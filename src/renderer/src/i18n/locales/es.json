@@ -28654,6 +28654,7 @@
         "desktopOnly": "Inicia sesión desde Orca en {{host}}.",
         "denied": "No se permitió el acceso.",
         "expired": "El inicio de sesión caducó. Inténtalo de nuevo.",
+        "interrupted": "Un reinicio interrumpió el inicio de sesión. Inténtalo de nuevo.",
         "couldNotSignIn": "No se pudo iniciar sesión. Inténtalo de nuevo."
       }
     }

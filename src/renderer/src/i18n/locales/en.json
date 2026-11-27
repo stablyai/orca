@@ -30260,6 +30260,7 @@
       "cantReach": "Can’t reach",
       "signInOrca": "Works with Claude and Codex",
       "finishing": "Finishing sign-in…",
+      "interrupted": "Sign-in interrupted",
       "updateHost": "Update Orca on {{host}} to sign in to apps",
       "updateServer": "Update Orca on the server to sign in to apps",
       "updateHostShort": "Update Orca on {{host}}",
@@ -30951,6 +30952,7 @@
         "desktopOnly": "Sign in from Orca on {{host}}.",
         "denied": "Access wasn’t allowed.",
         "expired": "The sign-in expired. Try again.",
+        "interrupted": "The sign-in was interrupted by a restart. Try again.",
         "couldNotSignIn": "Couldn’t sign in. Try again."
       }
     }

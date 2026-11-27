@@ -7073,7 +7073,8 @@
         "finishing": "Finishing sign-in…",
         "updateHost": "Update Orca on {{host}}",
         "cantReach": "Can’t reach",
-        "unsupported": "This app isn’t supported yet"
+        "unsupported": "This app isn’t supported yet",
+        "interrupted": "Sign-in interrupted"
       },
       "removeNamed": "Remove {{app}}",
       "signIn": {
@@ -7133,6 +7134,7 @@
         "desktopOnly": "Sign in from Orca on {{host}}.",
         "denied": "Access wasn’t allowed.",
         "expired": "The sign-in expired. Try again.",
+        "interrupted": "The sign-in was interrupted by a restart. Try again.",
         "couldNotSignIn": "Couldn’t sign in. Try again."
       },
       "trust": "Only add software you trust.",

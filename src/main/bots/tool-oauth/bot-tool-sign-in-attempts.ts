@@ -2,7 +2,7 @@
 // desktop opens the page in Orca's browser routed to this host, so the app returns to this host's own
 // listener; a phone, the web or the CLI pastes the address its browser ended on and sends only its
 // query. Tokens and the PKCE verifier never leave this host.
-import { randomInt, randomUUID } from 'node:crypto'
+import { randomBytes, randomInt, randomUUID } from 'node:crypto'
 import type {
   BotToolSignInAttemptView,
   BotToolSignInFailure
@@ -46,6 +46,9 @@ type Pending = {
 }
 
 const attempts = new Map<string, Pending>()
+// Leads every flow id, so a wait on a flow from before this host restarted learns it was interrupted.
+const HOST_RUN = randomBytes(6).toString('base64url')
+const flowIdOf = (id: string): string => `${HOST_RUN}.${id}`
 
 /**
  * A paste's return address: the loopback address the tool's registration was made for, so a paste
@@ -115,7 +118,7 @@ export async function startBotToolSignInAttempt(
           )
         : await beginFlowSignIn(key, flow, entry, pasteRedirect(entry.record.redirectUri))
   } catch (error) {
-    const flowId = randomUUID()
+    const flowId = flowIdOf(randomUUID())
     const view = {
       flowId,
       revision: 1,
@@ -133,7 +136,7 @@ export async function startBotToolSignInAttempt(
     flow,
     attempt,
     view: {
-      flowId: attempt.id,
+      flowId: flowIdOf(attempt.id),
       revision: 1,
       expiresAt: attempt.expiresAt,
       state: 'waiting',
@@ -143,7 +146,7 @@ export async function startBotToolSignInAttempt(
     listeners: new Set()
   }
   pending = started
-  attempts.set(attempt.id, started)
+  attempts.set(started.view.flowId, started)
   // A newer start, the tool's removal, a URL edit or the bot's deletion ends it; while the code is
   // being exchanged, the exchange reports how that ended.
   signal.addEventListener(
@@ -203,6 +206,16 @@ export async function waitBotToolSignInAttempt(
   afterRevision: number,
   signal?: AbortSignal
 ): Promise<BotToolSignInAttemptView> {
+  const run = flowId.split('.', 1)[0]
+  if (!attempts.has(flowId) && flowId.includes('.') && run !== HOST_RUN) {
+    return {
+      flowId,
+      revision: afterRevision + 1,
+      expiresAt: now(),
+      state: 'failed',
+      code: 'interrupted'
+    }
+  }
   const pending = own(owner, flowId)
   const { state, revision } = pending.view
   if (revision > afterRevision || state === 'done' || state === 'failed') {

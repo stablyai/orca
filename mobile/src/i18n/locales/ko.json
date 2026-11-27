@@ -6771,7 +6771,8 @@
         "finishing": "로그인을 마무리하는 중…",
         "updateHost": "{{host}}의 Orca 업데이트",
         "cantReach": "연결할 수 없음",
-        "unsupported": "이 앱은 아직 지원되지 않습니다"
+        "unsupported": "이 앱은 아직 지원되지 않습니다",
+        "interrupted": "로그인 중단됨"
       },
       "removeNamed": "{{app}} 제거",
       "signIn": {
@@ -6834,6 +6835,7 @@
         "desktopOnly": "{{host}}의 Orca에서 로그인하세요.",
         "denied": "액세스가 허용되지 않았습니다.",
         "expired": "로그인이 만료되었습니다. 다시 시도하세요.",
+        "interrupted": "다시 시작되어 로그인이 중단되었습니다. 다시 시도하세요.",
         "couldNotSignIn": "로그인할 수 없습니다. 다시 시도하세요."
       },
       "trust": "신뢰할 수 있는 소프트웨어만 추가하세요.",

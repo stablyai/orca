@@ -173,6 +173,7 @@ const FAILURES = [
   'issuer-mismatch',
   'refused',
   'superseded',
+  'interrupted',
   'desktop-only'
 ] as const
 

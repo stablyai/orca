@@ -5644,7 +5644,8 @@
         "finishing": "Anmeldung wird abgeschlossen…",
         "updateHost": "Orca auf {{host}} aktualisieren",
         "cantReach": "Nicht erreichbar",
-        "unsupported": "Diese App wird noch nicht unterstützt"
+        "unsupported": "Diese App wird noch nicht unterstützt",
+        "interrupted": "Anmeldung unterbrochen"
       },
       "removeNamed": "{{app}} entfernen",
       "signIn": {
@@ -5685,6 +5686,7 @@
         "desktopOnly": "Melde dich in Orca auf {{host}} an.",
         "denied": "Der Zugriff wurde nicht erlaubt.",
         "expired": "Die Anmeldung ist abgelaufen. Versuche es erneut.",
+        "interrupted": "Die Anmeldung wurde durch einen Neustart unterbrochen. Versuche es erneut.",
         "couldNotSignIn": "Anmeldung nicht möglich. Versuche es erneut."
       },
       "trust": "Füge nur Software hinzu, der du vertraust.",

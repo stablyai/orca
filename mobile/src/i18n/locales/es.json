@@ -5471,7 +5471,8 @@
         "finishing": "Finalizando el inicio de sesión…",
         "updateHost": "Actualizar Orca en {{host}}",
         "cantReach": "No se puede conectar",
-        "unsupported": "Esta app aún no es compatible"
+        "unsupported": "Esta app aún no es compatible",
+        "interrupted": "Inicio de sesión interrumpido"
       },
       "removeNamed": "Quitar {{app}}",
       "signIn": {
@@ -5512,6 +5513,7 @@
         "desktopOnly": "Inicia sesión desde Orca en {{host}}.",
         "denied": "No se permitió el acceso.",
         "expired": "El inicio de sesión caducó. Inténtalo de nuevo.",
+        "interrupted": "Un reinicio interrumpió el inicio de sesión. Inténtalo de nuevo.",
         "couldNotSignIn": "No se pudo iniciar sesión. Inténtalo de nuevo."
       },
       "trust": "Añade solo software de confianza.",

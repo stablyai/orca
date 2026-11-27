@@ -6117,7 +6117,8 @@
         "finishing": "Concluindo login…",
         "updateHost": "Atualizar o Orca em {{host}}",
         "cantReach": "Inacessível",
-        "unsupported": "Este app ainda não tem suporte"
+        "unsupported": "Este app ainda não tem suporte",
+        "interrupted": "Login interrompido"
       },
       "removeNamed": "Remover {{app}}",
       "signIn": {
@@ -6158,6 +6159,7 @@
         "desktopOnly": "Faça login pelo Orca em {{host}}.",
         "denied": "O acesso não foi permitido.",
         "expired": "O login expirou. Tente novamente.",
+        "interrupted": "Uma reinicialização interrompeu o login. Tente novamente.",
         "couldNotSignIn": "Não foi possível fazer login. Tente novamente."
       },
       "trust": "Adicione apenas software em que você confia.",

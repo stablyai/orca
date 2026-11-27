@@ -6007,7 +6007,8 @@
         "finishing": "正在完成登入…",
         "updateHost": "更新 {{host}} 上的 Orca",
         "cantReach": "無法連線",
-        "unsupported": "暫不支援此應用程式"
+        "unsupported": "暫不支援此應用程式",
+        "interrupted": "登入已中斷"
       },
       "removeNamed": "移除 {{app}}",
       "signIn": {
@@ -6070,6 +6071,7 @@
         "desktopOnly": "請在 {{host}} 上的 Orca 中登入。",
         "denied": "未獲准存取。",
         "expired": "登入已逾期。請再試一次。",
+        "interrupted": "登入因重新啟動而中斷。請再試一次。",
         "couldNotSignIn": "無法登入。請再試一次。"
       },
       "trust": "只新增你信任的軟體。",

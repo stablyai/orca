@@ -5965,7 +5965,8 @@
         "finishing": "Finalisation de la connexion…",
         "updateHost": "Mettre à jour Orca sur {{host}}",
         "cantReach": "Injoignable",
-        "unsupported": "Cette app n’est pas encore prise en charge"
+        "unsupported": "Cette app n’est pas encore prise en charge",
+        "interrupted": "Connexion interrompue"
       },
       "removeNamed": "Retirer {{app}}",
       "signIn": {
@@ -6006,6 +6007,7 @@
         "desktopOnly": "Connectez-vous depuis Orca sur {{host}}.",
         "denied": "L’accès n’a pas été autorisé.",
         "expired": "La connexion a expiré. Réessayez.",
+        "interrupted": "Un redémarrage a interrompu la connexion. Réessayez.",
         "couldNotSignIn": "Connexion impossible. Réessayez."
       },
       "trust": "N’ajoutez que des logiciels de confiance.",

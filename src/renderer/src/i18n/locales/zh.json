@@ -28971,6 +28971,7 @@
       "cantReach": "无法连接",
       "signInOrca": "适用于 Claude 和 Codex",
       "finishing": "正在完成登录…",
+      "interrupted": "登录已中断",
       "updateHost": "请更新 {{host}} 上的 Orca 以登录应用",
       "updateServer": "请更新服务器上的 Orca 以登录应用",
       "updateHostShort": "更新 {{host}} 上的 Orca",
@@ -30553,6 +30554,7 @@
         "desktopOnly": "请在 {{host}} 上的 Orca 中登录。",
         "denied": "未获得访问授权",
         "expired": "登录已过期。请重试。",
+        "interrupted": "登录因重启而中断。请重试。",
         "couldNotSignIn": "无法登录。请重试。"
       }
     },

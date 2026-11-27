@@ -18,10 +18,8 @@ import { botOwnTool, readBotToolServers } from '../../../bots/bot-tools-file'
 import { isMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers-feature'
 import {
   addSortedBotTool,
-  BOT_TOOL_SIGN_IN_NEEDS_UPDATE,
   connectOwnedBotTool,
-  ownedBotToolSignInStatus,
-  ownedSignInKey
+  ownedBotToolSignInStatus
 } from '../../../bots/tool-oauth/bot-tool-owned-sign-in'
 import { ClaudeMirrorScrubs } from '../../../bots/bot-tool-secret-scrub'
 import { existsSync } from 'node:fs'
@@ -282,8 +280,14 @@ export const BOT_TOOLS_METHODS = [
     handler: async (params, context) => {
       refuseFromLook(params, context)
       const bot = targetBot(params, context)
-      if (await ownedSignInKey(botHomeFolder(bot), params.name)) {
-        throw new Error(BOT_TOOL_SIGN_IN_NEEDS_UPDATE)
+      const owned = await connectOwnedBotTool(
+        botHomeFolder(bot),
+        params.name,
+        context,
+        params.address
+      )
+      if (owned) {
+        return owned
       }
       await finishBotToolSignIn(
         await botToolsHome(context.runtime, bot),

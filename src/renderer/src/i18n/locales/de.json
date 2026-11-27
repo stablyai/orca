@@ -28069,6 +28069,7 @@
         "desktopOnly": "Melde dich in Orca auf {{host}} an.",
         "denied": "Der Zugriff wurde nicht erlaubt.",
         "expired": "Die Anmeldung ist abgelaufen. Versuche es erneut.",
+        "interrupted": "Die Anmeldung wurde durch einen Neustart unterbrochen. Versuche es erneut.",
         "couldNotSignIn": "Anmeldung nicht möglich. Versuche es erneut."
       }
     }

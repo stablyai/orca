@@ -33,6 +33,8 @@ export type BotToolSignInFailure =
   | 'issuer-mismatch'
   | 'refused'
   | 'superseded'
+  /** Orca restarted while the browser return was still pending. */
+  | 'interrupted'
   /** Started from a phone or the web: v1 signs in only from Orca on the bot's computer. */
   | 'desktop-only'
 
@@ -83,6 +85,11 @@ export function botToolSignInFailureWords(
       return t('bots.tools.signInFailure.denied', 'Access wasn’t allowed.')
     case 'expired':
       return t('bots.tools.signInFailure.expired', 'The sign-in expired. Try again.')
+    case 'interrupted':
+      return t(
+        'bots.tools.signInFailure.interrupted',
+        'The sign-in was interrupted by a restart. Try again.'
+      )
     case 'cancelled':
     case 'issuer-mismatch':
     case 'refused':
