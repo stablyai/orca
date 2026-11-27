@@ -2,13 +2,11 @@
 // its caller identity. Only the session id, run fence and grant owner are in the clear; the caller
 // payload carries the bot and MCP tokens, so it is sealed whole. One entry (and file) per kept chat
 // run, so a launch writes only its own.
-import { jsonObject } from '../../../../shared/json-stream/json-value-property'
 import {
   relaySealingProtected,
   relayUnlockThrottle,
   type RelayUnlockThrottle,
-  sealRelaySecret,
-  unsealRelaySecret
+  sealRelaySecret
 } from '../../../bots/tool-relay/relay-sealed-file'
 import { RelaySealedEntries } from '../../../bots/tool-relay/relay-sealed-entries'
 import {
@@ -18,61 +16,15 @@ import {
   keptToolGrantsConfig
 } from '../../../bots/tool-relay/kept-tool-grants'
 
-export type StoredSharedToolCaller = {
-  sessionId: string
-  runFence: number
-  owner: string
-  sealed: string
-}
+import {
+  callerKey,
+  isStoredCaller,
+  opened,
+  type KeptSharedToolCaller,
+  type StoredSharedToolCaller
+} from './kept-shared-tool-caller'
 
-/** A kept caller as this run holds it. */
-export type KeptSharedToolCaller = {
-  sessionId: string
-  runFence: number
-  owner: string
-  caller: Readonly<Record<string, string>>
-  token: string
-}
-
-function isStoredCaller(value: unknown): value is StoredSharedToolCaller {
-  const entry = jsonObject(value)
-  return (
-    entry !== null &&
-    typeof entry.sessionId === 'string' &&
-    typeof entry.runFence === 'number' &&
-    Number.isSafeInteger(entry.runFence) &&
-    typeof entry.owner === 'string' &&
-    typeof entry.sealed === 'string'
-  )
-}
-
-const callerKey = (entry: StoredSharedToolCaller): string => `${entry.sessionId}\n${entry.runFence}`
-
-async function opened(entry: StoredSharedToolCaller): Promise<KeptSharedToolCaller | null> {
-  try {
-    const payload = jsonObject(JSON.parse(await unsealRelaySecret(entry.sealed)))
-    const token = payload?.token
-    const caller: Record<string, string> = {}
-    for (const [name, value] of Object.entries(jsonObject(payload?.caller) ?? {})) {
-      if (typeof value !== 'string') {
-        return null
-      }
-      caller[name] = value
-    }
-    if (typeof token !== 'string' || !jsonObject(payload?.caller)) {
-      return null
-    }
-    return {
-      sessionId: entry.sessionId,
-      runFence: entry.runFence,
-      owner: entry.owner,
-      caller,
-      token
-    }
-  } catch {
-    return null
-  }
-}
+export type { KeptSharedToolCaller, StoredSharedToolCaller }
 
 type Entry = { stored: StoredSharedToolCaller; kept: KeptSharedToolCaller | null }
 
