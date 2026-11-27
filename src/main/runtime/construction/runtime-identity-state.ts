@@ -3,9 +3,6 @@ import * as savedChatOpen from '../agent-session/records/local-agent-session-rec
 import type { SessionTitlePublisher } from '../session-tabs/publication/session-title-publisher'
 import { randomUUID } from 'node:crypto'
 import { mainBindsUnendedTerminal } from '../terminal/surface/main-pane-verdict'
-import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
-import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeClientSettingsController } from '../client/settings/runtime-client-settings'
 import type { RuntimeAutomationController } from '../integrations/automations/runtime-automation-controller'
@@ -281,17 +278,6 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
   protected pendingMobileSessionPtyAggregateInventoryRefresh: Promise<PtyControllerInventory | null> | null =
     null
 
-  /** Rank launch authority first, then foreground evidence for agents Orca did not launch. */
-  getPaneTerminalAgent(ptyId: string | null | undefined): TerminalAgent | null {
-    const pty = ptyId ? this.ptysById.get(ptyId) : undefined
-    return pty?.launchAgent ?? pty?.foregroundAgent ?? pty?.launchCommandAgent ?? null
-  }
-
-  protected getPaneAgentForTuiIdle(ptyId: string | null | undefined): TuiAgent | null {
-    const agent = this.getPaneTerminalAgent(ptyId)
-    return isTuiAgent(agent) ? agent : null
-  }
-
   protected deliveryRecheckTimersByPtyId = new Map<string, ReturnType<typeof setTimeout>>()
 
   // Sequence authoritative graph statements to distinguish absent surfaces from unpublished ones.
@@ -361,6 +347,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
     ...this.tuiIdleEvidenceSource,
     intervalMs: TUI_IDLE_POLL_INTERVAL_MS,
     getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null,
+    getOutputSequence: (ptyId) => this.getPtyOutputSequence(ptyId),
     hasCommandPainted: (ptyId) => hasTerminalCommandPainted(this.ptysById.get(ptyId) ?? {}),
     // Runtime emulator reads avoid a provider round trip on every poll.
     readVisibleScreen: (ptyId) =>
