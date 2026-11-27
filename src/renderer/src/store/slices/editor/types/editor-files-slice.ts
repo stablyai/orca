@@ -106,7 +106,9 @@ export type EditorFilesSlice = {
     groupId?: string
   ) => Promise<void>
   /** Opens an empty `untitled<extension>` at the active workspace root. */
-  openBlankFileInActiveWorkspace: (extension: string) => Promise<void>
+  openBlankFileInActiveWorkspace: (extension: string, groupId?: string) => Promise<void>
+  /** Prompts for an extension and opens an empty `untitled<extension>` in the target group. */
+  openNewFileInActiveWorkspace: (groupId?: string) => Promise<void>
   // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
   activateMarkdownLink: (
     rawHref: string | undefined,

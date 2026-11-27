@@ -9,7 +9,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import NewWorkspaceComposerModal from '../components/new-workspace/composer/NewWorkspaceComposerModal'
 import { CrashReportDialog } from '../components/crash-report/CrashReportDialog'
-import { MarkdownTemplatePicker } from '../components/editor/markdown/documents/MarkdownTemplatePicker'
+import { EditorCreationPickers } from '../components/editor/file-creation/EditorCreationPickers'
 import RecentTabSwitcher from '../components/tab-bar/recent-switcher/RecentTabSwitcher'
 import { SkillFreshnessUpdateDialogHost } from '../components/skills/freshness/SkillFreshnessUpdateDialogHost'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
@@ -339,9 +339,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
           </ModalBoundary>
         </Suspense>
       ) : null}
-      <ModalBoundary boundaryId="modal.markdown-template-picker" resetKey={activeModal}>
-        <MarkdownTemplatePicker />
-      </ModalBoundary>
+      <EditorCreationPickers resetKey={activeModal} />
       <RecoverableRenderErrorBoundary
         boundaryId="modal.crash-report"
         surface="modal"

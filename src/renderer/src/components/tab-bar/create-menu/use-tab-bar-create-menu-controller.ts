@@ -212,6 +212,9 @@ export function useTabBarCreateMenuController({
       case 'new-markdown':
         onNewFileTab?.()
         break
+      case 'new-file':
+        void useAppStore.getState().openNewFileInActiveWorkspace(resolvedGroupId)
+        break
       case 'open-markdown':
         onOpenFileTab?.()
         break
