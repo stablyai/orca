@@ -101,20 +101,21 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
       await withUpdaterSpan({ stage: 'install' }, async (span) => {
         span.setAttribute('updater.version', pendingVersion || 'unknown')
         span.setAttribute('updater.platform', process.platform)
-        span.setAttribute(
-          'updater.macosInstallerReady',
-          process.platform === 'darwin' ? isMacInstallerReady() : true
-        )
+        const macInstallerReady = process.platform === 'darwin' ? isMacInstallerReady() : true
+        span.setAttribute('updater.macosInstallerReady', macInstallerReady)
         recordUpdaterLifecycle('quit_and_install_started', {
           version: pendingVersion || null,
-          macInstallerReady: process.platform === 'darwin' ? isMacInstallerReady() : true
+          trigger,
+          macInstallerReady
         })
         span.addEvent('pre_quit_cleanup_start')
         preparingProfile = true
         await this.runBeforeUpdateQuitCleanup()
         preparingProfile = false
         span.addEvent('pre_quit_cleanup_done')
-        if (trigger !== 'manual' && !(await this.prepareAutomaticInstall(pendingVersion))) {
+        // A Restart click prepared the renderer in preload; main-started installs prepare it here.
+        const rendererPrepared = trigger === 'restart-click' || trigger === 'remote'
+        if (!rendererPrepared && !(await this.prepareAutomaticInstall(pendingVersion))) {
           return
         }
         if (!canProceed()) {
@@ -160,7 +161,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         this.quitAndInstallNativeInvoked = true
         // Invoke before destroying PTYs/close guards so synchronous failure leaves the app usable.
         const supervisorOwnsRelaunch = this.updateInstallMode === 'supervised-headless-serve'
-        const silent = trigger !== 'manual' || supervisorOwnsRelaunch
+        const silent = this.isUnattendedInstall(trigger) || supervisorOwnsRelaunch
         runWithLaunchPath(() =>
           this.getAutoUpdater().quitAndInstall(silent, !supervisorOwnsRelaunch)
         )

@@ -2,6 +2,7 @@ import type {
   LinuxPackageInstallInstructions,
   ReleaseBuildListResult,
   UpdateCheckOptions,
+  UpdateDownloadOptions,
   UpdateStatus
 } from '../../../shared/updater/update-status-types'
 import type { ReleaseChannel } from '../../../shared/updater/release-channel'
@@ -10,7 +11,7 @@ export type UpdaterApi = {
   getVersion: () => Promise<string>
   getStatus: () => Promise<UpdateStatus>
   check: (options?: UpdateCheckOptions) => Promise<void>
-  download: () => Promise<void>
+  download: (options?: UpdateDownloadOptions) => Promise<void>
   quitAndInstall: () => Promise<void>
   dismissNudge: () => Promise<void>
   dismissAvailableUpdate: () => Promise<void>

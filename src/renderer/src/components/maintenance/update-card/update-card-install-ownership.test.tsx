@@ -2,7 +2,10 @@
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { UpdateStatus } from '../../../../../shared/updater/update-status-types'
+import type {
+  UpdateDownloadOptions,
+  UpdateStatus
+} from '../../../../../shared/updater/update-status-types'
 import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import { registerUpdaterStatusIpcBridge } from '../../../hooks/ipc-events/native-app/updater-status-ipc-bridge'
 import { useAppStore } from '../../../store/index'
@@ -13,7 +16,7 @@ import { UpdateCard } from './UpdateCard'
 const VERSION = '1.4.280-adhoc.20261127061846'
 let emitStatus: (status: UpdateStatus) => void = () => {}
 const quitAndInstall = vi.fn(() => Promise.resolve())
-const download = vi.fn(() => Promise.resolve())
+const download = vi.fn((_options?: UpdateDownloadOptions) => Promise.resolve())
 const unsubs: (() => void)[] = []
 
 beforeEach(() => {
@@ -74,24 +77,13 @@ function finishDownload(): void {
   emit({ state: 'downloaded', version: VERSION })
 }
 
-it('a Settings download waits for Restart even after the card started an earlier attempt', () => {
-  offerPinnedBuild()
-  fireEvent.click(screen.getByRole('button', { name: 'Update' }))
-  emit({ state: 'downloading', version: VERSION, percent: 10 })
-  emit({ state: 'error', version: VERSION, message: 'net::ERR_CONNECTION_RESET' })
-
+it('only the card Update asks main to install when done; the renderer never installs on its own', () => {
   offerPinnedBuild()
   fireEvent.click(screen.getByRole('button', { name: 'Download update' }))
-  finishDownload()
-
-  expect(quitAndInstall).not.toHaveBeenCalled()
-  expect(screen.getByRole('button', { name: 'Restart to update' })).toBeTruthy()
-})
-
-it("the card's own Update installs as soon as its download finishes", () => {
-  offerPinnedBuild()
+  expect(download).toHaveBeenLastCalledWith()
   fireEvent.click(screen.getByRole('button', { name: 'Update' }))
-  finishDownload()
+  expect(download).toHaveBeenLastCalledWith({ installWhenDownloaded: true })
 
-  expect(quitAndInstall).toHaveBeenCalledTimes(1)
+  finishDownload()
+  expect(quitAndInstall).not.toHaveBeenCalled()
 })

@@ -23,8 +23,6 @@ export function UpdateCard(): React.JSX.Element | null {
   const setCollapsed = useAppStore((state) => state.setUpdateCardCollapsed)
   const reassuranceSeen = useAppStore((state) => state.updateReassuranceSeen)
   const markReassuranceSeen = useAppStore((state) => state.markUpdateReassuranceSeen)
-  // Only the download this card started installs on finish; Settings downloads wait for Restart.
-  const cardDownloadVersion = useRef<string | null>(null)
   const dismissAnimationTimerRef = useRef<number | null>(null)
   const collapseAnimationTimerRef = useRef<number | null>(null)
   const [mediaFailed, setMediaFailed] = useState(false)
@@ -97,22 +95,6 @@ export function UpdateCard(): React.JSX.Element | null {
         installRequestPending.current = false
       })
   }, [])
-  useEffect(() => {
-    const version = cardDownloadVersion.current
-    if (version === null || (status.state === 'downloading' && status.version === version)) {
-      return
-    }
-    cardDownloadVersion.current = null
-    if (
-      status.state === 'downloaded' &&
-      status.version === version &&
-      !status.installing &&
-      !status.automaticDownload &&
-      !status.requiredByTeam
-    ) {
-      requestInstall(installTarget)
-    }
-  }, [status, installTarget, requestInstall])
 
   const prefersReducedMotion = usePrefersReducedMotion()
   const clearAnimationTimers = useCallback(() => {
@@ -148,11 +130,11 @@ export function UpdateCard(): React.JSX.Element | null {
   }
 
   const handleUpdate = (): void => {
-    cardDownloadVersion.current = versionRef.current
     if (!reassuranceSeen) {
       markReassuranceSeen()
     }
-    void window.api.updater.download()
+    // Main installs when this download finishes; a Settings download waits for Restart.
+    void window.api.updater.download({ installWhenDownloaded: true })
   }
   const handleClose = (): void => {
     dismissUpdate()
@@ -254,7 +236,6 @@ export function UpdateCard(): React.JSX.Element | null {
       errorCard={errorCard}
       linuxPackageRecovery={linuxPackageRecovery}
       isLocalBuild={isLocalBuild}
-      hasStartedDownload={cardDownloadVersion.current !== null}
       prefersReducedMotion={prefersReducedMotion}
       mediaFailed={mediaFailed}
       mediaLoaded={mediaLoaded}

@@ -13,6 +13,9 @@ export type ChangelogData = {
   releasesBehind: number | null
 }
 
+/** Set only by the update card's Update button: install as soon as this download finishes. */
+export type UpdateDownloadOptions = { installWhenDownloaded?: boolean }
+
 export type UpdateCheckOptions = {
   includePrerelease?: boolean
   includePerfPrerelease?: boolean

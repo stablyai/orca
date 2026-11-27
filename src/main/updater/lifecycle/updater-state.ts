@@ -36,7 +36,14 @@ export type UpdateInstallMode =
   | 'supervised-headless-serve'
   | 'unsupported-headless-serve'
 export type PreQuitCleanupFailureMode = 'continue' | 'abort'
-export type UpdateInstallTrigger = 'manual' | 'automatic' | 'team-policy'
+/** Logged on quit_and_install_started so every install names what started it. */
+export type UpdateInstallTrigger =
+  | 'restart-click'
+  | 'card-download'
+  | 'remote'
+  | 'automatic'
+  | 'team-policy'
+export type DownloadCompletion = 'wait-for-restart' | 'install' | 'automatic'
 
 export function isPendingTeamRestart(status: UpdateStatus): boolean {
   return (
@@ -71,6 +78,13 @@ export abstract class UpdaterState {
   protected availableVersion: string | null = null
   protected automaticDownloadOfferVersion: string | null = null
   protected automaticDownloadVersion: string | null = null
+  protected installWhenDownloadedVersion: string | null = null
+  protected deferredInstallTrigger: UpdateInstallTrigger = 'restart-click'
+
+  /** Only installs nobody clicked for run the installer silently. */
+  protected isUnattendedInstall(trigger: UpdateInstallTrigger): boolean {
+    return trigger === 'automatic' || trigger === 'team-policy'
+  }
   protected getAutomaticUpdates: (() => boolean) | null = null
   protected availableReleaseUrl: string | null = null
   protected pendingCheckFailureKey: string | null = null
