@@ -21530,6 +21530,7 @@
       "explicitChatWslMoveToHost": "El chat no está disponible en una carpeta WSL abierta desde Windows. Ejecuta el proyecto en un host WSL para chatear allí, o abre el agente en una terminal.",
       "explicitChatWslRunAsHost": "Ejecutar {{distro}} como host",
       "structuredSessionTerminalNotVisible": "Orca abrió {{value0}} en una terminal, pero no pudo mostrarlo aquí cuando finalizó el lanzamiento. Se mantuvo el borrador de tu chat.",
+      "explicitChatWorkspaceAccess": "Orca no tiene permiso para abrir esta carpeta del espacio de trabajo. Verifique los permisos de la carpeta e inténtelo de nuevo.",
       "explicitChatUnavailable": "Este espacio de trabajo no puede ejecutar el chat. Verifique la instalación del agente o ábralo en una terminal.",
       "goalControl": {
         "settingsRejected": "Codex no pudo aplicar el modelo y el esfuerzo seleccionados. No se envió este cambio de objetivo. Revisa la selección e inténtalo de nuevo.",

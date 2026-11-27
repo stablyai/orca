@@ -22269,6 +22269,7 @@
       "explicitChatWslMoveToHost": "Chat is not available in a WSL folder opened from Windows. Run the project on a WSL host to chat there, or open the agent in a terminal.",
       "explicitChatWslRunAsHost": "Run {{distro}} as a host",
       "explicitChatSsh": "Chat is not available over SSH. Open the agent in a terminal instead.",
+      "explicitChatWorkspaceAccess": "Orca doesn't have permission to open this workspace folder. Check the folder's permissions and try again.",
       "explicitChatUnavailable": "This workspace cannot run the chat. Check the agent installation or open it in a terminal.",
       "structuredSessionHostDeclined": "Opened {{value0}} in a terminal",
       "structuredSessionTerminalNotVisible": "Orca opened {{value0}} in a terminal, but couldn't show it here when the launch finished. Your chat draft was kept.",

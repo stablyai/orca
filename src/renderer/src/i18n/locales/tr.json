@@ -22194,6 +22194,7 @@
       "thoughtForDuration": "{{duration}} boyunca düşündü",
       "explicitChatWsl": "Sohbet WSL'de kullanılamıyor. Ajanı bir terminalde açın.",
       "explicitChatSsh": "Sohbet SSH üzerinden kullanılamıyor. Ajanı bir terminalde açın.",
+      "explicitChatWorkspaceAccess": "Orca'nın bu çalışma alanı klasörünü açma izni yok. Klasörün izinlerini kontrol edip yeniden deneyin.",
       "explicitChatUnavailable": "Bu çalışma alanı sohbeti çalıştıramıyor. Ajan kurulumunu kontrol edin veya ajanı bir terminalde açın.",
       "structuredSessionHostDeclined": "{{value0}} bir terminalde açıldı",
       "structuredSessionTerminalNotVisible": "Orca, {{value0}} öğesini terminalde açtı ancak başlatma tamamlandığında burada gösteremedi. Sohbet taslağınız korundu.",

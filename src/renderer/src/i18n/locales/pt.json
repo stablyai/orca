@@ -23308,6 +23308,7 @@
       "thoughtForDuration": "Pensou por {{duration}}",
       "explicitChatWsl": "O chat não está disponível no WSL. Abra o agente em um terminal.",
       "explicitChatSsh": "O chat não está disponível via SSH. Abra o agente em um terminal.",
+      "explicitChatWorkspaceAccess": "O Orca não tem permissão para abrir esta pasta do espaço de trabalho. Verifique as permissões da pasta e tente novamente.",
       "explicitChatUnavailable": "Este espaço de trabalho não pode executar o chat. Confira a instalação do agente ou abra o agente em um terminal.",
       "structuredSessionHostDeclined": "{{value0}} aberto em um terminal",
       "structuredSessionTerminalNotVisible": "O Orca abriu o {{value0}} em um terminal, mas não conseguiu exibi-lo aqui ao concluir a inicialização. Seu rascunho do chat foi mantido.",
