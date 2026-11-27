@@ -8,7 +8,7 @@ import {
 } from '../../../../../shared/work-items/task-providers'
 import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items/work-item-pagination'
 import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
-import { presetToQuery } from './ui-slice-hydration-sanitizers'
+import { getTaskPresetQuery } from '../../../../../shared/work-items/task-preset-query'
 
 const LINEAR_TASK_PREFETCH_LIMIT = 36
 
@@ -147,7 +147,7 @@ export function createUiTaskActions(set: UISliceSet, get: UISliceGet): Partial<U
         const query =
           resume?.githubItemsPreset === null
             ? (resume.githubItemsQuery ?? '').trim()
-            : presetToQuery(resume?.githubItemsPreset ?? defaultPreset)
+            : getTaskPresetQuery(resume?.githubItemsPreset ?? defaultPreset)
         for (const repo of selectedRepos) {
           state.prefetchWorkItems(repo.id, repo.path, PER_REPO_FETCH_LIMIT, query, {
             sourceContext:

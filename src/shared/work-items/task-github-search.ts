@@ -23,8 +23,8 @@ export function isPRFocusedTaskView(preset: TaskViewPresetId | null, query: stri
 export function normalizeGitHubTaskPreset(
   preset: TaskViewPresetId | null | undefined
 ): TaskViewPresetId {
-  // Legacy mixed All defaults now open Issues; split tabs must not mix row kinds.
-  return !preset || preset === 'all' ? 'issues' : preset
+  // 'all' is the untouched default (and legacy mixed view); users with no saved choice land on PRs.
+  return !preset || preset === 'all' ? 'prs' : preset
 }
 
 export function getGitHubTaskKind(preset: TaskViewPresetId | null, query: string): GitHubTaskKind {
