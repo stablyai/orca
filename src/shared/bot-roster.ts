@@ -173,22 +173,17 @@ export type BotRosterClient = {
  *  words, quoted as data. */
 export function formatPairedClient(client: BotRosterClient): string {
   const on = `--on-client ${botServerArgument({ name: client.name, on: client.onClient })}`
-  const ask = `orca orchestration send ${on} --to bot:<id> --type question|handoff --subject … --body-file …`
-  const others =
-    'an ask to one is declined, unless its owner @-mentions that bot in your chat from that computer or once allowed this Orca to ask it (then a person there answers your ask on a card), or always allows this Orca in that bot’s Who can ask.'
   const listed = client.bots
-    .map((bot) => `${JSON.stringify(bot.name)} (address: ${BOT_ADDRESS_PREFIX}${bot.id})`)
+    .map((bot) => `${JSON.stringify(bot.name)} (${BOT_ADDRESS_PREFIX}${bot.id})`)
     .join(', ')
+  const more = client.moreBots ? ' (it allows more)' : ''
   return [
-    `${JSON.stringify(client.name)} (the name that computer gives itself): a computer paired to this Orca, connected now; reach it with ${on}`,
-    ...(client.bots.length > 0
-      ? [
-          `  Bots it lets this Orca's agents ask (names as that computer gives them; send to the address)${client.moreBots ? ', and it allows more than are named here' : ''}: ${listed}`,
-          `  Ask one: ${ask}. For its bots not named here, ${others}`
-        ]
-      : [
-          `  None of its bots are named here${client.moreBots ? ', though it allows some' : ''}. For any of them, ${others} Then: ${ask}.`
-        ])
+    `${JSON.stringify(client.name)} (paired computer, connected; the name is its own): ${on}`,
+    client.bots.length > 0
+      ? `  Bots it lets you ask${more}: ${listed}`
+      : `  No bots listed${more}.`,
+    `  Ask: orca orchestration send ${on} --to bot:<id> --type question|handoff --subject … --body-file …`,
+    '  Other bots there may decline; ask your owner to @-mention one in your chat from that computer.'
   ].join('\n')
 }
 
