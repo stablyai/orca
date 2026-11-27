@@ -131,7 +131,11 @@ export class ToolRelayFronts {
       return
     }
     const served = client
-      .request<ToolRelayFrontServeResult>('toolRelayFrontServe', undefined, FRONT_REQUEST_TIMEOUT_MS)
+      .request<ToolRelayFrontServeResult>(
+        'toolRelayFrontServe',
+        undefined,
+        FRONT_REQUEST_TIMEOUT_MS
+      )
       .then(({ port }) => this.noteServed(client, Number.isSafeInteger(port) ? port : null))
     watched.served = served.catch(() => {})
     await served
