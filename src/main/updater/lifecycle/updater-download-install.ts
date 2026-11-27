@@ -136,7 +136,11 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
       this.sendStatus({ ...status, ...this.requiredUpdateStatusFields() })
       return
     }
+    const installWhenDownloaded =
+      status.state === 'downloaded' && status.version === this.installWhenDownloadedVersion
     if (status.state === 'downloaded') {
+      // The card's request belongs to this download alone, even when team policy takes it over.
+      this.installWhenDownloadedVersion = null
       this.finishMacStaging()
       if (this.holdUpdateForTeamPolicy(status.version)) {
         return
@@ -146,8 +150,6 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
         return
       }
     }
-    const installWhenDownloaded =
-      status.state === 'downloaded' && status.version === this.installWhenDownloadedVersion
     if (
       status.state !== 'downloaded' ||
       (status.version !== this.automaticDownloadVersion && !installWhenDownloaded)
@@ -158,7 +160,6 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
     if (this.pendingQuitAndInstallTimer || this.quitAndInstallInProgress) {
       return
     }
-    this.installWhenDownloadedVersion = null
     const trigger: UpdateInstallTrigger | null = installWhenDownloaded
       ? 'card-download'
       : this.getAutomaticUpdates?.() === true
