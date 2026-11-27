@@ -1,5 +1,6 @@
 import { spawnProcess } from '@orca/process-host'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
+import { awaitProviderChildSpawn } from '../../provider-process/provider-child'
 import { createClaudeChildTreeReaper } from '../../claude/child-process/claude-agent-sdk-exit-proof'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
@@ -244,6 +245,7 @@ export function spawnZcodeAppServerConnection(
 
   // A spawn that failed has no pid; a failing owner recording reaps the child here.
   return (async () => {
+    await awaitProviderChildSpawn(child)
     if (child.pid !== undefined) {
       try {
         await handlers.onSpawned?.(child.pid)
