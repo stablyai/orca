@@ -1272,7 +1272,6 @@
 1 src/main/runtime/terminal/launch/wsl-host-windows-drive-guard.ts
 1 src/main/runtime/terminal/output/tail/terminal-history-last-output.ts
 2 src/main/runtime/terminal/output/terminal-kitty-file-read.ts
-1 src/main/runtime/workspaces/archive/runtime-workspace-archive.ts
 2 src/main/runtime/workspaces/catalog/repo-worktree-row-resolution.ts
 1 src/main/runtime/workspaces/catalog/resolved-worktree-scan-join.ts
 2 src/main/runtime/workspaces/catalog/scoped-worktree-row-resolution.ts
@@ -1284,7 +1283,6 @@
 2 src/main/runtime/workspaces/creation/runtime-local-worktree-create.ts
 1 src/main/runtime/workspaces/creation/runtime-local-worktree-materialization.ts
 4 src/main/runtime/workspaces/creation/runtime-local-worktree-setup.ts
-2 src/main/runtime/workspaces/creation/workspace-creation.ts
 1 src/main/runtime/workspaces/lineage/runtime-worktree-lineage-controller.ts
 4 src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-registration-removal.ts
