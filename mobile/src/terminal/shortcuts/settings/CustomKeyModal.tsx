@@ -13,8 +13,14 @@ import {
 } from '../../key-input/terminal-accessory-keys'
 import { TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS as TERMINAL_SHORTCUT_SPECIAL_KEYS } from '../../key-input/terminal-key-definitions'
 import { customKeyModalStyles as styles } from './CustomKeyModal.styles'
+import {
+  customKeyEditDraft,
+  customKeyModalTitle,
+  customKeySaveLabel,
+  replaceCustomKeyPreservingId,
+  specialKeyGroups
+} from '../../../components/custom-key-edit'
 import { updateStoredCustomKeys, type CustomKey } from '../../key-input/terminal-custom-keys'
-import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
 import { ListGroup, ListRow } from '../../../components/list/ListGroup'
@@ -30,30 +36,6 @@ const SHORTCUT_MODIFIERS: { id: TerminalShortcutModifier; label: string; glyph?:
   { id: 'shift', label: 'Shift' }
 ]
 
-// Group keys into three fixed grids; ragged wrapping clipped F7–F12.
-function specialKeyGroups(t: Translate) {
-  return [
-    {
-      id: 'editing',
-      title: t('components.customKeyModal.editing', 'Editing'),
-      ids: ['escape', 'tab', 'enter', 'backspace', 'delete', 'insert', 'space'],
-      columns: 4
-    },
-    {
-      id: 'navigation',
-      title: t('components.customKeyModal.navigation', 'Navigation'),
-      ids: ['arrowUp', 'arrowDown', 'arrowLeft', 'arrowRight', 'home', 'end', 'pageUp', 'pageDown'],
-      columns: 4
-    },
-    {
-      id: 'function',
-      title: t('components.customKeyModal.function', 'Function'),
-      ids: ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12'],
-      columns: 6
-    }
-  ]
-}
-
 const SPECIAL_KEY_BY_ID: Record<string, TerminalShortcutSpecialKey> = Object.fromEntries(
   TERMINAL_SHORTCUT_SPECIAL_KEYS.map((key) => [key.id, key])
 )
@@ -63,42 +45,59 @@ type Props = {
   onClose: () => void
   onKeysChanged: (keys: CustomKey[]) => void
   onManageShortcuts?: () => void
+  editingKey?: CustomKey | null
   smartRail?: { enabled: boolean; onChange: (enabled: boolean) => void }
 }
 
-export function CustomKeyModal(props: Props) {
-  const { visible, onClose, onKeysChanged, onManageShortcuts, smartRail } = props
+export function CustomKeyModal({
+  visible,
+  onClose,
+  onKeysChanged,
+  onManageShortcuts,
+  editingKey = null,
+  smartRail
+}: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const [step, setStep] = useState<Step>('choose-type')
-  const [shortcutKey, setShortcutKey] = useState('c')
-  const [shortcutModifiers, setShortcutModifiers] = useState<TerminalShortcutModifier[]>(['ctrl'])
-  const [macroLabel, setMacroLabel] = useState('')
-  const [macroText, setMacroText] = useState('')
-  const [macroEnter, setMacroEnter] = useState(true)
+  const openingDraft = customKeyEditDraft(editingKey)
+  const [step, setStep] = useState<Step>(openingDraft.step)
+  const [shortcutKey, setShortcutKey] = useState(openingDraft.shortcutKey)
+  const [shortcutModifiers, setShortcutModifiers] = useState<TerminalShortcutModifier[]>(
+    openingDraft.shortcutModifiers
+  )
+  const [macroLabel, setMacroLabel] = useState(openingDraft.macroLabel)
+  const [macroText, setMacroText] = useState(openingDraft.macroText)
+  const [macroEnter, setMacroEnter] = useState(openingDraft.macroEnter)
   const [previousVisible, setPreviousVisible] = useState(visible)
+  const [previousEditingId, setPreviousEditingId] = useState(editingKey?.id ?? null)
 
   // Reset draft before opening commit to avoid old-key flash; retain close state through slide-out.
-  if (visible !== previousVisible) {
+  const nextEditingId = editingKey?.id ?? null
+  if (visible !== previousVisible || nextEditingId !== previousEditingId) {
     setPreviousVisible(visible)
+    setPreviousEditingId(nextEditingId)
     if (visible) {
-      setStep('choose-type')
-      setShortcutKey('c')
-      setShortcutModifiers(['ctrl'])
-      setMacroLabel('')
-      setMacroText('')
-      setMacroEnter(true)
+      const draft = customKeyEditDraft(editingKey)
+      setStep(draft.step)
+      setShortcutKey(draft.shortcutKey)
+      setShortcutModifiers(draft.shortcutModifiers)
+      setMacroLabel(draft.macroLabel)
+      setMacroText(draft.macroText)
+      setMacroEnter(draft.macroEnter)
     }
   }
 
-  const addKey = useCallback(
+  const saveKey = useCallback(
     async (key: Omit<CustomKey, 'id'>) => {
-      const newKey: CustomKey = { ...key, id: `custom-${Date.now()}` }
       let updated: CustomKey[]
-      // Catch both void addKey callers: page storage can refuse size/unseeded-key writes (ruling 33.6), and uncaught rejection would fault/drop generation.
+      // Catch both void saveKey callers: page storage can refuse size/unseeded-key writes (ruling 33.6), and uncaught rejection would fault/drop generation.
       // Other allowlisted writers in this closure already catch saves.
       try {
-        updated = await updateStoredCustomKeys((keys) => [...keys, newKey])
+        updated = await updateStoredCustomKeys((keys) =>
+          editingKey
+            ? replaceCustomKeyPreservingId(keys, { ...editingKey, ...key, id: editingKey.id })
+            : [...keys, { ...key, id: `custom-${Date.now()}` }]
+        )
       } catch (error) {
         // Keep failed-save drawer open without announcing success; otherwise accessory row would lack persisted key.
         console.warn('[custom-keys] the store would not take this key', error)
@@ -107,7 +106,7 @@ export function CustomKeyModal(props: Props) {
       onKeysChanged(updated)
       onClose()
     },
-    [onClose, onKeysChanged]
+    [editingKey, onClose, onKeysChanged]
   )
 
   const shortcutPreview = useMemo(
@@ -158,8 +157,8 @@ export function CustomKeyModal(props: Props) {
     if (!built) {
       return
     }
-    void addKey({ label: built.label, bytes: built.bytes, enter: false })
-  }, [addKey, shortcutKey, shortcutModifiers])
+    void saveKey({ label: built.label, bytes: built.bytes, enter: false })
+  }, [saveKey, shortcutKey, shortcutModifiers])
 
   const handleMacroSave = useCallback(() => {
     const label = macroLabel.trim() || macroText.trim().slice(0, 12)
@@ -168,17 +167,17 @@ export function CustomKeyModal(props: Props) {
       return
     }
     const bytes = macroEnter ? `${text}\r` : text
-    void addKey({ label, bytes, enter: false })
-  }, [addKey, macroLabel, macroText, macroEnter])
+    void saveKey({ label, bytes, enter: false })
+  }, [saveKey, macroLabel, macroText, macroEnter])
 
-  const showBack = step !== 'choose-type'
+  const showBack = editingKey ? step === 'special-keys' : step !== 'choose-type'
   const onBack = useCallback(() => {
     if (step === 'special-keys') {
       setStep('shortcut-combo')
-    } else {
+    } else if (!editingKey) {
       setStep('choose-type')
     }
-  }, [step])
+  }, [editingKey, step])
 
   return (
     <BottomDrawer visible={visible} onClose={onClose}>
@@ -195,13 +194,7 @@ export function CustomKeyModal(props: Props) {
         ) : (
           <View style={styles.backSpacer} />
         )}
-        <Text style={styles.title}>
-          {step === 'choose-type' && t('components.customKeyModal.addShortcut', 'Add Shortcut')}
-          {step === 'shortcut-combo' &&
-            t('components.customKeyModal.shortcutCombo', 'Shortcut Combo')}
-          {step === 'special-keys' && t('components.customKeyModal.pickKey', 'Pick a key')}
-          {step === 'text-macro' && t('components.customKeyModal.textMacro', 'Text Macro')}
-        </Text>
+        <Text style={styles.title}>{customKeyModalTitle(step, editingKey != null, t)}</Text>
         <View style={styles.backSpacer} />
       </View>
 
@@ -329,7 +322,7 @@ export function CustomKeyModal(props: Props) {
             <Text
               style={[styles.saveButtonText, !shortcutPreview && styles.saveButtonTextDisabled]}
             >
-              {t('components.customKeyModal.add', 'Add')}
+              {customKeySaveLabel(editingKey != null, 'combo', t)}
             </Text>
           </Pressable>
         </View>
@@ -417,7 +410,7 @@ export function CustomKeyModal(props: Props) {
               <Text
                 style={[styles.saveButtonText, !macroText.trim() && styles.saveButtonTextDisabled]}
               >
-                {t('components.customKeyModal.addShortcut', 'Add Shortcut')}
+                {customKeySaveLabel(editingKey != null, 'macro', t)}
               </Text>
             </Pressable>
           </View>
