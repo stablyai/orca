@@ -5,7 +5,6 @@ import { explicitStructuredLaunchSeedOptions } from '../../shared/native-chat/in
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { botHomeFolder } from './bot-home'
 import { listedModelDescribing } from '../../shared/agent-session/options/model-catalog/structured-agent-session-listed-model'
-import { STANDARD_SERVICE_TIER } from '../../shared/agent-session/options/reconciliation/structured-agent-session-effective-tier'
 import {
   findCatalogModel,
   findCatalogOption
@@ -78,11 +77,6 @@ async function botHandoffStartOptions(
         : []
   return {
     ...(effort && efforts.some(({ value }) => value === effort) ? { effort } : {}),
-    ...(serviceTier &&
-    (serviceTier === STANDARD_SERVICE_TIER ||
-      listed?.serviceTiers?.some(({ value }) => value === serviceTier))
-      ? { serviceTier }
-      : {}),
     ...requested
   }
 }

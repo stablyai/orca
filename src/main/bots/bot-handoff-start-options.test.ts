@@ -55,12 +55,12 @@ const listed = {
       label: 'Model B',
       isDefault: false,
       efforts: [{ value: 'low', label: 'Low' }],
-      serviceTiers: []
+      serviceTiers: [{ value: 'priority', label: 'Priority' }]
     }
   ]
 } satisfies AgentSessionModelCatalogResult
 
-test('one handoff overlays a saved selection and only carries compatible choices across models', async () => {
+test('a handoff keeps saved Priority for the same model and clears it across models', async () => {
   const runtime = new OrcaRuntimeService(null)
   vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
   prepareSaved.mockResolvedValue(listed)
