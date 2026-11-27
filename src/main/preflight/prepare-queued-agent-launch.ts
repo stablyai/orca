@@ -4,6 +4,7 @@ import type {
   QueuedAgentLaunch
 } from '../../shared/agent-launch/startup/queued-agent-launch'
 import { prepareShellNativeAgentLaunch } from '../../shared/agent-launch/startup/codex-startup-image-command'
+import { renderReceivingShellLaunch } from '../../shared/agent-launch/startup/receiving-shell-agent-launch'
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import {
   canonicalizeWindowsShellOverride,
@@ -100,35 +101,38 @@ async function prepareForPty(
     : process.platform === 'win32' && !wsl
       ? resolveWindowsShellStartupFamily(shellPreference)
       : 'posix'
-  const { command, launchConfig, blocked } = await alignManagedAgentLaunchAtSpawn(
-    {
-      launchCommand: launch.command,
-      codexRuntime: wsl ? 'wsl' : 'host',
-      sshTarget: ssh,
-      cwd: launch.cwd,
-      readCwd: pty.readCwd,
-      shellPath: process.platform === 'win32' ? undefined : shellPreference?.trim(),
-      launchConfig: launch.launchConfig,
-      launchAgent: launch.launchAgent,
-      nativeChatSignIn: launch.nativeChatSignIn,
-      restoring: launch.restoring ?? !launch.launchConfig,
-      expectedWslDistro: pty.wslDistro,
-      getSettings: () => settings
-    },
-    shell
-  )
-  return {
-    preparedCommand:
-      command === undefined
-        ? null
-        : launch.nativeChatSignIn || launchConfig?.commandProvenance === 'authored'
-          ? command
-          : prepareShellNativeAgentLaunch(
-              command,
-              shell,
-              launch.images !== false && settings?.terminalInlineImages !== false
-            ),
-    launchConfig,
-    blocked
+  const { command, launchConfig, blocked, receivingShellCheck } =
+    await alignManagedAgentLaunchAtSpawn(
+      {
+        launchCommand: launch.command,
+        codexRuntime: wsl ? 'wsl' : 'host',
+        sshTarget: ssh,
+        cwd: launch.cwd,
+        readCwd: pty.readCwd,
+        shellPath: process.platform === 'win32' ? undefined : shellPreference?.trim(),
+        launchConfig: launch.launchConfig,
+        launchAgent: launch.launchAgent,
+        nativeChatSignIn: launch.nativeChatSignIn,
+        restoring: launch.restoring ?? !launch.launchConfig,
+        expectedWslDistro: pty.wslDistro,
+        getSettings: () => settings
+      },
+      shell
+    )
+  if (
+    command === undefined ||
+    launch.nativeChatSignIn ||
+    launchConfig?.commandProvenance === 'authored'
+  ) {
+    return { preparedCommand: command ?? null, launchConfig, blocked }
   }
+  const fallback = prepareShellNativeAgentLaunch(
+    command,
+    shell,
+    launch.images !== false && settings?.terminalInlineImages !== false
+  )
+  const preparedCommand = receivingShellCheck
+    ? await renderReceivingShellLaunch(receivingShellCheck, command, fallback)
+    : fallback
+  return { preparedCommand, launchConfig, blocked }
 }

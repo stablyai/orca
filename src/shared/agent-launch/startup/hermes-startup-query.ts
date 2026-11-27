@@ -1,4 +1,6 @@
 import { encodePowerShellCommand } from '../../shell/launch/powershell-command-encoding'
+import { getPowerShellEscapeNativeArgsFunction } from '../../shell/launch/powershell-native-argument'
+import type { ReceivingShell } from './receiving-shell-agent-launch'
 import {
   buildShellCommandFromArgv,
   isPosixStartupShell,
@@ -173,6 +175,33 @@ export function buildHermesQueryCommand(
   const script = `${POSIX_QUERY_VARIABLE}="\${${ORCA_HERMES_STARTUP_QUERY_ENV}}"; unset ${ORCA_HERMES_STARTUP_QUERY_ENV}; eval "$(printf %b "${encodedInvocation}")"`
   // Outer quoting is parsed by the typing shell, even though the body uses sh; octal payload escapes only happen to survive POSIX quoting in fish.
   return `sh -c ${quoteStartupArg(script, shell)}`
+}
+
+export function buildReceivingHermesQueryCommand(
+  argv: readonly [string, ...string[]],
+  shell: ReceivingShell
+): string {
+  const [name, ...args] = argv
+  const query = POSIX_QUERY_VARIABLE
+  const queryArg = shell === 'powershell' ? '$orcaHermesQueryArg' : `"--query=$${query}"`
+  const invocation = [
+    name,
+    ...args.map((arg) =>
+      arg === QUERY_ARG_PLACEHOLDER
+        ? queryArg
+        : quoteStartupArg(arg, shell === 'powershell' ? shell : 'posix')
+    )
+  ].join(' ')
+  if (shell === 'powershell') {
+    const escape = getPowerShellEscapeNativeArgsFunction({ inline: true })
+    const readTarget = `$orcaHermesTarget = Get-Command ${name} -ErrorAction SilentlyContinue | Select-Object -First 1; if ($orcaHermesTarget -is [System.Management.Automation.AliasInfo]) { $orcaHermesTarget = $orcaHermesTarget.ResolvedCommand }`
+    const escapeQuery = `if ($orcaHermesTarget -is [System.Management.Automation.ApplicationInfo]) { ${escape}; $orcaHermesQueryArg = @(__OrcaEscapeNativeArgs $orcaHermesTarget.Source @($orcaHermesQueryArg))[0] }`
+    return `& { $orcaHermesQueryArg = "--query=$env:${ORCA_HERMES_STARTUP_QUERY_ENV}"; Remove-Item Env:${ORCA_HERMES_STARTUP_QUERY_ENV} -ErrorAction SilentlyContinue; ${readTarget}; ${escapeQuery}; ${invocation} }`
+  }
+  if (shell === 'fish') {
+    return `begin; set -l ${query} "$${ORCA_HERMES_STARTUP_QUERY_ENV}"; set -eg ${ORCA_HERMES_STARTUP_QUERY_ENV}; ${invocation}; end`
+  }
+  return `(${query}="\${${ORCA_HERMES_STARTUP_QUERY_ENV}-}"; unset ${ORCA_HERMES_STARTUP_QUERY_ENV}; ${invocation})`
 }
 
 export function readGeneratedHermesQueryArgv(

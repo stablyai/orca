@@ -1,4 +1,5 @@
 import { quoteWindowsCmdArgument } from '@orca/process-host/windows-command-line'
+import type { SleepingAgentLaunchConfig } from '../../agent-session/lifecycle/resume/sleeping-agent-launch-config'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
 import type { TuiAgent } from '../catalog/tui-agent'
 import { readLaunchArguments, type LaunchPosition } from './launch-position'
@@ -80,6 +81,30 @@ export function replaceLaunchExecutable(
     ? quoteLaunchProgram(executable, shell)
     : launchProgramHead(executable, shell)
   return command.slice(0, launch.start) + head + command.slice(launch.end)
+}
+
+export function saveGeneratedLaunchProgram(
+  config: SleepingAgentLaunchConfig,
+  shell: AgentStartupShell,
+  command: string | undefined,
+  launch: LaunchPosition | null,
+  head: string | undefined,
+  path: string | undefined
+): SleepingAgentLaunchConfig {
+  const { selectedExecutable: _previous, ...recipe } = config
+  return {
+    ...recipe,
+    ...(head && launch && command
+      ? {
+          agentCommand: /^[ \t]*(?:&[ \t]+)?$/.test(command.slice(0, launch.start))
+            ? savedLaunchProgramHead(head, shell, command.slice(launch.end)) +
+              command.slice(launch.end)
+            : replaceLaunchExecutable(command, shell, launch, head)
+        }
+      : {}),
+    commandProvenance: 'generated',
+    ...(path ? { selectedExecutable: path } : {})
+  }
 }
 
 /** The Windows setup gate evaluates its carried launch in PowerShell, including from cmd panes. */

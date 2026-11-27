@@ -176,6 +176,7 @@ export function qualifyProgram(
 export type TerminalAgentProgramSelection = {
   program: string
   result: TerminalAgentProgram
+  cached?: true
   runtimeOnly?: true
 }
 

@@ -150,10 +150,12 @@ export async function selectTerminalAgentProgram(
             return { program, result: { kind: 'unknown' } }
           }
           if (canonicalPath) {
-            const kind = read.scannedMatch?.(program, match) ? result.kind : 'full-path'
+            const cached = !read.scannedMatch?.(program, match)
+            const kind = cached ? 'full-path' : result.kind
             return {
               program,
-              result: { ...result, kind, ...(options.pinForSetup ? { canonicalPath } : {}) }
+              result: { ...result, kind, ...(options.pinForSetup ? { canonicalPath } : {}) },
+              ...(cached ? { cached: true } : {})
             }
           }
           if (retry) {

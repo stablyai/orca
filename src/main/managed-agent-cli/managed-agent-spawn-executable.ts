@@ -2,12 +2,9 @@ import { basename, isAbsolute, win32 } from 'node:path'
 import type { TerminalAgentProgram } from '../preflight/agent-command-detection'
 import {
   matchesStockLaunchProgram,
-  renderCmdLaunchForPowerShell,
   renderPinnedLaunchHead,
-  replaceLaunchExecutable,
-  savedLaunchProgramHead,
-  stockLaunchProgram,
-  stockProgramKey
+  saveGeneratedLaunchProgram,
+  stockLaunchProgram
 } from '../../shared/agent-launch/startup/managed-agent-launch-program'
 import { nativeWindowsPathToPosixShellPath } from '../../shared/agent-launch/startup/setup-runner-command'
 import {
@@ -25,33 +22,29 @@ import {
   GENERATED_AGENT_LAUNCH_ENV,
   readGeneratedAgentLaunchInputs
 } from '../../shared/agent-launch/startup/generated-agent-launch-inputs'
+import { renderGeneratedCmdLaunch } from '../../shared/agent-launch/startup/generated-cmd-launch'
 import {
-  generatedCmdLaunchPosition,
-  renderGeneratedCmdLaunch
-} from '../../shared/agent-launch/startup/generated-cmd-launch'
+  receivingShellDialect,
+  type ReceivingShellCheck
+} from '../../shared/agent-launch/startup/receiving-shell-agent-launch'
 import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
+import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { msysDrivePathToWindows } from '../../shared/file-access/cross-platform-path'
 import { toWindowsWslDrivePath } from '../../shared/file-access/wsl-paths'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { managedPathAgent } from './managed-agent-legacy-runtime-path'
+import { renderManagedAgentLaunchCommand, stockAgents } from './managed-agent-launch-rendering'
 import {
   resolveSpawnAgentProgram,
   type PreselectedAgentProgram,
   type SpawnProgramContext
 } from './spawn-agent-program-selection'
 
-const stockAgents = Object.keys(TUI_AGENT_CONFIG).filter(isTuiAgent)
-const stockPrograms = new Set(
-  stockAgents.map((agent) =>
-    stockProgramKey(stockLaunchProgram(agent, process.platform), process.platform)
-  )
-)
-
 export type AgentExecutableLaunch = SpawnProgramContext & {
   launchAgent?: TuiAgent
   sourceShell?: AgentStartupShell
+  receivingShellPath?: string
   restoring?: boolean
 }
 
@@ -61,6 +54,7 @@ export type AlignedLaunch = {
   blocked?: 'unknown' | 'unavailable'
   rebuiltHermesQuery?: true
   postSetupProgram?: SetupAgentProgram
+  receivingShellCheck?: ReceivingShellCheck
 }
 
 export async function rewriteLaunchExecutable(
@@ -156,6 +150,7 @@ export async function rewriteLaunchExecutable(
   let launchConfig = config
   const setupGate = spawn.setupGate && generated && shell !== 'cmd'
   let postSetupProgram: SetupAgentProgram | undefined
+  let receivingShellCheck: ReceivingShellCheck | undefined
   if (agent) {
     const primary = stock(agent)
     const recordedName = nameFor(agent, recorded?.executable) ?? nameFor(agent, pinName)
@@ -203,6 +198,33 @@ export async function rewriteLaunchExecutable(
     const replaceable =
       executable &&
       (nameFor(agent, executable) || (sourceProgram && isAbsoluteProgram(sourceProgram)))
+    if (
+      selection.cached &&
+      selected.kind === 'full-path' &&
+      generated &&
+      !pin &&
+      !spawn.restoring &&
+      !spawn.requirePinnedProgram &&
+      !guest &&
+      !setupGate &&
+      source === shell &&
+      !(config?.agentCommand && recorded && isAbsolute(recorded.executable)) &&
+      (replaceable || hermesArgv)
+    ) {
+      const dialect = receivingShellDialect(
+        shell,
+        process.platform,
+        spawn.receivingShellPath || spawn.shellPath || spawn.env?.SHELL || process.env.SHELL
+      )
+      if (dialect) {
+        receivingShellCheck = {
+          shell: dialect,
+          name: program,
+          path: launchHead,
+          ...(hermesArgv ? { hermesArgs: hermesArgv.slice(1) } : {})
+        }
+      }
+    }
     if (setupGate && executable && !replaceable) {
       return { command: undefined, launchConfig: config, blocked: 'unknown' }
     }
@@ -215,31 +237,24 @@ export async function rewriteLaunchExecutable(
             : program
     }
     if (config) {
-      const { selectedExecutable: _previous, ...recipe } = config
+      const persistPath = selected.kind === 'full-path' && !receivingShellCheck
+      const recipeHead = persistPath ? selectedHead : program
       const updateRecipe =
         pinned ||
         postSetupProgram ||
-        selected.kind === 'full-path' ||
+        persistPath ||
         oldAgent ||
         program !== primary ||
         program !== preferred ||
         (recordedName && recordedName !== program)
-      launchConfig = {
-        ...recipe,
-        ...(updateRecipe && recorded && recordedCommand
-          ? {
-              agentCommand: /^[ \t]*(?:&[ \t]+)?$/.test(recordedCommand.slice(0, recorded.start))
-                ? savedLaunchProgramHead(
-                    selectedHead,
-                    source,
-                    recordedCommand.slice(recorded.end)
-                  ) + recordedCommand.slice(recorded.end)
-                : replaceLaunchExecutable(recordedCommand, source, recorded, selectedHead)
-            }
-          : {}),
-        commandProvenance: 'generated',
-        ...(selected.kind === 'full-path' ? { selectedExecutable: selected.path } : {})
-      }
+      launchConfig = saveGeneratedLaunchProgram(
+        config,
+        source,
+        recordedCommand,
+        recorded,
+        updateRecipe ? recipeHead : undefined,
+        persistPath ? selected.path : undefined
+      )
     }
     if (hermesArgv) {
       if (
@@ -258,40 +273,29 @@ export async function rewriteLaunchExecutable(
         ),
         launchConfig,
         rebuiltHermesQuery: true,
-        ...(postSetupProgram ? { postSetupProgram } : {})
+        ...(postSetupProgram ? { postSetupProgram } : {}),
+        ...(receivingShellCheck ? { receivingShellCheck } : {})
       }
     }
   }
-  const deferred = postSetupProgram ? { postSetupProgram } : {}
-  const cmdLaunch = cmd ? generatedCmdLaunchPosition(cmd, command) : launch
-  if (
-    convertCmd &&
-    executable &&
-    cmdLaunch &&
-    (cmd ||
-      agent ||
-      config ||
-      stockPrograms.has(stockProgramKey(basename(sourceProgram || executable), process.platform)))
-  ) {
-    const converted = renderCmdLaunchForPowerShell(command, cmdLaunch, executable)
-    if (setupGate && converted === null) {
-      return { command: undefined, launchConfig, blocked: 'unknown' }
-    }
-    return { command: converted ?? command, launchConfig, ...deferred }
-  }
-  if (cmd && executable) {
-    return {
-      command: renderGeneratedCmdLaunch(cmd, executable),
-      launchConfig,
-      ...deferred
-    }
-  }
-  if (!launch || !executable) {
-    return { command, launchConfig, ...deferred }
+  const rendered = renderManagedAgentLaunchCommand({
+    command,
+    executable,
+    launch,
+    sourceProgram,
+    cmd,
+    shell,
+    convertCmd,
+    agent,
+    hasRecipe: config !== undefined
+  })
+  if (setupGate && rendered === null) {
+    return { command: undefined, launchConfig, blocked: 'unknown' }
   }
   return {
-    command: replaceLaunchExecutable(command, shell, launch, executable),
+    command: rendered ?? command,
     launchConfig,
-    ...deferred
+    ...(postSetupProgram ? { postSetupProgram } : {}),
+    ...(receivingShellCheck ? { receivingShellCheck } : {})
   }
 }

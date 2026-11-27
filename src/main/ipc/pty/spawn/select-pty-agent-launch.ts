@@ -39,7 +39,8 @@ export async function selectPtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
     launchConfig,
     blocked: selectionBlocked,
     rebuiltHermesQuery,
-    postSetupProgram
+    postSetupProgram,
+    receivingShellCheck
   } = await alignManagedAgentLaunchAtSpawn(
     {
       ...input,
@@ -47,6 +48,10 @@ export async function selectPtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
       launchCommand: sequenced || input.launchCommand,
       launchAgent,
       shellPath: process.platform === 'win32' ? undefined : input.shellOverride,
+      receivingShellPath:
+        sequenced && shell === 'posix'
+          ? 'bash'
+          : input.shellOverride || input.getSettings?.()?.terminalDefaultShell?.trim(),
       preselectedAgentProgram:
         !sequenced || args.preselectedAgentProgram?.shell === shell
           ? args.preselectedAgentProgram
@@ -93,6 +98,7 @@ export async function selectPtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
     launchConfig,
     selectionBlocked,
     postSetupProgram,
+    receivingShellCheck,
     rebuiltHermesQuery,
     wslDistro,
     paneEnv

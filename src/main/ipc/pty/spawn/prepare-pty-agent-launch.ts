@@ -1,4 +1,3 @@
-import { isAbsolute } from 'node:path'
 import {
   addClaudeTeammateModeAuto,
   addClaudeTeammateModeInProcess
@@ -7,23 +6,22 @@ import { planClaudeRootLaunch } from '../../../../shared/agent-launch/permission
 import { withClaudeAgentViewPlugin } from '../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view-launch'
 import {
   clearEnvCommand,
-  commandSeparator,
-  type AgentStartupShell
+  commandSeparator
 } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
-import {
-  readLaunchArguments,
-  readLaunchPosition
-} from '../../../../shared/agent-launch/startup/launch-position'
+import { readLaunchPosition } from '../../../../shared/agent-launch/startup/launch-position'
 import { hermesStartupQueryFits } from '../../../../shared/agent-launch/startup/hermes-startup-query'
 import { agentLaunchUnbuildableMessage } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { AgentProgramBlockReason } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
-  readCodexDirectLaunch,
-  withCodexDirectLaunchCommand
-} from '../../../../shared/agent-launch/startup/codex-startup-image-command'
-import { withCodexScopedImageCommand } from '../../../../shared/agent-launch/startup/codex-scoped-image-command'
-import { withClaudeDirectLaunchCommand } from '../../../../shared/agent-launch/startup/claude-direct-launch-command'
+  RECEIVING_SHELL_LAUNCH_ENV,
+  receivingShellLaunchFromEnv,
+  renderReceivingShellLaunch
+} from '../../../../shared/agent-launch/startup/receiving-shell-agent-launch'
+import {
+  hasControlByte,
+  TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES
+} from '../../../../shared/agent-launch/startup/startup-line-prompt-carry'
 import {
   buildSetupAgentRecheck,
   setupAgentBlockedNotice,
@@ -42,12 +40,12 @@ import {
 } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { withSpawnTerminalMcpServers } from '../../../mcp-servers/terminal/terminal-mcp-spawn-step'
 import { getOrcaAgentRuntimeRoot } from '../../../managed-agent-cli/managed-agent-cli-path'
-import { planCodexNoDaemonLaunch } from '../../../pty/shell-startup/codex-no-daemon-launch-command'
 import { promoteAgentTeamsShimPath } from '../host-env/path'
 import { addSetupAgentWslInteropEnv } from '../../../pty/shell-startup/wsl-orca-env'
 import type { PtySpawnLaunchOptionsInput } from './spawn-options-assembly'
 import type { selectPtyAgentLaunch } from './select-pty-agent-launch'
 import { applyTerminalImageEnvironment } from './terminal-image-environment'
+import { prepareDirectLaunch } from './prepare-direct-agent-launch'
 import { preparePostSetupCommand } from './prepare-post-setup-agent-command'
 
 export async function preparePtyAgentLaunch(
@@ -66,7 +64,8 @@ export async function preparePtyAgentLaunch(
     launchConfig,
     selectionBlocked,
     rebuiltHermesQuery,
-    postSetupProgram
+    postSetupProgram,
+    receivingShellCheck
   } = selection
   const settings = input.getSettings?.()
   const env = { ...openCodeLaunch.env }
@@ -192,6 +191,9 @@ export async function preparePtyAgentLaunch(
   ) {
     prepared = await prepareDirectLaunch(prepared, shell, input, env, local, images, authored)
   }
+  if (receivingShellCheck && agentCommand !== undefined && prepared !== undefined) {
+    prepared = await renderReceivingShellLaunch(receivingShellCheck, agentCommand, prepared)
+  }
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
   // Setup gates carry the wrapper in the environment, where it is counted once.
   const hermesQueryTooLarge =
@@ -229,7 +231,17 @@ export async function preparePtyAgentLaunch(
       env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV] = prepared
     }
   }
-  const startup = keepGate ? input.launchCommand : prepared
+  let startup = keepGate ? input.launchCommand : prepared
+  if (
+    !sequenced &&
+    !input.preAdoptedStablePane &&
+    receivingShellCheck &&
+    startup !== undefined &&
+    (Buffer.byteLength(startup) > TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES || hasControlByte(startup))
+  ) {
+    env[RECEIVING_SHELL_LAUNCH_ENV] = startup
+    startup = receivingShellLaunchFromEnv(receivingShellCheck.shell)
+  }
   return {
     env,
     launchAgent: blocked ? undefined : launchAgent,
@@ -246,53 +258,4 @@ export async function preparePtyAgentLaunch(
       : (authoredRootLaunch?.notice ?? rootLaunch?.notice),
     terminalMcp: mcp.pane
   }
-}
-
-async function prepareDirectLaunch(
-  command: string,
-  shell: AgentStartupShell,
-  input: PtySpawnLaunchOptionsInput,
-  env: NodeJS.ProcessEnv,
-  local: boolean,
-  images: boolean,
-  authored: boolean
-): Promise<string> {
-  const invocation = readCodexDirectLaunch(command, shell)
-  if (!invocation) {
-    return authored ? command : withClaudeDirectLaunchCommand(command, shell)
-  }
-  const { launch } = invocation
-  const absolute = isAbsolute(launch.executable)
-  const probeInvocation =
-    authored && local && absolute && shell === 'powershell' && !invocation.args
-      ? {
-          launch,
-          args: readLaunchArguments(command, shell, launch, undefined, 'preserve-expansions')
-        }
-      : invocation
-  const supported = await planCodexNoDaemonLaunch(
-    {
-      command,
-      executesOnThisHost: local && (!authored || shell === 'cmd' || absolute),
-      env,
-      envToDelete: input.envToDelete,
-      cwd: input.cwd
-    },
-    shell,
-    probeInvocation
-  )
-  const prepared = supported
-    ? `${command.slice(0, launch.end)} --no-daemon${command.slice(launch.end)}`
-    : command
-  if (authored) {
-    return images ? withCodexScopedImageCommand(prepared, shell, launch) : prepared
-  }
-  return withCodexDirectLaunchCommand(
-    prepared,
-    shell,
-    { images, probeInShell: !local },
-    supported && invocation.args
-      ? { ...invocation, args: ['--no-daemon', ...invocation.args] }
-      : invocation
-  )
 }
