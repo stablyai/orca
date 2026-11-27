@@ -21,7 +21,12 @@ export type AgentSessionMcpServer = {
   canSignIn: boolean
   canReconnect: boolean
   canToggle: boolean
+  /** A server from the host's own list while its chat is at rest, which Orca checks and (when
+   *  `signsIn`) signs in to itself; `url` is null for a command. Older hosts send none. */
+  orca?: AgentSessionMcpOrcaServer
 }
+
+export type AgentSessionMcpOrcaServer = { id: string; url: string | null; signsIn: boolean }
 
 export type AgentSessionMcpOperation =
   | { action: 'status' }

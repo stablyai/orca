@@ -310,9 +310,9 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'ブロックを検索'
   },
   'auto.components.TaskPage.eec0c5c079': {
-    ko: 'Linear 이슈 검색...',
-    zh: '搜索 Linear 议题...',
-    ja: 'Linear イシューを検索...'
+    ko: '검색...',
+    zh: '搜索...',
+    ja: '検索…'
   },
   'auto.web.WebConnect.e3bcd082ac': {
     ko: 'Orca에 연결',

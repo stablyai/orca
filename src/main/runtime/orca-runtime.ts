@@ -1,4 +1,4 @@
-import { announceAgentCliUpdatesFinished } from '../agent-cli-update/agent-cli-update-service'
+import { announceAgentCliUpdatesFinished } from '../agent-cli-update/agent-cli-update-events'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import { chatMailPlace } from '../external-conversations/external-conversation-links'
 import * as botGroups from '../bots/bot-group-runtime'
@@ -42,10 +42,8 @@ import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-l
 import { rekeyMovedPaneOwners } from './terminal/identity/moved-pane-owner-rekey'
 import * as Layout from './terminal/layout/runtime-layout-apply'
 import type { TerminalCreateOptions } from './terminal/launch/terminal-create-options'
-import {
-  installStructuredAgentAvailability as installAvailability,
-  type StructuredAgentAvailabilityReader as AvailabilityReader
-} from './agent-session/launch/structured-agent-availability'
+import type { StructuredAgentAvailabilityReader as AvailabilityReader } from './agent-session/launch/structured-agent-availability'
+import { LazyStructuredAgentAvailability } from './agent-session/launch/lazy-structured-agent-availability'
 import { PairedServerRowsProducer } from './sidebar-inputs/workspace-rows/paired-server-rows-producer'
 import { RepoIconDataUrls } from './sidebar-inputs/repo-icons/repo-icon-data-urls'
 import { runtimeIconFetch } from './sidebar-inputs/repo-icons/repo-icon-remote-fetch'
@@ -213,11 +211,13 @@ class OrcaRuntimeService extends OrcaRuntimeWithRelayHostNotices {
     syncPRAutoRefreshCadence(this.store)
   }
 
-  private structuredAgentAvailability?: ReturnType<typeof installAvailability>
+  private readonly structuredAgentAvailability = new LazyStructuredAgentAvailability(
+    () => this.store,
+    this
+  )
 
   /** Subscribe from first use; returns the release function. */
   subscribeStructuredAgentAvailability(read: AvailabilityReader): () => void {
-    this.structuredAgentAvailability ??= installAvailability(this.store, this)
     return this.structuredAgentAvailability.subscribe(read)
   }
 

@@ -8,15 +8,11 @@ import { AGENT_ACTIVITY_METHODS } from './workspaces/agent-activity-methods'
 import { TERMINAL_METHODS } from './terminal/terminal'
 import { TERMINAL_DAEMON_METHODS } from './terminal/terminal-daemon'
 import { SESSION_TAB_METHODS } from './session-tabs/session-tabs'
-import { NATIVE_CHAT_METHODS } from './native-chat/native-chat'
 import { CLIENT_UI_METHODS } from './client-state/client-ui'
 import { CLIENT_EVENT_METHODS } from './client-events/client-events'
 import { HOST_CAPABILITY_METHODS } from './host-management/host-capabilities'
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from './client-events/runtime-client-capabilities'
-import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-sessions/structured-agent-session'
-import { STRUCTURED_AGENT_SESSION_AGENTS_METHODS } from './structured-sessions/catalog/structured-agent-session-agents'
 import { AGENT_HOOK_METHODS } from './agent-hooks/agent-hooks'
-import { AGENT_LAUNCH_METHODS } from './agent-launch/agent-launch'
 import {
   LAYOUT_APPLY_METHODS,
   LAYOUT_VIEW_REPORT_METHODS,
@@ -34,10 +30,7 @@ export const EAGER_CORE_RPC_METHODS = [
   ...AGENT_HOOK_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
-  ...AGENT_ACTIVITY_METHODS,
-  ...STRUCTURED_AGENT_SESSION_METHODS,
-  ...STRUCTURED_AGENT_SESSION_AGENTS_METHODS,
-  ...AGENT_LAUNCH_METHODS
+  ...AGENT_ACTIVITY_METHODS
 ] as const
 
 export const EAGER_SERVICE_RPC_METHODS = [
@@ -47,7 +40,6 @@ export const EAGER_SERVICE_RPC_METHODS = [
   ...WORKSPACE_LAYOUT_METHODS,
   // Switch point: a window-owned build registers no layout command.
   ...(ORCA_LAYOUT_OWNER_IS_MAIN ? [...LAYOUT_APPLY_METHODS, ...LAYOUT_VIEW_REPORT_METHODS] : []),
-  ...NATIVE_CHAT_METHODS,
   ...HOST_CAPABILITY_METHODS,
   ...RUNTIME_CLIENT_CAPABILITY_METHODS,
   ...CLIENT_EVENT_METHODS,

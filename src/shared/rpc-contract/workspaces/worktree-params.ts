@@ -9,7 +9,11 @@ import {
 } from '../rpc-param-primitives'
 import { WorkspaceLinkedItemSchema } from '../../workspace-attachments/workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../../workspace-attachments/workspace-attachment-schema'
-import { DiffCommentSchema, MobileDiffReviewSchema } from '../../file-review/diff-comment-schema'
+import {
+  DiffCommentDeliverySnapshotSchema,
+  DiffCommentSchema,
+  MobileDiffReviewSchema
+} from '../../file-review/diff-comment-schema'
 import { TaskSourceContextSchema } from '../../work-items/task-source-context-schema'
 import { CrossStoreParentRefSchema } from './cross-store-parent-params'
 import {
@@ -70,6 +74,7 @@ export const WorktreeSet = lazyZodSchema(() =>
     diffComments: z.array(DiffCommentSchema).optional(),
     // The list the writer started from; the host applies only its changes so other devices' notes survive.
     diffCommentsBase: z.array(DiffCommentSchema).optional(),
+    deliveredDiffCommentSnapshots: z.array(DiffCommentDeliverySnapshotSchema).optional(),
     // Older clients may send unsupported review shapes alongside unrelated metadata edits.
     mobileDiffReview: MobileDiffReviewSchema.optional().catch(undefined),
     parentWorktree: OptionalString,

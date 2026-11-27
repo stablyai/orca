@@ -15,6 +15,7 @@ import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../../ai-vault/parsing/session-json-object'
 import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
 
+import { readKimiWireSessionWorkDir } from '../../../ai-vault/scanners/kimi/session-scanner-kimi-paths'
 import { parseHermesSqliteSessionViaWorker } from '../../../ai-vault/scanners/hermes/session-scanner-hermes-worker'
 import { readOpenCodeTranscriptSignalViaWorker } from '../../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { samePiDirectory } from '../../../pi/rpc/launch/rpc-launch-resolution'
@@ -132,7 +133,10 @@ export function adoptedTranscriptSourceObserver(input: {
       sessionId = extractString(summary?.id) ?? sessionIdFromFileName(dirname(input.filePath))
       cwd = extractString(summary?.cwd)
     }
-    if (input.agent === 'pi' && sessionIdFromFileName(input.filePath) !== sessionId) {
+    if (
+      (input.agent === 'pi' || input.agent === 'droid') &&
+      sessionIdFromFileName(input.filePath) !== sessionId
+    ) {
       throw new Error('The saved conversation header does not match its file identity.')
     }
     // Moved or copied chats keep their old cwd; Claude and Grok resume from the cwd's bucket regardless.
@@ -152,7 +156,10 @@ export function adoptedTranscriptSourceObserver(input: {
       sawCodexMetadata = true
       const payload = asRecord(record.payload)
       sessionId = extractString(payload?.id) ?? sessionId
-    } else if ((input.agent === 'omp' || input.agent === 'pi') && record.type === 'session') {
+    } else if (
+      ((input.agent === 'omp' || input.agent === 'pi') && record.type === 'session') ||
+      (input.agent === 'droid' && record.type === 'session_start')
+    ) {
       sessionId = extractString(record.id)
       cwd = extractString(record.cwd)
     }
@@ -223,6 +230,10 @@ const ADOPTED_FOLDER_HEAD_BYTES = 16 * 1024 * 1024
 const ADOPTED_SUMMARY_BYTES = 1024 * 1024
 
 function folderCheckedTranscriptAgent(agent: AgentType) {
+  // Droid and Kimi load a session only in the folder it was saved in.
+  if (agent === 'droid' || agent === 'kimi') {
+    return agent
+  }
   const transcriptAgent = agent === 'pi' ? 'omp' : resolveNativeChatTranscriptAgent(agent)
   return transcriptAgent === 'codex' ? null : transcriptAgent
 }
@@ -261,6 +272,8 @@ export async function resolveAdoptedTranscriptFolder(
     let actual: { cwd: string | null } | null = null
     if (input.agent === 'hermes') {
       actual = await readAdoptedHermesIdentity(input.filePath, source)
+    } else if (input.agent === 'kimi') {
+      actual = { cwd: await readKimiWireSessionWorkDir(input.filePath) }
     } else if (transcriptAgent === 'opencode') {
       actual = await readAdoptedOpenCodeIdentity(input.filePath, source, input.signal)
     } else if (transcriptAgent) {

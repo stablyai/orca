@@ -9,6 +9,7 @@ import type {
 import { CONNECTOR_SOURCE_NAMES } from '../connectors/external-conversation-link'
 import { botLinearWorkspaces, botSlackApps, type Bot } from '../bot-types'
 import { googleBotAsk, type GoogleBotConnectState } from '../google/google-bot-connect-state'
+import { CONNECTOR_OFFER_NO_DIRECTIONS } from './connector-offer-directions'
 import {
   orcaCloudNeedsSignIn,
   serverSignInSteps,
@@ -48,8 +49,8 @@ export const ConnectorOfferSchema = lazyZodSchema(() =>
 
 export type ConnectorOffer = z.infer<typeof ConnectorOfferSchema>
 
-// What a connected source's add-access card adds: GitHub's install page covers both repositories and orgs.
-function addAccessWhat(source: LinkedOfferSource): string {
+/** What a connected source's add-access card adds: GitHub's install page covers both repositories and orgs. */
+export function addAccessWhat(source: LinkedOfferSource): string {
   return source === 'github'
     ? 'more GitHub repositories or organizations'
     : `another ${CONNECTOR_OFFER_NAMES[source]} workspace`
@@ -159,7 +160,7 @@ export function signInOfferReply(
   }
   return {
     offered: true,
-    message: `Your owner now sees a Sign in line for ${signInWhat(source).toLowerCase()} in this chat. Once they sign in, they'll tell you; then save it again. Don't tell them where to click.`
+    message: `Your owner now sees a Sign in line for ${signInWhat(source).toLowerCase()} in this chat. Once they sign in, they'll tell you; then save it again.${CONNECTOR_OFFER_NO_DIRECTIONS}`
   }
 }
 
@@ -188,7 +189,7 @@ export function connectorOfferReply(
   }
   return {
     offered: true,
-    message: `Your owner now sees a Connect card for ${name}${workspace ? ` (${workspace})` : ''} in this chat; it turns to Connected once they connect it. Don't tell them where to click. Before using it, check with \`orca bot connectors\`.`
+    message: `Your owner now sees a Connect card for ${name}${workspace ? ` (${workspace})` : ''} in this chat; it turns to Connected once they connect it.${CONNECTOR_OFFER_NO_DIRECTIONS} Before using it, check with \`orca bot connectors\`.`
   }
 }
 

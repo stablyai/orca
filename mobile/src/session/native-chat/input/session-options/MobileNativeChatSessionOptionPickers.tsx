@@ -26,6 +26,8 @@ import {
 import { mobileNativeChatSessionOptionSay } from './native-chat-session-option-copy'
 import {
   mobileDeferredPermissionSummary,
+  mobileEffectivePermissionValue,
+  mobileReportedPermissionAccessibleValue,
   mobileSessionOptionSummaryValue
 } from './mobile-native-chat-session-option-labels'
 import {
@@ -73,12 +75,6 @@ type PresentationProps = {
   onNavigate: (page: string | null) => void
   onDrawerOpen: (page: string) => void
   onDrawerAfterClose?: () => void
-}
-
-function selectedChoice(descriptor: SessionOptionDescriptor | undefined) {
-  return descriptor?.kind.type === 'select'
-    ? descriptor.kind.choices.find((choice) => choice.value === descriptor.kind.currentValue)
-    : undefined
 }
 
 export function MobileNativeChatSessionOptionPickers({
@@ -171,19 +167,22 @@ export function MobileNativeChatSessionOptionPickers({
   const locked = (descriptor: SessionOptionDescriptor): boolean =>
     busy || (isWorking && locksMidTurn(descriptor))
   const reason = nativeChatSessionOptionDisabledReason(activeDescriptor?.disabledReason, say)
-  const permissionChoice = selectedChoice(permission)
-  const permissionColor = permissionChoiceColor(colors, permissionChoice?.value)
-  const permissionIcon =
-    !model && permissionChoice ? permissionModeIcon(permissionChoice.value) : undefined
+  // An Own chat looks like the mode its agent reports, as an explicit pick of that mode would.
+  const permissionValue = mobileEffectivePermissionValue(permission)
+  const permissionColor = permissionChoiceColor(colors, permissionValue)
+  const permissionIcon = !model && permissionValue ? permissionModeIcon(permissionValue) : undefined
   const primary = model
     ? nativeChatModelPillLabel(model, say)
     : mobileSessionOptionSummaryValue((permission ?? options[0])!, t)
   const permissionDeferred = permission
     ? mobileDeferredPermissionSummary(permission, t)?.full
     : null
+  const permissionReported = mobileReportedPermissionAccessibleValue(permission, t)
+  // The model pill names permission only to warn; a reported Full access also says it comes from the settings.
+  const modelPermission = permissionDeferred ?? (permissionColor ? permissionReported : undefined)
   const secondary = (model && nativeChatOptionValuesLabel(options, say)) || null
-  // The pill shows only the model; its spoken name still carries effort and a deferred pick.
-  const modelValue = [primary, secondary, model && permissionDeferred].filter(Boolean).join(' ')
+  // The pill shows only the model; its spoken name still carries effort and the permission it warns about.
+  const modelValue = [primary, secondary, model && modelPermission].filter(Boolean).join(' ')
 
   const closePicker = (): void => onNavigate(null)
   const goHome = (): void => onNavigate(SESSION_OPTIONS_HOME)
@@ -226,7 +225,7 @@ export function MobileNativeChatSessionOptionPickers({
         leading={controller.heldPick ? Clock : undefined}
         accessibleName={
           model
-            ? permissionColor && !permissionDeferred
+            ? permissionColor && !modelPermission
               ? t(
                   'chat.sessionOptionPickers.modelFullAccessLabel',
                   'Model, {{value}}, full access',
@@ -236,7 +235,7 @@ export function MobileNativeChatSessionOptionPickers({
                 )
               : t('chat.sessionOptionPickers.modelLabel', 'Model, {{value}}', { value: modelValue })
             : t('chat.sessionOptionPickers.permissionsLabel', 'Permissions, {{value}}', {
-                value: permissionDeferred ?? primary
+                value: permissionDeferred ?? permissionReported ?? primary
               })
         }
         disabled={!canOpen}

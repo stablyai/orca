@@ -22,8 +22,10 @@ import {
 import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
 import { scheduleLocalCapacityRetry } from './filesystem-watcher-local-capacity'
 import { installLocalWatcher } from './filesystem-watcher-local-install'
+import { undeliveredBatchPayload } from './filesystem-watcher-local-events'
 import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
 import type { WatchWorktreeResult } from '../../../../shared/file-watch/watch-worktree-result'
+import type { FsChangedPayload } from '../../../../shared/file-watch/filesystem-change-event'
 
 const cancelledInstallWaiters = watcherLifecycleState.cancelledLocalInstallWaiters
 
@@ -217,7 +219,12 @@ async function subscribeWhileRemovalAllowed(
   }
 }
 
-export function unsubscribeLocalWatcher(worktreePath: string, senderId: number): void {
+/** With `handOver`, returns the events this sender had queued but not yet received, so a caller moving coverage to another watch keeps them. */
+export function unsubscribeLocalWatcher(
+  worktreePath: string,
+  senderId: number,
+  handOver = false
+): FsChangedPayload | undefined {
   const { key: rootKey } = getLocalWatcherRoot(worktreePath)
   forgetCancelledInstallWaiter(cancelledInstallWaiters, rootKey, senderId)
   const suspended = watcherLifecycleState.suspendedLocalWatcherListeners.get(rootKey)
@@ -244,10 +251,11 @@ export function unsubscribeLocalWatcher(worktreePath: string, senderId: number):
 
   const root = watcherLifecycleState.watchedRoots.get(rootKey)
   if (!root) {
-    return
+    return undefined
   }
 
-  root.listeners.delete(senderId)
+  const undelivered =
+    root.listeners.delete(senderId) && handOver ? undeliveredBatchPayload(root) : undefined
 
   // Grace teardown lets rapid workspace switches reuse native watchers.
   if (root.listeners.size === 0) {
@@ -258,7 +266,7 @@ export function unsubscribeLocalWatcher(worktreePath: string, senderId: number):
     }
     // Duplicate unwatch calls must not overwrite and leak existing grace timers.
     if (watcherLifecycleState.pendingTeardowns.has(rootKey)) {
-      return
+      return undelivered
     }
 
     const teardownTimer = setTimeout(() => {
@@ -274,4 +282,5 @@ export function unsubscribeLocalWatcher(worktreePath: string, senderId: number):
 
     watcherLifecycleState.pendingTeardowns.set(rootKey, teardownTimer)
   }
+  return undelivered
 }
