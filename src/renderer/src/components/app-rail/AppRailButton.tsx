@@ -13,6 +13,7 @@ const APP_RAIL_ITEM_IDS = [
   'automations',
   'artifacts',
   'skills',
+  'plugins',
   'mobile',
   'customize',
   'more',
