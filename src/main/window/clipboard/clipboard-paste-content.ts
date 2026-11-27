@@ -5,9 +5,10 @@ import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { readClipboardImageSource } from './clipboard-image-source'
 import { clipboardHtmlMayHaveLinks } from '../../../shared/clipboard/clipboard-link-html'
 import { assertClipboardTextWithinLimitWithYield } from '../../../shared/clipboard/clipboard-text'
-import type {
-  ClipboardPasteContent,
-  ReadClipboardPasteContentOptions
+import {
+  shouldProbeClipboardPasteImage,
+  type ClipboardPasteContent,
+  type ReadClipboardPasteContentOptions
 } from '../../../shared/clipboard/clipboard-paste-content'
 
 /** One clipboard.read() per paste: on macOS each read waits on the pasteboard, and a stalled source app holds main for each one. */
@@ -31,12 +32,11 @@ export async function readClipboardPasteContent(
         .then((html) => (clipboardHtmlMayHaveLinks(html) ? html : ''))
         .catch(() => '')
     : ''
-  const hasImage =
-    options.probeImage || text === ''
-      ? await readClipboardImageSource(reader).then(
-          (source) => source !== null,
-          () => false
-        )
-      : false
+  const hasImage = shouldProbeClipboardPasteImage(options.imageProbe, text, filePaths)
+    ? await readClipboardImageSource(reader).then(
+        (source) => source !== null,
+        () => false
+      )
+    : false
   return { text, filePaths, linkHtml, hasImage }
 }

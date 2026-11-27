@@ -3,8 +3,27 @@ import type { ReadClipboardTextOptions } from './clipboard-text'
 export type ReadClipboardPasteContentOptions = ReadClipboardTextOptions & {
   /** Also return the HTML flavor when it may carry links. */
   linkHtml?: boolean
-  /** Probe for an image even when there is text; otherwise only text-less clipboards are probed. */
-  probeImage?: boolean
+  /** When to check for an image: always, only with no text, or only for copied files with no text. Omitted: never. */
+  imageProbe?: ClipboardPasteImageProbe
+}
+
+export type ClipboardPasteImageProbe = 'always' | 'without-text' | 'files-without-text'
+
+export function shouldProbeClipboardPasteImage(
+  probe: ClipboardPasteImageProbe | undefined,
+  text: string,
+  filePaths: readonly string[]
+): boolean {
+  switch (probe) {
+    case 'always':
+      return true
+    case 'without-text':
+      return text === ''
+    case 'files-without-text':
+      return text === '' && filePaths.length > 0
+    default:
+      return false
+  }
 }
 
 /** Everything one paste needs, read from a single clipboard snapshot. */
@@ -14,6 +33,6 @@ export type ClipboardPasteContent = {
   filePaths: string[]
   /** Empty unless requested and the HTML may carry links. */
   linkHtml: string
-  /** False when not probed (text present without `probeImage`). */
+  /** False when `imageProbe` skipped the check. */
   hasImage: boolean
 }

@@ -4,6 +4,7 @@ import {
   textOnlyLabelsCopiedFiles
 } from '../../../../../shared/native-chat/input/composer/native-chat-clipboard-event'
 import { withPastedLinks } from './native-chat-pasted-links'
+import type { ClipboardPasteImageProbe } from '../../../../../shared/clipboard/clipboard-paste-content'
 
 /** Accept native pane clipboard events and React synthetic events. */
 export type ClipboardEventLike = {
@@ -59,12 +60,15 @@ function copiesOnlyFiles(text: string, filePaths: readonly string[]): boolean {
 /** Separate copied-file labels from prompt text; reuse eventFilePaths when the event already resolved them. */
 export async function readClipboardPasteText(
   maxBytes: number,
-  { eventFilePaths, probeImage = false }: { eventFilePaths?: string[]; probeImage?: boolean } = {}
+  {
+    eventFilePaths,
+    imageProbe = 'without-text'
+  }: { eventFilePaths?: string[]; imageProbe?: ClipboardPasteImageProbe } = {}
 ): Promise<{ text: string; copiedFilePaths: string[]; hasImage: boolean }> {
   const read = await window.api.ui.readClipboardPasteContent({
     maxBytes,
     linkHtml: true,
-    probeImage
+    imageProbe
   })
   const { text, hasImage } = read
   const filePaths = eventFilePaths ?? read.filePaths

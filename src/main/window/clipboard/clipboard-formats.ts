@@ -55,10 +55,21 @@ export type ClipboardFormatReader = {
 export function clipboardFormatSnapshot(): ClipboardFormatReader {
   let items: Promise<ClipboardItems> | null = null
   const read = (): Promise<ClipboardItems> => (items ??= clipboard.read())
+  // getType() fetches from the pasteboard each call; a paste probes the same file-list formats twice.
+  const unboundedReads = new Map<string, Promise<Buffer>>()
   return {
     availableFormats: async () => (await read()).flatMap((item) => item.types),
-    readBuffer: async (format, assertByteLength) =>
-      readItemsBuffer(await read(), format, assertByteLength),
+    readBuffer: async (format, assertByteLength) => {
+      if (assertByteLength) {
+        return readItemsBuffer(await read(), format, assertByteLength)
+      }
+      let buffer = unboundedReads.get(format)
+      if (!buffer) {
+        buffer = read().then((entries) => readItemsBuffer(entries, format))
+        unboundedReads.set(format, buffer)
+      }
+      return buffer
+    },
     // Electron's has() is membership in this same type list, enumerated again.
     has: async (format) =>
       (await read()).some((item) => item.types.includes(nativeClipboardFormat(format))),

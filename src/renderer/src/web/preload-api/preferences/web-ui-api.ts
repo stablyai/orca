@@ -6,7 +6,10 @@ import { WEB_PENDING_LINK_API } from './web-pending-link-api'
 import type { PreloadApi } from '../../../../../preload/api-types'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../../shared/clipboard/clipboard-text'
 import type { ReadClipboardTextOptions } from '../../../../../shared/clipboard/clipboard-text'
-import type { ReadClipboardPasteContentOptions } from '../../../../../shared/clipboard/clipboard-paste-content'
+import {
+  shouldProbeClipboardPasteImage,
+  type ReadClipboardPasteContentOptions
+} from '../../../../../shared/clipboard/clipboard-paste-content'
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import { omitPairingLocalUiFields } from '../../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
@@ -155,13 +158,13 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     readClipboardText: readWebClipboardText,
     readClipboardPasteContent: async (options?: ReadClipboardPasteContentOptions) => {
       const text = await readWebClipboardText(options)
-      // Each browser clipboard read can prompt, so probe images only when asked or text is empty.
-      const hasImage =
-        options?.probeImage || text === ''
-          ? (await clipboardHasImage().catch(() => null)) === true
-          : false
       // Browsers expose copied files and HTML only inside a paste event; a programmatic HTML read would prompt.
-      return { text, filePaths: [], linkHtml: '', hasImage }
+      const filePaths: string[] = []
+      // Each browser clipboard read can prompt, so probe only when the caller needs the answer.
+      const hasImage = shouldProbeClipboardPasteImage(options?.imageProbe, text, filePaths)
+        ? (await clipboardHasImage().catch(() => null)) === true
+        : false
+      return { text, filePaths, linkHtml: '', hasImage }
     },
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),

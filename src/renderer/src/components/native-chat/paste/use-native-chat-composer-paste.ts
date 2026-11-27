@@ -6,6 +6,7 @@ import { assertClipboardTextWithinLimit } from '../../../../../shared/clipboard/
 import { setNativeChatPasteFailure } from '../composer/controls/native-chat-composer-notice'
 import { NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES } from './native-chat-context-paste-limit'
 import { isMacPlatform } from '../pane/routing/native-chat-shortcut'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   clipboardEventCopiedFilePaths,
   clipboardEventPastedText,
@@ -252,9 +253,10 @@ export function useNativeChatComposerPaste({
       captureExternalPaths?.() ?? ((paths: string[]) => attachCopiedFiles(paths, { focus: false }))
     const owner = resolveAttachmentOwner()
     void (async () => {
-      // In a browser each clipboard read can prompt; probe beside text only when an image can attach.
+      // Desktop answers from the same snapshot; a browser read can prompt, so web probes beside text only after typing it.
+      const probeBesideText = ownerAcceptsClipboardImage(owner) && !isWebClientLocation()
       const read = await readClipboardPasteText(NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES, {
-        probeImage: ownerAcceptsClipboardImage(owner)
+        imageProbe: probeBesideText ? 'always' : 'without-text'
       }).catch((error) => {
         if (canPaste()) {
           setNativeChatPasteFailure(setNotice, error)
@@ -279,10 +281,11 @@ export function useNativeChatComposerPaste({
         }
         return
       }
-      // A failed read (e.g. text too large) can still carry a picture.
-      const hasImage = read
-        ? read.hasImage
-        : await window.api.ui.clipboardHasImage().catch(() => null)
+      // A failed read (e.g. text too large) or an unprobed web read can still carry a picture.
+      const hasImage =
+        read && (probeBesideText || read.text === '')
+          ? read.hasImage
+          : await window.api.ui.clipboardHasImage().catch(() => null)
       if (hasImage !== true) {
         return
       }

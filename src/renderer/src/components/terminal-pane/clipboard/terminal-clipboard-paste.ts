@@ -63,7 +63,10 @@ export async function pasteTerminalClipboard({
   // File-manager copies carry the file names as text; one read returns the file list beside it.
   let content: ClipboardPasteContent = { text: '', filePaths: [], linkHtml: '', hasImage: false }
   try {
-    content = await readClipboardContent({ maxBytes: TERMINAL_PASTE_MAX_BYTES })
+    content = await readClipboardContent({
+      maxBytes: TERMINAL_PASTE_MAX_BYTES,
+      imageProbe: 'files-without-text'
+    })
   } catch (error) {
     if (isClipboardTextTooLargeError(error)) {
       onTextPasteError?.(error)
