@@ -1,3 +1,5 @@
+import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
+
 /** GETs a public JSON file with a byte cap and timeout; no cookies, no query, no identifiers. */
 export async function fetchBoundedJson(
   fetcher: typeof fetch,
@@ -10,10 +12,12 @@ export async function fetchBoundedJson(
     signal: AbortSignal.timeout(timeoutMs)
   })
   if (!response.ok) {
+    await cancelUnreadResponseBody(response)
     throw new Error(`${label} request failed with HTTP ${response.status}`)
   }
   const declaredBytes = Number(response.headers.get('content-length') ?? '0')
   if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
+    await cancelUnreadResponseBody(response)
     throw new Error(`${label} response exceeds its size limit`)
   }
   if (!response.body) {
