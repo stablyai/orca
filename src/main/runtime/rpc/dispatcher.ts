@@ -1,18 +1,14 @@
 import {
-  buildRegistry,
   isStreamingMethod,
   type RpcAnyMethodDeclaration,
   type RpcEnvelopeMeta,
   type RpcMethod,
-  type RpcRegistry,
   type RpcRequest,
   type RpcResponse,
   type RpcStreamingMethod
 } from './core'
 import { guardedRpcCallContext, rpcCallContext } from './rpc-call-context'
-
 import { successResponse } from './responses/rpc-response'
-import { withoutMethodsThisHostDoesNotServe } from './methods/terminal/session-terminal-scrollback'
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { isDurableMutation } from '../../../shared/orchestration/orchestration-rpc-contract'
@@ -32,10 +28,13 @@ import { runWithActiveRpcCaller } from './callers/active-call'
 import { admitRpcRequest } from './dispatch/rpc-request-admission-prologue'
 import { resolveOrcadFeatureRequirement, rpcMethodFeatureWait } from './startup/orcad-readiness'
 import { routeRemoteOwnedCall } from '../orchestration/federation/remote-owned/remote-owned-route'
+import { LazyRpcMethodLoader, type LazyRpcMethodGroup } from './lazy-rpc-method-group'
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
   methods: readonly RpcAnyMethodDeclaration[]
+  /** Optional lazy method groups loaded on first dispatch of a matching method name. */
+  lazyGroups?: readonly LazyRpcMethodGroup[]
   /** Pins every call to this scope, for in-process bridges that relay a non-owner caller. */
   callerScope?: RpcCallerScope
 }
@@ -49,15 +48,15 @@ type AdmittedUnaryCall = {
 
 export class RpcDispatcher {
   private readonly runtime: OrcaRuntimeService
-  private readonly registry: RpcRegistry
+  private readonly lazyLoader: LazyRpcMethodLoader
   private readonly orchestrationMutations: OrchestrationMutationExecutor
   private readonly legacyOrchestration: OrchestrationLegacyCompatibility
   private readonly pinnedCallerScope: RpcCallerScope | undefined
 
-  constructor({ runtime, methods, callerScope }: DispatcherOptions) {
+  constructor({ runtime, methods, lazyGroups = [], callerScope }: DispatcherOptions) {
     this.runtime = runtime
     this.pinnedCallerScope = callerScope
-    this.registry = buildRegistry(withoutMethodsThisHostDoesNotServe(methods))
+    this.lazyLoader = new LazyRpcMethodLoader(methods, lazyGroups)
     this.orchestrationMutations = getOrchestrationMutationExecutor(runtime)
     this.legacyOrchestration = new OrchestrationLegacyCompatibility(runtime)
   }
@@ -187,17 +186,20 @@ export class RpcDispatcher {
     meta: RpcEnvelopeMeta,
     isTransportSupported: (method: RpcMethod | RpcStreamingMethod) => method is M
   ) {
-    return admitRpcRequest(
-      {
-        runtime: this.runtime,
-        registry: this.registry,
-        meta,
-        pinnedCallerScope: this.pinnedCallerScope
-      },
-      request,
-      options,
-      isTransportSupported
-    )
+    const loadPending = this.lazyLoader.ensureMethodLoaded(request.method)
+    const runAdmit = () =>
+      admitRpcRequest(
+        {
+          runtime: this.runtime,
+          registry: this.lazyLoader.registry,
+          meta,
+          pinnedCallerScope: this.pinnedCallerScope
+        },
+        request,
+        options,
+        isTransportSupported
+      )
+    return loadPending ? loadPending.then(runAdmit) : runAdmit()
   }
 
   private async invokeUnary(
@@ -302,12 +304,10 @@ export class RpcDispatcher {
       context.orchestrationCaller
     )
     if (request.method.startsWith('orchestration.')) {
-      queueMicrotask(async () => {
-        try {
-          await runtime.refreshAgentSenderAssociations?.()
-        } catch (error) {
+      queueMicrotask(() => {
+        void runtime.refreshAgentSenderAssociations?.().catch((error) => {
           console.warn('[runtime] Sender identity publication failed', error)
-        }
+        })
       })
     }
     recordRuntimeFeatureInteraction(runtime, request.method, result, undefined, request.params)
