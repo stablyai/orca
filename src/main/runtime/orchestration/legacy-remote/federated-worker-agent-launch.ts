@@ -27,7 +27,7 @@ export async function launchFederatedWorkerAgent(args: {
   agent: TuiAgent | undefined
   launchPreferences: AgentLaunchPreferences | undefined
   /** The workspace to start in; absent creates the new top-level worktree the params describe. */
-  worktree?: { id: string }
+  worktree?: { id: string; identity?: { key: string } }
   /** The paired client that asked, so its own sidebar counts the new worktree as its own. */
   creatorProvenance?: Worktree['creatorProvenance']
   setupSource: string
@@ -152,7 +152,11 @@ export async function launchFederatedWorkerAgent(args: {
         throw new Error(TERMINAL_ONLY_MESSAGE)
       },
       createTerminalAgent: async ({ worktreeId }) => {
-        const terminal = await runtime.createTerminal(`id:${worktreeId}`, {
+        const selector =
+          args.worktree?.id === worktreeId && args.worktree.identity?.key
+            ? `identity:${args.worktree.identity.key}`
+            : `id:${worktreeId}`
+        const terminal = await runtime.createTerminal(selector, {
           // Resolve agent ids through TUI config: cursor is the desktop app, its CLI is cursor-agent.
           startupAgent: agent,
           launchSource: 'orchestration',

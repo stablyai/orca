@@ -14,6 +14,8 @@ import type { AgentSessionWriteNoticePart } from '../../../../../../../shared/ag
 import { structuredAgentSessionMessageSendMutation } from '../../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { structuredAgentSessionBlocksTooLarge } from '../../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import { AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY } from '../../../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
+import { AGENT_SESSION_SEND_WORK_TARGET_RUNTIME_CAPABILITY } from '../../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../../shared/execution-host/execution-host'
 import {
   structuredAgentSessionSendEvidence,
   type StructuredAgentSessionSendAnswer,
@@ -125,6 +127,26 @@ export async function attemptStructuredAgentSessionSend(args: {
     ) {
       const { skills: _skills, ...compatibleBody } = body
       body = compatibleBody
+    }
+    // Never silently drop a selected work target on an older host that cannot honor it.
+    if (
+      body.workTarget &&
+      !(await structuredAgentSessionHostSupports(
+        target,
+        AGENT_SESSION_SEND_WORK_TARGET_RUNTIME_CAPABILITY
+      ))
+    ) {
+      return { kind: 'not-sent', parts: ['workTargetHostUnsupported', 'notDoneSend'] }
+    }
+    if (
+      body.workTarget &&
+      target.kind === 'environment' &&
+      body.workTarget.hostId === `runtime:${target.environmentId}`
+    ) {
+      body = {
+        ...body,
+        workTarget: { ...body.workTarget, hostId: LOCAL_EXECUTION_HOST_ID }
+      }
     }
   } catch (error) {
     return args.abandoned() ? null : { kind: 'not-sent', parts: notSentParts(error) }

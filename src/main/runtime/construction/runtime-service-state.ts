@@ -262,6 +262,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
       senderSnapshotReader: () => this.orchestrationSenderNames.snapshotReader(),
       senderSnapshot: (party, reportedDispatchId, recorded) =>
         this.orchestrationSenderNames.snapshotOf(party, reportedDispatchId, recorded),
+      verifyMessage: this.verifyStructuredMailMessage,
       host: createStructuredMailboxPointerHost(this.structuredMailOwner?.())
     })
 

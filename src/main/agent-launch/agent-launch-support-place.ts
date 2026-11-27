@@ -28,7 +28,11 @@ export async function readStructuredCreateSupport(
   const options = { requireInstalledChatProgram: true }
   try {
     return await runtime.getStructuredAgentSessionCreateSupport(
-      'worktreeId' in place ? `id:${place.worktreeId}` : { repo: place.repoSelector },
+      'worktreeId' in place
+        ? place.worktreeId.startsWith('identity:') || place.worktreeId.startsWith('id:')
+          ? place.worktreeId
+          : `id:${place.worktreeId}`
+        : { repo: place.repoSelector },
       agent,
       options
     )

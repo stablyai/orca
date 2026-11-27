@@ -1,7 +1,11 @@
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
+import { useAppStore } from '@/store/index'
+import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import { findNativeChatPasteField } from '@/components/native-chat/paste/native-chat-paste-request'
 import type { NativeChatComposerHandle } from '../native-chat-composer-types'
 import {
+  isNativeChatKeyOwnerTarget,
   shouldFocusNativeChatComposerFromEditingKey,
   shouldFocusNativeChatInputForPaste,
   shouldRedirectNativeChatTyping,
@@ -9,6 +13,10 @@ import {
 } from './native-chat-typing-redirect'
 
 type NativeChatRootKeyEvent = KeyboardRedirectEvent & {
+  code?: string
+  keyCode?: number
+  repeat?: boolean
+  nativeEvent?: { isComposing?: boolean }
   preventDefault: () => void
   stopPropagation: () => void
 }
@@ -18,6 +26,38 @@ export function routeNativeChatRootKeyToInput(
   composer: NativeChatComposerHandle | null,
   questionAnswerInput: HTMLInputElement | HTMLTextAreaElement | null
 ): void {
+  const composing =
+    event.isComposing === true ||
+    event.nativeEvent?.isComposing === true ||
+    event.keyCode === 229 ||
+    composer?.isComposing?.() === true
+  const platform = getShortcutPlatform()
+  if (
+    !event.defaultPrevented &&
+    !event.repeat &&
+    !composing &&
+    !isNativeChatKeyOwnerTarget(event.target) &&
+    !hasVisibleOverlay({ ignoreDismissed: true }) &&
+    composer?.openWorkTargetPicker &&
+    keybindingMatchesAction(
+      'chat.pickWorkTarget',
+      {
+        key: event.key,
+        code: event.code ?? '',
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey === true,
+        shiftKey: event.shiftKey === true
+      },
+      platform,
+      useAppStore.getState().keybindings
+    ) &&
+    composer.openWorkTargetPicker()
+  ) {
+    event.preventDefault()
+    event.stopPropagation()
+    return
+  }
   // A focused transcript or code box owns Space paging; typing elsewhere still reaches the composer.
   if (
     event.key === ' ' &&
@@ -33,7 +73,7 @@ export function routeNativeChatRootKeyToInput(
     return
   }
   // Resolve an editing card before the primary input so the native paste keeps its owner.
-  const isMac = getShortcutPlatform() === 'darwin'
+  const isMac = platform === 'darwin'
   if (shouldFocusNativeChatInputForPaste(event, isMac)) {
     const field = findNativeChatPasteField(event.target)
     if (field) {

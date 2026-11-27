@@ -8,6 +8,7 @@ import type {
   NativeChatComposerDraft,
   NativeChatComposerDraftImage
 } from './native-chat-composer-draft-storage'
+import { sameAgentJournalWorkTarget } from '../../../../../shared/agent-session/work-target/agent-session-work-target'
 
 /** Compare document values so adopting an equal editor copy cannot create a new unsaved change. */
 export function sameNativeChatComposerDraftDocument(
@@ -39,7 +40,8 @@ export function sameNativeChatComposerDraftImages(
 /** After acceptance, keep inserted text and newly attached images; return null for other edits so the current draft stays intact. */
 export function nativeChatComposerDraftLeftAfterSend(
   current: NativeChatComposerDraft,
-  sent: NativeChatComposerDraft
+  sent: NativeChatComposerDraft,
+  options?: { preserveWorkTarget?: boolean }
 ): NativeChatComposerDraft | null {
   if (
     current.text === sent.text &&
@@ -54,12 +56,18 @@ export function nativeChatComposerDraftLeftAfterSend(
   if (!left) {
     return null
   }
+  const keptWorkTarget = options?.preserveWorkTarget
+    ? current.workTarget
+    : sameAgentJournalWorkTarget(current.workTarget, sent.workTarget)
+      ? undefined
+      : current.workTarget
   return {
     text: left.text,
     ...(current.document
       ? { document: slicePromptDocument(current.document, left.from, left.to) }
       : {}),
     ...(current.pastedTextFiles ? { pastedTextFiles: current.pastedTextFiles } : {}),
-    images: current.images.filter((image) => !sent.images.some((held) => held.id === image.id))
+    images: current.images.filter((image) => !sent.images.some((held) => held.id === image.id)),
+    ...(keptWorkTarget ? { workTarget: keptWorkTarget } : {})
   }
 }

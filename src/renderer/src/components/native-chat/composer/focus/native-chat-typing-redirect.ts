@@ -87,6 +87,10 @@ export function shouldFocusNativeChatInputForPaste(
   return chord && !targetMatches(event.target, KEY_OWNER_TARGET_SELECTOR)
 }
 
+export function isNativeChatKeyOwnerTarget(target: EventTarget | null): boolean {
+  return targetMatches(target, KEY_OWNER_TARGET_SELECTOR)
+}
+
 function targetMatches(target: EventTarget | null, selector: string): boolean {
   return eventTargetElement(target)?.closest(selector) != null
 }

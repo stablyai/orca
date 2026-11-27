@@ -1,10 +1,11 @@
 import { isFolderRepo } from '../../../../../../../../shared/repository/repo-kind'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
+import type { RuntimeRepoSelector } from '../../../../../../workspaces/catalog/runtime-repo-selector'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 
 export async function assertOrchestrationWorktreeCreationSupported(args: {
   runtime: OrcaRuntimeService
-  repoSelector: string
+  repoSelector: RuntimeRepoSelector
   existingPlacement: string
 }): Promise<void> {
   if (!isFolderRepo(await args.runtime.showRepo(args.repoSelector))) {
@@ -19,7 +20,7 @@ export async function assertOrchestrationWorktreeCreationSupported(args: {
 /** The existing workspace a worker reuses, or none once a new worktree's repo can host one. */
 export async function resolveExistingWorkerWorkspace(
   runtime: OrcaRuntimeService,
-  creationTarget: { repoSelector: string } | undefined,
+  creationTarget: { repoSelector: RuntimeRepoSelector } | undefined,
   existingWorktree: string
 ): Promise<Awaited<ReturnType<OrcaRuntimeService['showManagedTerminalWorkspace']>> | undefined> {
   if (!creationTarget) {

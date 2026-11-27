@@ -3,8 +3,13 @@ import { agentJournalSubmissionKey } from '../../../../shared/agent-session/jour
 // Accept into conversations without provider ownership; delivery starts children after acceptance.
 
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import {
+  refuse,
+  type AgentSessionWireRefusal
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { stripWorkTargetHostPin } from '../../../../shared/agent-session/work-target/agent-session-work-target'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -42,6 +47,35 @@ export function structuredAgentSessionSendBlock(
     return rewindRefusal('outcome-unknown')
   }
   return null
+}
+
+/** Validate any selected work target before journal admission and return the canonicalized body. */
+export async function admitSendWorkTarget(
+  deps: Pick<StructuredAgentSessionMutationContext['deps'], 'validateWorkTarget'>,
+  record: Pick<AgentSessionRecord, 'location'> | null,
+  body: AgentJournalMessageItem
+): Promise<
+  { ok: true; body: AgentJournalMessageItem } | { ok: false; refusal: AgentSessionWireRefusal }
+> {
+  if (!body.workTarget) {
+    return { ok: true, body }
+  }
+  if (!record || !deps.validateWorkTarget) {
+    return {
+      ok: false,
+      refusal: refuse(
+        'agent_session_operation_invalid',
+        { reason: 'workTargetUnsupportedChat' },
+        'Project and workspace targeting is only available in bot chats.'
+      )
+    }
+  }
+  // Strip any client-supplied pairing pin so the host always authors paired-server identity from live state.
+  const validated = await deps.validateWorkTarget(record, stripWorkTargetHostPin(body.workTarget))
+  if (!validated.ok) {
+    return validated
+  }
+  return { ok: true, body: { ...body, workTarget: validated.placement.canonicalTarget } }
 }
 
 export async function openConversationForWrite(

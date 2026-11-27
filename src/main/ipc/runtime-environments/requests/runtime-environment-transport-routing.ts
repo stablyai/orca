@@ -51,6 +51,8 @@ export async function callRuntimeEnvironment(
     background?: boolean
     /** The user asked for it: it may wake a WSL host Orca stopped idle (#46567). */
     wake?: boolean
+    /** Bypass status-owner failure backoff when forcing a fresh status.get probe. */
+    force?: true
   }
 ): Promise<Rpc.RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {

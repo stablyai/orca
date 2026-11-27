@@ -5,6 +5,10 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
+import {
+  parseAgentJournalWorkTarget,
+  type AgentJournalWorkTarget
+} from '../../../../../shared/agent-session/work-target/agent-session-work-target'
 import { createIndexedDbNativeChatComposerDraftStorage } from './native-chat-composer-draft-indexeddb'
 
 export type NativeChatComposerDraftImage = {
@@ -22,6 +26,8 @@ export type NativeChatComposerDraft = {
   /** The editor's document for exactly `text`; dropped when the text changes without one. */
   readonly document?: JSONContent
   readonly images: readonly NativeChatComposerDraftImage[]
+  /** Optional project or existing workspace selected in a bot chat for the next ordinary message. */
+  readonly workTarget?: AgentJournalWorkTarget
 }
 
 /** The workspace whose chat the draft was written in; its removal deletes the draft. */
@@ -168,11 +174,13 @@ export function parseStoredNativeChatComposerDraft(
       )
     : undefined
   const owner = parseOwner(value.owner)
+  const workTarget = parseAgentJournalWorkTarget(value.workTarget)
   return {
     text,
     ...(pastedTextFiles ? { pastedTextFiles } : {}),
     ...(isEditorDocument(document) ? { document } : {}),
     images: images.flatMap((image) => parseImage(image) ?? []),
+    ...(workTarget ? { workTarget } : {}),
     savedAt,
     ...(owner ? { owner } : {})
   }
@@ -204,6 +212,8 @@ export type NativeChatComposerDraftChange = {
   /** Present, even as undefined, to replace the document. */
   document?: JSONContent
   images?: readonly NativeChatComposerDraftImage[]
+  /** Present, even as null/undefined, to replace or clear the selected work target. */
+  workTarget?: AgentJournalWorkTarget | null
   /** Text shown but never saved while the draft still holds exactly it. */
   unsavedText?: string
   /** A new draft's owner when its chat may no longer be open to name it: the one it was begun in. */

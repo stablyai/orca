@@ -1,5 +1,4 @@
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
-import { resolveLocalWorkerStartLaunch } from './launch/worker-opencode-model-preflight'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type {
@@ -9,17 +8,9 @@ import type {
 } from '../../../../../orchestration/db/orchestration-records'
 import type { OrchestrationEntryCaller } from '../../../../../orchestration/addressing/orchestration-caller-identity'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
-import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
-import {
-  refuseUnmatchedWorkerSelector,
-  workerStartTargetLabel
-} from './worker-start-selector-refusal'
-import { preflightWorkerAgentOnHost } from './launch/worker-agent-host-preflight'
 import { lineageModeForResolvedAgent } from './worker-chat-lineage'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './placement/worker-start-agent-placement'
-import { resolveExistingWorkerWorkspace } from './placement/folder-worktree-placement'
-import { resolveWorkerWorktreeCreationTarget } from './placement/worker-worktree-creation'
 import type { WorkerStartInput } from './worker-start-input'
 import {
   persistGatedSetupSpawnFailure,
@@ -48,6 +39,16 @@ import {
 } from '../../../../../orchestration/workers/launch/worker-start-card'
 import { rebindReusedStructuredWorker } from '../../structured-workers/orchestration-structured-worker-session'
 import { placedWorkerParty, type WorkerFollowUp } from '../follow-up/worker-follow-up-placement'
+import type { ResolvedBotWorkTargetPlacement } from '../../../../../../../shared/agent-session/work-target/agent-session-work-target'
+import { runtimeRepoSelectorText } from '../../../../../workspaces/catalog/runtime-repo-selector'
+import {
+  preflightLocalWorkerMode,
+  prepareLocalWorkerPlacementAndLaunch
+} from './placement/local-worker-existing-placement'
+import {
+  resolveInitialOrdinaryTakesMailIds,
+  verifyAndBindTakesMailForHandOver
+} from '../../../../../../bots/bot-work-target-follow-up-mail-gate'
 
 export async function startLocalWorker(args: {
   params: WorkerStartInput
@@ -67,8 +68,10 @@ export async function startLocalWorker(args: {
   /** Set when a worker starts its own helper; the helper reports to this Dispatch. */
   helperCreator?: DispatchContextRow
   followUp?: WorkerFollowUp
+  /** Validated single-turn bot work target enforced through host/repo/instance placement. */
+  workTarget?: ResolvedBotWorkTargetPlacement
 }): Promise<unknown> {
-  const { runtime, db, coordinator, callerSession, orchestrationMutation } = args
+  const { runtime, db, coordinator, callerSession, orchestrationMutation, workTarget } = args
   const recordStart = prepareWorkerStartCard(runtime, callerSession)
   // `--terminal` names a party: a chat by its `/clear` root address, as its Dispatch does.
   const terminal = args.params.terminal && resolveDispatchAssigneeParty(args.params.terminal, db)
@@ -77,44 +80,24 @@ export async function startLocalWorker(args: {
   const requestedWorktree =
     params.worktree ?? (await explicitWorkerWorkspace(runtime, db, terminal))
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
-  const creationTargetFor = (callerWorktreeId: string) =>
-    resolveWorkerWorktreeCreationTarget({
-      runtime,
-      requestedWorktree,
-      repo: params.repo,
-      callerWorktreeId,
-      crossStoreParent: params.crossStoreParent
-    })
-  const coordinatorWorktreeId = await refuseUnmatchedWorkerSelector(
-    { flag: '--from', value: params.from },
-    () => resolveDispatchCallerWorktreeId(runtime, params.from, callerSession)
-  )
-  const existingWorktree =
-    requestedWorktree === 'current' ? `id:${coordinatorWorktreeId}` : requestedWorktree
-  const targetLabel = workerStartTargetLabel({ ...args.params, createsWorktree, requestedWorktree })
+  const prepared = await prepareLocalWorkerPlacementAndLaunch({
+    runtime,
+    params,
+    rawParams: args.params,
+    callerSession,
+    requestedWorktree,
+    createsWorktree,
+    workTarget
+  })
   const {
     agent,
     launch,
-    warning: retryLaunchWarning
-  } = await resolveLocalWorkerStartLaunch({
-    params,
-    createsWorktree,
-    existingWorktree,
-    targetLabel,
-    runtime,
-    resolveTarget: async () =>
-      createsWorktree
-        ? { repo: (await creationTargetFor(coordinatorWorktreeId)).repoSelector }
-        : { worktree: existingWorktree }
-  })
-
-  const creationTarget = createsWorktree
-    ? await creationTargetFor(coordinatorWorktreeId)
-    : undefined
+    retryLaunchWarning,
+    creationTarget,
+    selector: existingWorktreeSelector
+  } = prepared
   let resolvedWorktree: Awaited<ReturnType<typeof placeWorkerAgent>>['worktree'] | undefined =
-    await refuseUnmatchedWorkerSelector(targetLabel, () =>
-      resolveExistingWorkerWorkspace(runtime, creationTarget, existingWorktree)
-    )
+    prepared.managed
   if (terminal) {
     await assertExplicitWorkerUsable({
       runtime,
@@ -126,10 +109,15 @@ export async function startLocalWorker(args: {
     })
   }
   const decided = lineageModeForResolvedAgent(runtime, args.mode, { ...args, params, agent })
-  const host = { runtime, agent, resolvedWorktree, creationTarget, terminal: params.terminal }
-  let mode = chatWorkerMode(await preflightWorkerAgentOnHost({ ...host, mode: decided }), chat)
+  let mode = chatWorkerMode(
+    await preflightLocalWorkerMode(runtime, decided, prepared, params.terminal),
+    chat
+  )
 
   const followUp = args.followUp
+  const takesMailMessageIds = followUp?.takesMailOf
+    ? await resolveInitialOrdinaryTakesMailIds(runtime, db, followUp.takesMailOf, followUp.of)
+    : undefined
   if (followUp?.retainedChat) {
     await runtime.ensureStructuredAgentSessionHost()
   }
@@ -139,18 +127,18 @@ export async function startLocalWorker(args: {
     createsWorktree,
     mode,
     resolvedWorktreeId: resolvedWorktree?.id,
-    repoSelector: creationTarget?.repoSelector,
+    resolvedWorktreeInstanceId: resolvedWorktree?.instanceId,
+    repoSelector: creationTarget ? runtimeRepoSelectorText(creationTarget.repoSelector) : undefined,
     agent,
-    launchReceipt: launch.receipt
+    launchReceipt: launch.receipt,
+    takesMailMessageIds
   })
   releaseRetriedWorkerTerminal(runtime, db, params)
-  const task = started.task
+  const { task } = started
   let terminalHandle = params.terminal
   let placed: Awaited<ReturnType<typeof placeWorkerAgent>> | undefined
   let failedStage = 'terminal_create'
-  const onStage = (stage: string) => {
-    failedStage = stage
-  }
+  const onStage = (stage: string) => void (failedStage = stage)
   let result: unknown
   const failStart = (error: unknown, stage = failedStage): Promise<unknown> =>
     failWorkerStartWithReceipt({
@@ -190,6 +178,8 @@ export async function startLocalWorker(args: {
       creationTarget,
       orchestrationRunId: run.id,
       resolvedWorktree,
+      ...(existingWorktreeSelector ? { existingWorktreeSelector } : {}),
+      ...(prepared.resolvedFolder ? { resolvedFolder: prepared.resolvedFolder } : {}),
       mode,
       agent,
       launch,
@@ -235,19 +225,23 @@ export async function startLocalWorker(args: {
     // Fixed now: the hand-over may run later, from the background wait.
     const placement = placed
     const handle = terminalHandle
+    const { worktree } = placement
+    const worktreeInstanceId = worktree.instanceId ?? null
     const warning = joinWorkerStartWarnings(retryLaunchWarning, placement.warning)
     const awaitingReceipt = { runId: run.id, taskId: task.id, launch: placed.launch, mode, warning }
     // A hand-over from the background wait gets a fresh delivery budget; one in time keeps the shared one.
-    const bindTerminal = (): void => {
+    const bindTerminal = (
+      resolvedAuthority = authority ?? requireWorkerAuthority(runtime, handle)
+    ): void => {
       if (retained) {
         return retained.assertStarting(started.dispatch.id)
       }
-      const terminalAuthority = authority ?? requireWorkerAuthority(runtime, handle)
       db.prepareStartingWorkerAuthority({
         dispatchId: started.dispatch.id,
         handle,
-        ...terminalAuthority,
-        worktreeId: placement.worktree.id,
+        ...resolvedAuthority,
+        worktreeId: worktree.id,
+        worktreeInstanceId,
         effects,
         setupState: setupReceipt.state,
         terminalOwnership: external ? 'external' : 'created',
@@ -255,7 +249,16 @@ export async function startLocalWorker(args: {
       })
     }
     const handOver = async (deliveryDeadline = readinessDeadline): Promise<unknown> => {
-      bindTerminal()
+      const terminalAuthority = authority ?? requireWorkerAuthority(runtime, handle)
+      await verifyAndBindTakesMailForHandOver(runtime, db, {
+        dispatchId: started.dispatch.id,
+        takesMailOf: args.followUp?.takesMailOf,
+        runId: run.id,
+        worktreeId: worktree.id,
+        worktreeInstanceId,
+        workerHostScope: 'hostScope' in terminalAuthority ? terminalAuthority.hostScope : undefined,
+        bindTerminal: () => bindTerminal(terminalAuthority)
+      })
       if (workerChat) {
         rebindReusedStructuredWorker(handle, db)
       }

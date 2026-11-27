@@ -1,6 +1,7 @@
 import * as z from 'zod'
 import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { isAgentSessionOptions } from '../../agent-session/lifecycle/agent-session-record'
+import { SendWorkTarget } from '../../agent-session/work-target/agent-session-work-target'
 import { measureUtf8ByteLength } from '../../text/utf8-byte-limits'
 
 export const AgentSessionOptions = lazyZodSchema(() =>
@@ -58,7 +59,8 @@ export const SendBodyStructure = lazyZodSchema(() =>
       kind: z.literal('message'),
       role: z.literal('user'),
       blocks: z.array(SendBlock).min(1).max(MAX_BLOCKS),
-      skills: z.array(SendSkillRef).min(1).max(MAX_SKILL_REFS).optional()
+      skills: z.array(SendSkillRef).min(1).max(MAX_SKILL_REFS).optional(),
+      workTarget: SendWorkTarget.optional()
     })
     .strict()
 )

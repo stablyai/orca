@@ -22,6 +22,7 @@ import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 
 import type { SendParams } from './send-params'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
+import type { SendWorkTargetGuard } from '../../../../../bots/bot-work-target-send-guards'
 import type { z } from 'zod'
 
 type SendParamsInput = z.infer<typeof SendParams>
@@ -113,6 +114,7 @@ export async function sendGroupMessage(args: {
   revalidateLegacyCoordinator: (() => string) | undefined
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
   withSendWarnings: SendReceipt
+  workTargetGuard?: SendWorkTargetGuard
 }): Promise<unknown> {
   const {
     params,
@@ -126,7 +128,8 @@ export async function sendGroupMessage(args: {
     explicitRunId,
     legacyCoordinatorRunId,
     revalidateLegacyCoordinator,
-    recordMutationReceipt
+    recordMutationReceipt,
+    workTargetGuard
   } = args
   // Audience follows the sender's binding, never a caller-supplied message Run or payload.
   function resolveAudienceRunId(): string {
@@ -267,6 +270,8 @@ export async function sendGroupMessage(args: {
     )
   }
 
+  await workTargetGuard?.verifyGroup(db, uniqueRecipients, candidates)
+
   const threadId = params.threadId ?? `thread_${Date.now()}`
   const senderDispatchId = db.getActiveDispatchForIdentity(from, senderPaneKey)?.id
   const messages = db.insertMessages(
@@ -286,7 +291,8 @@ export async function sendGroupMessage(args: {
         runtime,
         resolution.runId ?? legacyCoordinatorRunId,
         resolution.to
-      )
+      ),
+      workTargetProvenance: workTargetGuard?.provenanceFor(resolution.to)
     }))
   )
   groupWarnings.push(

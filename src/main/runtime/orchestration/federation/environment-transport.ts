@@ -21,6 +21,10 @@ export type OrchestrationEnvironmentCallOptions = {
   prepareGuard?: RuntimeRequestGuard
   contractVerified?: boolean
   expectedEnvironmentPairingRevision?: number
+  /** Send only to this server runtime instance; never silently retry onto a different runtime instance. */
+  expectedEnvironmentRuntimeId?: string
+  /** Force a fresh live status probe when recovering from a runtime instance change. */
+  forceStatusProbe?: true
 }
 
 export type OrchestrationEnvironmentSendOptions = {
@@ -28,6 +32,8 @@ export type OrchestrationEnvironmentSendOptions = {
   prepareGuard?: RuntimeRequestGuard
   /** Send only to this host incarnation; any other answers runtime_environment_changed before sending. */
   expectedRuntimeId?: string
+  /** Force a fresh live status probe when calling status.get. */
+  forceStatusProbe?: true
 }
 
 export type OrchestrationEnvironmentTransport = {

@@ -39,6 +39,7 @@ import {
   sameNativeChatComposerDraftDocument,
   sameNativeChatComposerDraftImages
 } from './native-chat-composer-draft-comparison'
+import { sameAgentJournalWorkTarget } from '../../../../../shared/agent-session/work-target/agent-session-work-target'
 import { persistNativeChatComposerDraft } from './native-chat-composer-draft-persistence'
 import {
   type DraftAppend,
@@ -131,6 +132,7 @@ export function updateNativeChatComposerDraft(
     )
   )
   const images = change.images ?? current.images
+  const workTarget = 'workTarget' in change ? (change.workTarget ?? undefined) : current.workTarget
   const unsavedText = change.unsavedText ?? current.unsavedText
   if (
     !position &&
@@ -138,14 +140,15 @@ export function updateNativeChatComposerDraft(
     text === current.text &&
     sameNativeChatComposerDraftDocument(document, current.document) &&
     unsavedText === current.unsavedText &&
-    sameNativeChatComposerDraftImages(images, current.images)
+    sameNativeChatComposerDraftImages(images, current.images) &&
+    sameAgentJournalWorkTarget(workTarget, current.workTarget)
   ) {
     if (persist === 'immediate' && dirtyScopes.has(scopeKey)) {
       persistNativeChatComposerDraft(scopeKey, 'immediate')
     }
     return
   }
-  if (text === '' && images.length === 0) {
+  if (text === '' && images.length === 0 && !workTarget) {
     installNativeChatDraftRecord(scopeKey)
     reconcileRestoredImageChecks(scopeKey, [])
     notifyScope(scopeKey)
@@ -166,6 +169,7 @@ export function updateNativeChatComposerDraft(
     images: sameNativeChatComposerDraftImages(images, current.images)
       ? current.images
       : [...images],
+    ...(workTarget ? { workTarget } : {}),
     savedAt: nextSavedAt(),
     ...(owner ? { owner } : {}),
     ...(unsavedText === undefined ? {} : { unsavedText })
@@ -199,7 +203,10 @@ export function appendToNativeChatComposerDraft(
     ? withIndependentNativeChatComposerDraft
     : withNativeChatComposerDraftAddition
   const compose = (base: StoredNativeChatComposerDraft) => ({ ...base, ...add(base, placed) })
-  const { text, images, document, pastedTextFiles } = compose({ ...current, savedAt: 0 })
+  const { text, images, document, pastedTextFiles, workTarget } = compose({
+    ...current,
+    savedAt: 0
+  })
   updateNativeChatComposerDraft(
     scopeKey,
     {
@@ -207,6 +214,7 @@ export function appendToNativeChatComposerDraft(
       images,
       document,
       pastedTextFiles,
+      ...(workTarget ? { workTarget } : {}),
       ...(owner ? { owner } : {})
     },
     'immediate',
@@ -217,7 +225,7 @@ export function appendToNativeChatComposerDraft(
       }
       return merged
     },
-    position?.({ text, images, document, pastedTextFiles })
+    position?.({ text, images, document, pastedTextFiles, ...(workTarget ? { workTarget } : {}) })
   )
   if (text !== current.text) {
     notifyDraftAppend(scopeKey, placed, current)

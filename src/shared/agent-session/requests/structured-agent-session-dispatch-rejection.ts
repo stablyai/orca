@@ -172,7 +172,8 @@ export function classifyDispatchRejection(
   submission: Pick<AgentJournalSubmission, 'reason'> & { rejection?: unknown }
 ): DispatchRejectionClassification {
   const { rejection } = submission
-  const factKind = readAgentSessionFailureFact(rejection)?.kind
+  const fact = readAgentSessionFailureFact(rejection)
+  const factKind = fact?.kind
   if (typeof rejection === 'object' && rejection !== null && !isSubmissionRejectionKind(factKind)) {
     // Unknown facts prove non-delivery but cannot establish a content failure.
     return { category: 'undelivered', verdict: null }
@@ -180,6 +181,10 @@ export function classifyDispatchRejection(
   const kind = isSubmissionRejectionKind(factKind) ? factKind : legacyMarkerKind(submission.reason)
   if (!kind) {
     return { category: 'content', verdict: 'failure' }
+  }
+  // An explicit refusal attached to notDelivered (e.g. disappeared workTarget) returns the card instead of retry-looping.
+  if (kind === 'notDelivered' && fact?.refusal !== undefined) {
+    return { category: 'content', verdict: 'failure', kind }
   }
   return { category: KIND_CATEGORY[kind], verdict: KIND_VERDICT[kind], kind }
 }

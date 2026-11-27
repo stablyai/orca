@@ -3,6 +3,10 @@ import type {
   AgentJournalMessageItem,
   AgentJournalSkillRef
 } from '../journal/agent-session-journal-types'
+import {
+  stripWorkTargetHostPin,
+  type AgentJournalWorkTarget
+} from '../work-target/agent-session-work-target'
 import type { AgentSessionMutationEnvelope } from '../agent-session-wire'
 import type { z } from 'zod'
 import {
@@ -39,8 +43,15 @@ export function agentSessionSendControlFields(
 
 export function agentSessionSendFields(
   send: StructuredAgentSessionSendControl & { body: AgentJournalMessageItem }
-): StructuredAgentSessionSendControl & { body: AgentJournalMessageItem } {
-  return { body: agentSessionMessagePayload(send.body), ...agentSessionSendControlFields(send) }
+): StructuredAgentSessionSendControl & {
+  body: AgentJournalMessageItem
+  workTarget?: AgentJournalWorkTarget
+} {
+  return {
+    body: agentSessionMessagePayload(send.body),
+    ...(send.body.workTarget ? { workTarget: send.body.workTarget } : {}),
+    ...agentSessionSendControlFields(send)
+  }
 }
 
 /** Exclude sender metadata because the provider never receives it; preserve body hashes for legacy messages and echo matching. */
@@ -59,6 +70,7 @@ export function agentSessionMessagePayload(body: AgentJournalMessageItem): Agent
     memorySource: _memorySource,
     triggeredBy: _triggeredBy,
     automationRun: _automationRun,
+    workTarget: _workTarget,
     ...payload
   } = body
   return payload
@@ -115,12 +127,14 @@ export class SkillRefLimitError extends Error {}
 export function structuredAgentSessionSendBody(
   text: string,
   attachments: readonly StructuredAgentSessionAttachment[],
-  skills: readonly AgentJournalSkillRef[] = []
+  skills: readonly AgentJournalSkillRef[] = [],
+  workTarget?: AgentJournalWorkTarget
 ): z.infer<typeof SendBody> {
   const picked = pickedSkillsInText(text, skills)
   if (picked.length > MAX_SKILL_REFS) {
     throw new SkillRefLimitError()
   }
+  const sendWorkTarget = workTarget ? stripWorkTargetHostPin(workTarget) : undefined
   return {
     kind: 'message',
     role: 'user',
@@ -128,7 +142,8 @@ export function structuredAgentSessionSendBody(
       ...(text.trim().length > 0 ? [{ type: 'text' as const, text: text.trimEnd() }] : []),
       ...attachments.map((attachment) => ({ type: 'image-ref' as const, path: attachment.path }))
     ],
-    ...(picked.length > 0 ? { skills: picked } : {})
+    ...(picked.length > 0 ? { skills: picked } : {}),
+    ...(sendWorkTarget ? { workTarget: sendWorkTarget } : {})
   }
 }
 

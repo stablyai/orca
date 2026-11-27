@@ -131,4 +131,6 @@ export type NativeChatComposerHandle = {
   contains: (node: Node | null) => boolean
   /** Sends the draft as Enter would, for a send control outside the composer. */
   submit?: () => void
+  /** Opens the bot chat project/workspace target picker, dismissing open autocomplete. */
+  openWorkTargetPicker?: () => boolean
 }

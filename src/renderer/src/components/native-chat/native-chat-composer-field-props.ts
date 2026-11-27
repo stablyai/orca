@@ -15,6 +15,17 @@ import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat/
 import type { NativeChatSteerChordPreview } from '../../../../shared/native-chat/input/composer/use-native-chat-steer-chord-preview'
 import type { NativeChatComposerImageAttachment } from './attachments/chips/native-chat-image-attachment'
 import type { NativeChatOptionPickerRequest } from './session/options/controls/native-chat-option-picker-request'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { AgentJournalWorkTarget } from '../../../../shared/agent-session/work-target/agent-session-work-target'
+
+export type NativeChatComposerWorkTargetPickerProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  botHostId: ExecutionHostId
+  supported: boolean
+  selectedTarget: AgentJournalWorkTarget | null
+  onSelectTarget: (target: AgentJournalWorkTarget | null) => void
+}
 
 export type NativeChatComposerFieldProps = {
   dock?: React.ReactNode
@@ -90,4 +101,6 @@ export type NativeChatComposerFieldProps = {
   workspaceFooter?: React.ReactNode
   /** Send opens `/btw` and `/side` drafts as side chats here. */
   sideChat?: boolean
+  /** Bot chat project/workspace target picker control and selected draft chip. */
+  workTargetPicker?: NativeChatComposerWorkTargetPickerProps
 }

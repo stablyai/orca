@@ -4,6 +4,10 @@ import type { StructuredAgentSessionAdapter } from '../providers/structured-agen
 import { structuredAgentSessionChildAcceptsInput } from './structured-agent-session-input-readiness'
 import { codexTurnOptionsDiffer } from '../options/structured-agent-session-message-options'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import {
+  refuse,
+  type AgentSessionWireRefusal
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { QueuedMessageRow } from '../../agent-session-journal/queued-messages/queued-message-table'
 import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
@@ -68,7 +72,35 @@ export function canSteerStructuredQueuedMessage(
     input.record &&
     input.work &&
     input.child &&
+    !card.body.command &&
+    !card.body.workTarget &&
     structuredAgentSessionChildAcceptsInput({ ...input, current: true }) &&
     !codexTurnOptionsDiffer(input.record, card.options ?? undefined, input.child, input.adapter)
   )
+}
+
+/** Refuse immediate Send-now for commands or targeted messages while a turn is running. */
+export function refuseQueuedSendWhileWorking(
+  work: Pick<StructuredAgentSessionObservedWork, 'working' | 'activeTurnId' | 'queueState'>,
+  body: QueuedMessageRow['body']
+): AgentSessionWireRefusal | null {
+  if (body.command && work.working()) {
+    return {
+      code: 'agent_session_operation_invalid',
+      message: "A command can't be sent while the agent is working."
+    }
+  }
+  if (
+    body.workTarget &&
+    (work.working() ||
+      work.activeTurnId() !== null ||
+      work.queueState().owedEnteredSubmissions.length > 0)
+  ) {
+    return refuse(
+      'agent_session_operation_invalid',
+      { reason: 'turnActive' },
+      'A targeted message opens a new turn and cannot steer a running turn. Wait for the current turn to finish.'
+    )
+  }
+  return null
 }

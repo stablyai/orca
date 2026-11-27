@@ -58,7 +58,9 @@ export function sendStructuredAgentSessionMessage(
     reservation.legacy()
     void input.prepareAttachments(input, reservation.active).then(
       (prepared) => {
-        if (reservation.prepare({ ...prepared, skills: input.skills })) {
+        if (
+          reservation.prepare({ ...prepared, skills: input.skills, workTarget: input.workTarget })
+        ) {
           reservation.send(input.target)
         }
       },
@@ -82,7 +84,7 @@ export type StructuredAgentSessionReservedSend = {
   legacy: () => void
   active: () => boolean
   prepare: (
-    input: Pick<StructuredAgentSessionSendInput, 'text' | 'attachments' | 'skills'>
+    input: Pick<StructuredAgentSessionSendInput, 'text' | 'attachments' | 'skills' | 'workTarget'>
   ) => boolean
   /** Sends it once the chat exists; null when the reservation was released or dropped meanwhile. */
   send: (target: RuntimeClientTarget) => StructuredAgentSessionSent | null
@@ -166,7 +168,12 @@ export function reserveStructuredAgentSessionSend(
         return false
       }
       updateStructuredAgentSessionPendingSend(current.sessionId, current.clientMessageId, {
-        body: structuredAgentSessionSendBody(input.text, input.attachments ?? [], input.skills),
+        body: structuredAgentSessionSendBody(
+          input.text,
+          input.attachments ?? [],
+          input.skills,
+          input.workTarget
+        ),
         previewUris: (input.attachments ?? []).map((image) => image.previewUri)
       })
       return true

@@ -31,6 +31,7 @@ import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-compositio
 import { useNativeChatComposerAppMenuSelection } from './focus/use-native-chat-composer-app-menu-selection'
 import { useNativeChatComposerSubmit } from './submit/use-native-chat-composer-submit'
 import { useNativeChatComposerCommandPicker } from './pickers/use-native-chat-composer-command-picker'
+import { useNativeChatComposerWorkTargetPicker } from './work-target/use-bot-work-target-catalog'
 import type * as C from './native-chat-composer-types'
 
 type ComposerHandle = C.NativeChatComposerHandle
@@ -126,15 +127,13 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       editor: { textareaRef, setDraft, setCaret, setActiveSuggestion },
       setNotice
     })
-    const { classifySend, clearSkillOrigin, completeItem, dismiss, handleDraftOrCaretChange } =
-      picker
+    const { completeItem } = picker
     const mentions = useNativeChatComposerMentions(room, draft, picker, {
       terminalTabId,
       structuredWorktreeId: structuredTransport?.worktreeId,
       caret,
       notices
     })
-    const { autocomplete } = mentions
 
     const resolveTarget = useCallback(
       () => (targetPtyId ? { ptyId: targetPtyId } : null),
@@ -171,6 +170,13 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setNotice
     })
 
+    const { onOpenWorkTargetPicker, workTargetPicker } = useNativeChatComposerWorkTargetPicker(
+      draftScopeKey,
+      !editSession && !launchPrompt ? structuredTransport?.workTargetSupport : undefined,
+      disabled,
+      setNotice
+    )
+
     const localHandle = useRef<C.NativeChatComposerHandle>(null)
     const root = useRef<HTMLDivElement>(null)
     const handlePasteEvent = useNativeChatComposerHandle(localHandle, {
@@ -182,13 +188,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setDraft,
       setCaret,
       setActiveSuggestion,
-      targetKey: JSON.stringify([
-        paneKey,
-        targetPtyId,
-        structuredTransport?.sessionId,
-        structuredTransport?.worktreeId,
-        structuredTransport?.runtimeEnvironmentId
-      ]),
+      target: { paneKey, targetPtyId, structuredTransport },
       agent,
       disabled,
       resolveAttachmentOwner: fileDrops.resolveAttachmentOwner,
@@ -202,6 +202,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       revealPendingImageAttachment: attachments.revealPendingImageAttachment,
       dropPendingImageAttachment: attachments.dropPendingImageAttachment,
       pastedTextEditor: structuredTransport ? attachments.scopeEditor : null,
+      openWorkTargetPicker: onOpenWorkTargetPicker,
       setNotice
     })
 
@@ -232,7 +233,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
         imageAttachments,
         structuredTransport,
         isComposing: imeEnterGesture.isComposing,
-        clearSkillOrigin,
+        clearSkillOrigin: picker.clearSkillOrigin,
         setDraft,
         setCaret
       })
@@ -245,7 +246,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       trackPendingSend,
       setDraft,
       setCaret,
-      clearSkillOrigin,
+      clearSkillOrigin: picker.clearSkillOrigin,
       clearImageAttachments,
       setNotice
     }
@@ -256,7 +257,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       imageAttachments,
       launchDraft: launchSeed?.launchDraft,
       launchDraftResolved: launchSeed?.launchDraftResolved === true,
-      classifySend,
+      classifySend: picker.classifySend,
       onOptimisticSend,
       optimisticSendOutcome,
       terminalTabId
@@ -292,7 +293,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       canStop: hasPty && onStop !== undefined,
       orcaCommand: !pending && !launchPrompt && orcaCommands.matchesDraft(draft),
       goalMode: goalMode.active,
-      mentionHold: mentions.sendHeld
+      mentionHold: mentions.sendHeld,
+      hasWorkTarget: Boolean(workTargetPicker?.selectedTarget)
     })
 
     const { send, chooseEditItem, fieldOverrides, dispatchPickerCommand } =
@@ -322,7 +324,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     })
 
     const handleKeyDown = useNativeChatComposerKeyDown({
-      autocomplete: autocomplete,
+      autocomplete: mentions.autocomplete,
       mentionFiles: mentions.mentionFiles,
       completeMention: mentions.chooseMention,
       mentionKey: mentions.handleKey,
@@ -334,18 +336,19 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       dispatchPickerCommand: editSession
         ? chooseEditItem
         : goalMode.interceptPick(orcaCommands.interceptPick(dispatchPickerCommand)),
-      dismissPicker: dismiss,
+      dismissPicker: picker.dismiss,
       interrupt: editSession?.cancel ?? (escapeStops ? interrupt : undefined),
       send,
       hasAttachments: imageAttachments.length > 0,
       ...(!editSession && steerHead ? { steerHead } : {}),
       chordSteersHead: sendButton.chordSteersHead,
+      onOpenWorkTargetPicker,
       setActiveSuggestion: picker.navigateSuggestion,
       setDraft,
       setCaret
     })
 
-    const pickerOpen = autocomplete.mode !== 'none'
+    const pickerOpen = mentions.autocomplete.mode !== 'none'
     const steerChord = useNativeChatSteerChordPreview(root, sendButton, steerHead, send, pickerOpen)
 
     const draftEvents = useNativeChatDraftEvents({
@@ -353,7 +356,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setDraft,
       setCaret,
       setActiveSuggestion,
-      handleDraftOrCaretChange,
+      handleDraftOrCaretChange: picker.handleDraftOrCaretChange,
       flushDraftAppends,
       flushPendingAttachments: attachments.flushPendingAttachments
     })
@@ -375,7 +378,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
             canSend={canSend}
             placeholderHint={unavailableHint}
             idleHint={afterStop ? undefined : mentions.hint}
-            autocomplete={autocomplete}
+            autocomplete={mentions.autocomplete}
             mentionFiles={mentions.listed}
             activeSuggestion={mentions.activeIndex ?? activeSuggestion}
             notices={mentions.notices}
@@ -410,6 +413,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
             agent={agent}
             launchPrompt={launchPrompt}
             workspaceFooter={workspaceFooter}
+            workTargetPicker={workTargetPicker}
             {...fieldOverrides}
           />
         </NativeChatComposerRoomProvider>

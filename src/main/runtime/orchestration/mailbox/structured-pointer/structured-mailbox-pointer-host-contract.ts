@@ -77,6 +77,14 @@ export type StructuredMailReportItem = (
   message: MessageRow
 ) => Promise<BotItemReportFact | null>
 
+/** Optional work-target provenance gate before whole-mail chat admission. */
+export type StructuredMailMessageVerifier = (
+  db: OrchestrationDb,
+  mailboxHandle: string,
+  target: StructuredPointerTarget,
+  message: MessageRow
+) => Promise<{ ok: true; reverifySync: () => boolean } | { ok: false }>
+
 export type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageWaiter> = {
   getDb: () => OrchestrationDb | null
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
@@ -98,5 +106,6 @@ export type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationM
   /** What Orca calls a sender now, snapshotted onto the message; null when it has no name. */
   senderSnapshotReader?: () => SenderSnapshotResolver
   senderSnapshot: SenderSnapshotResolver
+  verifyMessage?: StructuredMailMessageVerifier
   host: StructuredMailboxPointerHost
 }

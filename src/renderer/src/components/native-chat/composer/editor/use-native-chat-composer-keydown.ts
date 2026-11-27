@@ -9,6 +9,9 @@ import {
 import type { ComposerAutocomplete } from '../../../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
 import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import { isMacPlatform } from '../../pane/routing/native-chat-shortcut'
+import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
+import type { KeybindingOverrides } from '../../../../../../shared/keybindings/types'
+import { useAppStore } from '@/store/index'
 import type { NativeChatMentionFiles } from '../pickers/use-native-chat-mention-files'
 import type { NativeChatComposerSendIntent } from '../submit/native-chat-composer-send-intent'
 import {
@@ -40,6 +43,10 @@ export type UseNativeChatComposerKeyDownArgs = {
   steerHead?: (() => boolean) | undefined
   /** Cmd/Ctrl+Enter on an empty composer sends the head card now: where its other way is a steer, or no turn runs (a stopped, paused queue). */
   chordSteersHead?: boolean
+  /** Opens the bot chat project/workspace target picker on its dedicated shortcut. */
+  onOpenWorkTargetPicker?: (() => void) | undefined
+  /** Optional keybinding overrides for isolated keyboard tests. */
+  keybindingOverrides?: KeybindingOverrides
   setActiveSuggestion: Dispatch<SetStateAction<number>>
   setDraft: Dispatch<SetStateAction<string>>
   setCaret: Dispatch<SetStateAction<number>>
@@ -62,6 +69,8 @@ export function useNativeChatComposerKeyDown({
   send,
   steerHead,
   chordSteersHead = false,
+  onOpenWorkTargetPicker,
+  keybindingOverrides,
   setActiveSuggestion,
   setDraft,
   setCaret
@@ -77,6 +86,33 @@ export function useNativeChatComposerKeyDown({
           event.preventDefault()
         }
         return
+      }
+      if (onOpenWorkTargetPicker) {
+        const platform: NodeJS.Platform = isMacPlatform() ? 'darwin' : 'linux'
+        const overrides = keybindingOverrides ?? useAppStore.getState().keybindings
+        if (
+          keybindingMatchesAction(
+            'chat.pickWorkTarget',
+            {
+              key: event.key,
+              code: event.code,
+              metaKey: event.metaKey,
+              ctrlKey: event.ctrlKey,
+              altKey: event.altKey,
+              shiftKey: event.shiftKey
+            },
+            platform,
+            overrides
+          )
+        ) {
+          event.preventDefault()
+          event.stopPropagation()
+          if (autocomplete.mode !== 'none') {
+            dismissPicker(autocomplete.triggerKey)
+          }
+          onOpenWorkTargetPicker()
+          return
+        }
       }
       // An open layer that keeps focus here, like the context card, already spent this Escape closing
       // itself; a layer around the composer (a launch panel) leaves an open picker to take it.
@@ -199,7 +235,9 @@ export function useNativeChatComposerKeyDown({
       hasAttachments,
       interrupt,
       isComposing,
+      keybindingOverrides,
       mentionFiles,
+      onOpenWorkTargetPicker,
       send,
       steerHead,
       chordSteersHead,

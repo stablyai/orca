@@ -95,7 +95,8 @@ function computePublishedQueuedMessages(
       !held &&
       row.deliveryMode === 'steer' &&
       row.unattended === false &&
-      row.body.command === undefined
+      row.body.command === undefined &&
+      row.body.workTarget === undefined
     published.push({
       messageId: row.messageId,
       position: row.position,

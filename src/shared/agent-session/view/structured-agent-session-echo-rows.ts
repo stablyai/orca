@@ -38,6 +38,7 @@ export function structuredAgentSessionEchoRows(
             : 'unknown',
         timestamp: entry.queuedAt,
         blocks: entry.body.blocks,
+        ...(entry.body.workTarget ? { workTarget: entry.body.workTarget } : {}),
         ...(entry.afterSequence !== undefined
           ? {
               journalPosition: { sequence: entry.afterSequence + 0.5, index: entry.queuedAt ?? 0 }

@@ -33,6 +33,20 @@ function reservationSet(rows: readonly StructuredMailSendRow[]): string {
   )
 }
 
+function currentUnreadMatch(db: OrchestrationDb, original: MessageRow): MessageRow | undefined {
+  const current = db.getMessageById(original.id)
+  return current &&
+    !current.read &&
+    current.to_handle === original.to_handle &&
+    current.run_id === original.run_id
+    ? current
+    : undefined
+}
+
+export type CheckMailTargetVerification = (
+  messages: readonly MessageRow[]
+) => Promise<{ reverifySync: () => { allowedIds: ReadonlySet<string>; onHeld: () => void } }>
+
 /** One consuming invocation, including its later wake, owns one reconciliation allowance. */
 export class CheckMailReconciliation {
   private readonly deadline = new AbortController()
@@ -91,7 +105,8 @@ export class CheckMailReconciliation {
     direct: boolean
     revalidate: () => void
     claimId?: string
-    finalize: (messages: MessageRow[]) => T
+    verifySelected?: CheckMailTargetVerification
+    finalize: (messages: MessageRow[], heldAny: boolean) => T
     commit?: (take: () => T) => T
   }): Promise<T> {
     await this.within(() => Promise.resolve())
@@ -133,6 +148,11 @@ export class CheckMailReconciliation {
             this.assertCurrent(args.revalidate)
           }
         }
+        const targetVerification = args.verifySelected
+          ? await args.verifySelected(args.selected)
+          : undefined
+        this.assertCurrent(args.revalidate)
+        let onHeldAfterCommit: (() => void) | undefined
         const take = () =>
           runLifecycleWriteTransaction(this.db.db, 'check_reconciled_mail', () => {
             this.assertCurrent(args.revalidate)
@@ -141,33 +161,25 @@ export class CheckMailReconciliation {
             if (!sameReservations && !this.deadline.signal.aborted) {
               throw new ChangedMailReservation()
             }
+            const verified = targetVerification?.reverifySync()
+            const allowedIds = verified?.allowedIds
+            onHeldAfterCommit = verified?.onHeld
             const evidenceCurrent =
               sameReservations &&
               !this.deadline.signal.aborted &&
               (!args.direct || source === getStructuredAgentSessionHost()) &&
               (!args.direct || (hold?.current() ?? attempts.length === 0))
-            for (const original of args.selected) {
-              const message = this.db.getMessageById(original.id)
-              if (
-                message &&
-                !message.read &&
-                message.to_handle === original.to_handle &&
-                message.run_id === original.run_id
-              ) {
-                reconcileLifecycleMessage(this.db, message)
-              }
+            const active = args.selected.flatMap((original) => {
+              const message = currentUnreadMatch(this.db, original)
+              return message && (!allowedIds || allowedIds.has(original.id)) ? [message] : []
+            })
+            const activeIds = new Set(active.map((message) => message.id))
+            for (const message of active) {
+              reconcileLifecycleMessage(this.db, message)
             }
             if (evidenceCurrent) {
               attempts.forEach((attempt, index) => {
-                const selected = selectedById.get(attempt.message_id)
-                const currentMessage = this.db.getMessageById(attempt.message_id)
-                if (
-                  !selected ||
-                  !currentMessage ||
-                  currentMessage.read ||
-                  currentMessage.to_handle !== selected.to_handle ||
-                  currentMessage.run_id !== selected.run_id
-                ) {
+                if (!selectedById.has(attempt.message_id) || !activeIds.has(attempt.message_id)) {
                   return
                 }
                 settleStructuredMailAttempt(
@@ -192,19 +204,18 @@ export class CheckMailReconciliation {
                 )
               })
             }
-            const messages = args.selected.flatMap((original) => {
-              const current = this.db.getMessageById(original.id)
-              return current &&
-                !current.read &&
-                current.to_handle === original.to_handle &&
-                current.run_id === original.run_id
-                ? [current]
-                : []
-            })
-            return args.finalize(messages)
+            const messages = active.flatMap(
+              (original) => currentUnreadMatch(this.db, original) ?? []
+            )
+            const heldAny = Boolean(
+              allowedIds && args.selected.some((message) => !allowedIds.has(message.id))
+            )
+            return args.finalize(messages, heldAny)
           })
         this.assertCurrent(args.revalidate)
-        return args.commit ? args.commit(take) : take()
+        const committed = args.commit ? args.commit(take) : take()
+        onHeldAfterCommit?.()
+        return committed
       } catch (error) {
         if (!(error instanceof ChangedMailReservation)) {
           throw error
@@ -220,15 +231,18 @@ export class CheckMailReconciliation {
     revalidate: () => void
     respond: (messages: MessageRow[]) => T
     record?: (response: T) => void
+    verifySelected?: CheckMailTargetVerification
   }): Promise<T> {
     return this.reconcile({
       ...args,
       direct: true,
       finalize: (messages) => {
-        this.db.markAsRead(
-          messages.map((message) => message.id),
-          this.taker
-        )
+        if (messages.length > 0) {
+          this.db.markAsRead(
+            messages.map((message) => message.id),
+            this.taker
+          )
+        }
         const response = args.respond(messages)
         args.record?.(response)
         return response
@@ -244,6 +258,7 @@ export class CheckMailReconciliation {
     ) => NonNullable<MailboxDeliveryBatch['finalResponse']>
     record?: (response: NonNullable<MailboxDeliveryBatch['finalResponse']>) => void
     wake?: MessageWake
+    verifySelected?: CheckMailTargetVerification
   }): Promise<MailboxDeliveryBatch | undefined> {
     this.assertCurrent(args.revalidate)
     const key = `${args.mailbox.mailboxHandle}:${args.mailbox.consumerGeneration}`
@@ -262,6 +277,7 @@ export class CheckMailReconciliation {
       direct: false,
       claimId: claim.delivery.id,
       revalidate: args.revalidate,
+      verifySelected: args.verifySelected,
       commit: (take) => {
         const shared = args.wake?.final(key)
         if (shared) {
@@ -271,7 +287,14 @@ export class CheckMailReconciliation {
         // Publish the shared result only after the take and its receipt have committed.
         return args.wake ? args.wake.share(key, take) : take()
       },
-      finalize: (messages) => {
+      finalize: (messages, heldAny) => {
+        if (messages.length === 0 && heldAny) {
+          this.db.fenceOutstandingMailboxDelivery(
+            claim.delivery.id,
+            args.mailbox.consumerGeneration
+          )
+          return undefined
+        }
         const batch = this.db.finalizeMailboxDelivery({
           ...args.mailbox,
           claim,

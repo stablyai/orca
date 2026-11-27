@@ -18,6 +18,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
+import type { AgentJournalWorkTarget } from '../work-target/agent-session-work-target'
 import { pendingPromptsAllUnanswerableHere } from '../requests/prompts/agent-session-approval-subject'
 import type { NativeChatImageRefBlock } from '../../native-chat/native-chat-types'
 import {
@@ -71,6 +72,8 @@ export type QueuedMessageCard = {
   from?: AgentMessageSource
   /** Typed by someone other than the host's owner, on their paired computer. */
   typedByOther?: OtherPersonTypist
+  /** Optional project or existing workspace target attached to this queued message. */
+  workTarget?: AgentJournalWorkTarget
 }
 
 export function queuedMessageCardText(body: AgentSessionQueuedMessage['body']): string {
@@ -161,11 +164,10 @@ export function projectQueuedMessageCards(
       hold,
       ...(resumeEligible ? { resumeEligible: true as const } : {}),
       ...(queuedMessageEditableText(message.body) === null ? { notEditable: true as const } : {}),
-      ...(message.body.command !== undefined
-        ? {
-            command: true as const,
-            ...(session.agentWorking ? { waitsForAgent: true as const } : {})
-          }
+      ...(message.body.command !== undefined ? { command: true as const } : {}),
+      ...((message.body.command !== undefined || message.body.workTarget !== undefined) &&
+      session.agentWorking
+        ? { waitsForAgent: true as const }
         : {}),
       ...(message.pausedReason !== undefined ? { pausedReason: message.pausedReason } : {}),
       ...(message.returnedReason !== undefined ? { returnedReason: message.returnedReason } : {}),
@@ -173,7 +175,8 @@ export function projectQueuedMessageCards(
         ? { returnedRejection: message.returnedRejection }
         : {}),
       ...(from ? { from } : {}),
-      ...(typedByOther ? { typedByOther } : {})
+      ...(typedByOther ? { typedByOther } : {}),
+      ...(message.body.workTarget ? { workTarget: message.body.workTarget } : {})
     }
   })
   return cards.filter((card) => card.state === 'returned' || !handedOff.has(card.messageId))
@@ -232,11 +235,11 @@ export function queuedMessagesQueuePause(
   return agentMailWaiting || cards.some((card) => card.resumeEligible) ? queuePause : null
 }
 
-/** Steer moves turn-waiting cards mid-turn, even during queue pause; returned/individually held cards use Send, commands never steer. */
+/** Steer moves turn-waiting cards mid-turn, even during queue pause; returned/individually held cards use Send, commands and targeted messages never steer. */
 export function queuedMessageCardSteers(
-  card: Pick<QueuedMessageCard, 'hold' | 'command'>
+  card: Pick<QueuedMessageCard, 'hold' | 'command' | 'workTarget'>
 ): boolean {
-  return card.hold !== 'paused' && card.hold !== 'returned' && !card.command
+  return card.hold !== 'paused' && card.hold !== 'returned' && !card.command && !card.workTarget
 }
 
 /** The card Cmd/Ctrl+Shift+Enter steers: the head only, never one behind it. */

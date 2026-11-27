@@ -25,7 +25,11 @@ const afterWaits = new Set<string>()
 
 /** Runs `then` once this Dispatch's background wait has handed over, failed or been cancelled, however
  *  often it is asked for `purpose`: what a start's caller does after its receipt is done again then. */
-export function afterWorkerStartWait(dispatchId: string, purpose: string, then: () => void): void {
+export function afterWorkerStartWait(
+  dispatchId: string,
+  purpose: string,
+  then: () => void | Promise<void>
+): void {
   const ended = waits.get(dispatchId)?.ended
   const key = `${dispatchId}:${purpose}`
   if (!ended || afterWaits.has(key)) {
@@ -35,7 +39,7 @@ export function afterWorkerStartWait(dispatchId: string, purpose: string, then: 
   void ended
     .then(() => {
       afterWaits.delete(key)
-      then()
+      return then()
     })
     .catch((error: unknown) => {
       console.warn('[orchestration] work after a worker start failed', key, error)

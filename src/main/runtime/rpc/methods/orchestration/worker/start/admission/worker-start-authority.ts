@@ -18,6 +18,8 @@ import { ROOT_DISPATCH_DEPTH } from '../../../../../../../../shared/orchestratio
 import { readCustodyCohort } from '../../../../../../orchestration/db/worker-terminal/worker-terminal-transfer'
 import { createHelperStartScope } from './helper-start-scope'
 import { requireOrchestrationAdmission } from '../../../../../../orchestration/addressing/orchestration-admission'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../../../shared/agent-session/identity/orca-session-address-prefix'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../../../shared/orchestration/orchestration-session-caller-codes'
 
 export type WorkerStartRunBinding = { run: RunRow; created: boolean }
 
@@ -139,4 +141,58 @@ export function qualifyLiveWorkerFollowUp(
       maxDepth: () => runtime.getNestedWorkerMaxDepth()
     })(runId, followUp)
   )
+}
+
+/** Reject cross-host session IDs, non-peer task adoption, and invalid peer worktree placements. */
+export function assertWorkerStartPlacementBoundaries(
+  params: {
+    on?: string
+    terminal?: string
+    adoptTaskId?: string
+    worktree?: string
+    crossStoreParent?: unknown
+  },
+  orchestrationCaller: OrchestrationEntryCaller | undefined,
+  followUp: unknown
+): void {
+  if (params.on && params.terminal?.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
+    // Refused here, before any remote call: an Orca session ID names a chat only on its own host.
+    throw new OrchestrationError(
+      SESSION_CODES.hostBoundary,
+      `${params.terminal} names a chat by its Orca session ID, which identifies it only on the host that runs it. Run worker-start on that host. No effects were applied.`,
+      { effectsApplied: false }
+    )
+  }
+  if (params.adoptTaskId !== undefined && orchestrationCaller?.kind !== 'peer') {
+    throw new OrchestrationError(
+      'invalid_argument',
+      'Only the paired Orca coordinating a Run names its Task IDs. No effects were applied.',
+      { effectsApplied: false }
+    )
+  }
+  const placement = params.worktree ?? 'current'
+  if (
+    params.crossStoreParent &&
+    (orchestrationCaller?.kind !== 'peer' || placement !== 'new-child')
+  ) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      "Only the paired Orca coordinating a Run names its own workspace as a new-child's parent. No effects were applied.",
+      { effectsApplied: false }
+    )
+  }
+  // A paired Orca's new-child nests under its own workspace, named by the parent it sends.
+  if (
+    orchestrationCaller?.kind === 'peer' &&
+    !followUp &&
+    !params.terminal &&
+    !params.crossStoreParent &&
+    /^(current|new-child)$/.test(placement)
+  ) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `--on requires an exact remote worktree selector or new-top-level: ${orchestrationCaller.peerRun.home_label} has no workspace on this server for --worktree ${placement}. No effects were applied.`,
+      { effectsApplied: false }
+    )
+  }
 }

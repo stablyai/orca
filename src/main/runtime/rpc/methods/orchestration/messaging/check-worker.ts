@@ -9,13 +9,19 @@ import {
   exposeMessages,
   withReplyFollowUps
 } from './mailbox-message-receipt'
-import { createDirectMailSnapshotRouter } from './mailbox-page-routing'
-import { routeSettledDispatchMail } from './route-settled-dispatch-mail'
 import { isPotentiallyLiveRemoteAttachment } from '../../../../orchestration/db/federation/remote-attachment-liveness'
 import { asDispatchFence, callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
 import { interruptedAcknowledgedCheck } from '../routing'
 import type { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
 import { currentDispatchAssigneeRun } from './recipient-routing'
+import {
+  drainSettledDispatchMailboxToRun,
+  routeVerifiedDirectMailToDispatch
+} from './check-worker-target-mail'
+import {
+  filterReadableMailboxMessages,
+  prepareRoleDeliveryWorkTargetGate
+} from './work-target-mailbox-read-gate'
 import { asRecoveredAssignee } from '../../../../orchestration/workers/reports/reminted-worker-reporter'
 
 export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
@@ -58,7 +64,6 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
     activeDispatch
       ? db.getDispatchContextById(workerMailbox.dispatchId)?.consumer_generation
       : db.getRemoteDispatchAttachment(workerMailbox.dispatchId)?.consumer_generation
-  const routeDirectSnapshot = createDirectMailSnapshotRouter(db, signal)
   const revalidateWorkerMailbox = async (): Promise<void> => {
     if (activeDispatch) {
       const current = db.getActiveDispatchForIdentity(handle, paneKey)
@@ -95,9 +100,9 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
       (!latestDispatch ||
         (latestDispatch.status !== 'pending' && latestDispatch.status !== 'dispatched'))
     ) {
-      await routeSettledDispatchMail(runtime, db, {
+      await drainSettledDispatchMailboxToRun(runtime, db, {
         dispatchId: workerMailbox.dispatchId,
-        runId: owningRunId,
+        owningRunId,
         signal
       })
     }
@@ -108,24 +113,20 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
   }
 
   if (activeDispatch) {
-    await routeDirectSnapshot(activeDispatch.run_id, handle, (throughSequence) =>
-      db.routeUnreadDirectMessagesToDispatchMailbox(
-        activeDispatch.id,
-        activeDispatch.run_id,
-        handle,
-        throughSequence
-      )
-    )
+    await routeVerifiedDirectMailToDispatch(runtime, db, {
+      dispatchId: activeDispatch.id,
+      runId: activeDispatch.run_id,
+      directHandle: handle,
+      signal
+    })
     const assigneeHandle = activeDispatch.assignee_handle
     if (assigneeHandle && assigneeHandle !== handle) {
-      await routeDirectSnapshot(activeDispatch.run_id, assigneeHandle, (throughSequence) =>
-        db.routeUnreadDirectMessagesToDispatchMailbox(
-          activeDispatch.id,
-          activeDispatch.run_id,
-          assigneeHandle,
-          throughSequence
-        )
-      )
+      await routeVerifiedDirectMailToDispatch(runtime, db, {
+        dispatchId: activeDispatch.id,
+        runId: activeDispatch.run_id,
+        directHandle: assigneeHandle,
+        signal
+      })
     }
   }
   await revalidateWorkerMailbox()
@@ -162,7 +163,24 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
         }
       : {}
   const showAll = params.all === true || (params.unread === false && params.peek !== true)
-  const readPeek = () => db.getUnreadMessages(address, typeFilter)
+  const workerTarget = activeDispatch
+    ? ({ kind: 'dispatch', dispatchId: activeDispatch.id } as const)
+    : undefined
+  const filterVisible = (messages: MessageRow[]) =>
+    filterReadableMailboxMessages(runtime, db, {
+      target: workerTarget,
+      mailboxHandle: address,
+      runId: deliveryRunId,
+      messages
+    })
+  const readPeek = () => filterVisible(db.getUnreadMessages(address, typeFilter))
+  const listReceipt = (messages: MessageRow[]) => ({
+    ...mailboxIdentity,
+    messages: exposeMessages(messages),
+    count: messages.length,
+    acknowledged: acknowledged?.delivery.id ?? null,
+    ...formatted(messages)
+  })
   const result = (batch: MailboxDeliveryBatch | undefined) => {
     const receipt = deliveryReceipt({
       db,
@@ -203,44 +221,45 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
         throw dispatchFenced()
       }
     }
+    const targetGate = workerTarget
+      ? await prepareRoleDeliveryWorkTargetGate(runtime, db, {
+          target: workerTarget,
+          mailboxHandle: address,
+          runId: deliveryRunId,
+          consumerGeneration: workerMailbox.generation
+        })
+      : undefined
     try {
-      return await args.reconciliation.takeRole({
+      const batch = await args.reconciliation.takeRole({
         mailbox: {
           runId: deliveryRunId,
           mailboxHandle: address,
           consumerGeneration: workerMailbox.generation,
           consumerSource: activeDispatch ? 'dispatch' : 'attachment',
-          wakeTypes
+          wakeTypes,
+          ...(targetGate?.excludeMessageIds
+            ? { excludeMessageIds: targetGate.excludeMessageIds }
+            : {})
         },
         revalidate,
         respond: result,
         record: args.recordMutationReceipt,
-        wake
+        wake,
+        verifySelected: targetGate?.verifySelected
       })
+      targetGate?.flushHeld()
+      return batch
     } catch (error) {
       throw asDispatchFence(error)
     }
   }
   if (showAll) {
-    const messages = db.getAllMessagesForHandle(address, 100, typeFilter)
-    return {
-      ...mailboxIdentity,
-      messages: exposeMessages(messages),
-      count: messages.length,
-      acknowledged: acknowledged?.delivery.id ?? null,
-      ...formatted(messages)
-    }
+    return listReceipt(await filterVisible(db.getAllMessagesForHandle(address, 100, typeFilter)))
   }
   if (params.peek) {
-    const messages = readPeek()
+    const messages = await readPeek()
     if (messages.length > 0 || !params.wait) {
-      return {
-        ...mailboxIdentity,
-        messages: exposeMessages(messages),
-        count: messages.length,
-        acknowledged: acknowledged?.delivery.id ?? null,
-        ...formatted(messages)
-      }
+      return listReceipt(messages)
     }
   } else {
     const current = await takeDelivery(params.wait ? typeFilter : args.wakeTypes)
@@ -271,14 +290,7 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
     }
   }
   if (params.peek) {
-    const arrived = readPeek()
-    return {
-      ...mailboxIdentity,
-      messages: exposeMessages(arrived),
-      count: arrived.length,
-      acknowledged: acknowledged?.delivery.id ?? null,
-      ...formatted(arrived)
-    }
+    return listReceipt(await readPeek())
   }
   const batch = await takeDelivery(typeFilter, waitResult)
   return result(batch)

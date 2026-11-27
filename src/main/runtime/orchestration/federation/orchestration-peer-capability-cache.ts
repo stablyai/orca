@@ -181,6 +181,24 @@ export class OrchestrationPeerCapabilityCache {
     )
   }
 
+  /** Drop cached capabilities after a runtime instance change so the next check re-probes live. */
+  invalidateEpoch(peerFingerprint: string, staleRuntimeEpoch?: string): void {
+    if (staleRuntimeEpoch === undefined) {
+      this.evictPeer(peerFingerprint)
+      return
+    }
+    const staleKey = this.key(peerFingerprint, staleRuntimeEpoch)
+    this.states.delete(staleKey)
+    this.statusCapabilities.delete(staleKey)
+    this.probes.delete(staleKey)
+    this.probes.delete(this.key(peerFingerprint, 'unknown'))
+    if (this.latestEpochs.get(peerFingerprint) === staleRuntimeEpoch) {
+      this.latestEpochs.delete(peerFingerprint)
+      // Advance sequence so in-flight probes started before invalidation cannot repopulate stale state.
+      this.observedSequences.set(peerFingerprint, this.nextSequence(peerFingerprint))
+    }
+  }
+
   private observeEpochAt(
     peerFingerprint: string,
     runtimeEpoch: string,

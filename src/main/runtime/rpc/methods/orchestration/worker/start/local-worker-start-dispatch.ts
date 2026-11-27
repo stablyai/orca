@@ -34,18 +34,22 @@ export function createLocalWorkerStartDispatch(
     createsWorktree,
     mode,
     resolvedWorktreeId,
+    resolvedWorktreeInstanceId,
     repoSelector,
     agent,
-    launchReceipt
+    launchReceipt,
+    takesMailMessageIds
   }: {
     params: WorkerStartInput
     requestedWorktree: string
     createsWorktree: boolean
     mode: WorkerStartModeReceipt
     resolvedWorktreeId: string | undefined
+    resolvedWorktreeInstanceId?: string | undefined
     repoSelector: string | undefined
     agent: TuiAgent | undefined
     launchReceipt: OrchestrationWorkerLaunchReceipt
+    takesMailMessageIds?: readonly string[]
   }
 ) {
   const retainedRun = followUp?.retainedChat ? bindRun() : undefined
@@ -88,6 +92,7 @@ export function createLocalWorkerStartDispatch(
     worktree: requestedWorktree,
     mode,
     resolvedWorktreeId: resolvedWorktreeId ?? null,
+    resolvedWorktreeInstanceId: resolvedWorktreeInstanceId ?? null,
     name: params.name ?? null,
     repo: repoSelector ?? params.repo ?? null,
     baseBranch: params.baseBranch ?? null,
@@ -145,6 +150,7 @@ export function createLocalWorkerStartDispatch(
       : undefined,
     acceptedBy: followUp?.acceptedBy,
     takesMailOf: followUp?.takesMailOf,
+    ...(takesMailMessageIds !== undefined ? { takesMailMessageIds } : {}),
     ...(params.origin ? { originRef: params.origin } : {}),
     ...(params.forQuestion ? { forMessageId: params.forQuestion } : {}),
     ...(chatLineage ? { chatLineage } : {})

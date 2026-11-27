@@ -23,6 +23,7 @@ import {
   workerReportRefusal,
   type WorkerReportRefusal
 } from '../../../../orchestration/workers/reports/worker-report-admission'
+import type { ResolvedBotWorkTargetPlacement } from '../../../../../../shared/agent-session/work-target/agent-session-work-target'
 import type { z } from 'zod'
 
 type SendParamsInput = z.infer<typeof SendParams>
@@ -43,6 +44,10 @@ export function sendPointToPointMessage(args: {
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
   markWorkerDoneMutationEffectFree: (() => void) | undefined
   withSendWarnings: SendReceipt
+  workTargetProvenance?: {
+    sourceOrigin: string
+    placement: ResolvedBotWorkTargetPlacement
+  }
 }): unknown {
   const {
     params,
@@ -58,7 +63,8 @@ export function sendPointToPointMessage(args: {
     revalidateLegacyCoordinator,
     recordMutationReceipt,
     markWorkerDoneMutationEffectFree,
-    withSendWarnings
+    withSendWarnings,
+    workTargetProvenance
   } = args
   revalidateLegacyCoordinator?.()
   const messageType = (params.type ?? 'status') as MessageType
@@ -112,7 +118,8 @@ export function sendPointToPointMessage(args: {
         runtime,
         messageRunId ?? legacyCoordinatorRunId,
         to
-      )
+      ),
+      ...(workTargetProvenance ? { workTargetProvenance } : {})
     })
     if (isDispatchMutationMessageType(msg.type)) {
       const taskId = parseMessageTaskId(payload)

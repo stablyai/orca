@@ -89,7 +89,10 @@ export async function admitStructuredAgentSessionSend(
         },
         fromPerson,
         fromAgent: !fromPerson && params.body.from !== undefined,
-        deliveryMode: params.delivery === 'queue-if-active' ? 'queue' : 'steer',
+        deliveryMode:
+          params.delivery === 'queue-if-active' || params.body.workTarget !== undefined
+            ? 'queue'
+            : 'steer',
         ...(queueOnly ? { queueOnly: true } : {}),
         ...(params.usageLimitContinuationOfTurnItemId !== undefined
           ? { continuationOfTurnItemId: params.usageLimitContinuationOfTurnItemId }

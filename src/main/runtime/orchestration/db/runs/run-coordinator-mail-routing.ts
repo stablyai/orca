@@ -2,6 +2,7 @@ import type Database from '../../../../sqlite/sync-database'
 import type { OrchestrationDb } from '../orchestration-db'
 import { currentRunCoordinatorSessionAddressSql } from './run-coordinator-orca-session'
 import { orcaSessionAddressSql, orcaSessionIdOfAddressSql } from '../orca-session-address-sql'
+import { hasWorkTargetProvenanceSql } from '../messages/message-work-target-provenance'
 
 /** Mail to an active Dispatch assignee's address in the same Run is that worker's, not coordinator mail. */
 export function activeDispatchOwnsAddressSql(runIdSql: string, addressSql: string): string {
@@ -135,6 +136,7 @@ export function createCoordinatorMailRoutingTrigger(this: OrchestrationDb): void
         )
         AND ${coordinatorAliasSql('NEW.run_id', 'NEW.to_handle')}
         AND NOT ${activeDispatchOwnsAddressSql('NEW.run_id', 'NEW.to_handle')}
+        AND NOT ${hasWorkTargetProvenanceSql('NEW.id')}
       BEGIN
         UPDATE messages SET to_handle = 'run:' || NEW.run_id WHERE sequence = NEW.sequence;
       END;
@@ -157,6 +159,7 @@ export function routeAllUnreadDirectMessagesToRunMailbox(
        WHERE run_id = ? AND to_handle = ? AND read = 0
          AND delivery_contract = 'current_delivery'
          AND NOT ${activeDispatchOwnsAddressSql('messages.run_id', 'messages.to_handle')}
+         AND NOT ${hasWorkTargetProvenanceSql('messages.id')}
          AND NOT EXISTS (
            SELECT 1 FROM run_coordinator_handles AS alias
            WHERE alias.run_id = messages.run_id AND alias.terminal_handle = messages.to_handle

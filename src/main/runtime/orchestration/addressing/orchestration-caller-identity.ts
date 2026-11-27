@@ -7,6 +7,7 @@ import {
   type OrcaSessionId
 } from '../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../shared/orchestration/mailbox/orchestration-party-identity'
+import type { ResolvedBotWorkTargetPlacement } from '../../../../shared/agent-session/work-target/agent-session-work-target'
 
 /** The part of a caller a Run binding stores and matches. */
 export type OrchestrationCoordinatorKey = Pick<
@@ -34,6 +35,8 @@ export type OrchestrationPeerCaller = OrchestrationCallerIdentity &
     paneKey: string
     orcaSessionId: null
     peerRun: PeerRunRow
+    /** Host-validated work target forwarded by the paired coordinator for this call. */
+    workTarget?: ResolvedBotWorkTargetPlacement
   }>
 
 /** The caller the dispatch entry resolved, which wins over any declared handle: a session from
@@ -51,7 +54,10 @@ export function isPeerCoordinatorAddress(value: string | null | undefined): bool
   return !!value?.startsWith(PEER_ADDRESS_PREFIX)
 }
 
-export function peerCoordinatorCaller(peerRun: PeerRunRow): OrchestrationPeerCaller {
+export function peerCoordinatorCaller(
+  peerRun: PeerRunRow,
+  workTarget?: ResolvedBotWorkTargetPlacement
+): OrchestrationPeerCaller {
   const address = peerCoordinatorAddress(peerRun.conversation_id)
   return Object.freeze({
     kind: 'peer',
@@ -59,7 +65,8 @@ export function peerCoordinatorCaller(peerRun: PeerRunRow): OrchestrationPeerCal
     terminalHandle: address,
     paneKey: address,
     orcaSessionId: null,
-    peerRun
+    peerRun,
+    ...(workTarget ? { workTarget } : {})
   })
 }
 

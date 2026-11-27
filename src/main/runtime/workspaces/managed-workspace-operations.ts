@@ -14,6 +14,7 @@ import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { RuntimeRepoSelector } from './catalog/runtime-repo-selector'
 import type { ScopedWorktreeReads } from './catalog/scoped-worktree-row-resolution'
 import { launchTargetGitSelector } from './catalog/launch-target-git-selector'
 import { RuntimeWorkspacePortOperations } from './ports/runtime-workspace-port-operations'
@@ -41,7 +42,7 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
     return this.managedWorktreeQueries.list(repoSelector, limit, sourceDefaultsSupported)
   }
 
-  listRetiredWorktreeNames(repoSelector: string) {
+  listRetiredWorktreeNames(repoSelector: RuntimeRepoSelector) {
     return this.managedWorktreeQueries.listRetiredNames(repoSelector)
   }
 
@@ -199,6 +200,10 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
       scope?.type === 'folder'
         ? this.resolveFolderWorkspaceSelector(worktreeSelector, requiredHostId)
         : undefined
+    // Never fall through to an unscoped folder lookup on another host when requiredHostId missed.
+    if (scope?.type === 'folder' && requiredHostId && !folder) {
+      throw new Error('selector_not_found')
+    }
     const gitSelector = reads ? launchTargetGitSelector(worktreeSelector) : null
     const resolved =
       requiredHostId && scope?.type !== 'folder'

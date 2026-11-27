@@ -12,6 +12,7 @@ import {
   withReplyFollowUps,
   type MailboxMessageReceipt
 } from './mailbox-message-receipt'
+import { prepareDirectDeliveryWorkTargetGate } from './work-target-mailbox-read-gate'
 
 type Answer = {
   messages?: MailboxMessageReceipt[]
@@ -57,10 +58,21 @@ export async function withOwnDirectMail(args: {
   if (selected.length === 0 || !isAnswer(run)) {
     return run
   }
-  return args.reconciliation.takeDirect({
+  const targetGate = await prepareDirectDeliveryWorkTargetGate(args.runtime, db, {
+    recipientAddress: args.reader?.address ?? args.handle,
+    mailboxHandle: args.handle,
     selected,
+    fallbackRunId: args.runId
+  })
+  if (targetGate.deliverable.length === 0) {
+    targetGate.flushHeld()
+    return run
+  }
+  const response = await args.reconciliation.takeDirect({
+    selected: targetGate.deliverable,
     revalidate: args.revalidate,
     record: args.record,
+    verifySelected: targetGate.verifySelected,
     respond: (taken) => {
       const sequence = new Map(
         [...taken, ...(run.messages ?? []).map((m) => db.getMessageById(m.id))]
@@ -82,6 +94,8 @@ export async function withOwnDirectMail(args: {
       })
     }
   })
+  targetGate.flushHeld()
+  return response
 }
 
 function formatOne(db: OrchestrationDb, message: MailboxMessageReceipt): string {

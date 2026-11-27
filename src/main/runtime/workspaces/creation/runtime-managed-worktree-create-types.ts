@@ -118,6 +118,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
     crossStoreParent?: CrossStoreParentRef
     crossStoreParentInferredFrom?: CrossStoreInferredSource
     cwdParentWorktree?: string
+    /** Internal: targeted project launches nest under their project instead of bot home. */
+    suppressBotHomeParent?: true
     cwdParentAmbiguous?: true
     noParent?: boolean
     callerTerminalHandle?: string

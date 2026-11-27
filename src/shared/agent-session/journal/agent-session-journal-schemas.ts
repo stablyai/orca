@@ -14,6 +14,7 @@ import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure
 import { knownTags, openDiscriminatedUnion } from './agent-session-journal-open-union'
 import { SubagentEntry } from './agent-session-journal-subagent-schema'
 import { AgentJournalApprovalSubjectSchema } from './agent-session-journal-approval-subject-schema'
+import { JournalWorkTargetSchema } from '../work-target/agent-session-work-target'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
@@ -160,6 +161,7 @@ const MessageBody = z.object({
     .object({ name: z.string().min(1), instructions: z.string().min(1).optional() })
     .optional(),
   skills: z.array(z.object({ name: z.string().min(1), path: z.string().min(1) })).optional(),
+  workTarget: JournalWorkTargetSchema.optional(),
   // Open like `sentAs`: a state a newer host writes reads as completed, never malformed.
   state: z.string().min(1).optional(),
   completedAt: z.number().finite().optional()

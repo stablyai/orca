@@ -162,6 +162,8 @@ export async function startWorkerFollowUp(args: {
   message: { subject: string; body?: string | undefined }
   /** The Dispatch whose unread mail this follow-up's Task tells it to check. */
   takesMailOf?: string
+  /** Set only by settled-worker-follow-through so background unread mail uses its own SQLite provenance. */
+  trustedUnreadMailFollowThrough?: boolean
   /** `send --item <n>`: the follow-up is for that item, kept on its Dispatch as `worker-start --item`. */
   forItem?: string
 }): Promise<WorkerFollowUpOutcome> {
@@ -215,7 +217,8 @@ export async function startWorkerFollowUp(args: {
           }
         },
         ...(ctx.orchestrationMutation ? { acceptedBy: ctx.orchestrationMutation } : {}),
-        ...(args.takesMailOf ? { takesMailOf: args.takesMailOf } : {})
+        ...(args.takesMailOf ? { takesMailOf: args.takesMailOf } : {}),
+        ...(args.trustedUnreadMailFollowThrough ? { trustedUnreadMailFollowThrough: true } : {})
       }
     )
   } catch (error) {

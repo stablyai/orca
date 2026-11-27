@@ -1,4 +1,5 @@
 import { readRuntimeListingMetadata, readRuntimeWorktreeMetadata } from './runtime-listing-metadata'
+import type { RuntimeRepoSelector } from './runtime-repo-selector'
 import type { RuntimeManagedWorktreeQueryDependencies } from './runtime-managed-worktree-query-dependencies'
 import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
@@ -282,7 +283,7 @@ export class RuntimeManagedWorktreeQueries {
     })
   }
 
-  async listRetiredNames(repoSelector: string): Promise<{
+  async listRetiredNames(repoSelector: RuntimeRepoSelector): Promise<{
     retiredNamesByRepo: Record<string, readonly string[]>
     retiredNameTiersByRepo: Record<string, number>
   }> {

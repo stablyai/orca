@@ -12,7 +12,6 @@ import { assertSendParamsDeliverable } from './send-params-checks'
 import { resolveMessageRun } from '../routing'
 import {
   assertDispatchMailboxDeliverable,
-  resolveBareOrchestrationRecipient,
   resolveRunBoundDispatchRecipient,
   type SendRecipientWarning
 } from './recipient-routing'
@@ -20,8 +19,7 @@ import { replayAcceptedSend } from './send-replay'
 import { sendRemoteMessage } from '../../../../orchestration/legacy-remote/send-remote'
 import { withPeerMailSend } from './peer-mail-send'
 import { routeBotMail } from './bot-chat-address'
-import { prepareSessionRecipient } from './session-recipient'
-import { withDispatchPrefixHint } from './dispatch-prefix-hint'
+import { resolveBareSendRecipient } from './send-bare-recipient'
 import { sendPointToPointMessage } from './send-point-to-point'
 import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from '../../../../orchestration/legacy-remote-home/send-control-mail'
@@ -41,6 +39,7 @@ import {
   passHeldWorkerMail,
   settledDispatchId
 } from './settled-worker-follow-through'
+import { resolveSendWorkTargetGuard } from '../../../../../bots/bot-work-target-send-guards'
 
 export const ORCHESTRATION_SEND_METHODS = [
   defineOrchestrationMethod({
@@ -158,31 +157,25 @@ export const ORCHESTRATION_SEND_METHODS = [
       }
 
       const sendWarnings: SendRecipientWarning[] = []
+      const rawRecipient = to
+      const targetGuard = resolveSendWorkTargetGuard(
+        runtime,
+        orchestrationCaller,
+        from,
+        params.type
+      )
       let messageRunId = routing.run?.id
       if (!isGroupAddress(to) && !to.startsWith('run:') && !to.startsWith('dispatch:')) {
-        const terminal = await prepareSessionRecipient(runtime, to, revalidateLegacyCoordinator)
-        const recipient = resolveBareOrchestrationRecipient({
+        const recipient = await resolveBareSendRecipient({
           runtime,
           db,
-          handle: to,
+          to,
+          rawTo: params.to,
           senderRunId: routing.run?.id,
           explicitRunId: params.run,
-          terminalRecipient: terminal
+          orchestrationCaller,
+          revalidateLegacyCoordinator
         })
-        if (!recipient.ok) {
-          throw new OrchestrationError(recipient.code, withDispatchPrefixHint(db, to, recipient))
-        }
-        // A paired Orca's former worker may since have taken up local work; it is no longer its to reach.
-        if (
-          orchestrationCaller?.kind === 'peer' &&
-          recipient.runId !== orchestrationCaller.peerRun.run_id
-        ) {
-          throw new OrchestrationError(
-            'forbidden',
-            `${params.to} now works outside the Run ${orchestrationCaller.peerRun.home_label} coordinates here. No effects were applied.`,
-            { effectsApplied: false }
-          )
-        }
         to = recipient.to
         messageRunId = recipient.runId
         if (recipient.warning) {
@@ -202,6 +195,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           addressedDispatchId && to === `dispatch:${addressedDispatchId}`
             ? db.getFederatedDispatch(addressedDispatchId)
             : undefined
+        await targetGuard?.verifyDirect(db, to, rawRecipient)
         assertFollowUpForItem(forItem, !federatedTarget)
         // Federated targets perform their own liveness check before relaying.
         if (addressedDispatchId && !federatedTarget) {
@@ -228,7 +222,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           // The mail started the worker's next turn itself, so nothing holds it; `next` stays last.
           if (followUp?.kind === 'started') {
             if (typeof followUp.receipt.dispatchId === 'string') {
-              passHeldWorkerMail(runtime, db, followUp.receipt.dispatchId)
+              await passHeldWorkerMail(runtime, db, followUp.receipt.dispatchId)
             }
             return followUp.receipt
           }
@@ -283,7 +277,8 @@ export const ORCHESTRATION_SEND_METHODS = [
           recordMutationReceipt,
           markWorkerDoneMutationEffectFree,
           withSendWarnings: (sent) =>
-            finished?.receipt(withSendWarnings(sent)) ?? withSendWarnings(sent)
+            finished?.receipt(withSendWarnings(sent)) ?? withSendWarnings(sent),
+          workTargetProvenance: targetGuard?.provenanceFor(to)
         })
         followThroughWorkerReport(
           runtime,
@@ -308,7 +303,8 @@ export const ORCHESTRATION_SEND_METHODS = [
         legacyCoordinatorRunId,
         revalidateLegacyCoordinator,
         recordMutationReceipt,
-        withSendWarnings
+        withSendWarnings,
+        workTargetGuard: targetGuard
       })
     })
   })

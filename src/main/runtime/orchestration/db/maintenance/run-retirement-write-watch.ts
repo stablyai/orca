@@ -55,6 +55,10 @@ const WATCHED_TABLES = [
     mark: (row: string) => `${byDispatch('dispatch_id')(row)} ${byMessage(row)}`
   },
   {
+    table: 'message_work_target_provenance',
+    mark: byMessage
+  },
+  {
     table: 'structured_mail_sends',
     mark: (row: string) => `${byMessage(row)} ${watched(`${row}.mailbox_handle`)}`
   },

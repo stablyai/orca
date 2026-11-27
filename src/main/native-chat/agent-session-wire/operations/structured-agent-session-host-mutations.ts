@@ -27,6 +27,7 @@ import {
   type StructuredAgentSessionMutationContext
 } from './structured-agent-session-mutation-context'
 import {
+  admitSendWorkTarget,
   openForProviderWrite,
   openForWrite,
   sendPreparation,
@@ -94,19 +95,25 @@ export function sendStructuredAgentSessionTurn(
           if (blocked) {
             return blocked
           }
-          await params.beforeRun?.()
-          if (params.userSend && !params.body.command) {
+          const admitted = await admitSendWorkTarget(context.deps, record, params.body)
+          if (!admitted.ok) {
+            return admitted
+          }
+          const sendParams =
+            admitted.body === params.body ? params : { ...params, body: admitted.body }
+          await sendParams.beforeRun?.()
+          if (sendParams.userSend && !sendParams.body.command) {
             rememberNativeChatPrompt(
               ctx.journal,
-              params.envelope.clientOperationId,
+              sendParams.envelope.clientOperationId,
               ctx.agent,
               caller.userClient,
               caller.telemetryOwnerKey
             )
           }
           try {
-            const sent = await sendTellingAdmitted(context.deps, record, params, ctx, () =>
-              admitStructuredAgentSessionSend(context, ctx, params)
+            const sent = await sendTellingAdmitted(context.deps, record, sendParams, ctx, () =>
+              admitStructuredAgentSessionSend(context, ctx, sendParams)
             )
             if (!sent.ok) {
               forgetNativeChatPrompt(ctx.journal, params.envelope.clientOperationId)

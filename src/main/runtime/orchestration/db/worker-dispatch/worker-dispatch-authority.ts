@@ -13,6 +13,7 @@ export function prepareStartingWorkerAuthority(
     processIncarnation: string | null
     launchTokenHash?: string
     worktreeId: string
+    worktreeInstanceId?: string | null
     effects: unknown[]
     setupState: string
     hostScope?: string | null
@@ -100,7 +101,13 @@ export function prepareStartingWorkerAuthority(
       .prepare(
         `UPDATE worker_dispatches
          SET stage = ?, worktree_id = ?, agent_terminal_handle = ?,
-             setup_state = ?, effects = ?, residual_resources = ?, updated_at = datetime('now')
+             setup_state = ?, effects = ?, residual_resources = ?,
+             start_options = CASE
+               WHEN ? IS NOT NULL AND json_valid(start_options)
+               THEN json_set(start_options, '$.resolvedWorktreeInstanceId', ?)
+               ELSE start_options
+             END,
+             updated_at = datetime('now')
          WHERE dispatch_id = ? AND state = 'starting'`
       )
       .run(
@@ -119,6 +126,8 @@ export function prepareStartingWorkerAuthority(
             )
           )
         ),
+        params.worktreeInstanceId ?? null,
+        params.worktreeInstanceId ?? null,
         params.dispatchId
       )
     if (workerUpdate.changes !== 1) {

@@ -21431,6 +21431,14 @@
         "recordFailed": "Orca couldn't save this to the chat's history.",
         "attachmentExpired": "This attachment expired.",
         "reattachFile": "Remove it and attach it again.",
+        "workTargetUnavailable": "The selected project or workspace is no longer available.",
+        "workTargetExpired": "The selected target expired because its paired server changed or was re-paired.",
+        "chooseOrClearWorkTarget": "Choose another target or clear it and send again.",
+        "workTargetHostUnavailable": "The host for the selected project or workspace is unavailable.",
+        "reconnectOrClearWorkTarget": "Reconnect that host, or choose another target or clear it.",
+        "workTargetUnsupportedChat": "Project and workspace targeting is only available in bot chats.",
+        "clearWorkTargetAndSend": "Clear the selected target and send again.",
+        "workTargetHostUnsupported": "Update Orca on the host running this chat to target a project or workspace.",
         "conversationCleared": "This conversation has been cleared.",
         "openCurrentConversation": "Open the current conversation to continue.",
         "clearUnfinished": "The last /clear didn't finish.",
@@ -23153,6 +23161,22 @@
         "sampleCall": "Sample call",
         "sampleNote": "Starts a real run",
         "send": "Send"
+      },
+      "workTarget": {
+        "nextMessageProject": "Next message · project",
+        "nextMessageWorkspace": "Next message · workspace",
+        "clear": "Clear selected target",
+        "searchPlaceholder": "Filter projects and workspaces…",
+        "clearSearch": "Clear search",
+        "emptyCatalog": "No registered projects or workspaces available.",
+        "noMatches": "No matching projects or workspaces.",
+        "offline": "Offline",
+        "otherHost": "Other host",
+        "footerHint": "Applies to the next message only",
+        "clearAction": "Clear",
+        "trigger": "Target project or workspace",
+        "existingOnly": "Pick a workspace",
+        "sshProjectUnsupportedTitle": "New workspaces cannot be created on SSH Git projects. Select an existing workspace below."
       }
     },
     "tab": {
@@ -26796,6 +26820,7 @@
       "botItemBack": "Back to items",
       "botItemPrevious": "Previous item",
       "botItemNext": "Next item",
+      "chatPickWorkTarget": "Pick project or workspace target",
       "pageSearch": "Search this page"
     },
     "group": {

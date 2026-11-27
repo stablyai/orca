@@ -69,7 +69,6 @@ import { useStructuredAgentSessionDeliveryNotices } from '@/components/native-ch
 import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { useNativeChatHostOutage } from '@/components/native-chat/host-access/use-native-chat-host-outage'
 import { useNativeChatHostOutageNotice } from '@/components/native-chat/host-access/use-native-chat-host-outage-notice'
-import { useBotForWorkspace } from '@/components/bots/bot-workspace'
 import { BotServerOutageCard } from '@/components/bots/BotServerOutageCard'
 import { useNativeChatHostSendGate } from '@/components/native-chat/host-access/use-native-chat-host-send-gate'
 import { useStructuredAgentSessionStartFailureFacts } from '@/components/native-chat/messages/notices/use-structured-agent-session-start-failure-facts'
@@ -82,7 +81,7 @@ import {
 } from './worker-approvals/NativeChatWorkerApprovals'
 
 export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
-  const { ownerWorktreeId, turnBot, bot: chatBot } = useBotChatOwner(props)
+  const { ownerWorktreeId, turnBot, bot: chatBot, homeBot } = useBotChatOwner(props)
   const slackMirror = useNativeChatSlackMirror(chatBot, props.sessionId)
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const provisionalLaunch = useNativeChatProvisionalLaunch(ownerWorktreeId, props.sessionId)
@@ -174,8 +173,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   // Unknown prompts leave the composer usable; a send starts a turn whose cancel can resolve them.
   const promptsUnanswerable = pendingPromptsAllUnanswerableHere(controller.prompts)
   // A bot's page whose server is down keeps its last read; the recovery card stands in for the composer.
-  const pageBot = useBotForWorkspace(ownerWorktreeId ?? null)
-  const botServerDown = pageBot !== null && hostOutage !== null && hostOutage.kind !== 'stopped'
+  const botServerDown = homeBot !== null && hostOutage !== null && hostOutage.kind !== 'stopped'
   const subagents = useStructuredNativeChatSubagents({ ...props, paneKey, controller })
   const composerShown =
     (prompt === null || promptsUnanswerable) && readFailure?.final !== true && !botServerDown
@@ -218,7 +216,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     setOptionPickerRequest,
     onError: reportComposerError,
     reveal: submits,
-    sendBlockedReason: hostSendGate.sendBlockedReason ?? install.sendBlockedReason
+    sendBlockedReason: hostSendGate.sendBlockedReason ?? install.sendBlockedReason,
+    isBotHomeChat: homeBot !== null
   })
   const continuation = useNativeChatInterruptedContinuation({
     ...controller,

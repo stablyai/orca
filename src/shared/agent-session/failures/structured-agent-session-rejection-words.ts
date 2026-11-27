@@ -1,7 +1,9 @@
 import {
   agentSessionWriteNoticeEnglish,
+  agentSessionWriteNoticeParts,
   agentSessionWriteNotDoneParts
 } from './agent-session-refusal-notice'
+import { agentSessionRefusalFailure } from './agent-session-write-failure'
 import type { AgentSessionWriteNoticePart } from './agent-session-write-notice-copy'
 import {
   readWholeAgentSessionFailureFact,
@@ -67,6 +69,9 @@ function rejectionFactParts(
   const { kind } = classifyDispatchRejection({ reason: null, rejection: fact })
   if (kind === 'writeFailed') {
     return ['unreachable', ...agentSessionWriteNotDoneParts(write)]
+  }
+  if (kind === 'notDelivered' && fact.refusal) {
+    return agentSessionWriteNoticeParts(agentSessionRefusalFailure(fact.refusal), write, context)
   }
   // A fact this build cannot place proves only that the message did not happen.
   return kind

@@ -116,7 +116,11 @@ export function useStructuredAgentSessionSends(args: {
       if (!text.trim() && attachments.length === 0) {
         return false
       }
-      const delivery = structuredAgentSessionQueueRequest(queue, request?.alternate)
+      const delivery = request?.workTarget
+        ? queue.capability === 'supported'
+          ? 'queue-if-active'
+          : undefined
+        : structuredAgentSessionQueueRequest(queue, request?.alternate)
       const captured = sendSelection?.() ?? { options: sendOptions?.() }
       const sent = sendStructuredAgentSessionMessage({
         sessionId,
@@ -132,6 +136,7 @@ export function useStructuredAgentSessionSends(args: {
         ...(delivery ? { delivery } : {}),
         ...captured,
         ...(takesSkills && request?.skills?.length ? { skills: request.skills } : {}),
+        ...(request?.workTarget ? { workTarget: request.workTarget } : {}),
         ...(stopping ? { sentWhileStopping: true as const } : {})
       })
       if (!sent) {

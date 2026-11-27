@@ -17,6 +17,7 @@ import type {
 import type { StructuredAgentContextUsage } from '../../../../../../shared/agent-session/conversation-context/structured-agent-session-context-usage'
 import type { NativeChatComposerErrorDetail } from '../controls/native-chat-composer-error-detail'
 import type { NativeChatSideChat } from '../../messages/actions/use-native-chat-side-chat'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export type NativeChatStructuredComposerTransport = {
   capturePresentation: CaptureStructuredAgentSessionPresentation
@@ -81,4 +82,9 @@ export type NativeChatStructuredComposerTransport = {
   /** The host has not confirmed this chat: session uploads wait for publication. */
   sessionPending?: boolean
   sessionPendingNotice?: string
+  /** Present on bot chats: which execution host runs the bot and whether it accepts work targets. */
+  workTargetSupport?: {
+    botHostId: ExecutionHostId
+    supported: boolean
+  }
 }

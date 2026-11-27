@@ -13,6 +13,7 @@ import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { botOwnsChatSession } from '../../../../shared/bots/bot-chat-identity'
 import { selectFolderWorkspaceOnHost } from '../../store/folder-workspaces/folder-workspace-record-index'
+import { useBotForWorkspace } from './bot-workspace'
 
 export type BotChatIdentity = {
   showName?: boolean
@@ -59,6 +60,8 @@ export function useBotChatOwner(
   props: Pick<NativeChatStructuredViewProps, 'tabId' | 'sessionId' | 'target'>
 ) {
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
+  const hostId = getRuntimeTargetHostId(props.target)
+  const homeBot = useBotForWorkspace(ownerWorktreeId, hostId)
   const turnBot = useBotChatIdentity(ownerWorktreeId, props.sessionId, props.target)
   const { src, outfit } = useBotAvatarLook(turnBot ?? NO_BOT_AVATAR)
   // Keyed on what it shows, not the Bot object: a re-read bot is a new object, and a new identity here
@@ -69,5 +72,5 @@ export function useBotChatOwner(
     () => (name !== null && fallback !== null ? { name, src, outfit, fallback } : null),
     [name, src, outfit, fallback]
   )
-  return { ownerWorktreeId, turnBot: identity, bot: turnBot }
+  return { ownerWorktreeId, turnBot: identity, bot: turnBot, homeBot }
 }

@@ -5,6 +5,11 @@ import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import { isGeneratedId } from '../../../orchestration/db/generated-id'
 import { RemoteOwnedPeerRun } from '../../../../../shared/orchestration/remote-owned-wire'
 import {
+  ResolvedBotWorkTargetPlacementSchema,
+  type ResolvedBotWorkTargetPlacement
+} from '../../../../../shared/agent-session/work-target/agent-session-work-target'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import {
   peerCoordinatorCaller,
   type OrchestrationPeerCaller
 } from '../../../orchestration/addressing/orchestration-caller-identity'
@@ -24,6 +29,13 @@ export function admitOrchestrationPeerCall(
   options: RpcDispatchStreamingOptions | undefined
 ): { request: RpcRequest; caller: OrchestrationPeerCaller } | undefined {
   if (request.orchestrationPeerRun === undefined) {
+    if (request.orchestrationPeerWorkTarget !== undefined) {
+      throw new OrchestrationError(
+        'mail_requires_server_pairing',
+        'A peer work target is accepted only on an authenticated paired-computer Run call. No effects were applied.',
+        NO_EFFECTS
+      )
+    }
     return undefined
   }
   const access = method.orchestrationAccess
@@ -50,10 +62,30 @@ export function admitOrchestrationPeerCall(
       NO_EFFECTS
     )
   }
+  let peerWorkTarget: ResolvedBotWorkTargetPlacement | undefined
+  if (request.orchestrationPeerWorkTarget !== undefined) {
+    const parsedTarget = ResolvedBotWorkTargetPlacementSchema.safeParse(
+      request.orchestrationPeerWorkTarget
+    )
+    if (
+      !parsedTarget.success ||
+      parsedTarget.data.onEnvironmentId !== undefined ||
+      (parsedTarget.data.targetHostId ?? LOCAL_EXECUTION_HOST_ID) !== LOCAL_EXECUTION_HOST_ID ||
+      parsedTarget.data.canonicalTarget.hostId !== LOCAL_EXECUTION_HOST_ID
+    ) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        'Invalid peer work target placement for this server. No effects were applied.',
+        NO_EFFECTS
+      )
+    }
+    peerWorkTarget = parsedTarget.data
+  }
   const caller = peerCoordinatorCaller(
     runtime
       .getOrchestrationDb()
-      .admitPeerRun({ peerFingerprint: fingerprint, peerRun: peerRun.data })
+      .admitPeerRun({ peerFingerprint: fingerprint, peerRun: peerRun.data }),
+    peerWorkTarget
   )
   // Terminal attestation and pane keys name callers on the host that has them, never this one.
   const peerRequest = { ...request, orchestrationCompatibilityEvidence: undefined }

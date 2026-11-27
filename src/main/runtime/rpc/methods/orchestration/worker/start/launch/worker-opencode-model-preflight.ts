@@ -13,6 +13,7 @@ import {
 } from '../worker-start-selector-refusal'
 import type { WorkerStartInput } from '../worker-start-input'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
+import type { RuntimeRepoSelector } from '../../../../../../workspaces/catalog/runtime-repo-selector'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 
 export async function probeWorkerOpenCodeModelLaunchSupport(
@@ -34,7 +35,7 @@ export async function resolveLocalWorkerStartLaunch(args: {
   existingWorktree: string
   targetLabel: WorkerStartSelectorLabel
   runtime: OrcaRuntimeService
-  resolveTarget: () => Promise<{ repo?: string; worktree?: string }>
+  resolveTarget: () => Promise<{ repo?: RuntimeRepoSelector; worktree?: string }>
 }) {
   const { createsWorktree, existingWorktree, targetLabel, runtime, resolveTarget } = args
   const launchParams = await refuseUnmatchedWorkerSelector(targetLabel, () =>
