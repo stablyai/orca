@@ -58,6 +58,12 @@ function botHome(
   return store
 }
 
+function deferred<T = void>() {
+  let release!: (value: T) => void
+  const promise = new Promise<T>((resolve) => (release = resolve))
+  return { promise, release }
+}
+
 const view = (extra: Partial<ConversationWorkerView> = {}): ConversationWorkerView => ({
   activity: 'working',
   open: true,
@@ -491,6 +497,37 @@ describe('ThreadStatus', () => {
     await settled.advance(10 * MIN)
     expect(settled.sent).toHaveLength(1)
     expect(settled.fact()?.armed).toBeUndefined()
+  })
+
+  it('posts nothing that changed while its save or answer read was waiting', async () => {
+    const changes: [string, (run: ReturnType<typeof harness>) => void | Promise<void>][] = [
+      ['a turn starts', (run) => void (run.clock.running = run.clock.now)],
+      ['a turn ends', (run) => run.status.turnEnding(PANE)],
+      ['the bot answers', (run) => run.botSaid()],
+      ['the work settles', (run) => run.polled(view({ activity: 'none', open: false }))]
+    ]
+    for (const [, change] of changes) {
+      const save = deferred()
+      const run = harness(botHome(), { flush: () => save.promise })
+      await run.turnEnded()
+      await run.advance(30 * MIN)
+      expect(run.fact()?.pending).toBeDefined()
+      await change(run)
+      save.release()
+      await run.settle()
+      expect(run.sent).toHaveLength(0)
+      await closeTestStores()
+    }
+
+    const read = deferred<boolean>()
+    const answering = harness(botHome(), { answerPending: () => read.promise })
+    await answering.turnEnded()
+    await answering.advance(30 * MIN)
+    answering.clock.running = answering.clock.now
+    read.release(false)
+    await answering.settle()
+    expect(answering.sent).toHaveLength(0)
+    expect(answering.fact()?.pending).toBeUndefined()
   })
 
   it("starts a run's conflicts over: one 409 in a new run never stops it", async () => {

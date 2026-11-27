@@ -1,21 +1,28 @@
 // Whether something the thread should see first is still on its way: a status line waits for it.
 import { cloudConversation } from '../../../shared/connectors/connector-cloud-contract'
 import type { ExternalConversationLink } from '../../../shared/connectors/external-conversation-link'
-import type { ThreadStatusDeps } from './thread-status-deps'
+import { idOf, type ThreadStatusDeps } from './thread-status-deps'
+import type { ThreadStatusWaits } from './thread-status-waits'
 
 // A running turn holds the lines this long, unless it waits on a prompt in the thread.
 const RUNNING_TURN_HOLD_MS = 30 * 60_000
 
-export async function threadStatusHeld(
-  deps: Pick<ThreadStatusDeps, 'runningTurn' | 'cloud' | 'answerPending'>,
+type HoldDeps = Pick<ThreadStatusDeps, 'runningTurn' | 'cloud' | 'answerPending'>
+
+/** What holds a line that is known without waiting, so it can be asked again just before a send. */
+export function threadStatusHeldNow(
+  deps: HoldDeps,
+  waits: ThreadStatusWaits,
   link: ExternalConversationLink,
   /** The pane's latest heard turn end, when known. */
   turnId: number | null,
-  promptOpen: boolean,
   now: number
-): Promise<boolean> {
+): boolean {
+  if (waits.settlingNow(link.paneKey)) {
+    return true
+  }
   const running = deps.runningTurn(link.paneKey)
-  if (running !== null && (now - running < RUNNING_TURN_HOLD_MS || promptOpen)) {
+  if (running !== null && (now - running < RUNNING_TURN_HOLD_MS || waits.promptOpen(idOf(link)))) {
     return true
   }
   if (turnId === null) {
@@ -26,14 +33,22 @@ export async function threadStatusHeld(
     return true
   }
   // An owner's failed mirror post still holds that turn's answer.
-  const mirrorHeld = (link.mirrorHeld ?? []).some(
+  return (link.mirrorHeld ?? []).some(
     ({ event }) =>
       typeof event === 'object' && event !== null && 'turnId' in event && event.turnId === turnId
   )
-  if (mirrorHeld || !deps.answerPending) {
-    return mirrorHeld
+}
+
+/** Whether the reply outbox still holds the turn's answer; a read that fails holds the line rather
+ *  than let it go before the answer. */
+export async function threadStatusAnswerHeld(
+  deps: HoldDeps,
+  link: ExternalConversationLink,
+  turnId: number | null
+): Promise<boolean> {
+  if (turnId === null || !deps.answerPending) {
+    return false
   }
-  // A read that fails holds the line rather than let it go before the answer.
   return await deps.answerPending(link, turnId).then(
     (unsent) => unsent,
     () => true

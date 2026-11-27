@@ -27,7 +27,7 @@ import {
   withoutPending,
   withTurnEnd
 } from './thread-status-fact'
-import { threadStatusHeld } from './thread-status-hold'
+import { threadStatusAnswerHeld, threadStatusHeldNow } from './thread-status-hold'
 import { threadLinesOf } from './thread-status-lines'
 import { sendThreadStatusLine } from './thread-status-send'
 import { ThreadStatusWaits } from './thread-status-waits'
@@ -212,13 +212,10 @@ export class ThreadStatus implements ConversationWorkersWatcher {
         : undefined
     }
     const { link } = found
-    const view = this.views.get(link.paneKey)
-    const promptOpen = this.waits.promptOpen(id)
-    const held =
-      this.waits.settlingNow(link.paneKey) ||
-      (await threadStatusHeld(this.deps, link, view?.lastTurnId ?? null, promptOpen, this.now()))
-    // Read again after the wait: a line or a settle meanwhile decides afresh.
-    const { current, decided } = decide(held)
+    const lastTurnId = this.views.get(link.paneKey)?.lastTurnId ?? null
+    const answerHeld = await threadStatusAnswerHeld(this.deps, link, lastTurnId)
+    // Read again after the wait: a turn, a line or a settle meanwhile decides afresh.
+    const { current, decided } = decide(answerHeld || this.heldNow(link))
     if (!current || decided.kind === 'wait') {
       return
     }
@@ -254,16 +251,10 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     }
     const link = findLink(this.deps.store, given)?.link
     const pending = link?.threadStatus?.pending
-    if (!link || !pending || !link.threadStatus?.armed || !this.eligible(link)) {
+    // Asked again after the save, with nothing awaited before the post, and before each retry.
+    const owed = () => !!pending && this.stillOwed(given, pending.replyId)
+    if (!link || !pending || !owed()) {
       return
-    }
-    // The save took long enough that its elapsed time is stale: the next tick decides afresh.
-    if (this.now() - pending.at > PENDING_MAX_MS) {
-      return this.write(link, withoutPending(link.threadStatus))
-    }
-    const owed = () => {
-      const now = findLink(this.deps.store, given)?.link
-      return !!now && this.eligible(now) && now.threadStatus?.pending?.replyId === pending.replyId
     }
     const sent = await sendThreadStatusLine(cloud, conversation, pending, owed)
     const id = idOf(link)
@@ -291,6 +282,26 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     }
     this.conflicted.add(id)
     this.write(current, withoutPending(fact))
+  }
+
+  /** Whether this saved line may still go now, by all that is known without waiting: the same
+   *  line a fresh decision would post, nothing holding it, and none seen in the thread since. */
+  private stillOwed(thread: Thread, replyId: string): boolean {
+    const link = findLink(this.deps.store, thread)?.link
+    const fact = link?.threadStatus
+    const now = this.now()
+    if (!link || fact?.pending?.replyId !== replyId || stalePending(fact, now, PENDING_MAX_MS)) {
+      return false
+    }
+    const view = this.views.get(link.paneKey)
+    const eligible = this.eligible(link)
+    const decided = decideThreadStatus({ now, fact, view, eligible, held: this.heldNow(link) })
+    return decided.kind === 'post' && decided.stop === fact.pending.stop
+  }
+
+  private heldNow(link: ExternalConversationLink): boolean {
+    const lastTurnId = this.views.get(link.paneKey)?.lastTurnId ?? null
+    return threadStatusHeldNow(this.deps, this.waits, link, lastTurnId, this.now())
   }
 
   private disarm(link: ExternalConversationLink, fact: ThreadStatusFact): void {
