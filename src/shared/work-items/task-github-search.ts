@@ -1,6 +1,6 @@
 import { getTaskPresetQuery } from './task-preset-query'
 import { hasExplicitTaskScope, parseTaskQuery } from './task-query'
-import type { TaskViewPresetId } from '../ui-chrome/ui-chrome-types'
+import type { TaskResumeState, TaskViewPresetId } from '../ui-chrome/ui-chrome-types'
 export type GitHubTaskKind = 'issues' | 'prs'
 
 export function isPRFocusedTaskView(preset: TaskViewPresetId | null, query: string): boolean {
@@ -37,6 +37,17 @@ export function resolveGitHubLandingPreset(
     return savedPreset === 'all' ? 'issues' : savedPreset
   }
   return normalizeGitHubTaskPreset(defaultPreset)
+}
+
+/** The query the GitHub Tasks list opens with; prefetchers must match it so the warm cache key hits. */
+export function getGitHubLandingQuery(
+  resume: Pick<TaskResumeState, 'githubItemsPreset' | 'githubItemsQuery'> | undefined,
+  defaultPreset: TaskViewPresetId | null | undefined
+): string {
+  if (resume?.githubItemsPreset === null) {
+    return (resume.githubItemsQuery ?? '').trim()
+  }
+  return getTaskPresetQuery(resolveGitHubLandingPreset(resume?.githubItemsPreset, defaultPreset))
 }
 
 export function getGitHubTaskKind(preset: TaskViewPresetId | null, query: string): GitHubTaskKind {
