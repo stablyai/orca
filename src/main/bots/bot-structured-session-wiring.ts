@@ -37,6 +37,7 @@ import {
 } from '../native-chat/native-chat-skill-roots'
 import type { Repo } from '../../shared/repository/repo-types'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { botAutoCompactSupported } from '../../shared/bots/bot-launch'
 
 /** The agents that reload a watched skills folder mid-chat (checked on Claude 2.1.319, Codex 0.163). */
 const LIVE_SKILLS_PROVIDERS = new Set(['claude', 'codex'])
@@ -77,6 +78,7 @@ export function botStructuredSessionWiring(deps: {
     | 'resolveSessionToolServers'
     | 'launchTools'
     | 'resolveSessionLinkedSkills'
+    | 'sessionAutoCompactPercent'
     | 'prepareSessionLinkedSkills'
     | 'reportSessionLinkedSkills'
     | 'prepareSessionLaunch'
@@ -215,6 +217,10 @@ export function botStructuredSessionWiring(deps: {
         const launched = launchedTools.get(sessionId)
         return launched !== undefined && sessionLaunchToolsOutdated(launched)
       }
+    },
+    sessionAutoCompactPercent: (record) => {
+      const bot = botOfRecord(record)
+      return bot && botAutoCompactSupported(bot.agent) ? (bot.autoCompactPercent ?? null) : null
     },
     prepareSessionLinkedSkills: async (record) => {
       const bot = botOfRecord(record)

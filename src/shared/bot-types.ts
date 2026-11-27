@@ -6,7 +6,8 @@ import { optionalConnectorAvatarUrl } from './connector-message-asker'
 import type { NativeChatAgent } from './agent-launch/permissions/agent-chat-permission-support'
 import { LOCAL_EXECUTION_HOST_ID } from './execution-host/execution-host'
 import { BotLookAroundSchema } from './bots/bot-look-around'
-import { BotLaunchSchema } from './bots/bot-launch'
+import { BotAutoCompactPercentSchema, BotLaunchSchema } from './bots/bot-launch'
+import { BotItemsStaleSchema } from './bots/bot-items-stale'
 import { BotTidyUpSchema } from './bots/bot-tidy-up'
 import { BotOfferAnswerSchema } from './bots/bot-offer-answers'
 import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
@@ -163,19 +164,6 @@ export const BOT_MAX_SKILL_PROJECTS = 20
 const BotSlackLinkSchema = BotSlackAppSchema.extend(BotLinkOwner)
 const BotLinearLinkSchema = BotLinearSchema.extend(BotLinkOwner)
 
-export const BotItemsStaleSchema = z.union([
-  z.literal(3),
-  z.literal(5),
-  z.literal(7),
-  z.literal(14),
-  z.literal('never')
-])
-export type BotItemsStale = z.infer<typeof BotItemsStaleSchema>
-/** Its choices in order, as Settings offers them. */
-export const BOT_ITEMS_STALE_CHOICES: readonly BotItemsStale[] = BotItemsStaleSchema.options.map(
-  (option) => option.value
-)
-
 export const BotSchema = z.object({
   id: z.string().min(1),
   name: BotNameSchema,
@@ -205,6 +193,8 @@ export const BotSchema = z.object({
   /** The owner's model and options for `agent`; absent on older bots and dropped by older hosts. */
   // A malformed value reads as unset rather than losing the whole bot.
   launch: BotLaunchSchema.optional().catch(undefined),
+  /** Context percent its Claude Code chats compact at; absent or null keeps Claude Code's own. Older hosts drop it. */
+  autoCompactPercent: BotAutoCompactPercentSchema.nullable().optional().catch(undefined),
   notifications: BotNotificationsSchema,
   members: z.array(BotMemberSchema).max(BOT_MAX_MEMBERS),
   /** The first of slackApps, kept for readers that know one workspace (older Orcas, the phone). */
@@ -418,3 +408,8 @@ export function normalizePersistedBots(value: unknown): Bot[] {
 }
 
 export { botFolderName } from './bots/bot-folder-name'
+export {
+  BOT_ITEMS_STALE_CHOICES,
+  BotItemsStaleSchema,
+  type BotItemsStale
+} from './bots/bot-items-stale'

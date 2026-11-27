@@ -59,6 +59,8 @@ import { useBotComputerName } from './BotComputerPage'
 import type { BotSettingsPage } from './bot-settings-place'
 import { SettingsControlsOffContext, SettingsInsetGroup, SettingsInsetRow } from './BotSettingsRows'
 import { BotItemsSettingsGroup } from './BotItemsSettingsGroup'
+import { BotAutoCompactRow } from './BotAutoCompactRow'
+import { botAutoCompactSupported } from '../../../../../shared/bots/bot-launch'
 
 type Update = (updates: BotUpdateParams['updates']) => Promise<Bot | null>
 
@@ -361,6 +363,9 @@ export function BotSettingsRoot({
           page="permissions"
           onOpen={() => open('permissions')}
         />
+        {botAutoCompactSupported(bot.agent) ? (
+          <BotAutoCompactRow bot={bot} update={update} />
+        ) : null}
         <SettingsInsetRow
           icon={bot.hostId === 'local' ? <Laptop /> : <Server />}
           title={t('bots.settingsView.computer', 'Computer')}

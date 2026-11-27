@@ -27534,6 +27534,11 @@
       "itemsStale": {
         "shortTitle": "多久後標記為停滯"
       },
+      "autoCompact": {
+        "title": "自動壓縮",
+        "default": "預設",
+        "percent": "{{percent}}%"
+      },
       "memoryFiles_one": "{{count}} 個檔案",
       "memoryFiles_other": "{{count}} 個檔案",
       "lookAroundShort": {

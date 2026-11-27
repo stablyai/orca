@@ -58,6 +58,8 @@ export type StructuredAgentLaunchSources = {
     record: AgentSessionRecord,
     launchDirectory: string
   ) => Promise<SessionMcpTools>
+  /** The context percent a bot's chat compacts at; null or absent keeps the agent's own. */
+  autoCompactPercent?: (record: AgentSessionRecord) => number | null
   /** A bot's linked-skills folder and the projects in it, scanned for this launch; absent: none. */
   resolveLinkedSkills?: (record: AgentSessionRecord) => Promise<LinkedSkills>
   /** The agent loaded fewer linked skills than its instructions said; this section replaces it. */
@@ -89,6 +91,8 @@ export type StructuredAgentLaunchBasis = {
   refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
   /** The permission mode the host decided this start runs with; absent asks. */
   permissionMode?: AgentChatPermissionChoice
+  /** The context percent the chat compacts at; absent keeps the agent's own. */
+  autoCompactPercent?: number
   /** The session may only read: the agent's part adds its own enforcement of this mode. */
   readOnly: ReadOnlySessionMode | null
   /** The run needs no tools (`toolFreeSession`): it gets no skills either, and a part that can't
@@ -194,6 +198,7 @@ async function composedPart<L>(
   const refresh = sources.refreshAfterMissingProgram
   const readOnly = sources.readOnlySession?.(record.sessionId) ?? null
   const toolFree = toolFreeSession(readOnly)
+  const autoCompactPercent = sources.autoCompactPercent?.(record) ?? null
   const basis: StructuredAgentLaunchBasis = {
     record,
     launchDirectory,
@@ -242,6 +247,7 @@ async function composedPart<L>(
       : {}),
     // Ask, whatever the chat chose: the agent's part answers its asks from the read-only allow-list.
     ...(readOnly ? { permissionMode: 'ask' as const } : permissionMode ? { permissionMode } : {}),
+    ...(autoCompactPercent !== null ? { autoCompactPercent } : {}),
     readOnly,
     toolFree
   }
@@ -321,6 +327,9 @@ export function structuredAgentLaunchSources(
       ? { resolveToolServers: deps.resolveSessionToolServers }
       : {}),
     ...(deps.prepareSessionLaunch ? { prepareLaunch: deps.prepareSessionLaunch } : {}),
+    ...(deps.sessionAutoCompactPercent
+      ? { autoCompactPercent: deps.sessionAutoCompactPercent }
+      : {}),
     ...(deps.resolveSessionLinkedSkills
       ? { resolveLinkedSkills: deps.resolveSessionLinkedSkills }
       : {}),
