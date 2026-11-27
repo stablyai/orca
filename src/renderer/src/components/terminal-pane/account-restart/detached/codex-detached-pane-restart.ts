@@ -31,6 +31,12 @@ import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 
 const inFlightPtyIds = new Set<string>()
 
+// A spawn can kill the pane's PTY inside its replace and still fail before the replacement is
+// created; the queue entry was already spent, and Claude has no restart prompt to answer, so
+// nothing would try again and the pane would run nowhere. Ask again, a bounded number of times.
+const detachedRestartAsks = new Map<string, number>()
+const maxDetachedRestartAsks = 3
+
 export async function sweepUnclaimedCodexPaneRestarts(onSettled?: () => void): Promise<void> {
   const restarts: Promise<void>[] = []
   for (const ptyId of Object.keys(useAppStore.getState().pendingPaneAccountRestarts)) {
@@ -45,6 +51,7 @@ export async function sweepUnclaimedCodexPaneRestarts(onSettled?: () => void): P
 async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Promise<void> {
   let located: LocatedCodexPane | null = null
   let releaseSlot: (() => void) | null = null
+  let queuedAgent: AccountRestartAgent | null = null
   try {
     // Remote spawns need mounted transport assembly; leave them queued for mount.
     if (isForeignMachineCodexPtyId(ptyId)) {
@@ -73,6 +80,7 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
     if (!agent) {
       return
     }
+    queuedAgent = agent
     inFlightPtyIds.add(ptyId)
     const claimedPane = located
     releaseSlot = holdDetachedRestartSlot(ptyId, () => {
@@ -82,8 +90,19 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
       onSettled?.()
     })
     await executeDetachedCodexPaneRestart(located, ptyId, agent)
+    detachedRestartAsks.delete(ptyId)
   } catch (err) {
     console.warn('[codex-restart] detached pane restart failed:', err)
+    const asks = detachedRestartAsks.get(ptyId) ?? 0
+    if (queuedAgent && asks < maxDetachedRestartAsks) {
+      // The queue entry was consumed before the spawn ran, so a failure after the old PTY's
+      // kill would leave the pane with nothing running and nothing queued: ask again. The
+      // added key reschedules the sweep once this write lands.
+      detachedRestartAsks.set(ptyId, asks + 1)
+      useAppStore.getState().queuePaneAccountRestarts([ptyId], queuedAgent)
+      return
+    }
+    detachedRestartAsks.delete(ptyId)
     // Contain each bad claim so later panes still restart and this prompt cannot remain silently answered.
     if (located) {
       reopenCurrentCodexRestartPrompt(located, ptyId)
