@@ -10,6 +10,7 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { assertTerminalLaunchAdmissible } from '../../../../agent-launch/agent-launch-surface-factories'
 import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { resolveAgentLaunchModeOnHost } from '../../../../agent-launch/agent-launch-mode'
+import { assertTuiAgentLaunchEnabled } from '../../../../agent-launch/disabled-agent-launch-refusal'
 
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
 
@@ -89,6 +90,13 @@ export async function resolveUnlaunchedIntent(
   early: EarlyAgentLaunchTab | null,
   modeOptions: { terminalOnly?: boolean; callerRendersStructured?: boolean } = {}
 ): Promise<{ intent: ResolvedAgentLaunchIntent; decidedMode: AgentLaunchModeReceipt }> {
+  // Before any workspace exists; a reused terminal already runs its agent, so only new launches refuse.
+  if (!params.reuseTerminal) {
+    assertTuiAgentLaunchEnabled(
+      params.agent,
+      runtime.requireStore().getSettings().disabledTuiAgents
+    )
+  }
   const intent = await agentLaunchIntent(params, runtime, early?.paneKey)
   await validateReusedTerminal(intent, runtime)
   const preflight = decideAgentLaunchIntentMode({ intent, runtime, ...modeOptions })
