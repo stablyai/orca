@@ -70,8 +70,7 @@ function SearchShortcutOptInRow({ state }: { state: SearchShortcutOfferState }):
               {/* The toggle already shows the unsaved choice, so it can't resubmit it; the service saves a repeat again. */}
               <Button
                 variant="link"
-                size="xs"
-                className="h-auto p-0"
+                size="inlineText"
                 disabled={pending}
                 onClick={() => void choose(notice.choice)}
               >

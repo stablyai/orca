@@ -41,11 +41,13 @@ async function clickCardButton(doc: Document, name: string): Promise<void> {
 function offerCase({
   platform = 'darwin',
   dialogWidth,
-  clicks = []
+  clicks = [],
+  outcome = 'applied'
 }: {
   platform?: KeybindingPlatform
   dialogWidth?: number
   clicks?: string[]
+  outcome?: SearchShortcutChoiceResult['outcome']
 }) {
   return defineFixture({
     store: {
@@ -57,7 +59,7 @@ function offerCase({
         // Bots need a paired runtime the fixture host lacks; the offer doesn't depend on them.
         settings: state.settings && { ...state.settings, botsEnabled: false },
         // No main process here: report each choice as saved without changing the snapshot.
-        setSearchShortcutChoice: async () => 'applied'
+        setSearchShortcutChoice: async () => outcome
       })),
     render: () => <WorktreeJumpPalette />,
     interact: async (frame) => {
@@ -83,3 +85,5 @@ export const windowsNarrow = offerCase({ platform: 'win32', dialogWidth: 400 })
 export const windowsWide = offerCase({ platform: 'win32' })
 export const switched = offerCase({ clicks: ['Switch'] })
 export const undone = offerCase({ clicks: ['Switch', 'Undo'] })
+// Mod+K was taken after the card rendered: the card explains instead of vanishing.
+export const refused = offerCase({ clicks: ['Switch'], outcome: 'refused' })
