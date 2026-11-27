@@ -1,5 +1,5 @@
 // A teammate's call never reaches the host's own window: nothing it opens, focuses or drives lands
-// there. Every method a teammate can reach is classified once, in teammate-method-classes.json
+// there, and no tab it opens is written into the host's tab list. Every method a teammate can reach is classified once, in teammate-method-classes.json
 // (`hostWindow`); a method missing from it is refused.
 import { z } from 'zod'
 import {
@@ -47,8 +47,10 @@ export const HOST_WINDOW_CONDITIONS: Record<
   // hooks activates it as `activate` does.
   activatesOnlyForCaller: (params) =>
     (params.activate !== true && params.runHooks !== true) || params.navigation === 'caller',
-  // Omitted navigation publishes the reveal for every screen, the host's included.
-  callerNavigation: (params) => params.navigation === 'caller',
+  // A host tab is on the host's window whether or not it is focused. A teammate's caller reveal opens
+  // the chat in their own tabs and writes none of the host's (structured-agent-session-reveal);
+  // without it the reveal publishes to every screen, the host's included.
+  writesNoHostTab: (params) => params.navigation === 'caller',
   clientPlacement: (params) => params.placement?.kind === 'client',
   ownClientPage,
   unfocusedOwnClientPage: (params, caller) => params.focus !== true && ownClientPage(params, caller)

@@ -1216,7 +1216,7 @@
     ],
     "conditional": {
       "activatesOnlyForCaller": ["worktree.create"],
-      "callerNavigation": ["agentSession.reveal"],
+      "writesNoHostTab": ["agentSession.reveal"],
       "clientPlacement": ["browser.tabCreate"],
       "ownClientPage": [
         "browser.addWordToDictionary",

@@ -147,6 +147,12 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
     return device ? callerScopeOf(device).kind !== 'bot-share' : false
   }
 
+  /** See `BotShareDevices.teammateOfDevice`. */
+  teammateOfDevice(deviceId: string): { botId: string; accountId: string } | null {
+    const device = this.botShareDevices?.get(deviceId)
+    return device ? { botId: device.botId, accountId: device.accountId } : null
+  }
+
   /** Who typed a paired device's message; see `pairedDeviceTypistOf`. */
   pairedDeviceTypist(
     deviceId: string,

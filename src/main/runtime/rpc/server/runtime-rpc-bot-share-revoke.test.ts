@@ -169,6 +169,7 @@ describe('revoking a teammate’s share devices', () => {
       revokeBotSharePhone: vi.fn(),
       reachedAccounts: vi.fn(),
       isOwnerDevice: vi.fn(),
+      teammateOfDevice: vi.fn(),
       revokeBotShareDevices: vi.fn(async () => {
         throw new Error('disk full')
       })

@@ -10,6 +10,8 @@ export type StoredClientSessionTabSelection = {
   revision: number
   shouldPersist: boolean
   closedTabIds: ReadonlySet<string>
+  /** Under a person key only: the chats in this workspace whose tabs are that person's alone. */
+  personTabs?: readonly string[]
   /** What this client was shown while its pick was still there; not persisted. */
   topologyBeforeClose?: ClientSessionTabTopology
 }

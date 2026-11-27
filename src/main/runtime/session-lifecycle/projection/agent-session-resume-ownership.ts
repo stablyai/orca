@@ -3,7 +3,7 @@
 import { findPaneSleepingRecord } from './pane-sleeping-record'
 import { hookRowPaneResumeRecord, isPaneLocalHookRow } from './hook-row-pane-resume-record'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { OrcaRuntimeWithApplyMobileSessionTabNavigation } from './apply-mobile-session-tab-navigation'
+import { OrcaRuntimeWithPersonSessionTabs } from './person-session-tabs'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
@@ -25,7 +25,7 @@ import {
 export type PaneResumeStartup = MobileTerminalResumeCommand & {
   resumeClaim: AgentSessionResumeClaim
 }
-export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRuntimeWithApplyMobileSessionTabNavigation {
+export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRuntimeWithPersonSessionTabs {
   protected abstract resolveMobileSessionResumeCommand(
     ...args: Parameters<MobileTerminalStartup['resolveMobileSessionResumeCommand']>
   ): ReturnType<MobileTerminalStartup['resolveMobileSessionResumeCommand']>

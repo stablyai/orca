@@ -9,18 +9,20 @@ import {
 } from './client-session-tab-closed-selection'
 import type { StoredClientSessionTabSelection } from './client-session-tab-closed-selection'
 import { normalizePersistedMobileClientTabSelections } from './client-session-tab-selection-persistence'
+import { ClientSessionPersonTabs } from './client-session-person-tabs'
 import {
   deriveClientSessionTabSelection,
   emptyClientSessionTabSelection,
   projectClientSessionTabSelection,
   activateClientSessionTabSelection,
-  topLevelTabId,
-  type ClientSessionTabSelection
+  topLevelTabId
 } from './client-session-tab-selection-projection'
 
 export class ClientSessionTabSelectionStore {
   private statesByClient = new Map<string, Map<string, StoredClientSessionTabSelection>>()
   private persistListener: ((state: PersistedMobileClientTabSelections) => void) | null = null
+  /** Each teammate's own tabs, kept under their person key beside the devices' selections. */
+  readonly personTabs = new ClientSessionPersonTabs(this.statesByClient, () => this.persistNow())
 
   // Persist across host restart so phones do not snap back to the first tab.
   hydrate(persisted: PersistedMobileClientTabSelections): void {
@@ -28,12 +30,15 @@ export class ClientSessionTabSelectionStore {
       normalizePersistedMobileClientTabSelections(persisted)
     )) {
       const statesByWorktree = this.getStatesByWorktree(clientNavigationId)
-      for (const [worktreeId, selection] of Object.entries(selectionsByWorktree)) {
+      for (const [worktreeId, { personTabs, ...selection }] of Object.entries(
+        selectionsByWorktree
+      )) {
         statesByWorktree.set(worktreeId, {
           selection,
           revision: 0,
           shouldPersist: true,
-          closedTabIds: new Set()
+          closedTabIds: new Set(),
+          ...(personTabs ? { personTabs } : {})
         })
       }
     }
@@ -46,10 +51,12 @@ export class ClientSessionTabSelectionStore {
   serialize(): PersistedMobileClientTabSelections {
     const persisted: PersistedMobileClientTabSelections = {}
     for (const [clientNavigationId, statesByWorktree] of this.statesByClient) {
-      const entries: Record<string, ClientSessionTabSelection> = {}
+      const entries: PersistedMobileClientTabSelections[string] = {}
       for (const [worktreeId, state] of statesByWorktree) {
         if (state.shouldPersist) {
-          entries[worktreeId] = state.selection
+          entries[worktreeId] = state.personTabs?.length
+            ? { ...state.selection, personTabs: [...state.personTabs] }
+            : state.selection
         }
       }
       if (Object.keys(entries).length > 0) {
@@ -75,12 +82,13 @@ export class ClientSessionTabSelectionStore {
   }
 
   project(
-    snapshot: RuntimeMobileSessionTabsResult,
+    hostSnapshot: RuntimeMobileSessionTabsResult,
     clientNavigationId?: string
   ): RuntimeMobileSessionTabsResult {
     if (!clientNavigationId) {
-      return snapshot
+      return hostSnapshot
     }
+    const snapshot = this.personTabs.shown(hostSnapshot, clientNavigationId)
     const statesByWorktree = this.getStatesByWorktree(clientNavigationId)
     const existingState = statesByWorktree.get(snapshot.worktree)
     const state = existingState ?? {
@@ -145,13 +153,14 @@ export class ClientSessionTabSelectionStore {
       shouldPersist: false,
       closedTabIds: new Set<string>()
     }
-    const nextSelection = activateClientSessionTabSelection(snapshot, state.selection, activeTabId)
+    const shown = this.personTabs.shown(snapshot, clientNavigationId)
+    const nextSelection = activateClientSessionTabSelection(shown, state.selection, activeTabId)
     statesByWorktree.set(snapshot.worktree, {
       ...state,
       selection: nextSelection,
       revision: state.revision + 1,
       shouldPersist: true,
-      closedTabIds: this.reopenedTabIds(snapshot, state.closedTabIds, activeTabId)
+      closedTabIds: this.reopenedTabIds(shown, state.closedTabIds, activeTabId)
     })
     this.persistNow()
     return this.project(snapshot, clientNavigationId)

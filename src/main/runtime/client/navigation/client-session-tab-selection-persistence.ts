@@ -24,7 +24,15 @@ function normalizeClientSessionTabSelection(
       }
     }
   }
-  if (!activeTabId && !activeGroupId && Object.keys(activeTabIdByGroupId).length === 0) {
+  const personTabs = Array.isArray(candidate.personTabs)
+    ? candidate.personTabs.filter((sessionId): sessionId is string => typeof sessionId === 'string')
+    : []
+  if (
+    !activeTabId &&
+    !activeGroupId &&
+    Object.keys(activeTabIdByGroupId).length === 0 &&
+    personTabs.length === 0
+  ) {
     return null
   }
   const recentTabIds = Array.isArray(candidate.recentTabIds)
@@ -34,7 +42,8 @@ function normalizeClientSessionTabSelection(
     activeTabId,
     activeGroupId,
     activeTabIdByGroupId,
-    ...(recentTabIds.length > 0 ? { recentTabIds } : {})
+    ...(recentTabIds.length > 0 ? { recentTabIds } : {}),
+    ...(personTabs.length > 0 ? { personTabs } : {})
   }
 }
 

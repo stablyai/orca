@@ -52,9 +52,11 @@ export type PersistedMobileClientTabSelection = {
   activeTabIdByGroupId: Readonly<Record<string, string>>
   /** Top-level tabs the client showed, most recent last. */
   recentTabIds?: string[]
+  /** Under a teammate's person key: the chats whose tabs are theirs alone, by session id. */
+  personTabs?: string[]
 }
 
-/** deviceId → worktreeId → selection. */
+/** deviceId (or a teammate's person key) → worktreeId → selection. */
 export type PersistedMobileClientTabSelections = Record<
   string,
   Record<string, PersistedMobileClientTabSelection>
