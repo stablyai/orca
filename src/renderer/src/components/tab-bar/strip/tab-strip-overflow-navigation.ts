@@ -57,12 +57,14 @@ function isTabStripScrolledToEnd(el: HTMLElement): boolean {
 }
 
 export function useTabStripOverflowNavigation({
+  enabled = true,
   activeVisibleTabId,
   activeDockSlotId,
   layoutKey,
   slotIds,
   worktreeId
 }: {
+  enabled?: boolean
   activeVisibleTabId: string | null
   /** The slot drawn active; a client-hosted row can take it without `activeVisibleTabId` changing. */
   activeDockSlotId: string | null
@@ -100,7 +102,7 @@ export function useTabStripOverflowNavigation({
   const [activeTabDockSide, setActiveTabDockSide] = useState<ActiveTabDockSide | null>(null)
   const updateTabStripOverflowState = useCallback((): void => {
     const el = tabStripRef.current
-    if (!el) {
+    if (!enabled || !el) {
       return
     }
     const next = computeTabStripOverflowState(el)
@@ -109,7 +111,7 @@ export function useTabStripOverflowNavigation({
     )
     updateTabStripDockAvailability(el)
     setActiveTabDockSide(getActiveTabDockSide(el))
-  }, [])
+  }, [enabled])
   const scrollTabStrip = useCallback(
     (direction: 'start' | 'end', behavior: ScrollBehavior = 'smooth'): void => {
       const el = tabStripRef.current

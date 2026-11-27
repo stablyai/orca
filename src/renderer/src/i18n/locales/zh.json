@@ -946,6 +946,10 @@
         "skillTitle": "供智能体使用的 Orca 技能",
         "description": "Orca 自带的终端已内置该命令"
       },
+      "wrapWorkspaceTabs": {
+        "title": "工作区标签页自动换行",
+        "description": "标签栏宽度不足时，将工作区标签页排成多行。"
+      },
       "previewTabs": {
         "title": "预览标签页",
         "description": "单击文件时复用同一个预览标签页，直到你编辑或固定它"

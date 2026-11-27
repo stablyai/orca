@@ -1749,6 +1749,10 @@
       }
     },
     "general": {
+      "wrapWorkspaceTabs": {
+        "title": "工作區分頁自動換行",
+        "description": "分頁列寬度不足時，將工作區分頁排成多列。"
+      },
       "openInMenu": {
         "keyword": {
           "windsurf": "windsurf",

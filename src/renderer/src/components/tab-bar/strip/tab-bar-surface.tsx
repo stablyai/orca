@@ -2,6 +2,7 @@ import React from 'react'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -15,7 +16,7 @@ import { TabBarAgentPickerEntry } from '../create-entry/TabBarAgentPickerEntry'
 import { TabStripScrollIndicator } from './TabStripScrollIndicator'
 import { TabStripTooltipProvider } from './TabStripTooltipProvider'
 import { getTabStripScrollMaskClassName } from './tab-strip-scroll-metrics'
-import type { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
+import type { useTabStripViewportNavigation } from './tab-strip-viewport-navigation'
 import type { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
 import type { TabBarProps } from '../tab-bar-props'
 import type { TabBarRuntimeModel } from '../model/use-tab-bar-runtime-model'
@@ -61,7 +62,7 @@ export function renderTabBarSurface(
     itemProjection: TabBarItemProjection
     /** What renders: a pinned bot Home in its own slot, then the scrolling strip's tabs. */
     strip: RenderedTabStrip
-    tabStripNavigation: ReturnType<typeof useTabStripOverflowNavigation>
+    tabStripNavigation: ReturnType<typeof useTabStripViewportNavigation>
     tabStripDragScroll: ReturnType<typeof useTabStripDragScrollHandlers>
     activeClientHostedBrowserRowId: string | null
     itemActions: TabBarItemActions
@@ -79,7 +80,8 @@ export function renderTabBarSurface(
     showAgentLaunchItems = true,
     onNewTerminalTab,
     onOpenEntry,
-    tabStripChrome = 'default'
+    tabStripChrome = 'default',
+    wrapTabs = false
   } = props
   const {
     resolvedGroupId,
@@ -118,16 +120,19 @@ export function renderTabBarSurface(
   } = strip
   const {
     tabStripRef,
+    viewportRef,
     tabStripOverflowState,
     activeTabDockSide,
     scrollTabStrip,
     subscribeToStripResize
   } = tabStripNavigation
+  const hasHorizontalOverflow = !wrapTabs && tabStripOverflowState.hasOverflow
   const singleTab = orderedItems.length + clientHostedBrowserRows.length === 1
   const includeTopTabBorder = tabStripChrome !== 'floating-panel'
   const renderItems = (
     segments: readonly TabStripSegment[],
-    itemOffset = pinnedCount
+    itemOffset = pinnedCount,
+    columns: number | null = null
   ): React.ReactNode[] =>
     renderTabBarItems({
       items: orderedItems,
@@ -138,11 +143,19 @@ export function renderTabBarSurface(
       includeTopTabBorder,
       activeClientHostedBrowserRowId,
       segments,
-      itemOffset
+      itemOffset,
+      columns
     })
 
   return (
-    <div ref={surfaceRef} className="flex items-stretch h-full overflow-hidden flex-1 min-w-0">
+    <div
+      ref={surfaceRef}
+      data-wrapped-tab-bar={wrapTabs ? '' : undefined}
+      className={cn(
+        'flex min-w-0 flex-1 items-stretch overflow-hidden',
+        wrapTabs ? 'min-h-(--workspace-tab-row-height)' : 'h-full'
+      )}
+    >
       {pinnedCount > 0 ? (
         <PinnedHomeTabSlot
           sortableIds={strip.pinnedSortableIds}
@@ -152,7 +165,7 @@ export function renderTabBarSurface(
           {renderItems([{ kind: 'tabs', start: 0, end: pinnedCount }], 0)}
         </PinnedHomeTabSlot>
       ) : null}
-      {tabStripOverflowState.hasOverflow ? (
+      {hasHorizontalOverflow ? (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -179,34 +192,43 @@ export function renderTabBarSurface(
       ) : null}
       {/* Keep drag siblings anchored; only the insertion bar moves. */}
       <WindowedTabStrip
-        stripRef={tabStripRef}
+        stripRef={viewportRef}
+        wrapTabs={wrapTabs}
         subscribeToStripResize={subscribeToStripResize}
         sortableIds={sortableIds}
-        activeVisibleTabId={activeVisibleTabId}
-        renderStrip={(segments) => (
+        activeVisibleTabId={
+          wrapTabs ? (activeClientHostedBrowserRowId ?? activeVisibleTabId) : activeVisibleTabId
+        }
+        renderStrip={(segments, columns) => (
           // Why no-drag: tab interactions must work inside the titlebar's drag region (outer container stays window-draggable).
           <div
             data-single-tab={singleTab ? '' : undefined}
             // Why: tabs are the only drag source, so a narrow pane clips the "+" before the last tab sliver.
-            className={`group/tab-strip relative flex min-h-0 w-max max-w-full ${stripSizeClassName(strip)}`}
+            className={cn(
+              'group/tab-strip relative flex min-h-0 max-w-full',
+              wrapTabs ? 'flex-1' : 'w-max',
+              stripSizeClassName(strip)
+            )}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
             <div
-              ref={tabStripRef}
+              ref={viewportRef}
               // Tab drags clip drop targets to this box (tab-drag-collision.ts).
               data-tab-strip-scroller=""
-              data-active-tab-docked={activeTabDockSide ?? undefined}
+              data-wrapped-tab-strip={wrapTabs ? '' : undefined}
+              data-active-tab-docked={wrapTabs ? undefined : (activeTabDockSide ?? undefined)}
               // Why: only `border-r` here — a strip-level `border-l` would render a heavier L-corner than the first tab's own `border-l`.
-              className={[
-                'terminal-tab-strip flex h-full min-w-0 max-w-full flex-1 items-stretch overflow-x-auto overflow-y-hidden',
-                'border-r border-border/70',
-                getTabStripScrollMaskClassName(tabStripOverflowState, activeTabDockSide)
-              ]
-                .filter(Boolean)
-                .join(' ')}
+              className={cn(
+                'terminal-tab-strip min-w-0 max-w-full flex-1 border-r border-border/70',
+                wrapTabs
+                  ? 'scrollbar-sleek grid content-start overflow-x-hidden overflow-y-auto'
+                  : 'flex h-full items-stretch overflow-x-auto overflow-y-hidden',
+                !wrapTabs &&
+                  getTabStripScrollMaskClassName(tabStripOverflowState, activeTabDockSide)
+              )}
             >
               <TabStripTooltipProvider>
-                {renderItems(segments)}
+                {renderItems(segments, pinnedCount, columns)}
                 {clientHostedBrowserRows.length > 0 ? (
                   <ClientHostedBrowserTabRows
                     rows={clientHostedBrowserRows}
@@ -218,16 +240,18 @@ export function renderTabBarSurface(
                 ) : null}
               </TabStripTooltipProvider>
             </div>
-            <TabStripScrollIndicator
-              hasOverflow={tabStripOverflowState.hasOverflow}
-              scrollContainerRef={tabStripRef}
-              subscribeToStripResize={subscribeToStripResize}
-              disabled={tabStripDragScroll.isTabDragActive}
-            />
+            {!wrapTabs ? (
+              <TabStripScrollIndicator
+                hasOverflow={hasHorizontalOverflow}
+                scrollContainerRef={tabStripRef}
+                subscribeToStripResize={subscribeToStripResize}
+                disabled={tabStripDragScroll.isTabDragActive}
+              />
+            ) : null}
           </div>
         )}
       />
-      {tabStripOverflowState.hasOverflow ? (
+      {hasHorizontalOverflow ? (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -259,9 +283,11 @@ export function renderTabBarSurface(
         <DropdownMenuTrigger asChild>
           {/* Why: "+" hides whole rather than clip, so Tab never lands on it (rendered-tab-strip.ts). */}
           <button
-            className={`ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground ${newTabButtonHideClassName(
-              strip
-            )}`}
+            className={cn(
+              'ml-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+              wrapTabs ? 'mt-0.5 self-start' : 'my-auto',
+              newTabButtonHideClassName(strip)
+            )}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             title={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
             aria-label={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}

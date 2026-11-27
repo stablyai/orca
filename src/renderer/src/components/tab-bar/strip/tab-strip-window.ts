@@ -34,7 +34,8 @@ export function computeTabStripRange(
 export function buildTabStripSegments(
   count: number,
   range: TabStripRange | null,
-  keptIndices: readonly number[]
+  keptIndices: readonly number[],
+  columns = 1
 ): TabStripSegment[] {
   // Why clamp: the range follows scroll in a layout effect, so the render that closes tabs still holds the old one.
   if (range === null || count < TAB_STRIP_WINDOW_MIN_TABS) {
@@ -44,7 +45,8 @@ export function buildTabStripSegments(
   const runs: [number, number][] = [[Math.min(range.start, end), end]]
   for (const index of keptIndices) {
     if (index >= 0 && index < count) {
-      runs.push([index, index + 1])
+      const rowStart = Math.floor(index / columns) * columns
+      runs.push([rowStart, Math.min(count, rowStart + columns)])
     }
   }
   runs.sort((a, b) => a[0] - b[0])
@@ -84,36 +86,70 @@ function slotIdOf(strip: HTMLElement, target: EventTarget | null): string | null
 
 export type TabStripWindowState = {
   range: TabStripRange | null
+  columns: number | null
   /** The slot holding focus (rename input, keyboard focus), kept mounted so scrolling never drops it. */
   focusedSlotId: string | null
 }
 
-const UNWINDOWED: TabStripWindowState = { range: null, focusedSlotId: null }
+const UNWINDOWED: TabStripWindowState = { range: null, columns: null, focusedSlotId: null }
+
+function readTabStripWindow(
+  strip: HTMLElement,
+  count: number,
+  wrapTabs: boolean
+): Pick<TabStripWindowState, 'range' | 'columns'> {
+  if (!wrapTabs) {
+    return {
+      range: computeTabStripRange(count, strip.scrollLeft, strip.clientWidth),
+      columns: null
+    }
+  }
+  const style = getComputedStyle(strip)
+  const columns = strip.clientWidth > 0 ? style.gridTemplateColumns.trim().split(/\s+/).length : 1
+  if (count < TAB_STRIP_WINDOW_MIN_TABS) {
+    return { range: null, columns }
+  }
+  const rowHeight = Number.parseFloat(style.gridAutoRows) || 1
+  const perView = Math.max(1, Math.ceil(strip.clientHeight / rowHeight))
+  const firstRow = Math.floor(strip.scrollTop / rowHeight)
+  return {
+    columns,
+    range: {
+      start: Math.min(count, Math.max(0, firstRow - perView) * columns),
+      end: Math.min(count, (firstRow + 2 * perView + 1) * columns)
+    }
+  }
+}
 
 /** Follow the strip's scroll, size and focus; re-renders only when the range moves a block or focus changes slot. */
 export function useTabStripWindowState(
   stripRef: RefObject<HTMLElement | null>,
   count: number,
-  subscribeToStripResize: (listener: () => void) => () => void
+  subscribeToStripResize: (listener: () => void) => () => void,
+  wrapTabs = false
 ): TabStripWindowState {
   const [state, setState] = useState<TabStripWindowState>(() => {
     const range = computeTabStripRange(count, 0, 0)
-    return range ? { range, focusedSlotId: null } : UNWINDOWED
+    return wrapTabs || range
+      ? { range, columns: wrapTabs ? 1 : null, focusedSlotId: null }
+      : UNWINDOWED
   })
   useLayoutEffect(() => {
     const el = stripRef.current
-    if (!el || count < TAB_STRIP_WINDOW_MIN_TABS) {
+    if (!el || (!wrapTabs && count < TAB_STRIP_WINDOW_MIN_TABS)) {
       setState(UNWINDOWED)
       return
     }
     const update = (focusTarget: EventTarget | null = document.activeElement): void => {
-      const range = computeTabStripRange(count, el.scrollLeft, el.clientWidth)
+      const { range, columns } = readTabStripWindow(el, count, wrapTabs)
       // Why read focus with the range: the first windowed render must already keep a focused tab (a rename) mounted.
       const focusedSlotId = slotIdOf(el, focusTarget)
       setState((previous) =>
-        sameRange(previous.range, range) && previous.focusedSlotId === focusedSlotId
+        sameRange(previous.range, range) &&
+        previous.columns === columns &&
+        previous.focusedSlotId === focusedSlotId
           ? previous
-          : { range, focusedSlotId }
+          : { range, columns, focusedSlotId }
       )
     }
     update()
@@ -132,15 +168,18 @@ export function useTabStripWindowState(
     el.addEventListener('scroll', onScroll, { passive: true })
     el.addEventListener('focusin', onFocusIn)
     el.addEventListener('focusout', onFocusOut)
-    const unsubscribe = subscribeToStripResize(onResize)
+    const observer = wrapTabs ? new ResizeObserver(onResize) : null
+    observer?.observe(el)
+    const unsubscribe = wrapTabs ? undefined : subscribeToStripResize(onResize)
     return () => {
       el.removeEventListener('scroll', onScroll)
       el.removeEventListener('focusin', onFocusIn)
       el.removeEventListener('focusout', onFocusOut)
-      unsubscribe()
+      unsubscribe?.()
+      observer?.disconnect()
       cancelAnimationFrame(frame)
     }
-  }, [count, stripRef, subscribeToStripResize])
+  }, [count, stripRef, subscribeToStripResize, wrapTabs])
   return state
 }
 

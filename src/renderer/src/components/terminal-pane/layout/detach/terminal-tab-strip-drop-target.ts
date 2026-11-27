@@ -95,6 +95,49 @@ function resolveTabStripInsertion(args: {
   }
 }
 
+function resolveWrappedTabInsertion(
+  strip: HTMLElement,
+  box: DOMRect,
+  tabOrder: readonly string[],
+  clientX: number,
+  clientY: number
+): { index: number; rect: DOMRect } | null {
+  let target: { index: number; rect: DOMRect; after: boolean } | null = null
+  for (const tab of getTabElements(strip)) {
+    const rect = tab.getBoundingClientRect()
+    if (clientY < rect.top || clientY >= rect.bottom) {
+      continue
+    }
+    const index = tabOrder.indexOf(tab.dataset.unifiedTabId ?? '')
+    if (index === -1) {
+      continue
+    }
+    const after =
+      clientX >= rect.left + rect.width / 2 || tab.closest('[data-pinned-home-slot]') !== null
+    target = { index, rect, after }
+    if (!after || clientX <= rect.right) {
+      break
+    }
+  }
+  if (!target) {
+    return null
+  }
+
+  const { index, rect, after } = target
+  const width = 2
+  const edge = after ? rect.right - width : rect.left
+  const top = Math.max(box.top, rect.top)
+  return {
+    index: index + Number(after),
+    rect: rectFromBox({
+      left: Math.min(Math.max(box.left, edge), box.right - width),
+      top,
+      width,
+      height: Math.min(box.bottom, rect.bottom) - top
+    })
+  }
+}
+
 function getElementsFromPoint(clientX: number, clientY: number): Element[] {
   if (typeof document === 'undefined') {
     return []
@@ -132,15 +175,17 @@ export function resolveTerminalTabStripDropTarget(args: {
       continue
     }
     const group = groupById.get(groupId)
-    const insertion = group
-      ? resolveTabStripInsertion({
-          clientX: args.clientX,
-          clientY: args.clientY,
-          groupTabOrderLength: group.tabOrder?.length ?? 0,
-          strip,
-          stripRect: rect
-        })
-      : null
+    const tabOrder = group?.tabOrder ?? []
+    const insertion =
+      strip.dataset.tabGroupStripLayout === 'wrapped'
+        ? resolveWrappedTabInsertion(strip, rect, tabOrder, args.clientX, args.clientY)
+        : resolveTabStripInsertion({
+            clientX: args.clientX,
+            clientY: args.clientY,
+            groupTabOrderLength: tabOrder.length,
+            strip,
+            stripRect: rect
+          })
     return insertion
       ? {
           id: groupId,

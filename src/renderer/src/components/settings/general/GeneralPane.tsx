@@ -16,7 +16,8 @@ import { LOCAL_SETTINGS_HOST_SCOPE } from '../host-scope/settings-host-scope'
 import {
   getGeneralCliSearchEntries,
   getGeneralNavigationSearchEntries,
-  getGeneralUpdateSearchEntries
+  getGeneralUpdateSearchEntries,
+  getWorkspaceTabWrapEntry
 } from './general-search'
 import { getGeneralEditorSearchDescriptors } from '../editor/general-editor-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
@@ -156,6 +157,7 @@ function GeneralRootSettings({
   const t = useTranslate()
   const nestWorkspaces = useNestWorkspacesSetting(hostScope, settings, updateSettings)
   const tabsEntries = getGeneralNavigationSearchEntries()
+  const wrapTabsEntry = getWorkspaceTabWrapEntry(t)
   const runtimeEntries = getGeneralProjectRuntimeSearchEntries()
   const showRuntime = shouldShowProjectRuntimeSection(wslSupportedPlatform, query, runtimeEntries)
   const autoSaveEntries = getGeneralEditorSearchDescriptors()
@@ -183,6 +185,14 @@ function GeneralRootSettings({
             keywords={getTabOrderControlSearchKeywords(tabsEntries)}
             updateSettings={updateSettings}
           />
+          <SearchableSetting {...wrapTabsEntry}>
+            <SettingsSwitchRow
+              label={wrapTabsEntry.title}
+              description={wrapTabsEntry.description}
+              checked={settings.wrapWorkspaceTabs === true}
+              onChange={() => updateSettings({ wrapWorkspaceTabs: !settings.wrapWorkspaceTabs })}
+            />
+          </SearchableSetting>
           <SearchableSetting
             title={t('settings.general.previewTabs.title', 'Preview tabs')}
             description={t(

@@ -44,7 +44,8 @@ export function resolveTabInsertion(
 
 export function resolveTabIndicatorEdges(
   orderedVisibleTabIds: string[],
-  hoveredTabInsertion: HoveredTabInsertion | null
+  hoveredTabInsertion: HoveredTabInsertion | null,
+  wrapTabs = false
 ): TabIndicatorEdge[] {
   if (!hoveredTabInsertion || orderedVisibleTabIds.length === 0) {
     return []
@@ -53,6 +54,11 @@ export function resolveTabIndicatorEdges(
   const hoveredIndex = orderedVisibleTabIds.indexOf(hoveredTabInsertion.visibleTabId)
   if (hoveredIndex === -1) {
     return []
+  }
+
+  // In a wrapped strip the next tab can be on a different row.
+  if (wrapTabs) {
+    return [{ visibleTabId: hoveredTabInsertion.visibleTabId, side: hoveredTabInsertion.side }]
   }
 
   const insertionIndex = hoveredIndex + (hoveredTabInsertion.side === 'right' ? 1 : 0)

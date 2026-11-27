@@ -1,7 +1,8 @@
-import React, { useMemo, useState, type RefObject } from 'react'
+import React, { useLayoutEffect, useMemo, useState, type RefObject } from 'react'
 import { SortableContext } from '@dnd-kit/sortable'
 import { sameStringArray } from '@/runtime/web-session-tabs-sync/snapshots/state-equality-core'
 import { useActiveDragVisibleTabId } from '../../tab-group/drag/tab-drag-context'
+import { findTabStripSlot } from './tab-strip-slot-geometry'
 import {
   buildTabStripSegments,
   useTabStripWindowState,
@@ -11,20 +12,25 @@ import {
 /** Owns the strip's window state, so scrolling re-renders the strip alone, not the tab bar around it. */
 export function WindowedTabStrip({
   stripRef,
+  wrapTabs = false,
   subscribeToStripResize,
   sortableIds,
   activeVisibleTabId,
   renderStrip
 }: {
   stripRef: RefObject<HTMLDivElement | null>
+  wrapTabs?: boolean
   subscribeToStripResize: (listener: () => void) => () => void
   sortableIds: string[]
   activeVisibleTabId: string | null
   /** Renders the scroller (which must attach `stripRef`) with these mounted runs of the tabs. */
-  renderStrip: (segments: readonly TabStripSegment[]) => React.ReactNode
+  renderStrip: (segments: readonly TabStripSegment[], columns: number | null) => React.ReactNode
 }): React.JSX.Element {
   const count = sortableIds.length
-  const { range, focusedSlotId } = useTabStripWindowState(stripRef, count, subscribeToStripResize)
+  const windowState = useTabStripWindowState(stripRef, count, subscribeToStripResize, wrapTabs)
+  const { focusedSlotId } = windowState
+  const columns = wrapTabs ? (windowState.columns ?? 1) : null
+  const range = (windowState.columns !== null) === wrapTabs ? windowState.range : null
   const activeDragVisibleTabId = useActiveDragVisibleTabId()
   const windowed = range !== null
   // Why keyed on sortableIds: they change only when tabs open, close or move, not on every tab write.
@@ -43,7 +49,11 @@ export function WindowedTabStrip({
         return index === undefined ? [] : [index]
       }
     )
-    const segments = buildTabStripSegments(count, range, keptIndices)
+    if (columns !== null) {
+      // Client-hosted browser tabs can share the final row with sortable tabs.
+      keptIndices.push(count - 1)
+    }
+    const segments = buildTabStripSegments(count, range, keptIndices, columns ?? 1)
     const mountedIds = segments.flatMap((segment) =>
       segment.kind === 'tabs' ? sortableIds.slice(segment.start, segment.end) : []
     )
@@ -51,6 +61,7 @@ export function WindowedTabStrip({
   }, [
     activeDragVisibleTabId,
     activeVisibleTabId,
+    columns,
     count,
     focusedSlotId,
     indexBySortableId,
@@ -62,10 +73,30 @@ export function WindowedTabStrip({
   if (!sameStringArray(mountedSortableIds, tabStripWindow.sortableIds)) {
     setMountedSortableIds(tabStripWindow.sortableIds)
   }
+  useLayoutEffect(() => {
+    const strip = stripRef.current
+    if (!wrapTabs || !strip || !activeVisibleTabId || activeDragVisibleTabId !== null) {
+      return
+    }
+    const revealActiveRow = (): void => {
+      const slot = findTabStripSlot(strip, activeVisibleTabId)
+      if (!slot) {
+        return
+      }
+      const { top, bottom } = slot.getBoundingClientRect()
+      const viewportTop = strip.getBoundingClientRect().top + strip.clientTop
+      const viewportBottom = viewportTop + strip.clientHeight
+      strip.scrollTop += Math.min(0, top - viewportTop) + Math.max(0, bottom - viewportBottom)
+    }
+    revealActiveRow()
+    const observer = new ResizeObserver(revealActiveRow)
+    observer.observe(strip)
+    return () => observer.disconnect()
+  }, [activeDragVisibleTabId, activeVisibleTabId, columns, sortableIds, stripRef, wrapTabs])
   // Why the scroller renders inside: its ref must attach before the window state's layout effect reads it.
   return (
     <SortableContext items={mountedSortableIds}>
-      {renderStrip(tabStripWindow.segments)}
+      {renderStrip(tabStripWindow.segments, columns)}
     </SortableContext>
   )
 }

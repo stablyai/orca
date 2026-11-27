@@ -1500,6 +1500,10 @@
         "skillTitle": "Orca skill for agents",
         "description": "Orca’s own terminals already have it."
       },
+      "wrapWorkspaceTabs": {
+        "title": "Wrap workspace tabs",
+        "description": "Show tabs across multiple rows when the tab bar fills up."
+      },
       "previewTabs": {
         "title": "Preview tabs",
         "description": "Single-clicking a file reuses one preview tab until you edit or pin it."
