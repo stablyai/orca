@@ -1,3 +1,5 @@
+import { useBrowserAnnotateToolSwitch } from '../annotate/palette/use-browser-annotate-tool-switch'
+import { useBrowserAnnotateKeys } from '../host-guest/input/use-browser-annotate-keys'
 import type { MutableRefObject } from 'react'
 import { useBrowserPageMarkupCapture } from '@/components/browser-pane/annotate/capture/use-browser-page-markup-capture'
 import { useBrowserGuestAnnotateTools } from '@/components/browser-pane/annotate/use-browser-guest-annotate-tools'
@@ -9,7 +11,9 @@ export function useDocPreviewGuestTools({
   grantId,
   webviewRef,
   containerRef,
-  toolsReady
+  toolsReady,
+  isActive,
+  documentGeneration
 }: {
   previewId: string
   worktreeId: string
@@ -17,6 +21,8 @@ export function useDocPreviewGuestTools({
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   containerRef: MutableRefObject<HTMLDivElement | null>
   toolsReady: boolean
+  isActive: boolean
+  documentGeneration: number
 }) {
   const markup = useBrowserPageMarkupCapture(webviewRef)
   const tools = useBrowserGuestAnnotateTools({
@@ -28,11 +34,34 @@ export function useDocPreviewGuestTools({
     // Nothing has painted on a loading or failed preview, so there is no element to pick.
     toolsDisabled: !toolsReady,
     markupIsActive: markup.isActive,
+    paletteKeys: true,
     containerRef,
     guestSurfaceRef: webviewRef
   })
+  const toolTargetId = grantId === null ? '' : previewId
+  const toolSwitch = useBrowserAnnotateToolSwitch({
+    grab: tools.grab,
+    grabIntent: tools.grabAnnotations.grabIntent,
+    startGrabIntent: tools.grabAnnotations.startGrabIntent,
+    cancelPendingBrowserCapture: tools.grabAnnotations.cancelPendingBrowserCapture,
+    markup,
+    canPickElements: toolsReady,
+    toolTargetId,
+    documentKey: `${grantId ?? ''}\n${documentGeneration}`
+  })
+  useBrowserAnnotateKeys({
+    browserTabId: toolTargetId,
+    isActive: isActive && toolsReady,
+    grabIsInteractive: tools.grab.state !== 'idle' && tools.grab.state !== 'error',
+    markupIsActive: markup.isActive,
+    annotateToolOn: toolSwitch.activeTool !== null,
+    handleAnnotateToolKey: toolSwitch.selectToolByKey,
+    handleGrabActionShortcut: tools.grabAnnotations.handleGrabActionShortcut
+  })
   return {
     ...tools,
+    toolSwitch,
+    elementTools: { ...tools.elementTools, onStartIntent: toolSwitch.toggleTool },
     markup,
     handleAnnotationViewportMessage: tools.viewportBridge.handleViewportMessage,
     resetBrowserOverlayViewport: tools.viewportBridge.resetOverlayViewport

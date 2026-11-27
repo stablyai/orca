@@ -1,24 +1,31 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { RelayRegionSchema } from './relay-region-probe'
 
-const Counter = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
-export const RelayRegionWindowSchema = z
-  .object({
-    generation: Counter,
-    expiresAt: Counter,
-    assignmentEpoch: Counter,
-    incumbentRegion: RelayRegionSchema,
-    policyVersion: z.literal(1)
-  })
-  .strict()
+const Counter = lazyZodSchema(() => z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER))
+export const RelayRegionWindowSchema = lazyZodSchema(() =>
+  z
+    .object({
+      generation: Counter,
+      expiresAt: Counter,
+      assignmentEpoch: Counter,
+      incumbentRegion: RelayRegionSchema,
+      policyVersion: z.literal(1)
+    })
+    .strict()
+)
 
-export const RelayRegionCorrectionResponseSchema = z
-  .object({
-    v: z.literal(1),
-    window: RelayRegionWindowSchema.optional(),
-    reportStatus: z.enum(['accepted', 'duplicate', 'stale', 'expired', 'basis-changed']).optional()
-  })
-  .strict()
+export const RelayRegionCorrectionResponseSchema = lazyZodSchema(() =>
+  z
+    .object({
+      v: z.literal(1),
+      window: RelayRegionWindowSchema.optional(),
+      reportStatus: z
+        .enum(['accepted', 'duplicate', 'stale', 'expired', 'basis-changed'])
+        .optional()
+    })
+    .strict()
+)
 
 export type RelayRegionWindow = z.infer<typeof RelayRegionWindowSchema>
 export type RelayRegionDecision =

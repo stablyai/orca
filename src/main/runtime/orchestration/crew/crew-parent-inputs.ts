@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { readCrewAssignmentIds } from './crew-query'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { currentRunCoordinatorOrcaSessionIdSql } from '../db/runs/run-coordinator-orca-session'
@@ -10,45 +11,49 @@ import {
   paneKeyMatchSuffix
 } from '../db/pane-key-match'
 
-const nullable = z.string().nullable()
-const claim = z.object({
-  id: z.string(),
-  task: z.string(),
-  run: z.string(),
-  runHome: z.string(),
-  handle: nullable,
-  pane: nullable,
-  session: nullable,
-  process: nullable,
-  host: nullable,
-  endpoint: nullable,
-  creator: nullable,
-  creatorHandle: nullable,
-  creatorPane: nullable,
-  creatorSession: nullable,
-  retry: nullable,
-  home: nullable,
-  coordinator: nullable,
-  coordinatorPane: nullable,
-  coordinatorSession: nullable
-})
+const nullable = lazyZodSchema(() => z.string().nullable())
+const claim = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    task: z.string(),
+    run: z.string(),
+    runHome: z.string(),
+    handle: nullable,
+    pane: nullable,
+    session: nullable,
+    process: nullable,
+    host: nullable,
+    endpoint: nullable,
+    creator: nullable,
+    creatorHandle: nullable,
+    creatorPane: nullable,
+    creatorSession: nullable,
+    retry: nullable,
+    home: nullable,
+    coordinator: nullable,
+    coordinatorPane: nullable,
+    coordinatorSession: nullable
+  })
+)
 export type CrewParentClaim = z.infer<typeof claim> & {
   family: 'local' | 'remote'
   remoteRoute?: { ordinal: number; active: boolean; stopping: boolean }
 }
-const resource = z.object({
-  id: z.string(),
-  origin: z.string(),
-  owner: z.string(),
-  prior: z.string(),
-  handle: z.string(),
-  pane: nullable,
-  process: nullable,
-  host: nullable,
-  endpoint: nullable,
-  endpointProcess: nullable,
-  ownership: z.string()
-})
+const resource = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    origin: z.string(),
+    owner: z.string(),
+    prior: z.string(),
+    handle: z.string(),
+    pane: nullable,
+    process: nullable,
+    host: nullable,
+    endpoint: nullable,
+    endpointProcess: nullable,
+    ownership: z.string()
+  })
+)
 export type CrewParentResource = z.infer<typeof resource>
 
 const localColumns = `d.id, d.task_id AS task, d.run_id AS run, r.home_database AS runHome, d.assignee_handle AS handle,

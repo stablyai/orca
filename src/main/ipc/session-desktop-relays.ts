@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { Store } from '../persistence/loading-store/store'
 import {
   captureLegacyRelayBaseline,
@@ -26,17 +27,21 @@ import {
   type DesktopRelayWriteResult
 } from '../../shared/workspace-session/desktop-relay-write'
 
-const desktopRelayHostSchema = z.object({
-  hostId: z.string(),
-  relayIdsByTabId: z.record(z.string(), z.string()),
-  complete: z.boolean(),
-  removedTabIds: z.array(z.string()).optional()
-})
+const desktopRelayHostSchema = lazyZodSchema(() =>
+  z.object({
+    hostId: z.string(),
+    relayIdsByTabId: z.record(z.string(), z.string()),
+    complete: z.boolean(),
+    removedTabIds: z.array(z.string()).optional()
+  })
+)
 
-const desktopRelayWriteSchema = z.object({
-  version: z.literal(DESKTOP_RELAY_WRITE_VERSION),
-  hosts: z.array(desktopRelayHostSchema)
-})
+const desktopRelayWriteSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(DESKTOP_RELAY_WRITE_VERSION),
+    hosts: z.array(desktopRelayHostSchema)
+  })
+)
 
 type RelayStore = Pick<
   Store,

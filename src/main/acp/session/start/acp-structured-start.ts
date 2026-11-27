@@ -61,7 +61,8 @@ export async function startAcpStructuredSession(
       },
       onConnectionLost: (session, error) => children.connectionLost(session, error),
       onSettled: (settlement) => deps.onDispatchSettledLate?.({ sessionId, ...settlement }),
-      forceClose: (id, reason) => children.stopAfterFailure(id, reason)
+      forceClose: (id, reason) => children.stopAfterFailure(id, reason),
+      interrupt: (id, reason) => children.interrupt(id, reason)
     })
     if (attempt.signal.aborted) {
       session.dispose()
