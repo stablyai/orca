@@ -1,8 +1,9 @@
 // Which paired computers are taking asks from this Orca's agents right now. A computer listens from
 // its first pull in a session until a pull's caller goes away or it leaves; an answered pull keeps it,
-// since it pulls again at once. Routing is never timed, and a server restart starts with none; only
-// `orca bot list` lists just the computers seen within the last minute, so one that crashed or lost its
-// network between pulls, leaving no pull to end, stops being shown as connected.
+// since it pulls again at once, and a server restart starts with none. A computer seen within the last
+// minute is live: `orca bot list` shows only those, and when two computers answer to one address only
+// the live ones count, so one that crashed or lost its network between pulls, leaving no pull to end,
+// stops showing and never hides or blocks a live one. A lone match still routes however long ago.
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrchestrationError } from '../../orchestration-error'
@@ -21,7 +22,7 @@ export type ClientAskListener = {
   bots: { id: string; name: string }[]
   /** It allows more than it could name. */
   moreBots?: true
-  /** When a pull of its last started or was answered, in ms. */
+  /** When a pull of its last started or was answered, on `monotonicNow`'s clock. */
   seenAt: number
 }
 
@@ -34,6 +35,14 @@ export const CLIENT_ROSTER_LIVE_MS = 60_000
 /** The most installations one paired device keeps listening at once; its least recently seen goes
  *  first. A real computer has one, a few copies at most, so a device naming more can't grow this. */
 export const CLIENT_INSTALLATIONS_PER_DEVICE = 8
+
+/** Elapsed ms on a clock that never moves back, so setting the system clock can't revive or hide one. */
+export function monotonicNow(): number {
+  return performance.now()
+}
+
+const isLive = (listener: ClientAskListener, now: number): boolean =>
+  now - listener.seenAt >= 0 && now - listener.seenAt <= CLIENT_ROSTER_LIVE_MS
 
 /** The runtime whose server the computers listen on; a test's runtimes keep separate listeners. */
 export type ClientAskListenerOwner = Pick<OrcaRuntimeService, 'getOrchestrationDb'>
@@ -61,7 +70,7 @@ export function clientAskPullStarted(
   owner: ClientAskListenerOwner,
   caller: { deviceId: string; fingerprint: string },
   pull: z.infer<typeof PeerMailClientAsksPull>,
-  now: number = Date.now()
+  now: number = monotonicNow()
 ): ClientAskPull | null {
   const listeners = listenersOf(owner)
   const key = keyOf(caller.deviceId, pull.installationId)
@@ -126,7 +135,7 @@ export function clientAskPullEnded(
   owner: ClientAskListenerOwner,
   pull: ClientAskPull,
   outcome: 'answered' | 'caller_gone',
-  now: number = Date.now()
+  now: number = monotonicNow()
 ): void {
   const listeners = listenersOf(owner)
   const current = listeners.get(pull.key)
@@ -158,14 +167,16 @@ const PLAIN_ID = /^[\w-]{1,100}$/
 
 /** Every computer seen within the last minute, as this Orca's own `orca bot list` names it: by its
  *  installation id, which `--on-client` takes, with the agents there it said this Orca's agents may ask
- *  without a card. Only a computer that id reaches alone (as `listeningClients` would match it) is
- *  listed, so a listed command never comes back ambiguous; ids of another shape are left out, and
+ *  without a card. Only a computer that id reaches alone among those seen within the minute is listed,
+ *  the same rule `requireListeningClient` settles a tie by, so a listed command never comes back
+ *  ambiguous; ids of another shape are left out, and
  *  names, which came from that computer, stay one line. One pass over the listeners. */
 export function connectedClientRosters(
   owner: ClientAskListenerOwner,
-  now: number = Date.now()
+  now: number = monotonicNow()
 ): BotRosterClient[] {
-  const listeners = [...listenersOf(owner).values()]
+  // Only computers seen within the lease count, so one that went silent never hides a live one.
+  const listeners = [...listenersOf(owner).values()].filter((listener) => isLive(listener, now))
   // How many listeners a selector matches, by id or by name, counting one matching both once.
   const byId = new Map<string, number>()
   const byName = new Map<string, number>()
@@ -182,9 +193,7 @@ export function connectedClientRosters(
   const matches = (id: string) =>
     (byId.get(id) ?? 0) + (byName.get(id.toLowerCase()) ?? 0) - (byBoth.get(id) ?? 0)
   return listeners.flatMap((listener) =>
-    now - listener.seenAt <= CLIENT_ROSTER_LIVE_MS &&
-    PLAIN_ID.test(listener.installationId) &&
-    matches(listener.installationId) === 1
+    PLAIN_ID.test(listener.installationId) && matches(listener.installationId) === 1
       ? [
           {
             name: toSafeDisplayLine(listener.name) || listener.installationId,
@@ -216,13 +225,18 @@ export function forgetClientAskDevice(owner: ClientAskListenerOwner, deviceId: s
   }
 }
 
-/** The one listening computer a selector names; refused when none is connected or two share it. */
+/** The one listening computer a selector names; refused when none is connected or two share it.
+ *  When two match, only those seen within the lease count, so one that crashed between pulls never
+ *  blocks a live one; a lone match routes as it always has, however long since it pulled. */
 export function requireListeningClient(
   owner: ClientAskListenerOwner,
   selector: string,
-  nothingDone: string
+  nothingDone: string,
+  now: number = monotonicNow()
 ): ClientAskListener {
-  const listening = listeningClients(owner, selector)
+  const matched = listeningClients(owner, selector)
+  const live = matched.length > 1 ? matched.filter((listener) => isLive(listener, now)) : matched
+  const listening = live.length === 1 ? live : matched
   if (listening.length > 1) {
     throw new OrchestrationError(
       'invalid_argument',

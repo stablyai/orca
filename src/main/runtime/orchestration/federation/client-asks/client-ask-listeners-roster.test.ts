@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTestBot } from '../../../../bots/bot.test-fixture'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import { allowServer } from '../../db/federation/paired-server-asks-store'
@@ -10,7 +10,8 @@ import {
   CLIENT_ROSTER_LIVE_MS,
   clientAskPullEnded,
   clientAskPullStarted,
-  connectedClientRosters
+  connectedClientRosters,
+  requireListeningClient
 } from './client-ask-listeners'
 
 // A server's runtime as the listeners key it; nothing here reads its database.
@@ -113,6 +114,62 @@ describe("the computers a server's bot list names", () => {
     clientAskPullEnded(owner, started, 'answered', 20_000)
     expect(connectedClientRosters(owner, 20_000 + CLIENT_ROSTER_LIVE_MS)).toHaveLength(1)
     expect(connectedClientRosters(owner, 20_001 + CLIENT_ROSTER_LIVE_MS)).toEqual([])
+  })
+
+  it('never lets a computer that went silent hide or block a live one its address names', () => {
+    const owner = serverOwner()
+    // B once pulled named as A's id, then crashed; A keeps pulling.
+    clientAskPullStarted(
+      owner,
+      { deviceId: 'device_b', fingerprint: 'fp_b' },
+      { session: 'sb', installationId: 'install_b', name: 'install_a' },
+      1_000
+    )
+    const live = 1_000 + CLIENT_ROSTER_LIVE_MS + 500
+    clientAskPullStarted(
+      owner,
+      { deviceId: 'device_a', fingerprint: 'fp_a' },
+      { session: 'sa', installationId: 'install_a', name: 'Mac A' },
+      live
+    )
+    expect(connectedClientRosters(owner, live).map((client) => client.onClient)).toEqual([
+      'install_a'
+    ])
+    expect(requireListeningClient(owner, 'install_a', '', live).deviceId).toBe('device_a')
+
+    // While both are live, the address names two computers: A isn't listed, and a send is refused.
+    clientAskPullStarted(
+      owner,
+      { deviceId: 'device_b', fingerprint: 'fp_b' },
+      { session: 'sb', installationId: 'install_b', name: 'install_a' },
+      live
+    )
+    expect(connectedClientRosters(owner, live).map((client) => client.onClient)).toEqual([
+      'install_b'
+    ])
+    expect(() => requireListeningClient(owner, 'install_a', '', live)).toThrow(
+      'Two paired computers'
+    )
+  })
+
+  it('times liveness on a clock that never moves back, so setting the system clock changes nothing', () => {
+    const owner = serverOwner()
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(5_000)
+    const wall = vi.spyOn(Date, 'now').mockReturnValue(10_000_000)
+    try {
+      pullAs(owner, 'device_a', { installationId: UUID_A })
+      // The system clock is set back an hour, while elapsed time moves past the lease.
+      wall.mockReturnValue(10_000_000 - 3_600_000)
+      clock.mockReturnValue(5_000 + CLIENT_ROSTER_LIVE_MS + 1)
+      expect(connectedClientRosters(owner)).toEqual([])
+      // And set forward: a computer that just pulled stays listed.
+      pullAs(owner, 'device_b', { installationId: 'install_b' })
+      wall.mockReturnValue(10_000_000 + 3_600_000)
+      expect(connectedClientRosters(owner).map((client) => client.onClient)).toEqual(['install_b'])
+    } finally {
+      clock.mockRestore()
+      wall.mockRestore()
+    }
   })
 
   it("never lets an older session's ended pull touch a newer session", () => {
