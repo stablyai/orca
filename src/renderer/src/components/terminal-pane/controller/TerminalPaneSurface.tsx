@@ -81,6 +81,7 @@ export function TerminalPaneSurface({
     handleToggleNativeChat,
     hiddenStartupStyle,
     isActive,
+    isVisible,
     isTabPinned,
     keybindings,
     managedPanes,
@@ -344,46 +345,48 @@ export function TerminalPaneSurface({
           onOpenChange={(open) => !open && setAgentSessionContinuation(null)}
         />
       )}
-      <TerminalPaneHeaderOverlay
-        tabId={tabId}
-        worktreeId={worktreeId}
-        cwd={cwd ?? ''}
-        showAlwaysOnHeaders={isActive && terminalContentVisible}
-        showSplitButton={showSplitButton}
-        isTabPinned={isTabPinned}
-        paneCount={paneCount}
-        activePaneId={activePane?.id}
-        panes={managedPanes}
-        paneTitles={paneTitles}
-        paneTitleOverlayRects={paneTitleOverlayRects}
-        renamingPaneId={renamingPaneId}
-        renameValue={renameValue}
-        renameInputRef={renameInputRef}
-        titleUsesLightSurface={titleUsesLightSurface}
-        paneTitleBackground={paneTitleBackground}
-        terminalContentVisible={terminalContentVisible}
-        hiddenStartupStyle={hiddenStartupStyle}
-        managerRef={managerRef}
-        paneTransportsRef={paneTransportsRef}
-        canShowTerminal={activePaneIsChatLeaf}
-        onShowTerminal={handleToggleNativeChat}
-        canResumeInNewNativeChat={activePaneCanResumeInChat}
-        canContinueAgentSessionInNewSession={activePaneCanContinueInNewSession}
-        onContinueAgentSessionInNewSession={(pane) =>
-          contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)
-        }
-        onSplitPane={splitTerminalPaneFromHeader}
-        onBeginPaneDrag={beginPaneDragFromHeader}
-        onActivatePaneTitleInteraction={activatePaneTitleInteraction}
-        onPaneTitleContextMenu={contextMenu.onPaneTitleContextMenu}
-        onStartRename={handleStartRename}
-        onRemoveTitle={handleRemoveTitle}
-        onClosePane={handleRequestClosePane}
-        onRenameValueChange={setRenameValue}
-        onRenameSubmit={handleRenameSubmit}
-        onRenameCancel={handleRenameCancel}
-        onRenameBlur={handleRenameBlur}
-      />
+      {(isActive || isVisible) && (
+        <TerminalPaneHeaderOverlay
+          tabId={tabId}
+          worktreeId={worktreeId}
+          cwd={cwd ?? ''}
+          showAlwaysOnHeaders={isActive && terminalContentVisible}
+          showSplitButton={showSplitButton}
+          isTabPinned={isTabPinned}
+          paneCount={paneCount}
+          activePaneId={activePane?.id}
+          panes={managedPanes}
+          paneTitles={paneTitles}
+          paneTitleOverlayRects={paneTitleOverlayRects}
+          renamingPaneId={renamingPaneId}
+          renameValue={renameValue}
+          renameInputRef={renameInputRef}
+          titleUsesLightSurface={titleUsesLightSurface}
+          paneTitleBackground={paneTitleBackground}
+          terminalContentVisible={terminalContentVisible}
+          hiddenStartupStyle={hiddenStartupStyle}
+          managerRef={managerRef}
+          paneTransportsRef={paneTransportsRef}
+          canShowTerminal={activePaneIsChatLeaf}
+          onShowTerminal={handleToggleNativeChat}
+          canResumeInNewNativeChat={activePaneCanResumeInChat}
+          canContinueAgentSessionInNewSession={activePaneCanContinueInNewSession}
+          onContinueAgentSessionInNewSession={(pane) =>
+            contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)
+          }
+          onSplitPane={splitTerminalPaneFromHeader}
+          onBeginPaneDrag={beginPaneDragFromHeader}
+          onActivatePaneTitleInteraction={activatePaneTitleInteraction}
+          onPaneTitleContextMenu={contextMenu.onPaneTitleContextMenu}
+          onStartRename={handleStartRename}
+          onRemoveTitle={handleRemoveTitle}
+          onClosePane={handleRequestClosePane}
+          onRenameValueChange={setRenameValue}
+          onRenameSubmit={handleRenameSubmit}
+          onRenameCancel={handleRenameCancel}
+          onRenameBlur={handleRenameBlur}
+        />
+      )}
       <TerminalPaneRecoveryPortals controller={controller} />
       <TerminalPaneSleepingPortals controller={controller} />
       <TerminalPaneMobileDriverPortals controller={controller} />
