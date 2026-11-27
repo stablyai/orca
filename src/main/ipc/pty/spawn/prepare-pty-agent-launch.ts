@@ -166,7 +166,7 @@ export async function preparePtyAgentLaunch(
       runtimeRoot && local && process.platform === 'win32' && shell === 'posix'
         ? nativeWindowsPathToPosixShellPath(runtimeRoot)
         : (runtimeRoot ?? '')
-    env[SETUP_AGENT_RECHECK_ENV] = buildSetupAgentRecheck(postSetupProgram.path, shell)
+    env[SETUP_AGENT_RECHECK_ENV] = buildSetupAgentRecheck(postSetupProgram, shell)
     env[SETUP_AGENT_NOTICE_ENV] = setupAgentBlockedNotice(
       TUI_AGENT_DISPLAY_NAMES[postSetupProgram.agent],
       getRuntimeDesktopSurface().translateNotification
@@ -174,7 +174,7 @@ export async function preparePtyAgentLaunch(
     if (input.codexRuntime === 'wsl') {
       addSetupAgentWslInteropEnv(env)
     }
-    if (!postSetupProgram.path) {
+    if (postSetupProgram.blocked) {
       prepared = undefined
     } else if (prepared && !rebuiltHermesQuery) {
       prepared = await preparePostSetupCommand(prepared, postSetupProgram, shell, images)

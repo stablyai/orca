@@ -9,7 +9,12 @@ export const SETUP_AGENT_RUNTIME_ROOT_ENV = 'ORCA_SEQUENCED_AGENT_RUNTIME_ROOT'
 export const SETUP_AGENT_EXECUTABLE_ENV = 'ORCA_SEQUENCED_AGENT_EXECUTABLE'
 export const SETUP_AGENT_ARGV0_ENV = 'ORCA_SEQUENCED_AGENT_ARGV0'
 
-export type SetupAgentProgram = { agent: TuiAgent; launchHead: string; path?: string }
+export type SetupAgentProgram = {
+  agent: TuiAgent
+  launchHead: string
+  path?: string
+  blocked?: true
+}
 
 export function setupAgentBlockedNotice(
   agent: string,
@@ -42,13 +47,15 @@ export function setupAgentProgramExpression(shell: 'posix' | 'powershell'): stri
 }
 
 export function buildSetupAgentRecheck(
-  path: string | undefined,
+  { path, launchHead, blocked }: SetupAgentProgram,
   shell: 'posix' | 'powershell'
 ): string {
-  if (path === undefined) {
+  if (blocked) {
     return shell === 'posix' ? 'exit 1' : 'return'
   }
-  return shell === 'posix' ? buildPosixRecheck(path) : buildPowerShellRecheck(path)
+  return shell === 'posix'
+    ? buildPosixRecheck(path, launchHead)
+    : buildPowerShellRecheck(path, launchHead)
 }
 
 export function buildPosixSetupAgentRecheck(timeoutSeconds: number): string[] {
@@ -86,7 +93,7 @@ export function buildPosixSetupAgentRecheck(timeoutSeconds: number): string[] {
   ]
 }
 
-function buildPosixRecheck(path: string): string {
+function buildPosixRecheck(path: string | undefined, name: string): string {
   return [
     'orca_setup_realpath() (',
     '  rest=${1#/}; dir=; links=0',
@@ -120,7 +127,13 @@ function buildPosixRecheck(path: string): string {
     '  root=${root%??}',
     'fi',
     'root=${root:-$runtime}; root=${root%/}',
-    `program=${quotePosixShell(path)}`,
+    ...(path === undefined
+      ? [
+          `program=$(builtin type -P -- ${quotePosixShell(name)} && printf .) || exit 1`,
+          'program=${program%??}',
+          'case "$program" in /*) ;; *) program="${PWD%/}/$program" ;; esac'
+        ]
+      : [`program=${quotePosixShell(path)}`]),
     'pin=$(orca_setup_realpath "$program" && printf .) || exit 1',
     'pin=${pin%.}',
     '[ -f "$pin" ] && [ -x "$pin" ] || exit 1',
@@ -131,7 +144,7 @@ function buildPosixRecheck(path: string): string {
   ].join('\n')
 }
 
-function buildPowerShellRecheck(path: string): string {
+function buildPowerShellRecheck(path: string | undefined, name: string): string {
   return [
     'function Resolve-OrcaSetupPath($path, $root, [switch]$AllowMissing) {',
     '  for ($links = 0; $links -le 40; $links++) {',
@@ -165,7 +178,12 @@ function buildPowerShellRecheck(path: string): string {
     'try {',
     '  $compare = [StringComparison]::OrdinalIgnoreCase',
     `  $root = (Resolve-OrcaSetupPath $env:${SETUP_AGENT_RUNTIME_ROOT_ENV} $null -AllowMissing).Path.TrimEnd('\\')`,
-    `  $program = ${quotePowerShellLiteral(path)}`,
+    ...(path === undefined
+      ? [
+          `  $application = Get-Command -Name ${quotePowerShellLiteral(name)} -CommandType Application -ErrorAction Stop | Select-Object -First 1`,
+          '  $program = $application.Path'
+        ]
+      : [`  $program = ${quotePowerShellLiteral(path)}`]),
     '  $resolved = Resolve-OrcaSetupPath $program $root',
     '  $pin = $resolved.Path',
     '  $extensions = ($env:PATHEXT -split ";") + @(".exe", ".com", ".cmd", ".bat", ".ps1")',

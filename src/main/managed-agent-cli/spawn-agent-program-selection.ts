@@ -108,7 +108,7 @@ export async function resolveSpawnAgentProgram(
     if (!spawn.sshTarget && selection.result.kind === 'by-name') {
       selection = {
         program: selection.program,
-        result: { kind: 'full-path', path: selection.result.path }
+        result: { ...selection.result, kind: 'full-path' }
       }
     }
     onProgramSelected({ shell, wslDistro, selection })

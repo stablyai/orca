@@ -56,7 +56,7 @@ export function settledAtCreation(
     return structuredLaunchSubmitText(intent) === undefined ? NOT_DELIVERED : UNCONFIRMED
   }
   const gate = created.terminalCreation?.[SETUP_AGENT_GATE]
-  if (gate?.verified === false) {
+  if (created.terminalCreation?.agentProgramBlocked || gate?.blocked) {
     return NOT_DELIVERED
   }
   if (created.promptRodeLaunchCommand) {
@@ -70,14 +70,17 @@ export async function settleLaunchPromptDisposal(
   created: CreatedSurface
 ): Promise<AgentLaunchPromptDisposal> {
   const gate = created.terminalCreation?.[SETUP_AGENT_GATE]
-  if (gate?.verified && created.promptRodeLaunchCommand) {
+  if (created.terminalCreation?.agentProgramBlocked || gate?.blocked) {
+    return NOT_DELIVERED
+  }
+  if (gate && created.promptRodeLaunchCommand) {
     const started = await waitForPromiseWithSignal(gate.started, execution.signal).catch(
       () => undefined
     )
     // The setup marker precedes the agent wrapper, so it cannot confirm argv handoff.
     return started === false ? NOT_DELIVERED : UNCONFIRMED
   }
-  if (created.structured || created.promptRodeLaunchCommand || gate?.verified === false) {
+  if (created.structured || created.promptRodeLaunchCommand) {
     return settledAtCreation(execution.intent, created)
   }
   return deliverTerminalLaunchPrompt(execution, created.outcome.handle, {

@@ -100,14 +100,17 @@ export async function wslInventory(
   return slot
 }
 
-export type TerminalAgentProgram =
-  | { kind: 'by-name' | 'full-path'; path: string; canonicalPath?: string }
-  | { kind: 'unavailable' | 'unknown' }
+type LocatedTerminalAgentProgram = {
+  kind: 'by-name' | 'full-path'
+  path: string
+  canonicalPath?: string
+}
+export type TerminalAgentProgram = LocatedTerminalAgentProgram | { kind: 'unavailable' | 'unknown' }
 
 export function qualifyProgram(
   match: AgentPathMatch | undefined,
   shell: AgentStartupShell
-): TerminalAgentProgram {
+): LocatedTerminalAgentProgram | { kind: 'unavailable' } {
   if (!match?.user) {
     return { kind: 'unavailable' }
   }
@@ -117,7 +120,11 @@ export function qualifyProgram(
     : { kind: 'full-path', path: match.user }
 }
 
-export type TerminalAgentProgramSelection = { program: string; result: TerminalAgentProgram }
+export type TerminalAgentProgramSelection = {
+  program: string
+  result: TerminalAgentProgram
+  runtimeOnly?: true
+}
 
 export async function selectWslTerminalAgentProgram(
   target: WslPreflightTarget,
@@ -187,15 +194,4 @@ export async function selectWslTerminalAgentProgram(
       return { program: programs[0], result: { kind: inconclusive ? 'unknown' : 'unavailable' } }
     }
   }
-}
-
-export function readPublishedLocalTerminalAgentProgram(
-  program: string,
-  shell: AgentStartupShell
-): TerminalAgentProgram {
-  const inventory = currentInventoryPublication(getLocalInventory())?.inventory
-  return qualifyProgram(
-    inventory?.probed.has(program) ? inventory.matches.get(program) : undefined,
-    shell
-  )
 }

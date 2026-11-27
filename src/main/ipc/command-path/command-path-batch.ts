@@ -183,6 +183,7 @@ export async function findCommandsOnLocalPath(
     const checked = new Set<string>()
     let uncertain = false
     let shadow = false
+    let runtimeHit: true | undefined
     for (const ext of extensions.get(command) ?? []) {
       const wanted = command + ext
       const listed = names?.get(directoryNameKey(wanted))
@@ -208,16 +209,20 @@ export async function findCommandsOnLocalPath(
             uncertain = true
             continue
           }
-          if (runtime === true || runtime === null) {
+          const runtimePath = inventory.isRuntimePath(candidate)
+          if (runtime === true || runtime === null || runtimePath) {
+            if (runtime === true || runtimePath) {
+              runtimeHit = true
+            }
             shadow ||= Boolean(eligible)
             continue
           }
         }
-        return { hit: candidate, uncertain, byName: eligible && !shadow }
+        return { hit: candidate, uncertain, byName: eligible && !shadow, runtimeHit }
       }
       uncertain ||= outcome === 'unknown'
     }
-    return { uncertain, shadow }
+    return { uncertain, shadow, runtimeHit }
   }
   const { inventoryCommandCount, signal } = options
   const concurrency =
@@ -229,7 +234,10 @@ export async function findCommandsOnLocalPath(
     readListing,
     probeCommand,
     (command, match, unresolvedHit) => {
-      inventory?.matches.set(command, inventory.pinPathMatches ? { user: match.user } : match)
+      inventory?.matches.set(
+        command,
+        inventory.pinPathMatches ? { user: match.user, runtimeHit: match.runtimeHit } : match
+      )
       if (unresolvedHit) {
         inventory?.unresolvedHits?.add(command)
       } else {

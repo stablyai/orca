@@ -191,7 +191,11 @@ export async function rewriteLaunchExecutable(
         : path
     const launchHead = selected.kind === 'full-path' ? toPanePath(selectedHead) : selectedHead
     if (setupGate) {
-      postSetupProgram = { agent, launchHead }
+      postSetupProgram = {
+        agent,
+        launchHead,
+        ...(selection.runtimeOnly ? { blocked: selection.runtimeOnly } : {})
+      }
       if ('path' in verified && verified.canonicalPath) {
         postSetupProgram.path = launchHead
       }

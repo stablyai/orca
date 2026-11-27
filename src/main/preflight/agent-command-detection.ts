@@ -135,12 +135,14 @@ export async function selectTerminalAgentProgram(
       }
       let inconclusive = false
       let rejected = false
+      let runtimeHit = false
       for (const program of programs) {
         if (!inventory.probed.has(program)) {
           inconclusive = true
           continue
         }
         const match = inventory.matches.get(program)
+        runtimeHit ||= match?.runtimeHit === true
         const result = qualifyProgram(match, shell)
         if ('path' in result) {
           const canonicalPath = await canonicalLocalAgentProgram(result.path, waitSignal)
@@ -160,11 +162,11 @@ export async function selectTerminalAgentProgram(
           rejected = true
           break
         }
-        if (result.kind !== 'unavailable') {
-          return { program, result }
-        }
       }
       if (!rejected) {
+        if (options.pinForSetup && !inconclusive && runtimeHit) {
+          return { program: preferred, result: { kind: 'unavailable' }, runtimeOnly: true }
+        }
         return { program: preferred, result: { kind: inconclusive ? 'unknown' : 'unavailable' } }
       }
     }

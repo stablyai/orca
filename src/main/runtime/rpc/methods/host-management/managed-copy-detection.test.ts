@@ -351,6 +351,17 @@ it('reports unavailable when only the Orca executable is on PATH', async () => {
       shell
     )
   ).toMatchObject({ command: undefined, blocked: 'unavailable' })
+  await expect(
+    alignManagedAgentLaunchAtSpawn(
+      {
+        launchCommand: 'claude',
+        launchAgent: 'claude',
+        launchConfig: { ...legacy('claude'), commandProvenance: 'generated' },
+        setupGate: true
+      },
+      shell
+    )
+  ).resolves.toMatchObject({ postSetupProgram: { blocked: true } })
 })
 
 it.runIf(windows)('rechecks the cmd launch folder after an earlier miss', async () => {
@@ -734,30 +745,17 @@ it.skipIf(windows)('expands the executable head for standalone Agent Teams', asy
   await expect(resolveClaudeTeamsInvocation('claude $FLAGS')).rejects.toThrow('requires a shell')
 })
 
-it('uses the verified caller PATH for standalone Agent Teams when host inventory times out', async () => {
+it('uses the caller PATH for standalone Agent Teams even with a verified host install', async () => {
+  const hostClaude = await executable('host-bin', claudeName)
   const callerClaude = await executable('caller-bin', claudeName)
-  const entered = Promise.withResolvers<void>()
-  const held = Promise.withResolvers<void>()
-  fixture.onScan = entered.resolve
-  fixture.installs = held.promise
-  vi.useFakeTimers()
-  const launch = resolveClaudeTeamsInvocation(undefined, {
-    env: { PATH: dirname(callerClaude), PATHEXT: '.exe' }
-  })
-  let settled = false
-  const resolved = launch
-    .catch((error: unknown) => error)
-    .finally(() => {
-      settled = true
+  fixture.path = dirname(hostClaude)
+  await expect(resolveClaudeTeamsInvocation(undefined)).resolves.toEqual({ command: hostClaude })
+  await expect(
+    resolveClaudeTeamsInvocation(undefined, {
+      env: { PATH: dirname(callerClaude), PATHEXT: '.exe' }
     })
-  try {
-    await entered.promise
-    await vi.waitFor(() => expect(settled).toBe(true))
-    await vi.advanceTimersByTimeAsync(10_000)
-    await expect(resolved).resolves.toEqual({ command: callerClaude })
-  } finally {
-    const completion = readLocalTerminalAgentProgram('claude', shell)
-    held.resolve()
-    await Promise.all([completion, resolved])
-  }
+  ).resolves.toEqual({ command: callerClaude })
+  await expect(resolveClaudeTeamsInvocation(undefined, { env: { PATH: '' } })).rejects.toThrow(
+    'Your Claude installation could not be found.'
+  )
 })

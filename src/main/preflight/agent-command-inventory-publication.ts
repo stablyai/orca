@@ -51,7 +51,7 @@ export function mergeInventory(
             .filter(([command]) => keep(command))
             .map(([command, match]): [string, AgentPathMatch] => [
               command,
-              pinPrevious ? { user: match.user } : match
+              pinPrevious ? { user: match.user, runtimeHit: match.runtimeHit } : match
             ])
         ]),
         probed: new Set([...result.probed, ...[...previous.probed].filter(keep)]),

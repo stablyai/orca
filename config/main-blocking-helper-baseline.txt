@@ -1030,7 +1030,6 @@
 8 src/main/ports/local-workspace-platform-port-scanner.ts # Linux socket listing runs in the port-scan worker; the only sync call is the worker client's one existsSync per lazy worker spawn
 1 src/main/ports/local-workspace-port-scanner.ts
 1 src/main/ports/port-scan-command-client.ts
-1 src/main/preflight/agent-detection.ts
 1 src/main/project-groups/nested-repo-discovery.ts
 2 src/main/provider-process/managed-provider-process.ts
 2 src/main/provider-process/provider-executable-missing.ts

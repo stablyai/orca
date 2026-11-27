@@ -12,7 +12,6 @@ import {
   type TerminalAgentProgram,
   withAgentInventoryDeadline
 } from '../../../preflight/agent-command-detection'
-import { readPublishedLocalTerminalAgentProgram } from '../../../preflight/agent-command-inventory-host'
 import {
   canonicalLocalAgentProgram,
   isOrcaAgentRuntimePath
@@ -58,36 +57,21 @@ export async function resolveClaudeTeamsInvocation(
 
 async function userClaude(caller: Caller): Promise<string> {
   return withAgentInventoryDeadline(async (signal) => {
-    const lookup = new AbortController()
-    const lookupSignal = AbortSignal.any([signal, lookup.signal])
-    const readyHostPath = () =>
-      directClaudePath(readPublishedLocalTerminalAgentProgram('claude', 'posix'))
-    const hostWasReady = readyHostPath() !== undefined
-    const hostResult = readLocalTerminalAgentProgram('claude', 'posix', false, lookupSignal)
-    const callerResult = caller.env
-      ? resolveClaudeOnCallerPath(caller.env, caller.cwd ?? caller.env.PWD, lookupSignal).catch(
+    const selection = caller.env
+      ? undefined
+      : await readLocalTerminalAgentProgram('claude', 'posix', false, signal)
+    const command = caller.env
+      ? await resolveClaudeOnCallerPath(caller.env, caller.cwd ?? caller.env.PWD, signal).catch(
           () => null
         )
-      : null
-    try {
-      const first = await (callerResult ? Promise.race([hostResult, callerResult]) : hostResult)
-      if (typeof first === 'string') {
-        return hostWasReady || readyHostPath()
-          ? (directClaudePath(await hostResult) ?? first)
-          : first
-      }
-      const selection = first ?? (await hostResult)
-      const command = directClaudePath(selection) ?? (await callerResult)
-      if (command) {
-        return command
-      }
-      if (signal.aborted || selection.kind === 'unknown') {
-        throw new AgentInventoryDeadlineError()
-      }
-      throw new Error('Your Claude installation could not be found.')
-    } finally {
-      lookup.abort()
+      : selection && directClaudePath(selection)
+    if (command) {
+      return command
     }
+    if (signal.aborted || selection?.kind === 'unknown') {
+      throw new AgentInventoryDeadlineError()
+    }
+    throw new Error('Your Claude installation could not be found.')
   })
 }
 

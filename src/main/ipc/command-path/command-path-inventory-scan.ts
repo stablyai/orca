@@ -1,5 +1,6 @@
 export type AgentPathMatch = {
   user?: string
+  runtimeHit?: true
   // Null means an earlier candidate blocks safe by-name lookup.
   first?: string | null
   unquoted?: string | null
@@ -16,6 +17,7 @@ export type DirectoryCandidate = {
   uncertain: boolean
   byName?: boolean
   shadow?: boolean
+  runtimeHit?: true
 }
 
 function trackPathCommand(
@@ -42,8 +44,11 @@ function trackPathCommand(
     let pathHit = false
     for (let entry = settled.get(next); entry; entry = settled.get(next)) {
       settled.delete(next++)
-      const { hit, uncertain: entryUncertain, byName, shadow } = entry.outcome
+      const { hit, uncertain: entryUncertain, byName, shadow, runtimeHit } = entry.outcome
       uncertain ||= entryUncertain
+      if (runtimeHit) {
+        match.runtimeHit = true
+      }
       const winner = entryUncertain || shadow || (hit && (!entry.dir.user || !byName)) ? null : hit
       if (entry.dir.first && match.first === undefined) {
         match.first = winner

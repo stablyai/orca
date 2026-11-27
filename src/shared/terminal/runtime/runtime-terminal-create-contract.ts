@@ -6,7 +6,7 @@ export const SETUP_AGENT_GATE = Symbol('setup agent gate')
 
 export type RuntimeTerminalCreate = TerminalLaunchResult & {
   /** An unobserved gate outcome resolves to undefined. */
-  [SETUP_AGENT_GATE]?: { started: Promise<boolean | undefined>; verified: boolean }
+  [SETUP_AGENT_GATE]?: { started: Promise<boolean | undefined>; blocked?: true }
   coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
   handle: string
   /** Host-owned PTY incarnation used to fence remote identity observations. */
