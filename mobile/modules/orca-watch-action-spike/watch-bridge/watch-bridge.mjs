@@ -180,7 +180,7 @@ async function pendingPrompts() {
       status.toolInput,
       dialog.question
     ]
-    const workspace = basename((status.worktreeId ?? '').split('::').at(-1) ?? '')
+    const workspace = workspaceName(status.worktreeId)
     prompts.push({
       id: createHash('sha256').update(JSON.stringify(identity)).digest('hex').slice(0, 20),
       kind: 'approval',
@@ -194,6 +194,7 @@ async function pendingPrompts() {
       options: dialog.options.map((option) => ({ ...option, label: option.label.slice(0, 90) })),
       allowsText: true,
       createdAt: status.stateStartedAt,
+      spoken: spokenAction(status.toolName, status.toolInput),
       handle
     })
   }
@@ -215,6 +216,7 @@ export function speakable(text, max) {
     return ''
   }
   const plain = text
+    .replace(/<\/?pastedcontent[^>]*>/gi, ' ')
     .replace(/```[\s\S]*?(```|$)/g, ' (code omitted) ')
     .replace(/`([^`]*)`/g, '$1')
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
@@ -233,6 +235,34 @@ export function speakable(text, max) {
     return cut.slice(0, sentenceEnd + 1)
   }
   return `${cut.slice(0, cut.lastIndexOf(' ') > 0 ? cut.lastIndexOf(' ') : max)}…`
+}
+
+// Folder workspaces are "folder:<uuid>", which Siri would read out character by character.
+function workspaceName(worktreeId) {
+  const name = basename((worktreeId ?? '').split('::').at(-1) ?? '')
+  return name.startsWith('folder:') ? '' : name
+}
+
+// Siri says this after "wants to use": a file name not a path, a host not a URL, the first command of a chain.
+export function spokenAction(toolName, toolInput) {
+  const tool = toolName || 'a tool'
+  const input = String(toolInput ?? '').trim()
+  if (!input) {
+    return tool
+  }
+  if (tool === 'Bash') {
+    const commands = input.split(/\s*(?:&&|\|\||;|\|)\s*/).filter(Boolean)
+    const first = commands[0].replace(/https?:\/\/([^/\s]+)\S*/g, '$1').replace(/\s+/g, ' ')
+    const cut = first.lastIndexOf(' ', 60)
+    const command = first.length <= 60 ? first : `${first.slice(0, cut > 0 ? cut : 60)}…`
+    const more = commands.length - 1
+    return `Bash: ${command}${more > 0 ? `, and ${more} more` : ''}`
+  }
+  if (/^(Edit|MultiEdit|Write|Read|NotebookEdit)$/.test(tool)) {
+    return `${tool} on ${basename(input.split('\n')[0])}`
+  }
+  const host = input.match(/https?:\/\/([^/\s]+)/)
+  return host ? `${tool} on ${host[1]}` : `${tool}: ${speakable(input, 60)}`
 }
 
 // Claude Code and others put a spinner or status glyph before the terminal title.
@@ -255,7 +285,7 @@ async function terminalAgents() {
     .filter((tab) => tab.type === 'terminal' && tab.agentStatus?.terminalHandle)
     .map((tab) => {
       const status = tab.agentStatus
-      const workspace = basename((status.worktreeId ?? '').split('::').at(-1) ?? '')
+      const workspace = workspaceName(status.worktreeId)
       const agentType = status.agentType ?? 'agent'
       const message = status.lastAssistantMessageIsToolOutput
         ? status.lastCompletedAssistantMessage
@@ -311,6 +341,10 @@ function messageAgent(body) {
     if (agent.state === 'working') {
       return { status: 409, body: { error: `${agent.name} is still working` } }
     }
+    // Orca keeps a finished agent's status after it exits, so check Claude is still on screen.
+    if (agent.agentType !== 'claude' || !(await showsClaudeInput(agent.handle))) {
+      return { status: 409, body: { error: `${agent.name} isn't running anymore` } }
+    }
     await typeReply(agent.handle, text, agent.needsApproval)
     for (let attempt = 0; attempt < 8; attempt += 1) {
       await sleep(400)
@@ -321,6 +355,13 @@ function messageAgent(body) {
     }
     return { status: 200, body: { ok: true, confirmed: false, name: agent.name } }
   })
+}
+
+// Claude Code draws its input box between two horizontal rules; a bare shell never does.
+async function showsClaudeInput(handle) {
+  const screen = await orca('terminal', 'read', '--terminal', handle, '--screen').catch(() => null)
+  const lines = (screen?.terminal?.tail ?? []).filter((line) => line.trim())
+  return lines.slice(-8).filter((line) => /^\s*─{10,}/.test(line)).length >= 2
 }
 
 function answerPrompt(body) {
@@ -532,7 +573,14 @@ function readBody(req) {
   })
 }
 
-const listPrompts = async () => (await pendingPrompts()).map(withoutHandle)
+const listPrompts = async () =>
+  (await pendingPrompts()).map(({ spoken: _spoken, ...prompt }) => withoutHandle(prompt))
+
+// The Siri app speaks the first detail line, so lead with the short spoken action.
+const siriPrompts = async () =>
+  (await pendingPrompts()).map(({ spoken, detail, ...prompt }) =>
+    withoutHandle({ ...prompt, detail: [spoken, ...detail.split('\n').slice(1)].join('\n') })
+  )
 
 // `${method} ${path}` → scope it needs, whether it types into a terminal, and its handler.
 const ROUTES = {
@@ -546,7 +594,7 @@ const ROUTES = {
   'GET /siri/v1/overview': {
     scope: 'agents',
     handle: async () => {
-      const [prompts, agents] = await Promise.all([listPrompts(), terminalAgents()])
+      const [prompts, agents] = await Promise.all([siriPrompts(), terminalAgents()])
       return { status: 200, body: { prompts, agents: agents.map(withoutHandle) } }
     }
   },
