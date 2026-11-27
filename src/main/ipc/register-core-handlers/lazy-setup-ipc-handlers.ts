@@ -1,4 +1,5 @@
 import type { CodexAccountService } from '../../codex-accounts/service'
+import type { KeybindingService } from '../../keybindings/keybinding-service'
 import type { Store } from '../../persistence/loading-store/store'
 import { registerLazyIpcHandleGroup } from '../lazy-ipc-handle-group'
 
@@ -48,9 +49,19 @@ export const SHELL_IPC_CHANNELS = [
   'shell:pickAudio'
 ] as const
 
+export const DASHBOARD_POPOUT_IPC_CHANNELS = [
+  'dashboardPopout:open',
+  'dashboard:publishSnapshot',
+  'dashboard:requestSnapshot',
+  'dashboard:getPopoutOpen',
+  'dashboardPopout:revealAgent',
+  'dashboardPopout:ackAgent'
+] as const
+
 export function registerLazySetupIpcHandlers(
   store: Store,
-  codexAccounts: CodexAccountService
+  codexAccounts: CodexAccountService,
+  keybindings?: KeybindingService
 ): void {
   registerLazyIpcHandleGroup(CLI_IPC_CHANNELS, async (ipc) => {
     const { registerCliHandlers } = await import('../cli')
@@ -76,5 +87,9 @@ export function registerLazySetupIpcHandlers(
   registerLazyIpcHandleGroup(SHELL_IPC_CHANNELS, async (ipc) => {
     const { registerShellHandlers } = await import('../shell/shell')
     registerShellHandlers(store, undefined, ipc)
+  })
+  registerLazyIpcHandleGroup(DASHBOARD_POPOUT_IPC_CHANNELS, async (ipc) => {
+    const { registerDashboardPopoutHandlers } = await import('../dashboard/dashboard-popout')
+    registerDashboardPopoutHandlers(store, keybindings, ipc)
   })
 }
