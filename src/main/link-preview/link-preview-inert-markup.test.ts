@@ -29,7 +29,7 @@ it('uses a live charset beyond 64 KB instead of an earlier commented declaration
   expect(decodeHtmlBody(Buffer.from(html, 'latin1'), 'text/html')).toContain('<title>Café</title>')
 })
 
-it('keeps XHTML empty scripts distinct from HTML raw-text scripts', () => {
+it('keeps XHTML script boundaries distinct from HTML raw-text scripts', () => {
   const head =
     '<!-- <title>Removed</title> --><script src="/boot.js"/><title>XML title</title>' +
     '<meta name="description" content="XML description"><link rel="icon" href="/xml.ico"/>'
@@ -47,4 +47,25 @@ it('keeps XHTML empty scripts distinct from HTML raw-text scripts', () => {
     imageUrl: null,
     iconHref: '/favicon.ico'
   })
+  for (const text of [
+    '<![CDATA[const example = "<!-- <script>";]]>',
+    '<![CDATA[const example = "<!-- <script></script><title>Hidden</title>";]]>',
+    '<!-- <script></script><title>Hidden</title> -->'
+  ]) {
+    const html =
+      `<script>${text}</script>` +
+      '<title>XML title</title><meta name="description" content="XML description"/>' +
+      '<link rel="icon" href="/xml.ico"/>'
+    expect(readLinkPreviewMetadata(html, pageUrl, 'application/xhtml+xml')).toEqual({
+      title: 'XML title',
+      description: 'XML description',
+      siteName: null,
+      imageUrl: null,
+      iconHref: '/xml.ico'
+    })
+  }
+  for (const opener of ['<![CDATA[', '<!--']) {
+    const html = `<script>${opener}</script><title>Still hidden</title>`
+    expect(readLinkPreviewMetadata(html, pageUrl, 'application/xhtml+xml').title).toBeNull()
+  }
 })

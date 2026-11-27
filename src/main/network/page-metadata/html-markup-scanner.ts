@@ -32,19 +32,29 @@ function findCommentEnd(html: string, from: number): number {
   return close.test(html) ? close.lastIndex - 1 : -1
 }
 
-function findRawTextEnd(html: string, name: string, from: number): number {
-  const end = new RegExp(`</${name}(?=[\\t\\n\\f\\r />])`, 'gi')
+function findRawTextEnd(html: string, name: string, from: number, xml: boolean): number {
+  const end = new RegExp(`${xml ? '<!--|<!\\[CDATA\\[|' : ''}</${name}(?=[\\t\\n\\f\\r />])`, 'gi')
   end.lastIndex = from
-  const closing = end.exec(html)?.index ?? -1
-  if (name !== 'script' || closing === -1) {
+  let boundary = end.exec(html)
+  while (xml && boundary && !boundary[0].startsWith('</')) {
+    const delimiter = boundary[0] === '<!--' ? '-->' : ']]>'
+    const close = html.indexOf(delimiter, end.lastIndex)
+    if (close === -1) {
+      return -1
+    }
+    end.lastIndex = close + delimiter.length
+    boundary = end.exec(html)
+  }
+  const closing = boundary?.index ?? -1
+  if (xml || name !== 'script' || closing === -1) {
     return closing
   }
-  const escape = html.indexOf('<!--', from)
-  if (escape === -1 || escape > closing) {
+  const escape = html.slice(from, closing).indexOf('<!--')
+  if (escape === -1) {
     return closing
   }
   const close = /<!--(?:-*>)?|-->|<\/?script(?=[\t\n\f\r />])/gi
-  close.lastIndex = escape
+  close.lastIndex = from + escape
   let escaped = false
   let doubleEscaped = false
   for (let match = close.exec(html); match; match = close.exec(html)) {
@@ -144,7 +154,7 @@ export function* scanHtmlTags(html: string, wanted: Set<string>, xml: boolean): 
     if (xml && html[end - 1] === '/') {
       contentEnd = end + 1
     } else if (/^(script|style|title|textarea|xmp|iframe|noembed|noframes)$/.test(name)) {
-      contentEnd = findRawTextEnd(html, name, open.lastIndex)
+      contentEnd = findRawTextEnd(html, name, open.lastIndex, xml)
       if (contentEnd === -1) {
         return
       }
