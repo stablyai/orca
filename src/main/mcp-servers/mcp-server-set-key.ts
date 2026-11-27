@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 export type McpServerIdentity = {
   name: string
   url?: string
+  type?: string
   command?: string
   args?: readonly string[]
   env?: unknown
@@ -22,6 +23,7 @@ export function mcpServerSetKey(servers: readonly McpServerIdentity[]): string {
       JSON.stringify([
         server.name,
         server.url ?? null,
+        server.type ?? null,
         server.command ?? null,
         server.args ?? [],
         server.env ?? null,
