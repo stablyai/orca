@@ -175,6 +175,17 @@ function runLocalPrecheck(
     timeout = setTimeout(() => {
       timedOut = true
       forceKillTimer = killLocalPrecheckProcessTree(child)
+      // Descendants a tree kill missed can hold the pipes, so close may never come; the root's exit ends it.
+      const settleOnExit = (): void => {
+        child.stdout?.destroy()
+        child.stderr?.destroy()
+        settle(null, `Precheck timed out after ${precheck.timeoutSeconds}s.`)
+      }
+      if (childProcessHasExited(child)) {
+        settleOnExit()
+      } else {
+        child.once('exit', settleOnExit)
+      }
     }, timeoutMs)
 
     child.stdout?.setEncoding('utf8')

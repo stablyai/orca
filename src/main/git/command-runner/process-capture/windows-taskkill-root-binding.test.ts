@@ -71,6 +71,8 @@ describe('Windows taskkill on the process worker', () => {
     root.exitCode = 0
     root.emit('exit')
     expect(requests).toContain('cancel-spawn')
+    // The worker reads the flag as it dequeues, so a cancel still in flight cannot let it launch.
+    expect(Atomics.load(workerSpawn.mock.calls[0][0].withdrawWhenSet, 0)).toBe(1)
     killers[0].receive({ type: 'exit', id: 1, code: null, signal: 'SIGTERM' })
     killers[0].receive({ type: 'close', id: 1, code: null, signal: 'SIGTERM' })
 
@@ -83,6 +85,17 @@ describe('Windows taskkill on the process worker', () => {
 
     root.exitCode = 0
     loseWorker(killers[0])
+
+    await expect(verdict).resolves.toBe(false)
+    expect(nativeSpawn).not.toHaveBeenCalled()
+  })
+
+  it('drops a lost taskkill from the main rerun when its root exits before the rerun starts', async () => {
+    const root = liveRoot()
+    const verdict = runWindowsTaskkillOffMain([4242], 5_000, root)
+
+    loseWorker(killers[0])
+    root.exitCode = 0
 
     await expect(verdict).resolves.toBe(false)
     expect(nativeSpawn).not.toHaveBeenCalled()
