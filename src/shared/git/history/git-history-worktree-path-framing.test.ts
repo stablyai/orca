@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
@@ -13,7 +13,7 @@ it.skipIf(process.platform === 'win32')(
     if (!executable) {
       throw new Error('Git is required for the history pathname regression')
     }
-    const root = await mkdtemp(join(tmpdir(), 'orca-history-path-'))
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'orca-history-path-')))
     const repo = join(root, 'repo')
     const linked = join(root, 'review\nworkspace')
     const env = {
