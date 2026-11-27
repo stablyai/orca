@@ -10,7 +10,8 @@ import {
   answerBotOffer,
   answerBotOfferAgain,
   BOT_OFFER_DISMISS_ANSWER,
-  type BotOfferAnswerUpdate
+  type BotOfferAnswerUpdate,
+  type BotOfferTold
 } from '../../../../shared/bots/bot-offer-answers'
 import { isLostHostAnswer } from '@/runtime/provider-accounts/sign-in/host-sign-in-lost-answers'
 import { botHostTakes } from '../bots/bot-host-capability'
@@ -18,8 +19,9 @@ import { botErrorMessage } from '../bots/bot-presentation'
 import { NativeChatCardActions } from './NativeChatCardFrame'
 import { NativeChatBotKickoffContext } from './native-chat-bot-kickoff-view'
 
-/** Tells the bot one card answer; a hidden one carries `answerKey`, so the host drops a repeat. */
-type CardTell = (answerKey: string) => Promise<boolean>
+/** Tells the bot one card answer; a hidden one carries `answerKey`, so the host drops a repeat and says
+ *  what the bot was told. */
+type CardTell = (answerKey: string) => Promise<BotOfferTold>
 
 export type NativeChatOffer = {
   dismissed: boolean
@@ -31,7 +33,7 @@ export type NativeChatOffer = {
   /** Like `send`, for a further action on a card already answered: replaces its answer. */
   sendAgain: (text: string, chosen: readonly string[]) => void
   /** Like `send` (`again`: `sendAgain`), told by `tell` instead of a typed message, such as a hidden
-   *  card answer carrying `answerKey`; `tell` resolves false when it was refused. */
+   *  card answer carrying `answerKey`; `tell` resolves `sent: false` when it was refused. */
   answer: (tell: CardTell, chosen: readonly string[], again?: boolean) => void
 }
 
@@ -42,7 +44,8 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
   const answer = bot?.offerAnswers?.find((entry) => entry.cardId === cardId)
   // Claimed on the host before the send, so a second window, device or press sends nothing; a refused or failed
   // send gives the claim back and leaves the card to press again. A press again after a lost reply carries the
-  // same answer key, so a host that already queued it doesn't tell the bot twice.
+  // same answer key, so a host that already told the bot doesn't tell it twice, and the card takes back the
+  // choice the bot heard.
   const answerOffer = async (
     update: Parameters<typeof answerBotOffer>[0],
     tell: CardTell,
@@ -55,7 +58,7 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
     }
     const outcome = await (
       again && update.sent
-        ? answerBotOfferAgain({ cardId, sent: update.sent }, answer?.sent, ops)
+        ? answerBotOfferAgain({ cardId, sent: update.sent }, answer, ops)
         : answerBotOffer(update, ops)
     ).catch((error: unknown) => {
       toast.error(botErrorMessage(error))
@@ -70,22 +73,20 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
   }
   const typed =
     (text: string): CardTell =>
-    async () =>
-      (await view?.send(text)) === true
+    async () => ({ sent: (await view?.send(text)) === true })
   // Typed follows the follow-up setting and can steer a running turn; a card answer always waits for it.
   const sessionId = view?.sessionId
   const asCardAnswer = !!sessionId && botHostTakes(ref, BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY)
-  const told = (text: string): CardTell =>
+  const told = (text: string, chosen?: readonly string[]): CardTell =>
     asCardAnswer
-      ? async (answerKey) =>
-          (
-            await callBotRpc<{ sent: boolean }>(ref, 'bots.offer.answer', {
-              botId,
-              sessionId,
-              text,
-              answerKey
-            })
-          ).sent
+      ? (answerKey) =>
+          callBotRpc<BotOfferTold>(ref, 'bots.offer.answer', {
+            botId,
+            sessionId,
+            text,
+            answerKey,
+            ...(chosen ? { chosen: [...chosen] } : {})
+          })
       : typed(text)
   const dismissed = asCardAnswer
     ? told(BOT_OFFER_DISMISS_ANSWER)
@@ -94,9 +95,10 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
     dismissed: answer?.dismissed === true,
     sent: answer?.sent?.chosen ?? null,
     dismiss: () => void answerOffer({ cardId, dismissed: true }, dismissed),
-    send: (text, chosen) => void answerOffer({ cardId, sent: { chosen: [...chosen] } }, told(text)),
+    send: (text, chosen) =>
+      void answerOffer({ cardId, sent: { chosen: [...chosen] } }, told(text, chosen)),
     sendAgain: (text, chosen) =>
-      void answerOffer({ cardId, sent: { chosen: [...chosen] } }, told(text), true),
+      void answerOffer({ cardId, sent: { chosen: [...chosen] } }, told(text, chosen), true),
     answer: (tell, chosen, again) =>
       void answerOffer({ cardId, sent: { chosen: [...chosen] } }, tell, again)
   }

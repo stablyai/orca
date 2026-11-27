@@ -86,7 +86,11 @@ export const botOfferAnswerSend = bindDeferredRpcOperation(
     method: 'bots.offer.answer',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('bot-offer-answered', z.looseObject({ sent: z.boolean() }))
+    // `chosen`: what the bot was told for the answer key, when this press repeated an earlier one.
+    read: rpcResultVariant(
+      'bot-offer-answered',
+      z.looseObject({ sent: z.boolean(), chosen: z.array(z.string()).optional() })
+    )
   })
 )
 

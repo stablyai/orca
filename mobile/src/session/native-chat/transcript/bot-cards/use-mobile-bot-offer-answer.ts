@@ -50,11 +50,18 @@ export function useMobileBotOfferAnswer(botId: string, cardId: string): MobileBo
       return
     }
     setError(null)
+    const chosen = update.sent?.chosen
     const cardAnswer = takesCardAnswers
       ? async (line: string, sessionId: string, answerKey: string) =>
           botOfferAnswerSend.interpret(
-            await botOfferAnswerSend.request(client, { botId, sessionId, text: line, answerKey })
-          ).sent
+            await botOfferAnswerSend.request(client, {
+              botId,
+              sessionId,
+              text: line,
+              answerKey,
+              ...(chosen ? { chosen } : {})
+            })
+          )
       : null
     void answerBotOffer(update, {
       update: async (offerAnswer) =>
@@ -63,8 +70,7 @@ export function useMobileBotOfferAnswer(botId: string, cardId: string): MobileBo
           botUpdate.interpret(await botUpdate.request(client, { botId, updates: { offerAnswer } }))
             .bot
         ),
-      send: async (answerKey) =>
-        (await mobileBotOfferTell(card, cardAnswer, text, answerKey)) === true,
+      send: (answerKey) => mobileBotOfferTell(card, cardAnswer, text, answerKey),
       deliveryUnknown: isRpcDeliveryUnknown
     })
       .then((outcome) => {

@@ -117,7 +117,7 @@ describe('bots.offer.answer', () => {
             if (lostReply) {
               throw new Error('The connection closed before the reply.')
             }
-            return sent
+            return { sent }
           }
         }
       )
@@ -130,7 +130,7 @@ describe('bots.offer.answer', () => {
     expect(sends).toHaveLength(1)
   })
 
-  it('drops a repeat of one card answer, and keeps other cards and chats apart', async () => {
+  it('drops a repeat of one card answer whichever chat it names, and keeps other cards apart', async () => {
     sends.length = 0
     const answer = (answerKey: string, sessionId = 'chat-1') =>
       BOT_OFFER_ANSWER_METHOD.handler(
@@ -145,7 +145,8 @@ describe('bots.offer.answer', () => {
     expect([first, second]).toEqual([{ sent: true }, { sent: true }])
     await answer('card-3\ndismissed')
     await answer('card-2\ndismissed', 'chat-2')
-    expect(sends.map((send) => send.envelope.sessionId)).toEqual(['chat-1', 'chat-1', 'chat-2'])
+    expect(sends.map((send) => send.body.blocks[0]?.text)).toEqual(['Dismiss', 'Dismiss'])
+    expect(sends).toHaveLength(2)
   })
 
   it('tells the bot on a press again after a send that failed on the host', async () => {

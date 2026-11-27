@@ -1,30 +1,33 @@
 // An owner's press on a card, told to the agent as a hidden card answer: it queues behind a running
 // turn and draws as nothing, where a typed one could steer that turn under the owner's name.
-import { BotOfferAnswerParams } from '../../../../shared/bots/bot-offer-answers'
+import { BotOfferAnswerParams, type BotOfferTold } from '../../../../shared/bots/bot-offer-answers'
 import { runtimeBotChats } from '../../../bots/bot-chat-session'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, InvalidArgumentError } from '../core'
 import { ownerOnly } from './bots-caller-gates'
 
-type CardAnswerTold = Promise<{ sent: boolean }>
-
-// Card answers each host queued (or is queueing), by bot, chat and answer key. Enough for the presses one
-// lost reply can repeat; a host restart forgets them, as it forgets the replies it never sent.
+// Card answers each host told (or is telling), by bot and answer key, with what each chose. Keyed without
+// the chat: a card sits in one, and its answer is the same whichever way a client names it. Enough for
+// the presses one lost reply can repeat; a host restart forgets them.
 const MAX_TOLD_CARD_ANSWERS = 256
-const toldCardAnswers = new WeakMap<OrcaRuntimeService, Map<string, CardAnswerTold>>()
+const toldCardAnswers = new WeakMap<OrcaRuntimeService, Map<string, Promise<BotOfferTold>>>()
+
+/** One card answer's idempotency key, and what it chose. */
+export type CardAnswerKey = { answerKey: string; chosen?: readonly string[] }
 
 /** Sends `line` as a card answer into `sessionId`, which must be one of the bot's chats, or into its Chat.
- *  With `answerKey`, a repeat of an answer this host queued (a press again after a lost reply, another
- *  window) returns that answer's result instead of telling the bot twice; a refused or failed one may go again. */
+ *  With `key`, a repeat of an answer this host told (a press again after a lost reply, another window,
+ *  a reload) tells the bot nothing new and returns what it was told, so the card can show that; a refused
+ *  or failed one is forgotten so it can go again. Nothing throws once the chat admitted a send. */
 export function tellBotCardAnswer(
   runtime: OrcaRuntimeService,
   botId: string,
   sessionId: string | undefined,
   line: string,
-  answerKey?: string
-): CardAnswerTold {
-  if (!answerKey) {
+  key?: CardAnswerKey
+): Promise<BotOfferTold> {
+  if (!key) {
     return tellOnce(runtime, botId, sessionId, line)
   }
   let told = toldCardAnswers.get(runtime)
@@ -32,20 +35,23 @@ export function tellBotCardAnswer(
     told = new Map()
     toldCardAnswers.set(runtime, told)
   }
-  const key = JSON.stringify([botId, sessionId ?? null, answerKey])
-  const prior = told.get(key)
+  const slot = JSON.stringify([botId, key.answerKey])
+  const prior = told.get(slot)
   if (prior) {
     return prior
   }
-  const telling = tellOnce(runtime, botId, sessionId, line)
-  told.set(key, telling)
+  const chosen = key.chosen ? [...key.chosen] : undefined
+  const telling = tellOnce(runtime, botId, sessionId, line).then(({ sent }) =>
+    chosen ? { sent, chosen } : { sent }
+  )
+  told.set(slot, telling)
   const oldest = told.size > MAX_TOLD_CARD_ANSWERS ? told.keys().next().value : undefined
   if (oldest !== undefined) {
     told.delete(oldest)
   }
   const forget = (): void => {
-    if (told.get(key) === telling) {
-      told.delete(key)
+    if (told.get(slot) === telling) {
+      told.delete(slot)
     }
   }
   telling.then(({ sent }) => (sent ? undefined : forget()), forget)
@@ -57,7 +63,7 @@ async function tellOnce(
   botId: string,
   sessionId: string | undefined,
   line: string
-): CardAnswerTold {
+): Promise<BotOfferTold> {
   if (sessionId) {
     // The host may have restarted since the card drew; an absent one would read every chat as no bot's.
     await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
@@ -76,9 +82,15 @@ export const BOT_OFFER_ANSWER_METHOD = defineMethod({
   name: 'bots.offer.answer',
   permission: 'workspace',
   params: BotOfferAnswerParams,
-  handler: async ({ botId, sessionId, text, answerKey }, context) => {
+  handler: async ({ botId, sessionId, text, answerKey, chosen }, context) => {
     ownerOnly(context, 'Only your owner answers offer cards, in Orca.')
     context.runtime.bots.assertEnabled()
-    return tellBotCardAnswer(context.runtime, botId, sessionId, text, answerKey)
+    return tellBotCardAnswer(
+      context.runtime,
+      botId,
+      sessionId,
+      text,
+      answerKey ? { answerKey, chosen } : undefined
+    )
   }
 })

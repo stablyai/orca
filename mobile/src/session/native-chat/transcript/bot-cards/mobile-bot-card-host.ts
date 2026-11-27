@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react'
 import type { ExecutionHostId } from '../../../../../../src/shared/execution-host/execution-host'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import type { BotAgent } from '../../../../../../src/shared/bot-types'
+import type { BotOfferTold } from '../../../../../../src/shared/bots/bot-offer-answers'
 import type { BotProposal } from '../../../../../../src/shared/bots/bot-proposal'
 import type { BotCardChatBot } from './mobile-bot-card-chat-open'
 
@@ -52,16 +53,19 @@ export const MobileBotCardSendContext = createContext<MobileBotCardSend | null>(
 
 /** How a card tells its agent `text`: a card answer, which waits for a running turn, when the host
  *  takes one (`cardAnswer`) and the chat has a session; else typed, which follows the follow-up setting.
- *  A card answer carries `answerKey`, so a host that already queued it doesn't tell the bot twice. */
-export function mobileBotOfferTell(
+ *  A card answer carries `answerKey`, so a host that already told the bot tells it nothing new and says
+ *  what it was told. */
+export async function mobileBotOfferTell(
   card: MobileBotCardSend | null,
-  cardAnswer: ((text: string, sessionId: string, answerKey: string) => Promise<boolean>) | null,
+  cardAnswer:
+    | ((text: string, sessionId: string, answerKey: string) => Promise<BotOfferTold>)
+    | null,
   text: string,
   answerKey: string
-): Promise<boolean> {
+): Promise<BotOfferTold> {
   const sessionId = card?.sessionId
   if (cardAnswer && sessionId) {
     return cardAnswer(text, sessionId, answerKey)
   }
-  return card ? card.typed(text) : Promise.resolve(false)
+  return { sent: card ? (await card.typed(text)) === true : false }
 }

@@ -295,7 +295,15 @@ export const GOOGLE_METHODS = [
       }
       // Read now, not at the click: the sign-in can take minutes.
       const line = googleConnectedLine(account, await connect.defaultAccount())
-      return tellBotCardAnswer(ctx.runtime, botId, sessionId, line, answerKey)
+      // Each account signed in is its own fact for the bot, so the key names it: a repeat of one
+      // account's answer tells nothing new, while another account's still reaches the bot.
+      return tellBotCardAnswer(
+        ctx.runtime,
+        botId,
+        sessionId,
+        line,
+        answerKey ? { answerKey: `${answerKey}\n${account}`, chosen: [account] } : undefined
+      )
     }
   })
 ] as const

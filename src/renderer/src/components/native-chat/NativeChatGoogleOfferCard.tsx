@@ -22,6 +22,7 @@ import { useGoogleSignIn } from '../bots/google/use-google-sign-in'
 import { useTurnOnBotGoogle } from '../bots/google/use-turn-on-bot-google'
 import { giveBotGoogleAccount, readFreshBot } from '../bots/google/give-bot-google-account'
 import type { Bot } from '../../../../shared/bot-types'
+import type { BotOfferTold } from '../../../../shared/bots/bot-offer-answers'
 import {
   NativeChatCardActions,
   NativeChatCardFrame,
@@ -77,15 +78,13 @@ export function NativeChatGoogleOfferCard({
       // A hidden card answer: the Connected card already shows the account, and the bot reads a fact.
       hidden: () =>
         answering.answer(
-          async (answerKey) =>
-            (
-              await callBotRpc<{ sent: boolean }>(bot, 'google.bot.connected', {
-                botId: bot.id,
-                account: connected.email,
-                ...(chat?.sessionId ? { sessionId: chat.sessionId } : {}),
-                answerKey
-              })
-            ).sent,
+          (answerKey) =>
+            callBotRpc<BotOfferTold>(bot, 'google.bot.connected', {
+              botId: bot.id,
+              account: connected.email,
+              ...(chat?.sessionId ? { sessionId: chat.sessionId } : {}),
+              answerKey
+            }),
           chosen,
           again
         ),
