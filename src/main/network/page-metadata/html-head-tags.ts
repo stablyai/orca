@@ -4,21 +4,29 @@
 /** Index of the `>` closing a tag, skipping any inside quoted attribute values; -1 when none closes it. */
 function findTagEnd(html: string, from: number): number {
   let afterEquals = false
+  let unquotedValue = false
   for (let i = from; i < html.length; i++) {
     const ch = html[i]
-    if (afterEquals && (ch === '"' || ch === "'")) {
-      const close = html.indexOf(ch, i + 1)
-      if (close === -1) {
-        return -1
-      }
-      i = close
-      afterEquals = false
-    } else if (ch === '>') {
+    if (ch === '>') {
       return i
+    }
+    const whitespace = /[\t\n\f\r ]/.test(ch)
+    if (unquotedValue) {
+      unquotedValue = !whitespace
+    } else if (afterEquals) {
+      if (ch === '"' || ch === "'") {
+        const close = html.indexOf(ch, i + 1)
+        if (close === -1) {
+          return -1
+        }
+        i = close
+        afterEquals = false
+      } else if (!whitespace) {
+        unquotedValue = true
+        afterEquals = false
+      }
     } else if (ch === '=') {
       afterEquals = true
-    } else if (!/\s/.test(ch)) {
-      afterEquals = false
     }
   }
   return -1
@@ -36,15 +44,63 @@ function findCommentEnd(html: string, from: number): number {
   return close.test(html) ? close.lastIndex - 1 : -1
 }
 
+function findScriptEnd(html: string, from: number): number {
+  let escaped = false
+  let doubleEscaped = false
+  let dashes = 0
+  const scriptTag = /<(\/?)script(?=[\t\n\f\r />])/iy
+  for (let i = from; i < html.length; i++) {
+    const ch = html[i]
+    if (ch === '<') {
+      if (!escaped && html.startsWith('<!--', i)) {
+        escaped = true
+        dashes = 2
+        i += 3
+        continue
+      }
+      scriptTag.lastIndex = i
+      const tag = scriptTag.exec(html)
+      if (tag) {
+        if (tag[1] === '/') {
+          if (!doubleEscaped) {
+            return i
+          }
+          doubleEscaped = false
+        } else if (escaped) {
+          doubleEscaped = true
+        }
+        i = scriptTag.lastIndex - 1
+      }
+    } else if (ch === '>' && dashes >= 2) {
+      escaped = false
+      doubleEscaped = false
+    }
+    dashes = ch === '-' ? dashes + 1 : 0
+  }
+  return -1
+}
+
+function findRawTextEnd(html: string, name: string, from: number): number {
+  if (name === 'script') {
+    return findScriptEnd(html, from)
+  }
+  const close = new RegExp(`</${name}(?=[\\t\\n\\f\\r />])`, 'gi')
+  close.lastIndex = from
+  return close.exec(html)?.index ?? -1
+}
+
 type HtmlTag = { attributesStart: number; end: number; contentEnd?: number }
 
 /** Skip inert text before interpreting tag-shaped strings as page metadata. */
 function* htmlTags(html: string, tagName: string): Generator<HtmlTag> {
   const wanted = tagName.toLowerCase()
-  const open = /<!--|<(\/?)([a-z][^\t\n\f\r />]*)/gi
+  const open = /<!--|<!|<(\/?)([a-z][^\t\n\f\r />]*)/gi
   for (let match = open.exec(html); match; match = open.exec(html)) {
-    if (match[0] === '<!--') {
-      const end = findCommentEnd(html, open.lastIndex)
+    if (match[0] === '<!--' || match[0] === '<!') {
+      const end =
+        match[0] === '<!--'
+          ? findCommentEnd(html, open.lastIndex)
+          : html.indexOf('>', open.lastIndex)
       if (end === -1) {
         return
       }
@@ -63,14 +119,12 @@ function* htmlTags(html: string, tagName: string): Generator<HtmlTag> {
     }
     let contentEnd: number | undefined
     if (/^(script|style|title|textarea|xmp|iframe|noembed|noframes)$/.test(name)) {
-      const close = new RegExp(`</${name}(?=[\\t\\n\\f\\r />])`, 'gi')
-      close.lastIndex = open.lastIndex
-      const closing = close.exec(html)
-      if (!closing) {
+      const closing = findRawTextEnd(html, name, open.lastIndex)
+      if (closing === -1) {
         return
       }
-      contentEnd = closing.index
-      const closingEnd = findTagEnd(html, close.lastIndex)
+      contentEnd = closing
+      const closingEnd = findTagEnd(html, closing + name.length + 2)
       if (closingEnd === -1) {
         return
       }
