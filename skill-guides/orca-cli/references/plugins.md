@@ -20,6 +20,8 @@ ORCA plugin dev request <dir|plugin-key> <name> [--data <json>] [--panel <id>] [
 ORCA plugin dev unload <dir|plugin-key> --json
 ORCA plugin list --json
 ORCA plugin logs <plugin-key> --json
+ORCA plugin settings get <plugin-key> [<key>] --json
+ORCA plugin settings set <plugin-key> <key> <json-value|null> --json
 ORCA plugin enable <plugin-key> [--approve <fingerprint>] --json
 ORCA plugin disable <plugin-key> --json
 ORCA plugin system on|off --json
@@ -36,6 +38,34 @@ ORCA plugin catalog rm <id|name|url> --json   # alias: catalog remove
 ```
 
 Exit codes: `0` ok, `1` error, `2` `plugin_invalid`, `3` `approval_required` or `approval_stale`.
+
+## Read and change declared settings
+
+`plugin settings get` reads only `contributes.settings`, using the same store as Settings →
+Plugins. It prints `{ pluginKey, settings, values }`, with declared defaults included. Pass a
+key to select just that setting. A declared key without an override or default is absent from
+`values` (shown as `(unset)` in human output); a plugin declaring no settings returns empty
+`settings` and `values`. Unknown plugins and undeclared keys fail.
+
+`plugin settings set` validates one declared key, saves it and notifies open panels and a
+running worker. It prints `{ pluginKey, key, value }` with the effective value, or `null` when
+unset without a default. Pass JSON, including JSON quotes for strings:
+
+```sh
+ORCA plugin settings set acme.notes board '"backlog"' --json
+ORCA plugin settings set acme.notes enabled false --json
+ORCA plugin settings set acme.notes limit 0 --json
+ORCA plugin settings set acme.notes board '""' --json
+ORCA plugin settings set acme.notes board null --json
+ORCA plugin settings get acme.notes --environment build-box --json
+```
+
+`false`, `0` and `""` are saved values. `null` removes the override and restores the declared
+default. Both commands require `host-admin` and run on the selected host, including
+`--environment`; they never fall back to local settings. An older host returns
+`runtime_unsupported`: update Orca on that host. They never read or write `orca.secrets`,
+credentials, or undeclared settings. Exit code `1` covers invalid JSON, undeclared keys,
+validation failures and unsupported hosts.
 
 ## Make and load a plugin
 

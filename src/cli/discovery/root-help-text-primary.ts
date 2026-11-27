@@ -60,6 +60,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  plugin check              Validate, then render each panel on this machine, unsandboxed',
   '  plugin list               List plugins on the Orca host',
   "  plugin logs               Print a plugin's recent log lines",
+  '  plugin settings get|set   Read or change declared plugin settings',
   '  plugin install            Install from a catalog, Git repo or folder (code needs --approve)',
   '  plugin update             Update one plugin or --all (new access needs --approve)',
   '  plugin uninstall          Remove an installed plugin',

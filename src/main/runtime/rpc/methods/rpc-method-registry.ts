@@ -26,6 +26,7 @@ import { MANAGED_RUNTIME_INSTALL_METHODS } from './host-management/managed-runti
 import { AGENT_CLI_UPDATE_METHODS } from './host-management/agent-cli-update'
 import { SSH_METHODS } from './ssh/ssh'
 import { PLUGIN_METHODS } from './plugins/plugins'
+import { PLUGIN_SETTINGS_METHODS } from './plugins/plugin-settings'
 import { PLUGIN_VIEW_METHODS } from './plugins/plugin-view'
 import { PLUGIN_DEV_EMIT_METHODS } from './plugins/plugin-dev-emit'
 import { PLUGIN_DEV_REQUEST_METHODS } from './plugins/plugin-dev-request'
@@ -73,6 +74,7 @@ const SERVICE_RPC_METHODS = [
   ...MANAGED_SERVER_METHODS,
   ...SSH_METHODS,
   ...PLUGIN_METHODS,
+  ...PLUGIN_SETTINGS_METHODS,
   ...PLUGIN_VIEW_METHODS,
   ...PLUGIN_DEV_EMIT_METHODS,
   ...PLUGIN_DEV_REQUEST_METHODS,

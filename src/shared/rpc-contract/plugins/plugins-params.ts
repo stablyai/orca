@@ -137,6 +137,21 @@ const pluginKeyParam = lazyZodSchema(() =>
 )
 const contributionIdParam = lazyZodSchema(() => z.string().min(1).max(128))
 
+export const PluginGetSettingsParams = z
+  .object({
+    pluginKey: pluginKeyParam,
+    key: z.string().min(1).max(64).optional()
+  })
+  .strict()
+
+export const PluginSetSettingParams = z
+  .object({
+    pluginKey: pluginKeyParam,
+    key: z.string().min(1).max(64),
+    value: z.json()
+  })
+  .strict()
+
 /** `orca plugin open`: a panel (default: the first) or, with `filePath`, a file in its editor. */
 export const PluginOpenParams = lazyZodSchema(() =>
   z
