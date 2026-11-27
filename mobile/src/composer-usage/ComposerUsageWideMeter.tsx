@@ -1,5 +1,5 @@
 import { Pressable, Text } from 'react-native'
-import { composerInputStyles } from '../components/composer-input/composer-input-styles'
+import { composerInputStylesSheet } from '../components/composer-input/composer-input-styles'
 import { radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { ComposerUsageMeterReadout } from './composer-usage-meter-readout'
@@ -29,6 +29,7 @@ export function ComposerUsageWideMeter({
   onPress: () => void
 }): React.JSX.Element {
   const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
 
   return (
     <Pressable
