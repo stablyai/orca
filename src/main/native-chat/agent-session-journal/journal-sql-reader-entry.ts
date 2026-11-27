@@ -113,6 +113,7 @@ function creditGrant(value: unknown): JournalReaderReplyCreditGrant | undefined 
 }
 try {
   db = new Database(workerData.filename, { readonly: true, fileMustExist: true, timeout: 5000 })
+  db.pragma('cache_size = -2048')
   if (String(db.pragma('journal_mode', { simple: true })).toLowerCase() !== 'wal') {
     throw new Error('journal SQL reader requires WAL mode')
   }
