@@ -13,6 +13,7 @@ import CommentMarkdown, {
   type CommentMarkdownExtension
 } from '@/components/comment-markdown/CommentMarkdown'
 import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
+import { CommentMarkdownDocumentCode } from '@/components/comment-markdown/comment-markdown-code-renderers'
 import { createDocumentCommentMarkdownComponents } from '@/components/comment-markdown/comment-markdown-element-renderers'
 import { cn } from '@/lib/class-names'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../shared/native-chat/visuals/native-chat-visual-directive'
@@ -135,6 +136,7 @@ function containsOnlyLinks(children: ReactNode): boolean {
 // The chat's own text blocks: list items take the paragraphs' line height (the shared comment
 // renderer gives them leading-relaxed), 10px between blocks and 3px between items at 13px.
 const NATIVE_CHAT_TEXT_BLOCK_COMPONENTS: CommentMarkdownExtension['components'] = {
+  code: (props) => <CommentMarkdownDocumentCode {...props} dir="ltr" />,
   p: ({ children }) => (
     <p
       className="my-2.5 first:mt-0 last:mb-0"

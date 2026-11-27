@@ -37,7 +37,7 @@ function BidiChat(): React.JSX.Element {
         variant="document"
         renderCodeBlock={NativeChatCodeBlock}
         content={
-          '```sh\nnpm test -- --name="سلام"\n```\n\n> سلام دنیا\n\n- سلام دنیا\n- Hello world\n\n# سلام دنیا\n\n| فارسی | English |\n| --- | --- |\n| سلام | Hello |'
+          '```sh\nnpm test -- --name="سلام"\n```\n\n> سلام دنیا\n\n- سلام دنیا\n- Hello world\n- `npm test` را اجرا کنید.\n- Run `npm test` now.\n\n# سلام دنیا\n\n| فارسی | English |\n| --- | --- |\n| سلام | Hello |'
         }
       />
       <NativeChatPromptEditor
@@ -133,7 +133,9 @@ export const bidi = defineFixture({
     const items = frame.querySelectorAll('li')
     if (
       getComputedStyle(items[0]).direction !== 'rtl' ||
-      getComputedStyle(items[1]).direction !== 'ltr'
+      getComputedStyle(items[1]).direction !== 'ltr' ||
+      getComputedStyle(items[2]).direction !== 'rtl' ||
+      getComputedStyle(items[3]).direction !== 'ltr'
     ) {
       throw new Error('List markers have the wrong direction')
     }
