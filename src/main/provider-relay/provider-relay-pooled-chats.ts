@@ -33,8 +33,9 @@ export function pooledProviderRelayChat(chatKey: string): PooledProviderRelayCha
   return pooled.get(chatKey)
 }
 
+/** Quit waits only when a chat here can be handed off (scanned once, at quit). */
 export function pooledProviderRelayChatsPresent(): boolean {
-  return pooled.size > 0 || quitWork.size > 0
+  return quitWork.size > 0 || [...pooled.values()].some((chat) => chat.keepable())
 }
 
 /** Runs once quit begins, before chats are evicted. */

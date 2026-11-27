@@ -12,7 +12,7 @@ import { CODEX_RELAY_WORK_MARKERS, type CodexAppServerRelayAs } from '../codex-a
 export const CODEX_SHARED_RELAY_AGENT = 'codex-shared'
 
 /** Who hears that a deleted chat no longer wants its part of a kept shared server. */
-let chatDropped: ((chatKey: string, relay: KeptProviderRelay) => void) | null = null
+let chatDropped: ((chatKey: string, relay: KeptProviderRelay | null) => void) | null = null
 
 export function onCodexSharedRelayChatDropped(listener: typeof chatDropped): void {
   chatDropped = listener

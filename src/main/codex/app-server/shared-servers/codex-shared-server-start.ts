@@ -63,6 +63,6 @@ export async function startCodexSharedServer(
       expected
     })
     connection.relay.releaseOutput()
-    void server.keep.unsubscribe(unwanted)
+    void server.keep.endThreads(unwanted, null)
   }
 }

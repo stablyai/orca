@@ -271,11 +271,11 @@ export class CodexSharedServerRouter {
       owner.deliver(frame)
       return
     }
-    if (this.recovery?.hold(threadId, frame)) {
-      return
-    }
     if (this.retired.has(threadId)) {
       this.refuse(frame)
+      return
+    }
+    if (this.recovery?.hold(threadId, frame)) {
       return
     }
     this.unrouted.hold(threadId, frame)

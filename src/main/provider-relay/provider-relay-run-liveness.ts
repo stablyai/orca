@@ -17,9 +17,9 @@ import {
   providerRelayRunAskAwaitsProof,
   providerRelayRunAskCurrent,
   placeKeptProviderRelay,
-  providerRelayAttachedByOther,
   providerRelayMayKeep
 } from './provider-relay-launch-inventory'
+import { providerRelayAttachedByOther } from './provider-relay-shared-agents'
 import { providerRelayRoute } from './provider-relay-route'
 import { watchProviderRelayClient } from './provider-relay-instance-signals'
 import { agentProvenGone, provenGone } from './provider-relay-exit-probes'

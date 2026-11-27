@@ -1,7 +1,8 @@
 import type { ProviderRelayInfo } from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { KeptProviderRelay } from './provider-relay-launch-inventory'
 
-type Dropped = (chatKey: string, relay: KeptProviderRelay) => void
+/** `relay` null: the chat wasn't listed here, so every shared agent attached here is told. */
+type Dropped = (chatKey: string, relay: KeptProviderRelay | null) => void
 
 /** Integrations whose one agent serves many chats: a chat's drop never closes it, its owner does. */
 const sharedAgents = new Map<string, Dropped>()
@@ -34,4 +35,11 @@ export function noteSharedProviderRelayAttached(relayId: string, attachedHere: b
 /** Attached, but not by this app's own shared agent (whose chats still claim their parts). */
 export function providerRelayAttachedByOther(info: ProviderRelayInfo): boolean {
   return info.attached && !sharedAttachedHere.has(info.relayId)
+}
+
+/** A deleted chat no relay was listed for: every shared integration hears it. */
+export function sharedProviderRelayChatDropped(chatKey: string): void {
+  for (const dropped of sharedAgents.values()) {
+    dropped(chatKey, null)
+  }
 }

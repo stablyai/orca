@@ -22,12 +22,8 @@ export {
 import {
   providerRelayAgentShared,
   registerSharedProviderRelayAgent,
+  sharedProviderRelayChatDropped,
   sharedProviderRelayDropped
-} from './provider-relay-shared-agents'
-export {
-  noteSharedProviderRelayAttached,
-  providerRelayAgentShared,
-  providerRelayAttachedByOther
 } from './provider-relay-shared-agents'
 
 const LIST_TIMEOUT_MS = 3_000
@@ -70,7 +66,7 @@ export function registerReattachableProviderRelayAgent(
     opensEnded?: boolean
     provider?: string
     /** One agent serves many chats; `dropped` hears a chat (deleted) that no longer wants its part. */
-    shared?: { dropped: (chatKey: string, relay: KeptProviderRelay) => void }
+    shared?: { dropped: (chatKey: string, relay: KeptProviderRelay | null) => void }
   } = {}
 ): void {
   reattachableAgents.add(agent)
@@ -366,6 +362,10 @@ export function dropListedProviderRelay(chatKey: string, keepUnread = false): vo
     forgetProviderRelayRunVerdict(chatKey)
   }
   const relay = keptProviderRelay(chatKey)
+  if (!relay && !keepUnread) {
+    // Its part of a shared agent this app already attached (and claimed for no one) goes too.
+    sharedProviderRelayChatDropped(chatKey)
+  }
   if (relay) {
     forgetKeptProviderRelay(chatKey, relay)
     const shared = sharedProviderRelayDropped(relay.info.agent)

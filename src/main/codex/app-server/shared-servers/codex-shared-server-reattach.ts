@@ -1,6 +1,9 @@
 import { mapSettledWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import type { CodexAppServerConnection } from '../codex-app-server-connection-types'
-import { readSource, SOFT_READ_TIMEOUT_MS } from '../../structured/threads/codex-kept-loaded-threads'
+import {
+  readSource,
+  SOFT_READ_TIMEOUT_MS
+} from '../../structured/threads/codex-kept-loaded-threads'
 import { readRecord } from '../codex-item-field-readers'
 import {
   CODEX_SHARED_RECOVERY_MAX_IDENTITIES,
@@ -19,10 +22,10 @@ const LISTING_ATTEMPTS = 3
 
 /** Every loaded thread, page by page up to what the server may hold, each page retried. A listing
  *  that still fails is partial: it only leaves threads undiscovered, it never settles a chat. */
-async function listLoaded(connection: Connection): Promise<string[]> {
+async function listLoaded(connection: Connection): Promise<{ ids: string[]; complete: boolean }> {
   const ids: string[] = []
   let cursor: string | null = null
-  for (let failures = 0; failures < LISTING_ATTEMPTS; ) {
+  for (let failures = 0; failures < LISTING_ATTEMPTS;) {
     try {
       const page = readRecord(
         await connection.request(
@@ -31,16 +34,21 @@ async function listLoaded(connection: Connection): Promise<string[]> {
           { timeoutMs: SOFT_READ_TIMEOUT_MS }
         )
       )
-      ids.push(...(Array.isArray(page.data) ? page.data.filter((id) => typeof id === 'string') : []))
+      ids.push(
+        ...(Array.isArray(page.data) ? page.data.filter((id) => typeof id === 'string') : [])
+      )
       cursor = typeof page.nextCursor === 'string' ? page.nextCursor : null
-      if (cursor === null || ids.length >= CODEX_SHARED_RECOVERY_MAX_IDENTITIES) {
+      if (cursor === null) {
+        return { ids, complete: true }
+      }
+      if (ids.length >= CODEX_SHARED_RECOVERY_MAX_IDENTITIES) {
         break
       }
     } catch {
       failures += 1
     }
   }
-  return ids
+  return { ids, complete: false }
 }
 
 /** A thread's parent as Codex reads it; undefined when the read failed. */
@@ -85,7 +93,9 @@ export async function recoverCodexSharedServerThreads(input: {
   for (const chat of input.expected) {
     recovery.expect(chat)
   }
-  const loaded = await listLoaded(connection)
+  const { ids: loaded, complete } = await listLoaded(connection)
+  // Threads the listing missed are held as unresolved roots when their frames arrive.
+  recovery.discoveryPartial = !complete
   const parents: Parents = new Map()
   let unread = loaded.filter((threadId) => !recovery.holds(threadId))
   for (let round = 0; unread.length > 0 && round <= MAX_ANCESTOR_ROUNDS; round += 1) {

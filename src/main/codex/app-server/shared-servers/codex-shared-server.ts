@@ -106,8 +106,10 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   claim = (threadId: string, lease: CodexSharedServerLease, opened?: boolean, history?: boolean) =>
     this.router.claim(threadId, lease, opened, history)
 
-  backlog = (lease: CodexSharedServerLease, deltaBytes: number): void =>
+  backlog = (lease: CodexSharedServerLease, deltaBytes: number): void => {
     this.backlogs.change(lease, deltaBytes)
+    this.keep.queueChanged(lease)
+  }
   turnsChanged = (): void => this.turns.changed()
   hasRunningTurn = (threads: Iterable<string>): boolean =>
     [...threads].some((threadId) => this.turns.runningOn(threadId) !== undefined)
@@ -177,6 +179,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
         this.releases.delete(lease)
       } else {
         this.leases.delete(lease)
+        this.keep.forget(lease)
         this.turns.changed()
         this.router.openSettled()
         this.onEnded(this)
@@ -223,6 +226,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     }
     // Only now do the chat's threads stop routing to it; their late frames are refused.
     this.leases.delete(lease)
+    this.keep.forget(lease)
     // A helper named only in history never loaded here: nothing to list, stop or unsubscribe.
     const owned = this.router.release(lease).filter((threadId) => lease.liveThreads.has(threadId))
     // Threads that opened after the chat left are let go here, and their commands stopped below.
@@ -284,7 +288,9 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
    *  server, stop the server (its exit reaps the tree); else drain it so it ends with the last. */
   private async stopIfAlone(lease: CodexSharedServerLease): Promise<void> {
     this.draining = true
-    if ([...this.leases].some((other) => other !== lease) || !this.physicalConnection) {
+    // Threads a reattach holds for chats not open yet count as other chats on it.
+    const others = [...this.leases].some((other) => other !== lease) || !this.recovery.empty
+    if (others || !this.physicalConnection) {
       console.warn(`[codex-shared-server] pid ${this.pid ?? '?'}: chat work outlived cleanup`)
       return
     }

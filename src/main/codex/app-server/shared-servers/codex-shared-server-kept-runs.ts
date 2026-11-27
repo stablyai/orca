@@ -16,10 +16,16 @@ import {
   providerRelayPlacedRunOf,
   providerRelayRunsPlacedOn
 } from '../../../provider-relay/provider-relay-placed-records'
-import type { CodexRecoveredChat } from './codex-shared-server-recovery'
+import {
+  CODEX_SHARED_RECOVERY_MAX_IDENTITIES,
+  type CodexRecoveredChat
+} from './codex-shared-server-recovery'
 
 /** A chat's last run on a shared server: which relay and daemon start, and its commands' tag. */
 export type CodexPooledRun = { relayId: string; daemon: AgentSessionRunDaemon; workload: string }
+
+/** Where a relayed shared server runs, for its chats' run placements. */
+export type CodexPooledServerPlacement = { relayId: string; daemon: AgentSessionRunDaemon }
 
 /** Only a pooled run records the lease's tag; a chat's own relayed run never does. */
 export function codexPooledRunOf(sessionId: string): CodexPooledRun | null {
@@ -38,9 +44,16 @@ function codexThreadOf(record: AgentSessionRecord): string | null {
     : null
 }
 
+/** Expected chats one server holds at most, newest runs first: half its identity budget, the rest
+ *  left for their descendants. */
+const MAX_EXPECTED_CHATS = CODEX_SHARED_RECOVERY_MAX_IDENTITIES / 2
+
 /** The chats a kept server still carries: each record whose current run names its relay. */
 export function codexExpectedChats(relayId: string): CodexRecoveredChat[] {
-  return providerRelayRunsPlacedOn(relayId).flatMap(({ record, placement }) => {
+  const runs = providerRelayRunsPlacedOn(relayId)
+    .toSorted((a, b) => b.record.lease.lastRenewedAt - a.record.lease.lastRenewedAt)
+    .slice(0, MAX_EXPECTED_CHATS)
+  return runs.flatMap(({ record, placement }) => {
     const threadId = codexThreadOf(record)
     return threadId && placement.workload
       ? [{ sessionId: record.sessionId, threadId, workload: placement.workload }]

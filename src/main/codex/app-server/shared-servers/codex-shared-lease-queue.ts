@@ -58,10 +58,11 @@ export class CodexSharedLeaseQueue {
   /** Every held frame, in order, for another holder; nothing is refused. */
   take(): CodexSharedServerFrame[] {
     const taken = this.frames.slice(this.head).flatMap((slot) => (slot ? [slot.frame] : []))
-    this.owner.backlog(-this.heldBytes)
+    const held = this.heldBytes
     this.frames = []
     this.head = 0
     this.heldBytes = 0
+    this.owner.backlog(-held)
     return taken
   }
 
@@ -72,10 +73,11 @@ export class CodexSharedLeaseQueue {
         this.owner.refuse(slot.frame)
       }
     }
-    this.owner.backlog(-this.heldBytes)
+    const held = this.heldBytes
     this.frames = []
     this.head = 0
     this.heldBytes = 0
+    this.owner.backlog(-held)
   }
 
   drain(): void {

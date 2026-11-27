@@ -139,21 +139,22 @@ async function connected(client: DaemonClient | null): Promise<DaemonClient | nu
 
 /**
  * A shared agent kept from before this app started, attached once for every chat it serves from
- * its last acked line. Null when it can't be attached now; the caller decides what that means.
+ * its last acked line. One that can't be attached refuses the launch: it may still run, and a
+ * direct spawn beside it would be a second writer on its chats' threads.
  */
 async function attachSharedRelay(
   relay: KeptProviderRelay,
   launch: ProviderRelayLaunch
-): Promise<RelayedProviderProcess | null> {
+): Promise<RelayedProviderProcess> {
   const { channel, info } = relay
   if (!keptProviderRelayAttachable(info) || !(await connected(channel.client))) {
-    return null
+    throw new KeptProviderRelayUnreachableError(launch.chatKey)
   }
   const child = relayedChild(channel, info.relayId, info.pid, launch, launch.passWhileHeld)
   const attach = await child.start(info.ackedSeq).catch(() => null)
   if (!attach || attach.exit !== null) {
     channel.release(info.relayId)
-    return null
+    throw new KeptProviderRelayUnreachableError(launch.chatKey)
   }
   relayOf.set(child, relay)
   reattachedChildren.add(child)
@@ -261,12 +262,12 @@ export async function launchRelayedProviderProcess(
 ): Promise<RelayedProviderProcess | null> {
   handedBack.delete(relay.chatKey)
   forgetProviderRelayRunPlacement(relay.chatKey)
+  if (relay.attach) {
+    return attachSharedRelay(relay.attach, relay)
+  }
   const installed = providerRelayRoute()
   if (!installed) {
     return null
-  }
-  if (relay.attach) {
-    return attachSharedRelay(relay.attach, relay)
   }
   // Only the last run's own daemon start (or proof) says whether a second agent may start.
   const verdict = await providerRelayRunGate(relay.chatKey, 'gone')

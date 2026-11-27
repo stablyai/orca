@@ -5,11 +5,13 @@ import { providerRelayRoute } from './provider-relay-route'
 import { RELAYED_CHILD_HANDED_OFF, type RelayedProviderChild } from './relayed-provider-child'
 import type { ProviderRelayCarriedWork } from './provider-relay-carried-work'
 import {
-  noteSharedProviderRelayAttached,
-  providerRelayAgentShared,
   rememberKeptProviderRelay,
   type KeptProviderRelay
 } from './provider-relay-launch-inventory'
+import {
+  noteSharedProviderRelayAttached,
+  providerRelayAgentShared
+} from './provider-relay-shared-agents'
 import {
   pooledProviderRelayChat,
   pooledProviderRelayChatsPresent,

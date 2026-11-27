@@ -52,6 +52,8 @@ export class CodexSharedServerRecovery {
   private readonly groupOf = new Map<string, RecoveryGroup>()
   private readonly bySession = new Map<string, RecoveryGroup>()
   private heldBytes = 0
+  /** The reattach couldn't list every loaded thread: an unknown thread's frames are held too. */
+  discoveryPartial = false
 
   constructor(
     /** Answers a request no chat will take, so Codex doesn't wait on it. */
@@ -103,6 +105,14 @@ export class CodexSharedServerRecovery {
     this.boundIdentities()
   }
 
+  /** Frames this group held were dropped before (a hand-back keeps its claim's cut). */
+  markCut(threadId: string): void {
+    const group = this.groupOf.get(threadId)
+    if (group) {
+      group.cut = true
+    }
+  }
+
   /** A loaded thread whose owner can't be told yet: a provisional owner of its own group. */
   holdUnowned(threadId: string): void {
     if (!this.groupOf.has(threadId)) {
@@ -136,6 +146,9 @@ export class CodexSharedServerRecovery {
   }
 
   hold(threadId: string, frame: CodexSharedServerFrame): boolean {
+    if (this.discoveryPartial && !this.groupOf.has(threadId)) {
+      this.holdUnowned(threadId)
+    }
     const group = this.groupOf.get(threadId)
     if (!group) {
       return false
@@ -152,8 +165,8 @@ export class CodexSharedServerRecovery {
   floor(): number | null {
     let floor: number | null = null
     for (const group of this.groups.values()) {
-      const seq = group.frames.find((held) => held.frame.seq !== undefined)?.frame.seq
-      if (seq !== undefined && seq !== null && (floor === null || seq < floor)) {
+      const seq = group.frames.find((held) => typeof held.frame.seq === 'number')?.frame.seq
+      if (typeof seq === 'number' && (floor === null || seq < floor)) {
         floor = seq
       }
     }

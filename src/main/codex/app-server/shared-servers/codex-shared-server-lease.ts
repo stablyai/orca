@@ -235,6 +235,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
       this.host.refuse(frame)
       return
     }
+    this.host.relay?.dispatched(this)
     dispatchCodexLeaseFrame(this.handlers, frame, (error) => this.fail(error, true))
   }
 

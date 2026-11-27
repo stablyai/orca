@@ -63,6 +63,8 @@ export type CodexSharedLeaseRelay = {
     lease: CodexSharedServerLease,
     open: Record<string, string[][]> | null
   ) => Promise<void>
+  /** The chat was handed a frame its journal may not hold yet. */
+  dispatched: (lease: CodexSharedServerLease) => void
   /** A reattach that couldn't finish: its threads and frames wait for the chat's next open. */
   handBack: (lease: CodexSharedServerLease, frames: CodexSharedServerFrame[]) => void
 }

@@ -9,19 +9,16 @@ import {
   readSource,
   SOFT_READ_TIMEOUT_MS
 } from '../../structured/threads/codex-kept-loaded-threads'
-import {
-  stopCodexSharedChatWorkload,
-  unsubscribeCodexThreads,
-  type CodexSharedServerProcessSweep
-} from './codex-shared-server-chat-workload'
+import type { CodexSharedServerProcessSweep } from './codex-shared-server-chat-workload'
+import { endCodexSharedThreads } from './codex-shared-server-thread-end'
+import { CODEX_SHARED_REATTACH_READS } from './codex-shared-server-reattach'
+import { mapSettledWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import type { CodexSharedServerFrame } from './codex-shared-server-frames'
 import type { CodexSharedLeaseRelay } from './codex-shared-lease-host'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
 import type { CodexRecoveredGroup, CodexSharedServerRecovery } from './codex-shared-server-recovery'
 import type { CodexSharedServerRouter } from './codex-shared-server-router'
 import type { CodexSharedRelayAcks } from './codex-shared-server-relay'
-
-const CLEANUP_TIMEOUT_MS = 5_000
 
 type Work = Record<string, string[][]>
 
@@ -71,9 +68,34 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
   endedWork = () => this.relay?.endedWork()
   recordSeq = () => this.relay?.recordSeq?.() ?? null
 
+  /** Chats handed frames since their journal last held them all; only these are asked to save. */
+  private readonly unsaved = new Set<CodexSharedServerLease>()
+  /** Chats with frames queued (paused, held, or handed off); only these can hold the floor. */
+  private readonly queued = new Set<CodexSharedServerLease>()
+  /** A handed-off chat's last save; the final ack waits for it. */
+  private readonly quitSaves = new Map<CodexSharedServerLease, Promise<boolean>>()
+
+  dispatched(lease: CodexSharedServerLease): void {
+    this.unsaved.add(lease)
+  }
+
+  queueChanged(lease: CodexSharedServerLease): void {
+    if (lease.queue.pending > 0) {
+      this.queued.add(lease)
+    } else {
+      this.queued.delete(lease)
+    }
+  }
+
+  /** A chat left the server: it holds nothing for the acks any more. */
+  forget(lease: CodexSharedServerLease): void {
+    this.unsaved.delete(lease)
+    this.queued.delete(lease)
+  }
+
   floor = (): number | null => {
     let floor = this.server.router.floor()
-    for (const lease of this.server.leases) {
+    for (const lease of this.queued) {
       const seq = lease.queue.firstSeq()
       if (seq !== null && (floor === null || seq < floor)) {
         floor = seq
@@ -83,11 +105,21 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
   }
 
   durable = async (force: boolean): Promise<boolean> => {
-    // A chat quit handed off saved everything it was handed then, and is handed nothing since.
-    const chats = [...this.server.leases].flatMap((lease) =>
-      lease.handedOff || lease.sessionId === null ? [] : [lease.sessionId]
-    )
-    const saved = await Promise.all(chats.map((chat) => providerRelayChatDurable(chat, force)))
+    // A chat quit handed off is handed nothing more: its own last save stands for it.
+    const asked = [...this.unsaved].filter((lease) => !lease.handedOff)
+    this.unsaved.clear()
+    const saved = await Promise.all([
+      ...asked.map(async (lease) => {
+        const ok =
+          lease.sessionId === null ||
+          (await providerRelayChatDurable(lease.sessionId, force).catch(() => false))
+        if (!ok && this.server.leases.has(lease)) {
+          this.unsaved.add(lease)
+        }
+        return ok
+      }),
+      ...this.quitSaves.values()
+    ])
     return saved.every(Boolean)
   }
 
@@ -99,9 +131,12 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
     lease.handedOff = true
     lease.unregister()
     this.quitOpen = mergeWork(this.quitOpen === undefined ? {} : this.quitOpen, open)
-    if (lease.sessionId !== null) {
-      await providerRelayChatDurable(lease.sessionId, true).catch(() => false)
-    }
+    const saved =
+      lease.sessionId === null
+        ? Promise.resolve(true)
+        : providerRelayChatDurable(lease.sessionId, true).catch(() => false)
+    this.quitSaves.set(lease, saved)
+    await saved
     this.settleQuit()
   }
 
@@ -130,9 +165,14 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
     const chat = lease.restored?.chat
     const threads = this.server.router.handBack(lease)
     this.server.leases.delete(lease)
+    this.forget(lease)
+    this.quitSaves.delete(lease)
     if (chat && !this.server.exited) {
       const { recovery } = this.server
       recovery.expect(chat)
+      if (lease.recoveryCut) {
+        recovery.markCut(chat.threadId)
+      }
       for (const threadId of threads) {
         if (threadId !== chat.threadId) {
           recovery.join(threadId, chat.threadId)
@@ -160,25 +200,35 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
     if (!connection || connection.closed) {
       return
     }
-    for (const root of this.server.recovery.dueUnresolved()) {
-      const source = await readSource(connection, root, SOFT_READ_TIMEOUT_MS).catch(() => null)
-      if (!source || !this.server.recovery.holds(root)) {
-        continue
+    await mapSettledWithConcurrency(
+      this.server.recovery.dueUnresolved(),
+      CODEX_SHARED_REATTACH_READS,
+      async (root) => {
+        const source = await readSource(connection, root, SOFT_READ_TIMEOUT_MS).catch(() => null)
+        if (!source || !this.server.recovery.holds(root)) {
+          return
+        }
+        if (source.parentThreadId) {
+          this.server.router.ownerFound(root, source.parentThreadId)
+        } else {
+          await this.letGo(this.server.recovery.take(root))
+        }
       }
-      if (source.parentThreadId) {
-        this.server.router.ownerFound(root, source.parentThreadId)
-      } else {
-        await this.letGo(this.server.recovery.take(root))
-      }
-    }
+    )
     this.server.ended()
   }
 
-  /** Threads the reattach found no chat wants. */
-  async unsubscribe(threads: readonly string[]): Promise<void> {
+  /** Threads no chat will take back: their turns and commands end, and Codex lets them go. */
+  async endThreads(threads: readonly string[], workload: string | null): Promise<void> {
     const connection = this.server.physicalConnection
-    if (connection && threads.length > 0) {
-      await unsubscribeCodexThreads(connection, threads, CLEANUP_TIMEOUT_MS).catch(() => false)
+    if (connection) {
+      await endCodexSharedThreads({
+        connection,
+        threads,
+        workload,
+        serverPid: this.server.pid,
+        ...(this.server.sweep ? { sweep: this.server.sweep } : {})
+      }).catch(() => {})
     }
   }
 
@@ -187,20 +237,10 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
       return
     }
     this.server.recovery.drop(released)
-    const threads = released.threads.map(([threadId]) => threadId)
-    const connection = this.server.physicalConnection
-    if (released.chat && connection && !connection.closed) {
-      await stopCodexSharedChatWorkload({
-        rpc: connection,
-        threads,
-        leaseId: released.chat.workload,
-        serverPid: this.server.pid,
-        ...(this.server.sweep ? { sweep: this.server.sweep } : {}),
-        ...(connection.watcherPid !== undefined ? { watcherPid: connection.watcherPid } : {}),
-        timeoutMs: CLEANUP_TIMEOUT_MS
-      }).catch(() => false)
-    }
-    await this.unsubscribe(threads)
+    await this.endThreads(
+      released.threads.map(([threadId]) => threadId),
+      released.chat?.workload ?? null
+    )
     this.server.ended()
   }
 }
