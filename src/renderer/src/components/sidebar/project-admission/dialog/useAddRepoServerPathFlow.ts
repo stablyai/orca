@@ -23,6 +23,8 @@ import {
 import { getWindowsPathAccess } from '@/lib/files/os-open/windows-path-access'
 import type { AddRepoPathOptions } from '@/store/repos/repo-state'
 import { addRepoBusyLabels } from './add-repo-busy-labels'
+import { useAppStore } from '@/store/index'
+import { enclosingGitRootOfChildFolder } from '../../../../../../shared/project/groups/nested-repo-child-folder'
 
 type ShowNestedRepoReview = (args: {
   scan: NestedRepoScanResult
@@ -181,6 +183,19 @@ export function useAddRepoServerPathFlow({
               inProgress: false,
               scanId,
               runtimeEnvironmentId: activeRuntimeEnvironmentId
+            })
+            return
+          }
+          const enclosingGitRoot = scan ? enclosingGitRootOfChildFolder(scan) : null
+          if (enclosingGitRoot) {
+            // Why: Git registration would resolve a child folder to its repository root (#9314).
+            closeModal()
+            useAppStore.getState().openModal('confirm-non-git-folder', {
+              folderPath: path,
+              enclosingGitRoot,
+              ...(activeRuntimeEnvironmentId
+                ? { runtimeEnvironmentId: activeRuntimeEnvironmentId }
+                : {})
             })
             return
           }

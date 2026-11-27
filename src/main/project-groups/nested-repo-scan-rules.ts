@@ -13,6 +13,7 @@ export type NestedRepoScanFilesystem = {
   basename: (path: string) => string
   hasGitMarker: (path: string) => Promise<boolean> | boolean
   isSelectedPathGitRepo: (path: string) => Promise<boolean> | boolean
+  resolveGitRoot?: (path: string) => Promise<string | null>
 }
 
 type IgnoreRule = {
