@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { isAbsolute } from 'node:path'
 import { resolveCallerLocalPath } from '../../shared/file-access/caller-local-path'
 import { getWslCallerDistro } from '../hosts/wsl-caller-distro'
 import { readStdin } from './flag-or-stdin-payload'
@@ -66,8 +67,12 @@ export async function readTextOrFileFlag(
 
 async function readBodyFile(path: string, cwd: string): Promise<string> {
   if (path !== '-') {
-    // A WSL caller's Linux path names a distro file; plain node:path reads it as C:\home\...
-    const resolved = resolveCallerLocalPath(path, cwd, getWslCallerDistro(cwd))
+    const wslDistro = getWslCallerDistro(cwd)
+    const isWslAbsolute = Boolean(wslDistro && path.startsWith('/') && !path.startsWith('//'))
+    // Keep native absolute paths unnormalized so symlinks before `..` resolve via the OS;
+    // a WSL caller's Linux path still translates to a distro UNC or drive path.
+    const resolved =
+      !isWslAbsolute && isAbsolute(path) ? path : resolveCallerLocalPath(path, cwd, wslDistro)
     try {
       return await readFile(resolved, 'utf8')
     } catch (error) {
