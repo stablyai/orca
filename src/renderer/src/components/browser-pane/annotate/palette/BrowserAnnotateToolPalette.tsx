@@ -423,7 +423,7 @@ export function BrowserAnnotateToolPalette({
             'pointer-events-none absolute z-40 rounded-md break-words border border-black/14 bg-floating-surface px-2 py-0.5 text-2xs shadow-[0_1px_2px_rgba(0,0,0,0.12)] backdrop-blur-[14px] dark:border-white/16',
             'transition-opacity duration-100',
             seeThrough && 'opacity-15',
-            hintIsError ? 'text-destructive' : 'text-muted-foreground'
+            hintIsError ? 'text-destructive' : 'text-popover-foreground/80'
           )}
           style={hintPlacement}
         >

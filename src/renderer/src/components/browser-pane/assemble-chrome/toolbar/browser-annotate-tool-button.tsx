@@ -81,12 +81,15 @@ function MenuToolRow({
 export function BrowserAnnotateToolMenuItems({
   tools,
   markup,
-  onDraw
+  onDraw,
+  afterGrab
 }: {
   /** Null where the page can't run the element picker; only Draw is offered. */
   tools: BrowserChromeElementTools | null
   markup: BrowserChromeMarkupTool
   onDraw?: () => void
+  /** A row between Grab and Draw, so menus keep the palette's Grab, Annotate, Draw order. */
+  afterGrab?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -101,6 +104,7 @@ export function BrowserAnnotateToolMenuItems({
           onSelect={() => tools.onStartIntent('copy')}
         />
       ) : null}
+      {afterGrab}
       <MenuToolRow
         icon={PenTool}
         label={t('auto.components.browser-pane.markup.drawButton', 'Draw on screenshot')}
@@ -156,6 +160,8 @@ export function BrowserAnnotateToolButton({
     markup.onToggle()
   }
   const hasNotes = Boolean(notes) && tools.annotationCount > 0
+  // A click opens Grab, so the button is named for the whole mode, not for Annotate.
+  const modeLabel = t('browser.toolbar.annotateMode', 'Annotate, grab or draw')
   // The palette over the page now carries the per-tool detail, so the button names the whole mode.
   const primaryTooltip = active
     ? t('browser.annotatePalette.doneTitle', 'Done (Esc)')
@@ -163,7 +169,7 @@ export function BrowserAnnotateToolButton({
       ? t('browser.toolbar.annotateModeWithShortcut', 'Annotate, grab or draw ({{value0}})', {
           value0: tools.annotateShortcutLabel
         })
-      : t('browser.toolbar.annotateMode', 'Annotate, grab or draw')
+      : modeLabel
 
   return (
     <MarkupDrawHintPopover open={showHint} onDismiss={dismissHint} onStart={startDraw}>
@@ -186,7 +192,7 @@ export function BrowserAnnotateToolButton({
                   size="icon-xs"
                   className="relative"
                   disabled={!active && tools.disabled}
-                  aria-label={annotateLabel}
+                  aria-label={modeLabel}
                   aria-pressed={active}
                   {...{ [BROWSER_ANNOTATE_BUTTON_ATTRIBUTE]: '' }}
                   // Same gestures as Reload: left click runs the tool, right click opens the menu.
@@ -221,15 +227,21 @@ export function BrowserAnnotateToolButton({
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="end" className="w-64">
-            <MenuToolRow
-              icon={SquareMousePointer}
-              label={annotateLabel}
-              shortcut={tools.annotateShortcutLabel}
-              checked={tools.activeIntent === 'annotate'}
-              disabled={tools.disabled}
-              onSelect={() => tools.onStartIntent('annotate')}
+            <BrowserAnnotateToolMenuItems
+              tools={tools}
+              markup={markup}
+              onDraw={startDraw}
+              afterGrab={
+                <MenuToolRow
+                  icon={SquareMousePointer}
+                  label={annotateLabel}
+                  shortcut={tools.annotateShortcutLabel}
+                  checked={tools.activeIntent === 'annotate'}
+                  disabled={tools.disabled}
+                  onSelect={() => tools.onStartIntent('annotate')}
+                />
+              }
             />
-            <BrowserAnnotateToolMenuItems tools={tools} markup={markup} onDraw={startDraw} />
             {notes && hasNotes ? (
               <>
                 <DropdownMenuSeparator />
