@@ -75,7 +75,7 @@ describe('a result posted away from the thread its automation was made in', () =
         postId: 'r1',
         channelId: 'C9',
         turnFor: 'owner',
-        text: '_From the automation “Weekly recap”, set up in the Slack thread in #design._\n\nAll green.'
+        text: '_From the automation “Weekly recap”, created in the Slack thread in #design._\n\nAll green.'
       }
     ])
   })

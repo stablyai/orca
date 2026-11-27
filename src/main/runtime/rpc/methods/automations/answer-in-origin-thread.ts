@@ -100,8 +100,11 @@ export function answerInOriginThread(
 }
 
 function overridden(where: string, flags: string[], inChat = false): string {
-  const how = inChat ? 'runs in this chat and answers' : 'posts its result'
-  return `Made while answering ${where}, so it ${how} there; ${flags.join(' and ')} didn't change that. To post in another channel instead, name it with --results-to channel:<channel>.`
+  const how = inChat ? 'runs in this chat and replies' : 'posts its result'
+  const why = flags.includes('--results-to')
+    ? " (--results-to named this thread's own channel)"
+    : ''
+  return `Made while answering ${where}, so it ${how} there: this overrode ${flags.join(' and ')}${why}. To post in a different channel instead, name that channel with --results-to channel:<channel>.`
 }
 
 /** The bot's own chat (not its Home Chat) whose running turn its thread owns; null otherwise. */

@@ -39,7 +39,7 @@ describe('an automation a thread turn makes answers under that thread', () => {
     )
     expect(target).toEqual({ ...base, ...inThreadChat })
     expect(note).toBe(
-      "Made while answering the Slack thread in #ui-ux-design, so it runs in this chat and answers there; --runs-in and --results-to didn't change that. To post in another channel instead, name it with --results-to channel:<channel>."
+      "Made while answering the Slack thread in #ui-ux-design, so it runs in this chat and replies there: this overrode --runs-in and --results-to (--results-to named this thread's own channel). To post in a different channel instead, name that channel with --results-to channel:<channel>."
     )
   })
 

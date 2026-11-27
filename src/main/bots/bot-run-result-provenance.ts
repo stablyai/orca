@@ -11,5 +11,5 @@ export function withProvenance(
   if (!origin) {
     return message
   }
-  return `_From the automation “${automation.name}”, set up in ${originThreadText(origin)}._\n\n${message}`
+  return `_From the automation “${automation.name}”, created in ${originThreadText(origin)}._\n\n${message}`
 }
