@@ -508,7 +508,7 @@
 3 src/main/git/command-runner/git-exec-file.ts
 4 src/main/git/command-runner/host-routing/git-command-resolution.ts
 1 src/main/git/command-runner/host-routing/wsl-aware-spawn.ts
-5 src/main/git/command-runner/host-routing/wsl-command-resolution.ts
+4 src/main/git/command-runner/host-routing/wsl-command-resolution.ts
 2 src/main/git/command-runner/host-routing/wsl-drive-checkout-git-routing.ts
 2 src/main/git/command-runner/host-routing/wsl-git-read-environment.ts
 9 src/main/git/command-runner/host-routing/wsl-windows-checkout-git-probe.ts
