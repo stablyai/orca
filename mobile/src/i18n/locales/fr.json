@@ -5219,13 +5219,6 @@
     "wontFire": "Ne s’exécutera pas : nécessite le connecteur {{connectors}}"
   },
   "auto": {
-    "lib": {
-      "agent": {
-        "catalog": {
-          "doubao_label": "Doubao"
-        }
-      }
-    },
     "components": {
       "automations": {
         "automation": {
@@ -5362,6 +5355,11 @@
       }
     },
     "lib": {
+      "agent": {
+        "catalog": {
+          "doubao_label": "Doubao"
+        }
+      },
       "rateLimits": {
         "errors": {
           "opencodeInvalidWorkspaceId": "Format d'ID d'espace de travail invalide",

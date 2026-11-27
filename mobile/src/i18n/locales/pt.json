@@ -5454,13 +5454,6 @@
     "wontFire": "Não vai executar: precisa do conector {{connectors}}"
   },
   "auto": {
-    "lib": {
-      "agent": {
-        "catalog": {
-          "doubao_label": "Doubao"
-        }
-      }
-    },
     "components": {
       "automations": {
         "automation": {
@@ -5597,6 +5590,11 @@
       }
     },
     "lib": {
+      "agent": {
+        "catalog": {
+          "doubao_label": "Doubao"
+        }
+      },
       "rateLimits": {
         "errors": {
           "opencodeInvalidWorkspaceId": "Formato de ID do espaço de trabalho inválido",

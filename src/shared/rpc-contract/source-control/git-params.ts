@@ -1,6 +1,7 @@
 import { isGitHistoryRefName } from '../../git/history/git-history-revisions'
 import { normalizeSourceControlAiActionDefaults } from '../../source-control/ai/recipes/source-control-ai-actions'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
 import { OptionalTuiAgent } from '../workspaces/worktree-params'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
@@ -214,11 +215,13 @@ export const GitGenerateCommitMessage = WorktreeSelector.extend({
   commitMessageDiscoveryHostKey: z.string().optional()
 })
 
-export const GitDiscoverCommitMessageModels = WorktreeSelector.extend({
-  agentId: z.string().min(1, 'Missing agent id'),
-  expectedConnectionId: z.string().trim().min(1).max(1024).optional(),
-  agentCmdOverrides: z.record(z.string(), z.string()).optional()
-})
+export const GitDiscoverCommitMessageModels = lazyZodSchema(() =>
+  WorktreeSelector.extend({
+    agentId: z.string().min(1, 'Missing agent id'),
+    expectedConnectionId: z.string().trim().min(1).max(1024).optional(),
+    agentCmdOverrides: z.record(z.string(), z.string()).optional()
+  })
+)
 
 export const GitGeneratePullRequestFields = GitGenerateCommitMessage.extend({
   base: z.string().min(1, 'Missing base branch'),
