@@ -46,7 +46,11 @@ function charsetOf(contentType: string): string | null {
 
 function sniffMetaCharset(body: Buffer, contentType: string): string | null {
   // Latin-1 keeps every byte, and tag syntax is ASCII in any charset a page can declare this way.
-  for (const attributes of htmlTagAttributes(body.toString('latin1'), 'meta', isXhtml(contentType))) {
+  for (const attributes of htmlTagAttributes(
+    body.toString('latin1'),
+    'meta',
+    isXhtml(contentType)
+  )) {
     const charset =
       attributes.get('charset') ??
       (attributes.get('http-equiv')?.toLowerCase() === 'content-type'
@@ -63,7 +67,11 @@ function isXhtml(contentType: string): boolean {
   return contentType.split(';')[0].trim().toLowerCase() === 'application/xhtml+xml'
 }
 
-export function readLinkPreviewMetadata(html: string, pageUrl: URL, contentType = 'text/html'): LinkPreviewPageMetadata {
+export function readLinkPreviewMetadata(
+  html: string,
+  pageUrl: URL,
+  contentType = 'text/html'
+): LinkPreviewPageMetadata {
   const { meta, title: htmlTitle, iconHref } = readHtmlHead(html, isXhtml(contentType))
   const pick = (...names: string[]): string | null => {
     for (const name of names) {

@@ -43,14 +43,14 @@ function findRawTextEnd(html: string, name: string, from: number): number {
   if (escape === -1 || escape > closing) {
     return closing
   }
-  const close = /<!--|-->|<\/?script(?=[\t\n\f\r />])/gi
+  const close = /<!--(?:-*>)?|-->|<\/?script(?=[\t\n\f\r />])/gi
   close.lastIndex = escape
   let escaped = false
   let doubleEscaped = false
   for (let match = close.exec(html); match; match = close.exec(html)) {
     if (match[0] === '<!--') {
       escaped = true
-    } else if (match[0] === '-->') {
+    } else if (match[0].endsWith('>')) {
       escaped = false
       doubleEscaped = false
     } else if (match[0][1] === '/') {
@@ -109,9 +109,10 @@ function* htmlTags(html: string, wanted: Set<string>, xml: boolean): Generator<H
         open.lastIndex = less
       } else {
         // The scan detects quoted `>` and inert openers, so the previous delimiter ends ordinary tags.
-        open.lastIndex = less === next.index
-          ? less
-          : html.indexOf('<', Math.max(open.lastIndex, html.lastIndexOf('>', next.index - 1) + 1))
+        open.lastIndex =
+          less === next.index
+            ? less
+            : html.indexOf('<', Math.max(open.lastIndex, html.lastIndexOf('>', next.index - 1) + 1))
       }
     }
     const match = open.exec(html)
@@ -119,9 +120,10 @@ function* htmlTags(html: string, wanted: Set<string>, xml: boolean): Generator<H
       return
     }
     if (match[0] === '<!--' || match[0] === '<!' || match[0] === '<?') {
-      const end = match[0] === '<!--'
-        ? findCommentEnd(html, open.lastIndex)
-        : html.indexOf('>', open.lastIndex)
+      const end =
+        match[0] === '<!--'
+          ? findCommentEnd(html, open.lastIndex)
+          : html.indexOf('>', open.lastIndex)
       if (end === -1) {
         return
       }
@@ -173,7 +175,11 @@ function readAttributes(tag: string): Map<string, string> {
 }
 
 /** Attributes of each `<tagName ...>` in document order; stops at the first unclosed tag. */
-export function* htmlTagAttributes(html: string, tagName: string, xml = false): Generator<Map<string, string>> {
+export function* htmlTagAttributes(
+  html: string,
+  tagName: string,
+  xml = false
+): Generator<Map<string, string>> {
   for (const { attributesStart, end } of htmlTags(html, new Set([tagName.toLowerCase()]), xml)) {
     yield readAttributes(html.slice(attributesStart, end))
   }
@@ -197,7 +203,10 @@ export function findIconHref(html: string, xml = false): string | null {
   return null
 }
 
-export function readHtmlHead(html: string, xml = false): {
+export function readHtmlHead(
+  html: string,
+  xml = false
+): {
   meta: Map<string, string>
   title: string | null
   iconHref: string | null

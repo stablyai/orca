@@ -12,6 +12,7 @@ it('reads live metadata after comments, script text and quoted tag attributes', 
     </div data-example='<meta name="description" content="End tag example">'>
     <div data-x="unclosed <div></div>text = " unclosed text <meta property="og:title" content="Attribute after nested close">
     <title-widget>Custom element</title-widget><link-custom rel="icon" href="/custom.ico">
+    <script><!--><script></script><script><!---><script></script>
     <title data-note=">">Café &amp; tools</title>
     <div data-x=a="><meta name="description" content="Actual description"><link rel="icon" href="/actual.ico">`
   expect(readLinkPreviewMetadata(html, pageUrl)).toEqual({
@@ -24,13 +25,16 @@ it('reads live metadata after comments, script text and quoted tag attributes', 
 })
 
 it('uses a live charset beyond 64 KB instead of an earlier commented declaration', () => {
-  const html = '<!-- <meta charset="utf-8"> -->' + ' '.repeat(70 * 1024) +
+  const html =
+    '<!-- <meta charset="utf-8"> -->' +
+    ' '.repeat(70 * 1024) +
     '<meta charset="windows-1252"><title>Café</title>'
   expect(decodeHtmlBody(Buffer.from(html, 'latin1'), 'text/html')).toContain('<title>Café</title>')
 })
 
 it('keeps XHTML empty scripts distinct from HTML raw-text scripts', () => {
-  const head = '<!-- <title>Removed</title> --><script src="/boot.js"/><title>XML title</title>' +
+  const head =
+    '<!-- <title>Removed</title> --><script src="/boot.js"/><title>XML title</title>' +
     '<meta name="description" content="XML description"><link rel="icon" href="/xml.ico"/>'
   expect(readLinkPreviewMetadata(head, pageUrl, 'application/xhtml+xml; charset=utf-8')).toEqual({
     title: 'XML title',
