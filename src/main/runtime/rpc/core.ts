@@ -202,7 +202,8 @@ export type RpcContext = {
     /** Tags this socket with the caller's installation until it closes. */
     declare(clientInstanceId: string): void
   }
-  // Authenticated runtime devices may manage only their own delegated phones.
+  // Authenticated runtime devices manage the phones of the installation they name. A claim is enough:
+  // the same device can already open a terminal here and revoke any device as this host's owner.
   delegatedMobileDevices?: {
     sync(
       phones: readonly DelegatedPhone[],
