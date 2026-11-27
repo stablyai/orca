@@ -40,6 +40,8 @@ export type TrashEntry = {
   movedAt: number
   /** Bytes a recheck already matched, while both files keep these keys. */
   progress?: { key: string; matched: number }
+  /** Both files' keys when a recheck last passed; unchanged, the next launch skips the read. */
+  passed?: string
 }
 
 const STRING_FIELDS = ['name', 'from', 'original', 'copyKey', 'originalKey'] as const

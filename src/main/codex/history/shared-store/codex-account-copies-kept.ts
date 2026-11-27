@@ -78,11 +78,17 @@ export function writeKeptCopies(
 ): void {
   const target = join(accountHome, KEPT_COPIES_FILE)
   const staged = `${target}.${process.pid}.tmp`
+  const text = `${JSON.stringify({ version: 1, differs, settled, progress, verified })}\n`
   try {
-    writeFileSync(
-      staged,
-      `${JSON.stringify({ version: 1, differs, settled, progress, verified })}\n`
-    )
+    // A launch that learned nothing new leaves the file alone.
+    if (readFileSync(target, 'utf8') === text) {
+      return
+    }
+  } catch {
+    // Missing: written below.
+  }
+  try {
+    writeFileSync(staged, text)
     renameSync(staged, target)
   } catch {
     try {

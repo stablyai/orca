@@ -1,12 +1,4 @@
-import {
-  type BigIntStats,
-  linkSync,
-  lstatSync,
-  mkdirSync,
-  readdirSync,
-  rmdirSync,
-  unlinkSync
-} from 'node:fs'
+import { type BigIntStats, linkSync, lstatSync, mkdirSync, rmdirSync, unlinkSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { rolloutTwinPath } from '../rollouts/codex-rollout-compressed-twin'
 import { originalHoldsCopy } from './codex-account-copy-content'
@@ -110,8 +102,10 @@ export function recheckTrashedCopies(args: {
       bytesRead += n
     }
   }
+  // Passed last launch but not deleted (open, say): offered after fresh copies, without a read.
+  const retries: VerifiedCopy[] = []
   for (const list of lists) {
-    if (ready.length >= MAX_READY_PER_HOME || Date.now() > args.deadline) {
+    if (Date.now() > args.deadline) {
       tally.deferred += 1
       continue
     }
@@ -133,17 +127,18 @@ export function recheckTrashedCopies(args: {
         changed = true
         continue
       }
-      const before = entry.progress?.matched
+      const before = `${entry.progress?.matched}|${entry.passed}`
       let reason: keyof CopiesTally | null
       try {
-        reason =
-          ready.length >= MAX_READY_PER_HOME
-            ? 'deferred'
-            : recheckOne(args, entry, list.name, path, stats, ready, budget)
+        reason = recheckOne(args, entry, list.name, path, stats, {
+          ready: ready.length < MAX_READY_PER_HOME ? ready : null,
+          retries,
+          budget
+        })
       } catch {
         reason = 'error'
       }
-      changed ||= entry.progress?.matched !== before
+      changed ||= `${entry.progress?.matched}|${entry.passed}` !== before
       if (reason === null) {
         // Listed until its delete.
         next.push(entry)
@@ -171,6 +166,8 @@ export function recheckTrashedCopies(args: {
       writeList(trash, list.name, next)
     }
   }
+  ready.push(...retries.slice(0, Math.max(0, MAX_READY_PER_HOME - ready.length)))
+  tally.deferred += Math.max(0, retries.length - MAX_READY_PER_HOME)
   return { ready, tally, bytesRead }
 }
 
@@ -184,9 +181,14 @@ function recheckOne(
   list: string,
   path: string,
   stats: BigIntStats,
-  ready: VerifiedCopy[],
-  budget: { left: () => number; spend: (bytes: number) => void }
+  out: {
+    /** Null once this launch has enough fresh copies: the rest wait, unread. */
+    ready: VerifiedCopy[] | null
+    retries: VerifiedCopy[]
+    budget: { left: () => number; spend: (bytes: number) => void }
+  }
 ): keyof CopiesTally | null {
+  const { ready, budget } = out
   if (
     !stats.isFile() ||
     !isInsideHome(args.accountHome, path) ||
@@ -215,10 +217,22 @@ function recheckOne(
   if (stats.size > original.size) {
     return 'differs'
   }
-  if (Date.now() > args.deadline) {
+  const pairKey = `${trashKey(stats)}|${fileKey(original)}`
+  const copy: VerifiedCopy = {
+    copy: path,
+    original: entry.original,
+    copyKey: trashKey(stats),
+    originalKey: fileKey(original),
+    list
+  }
+  // The delete rechecks both keys right before unlinking: unchanged keys mean unchanged bytes.
+  if (entry.passed === pairKey) {
+    out.retries.push(copy)
+    return null
+  }
+  if (!ready || Date.now() > args.deadline) {
     return 'deferred'
   }
-  const pairKey = `${trashKey(stats)}|${fileKey(original)}`
   const from = entry.progress?.key === pairKey ? entry.progress.matched : 0
   const allowance = Math.min(Number(stats.size) - from, Math.floor((budget.left() - 1) / 2))
   if (allowance <= 0 && Number(stats.size) > from) {
@@ -248,13 +262,8 @@ function recheckOne(
   if (!result.holds) {
     return 'differs'
   }
-  ready.push({
-    copy: path,
-    original: entry.original,
-    copyKey: trashKey(stats),
-    originalKey: fileKey(original),
-    list
-  })
+  entry.passed = pairKey
+  ready.push(copy)
   return null
 }
 
@@ -306,9 +315,9 @@ export function deleteTrashedCopies(accountHome: string, copies: VerifiedCopy[])
       )
     }
   }
-  // Empty: the folder goes; anything else in it keeps it.
+  // Empty: the folder goes; anything else in it keeps it (rmdir fails, unlisted).
   try {
-    if (deletedByList.size > 0 && readdirSync(trash).length === 0) {
+    if (deletedByList.size > 0) {
       rmdirSync(trash)
     }
   } catch {

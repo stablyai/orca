@@ -11,6 +11,7 @@ import { distinctFolders } from '../bridges/codex-legacy-session-copy-writer-loc
 import { holdThreadLockFolders, WRITER_LOCKS } from './codex-thread-writer-locks'
 import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { addTally, emptyTally, type CopiesTally } from './codex-account-copies-tally'
+import type { VerifiedCopy } from './codex-account-copy-checks'
 import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-move-telemetry'
 import type {
   CodexAccountCopiesRequest,
@@ -208,6 +209,8 @@ export async function cleanUpCodexAccountCopies(args: {
     // The account's lock folder is linked to the store's once its history moved: one folder.
     const moveDeadline = Date.now() + MOVE_MS_PER_HOME
     let trashedHere = 0
+    // Noted once per home after its batches: the note rewrites the home's kept-copies record.
+    const aclKeptHere: VerifiedCopy[] = []
     const lockFolders = await distinctFolders([
       join(args.storeHome, WRITER_LOCKS),
       join(accountHome, WRITER_LOCKS)
@@ -228,10 +231,7 @@ export async function cleanUpCodexAccountCopies(args: {
         total.open += checked.verified.length - start
         break
       }
-      const aclKept = batch.filter((copy) => withAcl.has(copy.copy))
-      if (aclKept.length > 0) {
-        await args.worker.call({ op: 'remember-acl', accountHome, copies: aclKept })
-      }
+      aclKeptHere.push(...batch.filter((copy) => withAcl.has(copy.copy)))
       const candidates = batch.filter((copy) => !withAcl.has(copy.copy))
       total.open += batch.length - candidates.length
       if (candidates.length === 0) {
@@ -305,6 +305,9 @@ export async function cleanUpCodexAccountCopies(args: {
         }
         await hold.release()
       }
+    }
+    if (aclKeptHere.length > 0 && !args.shouldStop()) {
+      await args.worker.call({ op: 'remember-acl', accountHome, copies: aclKeptHere })
     }
     // Once per home and outside the locks: empty folders only, so Codex never waits on the walk.
     if (trashedHere > 0 && !args.shouldStop()) {
