@@ -40,6 +40,13 @@ type UpdateSearchState = (updates: {
 type ExecuteSearchOptions = {
   /** Seeded searches (search selection, Find in Folder) are explicit, so they run at any length. */
   allowShortQuery?: boolean
+  /** Time already waited since the keystroke, taken off the debounce. */
+  waitedMs?: number
+}
+
+type CancelSearchOptions = {
+  /** A caller-held scan was owed too, so the stored results no longer belong to the live query. */
+  interrupted?: boolean
 }
 
 type UseFileSearchRunnerArgs = {
@@ -54,9 +61,9 @@ export function useFileSearchRunner({
   updateActiveSearchState
 }: UseFileSearchRunnerArgs): {
   executeSearch: (query: string, options?: ExecuteSearchOptions) => void
-  cancelPendingSearch: () => void
+  cancelPendingSearch: (options?: CancelSearchOptions) => void
   /** Stops a debouncing or running scan without touching the store, for a caller that reruns soon. */
-  stopSearch: () => void
+  stopSearch: () => boolean
 } {
   const runtimeEnvironmentId = useAppStore((state) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(state, activeWorktreeId)
@@ -72,6 +79,7 @@ export function useFileSearchRunner({
   const searchControllerRef = useRef<AbortController | null>(null)
 
   const stopSearch = useCallback(() => {
+    const interrupted = searchControllerRef.current !== null || searchTimerRef.current !== null
     searchControllerRef.current?.abort()
     searchControllerRef.current = null
     latestSearchIdRef.current += 1
@@ -79,22 +87,26 @@ export function useFileSearchRunner({
       clearTimeout(searchTimerRef.current)
       searchTimerRef.current = null
     }
+    return interrupted
   }, [])
 
-  const cancelPendingSearch = useCallback(() => {
-    const interrupted = searchControllerRef.current !== null || searchTimerRef.current !== null
-    stopSearch()
-    updateActiveSearchState({
-      loading: false,
-      // Why: an ownerless leftover error would read as a skipped-scan notice on the next mount.
-      ...(interrupted ? { results: null, resultOwner: null, error: null } : {})
-    })
-  }, [stopSearch, updateActiveSearchState])
+  const cancelPendingSearch = useCallback(
+    (options?: CancelSearchOptions) => {
+      const interrupted = stopSearch() || options?.interrupted === true
+      updateActiveSearchState({
+        loading: false,
+        // Why: an ownerless leftover error would read as a skipped-scan notice on the next mount.
+        ...(interrupted ? { results: null, resultOwner: null, error: null } : {})
+      })
+    },
+    [stopSearch, updateActiveSearchState]
+  )
 
   const executeSearch = useCallback(
     (query: string, options?: ExecuteSearchOptions) => {
       stopSearch()
       const searchId = latestSearchIdRef.current
+      const debounceMs = Math.max(0, SEARCH_DEBOUNCE_MS - (options?.waitedMs ?? 0))
 
       // Why: typing shares this field with the name filter, so every store write waits for the pause.
       searchTimerRef.current = setTimeout(async () => {
@@ -221,7 +233,7 @@ export function useFileSearchRunner({
             updateActiveSearchState({ loading: false })
           }
         }
-      }, SEARCH_DEBOUNCE_MS)
+      }, debounceMs)
     },
     [
       activeWorktreeId,

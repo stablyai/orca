@@ -89,10 +89,11 @@ export function useCombinedSearch({
     worktreePath,
     updateActiveSearchState
   })
-  const { requestTextSearch, dropQueuedTextSearch } = useNamesFirstTextSearch({
+  const { requestTextSearch, cancelTextSearch } = useNamesFirstTextSearch({
     namesSettled: !namesLoading,
     executeSearch,
-    stopSearch
+    stopSearch,
+    cancelPendingSearch
   })
   // An explicit seed may search one character; typing never does.
   const [forcedShortQuery, setForcedShortQuery] = useState<string | null>(() =>
@@ -105,7 +106,7 @@ export function useCombinedSearch({
   const isCurrentOwner = useFileSearchScope({
     activeWorktreeId,
     worktreePath,
-    cancelPendingSearch,
+    cancelPendingSearch: cancelTextSearch,
     updateActiveSearchState
   })
 
@@ -118,10 +119,11 @@ export function useCombinedSearch({
       isCurrentOwner
     })
   const hasQuery = query.trim().length > 0
-  // The notice holds for the whole search session; dropping it while each pause's rerun is pending
-  // would re-announce it on every keystroke. A remount (workspace or owner change) starts fresh.
+  // The notice holds while each pause's rerun is pending; dropping it then would re-announce it on
+  // every keystroke. A scan that settles without it clears it. A remount (workspace or owner change)
+  // starts fresh.
   const [sessionNotice, setSessionNotice] = useState('')
-  const nextSessionNotice = hasQuery ? (textNotice ?? sessionNotice) : ''
+  const nextSessionNotice = hasQuery ? (textNotice ?? (textPending ? sessionNotice : '')) : ''
   if (nextSessionNotice !== sessionNotice) {
     setSessionNotice(nextSessionNotice)
   }
@@ -154,12 +156,11 @@ export function useCombinedSearch({
   const clearQuery = useCallback(() => {
     setQuery('')
     setForcedShortQuery(null)
-    dropQueuedTextSearch()
-    cancelPendingSearch()
+    cancelTextSearch()
     if (activeWorktreeId) {
       clearFileSearch(activeWorktreeId)
     }
-  }, [activeWorktreeId, cancelPendingSearch, clearFileSearch, dropQueuedTextSearch, setQuery])
+  }, [activeWorktreeId, cancelTextSearch, clearFileSearch, setQuery])
 
   // The latest draft for activation guards that run after the render that built the rows.
   const liveQueryRef = useRef(query)
