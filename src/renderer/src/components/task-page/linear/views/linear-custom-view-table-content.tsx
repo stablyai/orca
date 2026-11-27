@@ -31,7 +31,7 @@ function LinearCustomViewTableSkeleton(): React.JSX.Element {
         <div
           key={index}
           className={cn(
-            'grid gap-3 px-3 py-3 md:grid-cols-[minmax(220px,1.5fr)_120px_120px_120px_130px_60px]',
+            'grid gap-3 px-3 py-3 grid-cols-[minmax(220px,1.5fr)_120px_120px_120px_130px_60px]',
             LIST_TABLE_SPAN_TRACKS_CLASS
           )}
         >
@@ -90,7 +90,7 @@ export function LinearCustomViewTableContent({
   }
 
   return (
-    <div className="min-w-[680px] divide-y divide-border/50">
+    <div className="divide-y divide-border/50">
       {views.map((view) => {
         const selected = view.id === selectedViewId
         const workspace = linearProjectWorkspaceLabel(workspaceSelection, view.workspaceName)

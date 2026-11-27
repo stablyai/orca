@@ -4,6 +4,7 @@ import { ChevronDown, FolderOpen, ArrowRight, ExternalLink } from 'lucide-react'
 import { findLinearIssueWorkspaceAttachmentInIndex } from '@/lib/work-items/linear/linear-issue-workspace-attachment'
 import { getWorktreeAttachmentLabel } from '@/lib/workspace/display/worktree-attachment-label'
 import { cn } from '@/lib/class-names'
+import { LIST_TABLE_SPAN_TRACKS_CLASS } from '@/lib/list-interaction/list-table-layout'
 import { LinearPriorityIcon } from '@/components/task-page/linear/issues/linear-priority-icon'
 import { LinearStateCell } from './task-page-linear-state-cell'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -32,7 +33,7 @@ export function TaskPageLinearIssueTable({
   } = model
   let sectionCollapsed = false
   return (
-    <div className="divide-y divide-border/50">
+    <div className={cn('divide-y divide-border/50', LIST_TABLE_SPAN_TRACKS_CLASS)}>
       {linearIssueListRows.map((row) => {
         if (row.type === 'section') {
           const collapsed = collapsedSections.has(row.key)

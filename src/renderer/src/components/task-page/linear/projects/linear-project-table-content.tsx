@@ -66,7 +66,7 @@ function LinearProjectTableSkeleton(): React.JSX.Element {
         <div
           key={index}
           className={cn(
-            'grid gap-3 px-3 py-3 md:grid-cols-[minmax(180px,1.5fr)_110px_100px_90px_120px_110px_80px_70px]',
+            'grid gap-3 px-3 py-3 grid-cols-[minmax(180px,1.5fr)_110px_100px_90px_120px_110px_80px_70px]',
             LIST_TABLE_SPAN_TRACKS_CLASS
           )}
         >
@@ -131,7 +131,7 @@ export function LinearProjectTableContent({
   }
 
   return (
-    <div className="min-w-[820px] divide-y divide-border/50">
+    <div className="divide-y divide-border/50">
       {projects.map((project) => {
         const presentation = project as LinearProjectPresentation
         const selected = project.id === selectedProjectId

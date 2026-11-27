@@ -193,64 +193,67 @@ export default function ProjectViewList({
       style={{ '--project-scroll-left': '0px' } as React.CSSProperties}
       onScroll={handleListScroll}
     >
-      <ProjectHeaderRow
-        fields={fields}
-        availableFields={availableFields}
-        hidden={hidden}
-        onToggleColumn={toggleColumn}
-        activeSort={activeSort}
-        onSortClick={handleSortClick}
-        widths={widths}
-        gridTemplate={gridTemplate}
-        onResizeColumn={setColumnPair}
-      />
-      {groups.map((g) => {
-        const expanded = !collapsed.has(g.key)
-        return (
-          <div key={g.key} className={LIST_TABLE_SPAN_TRACKS_CLASS}>
-            {table.selectedView.groupByFields[0] ? (
-              <ProjectGroupHeader
-                group={g}
-                groupFieldName={table.selectedView.groupByFields[0].name}
-                expanded={expanded}
-                onToggle={() => {
-                  setCollapsed((prev) => {
-                    const next = new Set(prev)
-                    if (next.has(g.key)) {
-                      next.delete(g.key)
-                    } else {
-                      next.add(g.key)
-                    }
-                    return next
-                  })
-                }}
-              />
-            ) : null}
-            {expanded
-              ? g.rows.map((row) => (
-                  <ProjectRow
-                    key={row.id}
-                    row={row}
-                    fields={fields}
-                    gridTemplate={gridTemplate}
-                    widths={widths}
-                    onResizeColumn={setColumnPair}
-                    editable
-                    onOpenDialog={() => onOpenDialog?.(row)}
-                    onEditField={(fieldId, value) => onEditField?.(row, fieldId, value)}
-                    onEditAssignees={(add, remove) => onEditAssignees?.(row, add, remove)}
-                    onEditLabels={(add, remove) => onEditLabels?.(row, add, remove)}
-                    onEditIssueType={(issueType) => onEditIssueType?.(row, issueType)}
-                    onStartWork={() => onStartWork?.(row)}
-                    onOpenInBrowser={() => onOpenInBrowser?.(row)}
-                    sourceHost={table.project.host}
-                    sourceTarget={sourceTarget}
-                  />
-                ))
-              : null}
-          </div>
-        )
-      })}
+      {/* Why: one shared width keeps header, collapsed groups and rows aligned; frozen columns use translateX, not sticky. */}
+      <div className={LIST_TABLE_SPAN_TRACKS_CLASS}>
+        <ProjectHeaderRow
+          fields={fields}
+          availableFields={availableFields}
+          hidden={hidden}
+          onToggleColumn={toggleColumn}
+          activeSort={activeSort}
+          onSortClick={handleSortClick}
+          widths={widths}
+          gridTemplate={gridTemplate}
+          onResizeColumn={setColumnPair}
+        />
+        {groups.map((g) => {
+          const expanded = !collapsed.has(g.key)
+          return (
+            <div key={g.key}>
+              {table.selectedView.groupByFields[0] ? (
+                <ProjectGroupHeader
+                  group={g}
+                  groupFieldName={table.selectedView.groupByFields[0].name}
+                  expanded={expanded}
+                  onToggle={() => {
+                    setCollapsed((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(g.key)) {
+                        next.delete(g.key)
+                      } else {
+                        next.add(g.key)
+                      }
+                      return next
+                    })
+                  }}
+                />
+              ) : null}
+              {expanded
+                ? g.rows.map((row) => (
+                    <ProjectRow
+                      key={row.id}
+                      row={row}
+                      fields={fields}
+                      gridTemplate={gridTemplate}
+                      widths={widths}
+                      onResizeColumn={setColumnPair}
+                      editable
+                      onOpenDialog={() => onOpenDialog?.(row)}
+                      onEditField={(fieldId, value) => onEditField?.(row, fieldId, value)}
+                      onEditAssignees={(add, remove) => onEditAssignees?.(row, add, remove)}
+                      onEditLabels={(add, remove) => onEditLabels?.(row, add, remove)}
+                      onEditIssueType={(issueType) => onEditIssueType?.(row, issueType)}
+                      onStartWork={() => onStartWork?.(row)}
+                      onOpenInBrowser={() => onOpenInBrowser?.(row)}
+                      sourceHost={table.project.host}
+                      sourceTarget={sourceTarget}
+                    />
+                  ))
+                : null}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -279,10 +282,7 @@ function ProjectHeaderRow({
   const t = useTranslate()
   return (
     <div
-      className={cn(
-        'sticky top-0 z-10 grid items-center gap-3 border-b border-border/60 bg-background/95 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground backdrop-blur',
-        LIST_TABLE_SPAN_TRACKS_CLASS
-      )}
+      className="sticky top-0 z-10 grid items-center gap-3 border-b border-border/60 bg-background/95 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground backdrop-blur"
       style={{ gridTemplateColumns: gridTemplate }}
     >
       {fields.map((f, idx) => {
