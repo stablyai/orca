@@ -31,6 +31,9 @@ export function snapshotCoordinatorChatPermission(
     return undefined
   }
   const saved = savedChatPermissionMode(support, record.permissionMode)
+  if (saved === 'own') {
+    return { agent: record.provider, mode: saved }
+  }
   const running =
     host.deps.adapter.runningPermissionMode?.(session.sessionId) ??
     host.reads.childLaunchPermissionMode(session.sessionId)

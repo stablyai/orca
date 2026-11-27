@@ -31,7 +31,7 @@ type Case = {
   global: 'ask' | 'full-access'
   expected: AgentChatPermissionChoice | undefined
   coordinator?: 'claude'
-  worker?: 'codex' | 'pi'
+  worker?: 'claude' | 'codex' | 'pi'
   terminalCaller?: boolean
   switchAfterStart?: boolean
   followUp?: boolean
@@ -64,6 +64,24 @@ it.each<Case>([
     name: 'agent settings for a different agent',
     saved: 'own',
     worker: 'codex',
+    global: 'full-access',
+    expected: 'ask'
+  },
+  {
+    name: 'Claude settings for a Claude worker when Claude reports Accept Edits',
+    coordinator: 'claude',
+    worker: 'claude',
+    saved: 'own',
+    running: 'accept-edits',
+    global: 'full-access',
+    expected: 'own'
+  },
+  {
+    name: 'Claude settings for a Codex worker when Claude reports Accept Edits',
+    coordinator: 'claude',
+    worker: 'codex',
+    saved: 'own',
+    running: 'accept-edits',
     global: 'full-access',
     expected: 'ask'
   },
