@@ -4,6 +4,7 @@
 import { rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { getMainHttpClient } from '../network/http-client'
 import type { ManagedAgentCli, ManagedRuntimePin } from '../node-runtime/managed-runtime-release'
 import { followLatestRelease } from '../node-runtime/managed-runtime-latest-release'
@@ -18,18 +19,20 @@ const BUILDS = 'https://storage.googleapis.com/antigravity-public/antigravity-cl
 // Orca updates its copy itself; agy's own updater would replace it unverified.
 const AGY_ENV = { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
 
-const manifestSchema = z.object({
-  version: z.string().regex(/^\d+\.\d+\.\d+$/),
-  // Parsed, so a `..` segment can't climb out of Google's folder.
-  url: z
-    .string()
-    .url()
-    .refine((url) => new URL(url).href.startsWith(BUILDS)),
-  sha512: z
-    .string()
-    .regex(/^[a-f0-9]{128}$/i)
-    .transform((hex) => hex.toLowerCase())
-})
+const manifestSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.string().regex(/^\d+\.\d+\.\d+$/),
+    // Parsed, so a `..` segment can't climb out of Google's folder.
+    url: z
+      .string()
+      .url()
+      .refine((url) => new URL(url).href.startsWith(BUILDS)),
+    sha512: z
+      .string()
+      .regex(/^[a-f0-9]{128}$/i)
+      .transform((hex) => hex.toLowerCase())
+  })
+)
 
 /** The manifest naming this host's build; null where Google ships none. */
 export function agyManifestPlatform(

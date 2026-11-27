@@ -4,6 +4,7 @@ import type { DriveListView, DriveWriteView } from '../../shared/google/google-f
 import { formatMegabytes, TOOL_LIST_PAGE_SIZE } from '../../shared/tool-output-limits'
 import { DRIVE_UPLOAD_MAX_BYTES } from '../../shared/rpc-contract/google-files-params'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { GoogleToolError, parseGoogleJson, type GoogleApi } from './google-api-client'
 import {
   allDrives,
@@ -25,10 +26,12 @@ import {
   summarize
 } from './google-drive-files'
 
-const ListSchema = z.object({
-  files: z.array(DriveFileSchema).default([]),
-  nextPageToken: z.string().optional()
-})
+const ListSchema = lazyZodSchema(() =>
+  z.object({
+    files: z.array(DriveFileSchema).default([]),
+    nextPageToken: z.string().optional()
+  })
+)
 
 export async function searchDrive(
   api: GoogleApi,

@@ -3,12 +3,15 @@
 import { readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { BotToolServerSchema, type BotToolServer } from '../../shared/bot-tools'
 import { botToolCredentialFingerprints } from './bot-tool-credentials'
 import { botToolEntryExtras, type BotToolEntry } from './bot-tool-entry-extras'
 import { botToolsPath } from './bot-tools-path'
 
-const BotToolsFile = z.looseObject({ servers: z.array(z.record(z.string(), z.unknown())) })
+const BotToolsFile = lazyZodSchema(() =>
+  z.looseObject({ servers: z.array(z.record(z.string(), z.unknown())) })
+)
 
 export type BotToolsSnapshot = {
   text: string | null
