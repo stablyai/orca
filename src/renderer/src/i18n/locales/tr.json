@@ -583,10 +583,6 @@
         "pageChanged": "Bu sayfa içe aktarma sırasında kapandı veya profil değiştirdi. Tekrar deneyin."
       },
       "notice": {
-        "importedMore_one": "{{domains}} ve diğer {{more}} alan adı için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
-        "importedMore_other": "{{domains}} ve diğer {{more}} alan adı için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
-        "imported_one": "{{domains}} için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
-        "imported_other": "{{domains}} için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
         "failed": "Çerezler içe aktarılamadı: {{reason}}"
       },
       "routedPage": {
@@ -843,7 +839,6 @@
         "sshToggleDescription": "Herhangi biri kullanılabilir olduğunda yapılandırılmış SSH ve uzak Orca sunucularını göster.",
         "resourceUsageToggleDescription": "Kaynak Yöneticisini göster. CPU, bellek, oturumlar, arka plan hizmeti kontrolleri ve çalışma alanı disk taramaları için tıklayın.",
         "portsToggleDescription": "Canlı çalışma alanı portlarını göster. Çalışma alanı kapsamındaki portlar ve dış dinleyiciler için tıklayın.",
-        "antigravityToggleDescription": "Etkin çalışma alanı için Antigravity abonelik kullanımını göster.",
         "grokToggleDescription": "Grok CLI üzerinden oturum açıldığında Grok abonelik kredisi kullanımını göster.",
         "cursorToggleDescription": "cursor-agent veya Cursor IDE üzerinden oturum açıldığında Cursor plan kullanımını göster.",
         "zcodeToggleDescription": "ZCode Coding Plan kota kullanımını göster.",
@@ -2465,14 +2460,16 @@
         },
         "worktrees": {
           "e50495aae6": "Branch'i Zorla Sil",
-          "14bc053a47": "Yerel {{value0}} yenilenmedi",
-          "localBaseRefRefreshFailedForWorktree": "\"{{value1}}\" için yerel {{value0}} yenilenmedi",
-          "903b51c2ed": "Çalışma alanı {{value0}} üzerinden oluşturuldu, ancak Orca yerel {{value1}} için fast-forward yapamadı. {{value2}}",
-          "localBaseRefRefreshFailedDescriptionNamed": "\"{{value0}}\" çalışma alanı {{value1}} üzerinden oluşturuldu, ancak Orca yerel {{value2}} için fast-forward yapamadı. {{value3}}",
           "localBaseRefRefreshFailedDetailDirtyNamed": "{{value0}} konumundaki worktree'de (yerel {{value1}} burada checkout edilmiş durumda) commit edilmemiş değişiklikler var. Bu değişiklikleri commit'leyin, stash'leyin veya atın, ardından yerel {{value1}} branch'ini elle güncelleyin.",
           "localBaseRefRefreshFailedDetailDirty": "Yerel {{value0}} branch'inin checkout edildiği worktree'de commit edilmemiş değişiklikler var. Bu değişiklikleri commit'leyin, stash'leyin veya atın, ardından yerel {{value0}} branch'ini elle güncelleyin.",
           "localBaseRefRefreshFailedDetailNotFastForward": "Yerel {{value0}} mevcut değil veya uzak taban üzerinden temiz bir şekilde fast-forward yapılamıyor. Elle güncellemeden önce yalnızca yerelde bulunan commit'leri kontrol edin.",
           "localBaseRefRefreshFailedDetailError": "Yerel {{value0}} güncellenirken Git bir hata döndürdü. Repository'de kilitli referanslar veya olağandışı worktree durumu olup olmadığını kontrol edin, ardından yerel {{value0}} branch'ini elle güncelleyin.",
+          "localBaseRefNotUpdated": "{{value0}} güncellenmedi",
+          "localBaseRefNotUpdatedDirty": "{{value0}} içinde commit edilmemiş değişiklikler var.",
+          "localBaseRefNotUpdatedNotFastForward": "{{value0}} üzerinde yalnızca yerel commit'ler var.",
+          "localBaseRefNotUpdatedError": "Git hatası.",
+          "localBaseRefHideDetails": "Ayrıntıları gizle",
+          "localBaseRefShowDetails": "Ayrıntılar",
           "localBaseRefShallowHistoryTitle": "Yerel {{value0}} güncellenemedi: sığ klon",
           "localBaseRefShallowHistoryNamed": "\"{{value0}}\", {{value1}} temel alınarak oluşturuldu ve bu durumdan etkilenmedi. Orca'da yerel {{value2}} branch'iniz de güncellenemedi çünkü bu klon yalnızca yakın geçmişi içeriyor ve Git, yerel {{value2}} branch'inin yalnızca geride kaldığını doğrulayamıyor. Bu sorunu tüm yeni çalışma alanları için gidermek üzere şu komutu bir kez çalıştırın:",
           "localBaseRefShallowHistory": "Çalışma alanınız {{value0}} temel alınarak oluşturuldu ve bu durumdan etkilenmedi. Orca'da yerel {{value1}} branch'iniz de güncellenemedi çünkü bu klon yalnızca yakın geçmişi içeriyor ve Git, yerel {{value1}} branch'inin yalnızca geride kaldığını doğrulayamıyor. Bu sorunu tüm yeni çalışma alanları için gidermek üzere şu komutu bir kez çalıştırın:",
@@ -3992,9 +3989,9 @@
         "setLocationTooltip": "Bir klasör seçin veya bu projeyi {{host}} üzerine clone'layın.",
         "addHost": "Sunucu ekle",
         "addSshHost": "SSH sunucusu ekle",
-        "addSshHostHint": "SSH üzerinden mevcut bir makineyi kullanın",
+        "addSshHostHint": "SSH ile bağlan",
         "addRemoteOrcaServer": "Uzak Orca Sunucusu Ekle",
-        "addRemoteOrcaServerHint": "Başka bir Orca çalışma zamanını eşleştirin",
+        "addRemoteOrcaServerHint": "Başka bilgisayardaki Orca",
         "hostConnectionFailed": "Bağlantı başarısız oldu",
         "connect": "Bağlan",
         "reconnect": "Yeniden bağlan",
@@ -5583,6 +5580,11 @@
             "waitingTitle": "{{server}} bekleniyor",
             "waitingBody": "Sunucu bu terminali yeniden kullanılabilir hâle getirdiğinde veya bağlantı değiştiğinde Orca terminale yeniden bağlanır. Şimdi denemek için yeniden bağlanın.",
             "downFor": "{{duration}} süredir erişilemiyor",
+            "cantReachTitle": "{{server}} sunucusuna ulaşılamıyor",
+            "detailsButton": "Ayrıntılar",
+            "tailscaleHintTitle": "Tailscale yolunu kontrol edin",
+            "reconnectNowButton": "Şimdi yeniden bağlan",
+            "copyPingCommand": "Komutu kopyala",
             "tailscaleHint": "Tailscale yolunu kontrol edin:",
             "fallbackServerName": "sunucu",
             "connectionLostTitle": "{{server}} ile yeniden bağlantı kuruluyor",
@@ -6011,7 +6013,6 @@
             "c0e972d726": "İptal",
             "3bbf140864": "MiniMax Kullanımı",
             "remoteServerLabel": "Uzak sunucu",
-            "antigravityUsage": "Antigravity Kullanımı",
             "grokUsageMenu": "Grok Kullanımı",
             "floatingTerminalNewActivity": "{{label}}, yeni etkinlik",
             "4fba7dc1e7": "{{value0}} bakiye",
@@ -6472,16 +6473,9 @@
             "mainWorktree": "ana worktree",
             "detached": "ayrık"
           },
-          "antigravity": {
-            "unknownAccount": "Google hesabı",
-            "accounts": "Kayıtlı Antigravity Hesapları",
-            "readAgo": "Okunma zamanı: {{time}}",
-            "notRead": "Kullanım bilinmiyor: henüz okunmadı"
-          },
           "AccountSwitchList": {
             "used": "Kullanılan",
             "left": "Kalan",
-            "reset": "Sıfırlanma",
             "accounts": "Hesaplar"
           },
           "InlineUsageBars": {
@@ -7370,8 +7364,8 @@
           "addSshHost": "SSH sunucusu ekle",
           "addRemoteServer": "Uzak sunucu ekle",
           "addRemoteHost": "Uzak sunucu ekle",
-          "addSshHostDetail": "SSH üzerinden mevcut bir makineyi kullanın.",
-          "addRemoteServerDetail": "Başka bir bilgisayarda çalışan Orca ile eşleştirin.",
+          "addSshHostDetail": "Bir makineye SSH ile bağlanın.",
+          "addRemoteServerDetail": "Başka bilgisayardaki Orca, SSH gerekmez.",
           "addRemoteHostDetail": "SSH sunucusu veya Orca sunucusu",
           "addWslHost": "WSL dağıtımı ekle",
           "addWslHostDetail": "WSL 2 dağıtımı içinde Orca sunucusu çalıştırın. Deneysel.",
@@ -8480,7 +8474,7 @@
           "serverSaveFailed": "Uzak sunucu eklenemedi.",
           "serverTitle": "Uzak sunucu ekle",
           "sshTitle": "SSH sunucusu ekle",
-          "serverDescription": "Başka bir bilgisayarda çalışan Orca ile eşleştirin.",
+          "serverDescription": "Aynı ağdaki başka bir bilgisayardaki Orca ile eşleştirin.",
           "serverRunsAsYou": "Bu cihaz, bu sunucuda sizin adınıza komut çalıştırabilecek.",
           "sshDescription": "SSH üzerinden oturum açabileceğiniz kalıcı bir makine ekleyin.",
           "serverSshTitle": "{{server}} sunucusuna SSH sunucusu ekle",
@@ -11318,7 +11312,6 @@
             "d77537b580": "opencode-go",
             "a9d56852eb": "opencode",
             "7f72de7cbe": "Durum çubuğunda OpenCode Go token ve maliyet kullanımını gösterin.",
-            "51b0ccd6a2": "google",
             "97957e374e": "openai",
             "8dfd676c28": "codex",
             "e9e4412545": "Durum çubuğunda Codex token ve maliyet kullanımını gösterin.",
@@ -11360,8 +11353,6 @@
               "pr": "pr",
               "duplicate": "yinelenen"
             },
-            "antigravityUsageDescription": "Durum çubuğunda Antigravity abonelik kullanımını gösterin.",
-            "antigravityKeyword": "antigravity",
             "e7d1b0f3a5": "Grok CLI OAuth'tan haftalık kredi kullanımını gösterin.",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
@@ -11405,7 +11396,6 @@
             "c29089716e": "Kimi Kullanımı",
             "96e32c1118": "MiniMax Kullanımı",
             "aff6e6afdf": "IDE Yazı Tipi",
-            "ba1f9d39a6": "Antigravity Kullanımı",
             "museUsageDescription": "Muse abonelik kotasını durum çubuğunda göster.",
             "muse": "muse",
             "meta": "meta",
@@ -15169,8 +15159,7 @@
             "windows": "kullanım aralığının yüzdesi",
             "reset": "sıfırlamaya kalan süre, ör. 3 sa 15 dk",
             "resetAt": "sıfırlama saati, ör. 20:50",
-            "optional": "içindeki yer tutuculardan biri boşsa bu bölüm gösterilmez",
-            "usagePools": "adlandırılmış kullanım havuzları, ör. Antigravity modelleri"
+            "optional": "içindeki yer tutuculardan biri boşsa bu bölüm gösterilmez"
           }
         }
       },
@@ -15236,7 +15225,8 @@
             "741ff8a0d2": "Push Yap ve {{value0}} Oluştur"
           },
           "FileExplorer": {
-            "79b1537dd3": "Dosyalara göz atmak için bir çalışma alanı seçin"
+            "79b1537dd3": "Dosyalara göz atmak için bir çalışma alanı seçin",
+            "2f4483d6c4": "Bu filtreyle eşleşen dosya yok"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "Yeni Klasör",
@@ -15279,6 +15269,7 @@
             "31b4c3195d": "Diğer Gezgin İşlemleri",
             "d95e30fe28": "Gezgini Yenile",
             "6026b16950": "Tümünü Daralt",
+            "c1f3f3ec70": "Dosya içeriğinde ara",
             "openInApp": "{{app}} ile aç"
           },
           "FileExplorerTreeStatus": {
@@ -15391,6 +15382,17 @@
             "localPortInUse": "{{port}} portu zaten kullanımda. Farklı bir yerel port seçin.",
             "localPortRequiresPrivileges": "{{port}} portu yükseltilmiş ayrıcalıklar gerektirir. 1024 veya daha büyük bir yerel port kullanın."
           },
+          "Search": {
+            "1abfb25a66": "Dosyalarda aramak için yazın",
+            "d56d140747": "Aramak için Enter'a basın",
+            "98c8435e36": "Aramak için bir çalışma alanı seçin",
+            "dcc294f28d": "(sonuçlar kısaltıldı)",
+            "resultsInFiles": "{{files}} içinde {{results}}",
+            "resultCount_one": "{{count}} sonuç",
+            "resultCount_other": "{{count}} sonuç",
+            "fileCount_one": "{{count}} dosya",
+            "fileCount_other": "{{count}} dosya"
+          },
           "SearchFilters": {
             "01e4671ccf": "ör. *.min.js, dist/**",
             "0a6412a895": "Hariç tutulacak dosyalar",
@@ -15400,9 +15402,11 @@
           "SearchHeader": {
             "6234a5ef85": "Düzenli İfade Kullan",
             "4567e6e0b6": "Tam Kelime Eşleştir",
-            "464ae3974f": "Büyük/Küçük Harf Eşleştir"
+            "464ae3974f": "Büyük/Küçük Harf Eşleştir",
+            "693cbeadd0": "Ara"
           },
           "SearchQueryRow": {
+            "queryLabel": "Dosyalarda ara",
             "clearLabel": "Aramayı temizle"
           },
           "SearchResultItems": {
@@ -15433,7 +15437,6 @@
             "476b77745b": "Base Ref'i Değiştir",
             "ed34038d0d": "Branch karşılaştırmasını yenile",
             "493f963029": "Base ref'i değiştir",
-            "11b5dd8e41": "Şununla karşılaştırılıyor",
             "a9bf7c171a": "Commit Başarısız Oldu",
             "011f9713fc": "Commit engellendi",
             "cc199ccc5f": "Diğer commit ve remote işlemleri",
@@ -15577,8 +15580,6 @@
             "c8e4a1f902": "Filtre: {{value0}}",
             "b3c8f1a902": "Dosyaları ada göre filtrele",
             "d4f8c2a901": "Filtreyi temizle ve kapat",
-            "e8a1c4b203": "vs",
-            "4b4a7de138": "İnceleme sayfasını tarayıcıda aç",
             "createPrIntentCommitBlockedSummary": "Commit engellendi: {{value0}} Sorunu düzeltip PR Oluştur'u tekrar deneyin.",
             "pushRecovery": {
               "4b37ae99b0": "Bu push hatasını düzeltmek için varsayılan AI ajanını başlat",
@@ -15598,7 +15599,6 @@
             "97e7124eac": "Kaynak Kontrolü yenilenemedi. Tekrar deneyin.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Geçerli branch: {{value0}}",
-            "c7d4e2f801": "Base ref'i değiştir: {{value0}}",
             "createPrIntentGenerateDetailsFailed": "İnceleme ayrıntıları oluşturulamadı. PR Oluştur'u tekrar deneyin.",
             "entryStageFailed": "“{{value0}}” stage edilemedi",
             "entryUnstageFailed": "“{{value0}}” stage'den çıkarılamadı",
@@ -15646,9 +15646,6 @@
             "keepDeletion": "Silmeyi koru",
             "refreshAll": "Tümünü yenile",
             "statusReadFailed": "Git bu çalışma alanını okuyamadı. Gösterilen değişiklikler güncel olmayabilir.",
-            "baseUpToDate": "Güncel",
-            "rebaseOperationInProgress": "Geçerli Git işleminin bitmesini bekleyin",
-            "rebaseButton": "Rebase",
             "rebaseConflictCount_one": "{{count}} çakışma",
             "rebaseConflictCount_other": "{{count}} çakışma",
             "rebasePaused": "Rebase duraklatıldı",
@@ -15678,9 +15675,7 @@
             "scopeUncommitted": "Commit edilmemiş",
             "scopeAllChanges": "Tüm değişiklikler",
             "scopeNone": "Yok",
-            "scopeOpenDiff": "Diff aç",
             "scopeShowAll": "Tüm değişiklikleri göster",
-            "scopeLoadingBranchChanges": "Dal değişiklikleri yükleniyor…",
             "scopeBranchCommits": "Bu daldaki commitler",
             "scopeRecentCommits": "Son commitler",
             "scopeCompareTo": "{{ref}} ile karşılaştır",
@@ -15697,7 +15692,8 @@
             "scopeOlderHistory": "Git Graph içinde daha eski geçmiş",
             "scopeNoUncommitted": "Commit edilmemiş değişiklik yok.",
             "scopeCommitFiles": "Dosyalar",
-            "gitGraphButton": "Grafik"
+            "gitGraphButton": "Grafik",
+            "compareLoadingAgainst": "{{base}} ile karşılaştırılıyor"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Seçilen ajan başlatılamadı.",
@@ -16559,6 +16555,16 @@
             "description": "\"{{value0}}\" silinecek. Silindikten sonra artık {{value1}} aracının kendi komut satırından da devam ettirilemez.",
             "remoteDescription": "\"{{value0}}\", {{value2}} konumundan silinecek. Silindikten sonra artık {{value1}} aracının kendi komut satırından da devam ettirilemeyecek.",
             "confirm": "Sil"
+          },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "Dosya bul",
+            "4d5a6b2a49": "Dosya filtresini temizle",
+            "7a9fb1e6aa": "İçerik"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "Adlar",
+            "b3c8f1a902": "Dosyaları ada göre filtrele",
+            "f8a2c4d1e0": "Gezgin arama modu"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "Bu commit'te dosya değişikliği yok"
@@ -19157,8 +19163,6 @@
             "fa6ea61de3": "İptal",
             "c2ef0359b9": "İçeriği Kopyala",
             "f2d0c22d67": "{{value0}} ek açıklamasını sil",
-            "11c5084aa2": "Ek açıklamaları temizle",
-            "734e4343ec": "Tarayıcı ek açıklamalarını temizle",
             "95af781091": "Geri bildirimi bir ajana gönder",
             "ac39b9366b": "Gönder",
             "366bf5d62c": "Yeni Sekme",
@@ -19192,21 +19196,14 @@
             "b71dc3d930": "Yeniden bağlan",
             "d51ef37351": "Kopyala",
             "6f4ab3592b": "Kopyalandı",
-            "499b31b84e": "Tümünü Kopyala",
             "168350ae6a": "Bir öğeye tıklayın veya üzerine gelin, ardından kopyalamak için C, ekran görüntüsü almak için S tuşuna basın.",
-            "e852e20cea": "Kopyalandı, ekran görüntüsü almak için S'ye basın veya başka bir öğe seçin",
             "777b5bc4ec": "Ajan için geri bildirim eklemek üzere bir öğeye tıklayın.",
             "b733a91bd9": "Seçili öğe için geri bildirim ekleyin.",
             "4328a0a062": "Sayfa öğesi yakalanamadı: {{value0}}",
             "759f32af29": "İndiriliyor",
             "4300f38145": "{{value0}}{{value1}} adresinden indiriliyor",
-            "cc4a071d3a": "Sayfa öğesine açıklama ekle ({{value0}})",
             "572046436a": "Uzak tarayıcı",
             "b313a7275b": "Uzak tarayıcı açılıyor",
-            "ea6af700da": "{{value0}} ek açıklama",
-            "c13693fe27": "{{value0}} ek açıklama",
-            "074f0ed10b": "{{value0}} ek açıklama hazır. Başka bir öğe seçin veya tüm geri bildirimi kopyalayın.",
-            "a2164a6e5a": "{{value0}} ek açıklama hazır. Başka bir öğe seçin veya tüm geri bildirimi kopyalayın.",
             "9f6f2e8c19": "İndirilen dosyanın yolu kullanılamıyor.",
             "0c79b7634d": "İndirilen dosya açılamadı. Taşınmış veya silinmiş olabilir.",
             "397d9dc923": "İndirilen dosya gösterilemedi. Taşınmış veya silinmiş olabilir.",
@@ -19236,7 +19233,9 @@
             "devToolsDockRight": "Sağa sabitle",
             "devToolsDockBottom": "Alta sabitle",
             "devToolsUndock": "Ayrı pencerede aç",
-            "devToolsClose": "DevTools'u kapat"
+            "devToolsClose": "DevTools'u kapat",
+            "11c5084aa2": "Ek açıklamaları temizle",
+            "734e4343ec": "Tarayıcı ek açıklamalarını temizle"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "İptal",
@@ -19322,8 +19321,6 @@
                     "c16f932cb3": "Kaydet",
                     "024467ceac": "İptal",
                     "449d2c2629": "Ek açıklama amacı",
-                    "38d320108c": "Ek açıklamaları daralt",
-                    "9f209891a7": "Ek açıklamaları genişlet",
                     "includePageDetails": "Sayfa ayrıntılarını ekle",
                     "copyFeedback": "Geri bildirimi kopyala",
                     "copyFeedbackWithPageDetails": "Geri bildirimi sayfa ayrıntılarıyla kopyala"
@@ -22918,21 +22915,14 @@
         "notNow": "Şimdi değil",
         "retry": "Yeniden dene",
         "dismiss": "Kapat",
-        "openWorker": "Çalışanı aç",
         "remoteOwner": "Bunu, çalıştığı bilgisayardan durdurun veya temizleyin",
-        "workspaceRemoved": "Bu çalışanın çalışma alanı kaldırıldı",
-        "restore": "Listede yeniden göster",
         "alreadyStopped": "Zaten durduruldu",
         "cantStop": "Şu anda durdurulamıyor",
         "clearAllLabel_one": "Başarısız çalışanı temizle",
         "clearAllLabel_other": "Başarısız {{count}} çalışanın tümünü temizle",
         "loadingWorker": "Çalışan yükleniyor…",
         "resultUnavailable": "Çalışan sonucu kullanılamıyor",
-        "showDetails": "Ayrıntıları göster",
-        "hideDetails": "Ayrıntıları gizle",
-        "close": "Kapat",
         "workersRegion": "Çalışanlar",
-        "doneResult": "Tamamlandı · sonucu aç",
         "clearName": "Temizle: {{name}}",
         "stopUnavailable": "Durdur: {{name}} · {{title}} kullanılamıyor · {{reason}}",
         "stopName": "Durdur: {{name}} · {{title}}",
@@ -22956,8 +22946,6 @@
         "task": "Görev",
         "workerCount_one": "{{count}} çalışan",
         "workerCount_other": "{{count}} çalışan",
-        "stopped": "Durduruldu",
-        "finished": "Tamamlandı",
         "failedCount": "{{count}} başarısız",
         "needsYouCount": "{{count}} sizi bekliyor",
         "newQuestions_one": "Sizi bekleyen {{count}} yeni çalışan sorusu",
@@ -24964,9 +24952,6 @@
         "planModelWithoutThinking": "\"{{model}}\" modeli düşünme çabası düzeyini desteklemiyor.",
         "planThinkingLevelInvalid": "\"{{level}}\" düşünme düzeyi {{model}} için geçerli değil.",
         "openCodeInvalidEvents": "OpenCode geçersiz JSON olayları döndürdü.",
-        "antigravityInvalidEvents": "Antigravity geçersiz JSON olayları döndürdü.",
-        "antigravityInvalidResult": "Antigravity geçersiz bir sonuç döndürdü.",
-        "antigravityNoFinalResult": "Antigravity nihai bir sonuç döndürmedi.",
         "kimiUnreadableOutput": "Kimi, Orca'nın okuyamadığı bir çıktı döndürdü. Yeniden deneyin.",
         "kimiSessionOccupied": "Bu oturum başka bir istemcide etkin olduğundan Kimi'de kullanılamadı. Oturumu orada durdurun veya o istemciden çıkıp yeniden deneyin.",
         "kimiInterrupted": "Kimi, metin oluşturmayı tamamlamadan kesintiye uğradı. Yeniden deneyin.",
@@ -25453,10 +25438,13 @@
       "label": "Dosya Gezgini kökü",
       "full": "Repo kökü",
       "back": "{{path}} yoluna dön",
+      "searchScope": "Arama kapsamı: çalışma alanı dosyaları",
       "retry": "Tekrar dene",
       "sparseStatus": "Sparse checkout",
       "scopeDetails": "Sparse checkout kapsamı hakkında",
       "scopeExplanation": "Klasör seçici, çalışma alanına alınan dosyaları değil, gördüklerinizi değiştirir. Repo kökü, çalışma alanına alınan kök ve üst klasörlerdeki dosyaları içerir.",
+      "searchExplanation": "Adlar, görüntülediğiniz klasörü filtreler. İçerik, tüm çalışma alanında arama yapar. Sparse checkout dışında bırakılan dosyalar aranmaz.",
+      "findInFolder": "{{path}} içinde bul",
       "folderLoadError": "Bu klasör yüklenemedi:",
       "emptyFolder": "Bu klasörde dosya yok"
     },
@@ -25522,13 +25510,10 @@
       "retry": "Tekrar dene",
       "changed": "agy'nin kendi hesabı değişti. agy'yi başlatmadan önce kayıtlı bir hesabı yeniden seçin.",
       "refresh": "Hesapları yenile",
-      "usage": "Kullanımı yenile",
-      "usageWithReading": "Kullanımı yenile ({{reading}})",
       "windowsChanged": "Ana bilgisayarın varsayılan hesabı değişti. Kayıtlı bir hesabı yeniden kullanmak için seçin.",
       "enterprise": "Gemini Enterprise",
       "projectPlaceholder": "my-project-id",
       "locationPlaceholder": "us-central1",
-      "usageReading": "Oturum: {{session}} · Haftalık: {{weekly}}",
       "saved": "Kaydedilmiş Google hesabı",
       "remove": "Kaldır",
       "searchDescription": "Çalıştırma ana makinesinde agy'nin kullandığı Google hesaplarını kaydedin ve seçin.",
@@ -25545,8 +25530,6 @@
       "settingsIncomplete": "Bir Antigravity hesap türü seçin ve Google Cloud projesini ve konumunu girin.",
       "settingsLoadFailed": "Orca Antigravity oturum açma ayarlarınızı yükleyemedi. Tekrar deneyin.",
       "settingsSaveFailed": "Orca Antigravity oturum açma ayarlarınızı kaydedemedi. Tekrar deneyin.",
-      "lastReading": "{{reading}} · Okunma zamanı: {{time}}",
-      "noReading": "Kullanım bilinmiyor: henüz okunmadı",
       "fd47b5a5dd": "Antigravity Hesapları",
       "personalOption": "Kişisel Google AI planınız",
       "enterpriseOption": "Kuruluşunuzun lisansı",
@@ -25577,7 +25560,6 @@
       "currentNotSaved": "Geçerli agy oturumu · kaydedilmedi",
       "noEmailNotSaved": "agy e-posta adresi bildirmedi · kaydedilmedi",
       "saveShort": "Kaydet",
-      "readAt": "Okunma zamanı: {{time}}",
       "active": "Etkin",
       "runtime": "Çalışma zamanı",
       "chatTitle": "Antigravity Chat",
@@ -25736,7 +25718,8 @@
     "filters": {
       "toggle": "Arama ayrıntılarını aç/kapat",
       "active": "{{count}} etkin"
-    }
+    },
+    "noResults": "Sonuç yok. Farklı bir arama yapın veya filtrelerinizi ayarlayın."
   },
   "workspaceDeletion": {
     "preferenceSaveFailed": "Silme tercihi kaydedilemedi",
@@ -28772,6 +28755,7 @@
     "usageLimit": {
       "continuesAt": "{{time}} saatinde devam eder",
       "continuesShort": "{{time}} devam eder",
+      "rowLine": "Kullanım sınırı · {{time}}",
       "continuesTip": "{{time}} saatinde otomatik devam eder",
       "hitLimit": "Limite ulaşıldı · {{time}} saatinde sıfırlanır",
       "hitShort": "Limite ulaşıldı",

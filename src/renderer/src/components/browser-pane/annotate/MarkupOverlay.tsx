@@ -1,11 +1,12 @@
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, X } from 'lucide-react'
+import { Check, Copy, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { MarkupToolbar } from './markup-tools/MarkupToolbar'
+import { MarkupPaletteTools, type MarkupPaletteDensity } from './palette/MarkupPaletteTools'
 import type { MarkupBaseImage } from './capture/markup-base-image'
 import type { MarkupShape } from './drawing/markup-drawing-model'
 import { TEXT_FONT_FAMILY } from './drawing/markup-shape-render'
@@ -18,6 +19,16 @@ export type MarkupOverlayProps = {
   onCancel: () => void
   /** Element outside the page box that hosts the controls as a footer instead of over the page. */
   controlsContainer?: HTMLElement | null
+  /** The annotate palette's Draw slot; when set, only the markup tools and Copy markup render there. */
+  paletteSlot?: HTMLElement | null
+  /** How much room the palette has: all tools, a row plus ⋯, or a minimal row with a short Copy label. */
+  paletteDensity?: MarkupPaletteDensity
+  /** Strokes of a reopened drawing. */
+  initialShapes?: readonly MarkupShape[]
+  /** Latest strokes, so leaving Draw can offer Undo. */
+  onShapesChange?: (shapes: readonly MarkupShape[]) => void
+  /** The page this drawing belongs to, for Esc ownership. */
+  ownerPageId?: string
 }
 
 export function MarkupOverlay({
@@ -25,12 +36,20 @@ export function MarkupOverlay({
   busy,
   onComplete,
   onCancel,
-  controlsContainer
+  controlsContainer,
+  paletteSlot,
+  paletteDensity = 'full',
+  initialShapes,
+  onShapesChange,
+  ownerPageId
 }: MarkupOverlayProps): React.JSX.Element {
   const t = useTranslate()
   const baseImgRef = useRef<HTMLImageElement | null>(null)
   const [baseLoaded, setBaseLoaded] = useState(false)
-  const editor = useMarkupEditor(busy, onCancel)
+  const editor = useMarkupEditor(busy, onCancel, initialShapes, ownerPageId)
+  useEffect(() => {
+    onShapesChange?.(editor.shapes)
+  }, [editor.shapes, onShapesChange])
   const { pendingText } = editor
 
   const handleDone = useCallback(() => {
@@ -40,6 +59,44 @@ export function MarkupOverlay({
     }
     onComplete({ imageElement, shapes: editor.shapes })
   }, [baseLoaded, editor.shapes, onComplete])
+
+  const paletteControls = paletteSlot ? (
+    <div className="flex min-w-0 flex-wrap items-center gap-1">
+      <MarkupPaletteTools
+        density={paletteDensity}
+        tool={editor.tool}
+        onToolChange={editor.setTool}
+        color={editor.color}
+        onColorChange={editor.setColor}
+        width={editor.width}
+        onWidthChange={editor.setWidth}
+        fontSize={editor.fontSize}
+        onFontSizeChange={editor.setFontSize}
+        canUndo={editor.canUndo}
+        canRedo={editor.canRedo}
+        onUndo={editor.undo}
+        onRedo={editor.redo}
+        onClear={editor.clear}
+        canClear={editor.shapes.length > 0}
+      />
+      {/* Narrow palettes show Copy as an icon, so it stays on the tools' row instead of wrapping alone. */}
+      <Button
+        type="button"
+        size={paletteDensity === 'compact' ? 'icon-xs' : 'xs'}
+        className="shrink-0"
+        onClick={handleDone}
+        disabled={busy || !baseLoaded || editor.shapes.length === 0}
+        aria-label={t('browser.annotatePalette.copyMarkup', 'Copy markup')}
+        title={t('browser.annotatePalette.copyMarkup', 'Copy markup')}
+      >
+        {paletteDensity === 'compact' ? (
+          <Copy className="size-3.5" />
+        ) : (
+          t('browser.annotatePalette.copyMarkup', 'Copy markup')
+        )}
+      </Button>
+    </div>
+  ) : null
 
   const controls = (
     <div
@@ -137,7 +194,11 @@ export function MarkupOverlay({
             if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
               event.preventDefault()
               editor.commitPendingText(event.currentTarget.value)
-            } else if (event.key === 'Escape') {
+            } else if (
+              event.key === 'Escape' &&
+              !event.nativeEvent.isComposing &&
+              event.keyCode !== 229
+            ) {
               event.preventDefault()
               editor.cancelPendingText()
             }
@@ -164,7 +225,11 @@ export function MarkupOverlay({
         />
       ) : null}
 
-      {controlsContainer ? createPortal(controls, controlsContainer) : controls}
+      {paletteSlot && paletteControls
+        ? createPortal(paletteControls, paletteSlot)
+        : controlsContainer
+          ? createPortal(controls, controlsContainer)
+          : controls}
     </div>
   )
 }

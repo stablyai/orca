@@ -42,6 +42,7 @@ export const WorkerDockEntry = z.object({
   changedAt: z.number().nullable(),
   startedAt: z.number().nullable(),
   reason: z.string().nullable(),
+  progressNote: z.string().optional(),
   settlement: z.string().nullable(),
   resultId: z.string().nullable(),
   stoppable: z.boolean(),

@@ -238,7 +238,6 @@
       "browser-pane": {
         "markup": {
           "errorAttach": "Could not attach the markup screenshot.",
-          "errorCapture": "Could not capture the page to draw on.",
           "errorUnavailable": "Screenshot markup is not available on this page."
         }
       },
@@ -430,6 +429,12 @@
           "BulkActionBar": {
             "selectedCount_one": "{{count}} selected",
             "selectedCount_other": "{{count}} selected"
+          },
+          "Search": {
+            "fileCount_one": "{{count}} file",
+            "fileCount_other": "{{count}} files",
+            "resultCount_one": "{{count}} result",
+            "resultCount_other": "{{count}} results"
           },
           "SourceControl": {
             "branchFilesChangedVsBase_one": "{{count}} file changed vs {{ref}}",
@@ -2349,10 +2354,8 @@
         "sshHostDisconnected": "This page is no longer connected through its SSH host. Reconnect and try again."
       },
       "notice": {
-        "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",
-        "importedMore_other": "Imported {{count}} cookies for {{domains}} +{{more}} more. Reload the page to use them.",
-        "imported_one": "Imported {{count}} cookie for {{domains}}. Reload the page to use them.",
-        "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them."
+        "importedCount_one": "Imported {{countLabel}} cookie",
+        "importedCount_other": "Imported {{countLabel}} cookies"
       }
     },
     "loadFailure": {
@@ -3858,9 +3861,6 @@
         "agentCouldNotStart": "{{label}} could not be started. Check the agent command in Settings and try again.",
         "agentFailedToStart": "{{label}} failed to start. Check the agent command in Settings and try again.",
         "agentReportedError": "{{label}} reported an error.",
-        "antigravityInvalidEvents": "Antigravity returned invalid JSON events.",
-        "antigravityInvalidResult": "Antigravity returned an invalid result.",
-        "antigravityNoFinalResult": "Antigravity returned no final result.",
         "chatNameAgentUnsupported": "Choose a supported chat name agent for this action in Settings -> Chat -> Chat names. Supported agents: {{agents}}, or Custom command.",
         "chatNameCustomCommandEmpty": "Custom command is empty. Add one in Settings -> Chat -> Chat names.",
         "cliFailed": "{{label}} CLI command failed with code {{exitCode}}.",
