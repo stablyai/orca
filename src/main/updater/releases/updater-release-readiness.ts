@@ -55,9 +55,12 @@ type ReleaseReadiness = 'ready' | 'not-ready' | 'unavailable'
 
 type ReleaseHeadResponse = { statusCode: number; redirectUrl?: string }
 
-export function requestGitHubReleaseHead(assetUrl: string): Promise<ReleaseHeadResponse | null> {
+export function requestReleaseHead(
+  assetUrl: string,
+  redirect: 'manual' | 'follow' = 'manual'
+): Promise<ReleaseHeadResponse | null> {
   return new Promise((resolve) => {
-    const request = net.request({ method: 'HEAD', url: assetUrl, redirect: 'manual' })
+    const request = net.request({ method: 'HEAD', url: assetUrl, redirect })
     let settled = false
     const settle = (response: ReleaseHeadResponse | null): void => {
       if (settled) {
@@ -76,11 +79,17 @@ export function requestGitHubReleaseHead(assetUrl: string): Promise<ReleaseHeadR
       settle(null)
     }, FETCH_TIMEOUT_MS)
 
-    request.on('redirect', (statusCode, _method, redirectUrl) => {
-      // GitHub's redirect proves existence without fetching the signed storage URL.
-      settle({ statusCode, redirectUrl })
+    if (redirect === 'manual') {
+      request.on('redirect', (statusCode, _method, redirectUrl) => {
+        // GitHub's redirect proves existence without fetching the signed storage URL.
+        settle({ statusCode, redirectUrl })
+      })
+    }
+    request.on('response', (response) => {
+      settle({ statusCode: response.statusCode })
+      // Release the unread response: a later loader error (e.g. a proxy 407's tunnel failure) would be unhandled on it.
+      request.abort()
     })
-    request.on('response', (response) => settle({ statusCode: response.statusCode }))
     request.on('error', () => settle(null))
     try {
       request.end()
@@ -88,18 +97,6 @@ export function requestGitHubReleaseHead(assetUrl: string): Promise<ReleaseHeadR
       settle(null)
     }
   })
-}
-
-async function getGitHubReleaseAssetReadiness(assetUrl: string): Promise<ReleaseReadiness> {
-  const response = await requestGitHubReleaseHead(assetUrl)
-  if (!response) {
-    return 'unavailable'
-  }
-  const ready =
-    response.redirectUrl !== undefined
-      ? response.statusCode >= 300 && response.statusCode < 400
-      : response.statusCode >= 200 && response.statusCode < 300
-  return response.statusCode === 404 ? 'not-ready' : ready ? 'ready' : 'unavailable'
 }
 
 async function getReleaseAssetReadiness(tag: string, assetName: string): Promise<ReleaseReadiness> {
@@ -111,22 +108,16 @@ async function getReleaseAssetReadiness(tag: string, assetName: string): Promise
   const assetUrl = isRelativeAsset
     ? getReleaseAssetUrl(tag, assetName.split('/').findLast(Boolean) ?? assetName)
     : assetName
-  if (isGitHubReleaseAsset) {
-    return getGitHubReleaseAssetReadiness(assetUrl)
-  }
-
-  try {
-    const res = await net.fetch(assetUrl, {
-      method: 'HEAD',
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
-    })
-    if (res.status === 404) {
-      return 'not-ready'
-    }
-    return res.ok ? 'ready' : 'unavailable'
-  } catch {
+  // Why: net.fetch HEAD leaves its response without an error listener, so a proxy 407 would crash main.
+  const response = await requestReleaseHead(assetUrl, isGitHubReleaseAsset ? 'manual' : 'follow')
+  if (!response) {
     return 'unavailable'
   }
+  const ready =
+    response.redirectUrl !== undefined
+      ? response.statusCode >= 300 && response.statusCode < 400
+      : response.statusCode >= 200 && response.statusCode < 300
+  return response.statusCode === 404 ? 'not-ready' : ready ? 'ready' : 'unavailable'
 }
 
 export async function getPlatformManifestReadiness(tag: string): Promise<ReleaseReadiness> {

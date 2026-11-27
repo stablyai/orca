@@ -1,20 +1,65 @@
-import type { ReactNode } from 'react'
-import { View, Text, Pressable } from 'react-native'
+import { useRef, useState } from 'react'
+import { View, Text, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Copy, Check, Send } from 'lucide-react-native'
-import { colors, pressedStyle, spacing } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { Check, Copy, Ellipsis, Send } from 'lucide-react-native'
+import { spacing } from '../theme/mobile-theme'
+import { useThemedStyles } from '../theme/themed-styles'
 import { ConnectionLog } from '../components/host-connection/ConnectionLog'
-import { connectionDiagnosticsScreenStyles as styles } from './connection-diagnostics-screen-styles'
+import { ListRow } from '../components/list/ListGroup'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { NavBarTitleButton } from '../components/nav-bar/NavBar'
+import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
+import { PickerModal } from '../components/sheets/PickerModal'
+import { connectionDiagnosticsScreenStylesSheet } from './connection-diagnostics-screen-styles'
 import type { ConnectionLogEntry } from './connection/connection-log-types'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import type { ConnectionDiagnosis } from './connection-diagnostics-analysis'
 import type { DiagnosticsSubmissionState } from './connection-diagnostics-screen-data'
+import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { SettingsNavBar, settingsScreenStyles } from '../settings/settings-screen-frame'
+import {
+  SettingsNavBar,
+  SettingsSection,
+  settingsScreenStylesSheet
+} from '../settings/settings-screen-frame'
+
+function stateLabel(t: Translate, state: ConnectionState): string {
+  switch (state) {
+    case 'connecting':
+      return t('diagnostics.connectionDiagnosticsView.status.connecting', 'Connecting')
+    case 'handshaking':
+      return t(
+        'diagnostics.connectionDiagnosticsView.status.handshaking',
+        'Securing the connection'
+      )
+    case 'connected':
+      return t('diagnostics.connectionDiagnosticsView.status.connected', 'Connected')
+    case 'disconnected':
+      return t('diagnostics.connectionDiagnosticsView.status.disconnected', 'Not connected')
+    case 'reconnecting':
+      return t('diagnostics.connectionDiagnosticsView.status.reconnecting', 'Reconnecting')
+    case 'auth-failed':
+      return t('diagnostics.connectionDiagnosticsView.status.authFailed', 'Needs pairing again')
+  }
+}
+
+function sendLabel(t: Translate, state: DiagnosticsSubmissionState | 'idle'): string {
+  switch (state) {
+    case 'sending':
+      return t('diagnostics.connectionDiagnosticsView.sending', 'Sending…')
+    case 'sent':
+      return t('diagnostics.connectionDiagnosticsView.sent', 'Diagnostics sent')
+    case 'failed':
+      return t('diagnostics.connectionDiagnosticsView.retrySending', 'Retry sending')
+    case 'idle':
+      return t('diagnostics.connectionDiagnosticsView.sendReport', 'Send report to Orca')
+  }
+}
 
 export function ConnectionDiagnosticsView({
-  hostPicker,
+  hosts,
+  selectedHostId,
+  onSelectHost,
   hasHost,
   hostName,
   state,
@@ -27,7 +72,10 @@ export function ConnectionDiagnosticsView({
   entries,
   onBack
 }: {
-  hostPicker?: ReactNode
+  /** Paired computers; with more than one, the title picks which log shows. */
+  hosts?: readonly { id: string; name: string }[]
+  selectedHostId?: string | null
+  onSelectHost?: (hostId: string) => void
   hasHost: boolean
   hostName: string
   state: ConnectionState
@@ -40,22 +88,54 @@ export function ConnectionDiagnosticsView({
   entries: readonly ConnectionLogEntry[]
   onBack: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(connectionDiagnosticsScreenStylesSheet)
+  const settingsScreenStyles = useThemedStyles(settingsScreenStylesSheet)
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
-  const stateLabels: Record<ConnectionState, string> = {
-    connecting: t('diagnostics.connectionDiagnosticsView.connecting', 'connecting'),
-    handshaking: t('diagnostics.connectionDiagnosticsView.handshaking', 'handshaking'),
-    connected: t('diagnostics.connectionDiagnosticsView.connected', 'connected'),
-    disconnected: t('diagnostics.connectionDiagnosticsView.disconnected', 'disconnected'),
-    reconnecting: t('diagnostics.connectionDiagnosticsView.reconnecting', 'reconnecting'),
-    'auth-failed': t('diagnostics.connectionDiagnosticsView.authFailed', 'auth-failed')
-  }
+  const menuAnchor = useRef<HostInstance>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [hostPickerOpen, setHostPickerOpen] = useState(false)
+  const title = t('diagnostics.connectionDiagnosticsView.connectionLog', 'Connection log')
+  const canPickHost = hosts !== undefined && hosts.length > 1 && onSelectHost !== undefined
+  const status =
+    reconnectAttempts > 0
+      ? t(
+          'diagnostics.connectionDiagnosticsView.stateWithAttempt',
+          '{{state}} · attempt {{attempts}}',
+          { state: stateLabel(t, state), attempts: reconnectAttempts }
+        )
+      : stateLabel(t, state)
+  const canSend = diagnosis?.reportability === 'orca-relay'
   return (
     <View style={[settingsScreenStyles.container, { paddingTop: insets.top }]}>
       <SettingsNavBar
-        title={t('diagnostics.connectionDiagnosticsView.title', 'Network diagnostics')}
+        title={title}
+        center={
+          canPickHost ? (
+            <NavBarTitleButton
+              title={title}
+              subtitle={hostName}
+              accessibilityLabel={t(
+                'diagnostics.connectionDiagnosticsView.pickComputer',
+                'Connection log for {{name}}, choose computer',
+                { name: hostName }
+              )}
+              onPress={() => setHostPickerOpen(true)}
+            />
+          ) : undefined
+        }
         onBack={onBack}
+        trailing={
+          // The app's own log copies even before a computer is paired, when it matters most.
+          hasHost || entries.length > 0 ? (
+            <NavBarButton
+              ref={menuAnchor}
+              icon={Ellipsis}
+              accessibilityLabel={t('diagnostics.connectionDiagnosticsView.more', 'More actions')}
+              onPress={() => setMenuOpen(true)}
+            />
+          ) : undefined
+        }
       />
 
       <View
@@ -65,95 +145,42 @@ export function ConnectionDiagnosticsView({
           { paddingBottom: insets.bottom + spacing.xl }
         ]}
       >
-        {hostPicker}
         {hasHost || entries.length > 0 ? (
           <>
-            <View style={styles.statusRow}>
-              <Text style={styles.statusText}>
-                {!hasHost
-                  ? t('diagnostics.connectionDiagnosticsView.noHosts', 'No paired hosts.')
-                  : reconnectAttempts > 0
-                    ? t(
-                        'diagnostics.connectionDiagnosticsView.stateWithAttempt',
-                        '{{state}} · attempt {{attempts}}',
-                        { state: stateLabels[state], attempts: reconnectAttempts }
-                      )
-                    : stateLabels[state]}
-              </Text>
-              <Pressable
-                style={({ pressed }) => [styles.copyButton, pressed && pressedStyle]}
-                onPress={() => void copyDiagnostics()}
-              >
-                {copied ? (
-                  <Check size={14} color={colors.statusGreen} />
-                ) : (
-                  <Copy size={14} color={colors.textSecondary} />
-                )}
-                <Text style={styles.copyButtonText}>
-                  {copied
-                    ? t('common.copied', 'Copied')
-                    : t('diagnostics.connectionDiagnosticsView.copyReport', 'Copy report')}
-                </Text>
-              </Pressable>
-            </View>
-            {diagnosis && (
-              <View style={styles.diagnosisCard}>
-                <Text style={styles.diagnosisHeading}>
+            <SettingsSection first>
+              <ListRow
+                key="status"
+                title={
+                  !hasHost
+                    ? t('diagnostics.connectionDiagnosticsView.noHosts', 'No paired hosts.')
+                    : canPickHost
+                      ? status
+                      : hostName
+                }
+                subtitle={hasHost && !canPickHost ? status : undefined}
+              />
+              {diagnosis ? (
+                <ListRow
+                  key="diagnosis"
+                  title={diagnosis.likelyCause}
+                  wrapTitle
+                  subtitle={diagnosis.nextStep}
+                  subtitleLines={4}
+                />
+              ) : null}
+            </SettingsSection>
+            <View style={styles.log}>
+              {entries.length > 0 ? (
+                <ConnectionLog entries={[...entries]} title={hostName} fillAvailableHeight />
+              ) : (
+                <Text style={styles.emptyText}>
                   {t(
-                    'diagnostics.connectionDiagnosticsView.diagnosisHeading',
-                    'What this suggests'
+                    'diagnostics.connectionDiagnosticsView.noEvents',
+                    'No connection events yet. Events appear as the app dials this host.'
                   )}
                 </Text>
-                <Text style={styles.diagnosisText}>{diagnosis.likelyCause}</Text>
-                <Text style={styles.diagnosisNext}>{diagnosis.nextStep}</Text>
-                {diagnosis.reportability === 'orca-relay' && (
-                  <>
-                    <Text style={styles.privacyHint}>
-                      {t(
-                        'diagnostics.connectionDiagnosticsView.privacyHint',
-                        'Sends a size-limited redacted report including host name, endpoint, versions, connection state, and events—never terminal contents or credentials.'
-                      )}
-                    </Text>
-                    <Pressable
-                      style={({ pressed }) => [styles.sendButton, pressed && pressedStyle]}
-                      onPress={() => void sendDiagnostics()}
-                      disabled={submissionState === 'sending'}
-                    >
-                      {submissionState === 'sent' ? (
-                        <Check size={14} color={colors.statusGreen} />
-                      ) : (
-                        <Send size={14} color={colors.textPrimary} />
-                      )}
-                      <Text style={styles.sendButtonText}>
-                        {submissionState === 'sending'
-                          ? t('diagnostics.connectionDiagnosticsView.sending', 'Sending…')
-                          : submissionState === 'sent'
-                            ? t('diagnostics.connectionDiagnosticsView.sent', 'Diagnostics sent')
-                            : submissionState === 'failed'
-                              ? t(
-                                  'diagnostics.connectionDiagnosticsView.retrySending',
-                                  'Retry sending'
-                                )
-                              : t(
-                                  'diagnostics.connectionDiagnosticsView.sendDiagnostics',
-                                  'Send diagnostics'
-                                )}
-                      </Text>
-                    </Pressable>
-                  </>
-                )}
-              </View>
-            )}
-            {entries.length > 0 ? (
-              <ConnectionLog entries={[...entries]} title={hostName} fillAvailableHeight />
-            ) : (
-              <Text style={styles.emptyText}>
-                {t(
-                  'diagnostics.connectionDiagnosticsView.noEvents',
-                  'No connection events yet. Events appear as the app dials this host.'
-                )}
-              </Text>
-            )}
+              )}
+            </View>
           </>
         ) : (
           <Text style={styles.emptyText}>
@@ -161,6 +188,49 @@ export function ConnectionDiagnosticsView({
           </Text>
         )}
       </View>
+
+      <PullDownMenu
+        visible={menuOpen}
+        anchorRef={menuAnchor}
+        onClose={() => setMenuOpen(false)}
+        groups={[
+          [
+            {
+              id: 'copy',
+              label: copied
+                ? t('common.copied', 'Copied')
+                : t('diagnostics.connectionDiagnosticsView.copyReport', 'Copy report'),
+              icon: copied ? Check : Copy,
+              onPress: () => void copyDiagnostics()
+            },
+            ...(canSend
+              ? [
+                  {
+                    id: 'send',
+                    label: sendLabel(t, submissionState),
+                    icon: submissionState === 'sent' ? Check : Send,
+                    hint: t(
+                      'diagnostics.connectionDiagnosticsView.sendHint',
+                      'Redacted: never terminal contents or credentials.'
+                    ),
+                    disabled: submissionState === 'sending' || submissionState === 'sent',
+                    onPress: () => void sendDiagnostics()
+                  }
+                ]
+              : [])
+          ]
+        ]}
+      />
+      {canPickHost ? (
+        <PickerModal
+          visible={hostPickerOpen}
+          title={title}
+          options={hosts.map((host) => ({ value: host.id, label: host.name }))}
+          selected={selectedHostId ?? ''}
+          onSelect={(id) => onSelectHost(id)}
+          onClose={() => setHostPickerOpen(false)}
+        />
+      ) : null}
     </View>
   )
 }

@@ -3,17 +3,16 @@
 import { useEffect, useState } from 'react'
 import { ArrowUpRight } from 'lucide-react-native'
 import { botSlackApps } from '../../../../src/shared/bot-types'
-import { slackSetupProblemDetails } from '../../../../src/shared/bots/slack-setup-problem-details'
+import { slackSetupProblemCode } from '../../../../src/shared/bots/slack-setup-problem-details'
 import { slackTeamState } from '../../../../src/shared/connector-bot-slack-contract'
-import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { ListRow } from '../../components/list/ListGroup'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
-import { MobileConnectorSourceIcon } from '../MobileConnectorSourceIcon'
+import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
 import { readSlack } from './use-phone-bot-slack'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 /** Each workspace's name as one of the host's bots there reads it (one read per bot, again once the
  *  phone is back online); its id until known. */
@@ -67,6 +66,7 @@ export function SlackPickStep(props: {
   onPick: (teamId: string) => void
   onAnother: () => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const names = useSlackTeamNames(props.client, props.hostBots, props.teamIds, props.online)
   return (
@@ -74,7 +74,7 @@ export function SlackPickStep(props: {
       {props.teamIds.map((teamId) => (
         <ListRow
           key={teamId}
-          leading={<MobileConnectorSourceIcon source="slack" size={20} />}
+          leading={<MobileConnectorLogo source="slack" size={20} />}
           title={names.get(teamId) ?? teamId}
           navigates
           disabled={!props.online}
@@ -82,7 +82,8 @@ export function SlackPickStep(props: {
         />
       ))}
       <ListRow
-        leading={<ArrowUpRight size={18} color={colors.textPrimary} />}
+        leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+        accent
         title={t('bots.slack.setup.another', 'Connect another workspace')}
         disabled={!props.online}
         onPress={props.onAnother}
@@ -91,46 +92,69 @@ export function SlackPickStep(props: {
   )
 }
 
-/** What happened, one way forward, and the codes under Details for whoever reads them to support. */
+/** What happened, one way forward, and under Details the codes for whoever reads them to support. */
 export function SlackProblemStep(props: {
   kind: 'expired' | 'other-user'
   teamId: string
+  client: RpcClient | null
+  hostBots: readonly PhoneBot[]
   botName: string
   hostName: string
   online: boolean
   onNewLink: () => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
+  const names = useSlackTeamNames(props.client, props.hostBots, [props.teamId], props.online)
   const other = props.kind === 'other-user'
   return (
-    <MobileStateView
-      iconElement={<MobileConnectorSourceIcon source="slack" size={28} />}
-      title={
-        other
-          ? t('bots.slack.problem.otherUser', 'A different Slack account approved the connection.')
-          : t('bots.slack.problem.expired', 'Slack sign-in didn’t finish.')
-      }
-      message={
-        other
-          ? t(
-              'bots.slack.problem.otherUserNext',
-              'Someone signed in to another Slack account approved the Slack link, so {{bot}} can’t act as you. Get a new link and approve it while signed in to your own Slack account.',
-              { bot: props.botName }
-            )
-          : t(
-              'bots.slack.problem.expiredNext',
-              'The Slack link expired before anyone approved the connection.'
-            )
-      }
-      details={slackSetupProblemDetails(
-        { kind: props.kind, teamId: props.teamId },
-        { botName: props.botName, hostName: props.hostName }
-      )}
-      action={
-        props.online
-          ? { label: t('bots.slack.setup.newLink', 'Get a new link'), onPress: props.onNewLink }
-          : null
-      }
-    />
+    <>
+      <SettingsSection first>
+        <ListRow
+          leading={<MobileConnectorLogo source="slack" size={20} />}
+          title={
+            other
+              ? t(
+                  'bots.slack.problem.otherUser',
+                  'A different Slack account approved the connection.'
+                )
+              : t('bots.slack.problem.expired', 'Slack sign-in didn’t finish.')
+          }
+          wrapTitle
+          subtitle={
+            other
+              ? t(
+                  'bots.slack.problem.otherUserNext',
+                  'Someone signed in to another Slack account approved the Slack link, so {{bot}} can’t act as you. Get a new link and approve it while signed in to your own Slack account.',
+                  { bot: props.botName }
+                )
+              : t(
+                  'bots.slack.problem.expiredNext',
+                  'The Slack link expired before anyone approved the connection.'
+                )
+          }
+          subtitleLines={5}
+        />
+        <ListRow
+          leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+          accent
+          title={t('bots.slack.setup.newLink', 'Get a new link')}
+          accessibilityRole="link"
+          disabled={!props.online}
+          onPress={props.onNewLink}
+        />
+      </SettingsSection>
+      <SettingsSection title={t('common.details', 'Details')}>
+        <ListRow
+          title={t('bots.slack.problem.code', 'Code')}
+          value={slackSetupProblemCode({ kind: props.kind, teamId: props.teamId })}
+        />
+        <ListRow title={t('bots.slack.problem.computer', 'Computer')} value={props.hostName} />
+        <ListRow
+          title={t('bots.slack.problem.workspace', 'Workspace')}
+          value={names.get(props.teamId) ?? props.teamId}
+        />
+      </SettingsSection>
+    </>
   )
 }

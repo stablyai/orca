@@ -2,7 +2,7 @@ import {
   botPreviewFacts,
   botStatusNeedsAttention
 } from '../../../src/shared/bots/bot-collapsed-preview'
-import { translate } from '../i18n/mobile-i18n'
+import type { Translate } from '../i18n/mobile-i18n'
 import { accessRequestPerson } from '../../../src/shared/bots/bot-access-request'
 import { getBotSidebarEntries } from '../../../src/shared/bots/bot-sidebar-entries'
 import type { BotSidebarEntryActivity } from '../../../src/shared/bots/bot-sidebar-view'
@@ -26,7 +26,11 @@ import type {
 import { resolveWorktreeHostId } from '../worktree/row-presentation/worktree-host-context-labels'
 import type { MobileLineageStores } from '../worktree/agent-lineage/mobile-workspace-lineage'
 import { botStatusLine, mobileBotAvatarSource } from './host-bot-row-facts'
-import { botPurposeSnippet, matchBotSearchText } from '../../../src/shared/bots/bot-sidebar-search'
+import {
+  botPurposeSnippet,
+  matchBotSearchText,
+  type BotSearchRange
+} from '../../../src/shared/bots/bot-sidebar-search'
 import { botTemplateText } from '../../../src/shared/bots/bot-template-text'
 import type { ListedHostBots, HostBotListing } from './host-bot-listing'
 import { hostAgentsByPaneKey, hostBotGroupRow } from './host-bot-group-row'
@@ -45,6 +49,8 @@ export type HostBotSectionInputs = {
   collapsedGroups: ReadonlySet<string>
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
   search: string
+  /** The search shows paused bots the Bot options hide. */
+  showPaused?: boolean
   /** What this computer's bots are for, by id, read while searching; a bot also matches by it. */
   purposes?: ReadonlyMap<string, string>
   /** How the list draws a row, e.g. this phone's highlight. */
@@ -57,6 +63,7 @@ export type HostBotSectionInputs = {
   /** This phone's chat folds and worker paging steps, by `botChatFoldKey`. */
   chatFolds: Readonly<Record<string, BotChatFold>>
   chatSteps: Readonly<Record<string, number>>
+  t: Translate
 }
 
 /** One bot or group of one host, drawn, before the one list arranges them. */
@@ -71,6 +78,26 @@ export type DrawnBotEntry = {
 
 /** A host's name and down word by id, for worker lines on another computer than their bot's. */
 export type BotHostNames = ReadonlyMap<ExecutionHostId, { label: string; offline?: string }>
+
+/** About what a row's line shows of a purpose before it cuts. */
+const PURPOSE_SHOWN = 32
+
+function phonePurposeSnippet(
+  purpose: string,
+  ranges: BotSearchRange[]
+): { text: string; ranges: BotSearchRange[] } {
+  if ((ranges[0]?.start ?? 0) <= PURPOSE_SHOWN) {
+    return { text: purpose, ranges }
+  }
+  const cut = botPurposeSnippet(purpose, ranges)
+  // The snippet leads with a one-unit "…" when it cuts.
+  return cut.text.startsWith('…')
+    ? {
+        text: cut.text.slice(1),
+        ranges: cut.ranges.map(({ start, end }) => ({ start: start - 1, end: end - 1 }))
+      }
+    : cut
+}
 
 function matches(row: Worktree, query: string): boolean {
   return row.displayName.toLowerCase().includes(query)
@@ -200,18 +227,10 @@ export function drawHostBotEntries(
     // Searching lists the matching workspaces flat, as before chats; otherwise its chats, once read. A
     // down host's last tree is not live, and its bot lists nothing.
     const tree = query || offline ? undefined : inputs.chatTrees.get(hostBotTreeKey(hostId, bot.id))
+    // Until its first read lands it lists nothing, so its rows don't swap under you.
     const chatItems =
       tree === 'loading'
-        ? [
-            {
-              row: drawnHome.row,
-              view: {
-                sectionListKey: `bot-chat-loading:${identity(home.row)}`,
-                botChatLoading: true as const,
-                ...(bot.paused ? { dimmed: true as const } : {})
-              }
-            }
-          ]
+        ? []
         : hostBotChatItems({
             tree,
             branches: branches.map((branch) => ({ id: branch.id, lines: branch.lines.map(place) })),
@@ -227,16 +246,17 @@ export function drawHostBotEntries(
     const nameMatches = !query || matchBotSearchText(bot.name, inputs.search) !== null
     const saved = nameMatches ? undefined : purposes?.get(bot.id)
     // A template's purpose is saved in English and reads in the UI language, as on the desktop.
-    const purpose = saved ? botTemplateText(saved, translate) : null
+    const purpose = saved ? botTemplateText(saved, inputs.t) : null
     const purposeRanges = purpose ? matchBotSearchText(purpose, inputs.search) : null
+    // The row cuts its own end, so the start is cut only for a match past what one line shows,
+    // and then without the ellipsis.
     const purposeMatch =
-      purpose && purposeRanges ? botPurposeSnippet(purpose, purposeRanges).text : null
+      purpose && purposeRanges ? phonePurposeSnippet(purpose, purposeRanges) : null
     // A down host shows no live work.
     const workerCounts = countLiveBotWorkspaces(offline ? [] : workspaceStatuses)
     const botFacts = {
       botId: bot.id,
-      // Its chats fold with it, even with no workspace under them.
-      ...(chatItems && chatItems.length > 0 ? { foldsChats: true as const } : {}),
+      ...(chatItems ? { listsChats: true as const } : {}),
       avatar: mobileBotAvatarSource(bot),
       status,
       dot,
@@ -253,7 +273,7 @@ export function drawHostBotEntries(
         itemsNeedingYou: needsYou + access.length
       },
       ...(access[0] ? { askedForAccess: accessRequestPerson(access[0]) } : {}),
-      statusLine: botStatusLine(dot, bot.paused, translate),
+      statusLine: botStatusLine(dot, bot.paused, inputs.t),
       ...(purposeMatch ? { searchPurpose: purposeMatch } : {}),
       paused: bot.paused,
       ...(host ? { host } : {})
@@ -284,11 +304,13 @@ export function drawHostBotEntries(
       entry,
       items: [botRow, ...(listsUnder ? shownLines : [])],
       preview: {
-        id: composeWorktreeHostIdentity(hostId, bot.id),
-        name: bot.name,
-        avatar: botFacts.avatar,
         ...preview,
-        // A down host's faces carry no live pip.
+        // What its row's Needs you count reads, which the folded header adds up; a down host's is
+        // its last read, not live.
+        needs: offline
+          ? { line: {}, agents: [] }
+          : { line: botFacts.line, agents: home.row.agents ?? [] },
+        // A down host's bots carry no live mark.
         ...(offline ? { status: 'inactive' as const, attention: false, unread: false } : {})
       },
       activity: {

@@ -9,7 +9,6 @@ import type {
 import { ampHookService } from '../../amp/hook-service'
 import { claudeHookService } from '../../claude/hook-service'
 import { codexHookService } from '../../codex/hooks/installation/hook-service'
-import { geminiHookService } from '../../gemini/hook-service'
 import { antigravityHookService } from '../../antigravity/hook-service'
 import { cursorHookService } from '../../cursor/hook-service'
 import { commandCodeHookService } from '../../command-code/hook-service'
@@ -67,7 +66,6 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
         deferTrustUntilConfigToml: options?.deferTrustUntilConfigToml
       })
   ],
-  ['gemini', (sftp, remoteHome) => geminiHookService.installRemote(sftp, remoteHome)],
   ['qoder', (sftp, remoteHome) => qoderHookService.installRemote(sftp, remoteHome)],
   ['qoder-cn', (sftp, remoteHome) => qoderCnHookService.installRemote(sftp, remoteHome)],
   ['qwen-code', (sftp, remoteHome) => qwenCodeHookService.installRemote(sftp, remoteHome)],

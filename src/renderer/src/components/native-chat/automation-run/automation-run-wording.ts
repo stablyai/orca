@@ -76,6 +76,7 @@ const KEYS: Record<AutomationRunCopyKey, string> = {
   afterThirtyDays: 'components.native-chat.automationRun.afterThirtyDays',
   waitsFor: 'components.native-chat.automationRun.waitsFor',
   thenLine: 'components.native-chat.automationRun.thenLine',
+  thenAt: 'components.native-chat.automationRun.thenAt',
   thenOnce: 'components.native-chat.automationRun.thenOnce',
   thenOnceBy: 'components.native-chat.automationRun.thenOnceBy',
   cancel: 'components.native-chat.automationRun.cancel',

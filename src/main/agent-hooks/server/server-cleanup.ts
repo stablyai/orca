@@ -14,6 +14,7 @@ import {
 } from '../../../shared/execution-host/execution-host'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
+import { discardCodexPaneOwner } from '../../../shared/agent-hook-listener/providers/codex/codex-pane-transcript-retirement'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
 import { endedPresenceOf } from './agent-exit-evidence'
@@ -269,10 +270,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         statusChanged = true
         this.commitStatusRowMutation(deleted, undefined)
         if (deleted.payload.agentType === 'codex') {
-          // A replacement remote process may reuse the pane; discard the lost owner's children.
-          this.state.codexSubagentRosterByPaneKey.delete(paneKey)
-          this.state.codexLeadStateByPaneKey.delete(paneKey)
-          this.state.codexAsyncQuestionsByPaneKey.delete(paneKey)
+          discardCodexPaneOwner(this.state, paneKey)
         } else if (deleted.payload.agentType === 'claude') {
           this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
           this.state.claudeLeadStateByPaneKey.delete(paneKey)

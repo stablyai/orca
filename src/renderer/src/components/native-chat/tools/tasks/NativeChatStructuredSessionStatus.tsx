@@ -4,7 +4,7 @@ import { useNativeChatPinnedWorkerApprovals } from '../../worker-approvals/nativ
 import { useWorkerDockFeed } from './dock/worker-dock-feed'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
 import type { WorkerDockSnapshot } from '../../../../../../shared/orchestration/dock/worker-dock'
-import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
+import { openWorkerDockRow } from './dock/worker-dock-open'
 import { useWorkerDockOwnerActions } from './dock/use-worker-dock-owner-actions'
 import { WorkerDockFeedLossesContext, workerDockStopBlock } from './dock/worker-dock-stop-check'
 import {
@@ -12,6 +12,12 @@ import {
   WorkerDockFailureStrip
 } from './dock/WorkerDockFailureStrip'
 import { useLatestHandler } from '@/lib/use-latest-handler'
+import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
+import {
+  ORCHESTRATION_PAIRED_WORKER_DOCK_OWNER_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY
+} from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { pairedHostClientCapabilities } from '@/runtime/rpc/targets/paired-host-client-capabilities'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import { NativeChatCrewBackgroundTasksStatus } from './NativeChatCrewBackgroundTasksStatus'
 import type { StructuredSessionBackgroundTasksView } from '../../../../../../shared/agent-session/view/structured-session-background-tasks-view'
@@ -23,11 +29,6 @@ import {
   useNativeChatCrew
 } from '../../../orchestration-crew/use-native-chat-crew'
 
-const WorkerDockResultDialog = lazy(() =>
-  import('./dock/WorkerDockResultDialog').then((module) => ({
-    default: module.WorkerDockResultDialog
-  }))
-)
 const WorkerDockProviderDetailsDialog = lazy(() =>
   import('./dock/WorkerDockProviderDetailsDialog').then((module) => ({
     default: module.WorkerDockProviderDetailsDialog
@@ -65,7 +66,15 @@ export function NativeChatStructuredSessionStatus(props: {
   const { backgroundTasks, stop } = props
 
   const target = props.target ?? LOCAL
-  const ownerActionsAvailable = target.kind === 'local'
+  // A paired host takes Clear and Stop from a client it counts as a person once it says it does; an
+  // older host or another client is refused, so its rows keep pointing to the computer they run on.
+  const pairedOwnerActions = useRuntimeEnvironmentCapability(
+    target.kind === 'environment' && pairedHostCountsThisClientAsPerson()
+      ? target.environmentId
+      : null,
+    ORCHESTRATION_PAIRED_WORKER_DOCK_OWNER_RUNTIME_CAPABILITY
+  )
+  const ownerActionsAvailable = target.kind === 'local' || pairedOwnerActions
   const expandedHere = expanded?.sessionId === props.sessionId && expanded.expanded
   const feed = useWorkerDockFeed(
     target,
@@ -154,18 +163,7 @@ export function NativeChatStructuredSessionStatus(props: {
     opener: HTMLElement
   } | null>(null)
   const workerOpen = useCallback(
-    (row: WorkerDockRowView) =>
-      void openOrchestrationCrewAgent(
-        {
-          partyKey: row.id,
-          role: 'worker',
-          label: row.name,
-          agentKind: 'unknown',
-          status: row.state,
-          openTarget: { kind: 'dispatch', address: `dispatch:${row.dispatchId}` }
-        },
-        target
-      ),
+    (row: WorkerDockRowView) => openWorkerDockRow(row, target),
     [target]
   )
   // Read live when a Stop or its Retry is sent, never from rows a held press kept on screen.
@@ -180,14 +178,8 @@ export function NativeChatStructuredSessionStatus(props: {
   // A focused Retry or Dismiss leaves with the failure line; focus then moves to the next line or
   // the dock's toggle instead of the page.
   const failureFocus = useWorkerDockFailureFocusHandoff()
-  const owner = useWorkerDockOwnerActions(
-    target,
-    feed.party,
-    controlledWorkerIdentities,
-    workerOpen,
-    stopBlock
-  )
-  const { dialog, failure } = owner
+  const owner = useWorkerDockOwnerActions(target, feed.party, controlledWorkerIdentities, stopBlock)
+  const { failure } = owner
   // An attempt that ends with no failure line (it succeeded, or was dismissed) hands focus to no
   // line: a later, unrelated failure must not take it.
   const attemptOpen = Boolean(failure) || owner.pending.size > 0
@@ -228,10 +220,12 @@ export function NativeChatStructuredSessionStatus(props: {
         sessionId={props.sessionId}
         workerRows={controlledWorkerRows}
         workerIdentities={controlledWorkerIdentities}
-        onOpenWorker={owner.open}
+        onOpenWorker={workerOpen}
         onWorkerAction={owner.action}
         onClearAll={owner.clearAll}
         loadWindow={feed.loadWindow}
+        incomplete={backgroundTasks.incomplete}
+        unavailable={!feed.available}
         tasks={backgroundTasks.tasks}
         settledTasks={backgroundTasks.settledTasks}
         {...(backgroundTasks.children
@@ -240,7 +234,6 @@ export function NativeChatStructuredSessionStatus(props: {
         indicatorActive={backgroundTasks.isMonitoring}
         supportsTaskStop={backgroundTasks.supportsStop}
         offersStopAll={backgroundTasks.offersStopAll}
-        incomplete={backgroundTasks.incomplete || !feed.available}
         stoppingTaskIds={new Set([...stop.stoppingTaskIds, ...owner.pending])}
         stoppingAll={stop.stoppingAll}
         expanded={expandedHere}
@@ -263,7 +256,7 @@ export function NativeChatStructuredSessionStatus(props: {
           />
         </Suspense>
       ) : null}
-      {failure && !dialog ? (
+      {failure ? (
         <WorkerDockFailureStrip
           key={`${failure.message}\0${failure.retry ? 'retry' : 'final'}`}
           failure={failure}
@@ -271,37 +264,16 @@ export function NativeChatStructuredSessionStatus(props: {
           focusHandoff={failureFocus}
         />
       ) : null}
-      {dialog ? (
-        <Suspense fallback={null}>
-          <WorkerDockResultDialog
-            ownerActionsAvailable={
-              ownerActionsAvailable && dialog.result?.ownerActionsAvailable !== false
-            }
-            result={dialog.result}
-            error={dialog.error}
-            onClose={() => {
-              const { opener } = dialog
-              owner.close()
-              if (opener.isConnected) {
-                opener.focus()
-              } else {
-                document
-                  .querySelector<HTMLButtonElement>(
-                    '[data-native-chat-background-tasks] button[aria-expanded]'
-                  )
-                  ?.focus()
-              }
-            }}
-            onOpen={() => workerOpen(dialog.row)}
-            onRestore={owner.restore}
-          />
-        </Suspense>
-      ) : null}
     </WorkerDockFeedLossesContext.Provider>
   )
 }
 
 const LOCAL: RuntimeClientTarget = { kind: 'local' }
+
+/** The host's owner check passes a paired client only when its handshake says it is a person's. */
+function pairedHostCountsThisClientAsPerson(): boolean {
+  return pairedHostClientCapabilities().includes(ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY)
+}
 
 /** The identity is the current lifecycle; a cached detail can lag it (a metadata-only update
  *  moves the identity alone). The row shows, and Stop is checked against, the identity's state. */

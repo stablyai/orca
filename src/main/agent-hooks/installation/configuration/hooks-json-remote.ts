@@ -1,69 +1,53 @@
-import { randomUUID } from 'node:crypto'
 import type { SFTPWrapper } from 'ssh2'
 import type { HooksConfig } from './hook-config-schema'
-import { parseHooksJsonText } from './hooks-json-read'
-import {
-  DEFAULT_REMOTE_CONFIG_MODE,
-  readFile,
-  writeFile,
-  getRemoteFileModeOrDefault,
-  rename,
-  unlink,
-  chmod,
-  mkdirpRemote,
-  dirnamePosix,
-  isNoEntryError
-} from '../remote/hook-sftp-operations'
+import { parseHooksJsonText, type HooksJsonSnapshot } from './hooks-json-read'
+import { readFile, isNoEntryError } from '../remote/hook-sftp-operations'
+import { writeTextFileRemoteAtomic } from '../remote/hook-text-files-remote'
+
+/** Null config means invalid JSON, {} means missing; propagate other I/O failures. */
+export async function readHooksJsonRemoteWithRaw(
+  sftp: SFTPWrapper,
+  remotePath: string
+): Promise<HooksJsonSnapshot> {
+  let raw: string
+  try {
+    raw = await readFile(sftp, remotePath)
+  } catch (err) {
+    if (isNoEntryError(err)) {
+      return { raw: null, config: {} }
+    }
+    throw err
+  }
+  return { raw, config: parseHooksJsonText(raw) }
+}
 
 /** Null means invalid JSON, {} means missing; propagate other I/O failures. */
 export async function readHooksJsonRemote(
   sftp: SFTPWrapper,
   remotePath: string
 ): Promise<HooksConfig | null> {
-  let body: string
-  try {
-    body = await readFile(sftp, remotePath)
-  } catch (err) {
-    if (isNoEntryError(err)) {
-      return {}
-    }
-    throw err
-  }
-  return parseHooksJsonText(body)
+  return (await readHooksJsonRemoteWithRaw(sftp, remotePath)).config
 }
 
-/** Atomically replace the remote config without rotating local-style backups. */
+/**
+ * Atomically replace the remote config without rotating local-style backups.
+ * With `computedFrom` (the bytes the edit was made from, null for absent), returns false without
+ * publishing when the file changed since, so the caller redoes its edit instead of clobbering.
+ */
 export async function writeHooksJsonRemote(
   sftp: SFTPWrapper,
   remotePath: string,
   config: Record<string, unknown>,
   // JSONC callers can supply text edited in place.
-  options?: { serialized?: string }
-): Promise<void> {
-  const dir = dirnamePosix(remotePath)
-  await mkdirpRemote(sftp, dir)
+  options?: { serialized?: string; computedFrom?: string | null }
+): Promise<boolean> {
   const serialized = options?.serialized ?? `${JSON.stringify(config, null, 2)}\n`
-  // Preserve mtime and inode on repeated installs.
-  try {
-    const existing = await readFile(sftp, remotePath)
-    if (existing === serialized) {
-      return
-    }
-  } catch {
-    // Retry through the write path after a failed read.
-  }
-  // Atomic replacement prevents interrupted writes from truncating live settings.
-  const tmp = `${dir}/.${Date.now()}-${randomUUID()}.tmp`
-  try {
-    const mode = await getRemoteFileModeOrDefault(sftp, remotePath, DEFAULT_REMOTE_CONFIG_MODE)
-    await writeFile(sftp, tmp, serialized, mode)
-    await chmod(sftp, tmp, mode)
-    await rename(sftp, tmp, remotePath)
-  } finally {
-    try {
-      await unlink(sftp, tmp)
-    } catch {
-      // Cleanup is best effort.
-    }
-  }
+  return await writeTextFileRemoteAtomic(
+    sftp,
+    remotePath,
+    serialized,
+    options && 'computedFrom' in options && options.computedFrom !== undefined
+      ? { computedFrom: options.computedFrom }
+      : undefined
+  )
 }

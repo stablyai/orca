@@ -188,7 +188,12 @@ export class CodexTurnFailures {
       case 'serverOverloaded':
       case 'flexUnavailable':
       case 'policyCapacityUnavailable':
+      case 'rateLimitExceeded':
         return agentSessionFailureFact('providerUnavailable')
+      case 'responseTooManyFailedAttempts':
+        return agentSessionFailureFact(
+          info?.status === 429 ? 'providerUnavailable' : 'providerResponseFailed'
+        )
       case 'cyberPolicy':
       case 'misalignmentPolicyViolation':
       case 'tooManyDenials':

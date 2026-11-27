@@ -144,6 +144,9 @@ export class AgentModelCatalogStore {
 
   failure = (fingerprint: string): AgentModelCatalogFailure | null => this.failures.get(fingerprint)
 
+  probeFailed: AgentModelCatalogFailures['probeFailed'] = (...failure) =>
+    this.failures.probeFailed(...failure)
+
   retirementRevision(agent: string): number {
     const revision = this.retirementRevisions.get(agent) ?? 0
     this.retirementRevisions.set(agent, revision)

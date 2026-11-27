@@ -1,10 +1,9 @@
 import { useTranslate } from '@/i18n/use-translate'
-import { workerDockStateLabel } from './worker-dock-labels'
+import { workerDockSpokenTitle, workerDockStateLabel } from './worker-dock-labels'
 import { useContext, useRef, useState } from 'react'
 import { Square, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { cn } from '@/lib/class-names'
 import type { WorkerDockRowView } from './WorkerDockRow'
 import { WorkerDockFeedLossesContext, workerDockCanStop } from './worker-dock-stop-check'
 
@@ -32,12 +31,10 @@ function workerDockPressStillLive(press: Press, readLosses: () => number): boole
 /** A dock row's Stop or Clear, which keeps the pressed intent through a structural update. */
 export function WorkerDockRowAction({
   row,
-  narrow,
   pending,
   onAction
 }: {
   row: WorkerDockRowView
-  narrow: boolean
   pending: boolean
   onAction: (row: WorkerDockRowView, action: 'stop' | 'clear') => void
 }) {
@@ -69,15 +66,9 @@ export function WorkerDockRowAction({
     losses: readLosses()
   })
   return (
-    <div
-      className={cn(
-        'flex shrink-0 justify-center pt-1.5',
-        narrow ? 'w-11' : 'w-10',
-        action === 'stop' &&
-          !pending &&
-          'opacity-0 group-hover/worker:opacity-100 group-focus-within/worker:opacity-100 [@media(pointer:coarse)]:opacity-100'
-      )}
-    >
+    // Above the row's stretched open button, so a press here never opens the worker. The row shows
+    // it on hover or focus.
+    <div className="relative z-10 flex shrink-0 items-center">
       {canClear || canStop ? (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -87,7 +78,7 @@ export function WorkerDockRowAction({
               variant="ghost-on-accent-inset"
               size="icon-xs"
               data-worker-dock-action={row.id}
-              className={cn(narrow ? (action === 'clear' ? 'h-6 w-11' : 'size-11') : 'size-6.5')}
+              className="size-5 [@media(pointer:coarse)]:size-7"
               aria-label={
                 action === 'clear'
                   ? t('components.native-chat.workerDock.clearName', 'Clear {{name}}', {
@@ -99,13 +90,13 @@ export function WorkerDockRowAction({
                         'Stop {{name}} · {{title}} unavailable · {{reason}}',
                         {
                           name: row.name,
-                          title: row.title,
+                          title: workerDockSpokenTitle(row.kind, row.title),
                           reason: workerDockStateLabel(t, 'stopping')
                         }
                       )
                     : t('components.native-chat.workerDock.stopName', 'Stop {{name}} · {{title}}', {
                         name: row.name,
-                        title: row.title
+                        title: workerDockSpokenTitle(row.kind, row.title)
                       })
               }
               aria-disabled={action === 'stop' ? unavailable : pending}
@@ -215,9 +206,9 @@ export function WorkerDockRowAction({
               }}
             >
               {action === 'clear' ? (
-                <X className="size-4" />
+                <X className="size-3.5" />
               ) : (
-                <Square className="size-4 p-1" fill="currentColor" />
+                <Square className="size-3.5 p-[3px]" fill="currentColor" />
               )}
             </Button>
           </TooltipTrigger>

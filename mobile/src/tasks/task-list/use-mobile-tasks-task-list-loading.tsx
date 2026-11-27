@@ -2,11 +2,12 @@ import { useQueryClient } from '@tanstack/react-query'
 import { linearIssueReadFailureMessage } from '../../../../src/shared/secure-storage/integration-credential-errors'
 import type { ProviderLoadActionsModel } from './use-mobile-tasks-provider-load-actions'
 import { listTaskSourceRepos } from '../repositories/hosted-repo-selection'
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { readTaskListRows } from './task-list-read'
 import { readTaskList, taskListParams } from '../screen-state/task-queries'
 import { taskListKey } from '../screen-state/task-query-storage'
 import { useTaskListCache } from './use-task-list-cache'
+import { recomputeOn } from '../../hooks/recompute-on'
 
 export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
   const {
@@ -36,7 +37,6 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     effectiveRepoIds,
     serverRepoList,
     setError,
-    setGithubCurrentPage,
     setGithubPages,
     setGithubRepoSources,
     setGithubSourceErrors,
@@ -55,99 +55,118 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     useTaskListCache(model)
   // By content, so re-picking the same repos (a new Set) does not re-read.
   const savedRepoKey = [...selectedRepoIds].sort().join('\n')
-  const loadTasks = useCallback(
-    async (options: { silent?: boolean } = {}): Promise<void> => {
-      if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) {
-        return
-      }
-      const generation = loadGenerationRef.current + 1
-      loadGenerationRef.current = generation
-      unsettledLoadRef.current = generation
-      const requestClient = client
-      const isCurrent = () =>
-        loadGenerationRef.current === generation && clientRef.current === requestClient
-      // Reads only inputs in this callback's dependencies.
-      const params = taskListParams(model, savedRepoKey)
-      const listKey = params && taskListKey(hostId, params)
-      setError('')
-      if (options.silent) {
-        setRefreshing(true)
-      } else {
-        begin(params, provider)
-      }
-      try {
-        if (provider !== 'github' || githubMode !== 'items') {
-          resetGitHubItemsState()
-        }
-        // Jira/Linear need repos only for workspace creation, not issue reads.
-        const repoListRequest = repoListEnsureLoaded()
-        void repoListRequest.catch(() => {})
-        const hosted = provider === 'github' || provider === 'gitlab'
-        const repos = hosted ? listTaskSourceRepos(await repoListRequest, effectiveRepoIds) : []
-        if (!isCurrent()) {
-          return
-        }
-        // Project rows match against repos without listing work items; a hosted filter with no repos has nothing to read.
-        if (!params || (hosted && repos.length === 0)) {
-          setItems([])
-          resetGitHubItemsState()
-          return
-        }
-        const snapshot = await readTaskList(
-          queryClient,
-          { hostId, client: requestClient },
-          params,
-          (signal) => readTaskListRows({ ...model, client: requestClient, repos }, signal)
-        )
-        if (!isCurrent()) {
-          return
-        }
-        shown(provider, params)
-        setItems(snapshot.items)
-        setError(snapshot.notice ?? '')
-        if (snapshot.github) {
-          setGithubRepoSources((current) => ({ ...current, ...snapshot.github.sources }))
-          setGithubSourceErrors(snapshot.github.sourceErrors)
-          setGithubSourceFallbacks(snapshot.github.sourceFallbacks)
-          setGithubPages([snapshot.items])
-          setGithubCurrentPage(0)
-          if (effectiveRepoIds.size > 0) {
-            void countGitHubItemPages(requestClient, repos, isCurrent).then((totalPages) => {
-              if (isCurrent()) {
-                setGithubCountedTotalPages(totalPages)
-                rememberPageCount(listKey, totalPages)
+  const loadTasks = useMemo(
+    () =>
+      recomputeOn(
+        [
+          appliedQuery,
+          fetchGitHubItemsPage,
+          gitlabFilter,
+          gitlabView,
+          githubKind,
+          jiraConnection,
+          jiraFilter,
+          linearConnected,
+          linearFilter,
+          linearOrderBy,
+          selectedLinearTeamIds,
+          selectedLinearWorkspaceId
+        ],
+        () =>
+          async (options: { silent?: boolean } = {}): Promise<void> => {
+            if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) {
+              return
+            }
+            const generation = loadGenerationRef.current + 1
+            loadGenerationRef.current = generation
+            unsettledLoadRef.current = generation
+            const requestClient = client
+            const isCurrent = () =>
+              loadGenerationRef.current === generation && clientRef.current === requestClient
+            // Reads only inputs in this callback's dependencies.
+            const params = taskListParams(model, savedRepoKey)
+            const listKey = params && taskListKey(hostId, params)
+            setError('')
+            if (options.silent) {
+              setRefreshing(true)
+            } else {
+              begin(params, provider)
+            }
+            try {
+              if (provider !== 'github' || githubMode !== 'items') {
+                resetGitHubItemsState()
               }
-            })
-          } else {
-            // Do not spend GitHub Search quota on all-repo totals before the user narrows scope.
-            setGithubCountedTotalPages(null)
+              // Jira/Linear need repos only for workspace creation, not issue reads.
+              const repoListRequest = repoListEnsureLoaded()
+              void repoListRequest.catch(() => {})
+              const hosted = provider === 'github' || provider === 'gitlab'
+              const repos = hosted
+                ? listTaskSourceRepos(await repoListRequest, effectiveRepoIds)
+                : []
+              if (!isCurrent()) {
+                return
+              }
+              // Project rows match against repos without listing work items; a hosted filter with no repos has nothing to read.
+              if (!params || (hosted && repos.length === 0)) {
+                setItems([])
+                resetGitHubItemsState()
+                return
+              }
+              const snapshot = await readTaskList(
+                queryClient,
+                { hostId, client: requestClient },
+                params,
+                (signal) => readTaskListRows({ ...model, client: requestClient, repos }, signal)
+              )
+              if (!isCurrent()) {
+                return
+              }
+              shown(provider, params)
+              setItems(snapshot.items)
+              setError(snapshot.notice ?? '')
+              if (snapshot.github) {
+                setGithubRepoSources((current) => ({ ...current, ...snapshot.github.sources }))
+                setGithubSourceErrors(snapshot.github.sourceErrors)
+                setGithubSourceFallbacks(snapshot.github.sourceFallbacks)
+                setGithubPages([snapshot.items])
+                if (effectiveRepoIds.size > 0) {
+                  void countGitHubItemPages(requestClient, repos, isCurrent).then((totalPages) => {
+                    if (isCurrent()) {
+                      setGithubCountedTotalPages(totalPages)
+                      rememberPageCount(listKey, totalPages)
+                    }
+                  })
+                } else {
+                  // Do not spend GitHub Search quota on all-repo totals before the user narrows scope.
+                  setGithubCountedTotalPages(null)
+                }
+              }
+            } catch (err) {
+              if (!isCurrent()) {
+                return
+              }
+              setItems([])
+              resetGitHubItemsState()
+              setError(
+                provider === 'linear'
+                  ? linearIssueReadFailureMessage(err)
+                  : err instanceof Error
+                    ? err.message
+                    : 'Failed to load tasks'
+              )
+            } finally {
+              if (unsettledLoadRef.current === generation) {
+                unsettledLoadRef.current = 0
+              }
+              if (isCurrent()) {
+                setLoading(false)
+                setRefreshing(false)
+                settle()
+                setTaskListSettled(true)
+              }
+            }
           }
-        }
-      } catch (err) {
-        if (!isCurrent()) {
-          return
-        }
-        setItems([])
-        resetGitHubItemsState()
-        setError(
-          provider === 'linear'
-            ? linearIssueReadFailureMessage(err)
-            : err instanceof Error
-              ? err.message
-              : 'Failed to load tasks'
-        )
-      } finally {
-        if (unsettledLoadRef.current === generation) {
-          unsettledLoadRef.current = 0
-        }
-        if (isCurrent()) {
-          setLoading(false)
-          setRefreshing(false)
-          settle()
-          setTaskListSettled(true)
-        }
-      }
-    },
+      ),
     [
       appliedQuery,
       client,

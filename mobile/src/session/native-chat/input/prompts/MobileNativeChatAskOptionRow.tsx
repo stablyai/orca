@@ -1,11 +1,12 @@
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { MobileNativeChatOptionThumbnail } from '../session-options/MobileNativeChatOptionThumbnail'
-import { colors, radii, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
+import { radii, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
 import { ASK_CHOICE_RADIUS } from './MobileNativeChatAsk.styles'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { nativeChatQuestionOptionLabel } from '../../../../../../src/shared/native-chat/input/questions/native-chat-question-option-label'
 
 export function MobileNativeChatAskOptionRow({
   label,
@@ -16,7 +17,6 @@ export function MobileNativeChatAskOptionRow({
   selected,
   multi,
   disabled,
-  pending = false,
   onPress
 }: {
   label: string
@@ -28,18 +28,18 @@ export function MobileNativeChatAskOptionRow({
   selected: boolean
   multi?: boolean
   disabled: boolean
-  /** This choice is the answer being sent (a card with no Submit). */
-  pending?: boolean
   onPress: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const hasPreview = Boolean(preview && onPreview)
+  // Agents mark their pick inline ("Tabs (Recommended)"); the answer keeps the full label.
+  const shown = nativeChatQuestionOptionLabel(label)
   const row = (
     <Pressable
       accessibilityRole={multi ? 'checkbox' : 'radio'}
-      accessibilityState={{ checked: selected, disabled, busy: pending }}
-      aria-busy={pending}
+      accessibilityState={{ checked: selected, disabled }}
       style={({ pressed }) => [
         styles.option,
         selected && styles.optionSelected,
@@ -50,23 +50,19 @@ export function MobileNativeChatAskOptionRow({
       onPress={onPress}
     >
       {/* Multi-select reads as a checkbox (square); single-select as a radio (circle). */}
-      {pending ? (
-        <ActivityIndicator size="small" color={colors.statusGreen} style={styles.checkSlot} />
-      ) : (
-        <View
-          style={[
-            styles.check,
-            multi ? styles.checkSquare : styles.checkCircle,
-            selected && styles.checkOn
-          ]}
-        >
-          {selected ? <Check size={12} color={colors.bgBase} strokeWidth={3} /> : null}
-        </View>
-      )}
+      <View
+        style={[
+          styles.check,
+          multi ? styles.checkSquare : styles.checkCircle,
+          selected && styles.checkOn
+        ]}
+      >
+        {selected ? <Check size={12} color={colors.bgBase} strokeWidth={3} /> : null}
+      </View>
       <View style={styles.optionBody}>
         <Text style={styles.optionLabel}>
-          {label}
-          {recommended ? (
+          {shown.shown}
+          {recommended || shown.recommended ? (
             <Text style={styles.recommended}>
               {'  '}
               {t('chat.ask.recommended', 'Recommended')}
@@ -98,7 +94,7 @@ const CHOICE_GAP = 10
 const CHOICE_PADDING_X = spacing.md
 
 // Choices sit on the card unfilled, edged at 3:1 against it, so dark mode is no longer grey on grey.
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   option: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -114,10 +110,6 @@ const styles = themedStyleSheet(() => ({
   optionSelected: {
     borderColor: colors.statusGreen,
     backgroundColor: colors.choiceSelectedFill
-  },
-  checkSlot: {
-    width: CHECK_SIZE,
-    height: CHECK_SIZE
   },
   check: {
     width: CHECK_SIZE,
@@ -146,10 +138,11 @@ const styles = themedStyleSheet(() => ({
     fontSize: typography.bodySize,
     fontWeight: '600'
   },
+  // The phone's Recommended tag (the voice model list's).
   recommended: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    fontWeight: '400'
+    color: colors.statusGreen,
+    fontSize: 11,
+    fontWeight: '700'
   },
   optionDescription: {
     color: colors.textSecondary,

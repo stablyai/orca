@@ -81,6 +81,34 @@ export function shouldPropagateStatus(status: GitFileStatus): boolean {
   return status !== 'deleted'
 }
 
+// Code units below U+0300 never change under NFC, so ASCII and Latin-1 paths skip normalize().
+const MAY_CHANGE_UNDER_NFC = /[\u0300-\uffff]/
+
+function composedVariant(relativePath: string): string | null {
+  if (!MAY_CHANGE_UNDER_NFC.test(relativePath)) {
+    return null
+  }
+  const composed = relativePath.normalize('NFC')
+  return composed === relativePath ? null : composed
+}
+
+// Why: macOS lists names as stored, often decomposed (NFD), while Git reports them composed (NFC).
+// Only the lookup key is composed; on byte-exact hosts the listed path still wins when present.
+export function getPathDecoration<T>(
+  byPath: ReadonlyMap<string, T>,
+  relativePath: string
+): T | null {
+  if (byPath.size === 0) {
+    return null
+  }
+  const direct = byPath.get(relativePath)
+  if (direct !== undefined) {
+    return direct
+  }
+  const composed = composedVariant(relativePath)
+  return composed === null ? null : (byPath.get(composed) ?? null)
+}
+
 export function isPathIgnored(ignored: Set<string>, relativePath: string): boolean {
   if (ignored.size === 0) {
     return false

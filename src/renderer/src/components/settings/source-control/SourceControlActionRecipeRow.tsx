@@ -13,7 +13,6 @@ import {
 import { canonicalSourceControlActionSelection } from '../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { ActionArgumentChoices } from '../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
 import { SourceControlActionAgentPicker } from './SourceControlActionAgentPicker'
-import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { CustomAgentId } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { isCustomAgentId } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
@@ -33,7 +32,7 @@ import {
   AI_TEXT_ACTION_ID_SET,
   getSourceControlActionAgentSupportText,
   getSourceControlActionAgentWarningText,
-  getSourceControlAgentArgsPlaceholder
+  SOURCE_CONTROL_AGENT_ARGS_PLACEHOLDER
 } from './source-control-action-recipe-options'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -58,7 +57,6 @@ type SourceControlActionRecipeRowProps<ActionId extends AiActionId> = {
   selectedAgent: TuiAgent | CustomAgentId | null
   draftValue: ActionRecipeDraftValue
   baseValue: ActionRecipeDraftValue
-  defaultTuiAgent: GlobalSettings['defaultTuiAgent']
   isSavingTemplate: boolean
   hasUnsavedChanges?: boolean
   defaultAgentLabel?: string
@@ -86,16 +84,6 @@ type SourceControlActionRecipeRowProps<ActionId extends AiActionId> = {
   onSave: (actionId: ActionId) => void
 }
 
-function resolveAgentArgsPlaceholderAgent(
-  selectedAgent: TuiAgent | CustomAgentId | null | undefined,
-  defaultTuiAgent: GlobalSettings['defaultTuiAgent']
-): TuiAgent | null {
-  if (selectedAgent && !isCustomAgentId(selectedAgent)) {
-    return selectedAgent
-  }
-  return defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null
-}
-
 function getActionLabel(actionId: AiActionId, t: Translate = translate): string {
   return actionId === 'conversationName'
     ? t('settings.chat.names.recipe', 'Chat name')
@@ -112,7 +100,6 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
   selectedAgent,
   draftValue,
   baseValue,
-  defaultTuiAgent,
   isSavingTemplate,
   hasUnsavedChanges,
   defaultAgentLabel,
@@ -138,10 +125,7 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
   const templateDirty =
     hasUnsavedChanges ?? JSON.stringify(draftValue) !== JSON.stringify(baseValue)
   const agentArgsPlaceholder =
-    (!selectedAgent && defaultAgentArgsPlaceholder) ||
-    getSourceControlAgentArgsPlaceholder(
-      resolveAgentArgsPlaceholderAgent(selectedAgent, defaultTuiAgent)
-    )
+    (!selectedAgent && defaultAgentArgsPlaceholder) || SOURCE_CONTROL_AGENT_ARGS_PLACEHOLDER
   const agentWarningText = getSourceControlActionAgentWarningText(actionId, selectedAgent, t)
   const agentSupportText =
     (!selectedAgent && defaultAgentSupportText) ||

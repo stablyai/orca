@@ -1,8 +1,11 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
-const launchConfig = z
-  .object({ agents: z.record(z.string(), z.record(z.string(), z.unknown())).optional() })
-  .passthrough()
+const launchConfig = lazyZodSchema(() =>
+  z
+    .object({ agents: z.record(z.string(), z.record(z.string(), z.unknown())).optional() })
+    .passthrough()
+)
 
 export function resolveOpenCodeLaunchModelConfig(options: {
   configContent: string | undefined

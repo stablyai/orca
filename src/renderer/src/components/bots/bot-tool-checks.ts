@@ -2,12 +2,17 @@
 // themselves cheaply, and a check that starts the servers only for readers that show it.
 import { translate } from '@/i18n/i18n'
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { useBots } from '@/lib/bot-catalog'
+import { readHostBots, useBots } from '@/lib/bot-catalog'
 import { botRefKey, callBotRpc, isSameBot, type BotRef } from '@/lib/bot-hosts'
 import { isBotAppTool } from '../../../../shared/bots/bot-connector-entries'
 import type { BotOwnTool, BotToolProblem, BotTools } from '../../../../shared/bot-tools'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import {
+  botChangeConcerns,
+  type BotChangeKind,
+  type BotChangeScope
+} from '../../../../shared/bots/bot-change-scope'
 import { notifyToolReaders, subscribe, toolsRevision } from './bot-tools-revision'
 
 type Problems = Record<string, BotToolProblem>
@@ -26,21 +31,55 @@ type BotToolReads = {
   agent: string | null
   tools: Promise<BotTools>
   checks: Partial<Record<CheckScope, Check>>
+  /** The host changed while no view showed it: the next view reads the tools again. */
+  stale?: boolean
 }
 // Shared by every row and card of a bot until the next change: a check starts its servers. Keyed by botRefKey.
 const reads = new Map<string, BotToolReads>()
+const MAX_CLOSED_READS = 64
 
 // Readers of a bot's tools, told when another window or the host changed them (a sign-in's state).
 const listReaders = new Map<string, Set<(tools: BotTools) => void>>()
 let listeningForHost = false
+const TOOL_KINDS: readonly BotChangeKind[] = ['settings', 'bot']
+
+function pruneClosedReads(): void {
+  const limit = listReaders.size + MAX_CLOSED_READS
+  if (reads.size <= limit) {
+    return
+  }
+  for (const [key, read] of reads) {
+    if (reads.size <= limit) {
+      break
+    }
+    if (!listReaders.has(key) && Object.values(read.checks).every((entry) => entry.users === 0)) {
+      reads.delete(key)
+    }
+  }
+}
 
 /**
  * The host says its bots changed (in any window, or on its own: a sign-in ended, couldn't start):
- * every bot's tools are read again, and the checks under way keep running.
+ * every shown bot's tools are read again, and the checks under way keep running. A bot no view
+ * shows waits for its next view instead, and is forgotten unless it holds a finished check and
+ * the host still lists it.
  */
-function rereadToolLists(hostId: ExecutionHostId): void {
+function rereadToolLists(hostId: ExecutionHostId, scope: BotChangeScope | undefined): void {
+  let listed: Set<string> | undefined
   for (const [key, read] of reads) {
-    if (read.bot.hostId !== hostId) {
+    if (
+      read.bot.hostId !== hostId ||
+      !botChangeConcerns(scope, { botId: read.bot.id, kinds: TOOL_KINDS })
+    ) {
+      continue
+    }
+    if (!listReaders.has(key)) {
+      listed ??= new Set(readHostBots(hostId).map((bot) => bot.id))
+      if (finishedCheck(read) && listed.has(read.bot.id)) {
+        read.stale = true
+      } else {
+        reads.delete(key)
+      }
       continue
     }
     const tools = callBotRpc<BotTools>(read.bot, 'bots.tools.list', { botId: read.bot.id })
@@ -59,7 +98,7 @@ function rereadToolLists(hostId: ExecutionHostId): void {
 function listenForHostChanges(): void {
   if (!listeningForHost && typeof window !== 'undefined') {
     listeningForHost = true
-    onBotsChanged(rereadToolLists, undefined, { kinds: ['settings', 'bot'] })
+    onBotsChanged(rereadToolLists, undefined, { kinds: TOOL_KINDS })
   }
 }
 
@@ -72,6 +111,7 @@ function onToolList(bot: BotRef, reader: (tools: BotTools) => void): () => void 
     readers.delete(reader)
     if (readers.size === 0) {
       listReaders.delete(key)
+      pruneClosedReads()
     }
   }
 }
@@ -87,6 +127,12 @@ function readsFor(bot: BotRef, agent: string | null): BotToolReads {
   const key = botRefKey(bot)
   const cached = reads.get(key)
   if (cached?.revision === toolsRevision() && cached.agent === agent) {
+    if (cached.stale) {
+      cached.stale = false
+      cached.tools = callBotRpc<BotTools>(cached.bot, 'bots.tools.list', { botId: bot.id })
+    }
+    reads.delete(key)
+    reads.set(key, cached)
     return cached
   }
   if (cached) {
@@ -101,7 +147,9 @@ function readsFor(bot: BotRef, agent: string | null): BotToolReads {
     tools: callBotRpc<BotTools>(ref, 'bots.tools.list', { botId: bot.id }),
     checks: {}
   }
+  reads.delete(key)
   reads.set(key, fresh)
+  pruneClosedReads()
   return fresh
 }
 

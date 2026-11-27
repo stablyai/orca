@@ -26,6 +26,7 @@ import { readBotShareable } from '../bots/sharing/bot-share-sources'
 import { runtimeBotWork, type BotWorkRuntime } from '../bots/bot-work-runtime'
 import type { WorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
+import { botLinkedSkillsFolder } from '../bots/bot-skill-projects'
 import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
 import { BotsDbWorkerClient } from '../bots/db-worker/bots-db-worker-client'
 import { profileAccountUserId } from '../orca-profiles/profile-account-user-id'
@@ -94,6 +95,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       }),
     leaveBotGroups: (botId) => this.leaveBotGroups(botId),
     botsRoot: () => botsRootFolder(),
+    slackIconsRoot: () => join(getProfileUserDataPath(), 'bot-slack-icons'),
     filesystem: localBotHomeFilesystem,
     accountUserId: () =>
       this.servedOrcaProfileId
@@ -106,6 +108,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       this.lookAround.forget(botId)
       void this.botWork.forgetBot(botId)
       this.bots.memory.removed(botId)
+      void this.bots.slackIcons.forget(botId).catch(() => undefined)
     }
   })
 
@@ -236,6 +239,13 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   private readonly wiredBotLookup = createBotLookupIndex(() => this.wiredBots())
 
+  /** The linked-project skills folder every chat of the bot homed at this workspace loads. */
+  botLinkedSkillsFolderOfHome(workspaceId: string | null | undefined): string | null {
+    const bot = this.wiredBotLookup.byHome(workspaceId)
+    // Unlinking every project hides its skills at once, before the folder's links are removed.
+    return bot?.skillProjects?.length ? botLinkedSkillsFolder(bot.id) : null
+  }
+
   /** The bots on this host's store, read per call. */
   protected wiredBots(): readonly WiredBot[] {
     return this.store?.getBots?.() ?? []
@@ -244,6 +254,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** The structured host's bot side: their sessions' tools and memory, Look around, and the queued-message gate. */
   protected botStructuredSessionHostDeps(store: () => RuntimeStore) {
     return {
+      owedItemAttachmentUploads: (stateDirectory: string, root: string) =>
+        this.botItems.owedCommentAttachmentUploads(stateDirectory, root),
       ...botStructuredSessionWiring({
         store,
         botsAtInstall: this.store?.getBots?.() ?? [],

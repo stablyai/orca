@@ -8,15 +8,23 @@ import { readWorkerPresence } from '../../db/worker-presence/worker-presence-sto
 import { observeWorker } from './worker-presence-report'
 import { START_BLOCKED_FENCE } from './awaiting-worker-start-report'
 import { WORKER_AGENT_STARTING_STAGE } from '../../db/worker-dispatch/worker-awaiting-agent-stage'
+import { RETAINED_CHAT_BEFORE_BRIEF_STAGE } from '../../db/worker-dispatch/restart-cut-worker-start'
 import { SUBMIT_WITHHELD_STAGE, type UnconfirmedStartEvidence } from './unconfirmed-start-evidence'
 import { confirmUnknownWorkerStart } from './worker-working-observation'
-import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
+import {
+  workerTurnStopDispatchId,
+  type WorkerTurnStopDispatch,
+  type WorkerTurnStopReportDeps
+} from './worker-turn-stop-report'
 
 /** One fence per Dispatch: a start is unconfirmed once, whichever runtime sees it. */
 const START_UNCONFIRMED_FENCE = 'start-unconfirmed'
 
 /** One fence per Dispatch for a resume's withheld continue prompt, apart from its start's. */
 const RESTART_CONTINUE_WITHHELD_FENCE = 'restart-continue-withheld'
+
+/** One fence per held notice, named by its newest message: a later held notice is new news. */
+const MAIL_NOTICE_HELD_FENCE_PREFIX = 'mail-notice-held:'
 
 /** Stages from which the worker may hold the brief: delivery began, or its turn went unseen. */
 const BRIEF_HANDED_OVER_STAGES: ReadonlySet<string> = new Set([
@@ -51,14 +59,16 @@ export function observeUnconfirmedWorkerStart(
     chat && isOrcaSessionId(chat)
       ? formatOrcaSessionAddress(canonicalOrcaSessionId(chat))
       : dispatch?.assignee_handle
-  // Only a start that handed its brief to a worker it placed here can hold it unsent; a paired
-  // server decides its own workers.
+  // An older binary could have handed over a chat brief without recording dispatch_input.
+  const attachedChat =
+    start.surface === 'chat' &&
+    (worker?.stage === 'authority_attached' || worker?.stage === RETAINED_CHAT_BEFORE_BRIEF_STAGE)
   if (
     !dispatch ||
     !from ||
     (dispatch.status !== 'pending' && dispatch.status !== 'dispatched') ||
     worker?.state !== 'start_unknown' ||
-    !BRIEF_HANDED_OVER_STAGES.has(worker.stage) ||
+    !(attachedChat || BRIEF_HANDED_OVER_STAGES.has(worker.stage)) ||
     db.getFederatedDispatch(dispatchId)
   ) {
     return
@@ -123,6 +133,40 @@ export function observeWithheldRestartContinue(
         startSurface: 'terminal',
         lastOutput: continued.screen,
         startEvidence: continued.evidence
+      }
+    },
+    deps
+  )
+}
+
+/** A terminal worker, local or a paired server's, whose mailbox notice stayed in its prompt after
+ *  Orca's Enters is told to its coordinator once per notice; a turn seen later supersedes it. */
+export function observeHeldMailNotice(
+  db: OrchestrationDb,
+  target: WorkerTurnStopDispatch,
+  notice: { from: string; newestMessageId: string; screen?: string },
+  deps: WorkerTurnStopReportDeps
+): void {
+  // A turn seen since the notice's Enter proves it was taken, and a gone worker reads no mail; an
+  // alert would undo either presence.
+  const presence = readWorkerPresence(db, workerTurnStopDispatchId(target))?.presence
+  if (presence === 'working' || presence === 'gone') {
+    return
+  }
+  const fence = `${MAIL_NOTICE_HELD_FENCE_PREFIX}${notice.newestMessageId}`
+  observeWorker(
+    db,
+    target,
+    {
+      presence: 'at-rest',
+      fence,
+      legacyStopKey: fence,
+      rest: {
+        from: notice.from,
+        reason: 'start-unconfirmed',
+        startSurface: 'terminal',
+        lastOutput: notice.screen,
+        startEvidence: { lines: [], mailNotice: true }
       }
     },
     deps

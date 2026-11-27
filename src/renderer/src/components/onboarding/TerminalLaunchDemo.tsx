@@ -5,7 +5,7 @@ import { useTranslate } from '@/i18n/use-translate'
 
 // Shell text, not prose: what a terminal shows when the agent's CLI starts.
 const DEMO_PROMPT = '~/uploader ❯'
-const DEMO_COMMAND = 'gemini'
+const DEMO_COMMAND = 'agy'
 
 // Pixel positions here are the keyframe targets in main.css (.onboarding-launch-demo).
 export function TerminalLaunchDemo(): React.JSX.Element {
@@ -26,7 +26,7 @@ export function TerminalLaunchDemo(): React.JSX.Element {
           className="inline-flex h-5 items-center gap-1 overflow-hidden whitespace-nowrap rounded border border-border bg-background font-medium"
         >
           <SquareTerminal className="size-3 shrink-0" />
-          {getAgentLabel('gemini')}
+          {getAgentLabel('antigravity')}
         </span>
         <span
           data-demo="plus"
@@ -55,7 +55,7 @@ export function TerminalLaunchDemo(): React.JSX.Element {
         </div>
         <div className="text-muted-foreground">
           {t('components.onboarding.launchDemo.cliReady', '{{agent}} CLI ready.', {
-            agent: getAgentLabel('gemini')
+            agent: getAgentLabel('antigravity')
           })}
         </div>
         <div>
@@ -71,7 +71,7 @@ export function TerminalLaunchDemo(): React.JSX.Element {
         <DemoRow agent="codex" label={getAgentLabel('codex')} />
         <div className="my-[3px] h-px bg-border" />
         <DemoRow agent="copilot" label={`${getAgentLabel('copilot')} ${cli}`} />
-        <DemoRow agent="gemini" label={`${getAgentLabel('gemini')} ${cli}`} picked />
+        <DemoRow agent="antigravity" label={`${getAgentLabel('antigravity')} ${cli}`} picked />
       </div>
       <svg
         data-demo="cursor"
@@ -90,7 +90,7 @@ function DemoRow({
   alt,
   picked
 }: {
-  agent: 'claude' | 'codex' | 'copilot' | 'gemini'
+  agent: 'claude' | 'codex' | 'copilot' | 'antigravity'
   label: string
   alt?: boolean
   picked?: boolean

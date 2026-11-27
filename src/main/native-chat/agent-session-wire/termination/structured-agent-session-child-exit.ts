@@ -1,6 +1,7 @@
 // First-hand writer death evidence ends the child record in finally. Attempt/report every bookkeeping step;
 // expected changes presentation, never whether the dead child remains recorded.
 
+import { takeProviderRelayHandedBack } from '../../../provider-relay/app-provider-relays'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { PROVIDER_EXIT_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stop-row-identity'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
@@ -160,7 +161,9 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     reason: expected ? (close?.reason ?? null) : exit.reason,
     ...(startFailure ? { failure: startFailure } : {}),
     duringStartup: exitedDuringStartup,
+    ...(exit.endedBeforeAcquire ? { endedBeforeAcquire: true as const } : {}),
     rootGone: true,
+    observedAt,
     ...(exit.deathEvidenceKind ? { deathEvidenceKind: exit.deathEvidenceKind } : {}),
     ...(expected && close ? { endedAt: close.requestedAt } : {})
   })
@@ -192,7 +195,8 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     }
   }
   const record = context.store.getRecord(sessionId)
-  if (!record || record.lease.handoffStage !== null) {
+  // A kept agent handed back to the daemon unopened runs on: nothing of it ended or is settled.
+  if (!record || record.lease.handoffStage !== null || takeProviderRelayHandedBack(sessionId)) {
     endChild()
     await wakeQueuedDelivery()
     return
@@ -221,9 +225,11 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       submissions: () => before.submissions,
       itemFence: (id) => beforeFences.get(id)
     })
-    // Quiet idle starts owe no failure row unless work was handed to them.
+    // Quiet idle starts owe no failure row unless work was handed to them; nothing reached a
+    // kept agent that had ended before its acquisition.
     const startFailed =
       exitedDuringStartup &&
+      !exit.endedBeforeAcquire &&
       (!expected || (startClose === 'host-stop' && unfinishedWork.hadUnsettledSubmissions))
     // Fold Stop before fallback turn-end classification.
     await close?.recorded
@@ -298,8 +304,9 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       context,
       sessionId,
       child.fence,
-      exit,
-      observedAt
+      { ...exit, expected },
+      observedAt,
+      exitedDuringStartup ? undefined : session.journal
     )
     endChild()
     // Unexpected death rebaselines fences; requested close preserves outstanding Stop replies.

@@ -6,13 +6,13 @@ import { reviewFlagSpots } from '../../../../src/shared/bots/bot-share-review-fi
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner'
 import { ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { isHostNotConnectedError } from '../../query/host-query-errors'
 import { SettingsNote } from '../../settings/settings-screen-frame'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import type { SettingsFeature, SettingsRootPage } from '../MobileBotSettingsRoot'
@@ -24,6 +24,7 @@ import {
   type ReviewPage
 } from './MobileBotShareReview'
 import { MobileBotShareReviewPage } from './MobileBotShareReviewPages'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 type SharedFrom = NonNullable<PhoneBot['sharedFrom']>
 
@@ -36,6 +37,7 @@ export function useBotSharedFromSettings(
   }
 ): SettingsFeature {
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const from = settings.routeBot.bot.sharedFrom
   if (!from) {
     return { rows: [], page: null }
@@ -46,9 +48,7 @@ export function useBotSharedFromSettings(
   const sharedAt = new Date(from.sharedAt)
   const date = Number.isNaN(sharedAt.getTime())
     ? null
-    : new Intl.DateTimeFormat(getUiIntlLocale(), { month: 'short', day: 'numeric' }).format(
-        sharedAt
-      )
+    : new Intl.DateTimeFormat(intlLocale, { month: 'short', day: 'numeric' }).format(sharedAt)
   return {
     rows: [
       {
@@ -92,6 +92,8 @@ function OriginalPage(props: {
   banner: ReactNode
   onBack: () => void
 }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { client, online } = props
   const { shareId, versionId } = props.from
@@ -178,6 +180,6 @@ function OriginalPage(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   loading: { paddingVertical: spacing.xl, alignItems: 'center' }
 }))

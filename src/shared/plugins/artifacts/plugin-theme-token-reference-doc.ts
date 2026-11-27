@@ -97,6 +97,10 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
 // Why: these mix per mode in main.css, come from chat-internal colors that authors cannot set,
 // or fall back differently per surface.
 const OMITTED_DESCRIPTIONS: Partial<Record<PluginAppThemeToken, string>> = {
+  '--tab-active':
+    'light: same as `--tab-bar`; dark: `--foreground` mixed into `--tab-bar`, up to 11%, as deep as keeps the active tab text and line as readable as at 6% (never under 6%)',
+  '--tab-inactive':
+    'light: `--foreground` mixed into `--tab-bar`, up to 8%, as deep as keeps tab text as readable as at 4% (never under 4%); dark: same as `--tab-bar`',
   '--tab-active-indicator':
     'tab line: same as `--tab-active-foreground`; right sidebar tool line: same as `--foreground`',
   '--worktree-sidebar-active-border': 'a mix of `--worktree-sidebar-border`',

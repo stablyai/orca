@@ -44,11 +44,12 @@ import { registerOrcadRuntimeMaintenanceHandlers } from './managed-orcad/orcad-r
 import { clearPublishedManagedServer } from '../ssh/ssh-renderer-broadcast'
 import { clearManagedServerNotes } from './managed-orcad/runtime-environment-managed-tunnel'
 import { reconcileOrphanedRuntimeSessions } from './catalog/runtime-environment-session-reconcile'
+import { readSavedRuntimeEnvironmentIds } from './catalog/runtime-environment-saved-ids'
 import { registerRuntimeSshAccessHandlers } from './connectivity/runtime-ssh-access-handlers'
 import { retirePairedRuntimeBrowserClientHostEnvironment } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { registerRuntimeEnvironmentBrowserClientHostHandler } from './browser-hosting/runtime-environment-browser-client-host-handler'
 import {
-  closePortForwardsOfRemovedEnvironments,
+  forgetPortForwardsOfRemovedEnvironments,
   registerRuntimeEnvironmentPortForwardHandlers
 } from './port-forwarding/runtime-environment-port-forward-handlers'
 import { advanceRuntimeEnvironmentCapabilityIncarnation } from './connections/runtime-environment-capability-evidence'
@@ -141,6 +142,17 @@ async function reactivateRuntimeEnvironmentStatus(environmentId: string): Promis
   ;(await getRuntimeEnvironmentStatusOwner(userDataPath, environmentId)).activate()
 }
 
+/** One registry read proves which servers are gone; their sessions and port forwards go with them. */
+async function retireStateOfRemovedEnvironments(store: Store): Promise<void> {
+  const known = await readSavedRuntimeEnvironmentIds(getUserDataPath())
+  try {
+    reconcileOrphanedRuntimeSessions(store, known)
+  } catch (error) {
+    console.warn('[runtime-environments] orphaned session reconcile failed:', error)
+  }
+  await forgetPortForwardsOfRemovedEnvironments(known)
+}
+
 const pendingSubscriptions = new Map<string, PendingRuntimeSubscription>()
 let stopPreferenceWatch: (() => void) | undefined
 
@@ -151,12 +163,7 @@ export async function registerRuntimeEnvironmentHandlers(
   stopPreferenceWatch?.()
   stopPreferenceWatch = watchRuntimeEnvironmentPreference(store, getUserDataPath(), async () => {
     // CLI and recipe removals skip the Settings path; drop their session partitions here too.
-    try {
-      await reconcileOrphanedRuntimeSessions(store, getUserDataPath())
-    } catch (error) {
-      console.warn('[runtime-environments] orphaned session reconcile failed:', error)
-    }
-    await closePortForwardsOfRemovedEnvironments(getUserDataPath())
+    await retireStateOfRemovedEnvironments(store)
     publishRuntimeEnvironmentCatalogChanged()
   })
   for (const pending of pendingSubscriptions.values()) {
@@ -178,7 +185,7 @@ export async function registerRuntimeEnvironmentHandlers(
     getUserDataPath,
     getSettings: () => store.getSettings()
   })
-  registerRuntimeEnvironmentPortForwardHandlers({ getUserDataPath })
+  registerRuntimeEnvironmentPortForwardHandlers({ getUserDataPath, store })
   registerRuntimeEnvironmentRecoveryHandler()
   registerRuntimeEnvironmentRepairHandler({
     getUserDataPath,
@@ -223,7 +230,7 @@ export async function registerRuntimeEnvironmentHandlers(
   })
   await hostInitialization
   await holdLaunchReconnectOptOuts(store.getSshTargets?.() ?? [])
-  await reconcileOrphanedRuntimeSessions(store, getUserDataPath())
+  await retireStateOfRemovedEnvironments(store)
   await Promise.all(
     (await listEnvironments(getUserDataPath())).map(async (environment) => {
       if (

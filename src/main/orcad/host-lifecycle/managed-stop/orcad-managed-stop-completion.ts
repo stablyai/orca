@@ -14,6 +14,7 @@ import {
   type OrcadProcessIdentityReaders,
   type OrcadRecordedIdentity
 } from '../../instance-lock/orcad-process-start-time'
+import { getPsProcessIdentityAsync } from '../../../daemon/endpoint/identity/daemon-process-identity-query'
 import {
   hasErrorCode,
   inspectProcessSignal
@@ -47,17 +48,29 @@ function defaultProbe(pid: number): ReturnType<OrcadProcessProbe> {
   return signal === 'occupied' ? 'alive' : signal === 'missing' ? 'missing' : 'unverifiable'
 }
 
-function observeInstance(
+async function observeInstance(
   instance: OrcadManagedStopInstance,
   recorded: OrcadRecordedIdentity,
   options: OrcadManagedStopCompletionOptions
-): OrcadManagedStopVerdict {
+): Promise<OrcadManagedStopVerdict> {
   const probe = (options.probeProcess ?? defaultProbe)(instance.pid)
   if (probe !== 'alive') {
     return probe === 'missing' ? 'exited' : 'unverifiable'
   }
+  // macOS reads start time by forking setuid ps: run it async so polls never block this loop.
+  // Linux procfs, Windows kernel reads and recorded incarnations stay with the sync readers.
+  const startedAtMs =
+    process.platform !== 'darwin' ||
+    options.startedAtMs ||
+    recordedOrcadProcessIncarnation(recorded)
+      ? undefined
+      : ((await getPsProcessIdentityAsync(instance.pid))?.startedAtMs ?? null)
   // Wall-clock drift alone cannot prove PID reuse.
-  const identity = compareOrcadProcessIdentity(instance.pid, recorded, options)
+  const identity = compareOrcadProcessIdentity(
+    instance.pid,
+    recorded,
+    startedAtMs === undefined ? options : { ...options, startedAtMs: () => startedAtMs }
+  )
   return identity === 'differs' ? 'exited' : identity === 'unproven' ? 'unverifiable' : 'live'
 }
 
@@ -92,7 +105,7 @@ export async function completeOrcadManagedStop(
     return 'exited'
   }
   const recorded = recordedIdentity(request.instance)
-  let verdict = observeInstance(request.instance, recorded, options)
+  let verdict = await observeInstance(request.instance, recorded, options)
   if (verdict !== 'live') {
     return verdict === 'exited' ? completed() : verdict
   }
@@ -117,7 +130,7 @@ export async function completeOrcadManagedStop(
   }
   for (let attempt = 0; attempt < attempts; attempt++) {
     await (options.sleep ?? (() => delay(ORCAD_STOP_COMPLETION_POLL_MS)))()
-    verdict = observeInstance(request.instance, recorded, options)
+    verdict = await observeInstance(request.instance, recorded, options)
     if (verdict !== 'live') {
       return verdict === 'exited' ? completed() : verdict
     }

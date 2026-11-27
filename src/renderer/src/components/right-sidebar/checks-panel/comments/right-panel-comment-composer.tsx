@@ -22,6 +22,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export type RightPanelCommentSubmitResult = { ok: true } | { ok: false; error: string }
 
@@ -185,19 +186,22 @@ export function RightPanelCommentComposer({
     }
     setSubmitting(true)
     setError(null)
-    try {
-      const result = await onSubmit(bodyState.body)
-      if (result.ok) {
-        setBody('')
-        onCancel?.()
-      } else {
-        setError(codeHostErrorText(result))
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to post comment.')
-    } finally {
-      setSubmitting(false)
-    }
+    await runWithFinally(
+      async () => {
+        try {
+          const result = await onSubmit(bodyState.body)
+          if (result.ok) {
+            setBody('')
+            onCancel?.()
+          } else {
+            setError(codeHostErrorText(result))
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Failed to post comment.')
+        }
+      },
+      () => setSubmitting(false)
+    )
   }, [body, disabled, onCancel, onSubmit, submitting, imagePendingRef])
   const canSubmitComment = hasBoundedCommentBodyText(body)
 

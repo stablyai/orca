@@ -1,9 +1,8 @@
 import { useContext, type RefObject } from 'react'
 import { Text, View, type HostInstance } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../../theme/mobile-theme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { themedStyleSheet } from '../../../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
 import { TailClippedText } from '../../../components/list/TailClippedText'
 import {
   mobileDictationStatusTitle,
@@ -34,10 +33,10 @@ export function MobileTerminalLiveInputStatus({
   isAttaching,
   heard
 }: MobileTerminalLiveInputStatusProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const live = useContext(MobileDictationLiveContext)
-  const dictationTitle = mobileDictationStatusTitle(dictation)
+  const dictationTitle = mobileDictationStatusTitle(dictation, t)
   if (live?.failureReason != null) {
     return (
       <View style={[styles.status, styles.dictating]} pointerEvents="box-none">
@@ -51,14 +50,9 @@ export function MobileTerminalLiveInputStatus({
   if (!dictationTitle) {
     return isAttaching ? (
       <View style={styles.status} pointerEvents="none">
-        <Text style={styles.title} numberOfLines={1}>
-          {t('session.terminalLiveInputStatus.uploadingImageTitle', 'Uploading image')}
+        <Text style={styles.uploading} numberOfLines={1}>
+          {t('session.terminalLiveInputStatus.uploading', 'Uploading…')}
         </Text>
-        <View style={styles.detailLine}>
-          <TailClippedText style={styles.detail}>
-            {t('session.terminalLiveInputStatus.uploadingImage', 'Uploading image to host')}
-          </TailClippedText>
-        </View>
       </View>
     ) : null
   }
@@ -98,7 +92,7 @@ export function MobileTerminalLiveInputStatus({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   // Cover the field in place so the dock, and with it the PTY, keeps its height.
   status: {
     position: 'absolute',
@@ -110,7 +104,8 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.pill,
+    // The field's own corners, so the cover lines up with the edge it sits on.
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   // The ✕ hugs the field's left edge, the way the mock's cancel sits in the pill.
@@ -124,10 +119,10 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.sm
   },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+  uploading: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.bodySize
   },
   detailLine: {
     flex: 1

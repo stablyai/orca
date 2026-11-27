@@ -10,7 +10,7 @@ import { JournalSqlConversions } from '../journal-sql-conversions'
 import { JournalSqlActivity, JournalSqlSendingChats } from '../journal-sql-activity'
 import { createJournalSqlMaintenance } from '../journal-sql-maintenance-owner'
 import type { JournalSqlBackgroundMaintenance } from '../journal-sql-background-maintenance'
-import type { JournalWriterCommand } from '../journal-writer-command'
+import type { JournalOpenRecovery, JournalWriterCommand } from '../journal-writer-command'
 import type { JournalWriterCommit } from '../journal-writer-changes'
 import type { JournalWriterEffect, JournalWriterEffectResult } from '../journal-writer-effects'
 import type { CommandReceiptScope } from '../writing/command-receipt-schema'
@@ -214,7 +214,7 @@ export class JournalSqlDatabase {
   openSession(
     identity: AgentSessionJournalIdentity,
     savedAt = Date.now(),
-    recover?: { fence: number }
+    recover?: JournalOpenRecovery
   ) {
     return this.serialize(identity.sessionId, async () => {
       assertJournalChatReadable(this.readOnly)

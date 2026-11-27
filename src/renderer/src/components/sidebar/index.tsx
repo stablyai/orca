@@ -32,7 +32,6 @@ import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { LocalGitToolchainScanBanner } from '../repo/toolchain/LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from '../maintenance/terminal-daemon/SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from '../maintenance/terminal-daemon/StalledTerminalDaemonBanner'
-import { SidebarBotsSection } from '@/components/bots/SidebarBotsSection'
 import { SidebarBotsSplit, SidebarProjectsListSlot } from './SidebarBotsSplit'
 import { SidebarContentViewport } from './SidebarContentViewport'
 import { SidebarSectionDragOverlay } from './SidebarSectionDragOverlay'
@@ -51,6 +50,11 @@ import { WorktreeCardsUpdateNotice } from './workspace-card/template/WorktreeCar
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
 const SidebarAgentsList = lazyWithRetry(() => import('../activity/sidebar/SidebarAgentsList'))
+const SidebarBotsSection = lazyWithRetry(() =>
+  import('@/components/bots/SidebarBotsSection').then((module) => ({
+    default: module.SidebarBotsSection
+  }))
+)
 
 const WorktreeMetaDialog = lazyWithRetry(
   () => import('./workspace-card/metadata/WorktreeMetaDialog')
@@ -237,7 +241,9 @@ function Sidebar({
       projectsCollapsed={projectsCollapsed}
       projectsFirst={projectsFirst}
     >
-      <SidebarBotsSection onOpenBot={closeWorkspaceBoard} reorderable />
+      <React.Suspense fallback={null}>
+        <SidebarBotsSection onOpenBot={closeWorkspaceBoard} reorderable />
+      </React.Suspense>
     </SidebarBotsSplit>
   ) : null
   const projectsSection = (

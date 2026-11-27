@@ -191,7 +191,8 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
     }
     if (
       record.ptyId !== null &&
-      (leaf.ptyId !== record.ptyId || leaf.ptyGeneration !== record.ptyGeneration)
+      (leaf.ptyId !== record.ptyId || leaf.ptyGeneration !== record.ptyGeneration) &&
+      !this.isSleptLeafBinding(handle, leaf)
     ) {
       throw new Error('terminal_handle_stale')
     }

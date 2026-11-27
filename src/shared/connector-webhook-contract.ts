@@ -2,6 +2,7 @@
 // side; both test suites check the shared JSON contract corpus.
 // Copies, not imports: the CLI compiles src/shared with rootDir src, so it can't reach cloud files.
 import * as z from 'zod'
+import { lazyZodSchema } from './schema/lazy-zod-schema'
 
 export const WEBHOOK_HOOK_ID_PATTERN = /^wh_[A-Za-z0-9]{16}$/
 export const WEBHOOK_CALL_ID_PATTERN = /^call_[A-Za-z0-9]{20}$/
@@ -100,61 +101,73 @@ export type ConnectorWebhookTrigger = WebhookFilters & {
 }
 
 /** On a trigger delivery from a hook. */
-export const WebhookCallFields = z.object({
-  callId: z.string().regex(WEBHOOK_CALL_ID_PATTERN),
-  /** The hook's lifecycle generation at admission; this machine refuses one below its own. */
-  epoch: z.number().int().nonnegative(),
-  // Always 1; sent for older Orca, unread here.
-  hostGen: z.number().int().nonnegative().optional(),
-  sample: z.literal(true).optional()
-})
+export const WebhookCallFields = lazyZodSchema(() =>
+  z.object({
+    callId: z.string().regex(WEBHOOK_CALL_ID_PATTERN),
+    /** The hook's lifecycle generation at admission; this machine refuses one below its own. */
+    epoch: z.number().int().nonnegative(),
+    // Always 1; sent for older Orca, unread here.
+    hostGen: z.number().int().nonnegative().optional(),
+    sample: z.literal(true).optional()
+  })
+)
 export type WebhookCallFields = z.infer<typeof WebhookCallFields>
 
 export const WEBHOOK_NOTICE_CONDITIONS = ['refusal_burst', 'cap_reached'] as const
 export type WebhookNoticeCondition = (typeof WEBHOOK_NOTICE_CONDITIONS)[number]
 
-export const WebhookNotice = z.object({
-  kind: z.literal('webhook_notice'),
-  hookId: z.string().regex(WEBHOOK_HOOK_ID_PATTERN),
-  botId: z.string().min(1),
-  condition: z.enum(WEBHOOK_NOTICE_CONDITIONS),
-  count: z.number().int().nonnegative(),
-  at: z.number().int().nonnegative()
-})
+export const WebhookNotice = lazyZodSchema(() =>
+  z.object({
+    kind: z.literal('webhook_notice'),
+    hookId: z.string().regex(WEBHOOK_HOOK_ID_PATTERN),
+    botId: z.string().min(1),
+    condition: z.enum(WEBHOOK_NOTICE_CONDITIONS),
+    count: z.number().int().nonnegative(),
+    at: z.number().int().nonnegative()
+  })
+)
 
-const RunId = z.string().min(1).max(200)
+const RunId = lazyZodSchema(() => z.string().min(1).max(200))
 
 // The answers to POST /v1/connector/webhook-calls/:callId/start; one grant per call, bound to its run.
-export const WebhookCallStartAnswer = z.discriminatedUnion('started', [
-  z.object({ started: z.literal(true), runId: RunId.optional() }),
-  z.object({ started: z.literal(false), retryAt: z.number() })
-])
+export const WebhookCallStartAnswer = lazyZodSchema(() =>
+  z.discriminatedUnion('started', [
+    z.object({ started: z.literal(true), runId: RunId.optional() }),
+    z.object({ started: z.literal(false), retryAt: z.number() })
+  ])
+)
 // 409 names the run that already holds the grant; 410 means the call can never start again.
-export const WebhookCallStartConflict = z.object({
-  error: z.literal('started_for_another_run'),
-  runId: RunId
-})
-export const WebhookCallStartSettled = z.object({ error: z.literal('settled') })
+export const WebhookCallStartConflict = lazyZodSchema(() =>
+  z.object({
+    error: z.literal('started_for_another_run'),
+    runId: RunId
+  })
+)
+export const WebhookCallStartSettled = lazyZodSchema(() =>
+  z.object({ error: z.literal('settled') })
+)
 
-const absent = z.never().optional()
+const absent = lazyZodSchema(() => z.never().optional())
 
 /** A hook's call: keyed by its callId, done by its hook, with no text or display string to leak a key. */
-export const WebhookTriggerEvent = z
-  .object({
-    key: z.string().regex(WEBHOOK_CALL_ID_PATTERN),
-    actorId: z.string().refine((id) => hookIdOfActor(id) !== null),
-    subject: z.string().min(1).optional(),
-    occurredAt: z.number().int().nonnegative(),
-    webhook: WebhookCallFields,
-    fromOwner: absent,
-    onOwnerMessage: absent,
-    pr: absent,
-    actor: absent,
-    place: absent,
-    url: absent,
-    text: absent
-  })
-  .refine(({ key, webhook }) => key === webhook.callId)
+export const WebhookTriggerEvent = lazyZodSchema(() =>
+  z
+    .object({
+      key: z.string().regex(WEBHOOK_CALL_ID_PATTERN),
+      actorId: z.string().refine((id) => hookIdOfActor(id) !== null),
+      subject: z.string().min(1).optional(),
+      occurredAt: z.number().int().nonnegative(),
+      webhook: WebhookCallFields,
+      fromOwner: absent,
+      onOwnerMessage: absent,
+      pr: absent,
+      actor: absent,
+      place: absent,
+      url: absent,
+      text: absent
+    })
+    .refine(({ key, webhook }) => key === webhook.callId)
+)
 
 /** A rule's size in a hello: its serialized UTF-8 JSON. */
 export function webhookRuleBytes(rule: ConnectorWebhookTrigger): number {

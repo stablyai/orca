@@ -190,6 +190,19 @@ export class ClientSessionTabSelectionStore {
     return this.project(snapshot, clientNavigationId)
   }
 
+  /** The host published this tab again (a chat keeps its id), so no client may keep hiding it. */
+  reopenForAllClients(worktreeId: string, tabId: string): void {
+    for (const statesByWorktree of this.statesByClient.values()) {
+      const state = statesByWorktree.get(worktreeId)
+      if (!state?.closedTabIds.has(tabId)) {
+        continue
+      }
+      const closedTabIds = new Set(state.closedTabIds)
+      closedTabIds.delete(tabId)
+      statesByWorktree.set(worktreeId, { ...state, revision: state.revision + 1, closedTabIds })
+    }
+  }
+
   forgetTabs(worktreeId: string, tabIds: readonly string[]): void {
     if (tabIds.length === 0) {
       return

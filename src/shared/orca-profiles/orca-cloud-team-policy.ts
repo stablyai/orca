@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { validRange } from 'semver'
 import { pluginMarketplaceGitSourceSchema } from '../plugins/catalog/plugin-marketplace'
 import { isQualifiedPluginKey } from '../plugins/manifest/plugin-manifest'
@@ -13,6 +14,7 @@ export const ORCA_CLOUD_TEAM_POLICY_FLAGS = {
   mobileRelay: 'relay.use',
   bots: 'desktop.bots',
   computerUse: 'desktop.computerUse',
+  browserUse: 'desktop.browserUse',
   artifactSharing: 'artifacts.share',
   plugins: 'desktop.plugins',
   officialPlugins: 'plugins.official',
@@ -57,33 +59,39 @@ export function getOrcaCloudTeamCapabilities(
     : undefined
 }
 
-const requiredPluginRuleSchema = z.object({
-  pluginKey: z.string().refine(isQualifiedPluginKey),
-  catalog: z.union([z.enum(['official', 'community']), pluginMarketplaceGitSourceSchema]),
-  version: z
-    .string()
-    .max(128)
-    .refine((range) => range.trim().length > 0 && validRange(range) !== null)
-})
+const requiredPluginRuleSchema = lazyZodSchema(() =>
+  z.object({
+    pluginKey: z.string().refine(isQualifiedPluginKey),
+    catalog: z.union([z.enum(['official', 'community']), pluginMarketplaceGitSourceSchema]),
+    version: z
+      .string()
+      .max(128)
+      .refine((range) => range.trim().length > 0 && validRange(range) !== null)
+  })
+)
 export type RequiredPluginRule = z.infer<typeof requiredPluginRuleSchema>
 
-export const orcaCloudTeamPolicySchema = z.object({
-  orgIds: z.array(z.string().min(1)).min(1),
-  reportingOrgIds: z.array(z.string().min(1)).optional(),
-  internalCatalogs: z.array(pluginMarketplaceGitSourceSchema).optional(),
-  internalCatalogAttribution: z
-    .array(z.object({ catalog: pluginMarketplaceGitSourceSchema, teamNames: z.array(z.string()) }))
-    .optional(),
-  requiredPlugins: z.array(z.string().refine(isQualifiedPluginKey)).optional(),
-  requiredPluginRules: z.array(requiredPluginRuleSchema).optional(),
-  blockedPlugins: z.array(z.string().refine(isQualifiedPluginKey)).optional(),
-  updateChannel: z.enum(['stable', 'rc']).optional(),
-  updateDelayDays: z.number().int().min(0).max(90).optional(),
-  minimumVersion: z.string().max(64).refine(isValidAppVersion).optional(),
-  forceUpdates: z.boolean().optional(),
-  forceUpdateDelayDays: z.number().int().min(0).max(30).optional(),
-  forceUsesMemberDelay: z.boolean().optional(),
-  restartDeadlineHours: z.number().int().min(1).max(168).optional()
-})
+export const orcaCloudTeamPolicySchema = lazyZodSchema(() =>
+  z.object({
+    orgIds: z.array(z.string().min(1)).min(1),
+    reportingOrgIds: z.array(z.string().min(1)).optional(),
+    internalCatalogs: z.array(pluginMarketplaceGitSourceSchema).optional(),
+    internalCatalogAttribution: z
+      .array(
+        z.object({ catalog: pluginMarketplaceGitSourceSchema, teamNames: z.array(z.string()) })
+      )
+      .optional(),
+    requiredPlugins: z.array(z.string().refine(isQualifiedPluginKey)).optional(),
+    requiredPluginRules: z.array(requiredPluginRuleSchema).optional(),
+    blockedPlugins: z.array(z.string().refine(isQualifiedPluginKey)).optional(),
+    updateChannel: z.enum(['stable', 'rc']).optional(),
+    updateDelayDays: z.number().int().min(0).max(90).optional(),
+    minimumVersion: z.string().max(64).refine(isValidAppVersion).optional(),
+    forceUpdates: z.boolean().optional(),
+    forceUpdateDelayDays: z.number().int().min(0).max(30).optional(),
+    forceUsesMemberDelay: z.boolean().optional(),
+    restartDeadlineHours: z.number().int().min(1).max(168).optional()
+  })
+)
 
 export type OrcaCloudTeamPolicy = z.infer<typeof orcaCloudTeamPolicySchema>

@@ -7,6 +7,7 @@ import { useBrowserPageMarkupCapture } from './capture/use-browser-page-markup-c
 import { useBrowserGuestAnnotateTools } from './use-browser-guest-annotate-tools'
 import { BrowserGuestAnnotateOverlays } from './browser-guest-annotate-overlays'
 import { BrowserGuestGrabBanner } from './browser-guest-grab-banner'
+import { useGrabCleanCapture } from './palette/use-grab-clean-capture'
 
 /** Annotate, Grab and Draw for a page this desktop draws for a remote workspace; the picker runs on the local guest. */
 export function useClientHostedBrowserAnnotate(
@@ -34,6 +35,14 @@ export function useClientHostedBrowserAnnotate(
   const browserPageId = browserTab.id
   const currentUrl = browserTab.url
   const markup = useBrowserPageMarkupCapture(webviewRef)
+  // Draw captures through main, the guest's one capture owner that Grab's screenshot and the paint
+  // restore also use, so a readback one of them left in flight is never overlapped.
+  const { captureCleanPage, cancelClean } = useGrabCleanCapture()
+  const cancelMarkup = markup.cancel
+  const cancelDraw = useCallback(() => {
+    cancelClean()
+    cancelMarkup()
+  }, [cancelClean, cancelMarkup])
   const disabled = !isActive || placement === null || unavailable || showFailureOverlay
   const annotate = useBrowserGuestAnnotateTools({
     browserPageId,
@@ -65,7 +74,7 @@ export function useClientHostedBrowserAnnotate(
 
   useEffect(() => {
     // Invalidate pending captures on deactivation, guest replacement, failure, or unmount.
-    return markup.cancel
+    return cancelDraw
   }, [
     browserPageId,
     runtimeEnvironmentId,
@@ -73,7 +82,7 @@ export function useClientHostedBrowserAnnotate(
     browserHostGeneration,
     pageHostGeneration,
     disabled,
-    markup.cancel
+    cancelDraw
   ])
 
   useEffect(() => {
@@ -106,7 +115,8 @@ export function useClientHostedBrowserAnnotate(
       markup: {
         active: markup.isActive,
         disabled: disabled || annotate.grab.state !== 'idle',
-        onToggle: () => (markup.isActive ? markup.cancel() : void markup.start()),
+        onToggle: () =>
+          markup.isActive ? cancelDraw() : void markup.start(() => captureCleanPage(browserPageId)),
         canShowDiscoveryHint: isActive
       },
       notes: annotate.notes
@@ -118,7 +128,7 @@ export function useClientHostedBrowserAnnotate(
             baseImage={markup.baseImage}
             busy={markup.state === 'composing'}
             onComplete={(input) => void markup.complete(input)}
-            onCancel={markup.cancel}
+            onCancel={cancelDraw}
             controlsContainer={controlsContainer}
           />
         ) : null}

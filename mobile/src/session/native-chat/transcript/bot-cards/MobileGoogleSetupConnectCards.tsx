@@ -1,12 +1,19 @@
-// The setup's last two cards on the phone. Google's sign-in returns to the computer, so the phone
-// says where to finish and the card moves on by itself once it's done; then what the bot can use.
+// The setup's last two cards on the phone. Sign in opens Google's sign-in in the bot's settings, as
+// Reconnect does there, and the card moves on by itself once it's done; then what the bot can use.
 import { useEffect, useState } from 'react'
 import type { GoogleServiceChoice } from '../../../../../../src/shared/google/google-scopes'
 import {
   googleReadyChoices,
-  googleSetupBlockerIsConnect
+  googleSetupBlockerIsConnect,
+  googleSetupConnectOpen
 } from '../../../../../../src/shared/google/google-setup-card-view'
-import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../../../src/shared/bot-runtime-capabilities'
+import { useBotPanelOpener } from '../../../../bots/bot-item-open'
+import { useRouteCapability } from '../../../../worktree/execution-hosts/use-route-capability'
+import { intlLocaleFor } from '../../../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../../../i18n/use-mobile-translation'
+import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePill'
+import { MobileBotCardActions } from './MobileBotCardFrame'
 import { googleStatusRead } from './mobile-bot-card-operations'
 import { googleServicesList, googleSetupOwnerStep } from './mobile-google-setup-copy'
 import {
@@ -16,7 +23,7 @@ import {
   MobileGoogleSetupReceipt,
   type MobileGoogleSetupScope
 } from './MobileGoogleSetupCardParts'
-import { MobileGoogleSetupBlockerPanel } from './MobileGoogleSetupProgressCards'
+import { MobileGoogleSetupBlockerPanel } from './MobileGoogleSetupBlockerPanel'
 
 export function MobileGoogleSetupConnectCard({
   scope,
@@ -28,7 +35,11 @@ export function MobileGoogleSetupConnectCard({
   const t = useMobileTranslation()
   const { run, blocker, fontScale } = scope
   const done = run.steps.connect?.status === 'done'
+  const open = googleSetupConnectOpen(run)
   const stuck = blocker && googleSetupBlockerIsConnect(blocker) ? blocker : null
+  const opener = useBotPanelOpener(scope.botId)
+  // An older host signs Google in only itself, so the card says to finish there.
+  const panel = useRouteCapability(BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY) ? opener : null
   return (
     <MobileGoogleSetupFrame
       heading={t('chat.botCards.google.heading', 'Connect Google')}
@@ -44,7 +55,7 @@ export function MobileGoogleSetupConnectCard({
     >
       {/* An older copy never acts, done or not; it points down while something is left to press. */}
       {!newest ? (
-        stuck || !done ? (
+        stuck || open ? (
           <MobileGoogleSetupMuted
             text={t('chat.botCards.google.movedDown', 'Continued further down.')}
             fontScale={fontScale}
@@ -63,7 +74,30 @@ export function MobileGoogleSetupConnectCard({
           }
           fontScale={fontScale}
         />
-      ) : (
+      ) : open && panel ? (
+        <MobileBotCardActions>
+          <MobileNativeChatNoticePill
+            label={t('chat.botCards.google.connect.signIn', 'Sign in to Google')}
+            primary
+            onPress={() =>
+              panel.open({
+                settings: {
+                  kind: 'google-sign-in',
+                  // Setup just made this computer's app, so even a saved account signs in through it.
+                  ask: {
+                    ...(run.account ? { account: run.account } : {}),
+                    services: run.services?.length ? run.services : ['gmail'],
+                    currentApp: true
+                  },
+                  from: { kind: 'list' },
+                  next: 'setup',
+                  ...(run.kind === 'work' ? {} : { newApp: true })
+                }
+              })
+            }
+          />
+        </MobileBotCardActions>
+      ) : open ? (
         <MobileGoogleSetupOnComputer
           text={t(
             'chat.botCards.google.connect.onComputer',
@@ -71,7 +105,7 @@ export function MobileGoogleSetupConnectCard({
           )}
           fontScale={fontScale}
         />
-      )}
+      ) : null}
     </MobileGoogleSetupFrame>
   )
 }
@@ -83,6 +117,7 @@ export function MobileGoogleSetupConnectedCard({
   scope: MobileGoogleSetupScope
 }): React.JSX.Element {
   const t = useMobileTranslation()
+  const locale = intlLocaleFor(useMobileUiLocale())
   const { run, client, fontScale } = scope
   const [ready, setReady] = useState<GoogleServiceChoice[]>(run.services ?? [])
   const account = run.account
@@ -114,7 +149,7 @@ export function MobileGoogleSetupConnectedCard({
         ready.length > 0
           ? t('chat.botCards.google.connected.canUse', '{{bot}} can use {{services}}.', {
               bot: scope.botName,
-              services: googleServicesList(t, ready)
+              services: googleServicesList(t, locale, ready)
             })
           : null
       }

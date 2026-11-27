@@ -144,19 +144,18 @@ export function projectQueuedMessageCards(
       message.body.origin === 'automation-run'
         ? readAutomationRunMessage(message.body.automationRun)
         : undefined
+    const text = queuedMessageCardText(message.body)
     return {
       messageId: message.messageId,
       position: message.position,
-      text: queuedMessageCardText(message.body),
-      ...(run
-        ? { displayText: run.automation.name }
-        : from
-          ? {
-              displayText:
-                agentMessageDisplayText(message.body.blocks, from) ??
-                queuedMessageCardText(message.body)
-            }
-          : {}),
+      text,
+      // Waiting agent mail may go straight to the transcript without rendering a queue card.
+      get displayText() {
+        return (
+          run?.automation.name ??
+          (from ? (agentMessageDisplayText(message.body.blocks, from) ?? text) : undefined)
+        )
+      },
       ...queuedMessageCardImages(message.body),
       state: message.state,
       hold,

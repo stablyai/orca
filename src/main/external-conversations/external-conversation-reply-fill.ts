@@ -12,6 +12,11 @@ import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-c
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
 import { capAnswer } from '../connector-cloud/connector-snapshot'
+import type { AgentSessionJournalReads } from '../native-chat/agent-session-journal/journal-reads'
+import { isQuietBotResult } from '../../shared/bot-quiet-result'
+import { isSlackDirectMessage } from '../../shared/connectors/slack-direct-message'
+import type { EmptyTurnRetry } from './external-conversation-reply-empty-retry'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 
 export type EndedTurnReplies = {
@@ -23,6 +28,10 @@ export type EndedTurnReplies = {
   openerItemId?: string
   outcome: AgentJournalTurnOutcome
   prose: string
+  /** A bot's newest words before its last tool call: its answer when no retry asks again. */
+  earlierProse?: string
+  /** A tool call inside the turn may have changed something (toolCallHasSideEffects). */
+  toolsRan?: boolean
   bot: boolean
   failure?: ConnectorFailure
   links: ConnectorWorkLink[]
@@ -30,6 +39,14 @@ export type EndedTurnReplies = {
   tookMs?: number
   /** The turn's turn-started `at` as its conversation knows it; absent after a restart. */
   turnStartedAt?: number
+  /** When the turn began by this app's clock, for its own post attempts when turnStartedAt is unknown. */
+  postsSince?: number
+  /** When the turn ended by this app's clock: a post after it is a later turn's. */
+  postsUntil?: number
+  /** The live turn end's, never boot recovery's: only it may retry an empty turn. */
+  live?: true
+  /** How a retry of the turn is asked (retryAskerOf): absent when the turn gets none. */
+  askedBy?: Pick<AgentJournalMessageItem, 'origin' | 'asker' | 'connectorConversation'>
 }
 
 /** What a fill did: the conversations its rows cover, and whether a usage-limit pause cut them
@@ -38,6 +55,23 @@ export type FilledTurn = {
   covered: ReadonlySet<string>
   paused: boolean
   resumesAt?: number
+}
+
+/** Whether the bot's owner sent the message that admitted a row (its journal body's asker): the
+ *  owner proof of an older build's row a continuation claimed, whose own stamps carry none. */
+export type AskedByOwner = (sessionId: string, messageId: string) => Promise<boolean>
+
+/** AskedByOwner over a chat's journal: the asker of the send that admitted the row, or, for a
+ *  queued card's row (whose id is the card's), of the send the card was handed over as. */
+export function journalAskedByOwner(
+  reads: (
+    sessionId: string
+  ) => Promise<Pick<AgentSessionJournalReads, 'submissionBody'> | undefined>
+): AskedByOwner {
+  return async (sessionId, messageId) => {
+    const body = await (await reads(sessionId))?.submissionBody(messageId, { family: true })
+    return body?.asker?.role === 'owner'
+  }
 }
 
 /** Fills an ended turn's outbox rows (design item 125 §3), the first fill winning. */
@@ -59,7 +93,9 @@ const keyOf = (account: string, deliveryId: string): string => `${account}\0${de
 export function conversationReplyFill(
   journal: () => ConnectorReplyJournal | null,
   filled: () => void,
-  pause?: UsageLimitPause
+  pause?: UsageLimitPause,
+  askedByOwner?: AskedByOwner,
+  retry?: Pick<EmptyTurnRetry, 'hold' | 'posted'>
 ): ConversationReplyFill {
   return async (turn) => {
     const store = journal()
@@ -67,11 +103,15 @@ export function conversationReplyFill(
       return { covered: new Set(), paused: false }
     }
     const order = new Map<string, number>()
+    const ownerAsked = new Set<string>()
     for (const stamp of turn.stamps) {
       for (const deliveryId of [stamp.deliveryId, ...(stamp.carried ?? [])]) {
         const key = keyOf(stamp.account, deliveryId)
         if (!order.has(key)) {
           order.set(key, order.size)
+        }
+        if (stamp.ownerAsked) {
+          ownerAsked.add(key)
         }
       }
     }
@@ -107,10 +147,46 @@ export function conversationReplyFill(
     if (paused) {
       return { covered, paused: true, ...paused }
     }
+    if (await retry?.hold(turn, own)) {
+      return { covered, paused: false }
+    }
+    // No retry asks again: words before the last tool answer, except where the chat posted its own,
+    // and never for a row already retried: an empty retry closes with the no-answer line.
+    const answeredIn = (row: JournalConnectorReplyRow): EndedTurnReplies =>
+      turn.prose ||
+      !turn.earlierProse ||
+      row.emptyRetried === true ||
+      retry?.posted(turn, row.conversation.externalId)
+        ? turn
+        : { ...turn, prose: turn.earlierProse }
+    // One answer per conversation, under the rule its turn began with: its head's (its earliest row
+    // still kept, filled or not). A row an older build admitted silences the whole reply, except to
+    // its owner in their own DM.
+    const quietIn = (row: JournalConnectorReplyRow) => {
+      const answered = answeredIn(row)
+      return answered.bot && answered.outcome === 'success' && isQuietBotResult(answered.prose)
+    }
+    const filling = new Set(own.map((row) => JSON.stringify([row.account, row.conversation])))
+    const silencedWhole = new Map<string, boolean>()
+    for (const row of rows) {
+      const conversation = JSON.stringify([row.account, row.conversation])
+      if (!filling.has(conversation) || silencedWhole.has(conversation) || !quietIn(row)) {
+        continue
+      }
+      const ownerDm =
+        row.quietRule === undefined &&
+        isSlackDirectMessage(row.conversation) &&
+        (ownerAsked.has(keyOf(row.account, row.deliveryId)) ||
+          (await askedByOwner?.(turn.sessionId, row.messageId).catch(() => false)) === true)
+      silencedWhole.set(conversation, row.quietRule === undefined && !ownerDm)
+    }
     const fills: JournalConnectorReplyFill[] = []
     for (const row of own) {
-      const { outcome, prose } = connectorReplyTurnOutcome(turn)
       const conversation = JSON.stringify([row.account, row.conversation])
+      const { outcome, prose } = connectorReplyTurnOutcome({
+        ...answeredIn(row),
+        silencedWhole: silencedWhole.get(conversation) === true
+      })
       const answerDeliveryId = answers.get(conversation) ?? row.deliveryId
       fills.push({
         account: row.account,
@@ -123,6 +199,7 @@ export function conversationReplyFill(
         ...(outcome === 'failed' && turn.failure ? { failure: turn.failure } : {}),
         ...(turn.links.length > 0 ? { links: turn.links } : {}),
         ...(outcome === 'answered' && turn.tookMs !== undefined ? { tookMs: turn.tookMs } : {}),
+        ...(outcome === 'no_answer' && turn.toolsRan ? { toolsRan: true as const } : {}),
         ...(turn.turnStartedAt === undefined ? {} : { turnStartedAt: turn.turnStartedAt })
       })
     }

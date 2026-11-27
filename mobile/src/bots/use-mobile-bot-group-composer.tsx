@@ -7,15 +7,13 @@ import {
   formatBotGroupAudience
 } from '../../../src/shared/bots/bot-group-mentions'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import { mobileBotAvatarSource } from './host-bot-row-facts'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { useBotDraftImages } from './use-bot-draft-images'
-import type { MobileBotGroupSession } from './MobileBotGroupTurns'
-import type { MobileNativeChatSessionOptionPickersProps } from '../session/native-chat/input/session-options/MobileNativeChatSessionOptionPickers'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 
-/** The group composer's `@` members, who the draft reaches, the one bot whose options apply, and its photos. */
+/** The group composer's `@` members, the room's faces, who the draft reaches, the one bot that would answer, and its photos. */
 export function useMobileBotGroupComposer(
   group: BotGroup | undefined,
   bots: readonly Pick<Bot, 'id' | 'name' | 'avatar'>[],
@@ -25,6 +23,7 @@ export function useMobileBotGroupComposer(
   takesPhotos: boolean,
   onError: (message: string) => void
 ) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const draft = composerDraft.text
   // Photos upload to a member's session, as the desktop's do.
@@ -34,10 +33,11 @@ export function useMobileBotGroupComposer(
     draftKey: composerDraft.key,
     sessionId: uploadTo,
     editText: composerDraft.edit,
-    showToast: onError
+    showToast: onError,
+    markersInText: false
   })
   const draftAudience = group ? botGroupDraftAudience(draft, group, bots) : 'invalid'
-  // Model and permission belong to one bot, so they show only while exactly one would answer.
+  // The one bot that would answer, whose agent the composer's commands follow.
   const recipientId =
     draftAudience !== 'invalid' && draftAudience.ids.length === 1 ? draftAudience.ids[0] : null
   const memberBots = useMemo(
@@ -53,29 +53,26 @@ export function useMobileBotGroupComposer(
       })),
       { name: 'everyone', icon: <Users size={20} color={colors.textSecondary} strokeWidth={2} /> }
     ],
+    [memberBots, group?.remoteMembers, colors]
+  )
+  // Who is in the room, in the same order, for its picture; a paired computer's upload shows as letters.
+  const faces = useMemo(
+    () => [
+      ...memberBots.map((bot) => ({
+        id: bot.id,
+        name: bot.name,
+        avatar: mobileBotAvatarSource(bot)
+      })),
+      ...(group?.remoteMembers ?? []).map((bot) => ({
+        id: `${bot.environmentId}:${bot.botId}`,
+        name: bot.name,
+        avatar: mobileBotAvatarSource(bot)
+      }))
+    ],
     [memberBots, group?.remoteMembers]
   )
   const audience = group ? formatBotGroupAudience(draftAudience, group, bots, t) : ''
   /** Opens the photo library; undefined hides the composer's +. */
   const attachPhotos = uploadTo ? () => void photos.attach() : undefined
-  return { recipientId, roomMentions, audience, photos, attachPhotos }
-}
-
-/** The one answering bot's model and permission pickers, as its chat's composer shows them. */
-export function mobileBotGroupSessionOptions(
-  chosen: MobileBotGroupSession | undefined
-): MobileNativeChatSessionOptionPickersProps | undefined {
-  return chosen
-    ? {
-        isWorking: chosen.isWorking,
-        controller: {
-          snapshot: chosen.optionSnapshot,
-          optionSurface: chosen.optionSurface,
-          pendingId: null,
-          setOption: chosen.setStructuredOption,
-          invokeAction: chosen.invokeStructuredOption,
-          recordCommand: () => {}
-        }
-      }
-    : undefined
+  return { recipientId, roomMentions, faces, audience, photos, attachPhotos }
 }

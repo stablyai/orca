@@ -43,6 +43,8 @@ export const BOT_FAILURE_COPY = {
   toolCredentialsRaced: 'The bot’s tool credentials changed in another Orca. Try again.',
   toolSourceManaged: 'Orca manages this tool. Change it where you set it up.',
   toolValuesUnmoved: 'A tool still holds its saved values. Reopen the bot’s tools to move them.',
+  googleAccountsChanged:
+    'Its Google accounts changed since you opened them. Check them and save again.',
   toolCodexCheckFailed:
     'Codex could not check or connect the tools. Check its setup and try again.',
   toolCodexNoThread: 'Codex started no thread to check the tools in.',
@@ -110,7 +112,11 @@ export const BOT_FAILURE_COPY = {
   groupImageNotStored: 'Only pasted or attached images can go in a group message.',
   groupAttachmentsUnavailable:
     "This computer can't take attachments right now. Try sending again in a moment.",
-  groupAttachFailed: "Couldn't attach the files. Try sending again in a moment."
+  groupAttachFailed: "Couldn't attach the files. Try sending again in a moment.",
+  composioKeyCantCreateSessions:
+    'This Composio key can’t create sessions. It needs {{permission}}.',
+  composioKeyNeedsPermission: 'This Composio key is missing a permission. It needs {{permission}}.',
+  composioKeyMissingPermission: 'This Composio key is missing a permission Orca needs.'
 } as const
 
 export type BotFailureCode = keyof typeof BOT_FAILURE_COPY
