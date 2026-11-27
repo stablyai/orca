@@ -8,6 +8,7 @@ import {
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { getRepositoryItsaplanSearchEntry } from './RepositoryItsaplanProjectSection'
 import { searchKeywordTranslator } from '../search/settings-search-keywords'
 import { getRepositoryGitAuthorSearchEntries } from './source-control/repository-git-author-search-entries'
 import { getRepositoryMcpConfigSearchEntries } from './mcp/mcp-config-search'
@@ -55,6 +56,7 @@ function getRepositorySearchParts(
       )
     ]
   }
+  const itsaplan = getRepositoryItsaplanSearchEntry(repo, t)
   const displayName = {
     title: t('auto.components.settings.repository.search.7f380f89ea', 'Display name'),
     description: t(
@@ -207,6 +209,7 @@ function getRepositorySearchParts(
   return {
     agentTrust: getRepositoryAgentTrustSearchEntry(),
     jira,
+    itsaplan,
     displayName,
     icon,
     github,
@@ -230,6 +233,7 @@ export function getRepositoryPaneSearchEntries(
     getRepositoryFormatterSearchEntry(t),
     parts.agentTrust,
     parts.jira,
+    parts.itsaplan,
     parts.displayName,
     parts.icon
   ]
@@ -265,7 +269,7 @@ export function getRepositoryPaneSearchMetadata(
 ) {
   const parts = getRepositorySearchParts(repo, options, t)
   const worktrees = isFolderRepo(repo) ? undefined : getRepositoryGitWorktreeSearchMetadata(repo, t)
-  const identity = [parts.agentTrust, parts.jira, parts.displayName, parts.icon]
+  const identity = [parts.agentTrust, parts.jira, parts.itsaplan, parts.displayName, parts.icon]
   if (parts.github) {
     identity.push(parts.github)
   }
