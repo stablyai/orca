@@ -12,6 +12,7 @@ import {
 import { resolveStructuredWorkerForDispatch } from '../../structured-workers/orchestration-structured-worker-lifecycle'
 import type { WorkerReleaseReceipt } from './worker-release-completion'
 import { receiptForUnchangedRelease } from './worker-terminal-resource-presentation'
+import { readWorkerTerminalReleaseAttempt } from '../../../../../orchestration/db/worker-terminal/worker-terminal-release-attempt'
 
 /** Exit-led release: the exact process is proven gone, so settle whatever the request state, keeping its output findable. */
 export async function settleProvenExitedWorkerTerminal(args: {
@@ -19,6 +20,8 @@ export async function settleProvenExitedWorkerTerminal(args: {
   db: OrchestrationDb
   dispatchId: string
   resource: WorkerTerminalResourceRow
+  /** The keep-open revision read with `resource`; a keep-open during the proof refuses the settle. */
+  expectedAttempt?: number
 }): Promise<WorkerTerminalResourceRow | null> {
   const { runtime, db, dispatchId, resource } = args
   const processIncarnation = resource.process_incarnation
@@ -38,7 +41,10 @@ export async function settleProvenExitedWorkerTerminal(args: {
     requestingDispatchId: dispatchId,
     resourceId: resource.id,
     processIncarnation,
-    expected: resource,
+    expected:
+      args.expectedAttempt === undefined
+        ? resource
+        : { ...resource, releaseAttempt: args.expectedAttempt },
     // The saved session may have moved during the proof; read it from the row being settled.
     output: (current) =>
       releaseCommitFieldsForCapturedArchive(
@@ -57,7 +63,8 @@ export function readRetainedWorkerReleaseState(
   db: OrchestrationDb,
   dispatchId: string,
   seen: WorkerTerminalResourceRow,
-  seenReason: WorkerTerminalRetainedReason
+  seenReason: WorkerTerminalRetainedReason,
+  seenAttempt?: number
 ):
   | { disposition: 'already_released'; resource: WorkerTerminalResourceRow }
   | {
@@ -81,8 +88,26 @@ export function readRetainedWorkerReleaseState(
     disposition: 'retained',
     resource: current,
     // Still releasable by its owner: whatever retained it before the proof (a stopped worker's unproven identity) still holds.
-    reason: decision.action === 'retained' ? decision.reason : seenReason
+    reason:
+      decision.action === 'retained'
+        ? decision.reason
+        : (reasonKeptOpenSince(db, current, seenAttempt) ?? seenReason)
   }
+}
+
+/** When a keep-open landed after `seenAttempt` was read, its reason, not the admission's, holds the row. */
+function reasonKeptOpenSince(
+  db: OrchestrationDb,
+  current: WorkerTerminalResourceRow,
+  seenAttempt: number | undefined
+): WorkerTerminalRetainedReason | null {
+  return seenAttempt !== undefined &&
+    current.release_state === 'retained' &&
+    current.retained_reason !== null &&
+    readWorkerTerminalReleaseAttempt(db, current.id) !== seenAttempt
+    ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every writer of a retained row's reason writes one of these.
+      (current.retained_reason as WorkerTerminalRetainedReason)
+    : null
 }
 
 /**

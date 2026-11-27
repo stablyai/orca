@@ -13,6 +13,8 @@ import { OrchestrationError } from '../../orchestration-error'
 import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
 import { parseWorkerTerminalPriorOwnerIds } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
+import { readWorkerTerminalReleaseAttempt } from './worker-terminal-release-attempt'
+import { listSettledWorkerTerminalsStillOwned } from './worker-terminal-still-owned-listing'
 
 export function requestWorkerTerminalRelease(
   this: OrchestrationDb,
@@ -24,6 +26,8 @@ export function requestWorkerTerminalRelease(
       disposition: 'retained'
       resource: WorkerTerminalResourceRow | null
       reason: WorkerTerminalRetainedReason
+      /** Only on a stopped or abandoned worker's own row: the keep-open revision its exit proof speaks for. */
+      attempt?: number
     } {
   this.db.exec('BEGIN IMMEDIATE')
   try {
@@ -63,8 +67,9 @@ export function requestWorkerTerminalRelease(
       return { disposition: 'already_released', resource }
     }
     if (worker.state === 'stopped' || worker.state === 'abandoned') {
+      const attempt = readWorkerTerminalReleaseAttempt(this, resource.id)
       this.db.exec('COMMIT')
-      return { disposition: 'retained', resource, reason: 'identity_unproven' }
+      return { disposition: 'retained', resource, reason: 'identity_unproven', attempt }
     }
     if (decision.action === 'retained') {
       this.db.exec('COMMIT')
@@ -116,7 +121,10 @@ type ProvenExitedWorkerTerminalRelease = DeadWorkerTerminalRelease & {
   expected: Pick<
     WorkerTerminalResourceRow,
     'owner_dispatch_id' | 'host_scope' | 'release_state' | 'retained_reason'
-  >
+  > & {
+    /** The keep-open revision seen with that row; a keep-open since then rewrites the same fields. */
+    releaseAttempt?: number
+  }
   /** Called only when the owner itself settles and has no archive yet. */
   output: (resource: WorkerTerminalResourceRow) => DeadWorkerTerminalOutput
 }
@@ -236,7 +244,9 @@ export function releaseDeadWorkerTerminalInTransaction(
     (resource.owner_dispatch_id === expected.owner_dispatch_id &&
       resource.host_scope === expected.host_scope &&
       resource.release_state === expected.release_state &&
-      resource.retained_reason === expected.retained_reason)
+      resource.retained_reason === expected.retained_reason &&
+      (expected.releaseAttempt === undefined ||
+        readWorkerTerminalReleaseAttempt(database, resource.id) === expected.releaseAttempt))
   if (
     !priorOwners ||
     !requesterRelated ||
@@ -279,43 +289,6 @@ export function releaseDeadWorkerTerminalInTransaction(
       params.processIncarnation
     )
   return database.getWorkerTerminalResource(params.resourceId) ?? resource
-}
-
-/** Rows a release sweep could ever act on; kept in a partial index so legacy history is never read. */
-export const UNRELEASED_MINTED_WORKER_TERMINAL_SQL = `release_state = 'not_requested'
-  AND ownership_state = 'owned'
-  AND process_incarnation LIKE '%:________-____-____-____-____________'
-  AND terminal_handle NOT LIKE 'structworker\\_%' ESCAPE '\\'`
-
-/**
- * One page of minted, never-requested terminal (not chat) worker rows, in owner order. `eligible` marks
- * the ones whose worker settled before `updatedBefore`: older builds left these owned, pinning their Run.
- */
-export function listSettledWorkerTerminalsStillOwned(
-  this: OrchestrationDb,
-  afterOwnerDispatchId: string,
-  limit: number,
-  updatedBefore: string
-): (WorkerTerminalResourceRow & { eligible: number })[] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: res.* plus its eligibility.
-  return this.db
-    .prepare(
-      // Pages on the partial index's own key, so each page reads at most `limit` entries; legacy fences
-      // never enter the index.
-      `SELECT res.*,
-          (w.state IN ('succeeded', 'failed', 'stopped', 'abandoned') AND res.updated_at < ?) AS eligible
-        FROM (
-          SELECT * FROM worker_terminal_resources
-            INDEXED BY idx_worker_terminal_resources_unreleased_minted
-            WHERE ${UNRELEASED_MINTED_WORKER_TERMINAL_SQL} AND owner_dispatch_id > ?
-            ORDER BY owner_dispatch_id LIMIT ?
-        ) res
-        LEFT JOIN worker_dispatches w ON w.dispatch_id = res.owner_dispatch_id
-        ORDER BY res.owner_dispatch_id`
-    )
-    .all(updatedBefore, afterOwnerDispatchId, limit) as (WorkerTerminalResourceRow & {
-    eligible: number
-  })[]
 }
 
 export type WorkerTerminalReleaseMethods = {
