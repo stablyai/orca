@@ -4,6 +4,7 @@ import { MessageSquare, Plus, Users } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { sessionTabBarStyles as styles } from '../session/tabs/MobileSessionTabBar'
+import { tabBarLayerStyles } from '../session/tabs/MobileSessionTabBarLayer'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { BotGroup } from '../../../src/shared/bots/bot-group'
@@ -51,9 +52,9 @@ export function MobileBotGroupRoomBar({
           accessibilityLabel={active.label}
           accessibilityHint={t('session.tabBar.hint', 'Shows all tabs')}
         >
-          <View style={styles.tabContent}>
+          <View style={tabBarLayerStyles.tabContent}>
             <ActiveIcon size={14} color={colors.textSecondary} />
-            <Text style={styles.title} numberOfLines={1}>
+            <Text style={tabBarLayerStyles.title} numberOfLines={1}>
               {active.label}
             </Text>
           </View>

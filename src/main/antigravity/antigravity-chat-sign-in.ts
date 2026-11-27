@@ -31,11 +31,16 @@ export type AntigravityChatSignInHost = {
   /** agy and the environment a chat on agy's own home runs it with. */
   agy(signal: AbortSignal): Promise<{ command: string; env: Record<string, string> }>
   /** agy's login changed: whatever vouched for or ran on the previous one reads it again, and an
-   *  added account is saved. */
-  signedIn(intent: accountTypes.AntigravityChatSignInIntent): void
+   *  added account is saved before the flow ends. */
+  signedIn(intent: accountTypes.AntigravityChatSignInIntent): Promise<void> | void
 }
 
 let active: Flow | null = null
+
+/** While a sign-in runs, agy's slot may hold a login Orca hasn't saved yet. */
+export function antigravitySignInHoldsNativeLogin(): boolean {
+  return active !== null
+}
 
 const settled = (phase: Phase): boolean =>
   phase !== 'starting' && phase !== 'waiting' && phase !== 'verifying'
@@ -102,7 +107,7 @@ async function runFlow(current: Flow, host: AntigravityChatSignInHost): Promise<
     const failure = await logIn(current, host)
     if (failure === null) {
       publish(current, { phase: 'signedIn' }, 'signedIn')
-      host.signedIn(current.intent)
+      await host.signedIn(current.intent)
     } else if (!current.ended.signal.aborted) {
       publish(current, { phase: 'failed', error: failure })
     }

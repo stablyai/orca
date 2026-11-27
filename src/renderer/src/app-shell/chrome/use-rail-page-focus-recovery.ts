@@ -11,7 +11,8 @@ const RECOVERY_BUDGET_MS = 5000
 // The palette restores its focus in a double animation frame; look only after that.
 const MIN_FRAMES_BEFORE_RECOVERY = 3
 // A page's own focus target, used before its first control.
-const DECLARED_PAGE_FOCUS_TARGET = '[data-automations-page-title], [data-automations-page-search]'
+const DECLARED_PAGE_FOCUS_TARGET =
+  '[data-automations-page-title], [data-automations-page-search], [data-rail-page-focus-target]'
 const TABBABLE = 'button, [href], input, select, textarea, [tabindex]'
 
 function isUsable(element: HTMLElement): boolean {
@@ -23,9 +24,10 @@ function isUsable(element: HTMLElement): boolean {
 }
 
 function resolvePageFocusTarget(column: HTMLElement): HTMLElement | null {
-  const declared = column.querySelector<HTMLElement>(DECLARED_PAGE_FOCUS_TARGET)
-  if (declared && isUsable(declared)) {
-    return declared
+  for (const element of column.querySelectorAll<HTMLElement>(DECLARED_PAGE_FOCUS_TARGET)) {
+    if (isUsable(element)) {
+      return element
+    }
   }
   for (const element of column.querySelectorAll<HTMLElement>(TABBABLE)) {
     if (element.tabIndex >= 0 && isUsable(element)) {

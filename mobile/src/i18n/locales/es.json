@@ -34,7 +34,6 @@
   "agentHistory": {
     "panel": {
       "all": "Todo",
-      "emptyScope": "No hay sesiones anteriores de agentes en este ámbito.",
       "missingResumeId": "Esta sesión no tiene un identificador de reanudación.",
       "noSearchResults": "No hay sesiones que coincidan con tu búsqueda.",
       "noSessions": "No hay sesiones de agentes",
@@ -66,15 +65,11 @@
       "untitledSession": "Sesión sin título"
     },
     "sessionHistoryList": {
-      "currentWorktree": "worktree actual",
       "messages_many": "{{count}} mensajes",
       "messages_one": "{{count}} mensaje",
       "messages_other": "{{count}} mensajes",
       "resumeSession": "Reanudar sesión de agente",
-      "continueInCli": "Continuar en la CLI",
-      "hidePreview": "Oculta los mensajes recientes.",
-      "showPreview": "Muestra los mensajes recientes.",
-      "you": "Tú"
+      "continueInCli": "Continuar en la CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "No se pudo contactar con el host",
@@ -1132,25 +1127,13 @@
     },
     "customKeyModal": {
       "add": "Añadir",
-      "addShortcut": "Añadir atajo",
-      "command": "Comando",
       "commandPlaceholder": "p. ej., pnpm build",
       "editing": "Edición",
       "function": "Función",
       "key": "Tecla",
-      "label": "Etiqueta",
       "labelPlaceholder": "p. ej., Compilar",
-      "manageShortcuts": "Gestionar atajos",
-      "manageShortcutsHint": "Muestra, oculta o reordena los atajos de teclado",
-      "modifiers": "Modificadores",
-      "moreKeys": "MÁS TECLAS",
       "navigation": "Navegación",
-      "pickKey": "Elige una tecla",
-      "pressEnter": "Pulsar Enter",
-      "shortcutCombo": "Combinación de teclas",
-      "shortcutComboHint": "Crea combinaciones de teclas con Ctrl, Alt y Shift",
-      "textMacro": "Macro de texto",
-      "textMacroHint": "Envía un comando de texto personalizado"
+      "pressEnter": "Pulsar Enter"
     },
     "dictationSetupSheet": {
       "description": "Descarga o elige un modelo y activa el dictado en el equipo emparejado. Todo desde aquí.",
@@ -1192,8 +1175,6 @@
       "tooLargeMessage": "Este diff es demasiado grande para la vista previa del móvil."
     },
     "diffReviewDrawers": {
-      "addNote": "Añadir nota",
-      "cancelNote": "Cancelar nota",
       "clearSentNotes": "Eliminar notas enviadas",
       "copyNotes": "Copiar notas",
       "deleteNote": "Eliminar nota",
@@ -1202,12 +1183,10 @@
       "discardTitle": "Descartar archivo",
       "editNote": "Editar nota",
       "fileNote": "Nota del archivo",
-      "lineNumber": "Línea {{lineNumber}}",
       "loadingSessions": "Cargando sesiones de agentes…",
       "newAgentSession": "Nueva sesión de agente",
       "openInSession": "Abrir en sesión",
       "reviewNote": "Nota de revisión",
-      "saveLineNote": "Guardar nota en la línea {{lineNumber}}",
       "sendNotes": "Enviar notas",
       "sendNotesLabel": "Enviar notas al agente",
       "viewedFiles_many": "{{count}} archivos vistos",
@@ -1223,10 +1202,7 @@
       "discardChanges": "Descartar cambios",
       "rangeLine": "Línea {{line}}",
       "rangeLines": "Líneas {{startLine}}–{{line}}",
-      "sendToAgent": "Enviar a {{agent}}",
-      "sendToAnAgent": "Enviar al agente",
       "rangePlaceholder": "¿Qué debería cambiar aquí?",
-      "commentOnGitHub": "Comentar en GitHub",
       "sendUnsentNotes": "Enviar notas pendientes",
       "statusUnreadable": "No se pudo leer el estado de este host. Reintentando…",
       "terminal": "Terminal",
@@ -1261,7 +1237,6 @@
       "title": "Cambios"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "Añadir una nota en la línea {{number}}",
       "addedLine": "Línea añadida",
       "addedLineNumber": "Línea {{number}} añadida",
       "contextLine": "Línea de contexto",
@@ -1938,9 +1913,6 @@
       "backToSession": "Volver a la sesión",
       "closeFiles": "Cerrar archivos",
       "emptyState": "No se encontraron archivos",
-      "filterPlaceholder": "Filtrar archivos",
-      "noMatchesHint": "Solo se busca en las carpetas que has abierto.",
-      "clearFilter": "Borrar filtro",
       "loading": "Cargando archivos…",
       "loadFailed": "No se pudieron cargar los archivos",
       "title": "Archivos",
@@ -1954,13 +1926,8 @@
       "openFolder": "Abrir la carpeta {{name}}",
       "previewFile": "Previsualizar el archivo {{name}}",
       "retryLoading": "Reintentar cargar {{path}}",
-      "searchAll": "Buscar en todo",
-      "searchAllIn": "Buscar en todo {{folder}}",
       "ignored": "Ignorado por .gitignore",
-      "searched": "Se buscó en {{loaded}} de {{total}} en {{folder}}.",
-      "searching": "Buscando en {{folder}}… {{loaded}} de {{total}}",
-      "showMore": "Mostrar {{rows}} más",
-      "unavailable": "No disponible en el móvil"
+      "showMore": "Mostrar {{rows}} más"
     },
     "fileExplorerRowActions": {
       "copyName": "Copiar nombre",
@@ -2409,7 +2376,6 @@
       "daysAgo_other": "hace {{count}} días",
       "deleteConfirmMessage": "Esto elimina permanentemente el comentario en GitHub.",
       "editPlaceholder": "Edita el comentario…",
-      "replyToComment": "Responder al comentario",
       "hoursAgo_many": "hace {{count}} h",
       "hoursAgo_one": "hace {{count}} h",
       "hoursAgo_other": "hace {{count}} h",
@@ -2421,40 +2387,23 @@
       "monthsAgo_one": "hace {{count}} mes",
       "monthsAgo_other": "hace {{count}} meses",
       "reply": "Responder",
-      "editComment": "Editar comentario",
-      "deleteComment": "Eliminar comentario",
-      "unresolveThread": "Reabrir hilo",
-      "resolveThread": "Resolver hilo",
       "resolve": "Resolver",
-      "replyPlaceholder": "Escribe una respuesta…",
       "unresolve": "Marcar como no resuelto",
       "yearsAgo_many": "hace {{count}} años",
       "yearsAgo_one": "hace {{count}} año",
-      "yearsAgo_other": "hace {{count}} años",
-      "resolved": "resuelto",
-      "openOnGitHub": "Abrir comentario en GitHub"
+      "yearsAgo_other": "hace {{count}} años"
     },
     "commentsSection": {
-      "all": "Todos",
-      "humans": "Humanos",
-      "bots": "Bots",
-      "noBotComments": "Sin comentarios de bots.",
-      "noHumanComments": "Sin comentarios humanos.",
       "comment": "Comentar",
       "resolvedThreadSingle": "Hilo de {{author}} resuelto",
       "resolvedThreadCount": "Hilo de {{author}} resuelto ({{count}})",
-      "resolvedCommentSingle": "Comentario de {{author}} resuelto",
-      "resolvedCommentCount": "Comentario de {{author}} resuelto ({{count}})",
       "commentsLoadFailedRetry": "No se pudieron cargar los comentarios.",
       "description": "Descripción",
       "descriptionLoadFailed": "No se pudo cargar la descripción. Toca Actualizar para reintentarlo.",
       "noComments": "Aún no hay comentarios.",
       "noDescription": "No se proporcionó descripción.",
       "showMore": "Mostrar {{count}} más",
-      "addCommentPlaceholder": "Añade un comentario…",
-      "title": "Comentarios",
-      "commentsLoadFailed": "No se pudieron cargar los comentarios. Toca Actualizar para reintentarlo.",
-      "showMoreOf": "Mostrar {{count}} más de {{remaining}}"
+      "title": "Comentarios"
     },
     "linkPrForm": {
       "linkButton": "Vincular pull request",
@@ -2566,14 +2515,6 @@
       "stateOpen": "Abierto",
       "unavailable": "Checks no disponibles"
     },
-    "prCommentAudienceLabels": {
-      "all": "Todos",
-      "bots": "Bots",
-      "humans": "Humanos",
-      "noBotComments": "Sin comentarios de robots.",
-      "noComments": "Aún no hay comentarios.",
-      "noHumanComments": "Sin comentarios humanos."
-    },
     "tab": {
       "updated": "actualizado {{time}}",
       "moreActions": "Más acciones de la pull request",
@@ -2637,7 +2578,6 @@
       "failedAfter": "Falló tras {{duration}}",
       "failed": "Fallido",
       "checkActions": "Más opciones para {{name}}",
-      "rerun": "Volver a ejecutar",
       "copyErrorFailed": "No se pudo copiar el error.",
       "durationSeconds": "{{seconds}} s",
       "durationMinutes": "{{minutes}} min {{seconds}} s",
@@ -2778,22 +2718,15 @@
       "messageModeLabel": "Modo mensaje: escribe y luego envía. Cambiar al modo teclas",
       "moreKeys": "Más teclas y acciones",
       "showKeyboard": "Mostrar teclado",
-      "dismissKeyboardHint": "Oculta el teclado en pantalla y mantiene abierta la sesión de terminal actual.",
-      "switchToDesktopMode": "Cambiar al modo de escritorio",
-      "switchToPhoneMode": "Cambiar al modo teléfono",
       "pasteFromClipboard": "Pegar desde el portapapeles",
-      "paste": "Pegar",
-      "addCustomShortcut": "Agregar atajo personalizado",
       "control": "Control",
       "alt": "Alt",
       "shift": "Shift"
     },
     "activeContent": {
-      "createTab": "Crear pestaña",
       "creatingTab": "Creando…",
       "fileTitle": "Archivo",
       "loadingTerminal": "Cargando terminal",
-      "noTabs": "No hay pestañas en esta sesión",
       "retryLoadingTerminal": "Reintentar cargar la terminal",
       "terminalTakingLonger": "La terminal está tardando más de lo esperado"
     },
@@ -2895,26 +2828,15 @@
       "workflow": "Flujo de trabajo en segundo plano"
     },
     "browserTabActionSheet": {
-      "forward": "Adelante",
-      "reload": "Recargar",
       "title": "Navegador",
       "hardReload": "Forzar recarga"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "Cerrar las otras pestañas"
     },
-    "bulkTabClose": {
-      "confirm": "Cerrar pestañas",
-      "description": "Se cerrarán las pestañas seleccionadas. Las pestañas fijadas permanecerán abiertas.",
-      "titleEditors": "¿Cerrar todas las pestañas del editor?",
-      "titleLeft": "¿Cerrar las pestañas de la izquierda?",
-      "titleOthers": "¿Cerrar las otras pestañas?",
-      "titleRight": "¿Cerrar las pestañas de la derecha?"
-    },
     "commandDock": {
       "liveInputHint": "El texto que escribes se envía directamente a la terminal activa.",
-      "liveInputLabel": "Entrada al terminal en tiempo real",
-      "tapToShowKeyboard": "Toca para mostrar el teclado"
+      "liveInputLabel": "Entrada al terminal en tiempo real"
     },
     "contentRow": {
       "dismissCreationWarning": "Descartar la advertencia de creación del espacio de trabajo"
@@ -3317,7 +3239,6 @@
       "file": "Archivo",
       "markdown": "Markdown",
       "markdownNote": "Nota en Markdown",
-      "newBrowser": "Nuevo navegador",
       "newTab": "Nueva pestaña",
       "notesCopied": "Notas copiadas",
       "notesHint": "Elige una sesión de agente a la que enviar las notas actuales.",
@@ -3333,11 +3254,9 @@
       "shellWsl": "WSL",
       "terminalName": "Nombre de la terminal",
       "unsavedMarkdown": "Cambios en Markdown sin guardar",
-      "urlPrompt": "Introduce una URL o deja el campo en blanco para abrir una pestaña nueva.",
       "allowAutoClose": "Permitir cierre automático",
       "agents": "Agentes",
       "renameTerminalFailed": "No se pudo cambiar el nombre del terminal. {{reason}}",
-      "browserStreamingUnavailable": "Este host no puede transmitir pestañas del navegador",
       "cli": "CLI",
       "cliOnly": "Solo CLI",
       "more": "Más",
@@ -3366,20 +3285,12 @@
       "switchToDesktop": "Cambiar al modo escritorio",
       "switchToPhone": "Cambiar al modo teléfono"
     },
-    "terminalInputActions": {
-      "attachFileHint": "Mantén pulsado para adjuntar un archivo en su lugar.",
-      "attachPhoto": "Adjuntar una foto",
-      "sendingImage": "Enviando imagen"
-    },
     "terminalLiveInputStatus": {
       "listening": "Escuchando",
-      "liveInput": "Entrada directa",
       "preparingMic": "Preparando micrófono",
       "processing": "Procesando",
       "releaseMicHint": "Suelta el micrófono para detener la grabación",
-      "startingMic": "Iniciando micrófono",
-      "uploadingImage": "Subiendo imagen al host",
-      "uploadingImageTitle": "Subiendo imagen"
+      "startingMic": "Iniciando micrófono"
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
@@ -3616,8 +3527,6 @@
       "mailOwnerUnconfirmed": "Orca no pudo confirmar que este mensaje siga estando dirigido a este chat."
     },
     "workerAutoClose": {
-      "running": "Agente de orquestación temporal · Se cierra 2 minutos después de terminar",
-      "finished": "Agente de orquestación temporal finalizado · Se cierra en {{countdown}}",
       "keepOpen": "Mantener abierto"
     },
     "terminalLayoutSheet": {
@@ -3639,17 +3548,14 @@
     "terminalMoreKeys": {
       "sendKey": "Enviar {{label}}",
       "paste": "Pegar",
-      "sending": "Enviando…",
       "photo": "Foto",
       "file": "Archivo",
       "desktopWidth": "Ancho de escritorio",
       "phoneWidth": "Ancho de teléfono",
       "keys": "Teclas",
-      "combos": "Combinaciones",
       "yourKeys": "Tus teclas",
       "deleteKeyHint": "Mantén pulsado para eliminar esta tecla",
-      "addCustomKey": "Añadir tecla personalizada",
-      "addKey": "Añadir tecla"
+      "addCustomKey": "Añadir tecla personalizada"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, enfocado",
@@ -3699,7 +3605,6 @@
     "tabBar": {
       "oneTab": "1 pestaña",
       "tabCount": "Pestañas: {{count}}",
-      "anotherNeedsYou": "otra pestaña requiere tu atención",
       "actionsHint": "Muestra las acciones de esta pestaña",
       "next": "Pestaña siguiente",
       "previous": "Pestaña anterior",
@@ -4047,12 +3952,7 @@
     },
     "commitFailurePanel": {
       "fix": "Arreglar",
-      "fixWithAi": "Solucionar error de commit con IA",
       "hideDetails": "Ocultar detalles",
-      "hideFailureDetails": "Ocultar detalles del error de commit",
-      "showDetails": "Mostrar detalles",
-      "showFailureDetails": "Mostrar detalles del error de commit",
-      "summary": "No se pudo hacer commit.",
       "title": "No se pudo hacer commit"
     },
     "commitMessageAi": {
@@ -4072,10 +3972,7 @@
       "cancelGeneration": "Cancelar la generación del mensaje de commit",
       "commitMessageDisabled": "Mensaje de commit deshabilitado. No hay archivos preparados.",
       "commitMessagePlaceholder": "Mensaje de commit",
-      "emptyMessage": "El árbol de trabajo está limpio.",
-      "emptyTitle": "No hay cambios locales",
       "generateMessage": "Generar mensaje de commit con IA",
-      "reconnecting": "Reconectando con el escritorio…",
       "regenerateHint": "Borre el mensaje para regenerar."
     },
     "createPrAction": {
@@ -4229,7 +4126,6 @@
       "updateDesktop": "Actualiza Orca en este host para usar el control de código fuente en el móvil."
     },
     "modals": {
-      "currentBranch": "actual",
       "discardButton": "Descartar",
       "discardConfirmMessage": "¿Descartar los cambios de \"{{path}}\"? Esta acción no se puede deshacer.",
       "discardTitle": "Descartar cambio",
@@ -4533,14 +4429,6 @@
       "behind": "{{count}} por detrás",
       "upToDate": "Actualizado",
       "switchBranch": "Cambiar de rama desde {{branch}}",
-      "mergeInProgress": "Fusión en progreso",
-      "rebaseInProgress": "Rebase en progreso",
-      "cherryPickInProgress": "Cherry-pick en progreso",
-      "filesNeedDecision_many": "{{count}} archivos necesitan una decisión antes de que puedas terminar.",
-      "filesNeedDecision_one": "{{count}} archivo necesita una decisión antes de que puedas terminar.",
-      "filesNeedDecision_other": "{{count}} archivos necesitan una decisión antes de que puedas terminar.",
-      "conflictsResolved": "Todos los conflictos están resueltos. Termina desde la barra de abajo.",
-      "continueOnComputer": "Todos los conflictos están resueltos. Continúa en tu equipo para terminar.",
       "commits_many": "{{count}} commits",
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commits",
@@ -5801,7 +5689,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Vincular un ordenador",
       "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",

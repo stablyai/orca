@@ -1,6 +1,14 @@
 import { agentListPreview } from '../../agents/agent-list-row-text'
 import { agentStatusGroup } from '../../agents/agent-list-rows'
 import { AGENT_LIST_STATUS_RANK } from '../../../../src/shared/agent-status/presentation/agent-list-status'
+import {
+  agentToolDisplayName,
+  agentToolPreviewInput
+} from '../../../../src/shared/agent-status/presentation/agent-tool-preview'
+import { parseAskFromStatus } from '../../../../src/shared/native-chat/input/native-chat-ask'
+import { parseNativeChatApprovalEnvelope } from '../../../../src/shared/native-chat/input/approvals/native-chat-approval-envelope'
+import { isAskUserQuestionTool } from '../../../../src/shared/agent-status/lifecycle/agent-question-answered-intent'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../../../src/shared/native-chat/input/questions/codex-async-question-input'
 import { translate } from '../../i18n/mobile-i18n'
 import {
   getMobileSessionTabTitle,
@@ -151,11 +159,58 @@ export function buildMobileSessionTabSummary(
   }
 }
 
+const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim()
+
+// Question tools wait for an answer, not a permission; Copilot reports its ask_user as blocked.
+const isQuestionTool = (toolName: string | undefined) =>
+  isAskUserQuestionTool(toolName) ||
+  toolName === CODEX_ASYNC_QUESTION_TOOL ||
+  toolName?.replaceAll(/[^a-z]/gi, '').toLowerCase() === 'askuser'
+
+/**
+ * What a waiting agent wants, as its ask card puts it: the question, or the tool it needs allowed.
+ * Null when the host sent neither (older hosts), so the row keeps its usual preview.
+ */
+function needsYouLine(
+  tab: MobileSessionTab,
+  dotState: AgentDotState | undefined
+): { stateWord: string; content: string } | null {
+  if (tab.type !== 'terminal' || !tab.agentStatus) {
+    return null
+  }
+  const { interactivePrompt, toolName } = tab.agentStatus
+  const question = parseAskFromStatus(interactivePrompt, toolName)?.questions[0]?.question
+  if (question) {
+    return { stateWord: translate('session.tabRows.asks', 'Asks'), content: oneLine(question) }
+  }
+  // Claude reports a permission request as waiting, with the approval in its prompt.
+  const approval = parseNativeChatApprovalEnvelope(interactivePrompt)
+  if (approval) {
+    return {
+      stateWord: translate('session.tabRows.allowTool', 'Allow {{tool}}?', {
+        tool: agentToolDisplayName(approval.tool)
+      }),
+      content: oneLine(approval.summary ?? agentToolPreviewInput(tab.agentStatus, false))
+    }
+  }
+  // Only a permission wait asks to allow its tool; a question tool without its prompt keeps the preview.
+  const tool = agentToolDisplayName(toolName)
+  if (!tool || isQuestionTool(toolName) || (dotState !== 'blocked' && dotState !== 'permission')) {
+    return null
+  }
+  return {
+    stateWord: translate('session.tabRows.allowTool', 'Allow {{tool}}?', { tool }),
+    content: oneLine(agentToolPreviewInput(tab.agentStatus, false))
+  }
+}
+
 // Why: the preview scans each agent's last message, so only the open sheet pays for it (STA-15103).
 export function buildMobileSessionTabRow(summary: MobileSessionTabSummary): MobileSessionTabRow {
   const { tab, title, dotState } = summary
-  const stateWord = dotState && dotState !== 'idle' ? agentStateLabel(dotState) : ''
-  const content = tabContent(tab, title, dotState)
+  const ask = summary.group === 'needs-you' ? needsYouLine(tab, dotState) : null
+  const stateWord =
+    ask?.stateWord ?? (dotState && dotState !== 'idle' ? agentStateLabel(dotState) : '')
+  const content = ask?.content ?? tabContent(tab, title, dotState)
   const timeAt =
     tab.type === 'terminal' && tab.agentStatus && !tab.agentStatus.restoredUnconfirmed
       ? agentRowTimeAt(tab.agentStatus)
@@ -211,4 +266,40 @@ export function groupMobileSessionSplitTabs<T extends MobileSessionTabSummary>(
     })
   }
   return entries
+}
+
+/** The split a pane belongs to, keyed as its entry is; null for a lone tab. */
+export function mobileSessionSplitKey(tab: MobileSessionTab): string | null {
+  return tab.type === 'terminal' && tab.parentTabId ? tab.parentTabId : null
+}
+
+/**
+ * The tabs a swipe steps to: one stop per desktop tab, so a split is one stop that lands on the pane
+ * last open in it (`lastPane`, by split key), else the desktop's active pane, else its first.
+ */
+export function mobileSessionSwipeStops<T extends MobileSessionTabSummary>(
+  rows: readonly T[],
+  activeTabId: string | null,
+  lastPane: ReadonlyMap<string, string>
+): { previous: T | undefined; next: T | undefined } {
+  const entries = groupMobileSessionSplitTabs(rows)
+  const stop = (entry: MobileSessionTabEntry<T> | undefined): T | undefined => {
+    if (!entry || entry.kind === 'tab') {
+      return entry?.tab
+    }
+    return (
+      entry.panes.find((pane) => pane.tab.id === lastPane.get(entry.key)) ??
+      entry.panes.find((pane) => pane.tab.isActive) ??
+      entry.panes[0]
+    )
+  }
+  const index = entries.findIndex((entry) =>
+    entry.kind === 'tab'
+      ? entry.tab.tab.id === activeTabId
+      : entry.panes.some((pane) => pane.tab.id === activeTabId)
+  )
+  if (index === -1) {
+    return { previous: undefined, next: undefined }
+  }
+  return { previous: stop(entries[index - 1]), next: stop(entries[index + 1]) }
 }

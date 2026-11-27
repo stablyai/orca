@@ -12,6 +12,23 @@ import {
   claudeToolResultFailed
 } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-tool-content'
 
+/** Content whitespace is meaningful to Markdown and copied tool output. */
+function contentString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
+/** Keeps a text block's first-line indent; its edge blank lines would land in copied text. */
+function blockText(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+  const lead = value.length - value.trimStart().length
+  if (lead === value.length) {
+    return null
+  }
+  return (lead ? value.slice(value.lastIndexOf('\n', lead) + 1) : value).trimEnd()
+}
+
 export function toolResultOutput(value: unknown): string {
   if (typeof value === 'string') {
     return value
@@ -19,7 +36,7 @@ export function toolResultOutput(value: unknown): string {
   if (!Array.isArray(value)) {
     const record = asRecord(value)
     if (record) {
-      const text = extractString(record.text) ?? extractString(record.content)
+      const text = contentString(record.text) ?? contentString(record.content)
       if (text) {
         return text
       }
@@ -33,12 +50,13 @@ export function toolResultOutput(value: unknown): string {
       continue
     }
     const record = asRecord(item)
-    const text = extractString(record?.text) ?? extractString(record?.content)
+    const text = contentString(record?.text) ?? contentString(record?.content)
     if (text) {
       parts.push(text)
     }
   }
-  return parts.join('\n')
+  // A part's own final newline already separates it from the next.
+  return parts.map((part, i) => (i && !parts[i - 1].endsWith('\n') ? `\n${part}` : part)).join('')
 }
 
 export function claudeContentBlocks(content: unknown): NativeChatBlock[] {
@@ -72,12 +90,12 @@ export function claudeContentBlocks(content: unknown): NativeChatBlock[] {
 function claudeContentBlock(record: Record<string, unknown>): NativeChatBlock | null {
   switch (record.type) {
     case 'text': {
-      const text = extractString(record.text)
+      const text = blockText(record.text)
       return text ? { type: 'text', text } : null
     }
     case 'thinking': {
       // Reasoning uses text blocks; message role carries its classification.
-      const text = extractString(record.thinking) ?? extractString(record.text)
+      const text = blockText(record.thinking) ?? blockText(record.text)
       return text ? { type: 'text', text } : null
     }
     case 'tool_use': {

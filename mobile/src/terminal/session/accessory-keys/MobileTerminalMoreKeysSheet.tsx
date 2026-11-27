@@ -1,4 +1,5 @@
 import { SPECIAL_KEY_LABELS } from '../../key-input/terminal-key-definitions'
+import { TERMINAL_RAIL_KEY_IDS } from '../../key-input/terminal-accessory-layout'
 import { createTerminalLiveAccessoryInput } from '../../live-input/terminal-live-accessory-input'
 import { isTerminalPhoneDisplayMode } from '../pane-layout/terminal-phone-display-mode'
 import { isMobileTerminalTabRunningAgent } from '../../../session/tabs/mobile-terminal-tab-agent'
@@ -6,7 +7,7 @@ import { TerminalMoreKeysSheet } from './TerminalMoreKeysSheet'
 import type { MobileSessionController } from '../../../session/use-mobile-session-controller'
 
 const ARROW_IDS = ['arrowUp', 'arrowDown', 'arrowLeft', 'arrowRight']
-// Built-in keys each row already shows; the ⋯ sheet offers the rest.
+// Built-in keys the Duo's side rail already shows; the ⋯ sheet offers the rest.
 const SHELL_ROW_KEY_IDS: ReadonlySet<string> = new Set(['escape', 'tab', ...ARROW_IDS])
 const AGENT_ROW_KEY_IDS: ReadonlySet<string> = new Set([
   'escape',
@@ -20,10 +21,13 @@ const AGENT_ROW_KEY_IDS: ReadonlySet<string> = new Set([
 export function MobileTerminalMoreKeysSheet({
   controller,
   visible,
+  besideRail,
   onClose
 }: {
   controller: MobileSessionController
   visible: boolean
+  /** Opened from the Duo's side rail, which shows its own set of keys. */
+  besideRail: boolean
   onClose: () => void
 }) {
   const {
@@ -53,7 +57,9 @@ export function MobileTerminalMoreKeysSheet({
       canPaste={canPaste}
       isAttaching={isAttaching}
       phoneDisplay={isTerminalPhoneDisplayMode(activeHandle, terminalModes)}
-      rowKeyIds={runsAgent ? AGENT_ROW_KEY_IDS : SHELL_ROW_KEY_IDS}
+      rowKeyIds={
+        besideRail ? (runsAgent ? AGENT_ROW_KEY_IDS : SHELL_ROW_KEY_IDS) : TERMINAL_RAIL_KEY_IDS
+      }
       builtInKeys={visibleBuiltInAccessoryKeys}
       customKeys={customKeys}
       onPaste={() => void handlePaste()}

@@ -15,6 +15,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
+import { useNewBrowserTabAddressFocus } from './new-browser-tab-address-focus'
 import { MobileBrowserJavaScriptDialog } from './MobileBrowserJavaScriptDialog'
 import { MobileBrowserPagePrompt } from './MobileBrowserPagePrompt'
 import type { MobileBrowserPagePromptState } from '../page-interaction/use-mobile-browser-page-prompts'
@@ -148,6 +149,8 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     togglePointerModifier,
     zoom
   } = props
+  // Only the blank tab + just made takes the keyboard; coming back to a blank tab later doesn't.
+  const addressFocus = useNewBrowserTabAddressFocus(tab.browserPageId)
   return (
     <View ref={setRootViewRef} style={styles.root}>
       {bare ? null : (
@@ -182,13 +185,17 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
           <MobileBrowserAddressField
             value={addressValue}
             onChangeText={setAddressValue}
-            onFocus={() => setAddressFocused(true)}
+            onFocus={() => {
+              setAddressFocused(true)
+              addressFocus.done()
+            }}
             onBlur={() => setAddressFocused(false)}
             onSubmit={() => void navigateToAddress()}
             focused={addressFocused}
             disabled={controlsDisabled}
             loading={tab.loading}
             loadFailed={tab.loadError != null}
+            focusWhenReady={addressFocus.pending}
           />
           <MobileBrowserViewModeSwitch
             disabled={controlsDisabled}
