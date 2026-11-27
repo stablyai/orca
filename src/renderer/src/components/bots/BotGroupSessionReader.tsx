@@ -4,11 +4,13 @@ import { useStructuredAgentSession } from '../native-chat/session/structured/use
 import {
   botGroupOperationAdmitted,
   createBotGroupJournalIndexer,
-  type indexBotGroupJournal,
+  type BotGroupJournalIndex,
   type BotGroupTurn
 } from '../../../../shared/bots/bot-group'
 export type BotGroupSession = ReturnType<typeof useStructuredAgentSession> & {
-  groupTurnItems: ReturnType<typeof indexBotGroupJournal>
+  groupTurnItems: BotGroupJournalIndex['read']
+  /** The room operations that only joined a turn another operation opened. */
+  joinedTurns: ReadonlySet<string>
 }
 export const BotGroupSessionReader = memo(function BotGroupSessionReader({
   target,
@@ -30,14 +32,16 @@ export const BotGroupSessionReader = memo(function BotGroupSessionReader({
     queueFollowUps: true
   })
   const indexJournal = useMemo(() => createBotGroupJournalIndexer(), [])
-  const groupTurnItems = useMemo(
-    () =>
-      indexJournal(
-        { items: controller.journalItems, submissions: controller.submissions },
-        turn.operationIds
-      ),
-    [indexJournal, controller.journalItems, controller.submissions, turn.operationIds]
+  const journal = useMemo(
+    () => ({ items: controller.journalItems, submissions: controller.submissions }),
+    [controller.journalItems, controller.submissions]
   )
+  const index = useMemo(
+    () => indexJournal(journal, turn.operationIds),
+    [indexJournal, journal, turn.operationIds]
+  )
+  const groupTurnItems = index.read
+  const joinedTurns = index.joined
   const { readCurrent, hasOlder, loadingOlder, loadOlder } = controller
   useEffect(() => {
     if (
@@ -48,10 +52,9 @@ export const BotGroupSessionReader = memo(function BotGroupSessionReader({
       turn.operationIds.some(
         (id) =>
           groupTurnItems(id).length === 0 &&
-          botGroupOperationAdmitted(
-            { items: controller.journalItems, submissions: controller.submissions },
-            id
-          )
+          // A joined turn has no rows of its own to page for.
+          !joinedTurns.has(id) &&
+          botGroupOperationAdmitted(journal, id)
       )
     ) {
       void loadOlder()
@@ -63,10 +66,13 @@ export const BotGroupSessionReader = memo(function BotGroupSessionReader({
     loadOlder,
     turn.operationIds,
     groupTurnItems,
-    controller.journalItems,
-    controller.submissions
+    joinedTurns,
+    journal
   ])
-  const session = useMemo(() => ({ ...controller, groupTurnItems }), [controller, groupTurnItems])
+  const session = useMemo(
+    () => ({ ...controller, groupTurnItems, joinedTurns }),
+    [controller, groupTurnItems, joinedTurns]
+  )
   useEffect(() => {
     report(turn.sessionId, session)
   }, [turn.sessionId, report, session])

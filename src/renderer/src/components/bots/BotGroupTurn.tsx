@@ -65,7 +65,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
   onStop: (botId: string) => void
   onReply: (botId: string) => void
   scrollMessageToTop: (element: HTMLElement) => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const t = useTranslate()
   useUiLanguageRevision()
   const [expanded, setExpanded] = useState(false)
@@ -87,6 +87,9 @@ export const BotGroupTurn = memo(function BotGroupTurn({
     () => turn.frozenItems ?? readTurn?.(turn.operationId, turn.workerDispatchIds) ?? noItems,
     [turn.frozenItems, turn.operationId, turn.workerDispatchIds, readTurn]
   )
+  // A wakeup that joined a running turn has no turn of its own: the room shows that turn once,
+  // under the operation that opened it, so this one shows nothing.
+  const joined = session?.joinedTurns.has(turn.operationId) === true
   const canonical = items.find((item) => item.body.kind === 'turn')
   const lifecycle = canonical?.body.kind === 'turn' ? canonical.body : null
   const submission = submissions.find(
@@ -234,6 +237,9 @@ export const BotGroupTurn = memo(function BotGroupTurn({
       : rejection
         ? t('bots.groups.notStarted', 'Not started')
         : undefined
+  if (joined) {
+    return null
+  }
   return (
     <BotGroupTranscriptOwner
       context={files}

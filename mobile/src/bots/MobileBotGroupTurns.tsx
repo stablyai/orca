@@ -12,7 +12,7 @@ import { foldMobileNativeChatMessages } from '../session/native-chat/transcript/
 import {
   botGroupOperationAdmitted,
   createBotGroupJournalIndexer,
-  type indexBotGroupJournal,
+  type BotGroupJournalIndex,
   type BotGroupTurn,
   withBotGroupTurnAnswer
 } from '../../../src/shared/bots/bot-group'
@@ -38,7 +38,9 @@ import { botCodedText } from '../../../src/shared/bots/bot-failure-copy'
 import { useThemedStyles } from '../theme/themed-styles'
 
 export type MobileBotGroupSession = StructuredMobileSession & {
-  groupTurnItems: ReturnType<typeof indexBotGroupJournal>
+  groupTurnItems: BotGroupJournalIndex['read']
+  /** The room operations that only joined a turn another operation opened. */
+  joinedTurns: ReadonlySet<string>
 }
 const transcript = createStructuredQuestionProjection(projectStructuredAgentStartItem)
 
@@ -70,10 +72,12 @@ export const MobileBotGroupReader = memo(function Reader({
     onSendError: onError
   })
   const indexJournal = useMemo(() => createBotGroupJournalIndexer(), [])
-  const groupTurnItems = useMemo(
+  const index = useMemo(
     () => indexJournal(session.journal, turn.operationIds),
     [indexJournal, session.journal.items, session.journal.submissions, turn.operationIds]
   )
+  const groupTurnItems = index.read
+  const joinedTurns = index.joined
   const { hasMore, loadingEarlier, loadEarlier, status } = session.session
   useEffect(() => {
     if (
@@ -84,7 +88,11 @@ export const MobileBotGroupReader = memo(function Reader({
       !loadingEarlier &&
       // Page only for a turn the session admitted; queued or refused ones have no older rows to find.
       turn.operationIds.some(
-        (id) => groupTurnItems(id).length === 0 && botGroupOperationAdmitted(session.journal, id)
+        (id) =>
+          groupTurnItems(id).length === 0 &&
+          // A joined turn has no rows of its own to page for.
+          !joinedTurns.has(id) &&
+          botGroupOperationAdmitted(session.journal, id)
       )
     ) {
       void loadEarlier()
@@ -98,9 +106,13 @@ export const MobileBotGroupReader = memo(function Reader({
     loadEarlier,
     turn.operationIds,
     groupTurnItems,
+    joinedTurns,
     session.journal
   ])
-  const view = useMemo(() => ({ ...session, groupTurnItems }), [session, groupTurnItems])
+  const view = useMemo(
+    () => ({ ...session, groupTurnItems, joinedTurns }),
+    [session, groupTurnItems, joinedTurns]
+  )
   useEffect(() => {
     report(turn.sessionId, view)
   }, [turn.sessionId, view, report])
@@ -134,6 +146,9 @@ export function MobileBotGroupTurn({
       (session ? session.groupTurnItems(turn.operationId, turn.workerDispatchIds) : []),
     [turn.frozenItems, session?.groupTurnItems, turn.operationId, turn.workerDispatchIds]
   )
+  // A wakeup that joined a running turn has no turn of its own: the room shows that turn once,
+  // under the operation that opened it, so this one shows nothing.
+  const joined = session?.joinedTurns.has(turn.operationId) === true
   const lifecycle = items.find((item) => item.body.kind === 'turn')?.body
   const clock = lifecycle?.kind === 'turn' ? lifecycle : null
   const queued = session?.queued.holds(turn.operationId)
@@ -197,6 +212,9 @@ export function MobileBotGroupTurn({
       ),
     [messages, fold, turn.operationId, turn.answer]
   )
+  if (joined) {
+    return null
+  }
   return (
     // Group turns keep the action sheet for every link; the phone's link setting isn't read here.
     <MobileNativeChatRowOverlaysHost
