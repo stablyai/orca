@@ -3379,6 +3379,17 @@
         "mergeRequest": "Merge request",
         "linkedIssue": "Linked issue",
         "listeningPort": "Listening port"
+      },
+      "simulator": {
+        "runtime": {
+          "emulatorRuntimeAttach": {
+            "serverAndroid": "Android emulators on {{host}} aren't supported yet. Pick an iOS simulator.",
+            "updateServer": "Couldn't show {{host}}'s simulator here. Update Orca on {{host}} and try again."
+          },
+          "emulatorRuntimeTarget": {
+            "ambiguousOwner": "Couldn't tell which computer runs this workspace. Reopen it and try again."
+          }
+        }
       }
     },
     "hooks": {
@@ -27594,7 +27605,9 @@
       "missing": "The saved device is no longer on this computer. Choose another device.",
       "unavailable": "The saved device runtime is unavailable. Choose another device or install its runtime.",
       "askPrompt": "Choose a device to open.",
-      "firstUse": "Choose your first device. Orca will remember successful selections on this computer."
+      "firstUse": "Choose your first device. Orca will remember successful selections on this computer.",
+      "missingOnServer": "The saved device is no longer on {{host}}. Choose another device.",
+      "firstUseOnServer": "Choose your first device. Orca will remember successful selections on {{host}}."
     },
     "errors": {
       "disabled": "Mobile Emulator is disabled in Settings.",
@@ -27640,7 +27653,8 @@
       "runtimeUnavailable": "Runtime unavailable",
       "running": "Running",
       "starting": "Starting",
-      "stopped": "Stopped"
+      "stopped": "Stopped",
+      "otherOnServer": "Other devices on {{host}}"
     }
   },
   "ephemeralVm": {
