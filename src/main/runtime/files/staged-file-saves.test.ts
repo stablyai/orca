@@ -265,3 +265,36 @@ describe('a staged save', () => {
     expect(temps()).toEqual([])
   })
 })
+
+// #31892: a phone upload must never leave a file in the folder unless it commits, nor replace one.
+describe('a staged upload', () => {
+  it('creates the file whole, refuses a taken name, and never commits as a save', async () => {
+    const staged = saves()
+    const target = join(root, 'photo.bin')
+    const bytes = Buffer.from([0, 255, 1, 254, 10, 13])
+    const upload = await staged.begin('conn-1', at(target), bytes.length, 'upload')
+    await staged.append('conn-1', upload.saveId, 0, bytes)
+    expect(existsSync(target)).toBe(false)
+    await expect(staged.commit('conn-1', upload.saveId, undefined, same)).rejects.toThrow(
+      'staged_save_unknown'
+    )
+    await staged.commitUpload('conn-1', upload.saveId, same)
+    expect(readFileSync(target)).toEqual(bytes)
+
+    const taken = join(root, 'taken.txt')
+    const late = await staged.begin('conn-1', at(taken), 3, 'upload')
+    await staged.append('conn-1', late.saveId, 0, Buffer.from('new'))
+    writeFileSync(taken, 'mine')
+    await expect(staged.commitUpload('conn-1', late.saveId, same)).rejects.toThrow('already exists')
+    expect(readFileSync(taken, 'utf8')).toBe('mine')
+
+    const save = await staged.begin('conn-1', at(taken), 3)
+    await staged.append('conn-1', save.saveId, 0, Buffer.from('new'))
+    await expect(staged.commitUpload('conn-1', save.saveId, same)).rejects.toThrow(
+      'staged_save_unknown'
+    )
+    await staged.abortConnection('conn-1')
+    expect(readFileSync(taken, 'utf8')).toBe('mine')
+    expect(temps()).toEqual([])
+  })
+})

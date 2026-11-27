@@ -103,6 +103,11 @@ export const EXECUTION_HOST_METHODS = [
   'files.readTerminalArtifactPreview',
   'files.resolveTerminalPath',
   'files.searchPaths',
+  // Upload into a workspace folder (files.upload.staged.v1): bytes stage outside the worktree, the commit never replaces a file.
+  'files.uploadBegin',
+  'files.saveChunk',
+  'files.uploadCommit',
+  'files.saveAbort',
   'files.stat',
   'files.statTerminalArtifact',
   'files.writeTerminalArtifact',
