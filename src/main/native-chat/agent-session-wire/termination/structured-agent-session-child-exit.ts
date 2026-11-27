@@ -163,6 +163,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     duringStartup: exitedDuringStartup,
     ...(exit.endedBeforeAcquire ? { endedBeforeAcquire: true as const } : {}),
     rootGone: true,
+    observedAt,
     ...(exit.deathEvidenceKind ? { deathEvidenceKind: exit.deathEvidenceKind } : {}),
     ...(expected && close ? { endedAt: close.requestedAt } : {})
   })
@@ -303,8 +304,9 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       context,
       sessionId,
       child.fence,
-      exit,
-      observedAt
+      { ...exit, expected },
+      observedAt,
+      exitedDuringStartup ? undefined : session.journal
     )
     endChild()
     // Unexpected death rebaselines fences; requested close preserves outstanding Stop replies.
