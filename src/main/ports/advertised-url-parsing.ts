@@ -105,6 +105,18 @@ export function extractUrlCandidates(cleaned: string): URL[] {
       continue
     }
     while (candidate.length > 0 && /[.,;:!?)\]}>'"`]/.test(candidate.slice(-1))) {
+      // The final ] can close an IPv6 authority, not prose punctuation.
+      if (candidate.endsWith(']')) {
+        const authority = parseUrl(candidate)
+        if (
+          authority?.hostname.startsWith('[') &&
+          authority.pathname === '/' &&
+          !authority.search &&
+          !authority.hash
+        ) {
+          break
+        }
+      }
       candidate = candidate.slice(0, -1)
     }
     const url = parseUrl(candidate)
