@@ -84,6 +84,41 @@ describe('itsaplanListIssues', () => {
   })
 })
 
+describe('itsaplanListIssues state columns', () => {
+  it('reads each matching column with its own columnId', async () => {
+    const issueUrls: string[] = []
+    setMainHttpClient({
+      fetch: async (url: string) => {
+        if (url.includes('/issues?')) {
+          issueUrls.push(url)
+          return jsonResponse([])
+        }
+        return jsonResponse({
+          ...board,
+          columns: [
+            { id: 1, name: 'Todo', stateType: 'unstarted', position: 1 },
+            { id: 2, name: 'Doing', stateType: 'started', position: 2 },
+            { id: 3, name: 'Done', stateType: 'completed', position: 3 }
+          ]
+        })
+      },
+      proxySession: () => null
+    })
+
+    await itsaplanListIssues({
+      projectRef: 'team.M',
+      filters: { stateTypes: ['unstarted', 'started'] },
+      limit: 20
+    })
+
+    expect(issueUrls.map((url) => new URL(url).searchParams.get('columnId')).sort()).toEqual([
+      '1',
+      '2'
+    ])
+    expect(issueUrls.map((url) => new URL(url).searchParams.get('limit'))).toEqual(['20', '20'])
+  })
+})
+
 describe('itsaplanGetIssue comments', () => {
   it('follows nextCursor and orders replies by time', async () => {
     const feedUrls: string[] = []

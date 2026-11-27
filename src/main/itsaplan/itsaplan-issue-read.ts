@@ -60,24 +60,27 @@ export async function itsaplanListIssues(query: ItsaplanIssueListQuery): Promise
         : undefined
   const search = query.search?.trim()
 
-  // The list route filters by a single column; the search route only by text.
-  const serverColumnId = !search && columnIds?.length === 1 ? columnIds[0] : undefined
-  const clientFiltersState = columnIds !== null && serverColumnId === undefined
-  const clientFiltersOthers = Boolean(search) || filters.assignee === 'unassigned'
-  const fetchLimit = clientFiltersState || clientFiltersOthers ? ITSAPLAN_LIST_LIMIT_MAX : limit
+  // The list route filters by a single column, so each state column is read on its own.
+  const fetchLimit = search || filters.assignee === 'unassigned' ? ITSAPLAN_LIST_LIMIT_MAX : limit
+  const listColumn = (columnId: number | undefined) =>
+    itsaplanRequest<RawIssueHit[]>(`${projectPath(query.projectRef)}/issues`, {
+      query: {
+        columnId,
+        assigneeUserId,
+        labelIds: filters.labelIds?.length ? filters.labelIds : undefined,
+        limit: fetchLimit
+      }
+    })
 
   const hits = search
     ? await itsaplanRequest<RawIssueHit[]>(`${projectPath(query.projectRef)}/issues/search`, {
         query: { q: search, limit: fetchLimit }
       })
-    : await itsaplanRequest<RawIssueHit[]>(`${projectPath(query.projectRef)}/issues`, {
-        query: {
-          columnId: serverColumnId,
-          assigneeUserId,
-          labelIds: filters.labelIds?.length ? filters.labelIds : undefined,
-          limit: fetchLimit
-        }
-      })
+    : columnIds && columnIds.length > 1
+      ? (await Promise.all(columnIds.map((id) => listColumn(id))))
+          .flat()
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id - a.id)
+      : await listColumn(columnIds?.[0])
 
   return hits
     .filter((hit) => !hit.archived)
