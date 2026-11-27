@@ -2,6 +2,8 @@ import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   collectAmbiguousTerminalTabIds,
+  getLiveFolderWorkspaceIds,
+  getMobileSessionWorktreeIds,
   graphState,
   jsonContentEquals,
   mobilePublicationEpoch
@@ -33,8 +35,6 @@ import {
 } from './mobile-session-capture'
 import {
   collectDirtyMobileSessionWorkspaces,
-  getLiveFolderWorkspaceIds,
-  getMobileSessionWorktreeIds,
   mobileSessionWorkspaceSourcesUnchanged,
   readMobileSessionWorkspaceSources
 } from './mobile-session-dirty-workspaces'
@@ -73,15 +73,13 @@ export function buildMobileSessionTabSnapshots(
   )
 
   for (const worktreeId of worktreeIds) {
-    if (worktreeId.startsWith('folder:')) {
-      const workspaceScope = parseWorkspaceKey(worktreeId)
-      if (
-        workspaceScope?.type === 'folder' &&
-        !liveFolderWorkspaceIds.has(workspaceScope.folderWorkspaceId)
-      ) {
-        graphState.mobileSessionSnapshotCacheByWorktree.delete(worktreeId)
-        continue
-      }
+    const workspaceScope = parseWorkspaceKey(worktreeId)
+    if (
+      workspaceScope?.type === 'folder' &&
+      !liveFolderWorkspaceIds.has(workspaceScope.folderWorkspaceId)
+    ) {
+      graphState.mobileSessionSnapshotCacheByWorktree.delete(worktreeId)
+      continue
     }
     const cached = graphState.mobileSessionSnapshotCacheByWorktree.get(worktreeId)
     if (
