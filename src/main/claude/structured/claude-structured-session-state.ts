@@ -74,6 +74,8 @@ export type ClaudeStructuredSessionAdapterDeps = {
     evidence: AgentChildWorkEvidence[],
     producer?: StructuredAgentSessionChildWorkProducer
   ) => void
+  /** The effort a child's own transcript resolved; absent leaves the label without one. */
+  readChildEffort?: (session: ClaudeSession, agentId: string) => Promise<string | undefined>
   openConnection?: typeof openClaudeStreamJsonConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string

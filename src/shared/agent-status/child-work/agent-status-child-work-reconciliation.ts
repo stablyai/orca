@@ -94,7 +94,8 @@ function applyOperation(ctx: ReconcileContext, edge: AgentChildWorkOperationEvid
       state: record.state,
       stoppable: record.stoppable,
       operation: edge.operation,
-      ...(edge.model !== undefined ? { model: edge.model } : {})
+      ...(edge.model !== undefined ? { model: edge.model } : {}),
+      ...(edge.effort !== undefined ? { effort: edge.effort } : {})
     },
     edge.observedAt,
     false

@@ -46,16 +46,17 @@ export type AgentChildWorkLiveEvidence = {
   restart?: true
 }
 
-/** Tool traffic updates recorded live children only, never creates them; null closes the operation. */
+/** Tool traffic updates recorded live children only, never creates them; absent `operation` says nothing about the open call. */
 export type AgentChildWorkOperationEvidence = {
   type: 'operation'
   observedAt: number
   /** Any handle the child answers to: its stable id, or the spawn call of its run. */
   childId: string
-  /** `null`: the call it had open has ended. */
-  operation: AgentChildWorkOperation | null
-  /** The model the child's own message ran on. */
+  /** Absent says nothing about the open call; `null` ends an `open` one. */
+  operation?: AgentChildWorkOperation | null
+  /** `model` and `effort` are what the child's own messages reported for that run. */
   model?: string
+  effort?: string
 }
 
 /** The child's own terminal frame. `unknown` is an ending whose status the provider did not say. */

@@ -1,0 +1,2 @@
+{"parentUuid":null,"isSidechain":true,"agentId":"b2","type":"user","message":{"role":"user","content":"Look for subtle bugs"},"uuid":"d1","timestamp":"2026-11-20T10:00:02.000Z","sessionId":"s1","version":"2.1.322"}
+{"parentUuid":"d1","isSidechain":true,"agentId":"b2","type":"assistant","message":{"model":"claude-opus-5-5","role":"assistant","content":[{"type":"tool_use","id":"d2","name":"Read","input":{"file_path":"/src/worker.ts"}}]},"uuid":"d3","timestamp":"2026-11-20T10:00:03.000Z","effort":"high","perTurnEffort":"high","sessionId":"s1","version":"2.1.322"}

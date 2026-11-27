@@ -36,7 +36,7 @@ import {
   settleClaudeUnexpectedExit,
   type ClaudeExitLifecycle
 } from './lifecycle/claude-structured-session-exit-lifecycle'
-import { drainClaudeChildWork } from '../child-work/claude-child-work-evidence'
+import { ClaudeChildWorkPublisher } from '../child-work/claude-child-work-publisher'
 import {
   deliverClaudeConnectionEvent,
   emitClaudeStructuredSessionEvent
@@ -63,6 +63,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   private readonly naming: ClaudeConversationNaming | undefined
   /** Sessions a reader shows prompt suggestions for; a process for any other is paused. */
   private readonly suggestionReaders = new Set<string>()
+  private readonly childWorkPublisher: ClaudeChildWorkPublisher
 
   constructor(private readonly deps: ClaudeStructuredSessionAdapterDeps) {
     const { namingInputs: snapshot, requestTimeoutMs: timeoutMs } = deps
@@ -76,6 +77,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       deps,
       emit: (session, event) => this.emit(session, event)
     }
+    this.childWorkPublisher = new ClaudeChildWorkPublisher({ ...deps, sessions: this.sessions })
   }
 
   supportsLocation = supportsClaudeStructuredLocation
@@ -157,10 +159,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     session: ClaudeSession | null | undefined = this.sessions.get(sessionId),
     message: Record<string, unknown> | null = null
   ): void {
-    const evidence = drainClaudeChildWork(session, message, this.deps.now?.() ?? Date.now())
-    if (evidence.length > 0) {
-      this.deps.onChildWorkEvidence?.(sessionId, evidence, session?.events)
-    }
+    this.childWorkPublisher.publish(sessionId, session, message)
   }
 
   bindPromptItemId(sessionId: string, journalItemId: string, promptKey: string): void {
@@ -278,6 +277,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       return closed
     } finally {
       this.publishChildWork(sessionId, session)
+      this.childWorkPublisher.forget(sessionId)
     }
   }
 
