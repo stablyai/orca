@@ -32,6 +32,7 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../shared/workspace-session/workspace-session-state-types'
+import { isWorkspaceSessionRecord } from '../../shared/workspace-session/workspace-session-host-records'
 import {
   applyWorkspaceSessionEntriesPatch,
   storedDifferently,
@@ -94,6 +95,12 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
       if (isFenced(hostId)) {
         return { status: 'skipped' }
       }
+      // A renderer settling a close can send no snapshot; a whole-field replace must never pass
+      // nullish data to the save helpers, which call Object.keys on it (#18838).
+      if (!isWorkspaceSessionRecord(args)) {
+        console.warn('[session] ignored nullish session:set payload')
+        return { status: 'skipped' }
+      }
       const stored = store.getWorkspaceSession(hostId)
       const save = windowSaveKeepingRelayOwnership(stored, args, 'set', options)
       const next = ORCA_LAYOUT_OWNER_IS_MAIN
@@ -124,7 +131,12 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
       return { status: 'skipped' }
     }
     const stored = store.getWorkspaceSession(hostId)
-    const args = windowSaveKeepingRelayOwnership(stored, toPatch(stored), 'patch')
+    const patch = toPatch(stored)
+    if (!isWorkspaceSessionRecord(patch)) {
+      console.warn('[session] ignored nullish session patch payload')
+      return { status: 'skipped' }
+    }
+    const args = windowSaveKeepingRelayOwnership(stored, patch, 'patch')
     const { save, written } = ORCA_LAYOUT_OWNER_IS_MAIN
       ? patchForMain(args, hostId, entries)
       : { save: windowSaveKeepingMainSleepRecords(stored, args, 'patch'), written: undefined }
@@ -164,6 +176,10 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
       hostId?: string | null,
       relays?: unknown
     ): WorkspaceSessionEntriesPatchResult => {
+      if (!isWorkspaceSessionRecord(args)) {
+        console.warn('[session] ignored nullish session:patch-entries payload')
+        return { status: 'skipped' }
+      }
       const result = patchWindowSession(
         (stored) => applyWorkspaceSessionEntriesPatch(stored, args),
         hostId,
