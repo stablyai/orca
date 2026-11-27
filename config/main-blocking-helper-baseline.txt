@@ -580,7 +580,7 @@
 1 src/main/ipc/emulator/emulator-video-stream.ts
 6 src/main/ipc/ephemeral-vm/ephemeral-vm-recipe-context.ts
 7 src/main/ipc/ephemeral-vm/ephemeral-vm-runtime-handlers.ts
-11 src/main/ipc/ephemeral-vm/ephemeral-vm.ts
+6 src/main/ipc/ephemeral-vm/ephemeral-vm.ts
 15 src/main/ipc/filesystem/access/filesystem-auth.ts
 20 src/main/ipc/filesystem/access/local-file-access-resolution.ts
 3 src/main/ipc/filesystem/filesystem.ts
@@ -643,7 +643,7 @@
 1 src/main/ipc/pty/spawn/spawn-options-assembly.ts
 1 src/main/ipc/register-core-handlers/lazy-account-and-diagnostic-ipc-handlers.ts # diagnostics charge moved from direct registration; the module imports on first invoke, so mkdirSync never runs at boot
 2 src/main/ipc/register-core-handlers/lazy-rare-ipc-handlers.ts # charges moved from register-core-handlers; handlers import on first invoke, so the blocking helpers never run at boot
-13 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
+12 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
 5 src/main/ipc/repos.ts
 1 src/main/ipc/repos/local-repo-registration.ts
 1 src/main/ipc/repos/nested-repo-import-handler.ts
