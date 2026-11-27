@@ -2077,7 +2077,11 @@
       "deleteUnconfirmed": "まだ残っています。フォルダを確認して、もう一度お試しください。",
       "renameFailed": "{{name}} の名前を変更できませんでした。{{reason}}",
       "newFileFailed": "ファイルを作成できませんでした。{{reason}}",
-      "newFolderFailed": "フォルダを作成できませんでした。{{reason}}"
+      "newFolderFailed": "フォルダを作成できませんでした。{{reason}}",
+      "share": "共有",
+      "shareFailed": "{{name}} を共有できませんでした",
+      "shareTooLarge": "256 MB を超えるファイルはスマートフォンから共有できません",
+      "shareHostOutdated": "ファイルを共有するには、このワークスペースを実行している Orca を更新してください"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "読み込み済みの Markdown ソースをコピー",

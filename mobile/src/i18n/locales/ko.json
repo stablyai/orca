@@ -2077,7 +2077,11 @@
       "deleteUnconfirmed": "아직 남아 있습니다. 폴더를 확인하고 다시 시도하세요.",
       "renameFailed": "{{name}}의 이름을 변경하지 못했습니다. {{reason}}",
       "newFileFailed": "파일을 만들지 못했습니다. {{reason}}",
-      "newFolderFailed": "폴더를 만들지 못했습니다. {{reason}}"
+      "newFolderFailed": "폴더를 만들지 못했습니다. {{reason}}",
+      "share": "공유",
+      "shareFailed": "{{name}}을(를) 공유하지 못했습니다",
+      "shareTooLarge": "256MB보다 큰 파일은 휴대폰에서 공유할 수 없습니다",
+      "shareHostOutdated": "파일을 공유하려면 이 워크스페이스가 실행되는 곳의 Orca를 업데이트하세요"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "불러온 Markdown 소스 복사",

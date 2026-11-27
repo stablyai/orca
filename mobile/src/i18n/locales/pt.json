@@ -2143,7 +2143,11 @@
       "deleteUnconfirmed": "Ainda está lá. Verifique a pasta e tente novamente.",
       "renameFailed": "Não foi possível renomear {{name}}. {{reason}}",
       "newFileFailed": "Não foi possível criar o arquivo. {{reason}}",
-      "newFolderFailed": "Não foi possível criar a pasta. {{reason}}"
+      "newFolderFailed": "Não foi possível criar a pasta. {{reason}}",
+      "share": "Compartilhar",
+      "shareFailed": "Não foi possível compartilhar {{name}}",
+      "shareTooLarge": "Arquivos maiores que 256 MB não podem ser compartilhados pelo celular",
+      "shareHostOutdated": "Atualize o Orca onde este workspace é executado para compartilhar arquivos"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código-fonte Markdown carregado",

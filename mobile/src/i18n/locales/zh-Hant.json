@@ -2078,7 +2078,11 @@
       "deleteUnconfirmed": "它仍在原處。請檢查資料夾後再試一次。",
       "renameFailed": "無法重新命名 {{name}}。{{reason}}",
       "newFileFailed": "無法建立檔案。{{reason}}",
-      "newFolderFailed": "無法建立資料夾。{{reason}}"
+      "newFolderFailed": "無法建立資料夾。{{reason}}",
+      "share": "分享",
+      "shareFailed": "無法分享 {{name}}",
+      "shareTooLarge": "大於 256 MB 的檔案無法從手機分享",
+      "shareHostOutdated": "請更新執行此工作區的 Orca 以分享檔案"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "複製已載入的 Markdown 原始碼",

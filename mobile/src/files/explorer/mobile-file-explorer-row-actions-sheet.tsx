@@ -1,5 +1,5 @@
 import { lazy, Suspense, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { Copy, CopyPlus, Edit3, FilePlus2, FolderPlus, Trash2 } from 'lucide-react-native'
+import { Copy, CopyPlus, Edit3, FilePlus2, FolderPlus, Share, Trash2 } from 'lucide-react-native'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import {
   ActionSheetContent,
@@ -20,6 +20,7 @@ import {
   explorerRename,
   type ExplorerTarget
 } from './mobile-file-explorer-mutations'
+import { useMobileFileExplorerShare } from './use-mobile-file-explorer-share'
 
 type CreateKind = 'file' | 'folder'
 
@@ -65,6 +66,7 @@ export function useMobileFileExplorerRowActions(writes: ExplorerWrites) {
   const scope = JSON.stringify([hostId, target])
   const [opened, setOpened] = useState<{ scope: string; view: SheetView } | null>(null)
   const view = opened?.scope === scope ? opened.view : null
+  const sharing = useMobileFileExplorerShare(scope, target.worktree, showToast)
   const shownScope = useRef(scope)
   useLayoutEffect(() => {
     shownScope.current = scope
@@ -74,8 +76,15 @@ export function useMobileFileExplorerRowActions(writes: ExplorerWrites) {
     const current = () => shownScope.current === sent
     return { route: (client) => (current() ? client : null), current }
   }
-  const close = () => setOpened(null)
-  const open = (next: SheetView) => setOpened({ scope, view: next })
+  const close = () => {
+    sharing?.cancel()
+    setOpened(null)
+  }
+  // Another action from the menu abandons a Share still downloading, so it can't close the newer sheet.
+  const open = (next: SheetView) => {
+    sharing?.cancel()
+    setOpened({ scope, view: next })
+  }
   const host = { hostId, client }
   // Every write lives as long as the explorer, so a lost reply is still settled after its sheet closes.
   const copy = useHostMutation(explorerCopy, host)
@@ -151,6 +160,14 @@ export function useMobileFileExplorerRowActions(writes: ExplorerWrites) {
         node={view.node}
         canMutate={canMutate}
         blockedOffline={copy.blockedOffline}
+        share={
+          sharing && view.node.kind !== 'directory'
+            ? {
+                loading: sharing.sharing === view.node.relativePath,
+                onPress: () => sharing.share(view.node, () => setOpened(null))
+              }
+            : null
+        }
         onOpen={open}
         onDuplicate={duplicate}
         onClose={close}
@@ -246,6 +263,7 @@ function RowActionsMenu({
   node,
   canMutate,
   blockedOffline,
+  share,
   onOpen,
   onDuplicate,
   onClose
@@ -253,6 +271,8 @@ function RowActionsMenu({
   node: TreeNode
   canMutate: boolean
   blockedOffline: boolean
+  /** Null for folders and on shells that can't share. */
+  share: { loading: boolean; onPress: () => void } | null
   onOpen: (view: SheetView) => void
   onDuplicate: (node: TreeNode) => void
   onClose: () => void
@@ -313,6 +333,18 @@ function RowActionsMenu({
             ])
       ]
   const actions: ActionSheetAction[] = [
+    ...(share
+      ? [
+          {
+            id: 'share',
+            group: 'share',
+            label: t('files.fileExplorerRowActions.share', 'Share'),
+            icon: Share,
+            loading: share.loading,
+            onPress: share.onPress
+          }
+        ]
+      : []),
     ...writes,
     copyAction('copyName', t('files.fileExplorerRowActions.copyName', 'Copy Name'), node.name),
     copyAction(

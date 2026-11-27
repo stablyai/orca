@@ -2174,7 +2174,11 @@
       "deleteUnconfirmed": "它仍在原处。请检查文件夹后重试。",
       "renameFailed": "无法重命名 {{name}}。{{reason}}",
       "newFileFailed": "无法创建文件。{{reason}}",
-      "newFolderFailed": "无法创建文件夹。{{reason}}"
+      "newFolderFailed": "无法创建文件夹。{{reason}}",
+      "share": "共享",
+      "shareFailed": "无法共享 {{name}}",
+      "shareTooLarge": "大于 256 MB 的文件无法从手机共享",
+      "shareHostOutdated": "请更新运行此工作区的 Orca 以共享文件"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "复制已加载的 Markdown 源码",

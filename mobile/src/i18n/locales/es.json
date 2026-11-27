@@ -2141,7 +2141,11 @@
       "deleteUnconfirmed": "Sigue ahí. Revisa la carpeta y vuelve a intentarlo.",
       "renameFailed": "No se pudo cambiar el nombre de {{name}}. {{reason}}",
       "newFileFailed": "No se pudo crear el archivo. {{reason}}",
-      "newFolderFailed": "No se pudo crear la carpeta. {{reason}}"
+      "newFolderFailed": "No se pudo crear la carpeta. {{reason}}",
+      "share": "Compartir",
+      "shareFailed": "No se pudo compartir {{name}}",
+      "shareTooLarge": "Los archivos de más de 256 MB no se pueden compartir desde el teléfono",
+      "shareHostOutdated": "Actualiza Orca donde se ejecuta este espacio de trabajo para compartir archivos"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código fuente Markdown cargado",
