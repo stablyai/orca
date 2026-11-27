@@ -11,15 +11,7 @@ const files: GitHubPRFile[] = [
 ]
 
 function pendingContents(): void {
-  const gh = window.api.gh
-  Reflect.set(
-    window.api,
-    'gh',
-    new Proxy(gh, {
-      get: (target, key) =>
-        key === 'prFileContents' ? () => new Promise(() => {}) : Reflect.get(target, key)
-    })
-  )
+  Reflect.set(window.api, 'gh', { ...window.api.gh, prFileContents: () => new Promise(() => {}) })
 }
 
 function Files({ loaded = false }: { loaded?: boolean }): React.JSX.Element {
