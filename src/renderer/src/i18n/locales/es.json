@@ -24041,10 +24041,11 @@
     },
     "clientHosted": {
       "preparationFailed": "No se pudo iniciar el navegador remoto en este escritorio. Comprueba la conexión emparejada y vuelve a intentarlo.",
-      "unavailableTitle": "Navegador alojado en el cliente no disponible",
-      "unavailableDescription": "Esta página no está disponible en este escritorio en este momento.",
-      "unavailableOtherDesktopDescription": "Esta página está abierta en otro escritorio.",
-      "unavailableHostOfflineDescription": "{{host}} está sin conexión. Esta página se volverá a cargar aquí cuando se reconecte.",
+      "runsOnServerTitle": "Esta pestaña se ejecuta en tu servidor",
+      "runsOnServerBody": "Ábrela allí para continuar.",
+      "details": "Detalles",
+      "noBrowserTitle": "No se puede abrir esta pestaña aquí",
+      "noBrowserBody": "Este servidor no tiene navegador.",
       "download": {
         "started": "Descargando {{filename}}…",
         "completed": "{{filename}} descargado",
@@ -24069,9 +24070,9 @@
       "reload": "Recargar"
     },
     "reopenOnServer": {
-      "action": "Reabrir en el servidor",
-      "pending": "Reabriendo…",
-      "caveat": "Esto abre una nueva página en el host remoto en la última dirección de esta página. El estado de sesión iniciada y otros estados transitorios pueden diferir, y una página que provenga del envío de un formulario se abrirá en blanco.",
+      "action": "Abrir en el servidor",
+      "pending": "Abriendo…",
+      "caveat": "Se abre en el servidor en la última dirección de esta página. El estado de inicio de sesión puede ser distinto.",
       "failed": "No se pudo abrir esta página en el host remoto. Comprueba la conexión y vuelve a intentarlo."
     },
     "deviceMove": {

@@ -23329,10 +23329,11 @@
     },
     "clientHosted": {
       "preparationFailed": "このデスクトップ上でリモートブラウザを起動できませんでした。ペアリングされた接続を確認して、もう一度試してください。",
-      "unavailableTitle": "クライアントホスト型ブラウザは利用不可",
-      "unavailableDescription": "このページは現在このデスクトップでは利用できません。",
-      "unavailableOtherDesktopDescription": "このページは別のデスクトップで開かれています。",
-      "unavailableHostOfflineDescription": "{{host}} はオフラインです。再接続されると、このページはここで再読み込みされます。",
+      "runsOnServerTitle": "このタブはサーバー上で動作しています",
+      "runsOnServerBody": "続けるにはサーバーで開いてください。",
+      "details": "詳細",
+      "noBrowserTitle": "このタブはここでは開けません",
+      "noBrowserBody": "このサーバーにはブラウザーがありません。",
       "download": {
         "started": "{{filename}}をダウンロード中…",
         "completed": "{{filename}}をダウンロードしました",
@@ -23357,9 +23358,9 @@
       "reload": "リロード"
     },
     "reopenOnServer": {
-      "action": "サーバー上で再度開く",
-      "pending": "再開…",
-      "caveat": "これにより、リモートホスト上のこのページの最後のアドレスにある新規ページが開きます。サインインとその他の一時的なページの状態は異なる場合があり、フォーム送信からのページは空白で開きます。",
+      "action": "サーバーで開く",
+      "pending": "開いています…",
+      "caveat": "このページの最後のアドレスでサーバー上に開きます。サインイン状態は異なる場合があります。",
       "failed": "リモートホストでこのページを開けませんでした。接続を確認して再試行してください。"
     },
     "deviceMove": {

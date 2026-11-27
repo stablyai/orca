@@ -122,10 +122,11 @@
     },
     "clientHosted": {
       "preparationFailed": "Impossible de démarrer le navigateur distant sur ce bureau. Vérifiez la connexion couplée et réessayez.",
-      "unavailableTitle": "Navigateur hébergé par le client indisponible",
-      "unavailableDescription": "Cette page n'est pas disponible sur ce bureau pour le moment.",
-      "unavailableOtherDesktopDescription": "Cette page est ouverte sur un autre bureau.",
-      "unavailableHostOfflineDescription": "{{host}} est hors ligne. Cette page se rechargera ici dès sa reconnexion.",
+      "runsOnServerTitle": "Cet onglet s’exécute sur votre serveur",
+      "runsOnServerBody": "Ouvrez-le là-bas pour continuer.",
+      "details": "Détails",
+      "noBrowserTitle": "Impossible d’ouvrir cet onglet ici",
+      "noBrowserBody": "Ce serveur n’a pas de navigateur.",
       "download": {
         "started": "Téléchargement de {{filename}}…",
         "completed": "Téléchargé {{filename}}",
@@ -150,9 +151,9 @@
       "reload": "Recharger"
     },
     "reopenOnServer": {
-      "action": "Réouvrir sur le serveur",
-      "pending": "Réouverture…",
-      "caveat": "Cela ouvre une nouvelle page sur l'hôte distant à la dernière adresse de cette page. L'état de la page connectée et celui des autres pages transitoires peuvent différer, et une page provenant d'une soumission de formulaire s'ouvre en blanc.",
+      "action": "Ouvrir sur le serveur",
+      "pending": "Ouverture…",
+      "caveat": "S’ouvre sur le serveur à la dernière adresse de cette page. L’état de connexion peut différer.",
       "failed": "Impossible d'ouvrir cette page sur l'hôte distant. Vérifiez la connexion et réessayez."
     },
     "deviceMove": {

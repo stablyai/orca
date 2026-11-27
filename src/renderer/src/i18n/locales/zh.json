@@ -23702,10 +23702,11 @@
     },
     "clientHosted": {
       "preparationFailed": "无法在此桌面上启动远程浏览器，请检查配对连接后重试",
-      "unavailableTitle": "客户端托管的浏览器不可用",
-      "unavailableDescription": "此页面目前在此桌面上不可用",
-      "unavailableOtherDesktopDescription": "此页面已在另一台桌面上打开",
-      "unavailableHostOfflineDescription": "{{host}} 已离线，重新连接后，此页面将在此处重新加载",
+      "runsOnServerTitle": "此标签页在你的服务器上运行",
+      "runsOnServerBody": "请在那里打开以继续。",
+      "details": "详细信息",
+      "noBrowserTitle": "无法在此打开此标签页",
+      "noBrowserBody": "此服务器没有浏览器。",
       "download": {
         "started": "正在下载 {{filename}}…",
         "completed": "已下载 {{filename}}",
@@ -23730,9 +23731,9 @@
       "reload": "重新加载"
     },
     "reopenOnServer": {
-      "action": "在服务器上重新打开",
-      "pending": "正在重新打开…",
-      "caveat": "这会在远程主机上按此页面最后的地址打开新页面，登录状态及其他临时页面状态可能不同，如果页面来自表单提交，新页面将为空白",
+      "action": "在服务器上打开",
+      "pending": "正在打开…",
+      "caveat": "将在服务器上以此页面的最后地址打开。登录状态可能不同。",
       "failed": "无法在远程主机上打开此页面，请检查连接后重试"
     },
     "deviceMove": {
