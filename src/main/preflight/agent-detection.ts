@@ -28,8 +28,11 @@ import {
   findRunnableLocalCommand,
   isCommandAvailable
 } from '../ipc/preflight/preflight-command-exec'
-import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
-import { withConfiguredProxyEnv } from '../network/configured-proxy-child-env'
+import {
+  _resetGlabOnlyCache,
+  isGlabAuthenticated,
+  readGlabOnly
+} from './default-wsl-glab-preflight'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import {
   detectRemoteWindowsTerminalCapabilities,
@@ -98,6 +101,7 @@ function preflightCacheKey(wslTarget: WslPreflightTarget | null): string {
 export function _resetPreflightCache(): void {
   cached = null
   cachedByWslDistro.clear()
+  _resetGlabOnlyCache()
   preflightInFlight.clear()
   latestPreflightRun.clear()
   // In-flight probes must not repopulate the cleared cache.
@@ -186,24 +190,6 @@ async function isGhAuthenticated(probe: CommandRuntime): Promise<boolean> {
   }
 }
 
-// glab versions split auth status across stdout/stderr; inspect both.
-async function isGlabAuthenticated(probe: CommandRuntime): Promise<boolean> {
-  try {
-    await (probe.wslTarget
-      ? execCommandInWslOrThrow(probe.wslTarget, `${quotePosixShell('glab')} auth status`)
-      : execLocalPreflightCommandOrThrow(probe.binary ?? 'glab', ['auth', 'status'], {
-          // `auth status` calls the GitLab API, so it needs the Settings proxy too.
-          env: withConfiguredProxyEnv(buildLocalPreflightEnv())
-        }))
-    return true
-  } catch (error) {
-    const stdout = (error as { stdout?: string }).stdout ?? ''
-    const stderr = (error as { stderr?: string }).stderr ?? ''
-    const output = `${stdout}\n${stderr}`
-    return output.includes('Logged in')
-  }
-}
-
 export async function runPreflightCheck(
   force = false,
   context?: PreflightRuntimeContext
@@ -212,15 +198,18 @@ export async function runPreflightCheck(
   if (!nativeGlabAbsent.has(status) || !isWindowsHostDefault(context)) {
     return status
   }
-  // A cwd-less glab call whose host copy is missing runs in the default distro; report that copy
-  // from the same per-distro entry a workspace in that distro reads.
+  // A cwd-less glab call whose host copy is missing runs in the default distro; report that copy.
   const distro = await defaultWslCliDistroAsync()
   if (!distro) {
     return status
   }
+  // The distro's full entry owns the answer while fresh; re-running it for glab alone wastes 3 launches.
+  const entry = force ? undefined : cachedByWslDistro.get(preflightCacheKey({ distro }))
+  if (entry && entry.expiresAt > Date.now() && entry.result.glab) {
+    return { ...status, glab: entry.result.glab }
+  }
   try {
-    const { glab } = await readPreflightStatus(force, { wslDistro: distro })
-    return glab ? { ...status, glab } : status
+    return { ...status, glab: await readGlabOnly(distro, force) }
   } catch {
     // A stopped distro is not booted for a background read (E9); the next read asks again.
     return status
