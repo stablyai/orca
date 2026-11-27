@@ -324,30 +324,32 @@ export function MobileNativeChatComposer({
             <MobileNativeChatDictationLeading
               {...{ micActive, micStarting, micProcessing, cancelRef, trailing: contextRing.ring }}
             >
-              <MobileNativeChatComposerAttachButton
-                onAttachImage={onAttachImage}
-                onAttachFiles={structured?.onAttachFiles}
-                structured={structured !== null}
-                isAttaching={isAttaching}
-                disabled={disabled || offline}
-                menu={menu}
-              />
-              {roomReplies}
-              {sessionOptions ? (
-                <MobileNativeChatSessionOptionPickers
-                  {...sessionOptions}
-                  sendInFlight={sending || isAttaching}
-                  presentation={picker}
-                  onNavigate={(page) => setPicker((current) => current && { ...current, page })}
-                  onDrawerOpen={(page) => setPicker({ page, refocus: focused })}
-                  onDrawerAfterClose={() => {
-                    if (picker?.refocus) {
-                      fieldRef.current?.focus()
-                    }
-                    setPicker(null)
-                  }}
+              <View style={styles.attachAndModel}>
+                <MobileNativeChatComposerAttachButton
+                  onAttachImage={onAttachImage}
+                  onAttachFiles={structured?.onAttachFiles}
+                  structured={structured !== null}
+                  isAttaching={isAttaching}
+                  disabled={disabled || offline}
+                  menu={menu}
                 />
-              ) : null}
+                {sessionOptions ? (
+                  <MobileNativeChatSessionOptionPickers
+                    {...sessionOptions}
+                    sendInFlight={sending || isAttaching}
+                    presentation={picker}
+                    onNavigate={(page) => setPicker((current) => current && { ...current, page })}
+                    onDrawerOpen={(page) => setPicker({ page, refocus: focused })}
+                    onDrawerAfterClose={() => {
+                      if (picker?.refocus) {
+                        fieldRef.current?.focus()
+                      }
+                      setPicker(null)
+                    }}
+                  />
+                ) : null}
+              </View>
+              {roomReplies}
               <MobileNativeChatComposerPlanChip options={sessionOptions} inputRef={fieldRef} />
               {goal.chip}
             </MobileNativeChatDictationLeading>

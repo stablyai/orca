@@ -22,6 +22,13 @@ export const mobileNativeChatComposerStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.sm
   },
+  // Keep the attach button beside the model pill so the label truncates before the toolbar wraps.
+  attachAndModel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    maxWidth: '100%',
+    gap: spacing.sm
+  },
   // One line while dictating: a long computer name truncates instead of wrapping and growing the composer.
   dictationLeading: {
     flexWrap: 'nowrap'
