@@ -15,6 +15,7 @@ import { observeWorker } from './worker-presence-report'
 import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
 import { redactFailure } from './worker-turn-stop-wording'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
+import { readChatWorkerUsageLimit } from './chat-worker-usage-limit-read'
 
 type ChatWorkerDispatch = { dispatch: DispatchContextRow; from: string }
 
@@ -57,7 +58,8 @@ function movedOnSince(db: OrchestrationDb, dispatchId: string, seen: number | un
 /** Capture authority synchronously; notification bookkeeping never rejects a committed write. */
 export async function escalateChatWorkerError(
   request: StructuredAgentSessionRequestFailure,
-  deps: WorkerTurnStopReportDeps
+  deps: WorkerTurnStopReportDeps,
+  readUsageLimit = readChatWorkerUsageLimit
 ): Promise<void> {
   try {
     const db = deps.getDb()
@@ -85,6 +87,11 @@ export async function escalateChatWorkerError(
     const { kind } = error
     const text = redactFailure(error.text)
     const detail = error.detail && redactFailure(error.detail)
+    const limit = kind === 'usageLimitReached' ? await readUsageLimit(request.sessionId) : null
+    const usageLimit = limit && {
+      ...(limit.resetsAt !== undefined ? { resetsAt: limit.resetsAt } : {}),
+      ...(limit.continuesAt !== undefined ? { continuesAt: limit.continuesAt } : {})
+    }
     for (const { dispatch, from } of targets) {
       // The journal read awaited: the Dispatch may have settled, or the worker moved on.
       const current = db.getDispatchContextById(dispatch.id)
@@ -103,6 +110,10 @@ export async function escalateChatWorkerError(
           fence: `${REQUEST_FENCE}${request.sessionId}:${request.kind}:${request.id}`,
           legacyStopKey: `request:${request.kind}:${request.id}`,
           legacyReportId: escalationId(dispatch.id, request),
+          // Orca's own continue met the limit it already reported, and continues again: no news.
+          ...(limit && limit.chain > 0 && limit.continuesAt !== undefined
+            ? { unreported: true as const }
+            : {}),
           rest: {
             from,
             reason: 'errored',
@@ -111,6 +122,7 @@ export async function escalateChatWorkerError(
               text,
               ...(detail ? { detail } : {}),
               ...(kind ? { kind } : {}),
+              ...(usageLimit ? { usageLimit } : {}),
               facts: {
                 sessionId: request.sessionId,
                 agent: request.agent,
@@ -118,7 +130,13 @@ export async function escalateChatWorkerError(
                 requestId: request.id,
                 ...(kind ? { failureKind: kind } : {}),
                 error: text,
-                ...(detail ? { detail } : {})
+                ...(detail ? { detail } : {}),
+                ...(usageLimit?.resetsAt !== undefined
+                  ? { resetsAt: new Date(usageLimit.resetsAt).toISOString() }
+                  : {}),
+                ...(usageLimit?.continuesAt !== undefined
+                  ? { continuesAt: new Date(usageLimit.continuesAt).toISOString() }
+                  : {})
               }
             }
           }
