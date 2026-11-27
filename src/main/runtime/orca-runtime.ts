@@ -344,8 +344,8 @@ class OrcaRuntimeService extends OrcaRuntimeWithRelayHostNotices {
   }
 
   /** Display-only copies of paired-server layouts. */
-  getRemoteLayoutSnapshots(): Record<string, RemoteLayoutSnapshot> {
-    return this.store?.getRemoteLayoutSnapshots?.() ?? {}
+  getRemoteLayoutSnapshots(envIds?: ReadonlySet<string>): Record<string, RemoteLayoutSnapshot> {
+    return this.store?.getRemoteLayoutSnapshots?.(envIds) ?? {}
   }
 
   /** Return the already-open record store without waiting. */

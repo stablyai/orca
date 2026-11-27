@@ -10,7 +10,8 @@ import type { AgentSessionMcpPanelState } from '../../../../../src/shared/agent-
 import {
   agentSessionMcpRowFailure,
   agentSessionMcpServerDisplayName,
-  groupAgentSessionMcpServers
+  groupAgentSessionMcpServers,
+  ORCA_MCP_SOURCE
 } from '../../../../../src/shared/agent-session/view/agent-session-mcp-server-presentation'
 import { MobilePendingButton } from '../../../components/controls/MobilePendingButton'
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
@@ -40,6 +41,8 @@ export type MobileNativeChatMcpPanelProps = AgentSessionMcpPanelState & {
   onClose: () => void
   /** Opens the host's MCP servers page; null on a host without one. */
   onManage?: (() => void) | null
+  /** The chat's agent, as the header names it. */
+  agentLabel: string
   /** The server list's cap, so the tray and composer stay on screen above the keyboard. */
   listMaxHeight: number
 }
@@ -96,18 +99,9 @@ export function MobileNativeChatMcpPanel(props: MobileNativeChatMcpPanelProps): 
 }
 
 function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
-  const trayStripStyles = useThemedStyles(trayStripStylesSheet)
-  const styles = useThemedStyles(stylesSheet)
   const { result, servers, t } = props
   if (result === null) {
     return null
-  }
-  if (result.status === 'not-running') {
-    return (
-      <Notice
-        text={t('chat.mcp.notRunning', 'MCP servers connect when you send your next message.')}
-      />
-    )
   }
   if (result.status === 'unsupported') {
     return (
@@ -129,9 +123,32 @@ function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
       />
     )
   }
-  if (servers.length === 0) {
+  if (result.status === 'ok' && servers.length === 0) {
     return <Notice text={t('chat.mcp.empty', 'No MCP servers are set up for this chat.')} />
   }
+  // An agent at rest lists what its next start gets; one that reports no status says so.
+  const notice =
+    result.status === 'not-running'
+      ? t('chat.mcp.notRunning', 'MCP servers connect when you send your next message.')
+      : servers.some((server) => server.status === 'unreported')
+        ? t('chat.mcp.unreported', "{{agent}} doesn't report connection status.", {
+            agent: props.agentLabel
+          })
+        : null
+  return (
+    <>
+      {notice ? <Notice text={notice} /> : null}
+      {servers.length > 0 ? <McpServerList {...props} /> : null}
+    </>
+  )
+}
+
+function McpServerList(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
+  const trayStripStyles = useThemedStyles(trayStripStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
+  const { servers, t } = props
+  const groups = groupAgentSessionMcpServers(servers)
+  const withOrca = groups.some((group) => group.source === ORCA_MCP_SOURCE)
   return (
     <ScrollView
       style={[styles.list, { maxHeight: props.listMaxHeight }]}
@@ -139,11 +156,12 @@ function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
       keyboardShouldPersistTaps="handled"
       nestedScrollEnabled
     >
-      {groupAgentSessionMcpServers(servers).map((group) => (
+      {groups.map((group) => (
         <View key={group.source ?? ''}>
-          {group.source === null ? null : (
+          {/* Servers the agent reports no source for are its own; under Orca's, say whose. */}
+          {group.source === null && !withOrca ? null : (
             <Text style={[trayStripStyles.groupLabel, styles.groupLabel]}>
-              {mobileMcpSourceLabel(group.source, t)}
+              {group.source === null ? props.agentLabel : mobileMcpSourceLabel(group.source, t)}
             </Text>
           )}
           {group.servers.map((server) => (
@@ -288,6 +306,7 @@ function StatusMark({ status }: { status: AgentSessionMcpServer['status'] }) {
       return <View style={[styles.dot, styles.dotFailed]} />
     case 'disabled':
     case 'not-started':
+    case 'unreported':
       return <View style={[styles.dot, styles.dotDisabled]} />
     case 'pending':
       return <View style={styles.dotPending} />

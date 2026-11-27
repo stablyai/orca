@@ -10540,7 +10540,12 @@
             "rollbackStopIncomplete": "Não concluído: o Orca não conseguiu confirmar que o servidor atual foi encerrado, então não fez a reversão. Verifique o orcad.log na pasta de instalação do servidor, em ~/.orca-remote no host, antes de tentar novamente.",
             "failed": "O Orca não conseguiu concluir esta ação no servidor. Tente novamente.",
             "defaultServer": "Não concluído: este servidor é o host padrão para novos projetos. Escolha outro em Novos projetos são abertos em antes de pará-lo.",
-            "wslMoveRunning": "Não concluído: um projeto está sendo movido para este servidor. O Orca o atualiza quando a movimentação terminar."
+            "wslMoveRunning": "Não concluído: um projeto está sendo movido para este servidor. O Orca o atualiza quando a movimentação terminar.",
+            "recoveryRequired": "Não concluído: uma atualização ou parada interrompida está bloqueando este host. Use Recuperar ou Cancelar parada, se o Orca oferecer, e tente novamente.",
+            "snapshotSpace": "Não concluído: este host não tem espaço para a cópia que o Orca faz antes de atualizar. Libere espaço no host e tente novamente.",
+            "policyRefused": "Não concluído: o Orca não vai ativar este build neste host. Verifique o host e atualize novamente, ou atualize o Orca primeiro se uma versão mais recente do Orca o executou por último.",
+            "hostNewer": "Não concluído: uma versão mais recente do Orca executou por último o servidor deste host. Atualize o Orca e tente novamente.",
+            "preflightFailed": "Não concluído: o novo servidor do Orca falhou na verificação de inicialização neste host, então o Orca deixou o host como estava."
           },
           "reassurance": "É executado em cada host, acessado pela sua própria conexão SSH. Seu código e seus arquivos permanecem onde estão. Apenas a lista de projetos, abas e terminais do Orca é movida para o host."
         },

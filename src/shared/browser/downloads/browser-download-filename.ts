@@ -24,9 +24,7 @@ export function normalizeBrowserDownloadFilename(
   if (!safeName || safeName === '.' || safeName === '..') {
     return 'download'
   }
-  return platform === 'win32' && WINDOWS_RESERVED_FILENAME.test(safeName)
-    ? `_${safeName}`
-    : safeName
+  return escapeWindowsDeviceName(safeName, platform)
 }
 
 /** Windows reads names like `NUL.txt` or `COM1 .log` as devices, so most tools can't open them. */

@@ -6,7 +6,7 @@ import type { Store } from '../../persistence/loading-store/store'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import { listSystemFontFamilies } from '../../window/desktop-integration/system-fonts'
-import { registerSettingsImportHandlers } from './settings-import-handlers'
+import { registerLazySettingsImportAndAppIconHandlers } from './lazy-settings-import-and-app-icon-ipc'
 import { setMainUiLanguage } from '../../i18n/main-i18n'
 import { rebuildAppMenu } from '../../menu/register-app-menu'
 import { rebuildSystemTrayMenu } from '../../tray/system-tray'
@@ -29,7 +29,6 @@ import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../../shared/app-lifecycle/identity/app-icon'
 import { normalizeUiLanguage } from '../../../shared/i18n/ui-language'
 import { applyAppIcon } from '../../window/desktop-integration/app-icon'
-import { registerCustomAppIconHandlers } from '../custom-app-icon'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal/replay/terminal-scrollback-policy'
 import { normalizeTerminalLineHeight } from '../../../shared/terminal/appearance/terminal-line-height-settings'
@@ -66,7 +65,7 @@ export function registerSettingsHandlers(
   store: Store,
   agentAwakeService?: AgentAwakeService
 ): void {
-  registerCustomAppIconHandlers(store)
+  registerLazySettingsImportAndAppIconHandlers(store)
   ipcMain.handle(
     'agentAwake:getStatus',
     () => agentAwakeService?.getStatus() ?? { mode: 'off', active: false }
@@ -310,8 +309,6 @@ export function registerSettingsHandlers(
   )
 
   ipcMain.handle('settings:listFonts', () => listSystemFontFamilies())
-
-  registerSettingsImportHandlers(store)
 
   ipcMain.handle('cache:getGitHub', () => {
     return store.getGitHubCache()

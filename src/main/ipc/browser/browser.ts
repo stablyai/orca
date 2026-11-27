@@ -17,12 +17,12 @@ import {
   syncBrowserMemorySaverPolicy,
   type BrowserMemorySaverSettingsSource
 } from '../../browser/guest-lifecycle/browser-page-idle-discard'
-import { registerBrowserDictationHandlers } from './browser-dictation-ipc'
 import {
-  registerBrowserGrabHandlers,
-  disposeGrabModeStateForPage,
-  resetGrabModeState
-} from './browser-grab-ipc'
+  disposeLazyGrabModeStateForPage,
+  registerLazyBrowserDictationHandlers,
+  registerLazyBrowserGrabHandlers,
+  resetLazyGrabModeState
+} from './lazy-browser-grab-and-dictation-ipc'
 import { registerLazyBrowserSessionProfileHandlers } from './lazy-browser-session-profile-ipc'
 import type { BrowserCertificateProceedResult } from '../../../shared/browser/workspaces/browser-workspace-types'
 import {
@@ -61,7 +61,7 @@ export function setAgentBrowserBridgeRef(bridge: AgentBrowserBridge | null): voi
 export function registerBrowserHandlers(
   store: BrowserPasswordsSettingsSource & BrowserMemorySaverSettingsSource
 ): void {
-  resetGrabModeState()
+  resetLazyGrabModeState()
   ipcMain.removeHandler('browser:registerGuest')
   ipcMain.removeHandler('browser:isGuestRegistered')
   ipcMain.removeHandler('browser:getGuestMetadata')
@@ -241,7 +241,7 @@ export function registerBrowserHandlers(
         args.browserPageId,
         args.replacement ? 'guest-destroyed' : 'page-closed'
       )
-      disposeGrabModeStateForPage(args.browserPageId)
+      disposeLazyGrabModeStateForPage(args.browserPageId)
       return true
     }
   )
@@ -315,9 +315,9 @@ export function registerBrowserHandlers(
   registerBrowserGuestViewHandlers()
   registerBrowserGuestDiscardHandlers()
   syncBrowserMemorySaverPolicy(store)
-  registerBrowserDictationHandlers()
+  registerLazyBrowserDictationHandlers()
 
-  registerBrowserGrabHandlers()
+  registerLazyBrowserGrabHandlers()
 
   registerLazyBrowserSessionProfileHandlers()
 
