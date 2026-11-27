@@ -136,8 +136,11 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     // The documented POSIX install; it bootstraps uv itself, so it works without a prior uv.
     installCommand: 'curl -LsSf https://mistral.ai/vibe/install.sh | bash',
     // Vibe publishes no install.ps1; bootstrap uv, then install vibe through it.
+    // uv's installer edits only the registry PATH, not the running session, so call uv.exe by
+    // its install path (forward slashes avoid escaping); uv's tool bin is %USERPROFILE%\.local\bin,
+    // which installDirectories already searches on win32.
     windowsInstallCommand:
-      'irm https://astral.sh/uv/install.ps1 | iex; uv tool install --python 3.12 mistral-vibe'
+      "irm https://astral.sh/uv/install.ps1 | iex; & '$env:USERPROFILE/.local/bin/uv.exe' tool install --python 3.12 mistral-vibe"
   }
 ] as const
 
