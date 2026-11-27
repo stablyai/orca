@@ -297,6 +297,8 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   withheldCommands: ['logout'],
   familyEfforts,
   modelEfforts: antigravityModelEfforts,
+  // agy accepts --effort independently of the model; the CLI clamps levels a model does not support.
+  clampsUnlistedEffort: true,
   listedSelection: antigravityListedFamilySelection
 }
 

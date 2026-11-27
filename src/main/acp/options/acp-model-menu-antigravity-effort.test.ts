@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest'
 import { ANTIGRAVITY_ACP_DIALECT } from '../acp-dialects/antigravity-dialect'
 import { acpModelMenuModels } from './acp-model-menu'
+import { AcpStructuredOptions } from './acp-structured-options'
 
 const effortOption = {
   id: 'effort',
@@ -42,4 +43,18 @@ it('advertises selectable efforts for Antigravity Orchestrator models (#50508)',
   }
   expect(models.find((model) => model.id === 'other-model')?.effortsKnown).toBe(false)
   expect(models.find((model) => model.id === 'gemini-4-neon-high')?.effortsKnown).toBe(false)
+})
+
+it('still sends an advertised xhigh when the live effort option omits it (#50508)', () => {
+  const options = new AcpStructuredOptions(ANTIGRAVITY_ACP_DIALECT)
+  const liveEffort = {
+    ...effortOption,
+    options: [
+      { value: 'low', name: 'Low' },
+      { value: 'medium', name: 'Medium' },
+      { value: 'high', name: 'High' }
+    ]
+  }
+  options.configOptions = [liveEffort]
+  expect(options.offersEffort('xhigh')).toBe(true)
 })
