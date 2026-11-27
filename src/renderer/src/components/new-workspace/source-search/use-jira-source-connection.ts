@@ -6,7 +6,11 @@ import {
   type TaskSourceContext
 } from '../../../../../shared/work-items/task-source-context'
 import type { JiraConnectionStatus } from '../../../../../shared/jira/jira-types'
-import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import {
+  getProviderRuntimeContextKey,
+  useProviderRuntimeSessionGeneration
+} from '@/runtime/hosts/observations/provider-runtime-context'
+import { recomputeOn } from '@/lib/recompute-on'
 
 export type JiraSourceConnection = {
   status: JiraConnectionStatus | null
@@ -51,9 +55,13 @@ export function useJiraSourceConnection(args: {
     () => (args.sourceContext ? getTaskSourceCacheScope(args.sourceContext) : null),
     [args.sourceContext]
   )
+  const providerRuntimeSessionGeneration = useProviderRuntimeSessionGeneration()
   const revisionKey = useMemo(
-    () => getJiraSourceConnectionRevisionKey(args.sourceContext),
-    [args.sourceContext]
+    () =>
+      recomputeOn([providerRuntimeSessionGeneration], () =>
+        getJiraSourceConnectionRevisionKey(args.sourceContext)
+      ),
+    [args.sourceContext, providerRuntimeSessionGeneration]
   )
   const connectionRevision = useAppStore((state) =>
     revisionKey ? (state.jiraConnectionRevisions[revisionKey] ?? 0) : 0
