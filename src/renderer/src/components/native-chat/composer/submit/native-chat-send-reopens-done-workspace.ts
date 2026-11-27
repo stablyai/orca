@@ -1,10 +1,7 @@
 import { useAppStore } from '@/store'
 import { selectWorkspaceStatusesForHost } from '@/store/workspaces/status/host-workspace-status-columns'
-import { getWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
+import { workspaceStatusAfterChatSend } from '../../../../../../shared/workspace/status/workspace-status-reopen-on-send'
 import { findNativeChatTabOwnerWorktreeId } from '../../pane/ownership/native-chat-tab-owner'
-
-const DONE_STATUS_ID = 'completed'
-const IN_PROGRESS_STATUS_ID = 'in-progress'
 
 /** Sending a message in a Done workspace resumes work there, so its card moves back to In progress. */
 export function reopenDoneWorkspaceOnChatSend(owner: {
@@ -19,16 +16,16 @@ export function reopenDoneWorkspaceOnChatSend(owner: {
   if (!worktree || !('workspaceStatus' in worktree)) {
     return
   }
-  const statuses = selectWorkspaceStatusesForHost(state, worktree)
-  if (
-    getWorkspaceStatus(worktree, statuses) !== DONE_STATUS_ID ||
-    !statuses.some((status) => status.id === IN_PROGRESS_STATUS_ID)
-  ) {
+  const next = workspaceStatusAfterChatSend(
+    worktree,
+    selectWorkspaceStatusesForHost(state, worktree)
+  )
+  if (!next) {
     return
   }
   void state.updateWorktreeMeta(
     worktree.id,
-    { workspaceStatus: IN_PROGRESS_STATUS_ID },
+    { workspaceStatus: next },
     { executionHostId: worktree.hostId ?? 'local' }
   )
 }
