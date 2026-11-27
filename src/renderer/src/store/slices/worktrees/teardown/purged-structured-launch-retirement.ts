@@ -1,3 +1,4 @@
+import { noteNativeChatFilesHeldElsewhere } from '@/components/native-chat/composer/controls/native-chat-held-elsewhere-notice'
 import { markStructuredAgentSessionLaunchCancelledSilently } from '@/lib/agent-session/launch/structured-agent-session-launch-cancel'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
@@ -37,6 +38,17 @@ export function retirePurgedTabLaunches(
   }
   for (const tab of unifiedTabs) {
     if (tab.contentType === 'agent-session') {
+      const survives = Object.values(s.unifiedTabsByWorktree).some((tabs) =>
+        tabs.some(
+          (other) =>
+            other.contentType === 'agent-session' &&
+            other.entityId === tab.entityId &&
+            !unifiedTabs.includes(other)
+        )
+      )
+      if (!survives) {
+        noteNativeChatFilesHeldElsewhere(tab.entityId, null)
+      }
       forgetUnlistedCreatedChat(worktreeId, tab.entityId)
       retireStructuredAgentSessionReadOwner(
         tab.entityId,

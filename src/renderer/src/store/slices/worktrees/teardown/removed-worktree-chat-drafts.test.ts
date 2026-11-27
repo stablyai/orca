@@ -1,4 +1,10 @@
 // @vitest-environment happy-dom
+import {
+  noteNativeChatFilesHeldElsewhere,
+  readNativeChatHeldElsewhere,
+  nativeChatHeldElsewhereRecordCountForTests
+} from '@/components/native-chat/composer/controls/native-chat-held-elsewhere-notice'
+import { updateNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
 import { expect, it } from 'vitest'
 import {
   closeNativeChatComposerNoticeRoute,
@@ -59,4 +65,34 @@ it('keeps a surviving same-ID folder copy feedback when the other copy is remove
   expect(closeNativeChatComposerNoticeRoute(removedRoute)).toBeNull()
   expect(closeNativeChatComposerNoticeRoute(survivorRoute)).toBe('notice-folder-survivor')
   expect(hasDeferredNativeChatComposerNotice('notice-folder-survivor')).toBe(true)
+})
+
+it('retires held records for removed and already closed conversations by exact workspace owner', () => {
+  const workspaceId = `held-repo${WORKTREE_ID_SEPARATOR}/wt`
+  const before = nativeChatHeldElsewhereRecordCountForTests()
+  for (let index = 0; index < 20; index += 1) {
+    const sessionId = `purged-held-${index}`
+    updateNativeChatComposerDraft(
+      `agent-session:${sessionId}`,
+      {
+        text: 'retained',
+        owner: { workspaceId, executionHostId: 'local' }
+      },
+      'immediate'
+    )
+    noteNativeChatFilesHeldElsewhere(sessionId, ['blob:elsewhere'])
+  }
+  updateNativeChatComposerDraft(
+    'agent-session:paired-held-survivor',
+    {
+      text: 'retained',
+      owner: { workspaceId, executionHostId: 'ssh:survivor' }
+    },
+    'immediate'
+  )
+  noteNativeChatFilesHeldElsewhere('paired-held-survivor', ['blob:elsewhere'])
+  deleteProjectChatDrafts('held-repo', 'local')
+  expect(nativeChatHeldElsewhereRecordCountForTests()).toBe(before + 1)
+  expect(readNativeChatHeldElsewhere('purged-held-0')).toBeNull()
+  expect(readNativeChatHeldElsewhere('paired-held-survivor')).not.toBeNull()
 })

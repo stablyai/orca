@@ -1,5 +1,4 @@
 import { useAppStore } from '@/store/index'
-import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
@@ -11,17 +10,12 @@ import {
 } from '@/lib/workspace/creation/pending-worktree-creation'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import {
-  moveWorktreeCreationDraftToTarget,
-  readWorktreeCreationHandoffTarget,
-  releaseFirstSendFilesWhenHeld
+  handOffWorktreeCreationDraft,
+  retainWorktreeCreationInput,
+  recordWorktreeCreationFirstSend,
+  waitForWorktreeCreationFirstSend
 } from '@/lib/workspace/creation/worktree-creation-handoff-target'
 import { hasDeferredNativeChatComposerNotice } from '@/components/native-chat/composer/controls/native-chat-deferred-composer-notice'
-import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/workspace-mounting/background-terminal-worktree-mount'
-import {
-  nativeChatComposerSelection,
-  waitForNativeChatComposerHandoff
-} from '@/components/native-chat/composer/focus/native-chat-composer-mount'
-import '@/components/native-chat/composer/focus/use-native-chat-composer-reveal-focus'
 import { openBackgroundDeclinedTerminal } from '@/lib/workspace/creation/worktree-creation-background-mount'
 import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 import { hasNativeChatStagedFiles } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
@@ -31,8 +25,6 @@ import {
   worktreeCreationFirstSendNeedsChat
 } from '@/lib/workspace/creation/worktree-creation-first-send'
 import { nativeChatComposerHasUserContent } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
-
-const HANDOFF_READY_TIMEOUT_MS = 5000
 
 export type WorktreeCreationStructuredSessionResult = {
   accepted: boolean
@@ -96,14 +88,7 @@ export async function launchStructuredWorktreeSession(
   const needsChat = (): boolean =>
     worktreeCreationFirstSendNeedsChat(firstSend, pending?.heldChatSkills, sourceHoldsInput)
   const retainInput = (): WorktreeCreationStructuredSessionResult => {
-    useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
-      worktreeId: args.worktreeId,
-      status: 'error',
-      error: translate(
-        'components.native-chat.creationChatNotOpened',
-        'Your worktree is ready, but the chat could not open. Retry to open it with your message.'
-      )
-    })
+    retainWorktreeCreationInput(args.creationId, args.worktreeId, chatOpened)
     return { ...settled, retainedInput: true, activation, primaryTabId }
   }
   // Reuse composer-fixed route/delivery through retries; later host changes must not re-resolve this create.
@@ -157,46 +142,26 @@ export async function launchStructuredWorktreeSession(
   })
   // Set only once the source draft moved into the chat: a published tab alone does not prove it.
   let draftTransferred = false
+  let firstSendRecovered = !firstSend.text.trim() && !firstSend.attachments?.length
   const handOffDraft = async (tabId: string | null): Promise<void> => {
-    const tab = readWorktreeCreationHandoffTarget(tabId, args.worktreeId)
-    if (!tab) {
-      return
-    }
-    const state = useAppStore.getState()
-    if (
-      args.shouldActivateOnCompletion &&
-      state.activeView === 'terminal' &&
-      state.activePendingCreationId === args.creationId
-    ) {
-      requestBackgroundTerminalWorktreeMount({ worktreeId: args.worktreeId, tabIds: [tab.tabId] })
-      await waitForNativeChatComposerHandoff(
-        sourceScope,
-        tab.tabId,
-        revealAbandoned.signal,
-        HANDOFF_READY_TIMEOUT_MS
-      )
-    }
-    if (abandoned.signal.aborted) {
-      return
-    }
-    const selection = revealAbandoned.signal.aborted
-      ? undefined
-      : nativeChatComposerSelection(sourceScope)
-    // The tab may have closed, or its session or host changed, while the composer mounted.
-    draftTransferred = moveWorktreeCreationDraftToTarget(
-      tab,
-      args.worktreeId,
+    draftTransferred = await handOffWorktreeCreationDraft({
+      tabId,
+      worktreeId: args.worktreeId,
       sourceScope,
-      selection
-    )
+      creationId: args.creationId,
+      shouldActivate: args.shouldActivateOnCompletion,
+      signal: abandoned.signal,
+      revealSignal: revealAbandoned.signal
+    })
   }
   // The surfaces that took the input: a published chat, or (plain text only) a terminal.
   let chatOpened = false
   let reached = false
-  // An open chat proves the first send landed, not that the composer's own input moved with it.
+  // Visibility, first-message delivery and the remaining draft transfer are separate facts.
   const inputLost = (): boolean =>
     (chatOpened ? !draftTransferred && sourceHoldsInput() : needsChat()) ||
-    (!reached && Boolean(plan.prompt?.trim()))
+    (!reached && Boolean(plan.prompt?.trim())) ||
+    (chatOpened && !firstSendRecovered)
   try {
     const launch = beginStructuredAgentSessionProvisionalLaunch({
       plan,
@@ -230,12 +195,24 @@ export async function launchStructuredWorktreeSession(
     if (launch) {
       // Keep the pending chat until the layout owner's answering frame provides its replacement.
       primaryTabId = await tabOpen.promise
-      if (primaryTabId !== null) {
-        releaseFirstSendFilesWhenHeld(
-          launch.promptDeliveryResult,
-          () => draftTransferred,
-          prepareInput
+      // The pending row is the recovery copy until the first send, independently of later typing.
+      if (primaryTabId === null && launch.tab !== null) {
+        launch.cancel()
+      }
+      const delivery = launch.promptDeliveryResult
+      if (delivery) {
+        const result = await waitForWorktreeCreationFirstSend(
+          delivery,
+          sourceScope,
+          prepareInput,
+          abandoned.signal
         )
+        if (result) {
+          firstSendRecovered = result.delivered || result.handBackFinished === true
+          recordWorktreeCreationFirstSend(result, args.creationId, pending?.chatHandedOffAt)
+        }
+      } else {
+        firstSendRecovered = true
       }
       if (abandoned.signal.aborted || isCancelled()) {
         launch.cancel()
@@ -309,6 +286,10 @@ export async function launchStructuredWorktreeSession(
   } finally {
     abandoned.signal.removeEventListener('abort', stopWaiting)
     unsubscribe()
+    if (!isCancelled() && !firstSendRecovered) {
+      prepareInput.retainForRetry(sourceScope)
+    }
+    prepareInput.release()
   }
   return { ...settled, activation, primaryTabId }
 }

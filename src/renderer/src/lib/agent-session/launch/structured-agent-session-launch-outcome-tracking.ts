@@ -3,7 +3,10 @@ import { settleStructuredLaunchCreateOptions } from './structured-agent-session-
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { useAppStore } from '@/store/index'
 import { publishStructuredAgentSessionSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
-import { agentSessionWriteFailureText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
+import {
+  agentSessionWriteFailureText,
+  agentSessionWriteNoticeText
+} from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { removeStructuredLaunchSlot } from './structured-agent-session-launch-slot'
 import {
@@ -122,8 +125,23 @@ export function trackLaunchSettlement(
         recordUnlistedCreatedChat(worktreeId, sessionId, executionHostId)
       }
       if (receipt.configurationFailure) {
-        publishStructuredAgentSessionSends(receipt.sessionId, {
-          notice: `${getAgentLabel(state.intent.agent)}: ${agentSessionWriteFailureText(receipt.configurationFailure, 'option')}`
+        const notice = `${getAgentLabel(state.intent.agent)}: ${agentSessionWriteFailureText(receipt.configurationFailure, 'option')}`
+        const results = [...state.callers.entries].flatMap((caller) =>
+          caller.promptDeliveryResult ? [caller.promptDeliveryResult] : []
+        )
+        void Promise.allSettled(results).then((outcomes) => {
+          if (state.promise !== promise || state.cancelled) {
+            return
+          }
+          const lost = outcomes.some(
+            (outcome) => outcome.status === 'fulfilled' && outcome.value.handBackLost
+          )
+          publishStructuredAgentSessionSends(receipt.sessionId, {
+            notice: agentSessionWriteNoticeText([
+              { text: notice },
+              ...(lost ? (['messageNotSaved'] as const) : [])
+            ])
+          })
         })
       }
       settleStructuredLaunchCallers(state.callers, 'published')

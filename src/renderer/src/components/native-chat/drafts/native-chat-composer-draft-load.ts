@@ -44,6 +44,7 @@ export type AppendBeforeLoad = {
    * where the placement is in what a later load reads, if this is the last step that load holds.
    */
   committedPosition?: NativeChatDraftPosition
+  committedSnapshot?: string
 }
 
 export type LoadBookkeeping = {
@@ -80,7 +81,11 @@ function withAppends(
   const held = (entry: AppendBeforeLoad) => entry.committed && entry.sequence <= readAtSequence
   const missing = appends.filter((entry) => !held(entry))
   const placedThisRun = appends.some((entry) => entry.placed)
-  const committedPosition = appends.findLast(held)?.committedPosition
+  const committed = appends.findLast(held)
+  const committedPosition =
+    committed?.committedSnapshot === JSON.stringify(loaded)
+      ? committed.committedPosition
+      : undefined
   if (missing.length === 0) {
     return { draft: loaded, changed: false, position: committedPosition, placedThisRun }
   }

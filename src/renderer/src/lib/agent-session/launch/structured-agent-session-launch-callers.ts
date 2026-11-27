@@ -143,6 +143,8 @@ export type StructuredPromptDeliveryResult = {
    * durable: no later send, hand-back or recording follows, so nothing else will take custody.
    */
   handBackFinished?: true
+  /** Installing the recovery copy threw before usable custody was established. */
+  handBackLost?: true
   /** An admitted recipient took ownership before it was explicitly discarded. */
   recipientOwned?: true
   /** Nobody could confirm it went: the host may hold it. */

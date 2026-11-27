@@ -1,3 +1,4 @@
+import { retireNativeChatHeldElsewhereWhere } from '@/components/native-chat/composer/controls/native-chat-held-elsewhere-notice'
 import { retireNativeChatComposerSubmissionsWhere } from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
 import {
   nativeChatLaunchPromptDraftOwner,
@@ -92,6 +93,9 @@ export function deleteWorkspaceChatDraftOwners(
   )
   const exact = (owner: NativeChatComposerDraftOwner): boolean =>
     owners.has(JSON.stringify([owner.executionHostId, owner.workspaceId]))
+  retireNativeChatHeldElsewhereWhere(
+    (_scope, owner) => !!owner && (exact(owner) || feedbackAlso?.(owner) === true)
+  )
   retireNativeChatComposerSubmissionsWhere((scope, draft) => {
     const owner =
       launchDraftSource(scope) ?? nativeChatLaunchPromptDraftOwner(scope) ?? draft?.owner

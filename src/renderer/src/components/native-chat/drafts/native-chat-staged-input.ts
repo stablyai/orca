@@ -1,6 +1,9 @@
+import { nativeChatStagedLeaseRetired } from './native-chat-staged-ownership'
 import { formatNativeChatFileReference } from '../../../../../shared/native-chat/input/composer/agent-image-paste'
 import { nativeChatTextAttachmentParts } from '../../../../../shared/native-chat/attachments/native-chat-text-attachment-references'
 import {
+  adoptNativeChatStagedFile,
+  reconcileNativeChatStagedDraft,
   currentFiles,
   inputPaths,
   namedNativeChatStagedPaths,
@@ -185,7 +188,15 @@ function captureStagedPaths(files: StagedFiles | undefined, paths: string[]) {
       return named.filter((path) => !lease.has(path) || !owner?.paths.has(path))
     }
   }
+  let released = false
+  let retryHold: { owner: StagedFiles; paths: Set<string> } | undefined
   const release = (input?: NativeChatStagedInput): void => {
+    if (released) {
+      return
+    }
+    if (!input) {
+      released = true
+    }
     if (files) {
       const owner = currentFiles(files)
       const released = input ? inputPaths(owner, input) : [...lease]
@@ -200,13 +211,47 @@ function captureStagedPaths(files: StagedFiles | undefined, paths: string[]) {
   }
   return {
     release,
+    retainForRetry: (scope: string): void => {
+      const owner = files && currentFiles(files)
+      if (!owner) {
+        return
+      }
+      for (const path of paths) {
+        if (
+          owner.scope !== scope &&
+          !nativeChatStagedFileHeld(owner, path) &&
+          owner.paths.has(path)
+        ) {
+          adoptNativeChatStagedFile(owner, path, scope)
+        }
+      }
+      const recovery = stagedNativeChatFiles(scope)
+      if (recovery && !retryHold) {
+        const retained = new Set(paths.filter((path) => recovery.paths.has(path)))
+        recovery.heldInputs.add(retained)
+        retryHold = { owner: recovery, paths: retained }
+        reconcileNativeChatStagedDraft(scope, { ...(recovery.draft ?? { text: '', images: [] }) })
+      }
+    },
+    releaseRetry: (): void => {
+      if (retryHold) {
+        const owner = currentFiles(retryHold.owner)
+        owner.heldInputs.delete(retryHold.paths)
+        retryHold = undefined
+        pruneFiles(owner)
+      }
+    },
     /**
      * Release once the draft holds every submitted file: now, or at the first draft change that makes
      * it so (a returned original, or a live host upload of it). Until then the originals stay readable.
      */
     releaseWhenHeld: (): void => {
       const owner = files && currentFiles(files)
-      if (!owner || [...lease].every((path) => nativeChatStagedFileHeld(owner, path))) {
+      if (
+        !owner ||
+        nativeChatStagedLeaseRetired(lease) ||
+        [...lease].every((path) => nativeChatStagedFileHeld(owner, path))
+      ) {
         release()
       } else {
         owner.pendingLeases.add(lease)

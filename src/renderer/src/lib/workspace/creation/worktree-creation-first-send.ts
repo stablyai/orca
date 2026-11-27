@@ -18,8 +18,13 @@ type FirstSend = {
  */
 export function worktreeCreationFirstSend(
   request: Pick<WorktreeCreationRequest, 'launchDraftPrompt' | 'quickPrompt'>,
-  pending: Pick<PendingWorktreeCreation, 'heldChatAttachments'> | undefined
+  pending:
+    | Pick<PendingWorktreeCreation, 'heldChatAttachments' | 'heldChatMessageRecorded'>
+    | undefined
 ): FirstSend {
+  if (pending?.heldChatMessageRecorded) {
+    return { text: '' }
+  }
   return {
     text: request.launchDraftPrompt ?? request.quickPrompt,
     attachments: pending?.heldChatAttachments?.map(({ path, connectionId }) => ({

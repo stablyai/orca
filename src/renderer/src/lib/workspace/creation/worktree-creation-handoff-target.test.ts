@@ -61,12 +61,12 @@ it('confirms a handoff target only while its tab, session and host are unchanged
 // The first send's files are released outright only on a recorded delivery. After a confirmed move
 // they wait for the recipient's draft to hold them; an undelivered send to a stale chat keeps them for Retry.
 it('releases the first send files on delivery, waits for custody after a move, else keeps them', async () => {
-  const outcome = async (delivered: boolean, transferred: boolean): Promise<string> => {
+  const outcome = async (delivered: boolean, _transferred: boolean): Promise<string> => {
     let result = 'kept'
     const delivery = Promise.resolve({ delivered, failureNotified: !delivered })
-    releaseFirstSendFilesWhenHeld(delivery, () => transferred, {
+    releaseFirstSendFilesWhenHeld(delivery, 'retry-source', {
       release: () => (result = 'released'),
-      releaseWhenHeld: () => (result = 'when-held')
+      retainForRetry: () => (result = 'retained')
     })
     await delivery
     await Promise.resolve()
@@ -74,8 +74,8 @@ it('releases the first send files on delivery, waits for custody after a move, e
   }
   expect(await outcome(true, false)).toBe('released')
   expect(await outcome(true, true)).toBe('released')
-  expect(await outcome(false, true)).toBe('when-held')
-  expect(await outcome(false, false)).toBe('kept')
+  expect(await outcome(false, true)).toBe('released')
+  expect(await outcome(false, false)).toBe('released')
 })
 
 const { reserveStructuredAgentSessionSend, dropStructuredAgentSessionSends } =
@@ -126,14 +126,14 @@ it('releases the first send files when a reserved send is recorded after unconfi
       failureNotified: false,
       ...unconfirmedStructuredLaunchDelivery('unconfirmed', slot.recorded)
     }),
-    () => true,
-    { release: () => calls.push('release'), releaseWhenHeld: () => calls.push('when-held') }
+    'retry-source',
+    { release: () => calls.push('release'), retainForRetry: () => calls.push('retained') }
   )
   for (let tick = 0; tick < 4; tick += 1) {
     await Promise.resolve()
   }
 
-  expect(calls).toEqual(['when-held', 'release'])
+  expect(calls).toEqual(['retained', 'release'])
   slot.release()
 })
 
@@ -152,7 +152,10 @@ it('ends a dropped unconfirmed send recorded signal', () => {
 // After a confirmed move, a recipient discarded before the lease owner heard the result (or a send
 // already handed back to the composer) leaves no custody to wait for: the first-send files go now.
 it('releases moved first-send files when the recipient was discarded before the result', async () => {
-  for (const settled of [{ recipientOwned: true as const }, { inComposer: true as const }]) {
+  for (const settled of [
+    { handBackFinished: true as const },
+    { inComposer: true as const, handBackFinished: true as const }
+  ]) {
     const sessionId = `discard-first-${Object.keys(settled)[0]}`
     const scope = structuredAgentSessionDraftScopeKey(sessionId)
     stageNativeChatDraftFile(scope, `blob:${sessionId}`)
@@ -165,7 +168,7 @@ it('releases moved first-send files when the recipient was discarded before the 
     expect(hasNativeChatStagedFiles(scope)).toBe(true)
 
     const delivery = Promise.resolve({ delivered: false, failureNotified: true, ...settled })
-    releaseFirstSendFilesWhenHeld(delivery, () => true, files)
+    releaseFirstSendFilesWhenHeld(delivery, 'retry-source', files)
     await delivery
     await Promise.resolve()
 
@@ -197,7 +200,7 @@ it('ends a moved first-send lease after a create refusal whose hand-back was not
   expect(result.inComposer).toBeUndefined()
   expect(result.handBackFinished).toBe(true)
 
-  releaseFirstSendFilesWhenHeld(delivery, () => true, files)
+  releaseFirstSendFilesWhenHeld(delivery, 'retry-source', files)
   await Promise.resolve()
   await Promise.resolve()
 
@@ -232,7 +235,7 @@ it('reports a finished hand-back when preparation fails after a successful creat
   const result = await delivery
   expect(result.handBackFinished).toBe(true)
 
-  releaseFirstSendFilesWhenHeld(delivery, () => true, files)
+  releaseFirstSendFilesWhenHeld(delivery, 'retry-source', files)
   await Promise.resolve()
   await Promise.resolve()
   expect(hasNativeChatStagedFiles(scope)).toBe(false)

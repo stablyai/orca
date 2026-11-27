@@ -148,3 +148,58 @@ function indexedTab<T extends DirectoryTab>(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this weak index contains only rows of this exact immutable T array.
   return indexTabs(tabs)?.[kind].get(key) as T | undefined
 }
+
+// One current fleet index; unchanged workspace arrays are never revisited.
+let uniqueTabSource: TabsByWorkspace
+const uniqueWorkspaceTabs = new Map<string, readonly Tab[]>()
+const sessionTabs = new Map<string, Map<Tab, number>>()
+
+export function uniqueStructuredChatTab(
+  tabsByWorkspace: TabsByWorkspace,
+  sessionId: string
+): Tab | null {
+  if (uniqueTabSource !== tabsByWorkspace) {
+    const update = (tabs: readonly Tab[], add: boolean): void => {
+      for (const tab of tabs) {
+        if (tab.contentType !== 'agent-session') {
+          continue
+        }
+        const matches = sessionTabs.get(tab.entityId) ?? new Map<Tab, number>()
+        if (add) {
+          matches.set(tab, (matches.get(tab) ?? 0) + 1)
+        } else {
+          const count = matches.get(tab) ?? 0
+          if (count > 1) {
+            matches.set(tab, count - 1)
+          } else {
+            matches.delete(tab)
+          }
+        }
+        if (matches.size) {
+          sessionTabs.set(tab.entityId, matches)
+        } else {
+          sessionTabs.delete(tab.entityId)
+        }
+      }
+    }
+    for (const [workspaceId, tabs] of uniqueWorkspaceTabs) {
+      if (workspaceTabs(tabsByWorkspace, workspaceId) !== tabs) {
+        update(tabs, false)
+        uniqueWorkspaceTabs.delete(workspaceId)
+      }
+    }
+    for (const [workspaceId, tabs] of Object.entries(tabsByWorkspace ?? {})) {
+      if (tabs && uniqueWorkspaceTabs.get(workspaceId) !== tabs) {
+        update(tabs, true)
+        uniqueWorkspaceTabs.set(workspaceId, tabs)
+      }
+    }
+    uniqueTabSource = tabsByWorkspace
+  }
+  const matches = sessionTabs.get(sessionId)
+  if (matches?.size !== 1) {
+    return null
+  }
+  const [tab, count] = matches.entries().next().value!
+  return count === 1 ? tab : null
+}

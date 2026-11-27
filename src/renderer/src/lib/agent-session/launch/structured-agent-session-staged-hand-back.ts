@@ -58,10 +58,11 @@ export function stagedSendDelivery(
 export function stagedHandBackDelivery(
   prompt: StagedStructuredLaunchPrompt,
   handedBack: StructuredAgentSessionHandBackCustody | undefined
-): Pick<StagedDelivery, 'inComposer' | 'handBackFinished'> {
+): Pick<StagedDelivery, 'inComposer' | 'handBackFinished' | 'handBackLost'> {
   const custody = prompt.callerKeepsText ? 'caller' : handedBack
   return {
     inComposer: custody === 'durable',
+    ...(custody === 'lost' ? { handBackLost: true as const } : {}),
     ...(custody === 'durable' || custody === 'installed' || custody === 'caller'
       ? { handBackFinished: true as const }
       : {})

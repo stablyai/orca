@@ -5,7 +5,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 // Nothing is stood in: staging, the held-elsewhere store and the wording run for real.
 const { nativeChatBrowserFileRefusal } = await import('./native-chat-browser-file-refusal')
-const { stageNativeChatDraftFile } = await import('../drafts/native-chat-draft-attachment-staging')
+const { stageNativeChatDraftFile, reconcileNativeChatStagedDraft } =
+  await import('../drafts/native-chat-draft-attachment-staging')
 const { structuredAgentSessionDraftScopeKey } = await import('../drafts/native-chat-draft-scope')
 const { readNativeChatHeldElsewhere, resetNativeChatHeldElsewhereForTests } =
   await import('../composer/controls/native-chat-held-elsewhere-notice')
@@ -142,4 +143,23 @@ it('words a queued-card Save refusal for Save, not as a send', () => {
   )
   expect(agentSessionWriteNoticeText(mixed!)).not.toMatch(/not sent/i)
   expect(heldNow('refusing-d')).toBeNull()
+})
+
+it('never names an arbitrary holder of an original with overlapping draft custody', () => {
+  for (const order of [
+    ['overlap-a', 'overlap-b'],
+    ['reverse-b', 'reverse-a']
+  ]) {
+    const path = `blob:${order.join('-')}`
+    for (const sessionId of order) {
+      const scope = structuredAgentSessionDraftScopeKey(sessionId)
+      stageNativeChatDraftFile(scope, path)
+      reconcileNativeChatStagedDraft(scope, { text: '', images: [{ id: path, path }] })
+    }
+    nativeChatBrowserFileRefusal([path], 'overlap-refusing')
+    expect(nativeChatHeldElsewhereNow([path], 'overlap-refusing').held).toEqual({
+      count: 1,
+      severalChats: true
+    })
+  }
 })

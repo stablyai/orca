@@ -1,3 +1,7 @@
+import { abandonNativeChatPendingStagedLeases } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { noteNativeChatFilesHeldElsewhere } from '@/components/native-chat/composer/controls/native-chat-held-elsewhere-notice'
+import { useAppStore } from '@/store/index'
 import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
@@ -8,6 +12,7 @@ import { cancelPendingBotThreadChatClose } from '@/lib/agent-session/open/bot-th
 import { stopStructuredAgentSessionSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import {
   executionHostIdForStructuredTarget,
+  structuredAgentSessionOwnerForTab,
   structuredAgentSessionFocusOwner
 } from '../session-ownership/structured-agent-session-owner'
 import {
@@ -101,6 +106,23 @@ export function beginStructuredAgentSessionTabClose(args: {
   // Hold close intent until a host frame omits the chat; pre-close frames would otherwise reappend it.
   recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
   void retireStructuredAgentSessionTab(args).then((hostTabClosed) => {
+    if (hostTabClosed) {
+      const state = useAppStore.getState()
+      const survives = Object.values(state.unifiedTabsByWorktree).some((tabs) =>
+        tabs.some(
+          (tab) =>
+            tab.contentType === 'agent-session' &&
+            tab.entityId === args.sessionId &&
+            (tab.worktreeId !== args.worktreeId ||
+              structuredAgentSessionOwnerForTab(state, tab) !==
+                executionHostIdForStructuredTarget(args.target))
+        )
+      )
+      if (!survives) {
+        noteNativeChatFilesHeldElsewhere(args.sessionId, null)
+        abandonNativeChatPendingStagedLeases(structuredAgentSessionDraftScopeKey(args.sessionId))
+      }
+    }
     if (!hostTabClosed) {
       // The host may still have the chat: let its list show it again.
       clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)

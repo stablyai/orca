@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import { uniqueStructuredChatTab } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
+import { createElement, Fragment, useCallback, useMemo, useSyncExternalStore } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
@@ -86,6 +87,26 @@ export function nativeChatHeldElsewhereNotice(
   }
 }
 
+export function nativeChatHeldElsewhereRecoveryNotice(
+  notice: NativeChatComposerNotice,
+  gone: readonly string[]
+): NativeChatComposerNotice {
+  if (!gone.length) {
+    return notice
+  }
+  const recovery = agentSessionWriteNoticeText(nativeChatBrowserFileRefusalParts(gone))
+  return {
+    ...notice,
+    text: `${notice.text} ${recovery}`,
+    content: createElement(
+      Fragment,
+      null,
+      notice.content ?? notice.text,
+      createElement('span', { className: 'block' }, recovery)
+    )
+  }
+}
+
 /**
  * The one open chat tab of `sessionId`. Two tabs of the same conversation (a paired twin of it) are
  * ambiguous: the notice names and opens neither rather than guess.
@@ -94,18 +115,31 @@ export function nativeChatHeldElsewhereOwnerTab(
   tabsByWorktree: Readonly<Record<string, readonly Tab[]>>,
   sessionId: string
 ): Tab | null {
-  let found: Tab | null = null
-  for (const tabs of Object.values(tabsByWorktree)) {
-    for (const tab of tabs) {
-      if (tab.contentType === 'agent-session' && tab.entityId === sessionId) {
-        if (found) {
-          return null
-        }
-        found = tab
-      }
+  return uniqueStructuredChatTab(tabsByWorktree, sessionId)
+}
+
+type TabsByWorktree = Readonly<Record<string, readonly Tab[]>>
+
+/**
+ * A store selector for the one owning tab of `ownerSessionId` (null for none, or a twin). It answers
+ * with that tab itself, a stable identity, so a write elsewhere in the store re-renders nothing; and it
+ * scans only when the tab map itself is replaced, so such a write costs one comparison.
+ */
+export function nativeChatHeldElsewhereOwnerTabSelector(
+  ownerSessionId: string | undefined
+): (state: { unifiedTabsByWorktree: TabsByWorktree }) => Tab | null {
+  let scanned: TabsByWorktree | undefined
+  let tab: Tab | null = null
+  return (state) => {
+    if (!ownerSessionId) {
+      return null
     }
+    if (state.unifiedTabsByWorktree !== scanned) {
+      scanned = state.unifiedTabsByWorktree
+      tab = nativeChatHeldElsewhereOwnerTab(scanned, ownerSessionId)
+    }
+    return tab
   }
-  return found
 }
 
 /** Reveal the owning chat where it lives (its workspace, on its host) and select it; false if not. */
@@ -134,10 +168,10 @@ const NO_SUBSCRIPTION = (): (() => void) => () => {}
 function currentOwner(
   record: NativeChatHeldElsewhereRecord,
   held: NativeChatHeldElsewhere | null,
-  tabsByWorktree: Readonly<Record<string, readonly Tab[]>> | null
+  tabsByWorktree: TabsByWorktree
 ): Tab | null {
   const ownerSessionId = held?.ownerSessionId
-  if (!ownerSessionId || !tabsByWorktree || ownerSessionId === record.unreachableOwner) {
+  if (!ownerSessionId || ownerSessionId === record.unreachableOwner) {
     return null
   }
   return nativeChatHeldElsewhereOwnerTab(tabsByWorktree, ownerSessionId)
@@ -159,25 +193,25 @@ export function useNativeChatHeldElsewhereNotice(
   // while there is a notice to say it.
   const subscribeOwnership = useCallback(
     (listener: () => void) =>
-      record ? subscribeToNativeChatStagedOwnership(listener) : NO_SUBSCRIPTION(),
+      record
+        ? subscribeToNativeChatStagedOwnership(listener, record.references)
+        : NO_SUBSCRIPTION(),
     [record]
   )
   const ownershipVersion = useSyncExternalStore(subscribeOwnership, () =>
-    record ? nativeChatStagedOwnershipVersion() : 0
+    record ? nativeChatStagedOwnershipVersion(record.references) : 0
   )
   // The same result object until the record or the drafts' ownership changes.
   const now =
     record && sessionId ? nativeChatHeldElsewhereAt(record, sessionId, ownershipVersion) : null
   const ownerSessionId = now?.held?.ownerSessionId
-  // Why the map itself, and only while an owner is named: unrelated store writes keep its identity, so
-  // they neither re-render nor rescan; the scan below runs once per tab-set change.
-  const tabsByWorktree = useAppStore((state) =>
-    ownerSessionId ? state.unifiedTabsByWorktree : null
+  // The owning tab itself, read through a selector that rescans only when the tab map is replaced.
+  const selectOwnerTab = useMemo(
+    () => nativeChatHeldElsewhereOwnerTabSelector(ownerSessionId),
+    [ownerSessionId]
   )
-  const tab = useMemo(
-    () => (record && now ? currentOwner(record, now.held, tabsByWorktree) : null),
-    [record, now, tabsByWorktree]
-  )
+  const ownerTab = useAppStore(selectOwnerTab)
+  const tab = ownerTab && ownerTab.entityId !== record?.unreachableOwner ? ownerTab : null
   return useMemo((): NativeChatComposerNotice | null => {
     if (!record || !now || !sessionId) {
       return null
@@ -192,13 +226,16 @@ export function useNativeChatHeldElsewhereNotice(
               const state = useAppStore.getState()
               const latest = nativeChatHeldElsewhereNow(record.references, sessionId)
               const target = currentOwner(record, latest.held, state.unifiedTabsByWorktree)
-              if (!target || !openOwnerChat(target)) {
-                noteNativeChatHeldOwnerUnreachable(sessionId, tab.entityId)
+              if (target && !openOwnerChat(target)) {
+                noteNativeChatHeldOwnerUnreachable(sessionId, target.entityId)
               }
             }
           }
         : null
-      return nativeChatHeldElsewhereNotice(now.held, owner, dismiss)
+      return nativeChatHeldElsewhereRecoveryNotice(
+        nativeChatHeldElsewhereNotice(now.held, owner, dismiss),
+        now.gone
+      )
     }
     // Nobody holds them any more: the files have to be attached again, as for any file not here.
     return now.gone.length

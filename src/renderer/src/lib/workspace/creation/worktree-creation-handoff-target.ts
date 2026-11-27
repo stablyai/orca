@@ -1,3 +1,10 @@
+import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/workspace-mounting/background-terminal-worktree-mount'
+import {
+  nativeChatComposerSelection,
+  waitForNativeChatComposerHandoff
+} from '@/components/native-chat/composer/focus/native-chat-composer-mount'
+import '@/components/native-chat/composer/focus/use-native-chat-composer-reveal-focus'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { getStructuredAgentSessionLaunchOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { moveStructuredAgentLaunchDraft } from '@/lib/agent-session/launch/structured-agent-session-launch-draft'
@@ -69,35 +76,113 @@ export function moveWorktreeCreationDraftToTarget(
   return true
 }
 
-/**
- * The first send's staged browser files stay leased until a holder is proven. A recorded delivery
- * releases them. A draft that moved into a confirmed chat releases them once that draft holds every file
- * (the original itself, as a refused send returns it, or a live host upload of it), now or at a later
- * draft change. A moved draft alone proves nothing, and an undelivered send to a stale chat keeps them
- * for Retry; dismissing the pending creation, or deleting the draft that now holds them, releases them.
- * An unconfirmed send that the host records later, by reply or journal, is a recorded delivery too.
- * After a confirmed move, a send that has already been handed back into the chat's composer, or whose
- * recipient chat was discarded, has no custody left to wait for: the lease ends at once and the draft
- * keeps only what it references. That holds even when the discard came before this result, and for a
- * hand-back whose draft write could not be made durable: it still ended the operation.
- */
+/** Terminal attempts release their lease; the pending row owns a separate Retry hold after loss. */
 export function releaseFirstSendFilesWhenHeld(
   delivery: Promise<StructuredPromptDeliveryResult> | undefined,
-  draftTransferred: () => boolean,
-  files: { release: () => void; releaseWhenHeld: () => void }
-): void {
-  void delivery?.then((result) => {
-    if (result.delivered) {
-      files.release()
-      return
+  sourceScope: string,
+  files: { release: () => void; retainForRetry: (scope: string) => void; releaseRetry?: () => void }
+): Promise<StructuredPromptDeliveryResult | undefined> {
+  return Promise.resolve(delivery).then((result) => {
+    if (result && !result.delivered && !result.handBackFinished) {
+      files.retainForRetry(sourceScope)
     }
-    if (draftTransferred()) {
-      if (result.inComposer || result.handBackFinished || result.recipientOwned) {
-        files.release()
-        return
-      }
-      files.releaseWhenHeld()
+    files.release()
+    if (result?.delivered) {
+      files.releaseRetry?.()
     }
-    void result.whenRecorded?.then(() => files.release())
+    void result?.whenRecorded?.then(() => files.releaseRetry?.())
+    return result
   })
+}
+
+export async function waitForWorktreeCreationFirstSend(
+  delivery: Promise<StructuredPromptDeliveryResult>,
+  sourceScope: string,
+  files: Parameters<typeof releaseFirstSendFilesWhenHeld>[2],
+  signal: AbortSignal
+): Promise<StructuredPromptDeliveryResult | undefined | null> {
+  const interrupted = Promise.withResolvers<null>()
+  const interrupt = (): void => interrupted.resolve(null)
+  if (signal.aborted) {
+    interrupt()
+  } else {
+    signal.addEventListener('abort', interrupt, { once: true })
+  }
+  const settled = releaseFirstSendFilesWhenHeld(delivery, sourceScope, {
+    ...files,
+    retainForRetry: (scope) => {
+      if (!signal.aborted) {
+        files.retainForRetry(scope)
+      }
+    }
+  })
+  return Promise.race([settled, interrupted.promise]).finally(() =>
+    signal.removeEventListener('abort', interrupt)
+  )
+}
+
+export function retainWorktreeCreationInput(
+  creationId: string,
+  worktreeId: string,
+  chatOpened = false
+): void {
+  useAppStore.getState().updatePendingWorktreeCreation(creationId, {
+    worktreeId,
+    status: 'error',
+    error: chatOpened
+      ? translate(
+          'components.native-chat.writeNotice.outcomeUnknown',
+          "Orca couldn't confirm what happened. Check the chat."
+        )
+      : translate(
+          'components.native-chat.creationChatNotOpened',
+          'Your worktree is ready, but the chat could not open. Retry to open it with your message.'
+        )
+  })
+}
+
+export function recordWorktreeCreationFirstSend(
+  result: StructuredPromptDeliveryResult,
+  creationId: string,
+  handedOffAt: number | undefined
+): void {
+  void result.whenRecorded?.then(() => {
+    const current = useAppStore.getState().pendingWorktreeCreations[creationId]
+    if (current && current.chatHandedOffAt === handedOffAt) {
+      useAppStore
+        .getState()
+        .updatePendingWorktreeCreation(creationId, { heldChatMessageRecorded: true })
+    }
+  })
+}
+
+export async function handOffWorktreeCreationDraft(args: {
+  tabId: string | null
+  worktreeId: string
+  sourceScope: string
+  creationId: string
+  shouldActivate: boolean
+  signal: AbortSignal
+  revealSignal: AbortSignal
+}): Promise<boolean> {
+  const tab = readWorktreeCreationHandoffTarget(args.tabId, args.worktreeId)
+  if (!tab) {
+    return false
+  }
+  const state = useAppStore.getState()
+  if (
+    args.shouldActivate &&
+    state.activeView === 'terminal' &&
+    state.activePendingCreationId === args.creationId
+  ) {
+    requestBackgroundTerminalWorktreeMount({ worktreeId: args.worktreeId, tabIds: [tab.tabId] })
+    await waitForNativeChatComposerHandoff(args.sourceScope, tab.tabId, args.revealSignal, 5000)
+  }
+  if (args.signal.aborted) {
+    return false
+  }
+  const selection = args.revealSignal.aborted
+    ? undefined
+    : nativeChatComposerSelection(args.sourceScope)
+  return moveWorktreeCreationDraftToTarget(tab, args.worktreeId, args.sourceScope, selection)
 }

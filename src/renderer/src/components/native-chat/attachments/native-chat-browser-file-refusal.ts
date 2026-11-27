@@ -32,7 +32,9 @@ function splitHeldElsewhere(
       rest.push(reference)
     } else {
       heldReferences.push(reference)
-      ownerScopes.add(holders[0])
+      for (const holder of holders) {
+        ownerScopes.add(holder)
+      }
     }
   }
   const count = heldReferences.length
@@ -122,7 +124,7 @@ export function nativeChatBrowserFileRefusal(
   sessionId?: string,
   write: 'send' | 'queued-edit' = 'send'
 ): AgentSessionWriteNoticePart[] | null {
-  const { held, heldReferences, rest } = splitHeldElsewhere(references, sessionId)
+  const { held, rest } = splitHeldElsewhere(references, sessionId)
   if (write === 'queued-edit') {
     return [
       ...(held ? [{ text: queuedEditHeldElsewhereSentence(held) }] : []),
@@ -132,7 +134,7 @@ export function nativeChatBrowserFileRefusal(
     ]
   }
   if (sessionId !== undefined) {
-    noteNativeChatFilesHeldElsewhere(sessionId, heldReferences)
+    noteNativeChatFilesHeldElsewhere(sessionId, held ? references : null)
   }
   return rest.length ? nativeChatBrowserFileRefusalParts(rest) : null
 }

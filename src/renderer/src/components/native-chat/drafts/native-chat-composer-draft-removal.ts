@@ -1,3 +1,4 @@
+import { retireNativeChatHeldElsewhereWhere } from '../composer/controls/native-chat-held-elsewhere-notice'
 import {
   installNativeChatDraftRecord,
   notifyScope,
@@ -23,6 +24,13 @@ import type {
 export function deleteNativeChatComposerDraftsWhere(
   matches: (scope: string, draft: StoredNativeChatComposerDraft | undefined) => boolean
 ): void {
+  retireNativeChatHeldElsewhereWhere((scope, owner) => {
+    const record = records.get(scope)
+    return matches(
+      scope,
+      owner ? { ...(record ?? { text: '', images: [], savedAt: 0 }), owner } : record
+    )
+  })
   deleteLoadingNativeChatComposerDraftsWhere(matches)
   retireNativeChatComposerSubmissionsWhere(matches)
   // A paste failure waiting for this draft's next composer has no reader once the draft is gone. It is

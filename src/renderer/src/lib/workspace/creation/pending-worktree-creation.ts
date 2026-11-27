@@ -172,6 +172,8 @@ export type PendingWorktreeCreation = {
   phaseLog?: readonly { phase: WorktreeCreationPhase; at: number }[]
   /** Chat message sent before the worktree existed; the chat launch delivers it as its first message. */
   heldChatMessage?: string
+  /** A late exact receipt ended this first send; Retry must not send it again. */
+  heldChatMessageRecorded?: true
   heldChatAttachments?: readonly NativeChatComposerDraftImage[]
   heldChatSkills?: readonly AgentJournalSkillRef[]
   /** The launch owns the captured input until its replacement surface is published. */

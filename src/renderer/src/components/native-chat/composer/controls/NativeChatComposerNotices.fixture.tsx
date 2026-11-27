@@ -2,7 +2,10 @@ import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { NativeChatComposerNotices } from './NativeChatComposerNotices'
 import { structuredSessionNotices } from '../../messages/notices/native-chat-structured-session-notices'
 import { structuredAgentSessionReadFailureNotice } from '../../messages/notices/structured-agent-session-read-failure-notice'
-import { nativeChatHeldElsewhereNotice } from './use-native-chat-held-elsewhere-notice'
+import {
+  nativeChatHeldElsewhereNotice,
+  nativeChatHeldElsewhereRecoveryNotice
+} from './use-native-chat-held-elsewhere-notice'
 
 // Captured retained-opening read refusal: history is absent while creation still owns Retry.
 const refusal = {
@@ -209,4 +212,13 @@ export const heldInAnotherChatNarrow = heldFixture(
 export const heldInOtherChatsNarrow = heldFixture(
   360,
   nativeChatHeldElsewhereNotice({ count: 3, severalChats: true }, null, () => {})
+)
+
+export const heldAndGoneNarrow = heldFixture(
+  360,
+  nativeChatHeldElsewhereRecoveryNotice(heldElsewhere(), ['orca-browser-file:fixture/missing.png'])
+)
+export const heldAndGone = heldFixture(
+  720,
+  nativeChatHeldElsewhereRecoveryNotice(heldElsewhere(), ['orca-browser-file:fixture/missing.png'])
 )

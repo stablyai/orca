@@ -267,6 +267,7 @@ const beforeRetriedLoad = (scope: string, saved: StoredNativeChatComposerDraft) 
     return loadAll()
   }
   return {
+    storage,
     release: () => release(),
     retried: () => vi.waitFor(() => expect(reads).toBe(2), { timeout: 5_000 })
   }
@@ -389,4 +390,74 @@ it('arms nothing for a placement a replacing step retired before the load', asyn
   quiet.mockRestore()
 
   expect(positionOf(scope)).toBeUndefined()
+})
+
+it.each(['text', 'image'] as const)(
+  'carries committed placement across a second %s append',
+  async (kind) => {
+    const quiet = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const name = `two-committed-${kind}`
+    const scope = structuredAgentSessionDraftScopeKey(`placement-${name}`)
+    const { release, retried } = beforeRetriedLoad(scope, savedEarlier)
+    move(name, '', { text: 'hello world' }, { from: 6, to: 11 })
+    await committed(scope)
+    appendToNativeChatComposerDraft(
+      scope,
+      kind === 'text' ? { text: 'later' } : { images: [{ id: 'later', path: 'blob:later' }] }
+    )
+    await committed(scope)
+    await retried()
+    release()
+    await hydrateNativeChatComposerDrafts()
+    quiet.mockRestore()
+    const loaded = readNativeChatComposerDraft(scope)
+    const position = spanOf(positionOf(scope))
+    expect(position).toMatchObject({ from: 21, to: 26 })
+    expect(loaded.text.slice(position.from, position.to)).toBe('world')
+  }
+)
+
+it('carries committed placement through two writes then a missing replay step', async () => {
+  const quiet = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const name = 'mixed-three-writes'
+  const scope = structuredAgentSessionDraftScopeKey(`placement-${name}`)
+  const { storage, release, retried } = beforeRetriedLoad(scope, savedEarlier)
+  move(name, '', { text: 'hello world' }, { from: 6, to: 11 })
+  await committed(scope)
+  appendToNativeChatComposerDraft(scope, { text: 'second write' })
+  await committed(scope)
+  await retried()
+  storage.update = async () => {
+    throw new Error('third write refused')
+  }
+  appendToNativeChatComposerDraft(scope, { text: 'third write' })
+  release()
+  await hydrateNativeChatComposerDrafts()
+  quiet.mockRestore()
+  expect(readNativeChatComposerDraft(scope).text).toBe(
+    'saved earlier\n\nhello world\n\nsecond write\n\nthird write'
+  )
+  expect(spanOf(positionOf(scope))).toMatchObject({ from: 21, to: 26 })
+})
+
+it('retires committed placement when a foreign snapshot replaced its write', async () => {
+  const quiet = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const name = 'foreign-placement-write'
+  const scope = structuredAgentSessionDraftScopeKey(`placement-${name}`)
+  const { storage, release, retried } = beforeRetriedLoad(scope, savedEarlier)
+  move(name, '', { text: 'hello world' }, { from: 6, to: 11 })
+  await committed(scope)
+  await retried()
+  await storage.write(scope, {
+    text: 'foreign prefix\n\nsaved earlier\n\nhello world',
+    images: [],
+    savedAt: 9_000_000_000_000
+  })
+  release()
+  await hydrateNativeChatComposerDrafts()
+  quiet.mockRestore()
+  expect(positionOf(scope)).toBeUndefined()
+  expect(readNativeChatComposerDraft(scope).text).toBe(
+    'foreign prefix\n\nsaved earlier\n\nhello world'
+  )
 })

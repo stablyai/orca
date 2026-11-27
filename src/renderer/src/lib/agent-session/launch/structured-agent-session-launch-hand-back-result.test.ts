@@ -1,3 +1,6 @@
+import type { StructuredLaunchState } from './structured-agent-session-launch-state-store'
+import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
+import { structuredAgentSessionCreateParams } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type * as HandBack from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-hand-back'
 import type * as SendAttempt from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-attempt'
@@ -6,7 +9,8 @@ import type * as SendAttempt from '@/components/native-chat/session/structured/d
 // reserved send, settlement and the public launch result run for real. The draft write leaves the
 // returned input durable (journaled), installed (in the draft, not yet saved) or lost (it throws).
 type Custody = 'durable' | 'installed' | 'lost'
-const draft = vi.hoisted(() => ({ mode: 'durable' as Custody, writes: [] as string[] }))
+type DraftWrite = { mode: Custody; writes: string[] }
+const draft = vi.hoisted((): DraftWrite => ({ mode: 'durable', writes: [] }))
 vi.mock(
   '@/components/native-chat/session/structured/delivery/structured-agent-session-message-hand-back',
   async (importOriginal) => ({
@@ -163,5 +167,73 @@ it('says why preparation failed and that a lost hand-back was not saved', async 
   const notice = getStructuredAgentSessionSendNotice(sessionId) ?? ''
   expect(notice).toContain('The chat attachment host is unavailable.')
   expect(notice).toContain("Couldn't save your message.")
+  quiet.mockRestore()
+})
+
+it.each([
+  ['caller-first', 'lost'],
+  ['tracking-first', 'lost'],
+  ['caller-first', 'durable'],
+  ['tracking-first', 'installed']
+] as const)('keeps configuration cause and recovery result with %s / %s', async (order, mode) => {
+  const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { createStructuredLaunchCallerGroup, addStructuredLaunchCaller } =
+    await import('./structured-agent-session-launch-callers')
+  const { trackLaunchSettlement } =
+    await import('./structured-agent-session-launch-outcome-tracking')
+  const sessionId = `configuration-${order}-${mode}`
+  const prompt = stageStructuredLaunchPrompt(sessionId, 'launch text')
+  const receipt = Promise.withResolvers<StructuredAgentLaunchReceipt>()
+  const group = createStructuredLaunchCallerGroup({
+    kind: 'first',
+    requestId: sessionId,
+    stagedPrompt: prompt
+  })
+  const state: StructuredLaunchState = {
+    identity: sessionId,
+    intent: {
+      sessionId,
+      worktreeId: 'wt',
+      executionHostId: 'local',
+      target,
+      agent: 'codex',
+      params: structuredAgentSessionCreateParams({
+        sessionId,
+        worktree: 'id:wt',
+        agent: 'codex',
+        randomUuid: () => '00000000-0000-4000-8000-000000000000',
+        now: 1_700_000_000_000
+      })
+    },
+    promise: receipt.promise,
+    promptDelivery: 'auto-submit',
+    visibilityUnknown: false,
+    cancelled: false,
+    hostListed: true,
+    callers: group,
+    selection: {}
+  }
+  draft.mode = mode
+  if (order === 'tracking-first') {
+    trackLaunchSettlement(state, receipt.promise)
+  }
+  const caller = addStructuredLaunchCaller({
+    group,
+    launchResult: receipt.promise,
+    target,
+    options: { requestId: sessionId, prompt: 'launch text' },
+    stagedPrompt: prompt
+  })
+  if (order === 'caller-first') {
+    trackLaunchSettlement(state, receipt.promise)
+  }
+  receipt.resolve({ sessionId, fence: 1, configurationFailure: { kind: 'failed' } })
+  await caller.promptDeliveryResult
+  await Promise.resolve()
+  const notice = getStructuredAgentSessionSendNotice(sessionId) ?? ''
+  expect(notice).toContain("The setting wasn't changed.")
+  expect(notice.includes("Couldn't save your message.")).toBe(mode === 'lost')
+  expect(draft.writes).toEqual([sessionId])
+  expect(attempts.count).toBe(0)
   quiet.mockRestore()
 })

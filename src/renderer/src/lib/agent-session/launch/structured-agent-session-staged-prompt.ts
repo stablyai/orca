@@ -1,3 +1,4 @@
+import { agentSessionWriteNoticeText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
 import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import {
   dropStructuredAgentSessionSends,
@@ -169,11 +170,19 @@ export function finishStagedLaunchPromptWithHandBack(
       : undefined
   if (ended) {
     // Something else already ended it: that result stands, and the reason is still said.
-    if (notice) {
-      publishStructuredAgentSessionSends(prompt.sessionId, { notice })
+    const sayReason = (result: StagedDelivery): StagedDelivery => {
+      if (notice) {
+        publishStructuredAgentSessionSends(prompt.sessionId, {
+          notice: agentSessionWriteNoticeText([
+            { text: notice },
+            ...(result.handBackLost ? (['messageNotSaved'] as const) : [])
+          ])
+        })
+      }
+      return result
     }
     unstageStructuredLaunchPrompt(prompt)
-    return ended
+    return ended instanceof Promise ? ended.then(sayReason) : sayReason(ended)
   }
   const result: StagedDelivery = {
     delivered: false,

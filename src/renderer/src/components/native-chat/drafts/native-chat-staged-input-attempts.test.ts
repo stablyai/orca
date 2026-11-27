@@ -131,3 +131,54 @@ it('names staged originals in linear work, in staged order', () => {
     expect(reads.count).toBe(n + 2)
   }
 })
+
+it('releases a late custody wait registered after recipient discard without touching a sibling', async () => {
+  const { abandonNativeChatPendingStagedLeases, stagedNativeChatFiles } =
+    await import('./native-chat-draft-attachment-staging')
+  const scope = 'late-custody-registration'
+  stageNativeChatDraftFile(scope, 'blob:late-registration')
+  const first = captureNativeChatStagedInput(scope, {
+    text: '',
+    attachments: [{ path: 'blob:late-registration' }]
+  })
+  const sibling = captureNativeChatStagedInput(scope, {
+    text: '',
+    attachments: [{ path: 'blob:late-registration' }]
+  })
+  reconcileNativeChatStagedDraft(scope, { text: '', images: [] })
+  abandonNativeChatPendingStagedLeases(scope)
+  first.releaseWhenHeld()
+  expect(stagedNativeChatFiles(scope)?.pendingLeases.size ?? 0).toBe(0)
+  expect(hasNativeChatStagedFiles(scope)).toBe(true)
+  sibling.releaseWhenHeld()
+  expect(hasNativeChatStagedFiles(scope)).toBe(false)
+})
+
+it('ends a failed attempt while a distinct retry hold keeps the original usable', async () => {
+  const { stagedNativeChatFiles } = await import('./native-chat-draft-attachment-staging')
+  const scope = 'failed-attempt-recovery'
+  stageNativeChatDraftFile(scope, 'blob:retry-original')
+  const failed = captureNativeChatStagedInput(scope, {
+    text: '',
+    attachments: [{ path: 'blob:retry-original' }]
+  })
+  reconcileNativeChatStagedDraft(scope, { text: '', images: [] })
+  failed.retainForRetry(scope)
+  failed.release()
+  expect(stagedNativeChatFiles(scope)?.leases.size).toBe(0)
+  expect(hasNativeChatStagedFiles(scope)).toBe(true)
+  const retry = captureNativeChatStagedInput(scope, {
+    text: '',
+    attachments: [{ path: 'blob:retry-original' }]
+  })
+  expect(
+    (
+      await retry.prepare(
+        { text: '', attachments: [{ path: 'blob:retry-original' }] },
+        { sessionId: 'retry', runtimeEnvironmentId: null }
+      )
+    ).attachments
+  ).toEqual([{ path: 'blob:retry-original' }])
+  retry.release()
+  expect(hasNativeChatStagedFiles(scope)).toBe(false)
+})

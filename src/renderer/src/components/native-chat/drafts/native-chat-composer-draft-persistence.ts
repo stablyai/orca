@@ -1,9 +1,10 @@
+import { savedNativeChatComposerDraftForm } from './native-chat-composer-draft-saved-form'
+export {
+  isKeptLocalPaste,
+  unavailableNativeChatComposerDraftImage
+} from './native-chat-composer-draft-saved-form'
 // Persist whole memory records, journal unconfirmed changes on unload, and adopt other windows’ confirmed writes.
 
-import { basename } from '@/lib/path'
-import { isNativeChatKeptPastePath } from '../paste/native-chat-image-paste'
-import { isNativeChatPastedImagePath } from '../../../../../shared/native-chat/attachments/native-chat-image-label'
-import { isAgentSessionAttachmentStorePath } from '../../../../../shared/agent-session/agent-session-attachments'
 import {
   dirtyScopes,
   deferredRemovals,
@@ -11,18 +12,19 @@ import {
   hasLocalChange,
   load,
   nextSavedAt,
-  nativeChatDraftPositions,
   notifyScope,
   records,
   installNativeChatDraftRecord,
   refusedScopes,
   unconfirmed,
   reconcileRestoredImageChecks,
-  type DraftRecord,
   type UnconfirmedDraftChange
 } from './native-chat-composer-draft-memory'
 import type { DraftAppend } from './native-chat-composer-draft-load'
-import { recordNativeChatAppendBeforeLoad } from './native-chat-composer-draft-load-appends'
+import {
+  recordNativeChatAppendBeforeLoad,
+  applyNativeChatAppendToStorage
+} from './native-chat-composer-draft-load-appends'
 import {
   journalNativeChatComposerDraftChanges,
   pruneNativeChatComposerDraftJournal
@@ -30,7 +32,6 @@ import {
 import {
   nativeChatComposerDraftStorage,
   parseStoredNativeChatComposerDraft,
-  type NativeChatComposerDraftImage,
   type StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
 
@@ -55,37 +56,6 @@ function completeDeferredRemovals(destinationScope: string, savedAt: number): vo
   if (released) {
     flushNativeChatComposerDrafts()
   }
-}
-
-/** An image the draft names but can no longer send, so the user can attach it again. */
-export function unavailableNativeChatComposerDraftImage(
-  image: NativeChatComposerDraftImage
-): NativeChatComposerDraftImage {
-  return image.unavailableName === undefined
-    ? { id: image.id, path: '', unavailableName: basename(image.path) }
-    : image
-}
-
-/** A local paste in Orca's paste folder: it outlives the run, so a restore can show and send it. */
-export function isKeptLocalPaste(image: NativeChatComposerDraftImage): boolean {
-  return !image.connectionId && isNativeChatKeptPastePath(image.path)
-}
-
-/** Omit launch seeds; retain durable local/server pastes, reduce other pastes to unavailable names, and drop empty records. */
-function savedForm(record: DraftRecord): StoredNativeChatComposerDraft | null {
-  const { unsavedText, ...saved } = record
-  const images = saved.images.map((image) =>
-    isNativeChatPastedImagePath(image.path) &&
-    !isKeptLocalPaste(image) &&
-    !isAgentSessionAttachmentStorePath(image.path)
-      ? unavailableNativeChatComposerDraftImage(image)
-      : image
-  )
-  const text = saved.text === unsavedText ? '' : saved.text
-  if (text === '' && images.length === 0) {
-    return null
-  }
-  return { ...saved, text, images }
 }
 
 function confirm(scopeKey: string, change: UnconfirmedDraftChange): void {
@@ -116,7 +86,7 @@ function refuse(scopeKey: string, change: UnconfirmedDraftChange, error: unknown
 function persist(scopeKey: string): void {
   // A refused deliberate setup removal retries only null, even beside new live input.
   const record = isNativeChatSetupDraft(scopeKey) ? undefined : records.get(scopeKey)
-  const draft = record ? savedForm(record) : null
+  const draft = record ? savedNativeChatComposerDraftForm(record) : null
   const change: UnconfirmedDraftChange = { draft, at: draft?.savedAt ?? nextSavedAt() }
   unconfirmed.set(scopeKey, change)
   const storage = nativeChatComposerDraftStorage()
@@ -197,10 +167,13 @@ function appendBeforeLoad(scopeKey: string, append: DraftAppend): void {
   const written = nativeChatComposerDraftStorage()
     .update(scopeKey, (stored) => {
       const base = parseStoredNativeChatComposerDraft(stored) ?? empty
-      const appended = append({ ...base, ...(base.owner || !owner ? {} : { owner }) })
-      // Where this write puts the placement, against the stored text it actually read.
-      entry.committedPosition = nativeChatDraftPositions.get(appended)
-      return savedForm({ ...appended, savedAt: nextSavedAt() })
+      return applyNativeChatAppendToStorage(
+        scopeKey,
+        entry,
+        { ...base, ...(base.owner || !owner ? {} : { owner }) },
+        append,
+        savedNativeChatComposerDraftForm
+      )
     })
     .then(
       () => {

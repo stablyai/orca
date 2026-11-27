@@ -1,3 +1,9 @@
+import type { NativeChatComposerDraftOwner } from '../../drafts/native-chat-composer-draft-storage'
+import {
+  records,
+  resolveNativeChatComposerDraftOwner
+} from '../../drafts/native-chat-composer-draft-memory'
+import { structuredAgentSessionDraftScopeKey } from '../../drafts/native-chat-draft-scope'
 // A message refused because files it names are in another chat's draft says so where it was refused,
 // and stays until dismissed, the next send or goal there, or the chat closing: a toast would vanish
 // before the person looked. It lives in memory only, so a reload starts without it.
@@ -9,6 +15,7 @@
  */
 export type NativeChatHeldElsewhereRecord = {
   references: readonly string[]
+  owner?: NativeChatComposerDraftOwner
   /** A chat this notice tried and failed to open: it is not offered again. */
   unreachableOwner?: string
 }
@@ -52,7 +59,9 @@ export function noteNativeChatFilesHeldElsewhere(
   ) {
     return
   }
-  notices.set(sessionId, { references: [...references] })
+  const scope = structuredAgentSessionDraftScopeKey(sessionId)
+  const owner = records.get(scope)?.owner ?? resolveNativeChatComposerDraftOwner(scope)
+  notices.set(sessionId, { references: [...references], ...(owner ? { owner } : {}) })
   notify(sessionId)
 }
 
@@ -96,4 +105,19 @@ export function nativeChatHeldElsewhereRecordCountForTests(): number {
 export function resetNativeChatHeldElsewhereForTests(): void {
   notices.clear()
   listeners.clear()
+}
+
+export function retireNativeChatHeldElsewhereWhere(
+  matches: (scope: string, owner: NativeChatComposerDraftOwner | undefined) => boolean
+): void {
+  for (const [sessionId, record] of notices) {
+    if (
+      matches(
+        structuredAgentSessionDraftScopeKey(sessionId),
+        record.owner ?? records.get(structuredAgentSessionDraftScopeKey(sessionId))?.owner
+      )
+    ) {
+      noteNativeChatFilesHeldElsewhere(sessionId, null)
+    }
+  }
 }
