@@ -210,7 +210,11 @@ export function useBotItemQuestionSteps(
   })
   const reopen = useLatestHandler((index: number) => {
     setReopenedAt({ askId, index })
-    target.bind(`${askId}:${index}`)
+    // A draft keeps the line it started on; an empty box names the reopened line, "Replying to" shown.
+    if (boxEmpty) {
+      target.bind(`${askId}:${index}`)
+      target.show()
+    }
   })
   const bind = useLatestHandler((index: number) => {
     setReopenedAt(null)

@@ -186,6 +186,47 @@ it("holds a typed answer as its line's pick, and names the next open line", () =
   expect(posted[0]?.skipped).toEqual([1])
 })
 
+it('keeps a started draft on its own line when another line reopens', () => {
+  const uid = 'reopen-keeps-draft'
+  const { hook, posted } = steps(uid)
+  act(() => hook.result.current.steps!.pick(0, 'Yes'))
+  const words = 'Wait for the dry run'
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: words }, 'immediate')
+  )
+  expect(hook.result.current.waitingLine?.line).toBe(GO)
+  act(() => hook.result.current.steps!.reopen(0))
+  expect(hook.result.current.waitingLine?.line).toBe(GO)
+  act(() => hook.result.current.steps!.pick(0, 'No'))
+  const { replyMark, waitingLine } = hook.result.current
+  act(() =>
+    hook.result.current.fromBox(words, [], replyMark.hidden ? null : (waitingLine?.id ?? null))
+  )
+  expect(posted).toEqual([])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual(['No', words])
+})
+
+it('shows "Replying to" again on a reopened line whose × was closed', () => {
+  const uid = 'reopen-shows-reply'
+  const { hook, posted } = steps(uid)
+  act(() => hook.result.current.steps!.pick(1, 'No'))
+  expect(hook.result.current.waitingLine?.line).toBe(HOSTS)
+  act(() => hook.result.current.replyMark.hide())
+  act(() => hook.result.current.steps!.pick(0, 'Yes'))
+  act(() => hook.result.current.steps!.reopen(0))
+  expect(hook.result.current.replyMark.hidden).toBe(false)
+  const words = 'only the internal ones'
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: words }, 'immediate')
+  )
+  const { replyMark, waitingLine } = hook.result.current
+  act(() =>
+    hook.result.current.fromBox(words, [], replyMark.hidden ? null : (waitingLine?.id ?? null))
+  )
+  expect(posted).toEqual([])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([words, 'No'])
+})
+
 it('holds an answer with images, files and skills like a pick; Send posts them all as one comment', () => {
   const { hook, posted } = steps('files')
   const skill = { name: 'review', path: '/skills/review/SKILL.md' }
