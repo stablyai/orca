@@ -2,7 +2,8 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import { getLegacySearchBindings } from '../../../../shared/keybindings/definitions'
 import type {
   KeybindingFileSnapshot,
-  KeybindingPlatform
+  KeybindingPlatform,
+  SearchShortcutChoiceResult
 } from '../../../../shared/keybindings/types'
 import { useAppStore } from '@/store'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
