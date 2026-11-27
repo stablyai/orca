@@ -65,18 +65,6 @@ function finishedRun(
 
 const NARROW = 360
 
-export const offerManual = defineFixture({
-  width: NARROW,
-  render: () => (
-    <NativeChatResumeToast
-      view={resumeToastView(null, twelve.slice(0, 3), new Map())}
-      listedAt={NOW}
-      onDismissAll={noop}
-      {...actions}
-    />
-  )
-})
-
 export const offerManualDetails = defineFixture({
   width: NARROW,
   render: () => (
@@ -202,21 +190,6 @@ export const twelveOneNeedsYou = defineFixture({
   )
 })
 
-export const twelveOneNeedsYouCollapsed = defineFixture({
-  width: NARROW,
-  render: () => (
-    <NativeChatResumeToast
-      view={resumeToastView(
-        finishedRun(twelve, 'launch'),
-        [],
-        new Map([[notAttached.sessionId, notAttached]])
-      )}
-      listedAt={NOW}
-      {...actions}
-    />
-  )
-})
-
 export const remoteServer = defineFixture({
   width: NARROW,
   render: () => (
@@ -298,6 +271,26 @@ export const twoResumedOneLeftForPerson = defineFixture({
       {...actions}
     />
   )
+})
+
+export const twoResumedOneLeftForPersonRemoteTurkish = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(
+        finishedRun(twelve.slice(1, 3), 'user'),
+        [waitingOnApproval(0)],
+        new Map()
+      )}
+      machineName="build-server-02"
+      listedAt={NOW}
+      {...actions}
+    />
+  ),
+  interact: async () => {
+    await setRendererUiLanguage('tr')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
 })
 
 export const oneLeftForPerson = defineFixture({

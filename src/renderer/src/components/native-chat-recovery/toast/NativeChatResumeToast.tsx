@@ -222,23 +222,27 @@ export function NativeChatResumeToast({
                 className="@container flex min-w-0 items-baseline gap-1.5 text-[13px] leading-snug font-medium"
               >
                 <span
-                  className={namesAgent ? 'min-w-0 truncate' : 'max-w-full shrink-0 truncate'}
+                  className={
+                    namesAgent || needYou ? 'min-w-0 truncate' : 'max-w-full shrink-0 truncate'
+                  }
                   title={machineName ? `${title} · ${machineName}` : title}
                 >
                   {title}
                 </span>
+                {/* Who still needs the person matters most, so it never gives way. */}
                 {needYou && (
-                  <span
-                    className="min-w-0 truncate font-normal text-muted-foreground"
-                    title={needYou}
-                  >
+                  <span className="shrink-0 font-normal whitespace-nowrap text-muted-foreground">
                     {needYou}
                   </span>
                 )}
                 {/* A server's name yields first: capped beside a name, only announced where it can't be read. */}
                 {machineName && (
                   <span
-                    className={`sr-only min-w-0 truncate font-normal text-muted-foreground @[13rem]:not-sr-only @[13rem]:overflow-hidden @[13rem]:whitespace-nowrap ${namesAgent ? 'max-w-[40%] shrink-0' : ''}`}
+                    className={
+                      needYou
+                        ? 'sr-only'
+                        : `sr-only min-w-0 truncate font-normal text-muted-foreground @[13rem]:not-sr-only @[13rem]:overflow-hidden @[13rem]:whitespace-nowrap ${namesAgent ? 'max-w-[40%] shrink-0' : ''}`
+                    }
                     title={machineName}
                   >
                     {machineName}
