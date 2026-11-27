@@ -20015,7 +20015,8 @@
         "failedOne": "无法恢复 {{name}}",
         "failedSome_other": "无法恢复：{{total}} 个中的 {{count}} 个",
         "resumedOne": "已恢复 {{name}}",
-        "resumedMany_other": "已恢复 {{count}} 个智能体"
+        "resumedMany_other": "已恢复 {{count}} 个智能体",
+        "partial_other": "已恢复 {{total}} 个智能体中的 {{resumed}} 个。{{count}} 个需要你处理"
       },
       "NativeChatResumeFailureGuidance": {
         "fallbackShort": "无法恢复",

@@ -19961,7 +19961,9 @@
         "failedSome_other": "재개하지 못함: {{total}}개 중 {{count}}개",
         "resumedOne": "재개됨: {{name}}",
         "resumedMany_one": "재개됨: 에이전트 {{count}}개",
-        "resumedMany_other": "재개됨: 에이전트 {{count}}개"
+        "resumedMany_other": "재개됨: 에이전트 {{count}}개",
+        "partial_one": "에이전트 {{total}}개 중 {{resumed}}개를 다시 시작했습니다. {{count}}개는 확인이 필요합니다.",
+        "partial_other": "에이전트 {{total}}개 중 {{resumed}}개를 재개했습니다. {{count}}개는 확인이 필요합니다."
       },
       "RunTargetCombobox": {
         "noWslDistros": "WSL 배포판을 찾을 수 없음",

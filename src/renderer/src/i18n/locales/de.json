@@ -20622,11 +20622,13 @@
         "stateStopped": "Angehalten",
         "resumingOne": "Wird fortgesetzt: {{name}}…",
         "failedOne": "Nicht fortgesetzt: {{name}}",
-        "failedSome_one": "Nicht fortgesetzt: {{count}} von {{total}}",
-        "failedSome_other": "Nicht fortgesetzt: {{count}} von {{total}}",
+        "failedSome_one": "Fehler: {{count}} von {{total}}",
+        "failedSome_other": "Fehler: {{count}} von {{total}}",
         "resumedOne": "Fortgesetzt: {{name}}",
         "resumedMany_one": "Fortgesetzt: {{count}} Agent",
-        "resumedMany_other": "Fortgesetzt: {{count}} Agenten"
+        "resumedMany_other": "Fortgesetzt: {{count}} Agenten",
+        "partial_one": "{{resumed}} von {{total}} Agenten fortgesetzt. {{count}} braucht dich.",
+        "partial_other": "{{resumed}} von {{total}} Agenten fortgesetzt. {{count}} brauchen dich."
       },
       "RunTargetCombobox": {
         "noWslDistros": "Keine WSL-Distributionen gefunden",

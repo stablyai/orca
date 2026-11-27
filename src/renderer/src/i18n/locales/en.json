@@ -20973,7 +20973,9 @@
         "failedSome_other": "Couldn’t resume {{count}} of {{total}}",
         "resumedOne": "Resumed {{name}}",
         "resumedMany_one": "Resumed {{count}} agent",
-        "resumedMany_other": "Resumed {{count}} agents"
+        "resumedMany_other": "Resumed {{count}} agents",
+        "partial_one": "Resumed {{resumed}} of {{total}} agents. {{count}} needs you.",
+        "partial_other": "Resumed {{resumed}} of {{total}} agents. {{count}} need you."
       },
       "RunTargetCombobox": {
         "noWslDistros": "No WSL distros found",

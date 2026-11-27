@@ -20243,7 +20243,10 @@
         "resumedOne": "Se reanudó {{name}}",
         "resumedMany_one": "Reanudado: {{count}} agente",
         "resumedMany_many": "Reanudados: {{count}} agentes",
-        "resumedMany_other": "Reanudados: {{count}} agentes"
+        "resumedMany_other": "Reanudados: {{count}} agentes",
+        "partial_one": "{{resumed}} de {{total}} agentes reanudados. {{count}} te necesita.",
+        "partial_many": "{{resumed}} de {{total}} agentes reanudados. {{count}} te necesitan.",
+        "partial_other": "{{resumed}} de {{total}} agentes reanudados. {{count}} te necesitan."
       },
       "RunTargetCombobox": {
         "noWslDistros": "No se encontraron distribuciones WSL",

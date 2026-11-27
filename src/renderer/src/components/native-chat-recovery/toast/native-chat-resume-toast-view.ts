@@ -20,9 +20,18 @@ export type ResumeToastView = Readonly<{
   /** offer: nothing sent yet; resuming: an action is in flight; finished: its reply settled. */
   phase: 'offer' | 'resuming' | 'finished'
   rows: readonly ResumeToastRow[]
-  counts: Readonly<{ resumed: number; resuming: number; needsYou: number; total: number }>
+  /** failed: needs the person because resuming it went wrong, not because it was left for them. */
+  counts: Readonly<{
+    resumed: number
+    resuming: number
+    needsYou: number
+    failed: number
+    total: number
+  }>
   /** What the toast's one Resume button sends: every chat a retry could still help. */
   resumable: readonly string[]
+  /** What the toast's Retry sends: failures a retry could fix, never a chat left for the person. */
+  retryable: readonly string[]
   interruptedByUpdate: boolean
   startedBy: ResumeRunStarter | null
 }>
@@ -95,12 +104,23 @@ export function resumeToastView(
       resumed: count('resumed'),
       resuming: count('resuming'),
       needsYou,
+      failed: rows.filter((row) => row.state === 'needs-you' && (row.failure || row.openOnly))
+        .length,
       total: rows.length
     },
     resumable: rows
       .filter(
         (row) =>
           (row.state === 'stopped' || row.state === 'needs-you') &&
+          !row.openOnly &&
+          resumableByDefault(row.failure)
+      )
+      .map((row) => row.candidate.sessionId),
+    retryable: rows
+      .filter(
+        (row) =>
+          row.state === 'needs-you' &&
+          row.failure !== undefined &&
           !row.openOnly &&
           resumableByDefault(row.failure)
       )

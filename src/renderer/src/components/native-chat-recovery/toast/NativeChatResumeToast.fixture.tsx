@@ -304,6 +304,40 @@ export const remoteOneFailedGerman = defineFixture({
   }
 })
 
+/** Launch auto-resume leaves an agent waiting on an approval for the person; nothing failed. */
+function waitingOnApproval(index: number): ResumeCandidate {
+  return {
+    ...chat(index),
+    activity: { state: 'blocked', prompts: [{ kind: 'approval', label: 'Run tests' }], tasks: [] }
+  }
+}
+
+export const twoResumedOneLeftForPerson = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(
+        finishedRun(twelve.slice(1, 3), 'launch'),
+        [waitingOnApproval(0)],
+        new Map()
+      )}
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
+export const oneLeftForPerson = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(finishedRun([], 'launch'), [waitingOnApproval(0)], new Map())}
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
 type FixtureLanguage =
   | 'en'
   | 'de'

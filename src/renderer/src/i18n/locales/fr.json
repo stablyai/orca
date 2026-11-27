@@ -20557,7 +20557,10 @@
         "resumedOne": "Repris : {{name}}",
         "resumedMany_one": "Repris : {{count}} agent",
         "resumedMany_many": "Repris : {{count}} agents",
-        "resumedMany_other": "Repris : {{count}} agents"
+        "resumedMany_other": "Repris : {{count}} agents",
+        "partial_one": "{{resumed}} agents sur {{total}} repris. {{count}} a besoin de vous.",
+        "partial_many": "{{resumed}} agents sur {{total}} repris. {{count}} ont besoin de vous.",
+        "partial_other": "{{resumed}} agents sur {{total}} repris. {{count}} ont besoin de vous."
       },
       "RunTargetCombobox": {
         "noWslDistros": "Aucune distro WSL trouvée",

@@ -35,8 +35,27 @@ function headline(
   machine: string | undefined,
   onlyName: string | undefined
 ): string {
-  if (view.phase === 'offer') {
+  const { phase, counts } = view
+  // Agents left for the person (waiting on an approval) were never tried, so nothing failed.
+  const leftForPerson = phase === 'finished' && counts.failed === 0 && counts.needsYou > 0
+  if (phase === 'offer') {
     return stoppedHeadline(view, t, machine)
+  }
+  if (leftForPerson && counts.resumed === 0) {
+    // Past the offer the server is named by the label beside the line.
+    return stoppedHeadline(view, t, undefined)
+  }
+  if (leftForPerson) {
+    return t(
+      'auto.components.NativeChatResumeToast.partial',
+      'Resumed {{resumed}} of {{total}} agents. {{count}} need you.',
+      {
+        resumed: counts.resumed,
+        total: counts.total,
+        count: counts.needsYou,
+        defaultValue_one: 'Resumed {{resumed}} of {{total}} agents. {{count}} needs you.'
+      }
+    )
   }
   return progressLine(view, t, onlyName)
 }
@@ -52,14 +71,14 @@ function progressLine(view: ResumeToastView, t: Translate, onlyName: string | un
           defaultValue_one: 'Resuming {{count}} agent…'
         })
   }
-  if (counts.needsYou > 0) {
+  if (counts.failed > 0) {
     return onlyName !== undefined
       ? t('auto.components.NativeChatResumeToast.failedOne', 'Couldn’t resume {{name}}', name)
       : t(
           'auto.components.NativeChatResumeToast.failedSome',
           'Couldn’t resume {{count}} of {{total}}',
           {
-            count: counts.needsYou,
+            count: counts.failed,
             total: counts.total,
             defaultValue_one: 'Couldn’t resume {{count}} of {{total}}'
           }
@@ -158,8 +177,7 @@ export function NativeChatResumeToast({
   const namesAgent = onlyRow !== undefined && !offering
   const title = headline(view, t, machineName, namesAgent ? rowName(onlyRow) : undefined)
   const showResume = offering && view.resumable.length > 0
-  const showRetry =
-    view.phase === 'finished' && view.counts.needsYou > 0 && view.resumable.length > 0
+  const showRetry = view.phase === 'finished' && view.retryable.length > 0
   const showDetails = resumeToastShowsDetails(view)
   const showDismissAll = onDismissAll !== undefined && offering
   const detailsButton = showDetails && (
@@ -243,7 +261,7 @@ export function NativeChatResumeToast({
           )}
         </div>
         {showRetry && (
-          <Button variant="theme-accent" size="xs-compact" onClick={() => onResume(view.resumable)}>
+          <Button variant="theme-accent" size="xs-compact" onClick={() => onResume(view.retryable)}>
             {t('auto.components.NativeChatResumeToast.retry', 'Retry')}
           </Button>
         )}
