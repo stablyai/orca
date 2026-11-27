@@ -34,7 +34,14 @@ export function MobileDiffReviewRangeSheet({
 }: Props & { range: Extract<ReviewSheet, { kind: 'range' }> }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const item = controller.currentItem
+  // Only the file the lines were picked in; another file's lines never take this note.
+  const item = controller.currentItem?.key === range.itemKey ? controller.currentItem : null
+  const closeSheet = controller.closeSheet
+  useEffect(() => {
+    if (!item) {
+      closeSheet('range', range)
+    }
+  }, [closeSheet, item, range])
   const { agent, agentName, terminals } = useAgentTerminals(controller)
   const [destination, setDestination] = useState<'agent' | 'github'>('agent')
   const [busy, setBusy] = useState(false)
@@ -90,7 +97,7 @@ export function MobileDiffReviewRangeSheet({
           label: t('components.diffReviewDrawers.send', 'Send'),
           onPress: send,
           busy,
-          disabled: !body || gitHubGone
+          disabled: !body || gitHubGone || !item
         }}
       />
       <View style={prSheetStyles.body}>

@@ -190,7 +190,9 @@ export function MobileDiffReviewScreenView({ controller, hostConnection, onBack 
                 busyAction={controller.busyAction}
                 item={item}
                 selection={controller.lineSelection}
-                onComment={(range) => controller.openNewNoteSheet({ kind: 'range', ...range })}
+                onComment={(range) =>
+                  controller.openNewNoteSheet({ kind: 'range', itemKey: item.key, ...range })
+                }
                 onClearSelection={() => controller.selectLines(null)}
                 onMarkViewed={() => void controller.markReviewed()}
                 onStageAndOpenNext={() => void controller.stageAndOpenNext()}
