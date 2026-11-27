@@ -142,7 +142,7 @@ export default function MonacoEditor({
     autoHeight && isMonacoAutoHeightCapped(renderedEditorHeight, autoHeightLineHeight)
   // The React wrapper skips first post-remount value sync; reconcile retained models from live contentRef, never the possibly stale lastSyncedContentRef.
   const contentRef = useRef(content)
-  // Refresh before child layout effects and paint so sync bridges and event handlers read current props.
+  // Refresh before this component's later layout effects and paint so sync bridges and event handlers read current props.
   useLayoutEffect(() => {
     languageRef.current = language
     propsRef.current = { relativePath, language, onSave, onContentChange }
