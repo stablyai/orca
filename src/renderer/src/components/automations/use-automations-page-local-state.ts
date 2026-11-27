@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/automations/external/external-automation'
 import type { OrcaHooks } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
+import { useAppStore } from '@/store/index'
 import type { AutomationDraft } from './authoring/AutomationEditorDialog'
 import { AUTOMATION_DEFAULT_TIME } from './authoring/automation-draft-model'
 import type { AutomationActionNotice } from './hosts/automation-row-action-dispatch'
@@ -13,7 +14,7 @@ import type { AutomationHostCatalogEntry } from './hosts/automation-host-catalog
 import type { AutomationCreateDestination } from './authoring/automation-create-destination'
 import type { AutomationListRow } from './listing/automation-list-row-identity'
 import {
-  EMPTY_AUTOMATION_LIST_FILTER,
+  botListFilter,
   type AutomationListFilter,
   type AutomationListSort
 } from './listing/automation-list-view'
@@ -62,7 +63,10 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [listSearchQuery, setListSearchQuery] = useState('')
-  const [listFilter, setListFilter] = useState<AutomationListFilter>(EMPTY_AUTOMATION_LIST_FILTER)
+  // Why: a bot's "All N automations" opens the list already narrowed, with no unfiltered frame.
+  const [listFilter, setListFilter] = useState<AutomationListFilter>(() =>
+    botListFilter(useAppStore.getState().automationsPageBotFilterRequest)
+  )
   const [listSort, setListSort] = useState<AutomationListSort | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [editingAutomationId, setEditingAutomationId] = useState<string | null>(null)

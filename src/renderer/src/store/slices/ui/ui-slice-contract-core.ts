@@ -15,6 +15,7 @@ import type { TaskSourceContext } from '../../../../../shared/work-items/task-so
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type {
+  AutomationListBotFilter,
   AutomationRunPageOrigin,
   AutomationsPageLocation,
   AutomationsPageVisitMode
@@ -213,6 +214,11 @@ export type UISliceCore = {
   automationsPageNextVisitMode: AutomationsPageVisitMode
   setAutomationsPageNextVisitMode: (mode: AutomationsPageVisitMode) => void
   openAutomationsPage: () => void
+  /** A bot's "All N automations": the list, filtered to that bot's automations. */
+  openAutomationsPageForBot: (bot: AutomationListBotFilter) => void
+  /** The bot filter the Automations list applies next; the page applies it and clears it. */
+  automationsPageBotFilterRequest: AutomationListBotFilter | null
+  setAutomationsPageBotFilterRequest: (bot: AutomationListBotFilter | null) => void
   closeAutomationsPage: () => void
   openSpacePage: () => void
   closeSpacePage: () => void

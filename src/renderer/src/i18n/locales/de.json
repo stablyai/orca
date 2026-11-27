@@ -19404,6 +19404,7 @@
           "all": "Alle",
           "clear": "Filter zurücksetzen",
           "agent": "Agent",
+          "bot": "Bot",
           "lastRun": "Letzte Ausführung"
         },
         "AutomationListSortHeader": {

@@ -104,11 +104,24 @@ export function AutomationListFilterPills({
         .join(', ')
     : null
   const hostPillLabel = onClearHost ? (hostLabel ?? null) : null
-  if (!statusValueLabel && !lastRunValueLabel && !agentValueLabel && !hostPillLabel) {
+  if (
+    !filter.bot &&
+    !statusValueLabel &&
+    !lastRunValueLabel &&
+    !agentValueLabel &&
+    !hostPillLabel
+  ) {
     return null
   }
   return (
     <>
+      {filter.bot ? (
+        <FilterPill
+          label={t('auto.components.automations.AutomationListFilterMenu.bot', 'Bot')}
+          value={filter.bot.name}
+          onClear={() => onChange({ ...filter, bot: null })}
+        />
+      ) : null}
       {hostPillLabel && onClearHost ? (
         <FilterPill
           label={t('auto.components.automations.AutomationsPage.tableHost', 'Host')}

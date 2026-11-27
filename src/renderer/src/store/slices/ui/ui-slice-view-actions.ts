@@ -57,6 +57,12 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
             : state.activeView
       }))
     },
+    openAutomationsPageForBot: (bot) => {
+      get().openAutomationsPage()
+      set({ automationsPageBotFilterRequest: bot })
+    },
+    automationsPageBotFilterRequest: null,
+    setAutomationsPageBotFilterRequest: (bot) => set({ automationsPageBotFilterRequest: bot }),
     closeAutomationsPage: () =>
       set((state) => ({
         activeView: state.previousViewBeforeAutomations,

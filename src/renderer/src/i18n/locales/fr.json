@@ -19297,6 +19297,7 @@
           "all": "Tous",
           "clear": "Réinitialiser les filtres",
           "agent": "Agent",
+          "bot": "Bot",
           "lastRun": "Dernière exécution"
         },
         "AutomationListSortHeader": {

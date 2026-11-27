@@ -8,6 +8,7 @@ import {
   type AutomationLastRunSnapshot
 } from './automation-list-last-run'
 import type { Translate } from '../../../i18n/use-translate'
+import type { AutomationListBotFilter } from '../../../store/slices/ui/automations-page-location'
 
 export type AutomationListStatusFilter = 'all' | 'enabled' | 'paused'
 export type AutomationListLastRunFilter = 'all' | 'failed' | 'succeeded' | 'never'
@@ -48,13 +49,21 @@ export type AutomationListFilter = {
   agentIds: readonly TuiAgent[]
   /** Catalog stable keys; empty (or absent, on older callers) means every host. */
   hostStableKeys?: readonly string[]
+  /** One bot's automations, set from its Activity panel's "All N automations"; absent means any. */
+  bot?: AutomationListBotFilter | null
 }
 
 export const EMPTY_AUTOMATION_LIST_FILTER: AutomationListFilter = {
   status: 'all',
   lastRun: 'all',
   agentIds: [],
-  hostStableKeys: []
+  hostStableKeys: [],
+  bot: null
+}
+
+/** The list as a bot's "All N automations" opens it: that bot's automations, nothing else narrowed. */
+export function botListFilter(bot: AutomationListBotFilter | null): AutomationListFilter {
+  return bot ? { ...EMPTY_AUTOMATION_LIST_FILTER, bot } : EMPTY_AUTOMATION_LIST_FILTER
 }
 
 function selectedHostKeys(filter: AutomationListFilter): readonly string[] {
@@ -66,7 +75,8 @@ export function isAutomationListFilterActive(filter: AutomationListFilter): bool
     filter.status !== 'all' ||
     filter.lastRun !== 'all' ||
     filter.agentIds.length > 0 ||
-    selectedHostKeys(filter).length > 0
+    selectedHostKeys(filter).length > 0 ||
+    Boolean(filter.bot)
   )
 }
 
@@ -75,7 +85,8 @@ export function countAutomationListFilters(filter: AutomationListFilter): number
     (filter.status !== 'all' ? 1 : 0) +
     (filter.lastRun !== 'all' ? 1 : 0) +
     (filter.agentIds.length > 0 ? 1 : 0) +
-    (selectedHostKeys(filter).length > 0 ? 1 : 0)
+    (selectedHostKeys(filter).length > 0 ? 1 : 0) +
+    (filter.bot ? 1 : 0)
   )
 }
 
@@ -191,11 +202,12 @@ export function filterAutomationListRows(
       matchesHostFilter(row.catalogRef ? hostStableKey(row.catalogRef) : null, hostKeys) &&
       matchesStatusFilter(row.automation.enabled, filter.status) &&
       matchesLastRunFilter(getAutomationRowLastRunSnapshot(row, t), filter.lastRun) &&
-      (filter.agentIds.length === 0 || filter.agentIds.includes(row.automation.agentId))
+      (filter.agentIds.length === 0 || filter.agentIds.includes(row.automation.agentId)) &&
+      (!filter.bot || row.automation.workspaceId === filter.bot.workspaceId)
   )
 }
 
-/** External jobs have no Orca agent, so any agent filter excludes them — matching the old view. */
+/** External jobs have no Orca agent or bot, so an agent or bot filter excludes them. */
 export function filterExternalAutomationListEntries(
   entries: readonly ExternalAutomationListEntry[],
   filter: AutomationListFilter,
@@ -204,7 +216,7 @@ export function filterExternalAutomationListEntries(
   if (!isAutomationListFilterActive(filter)) {
     return entries
   }
-  if (filter.agentIds.length > 0) {
+  if (filter.agentIds.length > 0 || filter.bot) {
     return []
   }
   const hostKeys = selectedHostKeys(filter)
