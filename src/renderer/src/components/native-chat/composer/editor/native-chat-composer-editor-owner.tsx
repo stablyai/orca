@@ -151,32 +151,43 @@ export function NativeChatComposerEditorView({ editor }: { editor: Editor }): nu
 
 // Why: a chat view released to bound memory keeps only editors with a draft or undo history, so undo and
 // selection survive. Drafts are the user's text and stay; editors left with only undo history are capped.
-const keptEditorsByTab = new Map<string, ComposerEditors>()
-// Tabs whose kept editors hold no text, oldest first; drafts are the user's text and are never capped.
+const keptEditorsByTab = new Map<string, KeptEditors>()
+// Tabs whose kept editors hold no text, oldest first.
 const undoOnlyTabs = new Set<string>()
 const MAX_KEPT_UNDO_ONLY = 8
+// Every kept editor counts here, since a draft can clear after its view is released. The draft store keeps the
+// text, so dropping the oldest loses only its undo history.
+const MAX_KEPT_EDITOR_TABS = 16
+
+/** The part of a tab's editors the kept cache manages. */
+type KeptEditors = Pick<ComposerEditors, 'destroyAll' | 'holdsNoText'>
 
 const keepsEditor = (editor: Editor): boolean =>
   !editor.isEmpty || undoDepth(editor.state) > 0 || redoDepth(editor.state) > 0
 
-function keepEditors(tabId: string, editors: ComposerEditors): void {
+export function keepNativeChatComposerEditors(tabId: string, editors: KeptEditors): void {
   // A pane remounted in one commit kept its old editors after the new owner started; only one set stays.
   const previous = keptEditorsByTab.get(tabId)
   if (previous && previous !== editors) {
     previous.destroyAll()
   }
+  keptEditorsByTab.delete(tabId)
   keptEditorsByTab.set(tabId, editors)
-  if (!editors.holdsNoText()) {
-    return
-  }
-  undoOnlyTabs.add(tabId)
-  if (undoOnlyTabs.size > MAX_KEPT_UNDO_ONLY) {
-    for (const oldest of undoOnlyTabs) {
-      undoOnlyTabs.delete(oldest)
-      keptEditorsByTab.get(oldest)?.destroyAll()
-      keptEditorsByTab.delete(oldest)
-      break
+  if (editors.holdsNoText()) {
+    undoOnlyTabs.add(tabId)
+    if (undoOnlyTabs.size > MAX_KEPT_UNDO_ONLY) {
+      dropKeptEditors(undoOnlyTabs.values().next().value)
     }
+  }
+  if (keptEditorsByTab.size > MAX_KEPT_EDITOR_TABS) {
+    dropKeptEditors(keptEditorsByTab.keys().next().value)
+  }
+}
+
+function dropKeptEditors(tabId: string | undefined): void {
+  if (tabId !== undefined) {
+    keptEditorsByTab.get(tabId)?.destroyAll()
+    takeKeptEditors(tabId)
   }
 }
 
@@ -202,9 +213,10 @@ export function NativeChatComposerEditorOwner({
   viewTab?: NativeChatViewTab
   children: React.ReactNode
 }) {
-  const [owner] = useState(
-    () => (viewTab ? keptEditorsByTab.get(viewTab.tabId) : undefined) ?? new ComposerEditors()
-  )
+  const [owner] = useState(() => {
+    const kept = viewTab ? keptEditorsByTab.get(viewTab.tabId) : undefined
+    return kept instanceof ComposerEditors ? kept : new ComposerEditors()
+  })
   useEffect(() => {
     if (viewTab && keptEditorsByTab.get(viewTab.tabId) === owner) {
       takeKeptEditors(viewTab.tabId)
@@ -216,7 +228,7 @@ export function NativeChatComposerEditorOwner({
             keep: (editor) => isNativeChatViewTabLive(viewTab) && keepsEditor(editor),
             done: (editors) => {
               if (editors.size > 0) {
-                keepEditors(viewTab.tabId, editors)
+                keepNativeChatComposerEditors(viewTab.tabId, editors)
               }
             }
           }

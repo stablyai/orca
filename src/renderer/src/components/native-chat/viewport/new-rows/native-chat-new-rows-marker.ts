@@ -217,7 +217,8 @@ export function useNativeChatNewRowsMarker(
     setSeen(kept.saved ?? { watching, left: null, missed: null, arriving: false })
   }
   const { write: keep } = kept
-  useEffect(() => keep(seen), [keep, seen])
+  // With marking off nothing is tracked, so nothing is kept.
+  useEffect(() => keep(enabled ? seen : undefined), [enabled, keep, seen])
   const latest = useRef({ enabled, seen, slots, waitingSlots })
   useLayoutEffect(() => {
     latest.current = { enabled, seen, slots, waitingSlots }

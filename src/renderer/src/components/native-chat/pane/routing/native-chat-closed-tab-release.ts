@@ -14,19 +14,32 @@ export function releaseClosedChatTabs(closed: ReadonlySet<string>): void {
 
 // Chat tabs a layer has owned, by workspace: only they can hold released state.
 const trackedTabs = new Map<string, string>()
+const tabsByLayer = new Map<string, ReadonlySet<string>>()
 
-export function trackChatTabs(worktreeId: string, tabIds: Iterable<string>): void {
+/** A layer's tab set changed: only the tabs it lost are released, so one open or close never walks other workspaces. */
+export function reportChatLayerTabs(
+  layerId: string,
+  worktreeId: string,
+  tabIds: ReadonlySet<string>
+): void {
+  const closed = new Set([...(tabsByLayer.get(layerId) ?? [])].filter((id) => !tabIds.has(id)))
+  tabsByLayer.set(layerId, tabIds)
   for (const tabId of tabIds) {
     trackedTabs.set(tabId, worktreeId)
+  }
+  if (closed.size > 0) {
+    closed.forEach((tabId) => trackedTabs.delete(tabId))
+    releaseClosedChatTabs(closed)
   }
 }
 
 /**
- * Releases tracked tabs gone from the tab store, including ones closed while their workspace's layer was unmounted.
- * Why layers call it as they mount, unmount or change tabs, not on store writes: title and status writes are frequent
- * and touch tab lists; a sweep costs O(tracked tabs) per user-driven layer change and nothing per write.
+ * A layer unmounted (its workspace parked or removed): tabs closed while no layer showed them are found here.
+ * Why on unmount, not on store writes: title and status writes are frequent and touch tab lists, while unmounts are
+ * rare; the sweep costs O(tracked tabs) per unmount and nothing per write.
  */
-export function sweepClosedChatTabs(): void {
+export function forgetChatLayer(layerId: string): void {
+  tabsByLayer.delete(layerId)
   const byWorktree = useAppStore.getState().unifiedTabsByWorktree
   const live = new Map<string, Set<string>>()
   const closed = new Set<string>()
