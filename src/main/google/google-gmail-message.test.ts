@@ -132,11 +132,17 @@ it('pairs equivalent mixed plain and HTML siblings without removing independent 
       textPart('text/html', '<p>Independent HTML section</p>'),
       {
         mimeType: 'multipart/mixed',
-        parts: [textPart('text/plain', 'Nested section'), textPart('text/html', '<p>Nested section</p>')]
+        parts: [
+          textPart('text/plain', 'Nested section'),
+          textPart('text/html', '<p>Nested section</p>')
+        ]
       },
       {
         mimeType: 'multipart/mixed',
-        parts: [textPart('text/plain', 'Nested section'), textPart('text/html', '<p>Nested section</p>')]
+        parts: [
+          textPart('text/plain', 'Nested section'),
+          textPart('text/html', '<p>Nested section</p>')
+        ]
       }
     ]
   }

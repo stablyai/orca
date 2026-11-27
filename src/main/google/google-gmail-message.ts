@@ -90,15 +90,14 @@ function normalizeMimeHeader(value: string): string {
   if (commentDepth > 0) {
     throw new SyntaxError('Unterminated MIME header comment')
   }
-  return tokens.join('').replace(
-    /"(?:\\[\s\S]|[^"\\])*"?|[ \t\r\n]+/g,
-    (token, offset: number, source: string) => {
+  return tokens
+    .join('')
+    .replace(/"(?:\\[\s\S]|[^"\\])*"?|[ \t\r\n]+/g, (token, offset: number, source: string) => {
       if (token.startsWith('"')) return token
       const before = source[offset - 1]
       const after = source[offset + token.length]
       return before === '=' || after === '=' || before === '/' || after === '/' ? '' : ' '
-    }
-  )
+    })
 }
 
 function mixedBodyParts(children: Part[][], textOf: (part: Part) => string): Part[] {
@@ -183,10 +182,7 @@ export function bodyText(part: Part | undefined): string {
     }
     return node.mimeType === 'multipart/mixed' ? mixedBodyParts(children, textOf) : children.flat()
   }
-  return (part ? select(part) : [])
-    .map(textOf)
-    .join('\n')
-    .trim()
+  return (part ? select(part) : []).map(textOf).join('\n').trim()
 }
 
 export function attachmentsOf(message: Message): GmailAttachment[] {
