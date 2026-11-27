@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,6 @@ import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
-import { isEventTargetInsideCloseTerminalDialog } from '@/lib/pane-manager/pane-focus/terminal-pane-focus'
 import { useModalReturnFocus } from '@/lib/pane-manager/pane-focus/useModalReturnFocus'
 import { useAppStore } from '@/store/index'
 import { isTerminalPaneCloseChord } from '../../input/keyboard/terminal-shortcut-policy'
@@ -42,6 +41,7 @@ export default function CloseTerminalDialog({
   onConfirm: (dontAskAgain: boolean) => void
 }): React.JSX.Element {
   const checkboxId = useId()
+  const contentRef = useRef<HTMLDivElement>(null)
   // Why: no Radix trigger, so dismiss would leave focus on body; Stop/Sleep move focus themselves, and Cancel re-arms after a queued Stop.
   const { captureReturnFocus, skipReturnFocus, rearmReturnFocus } = useModalReturnFocus(open, {
     preferCapturedElement: true
@@ -85,8 +85,8 @@ export default function CloseTerminalDialog({
         return
       }
 
-      // Ensure this listener only processes the chord if focus is actually inside this dialog content.
-      if (!isEventTargetInsideCloseTerminalDialog(event.target)) {
+      // Only the dialog that holds focus consumes the chord, so re-registering cannot hand it to another open prompt.
+      if (!(event.target instanceof Node) || !contentRef.current?.contains(event.target)) {
         return
       }
 
@@ -113,6 +113,7 @@ export default function CloseTerminalDialog({
       }}
     >
       <DialogContent
+        ref={contentRef}
         size="confirm"
         initialFocus="cancel"
         onOpenAutoFocus={captureReturnFocus}
