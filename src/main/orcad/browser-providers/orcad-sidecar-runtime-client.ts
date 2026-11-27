@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { createConnection } from 'node:net'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
   findTransport,
   type RuntimeMetadata
@@ -10,16 +11,18 @@ import { BrowserError } from '../../browser/browser-error'
 import { daemonSocketDirIsTrusted } from '../../daemon/endpoint/publication/daemon-socket-endpoint-path'
 const SIDECAR_MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 
-const RuntimeResponse = z.discriminatedUnion('ok', [
-  z.object({ id: z.string(), ok: z.literal(true), result: z.unknown() }).passthrough(),
-  z
-    .object({
-      id: z.string(),
-      ok: z.literal(false),
-      error: z.object({ code: z.string(), message: z.string() }).passthrough()
-    })
-    .passthrough()
-])
+const RuntimeResponse = lazyZodSchema(() =>
+  z.discriminatedUnion('ok', [
+    z.object({ id: z.string(), ok: z.literal(true), result: z.unknown() }).passthrough(),
+    z
+      .object({
+        id: z.string(),
+        ok: z.literal(false),
+        error: z.object({ code: z.string(), message: z.string() }).passthrough()
+      })
+      .passthrough()
+  ])
+)
 
 export async function sendOrcadSidecarRequest(
   metadata: RuntimeMetadata,

@@ -118,7 +118,7 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
   private readonly reindexSleptPane = (pane: string) => this.sleptMailboxWake.refreshPane(pane)
 
   private readonly sleptPaneHost = new SleptPaneHost(this.sleepingRecordIndex, (repoId) =>
-    this.store?.getRepo?.(repoId)
+    this.store?.getRepoRegistrations?.(repoId)
   )
 
   private readonly sleepingMailCrewWatch = new SleepingMailCrewWatch(

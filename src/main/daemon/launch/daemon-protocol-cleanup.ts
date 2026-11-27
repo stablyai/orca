@@ -5,7 +5,7 @@ import { probeDaemonSocket as probeSocket } from './daemon-launch-paths'
 import { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } from './daemon-spawner'
 import { killStaleDaemon } from './daemon-stale-kill'
 import { CLEAN_DISCONNECT_PROTOCOL_VERSION } from '../protocol/daemon-protocol-version'
-import type { ListSessionsResult } from '../protocol/daemon-rpc-contract'
+import { countLiveDaemonSessions, type ListSessionsResult } from '../protocol/daemon-rpc-contract'
 
 const DAEMON_SELF_SHUTDOWN_WAIT_MS = 5_000
 
@@ -14,6 +14,8 @@ export type OrphanedDaemonCleanupResult = {
   cleaned: boolean
   /** Number of live PTY sessions killed during cleanup (surfaced to the user). */
   killedCount: number
+  /** Live chat relays the stop ended (v63+ daemons); kept apart so PTY counts read as before. */
+  killedRelayCount?: number
 }
 
 export async function cleanupDaemonForProtocol(
@@ -42,6 +44,7 @@ export async function cleanupDaemonForProtocol(
 
   const client = new DaemonClient({ socketPath, tokenPath, protocolVersion })
   let killedCount = 0
+  let killedRelayCount = 0
   let didRequestShutdown = false
   let didKillStaleDaemon = false
   try {
@@ -51,10 +54,15 @@ export async function cleanupDaemonForProtocol(
         'Daemon cleanup aborted: the endpoint is owned by a different daemon than expected'
       )
     }
-    const sessions = await client
+    const sessions: ListSessionsResult = await client
       .request<ListSessionsResult>('listSessions', undefined)
       .catch(() => ({ sessions: [] }))
     killedCount = sessions.sessions.filter((s) => s.isAlive).length
+    // Ended relays kept for collection have no agent left to kill.
+    killedRelayCount =
+      typeof sessions.runningRelays === 'number'
+        ? sessions.runningRelays
+        : countLiveDaemonSessions(sessions) - killedCount
 
     // One shutdown RPC avoids racing per-session kills against daemon exit.
     await client.request('shutdown', { killSessions: true }).catch(() => {
@@ -88,7 +96,7 @@ export async function cleanupDaemonForProtocol(
       // Require endpoint shutdown before replacement; the old daemon may still be disposing terminals.
       throw new Error('Timed out waiting for daemon self-shutdown')
     }
-    return { cleaned: true, killedCount }
+    return { cleaned: true, killedCount, killedRelayCount }
   }
 
   try {
@@ -97,7 +105,7 @@ export async function cleanupDaemonForProtocol(
     // PID cleanup must not turn successful shutdown into failure.
   }
 
-  return { cleaned: didRequestShutdown || didKillStaleDaemon, killedCount }
+  return { cleaned: didRequestShutdown || didKillStaleDaemon, killedCount, killedRelayCount }
 }
 
 async function waitForDaemonEndpointExit(socketPath: string): Promise<boolean> {

@@ -1,5 +1,5 @@
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CornerDownLeft, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -22,13 +22,18 @@ import {
 import { useBrowserAnnotationImages } from './use-browser-annotation-images'
 import { BrowserAnnotationImageStrip } from './browser-annotation-image-strip'
 
+export type BrowserAnnotationDraft = { comment: string; intent: BrowserAnnotationIntent }
+
 export function PendingBrowserAnnotationCard({
   payload,
   worktreeId,
   resolveAnchor,
   portalContainer,
   onAdd,
-  onCancel
+  onCancel,
+  initialDraft,
+  onDraftChange,
+  onEscape
 }: {
   payload: BrowserGrabPayload
   worktreeId: string
@@ -37,6 +42,11 @@ export function PendingBrowserAnnotationCard({
   portalContainer: HTMLElement | null
   onAdd: (comment: string, intent: BrowserAnnotationIntent, imagePaths: string[]) => void
   onCancel: () => void
+  /** A comment typed earlier for this element and closed without adding. */
+  initialDraft?: BrowserAnnotationDraft
+  onDraftChange?: (draft: BrowserAnnotationDraft) => void
+  /** Asked first on Esc; true means an open surface above the card (the notes list) took it. */
+  onEscape?: () => boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const [card, setCard] = useState<HTMLDivElement | null>(null)
@@ -51,13 +61,31 @@ export function PendingBrowserAnnotationCard({
     return () => observer.disconnect()
   }, [card])
   const anchor = resolveAnchor(cardHeight)
-  const [comment, setComment] = useState('')
-  const [intent, setIntent] = useState<BrowserAnnotationIntent>('change')
+  const [comment, setComment] = useState(initialDraft?.comment ?? '')
+  const [intent, setIntent] = useState<BrowserAnnotationIntent>(initialDraft?.intent ?? 'change')
+  // Closing the card (Esc, outside click, Cancel) keeps what was typed for this element until the mode ends.
+  useEffect(() => {
+    onDraftChange?.({ comment, intent })
+  }, [comment, intent, onDraftChange])
   const { images, imagePaths, saving, handlePaste, removeImage } =
     useBrowserAnnotationImages(worktreeId)
   const trimmed = comment.trim()
   const canAdd = Boolean(trimmed) && !saving
   const submitModifierLabel = getScreenSubmitModifierLabel()
+  // One Esc does one thing. The card's layer sees an Esc (document capture) before the textarea does (bubble), and
+  // closing the notes list in between unregisters its interceptor, so without this the same key would close the
+  // list and then the card.
+  const handledEscapesRef = useRef(new WeakSet<Event>())
+  const handleEscape = (nativeEvent: Event): void => {
+    if (handledEscapesRef.current.has(nativeEvent)) {
+      return
+    }
+    handledEscapesRef.current.add(nativeEvent)
+    if (onEscape?.()) {
+      return
+    }
+    onCancel()
+  }
 
   return (
     <Popover
@@ -89,7 +117,11 @@ export function PendingBrowserAnnotationCard({
         )}
         onEscapeKeyDown={(event) => {
           event.preventDefault()
-          onCancel()
+          // Esc during IME composition only ends the composition.
+          if (event.isComposing || event.keyCode === 229) {
+            return
+          }
+          handleEscape(event)
         }}
       >
         {/* Selector lives in the tooltip: truncated to a popover width it reads as noise. */}
@@ -119,10 +151,11 @@ export function PendingBrowserAnnotationCard({
           className="h-24 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
           autoFocus
           onKeyDown={(event) => {
-            if (event.key === 'Escape') {
+            // Esc during IME composition only ends the composition.
+            if (event.key === 'Escape' && !event.nativeEvent.isComposing && event.keyCode !== 229) {
               event.preventDefault()
               event.stopPropagation()
-              onCancel()
+              handleEscape(event.nativeEvent)
               return
             }
             if (isScreenSubmitShortcut(event)) {

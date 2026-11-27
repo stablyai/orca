@@ -9,11 +9,14 @@ import {
   DialogDescription
 } from '@/components/ui/dialog'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { createAttachmentTextPreviewHook } from '../../../../../../shared/attachment-text/use-attachment-text-preview'
-import { ATTACHMENT_TEXT_COPY_MAX_BYTES } from '../../../../../../shared/attachment-text/attachment-text-source'
+import {
+  ATTACHMENT_TEXT_COPY_MAX_BYTES,
+  type AttachmentTextSource
+} from '../../../../../../shared/attachment-text/attachment-text-source'
 import { AttachmentTextScrollView } from './AttachmentTextScrollView'
 import { formatAttachmentPreviewError } from './native-chat-text-attachment-error'
 import { createChatAttachmentReader } from './native-chat-text-attachment-read'
@@ -24,6 +27,92 @@ const useAttachmentTextPreview = createAttachmentTextPreviewHook({
   useEffect,
   useCallback
 })
+
+async function exportTextAttachment({
+  action,
+  path,
+  source,
+  setBusy,
+  setError,
+  t
+}: {
+  action: 'copy' | 'save'
+  path: string
+  source: AttachmentTextSource
+  setBusy: (busy: boolean) => void
+  setError: (error: string) => void
+  t: Translate
+}): Promise<void> {
+  setError('')
+  if (source.disposed) {
+    return
+  }
+  setBusy(true)
+  try {
+    if (action === 'copy') {
+      const content = await source.copyText()
+      source.assertCurrent()
+      await window.api.ui.writeClipboardText(content)
+      source.assertCurrent()
+      toast.success(
+        t('components.native-chat.textAttachmentPreview.copiedContents', 'Copied contents')
+      )
+    } else if (isWebClientLocation()) {
+      const chunks: Uint8Array<ArrayBuffer>[] = []
+      for await (const bytes of source.bytes()) {
+        chunks.push(new Uint8Array(bytes))
+      }
+      source.assertCurrent()
+      const url = URL.createObjectURL(new Blob(chunks))
+      try {
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = path.split(/[\\/]/).at(-1) || 'attachment.txt'
+        source.assertCurrent()
+        anchor.click()
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(url), 30_000)
+      }
+    } else {
+      const output = await window.api.fs.startDownloadedFile({
+        suggestedName: path.split(/[\\/]/).at(-1) || 'attachment.txt'
+      })
+      if (output.canceled) {
+        return
+      }
+      let finished = false
+      try {
+        for await (const bytes of source.bytes()) {
+          source.assertCurrent()
+          if (!bytes.length) {
+            continue
+          }
+          await window.api.fs.appendDownloadedFileChunk({
+            transferId: output.transferId,
+            contentBase64: btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(''))
+          })
+        }
+        source.assertCurrent()
+        await window.api.fs.finishDownloadedFile({ transferId: output.transferId })
+        finished = true
+      } finally {
+        if (!finished) {
+          await window.api.fs
+            .cancelDownloadedFile({ transferId: output.transferId })
+            .catch(() => {})
+        }
+      }
+    }
+  } catch (cause) {
+    if (!source.disposed) {
+      setError(cause instanceof Error ? cause.message : 'Unable to export attachment. Try again.')
+    }
+  } finally {
+    if (!source.disposed) {
+      setBusy(false)
+    }
+  }
+}
 
 export function NativeChatTextAttachmentPreview({
   path,
@@ -49,77 +138,8 @@ export function NativeChatTextAttachmentPreview({
           t('components.native-chat.composer.pastedTextLabel', 'Pasted text')
         )
       : t('components.native-chat.composer.pastedTextLabel', 'Pasted text')
-  const run = async (action: 'copy' | 'save') => {
-    setError('')
-    if (source.disposed) {
-      return
-    }
-    setBusy(true)
-    try {
-      if (action === 'copy') {
-        const content = await source.copyText()
-        source.assertCurrent()
-        await window.api.ui.writeClipboardText(content)
-        source.assertCurrent()
-        toast.success(
-          t('components.native-chat.textAttachmentPreview.copiedContents', 'Copied contents')
-        )
-      } else if (isWebClientLocation()) {
-        const chunks: Uint8Array<ArrayBuffer>[] = []
-        for await (const bytes of source.bytes()) {
-          chunks.push(new Uint8Array(bytes))
-        }
-        source.assertCurrent()
-        const url = URL.createObjectURL(new Blob(chunks))
-        try {
-          const anchor = document.createElement('a')
-          anchor.href = url
-          anchor.download = path.split(/[\\/]/).at(-1) || 'attachment.txt'
-          source.assertCurrent()
-          anchor.click()
-        } finally {
-          setTimeout(() => URL.revokeObjectURL(url), 30_000)
-        }
-      } else {
-        const output = await window.api.fs.startDownloadedFile({
-          suggestedName: path.split(/[\\/]/).at(-1) || 'attachment.txt'
-        })
-        if (output.canceled) {
-          return
-        }
-        let finished = false
-        try {
-          for await (const bytes of source.bytes()) {
-            source.assertCurrent()
-            if (!bytes.length) {
-              continue
-            }
-            await window.api.fs.appendDownloadedFileChunk({
-              transferId: output.transferId,
-              contentBase64: btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(''))
-            })
-          }
-          source.assertCurrent()
-          await window.api.fs.finishDownloadedFile({ transferId: output.transferId })
-          finished = true
-        } finally {
-          if (!finished) {
-            await window.api.fs
-              .cancelDownloadedFile({ transferId: output.transferId })
-              .catch(() => {})
-          }
-        }
-      }
-    } catch (cause) {
-      if (!source.disposed) {
-        setError(cause instanceof Error ? cause.message : 'Unable to export attachment. Try again.')
-      }
-    } finally {
-      if (!source.disposed) {
-        setBusy(false)
-      }
-    }
-  }
+  const run = (action: 'copy' | 'save') =>
+    exportTextAttachment({ action, path, source, setBusy, setError, t })
 
   const copyTooLarge = (source.size ?? 0) > ATTACHMENT_TEXT_COPY_MAX_BYTES
   return (

@@ -67,8 +67,22 @@ export type CodexJournalTranslator = {
   cancelPrompt: (journalItemId: string) => CodexJournalTranslationAdmission
   resolvePrompt: (journalItemId: string) => void
   flush: () => void
+  /** A kept agent's running turn: its messages, in order, keep the ordinals the live run gave them. */
+  seedTurnOrdinals: (threadId: string, turnId: string, messageItemIds: readonly string[]) => void
+  /** A kept agent's running items, from Codex's history: a replay from mid-item keeps their fields. */
+  seedRunningItems: (
+    threadId: string,
+    turnId: string,
+    items: readonly CodexThreadItem[]
+  ) => AgentJournalItemIdentity[]
+  /** The output a kept command's row already saved, so what streams next continues after it. */
+  seedRunningOutput: (threadId: string, itemId: string, output: string | null) => void
+  /** A kept agent's turns as Codex reports them at reattach; a replay never reopens a finished one. */
+  seedKeptTurns: (threadId: string, turns: readonly CodexKeptTurnState[]) => void
   dispose: () => void
 }
+
+export type CodexKeptTurnState = { id: string; running: boolean }
 
 export type CodexHistoryTranslator = {
   restoreThread: (

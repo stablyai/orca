@@ -3834,6 +3834,15 @@
         "message": "Message from",
         "notSentYet": "not sent yet"
       },
+      "unnamedRecipient": "an agent",
+      "recipientName": "{{name}}",
+      "event": {
+        "followedUp": "Sent follow-up",
+        "update": "Update",
+        "message": "Message",
+        "handedOff": "Handed off",
+        "task": "Task"
+      },
       "kind": {
         "started": "Started",
         "reopened": "Reopened",
@@ -4709,9 +4718,6 @@
     },
     "textGenerationFailure": {
       "openCodeInvalidEvents": "OpenCode returned invalid JSON events.",
-      "antigravityInvalidEvents": "Antigravity returned invalid JSON events.",
-      "antigravityInvalidResult": "Antigravity returned an invalid result.",
-      "antigravityNoFinalResult": "Antigravity returned no final result.",
       "kimiUnreadableOutput": "Kimi returned output Orca couldn't read. Try again.",
       "kimiSessionOccupied": "Kimi couldn't use this session because it is active in another client. Stop the session there or exit that client, then try again.",
       "kimiInterrupted": "Kimi was interrupted before it finished generating text. Try again.",
@@ -8664,7 +8670,7 @@
     "agentFilesMessage": "Orca will keep your MCP servers in their settings files. Your own entries stay as they are.",
     "allow": "Allow",
     "removeTitle": "Remove {{name}}?",
-    "removeMessage": "New sessions won’t have it. You can add it again any time.",
+    "removeMessageSavedData": "Sessions using it may lose access now. This can delete any saved headers, environment variables or sign-in for it. If so, you may need to re-enter them or sign in again to get that access back.",
     "remove": "Remove",
     "moveTitle": "Move {{name}} to Orca?",
     "moveMessage": "Orca removes it from {{agents}} settings and keeps a backup.",

@@ -2,8 +2,9 @@
 // couldn't start, and an item note.
 
 import * as z from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
-const AutomationRef = z.object({ id: z.string().min(1), name: z.string() })
+const AutomationRef = lazyZodSchema(() => z.object({ id: z.string().min(1), name: z.string() }))
 
 /** Appended after the shared item bodies; storage reads the known bodies by position. */
 export const BOT_JOURNAL_ITEM_BODIES = [

@@ -1,4 +1,16 @@
-export const BASH_PROMPT_COMMAND_COMPOSITION_BLOCK = `__orca_normalize_prompt_command_part() {
+export const BASH_PROMPT_COMMAND_COMPOSITION_BLOCK = `# Finish bash-preexec's deferred install now; composing PROMPT_COMMAND would strand its install string.
+# Not under function tracing: there Orca's chained DEBUG trap fires preexec during prompt hooks, pairing the wrong command.
+# Not for a multi-element PROMPT_COMMAND before bash 5.1: the install rewrites only element 0, so preexec reports the later elements.
+if [[ -n "\${__bp_install_string:-}" && -z "\${__bp_enable_subshells:-}" && ! -o functrace && "\${PROMPT_COMMAND[*]:-}" == *"$__bp_install_string"* ]] &&
+  ! shopt -q extdebug &&
+  { [[ "\${!PROMPT_COMMAND[*]}" == 0 ]] || (( BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1) )); }; then
+  # Its recursion guards skip the install's precmd run (the first prompt runs it) and keep this rcfile out of preexec.
+  __bp_inside_precmd=1 __bp_inside_preexec=1
+  eval "$__bp_install_string"
+  __bp_preexec_interactive_mode=""
+  __bp_inside_precmd=0 __bp_inside_preexec=0
+fi
+__orca_normalize_prompt_command_part() {
   local __orca_value="$1" __orca_output_name="$2" __orca_character __orca_chunk
   local __orca_value_length=\${#1} __orca_suffix_length=0 __orca_backslash_length=0
   local __orca_output_length __orca_scan_start

@@ -487,6 +487,22 @@ await check('clearing a failure acknowledges it without showing a toast', () =>
   })
 )
 
+await check('a failed row opens its worker by click, Enter or Space, no tooltip', () =>
+  scene('failedLong320', {}, async (page) => {
+    const open = page.locator('[data-worker-dock-row="dock:0"] [data-worker-dock-open]')
+    await open.hover()
+    await page.waitForTimeout(900)
+    assert((await page.locator('[data-slot="tooltip-content"]').count()) === 0, 'a tooltip opened')
+    await open.click()
+    await open.focus()
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Space')
+    const opened = (await events(page)).filter((event) => event.action === 'open')
+    assert(opened.length === 3 && opened.every((event) => event.id === 'dock:0'), 'opens missed')
+    assert((await page.getByRole('dialog').count()) === 0, 'a dialog opened')
+  })
+)
+
 await runLoadingAndLayerChecks({ check, scene, assert, shot })
 
 await check('Jump to latest rests in the transcript, clear above the chip row', () =>
