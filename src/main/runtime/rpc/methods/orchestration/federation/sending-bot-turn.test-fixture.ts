@@ -59,7 +59,7 @@ export function runningTurnItems(opener: unknown): AgentJournalRenderItem[] {
 }
 
 /** The journal reads of a chat whose running turn `opener` opened. */
-export function runningTurnReads(opener: unknown | undefined) {
+export function runningTurnReads(opener: unknown) {
   const items = opener ? runningTurnItems(opener) : []
   return async () => ({
     promptItem: async () => items[0] ?? null,
