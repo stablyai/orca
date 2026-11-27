@@ -5,7 +5,14 @@ import type {
 } from '../../../../../shared/orchestration/mailbox/agent-sender-associations'
 import { structuredAgentSessionOwnerInputs } from '../session-ownership/structured-agent-session-owner'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
-import { agentSenderAliasParts, assembleAgentSenderAliases } from './agent-sender-alias-projection'
+import {
+  agentSenderAliasParts,
+  assembleAgentSenderAliases,
+  type AgentSenderAliasState
+} from './agent-sender-alias-projection'
+
+export type AgentSenderIndexState = AgentSenderAliasState &
+  Pick<AppState, 'agentSenderPublicationsByHost'>
 import {
   HostPartDraft,
   merge,
@@ -49,7 +56,7 @@ const latestParts = new Map<string, BuiltPart>()
 const indexes = new WeakMap<object, { aliases: Aliases; index: SenderIndex }>()
 let joins = 0
 
-function senderAliases(state: AppState): Aliases {
+function senderAliases(state: AgentSenderIndexState): Aliases {
   const inputs = [
     state.unifiedTabsByWorktree,
     state.tabsByWorktree,
@@ -174,7 +181,7 @@ function editedHostPart(
   return draft.finish()
 }
 
-function senderIndex(state: AppState): SenderIndex {
+function senderIndex(state: AgentSenderIndexState): SenderIndex {
   const aliases = senderAliases(state)
   const source = state.agentSenderPublicationsByHost ?? EMPTY
   const cached = indexes.get(source)
@@ -270,7 +277,7 @@ function sameLocation(a: Located | undefined, b: Located | undefined): boolean {
 }
 
 /** Hosts starting or stopping publication move every sender on them; that is not keyed. */
-export function samePublishingHosts(a: AppState, b: AppState): boolean {
+export function samePublishingHosts(a: AgentSenderIndexState, b: AgentSenderIndexState): boolean {
   const before = a.agentSenderPublicationsByHost ?? EMPTY
   const after = b.agentSenderPublicationsByHost ?? EMPTY
   const hosts = Object.keys(before)
@@ -281,8 +288,8 @@ export function samePublishingHosts(a: AppState, b: AppState): boolean {
 
 /** Subscribed sender channels whose answer moved between two states sharing tabs and owners. */
 export function movedAgentSenderChannels(
-  previous: AppState,
-  state: AppState,
+  previous: AgentSenderIndexState,
+  state: AgentSenderIndexState,
   channels: Iterable<string>
 ): string[] {
   let pair: [SenderIndex, SenderIndex] | undefined

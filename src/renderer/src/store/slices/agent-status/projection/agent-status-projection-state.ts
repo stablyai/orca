@@ -16,6 +16,7 @@ import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/t
 import { KeyedDeadlines } from '../../../../../../shared/collections/keyed-deadlines'
 import type { TabAgentPane } from '@/lib/agent-session/tab-identity/tab-agent-status-index'
 import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../../shared/collections/structural-value-equality'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import {
   FLAGS,
   type Contribution,
@@ -26,6 +27,63 @@ import {
   type Bucket,
   bucket
 } from './agent-status-projection-types'
+
+/** Only the store slice references the projection compares across commits, so old full `AppState`
+ *  snapshots (and unrelated multi-MB maps like `agentStatusByPaneKey`, `openFiles`, `editorDrafts`,
+ *  `groupsByWorktree`, `contestedPrimaryHostBySessionKey`) are never pinned in V8 old-space. */
+export type AgentStatusProjectionInputs = Pick<
+  AppState,
+  | 'acknowledgedAgentsByPaneKey'
+  | 'agentSenderPublicationsByHost'
+  | 'repos'
+  | 'worktreesByRepo'
+  | 'detectedWorktreesByRepo'
+  | 'folderWorkspaces'
+  | 'projectGroups'
+  | 'tabsByWorktree'
+  | 'unifiedTabsByWorktree'
+  | 'runtimePaneTitlesByTabId'
+  | 'ptyIdsByTabId'
+  | 'terminalLayoutsByTabId'
+  | 'paneForegroundAgentByPaneKey'
+  | 'runtimeAgentOrchestrationByPaneKey'
+  | 'migrationUnsupportedByPtyId'
+  | 'runtimeEnvironments'
+  | 'runtimeEnvironmentCatalogHydrated'
+  | 'settings'
+  | 'restoredRuntimeHostIdByWorkspaceSessionKey'
+  | 'removedRuntimeEnvironmentIds'
+  | 'activeWorktreeId'
+  | 'activeWorkspaceExecutionHostId'
+> &
+  WorktreeRuntimeOwnerState
+
+export function captureProjectionInputs(state: AppState): AgentStatusProjectionInputs {
+  return {
+    acknowledgedAgentsByPaneKey: state.acknowledgedAgentsByPaneKey,
+    agentSenderPublicationsByHost: state.agentSenderPublicationsByHost,
+    repos: state.repos,
+    worktreesByRepo: state.worktreesByRepo,
+    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+    folderWorkspaces: state.folderWorkspaces,
+    projectGroups: state.projectGroups,
+    tabsByWorktree: state.tabsByWorktree,
+    unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+    runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
+    ptyIdsByTabId: state.ptyIdsByTabId,
+    terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+    paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
+    runtimeAgentOrchestrationByPaneKey: state.runtimeAgentOrchestrationByPaneKey,
+    migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
+    runtimeEnvironments: state.runtimeEnvironments,
+    runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
+    settings: state.settings,
+    restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
+    removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds,
+    activeWorktreeId: state.activeWorktreeId,
+    activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId
+  }
+}
 
 export class AgentStatusProjectionState {
   display = new AgentRowDisplayIndex()
@@ -43,7 +101,7 @@ export class AgentStatusProjectionState {
   readonly changeListeners = new Set<(keys: ReadonlySet<string> | null) => void>()
   readonly notices = new Set<string>()
   notifying = false
-  inputs: AppState | null = null
+  inputs: AgentStatusProjectionInputs | null = null
   /** Remote contexts applied to rows at the last publish, to tell which rows a host's reply moved. */
   remoteRows: Readonly<Record<string, AgentStatusOrchestrationContext>> = {}
   readonly tabs = new Map<string, TerminalTab>()

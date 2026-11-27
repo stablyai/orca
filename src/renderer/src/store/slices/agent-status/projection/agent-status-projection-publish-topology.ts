@@ -1,6 +1,9 @@
 import type { AppState } from '../../../types'
 import type { AgentStatusChange } from '../contracts/agent-status-contract'
-import type { AgentStatusProjectionState } from './agent-status-projection-state'
+import {
+  captureProjectionInputs,
+  type AgentStatusProjectionState
+} from './agent-status-projection-state'
 import type { ProjectionTopology } from './agent-status-projection-topology'
 import type { ProjectionRows } from './agent-status-projection-rows'
 
@@ -23,7 +26,7 @@ export function publishProjectionTopology(
       data.changedKeys.add(key)
     }
   }
-  data.inputs = state
+  data.inputs = captureProjectionInputs(state)
   data.remoteRows = topology.remoteRows
   represented.commitInto(data.represented)
   for (const [id, tab] of nextTabs) {

@@ -1,4 +1,8 @@
 import type { AppState } from '@/store/types'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
+
+export type AgentSenderAliasState = Pick<AppState, 'unifiedTabsByWorktree' | 'tabsByWorktree'> &
+  WorktreeRuntimeOwnerState
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   resolveStructuredAgentSessionOwner,
@@ -76,7 +80,7 @@ function part(
 }
 
 /** Each tab bucket's aliases, recomputed only for a bucket whose array or read hosts changed. */
-export function agentSenderAliasParts(state: AppState): readonly AliasPart[] {
+export function agentSenderAliasParts(state: AgentSenderAliasState): readonly AliasPart[] {
   for (const id of lastByBucket.keys()) {
     const split = id.indexOf(':')
     const buckets = id.startsWith('chat:') ? state.unifiedTabsByWorktree : state.tabsByWorktree
