@@ -1,25 +1,13 @@
-import { createContext, memo, useContext } from 'react'
+import { memo } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import type { ResourcePtyGroup, ResourcePtyRow } from './resource-pty-view-model'
-import { ResourcePtyProcessIcon } from './ResourcePtyProcessIcon'
+import type { ResourcePtyGroup } from './resource-pty-view-model'
 import {
   useResourcePtyGroupCanEnd,
   type useResourcePtyEndableGroups
 } from './use-resource-pty-endable-groups'
-
-const STRIP_LIMIT = 6
-
-export const ResourcePtyLabelContext = createContext((row: ResourcePtyRow) => row.label)
-
-function ResourcePtyTooltipLabel({ row }: { row: ResourcePtyRow }) {
-  const label = useContext(ResourcePtyLabelContext)(row)
-  const process = row.session.foregroundProcess?.trim()
-  return process ? `${label} · ${process}` : label
-}
 
 export const ResourcePtyGroupRow = memo(function ResourcePtyGroupRow({
   group,
@@ -44,7 +32,6 @@ export const ResourcePtyGroupRow = memo(function ResourcePtyGroupRow({
     group.kind === 'unbound'
       ? t('resourceManager.pty.notInTab', 'Not in a tab')
       : (group.name ?? t('resourceManager.pty.unassigned', 'Unassigned'))
-  const hidden = group.rows.length - STRIP_LIMIT
   return (
     <div
       data-resource-pty-group={group.key}
@@ -70,23 +57,6 @@ export const ResourcePtyGroupRow = memo(function ResourcePtyGroupRow({
             count: group.rows.length,
             defaultValue_one: '{{count}} PTY'
           })}
-        </span>
-        <span aria-hidden className="ml-auto flex shrink-0 items-center gap-1">
-          {group.rows.slice(0, STRIP_LIMIT).map((row) => (
-            <Tooltip key={row.identity}>
-              <TooltipTrigger asChild>
-                <span className="inline-flex size-3.5 items-center justify-center">
-                  <ResourcePtyProcessIcon process={row.session.foregroundProcess} />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                <ResourcePtyTooltipLabel row={row} />
-              </TooltipContent>
-            </Tooltip>
-          ))}
-          {hidden > 0 && (
-            <span className="text-2xs text-muted-foreground tabular-nums">+{hidden}</span>
-          )}
         </span>
       </button>
       {checking && (
