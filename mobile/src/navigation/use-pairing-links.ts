@@ -61,17 +61,22 @@ export function usePairingLinks(): void {
       }
     }
 
+    // getInitialURL can resolve after a live link arrives; the live link is newer, so the launch link is dropped.
+    let liveUrlArrived = false
     const intent = consumeInitialLaunchIntent('pairing-link')
     if (intent) {
       void Linking.getInitialURL()
         .then((url) => {
-          if (url && !intent.discarded) {
+          if (url && !intent.discarded && !liveUrlArrived) {
             handleUrl(url)
           }
         })
         .catch(() => {})
     }
-    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url))
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      liveUrlArrived = true
+      handleUrl(url)
+    })
     return () => {
       disposed = true
       sub.remove()
