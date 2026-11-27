@@ -101,12 +101,14 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
       await withUpdaterSpan({ stage: 'install' }, async (span) => {
         span.setAttribute('updater.version', pendingVersion || 'unknown')
         span.setAttribute('updater.platform', process.platform)
+        span.setAttribute('updater.trigger', trigger)
         span.setAttribute(
           'updater.macosInstallerReady',
           process.platform === 'darwin' ? isMacInstallerReady() : true
         )
         recordUpdaterLifecycle('quit_and_install_started', {
           version: pendingVersion || null,
+          trigger,
           macInstallerReady: process.platform === 'darwin' ? isMacInstallerReady() : true
         })
         span.addEvent('pre_quit_cleanup_start')

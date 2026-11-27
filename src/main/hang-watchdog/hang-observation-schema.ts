@@ -64,6 +64,8 @@ export type HangObservation = {
   escalatedAt?: number
   /** Build that stalled, so a report filed after an update names the right version. */
   appVersion?: string
+  /** Last watchdog tick while this stall was live; stopping before escalation means the watchdog was blocked too. */
+  watchdogTickAt?: number
 }
 /** Pre-tier records are hangs: the watchdog used to observe nothing shorter than its timeout. */
 export function isHangTierObservation(record: HangObservation): boolean {

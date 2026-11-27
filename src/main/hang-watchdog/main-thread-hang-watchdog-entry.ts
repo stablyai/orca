@@ -29,6 +29,9 @@ import type {
   MainToHangWatchdogWorkerMessage
 } from './hang-watchdog-worker-protocol'
 
+// After startup's busiest stretch, well before a user could hit a hang.
+const PRELOAD_DELAY_MS = 30_000
+
 type HangWatchdogPort = {
   on: (event: 'message', listener: (message: MainToHangWatchdogWorkerMessage) => void) => unknown
   close: () => void
@@ -111,7 +114,10 @@ export function runWatchdog(
           return
         }
         if (record.kind === 'heartbeat-stall') {
-          update(record.id, { completedSpans: incident.readCompletedHangContext(config.tracePath) })
+          const completedSpans = await incident.readCompletedHangContext(config.tracePath)
+          if (!controller.signal.aborted && !stopped) {
+            update(record.id, { completedSpans })
+          }
         }
         const machine = await incident.collectHangMachineSnapshot(controller.signal)
         if (!controller.signal.aborted && !stopped) {
@@ -167,10 +173,11 @@ export function runWatchdog(
       activeStallId = record.id
     }
     openReceiptWindow(record.id)
-    save()
+    // Spawn sample before the marker write: a disk stall that froze main can block the sync write too.
     if (!isMainThread && live && record.tier === 'hang' && find(record.id)) {
       captures.capture(record, showMenuBarIcon)
     }
+    save()
     enrich(record)
     return record.id
   }
@@ -196,11 +203,11 @@ export function runWatchdog(
         observe('heartbeat-stall', durationMs, Date.now() - durationMs, { tier: 'hang' })
         return
       }
-      // Same record (and detectedAt) so the native artifact still pairs with it at next launch.
-      update(stall.id, escalationFields(stall, durationMs))
       if (!isMainThread) {
         captures.capture(stall, showMenuBarIcon)
       }
+      // Same record (and detectedAt) so the native artifact still pairs with it at next launch.
+      update(stall.id, escalationFields(stall, durationMs))
     },
     onHangResolved: (unresponsiveMs) => {
       const endedAt = Date.now()
@@ -249,7 +256,22 @@ export function runWatchdog(
       }
     }
   })
-  const checkTimer = setInterval(() => loop.tick(), config.checkIntervalMs)
+  const checkTimer = setInterval(() => {
+    loop.tick()
+    // A last tick that stops short of escalation shows the watchdog itself was blocked.
+    if (activeStallId) {
+      update(activeStallId, { watchdogTickAt: Date.now() })
+    }
+  }, config.checkIntervalMs)
+  // Load capture code now: a module load during a hang needs the disk and thread pool main may be blocking.
+  const preload = setTimeout(() => {
+    void Promise.all([
+      import('./hang-incident-snapshot'),
+      import('./native-hang-capture'),
+      import('@orca/process-host')
+    ]).catch(() => {})
+  }, PRELOAD_DELAY_MS)
+  preload.unref?.()
   port.on('message', (message) => {
     if (stopped) {
       return
@@ -282,6 +304,7 @@ export function runWatchdog(
       }
     } else if (message.type === 'shutdown') {
       stopped = true
+      clearTimeout(preload)
       receiptWindow = null
       clearInterval(checkTimer)
       collector?.abort()

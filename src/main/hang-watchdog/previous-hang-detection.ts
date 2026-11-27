@@ -65,7 +65,9 @@ function observationDetails(record: HangObservation, omitted: number): CrashRepo
         : 'unknown',
     cause: 'unknown',
     cpuScope: 'process-all-threads',
-    machineEvidence: record.machine ? 'sampled' : 'unknown'
+    machineEvidence: record.machine ? 'sampled' : 'unknown',
+    watchdogTickAt: record.watchdogTickAt ?? null,
+    appVersion: record.appVersion ?? null
   }
   if (record.mainJs) {
     Object.assign(details, hangCaptureDetails('mainJs', record.mainJs))

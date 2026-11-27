@@ -154,6 +154,7 @@ function parseObservation(value: unknown): HangObservation | null {
         }
       : {}),
     ...(workerSends ? { workerSends } : {}),
+    ...(finite(data.watchdogTickAt) ? { watchdogTickAt: data.watchdogTickAt } : {}),
     ...(typeof data.appVersion === 'string' && /^[\w.+-]{1,80}$/.test(data.appVersion)
       ? { appVersion: data.appVersion }
       : {}),

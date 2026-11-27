@@ -10,6 +10,7 @@ import { hasServeUpdateSupervisor } from '../serve-update-handoff'
 import { getLinuxPackageType } from '../linux-package/linux-update-package-type'
 import { UpdaterNudge } from '../nudges/updater-nudge'
 import type { UpdateInstallMode } from './updater-state'
+import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 
 export abstract class UpdaterRemoteStatus extends UpdaterNudge {
   protected getUpdateStatus(): UpdateStatus {
@@ -98,6 +99,8 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
       targetVersion,
       runtimeId
     }
+    // Remote installs reuse the manual trigger; this names who asked.
+    recordUpdaterLifecycle('remote_install_requested', { targetVersion: targetVersion ?? null })
     this.quitAndInstall()
     return result
   }
