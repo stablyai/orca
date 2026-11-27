@@ -31,9 +31,14 @@ export function acpChildRelayOpenWork(
   return droidUnknown ? { ...work, [ACP_UNKNOWN_WORK]: [['subagent']] } : work
 }
 
-/** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`; only a ready chat's kept agent answers. */
-export function acpChildKeptLaunchOutgrown(
+/** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`; only a ready chat's kept agent answers.
+ *  One owing a fresh agent with no turn running waits for its replay's last ack (one request). */
+export async function acpChildKeptLaunchOutgrown(
   session: AcpStructuredChild | undefined
-): boolean | undefined {
-  return isAcpReadySession(session) ? session.connection.kept?.launchOutgrown : undefined
+): Promise<boolean | undefined> {
+  const kept = isAcpReadySession(session) ? session.connection.kept : null
+  if (kept?.freshOwed && session?.turns?.running === false) {
+    await kept.replaySettled()
+  }
+  return kept?.launchOutgrown
 }

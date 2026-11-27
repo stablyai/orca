@@ -107,6 +107,11 @@ export class AcpKeptSession {
     return this.relayed.freshOwed === true
   }
 
+  /** Acks what the chat has read and saved, so a finished replay is acked (unless still kept). */
+  replaySettled(): Promise<void> {
+    return this.child.settle().catch(() => undefined)
+  }
+
   /** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`: false until the replay is acked. */
   get launchOutgrown(): boolean | undefined {
     if (!this.child.replayAcked()) {

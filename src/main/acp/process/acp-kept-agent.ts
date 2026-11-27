@@ -1,6 +1,6 @@
 import { takeAcpKeptVersionSkip } from '../launch/acp-launch-version'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
-import { acpLaunchNote } from './acp-kept-launch-permission'
+import { acpKeptToolsDiffer, acpLaunchNote } from './acp-kept-launch-permission'
 import type { ProviderRelayKeepSpec } from '../../daemon/protocol/daemon-provider-relay-protocol'
 import {
   launchRelayedProviderProcess,
@@ -227,7 +227,7 @@ export async function launchRelayedAcpAgent(
   /** `resume`: the session the chat reopens; a kept agent running another one can't carry on. */
   launch: Pick<
     AcpStructuredLaunch,
-    'resume' | 'release' | 'appBoundGrants' | 'fullAccess' | 'toolFree'
+    'resume' | 'release' | 'appBoundGrants' | 'fullAccess' | 'toolFree' | 'mcpServers'
   >,
   processLaunch: ProviderProcessLaunch
 ): Promise<AcpRelayedProcess | null> {
@@ -251,7 +251,10 @@ export async function launchRelayedAcpAgent(
   const relay: ProviderRelayLaunch = {
     chatKey: input.acquire.identity.sessionId,
     markers: { ...acpRelayWorkMarkers(spec.agent), ackFloor, continuation },
-    keep: { ...acpRelayKeep(spec.dialect), note: acpLaunchNote(launch.fullAccess) },
+    keep: {
+      ...acpRelayKeep(spec.dialect),
+      note: acpLaunchNote(launch.fullAccess, launch.mcpServers)
+    },
     passWhileHeld: (line) => isJsonRpcAnswerAbove(line, floor),
     ...(appBound ? { only: 'reattach' as const } : {})
   }
@@ -290,5 +293,10 @@ export async function launchRelayedAcpAgent(
   if (relayed && input.abandoned()) {
     void relayed.managed.close().catch(() => undefined)
   }
-  return relayed && { ...relayed, turns, ...(appBound ? { freshOwed: true as const } : {}) }
+  // One launched with other MCP servers (one the user turned off since) lacks this launch's tools.
+  const stale =
+    appBound ||
+    (relayed?.reattached === true &&
+      acpKeptToolsDiffer(relayed.child.attachResult?.launchNote, launch.mcpServers))
+  return relayed && { ...relayed, turns, ...(stale ? { freshOwed: true as const } : {}) }
 }
