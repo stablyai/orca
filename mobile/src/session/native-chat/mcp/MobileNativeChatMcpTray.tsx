@@ -65,13 +65,14 @@ function useOrcaMcpProblems(
     }
     let live = true
     const requestId = newMcpProblemsRequestId()
-    const params = {
-      ...(agent === 'claude' || agent === 'codex' ? { agent } : {}),
-      ids: ids.split(','),
-      requestId
-    }
+    // Only Claude Code and Codex run the check; the host picks Claude Code for the rest.
+    const checker = agent === 'claude' || agent === 'codex' ? agent : undefined
     void mcpServerProblemsRead
-      .request(client, params, { timeoutMs: PROBLEMS_TIMEOUT_MS })
+      .request(
+        client,
+        { ...(checker ? { agent: checker } : {}), ids: ids.split(','), requestId },
+        { timeoutMs: PROBLEMS_TIMEOUT_MS }
+      )
       .then((reply) => {
         if (live) {
           setProblems(mcpServerProblemsRead.interpret(reply).problems)

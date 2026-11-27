@@ -46,9 +46,13 @@ export function mobileMcpServerStatusLine(server: AgentSessionMcpServer, t: Tran
         ? t('chat.mcp.status.needsAuth', 'Needs sign-in')
         : t('chat.mcp.status.needsAuthAfterSend', 'Needs sign-in. Send a message to sign in here.')
     case 'failed':
-      // Orca's own check found it before the agent started, in the words its MCP servers page uses.
+      // Orca's own check found it before the agent started, with the reason desktop gives.
       if (server.orca && !server.error) {
-        return t('mcpServers.wontStart', 'Won’t start')
+        return server.orca.url === null
+          ? t('chat.mcp.status.commandNotFound', 'Command not found')
+          : t('chat.mcp.status.unreachable', 'Can’t reach {{host}}', {
+              host: urlHost(server.orca.url)
+            })
       }
       return server.error
         ? t('chat.mcp.status.failedReason', 'Failed: {{error}}', { error: server.error })
@@ -108,4 +112,12 @@ export function mobileMcpTraySummary(
     })
   }
   return parts
+}
+
+function urlHost(url: string): string {
+  try {
+    return new URL(url).host
+  } catch {
+    return url
+  }
 }
