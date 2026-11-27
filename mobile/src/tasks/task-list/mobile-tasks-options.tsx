@@ -242,7 +242,7 @@ export const GITHUB_KIND_OPTIONS = localizedTaskOptions<GitHubMode>([
   },
   {
     value: 'prs',
-    label: () => translate('tasks.options.pullRequests', 'PRs'),
+    label: () => translate('tasks.options.pullRequestsKind', 'Pull requests'),
     subtitle: () => translate('tasks.options.githubPullRequestsDescription', 'GitHub pull requests')
   },
   {
@@ -356,8 +356,6 @@ export const SHOW_MOBILE_DETAIL_LABEL_CHIPS = false
 export const SHOW_MOBILE_DETAIL_METADATA_EDITORS = false
 
 export const SHOW_MOBILE_DETAIL_REVIEW_PANELS = false
-
-export const SHOW_MOBILE_LINEAR_DETAIL_TOOLS = false
 
 export const SHOW_MOBILE_COMMENT_THREAD_TOOLS = false
 

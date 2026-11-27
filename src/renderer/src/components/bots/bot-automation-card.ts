@@ -8,7 +8,7 @@ import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-ro
 import { botTidyUp, TIDY_UP_HOURS } from '../../../../shared/bots/bot-tidy-up'
 import { botUpcomingRows, type BotUpcomingRow } from './bot-upcoming-rows'
 
-/** Automations and waits shown before "All N automations"; Look around and Tidy memory always show. */
+/** Automations shown before "All N automations"; Look around, Tidy memory and waits always show. */
 export const AUTOMATION_CARD_CAP = 5
 
 /** What a row says of its newest run; null says nothing. */
@@ -156,19 +156,18 @@ export function rankAutomationCardRows(
     .map(({ row }) => row)
 }
 
-/** Built-ins always show, outside the cap: the Automations page that "All N" opens doesn't list them. */
+/** Five automations show; built-ins and waits always do, since the Automations page that "All N"
+ *  opens lists only automations, so N counts what it shows filtered to this bot. */
 export function botAutomationCardView(ordered: readonly BotAutomationCardRow[]): {
   shown: BotAutomationCardRow[]
-  /** What the Automations page lists: automations and waits. */
+  /** What the Automations page lists for this bot: its automations, not its waits. */
   listed: number
   listedPaused: number
 } {
-  const listed = ordered.filter((row) => row.kind === 'automation' || row.kind === 'wait')
+  const listed = ordered.filter((row) => row.kind === 'automation')
   const kept = new Set(listed.slice(0, AUTOMATION_CARD_CAP).map((row) => row.key))
   return {
-    shown: ordered.filter(
-      (row) => (row.kind !== 'automation' && row.kind !== 'wait') || kept.has(row.key)
-    ),
+    shown: ordered.filter((row) => row.kind !== 'automation' || kept.has(row.key)),
     listed: listed.length,
     listedPaused: listed.filter((row) => !row.on).length
   }

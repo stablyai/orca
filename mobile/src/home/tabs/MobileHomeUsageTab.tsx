@@ -118,7 +118,7 @@ export function MobileHomeUsageTab(props: {
           />
         ) : (
           <UsageEmpty
-            message={t('home.usage.pairDesktop', 'Pair a desktop to see agent account usage.')}
+            message={t('home.usage.pairComputer', 'Pair a computer to see agent account usage.')}
           />
         )}
       </ScrollView>
@@ -162,7 +162,10 @@ function HostUsage(props: {
   if (sections.length === 0) {
     return (
       <UsageEmpty
-        message={t('home.usage.addAccounts', 'Add accounts from desktop Settings → Accounts.')}
+        message={t(
+          'home.usage.addAccountsOnComputer',
+          'Add accounts in Orca on your computer, in Settings → Accounts.'
+        )}
       />
     )
   }
@@ -238,7 +241,7 @@ function UsageCard(props: {
       accessibilityLabel={[title, subtitle, card.active ? t('home.usage.active', 'Active') : null]
         .filter(Boolean)
         .join(', ')}
-      accessibilityHint={t('home.usage.openAccountsHint', 'Opens this desktop’s accounts')}
+      accessibilityHint={t('home.usage.openComputerAccountsHint', 'Opens this computer’s accounts')}
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
       onPress={props.onPress}

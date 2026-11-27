@@ -1,12 +1,15 @@
 // A new bot its owner made for workspaces they already have: which ones, and Orca's first turn to it.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { BOT_CREATED_KICKOFF } from '../bot-created-kickoff'
 
 /** A workspace the bot is made for: its id, since names repeat across projects and hosts. */
-export const HandedWorkspaceSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().trim().min(1).max(200)
-})
+export const HandedWorkspaceSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string().min(1),
+    name: z.string().trim().min(1).max(200)
+  })
+)
 
 export type HandedWorkspace = z.infer<typeof HandedWorkspaceSchema>
 

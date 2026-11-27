@@ -12,6 +12,8 @@ import type { PendingAutomationRunNavigation } from '../../../store/slices/ui/ui
 import { automationRowHostId } from '../automations-page-navigation'
 
 export function AutomationRunsDashboardSurface({
+  tabs,
+  notice,
   rows,
   entries,
   failures,
@@ -19,13 +21,14 @@ export function AutomationRunsDashboardSurface({
   hasMore,
   onLoadMore,
   now,
-  onRefresh,
   worktreeForRun,
   setPageView,
   selectAutomationRow,
   setPendingAutomationRunNavigation,
   setIsDetailOpen
 }: {
+  tabs: React.ReactNode
+  notice: React.ReactNode
   rows: readonly AutomationListRow[]
   entries: readonly AutomationRunsDashboardEntry[]
   failures: readonly AutomationRunsDashboardFailure[]
@@ -33,7 +36,6 @@ export function AutomationRunsDashboardSurface({
   hasMore: boolean
   onLoadMore: () => void
   now: number
-  onRefresh: () => void
   worktreeForRun: (entry: AutomationRunsDashboardEntry) => Worktree | null
   setPageView: (view: AutomationsPageView) => void
   selectAutomationRow: (rowKey: string | null) => void
@@ -42,6 +44,8 @@ export function AutomationRunsDashboardSurface({
 }): React.JSX.Element {
   return (
     <AutomationRunsDashboard
+      tabs={tabs}
+      notice={notice}
       rows={rows}
       entries={entries}
       failures={failures}
@@ -49,7 +53,6 @@ export function AutomationRunsDashboardSurface({
       hasMore={hasMore}
       onLoadMore={onLoadMore}
       now={now}
-      onRefresh={onRefresh}
       worktreeForRun={worktreeForRun}
       onOpenRun={(entry) => {
         const hostId: ExecutionHostId | undefined = automationRowHostId(entry.row)

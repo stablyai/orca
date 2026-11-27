@@ -6,7 +6,9 @@ import {
   projectStructuredAiVaultSessions
 } from './structured-session-ownership'
 import {
+  codexChatHolding,
   historySession,
+  installChats,
   installOwnership,
   listResult,
   PROVIDER_SESSION
@@ -77,4 +79,30 @@ it('lists a Cursor ACP session only as its owning chat, previewed from the last 
     }),
     expect.objectContaining({ sessionId: 'bbbbbbbb-0000-4000-8000-000000000000' })
   ])
+})
+
+it('lists a chat that holds a rewound-away conversation once, as its head', () => {
+  const original = '019fd532-7c11-7a90-b6de-4e1a2c3d5f61'
+  const rewound = '019fd532-7c11-7a90-b6de-4e1a2c3d5f62'
+  installChats([codexChatHolding('chat-1', [original, rewound])])
+  const row = (sessionId: string) =>
+    historySession({
+      id: `local:codex:${sessionId}`,
+      sessionId,
+      filePath: `/sessions/rollout-${sessionId}.jsonl`
+    })
+
+  const result = projectStructuredAiVaultSessions(
+    { ...listResult(), sessions: [row(original), row(rewound)] },
+    OPENS_EVERY_STRUCTURED_CHAT
+  )
+
+  expect(result.sessions).toEqual([
+    expect.objectContaining({
+      sessionId: rewound,
+      structuredSession: { sessionId: 'chat-1', workspaceId: 'workspace-1' }
+    })
+  ])
+  // Show more still sees a full scan.
+  expect(result.hiddenRowCount).toBe(1)
 })

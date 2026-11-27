@@ -33,7 +33,12 @@ export type QueuedRigProviderOptions = {
   /** The model its child reports running; otherwise the agent's own `default`. */
   reportsModel?: string
   reportsEffort?: string
+  /** The first acquisition hands back a kept agent that had already ended (`KEPT_ENDED`);
+   *  `during-startup`: its open fails as its connection closes. */
+  endedBeforeAcquire?: true | 'during-startup'
 }
+
+export const KEPT_ENDED_GENERATION = 'kept-ended'
 
 /** How long a winding-down child is given after the interrupt before the Stop ends it. */
 export const QUEUED_RIG_STOP_GRACE_MS = 2_000
@@ -72,12 +77,15 @@ export function createQueuedRigProvider(
     ...(options.reportsEffort ? { effort: options.reportsEffort } : {})
   })
   const scripted: StructuredAgentSessionAdapter = {
-    open: () =>
-      options.starting
-        ? new Promise((resolve) => {
-            proveOpen = () => resolve({ reportedOptions: reported() })
-          })
-        : Promise.resolve({ reportedOptions: reported() }),
+    open: (input) =>
+      options.endedBeforeAcquire === 'during-startup' &&
+      input.acquisitionGeneration === KEPT_ENDED_GENERATION
+        ? Promise.reject(new Error('kept agent connection closed'))
+        : options.starting
+          ? new Promise((resolve) => {
+              proveOpen = () => resolve({ reportedOptions: reported() })
+            })
+          : Promise.resolve({ reportedOptions: reported() }),
     acquire: async ({ identity, fence, spawnToken, events: sink }) => {
       starts()
       const hold = startHold
@@ -103,7 +111,10 @@ export function createQueuedRigProvider(
           processStartTimeMs: 1_700_000_000_000,
           spawnToken
         },
-        acquisitionGeneration: 'generation-1',
+        acquisitionGeneration:
+          options.endedBeforeAcquire && starts.mock.calls.length === 1
+            ? KEPT_ENDED_GENERATION
+            : 'generation-1',
         ...(accountHome ? { accountHome } : {}),
         link: {
           linkId: `link-${fence}`,
@@ -134,6 +145,12 @@ export function createQueuedRigProvider(
     cancelTurn,
     answerPrompt: vi.fn(async ({ commit }) => commit()),
     setOption,
+    ...(options.endedBeforeAcquire
+      ? {
+          endedBeforeAcquire: (_id: string, generation: string) =>
+            generation === KEPT_ENDED_GENERATION
+        }
+      : {}),
     ...(options.rewind
       ? {
           rewind: options.rewind,

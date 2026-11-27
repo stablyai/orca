@@ -1,5 +1,6 @@
 /** One terminal-restore-hints JSON blob restores moved panes’ source cwd. Format changes require a new capability. */
 import { z } from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { MAX_PANE_KEY_LEN } from '../agent-hook-listener/listener-limits'
 import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from './orcad-migration-blob-transfer'
 import { parsePaneKey } from '../workspace-layout/stable-pane-id'
@@ -32,34 +33,38 @@ export function isOrcadMigrationTerminalRestoreHintCwd(value: string): boolean {
   )
 }
 
-const HintSchema = z.object({
-  paneKey: z.string().refine(isOrcadMigrationTerminalRestoreHintPaneKey, {
-    message: 'orcad_migration_terminal_restore_hint_pane_key_invalid'
-  }),
-  cwd: z.string().refine(isOrcadMigrationTerminalRestoreHintCwd, {
-    message: 'orcad_migration_terminal_restore_hint_cwd_invalid'
+const HintSchema = lazyZodSchema(() =>
+  z.object({
+    paneKey: z.string().refine(isOrcadMigrationTerminalRestoreHintPaneKey, {
+      message: 'orcad_migration_terminal_restore_hint_pane_key_invalid'
+    }),
+    cwd: z.string().refine(isOrcadMigrationTerminalRestoreHintCwd, {
+      message: 'orcad_migration_terminal_restore_hint_cwd_invalid'
+    })
   })
-})
+)
 
 // Not strict: a same-version sender may add optional fields this build ignores.
-export const OrcadMigrationTerminalRestoreHintsDocumentSchema = z
-  .object({
-    version: z.literal(ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS_VERSION),
-    hints: z.array(HintSchema).max(MAX_ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS)
-  })
-  .superRefine((value, context) => {
-    const seen = new Set<string>()
-    for (const hint of value.hints) {
-      if (seen.has(hint.paneKey)) {
-        context.addIssue({
-          code: 'custom',
-          message: 'orcad_migration_terminal_restore_hint_duplicate'
-        })
-        return
+export const OrcadMigrationTerminalRestoreHintsDocumentSchema = lazyZodSchema(() =>
+  z
+    .object({
+      version: z.literal(ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS_VERSION),
+      hints: z.array(HintSchema).max(MAX_ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS)
+    })
+    .superRefine((value, context) => {
+      const seen = new Set<string>()
+      for (const hint of value.hints) {
+        if (seen.has(hint.paneKey)) {
+          context.addIssue({
+            code: 'custom',
+            message: 'orcad_migration_terminal_restore_hint_duplicate'
+          })
+          return
+        }
+        seen.add(hint.paneKey)
       }
-      seen.add(hint.paneKey)
-    }
-  })
+    })
+)
 
 export function parseOrcadMigrationTerminalRestoreHintsDocument(
   value: unknown

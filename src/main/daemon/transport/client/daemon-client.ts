@@ -60,6 +60,8 @@ export class DaemonClient {
   private pendingRequests = new DaemonPendingRequests()
   private eventListeners = new DaemonClientListeners<(event: unknown) => void>()
   private disconnectedListeners = new DaemonClientListeners<() => void>()
+  /** Run after each completed hello; `getDaemonIdentity()` then names the daemon start it reached. */
+  readonly connectedListeners = new DaemonClientListeners<() => void>()
   private requestCounter = 0
   private cleanupSocketListeners: (() => void) | null = null
 
@@ -195,6 +197,7 @@ export class DaemonClient {
       )
       controlBootstrap.stop()
       this.cleanupSocketListeners = cleanupPendingListeners
+      this.connectedListeners.eachIsolated((listener) => listener())
     } catch (error) {
       cleanupPendingListeners()
       this.controlSocket?.destroy()

@@ -25,34 +25,13 @@ import {
 } from './hosted-review/mobile-tasks-hosted-review'
 import { renderMobileTasksChrome } from './screen/mobile-tasks-screen-chrome'
 import { renderMobileTasksListSurface } from './task-list/mobile-tasks-list-surface'
-import {
-  mobileTasksSearchVisible,
-  renderMobileTasksSearchControl
-} from './screen/mobile-tasks-search-control'
-import { renderMobileTasksFilterSheet } from './screen/mobile-tasks-filter-sheet'
-import {
-  renderMobileTasksRepoPicker,
-  renderMobileTasksGitHubIssueSourcePicker,
-  renderMobileTasksGitHubViewPicker,
-  renderMobileTasksGitHubPresetPicker,
-  renderMobileTasksPagePicker
-} from './screen/mobile-tasks-provider-pickers'
+import { renderMobileTasksSearchControl } from './screen/mobile-tasks-search-control'
+import { MobileTasksFilterSheet } from './screen/mobile-tasks-filter-sheet'
 import {
   renderMobileTasksGitHubProjectPicker,
   renderMobileTasksGitHubProjectViewPicker
 } from './project-board/mobile-tasks-github-project-pickers'
-import {
-  renderMobileTasksGitHubProjectFieldsPicker,
-  renderMobileTasksGitLabViewPicker,
-  renderMobileTasksGitLabFilterPicker,
-  renderMobileTasksJiraFilterPicker,
-  renderMobileTasksJiraSitePicker,
-  renderMobileTasksLinearFilterPicker,
-  renderMobileTasksLinearWorkspacePicker,
-  renderMobileTasksLinearTeamPicker,
-  renderMobileTasksLinearStatusPicker
-} from './screen/mobile-tasks-filter-pickers'
-import { renderMobileTasksLinearDisplayPicker } from './task-list/mobile-tasks-list-display-pickers'
+import { renderMobileTasksLinearStatusPicker } from './providers/linear/mobile-tasks-linear-status-picker'
 import {
   renderMobileTasksCreateDrawer,
   renderMobileTasksCreateTargetPicker,
@@ -77,13 +56,12 @@ import {
   renderMobileTasksProjectMissingRepoDrawer,
   renderMobileTasksProjectDetailDrawer
 } from './project-board/mobile-tasks-project-detail-drawer'
-import { MobileTasksItemDetailDrawer } from './item-detail/mobile-tasks-item-detail-drawer'
+import { MobileTasksItemDetailPush } from './item-detail/mobile-tasks-item-detail-push'
 
 export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentationModel }) {
   const colorScheme = useMobileColorScheme()
   const t = useMobileTranslation()
-  const [searchBarHeight, setSearchBarHeight] = useState(0)
-  const bottomBarHeight = mobileTasksSearchVisible(model) ? searchBarHeight : 0
+  const [bottomBarHeight, setBottomBarHeight] = useState(0)
   const {
     error,
     githubMode,
@@ -113,134 +91,112 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
   } = model
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {renderMobileTasksChrome(model)}
+      <MobileTasksItemDetailPush model={model}>
+        <View style={styles.container}>
+          {renderMobileTasksChrome(model)}
 
-      {error && !mobileTasksListShowsError(model) ? (
-        <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>{describeLoadError(error, t).message}</Text>
-        </View>
-      ) : null}
+          {error && !mobileTasksListShowsError(model) ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{describeLoadError(error, t).message}</Text>
+            </View>
+          ) : null}
 
-      {!error && provider === 'github' && githubMode === 'items'
-        ? githubSourceFallbacks.map((fallback) => (
-            <View
-              key={`github-source-fallback:${fallback.repoId}`}
-              style={styles.sourceNoticeBanner}
-            >
-              <Text style={styles.sourceNoticeText}>
+          {!error && provider === 'github' && githubMode === 'items'
+            ? githubSourceFallbacks.map((fallback) => (
+                <View
+                  key={`github-source-fallback:${fallback.repoId}`}
+                  style={styles.sourceNoticeBanner}
+                >
+                  <Text style={styles.sourceNoticeText}>
+                    {t(
+                      'tasks.legacySurface.sourceFallback',
+                      'Preferred issue source upstream is unavailable for {{repo}}. Using origin.',
+                      { repo: fallback.repoLabel }
+                    )}
+                  </Text>
+                </View>
+              ))
+            : null}
+
+          {!error && provider === 'github' && githubMode === 'items'
+            ? githubSourceErrors.map((sourceError) => {
+                const isRetrying = retryingGithubSourceRepoPaths.has(sourceError.repoPath)
+                const sourceErrorParts = t(
+                  'tasks.legacySurface.loadIssuesFailed',
+                  "Couldn't load issues from {{source}}.",
+                  { source: '\uFFFC' }
+                ).split('\uFFFC')
+                return (
+                  <View
+                    key={`github-source-error:${sourceError.repoId}:${sourceError.source.owner}/${sourceError.source.repo}`}
+                    style={styles.sourceErrorBanner}
+                  >
+                    <View style={styles.sourceErrorCopy}>
+                      <Text style={styles.sourceErrorText}>
+                        {sourceErrorParts[0]}
+                        <Text style={styles.sourceErrorSlug}>
+                          {sourceError.source.owner}/{sourceError.source.repo}
+                        </Text>
+                        {sourceErrorParts.slice(1).join('')}
+                      </Text>
+                      <Text style={styles.sourceErrorMessage} numberOfLines={2}>
+                        {sourceError.message}
+                      </Text>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t(
+                        'tasks.legacySurface.retryLoadingIssues',
+                        'Retry loading issues from {{source}}',
+                        { source: `${sourceError.source.owner}/${sourceError.source.repo}` }
+                      )}
+                      style={({ pressed }) => [styles.sourceErrorRetry, pressed && pressedStyle]}
+                      disabled={loading || isRetrying}
+                      onPress={() => void retryGitHubIssueSourceFetch(sourceError.repoPath)}
+                    >
+                      <Text style={styles.sourceErrorRetryText}>
+                        {isRetrying
+                          ? t('tasks.legacySurface.retrying', 'Retrying...')
+                          : t('common.retry', 'Retry')}
+                      </Text>
+                    </Pressable>
+                  </View>
+                )
+              })
+            : null}
+
+          {!error &&
+          provider === 'github' &&
+          githubMode === 'project' &&
+          githubProjectTable?.parentFieldDropped === true ? (
+            <View style={styles.projectDataNotice}>
+              <AlertTriangle size={15} color={colors.statusAmber} />
+              <Text style={styles.projectDataNoticeText}>
                 {t(
-                  'tasks.legacySurface.sourceFallback',
-                  'Preferred issue source upstream is unavailable for {{repo}}. Using origin.',
-                  { repo: fallback.repoLabel }
+                  'tasks.legacySurface.subIssueDataUnavailable',
+                  'Sub-issue data is unavailable for your token.'
                 )}
               </Text>
             </View>
-          ))
-        : null}
+          ) : null}
 
-      {!error && provider === 'github' && githubMode === 'items'
-        ? githubSourceErrors.map((sourceError) => {
-            const isRetrying = retryingGithubSourceRepoPaths.has(sourceError.repoPath)
-            const sourceErrorParts = t(
-              'tasks.legacySurface.loadIssuesFailed',
-              "Couldn't load issues from {{source}}.",
-              { source: '\uFFFC' }
-            ).split('\uFFFC')
-            return (
-              <View
-                key={`github-source-error:${sourceError.repoId}:${sourceError.source.owner}/${sourceError.source.repo}`}
-                style={styles.sourceErrorBanner}
-              >
-                <View style={styles.sourceErrorCopy}>
-                  <Text style={styles.sourceErrorText}>
-                    {sourceErrorParts[0]}
-                    <Text style={styles.sourceErrorSlug}>
-                      {sourceError.source.owner}/{sourceError.source.repo}
-                    </Text>
-                    {sourceErrorParts.slice(1).join('')}
-                  </Text>
-                  <Text style={styles.sourceErrorMessage} numberOfLines={2}>
-                    {sourceError.message}
-                  </Text>
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t(
-                    'tasks.legacySurface.retryLoadingIssues',
-                    'Retry loading issues from {{source}}',
-                    { source: `${sourceError.source.owner}/${sourceError.source.repo}` }
-                  )}
-                  style={({ pressed }) => [styles.sourceErrorRetry, pressed && pressedStyle]}
-                  disabled={loading || isRetrying}
-                  onPress={() => void retryGitHubIssueSourceFetch(sourceError.repoPath)}
-                >
-                  <Text style={styles.sourceErrorRetryText}>
-                    {isRetrying
-                      ? t('tasks.legacySurface.retrying', 'Retrying...')
-                      : t('common.retry', 'Retry')}
-                  </Text>
-                </Pressable>
-              </View>
-            )
-          })
-        : null}
+          <MobileTasksOfflineBanner model={model} />
 
-      {!error &&
-      provider === 'github' &&
-      githubMode === 'project' &&
-      githubProjectTable?.parentFieldDropped === true ? (
-        <View style={styles.projectDataNotice}>
-          <AlertTriangle size={15} color={colors.statusAmber} />
-          <Text style={styles.projectDataNoticeText}>
-            {t(
-              'tasks.legacySurface.subIssueDataUnavailable',
-              'Sub-issue data is unavailable for your token.'
-            )}
-          </Text>
+          {renderMobileTasksListSurface(model, colorScheme, bottomBarHeight)}
+
+          {renderMobileTasksSearchControl(model, setBottomBarHeight)}
         </View>
-      ) : null}
-
-      <MobileTasksOfflineBanner model={model} />
-
-      {renderMobileTasksListSurface(model, colorScheme, bottomBarHeight)}
-
-      {renderMobileTasksSearchControl(model, setSearchBarHeight)}
+      </MobileTasksItemDetailPush>
 
       {/* iOS refuses stacked sibling native modals; layer Tasks sheets in one Modal by zIndex. */}
       <BottomDrawerModalHost>
-        {renderMobileTasksRepoPicker(model)}
-
-        {renderMobileTasksGitHubIssueSourcePicker(model)}
-
-        {renderMobileTasksGitHubViewPicker(model)}
-
-        {renderMobileTasksGitHubPresetPicker(model)}
-
-        {renderMobileTasksPagePicker(model)}
-
         {renderMobileTasksGitHubProjectPicker(model)}
 
         {renderMobileTasksGitHubProjectViewPicker(model)}
 
-        {renderMobileTasksGitHubProjectFieldsPicker(model)}
-
-        {renderMobileTasksGitLabViewPicker(model)}
-
-        {renderMobileTasksGitLabFilterPicker(model)}
-
-        {renderMobileTasksLinearFilterPicker(model)}
-        {renderMobileTasksJiraFilterPicker(model)}
-        {renderMobileTasksJiraSitePicker(model)}
-
-        {renderMobileTasksLinearWorkspacePicker(model)}
-
-        {renderMobileTasksLinearTeamPicker(model)}
-
         {renderMobileTasksLinearStatusPicker(model)}
 
-        {renderMobileTasksLinearDisplayPicker(model)}
-
-        {renderMobileTasksFilterSheet(model)}
+        <MobileTasksFilterSheet model={model} />
 
         {renderMobileTasksCreateDrawer(model)}
 
@@ -269,8 +225,6 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
         {renderMobileTasksProjectMissingRepoDrawer(model)}
 
         {renderMobileTasksProjectDetailDrawer(model)}
-
-        <MobileTasksItemDetailDrawer model={model} />
 
         <ActionSheetModal
           visible={taskUiReady && mergeMethodProjectRow != null}

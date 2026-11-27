@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../shared/browser/browser-metadata-redaction'
 import type { BrowserSnapshotOptions } from '../../../../shared/rpc-contract/browser/browser-observation-params'
 import type {
   BrowserSnapshotResult,
@@ -6,7 +7,10 @@ import type {
   BrowserFillResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard/clipboard-text'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
+import {
+  normalizeBrowserNavigationUrl,
+  redactKagiSessionToken
+} from '../../../../shared/browser/navigation/browser-url'
 import { BrowserError } from '../../browser-error'
 import { ORCA_TAB_SESSION_PREFIX } from '../session-lifecycle/agent-browser-session-name'
 import { FILL_ELEMENT_FUNCTION } from '../../cdp/input/browser-element-functions'
@@ -22,6 +26,7 @@ import { assertRemoteCliPageAccess } from '../../routing/input-ownership/remote-
 import { agentBrowserSnapshotArgs } from '../protocol/agent-browser-snapshot-arguments'
 import { getBrowserPasskeyRequest } from '../../webauthn/browser-passkey-requests'
 import { whenBrowserExtensionsReadyForPage } from '../../extensions/profile-sessions/browser-extension-page-start'
+import { isRecord } from '../../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import { claimBrowserPageFirstLoad } from '../../guest-lifecycle/browser-page-memory'
 
 export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQueue {
@@ -45,8 +50,8 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
       return {
         ...result,
         browserPageId: target.browserPageId,
-        url: wc.getURL(),
-        title: wc.getTitle(),
+        url: redactKagiSessionToken(wc.getURL()),
+        title: redactKagiSessionToken(wc.getTitle()),
         passkeyRequest: getBrowserPasskeyRequest(wc.id)
       }
     })
@@ -158,9 +163,13 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
             (navigationState.preventUnloadEvent !== null &&
               !navigationState.preventUnloadEvent.defaultPrevented)
           ) {
+            const failedUrl = isRecord(error) && typeof error.url === 'string' ? error.url : ''
+            const privateFailure = [navigationUrl, failedUrl].some(
+              (url) => redactKagiSessionToken(url) !== url
+            )
             throw new BrowserError(
               'browser_error',
-              `Failed to navigate browser page ${target.browserPageId}: ${error instanceof Error ? error.message : String(error)}`
+              `Failed to navigate browser page ${target.browserPageId}: ${privateFailure ? 'Private navigation failed.' : error instanceof Error ? error.message : String(error)}`
             )
           }
           navigationAborted = true
@@ -228,7 +237,10 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         `Failed to navigate browser page ${target.browserPageId}: ${loadError.description} (${loadError.code})`
       )
     }
-    return { url: navigatedWebContents.getURL(), title: navigatedWebContents.getTitle() }
+    return redactBrowserMetadata({
+      url: navigatedWebContents.getURL(),
+      title: navigatedWebContents.getTitle()
+    })
   }
 
   async fill(

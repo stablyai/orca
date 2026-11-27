@@ -2,7 +2,7 @@ import { automationOrphanIssueText } from './automation-orphan-issue-copy'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useEffect, useRef, useState } from 'react'
-import { Text, View, type HostInstance } from 'react-native'
+import { View, type HostInstance } from 'react-native'
 import { Ellipsis, History, Pencil, Play, Trash2 } from 'lucide-react-native'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
@@ -26,6 +26,7 @@ import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame
 import { automationScheduleText } from './automation-schedule-label'
 import { mobileTuiAgentLabel } from '../agents/mobile-tui-agents'
 import type { MobileAutomationRow } from './automation-reply-schema'
+import type { AutomationEditorSection } from './AutomationEditor'
 import { automationStyles as styles } from './automation-styles'
 
 export function AutomationDetail(props: {
@@ -35,6 +36,8 @@ export function AutomationDetail(props: {
   projectName: string | undefined
   onBack: () => void
   onToggle: (enabled: boolean) => void
+  /** Opens the editor on the section a row shows. */
+  onEdit: (section: AutomationEditorSection) => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -128,6 +131,9 @@ export function AutomationDetail(props: {
       : []
   const workspace = workspaces.length === 1 ? workspaces[0] : undefined
   const unavailable = t('automations.mobile.unavailable', 'Unavailable')
+  const editable = !props.disabled && item.selector.kind !== 'orphan'
+  const drill = (section: AutomationEditorSection) =>
+    editable ? { navigates: true, onPress: () => props.onEdit(section) } : {}
   return (
     <>
       {item.selector.kind === 'orphan' ? (
@@ -154,29 +160,31 @@ export function AutomationDetail(props: {
         <ListRow
           title={t('automations.mobile.repeats', 'Repeats')}
           value={automationScheduleText(automation)}
+          {...drill('when')}
         />
         <ListRow
           title={t('automations.mobile.agent', 'Agent')}
           value={mobileTuiAgentLabel(automation.agentId)}
           valueIcon={<MobileAgentIcon agentId={automation.agentId} size={13} />}
+          {...drill('where')}
         />
         <ListRow
           title={t('automations.mobile.project', 'Project')}
           value={props.projectName ?? setup?.label ?? unavailable}
+          {...drill('where')}
         />
         <ListRow
           title={t('automations.mobile.workspace', 'Workspace')}
           value={
             automation.workspaceMode === 'existing'
               ? workspace?.displayName || unavailable
-              : t('automations.mobile.newOnePerRun', 'New one per run')
+              : t('automations.mobile.newEachRun', 'New each run')
           }
+          {...drill('where')}
         />
       </SettingsSection>
       <SettingsSection title={t('automations.mobile.instructions', 'Instructions')}>
-        <Text selectable style={styles.instructions}>
-          {automation.prompt}
-        </Text>
+        <ListRow title={automation.prompt} wrapTitle {...drill('prompt')} />
       </SettingsSection>
     </>
   )

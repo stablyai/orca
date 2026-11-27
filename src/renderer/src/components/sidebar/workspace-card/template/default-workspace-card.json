@@ -32,7 +32,7 @@
     "title": "trim(ws.title)",
     "hoverBranch": "vars.newStyle ? ws.identity : vars.compact && vars.branch ? ws.branch : null",
     "hoverTitle": "len(vars.title) > 0 && vars.title != vars.hoverBranch ? vars.title : null",
-    "hoverDetails": "place.compactLine || (!vars.classic && (links.count > 0 || links.issue || links.linearIssue || links.jiraIssue || review != null || vars.hasComment || (options.show.automation && provenance.automation) || (options.show.cli && provenance.cli) || provenance.bot || ports.count > 0 || vars.hoverTitle != null || vars.hoverBranch != null))",
+    "hoverDetails": "place.compactLine || ws.hasRenameError || (!vars.classic && (links.count > 0 || links.issue || links.linearIssue || links.jiraIssue || review != null || vars.hasComment || (options.show.automation && provenance.automation) || (options.show.cli && provenance.cli) || provenance.bot || ports.count > 0 || vars.hoverTitle != null || vars.hoverBranch != null))",
     "singleLine": "!(vars.hasMetaRow || git.remoteBranchConflict != null || vars.inlineAgents || lineage.toggleable)"
   },
   "frame": {
@@ -74,8 +74,7 @@
                 },
                 {
                   "el": "RenameError",
-                  "when": "ws.hasRenameError && !ws.isRenaming",
-                  "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
+                  "when": "ws.hasRenameError && !ws.isRenaming"
                 },
                 {
                   "el": "HostBadge",
@@ -200,7 +199,10 @@
                 "inset": "end"
               },
               "children": [
-                { "el": "Indicators", "props": { "hover": "=vars.classic ? 'meta' : null" } }
+                {
+                  "el": "Indicators",
+                  "props": { "hover": "=vars.classic && !vars.hoverDetails ? 'meta' : null" }
+                }
               ]
             }
           ]

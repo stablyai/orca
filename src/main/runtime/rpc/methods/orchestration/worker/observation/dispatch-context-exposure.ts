@@ -26,6 +26,8 @@ export function exposeDispatchContext(dispatch: DispatchContextRow) {
     dispatchedAt: dispatch.dispatched_at,
     completedAt: dispatch.completed_at,
     createdAt: dispatch.created_at,
-    lastHeartbeatAt: dispatch.last_heartbeat_at
+    lastHeartbeatAt: dispatch.last_heartbeat_at,
+    progressNote: dispatch.progress_note,
+    progressUpdatedAt: dispatch.progress_updated_at
   }
 }

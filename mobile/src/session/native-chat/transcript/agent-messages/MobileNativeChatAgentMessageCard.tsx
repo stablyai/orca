@@ -13,6 +13,7 @@ import {
   agentMessageCanCopy,
   agentMessageSenderCanOpen,
   agentMessageWaitingQueuedId,
+  agentMessageHeadingNamesRecipient,
   type AgentMessageHeading
 } from '../../../../../../src/shared/agent-session/view/messages/agent-message-presentation'
 import { agentMessagePreviewLine } from '../../../../../../src/shared/agent-session/view/messages/agent-message-preview-line'
@@ -38,25 +39,55 @@ import {
 
 type Sender = AgentMessageSource['senders'][number]
 
-export function mobileAgentMessageLead(heading: AgentMessageHeading, t: Translate): string {
+/** The full lead read before the name: the row's spoken label, and the merged-entry word when
+ *  `standalone` (a lead with no name after it). */
+export function mobileAgentMessageLead(
+  heading: AgentMessageHeading,
+  t: Translate,
+  standalone = false
+): string {
   switch (heading) {
     case 'started':
     case 'started-agent':
-      return t('chat.agentMessage.row.started', 'Started')
+      return standaloneWords(t('chat.agentMessage.row.started', 'Started'), standalone)
     case 'reopened-worker':
-      return t('chat.agentMessage.row.reopened', 'Reopened')
+      return standaloneWords(t('chat.agentMessage.row.reopened', 'Reopened'), standalone)
     case 'followed-up-worker':
-      return t('chat.agentMessage.row.followedUp', 'Sent follow-up to')
+      return standalone
+        ? t('chat.agentMessage.event.followedUp', 'Sent follow-up')
+        : t('chat.agentMessage.row.followedUp', 'Sent follow-up to')
     case 'handed-off':
-      return t('chat.agentMessage.row.handedOff', 'Handed off to')
+      return standalone
+        ? t('chat.agentMessage.event.handedOff', 'Handed off')
+        : t('chat.agentMessage.row.handedOff', 'Handed off to')
     case 'task':
-      return t('chat.agentMessage.row.task', 'Task from')
+      return standalone
+        ? t('chat.agentMessage.event.task', 'Task')
+        : t('chat.agentMessage.row.task', 'Task from')
     case 'worker':
-      return t('chat.agentMessage.row.update', 'Update from')
+      return standalone
+        ? t('chat.agentMessage.event.update', 'Update')
+        : t('chat.agentMessage.row.update', 'Update from')
     case 'coordinator':
     case 'generic':
-      return t('chat.agentMessage.row.message', 'Message from')
+      return standalone
+        ? t('chat.agentMessage.event.message', 'Message')
+        : t('chat.agentMessage.row.message', 'Message from')
   }
+}
+
+/** A start or reopen lead reads whole on its own; one that joins a name with a colon ("再開:")
+ *  drops it when no name follows. */
+function standaloneWords(words: string, standalone: boolean): string {
+  return standalone ? words.replace(/\s*[:：]\s*$/u, '') : words
+}
+
+/** Stands in for a missing name: a follow-up or a hand-off names who received it, so it takes the
+ *  recipient form; every other heading keeps the sender-form fallback it always used. */
+export function mobileAgentMessageUnnamed(heading: AgentMessageHeading, t: Translate): string {
+  return agentMessageHeadingNamesRecipient(heading)
+    ? t('chat.agentMessage.unnamedRecipient', 'an agent')
+    : t('session.agentMessageAttribution.unnamedSender', 'an agent')
 }
 
 /** The one word drawn before the name for a start, a hand-off or a task; a plain message draws none. */
@@ -105,11 +136,11 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   // A sender's status change redraws the row; the body's text and first line are read once per body.
   const text = useMemo(() => mobileNativeChatDisplayCopyText(message), [message])
   const sender = agentMessagePrimarySender(from)
-  const unnamed = t('session.agentMessageAttribution.unnamedSender', 'an agent')
-  const senderName = useMobileAgentMessageName(sender ?? NO_SENDER, unnamed)
+  const heading = agentMessageHeading(from, message)
+  const unnamed = mobileAgentMessageUnnamed(heading, t)
+  const senderName = useMobileAgentMessageName(sender) ?? unnamed
   const view = useMobileAgentMessageView(sender)
   const { shown, more } = agentMessageSendersShown(from)
-  const heading = agentMessageHeading(from, message)
   const words = mobileAgentMessageLead(heading, t)
   const kind = kindWord(heading, t)
   const preview = useMemo(() => agentMessagePreviewLine(text).line, [text])
@@ -138,7 +169,7 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
       icon={<SenderMark agentType={view.agentType} />}
       // The live state never marks a row failed: a restarted worker would un-fail it. Waiting mail shows no status.
       badge={!waiting && view.dot === 'working' ? 'running' : null}
-      label={`${words} ${sender ? senderName : unnamed}${more > 0 ? ` +${more}` : ''}${
+      label={`${words} ${senderName}${from.senders.length > 1 ? ` +${from.senders.length - 1}` : ''}${
         items.length > 0
           ? ` ${t('chat.agentMessage.row.forItems', 'for')} ${items.map((item) => item.title).join(', ')}`
           : ''
@@ -171,6 +202,7 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
                     sender={each}
                     unnamed={unnamed}
                     named
+                    recipient={agentMessageHeadingNamesRecipient(heading)}
                   />
                 ))}
               </View>
@@ -184,15 +216,15 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
             />
             {status}
             {merged.map((earlier) => {
-              const earlierWords = earlier.from
-                ? mobileAgentMessageLead(agentMessageHeading(earlier.from, earlier), t)
-                : null
+              const earlierHeading = earlier.from && agentMessageHeading(earlier.from, earlier)
               const earlierText = mobileNativeChatDisplayCopyText(earlier)
               return (
                 <View key={earlier.id} style={styles.mergedEntry}>
                   <View style={styles.mergedMeta}>
-                    {earlierWords && earlierWords !== words ? (
-                      <Text style={styles.mergedWords}>{earlierWords}</Text>
+                    {earlierHeading && mobileAgentMessageLead(earlierHeading, t) !== words ? (
+                      <Text style={styles.mergedWords}>
+                        {mobileAgentMessageLead(earlierHeading, t, true)}
+                      </Text>
                     ) : null}
                     {earlier.agentStartItems?.length ? (
                       <Text style={styles.mergedWords}>
@@ -258,16 +290,10 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   return waiting ? <View style={styles.waiting}>{row}</View> : row
 })
 
-/** Stands in so the name hook runs in every render; its answer is unused without a sender. */
-const NO_SENDER: Sender = {
-  party: { address: '', terminalHandle: null, orcaSessionId: null },
-  name: null
-}
-
 function SenderName({ sender, unnamed }: { sender: Sender; unnamed: string }) {
   return (
     <MobileNativeChatEventName>
-      {useMobileAgentMessageName(sender, unnamed)}
+      {useMobileAgentMessageName(sender) ?? unnamed}
     </MobileNativeChatEventName>
   )
 }
@@ -277,31 +303,38 @@ function OpenSender({
   from,
   sender,
   unnamed,
-  named = false
+  named = false,
+  recipient = false
 }: {
   from: AgentMessageSource
   sender: Sender
   unnamed: string
   /** Its name beside the icon, for mail from several senders. */
   named?: boolean
+  /** The name stands alone for who received it; German says "an Eule". */
+  recipient?: boolean
 }): React.JSX.Element | null {
   const t = useMobileTranslation()
   const open = useContext(MobileAgentMessageOpenContext)
-  const name = useMobileAgentMessageName(sender, unnamed)
+  const name = useMobileAgentMessageName(sender)
   if (!open || !agentMessageSenderCanOpen(sender)) {
     return null
   }
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={t('chat.agentMessage.open', 'Open {{name}}', { name })}
+      accessibilityLabel={t('chat.agentMessage.open', 'Open {{name}}', {
+        name: name ?? t('session.agentMessageAttribution.unnamedSender', 'an agent')
+      })}
       hitSlop={named ? 8 : 12}
       onPress={() => open(from, sender)}
       style={({ pressed }) => [named && styles.named, pressed && pressedStyle]}
     >
       {named ? (
         <Text numberOfLines={1} style={styles.namedText}>
-          {name}
+          {recipient
+            ? t('chat.agentMessage.recipientName', '{{name}}', { name: name ?? unnamed })
+            : (name ?? unnamed)}
         </Text>
       ) : null}
       <ArrowUpRight size={14} color={named ? colors.textPrimary : colors.textMuted} />

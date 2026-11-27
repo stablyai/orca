@@ -165,7 +165,8 @@ function RemoveBadge({ label, onPress }: { label: string; onPress: () => void })
       accessibilityLabel={label}
       style={({ pressed }) => [styles.remove, pressed && pressedStyle]}
       onPress={onPress}
-      hitSlop={8}
+      // A 44 pt target around the 20 pt badge.
+      hitSlop={12}
     >
       <X size={11} color={colors.textPrimary} strokeWidth={3} />
     </Pressable>

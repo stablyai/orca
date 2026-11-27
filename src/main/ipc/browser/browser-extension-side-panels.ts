@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { BrowserExtensionSidePanel } from '../../../shared/browser/extensions/browser-extension-side-panel-types'
 import {
   closeBrowserExtensionSidePanelById,
@@ -9,7 +10,7 @@ import {
 import { prepareBrowserExtensionSidePanelAttach } from '../../browser/extensions/side-panel/browser-extension-side-panel-attach'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
-const panelArgs = z.object({ panelId: z.string().min(1) })
+const panelArgs = lazyZodSchema(() => z.object({ panelId: z.string().min(1) }))
 
 const CHANNELS = [
   'browserExtensions:sidePanels',

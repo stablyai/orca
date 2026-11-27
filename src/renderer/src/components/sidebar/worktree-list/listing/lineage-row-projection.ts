@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
 import { useMemo } from 'react'
+import { fingerprintStringList } from '../../../../../../shared/text/string-fingerprint'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getRenderRowKey, type RenderRow } from './render-row'
 import {
@@ -203,7 +204,12 @@ export function buildLineageRowProjection(
       stem: hasChildren ? guideX(index + 1) : null
     }
   })
-  return { frames, occurrencesByIdentity, rowIndexByKey, restoreSignal: JSON.stringify(rowKeys) }
+  return {
+    frames,
+    occurrencesByIdentity,
+    rowIndexByKey,
+    restoreSignal: fingerprintStringList(rowKeys)
+  }
 }
 
 export function useDraggedSubtreeRanges(
@@ -218,6 +224,46 @@ export function useDraggedSubtreeRanges(
       })),
     [projection, identity]
   )
+}
+
+function hasHiddenLineageChildren(row: RenderRow): boolean {
+  return (row.type === 'item' || row.type === 'folder-workspace') && row.lineageCollapsed === true
+}
+
+export function getActiveFamilyRoots(
+  rows: readonly RenderRow[],
+  projection: LineageRowProjection,
+  activeWorktreeId: string | null,
+  activeWorkspaceExecutionHostId: ExecutionHostId | null
+): Set<number> {
+  const roots = new Set<number>()
+  if (!activeWorktreeId) {
+    return roots
+  }
+  const addRoots = (occurrences: readonly number[]) => {
+    for (const index of occurrences) {
+      const root = projection.frames[index].root
+      // A collapsed family paints its root too: the band keeps the card's own background from
+      // handing back and forth when the children are shown or hidden.
+      if (projection.frames[root].end > root || hasHiddenLineageChildren(rows[root])) {
+        roots.add(root)
+      }
+    }
+  }
+  if (activeWorkspaceExecutionHostId) {
+    addRoots(
+      projection.occurrencesByIdentity.get(
+        composeWorktreeHostIdentity(activeWorkspaceExecutionHostId, activeWorktreeId)
+      ) ?? []
+    )
+  } else {
+    for (const [identity, occurrences] of projection.occurrencesByIdentity) {
+      if (getWorktreeIdFromHostIdentity(identity) === activeWorktreeId) {
+        addRoots(occurrences)
+      }
+    }
+  }
+  return roots
 }
 
 export function useLineageRowProjection(args: {
@@ -237,32 +283,9 @@ export function useLineageRowProjection(args: {
     () => rows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
     [rows]
   )
-  const activeFamilyRoots = useMemo(() => {
-    const roots = new Set<number>()
-    if (activeWorktreeId) {
-      const addRoots = (occurrences: readonly number[]) => {
-        for (const index of occurrences) {
-          const root = projection.frames[index].root
-          if (projection.frames[root].end > root) {
-            roots.add(root)
-          }
-        }
-      }
-      if (activeWorkspaceExecutionHostId) {
-        addRoots(
-          projection.occurrencesByIdentity.get(
-            composeWorktreeHostIdentity(activeWorkspaceExecutionHostId, activeWorktreeId)
-          ) ?? []
-        )
-      } else {
-        for (const [identity, occurrences] of projection.occurrencesByIdentity) {
-          if (getWorktreeIdFromHostIdentity(identity) === activeWorktreeId) {
-            addRoots(occurrences)
-          }
-        }
-      }
-    }
-    return roots
-  }, [activeWorktreeId, activeWorkspaceExecutionHostId, projection])
+  const activeFamilyRoots = useMemo(
+    () => getActiveFamilyRoots(rows, projection, activeWorktreeId, activeWorkspaceExecutionHostId),
+    [activeWorktreeId, activeWorkspaceExecutionHostId, projection, rows]
+  )
   return { projection, activeFamilyRoots, firstHeaderIndex }
 }

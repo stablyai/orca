@@ -4,7 +4,7 @@
 // store images pass, the same admission the comment had.
 import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../../../../../shared/agent-session/agent-session-attachments'
 import { isAgentInlineImagePath } from '../../../../../shared/native-chat/input/composer/agent-inline-image-types'
-import { BOT_ITEM_MAIL_SENDER } from '../../../../../shared/bots/bot-item-note-runs'
+import { BOT_ITEM_MAIL_SENDER } from '../../../../../shared/bots/bot-item-mail-sender'
 import { parseAgentSessionAttachmentStorePath } from '../../../../native-chat/agent-session-attachments/agent-session-attachment-references'
 import { getAgentSessionAttachmentStore } from '../../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { MessageRow } from '../../db/orchestration-records'

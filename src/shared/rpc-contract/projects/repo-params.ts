@@ -51,9 +51,11 @@ export const RepoSetBaseRef = lazyZodSchema(() =>
 export const RepoUpdate = createRepoUpdateSchema(RepoSelector.shape)
 
 /** `repo.setHidden`: sidebar-only; `repoHostId` picks one host's copy of a repo id set up on several. */
-export const RepoSetHidden = RepoShow.extend({
-  hidden: z.boolean()
-})
+export const RepoSetHidden = lazyZodSchema(() =>
+  RepoShow.extend({
+    hidden: z.boolean()
+  })
+)
 
 // Older hosts strip this and read the project checkout, as before.
 const SetupHooksCreateSourceParam = lazyZodSchema(() =>
@@ -70,16 +72,20 @@ const SetupHooksCreateSourceParam = lazyZodSchema(() =>
 )
 
 /** See `repoHooksCheckIsBackground`: only `wakeWslDistro` may open a stopped WSL distro (E9). */
-export const RepoHooksCheck = RepoSelector.extend({
-  background: z.boolean().optional(),
-  wakeWslDistro: OptionalBoolean,
-  createSource: SetupHooksCreateSourceParam
-})
+export const RepoHooksCheck = lazyZodSchema(() =>
+  RepoSelector.extend({
+    background: z.boolean().optional(),
+    wakeWslDistro: OptionalBoolean,
+    createSource: SetupHooksCreateSourceParam
+  })
+)
 
 /** `repo.hooks`: `createSource` reports the setup a create from that ref would run. */
-export const RepoHooksRead = RepoSelector.extend({
-  createSource: SetupHooksCreateSourceParam
-})
+export const RepoHooksRead = lazyZodSchema(() =>
+  RepoSelector.extend({
+    createSource: SetupHooksCreateSourceParam
+  })
+)
 
 export const RepoSearchRefs = lazyZodSchema(() =>
   z.object({
@@ -176,17 +182,23 @@ export const ProjectGroupImportNested = lazyZodSchema(() =>
 )
 
 /** `wakeWslDistro`: the user saving their own edit, which may start a stopped WSL distro; older hosts drop it. */
-export const RepoIssueCommandWrite = RepoSelector.extend({
-  content: z.string(),
-  wakeWslDistro: OptionalBoolean
-})
+export const RepoIssueCommandWrite = lazyZodSchema(() =>
+  RepoSelector.extend({
+    content: z.string(),
+    wakeWslDistro: OptionalBoolean
+  })
+)
 
-export const RepoSparsePresetSave = RepoSelector.extend({
-  id: OptionalString,
-  name: requiredString('Missing preset name'),
-  directories: z.array(z.string())
-})
+export const RepoSparsePresetSave = lazyZodSchema(() =>
+  RepoSelector.extend({
+    id: OptionalString,
+    name: requiredString('Missing preset name'),
+    directories: z.array(z.string())
+  })
+)
 
-export const RepoSparsePresetRemove = RepoSelector.extend({
-  presetId: requiredString('Missing preset id')
-})
+export const RepoSparsePresetRemove = lazyZodSchema(() =>
+  RepoSelector.extend({
+    presetId: requiredString('Missing preset id')
+  })
+)

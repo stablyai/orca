@@ -37,12 +37,13 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['bot', 'list'],
-    summary: 'List the bots on this computer, what each is for, and the address that reaches it',
+    summary: 'List the bots you can reach, what each is for, and the address that reaches it',
     usage: 'orca bot list [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
     notes: [
       ...BOT_NOTES,
-      "What each is for is the first paragraph of its SOUL.md. `orca orchestration send --to bot:<name>` mails that bot's Chat."
+      "What each is for is the first paragraph of its SOUL.md. `orca orchestration send --to bot:<name>` mails that bot's Chat.",
+      "It also lists paired servers' bots (`--on <server>`) and, on a paired server, its connected paired computers with the bots each lets this Orca ask (`--on-client <computer>`)."
     ]
   },
   {

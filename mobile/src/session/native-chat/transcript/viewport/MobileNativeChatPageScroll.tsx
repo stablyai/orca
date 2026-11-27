@@ -38,7 +38,7 @@ const pageScroll = themedStyleSheet(() => {
     flexDirection: 'column-reverse',
     overflowAnchor: 'none',
     // Opaque scroller layer: some Android GPUs draw its transparent pixels black during selection (#36553).
-    backgroundColor: colors.bgBase
+    backgroundColor: colors.chatCanvas
   }
   return {
     endAnchored,

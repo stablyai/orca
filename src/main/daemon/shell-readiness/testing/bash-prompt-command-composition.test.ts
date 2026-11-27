@@ -281,6 +281,82 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
 
   // Why: macOS /bin/bash 3.2 also reverts DEBUG traps set inside functions.
   const legacyBashes = process.platform === 'darwin' ? ['bash', '/bin/bash'] : ['bash']
+  // bash-preexec 0.5/0.6 (Atuin's hooks) defer install to a PROMPT_COMMAND string that runs `trap - DEBUG`.
+  const bashPreexecStub = [
+    '__bp_inside_precmd=0 __bp_inside_preexec=0 __bp_preexec_interactive_mode=""',
+    '__bp_precmd_invoke_cmd() { (( __bp_inside_precmd > 0 )) && return; local __bp_inside_precmd=1; printf "BP_PRECMD\\n"; }',
+    '__bp_interactive_mode() { __bp_preexec_interactive_mode=on; }',
+    '__bp_preexec_invoke_exec() {',
+    '  (( __bp_inside_preexec > 0 )) && return',
+    '  local __bp_inside_preexec=1',
+    '  [[ -n "$__bp_preexec_interactive_mode" ]] || return',
+    '  __bp_preexec_interactive_mode=""',
+    '  printf "BP_PREEXEC:<%s>\\n" "$BASH_COMMAND"',
+    '}',
+    '__bp_install() {',
+    '  printf "BP_INSTALL\\n"',
+    '  [[ "${PROMPT_COMMAND[*]:-}" == *__bp_precmd_invoke_cmd* ]] && return 1',
+    "  trap '__bp_preexec_invoke_exec' DEBUG",
+    '  PROMPT_COMMAND="__bp_precmd_invoke_cmd"$\'\\n\'"${PROMPT_COMMAND//"$__bp_install_string"/:}"$\'\\n__bp_interactive_mode\'',
+    '  __bp_precmd_invoke_cmd',
+    '  __bp_interactive_mode',
+    '}',
+    '__bp_install_string=$\'__bp_trap_string="$(trap -p DEBUG)"\\ntrap - DEBUG\\n__bp_install\'',
+    'PROMPT_COMMAND="$__bp_install_string"'
+  ].join('\n')
+  itWithBash.each(
+    [['array', 'bash'], ...legacyBashes.map((bash) => ['legacy', bash])].flatMap(
+      ([dispatch, bash]) => ['', 'set -u'].map((profileOptions) => [dispatch, bash, profileOptions])
+    )
+  )(
+    'finishes a pending bash-preexec install (%s dispatch, %s, profile `%s`)',
+    (dispatch, bash, profileOptions) => {
+      const rcfile = getDaemonBashShellReadyRcfileContent()
+      const output = runInteractiveBash(
+        `${profileOptions}\n${bashPreexecStub}`,
+        tempHome,
+        'true\nfalse\nexit 0\n',
+        dispatch === 'legacy' ? rcfile.replaceAll(LEGACY_GATE, '0') : rcfile,
+        bash
+      )
+      const commands = [...output.matchAll(/BP_PREEXEC:<([^>]+)>/g)].map((match) => match[1])
+
+      expect(commands).toEqual(['true', 'false', 'exit 0'])
+      expect(output.match(/BP_PRECMD/g)).toHaveLength(3)
+      expectLifecycle(output)
+    }
+  )
+
+  // Why: under function tracing Orca's chained DEBUG trap would fire preexec during prompt hooks.
+  itWithBash.each(['__bp_enable_subshells=1', 'set -o functrace', 'shopt -s extdebug'])(
+    'leaves the bash-preexec install to the first prompt after `%s`',
+    (tracing) => {
+      const output = runInteractiveBash(`${tracing}\n${bashPreexecStub}`, tempHome)
+      const promptIndex = output.indexOf('\x1b]133;A\x07')
+
+      expect(promptIndex).toBeGreaterThan(-1)
+      expect(output.indexOf('BP_INSTALL')).toBeGreaterThan(promptIndex)
+    }
+  )
+
+  // Why: an early install before bash 5.1 makes preexec report later PROMPT_COMMAND elements as commands.
+  itWithBash.each(legacyBashes)(
+    'leaves the bash-preexec install to the first prompt for a multi-element legacy PROMPT_COMMAND (%s)',
+    (bash) => {
+      const output = runInteractiveBash(
+        `${bashPreexecStub}\nPROMPT_COMMAND[1]='printf "USER_PROMPT\\n"'`,
+        tempHome,
+        'true\nfalse\nexit 0\n',
+        getDaemonBashShellReadyRcfileContent().replaceAll(LEGACY_GATE, '0'),
+        bash
+      )
+      const promptIndex = output.indexOf('\x1b]133;A\x07')
+
+      expect(promptIndex).toBeGreaterThan(-1)
+      expect(output.indexOf('BP_INSTALL')).toBeGreaterThan(promptIndex)
+    }
+  )
+
   itWithBash.each(
     legacyBashes.flatMap((bash) => [
       ['trap - DEBUG', bash],

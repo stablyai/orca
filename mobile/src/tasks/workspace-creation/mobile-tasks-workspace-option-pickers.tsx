@@ -2,6 +2,7 @@ import { branchRefLabels, branchRefLabel } from '../../../../src/shared/git/refs
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
+import { composerInputStyles } from '../../components/composer-input/composer-input-styles'
 import { TextField } from '../../components/composer-input/TextField'
 import { Search, Pencil } from 'lucide-react-native'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
@@ -53,6 +54,7 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
               'Search branches'
             )}
             leading={<Search size={16} color={colors.textMuted} />}
+            style={composerInputStyles.filledField}
             autoCapitalize="none"
             autoCorrect={false}
           />

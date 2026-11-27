@@ -29,6 +29,7 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
   deathEvidenceKind?: 'kill-delivered'
   exitObservedAt?: number
   exitReason?: string
+  resumeByMail?: true
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
@@ -50,7 +51,8 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
         ? args.exitReason.slice(0, MAX_AGENT_SESSION_DEATH_DETAIL_CHARS)
         : 'the last surface holding this session released it',
       observedAt: args.exitObservedAt ?? args.now,
-      ownerFence: record.lease.runtimeFence
+      ownerFence: record.lease.runtimeFence,
+      ...(args.resumeByMail ? { resumeByMail: true } : {})
     }
   })
 }
@@ -64,6 +66,7 @@ export function releaseStoredAgentSessionOwnerAfterSurfaceClose(
     deathEvidenceKind?: 'kill-delivered'
     exitObservedAt?: number
     exitReason?: string
+    resumeByMail?: true
   }
 ): Promise<AgentSessionRecord> {
   return store.updateRecord(args.sessionId, { kind: 'release-surface', args })

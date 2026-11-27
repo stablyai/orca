@@ -109,8 +109,8 @@ __orca_osc133_preexec() {
   printf "\\033]133;C\\007"
   __orca_in_command=1
 }
-# Capture $? before the user's PROMPT_COMMAND chain mutates it.
 ${BASH_PROMPT_COMMAND_COMPOSITION_BLOCK}
+# Capture $? before the user's PROMPT_COMMAND chain mutates it.
 __orca_prepend_prompt_command "__orca_osc133_precmd"
 # Mark readiness after user prompt setup without rerunning startup files.
 if [[ -n "$__orca_ready_marker" ]]; then

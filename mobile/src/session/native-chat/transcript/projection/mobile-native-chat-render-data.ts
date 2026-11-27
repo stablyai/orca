@@ -34,9 +34,8 @@ function mobileNativeChatEmptyStateCopy(
           "Can't find this conversation yet"
         ),
         subtitle: translate(
-          'session.nativeChatRenderData.notFoundSubtitle',
-          'Send a message to start one, or open the terminal view to see what {{agent}} is doing.',
-          { agent: agentLabel }
+          'session.nativeChatRenderData.notFoundMessage',
+          'Send a message to start one.'
         )
       }
     case 'empty':
@@ -44,18 +43,15 @@ function mobileNativeChatEmptyStateCopy(
         title: translate('session.nativeChatRenderData.emptyTitle', 'Start a chat with {{agent}}', {
           agent: agentLabel
         }),
-        subtitle: translate(
-          'session.nativeChatRenderData.emptySubtitle',
-          'Ask {{agent}} to inspect code, explain output, or make a change.',
-          { agent: agentLabel }
-        )
+        // The composer is right there; the title is enough.
+        subtitle: ''
       }
     case 'error':
       return {
         title: translate('session.nativeChatRenderData.errorTitle', 'Could not load conversation'),
         subtitle: translate(
-          'session.nativeChatRenderData.errorSubtitle',
-          'The transcript could not be read. Toggle back to the terminal to keep working.'
+          'session.nativeChatRenderData.errorMessage',
+          'The conversation couldn’t be read. The terminal view still works.'
         )
       }
   }

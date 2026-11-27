@@ -86,6 +86,8 @@ export const InboxParams = lazyZodSchema(() =>
   })
 )
 
+export const ORCHESTRATION_PROGRESS_NOTE_MAX = 500
+
 export const TaskCreateParams = lazyZodSchema(() =>
   z.object({
     spec: requiredString('Missing --spec'),

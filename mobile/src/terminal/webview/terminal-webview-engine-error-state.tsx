@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react'
-import { RefreshCw } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { CircleAlert } from 'lucide-react-native'
+import { StyleSheet, View } from 'react-native'
 import { translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, radii, pressedStyle } from '../../theme/mobile-theme'
+import { colors } from '../../theme/mobile-theme'
+import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
@@ -83,24 +84,19 @@ export function TerminalWebViewEngineErrorOverlay({
 }: TerminalWebViewEngineErrorOverlayProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  // The engine's own words stay one tap away for support, not in the sentence.
   return (
     <View style={styles.errorOverlay}>
-      <Text style={styles.errorTitle}>
-        {t('terminal.webviewEngineErrorState.title', 'Terminal failed to load')}
-      </Text>
-      <Text style={styles.errorDetail} numberOfLines={4}>
-        {message}
-      </Text>
-      <Pressable
-        accessibilityRole="button"
-        style={({ pressed }) => [styles.reloadButton, pressed && pressedStyle]}
-        onPress={onReload}
-      >
-        <RefreshCw size={16} color={colors.bgBase} />
-        <Text style={styles.reloadButtonText}>
-          {t('terminal.webviewEngineErrorState.reload', 'Reload')}
-        </Text>
-      </Pressable>
+      <MobileStateView
+        icon={CircleAlert}
+        title={t('terminal.webviewEngineErrorState.title', 'Terminal failed to load')}
+        message={t(
+          'terminal.webviewEngineErrorState.message',
+          'The session on your computer is still running.'
+        )}
+        details={message}
+        action={{ label: t('common.retry', 'Retry'), onPress: onReload }}
+      />
     </View>
   )
 }
@@ -108,36 +104,6 @@ export function TerminalWebViewEngineErrorOverlay({
 const styles = themedStyleSheet(() => ({
   errorOverlay: {
     ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    padding: 24,
     backgroundColor: colors.bgBase
-  },
-  errorTitle: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center'
-  },
-  errorDetail: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'center'
-  },
-  reloadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    minHeight: 36,
-    paddingHorizontal: 14,
-    borderRadius: radii.control,
-    backgroundColor: colors.surfaceBright
-  },
-  reloadButtonText: {
-    color: colors.bgBase,
-    fontSize: 14,
-    fontWeight: '700'
   }
 }))

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { View, Text } from 'react-native'
 import { Globe } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
@@ -31,11 +31,14 @@ function XIcon({ size = 16, color = colors.textSecondary }) {
 export default function AboutScreen({
   onBack,
   openExternal,
-  versionLabel
+  versionLabel,
+  children
 }: {
   onBack: () => void
   openExternal: (url: string) => Promise<unknown>
   versionLabel: string
+  /** The app's update rows, under the links. */
+  children?: ReactNode
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -78,6 +81,8 @@ export default function AboutScreen({
           onPress={() => openLink('https://x.com/orca_build')}
         />
       </SettingsSection>
+
+      {children}
 
       <Text style={styles.versionText}>{versionLabel}</Text>
       {error && (
