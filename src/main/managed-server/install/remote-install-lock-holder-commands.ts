@@ -31,6 +31,13 @@ function ownerPath(lockDir: string, ownerFileName: string): string {
   return `${lockDir.replace(/\/+$/u, '')}/${ownerFileName}`
 }
 
+/** Opens `redirect` (like `7<file`) on the shell's own fds, quietly false when it cannot be opened.
+ * A subshell probes the open and a plain `exec` keeps it. `command exec` would do it in one step, but
+ * macOS's /bin/sh (bash 3.2) then spins at 100% CPU forever at the next `exit`. */
+function openFd(redirect: string): string {
+  return `( exec ${redirect} ) 2>/dev/null && exec ${redirect}`
+}
+
 function lockLoop(fd: number, mode: '-s' | '-x', giveUp: string): string {
   return (
     `held_tries=0; until flock ${mode} -n ${fd} 2>/dev/null; do held_tries=$((held_tries + 1)); ` +
@@ -55,7 +62,7 @@ export function installLockHolderCommand(lockDir: string, owner: InstallLockOwne
     // cwd pins this lock's inode, so a takeover that renames it cannot redirect the marker.
     `cd ${quotePosixShell(lockDir)} 2>/dev/null && ${ownsLock} || exit 0;`,
     'command -v flock >/dev/null 2>&1 || exit 0;',
-    `{ command exec 9>>${holder}; } 2>/dev/null || exit 0;`,
+    `${openFd(`9>>${holder}`)} || exit 0;`,
     sharedLockLoop(9).replace('exit 75', 'exit 0'),
     // A filesystem that grants a second description an exclusive lock cannot prove anything.
     `if ( exec 8<${holder} && flock -x -n 8 ) 2>/dev/null; then exit 0; fi;`,
@@ -75,8 +82,8 @@ export function installLockHolderCommand(lockDir: string, owner: InstallLockOwne
  * A contender's exclusive lock therefore succeeds only once the holder and every command are gone. */
 export function installLockFenceStatement(lockDir: string, owner: InstallLockOwnerFile): string {
   return [
-    // Grouped so the redirect failure is quiet without silencing the command's own stderr.
-    `{ command exec 7<${quotePosixShell(holderPath(lockDir))}; } 2>/dev/null || exit ${INSTALL_LOCK_FENCE_EXIT_CODE};`,
+    // The open is probed in a subshell, so a failure is quiet without silencing the command's own stderr.
+    `${openFd(`7<${quotePosixShell(holderPath(lockDir))}`)} || exit ${INSTALL_LOCK_FENCE_EXIT_CODE};`,
     sharedLockLoop(7),
     `[ "$(cat ${quotePosixShell(ownerPath(lockDir, owner.fileName))} 2>/dev/null)" = ${quotePosixShell(owner.token)} ] || exit ${INSTALL_LOCK_FENCE_EXIT_CODE};`
   ].join(' ')
@@ -136,7 +143,7 @@ export function installLockHolderUnmarkCommand(
   return [
     `cd ${quotePosixShell(lockDir)} 2>/dev/null && ${ownsLock} || exit 0;`,
     'command -v flock >/dev/null 2>&1 || exit 0;',
-    `{ command exec 9<${holder}; } 2>/dev/null || exit 0;`,
+    `${openFd(`9<${holder}`)} || exit 0;`,
     'unmark_tries=0; until flock -x -n 9 2>/dev/null; do unmark_tries=$((unmark_tries + 1));',
     `if [ "$unmark_tries" -eq ${SHARED_LOCK_ATTEMPTS} ]; then holder_pid=$(head -c 16 ${quotePosixShell(`./${HOLDER_PID_FILENAME}`)} 2>/dev/null);`,
     `case "$holder_pid" in ''|*[!0-9]*) ;; *) if ${posixIsHolderProcess('holder_pid', owner.token)}; then kill -9 "$holder_pid" 2>/dev/null; fi;; esac; fi;`,
@@ -166,7 +173,7 @@ export function installLockReleaseGate(lockDir: string, owner: InstallLockOwnerF
   const ownerFile = quotePosixShell(ownerPath(lockDir, owner.fileName))
   return [
     `if gate_owner=$(cat ${ownerFile} 2>/dev/null) && [ "$gate_owner" != ${quotePosixShell(owner.token)} ]; then exit 0; fi;`,
-    `if { command exec 7<${quotePosixShell(holderPath(lockDir))}; } 2>/dev/null && command -v flock >/dev/null 2>&1; then`,
+    `if ${openFd(`7<${quotePosixShell(holderPath(lockDir))}`)} && command -v flock >/dev/null 2>&1; then`,
     lockLoop(7, '-x', `{ echo ${INSTALL_LOCK_RELEASE_BUSY} >&2; exit 1; }`),
     'fi;'
   ].join(' ')
@@ -201,7 +208,7 @@ export function posixHolderStealParts(
     // command of the old owner can start while the lock is replaced.
     claimCheck: [
       'current_holder_exited=0;',
-      `if ${sameGeneration('current_key')} && { command exec 6<${holder}; } 2>/dev/null; then`,
+      `if ${sameGeneration('current_key')} && ${openFd(`6<${holder}`)}; then`,
       `if flock -x -n 6 2>/dev/null && [ "$(head -c 16 ${holder} 2>/dev/null)" = ${HOLDER_MARKER} ] && ${ownedBy}; then current_holder_exited=1; fi;`,
       'fi;'
     ].join(' '),
