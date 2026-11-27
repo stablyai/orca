@@ -3,7 +3,7 @@ import { nativeResponse, type FeishuNativeResponse } from './feishu-native-data'
 const option = z.object({ id: z.string(), label: z.string(), answer: z.string().optional() })
 
 export const cardData = z.object({
-  kind: z.enum(['status', 'prompt', 'choices', 'async-question', 'response']),
+  kind: z.enum(['status', 'prompt', 'choices', 'async-question', 'response', 'resume']),
   text: z.string(),
   options: z.array(option).default([]),
   inline: z.boolean().optional(),
@@ -18,6 +18,7 @@ export const cardData = z.object({
       progress: z.array(z.object({ id: z.string(), text: z.string() })),
       trace: z.array(z.string()),
       final: z.string().optional(),
+      workersRunning: z.boolean().optional(),
       question: z
         .object({
           id: z.string(),
@@ -25,7 +26,8 @@ export const cardData = z.object({
           inline: z.boolean().optional(),
           text: z.string().optional(),
           options: z.array(option).optional(),
-          note: z.string().optional()
+          note: z.string().optional(),
+          resume: z.boolean().optional()
         })
         .optional(),
       continuation: z.string().optional(),
@@ -44,6 +46,7 @@ export type FeishuResponseChange =
   | { kind: 'handoff'; from: string; turnItemId: string; at: number }
   | { kind: 'native'; value: FeishuNativeResponse }
   | { kind: 'start'; turn: number }
+  | { kind: 'workers'; running: boolean }
   | { kind: 'status'; text: string; turn?: number | null }
   | { kind: 'trace'; text: string; turn: number }
   | { kind: 'progress'; id: string; text: string }

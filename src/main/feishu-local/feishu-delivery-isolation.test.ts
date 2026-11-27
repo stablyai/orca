@@ -93,7 +93,7 @@ it('isolates recalled replies across pages and restart, and does not mark failed
     sender: async (...args) => inbox.sender(...args),
     laneSender: async (...args) => inbox.laneSender(...args),
     stageFile: async (...args) => inbox.stageFile(...args),
-    artifact: async (...args) => inbox.artifact(...args),
+    artifacts: async (...args) => inbox.artifacts(...args),
     uploaded: async (...args) => inbox.uploaded(...args),
     filePosted: async (...args) => inbox.filePosted(...args),
     takeProgress: async (...args) => inbox.takeProgress(...args),

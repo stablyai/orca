@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { ConnectorContextItem } from '../../shared/connector-asker-contract'
+import type { BotMember } from '../../shared/bot-types'
+import { feishuAsker } from '../../shared/bots/feishu-members'
 
 export const feishuStoredContext = z
   .string()
@@ -72,12 +74,16 @@ function messageText(message: HistoryMessage): string {
 export function feishuHistoryContext(
   items: HistoryMessage[],
   request: { chat_id: string; message_id: string; create_time: string },
-  owner: string | null
+  binding: { app: string; owner: string | null },
+  members: readonly BotMember[]
 ): ConnectorContextItem[] {
   const earlier = [...new Map(items.map((item) => [item.message_id, item])).values()]
     .filter(
       (item) =>
         !item.deleted &&
+        (item.sender.sender_type !== 'user' ||
+          (item.sender.id_type === 'open_id' &&
+            Boolean(feishuAsker(binding, members, item.sender.id)))) &&
         item.chat_id === request.chat_id &&
         item.message_id !== request.message_id &&
         Number(item.create_time) < Number(request.create_time)
@@ -100,10 +106,11 @@ export function feishuHistoryContext(
     cut ||= raw.length > limit
     remaining -= text.length
     if (item.sender.sender_type === 'user' && item.sender.id_type === 'open_id') {
+      const author = feishuAsker(binding, members, item.sender.id)!
       context.push({
-        kind: item.sender.id === owner ? 'earlier' : 'no_access',
+        kind: 'earlier',
         userId: item.sender.id,
-        name: item.sender.id === owner ? 'paired owner' : item.sender.id,
+        name: author.name ?? (author.role === 'owner' ? 'paired owner' : item.sender.id),
         text
       })
     } else {

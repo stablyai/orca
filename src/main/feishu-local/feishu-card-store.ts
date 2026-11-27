@@ -228,7 +228,7 @@ export class FeishuCardStore {
     external: string,
     keep: string | null,
     note: string,
-    kind: 'prompt' | 'async-question' = 'prompt'
+    kind: 'prompt' | 'async-question' | 'resume' = 'prompt'
   ) {
     for (const raw of this.db
       .prepare("SELECT * FROM feishu_cards WHERE account=? AND external=? AND state='open'")

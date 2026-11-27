@@ -5,6 +5,39 @@ import { expect, it } from 'vitest'
 import { FeishuInbox } from './feishu-inbox'
 import { cardData } from './feishu-card-data'
 
+it('keeps native worker activity across final replies and restart until workers settle', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'feishu-workers-'))
+  const path = join(dir, 'db.sqlite')
+  let store = new FeishuInbox(path)
+  try {
+    const b = store.add('scope', 'bot', { name: 'profile', appId: 'cli_app', brand: 'feishu' })
+    const update = (change: Parameters<FeishuInbox['updateResponse']>[4]) =>
+      store.updateResponse(b.account, 'lane', 'om_one', 'oc_chat', change)
+    const id = update({ kind: 'begin' })!
+    update({ kind: 'workers', running: true })
+    update({ kind: 'final', text: 'Waiting for the worker' })
+    store.close()
+    store = new FeishuInbox(path)
+    const read = () => cardData.parse(JSON.parse(store.getCard(b.account, id)!.body)).response
+    expect(read()).toMatchObject({
+      phase: 'working',
+      workersRunning: true,
+      final: 'Waiting for the worker'
+    })
+    update({ kind: 'status', text: '已完成' })
+    expect(read()?.phase).toBe('working')
+    update({ kind: 'workers', running: false })
+    expect(read()).toMatchObject({
+      phase: 'done',
+      workersRunning: false,
+      final: 'Waiting for the worker'
+    })
+  } finally {
+    store.close()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 it('keeps one durable response per delivery, fences late events and deduplicates replayed progress', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'feishu-response-'))
   const path = join(dir, 'db.sqlite')

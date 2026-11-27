@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { feishuCommand, type FeishuMessage } from './feishu-cli'
 import type { Binding } from './feishu-binding'
+import type { BotMember } from '../../shared/bot-types'
 import type { ConnectorContextItem } from '../../shared/connector-asker-contract'
 import { feishuHistoryContext, feishuHistoryMessage } from './feishu-history-context'
 
@@ -19,7 +20,8 @@ const messages = z.object({
 export async function feishuThreadContext(
   b: Binding,
   m: FeishuMessage,
-  signal: AbortSignal
+  signal: AbortSignal,
+  members: () => readonly BotMember[]
 ): Promise<ConnectorContextItem[]> {
   const parent = m.root_id || m.reply_to
   const groupHistory = m.chat_type === 'group' && !m.thread_id && !parent
@@ -74,7 +76,7 @@ export async function feishuThreadContext(
       return [{ kind: 'unreadable' }]
     }
     const items = results.flatMap((r) => (r.status === 'fulfilled' ? r.value.items : []))
-    const context = feishuHistoryContext(items, m, b.owner)
+    const context = feishuHistoryContext(items, m, b, members())
     if (results.some((r) => r.status === 'rejected')) {
       context.unshift({ kind: 'unreadable' })
     }

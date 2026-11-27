@@ -40,6 +40,7 @@ it('keeps history in the same chat, before the request, without granting other a
         bot,
         owner,
         other,
+        { ...other, message_id: 'om_member', sender: { ...other.sender, id: 'ou_member' } },
         owner,
         { ...owner, message_id: 'om_foreign', chat_id: 'oc_another' },
         { ...owner, message_id: 'om_deleted', deleted: true },
@@ -47,11 +48,19 @@ it('keeps history in the same chat, before the request, without granting other a
         { ...owner, message_id: 'om_request', create_time: '4000' }
       ],
       { chat_id: 'oc_group', message_id: 'om_request', create_time: '4000' },
-      'ou_owner'
+      { app: 'cli_app', owner: 'ou_owner' },
+      [
+        {
+          id: 'ou_member',
+          name: 'Authorized member',
+          source: 'feishu-local',
+          workspaceId: 'cli_app'
+        }
+      ]
     )
   ).toEqual([
     { kind: 'earlier', userId: 'ou_owner', name: 'paired owner', text: 'owner context' },
-    { kind: 'no_access', userId: 'ou_other', name: 'ou_other', text: 'I am the owner' },
+    { kind: 'earlier', userId: 'ou_member', name: 'Authorized member', text: 'I am the owner' },
     { kind: 'bot', name: 'cli_app', text: 'previous answer' }
   ])
 })
@@ -76,12 +85,13 @@ it('bounds imported history and reads rich text without treating it as a current
       message_id: 'om_request',
       create_time: '100'
     },
-    'ou_owner'
+    { app: 'cli_app', owner: 'ou_owner' },
+    [{ id: 'ou_other', name: 'ou_other', source: 'feishu-local', workspaceId: 'cli_app' }]
   )
   expect(context).toHaveLength(21)
   expect(context[0]).toEqual({ kind: 'more' })
   expect(context[1]).toEqual({
-    kind: 'no_access',
+    kind: 'earlier',
     userId: 'ou_other',
     name: 'ou_other',
     text: 'Topic\nBackground'

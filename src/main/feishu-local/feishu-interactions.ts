@@ -16,10 +16,9 @@ import { dmKey, type Binding } from './feishu-binding'
 import type { FeishuStore } from './feishu-store-ops'
 import { cardData } from './feishu-card-data'
 import { feishuPromptData } from './feishu-card-render'
-import { consumeFeishuEvent } from './feishu-cli'
-import { setTimeout as delay } from 'node:timers/promises'
 import { FeishuCardDelivery } from './feishu-card-delivery'
-import { readFeishuClick } from './feishu-card-events'
+import { handleFeishuClick, listenFeishuCardActions } from './feishu-card-events'
+import { offerFeishuResume } from './feishu-resume'
 
 export class FeishuInteractions {
   private readonly native: FeishuNativeFeed
@@ -42,26 +41,10 @@ export class FeishuInteractions {
   private members() {
     return this.runtime.bots.list().find((bot) => bot.id === this.b.bot)?.members ?? []
   }
-  async listen(checkProfile: () => Promise<void>): Promise<void> {
-    while (!this.signal.aborted) {
-      try {
-        await checkProfile()
-        await consumeFeishuEvent(
-          this.b.app,
-          'card.action.trigger',
-          this.signal,
-          () => {},
-          (line) => this.click(line)
-        )
-      } catch {
-        if (!this.signal.aborted) {
-          this.wake()
-        }
-      }
-      if (!this.signal.aborted) {
-        await delay(15000, undefined, { signal: this.signal }).catch(() => {})
-      }
-    }
+  listen(checkProfile: () => Promise<void>): Promise<void> {
+    return listenFeishuCardActions(this.b.app, this.signal, checkProfile, this.wake, (line) =>
+      this.click(line)
+    )
   }
   event(event: ConversationEvent | ConversationSnapshot): void {
     this.events = this.events
@@ -70,27 +53,16 @@ export class FeishuInteractions {
         this.wake()
       })
   }
-  async click(line: string): Promise<void> {
-    const click = readFeishuClick(line)
-    if (!click || !this.active()) {
-      return
-    }
-    const card = await this.store.claimCardFor(
+  click(line: string): Promise<void> {
+    return handleFeishuClick(
+      this.store,
       this.b,
       this.members(),
-      click.operator_id,
-      click.message_id,
-      click.chat_id,
-      click.option,
-      click.question
+      this.cards,
+      this.active,
+      this.wake,
+      line
     )
-    try {
-      if (card) {
-        await this.cards.publish(card.id)
-      }
-    } finally {
-      this.wake()
-    }
   }
   private async record(
     event: ConversationEvent | ConversationSnapshot,
@@ -101,6 +73,12 @@ export class FeishuInteractions {
     }
     if (event.kind === 'snapshot') {
       for (const entry of event.conversations) {
+        if (entry.conversation.source !== 'feishu-local') {
+          continue
+        }
+        if (entry.workersRunning !== undefined) {
+          await this.record({ ...entry, kind: 'workers', running: entry.workersRunning })
+        }
         if (entry.working) {
           this.native.track(entry.conversation.externalId)
         }
@@ -117,6 +95,15 @@ export class FeishuInteractions {
           entry.conversation.externalId,
           entry.prompt ? '等待你的回答' : entry.working ? '正在处理' : '已完成'
         )
+        if (!entry.working && !entry.prompt) {
+          await offerFeishuResume(
+            this.runtime,
+            this.store,
+            this.b,
+            entry.conversation.externalId,
+            entry.turnId
+          )
+        }
       }
       return
     }
@@ -192,7 +179,11 @@ export class FeishuInteractions {
               ? '本次处理失败，请查看回复'
               : '已完成'
       )
+      if (event.kind === 'turn-ended' && !event.resumes) {
+        await offerFeishuResume(this.runtime, this.store, this.b, externalId, event.turnId)
+      }
     } else if (event.kind === 'turn-started') {
+      await this.store.closePrompts(this.b.account, externalId, null, '此轮已继续', 'resume')
       await this.store.updateResponse(
         this.b.account,
         externalId,
@@ -207,11 +198,10 @@ export class FeishuInteractions {
         turn: event.turnId
       })
     } else if (event.kind === 'workers') {
-      await this.status(
-        source,
-        externalId,
-        event.running ? '子任务仍在运行' : this.asyncQuestions.workStatus(externalId)
-      )
+      await this.store.updateResponse(this.b.account, externalId, null, route.chat, {
+        kind: 'workers',
+        running: event.running
+      })
     }
     this.wake()
   }
@@ -259,7 +249,11 @@ export class FeishuInteractions {
               await this.store.closeCard(b.account, card.id, '选项已失效')
               return
             }
-            if (data.kind === 'choices' || data.kind === 'async-question') {
+            if (
+              data.kind === 'choices' ||
+              data.kind === 'async-question' ||
+              data.kind === 'resume'
+            ) {
               if (
                 data.kind === 'async-question' &&
                 !this.asyncQuestions.isCurrent(data, card.external)

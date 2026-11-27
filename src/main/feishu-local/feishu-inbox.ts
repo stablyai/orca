@@ -1,3 +1,4 @@
+import { FeishuReplyFiles } from './feishu-reply-files'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import Database from '../sqlite/sync-database'
@@ -21,6 +22,7 @@ export class FeishuInbox {
   private responses: FeishuResponseStore
   private admissions: FeishuAdmissions
   private routes: FeishuRoutes
+  private files: FeishuReplyFiles
   private failures: FeishuDeliveryFailures
   constructor(path: string) {
     this.db = new Database(path)
@@ -32,6 +34,7 @@ export class FeishuInbox {
       CREATE TABLE IF NOT EXISTS text_replies(account TEXT NOT NULL,id TEXT NOT NULL,mid TEXT NOT NULL,text TEXT NOT NULL,first_post INTEGER,message_id TEXT,review INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(account,id),FOREIGN KEY(account,mid) REFERENCES inbox(account,mid) ON DELETE CASCADE);
       CREATE INDEX IF NOT EXISTS pending_feishu_replies ON text_replies(account) WHERE message_id IS NULL AND review=0;
       CREATE INDEX IF NOT EXISTS review_feishu_messages ON inbox(account) WHERE review=1;`)
+    this.files = new FeishuReplyFiles(this.db)
     this.failures = new FeishuDeliveryFailures(this.db)
     this.cards = new FeishuCardStore(this.db)
     this.responses = new FeishuResponseStore(this.db, this.cards)
@@ -158,48 +161,11 @@ export class FeishuInbox {
       .prepare('UPDATE inbox SET stored_path=? WHERE account=? AND mid=? AND body IS NOT NULL')
       .run(path, account, mid)
   }
-  stageFile(account: string, mid: string, name: string, bytes: Uint8Array): void {
-    const row = this.db
-      .prepare('SELECT name,bytes FROM reply_files WHERE account=? AND mid=?')
-      .get(account, mid)
-    if (
-      row &&
-      row.name === name &&
-      row.bytes instanceof Uint8Array &&
-      Buffer.from(row.bytes).equals(bytes)
-    ) {
-      return
-    }
-    this.db
-      .prepare('INSERT INTO reply_files(account,mid,name,bytes) VALUES(?,?,?,?)')
-      .run(account, mid, name, bytes)
-  }
-  artifact(account: string, mid: string) {
-    const row = this.db
-      .prepare(
-        'SELECT name,bytes,file_key AS key,posted FROM reply_files WHERE account=? AND mid=?'
-      )
-      .get(account, mid)
-    return (
-      row &&
-      z
-        .object({
-          name: z.string(),
-          bytes: z.instanceof(Uint8Array).nullable(),
-          key: z.string().nullable(),
-          posted: z.number()
-        })
-        .parse(row)
-    )
-  }
-  uploaded(account: string, mid: string, key: string): void {
-    this.db
-      .prepare('UPDATE reply_files SET file_key=?,bytes=NULL WHERE account=? AND mid=?')
-      .run(key, account, mid)
-  }
-  filePosted(account: string, mid: string): void {
-    this.db.prepare('UPDATE reply_files SET posted=1 WHERE account=? AND mid=?').run(account, mid)
-  }
+  stageFile = (...args: Parameters<FeishuReplyFiles['stageFile']>) => this.files.stageFile(...args)
+  artifacts = (...args: Parameters<FeishuReplyFiles['artifacts']>) => this.files.artifacts(...args)
+  uploaded = (...args: Parameters<FeishuReplyFiles['uploaded']>) => this.files.uploaded(...args)
+  filePosted = (...args: Parameters<FeishuReplyFiles['filePosted']>) =>
+    this.files.filePosted(...args)
   takeProgress(account: string, mid: string): boolean {
     return Boolean(
       this.db

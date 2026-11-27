@@ -39,7 +39,12 @@ export async function continueFeishuChoice(
       content: option.answer ?? option.label
     },
     [],
-    members
+    members,
+    { resume: data.kind === 'resume' }
   )
-  await store.closeCard(b.account, card.id, `已选择：${option.label}`)
+  await store.closeCard(
+    b.account,
+    card.id,
+    data.kind === 'resume' ? '已请求恢复' : `已选择：${option.label}`
+  )
 }

@@ -64,6 +64,7 @@ export class FeishuResponseStore {
     data.response.native = before.response.native
     data.response.baseline = before.response.native
     data.response.question = before.response.question
+    data.response.workersRunning = before.response.workersRunning
     before.response.supersededBy = id
     before.response.stoppedAt = change.at
     before.text = '已转至最新提问'
@@ -173,7 +174,10 @@ export class FeishuResponseStore {
       return id
     }
     // A late activity, reconnect snapshot or retried progress must never reopen a final answer.
-    if (response.supersededBy || (response.final !== undefined && change.kind !== 'native')) {
+    if (
+      response.supersededBy ||
+      (response.final !== undefined && !['native', 'workers'].includes(change.kind))
+    ) {
       return id
     }
     switch (change.kind) {
@@ -236,6 +240,17 @@ export class FeishuResponseStore {
       case 'start':
         response.turn = change.turn
         break
+      case 'workers':
+        response.workersRunning = change.running
+        if (response.phase !== 'failed') {
+          response.phase = change.running || response.final === undefined ? 'working' : 'done'
+          data.text = change.running
+            ? '等待子任务完成'
+            : response.final === undefined
+              ? '正在处理'
+              : '已完成'
+        }
+        break
       case 'status':
         data.text = change.text
         break
@@ -251,7 +266,7 @@ export class FeishuResponseStore {
         break
       case 'final':
         response.final = change.text
-        response.phase = change.failed ? 'failed' : 'done'
+        response.phase = change.failed ? 'failed' : response.workersRunning ? 'working' : 'done'
         data.text = change.failed ? '处理失败' : '已完成'
         break
     }

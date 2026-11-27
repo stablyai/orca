@@ -7,7 +7,7 @@ export async function replyFeishu(
   original: string,
   chat: string,
   message: { type: 'text' | 'post' | 'interactive' | 'file'; content: unknown },
-  part: 'final' | 'file' | `reply:${string}` | `card:${string}`,
+  part: 'final' | 'file' | `file:${string}` | `reply:${string}` | `card:${string}`,
   signal: AbortSignal
 ): Promise<string> {
   const uuid = createHash('sha256')

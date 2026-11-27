@@ -48,7 +48,6 @@ export class FeishuConnection {
       () => this.wake()
     )
   }
-
   private changed(): void {
     this.runtime.notifyBotsChanged({ botIds: [this.binding.bot], kinds: ['settings'] })
   }
@@ -280,8 +279,7 @@ export class FeishuConnection {
     }
   }
   private async sendOwed(displayName: string): Promise<void> {
-    const b = this.binding
-    if (!b.chat || !this.bot()) {
+    if (!this.binding.chat || !this.bot()) {
       return
     }
     const journal = getStructuredAgentSessionHost()?.deps.store.connectorReplies()
@@ -293,13 +291,14 @@ export class FeishuConnection {
     await drainFeishuOutbox(
       journal,
       this.inbox,
-      b,
+      this.binding,
       this.signal,
       () => !this.signal.aborted && Boolean(this.bot()),
       () => this.checkProfile(),
       () => this.changed(),
       displayName,
-      this.interactions.cards
+      this.interactions.cards,
+      this.runtime
     )
   }
 }

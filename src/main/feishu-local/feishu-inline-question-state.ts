@@ -41,6 +41,7 @@ export function syncInlineQuestion(
   data.response.question = {
     id: question.id,
     pending: question.state === 'open',
+    ...(detail.kind === 'resume' ? { resume: true } : {}),
     ...(detail.inline
       ? { inline: true, text: detail.text, options: detail.options, note: detail.note }
       : {})

@@ -138,6 +138,10 @@ export class FeishuLocalHost {
     this.retiring.set(bot, removal)
     return removal
   }
+  async isGroupThread(botId: string, external: string): Promise<boolean> {
+    const c = this.active.get(botId)
+    return Boolean(c && (await this.inbox.laneRoute(c.binding.account, external))?.group)
+  }
   private async mayReply(b: Binding, external: string, mid: string): Promise<boolean> {
     const route = await this.inbox.messageRoute(b.account, mid)
     if (route ? route.external !== external : dmKey(b).externalId !== external) {

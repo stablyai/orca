@@ -10,6 +10,25 @@ import { leaveThreadRefusal } from './bot-leave-thread-authority'
 const THREAD = { source: 'slack', externalId: 'T1:C1:1800000000.000100:U0BOT' }
 const REF = 'slack:T1:C1:1800000000.000100:1800000000.000200'
 
+it('grants Feishu leave authority only to the verified conversation requester, never mail or another lane', () => {
+  const conversation = { source: 'feishu-local', externalId: 'lane' }
+  const asker = person('member', { messageRef: 'feishu:lane:om_one' })
+  expect(leaveEligibleBatch({ ...conversation, bot: {} }, asker)).toEqual({ leaveEligible: true })
+  expect(
+    leaveEligibleBatch(
+      { ...conversation, bot: {} },
+      { ...asker, messageRef: 'feishu:other:om_one' }
+    )
+  ).toEqual({})
+  expect(leaveEligibleBatch({ ...conversation, bot: {} }, { ...asker, via: {} })).toEqual({})
+  const input = running(fromThread(asker, { connectorConversation: conversation }))
+  expect(leaveThreadRefusal(input.items, input.submissions, conversation)).toBeNull()
+  const mail = running(
+    fromThread(asker, { connectorConversation: conversation, from: { sessionId: 'worker' } })
+  )
+  expect(leaveThreadRefusal(mail.items, mail.submissions, conversation)).toBe('leave_refused_mixed')
+})
+
 let sequence = 0
 const row = (itemId: string, body: unknown, extra: Partial<AgentJournalRenderItem> = {}) =>
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: journal rows with only the fields the check reads.

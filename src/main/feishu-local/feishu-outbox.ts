@@ -1,3 +1,5 @@
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { readThreadMute } from '../external-conversations/external-conversation-link-writes'
 import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
 import { outcomeSentence } from '../connector-cloud/connector-reply-outcome-sentence'
 import { dmKey, type Binding } from './feishu-binding'
@@ -16,10 +18,22 @@ export async function drainFeishuOutbox(
   checkProfile: () => Promise<void>,
   changed: () => void,
   botName: string,
-  cards: FeishuCardDelivery
+  cards: FeishuCardDelivery,
+  runtime?: OrcaRuntimeService
 ): Promise<void> {
   if (!b.chat) {
     return
+  }
+  const threadLeft = (externalId: string, turn: number | undefined) => {
+    const thread =
+      runtime && readThreadMute(runtime.requireStore(), { source: 'feishu-local', externalId })
+    return (
+      typeof thread === 'object' &&
+      thread !== null &&
+      thread.muted &&
+      turn !== undefined &&
+      thread.leaveLine === turn
+    )
   }
   const defaultChat = b.chat
   cards.name = botName
@@ -80,23 +94,26 @@ export async function drainFeishuOutbox(
           await journal.sent([{ account: b.account, deliveryId: row.deliveryId }])
           return
         }
-        if (fill.answerDeliveryId === row.deliveryId && fill.outcome !== 'quiet') {
+        if (fill.answerDeliveryId === row.deliveryId) {
           await checkProfile()
           if (!active()) {
             return
           }
-          const artifact = await inbox.artifact(b.account, row.deliveryId)
+          const artifacts = await inbox.artifacts(b.account, row.deliveryId)
           if (!active()) {
             return
           }
-          if (artifact && fill.outcome === 'answered' && !artifact.posted) {
+          for (const artifact of artifacts) {
+            if (!['answered', 'quiet'].includes(fill.outcome) || artifact.posted) {
+              continue
+            }
             const key =
               artifact.key ?? (await uploadFeishuFile(b.app, artifact.name, artifact.bytes, signal))
             if (!active()) {
               return
             }
             if (!artifact.key) {
-              await inbox.uploaded(b.account, row.deliveryId, key)
+              await inbox.uploaded(b.account, row.deliveryId, artifact.name, key)
             }
             if (!active()) {
               return
@@ -107,10 +124,10 @@ export async function drainFeishuOutbox(
               await inbox.replyMessage(b.account, row.deliveryId),
               chat,
               { type: 'file', content: { file_key: key } },
-              'file',
+              artifact.part,
               signal
             )
-            await inbox.filePosted(b.account, row.deliveryId)
+            await inbox.filePosted(b.account, row.deliveryId, artifact.name)
           }
           if (!active()) {
             return
@@ -124,10 +141,16 @@ export async function drainFeishuOutbox(
           {
             kind: 'final',
             turnItemId: fill.turnItemId ?? undefined,
-            text:
+            text: [
               fill.answerDeliveryId === row.deliveryId && fill.outcome !== 'quiet'
                 ? fill.prose || outcomeSentence(fill.outcome, 'Orca')
                 : '',
+              ...(threadLeft(row.conversation.externalId, fill.turnStartedAt)
+                ? ['已停止跟进本话题；再次 @ 我即可继续。']
+                : [])
+            ]
+              .filter(Boolean)
+              .join('\n\n'),
             failed: fill.outcome === 'failed'
           }
         )

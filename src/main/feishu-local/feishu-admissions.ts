@@ -14,6 +14,11 @@ export class FeishuAdmissions {
     private readonly routes: FeishuRoutes
   ) {
     const columns = this.db.prepare('PRAGMA table_info(inbox)').all()
+    for (const name of ['mentioned', 'resume']) {
+      if (!columns.some((c) => c.name === name)) {
+        this.db.exec(`ALTER TABLE inbox ADD COLUMN ${name} INTEGER NOT NULL DEFAULT 0`)
+      }
+    }
     if (!columns.some((c) => c.name === 'progress')) {
       this.db.exec('ALTER TABLE inbox ADD COLUMN progress INTEGER NOT NULL DEFAULT 0')
     }
@@ -35,7 +40,8 @@ export class FeishuAdmissions {
     b: Binding,
     m: FeishuMessage,
     context: ConnectorContextItem[] = [],
-    members: readonly BotMember[] = []
+    members: readonly BotMember[] = [],
+    control: { mentioned?: boolean; resume?: boolean } = {}
   ): void {
     if (
       !feishuAsker(b, members, m.sender_id) ||
@@ -48,7 +54,7 @@ export class FeishuAdmissions {
     }
     this.db
       .prepare(
-        'INSERT OR IGNORE INTO inbox(account,mid,event,body,kind,context,sender) VALUES(?,?,?,?,?,?,?)'
+        'INSERT OR IGNORE INTO inbox(account,mid,event,body,kind,context,sender,mentioned,resume) VALUES(?,?,?,?,?,?,?,?,?)'
       )
       .run(
         b.account,
@@ -57,13 +63,15 @@ export class FeishuAdmissions {
         m.content,
         m.message_type,
         JSON.stringify(context),
-        m.sender_id
+        m.sender_id,
+        Number(Boolean(control.mentioned)),
+        Number(Boolean(control.resume))
       )
   }
   next(account: string) {
     const row = this.db
       .prepare(
-        'SELECT mid,body,kind,stored_path AS path,context,sender FROM inbox WHERE account=? AND body IS NOT NULL AND review=0 ORDER BY rowid LIMIT 1'
+        'SELECT mid,body,kind,stored_path AS path,context,sender,mentioned,resume FROM inbox WHERE account=? AND body IS NOT NULL AND review=0 ORDER BY rowid LIMIT 1'
       )
       .get(account)
     return (
@@ -71,6 +79,8 @@ export class FeishuAdmissions {
       z
         .object({
           mid: z.string(),
+          mentioned: z.number().transform(Boolean),
+          resume: z.number().transform(Boolean),
           sender: z.string().nullable(),
           body: z.string(),
           kind: z.enum(['text', 'image', 'file']),

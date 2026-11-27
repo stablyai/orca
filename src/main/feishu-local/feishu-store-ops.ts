@@ -34,7 +34,7 @@ const OPS = [
   'sender',
   'laneSender',
   'stageFile',
-  'artifact',
+  'artifacts',
   'uploaded',
   'filePosted',
   'takeProgress',

@@ -51,7 +51,7 @@ export function feishuResponseText(data: FeishuCardData): string {
 }
 export function feishuResponseCard(data: FeishuCardData, botName: string, streaming = false) {
   const response = data.response!
-  const complete = response.final !== undefined
+  const complete = response.final !== undefined && !response.workersRunning
   const superseded = Boolean(response.supersededBy)
   const waiting = Boolean(response.question?.pending) && !superseded
   const stopped = complete || superseded || waiting
@@ -151,14 +151,18 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
   const status = superseded
     ? '已转至最新提问'
     : waiting
-      ? '等待你的选择'
-      : complete
-        ? `${data.text}${elapsed === undefined ? '' : ` · ${formatElapsed(elapsed)}`}`
-        : tools.some((t) => t.status === 'running')
-          ? '正在执行工具'
-          : text
-            ? '正在生成回复'
-            : '正在准备回复'
+      ? response.question?.resume
+        ? '等待恢复'
+        : '等待你的选择'
+      : response.workersRunning
+        ? '等待子任务完成'
+        : complete
+          ? `${data.text}${elapsed === undefined ? '' : ` · ${formatElapsed(elapsed)}`}`
+          : tools.some((t) => t.status === 'running')
+            ? '正在执行工具'
+            : text
+              ? '正在生成回复'
+              : '正在准备回复'
   return {
     schema: '2.0',
     config: {

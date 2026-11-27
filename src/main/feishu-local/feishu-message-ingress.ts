@@ -48,13 +48,13 @@ export class FeishuMessageIngress {
     const root = known?.root ?? parent ?? m.message_id
     const external = threadKey(b, m.chat_id, root, m.sender_id).externalId
     const own = await this.store.laneRoute(b.account, external)
-    if (m.chat_type === 'group' && !own) {
+    if (m.chat_type === 'group') {
       await this.displayName(b.app)
-      if (!m.mentions?.some((mention) => mention.id === this.botOpenId)) {
+      if (!own && !m.mentions?.some((mention) => mention.id === this.botOpenId)) {
         return
       }
     }
-    const history = !own ? await feishuThreadContext(b, m, this.signal) : []
+    const history = !own ? await feishuThreadContext(b, m, this.signal, this.members) : []
     if (!feishuAsker(b, this.members(), m.sender_id)) {
       return
     }
@@ -84,7 +84,8 @@ export class FeishuMessageIngress {
           : m.content
       },
       history,
-      this.members()
+      this.members(),
+      { mentioned: m.mentions?.some((mention) => mention.id === this.botOpenId) }
     )
   }
 }

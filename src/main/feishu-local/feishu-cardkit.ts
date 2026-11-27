@@ -58,7 +58,7 @@ export class FeishuCardKit {
     }
     const sequence = () => this.store.cardSequence(this.b.account, card.id)
     const complete =
-      data.response?.final !== undefined ||
+      (data.response?.final !== undefined && !data.response.workersRunning) ||
       Boolean(data.response?.supersededBy) ||
       Boolean(data.response?.question?.pending)
     const text = feishuResponseText(data)
@@ -67,6 +67,7 @@ export class FeishuCardKit {
       tools: data.response?.native?.tools,
       trace: data.response?.native ? undefined : data.response?.trace,
       complete,
+      workersRunning: data.response?.workersRunning,
       question: data.response?.question,
       history: data.response?.history,
       answerFormat: text.includes('![') || /<img\b/i.test(text) ? 'plain' : 'markdown',

@@ -1,3 +1,9 @@
+import type { FeishuStore } from './feishu-store-ops'
+import type { Binding } from './feishu-binding'
+import type { BotMember } from '../../shared/bot-types'
+import type { FeishuCardDelivery } from './feishu-card-delivery'
+import { consumeFeishuEvent } from './feishu-cli'
+import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
 
 const click = z.object({
@@ -20,5 +26,58 @@ export function readFeishuClick(line: string) {
     return { ...event, ...choice.parse(JSON.parse(event.action_value)) }
   } catch {
     return null
+  }
+}
+
+export async function listenFeishuCardActions(
+  app: string,
+  signal: AbortSignal,
+  checkProfile: () => Promise<void>,
+  wake: () => void,
+  click: (line: string) => Promise<void>
+): Promise<void> {
+  while (!signal.aborted) {
+    try {
+      await checkProfile()
+      await consumeFeishuEvent(app, 'card.action.trigger', signal, () => {}, click)
+    } catch {
+      if (!signal.aborted) {
+        wake()
+      }
+    }
+    if (!signal.aborted) {
+      await delay(15000, undefined, { signal }).catch(() => {})
+    }
+  }
+}
+
+export async function handleFeishuClick(
+  store: FeishuStore,
+  b: Binding,
+  members: readonly BotMember[],
+  cards: FeishuCardDelivery,
+  active: () => boolean,
+  wake: () => void,
+  line: string
+): Promise<void> {
+  const click = readFeishuClick(line)
+  if (!click || !active()) {
+    return
+  }
+  const card = await store.claimCardFor(
+    b,
+    members,
+    click.operator_id,
+    click.message_id,
+    click.chat_id,
+    click.option,
+    click.question
+  )
+  try {
+    if (card) {
+      await cards.publish(card.id)
+    }
+  } finally {
+    wake()
   }
 }
