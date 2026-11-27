@@ -197,9 +197,9 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
     const ownedKey = structuredTabs.map((tab) => tab.id).join('\n')
     const ownedTabIds = useMemo(() => new Set(ownedKey ? ownedKey.split('\n') : []), [ownedKey])
     useLayoutEffect(() => {
-      watchClosedChatTabs()
+      watchClosedChatTabs(worktreeId)
       openNativeChatViewTabs(ownedTabIds)
-    }, [ownedTabIds])
+    }, [ownedTabIds, worktreeId])
     // Why: only shown chats and a few recently shown ones stay mounted, so memory doesn't grow with chats visited.
     const retainedKey = useRetainedChatViewKey(ownedTabIds)
     const mountedTabs = [...new Set([...shownKey.split('\n'), ...retainedKey.split('\n')])]
