@@ -13,6 +13,7 @@ import type { MobileStructuredAgentSessionArgs } from '../agent-session/mobile-s
 import { callAgentSession } from '../agent-session/mobile-structured-agent-session-rpc'
 import { useMobileRegisteredAgent } from '../agent-session/use-mobile-registered-agent'
 import { useMobileStructuredSessionHostExecutionPhase } from '../agent-session/use-mobile-structured-session-host-execution'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 
 // A cold Codex read or a Claude sign-in finish (exchange, reconnect, re-read) can run long.
 const MCP_TIMEOUT_MS = 90_000
@@ -27,6 +28,9 @@ export type MobileStructuredMcpPanel = {
   manage: (() => void) | null
   /** The chat's agent, as the tray names it. */
   agentLabel: string
+  /** The host's list of MCP servers, which Orca checks and signs in to itself before the agent
+   *  starts; null on a host without one. */
+  orca: { client: RpcClient; agent: string; hostId: string } | null
 }
 
 type McpCommands = Pick<StructuredAgentSessionComposerOptions, 'openMcpPanel'>
@@ -103,12 +107,16 @@ export function useMobileStructuredMcpPanel<TCommands extends object>(
   const refreshKey = `${opens}:${phase}`
   const canManage = hostListsServers && !!hostId
   const agentLabel = agent ? (tuiAgentDisplayName(agent) ?? agent) : ''
+  const orca = useMemo(
+    () => (canManage && client && agent ? { client, agent, hostId: hostId ?? '' } : null),
+    [agent, canManage, client, hostId]
+  )
   const mcpPanel = useMemo(
     () =>
       offered
-        ? { open, close, request, refreshKey, manage: canManage ? manage : null, agentLabel }
+        ? { open, close, request, refreshKey, manage: canManage ? manage : null, agentLabel, orca }
         : null,
-    [agentLabel, canManage, close, manage, offered, open, refreshKey, request]
+    [agentLabel, canManage, close, manage, offered, open, orca, refreshKey, request]
   )
   const mcpCommands = useMemo(
     () => ({ ...commands, openMcpPanel: offered ? show : undefined }),

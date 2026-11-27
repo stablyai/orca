@@ -179,10 +179,14 @@ export async function allowMcpAgentFile(
 }
 
 /** What each server's check found, by server id; starts the servers, so once per page. */
+/** `agent`: whose CLI runs the check (Claude Code or Codex); the host picks Claude Code otherwise. */
 export async function readMcpServerProblems(
-  target: RuntimeClientTarget
+  target: RuntimeClientTarget,
+  agent?: string
 ): Promise<Record<string, BotToolProblem>> {
-  return (await call<{ problems: Record<string, BotToolProblem> }>(target, 'problems')).problems
+  const params = agent === 'claude' || agent === 'codex' ? { agent } : {}
+  return (await call<{ problems: Record<string, BotToolProblem> }>(target, 'problems', params))
+    .problems
 }
 
 export function cancelMcpServerProblems(target: RuntimeClientTarget): void {

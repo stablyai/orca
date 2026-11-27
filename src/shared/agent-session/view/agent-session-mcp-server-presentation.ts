@@ -64,3 +64,29 @@ export function agentSessionMcpRowFailure(
     ? null
     : { kind: 'message', message: failure.message }
 }
+
+/** An at-rest chat lists Orca servers its client can check before the agent starts. */
+export function hasUncheckedOrcaMcpServers(servers: readonly AgentSessionMcpServer[]): boolean {
+  return servers.some((server) => server.orca !== undefined && server.status === 'not-started')
+}
+
+/** Orca's check of its host list (`mcpServers.problems`, by server id) on an at-rest chat's rows. */
+export function withOrcaMcpProblems(
+  servers: readonly AgentSessionMcpServer[],
+  problems: Readonly<Record<string, { kind: 'sign-in' | 'failed' | 'unconfirmed' }>>
+): readonly AgentSessionMcpServer[] {
+  if (Object.keys(problems).length === 0) {
+    return servers
+  }
+  return servers.map((server) => {
+    const problem = server.orca && server.status === 'not-started' && problems[server.orca.id]
+    return !problem || problem.kind === 'unconfirmed'
+      ? server
+      : { ...server, status: problem.kind === 'sign-in' ? 'needs-auth' : 'failed' }
+  })
+}
+
+/** A URL's host, for "Can’t reach …". */
+export function agentSessionMcpUrlHost(url: string): string {
+  return URL.canParse(url) ? new URL(url).host : url
+}

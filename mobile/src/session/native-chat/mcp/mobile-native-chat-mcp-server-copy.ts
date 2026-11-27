@@ -46,6 +46,10 @@ export function mobileMcpServerStatusLine(server: AgentSessionMcpServer, t: Tran
         ? t('chat.mcp.status.needsAuth', 'Needs sign-in')
         : t('chat.mcp.status.needsAuthAfterSend', 'Needs sign-in. Send a message to sign in here.')
     case 'failed':
+      // Orca's own check found it before the agent started, in the words its MCP servers page uses.
+      if (server.orca && !server.error) {
+        return t('mcpServers.wontStart', 'Won’t start')
+      }
       return server.error
         ? t('chat.mcp.status.failedReason', 'Failed: {{error}}', { error: server.error })
         : t('chat.mcp.status.failed', 'Failed')
