@@ -2,7 +2,7 @@ import {
   hangObservationUnresponsiveMs,
   isHangTierObservation,
   mergeHangTierFields,
-  parseHangTierFields,
+  parseHangStallTrailFields,
   MACHINE_FIELDS,
   SNAPSHOT_FIELDS,
   type HangPowerReceipt,
@@ -154,11 +154,7 @@ function parseObservation(value: unknown): HangObservation | null {
         }
       : {}),
     ...(workerSends ? { workerSends } : {}),
-    ...(finite(data.watchdogTickAt) ? { watchdogTickAt: data.watchdogTickAt } : {}),
-    ...(typeof data.appVersion === 'string' && /^[\w.+-]{1,80}$/.test(data.appVersion)
-      ? { appVersion: data.appVersion }
-      : {}),
-    ...parseHangTierFields(data)
+    ...parseHangStallTrailFields(data)
   }
 }
 

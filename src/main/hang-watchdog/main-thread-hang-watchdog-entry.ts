@@ -12,7 +12,7 @@ import {
   type HangPowerReceipt
 } from './hang-observations'
 import { captureHangSnapshot } from './hang-snapshot'
-import { createWatchdogHangCapture } from './watchdog-hang-capture'
+import { createWatchdogHangCapture, preloadHangCaptureModules } from './watchdog-hang-capture'
 import { recentWorkerSends } from './hang-recent-worker-sends'
 import { sleepAssociation, type SleepPeriod } from './hang-sleep-association'
 import {
@@ -28,9 +28,6 @@ import type {
   HangWatchdogWorkerData,
   MainToHangWatchdogWorkerMessage
 } from './hang-watchdog-worker-protocol'
-
-// After startup's busiest stretch, well before a user could hit a hang.
-const PRELOAD_DELAY_MS = 30_000
 
 type HangWatchdogPort = {
   on: (event: 'message', listener: (message: MainToHangWatchdogWorkerMessage) => void) => unknown
@@ -222,13 +219,13 @@ export function runWatchdog(
       openReceiptWindow(id)
       reportRecovered(id, unresponsiveMs, endedAt)
     },
-    onStallEndedBySleep: (gapMs) => {
+    onStallEndedBySleep: (durationMs) => {
       const stall = activeStallId ? find(activeStallId) : undefined
       activeStallId = null
       // Marks the stall as ended by the machine, so next launch does not treat it as an unrecovered hang.
       if (stall && !stall.watchdogGap) {
         update(stall.id, {
-          watchdogGap: { observedAt: Date.now(), durationMs: gapMs, snapshot: captureHangSnapshot() }
+          watchdogGap: { observedAt: Date.now(), durationMs, snapshot: captureHangSnapshot() }
         })
       }
     },
@@ -263,15 +260,7 @@ export function runWatchdog(
       update(activeStallId, { watchdogTickAt: Date.now() })
     }
   }, config.checkIntervalMs)
-  // Load capture code now: a module load during a hang needs the disk and thread pool main may be blocking.
-  const preload = setTimeout(() => {
-    void Promise.all([
-      import('./hang-incident-snapshot'),
-      import('./native-hang-capture'),
-      import('@orca/process-host')
-    ]).catch(() => {})
-  }, PRELOAD_DELAY_MS)
-  preload.unref?.()
+  const preload = preloadHangCaptureModules()
   port.on('message', (message) => {
     if (stopped) {
       return

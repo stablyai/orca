@@ -3,6 +3,21 @@ import type { NativeHangProcessMetadata } from './native-hang-report'
 import type { HangObservation } from './hang-observations'
 
 type NativeCaptureOwner = { stop?: () => void }
+// After startup's busiest stretch, well before a user could hit a hang.
+const PRELOAD_DELAY_MS = 30_000
+
+/** Loads capture code early: a module load during a hang needs the disk and thread pool main may be blocking. */
+export function preloadHangCaptureModules(): ReturnType<typeof setTimeout> {
+  const timer = setTimeout(() => {
+    void Promise.all([
+      import('./hang-incident-snapshot'),
+      import('./native-hang-capture'),
+      import('@orca/process-host')
+    ]).catch(() => {})
+  }, PRELOAD_DELAY_MS)
+  timer.unref?.()
+  return timer
+}
 
 export function createWatchdogHangCapture(options: {
   parentPid: number

@@ -102,14 +102,12 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         span.setAttribute('updater.version', pendingVersion || 'unknown')
         span.setAttribute('updater.platform', process.platform)
         span.setAttribute('updater.trigger', trigger)
-        span.setAttribute(
-          'updater.macosInstallerReady',
-          process.platform === 'darwin' ? isMacInstallerReady() : true
-        )
+        const macInstallerReady = process.platform === 'darwin' ? isMacInstallerReady() : true
+        span.setAttribute('updater.macosInstallerReady', macInstallerReady)
         recordUpdaterLifecycle('quit_and_install_started', {
           version: pendingVersion || null,
           trigger,
-          macInstallerReady: process.platform === 'darwin' ? isMacInstallerReady() : true
+          macInstallerReady
         })
         span.addEvent('pre_quit_cleanup_start')
         preparingProfile = true

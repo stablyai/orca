@@ -80,6 +80,19 @@ export function hangObservationUnresponsiveMs(record: HangObservation): number {
   )
   return record.durationMs + Math.max(0, lastKnownAt - record.detectedAt)
 }
+/** Tier plus the build and last watchdog tick a stall record carries. */
+export function parseHangStallTrailFields(
+  data: Record<string, unknown>
+): Pick<HangObservation, 'tier' | 'escalatedAt' | 'appVersion' | 'watchdogTickAt'> {
+  const { appVersion, watchdogTickAt } = data
+  return {
+    ...parseHangTierFields(data),
+    ...(typeof appVersion === 'string' && /^[\w.+-]{1,80}$/.test(appVersion) ? { appVersion } : {}),
+    ...(typeof watchdogTickAt === 'number' && Number.isFinite(watchdogTickAt)
+      ? { watchdogTickAt }
+      : {})
+  }
+}
 type HangTierFields = Pick<HangObservation, 'tier' | 'escalatedAt'>
 export function parseHangTierFields(data: Record<string, unknown>): HangTierFields {
   const escalatedAt = data.escalatedAt
