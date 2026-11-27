@@ -170,10 +170,16 @@ export class OrchestrationDbCompaction {
     if (!counted || this.stopped) {
       return
     }
-    // A WAL a passive checkpoint drained keeps its size, which quit would read as pending work. Truncated
-    // off main, and only then: it takes the writer lock for a moment. It moves the stamp, so it comes first.
-    if (((await sizeOf(`${this.filename}-wal`)) ?? 0) > MAX_WAL_BYTES) {
-      await this.runChild(undefined, MIN_COPY_BUDGET_MS)
+    // Drained off main first, so a valid copy leaves quit's checkpoint on main nothing to copy. A drained WAL
+    // keeps its size, which quit would read as pending work, so a large one is truncated too, though only
+    // then: that takes the writer lock for a moment. It moves the stamp, so it comes first.
+    const walBytes = (await sizeOf(`${this.filename}-wal`)) ?? 0
+    if (walBytes > 0) {
+      const drained = await this.runChild(undefined, MIN_COPY_BUDGET_MS, walBytes > MAX_WAL_BYTES)
+      // A reader pinning frames would leave work for main at quit, or a WAL quit refuses: no copy in vain.
+      if (!drained || ((await sizeOf(`${this.filename}-wal`)) ?? 0) > MAX_WAL_BYTES) {
+        return
+      }
     }
     if (this.stopped) {
       return
@@ -210,11 +216,16 @@ export class OrchestrationDbCompaction {
     await this.removeCopy()
   }
 
-  /** With a stamp, writes the copy and stops once a commit moves it; without, only truncates the WAL. */
-  private async runChild(stamp: string | undefined, budgetMs: number): Promise<boolean> {
+  /** With a stamp, writes the copy and stops once a commit moves it; without, only drains the WAL. */
+  private async runChild(
+    stamp: string | undefined,
+    budgetMs: number,
+    truncate = false
+  ): Promise<boolean> {
     const run = runCompactionChild({
       filename: this.filename,
       target: stamp === undefined ? undefined : this.copyPath,
+      truncate,
       budgetMs,
       isStale: () => {
         try {

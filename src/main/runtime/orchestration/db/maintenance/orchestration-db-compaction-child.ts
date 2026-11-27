@@ -7,11 +7,13 @@ export type CompactionChild = Pick<ChildProcess, 'kill'>
 
 /**
  * Starts the compaction child: with a target it writes the copy and is stopped as soon as `isStale` says a
- * commit made it useless; without, it only truncates the WAL. Resolves true on a clean exit.
+ * commit made it useless; without, it only drains the WAL, and truncates it when asked. Resolves true on a
+ * clean exit: the copy written, or every WAL frame drained.
  */
 export function runCompactionChild(job: {
   filename: string
   target: string | undefined
+  truncate?: boolean
   budgetMs: number
   isStale: () => boolean
 }): { child: CompactionChild | undefined; done: Promise<boolean> } {
@@ -26,6 +28,7 @@ export function runCompactionChild(job: {
         ORCA_ORCHESTRATION_COMPACTION: JSON.stringify({
           filename: job.filename,
           target: job.target,
+          truncate: job.truncate === true,
           budgetMs: job.budgetMs
         })
       },
