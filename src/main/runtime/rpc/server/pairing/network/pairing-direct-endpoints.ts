@@ -53,7 +53,7 @@ async function listDirectEndpoints(
   boundEndpoint: string,
   lookup: DefaultRouteInterfaceLookup
 ): Promise<string[]> {
-  const boundHost = new URL(boundEndpoint).hostname
+  const boundHost = new URL(boundEndpoint).hostname.replace(/^\[|\]$/g, '')
   const pinned = pinnedListenerAddress(boundHost)
   if (pinned !== undefined) {
     return pinned ? [boundEndpoint] : []

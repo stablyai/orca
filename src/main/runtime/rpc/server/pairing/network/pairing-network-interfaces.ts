@@ -87,10 +87,12 @@ function rankInterface({ name, address, hasDefaultRoute }: NetworkInterface): nu
 /** A pinned listener answers only on its own address, and on none a client can dial when it is loopback; undefined for a wildcard listener. */
 export function pinnedListenerAddress(listenerHost: string): string | null | undefined {
   const host = listenerHost.replace(/^\[|\]$/g, '')
-  if (isPairingWildcardHostname(host)) {
+  // Canonical IPv6 so every spelling of `::`, `::1` or `::ffff:127.0.0.1` classifies alike.
+  const canonical = isIP(host) === 6 ? new URL(`http://[${host}]`).hostname.slice(1, -1) : host
+  if (isPairingWildcardHostname(canonical)) {
     return undefined
   }
-  return classifyRemotePairingHostname(host) === 'loopback' ? null : host
+  return classifyRemotePairingHostname(canonical) === 'loopback' ? null : host
 }
 
 export async function getDefaultPairingAddress(
