@@ -14,25 +14,38 @@ const CONNECT_TIMEOUT_MS = 5_000
  */
 export async function openDaemonToolRelayConnection(
   client: Pick<DaemonClient, 'socketPath' | 'tokenPath' | 'protocolVersion' | 'clientId'>,
-  frontConnectionId: string
+  frontConnectionId: string,
+  /** Aborting ends the setup and its socket, whatever step it is at. */
+  signal?: AbortSignal
 ): Promise<{ socket: Socket; remainder: Buffer }> {
+  signal?.throwIfAborted()
   const token = (await readFile(client.tokenPath, 'utf8')).trim()
-  const socket = await new Promise<Socket>((resolve, reject) => {
-    const pending = connect(client.socketPath)
-    const timer = setTimeout(() => {
-      pending.destroy()
-      reject(new DaemonProtocolError('Connection timed out'))
-    }, CONNECT_TIMEOUT_MS)
-    pending.once('connect', () => {
-      clearTimeout(timer)
-      resolve(pending)
-    })
-    pending.once('error', (error) => {
-      clearTimeout(timer)
-      reject(error)
-    })
-  })
+  signal?.throwIfAborted()
+  const socket = connect(client.socketPath)
+  const onAbort = (): void => {
+    socket.destroy()
+  }
+  signal?.addEventListener('abort', onAbort, { once: true })
   try {
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        socket.destroy()
+        reject(new DaemonProtocolError('Connection timed out'))
+      }, CONNECT_TIMEOUT_MS)
+      socket.once('connect', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+      socket.once('close', () => {
+        clearTimeout(timer)
+        reject(new DaemonProtocolError('Connection closed'))
+      })
+      socket.once('error', (error) => {
+        clearTimeout(timer)
+        reject(error)
+      })
+    })
+    signal?.throwIfAborted()
     const hello = await sendDaemonHello({
       socket,
       token,
@@ -46,5 +59,7 @@ export async function openDaemonToolRelayConnection(
   } catch (error) {
     socket.destroy()
     throw error
+  } finally {
+    signal?.removeEventListener('abort', onAbort)
   }
 }

@@ -73,6 +73,9 @@ function opened(entry: StoredSharedToolCaller): KeptSharedToolCaller | null {
 
 type Entry = { stored: StoredSharedToolCaller; kept: KeptSharedToolCaller | null }
 
+/** At most this many locked entries are decrypted per retry, so one retry's work stays bounded. */
+const UNLOCK_BATCH = 64
+
 export class SharedToolCallerStore {
   private file: RelaySealedFile<StoredSharedToolCaller> | null = null
   /**
@@ -80,6 +83,10 @@ export class SharedToolCallerStore {
    * the keychain won't open it (it stays as written and is retried).
    */
   private readonly chats = new Map<string, Map<number, Entry>>()
+  /** The entries still locked, so a lookup that finds nothing to retry does no scan. */
+  private readonly locked = new Set<Entry>()
+  /** Bumped by each owner's revoke, so a seal racing it never writes that owner back. */
+  private readonly revocations = new Map<string, number>()
   private loading: Promise<void> | null = null
 
   constructor(private readonly throttle: RelayUnlockThrottle = relayUnlockThrottle) {}
@@ -119,6 +126,11 @@ export class SharedToolCallerStore {
     }
   }
 
+  /** Some kept caller is still waiting for the keychain. */
+  hasLocked(): boolean {
+    return this.locked.size > 0
+  }
+
   /** Every kept caller that opened. */
   opened(): KeptSharedToolCaller[] {
     return [...this.chats.values()].flatMap((runs) =>
@@ -131,26 +143,35 @@ export class SharedToolCallerStore {
    * file; returns the callers that opened now.
    */
   unlock(): KeptSharedToolCaller[] {
-    const locked = [...this.chats.values()].flatMap((runs) =>
-      [...runs.values()].filter((entry) => entry.kept === null)
-    )
-    if (locked.length === 0 || !this.throttle.due()) {
+    if (this.locked.size === 0 || !this.throttle.due()) {
       return []
     }
-    return locked.flatMap((entry) => {
-      entry.kept = opened(entry.stored)
+    const opening = [...this.locked].slice(0, UNLOCK_BATCH)
+    return opening.flatMap((entry) => {
+      this.open(entry)
       return entry.kept ? [entry.kept] : []
     })
   }
 
-  /** The chat's kept caller from an earlier run of Orca, if its run is still the current one. */
+  /**
+   * The chat's kept caller from an earlier run of Orca, if its run is still the current one. Its
+   * reattach tries a still-locked entry of its own once, apart from the shared retry.
+   */
   restored(sessionId: string): KeptSharedToolCaller | null {
-    for (const { kept } of this.chats.get(sessionId)?.values() ?? []) {
-      if (kept) {
-        return kept
+    for (const entry of this.chats.get(sessionId)?.values() ?? []) {
+      if (entry.kept || this.open(entry)) {
+        return entry.kept
       }
     }
     return null
+  }
+
+  private open(entry: Entry): boolean {
+    entry.kept ??= opened(entry.stored)
+    if (entry.kept) {
+      this.locked.delete(entry)
+    }
+    return entry.kept !== null
   }
 
   /** Durably keeps a caller; false (memory-only, so its launch is app-bound) when it can't. */
@@ -159,13 +180,19 @@ export class SharedToolCallerStore {
     if (!this.file || !relaySealingProtected()) {
       return false
     }
-    const stored: StoredSharedToolCaller = {
-      sessionId: caller.sessionId,
-      runFence: caller.runFence,
-      owner: caller.owner,
-      sealed: await sealRelaySecret(JSON.stringify({ caller: caller.caller, token: caller.token }))
+    const revocation = this.revocations.get(caller.owner) ?? 0
+    let sealed: string
+    try {
+      sealed = await sealRelaySecret(JSON.stringify({ caller: caller.caller, token: caller.token }))
+    } catch {
+      return false
     }
-    const entry: Entry = { stored, kept: caller }
+    // Its owner was revoked while sealing: a deleted bot's caller never reaches the file.
+    if ((this.revocations.get(caller.owner) ?? 0) !== revocation) {
+      return false
+    }
+    const { sessionId, runFence, owner } = caller
+    const entry: Entry = { stored: { sessionId, runFence, owner, sealed }, kept: caller }
     this.put(entry)
     try {
       await this.persist()
@@ -180,15 +207,26 @@ export class SharedToolCallerStore {
    * `current` is the caller the chat's run now uses (null: none kept); every other entry of the
    * chat retires. A reattached run carries its restored caller over to its new fence.
    */
-  async settle(sessionId: string, current: KeptSharedToolCaller | null): Promise<void> {
+  async settle(
+    sessionId: string,
+    current: KeptSharedToolCaller | null,
+    /** A reattached run's fence: a still-locked entry of the chat moves to it instead of going. */
+    carryLockedTo?: number
+  ): Promise<void> {
     await this.load()
     const runs = this.chats.get(sessionId)
+    const carried = current
+      ? undefined
+      : [...(runs?.values() ?? [])].find((entry) => entry.kept === null)
     let changed = false
     for (const [fence, entry] of runs ?? []) {
       if (fence !== current?.runFence) {
         this.remove(entry)
         changed = true
       }
+    }
+    if (carried && carryLockedTo !== undefined) {
+      this.put({ stored: { ...carried.stored, runFence: carryLockedTo }, kept: null })
     }
     if (current && runs?.get(current.runFence)?.kept?.token !== current.token) {
       await this.keep(current)
@@ -211,6 +249,7 @@ export class SharedToolCallerStore {
 
   /** The owner's grant is being revoked: its callers go durably first. */
   async forgetOwner(owner: string): Promise<void> {
+    this.revocations.set(owner, (this.revocations.get(owner) ?? 0) + 1)
     await this.load()
     let changed = false
     for (const runs of this.chats.values()) {
@@ -229,12 +268,20 @@ export class SharedToolCallerStore {
   private put(entry: Entry): void {
     const { sessionId, runFence } = entry.stored
     const runs = this.chats.get(sessionId) ?? new Map<number, Entry>()
+    const replaced = runs.get(runFence)
+    if (replaced) {
+      this.locked.delete(replaced)
+    }
     runs.set(runFence, entry)
     this.chats.set(sessionId, runs)
+    if (entry.kept === null) {
+      this.locked.add(entry)
+    }
   }
 
   private remove(entry: Entry): void {
     const runs = this.chats.get(entry.stored.sessionId)
+    this.locked.delete(entry)
     if (runs?.get(entry.stored.runFence) === entry) {
       runs.delete(entry.stored.runFence)
       if (runs.size === 0) {

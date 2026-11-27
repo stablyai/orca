@@ -89,6 +89,12 @@ export async function adoptSessionToolCaller(
     )
   })
   const caller = isRecord(answer) && isRecord(answer.env) ? answer.env : null
+  if (!caller && isRecord(answer) && answer.locked === true) {
+    throw new RuntimeClientError(
+      'session_tool_caller_locked',
+      "Orca can't unlock this bot's credentials yet (the keychain is locked). Your session is still running; try again shortly."
+    )
+  }
   if (!caller) {
     throw new RuntimeClientError(
       'session_tool_caller_ended',

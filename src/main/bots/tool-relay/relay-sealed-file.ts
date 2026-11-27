@@ -85,10 +85,11 @@ export class RelaySealedFile<Entry> {
    */
   write(snapshot: () => readonly Entry[]): Promise<void> {
     this.latest = snapshot
-    if (!this.running) {
+    // A queued write still to start takes this change; starting another would race it.
+    if (!this.running && !this.queued) {
       return this.start()
     }
-    this.queued ??= this.running
+    this.queued ??= (this.running ?? Promise.resolve())
       .catch(() => {})
       .then(() => {
         this.queued = null

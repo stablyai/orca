@@ -54,7 +54,7 @@ import { ProviderRelayCarriedWork } from './provider-relay-carried-work'
 import { relayedManagedProcess } from './relayed-managed-process'
 import {
   refuseMovedProviderRelayFront,
-  takeProviderRelayFrontPin
+  launchProviderRelayFrontPin
 } from './provider-relay-front-pins'
 
 export type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
@@ -230,7 +230,7 @@ export async function launchRelayedProviderProcess(
 ): Promise<RelayedProviderProcess | null> {
   handedBack.delete(relay.chatKey)
   forgetProviderRelayRunPlacement(relay.chatKey)
-  const front = takeProviderRelayFrontPin(relay.chatKey)
+  const front = launchProviderRelayFrontPin(relay.chatKey, relay.only)
   const installed = providerRelayRoute()
   if (!installed) {
     return null

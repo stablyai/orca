@@ -23,8 +23,9 @@ export type ToolRelayFront = { origin: string; daemonInstance: string }
 type Watched = {
   stop: () => void
   port: number | null
-  /** The latest serve request; announcements wait for it, so the Host check knows the port. */
-  served: Promise<unknown>
+  /** The latest serve request, rejecting when it failed; announcements wait for it, so the Host
+   *  check knows the port. */
+  served: Promise<void>
   /** Bumped by each hello: a connection serves once, however many chats launch on it. */
   connection: number
   servedConnection: number | null
@@ -35,6 +36,8 @@ type Watched = {
 export class ToolRelayFronts {
   private readonly watched = new Map<DaemonClient, Watched>()
   private closed = false
+  /** Cancels connection setup still running when this closes. */
+  private readonly closing = new AbortController()
 
   constructor(private readonly accept: (socket: Socket) => void) {}
 
@@ -97,6 +100,7 @@ export class ToolRelayFronts {
 
   close(): void {
     this.closed = true
+    this.closing.abort()
     for (const watched of this.watched.values()) {
       watched.stop()
     }
@@ -144,8 +148,8 @@ export class ToolRelayFronts {
       return
     }
     if (watched.servedConnection === watched.connection) {
-      await watched.served
-      return
+      // A launch sharing a serve that failed fails too: it gets no front nobody serves.
+      return watched.served
     }
     watched.servedConnection = watched.connection
     const served = client
@@ -155,7 +159,8 @@ export class ToolRelayFronts {
         FRONT_REQUEST_TIMEOUT_MS
       )
       .then(({ port }) => this.noteServed(client, Number.isSafeInteger(port) ? port : null))
-    watched.served = served.catch(() => {
+    watched.served = served
+    served.catch(() => {
       // A failed serve is asked again by the next launch.
       if (watched.servedConnection === watched.connection) {
         watched.servedConnection = null
@@ -179,19 +184,29 @@ export class ToolRelayFronts {
     watched.opening.add(frontConnectionId)
     try {
       // The daemon re-announces held connections while it answers the serve request.
-      await watched.served
-      const { socket, remainder } = await openDaemonToolRelayConnection(client, frontConnectionId)
-      // Closed meanwhile: a late connection is never served.
-      if (this.closed) {
-        socket.destroy()
+      await watched.served.catch(() => {})
+      // One retry: the daemon announces a held connection once per serving connection.
+      for (let attempt = 0; attempt < 2 && !this.closed; attempt += 1) {
+        const opened = await openDaemonToolRelayConnection(
+          client,
+          frontConnectionId,
+          this.closing.signal
+        ).catch(() => null)
+        if (!opened) {
+          continue
+        }
+        // Closed meanwhile: a late connection is never served.
+        if (this.closed) {
+          opened.socket.destroy()
+          return
+        }
+        if (opened.remainder.length > 0) {
+          opened.socket.unshift(opened.remainder)
+        }
+        this.accept(opened.socket)
         return
       }
-      if (remainder.length > 0) {
-        socket.unshift(remainder)
-      }
-      this.accept(socket)
-    } catch {
-      // The daemon answers the held connection itself once its hold runs out.
+      // Unopened, the daemon answers the held connection itself once its hold runs out.
     } finally {
       watched.opening.delete(frontConnectionId)
     }

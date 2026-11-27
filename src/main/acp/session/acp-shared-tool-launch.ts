@@ -29,9 +29,12 @@ export async function acpSharedToolLaunch<
   const kept =
     !keeps ||
     (await launched.keepAs({ ...run, owner: callerOwner(launch.env) }, providerRelayQuitting))
+  // A bot's caller carries its token: unkept, its run ends with the app. Any other chat's runs on
+  // as before, its caller kept in memory only.
+  const appBound = !kept && launch.env[BOT_TOOLS_TOKEN_ENV] !== undefined
   return {
     relay: (start) =>
-      start(kept ? launch : { ...launch, appBoundGrants: true }).catch((error: unknown) => {
+      start(appBound ? { ...launch, appBoundGrants: true } : launch).catch((error: unknown) => {
         launched?.abandon()
         throw error
       }),
@@ -48,10 +51,13 @@ export async function acpSharedToolLaunch<
         : null
       if (restored) {
         launched?.discard()
+        restored.settle(run.sessionId)
+        return restored
       }
-      const session = restored ?? launched
-      session?.settle(run.sessionId)
-      return session
+      // A reattached agent whose kept caller the keychain won't open yet keeps that entry, carried
+      // to this run, so its tools have their identity once it opens.
+      launched?.settle(run.sessionId, reattached ? run.runFence : undefined)
+      return launched
     }
   }
 }

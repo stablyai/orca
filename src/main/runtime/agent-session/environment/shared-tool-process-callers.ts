@@ -115,7 +115,7 @@ export class SharedToolProcessSession {
       return false
     }
     const kept: KeptSharedToolCaller = { ...run, caller, token: this.token }
-    if (!(await sharedToolCallerStore.keep(kept))) {
+    if (!(await sharedToolCallerStore.keep(kept).catch(() => false))) {
       return false
     }
     this.kept = kept
@@ -123,9 +123,12 @@ export class SharedToolProcessSession {
     return true
   }
 
-  /** This session is the chat's run's caller now: every other kept entry of the chat retires. */
-  settle(sessionId: string): void {
-    void sharedToolCallerStore.settle(sessionId, this.kept).catch(() => {})
+  /**
+   * This session is the chat's run's caller now: every other kept entry of the chat retires, except,
+   * with `carryLockedTo`, one the keychain hasn't opened yet, which moves to that run.
+   */
+  settle(sessionId: string, carryLockedTo?: number): void {
+    void sharedToolCallerStore.settle(sessionId, this.kept, carryLockedTo).catch(() => {})
   }
 
   /** `opened` once its session's tools have their identity. A chat that fails to publish keeps no

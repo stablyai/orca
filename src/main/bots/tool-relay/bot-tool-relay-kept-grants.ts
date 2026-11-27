@@ -79,8 +79,10 @@ export class KeptRelayGrants {
     await this.fronts.serveAll()
   }
 
+  /** A token's grant; one the keychain refused at startup is retried (at most once per 10 s). */
   of(token: string): RelayGrant | undefined {
-    return this.grants.of(token)
+    const grant = this.grants.of(token) ?? this.grants.unlock(token)
+    return grant === 'locked' ? undefined : grant
   }
 
   /**

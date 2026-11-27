@@ -15,7 +15,22 @@ export function pinProviderRelayFront(chatKey: string, daemonInstance: string | 
   }
 }
 
-/** Taken once, by the launch's spawn or its process commit, so no chat keeps one past its launch. */
+/**
+ * Taken once, by the launch's spawn, its process commit or its end, so no chat keeps one past its
+ * launch; a reattach-only probe (which never spawns) only reads it.
+ */
+export function launchProviderRelayFrontPin(
+  chatKey: string,
+  only: 'spawn' | 'reattach' | undefined
+): string | null {
+  const pinned = pins.get(chatKey) ?? null
+  if (only !== 'reattach') {
+    pins.delete(chatKey)
+  }
+  return pinned
+}
+
+/** The launch is over (started or failed): its pin goes. */
 export function takeProviderRelayFrontPin(chatKey: string): string | null {
   const pinned = pins.get(chatKey) ?? null
   pins.delete(chatKey)
