@@ -7,8 +7,8 @@ import {
   ORCA_HERMES_STARTUP_QUERY_ENV
 } from '../../../../shared/agent-launch/startup/hermes-startup-query'
 import {
-  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
-  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
+  SETUP_AGENT_SEQUENCE_POWERSHELL_SCRIPT_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { alignManagedAgentLaunchAtSpawn } from '../../../managed-agent-cli/managed-agent-spawn-program'
 import type { PtySpawnLaunchOptionsInput } from './spawn-options-assembly'
@@ -29,9 +29,9 @@ export async function selectPtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
   // The setup gate's existing carrier holds the actual launch, including any Agent Teams flags.
   const sequenced = input.launchCommand && input.env?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
   const shell = sequenced
-    ? input.env?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]
-      ? 'posix'
-      : 'powershell'
+    ? input.env?.[SETUP_AGENT_SEQUENCE_POWERSHELL_SCRIPT_ENV]
+      ? 'powershell'
+      : 'posix'
     : paneShell
   let wslDistro = input.expectedWslDistro
   const {

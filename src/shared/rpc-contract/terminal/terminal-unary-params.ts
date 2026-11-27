@@ -1,4 +1,4 @@
-import { NativeChatSignIn } from './native-chat-sign-in-params'
+import { OptionalNativeChatSignIn } from './native-chat-sign-in-params'
 import * as z from 'zod'
 import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../../terminal/images/terminal-kitty-file'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
@@ -252,7 +252,7 @@ export const TerminalCreateParams = z.object({
   clientMutationId: z.string().min(1).max(128).optional(),
   reconcileExisting: z.boolean().optional(),
   command: OptionalString,
-  nativeChatSignIn: NativeChatSignIn.optional(),
+  nativeChatSignIn: OptionalNativeChatSignIn,
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   env: z.record(z.string(), z.string()).optional(),
   generatedAgentLaunch: z.string().optional(),

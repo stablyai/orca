@@ -9,7 +9,7 @@ import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import type { WorkspaceLaunchKind } from '../../agent-launch/contracts/workspace-launch-kind'
 import type { ProjectExecutionRuntimeResolution } from '../../execution-host/project-execution-runtime'
 import { TERMINAL_INPUT_MAX_BYTES } from '../../terminal/input/terminal-input'
-import { NativeChatSignIn } from '../terminal/native-chat-sign-in-params'
+import { OptionalNativeChatSignIn } from '../terminal/native-chat-sign-in-params'
 
 export const PreflightQueuedAgentLaunch = lazyZodSchema(() =>
   z.object({
@@ -31,7 +31,7 @@ export const PreflightQueuedAgentLaunch = lazyZodSchema(() =>
       .optional(),
     launchAgent: z.custom<TuiAgent>(isTuiAgent).optional(),
     restoring: z.boolean().optional(),
-    nativeChatSignIn: NativeChatSignIn.optional(),
+    nativeChatSignIn: OptionalNativeChatSignIn,
     images: z.boolean().optional()
   })
 )
@@ -74,12 +74,10 @@ export const PreflightAgentDetection = lazyZodSchema(() =>
     })
 )
 
-export const PreflightAgentRefresh = lazyZodSchema(() =>
-  PreflightAgentDetection.safeExtend({
-    userInitiated: z.boolean().optional(),
-    withManagedAgentCommands: z.boolean().optional()
-  })
-)
+export const PreflightAgentRefresh = PreflightAgentDetection.safeExtend({
+  userInitiated: z.boolean().optional(),
+  withManagedAgentCommands: lazyZodSchema(() => z.boolean().optional())
+})
 
 export const PreflightProjectAgentDetection = lazyZodSchema(() =>
   PreflightAgentDetection.safeExtend({
@@ -87,7 +85,7 @@ export const PreflightProjectAgentDetection = lazyZodSchema(() =>
     withManagedAgentCommands: z.boolean().optional(),
     afterPublication: z.number().int().nonnegative().optional(),
     launch: PreflightQueuedAgentLaunch.optional(),
-    nativeChatSignIn: NativeChatSignIn.optional(),
+    nativeChatSignIn: OptionalNativeChatSignIn,
     project: RepoSelector.extend({ repo: RepoSelector.shape.repo.pipe(z.string().max(4096)) })
       .strict()
       .optional()

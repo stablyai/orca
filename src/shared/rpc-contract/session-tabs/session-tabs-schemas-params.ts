@@ -4,7 +4,7 @@ import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
 import { TAB_ACTIVATION_INTENTS } from '../../workspace-layout/tab-groups/tab-activation-intent'
 import { OptionalBoolean } from '../rpc-param-primitives'
-import { NativeChatSignIn } from '../terminal/native-chat-sign-in-params'
+import { OptionalNativeChatSignIn } from '../terminal/native-chat-sign-in-params'
 import { sleepingAgentLaunchConfigSchema } from '../../workspace-session/workspace-session-sleeping-agents'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
@@ -194,7 +194,7 @@ export const CreateTerminalTab = lazyZodSchema(() =>
     historyResume: z.literal(true).optional(),
     hermesStartupQueryArgv: z.string().optional(),
     envToDelete: z.array(z.string().min(1).max(256)).max(32).optional(),
-    nativeChatSignIn: NativeChatSignIn.optional(),
+    nativeChatSignIn: OptionalNativeChatSignIn,
     startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
     launchConfig: sleepingAgentLaunchConfigSchema,
     launchToken: z.string().min(1).max(128).optional(),
