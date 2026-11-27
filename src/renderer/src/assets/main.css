@@ -2448,34 +2448,6 @@ html.native-shell .app-layout {
   grid-template-rows: 1fr;
 }
 
-/* A click on a down pane's veil points at its server card: two short shakes, or a brief outline without motion. */
-@keyframes remote-server-outage-nudge {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-
-  25% {
-    transform: translateX(-4px);
-  }
-
-  75% {
-    transform: translateX(4px);
-  }
-}
-
-.remote-server-outage-nudge {
-  animation: remote-server-outage-nudge 250ms ease-in-out 2;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .remote-server-outage-nudge {
-    animation: none;
-    outline: 2px solid var(--status-warning);
-    outline-offset: 2px;
-  }
-}
-
 /* Keep rotation on the compositor: JS style writes caused typing stalls (#12359). */
 /* One day per iteration avoids per-second React animation events; still 12 steps/second. */
 @keyframes agent-spinner-rotate {
