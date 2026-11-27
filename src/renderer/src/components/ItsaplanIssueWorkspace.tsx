@@ -9,7 +9,10 @@ import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import type { ItsaplanIssue } from '../../../shared/itsaplan/itsaplan-types'
 import { ItsaplanStatePill } from './task-page/itsaplan/listing/ItsaplanIssueRow'
-import { getItsaplanErrorMessage } from './task-page/itsaplan/task-page-itsaplan-load-error'
+import {
+  getItsaplanErrorMessage,
+  isItsaplanInvalidApiKeyError
+} from './task-page/itsaplan/task-page-itsaplan-load-error'
 import { ItsaplanIssueStateControl } from './itsaplan-issue-state-control'
 import { ItsaplanIssueAssigneeControl } from './itsaplan-issue-assignee-control'
 import { ItsaplanIssueComments } from './itsaplan-issue-comments'
@@ -20,6 +23,7 @@ type ItsaplanIssueWorkspaceProps = {
   onUse: (issue: ItsaplanIssue) => void
   onOpenIssue: (issue: ItsaplanIssue) => void
   onClose: () => void
+  onReconnect: () => void
 }
 
 function SidebarField({
@@ -42,7 +46,8 @@ function ItsaplanIssueWorkspaceIssue({
   backLabel,
   onUse,
   onOpenIssue,
-  onClose
+  onClose,
+  onReconnect
 }: ItsaplanIssueWorkspaceProps): React.JSX.Element {
   const t = useTranslate()
   const detail = useAppStore((s) => s.itsaplanIssueDetails[issue.id])
@@ -130,7 +135,16 @@ function ItsaplanIssueWorkspaceIssue({
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
         <div className="mx-auto grid w-full grid-cols-1 gap-10 px-7 py-10 lg:grid-cols-[minmax(0,1fr)_280px] lg:px-10 xl:px-12">
           <main className="min-w-0">
-            {detailError ? (
+            {detailError && isItsaplanInvalidApiKeyError(detailError) ? (
+              <div className="mb-6 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <span>
+                  {t('taskProviders.itsaplan.invalidKeyTitle', 'API key invalid, reconnect')}
+                </span>
+                <Button variant="outline" size="xs" onClick={onReconnect}>
+                  {t('taskProviders.itsaplan.reconnect', 'Reconnect')}
+                </Button>
+              </div>
+            ) : detailError ? (
               <div className="mb-6 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {detailError}
               </div>

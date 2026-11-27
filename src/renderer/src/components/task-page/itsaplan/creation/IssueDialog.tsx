@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
@@ -52,6 +52,8 @@ function ItsaplanIssueForm({
   const [assigneeUserId, setAssigneeUserId] = useState<string | null>(null)
   const [labelIds, setLabelIds] = useState<number[]>([])
   const [submitting, setSubmitting] = useState(false)
+  // Why: a second key event can arrive before `submitting` renders; the ref closes that gap.
+  const inFlightRef = useRef(false)
   const columns = [...(metadata?.columns ?? [])].sort((a, b) => a.position - b.position)
   const members = metadata?.members ?? []
   const labels = metadata?.labels ?? []
@@ -59,9 +61,10 @@ function ItsaplanIssueForm({
   const effectiveColumnId = columnId ?? defaultColumnId(metadata)
   const submit = (): void => {
     const trimmedTitle = title.trim()
-    if (!trimmedTitle || submitting) {
+    if (!trimmedTitle || inFlightRef.current) {
       return
     }
+    inFlightRef.current = true
     setSubmitting(true)
     void createItsaplanIssue({
       projectRef,
@@ -81,7 +84,10 @@ function ItsaplanIssueForm({
       .catch(() => {
         toast.error(t('taskProviders.itsaplan.createFailed', 'Failed to create the issue.'))
       })
-      .finally(() => setSubmitting(false))
+      .finally(() => {
+        inFlightRef.current = false
+        setSubmitting(false)
+      })
   }
   const labelsLabel =
     labelIds.length === 0
@@ -115,7 +121,12 @@ function ItsaplanIssueForm({
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+            // Modified Enter bubbles to the form's submit-shortcut handler.
+            if (
+              event.key === 'Enter' &&
+              !event.nativeEvent.isComposing &&
+              !isScreenSubmitShortcut(event)
+            ) {
               event.preventDefault()
               submit()
             }

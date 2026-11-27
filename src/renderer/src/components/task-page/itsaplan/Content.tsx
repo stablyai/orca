@@ -37,6 +37,7 @@ export function TaskPageItsaplanContent({
         onUse={openComposerForItsaplanItem}
         onOpenIssue={openItsaplanDetailPage}
         onClose={closeTaskDetailPage}
+        onReconnect={() => setItsaplanConnectOpen(true)}
       />
     )
   }

@@ -90,6 +90,7 @@ export const detailPage = defineFixture({
         onUse={() => {}}
         onOpenIssue={() => {}}
         onClose={() => {}}
+        onReconnect={() => {}}
       />
     </div>
   )
