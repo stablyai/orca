@@ -1563,6 +1563,10 @@
         "browserBlockGuidance": "Finaliza el proceso del navegador (PID {{pids}}) y vuelve a intentarlo. Su servidor sigue en marcha.",
         "browserBlockGuidanceMany": "Finaliza los procesos del navegador (PID {{pids}}) y vuelve a intentarlo. Sus servidores siguen en marcha.",
         "blocked": "Bloqueado"
+      },
+      "action": {
+        "install": "Instalar",
+        "installNow": "Instalar {{version}} ahora"
       }
     }
   },

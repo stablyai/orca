@@ -273,8 +273,13 @@ export function UpdateStatusRow({
         ) : null}
       </div>
       {showDetails ? (
-        // Raw updater errors keep their lines and scroll; written guidance wraps to the card.
-        <UpdateStatusDetails text={details} prose={model.details !== 'message'} />
+        <UpdateStatusDetails
+          text={details}
+          // Coded messages are translated prose; only an uncoded raw error keeps monospace lines.
+          prose={
+            model.details !== 'message' || (status.state === 'error' && Boolean(status.messageCode))
+          }
+        />
       ) : null}
     </div>
   )
@@ -330,9 +335,22 @@ function UpdateStatusAction({
             'settings.updateDelay.skipDelayOnceHint',
             'Check for this release now. Your delay setting stays the same.'
           )}
+          aria-description={
+            model.line.kind === 'held'
+              ? t('settings.about.action.installNow', 'Install {{version}} now', {
+                  version: model.line.version
+                })
+              : undefined
+          }
           onClick={() => runUpdateCheck({ ignoreUpdateDelay: true })}
         >
-          {t('settings.about.action.skipDelay', 'Skip delay')}
+          {/* "Skip delay" crowds the version on the 256px card; "Install" is the same action. */}
+          <span className="@max-xs/about-status:hidden">
+            {t('settings.about.action.skipDelay', 'Skip delay')}
+          </span>
+          <span className="hidden @max-xs/about-status:inline">
+            {t('settings.about.action.install', 'Install')}
+          </span>
         </Button>
       )
     case 'download':

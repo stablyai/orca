@@ -1537,6 +1537,10 @@
         "browserBlockGuidance": "结束浏览器进程（PID {{pids}}）后重试。其服务器会继续运行。",
         "browserBlockGuidanceMany": "结束浏览器进程（PID {{pids}}）后重试。这些服务器会继续运行。",
         "blocked": "已阻止"
+      },
+      "action": {
+        "install": "安装",
+        "installNow": "立即安装 {{version}}"
       }
     }
   },

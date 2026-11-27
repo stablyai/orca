@@ -412,3 +412,16 @@ export const browserInstallBlock = about(
   { interact: (frame) => expand(frame, 'Show details') }
 )
 export const browserInstallBlockNarrow = narrow(browserInstallBlock)
+
+/** A coded updater error: translated prose, shown in the normal font. */
+export const codedErrorDetails = about(
+  {
+    state: 'error',
+    version: NEXT,
+    message: 'staging timed out',
+    messageCode: 'macStagingTimeout',
+    userInitiated: true
+  },
+  { interact: (frame) => expand(frame, 'Show details') }
+)
+export const codedErrorDetailsNarrow = narrow(codedErrorDetails)

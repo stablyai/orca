@@ -1535,6 +1535,10 @@
         "browserBlockGuidance": "ブラウザープロセス (PID {{pids}}) を終了してから再試行してください。サーバーは動作し続けます。",
         "browserBlockGuidanceMany": "ブラウザープロセス (PID {{pids}}) を終了してから再試行してください。サーバーは動作し続けます。",
         "blocked": "ブロック中"
+      },
+      "action": {
+        "install": "インストール",
+        "installNow": "{{version}} を今すぐインストール"
       }
     }
   },

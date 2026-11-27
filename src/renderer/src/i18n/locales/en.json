@@ -2294,6 +2294,8 @@
         "check": "Check",
         "retry": "Retry",
         "skipDelay": "Skip delay",
+        "install": "Install",
+        "installNow": "Install {{version}} now",
         "restart": "Restart",
         "checkForUpdates": "Check for updates"
       },

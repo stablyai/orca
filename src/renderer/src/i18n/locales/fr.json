@@ -1941,6 +1941,10 @@
         "browserBlockGuidance": "Arrêtez le processus du navigateur (PID {{pids}}), puis réessayez. Son serveur continue de tourner.",
         "browserBlockGuidanceMany": "Arrêtez les processus du navigateur (PID {{pids}}), puis réessayez. Leurs serveurs continuent de tourner.",
         "blocked": "Bloqué"
+      },
+      "action": {
+        "install": "Installer",
+        "installNow": "Installer {{version}} maintenant"
       }
     }
   },

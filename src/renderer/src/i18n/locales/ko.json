@@ -1544,6 +1544,10 @@
         "browserBlockGuidance": "브라우저 프로세스(PID {{pids}})를 종료한 뒤 다시 시도하세요. 서버는 계속 실행됩니다.",
         "browserBlockGuidanceMany": "브라우저 프로세스(PID {{pids}})를 종료한 뒤 다시 시도하세요. 서버는 계속 실행됩니다.",
         "blocked": "차단됨"
+      },
+      "action": {
+        "install": "설치",
+        "installNow": "지금 {{version}} 설치"
       }
     }
   },

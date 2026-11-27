@@ -3199,6 +3199,10 @@
         "browserBlockGuidance": "Encerre o processo do navegador (PID {{pids}}) e tente de novo. O servidor dele continua em execução.",
         "browserBlockGuidanceMany": "Encerre os processos do navegador (PIDs {{pids}}) e tente de novo. Os servidores continuam em execução.",
         "blocked": "Bloqueado"
+      },
+      "action": {
+        "install": "Instalar",
+        "installNow": "Instalar {{version}} agora"
       }
     }
   },
