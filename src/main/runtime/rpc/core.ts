@@ -204,7 +204,10 @@ export type RpcContext = {
   }
   // Authenticated runtime devices may manage only their own delegated phones.
   delegatedMobileDevices?: {
-    sync(phones: readonly DelegatedPhone[]): DelegatedMobileDeviceSyncResult
+    sync(
+      phones: readonly DelegatedPhone[],
+      clientInstanceId?: string
+    ): DelegatedMobileDeviceSyncResult
   }
   // Binary terminal transport is absent on Unix and non-E2EE WebSocket paths.
   sendBinary?: RpcBinarySender
