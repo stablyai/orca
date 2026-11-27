@@ -213,7 +213,10 @@ export async function resolveAgentLaunchModeOnHost(
     throw await withWslHostChatRecovery(error, context?.workspacePath, runtime)
   }
   // Why after the host verdict: an SSH or WSL workspace, which never pins, keeps its own reason.
-  if (settled.mode !== 'structured' || !projectClaudeAccountForLaunch(runtime, place, agent)) {
+  if (
+    settled.mode !== 'structured' ||
+    !(await projectClaudeAccountForLaunch(runtime, place, agent))
+  ) {
     return settled
   }
   // Why refused: an explicit chat request must not quietly become a terminal before anything opens.

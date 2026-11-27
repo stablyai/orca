@@ -8,6 +8,7 @@ import {
 export function resolveProjectClaudeAccount(input: {
   getRepo: (repoId: string) => Repo | undefined
   worktreeId?: string
+  repoId?: string
   launchConfigAccountId?: string
   explicitAccountId?: string
   /** The terminal's account target; absent means the host. */
@@ -31,10 +32,8 @@ export function resolveProjectClaudeAccount(input: {
   if (isPinnableClaudeAccountId(input.launchConfigAccountId)) {
     return input.launchConfigAccountId
   }
-  if (!input.worktreeId) {
-    return undefined
-  }
-  const repoId = getRepoIdFromWorktreeId(input.worktreeId)
+  const repoId =
+    input.repoId ?? (input.worktreeId ? getRepoIdFromWorktreeId(input.worktreeId) : undefined)
   const preference = repoId ? input.getRepo(repoId)?.agentAccounts?.claude : undefined
   return preference?.mode === 'account' ? preference.accountId : undefined
 }
