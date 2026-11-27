@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginCatalogImages } from '../../../shared/plugins/images/plugin-image-fields'
 import {
   pluginShaImageUrl,
@@ -23,11 +23,18 @@ import { gitExecFileAsyncBuffer } from '../../git/command-runner/git-exec-file'
 import { PluginCatalogImageOnDemand } from './plugin-catalog-image-on-demand'
 import { PluginImageCache } from './plugin-image-cache'
 import { createPluginImageRequestHandler } from './plugin-image-protocol'
-import { catalogImageFixture, pngImageBytes } from './plugin-image-test-fixture'
+import {
+  catalogImageFixture,
+  pngImageBytes,
+  settleImageCacheWrites,
+  trackImageCacheWrites
+} from './plugin-image-test-fixture'
 
 vi.mock('electron', () => ({ protocol: { handle: vi.fn() } }))
 const roots: string[] = []
+beforeEach(trackImageCacheWrites)
 afterEach(async () => {
+  await settleImageCacheWrites()
   vi.restoreAllMocks()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
@@ -44,10 +51,7 @@ async function imageCatalog(
   const root = await mkdtemp(join(tmpdir(), 'orca-catalog-image-'))
   roots.push(root)
   const bytes = options.bytes ?? pngImageBytes(1600, 1000)
-  const image = {
-    ...catalogImageFixture('cover.png', bytes),
-    ...options.declared
-  }
+  const image = { ...catalogImageFixture('cover.png', bytes), ...options.declared }
   const kind = options.kind ?? 'cover'
   const images: PluginCatalogImages = kind === 'icon' ? { icon: image } : { cover: image }
   const store = new PluginMarketplaceStore(root)
@@ -75,11 +79,7 @@ async function imageCatalog(
       }
     ]
   }
-  await store.writeSnapshot({
-    source,
-    marketplaceCommit: 'c'.repeat(40),
-    marketplace
-  })
+  await store.writeSnapshot({ source, marketplaceCommit: 'c'.repeat(40), marketplace })
   const cache = new PluginImageCache(join(root, 'images'))
   const readImages = vi.fn<
     (id: string, request: CatalogImageRead, signal?: AbortSignal) => Promise<Map<string, Buffer>>
@@ -261,10 +261,7 @@ describe('on-demand catalog image protocol', () => {
     { name: 'wrong hash', declared: { sha256: 'f'.repeat(64) } },
     { name: 'wrong dimensions', declared: { width: 1280 } },
     { name: 'wrong kind', kind: 'icon' as const },
-    {
-      name: 'oversized cover',
-      bytes: pngImageBytes(1600, 1000, 1024 * 1024 + 1)
-    }
+    { name: 'oversized cover', bytes: pngImageBytes(1600, 1000, 1024 * 1024 + 1) }
   ])('refuses $name without caching bytes', async (input) => {
     const fixture = await imageCatalog(input)
     const response = await fixture.handler(fixture.request())
@@ -399,6 +396,7 @@ describe('on-demand catalog image protocol', () => {
   it('denies a warm read at delivery after the registration is removed and re-added', async () => {
     const f = await imageCatalog()
     expect((await f.handler(f.request())).status).toBe(200)
+    await settleImageCacheWrites()
     const entered = Promise.withResolvers<void>()
     const release = Promise.withResolvers<void>()
     const get = f.cache.get.bind(f.cache)
@@ -495,9 +493,7 @@ describe('on-demand catalog image protocol', () => {
   it('authorizes the complete declaration before serving verified catalog bytes', async () => {
     const fixture = await imageCatalog()
     expect((await fixture.handler(fixture.request())).status).toBe(200)
-    const other = await imageCatalog({
-      bytes: pngImageBytes(1600, 1000, 64, 1)
-    })
+    const other = await imageCatalog({ bytes: pngImageBytes(1600, 1000, 64, 1) })
     await fixture.cache.put(other.bytes)
 
     const { width, height } = fixture.image
@@ -533,7 +529,7 @@ describe('on-demand catalog image protocol', () => {
   it('serves cached bytes after a restart when the commit lists their blob id', async () => {
     const f = await imageCatalog()
     expect((await f.handler(f.request())).status).toBe(200)
-    await vi.waitFor(async () => expect(await f.cache.get(f.image.sha256)).not.toBeNull())
+    await settleImageCacheWrites()
     f.listImages.mockResolvedValue(
       new Map([[f.image.path, { object: gitBlobId(f.bytes), size: f.bytes.byteLength }]])
     )
@@ -594,10 +590,7 @@ describe('on-demand catalog image protocol', () => {
       url.searchParams.delete(field)
       expect((await f.handler(new Request(url))).status, field).toBe(404)
     }
-    const preview = pluginShaImageUrl(f.image.sha256, {
-      ...f.image,
-      kind: 'cover'
-    })
+    const preview = pluginShaImageUrl(f.image.sha256, { ...f.image, kind: 'cover' })
     const response = await f.handler(new Request(preview))
     expect(response.status).toBe(200)
     expect(Buffer.from(await response.arrayBuffer())).toEqual(f.bytes)
@@ -605,10 +598,7 @@ describe('on-demand catalog image protocol', () => {
 
   it('does not use a warm hash to satisfy a different catalog path', async () => {
     const fixture = await imageCatalog()
-    const other = await fixture.store.addSource({
-      ...fixture.source.source,
-      ref: 'release'
-    })
+    const other = await fixture.store.addSource({ ...fixture.source.source, ref: 'release' })
     const marketplace = structuredClone(fixture.marketplace)
     marketplace.plugins[0]!.releases[0]!.images.cover!.path = 'missing.png'
     await fixture.store.writeSnapshot({
@@ -630,9 +620,7 @@ describe('on-demand catalog image protocol', () => {
     const release = Promise.withResolvers<Map<string, Buffer>>()
     fixture.readImages.mockResolvedValue(new Map())
     fixture.readImages.mockImplementationOnce(async (_source, _select, signal) => {
-      signal!.addEventListener('abort', () => release.resolve(new Map()), {
-        once: true
-      })
+      signal!.addEventListener('abort', () => release.resolve(new Map()), { once: true })
       entered.resolve()
       return release.promise
     })
@@ -657,10 +645,7 @@ describe('on-demand catalog image protocol', () => {
 
   it('serves another catalog while a read is blocked and cancels the abandoned Git batch', async () => {
     const fixture = await imageCatalog()
-    const other = await fixture.store.addSource({
-      ...fixture.source.source,
-      ref: 'release'
-    })
+    const other = await fixture.store.addSource({ ...fixture.source.source, ref: 'release' })
     await fixture.store.writeSnapshot({
       source: other,
       marketplaceCommit: 'c'.repeat(40),
@@ -669,9 +654,7 @@ describe('on-demand catalog image protocol', () => {
     const started = Promise.withResolvers<AbortSignal>()
     const release = Promise.withResolvers<Map<string, Buffer>>()
     fixture.readImages.mockImplementationOnce(async (_source, _select, signal) => {
-      signal!.addEventListener('abort', () => release.resolve(new Map()), {
-        once: true
-      })
+      signal!.addEventListener('abort', () => release.resolve(new Map()), { once: true })
       started.resolve(signal!)
       return release.promise
     })
@@ -710,11 +693,7 @@ describe('on-demand catalog image protocol', () => {
       )
       const valid = await fixture.handler(
         new Request(
-          pluginShaImageUrl(fixture.image.sha256, {
-            kind: 'cover',
-            width: 1600,
-            height: 1000
-          })
+          pluginShaImageUrl(fixture.image.sha256, { kind: 'cover', width: 1600, height: 1000 })
         )
       )
       expect(invalid.status).toBe(404)

@@ -20,7 +20,7 @@ export function catalogImageKey(
 
 /** Git's id for a blob holding these bytes, so cached bytes can be matched to a listed tree
  *  entry without reading the blob again. */
-export function gitBlobId(bytes: Uint8Array): string {
+function gitBlobId(bytes: Uint8Array): string {
   return createHash('sha1').update(`blob ${bytes.byteLength}\0`).update(bytes).digest('hex')
 }
 
@@ -43,6 +43,17 @@ export class CatalogSnapshotImages {
   /** The finished listing, if any; a batch read uses it to skip its own listing. */
   listed(snapshot: PluginMarketplaceCachedSnapshot): Map<string, ListedBlob> | undefined {
     return this.listings.get(snapshot)?.value
+  }
+
+  /** The cached asset when the snapshot's commit lists its bytes at `path`, by Git blob id. */
+  async provenCached<T extends { bytes: Uint8Array }>(
+    snapshot: PluginMarketplaceCachedSnapshot,
+    path: string,
+    cached: Promise<T | null>
+  ): Promise<T | null> {
+    const [asset, listed] = await Promise.all([cached, this.listing(snapshot)])
+    const entry = listed?.get(path)
+    return asset && entry && entry.object === gitBlobId(asset.bytes) ? asset : null
   }
 
   /** Shared by every request against the snapshot; a failed listing is forgotten so a later

@@ -13,7 +13,7 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { PluginMarketplace } from '../../../shared/plugins/catalog/plugin-marketplace'
 import type { OrcaCloudCapabilities } from '../../../shared/orca-profiles/orca-cloud-capabilities'
 import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../shared/orca-profiles/orca-cloud-team-policy'
@@ -23,7 +23,12 @@ import * as pluginGit from '../installation/plugin-git-repository'
 import { PluginCatalogImageOnDemand } from '../media/plugin-catalog-image-on-demand'
 import { PluginImageCache } from '../media/plugin-image-cache'
 import { createPluginImageRequestHandler } from '../media/plugin-image-protocol'
-import { catalogImageFixture, pngImageBytes } from '../media/plugin-image-test-fixture'
+import {
+  catalogImageFixture,
+  pngImageBytes,
+  settleImageCacheWrites,
+  trackImageCacheWrites
+} from '../media/plugin-image-test-fixture'
 import { PluginCatalogRepositoryStore } from './plugin-catalog-repository'
 import * as catalogBlobs from './plugin-catalog-blob-reader'
 import * as retainedGit from './plugin-catalog-git-repository'
@@ -41,7 +46,9 @@ const roots: string[] = []
 const runUnmockedGit = runPluginGit
 const runUnmockedDownload = pluginGit.runBoundedPluginGitDownload
 
+beforeEach(trackImageCacheWrites)
 afterEach(async () => {
+  await settleImageCacheWrites()
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
@@ -266,6 +273,7 @@ it('serves managed catalog GET and HEAD after an offline restart and policy rest
     expect(await head.arrayBuffer()).toHaveProperty('byteLength', 0)
   }
   await check(createHandler(f.store, f.repositories))
+  await settleImageCacheWrites()
   await rm(join(f.root, 'managed-art'), { recursive: true, force: true })
 
   capabilities = undefined

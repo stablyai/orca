@@ -18,7 +18,7 @@ import {
   type PluginMarketplaceStore
 } from '../catalog/plugin-marketplace-store'
 import type { PluginImageCache } from './plugin-image-cache'
-import { CatalogSnapshotImages, catalogImageKey, gitBlobId } from './plugin-catalog-snapshot-images'
+import { CatalogSnapshotImages, catalogImageKey } from './plugin-catalog-snapshot-images'
 import type { CheckedPluginImage } from './plugin-image-read'
 
 const IMAGE_BATCH_SIZE = 6
@@ -151,21 +151,15 @@ export class PluginCatalogImageOnDemand {
       }
     }
     // Why: after a restart or a new commit, bytes already cached under the declared hash are
-    // proven by the commit's listed blob id, which costs one shared listing instead of a read.
-    const [cached, listed] = await Promise.all([
-      this.options.cache.get(image.sha256).catch(() => null),
-      this.snapshots.listing(snapshot)
-    ])
-    const entry = listed?.get(image.path)
-    if (
-      cached &&
-      entry &&
-      !signal.aborted &&
-      entry.object === gitBlobId(cached.bytes) &&
-      validateCatalogImage(cached.bytes, image, image.kind)
-    ) {
-      this.verifiedAt(source, snapshot).keys.add(key)
-      return cached
+    // proven by the commit's listed blob id, one shared listing instead of a blob read. A request
+    // for an image already being read joins that read instead.
+    if (this.pending.get(snapshot)?.get(key)?.source !== source) {
+      const cache = this.options.cache.get(image.sha256).catch(() => null)
+      const proven = await this.snapshots.provenCached(snapshot, image.path, cache)
+      if (proven && !signal.aborted && validateCatalogImage(proven.bytes, image, image.kind)) {
+        this.verifiedAt(source, snapshot).keys.add(key)
+        return proven
+      }
     }
     return this.queue({ source, snapshot, key, path: image.path, kind: image.kind, image }, signal)
   }
@@ -243,10 +237,7 @@ export class PluginCatalogImageOnDemand {
       job.controller.signal.addEventListener('abort', onAbort, { once: true })
     }
     try {
-      let admitted: {
-        job: PendingImage
-        snapshot: PluginMarketplaceCachedSnapshot
-      }[] = []
+      let admitted: { job: PendingImage; snapshot: PluginMarketplaceCachedSnapshot }[] = []
       const files = await this.options.repositories.readImages(
         sourceId,
         () => {

@@ -71,13 +71,7 @@ export async function loadCatalogFiles(
       }
       roundBytes += found.size
       retainedBytes += found.size
-      reads.push({
-        kind: 'blob',
-        path,
-        object: found.object,
-        size: found.size,
-        executable: false
-      })
+      reads.push({ kind: 'blob', path, object: found.object, size: found.size, executable: false })
     }
   }
   return readCatalogRound(repository, reads, files, failed, readOptions)
@@ -150,10 +144,7 @@ async function readCatalogRound(
     )
     const contents = readPluginGitBatchBlobs(batch.stdout, objects)
     for (const read of reads) {
-      files.set(read.path, {
-        size: read.size,
-        bytes: contents.get(read.object) ?? null
-      })
+      files.set(read.path, { size: read.size, bytes: contents.get(read.object) ?? null })
     }
   } catch {
     for (const read of reads) {
@@ -184,12 +175,7 @@ function gitTreePath(path: string): string {
 }
 
 function imageReadOptions(signal?: AbortSignal): NonNullable<CatalogLoadState['readOptions']> {
-  return {
-    timeout: 10_000,
-    env: offlineGitEnv(),
-    signal,
-    terminationBarrier: true
-  }
+  return { timeout: 10_000, env: offlineGitEnv(), signal, terminationBarrier: true }
 }
 
 /** Regular-file blob ids and sizes at the catalog commit, from one `ls-tree` per path chunk;

@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto'
+import { vi } from 'vitest'
+import { PluginImageCache } from './plugin-image-cache'
 
 /** Header-valid PNG data for acceptance tests; it is not a rendered/decoded-image fixture. */
 export function pngImageBytes(width: number, height: number, size = 128, seed = 0): Buffer {
@@ -23,5 +25,28 @@ export function catalogImageFixture(path: string, bytes: Buffer) {
     sha256: createHash('sha256').update(bytes).digest('hex'),
     width: bytes.readUInt32BE(16),
     height: bytes.readUInt32BE(20)
+  }
+}
+
+const imageCacheWrites: Promise<unknown>[] = []
+
+/** Records every image cache write; install it in `beforeEach`, since mock restores remove it. */
+export function trackImageCacheWrites(): void {
+  const put = PluginImageCache.prototype.put
+  vi.spyOn(PluginImageCache.prototype, 'put').mockImplementation(function (
+    this: PluginImageCache,
+    bytes
+  ) {
+    const write = put.call(this, bytes)
+    imageCacheWrites.push(write)
+    return write
+  })
+}
+
+/** Delivery does not wait for its cache write, so a test settles writes before reading the cache
+ *  or removing its directory. */
+export async function settleImageCacheWrites(): Promise<void> {
+  while (imageCacheWrites.length > 0) {
+    await Promise.allSettled(imageCacheWrites.splice(0))
   }
 }

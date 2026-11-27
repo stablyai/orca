@@ -104,10 +104,7 @@ export class PluginCatalogRepositoryStore {
           maxDownloadBytes: this.maxDownloadBytes,
           publishedCommit: reusable ? publishedCommit : undefined
         },
-        async (commit) => ({
-          commit,
-          value: await save(repository, commit, slot)
-        })
+        async (commit) => ({ commit, value: await save(repository, commit, slot) })
       )
       try {
         await this.withoutReaders(source.id, async () => {
