@@ -46,6 +46,7 @@ import {
   cancelCodexStructuredTurn
 } from '../prompts/codex-structured-prompt-ownership'
 import { renameCodexProviderSession } from './codex-provider-session-rename'
+import { refreshCodexSessionHistory } from './codex-session-history-refresh'
 import { approveCodexAutoReviewDenial } from './codex-auto-review-approval'
 import * as codexRewind from '../threads/codex-structured-rewind'
 import * as turnEnd from '../turns/codex-structured-turn-end-settlement'
@@ -97,6 +98,9 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
     this.sessions.get(sessionId)?.skillReport?.read()
 
   readonly atRestCommands: CodexStructuredSessionAdapterDeps['atRestCommands']
+
+  refreshHistory: NonNullable<SessionAdapter['refreshHistory']> = (input) =>
+    refreshCodexSessionHistory(input, this.deps.providerInvocation, this.deps.logger)
 
   renameProviderSession: NonNullable<SessionAdapter['renameProviderSession']> = (input) =>
     renameCodexProviderSession({

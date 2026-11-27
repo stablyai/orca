@@ -1,3 +1,4 @@
+import type { StructuredAgentAdapterControls } from './structured-agent-session-adapter-controls'
 import type { StructuredMessageSteeringInputs } from '../../../../shared/agent-session/options/codex-message-compiler'
 import type {
   AgentSessionMcpOperation,
@@ -11,7 +12,6 @@ import type { CodexAccountUsageRead } from '../../../rate-limits/providers/codex
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from '../delivery/structured-agent-session-input-admission'
 import type { AiVaultConversationCopy } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import type { StructuredAgentSessionAdapterPermission } from './structured-agent-session-adapter-permission'
 import type {
   AgentSessionRewindFork,
   AgentSessionRewindSupport
@@ -36,10 +36,7 @@ import type { StructuredAgentSessionAtRestCommands } from '../options/structured
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import type {
-  AgentSessionCloseObserver,
-  StructuredAgentSessionAdapterStop
-} from './structured-agent-session-adapter-stop'
+import type { AgentSessionCloseObserver } from './structured-agent-session-adapter-stop'
 /** `unknown` (no timely, correlated answer) skips this idle stop and asks again later. */
 export type AgentSessionIdleConfirmation = 'idle' | 'busy' | 'unknown'
 
@@ -184,9 +181,7 @@ export type StructuredAgentSessionSetOptionInput = {
   signal?: AbortSignal
 }
 
-type AdapterControls = StructuredAgentSessionAdapterStop & StructuredAgentSessionAdapterPermission
-
-export type StructuredAgentSessionAdapter = AdapterControls & {
+export type StructuredAgentSessionAdapter = StructuredAgentAdapterControls & {
   readAccountUsage?(record: AgentSessionRecord, signal: AbortSignal): Promise<CodexAccountUsageRead>
   /** The `/mcp` panel's read or action on the chat's MCP servers; never enters the mutation queue. */
   manageMcp?(
