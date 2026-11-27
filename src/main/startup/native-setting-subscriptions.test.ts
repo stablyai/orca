@@ -14,22 +14,39 @@ vi.mock('./network-compatibility/http1-compatibility-marker', () => ({
 }))
 
 import { followNativeSettingChanges } from './native-setting-subscriptions'
+import type { NativeSettingsProjection } from '../core-desktop/native-settings-projection'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
+import { getDefaultSettings } from '../../shared/orca-profiles/constants'
 
-type Listener = (updates: Record<string, unknown>, settings: Record<string, unknown>) => void
+type Listener = Parameters<NativeSettingsProjection['onSettingsChanged']>[0]
+
+function settingsWith(updates: Partial<GlobalSettings>): GlobalSettings {
+  return { ...getDefaultSettings('/tmp'), ...updates }
+}
 
 function follow(): Listener {
   let listener: Listener | null = null
-  const projection = {
-    onSettingsChanged: (next: Listener) => {
+  const projection: NativeSettingsProjection = {
+    getSettings: () => settingsWith({}),
+    getUI: () => {
+      throw new Error('not used')
+    },
+    onSettingsChanged: (next) => {
       listener = next
-    }
+      return () => undefined
+    },
+    onUIChanged: () => () => undefined,
+    requestCoreWrite: async () => undefined
   }
-  followNativeSettingChanges(projection as never, {
+  followNativeSettingChanges(projection, {
     canonicalUserDataPath: '/tmp/orca',
     profileId: 'default',
     hangWatchdog: null
   })
-  return listener!
+  if (!listener) {
+    throw new Error('listener was not registered')
+  }
+  return listener
 }
 
 describe('followNativeSettingChanges system presence', () => {
@@ -39,13 +56,13 @@ describe('followNativeSettingChanges system presence', () => {
   })
 
   it('syncs the notch when its setting changes', () => {
-    follow()({ showNotchStatus: false }, { showNotchStatus: false })
+    follow()({ showNotchStatus: false }, settingsWith({ showNotchStatus: false }))
     expect(syncNotchStatus).toHaveBeenCalledWith(false)
     expect(syncMacMenuBarIcon).not.toHaveBeenCalled()
   })
 
   it('still syncs the menu-bar icon', () => {
-    follow()({ showMenuBarIcon: false }, { showMenuBarIcon: false })
+    follow()({ showMenuBarIcon: false }, settingsWith({ showMenuBarIcon: false }))
     expect(syncMacMenuBarIcon).toHaveBeenCalledWith(false)
     expect(syncNotchStatus).not.toHaveBeenCalled()
   })

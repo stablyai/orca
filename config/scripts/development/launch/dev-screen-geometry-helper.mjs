@@ -1,6 +1,5 @@
+import { pathToFileURL } from 'node:url'
 import { buildSwiftCliHelper } from '../../native-build/macos/swift-cli-helper-macos.mjs'
-
-export { buildDevSwiftCliHelpers } from '../../native-build/macos/swift-cli-helper-macos.mjs'
 
 /**
  * NSScreen's notch geometry has no Electron API, so without this helper every MacBook renders the
@@ -20,4 +19,11 @@ export function buildDevScreenGeometryHelper() {
       `[orca-dev] screen-geometry helper build failed (notch falls back to the pill): ${error?.message ?? error}`
     )
   }
+}
+
+// Why a separate `pnpm dev` step: the helper lives in the repo's .build/release, not in the
+// copied dev bundle, so it must build on every launch — cached bundle or not — or a deleted
+// binary or an edited main.swift silently leaves the notch on its pill fallback.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href && process.platform === 'darwin') {
+  buildDevScreenGeometryHelper()
 }

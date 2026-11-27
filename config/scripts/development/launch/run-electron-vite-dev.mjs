@@ -45,7 +45,7 @@ import {
 import { withRolldownThreadLimit } from '../../tool-invocation/rolldown-thread-limit.mjs'
 import { withDevRolldownRuntimeEnv } from './dev-rolldown-runtime-env.mjs'
 import { copyPrivateTree } from '../../artifact-storage/reflink-copy/space-sharing-copy.mjs'
-import { buildDevScreenGeometryHelper, buildDevSwiftCliHelpers } from './dev-native-helpers.mjs'
+import { buildDevSwiftCliHelpers } from '../../native-build/macos/swift-cli-helper-macos.mjs'
 import {
   DEV_BUNDLE_ID,
   getDevBundlePlistPatches,
@@ -282,12 +282,6 @@ function prepareMacDevElectronApp() {
       requiredResourcePaths.every((resourcePath) => existsSync(resourcePath))
     )
   }
-
-  // Why before the early return: this helper's output lives in the repo's .build/release, not
-  // in the copied bundle, so copiedAppIsUsable() never observes it. Called from inside the
-  // cached branch it would only build on the first dev launch — a deleted binary or an edited
-  // main.swift would then silently leave the notch on its pill fallback.
-  buildDevScreenGeometryHelper()
 
   if (copiedAppIsUsable()) {
     pruneStaleDevBundles(distDir)
