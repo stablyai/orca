@@ -6,7 +6,7 @@ import type {
   BotToolSignInProblem,
   BotToolSignInProgress
 } from '../../../shared/bot-tool-sign-in'
-import { commitBotToolOAuth, readBotToolOAuth } from '../bot-tool-credentials'
+import { commitBotToolOAuth, readBotToolSignIn } from '../bot-tool-credentials'
 import { onBotToolCredentialEnded } from '../bot-tool-credential-ended'
 import { serveLoopbackCallback } from '../../orca-profiles/cloud-auth/loopback-callback'
 import {
@@ -20,7 +20,11 @@ import {
   keyOf,
   type BotToolOAuthKey
 } from './bot-tool-oauth'
-import { beginBotToolSignIn, type BotToolSignInAttempt } from './bot-tool-oauth-sign-in'
+import {
+  beginBotToolSignIn,
+  signInToStart,
+  type BotToolSignInAttempt
+} from './bot-tool-oauth-sign-in'
 
 export const BOT_TOOL_CALLBACK_PATH = '/callback'
 
@@ -264,10 +268,7 @@ export async function connectBotToolSignIn(
   if (!open) {
     throw new BotToolSignInError('desktop-only')
   }
-  const entry = readBotToolOAuth(key.folder, key.credentialId)
-  if (!entry) {
-    throw new BotToolSignInError('no-tool')
-  }
+  const entry = signInToStart(readBotToolSignIn(key.folder, key.credentialId))
   const flow = claimBotToolSignIn(key)
   const attempt = await serveFlowSignIn(key, flow, entry, (begun, query) =>
     completeFlowSignIn(flow, begun, query)

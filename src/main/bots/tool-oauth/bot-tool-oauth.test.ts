@@ -399,6 +399,20 @@ describe('Orca signing in to a bot’s app', () => {
     expect(revoked()).toEqual([])
   })
 
+  it('refuses to start a sign-in on a computer with no keyring, before any grant is issued', async () => {
+    setSecretStore({
+      isEncryptionAvailable: () => false,
+      encryptString: (text) => Buffer.from(text, 'utf8'),
+      decryptString: (cipher) => cipher.toString('utf8'),
+      describeProtectionGap: () => null
+    })
+    const bare = { folder: tempDir('bot-home-'), credentialId: 'cred-0002' }
+    await createBotToolSignIn(bare, app.url)
+    await expect(beginBotToolSignIn(bare, { redirectUri: REDIRECT })).rejects.toMatchObject({
+      code: 'no-keyring'
+    })
+  })
+
   it('gives every waiter a refresh that couldn’t be stored, never an unhandled failure', async () => {
     await signIn()
     setSecretStore({

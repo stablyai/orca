@@ -10,10 +10,11 @@ import type {
 } from '@modelcontextprotocol/sdk/shared/auth.js'
 import {
   commitBotToolOAuth,
-  readBotToolOAuth,
+  readBotToolSignIn,
   type BotToolOAuthEntry,
   type BotToolOAuthRecord
 } from '../bot-tool-credentials'
+import { canSeal } from '../bot-tool-credential-envelope'
 import { discoverBotToolAuth, type BotToolAuthServer } from './bot-tool-oauth-discovery'
 import { isSecureOAuthEndpoint } from './secure-oauth-fetch'
 import {
@@ -96,6 +97,14 @@ function withProviderOfflineAccess(url: URL): URL {
   return next
 }
 
+/** The sign-in to start, or why there is none: one this computer can't open without a keyring, or no tool. */
+export function signInToStart(found: BotToolOAuthEntry | 'locked' | null): BotToolOAuthEntry {
+  if (found && found !== 'locked') {
+    return found
+  }
+  throw new BotToolSignInError(found === 'locked' && !canSeal() ? 'no-keyring' : 'no-tool')
+}
+
 /**
  * Starts a sign-in for the bot's tool. `redirectUri` is the caller's listener, already bound: it
  * stays fixed for the attempt, and the registration is made for exactly it.
@@ -104,9 +113,10 @@ export async function beginBotToolSignIn(
   key: BotToolOAuthKey,
   { redirectUri, signal }: { redirectUri: string; signal?: AbortSignal }
 ): Promise<BotToolSignInAttempt> {
-  const entry = readBotToolOAuth(key.folder, key.credentialId)
-  if (!entry) {
-    throw new BotToolSignInError('no-tool')
+  const entry = signInToStart(readBotToolSignIn(key.folder, key.credentialId))
+  // Saving the tokens needs a keyring; failing after the exchange would orphan the issued grant.
+  if (!canSeal()) {
+    throw new BotToolSignInError('no-keyring')
   }
   const need = await discoverBotToolAuth(entry.url, discoveryOptions(signal))
   if (need.kind === 'unavailable') {

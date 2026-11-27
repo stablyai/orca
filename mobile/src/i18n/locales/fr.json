@@ -6367,6 +6367,7 @@
         "unavailable": "Impossible de joindre cette app. Vérifiez l’adresse, puis réessayez.",
         "noTool": "Ce bot n’a plus cet outil.",
         "desktopOnly": "Connectez-vous depuis Orca sur {{host}}.",
+        "noKeyring": "Cet ordinateur n’a pas de trousseau système, donc Orca ne peut pas y enregistrer de connexion.",
         "denied": "L’accès n’a pas été autorisé.",
         "expired": "La connexion a expiré. Réessayez.",
         "couldNotSignIn": "Connexion impossible. Réessayez."

@@ -28070,6 +28070,7 @@
         "unavailable": "Diese App ist nicht erreichbar. Prüfe die Adresse und versuche es dann erneut.",
         "noTool": "Dieser Bot hat dieses Tool nicht mehr.",
         "desktopOnly": "Melde dich in Orca auf {{host}} an.",
+        "noKeyring": "Dieser Computer hat keinen System-Schlüsselbund, daher kann Orca hier keine Anmeldung speichern.",
         "denied": "Der Zugriff wurde nicht erlaubt.",
         "expired": "Die Anmeldung ist abgelaufen. Versuche es erneut.",
         "couldNotSignIn": "Anmeldung nicht möglich. Versuche es erneut."

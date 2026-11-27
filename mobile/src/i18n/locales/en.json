@@ -6984,6 +6984,7 @@
         "unavailable": "Can’t reach this app. Check the address, then try again.",
         "noTool": "This bot no longer has that tool.",
         "desktopOnly": "Sign in from Orca on {{host}}.",
+        "noKeyring": "This computer has no system keyring, so Orca can’t save a sign-in here.",
         "denied": "Access wasn’t allowed.",
         "expired": "The sign-in expired. Try again.",
         "couldNotSignIn": "Couldn’t sign in. Try again."

@@ -7,9 +7,9 @@ import type {
   BotToolSignInAttemptView,
   BotToolSignInFailure
 } from '../../../shared/bot-tool-sign-in'
-import { readBotToolOAuth } from '../bot-tool-credentials'
+import { readBotToolSignIn } from '../bot-tool-credentials'
 import { BotToolSignInError, now, type BotToolOAuthKey } from './bot-tool-oauth'
-import type { BotToolSignInAttempt } from './bot-tool-oauth-sign-in'
+import { signInToStart, type BotToolSignInAttempt } from './bot-tool-oauth-sign-in'
 import {
   BOT_TOOL_CALLBACK_PATH,
   beginFlowSignIn,
@@ -100,10 +100,7 @@ export async function startBotToolSignInAttempt(
   key: BotToolOAuthKey,
   mode: BotToolSignInMode
 ): Promise<BotToolSignInAttemptView> {
-  const entry = readBotToolOAuth(key.folder, key.credentialId)
-  if (!entry) {
-    throw new BotToolSignInError('no-tool')
-  }
+  const entry = signInToStart(readBotToolSignIn(key.folder, key.credentialId))
   const flow = claimBotToolSignIn(key)
   let pending: Pending | null = null
   let attempt: BotToolSignInAttempt

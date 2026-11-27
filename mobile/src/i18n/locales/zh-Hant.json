@@ -6218,6 +6218,7 @@
         "unavailable": "無法連線到此應用程式。請檢查網址後再試一次。",
         "noTool": "這個機器人已經沒有那個工具了。",
         "desktopOnly": "請在 {{host}} 上的 Orca 中登入。",
+        "noKeyring": "這台電腦沒有系統金鑰圈，Orca 無法在此儲存登入資訊。",
         "denied": "未獲准存取。",
         "expired": "登入已逾期。請再試一次。",
         "couldNotSignIn": "無法登入。請再試一次。"

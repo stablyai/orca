@@ -31014,6 +31014,7 @@
         "unavailable": "Não foi possível alcançar este app. Verifique o endereço e tente novamente.",
         "noTool": "Este bot não tem mais essa ferramenta.",
         "desktopOnly": "Faça login pelo Orca em {{host}}.",
+        "noKeyring": "Este computador não tem um chaveiro do sistema, então o Orca não pode salvar um login aqui.",
         "denied": "O acesso não foi permitido.",
         "expired": "O login expirou. Tente novamente.",
         "couldNotSignIn": "Não foi possível fazer login. Tente novamente."
