@@ -5,6 +5,7 @@ import { getDefaultVoiceSettings } from '../../../../shared/orca-profiles/consta
 import { normalizePRBotAuthorOverrides } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
+import { normalizeCustomTuiAgents } from '../../../../shared/agent-launch/catalog/custom-tui-agents'
 import { normalizeOpenInApplications } from '../../../../shared/editor/launch/open-in-applications'
 
 import { normalizeTerminalShortcutPolicy } from '../../../../shared/keybindings/effective'
@@ -156,6 +157,7 @@ export function normalizeLoadedGlobalSettings(
     terminalScrollbackRows: migratedTerminalScrollback.rows,
     terminalDefaultShell: normalizeTerminalDefaultShell(parsed.settings?.terminalDefaultShell),
     terminalQuickCommands: normalizeTerminalQuickCommands(parsed.settings?.terminalQuickCommands),
+    customTuiAgents: normalizeCustomTuiAgents(parsed.settings?.customTuiAgents),
     newTabMenuLayout: normalizeNewTabMenuLayout(parsed.settings?.newTabMenuLayout),
     floatingTerminalNewTabMenuLayout: normalizeNewTabMenuLayout(
       parsed.settings?.floatingTerminalNewTabMenuLayout

@@ -32,3 +32,12 @@ export function hasExplicitTuiLaunchCommand(
 ): boolean {
   return Boolean(settings?.agentCmdOverrides?.[agent]?.trim())
 }
+
+/** Settings for one launch whose own command (a custom agent's) replaces the agent's Settings command. */
+export function withLaunchCommandOverride<
+  T extends Partial<Pick<GlobalSettings, 'agentCmdOverrides'>>
+>(settings: T, agent: TuiAgent, launchCommand: string | undefined): T {
+  return launchCommand
+    ? { ...settings, agentCmdOverrides: { ...settings.agentCmdOverrides, [agent]: launchCommand } }
+    : settings
+}

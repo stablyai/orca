@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
 import { cn } from '@/lib/class-names'
@@ -22,7 +22,8 @@ export function AgentDetectionCatalog({
   activeServerEnvironmentId,
   activeServerName,
   onRefresh,
-  getRowProps
+  getRowProps,
+  afterInstalled
 }: {
   detectedAgents: AgentCatalogEntry[]
   undetectedAgents: AgentCatalogEntry[]
@@ -33,6 +34,8 @@ export function AgentDetectionCatalog({
   activeServerName: string | null
   onRefresh: () => void
   getRowProps: (agent: AgentCatalogEntry, isDetected: boolean) => AgentCatalogRowProps
+  /** Shown between the installed agents and the ones available to install. */
+  afterInstalled?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const installedBody = useRef<HTMLDivElement>(null)
@@ -95,64 +98,67 @@ export function AgentDetectionCatalog({
         className="space-y-8 scroll-mt-8 outline-none"
       >
         {sections.map(({ agents, installed }) => (
-          <SettingsGroup
-            key={installed ? 'installed' : 'available'}
-            bodyRef={installed ? installedBody : availableBody}
-            className="has-[[data-settings-group-body]:empty]:hidden"
-            title={
-              installed ? (
-                <span className="flex flex-wrap items-center gap-2">
-                  {t('auto.components.settings.AgentsPane.02e0143be5', 'Installed')}
-                  <SettingsBadge tone="accent">
-                    {agents.length}{' '}
-                    {t('auto.components.settings.AgentsPane.ed3e110e61', 'detected')}
-                  </SettingsBadge>
-                  {activeServerName ? (
-                    <SettingsBadge tone="muted">
-                      {t('auto.components.settings.AgentsPane.03e1a5081a', 'on {{value0}}', {
-                        value0: activeServerName
-                      })}
+          <Fragment key={installed ? 'installed' : 'available'}>
+            {!installed ? afterInstalled : null}
+            <SettingsGroup
+              bodyRef={installed ? installedBody : availableBody}
+              className="has-[[data-settings-group-body]:empty]:hidden"
+              title={
+                installed ? (
+                  <span className="flex flex-wrap items-center gap-2">
+                    {t('auto.components.settings.AgentsPane.02e0143be5', 'Installed')}
+                    <SettingsBadge tone="accent">
+                      {agents.length}{' '}
+                      {t('auto.components.settings.AgentsPane.ed3e110e61', 'detected')}
                     </SettingsBadge>
-                  ) : null}
-                </span>
-              ) : (
-                <span className="flex flex-wrap items-center gap-2 text-muted-foreground">
-                  {t('auto.components.settings.AgentsPane.e8da2af684', 'Available to install')}
-                  <SettingsBadge tone="muted">
-                    {agents.length} {t('auto.components.settings.AgentsPane.024bd95089', 'agents')}
-                  </SettingsBadge>
-                </span>
-              )
-            }
-            action={
-              installed ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  onClick={onRefresh}
-                  disabled={isRefreshing}
-                  title={
-                    activeServerEnvironmentId
-                      ? t(
-                          'auto.components.settings.AgentsPane.25a41a9aad',
-                          'Re-detect agents installed on this server'
-                        )
-                      : t(
-                          'auto.components.settings.AgentsPane.13647f9f80',
-                          'Re-read your shell PATH and re-detect installed agents'
-                        )
-                  }
-                  className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
-                  {isRefreshing
-                    ? t('auto.components.settings.AgentsPane.c9b33eb5c0', 'Refreshing…')
-                    : t('auto.components.settings.AgentsPane.0d9e293a02', 'Refresh')}
-                </Button>
-              ) : undefined
-            }
-          />
+                    {activeServerName ? (
+                      <SettingsBadge tone="muted">
+                        {t('auto.components.settings.AgentsPane.03e1a5081a', 'on {{value0}}', {
+                          value0: activeServerName
+                        })}
+                      </SettingsBadge>
+                    ) : null}
+                  </span>
+                ) : (
+                  <span className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                    {t('auto.components.settings.AgentsPane.e8da2af684', 'Available to install')}
+                    <SettingsBadge tone="muted">
+                      {agents.length}{' '}
+                      {t('auto.components.settings.AgentsPane.024bd95089', 'agents')}
+                    </SettingsBadge>
+                  </span>
+                )
+              }
+              action={
+                installed ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={onRefresh}
+                    disabled={isRefreshing}
+                    title={
+                      activeServerEnvironmentId
+                        ? t(
+                            'auto.components.settings.AgentsPane.25a41a9aad',
+                            'Re-detect agents installed on this server'
+                          )
+                        : t(
+                            'auto.components.settings.AgentsPane.13647f9f80',
+                            'Re-read your shell PATH and re-detect installed agents'
+                          )
+                    }
+                    className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
+                    {isRefreshing
+                      ? t('auto.components.settings.AgentsPane.c9b33eb5c0', 'Refreshing…')
+                      : t('auto.components.settings.AgentsPane.0d9e293a02', 'Refresh')}
+                  </Button>
+                ) : undefined
+              }
+            />
+          </Fragment>
         ))}
         {/* A stable portal target preserves drafts and pending writes when a row changes cards. */}
         {rows.map(({ agent, row }) => (

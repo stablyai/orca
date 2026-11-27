@@ -91,7 +91,8 @@ function openAgentInNewTab(
   // Resolve structured ownership first; only terminal routes plan CLI arguments.
   const route = routeNewTabLaunch(store, args, {
     agent,
-    requestedSurface: args.requestedSurface,
+    // A chat runs its own program, not a launch command.
+    requestedSurface: args.launchCommand ? 'terminal' : args.requestedSurface,
     preferredSurface: args.preferredSurface,
     selectedExecutionHostId: args.selectedExecutionHostId,
     workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId },
@@ -166,6 +167,7 @@ function openAgentInNewTab(
       base: resolveAgentStartupPlanInputs({
         agent,
         settings: { ...store.settings, agentLaunchChoices },
+        ...(args.launchCommand ? { launchCommand: args.launchCommand } : {}),
         agentArgs,
         sessionOptions,
         sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
@@ -221,6 +223,8 @@ function openAgentInNewTab(
   }
   if (
     pasteDraftAfterLaunch !== null &&
+    // The host would rebuild the command from its own settings and drop the launch command.
+    !args.launchCommand &&
     newTabPromptLaunchesThroughHost({ promptDelivery, pastesPrompt: true, isRemote })
   ) {
     const launched = launchNewTabPromptThroughHost({

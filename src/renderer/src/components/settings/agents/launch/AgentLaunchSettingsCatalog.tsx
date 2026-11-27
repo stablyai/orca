@@ -59,6 +59,7 @@ import {
 } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import { AgentLaunchDefaultsGroup } from '@/components/settings/agents/launch/AgentLaunchDefaultsGroup'
 import { AgentDetectionCatalog } from '@/components/settings/agents/launch/AgentDetectionCatalog'
+import { CustomTuiAgentsSection } from '@/components/settings/agents/launch/CustomTuiAgentsSection'
 import type { AgentCatalogRowProps } from '@/components/settings/agents/launch/AgentCatalogRow'
 import { HostAgentEnvironmentEditor } from '@/components/settings/agents/launch/HostAgentEnvironmentEditor'
 import { buildCodexSessionSourceHomeControl } from '@/components/agent/launch-settings/codex-session-source-home-control'
@@ -393,6 +394,14 @@ export function AgentLaunchSettingsCatalog({
           refreshSettings?.()
         }}
         getRowProps={rowProps}
+        afterInstalled={
+          local ? (
+            <CustomTuiAgentsSection
+              settings={local.settings}
+              updateSettings={local.updateSettings}
+            />
+          ) : null
+        }
       />
     </>
   )

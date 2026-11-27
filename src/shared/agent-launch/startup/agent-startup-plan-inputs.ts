@@ -8,6 +8,7 @@ import {
 import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
 import { terminalSessionOptionInputs } from './tui-agent-launch-command'
 import { resolveLocalWindowsAgentStartupShell } from '../../shell/launch/windows-terminal-shell'
+import { withLaunchCommandOverride } from './tui-agent-launch-command-override'
 
 /** The settings slice a launch reads; hosts pass their whole `GlobalSettings` row. */
 export type AgentStartupSettings = Partial<
@@ -53,9 +54,15 @@ export function resolveAgentStartupPlanInputs(args: {
   sessionOptionsYieldToAgentArgs?: boolean
   /** Orca types into this launch after start (worker, automation, handoff), not a user. */
   suppressStartupUpdatePrompt?: boolean
+  /** Replaces the agent's Settings command for this launch only (a custom agent's). */
+  launchCommand?: string
 }): AgentStartupPlanInputs {
   const { agent, platform, isRemote, sessionOptions } = args
-  const settings = agentLaunchPermissionSettings(agent, args.settings, sessionOptions)
+  const settings = agentLaunchPermissionSettings(
+    agent,
+    withLaunchCommandOverride(args.settings, agent, args.launchCommand),
+    sessionOptions
+  )
   const shell =
     args.shell ??
     resolveLocalWindowsAgentStartupShell({

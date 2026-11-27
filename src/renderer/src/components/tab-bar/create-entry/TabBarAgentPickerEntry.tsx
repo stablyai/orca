@@ -6,12 +6,14 @@ import {
   type AgentPickerInventorySource
 } from '../../agent/agent-picker-inventory-source'
 import type { NewTabAgentMenuModel } from '../../agent/launch-menu/new-tab-agent-menu-model'
+import { launchableCustomAgents } from '../../agent/launch-menu/custom-agent-menu-rows'
 import { buildBotNewChatSearchOptions } from '../../bots/bot-new-chat-search-options'
 import { useBotNewChatLaunch } from '../../bots/use-bot-new-chat-launch'
 import { botNewChatAgents } from '../../../../../shared/bots/bot-agent-choices'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
   buildAgentPickerLaunchOptions,
+  buildCustomAgentLaunchOptions,
   type TabAgentLaunchOption
 } from './tab-agent-launch-options'
 import TabBarCreateEntry from './TabBarCreateEntry'
@@ -34,10 +36,22 @@ export function TabBarAgentPickerEntry({
 }): React.JSX.Element {
   const entries = useAgentPickerInventoryEntries(inventory)
   const commandOverrides = useAppStore((state) => state.settings?.agentCmdOverrides)
-  const launchOptions = useMemo(
-    () => buildAgentPickerLaunchOptions(entries, commandOverrides),
-    [entries, commandOverrides]
-  )
+  const customAgents = useAppStore((state) => state.settings?.customTuiAgents)
+  const launchOptions = useMemo(() => {
+    const rows = entries.flatMap((entry) => entry.rows)
+    const runnable = entries.filter((entry) => entry.surfaces.includes('terminal'))
+    return [
+      ...buildAgentPickerLaunchOptions(entries, commandOverrides),
+      ...buildCustomAgentLaunchOptions(
+        launchableCustomAgents(
+          customAgents,
+          runnable.map((entry) => entry.agent),
+          rows
+        ),
+        rows
+      )
+    ]
+  }, [entries, commandOverrides, customAgents])
   if (botHome) {
     return <BotChatPickerEntry {...props} {...botHome} overrides={commandOverrides} />
   }
