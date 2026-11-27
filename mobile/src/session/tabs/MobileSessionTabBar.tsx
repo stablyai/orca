@@ -163,6 +163,7 @@ export function MobileSessionTabBar({
     })
   // Each layer sits a width from its neighbour and fades with its distance from the middle.
   const layerStyle = (place: -1 | 0 | 1) => () => {
+    'worklet'
     const x = offset.value + place * width.value
     const away = Math.min(Math.abs(x) / Math.max(width.value, 1), 1)
     return { transform: [{ translateX: x }], opacity: 1 - away * (1 - SIDE_OPACITY) }
