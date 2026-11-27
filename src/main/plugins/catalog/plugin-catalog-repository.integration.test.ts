@@ -513,7 +513,7 @@ it.each([
     const [command, ...options] = args
     await runUnmockedDownload(
       command.map((arg) =>
-        arg === 'fetch.unpackLimit=0' ? `fetch.unpackLimit=${unpackLimit}` : arg
+        arg === 'fetch.unpackLimit=1' ? `fetch.unpackLimit=${unpackLimit}` : arg
       ),
       ...options
     )

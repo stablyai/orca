@@ -12,8 +12,9 @@ const PLUGIN_GIT_SETTINGS = [
   'gc.auto=0',
   'maintenance.auto=false',
   'init.defaultObjectFormat=sha1',
-  // Why: keeps every fetched object in one pack so the size watcher sees it grow.
-  'fetch.unpackLimit=0'
+  // Why 1: any non-empty fetch keeps one pack, which the size watcher sees grow. 0 would make
+  // `git fetch` unpack every object loose, which slows a large catalog transfer.
+  'fetch.unpackLimit=1'
 ]
 
 /** An empty hooksPath and template stop user or global hooks (e.g. reference-transaction);
