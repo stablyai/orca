@@ -14,6 +14,7 @@ let pairs: Server | null = null
 afterEach(() => {
   front?.dispose()
   pairs?.close()
+  pairs = null
   for (const socket of opened.splice(0)) {
     socket.destroy()
   }

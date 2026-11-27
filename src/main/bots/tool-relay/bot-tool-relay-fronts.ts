@@ -20,7 +20,12 @@ const FRONT_REQUEST_TIMEOUT_MS = 5_000
 /** A launch's front: its loopback origin and the daemon start holding it. */
 export type ToolRelayFront = { origin: string; daemonInstance: string }
 
-type Watched = { stop: () => void; port: number | null }
+type Watched = {
+  stop: () => void
+  port: number | null
+  /** The latest serve request; announcements wait for it, so the Host check knows the port. */
+  served: Promise<unknown>
+}
 
 export class ToolRelayFronts {
   private readonly watched = new Map<DaemonClient, Watched>()
@@ -112,6 +117,7 @@ export class ToolRelayFronts {
     })
     this.watched.set(client, {
       port: null,
+      served: Promise.resolve(),
       stop: () => {
         stopEvents()
         stopConnected()
@@ -120,15 +126,15 @@ export class ToolRelayFronts {
   }
 
   private async serve(client: DaemonClient): Promise<void> {
-    if (!client.getDaemonIdentity()?.toolRelayFront || this.closed) {
+    const watched = this.watched.get(client)
+    if (!client.getDaemonIdentity()?.toolRelayFront || this.closed || !watched) {
       return
     }
-    const { port } = await client.request<ToolRelayFrontServeResult>(
-      'toolRelayFrontServe',
-      undefined,
-      FRONT_REQUEST_TIMEOUT_MS
-    )
-    this.noteServed(client, Number.isSafeInteger(port) ? port : null)
+    const served = client
+      .request<ToolRelayFrontServeResult>('toolRelayFrontServe', undefined, FRONT_REQUEST_TIMEOUT_MS)
+      .then(({ port }) => this.noteServed(client, Number.isSafeInteger(port) ? port : null))
+    watched.served = served.catch(() => {})
+    await served
   }
 
   private noteServed(client: DaemonClient, port: number | null): void {
@@ -143,6 +149,8 @@ export class ToolRelayFronts {
       return
     }
     try {
+      // The daemon re-announces held connections while it answers the serve request.
+      await this.watched.get(client)?.served
       const { socket, remainder } = await openDaemonToolRelayConnection(client, frontConnectionId)
       if (remainder.length > 0) {
         socket.unshift(remainder)

@@ -3,23 +3,15 @@
 // an agent that outlives the app keeps its caller identity; any other token names no one after it.
 import { createHash, randomBytes } from 'node:crypto'
 import { BOT_TOOLS_TOKEN_ENV } from '../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
-import { botToolRelay, MCP_HOST_LIST_RELAY_OWNER } from '../../../bots/tool-relay/bot-tool-relay'
 import {
   sharedToolProcessSessionEnv,
   type PublishSharedToolProcessSessionEnv
 } from './shared-tool-process-session-env'
 import { sharedToolCallerStore, type KeptSharedToolCaller } from './shared-tool-caller-store'
-import { providerRelayQuitting } from '../../../provider-relay/app-provider-relays'
 
 const callers = new Map<string, Readonly<Record<string, string>>>()
 
 const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex')
-
-/** Whose relay grant a launch's caller rides on: its bot's, or the host list's. */
-export function sharedToolCallerOwner(sealed: Readonly<Record<string, string>>): string {
-  const token = sealed[BOT_TOOLS_TOKEN_ENV]
-  return (token ? botToolRelay.botOf(token) : null) ?? MCP_HOST_LIST_RELAY_OWNER
-}
 
 /** Kept chats' callers from an earlier run of Orca, whose runs are still current. */
 export function restoreKeptSharedToolCallers(kept: readonly KeptSharedToolCaller[]): void {
@@ -39,6 +31,8 @@ export class SharedToolProcessSession {
   private ended = false
   /** The kept entry this session's run uses, once `keepAs` wrote it. */
   private kept: KeptSharedToolCaller | null = null
+  /** At its end, whether its agent runs on (handed to its daemon at quit), so the entry stays. */
+  private outlivesApp: () => boolean = () => false
 
   private constructor(
     private readonly token: string,
@@ -81,6 +75,7 @@ export class SharedToolProcessSession {
     sealed: Readonly<Record<string, string>>,
     sessionId: string,
     runFence: number,
+    outlivesApp: () => boolean,
     agentVersion?: string
   ): SharedToolProcessSession | null {
     const restored = sharedToolCallerStore.restored(sessionId)
@@ -99,11 +94,15 @@ export class SharedToolProcessSession {
       agentVersion
     )
     session.kept = { ...restored, runFence }
+    session.outlivesApp = outlivesApp
     return session
   }
 
   /** Seals this token at rest for a run the agent may outlive; false keeps it memory-only. */
-  async keepAs(run: { sessionId: string; runFence: number; owner: string }): Promise<boolean> {
+  async keepAs(
+    run: { sessionId: string; runFence: number; owner: string },
+    outlivesApp: () => boolean
+  ): Promise<boolean> {
     const caller = callers.get(this.key)
     if (!caller || this.ended) {
       return false
@@ -113,6 +112,7 @@ export class SharedToolProcessSession {
       return false
     }
     this.kept = kept
+    this.outlivesApp = outlivesApp
     return true
   }
 
@@ -171,7 +171,7 @@ export class SharedToolProcessSession {
     this.ended = true
     callers.delete(this.key)
     // An agent handed to its daemon at quit keeps running with this token; anything else retires it.
-    if (this.kept && !providerRelayQuitting()) {
+    if (this.kept && !this.outlivesApp()) {
       void sharedToolCallerStore.settle(this.kept.sessionId, null).catch(() => {})
     }
     void this.withdrawPublished()

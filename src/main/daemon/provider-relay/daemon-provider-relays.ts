@@ -31,6 +31,7 @@ export function createDaemonProviderRelays(options: DaemonProviderRelayOptions):
     appVersion: options.appVersion ?? null,
     entryPath: options.entryPath ?? null,
     daemonInstance: options.daemonInstance,
+    toolRelayFront: options.protocolVersion >= PROVIDER_RELAY_PROTOCOL_VERSION,
     acceptsWork: options.acceptsWork,
     onLiveCountChanged: options.onLiveCountChanged,
     log: (event, details) => options.log.log(event, details)

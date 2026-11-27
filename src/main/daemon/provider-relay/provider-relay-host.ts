@@ -31,6 +31,8 @@ type RelayHostOptions = {
   entryPath: string | null
   /** Echoed in spawn and list replies so a client knows which daemon start holds an agent. */
   daemonInstance?: string | null
+  /** Holds a tool relay front (only where the relay protocol is advertised). */
+  toolRelayFront?: boolean
   platform?: NodeJS.Platform
   acceptsWork: () => boolean
   onLiveCountChanged: () => void
@@ -58,7 +60,7 @@ export class ProviderRelayHost {
   constructor(private readonly options: RelayHostOptions) {
     this.platform = options.platform ?? process.platform
     this.toolRelayFront =
-      this.supported && options.daemonInstance
+      this.supported && options.toolRelayFront && options.daemonInstance
         ? new DaemonToolRelayFront(options.daemonInstance)
         : null
   }

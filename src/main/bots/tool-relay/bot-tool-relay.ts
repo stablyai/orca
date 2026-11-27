@@ -88,11 +88,9 @@ export class BotToolRelay {
 
   /** A deleted bot's token stops working (its kept entries go durably first); its calls are cut. */
   async revoke(botId: string): Promise<void> {
-    try {
-      await this.kept.revoke(botId)
-    } finally {
-      this.admission.abortWhere((call) => call.botId === botId, CREDENTIAL_ENDED)
-    }
+    await this.kept
+      .revoke(botId)
+      .finally(() => this.admission.abortWhere((call) => call.botId === botId, CREDENTIAL_ENDED))
   }
 
   /** Why the tool's server last refused, for the Tools row; null when it hasn't. */
