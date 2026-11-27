@@ -274,16 +274,29 @@ function ReferencePeek({
   const triggerRef = React.useRef<HTMLSpanElement>(null)
   const listRef = React.useRef<HTMLUListElement>(null)
   const [geometry, setGeometry] = React.useState<PeekGeometry | null>(null)
+  const [open, setOpen] = React.useState(false)
   const front = ordered[0]
+  // Re-clamp while open so a resized card never leaves the peek wider than it.
+  React.useEffect(() => {
+    const trigger = triggerRef.current
+    const card = trigger?.closest('[data-worktree-card-surface]')
+    if (!open || !trigger || !card) {
+      return
+    }
+    const observer = new ResizeObserver(() => setGeometry(measurePeek(trigger)))
+    observer.observe(card)
+    return () => observer.disconnect()
+  }, [open])
   return (
     <Tooltip
       delayDuration={200}
       // Why: the pointer must reach the list to scroll it.
       disableHoverableContent={false}
-      onOpenChange={(open) => {
-        if (open && triggerRef.current) {
+      onOpenChange={(next) => {
+        if (next && triggerRef.current) {
           setGeometry(measurePeek(triggerRef.current))
         }
+        setOpen(next)
       }}
     >
       <TooltipTrigger asChild>
@@ -292,7 +305,7 @@ function ReferencePeek({
           onKeyDown={(event) => {
             const list = listRef.current
             const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
-            if (list && step) {
+            if (list && step && list.scrollHeight > list.clientHeight) {
               // Why: arrows scroll the open peek instead of moving sidebar focus.
               event.preventDefault()
               event.stopPropagation()
@@ -334,6 +347,8 @@ function ReferencePeek({
         style={geometry ? { width: geometry.width } : undefined}
         // Why: pointer moves inside the portaled peek bubble to the card; keep its details card shut.
         data-activity-thread-control=""
+        // Why: React bubbles portal wheels to the sidebar, whose handler treats them as list scrolls.
+        onWheel={(event) => event.stopPropagation()}
       >
         <ul
           ref={listRef}
