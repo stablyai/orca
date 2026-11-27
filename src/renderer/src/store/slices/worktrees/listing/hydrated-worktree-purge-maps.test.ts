@@ -9,7 +9,12 @@ import {
 import { makeTab } from '../../../terminals/testing/terminal-tab.test-fixture'
 import { readWebChatMark } from '../../agent-status/structured-sessions/chat-read-mark-aliases'
 import { createWebChatReadMarkReceiptBatch } from '../../agent-status/structured-sessions/chat-read-mark-web-move'
-import { CHAT, OLD, TAB } from '../../agent-status/structured-sessions/chat-read-mark-web-test-fixture'
+import {
+  browserChatMarks,
+  CHAT,
+  OLD,
+  TAB
+} from '../../agent-status/structured-sessions/chat-read-mark-web-test-fixture'
 import { makeStructuredChatTab } from '../../tabs/tab-group.test-fixture'
 import { makePersistedUI } from '../../ui/ui-slice-test-harness'
 import { purgeHydratedWorktrees } from './hydrated-worktree-purge'
@@ -82,9 +87,9 @@ it.each([
   }
   const store = createTestStore()
   const now = vi.spyOn(performance, 'now').mockReturnValue(10_000)
-  vi.stubGlobal('window', { __ORCA_WEB_CLIENT__: true })
   try {
-    store.getState().hydratePersistedUI(makePersistedUI({ activityClearedAtByPaneKey }), 'startup')
+    const marks = browserChatMarks({ activityClearedAtByPaneKey })
+    store.getState().hydratePersistedUI(makePersistedUI(marks.stored()), 'startup')
     expect(createWebChatReadMarkReceiptBatch()).toBeDefined()
     now.mockReturnValue(120_001)
     seedStore(store, {
