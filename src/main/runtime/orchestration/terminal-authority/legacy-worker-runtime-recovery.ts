@@ -229,7 +229,7 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
     )
   }
 
-  private readUnsubmittedWorkerScreen(handle: string): Promise<string | undefined> {
+  protected readUnsubmittedWorkerScreen(handle: string): Promise<string | undefined> {
     return this.readTerminal(handle, { screen: true, limit: 15 })
       .then((view) => {
         const { tail, draft } = redactWorkerTerminalView(view)

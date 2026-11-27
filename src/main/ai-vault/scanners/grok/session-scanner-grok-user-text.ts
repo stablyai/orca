@@ -53,17 +53,26 @@ export function stripGrokUserQueryEnvelope(text: string): string {
   const opener = '<user_query>'
   const closer = '</user_query>'
   const lower = text.toLowerCase()
-  const start = lower.indexOf(opener)
+  // U+0130 lowercases to two code units, so lowercased offsets would not index the original.
+  const offsetsMatch = lower.length === text.length
+  const start = offsetsMatch ? lower.indexOf(opener) : text.search(/<user_query>/i)
   if (start === -1) {
     return text
   }
   const bodyStart = start + opener.length
-  const end = lower.indexOf(closer, bodyStart)
+  const end = offsetsMatch
+    ? lower.indexOf(closer, bodyStart)
+    : searchFrom(text, /<\/user_query>/gi, bodyStart)
   // A missing closer can reflect an incomplete write; retain the ask after the opener.
   if (end === -1) {
     return text.slice(bodyStart).trim()
   }
   return text.slice(bodyStart, end).trim()
+}
+
+function searchFrom(text: string, pattern: RegExp, fromIndex: number): number {
+  pattern.lastIndex = fromIndex
+  return pattern.exec(text)?.index ?? -1
 }
 
 export function isGrokBootstrapContextText(text: string): boolean {

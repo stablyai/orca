@@ -1,38 +1,19 @@
 import { Pressable, Text, View } from 'react-native'
-import {
-  ChevronDown,
-  ChevronRight,
-  GitBranch,
-  GitCommitHorizontal,
-  TriangleAlert
-} from 'lucide-react-native'
+import { ChevronDown, ChevronRight, GitBranch, GitCommitHorizontal } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { GitConflictOperation } from '../../../../src/shared/git/status/git-status-types'
-import {
-  isMobileConflictAborting,
-  mobileConflictAbortLabel
-} from '../conflicts/mobile-source-control-conflict-abort'
 import type { MobileSourceControlState } from '../use-mobile-source-control-state'
 import { styles } from '../mobile-source-control-styles'
 
 type HeaderState = Pick<
   MobileSourceControlState,
-  | 'status'
-  | 'branchLabel'
-  | 'branchCompareResult'
-  | 'busyAction'
-  | 'openBranchPicker'
-  | 'abortConflictOperation'
+  'status' | 'branchLabel' | 'branchCompareResult' | 'busyAction' | 'openBranchPicker'
 >
 
-function syncMeta(
-  status: MobileSourceControlState['status'],
-  operation: GitConflictOperation | null,
-  t: Translate
-): string | null {
+function operationLabel(operation: GitConflictOperation, t: Translate): string | null {
   switch (operation) {
     case 'merge':
       return t('sourceControl.changesHeader.merging', 'Merging')
@@ -41,8 +22,26 @@ function syncMeta(
     case 'cherry-pick':
       return t('sourceControl.changesHeader.cherryPicking', 'Cherry-picking')
     case 'unknown':
-    case null:
-      break
+      return null
+  }
+  return null
+}
+
+function syncMeta(
+  status: MobileSourceControlState['status'],
+  operation: GitConflictOperation | null,
+  unresolved: number,
+  t: Translate
+): string | null {
+  const paused = operation ? operationLabel(operation, t) : null
+  if (paused) {
+    // The count lives here; the Conflicts section lists the files and the bar has the next step.
+    return unresolved > 0
+      ? t('sourceControl.changesHeader.pausedToResolve', '{{operation}} · {{count}} to resolve', {
+          operation: paused,
+          count: unresolved
+        })
+      : paused
   }
   const upstream = status?.upstreamStatus
   if (!upstream) {
@@ -65,7 +64,7 @@ function syncMeta(
   return t('sourceControl.changesHeader.upToDate', 'Up to date')
 }
 
-/** Above the Changes list: the branch and its sync state, the Commits row, and a paused merge. */
+/** Above the Changes list: the branch and its sync state (or a paused merge's), and the Commits row. */
 export function MobileSourceControlChangesHeader({
   state,
   onOpenCommits
@@ -78,11 +77,27 @@ export function MobileSourceControlChangesHeader({
   const { status, busyAction } = state
   const rawOperation = status?.conflictOperation ?? null
   const operation = rawOperation === 'unknown' ? null : rawOperation
-  const meta = syncMeta(status, operation, t)
   const commits = state.branchCompareResult?.summary.commitsAhead ?? 0
   const unresolved =
     status?.entries.filter((entry) => entry.conflictStatus === 'unresolved').length ?? 0
-  const aborting = isMobileConflictAborting(busyAction, operation)
+  const meta = syncMeta(status, operation, unresolved, t)
+  // Only what the branch line, the list and the bar don't already say. Abort is in ⋯.
+  const note =
+    !operation || unresolved > 0
+      ? null
+      : status?.didHitLimit === true
+        ? // A capped listing can hide the remaining conflicts; never claim they're done.
+          t(
+            'sourceControl.changesHeader.conflictsMayRemain',
+            'Not every file is listed, so conflicts may remain. Check on your computer.'
+          )
+        : operation === 'merge'
+          ? null
+          : // Mobile has no continue for a rebase or cherry-pick.
+            t(
+              'sourceControl.changesHeader.continueOnComputerShort',
+              'Continue on your computer to finish.'
+            )
   return (
     <View>
       <View style={styles.statusLine}>
@@ -107,72 +122,10 @@ export function MobileSourceControlChangesHeader({
         </Pressable>
         {meta ? <Text style={styles.syncText}>{meta}</Text> : null}
       </View>
-      {operation ? (
-        <View style={styles.conflictBanner}>
-          <View style={styles.conflictBannerTitleRow}>
-            <TriangleAlert size={17} color={colors.statusAmber} strokeWidth={2.1} />
-            <Text style={styles.conflictBannerTitle}>
-              {operation === 'merge'
-                ? t('sourceControl.changesHeader.mergeInProgress', 'Merge in progress')
-                : operation === 'rebase'
-                  ? t('sourceControl.changesHeader.rebaseInProgress', 'Rebase in progress')
-                  : t(
-                      'sourceControl.changesHeader.cherryPickInProgress',
-                      'Cherry-pick in progress'
-                    )}
-            </Text>
-            {operation === 'merge' || operation === 'rebase' ? (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.abortButton,
-                  busyAction !== null && styles.abortButtonDisabled,
-                  pressed && busyAction === null && styles.abortPressed
-                ]}
-                disabled={busyAction !== null}
-                onPress={() => void state.abortConflictOperation(operation)}
-                accessibilityLabel={mobileConflictAbortLabel(operation, aborting)}
-              >
-                <Text style={styles.abortText}>
-                  {mobileConflictAbortLabel(operation, aborting)}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-          <Text style={styles.conflictBannerText}>
-            {unresolved > 0
-              ? unresolved === 1
-                ? t(
-                    'sourceControl.changesHeader.filesNeedDecision_one',
-                    '{{count}} file needs a decision before you can finish.',
-                    { count: unresolved }
-                  )
-                : t(
-                    'sourceControl.changesHeader.filesNeedDecision_other',
-                    '{{count}} files need a decision before you can finish.',
-                    { count: unresolved }
-                  )
-              : status?.didHitLimit === true
-                ? // A capped listing can hide the remaining conflicts; never claim they're done.
-                  t(
-                    'sourceControl.changesHeader.conflictsMayRemain',
-                    'Not every file is listed, so conflicts may remain. Check on your computer.'
-                  )
-                : operation === 'merge'
-                  ? t(
-                      'sourceControl.changesHeader.conflictsResolved',
-                      'Every conflict is resolved. Finish from the bar below.'
-                    )
-                  : // Mobile has no continue for a rebase or cherry-pick.
-                    t(
-                      'sourceControl.changesHeader.continueOnComputer',
-                      'Every conflict is resolved. Continue on your computer to finish.'
-                    )}
-          </Text>
-        </View>
-      ) : null}
+      {note ? <Text style={styles.conflictNote}>{note}</Text> : null}
       {commits > 0 ? (
         <Pressable
-          style={({ pressed }) => [styles.commitsRow, pressed && styles.fileRowPressed]}
+          style={({ pressed }) => [styles.commitsRow, pressed && styles.commitsRowPressed]}
           onPress={onOpenCommits}
           accessibilityRole="button"
         >

@@ -1,5 +1,6 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { PluginFrameEntry } from '../../../shared/plugins/frames/plugin-frame-bridge'
 import type { Store } from '../../persistence/loading-store/store'
 import type { PluginService } from '../../plugins/plugin-service'
@@ -11,17 +12,21 @@ import {
   pluginFrameThemeSchema
 } from '../../plugins/panels/guest-isolation/plugin-frame-theme-snapshot'
 
-const readPanelEntryArgsSchema = z.object({
-  pluginKey: z.string().min(1),
-  panelId: z.string().min(1),
-  theme: pluginFrameThemeSchema.optional()
-})
+const readPanelEntryArgsSchema = lazyZodSchema(() =>
+  z.object({
+    pluginKey: z.string().min(1),
+    panelId: z.string().min(1),
+    theme: pluginFrameThemeSchema.optional()
+  })
+)
 
-const readCustomEditorEntryArgsSchema = z.object({
-  pluginKey: z.string().min(1),
-  editorId: z.string().min(1),
-  theme: pluginFrameThemeSchema.optional()
-})
+const readCustomEditorEntryArgsSchema = lazyZodSchema(() =>
+  z.object({
+    pluginKey: z.string().min(1),
+    editorId: z.string().min(1),
+    theme: pluginFrameThemeSchema.optional()
+  })
+)
 
 export function rendererPanelOwner(webContentsId: number): string {
   return `renderer:${webContentsId}`

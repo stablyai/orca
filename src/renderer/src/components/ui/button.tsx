@@ -7,6 +7,9 @@ import { cn } from '@/lib/class-names'
 const outlineButtonClasses =
   'border border-border bg-background text-foreground shadow-xs hover:border-muted-foreground/35 hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50'
 
+const mutedGhostButtonClasses =
+  'text-muted-foreground hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50'
+
 const disabledOnAccentButtonClasses =
   'disabled:bg-accent disabled:text-muted-foreground disabled:opacity-100 disabled:hover:bg-accent disabled:hover:text-muted-foreground'
 
@@ -35,8 +38,8 @@ const buttonVariants = cva(
           'bg-theme-accent-fill text-theme-accent-foreground hover:bg-theme-accent-fill-hover',
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         // A quiet secondary action under a title, such as a toast's "Show list": muted until hovered.
-        'ghost-muted':
-          'text-muted-foreground hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        'ghost-muted': mutedGhostButtonClasses,
+        'ghost-muted-disclosure': `${mutedGhostButtonClasses} aria-expanded:bg-accent aria-expanded:text-accent-foreground`,
         // A row action over its hovered row's accent fill, where ghost's accent hover would not show.
         'ghost-on-accent': `text-accent-foreground hover:bg-foreground/10 ${disabledOnAccentButtonClasses}`,
         // `ghost-on-accent` at a clipped list's edge, where an outset ring would lose a side.
@@ -72,6 +75,8 @@ const buttonVariants = cva(
           'text-destructive hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/15',
         // A status that is also its fix, e.g. "Update in Slack": loud colour, link weight.
         'warning-link': 'text-status-warning-foreground underline-offset-4 hover:underline',
+        // An inline action in a menu row, e.g. an account's Sign in: accent text, underlined while hovered or highlighted.
+        'theme-accent-link': `text-theme-accent underline-offset-4 hover:underline focus:underline ${insetFocusRingClasses}`,
         // A chat notice's quiet icon tool: faint until hovered or open; pressed fills like a toggle.
         'chat-tool':
           'text-chat-foreground-faint hover:bg-accent hover:text-chat-foreground aria-expanded:bg-accent aria-expanded:text-chat-foreground aria-pressed:bg-foreground/10 aria-pressed:text-primary aria-pressed:hover:text-primary dark:aria-pressed:bg-accent',
@@ -82,6 +87,8 @@ const buttonVariants = cva(
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',
         xs: "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
+        // `xs` at 13px with a 6px radius, for the one action in a 36px browser notice bar.
+        'xs-notice': 'h-6 gap-1 rounded-sm px-2.5 text-[13px]',
         // `xs` trimmed to its text, for an action inside a 32px status line.
         'xs-compact':
           "h-5 gap-1 rounded-md px-1.5 py-0.5 text-xs [&_svg:not([class*='size-'])]:size-3",

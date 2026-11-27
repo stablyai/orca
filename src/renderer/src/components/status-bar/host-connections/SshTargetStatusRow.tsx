@@ -1,3 +1,4 @@
+import { runWithFinally } from '@/lib/run-with-finally'
 import { useCallback, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -55,13 +56,14 @@ export function SshTargetStatusRow({
 
   const handleConnect = useCallback(async () => {
     setBusy(true)
-    try {
-      await connectSshTargetFromStatusMenu(targetId)
-    } finally {
-      if (mountedRef.current) {
-        setBusy(false)
+    await runWithFinally(
+      () => connectSshTargetFromStatusMenu(targetId),
+      () => {
+        if (mountedRef.current) {
+          setBusy(false)
+        }
       }
-    }
+    )
   }, [mountedRef, targetId])
 
   const handleDisconnect = useCallback(async () => {
@@ -75,10 +77,9 @@ export function SshTargetStatusRow({
           ? formatSshUserFacingError(err.message)
           : translate('auto.components.status.bar.SshStatusSegment.bf07aee59e', 'Disconnect failed')
       )
-    } finally {
-      if (mountedRef.current) {
-        setBusy(false)
-      }
+    }
+    if (mountedRef.current) {
+      setBusy(false)
     }
   }, [mountedRef, recordFeatureInteraction, targetId])
 

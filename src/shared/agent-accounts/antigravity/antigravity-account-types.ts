@@ -1,5 +1,3 @@
-import type { ProviderRateLimits } from '../../agent-usage/rate-limits/rate-limit-types'
-
 export type AntigravityAccountSummary = {
   id: string
   email: string | null
@@ -7,8 +5,6 @@ export type AntigravityAccountSummary = {
   authMethod: string
   createdAt: number
   updatedAt: number
-  /** Last reading verified as this account on this runtime; null when never read, absent from older hosts. */
-  usage?: ProviderRateLimits | null
 }
 
 export type AntigravityAccountState = {
@@ -21,6 +17,9 @@ export type AntigravityAccountState = {
     identityKnown: boolean
   } | null
   selectedAccountId: string | null
+  /** New agy launches put the selected account back when another saved one took agy's login.
+   *  Absent from older hosts, Windows and WSL, where a moved login stays as it is. */
+  restoresSelectionAtLaunch?: true
   /** Host only: new chats run on agy and its signed-in account; false runs them elsewhere, or on a
    *  signed-out agy (`chatAgySignedOut`). Absent from older hosts and WSL. */
   chatUsesAgy?: boolean

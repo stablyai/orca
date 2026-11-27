@@ -6,10 +6,7 @@ import { AppState, type AppStateStatus, Platform } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { currentAppStateStatus } from '../platform/app-state-status'
 import { loadHosts } from '../host-catalog/host-store'
-import {
-  loadTerminalAccessoryLayout,
-  saveTerminalSmartRail
-} from '../terminal/key-input/terminal-accessory-layout'
+import { loadTerminalAccessoryLayout } from '../terminal/key-input/terminal-accessory-layout'
 import {
   recoverActiveTerminalAfterForeground,
   shouldRecoverTerminalOnAppStateChange
@@ -121,19 +118,6 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     }
   }, [padAvailable, shellStorage])
 
-  const handleSmartRailChange = useCallback(
-    (enabled: boolean) => {
-      // A read that started before the toggle must not flip it back.
-      layoutReadRevisionRef.current += 1
-      setSmartRailEnabled(enabled)
-      saveTerminalSmartRail(enabled, padAvailable).catch((error: unknown) => {
-        console.warn('[terminal-keys] the store would not take the Smart rail setting', error)
-        setSmartRailEnabled(!enabled)
-      })
-    },
-    [padAvailable]
-  )
-
   useFocusEffect(
     useCallback(() => {
       const releaseKeys = refreshCustomKeys()
@@ -217,7 +201,6 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
   }, [connState, scheduleDelayedAction, subscribeToTerminal, terminalResume, unsubscribeTerminal])
   return {
     accessoryPreferencesReady: customKeysLoaded && accessoryLayoutLoaded,
-    handleSmartRailChange,
     pendingForegroundRecoveryRef
   }
 }

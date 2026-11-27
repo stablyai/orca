@@ -45,6 +45,7 @@ import { HostRemoveDialog } from '../../host-lifecycle/HostRemoveDialog'
 import { RuntimeRepairDialog } from '../../../runtime-access/RuntimeRepairDialog'
 import { resolveHostRemoval } from '../../host-lifecycle/host-rename-remove'
 import { translateHostDisplayLabel } from '../../../../runtime/hosts/display/execution-host-label'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 function blockedTitle(
   reason: 'client-too-old' | 'server-too-old',
@@ -121,27 +122,32 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
         return
       }
       setBusy(true)
-      try {
-        await window.api.ssh[action]({ targetId: parsed.targetId })
-      } catch (err) {
-        toast.error(
-          err instanceof Error
-            ? formatSshUserFacingError(err.message)
-            : action === 'connect'
-              ? translate(
-                  'auto.components.sidebar.HostSectionHeaderMenu.2c29e2de68',
-                  'Connection failed'
-                )
-              : translate(
-                  'auto.components.sidebar.HostSectionHeaderMenu.bf07aee59e',
-                  'Disconnect failed'
-                )
-        )
-      } finally {
-        if (mountedRef.current) {
-          setBusy(false)
+      await runWithFinally(
+        async () => {
+          try {
+            await window.api.ssh[action]({ targetId: parsed.targetId })
+          } catch (err) {
+            toast.error(
+              err instanceof Error
+                ? formatSshUserFacingError(err.message)
+                : action === 'connect'
+                  ? translate(
+                      'auto.components.sidebar.HostSectionHeaderMenu.2c29e2de68',
+                      'Connection failed'
+                    )
+                  : translate(
+                      'auto.components.sidebar.HostSectionHeaderMenu.bf07aee59e',
+                      'Disconnect failed'
+                    )
+            )
+          }
+        },
+        () => {
+          if (mountedRef.current) {
+            setBusy(false)
+          }
         }
-      }
+      )
     },
     [mountedRef, row.hostId]
   )
@@ -156,40 +162,49 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
     clearRuntimeCompatibilityCache(parsed.environmentId)
     // Managed SSH can repair revoked pairing; connect retries it rather than rereading refusal.
     const retryPairing = row.blockedReason === 'access-revoked' && repairRoute === 'ssh'
-    try {
-      const selector = parsed.environmentId
-      const response = await (retryPairing
-        ? // Re-pairing needs time for SSH, readiness and two handshakes.
-          window.api.runtimeEnvironments.connect({ selector, timeoutMs: 45_000 })
-        : window.api.runtimeEnvironments.getStatus({ selector, timeoutMs: 10_000, force: true }))
-      unwrapRuntimeRpcResult<RuntimeStatus>(response)
-      // Publish refreshed host status to other pickers through the shared store.
-      await useAppStore.getState().readRuntimeHostStatusSnapshots()
-      toast.success(
-        translate(
-          'auto.components.sidebar.HostSectionHeaderMenu.7f1a2b3c4d',
-          '{{value0}} is reachable',
-          {
-            value0: row.label
-          }
-        )
-      )
-    } catch (err) {
-      // Publish failed probes so the registry cannot retain stale compatibility.
-      await useAppStore.getState().readRuntimeHostStatusSnapshots()
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.sidebar.HostSectionHeaderMenu.2c29e2de68',
-              'Connection failed'
+    await runWithFinally(
+      async () => {
+        try {
+          const selector = parsed.environmentId
+          const response = await (retryPairing
+            ? // Re-pairing needs time for SSH, readiness and two handshakes.
+              window.api.runtimeEnvironments.connect({ selector, timeoutMs: 45_000 })
+            : window.api.runtimeEnvironments.getStatus({
+                selector,
+                timeoutMs: 10_000,
+                force: true
+              }))
+          unwrapRuntimeRpcResult<RuntimeStatus>(response)
+          // Publish refreshed host status to other pickers through the shared store.
+          await useAppStore.getState().readRuntimeHostStatusSnapshots()
+          toast.success(
+            translate(
+              'auto.components.sidebar.HostSectionHeaderMenu.7f1a2b3c4d',
+              '{{value0}} is reachable',
+              {
+                value0: row.label
+              }
             )
-      )
-    } finally {
-      if (mountedRef.current) {
-        setBusy(false)
+          )
+        } catch (err) {
+          // Publish failed probes so the registry cannot retain stale compatibility.
+          await useAppStore.getState().readRuntimeHostStatusSnapshots()
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : translate(
+                  'auto.components.sidebar.HostSectionHeaderMenu.2c29e2de68',
+                  'Connection failed'
+                )
+          )
+        }
+      },
+      () => {
+        if (mountedRef.current) {
+          setBusy(false)
+        }
       }
-    }
+    )
   }, [mountedRef, repairRoute, row.blockedReason, row.hostId, row.label])
 
   return (

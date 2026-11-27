@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { AlertCircle, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { useToastHeightChange } from '@/components/ui/toast-height-change'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -118,21 +119,7 @@ export function ChatOpenFailureCard({
   const [open, setOpen] = useState(false)
   const detailId = useId()
   const cardRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const card = cardRef.current
-    if (!card) {
-      return
-    }
-    let height = card.offsetHeight
-    const observer = new ResizeObserver(() => {
-      if (card.offsetHeight !== height) {
-        height = card.offsetHeight
-        onResize?.()
-      }
-    })
-    observer.observe(card)
-    return () => observer.disconnect()
-  }, [onResize])
+  useToastHeightChange(cardRef, onResize)
   return (
     <div
       ref={cardRef}

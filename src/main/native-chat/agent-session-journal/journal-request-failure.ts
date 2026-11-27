@@ -26,4 +26,8 @@ export type JournalRequestEvent = {
 
 export type JournalRequestFailureRead =
   | { kind: 'request-failure'; requestKind: JournalRequestMark['kind']; id: string }
-  | { kind: 'running-request'; stopSettle?: JournalStopSettleFact }
+  | {
+      kind: 'running-request'
+      stopSettle?: JournalStopSettleFact
+      exit?: { fence: number; observedAt: number }
+    }

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { StringDecoder } from 'node:string_decoder'
 import { recordSubprocessSpawn } from '../../../diagnostics/main-thread-churn-probe'
 import { getSpawnArgsForWindows } from '../../../../shared/shell/launch/windows-batch-spawn'
 import { createAbortError } from './abort-error'
@@ -30,6 +31,9 @@ export async function spawnCommandCapture(
     let stderr = ''
     let stdoutBytes = 0
     let stderrBytes = 0
+    // Pipe reads can end mid-character; decoders carry partial bytes into the next read.
+    const stdoutDecoder = new StringDecoder(options.encoding ?? 'utf-8')
+    const stderrDecoder = new StringDecoder(options.encoding ?? 'utf-8')
     const spawnStartedAt = performance.now()
     const child = spawn(spawnCmd, spawnArgs, {
       cwd: options.cwd,
@@ -60,6 +64,8 @@ export async function spawnCommandCapture(
       }
       settled = true
       cleanupListeners()
+      stdout += stdoutDecoder.end()
+      stderr += stderrDecoder.end()
       if (error) {
         reject(Object.assign(error, { stdout, stderr }))
         return
@@ -80,7 +86,7 @@ export async function spawnCommandCapture(
         finish(new Error(`${command} stdout exceeded maxBuffer.`))
         return
       }
-      stdout += chunk.toString(options.encoding ?? 'utf-8')
+      stdout += stdoutDecoder.write(chunk)
     }
     function onStderrData(chunk: Buffer): void {
       stderrBytes += chunk.byteLength
@@ -89,7 +95,7 @@ export async function spawnCommandCapture(
         finish(new Error(`${command} stderr exceeded maxBuffer.`))
         return
       }
-      stderr += chunk.toString(options.encoding ?? 'utf-8')
+      stderr += stderrDecoder.write(chunk)
     }
     function onError(error: Error): void {
       finish(error)

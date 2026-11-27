@@ -12,7 +12,10 @@ import type {
   LayoutRefusalCode
 } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { clearReplacedPaneBinding } from '../../../persistence/loading-store/terminal-bindings/replaced-pane-binding'
+import {
+  clearReplacedPaneBinding,
+  replacedPaneBindingState
+} from '../../../persistence/loading-store/terminal-bindings/replaced-pane-binding'
 
 /** Keep runtime fakes on the same reserved, durable-before-ack contract as Store. */
 export function withDurableRuntimeStore<
@@ -63,17 +66,18 @@ export function withDurableRuntimeStore<
       return durable.runDurableMutation(() => {
         const resolved = resolveHostId(hostId)
         const session = sessions.getWorkspaceSession?.(resolved)
-        const bound =
-          session?.terminalLayoutsByTabId?.[binding.tabId]?.ptyIdsByLeafId?.[binding.leafId]
-        if (!session || !bound) {
+        if (!session) {
+          return { value: true, persist: 'if-dirty' }
+        }
+        const state = replacedPaneBindingState(session, binding)
+        if (state === 'unbound') {
           return { value: true, persist: 'if-dirty' }
         }
         if (
-          bound !== binding.ptyId ||
+          state === 'taken' ||
           (fence &&
             session.terminalPtyIncarnationsByPaneKey?.[`${binding.tabId}:${binding.leafId}`] !==
-              fence.incarnationId) ||
-          !session.tabsByWorktree?.[binding.worktreeId]?.some((tab) => tab.id === binding.tabId)
+              fence.incarnationId)
         ) {
           return { value: false, persist: false }
         }

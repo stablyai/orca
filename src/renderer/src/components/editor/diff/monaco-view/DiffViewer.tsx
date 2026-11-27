@@ -232,9 +232,11 @@ export default function DiffViewer({
   }, [unregisterDiffEditor])
 
   const onSaveRef = useRef(onSave)
-  onSaveRef.current = onSave
   const onContentChangeRef = useRef(onContentChange)
-  onContentChangeRef.current = onContentChange
+  useLayoutEffect(() => {
+    onSaveRef.current = onSave
+    onContentChangeRef.current = onContentChange
+  })
 
   const { setupCopy, toastNode } = useContextualCopySetup()
 

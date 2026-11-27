@@ -9,6 +9,7 @@ import PaletteFilterChips from '@/components/cmd-j/PaletteFilterChips'
 import { PaletteLiveStatusProvider } from '@/components/cmd-j/palette-live-status'
 import { getPaletteFilterSelectionCount } from '@/components/cmd-j/palette-filter'
 import { useTranslate } from '@/i18n/use-translate'
+import { isCommandInputCaretKey } from '@/lib/keyboard/command-input-caret-keys'
 import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import { WorktreeJumpPaletteEntry } from './rows/worktree-jump-palette-entry'
@@ -92,7 +93,8 @@ export function WorktreeJumpPaletteSurface({
           }
           if (
             controller.selectionMovedByUserRef &&
-            ['ArrowDown', 'ArrowUp', 'Home', 'End', 'PageDown', 'PageUp'].includes(event.key)
+            ['ArrowDown', 'ArrowUp', 'Home', 'End', 'PageDown', 'PageUp'].includes(event.key) &&
+            !(event.target instanceof HTMLInputElement && isCommandInputCaretKey(event))
           ) {
             controller.selectionMovedByUserRef.current = true
           }

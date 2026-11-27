@@ -34,7 +34,6 @@
   "agentHistory": {
     "panel": {
       "all": "Все",
-      "emptyScope": "В выбранной области нет предыдущих сессий агентов.",
       "missingResumeId": "У этой сессии нет идентификатора для продолжения.",
       "noSearchResults": "По вашему запросу сессий не найдено.",
       "noSessions": "Нет сессий агентов",
@@ -67,16 +66,12 @@
       "untitledSession": "Сессия без названия"
     },
     "sessionHistoryList": {
-      "currentWorktree": "текущее рабочее дерево",
       "messages_few": "{{count}} сообщения",
       "messages_many": "{{count}} сообщений",
       "messages_one": "{{count}} сообщение",
       "messages_other": "{{count}} сообщения",
       "resumeSession": "Продолжить сессию агента",
-      "continueInCli": "Продолжить в CLI",
-      "hidePreview": "Скрывает последние сообщения.",
-      "showPreview": "Показывает последние сообщения.",
-      "you": "Вы"
+      "continueInCli": "Продолжить в CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Не удалось связаться с сервером",
@@ -610,7 +605,9 @@
       "ultracode": "Ultracode",
       "permissionAppliesNextMessage": "{{saved}} применится к следующему сообщению; сейчас действует {{active}}",
       "permissionAppliesNextMessageCompact": "{{saved}} · следующее сообщение",
-      "permissionAppliesNextMessageTiming": "Применится к следующему сообщению · сейчас действует {{active}}"
+      "permissionAppliesNextMessageTiming": "Применится к следующему сообщению · сейчас действует {{active}}",
+      "modelsLoading": "Загрузка моделей…",
+      "signInForModels": "Войдите, чтобы увидеть доступные вам модели."
     },
     "sessionOptionPickers": {
       "agentWorking": "Агент работает",
@@ -981,7 +978,8 @@
         "needsAuth_few": "{{count}} требуют входа",
         "needsAuth_many": "{{count}} требуют входа"
       },
-      "pasteHint": "Когда браузер откроет страницу, которая не загрузится, скопируйте её адрес и вставьте здесь."
+      "pasteHint": "Когда браузер откроет страницу, которая не загрузится, скопируйте её адрес и вставьте здесь.",
+      "manage": "Управлять серверами MCP"
     },
     "restartNote": {
       "continued": "Orca попросила этого агента продолжить после перезапуска. Ваш собственный запрос повторно не отправлялся.",
@@ -994,8 +992,8 @@
       "row": {
         "started": "Запущен",
         "reopened": "Открыт заново",
-        "followedUp": "Отправлено уточнение для",
-        "handedOff": "Передано",
+        "followedUp": "Дослано получателю:",
+        "handedOff": "Передано получателю:",
         "task": "Задача от",
         "update": "Обновление от",
         "message": "Сообщение от",
@@ -1006,8 +1004,16 @@
         "started": "Запущен",
         "reopened": "Открыт заново",
         "task": "Задача",
-        "followedUp": "Уточнение",
-        "handedOff": "Передано"
+        "followedUp": "Дослано получателю:",
+        "handedOff": "Передано получателю:"
+      },
+      "unnamedRecipient": "агент",
+      "event": {
+        "followedUp": "Дополнение отправлено",
+        "update": "Обновление",
+        "message": "Сообщение",
+        "handedOff": "Работа передана",
+        "task": "Задача"
       }
     },
     "urlRequest": {
@@ -1487,25 +1493,13 @@
     },
     "customKeyModal": {
       "add": "Добавить",
-      "addShortcut": "Добавить кнопку",
-      "command": "Команда",
       "commandPlaceholder": "Например, pnpm build",
       "editing": "Редактирование",
       "function": "Функциональные клавиши",
       "key": "Клавиша",
-      "label": "Название",
       "labelPlaceholder": "Например, Сборка",
-      "manageShortcuts": "Управление кнопками",
-      "manageShortcutsHint": "Показывайте, скрывайте и меняйте порядок кнопок",
-      "modifiers": "Модификаторы",
-      "moreKeys": "ДОПОЛНИТЕЛЬНЫЕ КЛАВИШИ",
       "navigation": "Навигация",
-      "pickKey": "Выберите клавишу",
-      "pressEnter": "Нажимать Enter",
-      "shortcutCombo": "Сочетание клавиш",
-      "shortcutComboHint": "Создайте сочетания с Ctrl, Alt и Shift",
-      "textMacro": "Текстовый макрос",
-      "textMacroHint": "Отправка заданной текстовой команды"
+      "pressEnter": "Нажимать Enter"
     },
     "dictationSetupSheet": {
       "description": "Скачайте или выберите модель и включите диктовку на сопряжённом компьютере прямо здесь.",
@@ -1548,8 +1542,6 @@
       "allStaged": "Всё в индексе"
     },
     "diffReviewDrawers": {
-      "addNote": "Добавить заметку",
-      "cancelNote": "Отменить ввод заметки",
       "clearSentNotes": "Удалить отправленные заметки",
       "copyNotes": "Скопировать заметки",
       "deleteNote": "Удалить заметку",
@@ -1558,12 +1550,10 @@
       "discardTitle": "Отменить изменения в файле",
       "editNote": "Изменить заметку",
       "fileNote": "Заметка к файлу",
-      "lineNumber": "Строка {{lineNumber}}",
       "loadingSessions": "Загрузка сессий агентов…",
       "newAgentSession": "Новая сессия агента",
       "openInSession": "Открыть в сессии",
       "reviewNote": "Заметка по проверке",
-      "saveLineNote": "Сохранить заметку к строке {{lineNumber}}",
       "sendNotes": "Отправить заметки",
       "sendNotesLabel": "Отправить заметки агенту",
       "sendUnsentNotes": "Отправить неотправленные заметки",
@@ -1590,10 +1580,7 @@
       "discardChanges": "Отменить изменения",
       "rangeLine": "Строка {{line}}",
       "rangeLines": "Строки {{startLine}}–{{line}}",
-      "sendToAgent": "Отправить агенту {{agent}}",
-      "sendToAnAgent": "Отправить агенту",
-      "rangePlaceholder": "Что здесь нужно изменить?",
-      "commentOnGitHub": "Прокомментировать на GitHub"
+      "rangePlaceholder": "Что здесь нужно изменить?"
     },
     "diffReviewFileSummary": {
       "changed": "Изменён",
@@ -1621,7 +1608,6 @@
       "jumpToFile": "{{fileName}}, перейти к другому файлу"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "Добавить заметку к строке {{number}}",
       "addedLine": "Добавленная строка",
       "addedLineNumber": "Добавленная строка {{number}}",
       "contextLine": "Строка контекста",
@@ -2336,26 +2322,18 @@
       "loadFailed": "Не удалось загрузить файлы",
       "title": "Файлы",
       "truncatedList": "{{worktreeLabel}} — показаны первые 5000",
-      "filterPlaceholder": "Фильтр файлов",
-      "noMatchesHint": "Поиск идёт только по открытым папкам.",
-      "clearFilter": "Очистить фильтр",
       "loading": "Загрузка файлов…"
     },
     "fileExplorerRow": {
       "fileUnavailable": "Файл {{name}} недоступен на мобильном устройстве",
+      "ignored": "Игнорируется в .gitignore",
       "loadFolderFailed": "Не удалось загрузить папку",
       "loadedOfTotal": "{{loaded}} из {{total}}",
       "loading": "Загрузка…",
       "openFolder": "Открыть папку {{name}}",
       "previewFile": "Открыть предпросмотр файла {{name}}",
       "retryLoading": "Повторить загрузку {{path}}",
-      "searchAll": "Искать везде",
-      "searchAllIn": "Искать во всей папке {{folder}}",
-      "searched": "Просмотрено {{loaded}} из {{total}} в {{folder}}.",
-      "searching": "Поиск в {{folder}}… {{loaded}} из {{total}}",
-      "showMore": "Показать ещё {{rows}}",
-      "unavailable": "Недоступно на мобильном устройстве",
-      "ignored": "Игнорируется в .gitignore"
+      "showMore": "Показать ещё {{rows}}"
     },
     "fileExplorerRowActions": {
       "copyName": "Копировать имя",
@@ -2612,7 +2590,8 @@
       "tasks": "Задачи",
       "automations": "Автоматизации",
       "moreActions": "Дополнительные действия",
-      "sharedLinks": "Общие ссылки"
+      "sharedLinks": "Общие ссылки",
+      "mcpServers": "Серверы MCP"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Удалить «{{name}}» ({{branch}})?",
@@ -2763,7 +2742,8 @@
       "tasks": "Задачи",
       "terminal": "Терминал",
       "workspace": "Рабочее пространство",
-      "automations": "Автоматизации"
+      "automations": "Автоматизации",
+      "mcpServers": "Серверы MCP"
     }
   },
   "newWorkspace": {
@@ -2855,15 +2835,7 @@
       "yearsAgo_few": "{{count}} года назад",
       "yearsAgo_many": "{{count}} лет назад",
       "yearsAgo_one": "{{count}} год назад",
-      "yearsAgo_other": "{{count}} года назад",
-      "resolved": "решено",
-      "openOnGitHub": "Открыть комментарий на GitHub",
-      "replyToComment": "Ответить на комментарий",
-      "editComment": "Изменить комментарий",
-      "deleteComment": "Удалить комментарий",
-      "unresolveThread": "Открыть обсуждение снова",
-      "resolveThread": "Закрыть обсуждение",
-      "replyPlaceholder": "Напишите ответ…"
+      "yearsAgo_other": "{{count}} года назад"
     },
     "commentsSection": {
       "comment": "Добавить комментарий",
@@ -2873,18 +2845,8 @@
       "noDescription": "Описание не добавлено.",
       "showMore": "Показать ещё {{count}}",
       "title": "Комментарии",
-      "all": "Все",
-      "humans": "Люди",
-      "bots": "Боты",
-      "noBotComments": "Комментариев от ботов нет.",
-      "noHumanComments": "Комментариев от людей нет.",
-      "commentsLoadFailed": "Не удалось загрузить комментарии. Нажмите «Обновить», чтобы повторить.",
-      "showMoreOf": "Показать ещё {{count}} из {{remaining}}",
-      "addCommentPlaceholder": "Добавьте комментарий…",
       "resolvedThreadSingle": "Закрытое обсуждение от {{author}}",
       "resolvedThreadCount": "Закрытое обсуждение от {{author}} ({{count}})",
-      "resolvedCommentSingle": "Закрытый комментарий от {{author}}",
-      "resolvedCommentCount": "Закрытый комментарий от {{author}} ({{count}})",
       "commentsLoadFailedRetry": "Не удалось загрузить комментарии."
     },
     "linkPrForm": {
@@ -3003,14 +2965,6 @@
       "stateOpen": "Открыт",
       "unavailable": "Проверки недоступны"
     },
-    "prCommentAudienceLabels": {
-      "all": "Все",
-      "bots": "Боты",
-      "humans": "Люди",
-      "noBotComments": "Комментариев ботов нет.",
-      "noComments": "Комментариев пока нет.",
-      "noHumanComments": "Комментариев людей нет."
-    },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "Ветка {{branch}} не связана с открытым PR.",
       "currentBranchNotLinked": "Текущая ветка не связана с открытым PR.",
@@ -3104,7 +3058,6 @@
       "failedAfter": "Сбой через {{duration}}",
       "failed": "Сбой",
       "checkActions": "Другие действия: {{name}}",
-      "rerun": "Перезапустить",
       "copyErrorFailed": "Не удалось скопировать ошибку.",
       "durationSeconds": "{{seconds}} с",
       "durationMinutes": "{{minutes}} мин {{seconds}} с",
@@ -3226,22 +3179,15 @@
       "messageModeLabel": "Режим сообщений: напишите, затем отправьте. Переключиться в режим клавиш",
       "moreKeys": "Другие клавиши и действия",
       "showKeyboard": "Показать клавиатуру",
-      "dismissKeyboardHint": "Скрывает экранную клавиатуру и оставляет текущую сессию терминала открытой.",
-      "switchToDesktopMode": "Переключиться в режим компьютера",
-      "switchToPhoneMode": "Переключить в режим телефона",
       "pasteFromClipboard": "Вставить из буфера обмена",
-      "paste": "Вставить",
-      "addCustomShortcut": "Добавить пользовательское сочетание клавиш",
       "control": "Control",
       "alt": "Alt",
       "shift": "Shift"
     },
     "activeContent": {
-      "createTab": "Создать вкладку",
       "creatingTab": "Создание…",
       "fileTitle": "Файл",
       "loadingTerminal": "Загрузка терминала",
-      "noTabs": "В этой сессии нет вкладок",
       "retryLoadingTerminal": "Повторить загрузку терминала",
       "terminalTakingLonger": "Загрузка терминала занимает больше времени, чем ожидалось"
     },
@@ -3359,26 +3305,15 @@
       "workflow": "Фоновый процесс"
     },
     "browserTabActionSheet": {
-      "forward": "Вперёд",
-      "reload": "Перезагрузить",
       "title": "Браузер",
       "hardReload": "Полная перезагрузка"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "Закрыть другие вкладки"
     },
-    "bulkTabClose": {
-      "confirm": "Закрыть вкладки",
-      "description": "Выбранные вкладки закроются. Закреплённые вкладки останутся открытыми.",
-      "titleEditors": "Закрыть все вкладки редактора?",
-      "titleLeft": "Закрыть вкладки слева?",
-      "titleOthers": "Закрыть остальные вкладки?",
-      "titleRight": "Закрыть вкладки справа?"
-    },
     "commandDock": {
       "liveInputHint": "Вводимый текст отправляется прямо в активный терминал",
-      "liveInputLabel": "Прямой ввод в терминал",
-      "tapToShowKeyboard": "Нажмите, чтобы показать клавиатуру"
+      "liveInputLabel": "Прямой ввод в терминал"
     },
     "contentRow": {
       "dismissCreationWarning": "Закрыть предупреждение о создании рабочего пространства"
@@ -3786,7 +3721,6 @@
       "file": "Файл",
       "markdown": "Markdown",
       "markdownNote": "Заметка Markdown",
-      "newBrowser": "Новый браузер",
       "newTab": "Новая вкладка",
       "notesCopied": "Заметки скопированы",
       "notesHint": "Выберите сессию агента для текущих заметок.",
@@ -3802,11 +3736,9 @@
       "shellWsl": "WSL",
       "terminalName": "Название терминала",
       "unsavedMarkdown": "Несохранённые изменения в Markdown",
-      "urlPrompt": "Введите URL или оставьте поле пустым, чтобы открыть новую вкладку.",
       "allowAutoClose": "Разрешить автоматическое закрытие",
       "agents": "Агенты",
       "renameTerminalFailed": "Не удалось переименовать терминал. {{reason}}",
-      "browserStreamingUnavailable": "Этот сервер не может транслировать вкладки браузера",
       "cli": "CLI",
       "cliOnly": "Только CLI",
       "more": "Ещё",
@@ -3835,20 +3767,13 @@
       "switchToDesktop": "Включить режим компьютера",
       "switchToPhone": "Включить режим телефона"
     },
-    "terminalInputActions": {
-      "attachFileHint": "Нажмите и удерживайте, чтобы прикрепить файл вместо фото",
-      "attachPhoto": "Прикрепить фото",
-      "sendingImage": "Отправка изображения"
-    },
+    "terminalInputActions": {},
     "terminalLiveInputStatus": {
       "listening": "Прослушивание",
-      "liveInput": "Прямой ввод",
       "preparingMic": "Подготовка микрофона",
       "processing": "Обработка",
       "releaseMicHint": "Отпустите кнопку микрофона, чтобы остановить запись",
-      "startingMic": "Включение микрофона",
-      "uploadingImage": "Загрузка изображения на сервер",
-      "uploadingImageTitle": "Загрузка изображения"
+      "startingMic": "Включение микрофона"
     },
     "terminalRecords": {
       "defaultTitle": "Терминал"
@@ -4085,8 +4010,6 @@
       "mailOwnerUnconfirmed": "Orca не смогла подтвердить, что это сообщение по-прежнему предназначено для этого чата."
     },
     "workerAutoClose": {
-      "running": "Временный агент оркестрации · Закроется через 2 минуты после завершения",
-      "finished": "Временный агент оркестрации завершил работу · Закроется через {{countdown}}",
       "keepOpen": "Оставить открытым"
     },
     "terminalLayoutSheet": {
@@ -4108,17 +4031,14 @@
     "terminalMoreKeys": {
       "sendKey": "Отправить {{label}}",
       "paste": "Вставить",
-      "sending": "Отправка…",
       "photo": "Фото",
       "file": "Файл",
       "desktopWidth": "Ширина компьютера",
       "phoneWidth": "Ширина телефона",
       "keys": "Клавиши",
-      "combos": "Комбинации",
       "yourKeys": "Ваши клавиши",
       "deleteKeyHint": "Удерживайте, чтобы удалить эту клавишу",
-      "addCustomKey": "Добавить свою клавишу",
-      "addKey": "Добавить клавишу"
+      "addCustomKey": "Добавить свою клавишу"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, в фокусе",
@@ -4169,7 +4089,6 @@
     "tabBar": {
       "oneTab": "1 вкладка",
       "tabCount": "Вкладок: {{count}}",
-      "anotherNeedsYou": "другая вкладка требует вашего внимания",
       "actionsHint": "Показывает действия для этой вкладки",
       "next": "Следующая вкладка",
       "previous": "Предыдущая вкладка",
@@ -4551,12 +4470,7 @@
     },
     "commitFailurePanel": {
       "fix": "Исправить",
-      "fixWithAi": "Исправить ошибку коммита с ИИ",
       "hideDetails": "Скрыть подробности",
-      "hideFailureDetails": "Скрыть подробности ошибки коммита",
-      "showDetails": "Показать подробности",
-      "showFailureDetails": "Показать подробности ошибки коммита",
-      "summary": "Не удалось создать коммит.",
       "title": "Не удалось создать коммит"
     },
     "commitMessageAi": {
@@ -4576,10 +4490,7 @@
       "cancelGeneration": "Отменить создание сообщения коммита",
       "commitMessageDisabled": "Ввод сообщения коммита недоступен. В индексе нет файлов.",
       "commitMessagePlaceholder": "Сообщение коммита",
-      "emptyMessage": "В рабочем дереве нет изменений.",
-      "emptyTitle": "Нет локальных изменений",
       "generateMessage": "Создать сообщение коммита с помощью ИИ",
-      "reconnecting": "Переподключение к компьютеру…",
       "regenerateHint": "Очистите сообщение для повторного создания."
     },
     "createPrAction": {
@@ -4745,7 +4656,6 @@
       "updateDesktop": "Обновите Orca на этом сервере, чтобы использовать управление версиями на мобильном устройстве."
     },
     "modals": {
-      "currentBranch": "текущая",
       "discardButton": "Отменить изменения",
       "discardConfirmMessage": "Отменить изменения в «{{path}}»? Это действие необратимо.",
       "discardTitle": "Отменить изменение",
@@ -4877,9 +4787,6 @@
       "agentCouldNotStart": "Не удалось запустить {{label}}. Проверьте команду агента в разделе «Настройки» и повторите попытку.",
       "agentFailedToStart": "Запуск {{label}} завершился ошибкой. Проверьте команду агента в разделе «Настройки» и повторите попытку.",
       "agentReportedError": "{{label}} сообщил об ошибке.",
-      "antigravityInvalidEvents": "Antigravity вернул некорректные события JSON.",
-      "antigravityInvalidResult": "Antigravity вернул некорректный результат.",
-      "antigravityNoFinalResult": "Antigravity не вернул итоговый результат.",
       "chatNameAgentUnsupported": "Выберите поддерживаемого агента для названий чатов в разделе «Настройки -> Чат -> Названия чатов». Поддерживаемые агенты: {{agents}} или «Своя команда».",
       "chatNameCustomCommandEmpty": "Своя команда не задана. Добавьте её в разделе «Настройки -> Чат -> Названия чатов».",
       "cliFailed": "Команда CLI {{label}} завершилась с ошибкой и кодом {{exitCode}}.",
@@ -5059,15 +4966,6 @@
       "behind": "Позади: {{count}}",
       "upToDate": "Актуально",
       "switchBranch": "Сменить ветку {{branch}}",
-      "mergeInProgress": "Выполняется слияние",
-      "rebaseInProgress": "Выполняется перебазирование",
-      "cherryPickInProgress": "Выполняется cherry-pick",
-      "filesNeedDecision_one": "{{count}} файл требует решения, чтобы вы могли завершить.",
-      "filesNeedDecision_other": "{{count}} файла требуют решения, чтобы вы могли завершить.",
-      "filesNeedDecision_few": "{{count}} файла требуют решения, чтобы вы могли завершить.",
-      "filesNeedDecision_many": "{{count}} файлов требуют решения, чтобы вы могли завершить.",
-      "conflictsResolved": "Все конфликты разрешены. Завершите на панели ниже.",
-      "continueOnComputer": "Все конфликты разрешены. Завершите на компьютере.",
       "commits_one": "{{count}} коммит",
       "commits_other": "{{count}} коммита",
       "commits_few": "{{count}} коммита",
@@ -5829,6 +5727,9 @@
       "right": "Крестовина вправо",
       "down": "Крестовина вниз",
       "hint": "Отправляет клавишу со стрелкой. Удерживайте для повтора."
+    },
+    "terminalKeyRail": {
+      "ctrlC": "Ctrl+C"
     }
   },
   "automations": {
@@ -8902,6 +8803,95 @@
     }
   },
   "mcpServers": {
-    "agentBlocked": "Заблокировано настройками Claude вашей организации"
+    "category": {
+      "coding": "Разработка",
+      "chat": "Чат",
+      "monitoring": "Мониторинг",
+      "docs": "Документы и проекты",
+      "more": "Другое"
+    },
+    "searchApps": "Поиск приложений",
+    "filterActive": "Фильтр: {{filter}}",
+    "filter": "Фильтр",
+    "allApps": "Все приложения",
+    "added": "Добавлено",
+    "addTitle": "Добавить сервер MCP",
+    "customServer": "Свой сервер",
+    "customServerLine": "URL, команда или вставленная конфигурация",
+    "noMatch": "Нет приложений по запросу «{{query}}».",
+    "apps": "Приложения",
+    "header": "Заголовок",
+    "headerName": "Имя",
+    "headerValue": "Значение",
+    "removeHeader": "Удалить заголовок",
+    "headers": "Заголовки",
+    "headerEmpty": "Пусто",
+    "addHeader": "Добавить заголовок",
+    "addButton": "Добавить",
+    "sourceLabel": "URL сервера или команда запуска",
+    "sourcePlaceholder": "https://… или npx …",
+    "sourceNote": "Вставьте URL сервера, команду запуска или конфигурацию mcpServers.",
+    "details": "Подробности",
+    "trust": "Добавляйте только программы, которым доверяете.",
+    "serverType": "Тип сервера",
+    "urlMode": "Подключиться по URL",
+    "commandMode": "Выполнить команду",
+    "serverName": "Имя сервера",
+    "headersNone": "Нет",
+    "yours": "Ваши",
+    "addServer": "Добавить сервер",
+    "fromPlugins": "Из плагинов",
+    "inYourAgents": "В настройках агентов",
+    "needsSignIn": "Требуется вход",
+    "wontStart": "Не запускается",
+    "signIn": "Войти",
+    "projectsOnly": "Только {{projects}}",
+    "moreFor": "Другие действия: {{name}}",
+    "moveToOrca": "Перенести в Orca",
+    "copyToOrca": "Скопировать в Orca",
+    "signInAgain": "Войти снова",
+    "signOut": "Выйти",
+    "workspaces": "Рабочие пространства",
+    "account": "Учётная запись",
+    "signedIn": "Вход выполнен",
+    "agents": "Агенты",
+    "turnAllOn": "Включить все",
+    "agentsUnread": "Не удалось получить список агентов на этом компьютере.",
+    "agentBlocked": "Заблокировано настройками Claude вашей организации",
+    "advanced": "Дополнительно",
+    "sharedProcess": "Один процесс для всех агентов",
+    "sharedProcessNote": "Расходует меньше памяти. Работает вне папки рабочего пространства.",
+    "removeServer": "Удалить сервер",
+    "url": "URL",
+    "command": "Команда",
+    "arguments": "Аргументы",
+    "title": "Серверы MCP",
+    "reading": "Чтение серверов MCP…",
+    "unavailable": "Серверы MCP недоступны на {{host}}",
+    "signedInTo": "Вход в {{app}} выполнен",
+    "allWorkspaces": "Все рабочие пространства",
+    "includingLater": "Включая добавленные позже",
+    "appliesToNewNote": "Изменения применятся к новым сессиям.",
+    "allAgents": "Все агенты",
+    "agentsOf": "{{on}} из {{total}}",
+    "workspacesAll": "Все",
+    "workspacesAllBut": "Все, кроме {{names}}",
+    "workspacesNone": "Нет",
+    "appliesToNew": "Для новых сессий",
+    "restartSessions": "Перезапустить сессии ({{count}})",
+    "restarted": "Перезапущено сессий: {{count}}",
+    "agentFileTitle": "Включить {{server}} для {{agent}}?",
+    "agentFileMessage": "Orca будет хранить ваши серверы MCP в файле настроек {{agent}} ({{file}}). Ваши собственные записи останутся без изменений.",
+    "agentFilesMessage": "Orca будет хранить ваши серверы MCP в файлах настроек агентов. Ваши собственные записи останутся без изменений.",
+    "allow": "Разрешить",
+    "removeTitle": "Удалить {{name}}?",
+    "remove": "Удалить",
+    "moveTitle": "Перенести {{name}} в Orca?",
+    "moveMessage": "Orca удалит его из настроек {{agents}} и сохранит резервную копию.",
+    "move": "Перенести",
+    "workspacesCount": "Рабочих пространств: {{count}}",
+    "workspacesAllButCount": "Все, кроме {{count}}",
+    "headerMissing": "Заполните заголовок {{header}}, чтобы добавить этот сервер.",
+    "servers": "Серверы"
   }
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ScrollView, Text, View } from 'react-native'
-import { ChevronDown, CircleCheck, CircleMinus, LoaderCircle } from 'lucide-react-native'
+import { ChevronDown, CircleCheck, CircleMinus, LoaderCircle, RotateCw } from 'lucide-react-native'
+import { NavBarButton } from '../../../../components/nav-bar/NavBarButton'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
@@ -80,12 +81,24 @@ export function PrChecksScreen({ tab, onBack, bottomInset = 0 }: ScreenProps) {
     }
   }
   const notice = tab.triage.noticeFor('fix-checks')
+  // The host reruns every failed check at once, so that is one action for the screen, not one per row.
+  const rerunnable = [...failing, ...cancelled].some(isBrokenCheck)
 
   return (
     <ScreenFrame
       title={t('pullRequest.checksSection.title', 'Checks')}
       subtitle={data ? `#${data.pr.number}` : undefined}
       onBack={onBack}
+      trailing={
+        data && rerunnable ? (
+          <NavBarButton
+            icon={RotateCw}
+            onPress={tab.actions.rerunFailingChecks}
+            disabled={tab.actions.isBusy({ kind: 'rerun' })}
+            accessibilityLabel={t('pullRequest.screens.rerunFailed', 'Rerun failed checks')}
+          />
+        ) : undefined
+      }
     >
       {!data ? (
         <NotReady tab={tab} />
@@ -124,8 +137,6 @@ export function PrChecksScreen({ tab, onBack, bottomInset = 0 }: ScreenProps) {
                       onFix={() => fixChecks([check])}
                       fixBusy={tab.triage.isBusy('fix-checks')}
                       fixAvailable={tab.triage.availability === 'available'}
-                      onRerun={tab.actions.rerunFailingChecks}
-                      rerunBusy={tab.actions.isBusy({ kind: 'rerun' })}
                     />
                   ))}
                 </ListGroup>

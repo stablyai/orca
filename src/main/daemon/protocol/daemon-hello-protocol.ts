@@ -17,6 +17,10 @@ export type DaemonEndpointIdentity = {
   appVersion?: string
   spawnerExecPath?: string
   providerSpawn?: true
+  /** Serves the relay RPCs (v63+); absent on Windows until agents can be tied to the daemon. */
+  providerRelay?: true
+  /** Takes several relays' acks in one `relayAcks`; without it the app sends `relayAck` each. */
+  providerRelayAcks?: true
 }
 
 export type HelloResponse = {

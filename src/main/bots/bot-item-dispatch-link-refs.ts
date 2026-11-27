@@ -16,6 +16,7 @@ const READ_OPS: ReadonlySet<BotItemsOp> = new Set<BotItemsOp>([
   'list',
   'needsYou',
   'viewRows',
+  'showRows',
   'closes',
   'latestEventId',
   'ownerCommentByRequest',

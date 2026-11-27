@@ -1,6 +1,10 @@
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { voiceModelUnloadDelayMs } from '../../shared/speech/models/voice-model-unload'
-import { findSpeechSttService, getSpeechSttService } from './speech-runtime-service'
+import {
+  ensureSpeechServiceFactories,
+  findSpeechSttService,
+  getSpeechSttService
+} from './speech-runtime-service'
 
 type SpeechWarmupStore = {
   getSettings(): Pick<GlobalSettings, 'voice'>
@@ -20,26 +24,36 @@ export function startSpeechModelWarmup(store: SpeechWarmupStore): () => void {
       void findSpeechSttService()?.unloadIdleModel()
       return
     }
-    try {
-      const stt = getSpeechSttService(store)
-      stt.setIdleUnloadDelay(voiceModelUnloadDelayMs(voice))
-      const prewarm = (): void => {
-        const current = store.getSettings().voice
-        if (current?.enabled && current.sttModel) {
-          void stt.prewarm(current.sttModel, current.dictationLanguage, retryFailed)
+    const runPrewarm = (): void => {
+      try {
+        const latestVoice = store.getSettings().voice
+        if (!latestVoice?.enabled || !latestVoice.sttModel) {
+          void findSpeechSttService()?.unloadIdleModel()
+          return
         }
+        const stt = getSpeechSttService(store)
+        stt.setIdleUnloadDelay(voiceModelUnloadDelayMs(latestVoice))
+        const prewarm = (): void => {
+          const current = store.getSettings().voice
+          if (current?.enabled && current.sttModel) {
+            void stt.prewarm(current.sttModel, current.dictationLanguage, retryFailed)
+          }
+        }
+        // A loaded recognizer keeps the GPU choice it started with; reload it once no dictation uses it.
+        if (latestVoice.speechGpu !== speechGpu) {
+          speechGpu = latestVoice.speechGpu
+          void stt.unloadModelWhenIdle().then(prewarm)
+        } else {
+          prewarm()
+        }
+      } catch (error) {
+        // Runs inside settings writes; an unusable models folder must not fail the write.
+        console.warn('[speech] Could not pre-warm the speech model:', error)
       }
-      // A loaded recognizer keeps the GPU choice it started with; reload it once no dictation uses it.
-      if (voice.speechGpu !== speechGpu) {
-        speechGpu = voice.speechGpu
-        void stt.unloadModelWhenIdle().then(prewarm)
-      } else {
-        prewarm()
-      }
-    } catch (error) {
-      // Runs inside settings writes; an unusable models folder must not fail the write.
-      console.warn('[speech] Could not pre-warm the speech model:', error)
     }
+    void ensureSpeechServiceFactories().then(runPrewarm, (error: unknown) => {
+      console.warn('[speech] Could not pre-warm the speech model:', error)
+    })
   }
   store.onSettingsChanged?.((updates) => {
     if ('voice' in updates) {

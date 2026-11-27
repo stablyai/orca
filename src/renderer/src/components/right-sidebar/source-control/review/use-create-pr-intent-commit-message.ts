@@ -10,6 +10,7 @@ import { hasConfiguredCommitMessageGenerationDefaults } from '../ai/text-generat
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
 import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-target'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 /** Pin generation to the run token’s worktree so navigation cannot retarget it. */
 export function useSourceControlCreatePrIntentCommitMessage({
@@ -59,31 +60,36 @@ export function useSourceControlCreatePrIntentCommitMessage({
         return { ok: false, reason: 'failed' }
       }
       operationStore.setState({ generateInFlight: true, generateError: null })
-      try {
-        const result = await generateRuntimeCommitMessage(
-          operationGitContext(target, useAppStore.getState().settings),
-          {
-            sourceControlAiResolvedParams: resolvedCommitMessageAi.value.params
+      return runWithFinally(
+        async () => {
+          try {
+            const result = await generateRuntimeCommitMessage(
+              operationGitContext(target, useAppStore.getState().settings),
+              {
+                sourceControlAiResolvedParams: resolvedCommitMessageAi.value.params
+              }
+            )
+            if (!result.success) {
+              if (!result.canceled) {
+                operationStore.setState({ generateError: result.error })
+              }
+              return { ok: false, reason: result.canceled ? 'canceled' : 'failed' }
+            }
+            useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
+            operationStore.setState({ generateError: null })
+            return { ok: true, message: result.message }
+          } catch (error) {
+            operationStore.setState({
+              generateError:
+                error instanceof Error ? error.message : 'Failed to generate commit message'
+            })
+            return { ok: false, reason: 'failed' }
           }
-        )
-        if (!result.success) {
-          if (!result.canceled) {
-            operationStore.setState({ generateError: result.error })
-          }
-          return { ok: false, reason: result.canceled ? 'canceled' : 'failed' }
+        },
+        () => {
+          operationStore.setState({ generateInFlight: false })
         }
-        useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
-        operationStore.setState({ generateError: null })
-        return { ok: true, message: result.message }
-      } catch (error) {
-        operationStore.setState({
-          generateError:
-            error instanceof Error ? error.message : 'Failed to generate commit message'
-        })
-        return { ok: false, reason: 'failed' }
-      } finally {
-        operationStore.setState({ generateInFlight: false })
-      }
+      )
     },
     [activeRepo, getCreatePrIntentOperationTarget, operationStore]
   )
