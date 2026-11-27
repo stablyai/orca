@@ -1,8 +1,11 @@
 import { notifyBlockedAgentStartup } from '@/lib/agent-session/launch/prompt/blocked-agent-startup-notice'
+import { SETUP_WAIT_GATE_MAX_MS } from '../../../../../shared/agent-launch/startup/setup-wait-output-gate'
 import type { AgentProgramBlockReason } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { CreateWorktreeArgs } from '../../../../../shared/worktree/create-types'
 
-const startupPrompts = new Map<string, string>()
+type StartupPrompt = { prompt: string; expiry?: number }
+
+const startupPrompts = new Map<string, StartupPrompt>()
 
 export async function createLocalWorktreeWithStartupDraft(
   args: CreateWorktreeArgs,
@@ -18,15 +21,24 @@ export async function createLocalWorktreeWithStartupDraft(
   }
 
   // The gate can settle before the create reply, or after the creation UI closes.
-  startupPrompts.set(creationId, prompt)
+  const entry: StartupPrompt = { prompt }
+  window.clearTimeout(startupPrompts.get(creationId)?.expiry)
+  startupPrompts.set(creationId, entry)
   let reportsSetupGateOutcome = false
   try {
     const result = await window.api.worktrees.create(args)
     reportsSetupGateOutcome = result.startupTerminal?.reportsSetupGateOutcome === true
     return result
   } finally {
-    if (!reportsSetupGateOutcome) {
-      startupPrompts.delete(creationId)
+    if (startupPrompts.get(creationId) === entry) {
+      if (reportsSetupGateOutcome) {
+        // Match the gate's grace period for the wrapper's final executable check.
+        entry.expiry = window.setTimeout(() => {
+          startupPrompts.delete(creationId)
+        }, SETUP_WAIT_GATE_MAX_MS + 15_000)
+      } else {
+        startupPrompts.delete(creationId)
+      }
     }
   }
 }
@@ -35,9 +47,10 @@ export function settleWorktreeCreationSetupGate(
   creationId: string,
   blockReason: AgentProgramBlockReason | undefined
 ): void {
-  const prompt = startupPrompts.get(creationId)
+  const entry = startupPrompts.get(creationId)
+  window.clearTimeout(entry?.expiry)
   startupPrompts.delete(creationId)
-  if (blockReason && prompt) {
-    notifyBlockedAgentStartup(blockReason, { creationId, prompt })
+  if (blockReason && entry) {
+    notifyBlockedAgentStartup(blockReason, { creationId, prompt: entry.prompt })
   }
 }
