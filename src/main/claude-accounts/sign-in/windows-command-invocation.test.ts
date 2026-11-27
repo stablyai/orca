@@ -27,3 +27,22 @@ it('uses ComSpec when set', () => {
 
   expect(buildWindowsCommandInvocation('claude', ['auth']).command).toBe('E:\\Custom\\cmd.exe')
 })
+
+it('skips blank SystemRoot and falls back to windir for System32 cmd.exe', () => {
+  vi.stubEnv('SystemRoot', '')
+  vi.stubEnv('SYSTEMROOT', '')
+  vi.stubEnv('windir', 'D:\\Windows')
+  vi.stubEnv('ComSpec', '')
+  vi.stubEnv('COMSPEC', '')
+
+  expect(buildWindowsCommandInvocation('claude', ['auth', 'login']).command).toBe(
+    'D:\\Windows\\System32\\cmd.exe'
+  )
+
+  vi.stubEnv('SystemRoot', '   ')
+  vi.stubEnv('SYSTEMROOT', '   ')
+
+  expect(buildWindowsCommandInvocation('claude', ['auth', 'login']).command).toBe(
+    'D:\\Windows\\System32\\cmd.exe'
+  )
+})
