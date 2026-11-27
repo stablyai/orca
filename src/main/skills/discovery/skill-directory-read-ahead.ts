@@ -1,6 +1,7 @@
 import type { Dirent } from 'node:fs'
 import { readdir, realpath } from 'node:fs/promises'
 import { join, sep } from 'node:path'
+import { throwUnlessAbsent } from './skill-root-unreadable'
 
 // Why: keeps scans from flooding libuv's 4-thread pool. Up to 3 read-ahead reads, plus one demand read from `claim` (the walk claims serially): at most 4 reads, each up to two requests. Per walk: discovery walks roots concurrently.
 const MAX_IN_FLIGHT_DIRECTORY_READS = 3
@@ -31,10 +32,11 @@ function compareWalkOrder(left: WalkOrder, right: WalkOrder): number {
   return left.length - right.length
 }
 
-async function readDirectory(ticket: Ticket): Promise<DirectoryRead> {
+async function readDirectory(ticket: Ticket, strict: boolean): Promise<DirectoryRead> {
+  const failed = strict ? throwUnlessAbsent : () => null
   const [resolvedPath, entries] = await Promise.all([
-    ticket.resolvedPath ?? realpath(ticket.dirPath).catch(() => null),
-    readdir(ticket.dirPath, { withFileTypes: true }).catch(() => null)
+    ticket.resolvedPath ?? realpath(ticket.dirPath).catch(failed),
+    readdir(ticket.dirPath, { withFileTypes: true }).catch(failed)
   ])
   return { resolvedPath, entries }
 }
@@ -51,10 +53,12 @@ export type DirectoryReadAhead = {
  */
 export function createDirectoryReadAhead(args: {
   signal?: AbortSignal
+  /** An unreadable root rejects the walk instead of reading as empty; only its absence is empty. */
+  rejectUnreadableRoot?: boolean
   /** Entry indexes of the plain child directories the walk will enter. */
   enteredChildIndexes: (dirPath: string, entries: readonly Dirent[]) => number[]
 }): DirectoryReadAhead {
-  const { signal, enteredChildIndexes } = args
+  const { signal, enteredChildIndexes, rejectUnreadableRoot = false } = args
   const tickets = new Map<string, Ticket>()
   // Unstarted reads in reverse walk order, so the one the walk needs soonest pops off the end.
   const queue: Ticket[] = []
@@ -63,7 +67,9 @@ export function createDirectoryReadAhead(args: {
 
   function start(ticket: Ticket): Promise<DirectoryRead> {
     inFlight += 1
-    const started = readDirectory(ticket).then((read) => {
+    // Only the root has an empty walk order; child failures keep reading as empty.
+    const strict = rejectUnreadableRoot && ticket.order.length === 0
+    const started = readDirectory(ticket, strict).then((read) => {
       inFlight -= 1
       if (read.entries && !ticket.dropped && !signal?.aborted) {
         queueChildren(ticket, read)

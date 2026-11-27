@@ -3,7 +3,7 @@ import { useNativeChatSessionOptions } from '../../session/options/terminal/use-
 import type { NativeChatComposerProps } from '../native-chat-composer-types'
 import type { NativeChatSendHandle } from '../../session/terminal/send/native-chat-runtime-send'
 import type { NativeChatPtySessionOptionsSurface } from '../../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
-import { nativeChatCommandOpensTerminal } from '../../../../../../shared/native-chat/native-chat-agent-profiles'
+import { nativeChatCommandOpensTerminal } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 import { useCallback } from 'react'
 import type {
   SessionOptionDescriptor,
@@ -19,21 +19,23 @@ type ComposerSessionOptionsArgs = Pick<
   | 'onSlashCommand'
   | 'onSubmitted'
   | 'onSwitchToTerminal'
-  | 'readTerminalScreen'
   | 'structuredTransport'
 > &
-  Pick<Parameters<typeof useNativeChatSessionOptionCommand>[0], 'disabled' | 'resolveTarget'>
+  Pick<
+    Parameters<typeof useNativeChatSessionOptionCommand>[0],
+    'disabled' | 'resolveTarget' | 'readTerminalDraft'
+  >
 
 export function useNativeChatComposerSessionOptions({
   agent,
   disabled,
   onSlashCommand,
   onSubmitted,
+  readTerminalDraft,
   resolveTarget,
   terminalTabId,
   targetPtyId,
   onSwitchToTerminal,
-  readTerminalScreen,
   paneKey,
   structuredTransport
 }: ComposerSessionOptionsArgs): {
@@ -52,6 +54,7 @@ export function useNativeChatComposerSessionOptions({
     disabled,
     onSlashCommand,
     onSubmitted,
+    readTerminalDraft,
     resolveTarget
   })
   const pty = useNativeChatSessionOptions({
@@ -60,7 +63,6 @@ export function useNativeChatComposerSessionOptions({
     targetPtyId,
     dispatchCommand: dispatch,
     onAgentPicker: onSwitchToTerminal,
-    readTerminalScreen,
     paneKey
   })
   const onCommandSent = useCallback(

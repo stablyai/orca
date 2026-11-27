@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
 import { spawnProcess } from '@orca/process-host'
 import {
+  STDERR_TAIL_MAX_CHARS,
   spawnManagedProviderProcess,
   type ManagedProviderProcess,
   type ProviderProcessExit
@@ -23,7 +24,10 @@ import {
 } from '../transport/acp-errors'
 import { resolveAcpPeerOptions, type AcpPeerOptions } from '../transport/acp-peer-limits'
 import { AcpSessionRuntime } from '../protocol/acp-session-runtime'
+import { redactString, redactTextTail } from '../../../shared/observability/redactor'
 import type { AcpSessionRuntimeOptions } from '../protocol/acp-session-runtime-options'
+import { keptAcpSession, type AcpKeptSession, type AcpRelayedProcess } from './acp-kept-session'
+import type { InitializeResponse } from '../generated/acp-protocol.generated'
 
 export type AcpSignInWatch = {
   /** Returns a valid link, null for a malformed sign-in line, or undefined for other output. */
@@ -37,6 +41,8 @@ export type AcpSignInWatch = {
 const SIGN_IN_LINE_MAX_CHARS = 32_768
 
 export type AcpAgentConnectionOptions = Omit<AcpSessionRuntimeOptions, 'peer'> & {
+  /** The agent the terminal daemon runs for this chat, launched or kept from before a restart. */
+  relayed?: AcpRelayedProcess
   peer?: Omit<AcpPeerOptions, 'closeOnInputEnd'>
   /** Process exit evidence, including expected closes and processless spawn failures. */
   onExit?: (error: Error, context: { expected: boolean; exit: ProviderProcessExit }) => void
@@ -67,6 +73,9 @@ type AcpConnectionLifecycle = {
 
 export class AcpAgentConnection extends AcpSessionRuntime {
   private readonly managed: ManagedProviderProcess
+  /** The agent kept running under the terminal daemon from before this app started. */
+  readonly kept: AcpKeptSession | null
+  private readonly relayTurns: AcpRelayedProcess['turns'] | undefined
   private readonly lifecycle: AcpConnectionLifecycle
   private readonly diagnoseLifecycle: (message: string) => void
   readonly spawned: Promise<void>
@@ -104,17 +113,19 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       }
       return true
     }
-    const managed = spawnManagedProviderProcess(launch, {
-      spawnImpl,
-      site: 'acp-agent-teardown',
-      ...(options.onOutput ? { onOutput: options.onOutput } : {}),
-      ...(signIn
-        ? {
-            onStderrLine: (line: string, cut: boolean) => signInLine(line, 'stderr', cut),
-            stderrLineMaxChars: SIGN_IN_LINE_MAX_CHARS
-          }
-        : {})
-    })
+    const managed =
+      options.relayed?.managed ??
+      spawnManagedProviderProcess(launch, {
+        spawnImpl,
+        site: 'acp-agent-teardown',
+        ...(options.onOutput ? { onOutput: options.onOutput } : {}),
+        ...(signIn
+          ? {
+              onStderrLine: (line: string, cut: boolean) => signInLine(line, 'stderr', cut),
+              stderrLineMaxChars: SIGN_IN_LINE_MAX_CHARS
+            }
+          : {})
+      })
     const diagnose = (message: string): void => {
       try {
         options.onDiagnostic?.(message)
@@ -163,6 +174,8 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       }
     }
     this.managed = managed
+    this.kept = keptAcpSession(options.relayed, this.peer.calls, this.handleNotification.bind(this))
+    this.relayTurns = options.relayed?.turns
     this.lifecycle = lifecycle
     this.diagnoseLifecycle = diagnose
     const { child } = managed
@@ -195,13 +208,14 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       const expected = lifecycle.closing
       const finish = (): void => {
         clearTimeout(lifecycle.outputEndTimer)
-        const detail = managed.stderrTail().trim() || `${launch.command} exited`
+        const stderr = this.stderrTail()
+        const detail = stderr || `${launch.command} exited`
         // Only an exit Orca neither caused nor preceded with its own refusal leaves calls unanswered.
         const error = withProviderSpawnAbsence(
           lifecycle.error ??
             (expected
               ? new AcpConnectionClosedError(detail)
-              : new AcpAgentExitedError(detail, managed.stderrTail().trim())),
+              : new AcpAgentExitedError(detail, stderr)),
           managed.spawnAbsence
         )
         withLostProviderOutcome(error, exit)
@@ -220,6 +234,23 @@ export class AcpAgentConnection extends AcpSessionRuntime {
         lifecycle.finishExit = afterProviderOutputDrains(child.stdout, finish, child)
       }
     })
+  }
+
+  override initialize(): Promise<InitializeResponse> {
+    return this.kept?.initialize() ?? super.initialize()
+  }
+
+  protected override call<T>(
+    method: string,
+    params: unknown,
+    schema: z.ZodType<T>,
+    received?: (response: T) => void,
+    timeoutMs: number | null = null
+  ): Promise<T> {
+    const send = (onId?: (id: number) => void): Promise<T> =>
+      this.kept?.answerStart(method, params, schema, received) ??
+      super.call(method, params, schema, received, timeoutMs, onId)
+    return method === 'session/prompt' && this.relayTurns ? this.relayTurns.track(send) : send()
   }
 
   get pid(): number | undefined {
@@ -250,8 +281,11 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     return this.exited && (result?.tree === 'unverifiable' || result?.tree === 'live')
   }
 
+  /** Redacted, since it reaches chat errors and saved chats; sign-in watching reads raw lines. */
   stderrTail(): string {
-    return this.managed.stderrTail().trim()
+    const tail = this.managed.stderrTail()
+    // A full tail starts mid-line, where a credential may have lost the marker that identifies it.
+    return (tail.length < STDERR_TAIL_MAX_CHARS ? redactString(tail) : redactTextTail(tail)).trim()
   }
 
   /** Requires advertised session listing support. */

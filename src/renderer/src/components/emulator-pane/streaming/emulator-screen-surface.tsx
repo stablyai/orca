@@ -1,11 +1,18 @@
 import type {
   ClipboardEventHandler,
+  CompositionEvent,
   FocusEventHandler,
+  FormEvent,
   KeyboardEventHandler,
   PointerEventHandler,
+  RefObject,
   WheelEventHandler
 } from 'react'
 import { cn } from '@/lib/class-names'
+import {
+  ComposingKeyboardProxy,
+  recordComposingKeyboardProxyAnchor
+} from '@/lib/text-input/ime/composing-keyboard-proxy'
 import { getEmulatorScreenAriaLabel } from './emulator-screen-aria-label'
 import { EmulatorScreenStreamContent } from './emulator-screen-stream-content'
 import type {
@@ -20,8 +27,11 @@ type EmulatorScreenSurfaceProps = {
   frameLayout: DeviceFrameLayout | null
   isLive: boolean
   keyboardCaptureActive: boolean
+  keyboardProxyRef: RefObject<HTMLTextAreaElement | null>
   loading: boolean
   onBlur: FocusEventHandler<HTMLDivElement>
+  onKeyboardProxyCompositionEnd: (event: CompositionEvent<HTMLTextAreaElement>) => void
+  onKeyboardProxyInput: (event: FormEvent<HTMLTextAreaElement>) => void
   onKeyDown: KeyboardEventHandler<HTMLDivElement>
   onPaste: ClipboardEventHandler<HTMLDivElement>
   onPointerCancel: PointerEventHandler<HTMLDivElement>
@@ -44,8 +54,11 @@ export function EmulatorScreenSurface({
   frameLayout,
   isLive,
   keyboardCaptureActive,
+  keyboardProxyRef,
   loading,
   onBlur,
+  onKeyboardProxyCompositionEnd,
+  onKeyboardProxyInput,
   onKeyDown,
   onPaste,
   onPointerCancel,
@@ -63,6 +76,7 @@ export function EmulatorScreenSurface({
   streamRotation
 }: EmulatorScreenSurfaceProps) {
   const t = useTranslate()
+  const ariaLabel = getEmulatorScreenAriaLabel(isLive, keyboardCaptureActive, t)
   return (
     <div
       className={cn(
@@ -78,17 +92,35 @@ export function EmulatorScreenSurface({
       }}
       onPointerCancel={onPointerCancel}
       onPointerDown={onPointerDown}
+      onPointerDownCapture={recordComposingKeyboardProxyAnchor}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onBlur={onBlur}
+      onFocus={(event) => {
+        // Keyboard focus belongs to the proxy, so a Tab onto the screen lands there.
+        if (isLive && event.target === event.currentTarget) {
+          event.currentTarget
+            .querySelector<HTMLTextAreaElement>('[data-emulator-keyboard-proxy]')
+            ?.focus({ preventScroll: true })
+        }
+      }}
       onKeyDown={onKeyDown}
       onPaste={onPaste}
       onWheel={onWheel}
       role={isLive ? 'application' : undefined}
       tabIndex={isLive ? 0 : undefined}
       aria-keyshortcuts={keyboardCaptureActive ? 'Escape' : undefined}
-      aria-label={getEmulatorScreenAriaLabel(isLive, keyboardCaptureActive, t)}
+      aria-label={ariaLabel}
     >
+      {isLive ? (
+        <ComposingKeyboardProxy
+          ref={keyboardProxyRef}
+          data-emulator-keyboard-proxy=""
+          aria-label={ariaLabel}
+          onCompositionEnd={onKeyboardProxyCompositionEnd}
+          onInput={onKeyboardProxyInput}
+        />
+      ) : null}
       {/* Use the real streamed screen; extra in-screen chrome would duplicate iOS status bars and distort bezels. */}
       <EmulatorScreenStreamContent
         deviceId={deviceId}

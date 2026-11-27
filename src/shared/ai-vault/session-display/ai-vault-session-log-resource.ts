@@ -33,12 +33,11 @@ const logFileResolvers = {
   codebuddy: jsonlLog,
   qoder: jsonlLog,
   codex: jsonlLog,
-  hermes: jsonLog,
+  hermes: () => null,
   pi: jsonlLog,
   omp: jsonlLog,
   'prime-agent': jsonlLog,
   cursor: jsonlLog,
-  gemini: (filePath) => jsonLog(filePath) ?? jsonlLog(filePath),
   antigravity: jsonlLog,
   rovo: (filePath) =>
     getRuntimePathBasename(filePath) === 'metadata.json'

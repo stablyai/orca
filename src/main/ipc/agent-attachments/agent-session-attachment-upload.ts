@@ -1,0 +1,237 @@
+// Main pumps client-local attachment bytes into the paired server store; the renderer receives only server paths.
+
+import { randomUUID } from 'node:crypto'
+import { lstat } from 'node:fs/promises'
+import { basename } from 'node:path'
+import {
+  AGENT_SESSION_ATTACHMENT_CHUNK_BYTES,
+  AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+  agentSessionAttachmentUploadDestination,
+  agentSessionPastedImageName,
+  type AgentSessionAttachmentClipboardTarget,
+  type AgentSessionAttachmentPathUploadResult,
+  type AgentSessionAttachmentUploadCommitResult,
+  type AgentSessionAttachmentUploadStartResult,
+  type AgentSessionAttachmentUploadTarget
+} from '../../../shared/agent-session/agent-session-attachments'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { callRuntimeEnvironment } from '../runtime-environments/requests/runtime-environment-transport-routing'
+import {
+  isRuntimeEnvironmentManuallyDisconnected,
+  RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
+} from '../runtime-environments/connectivity/runtime-environment-manual-disconnect'
+import { stageOneSourceForRuntimeUpload } from '../filesystem/imports/filesystem-runtime-upload-staging'
+import { streamExternalFileSlices } from '../runtime-transfers/runtime-upload-file-stream'
+import { formatByteCeiling } from '../runtime-transfers/runtime-import-limits'
+
+const ATTACHMENT_CALL_TIMEOUT_MS = 30_000
+
+async function isDirectory(path: string): Promise<boolean> {
+  try {
+    return (await lstat(path)).isDirectory()
+  } catch {
+    // The stager reports a path it cannot read with its own reason.
+    return false
+  }
+}
+
+type UploadContext = AgentSessionAttachmentUploadTarget & {
+  userDataPath: string
+  signal?: AbortSignal
+}
+
+async function callAttachmentMethod<TResult>(
+  context: UploadContext,
+  method: string,
+  params: unknown
+): Promise<TResult> {
+  if (isRuntimeEnvironmentManuallyDisconnected(context.environmentId)) {
+    throw new Error(RUNTIME_MANUALLY_DISCONNECTED_MESSAGE)
+  }
+  const response = await callRuntimeEnvironment(
+    context.userDataPath,
+    context.environmentId,
+    method,
+    params,
+    ATTACHMENT_CALL_TIMEOUT_MS,
+    context.expectedEnvironmentPairingRevision,
+    undefined,
+    {
+      expectedEnvironmentRuntimeId: context.expectedEnvironmentRuntimeId,
+      signal: context.signal
+    }
+  )
+  if (response.ok !== true) {
+    throw new Error(response.error.message || response.error.code)
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each caller names the result type of the agentSessionAttachment.* method it calls, whose server handler returns exactly that shape.
+  return response.result as TResult
+}
+
+/** One `agentSessionAttachment.*` call on the store's host; `abort` is the cleanup call, sent even
+ *  after the transfer's signal fired. */
+export type AgentSessionAttachmentCall = (
+  method: string,
+  params: unknown,
+  abort?: boolean
+) => Promise<unknown>
+
+function environmentCall(context: UploadContext): AgentSessionAttachmentCall {
+  return (method, params, abort) =>
+    callAttachmentMethod(abort ? { ...context, signal: undefined } : context, method, params)
+}
+
+/** Abort failed transfers so the server frees their slots and part files. */
+async function uploadAttachment(
+  call: AgentSessionAttachmentCall,
+  sessionId: string,
+  file: { name: string; byteLength: number },
+  writeBody: (
+    appendSlice: (contentBase64: string, offset: number) => Promise<void>
+  ) => Promise<void>
+): Promise<AgentSessionAttachmentUploadCommitResult> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: uploadStart's handler returns this shape.
+  const { uploadId } = (await call('agentSessionAttachment.uploadStart', {
+    ...agentSessionAttachmentUploadDestination(sessionId),
+    name: file.name,
+    byteLength: file.byteLength
+  })) as AgentSessionAttachmentUploadStartResult
+  try {
+    await writeBody(async (contentBase64, offset) => {
+      await call('agentSessionAttachment.uploadAppend', { uploadId, offset, contentBase64 })
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: uploadCommit's handler returns this shape.
+    return (await call('agentSessionAttachment.uploadCommit', {
+      uploadId
+    })) as AgentSessionAttachmentUploadCommitResult
+  } catch (error) {
+    await call('agentSessionAttachment.uploadAbort', { uploadId }, true).catch(() => {})
+    throw error
+  }
+}
+
+/** A buffer into a chat's store on the host `call` reaches, in the chunks a paste uses. */
+export function uploadBufferWith(
+  call: AgentSessionAttachmentCall,
+  sessionId: string,
+  name: string,
+  buffer: Buffer,
+  signal?: AbortSignal
+): Promise<AgentSessionAttachmentUploadCommitResult> {
+  return uploadAttachment(
+    call,
+    sessionId,
+    { name, byteLength: buffer.byteLength },
+    async (appendSlice) => {
+      if (buffer.byteLength === 0) {
+        await appendSlice('', 0)
+        return
+      }
+      for (
+        let offset = 0;
+        offset < buffer.byteLength;
+        offset += AGENT_SESSION_ATTACHMENT_CHUNK_BYTES
+      ) {
+        signal?.throwIfAborted()
+        const slice = buffer.subarray(offset, offset + AGENT_SESSION_ATTACHMENT_CHUNK_BYTES)
+        await appendSlice(slice.toString('base64'), offset)
+      }
+    }
+  )
+}
+
+export function uploadBufferToAgentSessionAttachments(
+  context: UploadContext,
+  name: string,
+  buffer: Buffer
+): Promise<AgentSessionAttachmentUploadCommitResult> {
+  return uploadBufferWith(environmentCall(context), context.sessionId, name, buffer, context.signal)
+}
+
+export async function uploadPasteToAgentSessionAttachments(
+  target: AgentSessionAttachmentClipboardTarget,
+  runtimeEnvironmentId: string,
+  userDataPath: string,
+  buffer: Buffer,
+  name: string = agentSessionPastedImageName(Date.now(), randomUUID())
+): Promise<string> {
+  const stored = await uploadBufferToAgentSessionAttachments(
+    {
+      ...target,
+      environmentId: (await resolveEnvironment(userDataPath, runtimeEnvironmentId)).id,
+      userDataPath
+    },
+    name,
+    buffer
+  )
+  return stored.path
+}
+
+/** Upload files in input order; folders are unsupported. */
+export async function uploadExternalPathsToAgentSessionAttachments(
+  context: UploadContext,
+  paths: readonly string[]
+): Promise<AgentSessionAttachmentPathUploadResult> {
+  const result: AgentSessionAttachmentPathUploadResult = { uploaded: [], skipped: [], failed: [] }
+  for (const sourcePath of paths) {
+    context.signal?.throwIfAborted()
+    // Reject folders before staging walks and opens their contents.
+    if (await isDirectory(sourcePath)) {
+      result.skipped.push({ sourcePath, reason: 'unsupported' })
+      continue
+    }
+    const staged = await stageOneSourceForRuntimeUpload(sourcePath, 0, {
+      nameExtensionlessImages: true
+    })
+    if (staged.status === 'skipped') {
+      result.skipped.push({ sourcePath, reason: staged.reason })
+      continue
+    }
+    if (staged.status === 'failed') {
+      result.failed.push({ sourcePath, reason: staged.reason })
+      continue
+    }
+    const entry = staged.entries[0]
+    if (staged.kind !== 'file' || !entry || entry.kind !== 'file') {
+      result.skipped.push({ sourcePath, reason: 'unsupported' })
+      continue
+    }
+    if (entry.byteLength > AGENT_SESSION_ATTACHMENT_MAX_BYTES) {
+      result.failed.push({
+        sourcePath,
+        reason:
+          `'${basename(sourcePath)}' is ${formatByteCeiling(entry.byteLength)}, over the ` +
+          `${formatByteCeiling(AGENT_SESSION_ATTACHMENT_MAX_BYTES)} chat attachment limit`
+      })
+      continue
+    }
+    try {
+      const stored = await uploadAttachment(
+        environmentCall(context),
+        context.sessionId,
+        { name: staged.name, byteLength: entry.byteLength },
+        async (appendSlice) => {
+          await streamExternalFileSlices({
+            sourceRootPath: sourcePath,
+            entryRelativePath: '',
+            expected: entry,
+            signal: context.signal,
+            maxFileBytes: AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+            limitLabel: 'chat attachment limit',
+            writeSlice: appendSlice
+          })
+        }
+      )
+      result.uploaded.push({ sourcePath, path: stored.path })
+    } catch (error) {
+      if (context.signal?.aborted) {
+        throw error
+      }
+      result.failed.push({
+        sourcePath,
+        reason: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+  return result
+}

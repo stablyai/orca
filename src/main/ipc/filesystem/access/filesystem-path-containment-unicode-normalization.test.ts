@@ -34,7 +34,7 @@ async function makeOneDirectoryTwoSpellings(
   const registered = join(scratch, NFC_FOLDER)
   await mkdir(onDisk)
   try {
-    await symlink(onDisk, registered, 'dir')
+    await symlink(onDisk, registered, 'junction')
   } catch (error) {
     if (!isEEXIST(error)) {
       throw error

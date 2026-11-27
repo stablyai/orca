@@ -14,7 +14,7 @@ import type {
 import { rejectedAcpDispatch } from '../turns/acp-dispatch-rejection'
 import type { AcpStructuredSession } from './acp-structured-session-contract'
 
-import { applyAcpMessageOptions } from '../turns/acp-message-execution-options'
+import { applyAcpMessageOptions, mailModelCommand } from '../turns/acp-message-execution-options'
 import { AgentSessionOptionRejectedError } from '../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import * as stop from '../turns/acp-structured-stop'
 import { acpDispatchPrompt } from '../turns/acp-prompt-content'
@@ -23,6 +23,11 @@ import {
   type AcpStructuredSessionAdapterDeps
 } from './acp-structured-session-adapter-deps'
 import { readAcpLiveOptions } from '../options/acp-live-options'
+import {
+  acpPermissionWritesSettled,
+  acpRunningPermission,
+  applyAcpLivePermissionMode
+} from '../options/acp-live-permission-mode'
 import { acpControlsSettled, writeAcpSessionOption } from '../options/acp-session-option-write'
 import { acpOptionWriteBound, withAcpModelFallback } from '../turns/acp-model-command'
 import {
@@ -30,6 +35,7 @@ import {
   closeAcpChildSessions,
   stopAcpChildren
 } from '../turns/acp-structured-child-stop'
+import { acpChildKeptLaunchOutgrown, acpChildRelayOpenWork } from './acp-child-relay-open-work'
 import * as childState from './children/acp-structured-child'
 import { AcpStructuredChildren } from './children/acp-structured-child-lifecycle'
 import { AcpConversationCopies } from '../conversation-copy/acp-conversation-copies'
@@ -38,12 +44,15 @@ import { supportsAcpStructuredLocation } from './acp-structured-location-support
 import { acpAcquireFailure } from './start/acp-startup-outcome'
 import { openAcpStart } from './start/acp-structured-start-open'
 import { admitStructuredAgentSessionInput } from '../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
+import { orchestrationMailNotice } from '../../../shared/agent-session/journal/agent-session-message-source'
 
 export class AcpStructuredSessionAdapter implements SessionAdapter {
   readonly atRestCommands: AcpStructuredSessionAdapterDeps['atRestCommands']
   private readonly children: AcpStructuredChildren
   private readonly copies: AcpConversationCopies
   private readonly textTasks: AcpTextTasks
+  /** Mail still preparing holds the steering slot, so the host keeps the next one unprepared. */
+  private readonly preparingMail = new WeakMap<AcpStructuredSession, number>()
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {
     this.atRestCommands = deps.atRestCommands
     this.children = new AcpStructuredChildren(deps)
@@ -105,6 +114,22 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       return rejectedAcpDispatch(lost)
     }
     const session = this.live(input.sessionId)
+    if (orchestrationMailNotice(input.body.from) === null) {
+      return this.dispatchTo(session, input, false)
+    }
+    this.preparingMail.set(session, (this.preparingMail.get(session) ?? 0) + 1)
+    try {
+      return await this.dispatchTo(session, input, true)
+    } finally {
+      this.preparingMail.set(session, (this.preparingMail.get(session) ?? 1) - 1)
+    }
+  }
+
+  private async dispatchTo(
+    session: AcpStructuredSession,
+    input: Parameters<SessionAdapter['dispatch']>[0],
+    mail: boolean
+  ): Promise<DispatchOutcome> {
     const prompt = await acpDispatchPrompt(input.body, session)
     if (!Array.isArray(prompt)) {
       return { state: 'rejected', ...prompt }
@@ -124,21 +149,26 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
         () =>
           this.children.sessions.get(input.sessionId) === session && session.journalClosed === null,
         signal,
-        fallback.command
+        mailModelCommand(fallback.command, mail && session.turns.steersMail, session.turns)
       )
       if (!optionsApplied) {
         return rejectedAcpDispatch(session)
       }
       await acpControlsSettled(session, signal)
+      // A mode picked before this send must reach the agent before the prompt does.
+      await acpPermissionWritesSettled(session)
       input.signal?.throwIfAborted()
       await input.beforeDispatch?.()
       input.signal?.throwIfAborted()
       const commit = fallback.admitting(() =>
-        session.turns.dispatch({
-          clientMessageId: input.clientMessageId,
-          prompt,
-          requestedAt: input.requestedAt ?? this.now()
-        })
+        session.turns.dispatch(
+          {
+            clientMessageId: input.clientMessageId,
+            prompt,
+            requestedAt: input.requestedAt ?? this.now()
+          },
+          mail ? 'mail' : 'cancel'
+        )
       )
       await admitStructuredAgentSessionInput(input.admitFreshInput, commit)
       // Admission precedes provider confirmation of the send.
@@ -178,6 +208,29 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
 
   settlePermissionTransition = stop.acpPermissionTransition((id) => this.live(id), this.graceMs)
 
+  permissionModeRequiresAcquisition: NonNullable<
+    SessionAdapter['permissionModeRequiresAcquisition']
+  > = (sessionId, mode) => {
+    const session = this.children.sessions.get(sessionId)
+    return childState.isAcpReadySession(session)
+      ? acpRunningPermission(session) !== mode
+      : undefined
+  }
+
+  runningPermissionMode: NonNullable<SessionAdapter['runningPermissionMode']> = (sessionId) => {
+    const session = this.children.sessions.get(sessionId)
+    return childState.isAcpReadySession(session)
+      ? (acpRunningPermission(session) ?? undefined)
+      : undefined
+  }
+
+  applyPermissionMode: NonNullable<SessionAdapter['applyPermissionMode']> = async (input) => {
+    const session = this.live(input.sessionId)
+    if (session.fence === input.fence) {
+      await applyAcpLivePermissionMode(session, input.mode, this.writeBound(session))
+    }
+  }
+
   answerPrompt: SessionAdapter['answerPrompt'] = (input) =>
     this.live(input.sessionId).prompts.answer(input)
 
@@ -207,12 +260,9 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return readAcpLiveOptions(session, session.permissionModes)
   }
 
-  readCommands = (sessionId: string) => {
-    const session = this.children.sessions.get(sessionId)
-    return session && childState.isAcpReadySession(session)
-      ? session.options.readCommands()
-      : undefined
-  }
+  // Not gated on ready: a list reported mid-startup is published only when it arrives.
+  readCommands = (sessionId: string) =>
+    this.children.sessions.get(sessionId)?.options.readCommands()
 
   capturePendingOutput: SessionAdapter['capturePendingOutput'] = (input) =>
     this.children.capturePendingOutput?.(input)
@@ -222,6 +272,18 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return session ? childState.isAcpReadySession(session) && session.turns.running : false
   }
 
+  steeringMode: SessionAdapter['steeringMode'] = (sessionId) => {
+    const session = this.children.sessions.get(sessionId)
+    // One mail at a time: the host keeps later mail until a held steer settles.
+    return childState.isAcpReadySession(session) &&
+      session.turns.running &&
+      session.turns.steersMail &&
+      !session.turns.holdsSteers &&
+      !this.preparingMail.get(session)
+      ? 'inject'
+      : 'queue'
+  }
+
   confirmIdle: NonNullable<SessionAdapter['confirmIdle']> = (sessionId) => {
     const session = this.children.sessions.get(sessionId)
     // OMP cannot prove that a finished parent has no background work or pending results.
@@ -229,6 +291,13 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       ? Promise.resolve('unknown')
       : undefined
   }
+
+  relayOpenWork = (id: string) => acpChildRelayOpenWork(this.children.sessions.get(id))
+  keptLaunchOutgrown = (id: string, toolsOutdated: boolean, owesWork: () => Promise<boolean>) =>
+    acpChildKeptLaunchOutgrown(this.children.sessions.get(id), toolsOutdated, owesWork)
+
+  endedBeforeAcquire = (sessionId: string, generation: string): boolean =>
+    this.children.endedBeforeAcquire.get(sessionId) === generation
 
   holdsLiveProviderProcess = (sessionId: string, generation: string): boolean => {
     const session = this.children.sessions.get(sessionId)

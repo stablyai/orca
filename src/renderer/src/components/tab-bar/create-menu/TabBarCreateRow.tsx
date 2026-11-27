@@ -1,9 +1,10 @@
 import React, { useRef, useState } from 'react'
 import { Settings } from 'lucide-react'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
-import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatOptionalPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import {
   DropdownMenuItem,
   DropdownMenuShortcut,
@@ -22,9 +23,18 @@ import {
 } from '../../../../../shared/new-tab-menu/new-tab-menu-layout'
 import type { KeybindingActionId } from '../../../../../shared/keybindings/types'
 import type { TabBarCreateRowItem } from './tab-bar-create-row-item'
-import { TabBarCreateRowCustomizer } from './TabBarCreateRowCustomizer'
 import { CREATE_ROW_HIGHLIGHT_CLASS, TabBarCreateRowIcons } from './TabBarCreateRowIcons'
+
+const LazyTabBarCreateRowCustomizer = lazyWithRetry(
+  () =>
+    import('./TabBarCreateRowCustomizer').then((module) => ({
+      default: module.TabBarCreateRowCustomizer
+    })),
+  { reloadKey: 'tab-bar-create-row-customizer' }
+)
 import { useCreateRowScroller } from './use-create-row-scroller'
+import { isPressedPointer, useCreateRowHoverTooltip } from './use-create-row-hover-tooltip'
+import type { IntroArrowAnchor } from '../../emulator-pane/tab-intro/use-intro-arrow'
 
 const EMPTY_LAYOUT: NewTabMenuLayout = { order: [], hidden: [] }
 
@@ -43,7 +53,7 @@ export function TabBarCreateRow({
   customizable: boolean
   layoutSetting: keyof NewTabMenuSettings
   /** Content tied to shown items, e.g. an intro for an icon the user has not hidden. */
-  renderBelow?: (shownIds: ReadonlySet<string>) => React.ReactNode
+  renderBelow?: (shownIds: ReadonlySet<string>, anchor: IntroArrowAnchor) => React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const closeMenu = useDropdownMenuClose()
@@ -63,12 +73,14 @@ export function TabBarCreateRow({
   const [keyboardNav, setKeyboardNav] = useState(false)
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const pointerInside = useRef(false)
-  const { scrollerRef, attachScroller, overflow, revealIcon } = useCreateRowScroller()
+  const hoverTooltip = useCreateRowHoverTooltip()
+  const { scrollerRef, scroller, attachScroller, overflow, revealIcon } = useCreateRowScroller()
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
   const customizeIndex = visible.length
   const active = Math.min(activeIndex, customizeIndex)
   const keyboardActive = rowFocused && keyboardNav
-  const below = renderBelow?.(new Set(visible.map((item) => item.id)))
+  const visibleIds = visible.map((item) => item.id)
+  const below = renderBelow?.(new Set(visibleIds), { scroller, order: visibleIds.join(' ') })
 
   useShortcutRecorderFocus(recordingActionId !== null)
 
@@ -85,11 +97,7 @@ export function TabBarCreateRow({
             ? formatOptionalPrimaryShortcutLabel(item.actionId, keybindings)
             : null
           return (
-            <DropdownMenuItem
-              key={item.id}
-              onSelect={() => item.run()}
-              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            >
+            <DropdownMenuItem key={item.id} onSelect={() => item.run()} variant="create">
               <span className="flex text-muted-foreground">{item.icon}</span>
               <span className="flex-1">{item.label}</span>
               {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
@@ -108,6 +116,15 @@ export function TabBarCreateRow({
     )
   }
   const activeItem = visible[active]
+  // The pointer may enter the row first or already be inside it; either way the keyboard label
+  // it replaces counts as just shown, so the next icon opens without a cold wait. A press or drag
+  // is not hover intent and gets no head start.
+  const handOffToPointer = (pressed: boolean): void => {
+    if (keyboardActive && !pressed) {
+      hoverTooltip.startSkipWindow()
+    }
+    setKeyboardNav(false)
+  }
   const recorderHasFocus = (): boolean =>
     document.activeElement?.matches('[data-shortcut-recorder-active]') ?? false
   const customizeLabel = t('tabBar.createRow.customize', 'Customize')
@@ -130,9 +147,9 @@ export function TabBarCreateRow({
             'tabBar.createRow.label',
             'New tab actions. Left and Right choose; the last one customizes this row.'
           )}
-          onPointerEnter={() => {
+          onPointerEnter={(event) => {
             pointerInside.current = true
-            setKeyboardNav(false)
+            handOffToPointer(isPressedPointer(event))
           }}
           onPointerLeave={() => {
             pointerInside.current = false
@@ -147,6 +164,7 @@ export function TabBarCreateRow({
           onKeyDown={(event) => {
             setKeyboardNav(true)
             setHoveredIndex(null)
+            hoverTooltip.hover(null)
             if (event.key === 'ArrowLeft') {
               event.preventDefault()
               setActiveIndex(Math.max(0, active - 1))
@@ -165,16 +183,19 @@ export function TabBarCreateRow({
           <TabBarCreateRowIcons
             items={visible}
             highlightedIndex={keyboardActive ? active : hoveredIndex}
+            tooltipIndex={keyboardActive ? active : hoverTooltip.tooltipIndex}
             overflow={overflow}
             scrollerRef={scrollerRef}
             attachScroller={attachScroller}
             onEscape={closeMenu}
-            onHover={(index) => {
+            onHover={(index, pressed) => {
               if (index !== null) {
-                setKeyboardNav(false)
+                handOffToPointer(pressed ?? false)
               }
               setHoveredIndex(index)
+              hoverTooltip.hover(index, pressed)
             }}
+            onPress={hoverTooltip.press}
             onRun={run}
           />
           <Tooltip open={keyboardActive && active === customizeIndex}>
@@ -220,34 +241,36 @@ export function TabBarCreateRow({
             }
           }}
         >
-          <TabBarCreateRowCustomizer
-            visible={visible}
-            hidden={hidden}
-            recordingActionId={recordingActionId}
-            onRecordingChange={setRecordingActionId}
-            onArrange={(visibleIds, hiddenIds) => {
-              const next = buildNewTabMenuLayout(visibleIds, hiddenIds, layout)
-              // A turned-off item sits under Hidden only while off; don't save that as a user choice.
-              const offIds = new Set(hidden.filter((item) => item.enable).map((item) => item.id))
-              const keptHidden = new Set(layout?.hidden)
-              saveLayout({
-                ...next,
-                hidden: next.hidden.filter((id) => !offIds.has(id) || keptHidden.has(id))
-              })
-              for (const item of hidden) {
-                if (item.enable && visibleIds.includes(item.id)) {
-                  void item.enable()
+          <React.Suspense fallback={null}>
+            <LazyTabBarCreateRowCustomizer
+              visible={visible}
+              hidden={hidden}
+              recordingActionId={recordingActionId}
+              onRecordingChange={setRecordingActionId}
+              onArrange={(visibleIds, hiddenIds) => {
+                const next = buildNewTabMenuLayout(visibleIds, hiddenIds, layout)
+                // A turned-off item sits under Hidden only while off; don't save that as a user choice.
+                const offIds = new Set(hidden.filter((item) => item.enable).map((item) => item.id))
+                const keptHidden = new Set(layout?.hidden)
+                saveLayout({
+                  ...next,
+                  hidden: next.hidden.filter((id) => !offIds.has(id) || keptHidden.has(id))
+                })
+                for (const item of hidden) {
+                  if (item.enable && visibleIds.includes(item.id)) {
+                    void item.enable()
+                  }
                 }
-              }
-            }}
-            onReset={() => saveLayout(EMPTY_LAYOUT)}
-            onOpenShortcutSettings={() => {
-              closeMenu()
-              const store = useAppStore.getState()
-              store.openSettingsTarget({ pane: 'shortcuts', repoId: null })
-              store.openSettingsPage()
-            }}
-          />
+              }}
+              onReset={() => saveLayout(EMPTY_LAYOUT)}
+              onOpenShortcutSettings={() => {
+                closeMenu()
+                const store = useAppStore.getState()
+                store.openSettingsTarget({ pane: 'shortcuts', repoId: null })
+                store.openSettingsPage()
+              }}
+            />
+          </React.Suspense>
         </DropdownMenuSubContent>
       </DropdownMenuSub>
       {/* The row is one menu item; announce which icon ←/→ landed on. */}

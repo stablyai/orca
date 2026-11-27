@@ -32,6 +32,8 @@
 /src/renderer/src/components/terminal-pane/terminal-link-transcripts/*.txt -text whitespace=cr-at-eol
 # verify:localization-runtime-catalog compares LF bytes.
 /src/renderer/src/i18n/en-runtime-required.json linguist-generated=true text eol=lf
+# verify:localization-protected-copy compares LF bytes.
+/src/shared/plugins/languages/protected-copy-keys.json linguist-generated=true text eol=lf
 # verify:rpc-params-catalog compares LF bytes.
 /src/shared/rpc-contract/rpc-params-catalog.generated.ts linguist-generated=true text eol=lf
 # RPC recording goldens must match rpc:record's LF output.

@@ -2,12 +2,15 @@
   "expo": {
     "name": "Orca",
     "slug": "orca-mobile",
-    "version": "0.0.67",
+    "version": "0.0.71",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "scheme": "orca",
     "newArchEnabled": true,
+    "experiments": {
+      "reactCompiler": true
+    },
     "locales": {
       "en": "./locales/en.json",
       "zh-Hans": "./locales/zh-Hans.json",
@@ -95,7 +98,7 @@
         "android.permission.USE_FINGERPRINT"
       ],
       "package": "dev.orca.app",
-      "versionCode": 31,
+      "versionCode": 35,
       "googleServicesFile": "./google-services.json"
     },
     "plugins": [
@@ -116,6 +119,7 @@
       ],
       "expo-notifications",
       "./plugins/android-respect-rotation-lock.js",
+      "./plugins/android-optional-hardware-features.js",
       "./plugins/android-window-density.js",
       "./plugins/android-release-signing.js",
       "./plugins/android-navigation-bar-theme.js",

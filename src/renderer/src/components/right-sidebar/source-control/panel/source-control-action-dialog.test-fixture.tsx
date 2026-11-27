@@ -19,7 +19,7 @@ import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY as SURFACE } from '../../../../
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT
-} from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
+} from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import {
   type SourceControlActionRecipe,
   normalizeSourceControlActionRecipe
@@ -153,7 +153,7 @@ export function mountSourceDialog(
 }
 
 export async function pickDialogAgent(label: string, terminal: boolean) {
-  const trigger = screen.getByRole('button', { name: 'Select agent' })
+  const trigger = screen.getByRole('button', { name: /^Select agent/ })
   await waitFor(() => expect(trigger.hasAttribute('disabled')).toBe(false))
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
   if (!terminal) {

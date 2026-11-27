@@ -272,8 +272,3 @@ export function hostScrollbackEnvironmentId(
   const environment = environments?.find((candidate) => candidate.id === environmentId)
   return environment?.orcadDeployment?.kind === 'wsl' ? environmentId : null
 }
-
-export function resetHostTerminalScrollbackReadsForTests(): void {
-  settledKeys.clear()
-  warmingByEnvironmentId.clear()
-}

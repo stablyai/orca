@@ -2,6 +2,7 @@ import { View } from 'react-native'
 import { formatWindowLabel } from '../../../src/shared/agent-usage/rate-limits/rate-limit-window-label'
 import {
   getUsageWindowSections,
+  WEEKLY_WINDOW_MINUTES,
   type UsageWindowSection
 } from '../../../src/shared/agent-usage/display/usage-provider-windows'
 import { UsageBar } from './usage/UsageBar'
@@ -10,14 +11,23 @@ import type { ProviderRateLimits } from './accounts-snapshot'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 
 const SESSION_WINDOW_MINUTES = 300
-const WEEKLY_WINDOW_MINUTES = 10_080
 const EMPTY_SECTIONS: UsageWindowSection[] = [
   { kind: 'session', window: null },
   { kind: 'weekly', window: null }
 ]
+
+function formatWindowLength(minutes: number, t: Translate): string {
+  if (minutes === SESSION_WINDOW_MINUTES) {
+    return t('accounts.screen.sessionWindow', '5h')
+  }
+  if (minutes === WEEKLY_WINDOW_MINUTES) {
+    return t('accounts.screen.weeklyWindow', '7d')
+  }
+  return formatWindowLabel(minutes)
+}
 
 // The desktop roster's labels, except 5h and 7d use mobile's translated copy (desktop shows 7d as "wk").
 function getWindowLabel(section: UsageWindowSection, t: Translate): string {
@@ -30,16 +40,11 @@ function getWindowLabel(section: UsageWindowSection, t: Translate): string {
   if (section.kind === 'mcp') {
     return t('accounts.screen.mcpWindow', 'MCP')
   }
-  const minutes =
+  return formatWindowLength(
     section.window?.windowMinutes ??
-    (section.kind === 'session' ? SESSION_WINDOW_MINUTES : WEEKLY_WINDOW_MINUTES)
-  if (minutes === SESSION_WINDOW_MINUTES) {
-    return t('accounts.screen.sessionWindow', '5h')
-  }
-  if (minutes === WEEKLY_WINDOW_MINUTES) {
-    return t('accounts.screen.weeklyWindow', '7d')
-  }
-  return formatWindowLabel(minutes)
+      (section.kind === 'session' ? SESSION_WINDOW_MINUTES : WEEKLY_WINDOW_MINUTES),
+    t
+  )
 }
 
 /** One bar per usage window desktop shows for this provider. */
@@ -55,11 +60,12 @@ export function ProviderUsageWindows({
   /** Account rows keep empty session/weekly bars so a not-yet-read account still shows its windows. */
   showEmptyWindows?: boolean
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const sections = (limits ? getUsageWindowSections(limits) : EMPTY_SECTIONS).filter(
     (section) => showEmptyWindows || section.window !== null
   )
-  // Pool names can repeat when agy leaves a window unnamed, so count each name's occurrences.
+  // Pool names can repeat when a provider leaves a window unnamed, so count each name's occurrences.
   const seen = new Map<string, number>()
   return (
     <View style={styles.windows}>
@@ -86,7 +92,7 @@ export function ProviderUsageWindows({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   windows: {
     flexDirection: 'row',
     flexWrap: 'wrap',

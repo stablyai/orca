@@ -5,6 +5,7 @@
 import { z } from 'zod'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
+import { withoutReleasedWslMovedProjectKeys } from '../../../shared/wsl-move/wsl-moved-project'
 import type { Store } from '../../persistence/loading-store/store'
 import { wslMoveDesktopRewriteContext } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
 import {
@@ -21,7 +22,9 @@ import { listEnvironments } from '../../../shared/remote-runtime/host-store/runt
 import { callRuntimeEnvironment } from '../runtime-environments/requests/runtime-environment-transport-routing'
 import { wasWslHostKeptForPeers } from '../../wsl/host-lifecycle/wsl-host-kept-for-peers'
 import {
+  applyWslMoveAutomationStatesHere,
   stopWslMoveHostAutomations,
+  wslMoveAutomationsOnBeforeMove,
   wslMoveMovedAutomationIds,
   type WslMoveHostAutomationStop
 } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-undo-host-automations'
@@ -33,6 +36,7 @@ import {
   readWslHostAutomationStates,
   restoreWslHostAutomations
 } from '../../wsl/host-lifecycle/wsl-host-automation-disable'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 /** `user`: the user's undo, which may start the distro. `automatic`: a bring-back, which never does. */
 export type WslMoveUndoMode = 'user' | 'automatic'
@@ -48,15 +52,19 @@ export type WslMoveUndoPorts = {
   stopHostAutomations?: (move: WslMoveCutover) => Promise<WslMoveHostAutomationStop>
   /** After the release, with window writes held: focus on the host copy returns here. */
   refocusHere?: (move: WslMoveCutover) => void
+  /** After the release: its projects' hidden sidebar entries are forgotten, so a later move lists them. */
+  unhideMovedEntries?: (move: WslMoveCutover) => void
 }
 
 // What undo reads of the host's terminal list: whether each terminal is still running.
-const HostTerminalList = z.object({
-  terminals: z.array(
-    z.object({ connected: z.boolean(), worktreeId: z.string().optional() }).passthrough()
-  ),
-  truncated: z.boolean().optional()
-})
+const HostTerminalList = lazyZodSchema(() =>
+  z.object({
+    terminals: z.array(
+      z.object({ connected: z.boolean(), worktreeId: z.string().optional() }).passthrough()
+    ),
+    truncated: z.boolean().optional()
+  })
+)
 
 // The host's answer for a workspace selector it does not have.
 const HOST_WORKSPACE_NOT_FOUND = 'selector_not_found'
@@ -91,7 +99,14 @@ async function connectUndoHost(
 
 type UndoStore = Pick<
   Store,
-  'getWorkspaceSession' | 'patchWorkspaceSession' | 'listAutomations' | 'updateAutomation'
+  | 'getWorkspaceSession'
+  | 'patchWorkspaceSession'
+  | 'listAutomations'
+  | 'updateAutomations'
+  | 'advanceAutomationNextRuns'
+  | 'flushPendingOrThrowAsync'
+  | 'getUI'
+  | 'updateUI'
 >
 
 /** The host's terminals in the move's scope, reached over its runtime, handed to `read`. */
@@ -136,7 +151,7 @@ async function withHostCopyPort<T extends WslMoveHostCopyStop>(
     workspacesWithTerminals: async () => {
       const response = await call(
         'terminal.list',
-        { limit: HOST_TERMINAL_LIST_LIMIT, includeVisualLayouts: false },
+        { limit: HOST_TERMINAL_LIST_LIMIT, includeVisualLayouts: false, includePreview: false },
         LIST_TIMEOUT_MS
       )
       const listed = response?.ok ? HostTerminalList.safeParse(response.result) : null
@@ -157,7 +172,11 @@ async function withHostCopyPort<T extends WslMoveHostCopyStop>(
       return response === null ? null : response.ok
     },
     liveTerminals: async (id) => {
-      const response = await call('terminal.list', { worktree: `id:${id}` }, LIST_TIMEOUT_MS)
+      const response = await call(
+        'terminal.list',
+        { worktree: `id:${id}`, includePreview: false },
+        LIST_TIMEOUT_MS
+      )
       if (response === null) {
         return null
       }
@@ -179,6 +198,32 @@ export function createWslMoveUndoPorts(
   userDataPath: string,
   mode: WslMoveUndoMode = 'user'
 ): WslMoveUndoPorts {
+  const here = {
+    listHere: () => store.listAutomations(),
+    setHere: (updates: readonly { id: string; enabled: boolean }[]) => {
+      const results = store.updateAutomations(
+        updates.map(({ id, enabled }) => ({ id, updates: { enabled } }))
+      )
+      const applied: { id: string; enabled: boolean }[] = []
+      let error: unknown
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i]
+        if ('error' in result) {
+          error ??= result.error
+        } else {
+          applied.push(updates[i])
+        }
+      }
+      return error === undefined ? { applied } : { applied, error }
+    },
+    // A wait's due time is its own; advanceAutomationNextRuns skips `once` rows in one pass.
+    advanceHere: (ids: readonly string[]) => {
+      if (ids.length > 0) {
+        store.advanceAutomationNextRuns(new Set(ids))
+      }
+    },
+    flushHere: () => store.flushPendingOrThrowAsync()
+  }
   return {
     stopHostCopies: (move) =>
       withHostCopyPort(store, userDataPath, move, mode, (hostIds, port) =>
@@ -207,7 +252,12 @@ export function createWslMoveUndoPorts(
         ) {
           return wasWslHostKeptForPeers(userDataPath, move.destinationEnvironmentId)
             ? { outcome: 'unreachable' }
-            : { outcome: 'stopped', restore: async () => {}, applyHere: () => () => {} }
+            : {
+                outcome: 'stopped',
+                restore: async () => {},
+                applyHere: () =>
+                  applyWslMoveAutomationStatesHere(here, wslMoveAutomationsOnBeforeMove(move))
+              }
         }
         // E11: a Remove that could not prove the server stopped; the host is not to be touched.
         if (await wslHostRemovalPending(userDataPath, move.manifest.source.distro)) {
@@ -225,10 +275,7 @@ export function createWslMoveUndoPorts(
             read: (ids) => readWslHostAutomationStates(userDataPath, environmentId, ids),
             disable: (ids) => disableWslHostAutomations(userDataPath, environmentId, ids),
             restore: (ids) => restoreWslHostAutomations(userDataPath, environmentId, ids),
-            listHere: () => store.listAutomations(),
-            setHere: (id, enabled) => {
-              store.updateAutomation(id, { enabled })
-            }
+            ...here
           }
         )
         // Whatever a refusal left off on the host is retried until it is back on.
@@ -254,6 +301,18 @@ export function createWslMoveUndoPorts(
         wslMoveRewriteScope(wslMoveDesktopRewriteContext(userDataPath, move)),
         wslMoveReleasedSessionFocusPatch
       )
+    },
+    unhideMovedEntries: (move) => {
+      const hidden = store.getUI().hiddenWslMovedProjectKeys ?? []
+      const { distro, scopeRepoIds, scopeFolderWorkspaceIds } = move.manifest.source
+      const kept = withoutReleasedWslMovedProjectKeys(hidden, {
+        distro,
+        repoIds: scopeRepoIds,
+        folderWorkspaceIds: scopeFolderWorkspaceIds
+      })
+      if (kept.length !== hidden.length) {
+        store.updateUI({ hiddenWslMovedProjectKeys: kept })
+      }
     }
   }
 }

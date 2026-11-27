@@ -41,6 +41,7 @@ type RuntimeTerminalListDependencies = {
     pty: RuntimePtyWorktreeRecord,
     worktrees: Map<string, ResolvedWorktree>
   ): RuntimeTerminalSummary
+  alternateScreenGridPreview(ptyId: string | null, preview: string): string
   getSnapshots(): ReadonlyMap<string, RuntimeMobileSessionTabsSnapshot>
   getTabTitle(tabId: string): string | null
   getTopologyRevision(worktreeId: string): number
@@ -52,6 +53,13 @@ type RuntimeTerminalListDependencies = {
   ): { hostIds: ExecutionHostId[]; omittedHostIds: ExecutionHostId[] }
   /** Layout-owner builds: main lists every saved pane of the workspace, a live terminal or not. */
   listsEveryPane?: (worktreeId: string) => boolean
+  /** Agent Sleep stopped this pane's process; it is listed as the idle agent it stands for. */
+  isSleptAgentLeaf: (leaf: RuntimeLeafRecord) => boolean
+  /** Slept agents whose tab the window hasn't mounted, listed under the handle their record saved. */
+  unmountedSleptAgents: (
+    worktreeId?: string,
+    handles?: readonly string[]
+  ) => Iterable<RuntimeLeafRecord>
 }
 
 export class RuntimeTerminalList {
@@ -64,6 +72,7 @@ export class RuntimeTerminalList {
       handles?: readonly string[]
       requireFreshPtyLiveness?: boolean
       includeVisualLayouts?: boolean
+      alternateScreenGridPreviews?: boolean
     }
   ): Promise<RuntimeTerminalListResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
@@ -132,7 +141,8 @@ export class RuntimeTerminalList {
         if (
           !leaf.ptyId &&
           liveWorktreeIds.has(leaf.worktreeId) &&
-          !(ORCA_LAYOUT_OWNER_IS_MAIN && this.deps.listsEveryPane?.(leaf.worktreeId))
+          !(ORCA_LAYOUT_OWNER_IS_MAIN && this.deps.listsEveryPane?.(leaf.worktreeId)) &&
+          !this.deps.isSleptAgentLeaf(leaf)
         ) {
           continue
         }
@@ -140,6 +150,13 @@ export class RuntimeTerminalList {
           leafPtyIds.add(leaf.ptyId)
         }
         terminals.push(this.deps.buildLeafSummary(leaf, worktreesById, provenLivePtyIds))
+      }
+      if (!opts.requireFreshPtyLiveness) {
+        for (const leaf of this.deps.unmountedSleptAgents(targetId ?? undefined, opts.handles)) {
+          if (!targetId || leaf.worktreeId === targetId) {
+            terminals.push(this.deps.buildLeafSummary(leaf, worktreesById, provenLivePtyIds))
+          }
+        }
       }
     }
     for (const pty of ptys) {
@@ -158,7 +175,14 @@ export class RuntimeTerminalList {
     const matching = requestedHandles
       ? terminals.filter((terminal) => requestedHandles.has(terminal.handle))
       : terminals
-    const listed = matching.slice(0, limit)
+    // Grid reads cost per pane, so only the returned rows of a preview-wanting list pay them.
+    const returned = matching.slice(0, limit)
+    const listed = opts.alternateScreenGridPreviews
+      ? returned.map((terminal) => ({
+          ...terminal,
+          preview: this.deps.alternateScreenGridPreview(terminal.ptyId, terminal.preview)
+        }))
+      : returned
     const snapshots = this.deps.getSnapshots()
     const visualLayouts =
       opts.includeVisualLayouts === false

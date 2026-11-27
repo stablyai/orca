@@ -59,13 +59,6 @@ function pruneWorktreeScanGeneration(repoPath: string): void {
   }
 }
 
-export function _getWorktreeScanCacheSizesForTests(): { inFlight: number; generations: number } {
-  return {
-    inFlight: inFlightWorktreeScans.size,
-    generations: worktreeScanGenerations.size
-  }
-}
-
 export function _resetWorktreeScanCacheForTests(): void {
   signalIdentities = new WeakMap()
   nextSignalIdentity = 0

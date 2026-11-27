@@ -14,6 +14,7 @@ import {
   getMarkdownPreviewBlockRange,
   hasMarkdownPreviewNestedBlock
 } from '../review/markdown-preview-block-model'
+import { cn } from '@/lib/class-names'
 import { preventMiddleButtonDefault } from '@/components/tab-bar/strip/middle-button-default-guard'
 import {
   handleMarkdownPreviewLinkAuxClick,
@@ -22,32 +23,155 @@ import {
 } from '../links/markdown-preview-link-actions'
 import { isMarkdownPreviewOpenModifier } from '../../markdown/link-routing/markdown-preview-links'
 import type { MarkdownPreviewPositionNode } from './markdown-preview-types'
-import type { MarkdownPreviewAnnotationRenderers } from '../review/use-markdown-preview-annotation-renderers'
+import { useMarkdownPreviewAnnotations } from '../review/markdown-preview-annotation-context'
 import type { MarkdownPreviewFoundation } from '../surface/use-markdown-preview-foundation'
-import type { MarkdownPreviewReviewActions } from '../review/use-markdown-preview-review-actions'
 import type { MarkdownPreviewViewport } from '../viewport/use-markdown-preview-viewport'
 import { useLocalImageSrc } from '../../document-images/useLocalImageSrc'
 import { documentResourceAccess } from '@/lib/files/access/local-file-access'
-import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
+import { MarkdownGitHubCallout } from '@/components/comment-markdown/markdown-github-callout'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 import { readGitHubCalloutKind } from '../../../../../../shared/github/markdown/github-callouts'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 function hasMermaidCodeClass(value: unknown): boolean {
   return typeof value === 'string' && /language-mermaid/.test(value)
 }
 
+function mermaidLinkHref(event: React.MouseEvent): string | undefined {
+  const link = event.target instanceof Element ? event.target.closest('a') : null
+  if (!link || !event.currentTarget.contains(link)) {
+    return undefined
+  }
+  return link.getAttribute('href') ?? link.getAttribute('xlink:href') ?? undefined
+}
+
+function annotatedHeading(
+  Heading: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
+): NonNullable<Components['h1']> {
+  return function MarkdownPreviewHeading({ node, children, ...props }) {
+    const { wrapAnnotatedBlock } = useMarkdownPreviewAnnotations()
+    return wrapAnnotatedBlock(
+      Heading,
+      node as MarkdownPreviewPositionNode,
+      <Heading {...props} tabIndex={-1}>
+        {children}
+      </Heading>
+    )
+  }
+}
+
+// Why: review-note state reaches blocks through context; new component types would remount the
+// whole document and reset its scroll position.
+const annotatedBlockComponents = {
+  pre: function MarkdownPreviewPre({ node, children, ...props }) {
+    const { wrapAnnotatedBlock } = useMarkdownPreviewAnnotations()
+    const isMermaid = node?.children.some(
+      (child) =>
+        child.type === 'element' &&
+        child.tagName === 'code' &&
+        Array.isArray(child.properties.className) &&
+        child.properties.className.some(hasMermaidCodeClass)
+    )
+    return wrapAnnotatedBlock(
+      'pre',
+      node,
+      <CodeBlockCopyButton {...props} wrapInPre={!isMermaid}>
+        {children}
+      </CodeBlockCopyButton>
+    )
+  },
+  p: function MarkdownPreviewParagraph({ node, children, ...props }) {
+    const { wrapAnnotatedBlock } = useMarkdownPreviewAnnotations()
+    return wrapAnnotatedBlock(
+      'p',
+      node as MarkdownPreviewPositionNode,
+      <p {...props}>{children}</p>
+    )
+  },
+  blockquote: function MarkdownPreviewBlockquote({ node, children, ...props }) {
+    const { wrapAnnotatedBlock } = useMarkdownPreviewAnnotations()
+    const calloutKind = readGitHubCalloutKind(node?.properties.dataCallout)
+    return wrapAnnotatedBlock(
+      'blockquote',
+      node as MarkdownPreviewPositionNode,
+      calloutKind ? (
+        <MarkdownGitHubCallout kind={calloutKind}>{children}</MarkdownGitHubCallout>
+      ) : (
+        <blockquote {...props}>{children}</blockquote>
+      )
+    )
+  },
+  table: function MarkdownPreviewTable({ node, children, ...props }) {
+    const { wrapAnnotatedBlock } = useMarkdownPreviewAnnotations()
+    return wrapAnnotatedBlock(
+      'table',
+      node as MarkdownPreviewPositionNode,
+      <table {...props}>{children}</table>
+    )
+  },
+  li: function MarkdownPreviewListItem({ node, children, ...props }) {
+    const {
+      activeAnnotationBlockKey,
+      getMarkdownCommentsForRange,
+      handleAnnotatedMarkdownBlockClick,
+      renderAnnotationControls
+    } = useMarkdownPreviewAnnotations()
+    const positionNode = node as MarkdownPreviewPositionNode
+    const range = hasMarkdownPreviewNestedBlock(positionNode)
+      ? null
+      : getMarkdownPreviewBlockRange(positionNode)
+    if (!range) {
+      return <li {...props}>{children}</li>
+    }
+    const blockKey = `li:${range.startLine}-${range.endLine}`
+    const controls = renderAnnotationControls(
+      range,
+      blockKey,
+      getMarkdownPreviewAnnotationQuote(children)
+    )
+    if (!controls) {
+      // Why: the list wrapper reserves the review-note grid column, so skip it like wrapAnnotatedBlock.
+      return (
+        <li {...props} data-source-line={range.startLine} data-source-end-line={range.endLine}>
+          {children}
+        </li>
+      )
+    }
+    return (
+      <li {...props}>
+        <div
+          className={cn(
+            'markdown-annotation-list-block',
+            getMarkdownCommentsForRange(range).length > 0 && 'has-review-notes',
+            activeAnnotationBlockKey === blockKey && 'is-adding-note'
+          )}
+          data-source-line={range.startLine}
+          data-source-end-line={range.endLine}
+          data-annotation-block-key={blockKey}
+          onClick={(event) => handleAnnotatedMarkdownBlockClick(range, event)}
+        >
+          <span className="markdown-annotation-list-content">{children}</span>
+          {controls}
+        </div>
+      </li>
+    )
+  },
+  h1: annotatedHeading('h1'),
+  h2: annotatedHeading('h2'),
+  h3: annotatedHeading('h3'),
+  h4: annotatedHeading('h4'),
+  h5: annotatedHeading('h5'),
+  h6: annotatedHeading('h6')
+} satisfies Components
+
 export function useMarkdownPreviewComponents({
   foundation,
   viewport,
-  reviewActions,
-  annotationRenderers,
   filePath,
   onOpenDocument
 }: {
   foundation: MarkdownPreviewFoundation
-  viewport: MarkdownPreviewViewport
-  reviewActions: MarkdownPreviewReviewActions
-  annotationRenderers: MarkdownPreviewAnnotationRenderers
+  viewport: Pick<MarkdownPreviewViewport, 'scrollToAnchor'>
   filePath: string
   onOpenDocument?: (
     document: MarkdownDocument,
@@ -70,10 +194,12 @@ export function useMarkdownPreviewComponents({
     openMarkdownPreview,
     setMarkdownViewMode
   } = foundation
+  const t = useTranslate()
   const { scrollToAnchor } = viewport
-  const { getMarkdownCommentsForRange, handleAnnotatedMarkdownBlockClick } = reviewActions
-  const { renderAnnotationControls, wrapAnnotatedBlock } = annotationRenderers
   const expandMermaidDiagram = useMermaidDiagramExpand()
+  // Why: saving a review note rewrites the worktree rows. Links read them at click time so that
+  // write cannot rebuild components and remount images and Mermaid diagrams.
+  const readWorktreeRouting = useLatestHandler(() => ({ worktreesByRepo, sourceWorktree }))
 
   return useMemo(() => {
     // Why: preview images come from document text, so main limits them to the document's roots.
@@ -84,16 +210,29 @@ export function useMarkdownPreviewComponents({
       sourceRoutingWorktreeId,
       resolvedSourceRuntimeEnvironmentId,
       worktreeRoot,
-      worktreesByRepo,
-      sourceWorktree,
       activateMarkdownLink,
       openFile,
       openMarkdownPreview,
       setMarkdownViewMode,
       scrollToAnchor
     }
+    const linkAction = (event: React.MouseEvent, href: string | undefined) => ({
+      event,
+      href,
+      filePath,
+      context: { ...linkContext, ...readWorktreeRouting() }
+    })
+    const guardMermaidMiddleButton = (event: React.MouseEvent): void => {
+      if (
+        event.button === 1 &&
+        isMarkdownPreviewExternalHttpHref(mermaidLinkHref(event), filePath)
+      ) {
+        preventMiddleButtonDefault(event)
+      }
+    }
 
     return {
+      ...annotatedBlockComponents,
       a: ({ href, children, className, ...props }) => {
         const docLinkTarget = parseMarkdownDocLinkHref(href)
         if (docLinkTarget !== null) {
@@ -101,14 +240,11 @@ export function useMarkdownPreviewComponents({
           const resolvedDocument = resolution.status === 'resolved' ? resolution.document : null
           const title =
             resolution.status === 'ambiguous'
-              ? translate(
+              ? t(
                   'auto.components.editor.MarkdownPreview.docLinkAmbiguous',
                   'Document link is ambiguous'
                 )
-              : translate(
-                  'auto.components.editor.MarkdownPreview.docLinkNotFound',
-                  'Document not found'
-                )
+              : t('auto.components.editor.MarkdownPreview.docLinkNotFound', 'Document not found')
 
           const handleDocLinkClick = (event: React.MouseEvent<HTMLAnchorElement>): void => {
             event.preventDefault()
@@ -145,18 +281,10 @@ export function useMarkdownPreviewComponents({
             onMouseUp={isMiddleClickable ? preventMiddleButtonDefault : undefined}
             onAuxClick={
               isMiddleClickable
-                ? (event) =>
-                    handleMarkdownPreviewLinkAuxClick({
-                      event,
-                      href,
-                      filePath,
-                      context: linkContext
-                    })
+                ? (event) => handleMarkdownPreviewLinkAuxClick(linkAction(event, href))
                 : undefined
             }
-            onClick={(event) =>
-              void handleMarkdownPreviewLinkClick({ event, href, filePath, context: linkContext })
-            }
+            onClick={(event) => void handleMarkdownPreviewLinkClick(linkAction(event, href))}
             style={{ cursor: 'pointer' }}
           >
             {children}
@@ -196,11 +324,27 @@ export function useMarkdownPreviewComponents({
       code: ({ className, children, ...props }) => {
         if (hasMermaidCodeClass(className)) {
           return (
-            <MermaidBlock
-              content={String(children).trimEnd()}
-              isDark={isDark}
-              onExpand={expandMermaidDiagram}
-            />
+            <div
+              onClickCapture={(event) => {
+                const href = mermaidLinkHref(event)
+                if (href) {
+                  // Handle the SVG link before the diagram's click-to-expand handler.
+                  event.stopPropagation()
+                  void handleMarkdownPreviewLinkClick(linkAction(event, href))
+                }
+              }}
+              onMouseDown={guardMermaidMiddleButton}
+              onMouseUp={guardMermaidMiddleButton}
+              onAuxClick={(event) =>
+                handleMarkdownPreviewLinkAuxClick(linkAction(event, mermaidLinkHref(event)))
+              }
+            >
+              <MermaidBlock
+                content={String(children).trimEnd()}
+                isDark={isDark}
+                onExpand={expandMermaidDiagram}
+              />
+            </div>
           )
         }
         return (
@@ -208,123 +352,7 @@ export function useMarkdownPreviewComponents({
             {children}
           </code>
         )
-      },
-      pre: ({ node, children, ...props }) => {
-        const isMermaid = node?.children.some(
-          (child) =>
-            child.type === 'element' &&
-            child.tagName === 'code' &&
-            Array.isArray(child.properties.className) &&
-            child.properties.className.some(hasMermaidCodeClass)
-        )
-        return wrapAnnotatedBlock(
-          'pre',
-          node,
-          <CodeBlockCopyButton {...props} wrapInPre={!isMermaid}>
-            {children}
-          </CodeBlockCopyButton>
-        )
-      },
-      p: ({ node, children, ...props }) =>
-        wrapAnnotatedBlock('p', node as MarkdownPreviewPositionNode, <p {...props}>{children}</p>),
-      blockquote: ({ node, children, ...props }) => {
-        const calloutKind = readGitHubCalloutKind(node?.properties.dataCallout)
-        return wrapAnnotatedBlock(
-          'blockquote',
-          node as MarkdownPreviewPositionNode,
-          calloutKind ? (
-            <MarkdownGitHubCallout kind={calloutKind}>{children}</MarkdownGitHubCallout>
-          ) : (
-            <blockquote {...props}>{children}</blockquote>
-          )
-        )
-      },
-      table: ({ node, children, ...props }) =>
-        wrapAnnotatedBlock(
-          'table',
-          node as MarkdownPreviewPositionNode,
-          <table {...props}>{children}</table>
-        ),
-      li: ({ node, children, ...props }) => {
-        const positionNode = node as MarkdownPreviewPositionNode
-        const range = hasMarkdownPreviewNestedBlock(positionNode)
-          ? null
-          : getMarkdownPreviewBlockRange(positionNode)
-        if (!range) {
-          return <li {...props}>{children}</li>
-        }
-        const blockKey = `li:${range.startLine}-${range.endLine}`
-        const hasReviewNotes = getMarkdownCommentsForRange(range).length > 0
-        const controls = renderAnnotationControls(
-          range,
-          blockKey,
-          getMarkdownPreviewAnnotationQuote(children)
-        )
-        return (
-          <li {...props}>
-            <div
-              className={`markdown-annotation-list-block ${
-                hasReviewNotes ? 'has-review-notes' : ''
-              }`.trim()}
-              data-source-line={range.startLine}
-              data-source-end-line={range.endLine}
-              data-annotation-block-key={controls ? blockKey : undefined}
-              onClick={(event) => handleAnnotatedMarkdownBlockClick(range, event)}
-            >
-              <span className="markdown-annotation-list-content">{children}</span>
-              {controls}
-            </div>
-          </li>
-        )
-      },
-      h1: ({ node, children, ...props }) =>
-        wrapAnnotatedBlock(
-          'h1',
-          node as MarkdownPreviewPositionNode,
-          <h1 {...props} tabIndex={-1}>
-            {children}
-          </h1>
-        ),
-      h2: ({ node, children, ...props }) =>
-        wrapAnnotatedBlock(
-          'h2',
-          node as MarkdownPreviewPositionNode,
-          <h2 {...props} tabIndex={-1}>
-            {children}
-          </h2>
-        ),
-      h3: ({ node, children, ...props }) =>
-        wrapAnnotatedBlock(
-          'h3',
-          node as MarkdownPreviewPositionNode,
-          <h3 {...props} tabIndex={-1}>
-            {children}
-          </h3>
-        ),
-      h4: ({ node, children, ...props }) =>
-        wrapAnnotatedBlock(
-          'h4',
-          node as MarkdownPreviewPositionNode,
-          <h4 {...props} tabIndex={-1}>
-            {children}
-          </h4>
-        ),
-      h5: ({ node, children, ...props }) =>
-        wrapAnnotatedBlock(
-          'h5',
-          node as MarkdownPreviewPositionNode,
-          <h5 {...props} tabIndex={-1}>
-            {children}
-          </h5>
-        ),
-      h6: ({ node, children, ...props }) =>
-        wrapAnnotatedBlock(
-          'h6',
-          node as MarkdownPreviewPositionNode,
-          <h6 {...props} tabIndex={-1}>
-            {children}
-          </h6>
-        )
+      }
     }
   }, [
     filePath,
@@ -333,21 +361,17 @@ export function useMarkdownPreviewComponents({
     isDark,
     isMac,
     imageRuntimeContext,
-    getMarkdownCommentsForRange,
-    handleAnnotatedMarkdownBlockClick,
     markdownDocumentIndex,
     onOpenDocument,
     openFile,
     openMarkdownPreview,
-    renderAnnotationControls,
+    readWorktreeRouting,
     scrollToAnchor,
     setMarkdownViewMode,
     sourceOwner,
-    sourceWorktree,
     resolvedSourceRuntimeEnvironmentId,
     sourceRoutingWorktreeId,
-    worktreeRoot,
-    worktreesByRepo,
-    wrapAnnotatedBlock
+    t,
+    worktreeRoot
   ])
 }

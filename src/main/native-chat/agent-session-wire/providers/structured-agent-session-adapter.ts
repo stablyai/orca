@@ -2,7 +2,7 @@ import type { StructuredMessageSteeringInputs } from '../../../../shared/agent-s
 import type {
   AgentSessionMcpOperation,
   AgentSessionMcpResult
-} from '../../../../shared/agent-session/agent-session-mcp'
+} from '../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import type { PrepareStructuredRewind } from './structured-agent-session-rewind-contract'
 import type { ProviderProcessCloseOptions } from '../../../provider-process/provider-process-close'
 import type { NativeCopyCoverage } from '../../agent-session-journal/context-epochs/journal-history-origin'
@@ -11,7 +11,7 @@ import type { CodexAccountUsageRead } from '../../../rate-limits/providers/codex
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from '../delivery/structured-agent-session-input-admission'
 import type { AiVaultConversationCopy } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import type { StructuredAgentSessionAdapterPermission } from './structured-agent-session-adapter-permission'
 import type {
   AgentSessionRewindFork,
   AgentSessionRewindSupport
@@ -34,7 +34,7 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAtRestCommands } from '../options/structured-agent-session-at-rest-commands'
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
+import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentSessionCloseObserver,
@@ -45,7 +45,7 @@ export type AgentSessionIdleConfirmation = 'idle' | 'busy' | 'unknown'
 
 import type { AgentJournalDispatchRejection } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
-import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import type {
   StructuredAgentSessionStartupAttempt,
   StructuredAgentSessionAcquisitionReceipt as AcquisitionReceipt
@@ -71,6 +71,8 @@ export type AgentSessionAcquisition = {
   acquisitionGeneration: string
   /** The account home this child launched under, when its launch follows the selection. */
   accountHome?: AgentSessionAccountHome
+  /** The home a chat with no conversation yet moved to at this launch, which it keeps. */
+  movedAccountHome?: AgentSessionAccountHome
 }
 
 /** The host creates the command’s running turn; the child translator ends it and writes its result. */
@@ -96,6 +98,8 @@ export type AgentSessionDispatchOutcome =
   | ({
       state: 'accepted'
       providerIdentity: AgentJournalItemIdentity
+      /** The running turn it joined, which another send opened. */
+      answeredInTurn?: AgentJournalAnsweredTurnIdentity
     } & AgentSessionRanOptionsEvidence)
   /** Transport admission stays pending until provider acknowledgement; elapsed time never proves unknown delivery. */
   | ({ state: 'admitted' } & AgentSessionRanOptionsEvidence)
@@ -129,6 +133,8 @@ export type StructuredAgentSessionEndedEvent = {
   observedAt?: number
   /** Failed startup proves none of its handed-over work ran. */
   startupUnanswered?: true
+  /** A kept agent that had ended before this acquisition reattached it: no send reached it. */
+  endedBeforeAcquire?: true
 }
 
 /** Readiness never waits for optional option reports. */
@@ -178,7 +184,9 @@ export type StructuredAgentSessionSetOptionInput = {
   signal?: AbortSignal
 }
 
-export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & {
+type AdapterControls = StructuredAgentSessionAdapterStop & StructuredAgentSessionAdapterPermission
+
+export type StructuredAgentSessionAdapter = AdapterControls & {
   readAccountUsage?(record: AgentSessionRecord, signal: AbortSignal): Promise<CodexAccountUsageRead>
   /** The `/mcp` panel's read or action on the chat's MCP servers; never enters the mutation queue. */
   manageMcp?(
@@ -202,17 +210,6 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   releaseAcquisition?(input: { sessionId: string }): Promise<boolean>
   hasOwnedAcquisition?(sessionId: string): boolean
   stoppedAcquisition?(sessionId: string): AcquisitionReceipt | undefined
-  permissionModeRequiresAcquisition?(
-    sessionId: string,
-    mode: AgentChatPermissionChoice
-  ): boolean | undefined
-  /** Settle native work without withdrawing previously admitted input; false proves no permission transition. */
-  settlePermissionTransition?(input: {
-    sessionId: string
-    fence: number
-    mode: AgentChatPermissionChoice
-    signal?: AbortSignal
-  }): Promise<boolean>
   dispatch(input: {
     sessionId: string
     clientMessageId: string
@@ -280,6 +277,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   confirmIdle?(sessionId: string): Promise<AgentSessionIdleConfirmation> | undefined
   /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
   liveTurnId?(sessionId: string): string | null | undefined
+  /** Narrow declared steering to the live acquisition's negotiated support. */
+  steeringMode?(sessionId: string): 'inject' | 'queue' | undefined
   /** The live child opened in another approval mode than requested and this input picks another model. */
   requiresModelTransitionRestart?(input: {
     sessionId: string
@@ -297,6 +296,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   heldSends?(sessionId: string): ReadonlySet<string> | undefined
   /** Prove this acquisition’s root alive for lease renewal; absent/false falls back to PID probing. */
   holdsLiveProviderProcess?(sessionId: string, acquisitionGeneration: string): boolean
+  /** This acquisition reattached a kept agent that had already ended; it only replays its output. */
+  endedBeforeAcquire?(sessionId: string, acquisitionGeneration: string): boolean
   /** This exact acquisition's ending before the host committed it ready, as the adapter reads it. */
   startupEnding?(
     sessionId: string,
@@ -321,6 +322,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   ): Promise<void | Readonly<Record<string, string>>>
   /** Opt in only when setOption can update idle metadata without a provider turn. */
   canSetOptionWhileIdle?(input: StructuredAgentSessionSetOptionInput): boolean
+  /** A saved model pick, even of the unchanged value; a child on a provider fallback applies it next turn. */
+  noteModelPick?(input: { sessionId: string; fence: number }): void
   /** Finite live compiler facts for this exact child, without a proposed card. */
   captureMessageSteeringInputs?(input: {
     sessionId: string
@@ -363,6 +366,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     inheritance?: boolean
   }): Promise<void> | undefined
   stopProviderNaming?(): void
+  /** The session gained its first, or lost its last, reader that shows prompt suggestions. */
+  promptSuggestionInterestChanged?(sessionId: string, wanted: boolean): void
   /** True proves child exit; root/processless verdicts throw only after finalization (stopAgentSessionProviderRoot). */
   closeSession?(
     sessionId: string,

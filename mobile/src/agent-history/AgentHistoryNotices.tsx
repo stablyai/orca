@@ -1,11 +1,16 @@
 import { useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
-import { TriangleAlert, X } from 'lucide-react-native'
-import { colors, radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
+import { TriangleAlert } from 'lucide-react-native'
+import { radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { AutoHeight } from '../components/motion/AutoHeight'
+import type { AgentHistoryRestartOffer } from './use-agent-history-restart-offer'
+import type { AgentHistoryHandoffLaunchNotice } from './use-agent-history-handoff'
+import { useLaunchedAgentOpener } from '../session/agent-launch/launched-agent-opener'
+import { useClipboardWriter } from '../platform/clipboard/clipboard'
+import { AutoHeight, Presence } from '../components/motion/AutoHeight'
+import { HostRouteNoticeBanner } from '../components/host-connection/HostRouteNoticeBanner'
 import type { AiVaultScanIssue } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import {
   aiVaultScanIssueKey,
@@ -25,19 +30,19 @@ export function AgentHistoryScanNotices({
   sessions: readonly unknown[]
   issues: readonly AiVaultScanIssue[]
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const scan = { sessions, issues }
   const blocking = blockingAiVaultScanIssue(scan)
   const notices = aiVaultScanNoticeIssues(scan)
   const skipped = skippedAiVaultTranscriptIssues(scan)
+  // One notice at a time, the one that matters most, so the sessions stay in view.
   return (
     <>
       {blocking ? (
         <View style={styles.notice}>
           <Text style={styles.hostIssueText}>{blocking.message}</Text>
         </View>
-      ) : null}
-      {notices.length > 0 ? (
+      ) : notices.length > 0 ? (
         <View style={styles.notice}>
           <AutoHeight maxHeight={ISSUE_LIST_MAX_HEIGHT}>
             <ScrollView contentContainerStyle={styles.noticeList} nestedScrollEnabled>
@@ -52,15 +57,17 @@ export function AgentHistoryScanNotices({
             </ScrollView>
           </AutoHeight>
         </View>
+      ) : skipped.length > 0 ? (
+        <AgentHistorySkippedNotice issues={skipped} />
       ) : null}
-      {skipped.length > 0 ? <AgentHistorySkippedNotice issues={skipped} /> : null}
     </>
   )
 }
 
 /** Says how many transcripts the scan skipped, with the paths and reasons one tap away. */
 function AgentHistorySkippedNotice({ issues }: { issues: readonly AiVaultScanIssue[] }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const [shown, setShown] = useState(false)
   const count = issues.length
@@ -109,28 +116,118 @@ export function AgentHistoryResumeNotice({
   message,
   onDismiss
 }: {
-  message: string
+  message: string | null
   onDismiss: () => void
 }) {
-  useMobileColorScheme()
-  const t = useMobileTranslation()
   return (
-    <View style={[styles.notice, styles.noticeRow]}>
-      <Text style={styles.noticeText}>{message}</Text>
-      <Pressable
-        style={({ pressed }) => pressed && pressedStyle}
-        onPress={onDismiss}
-        hitSlop={12}
-        accessibilityRole="button"
-        accessibilityLabel={t('agentHistory.panel.dismissNotice', 'Dismiss')}
-      >
-        <X size={14} color={colors.textMuted} strokeWidth={2.2} />
-      </Pressable>
-    </View>
+    <Presence>
+      {message ? <HostRouteNoticeBanner message={message} onDismiss={onDismiss} /> : null}
+    </Presence>
   )
 }
 
-const styles = themedStyleSheet(() => ({
+/** A handed-off agent the user should look at: its host's note, or the context it did not get to copy in. */
+export function AgentHistoryHandoffNotice({
+  notice,
+  onDismiss
+}: {
+  notice: AgentHistoryHandoffLaunchNotice | null
+  onDismiss: () => void
+}) {
+  const t = useMobileTranslation()
+  const clipboard = useClipboardWriter()
+  const openAgent = useLaunchedAgentOpener(notice?.opens ?? null)
+  const [copied, setCopied] = useState<{ prompt: string; ok: boolean } | null>(null)
+  const prompt = notice?.prompt
+  const state = prompt && copied?.prompt === prompt ? copied : null
+  const message = !prompt
+    ? (notice?.warning ?? '')
+    : !state
+      ? t(
+          'session.prAiTriageLaunch.promptNotSent',
+          "The agent started, but the prompt wasn't sent."
+        )
+      : state.ok
+        ? t('agentHistory.handoff.promptCopied', 'Prompt copied. Open the agent to paste it.')
+        : t('components.agentLaunchNotice.copyFailed', "Couldn't copy")
+  const open = openAgent
+    ? { label: t('automations.mobile.openAgent', 'Open agent'), onPress: openAgent }
+    : undefined
+  return (
+    <Presence>
+      {notice ? (
+        <HostRouteNoticeBanner
+          message={message}
+          action={
+            prompt && !state?.ok
+              ? {
+                  label: t('components.agentLaunchNotice.copyPrompt', 'Copy prompt'),
+                  onPress: () => {
+                    clipboard.writeText(prompt).then(
+                      () => setCopied({ prompt, ok: true }),
+                      () => setCopied({ prompt, ok: false })
+                    )
+                  }
+                }
+              : open
+          }
+          onDismiss={onDismiss}
+        />
+      ) : null}
+    </Presence>
+  )
+}
+
+/** Whether the restart offer has something to say. */
+export function agentHistoryInterruptedShown(offer: AgentHistoryRestartOffer): boolean {
+  return offer.count > 0 || offer.failedCount > 0 || offer.requestFailed
+}
+
+/** Desktop's resume-after-restart offer, as the phone's notice strip: "3 chats were interrupted · Resume all". */
+export function AgentHistoryInterruptedNotice({ offer }: { offer: AgentHistoryRestartOffer }) {
+  const colors = useMobileColors()
+  const t = useMobileTranslation()
+  const { count, failedCount, requestFailed, resuming } = offer
+  const shown = agentHistoryInterruptedShown(offer)
+  const message = requestFailed
+    ? t('agentHistory.interrupted.failed', "Couldn't resume the interrupted chats.")
+    : count > 0
+      ? count === 1
+        ? t('agentHistory.interrupted.count_one', '{{count}} chat was interrupted', { count })
+        : t('agentHistory.interrupted.count_other', '{{count}} chats were interrupted', { count })
+      : failedCount === 1
+        ? t('agentHistory.interrupted.failedCount_one', "{{count}} chat couldn't resume", {
+            count: failedCount
+          })
+        : t('agentHistory.interrupted.failedCount_other', "{{count}} chats couldn't resume", {
+            count: failedCount
+          })
+  const action =
+    !resuming && (count > 0 || requestFailed)
+      ? {
+          label: requestFailed
+            ? t('common.retry', 'Retry')
+            : t('agentHistory.interrupted.resumeAll', 'Resume all'),
+          onPress: offer.resumeAll
+        }
+      : undefined
+  return (
+    <Presence>
+      {shown ? (
+        <HostRouteNoticeBanner
+          message={message}
+          leading={
+            resuming ? <ActivityIndicator size="small" color={colors.textSecondary} /> : undefined
+          }
+          action={action}
+          onDismiss={offer.dismiss}
+        />
+      ) : null}
+    </Presence>
+  )
+}
+
+const stylesSheet = themedStyleSheet((colors) => ({
   notice: {
     marginHorizontal: spacing.lg,
     marginTop: spacing.sm,

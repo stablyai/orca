@@ -30,6 +30,8 @@ export function useNativeChatDraftEvents({
   )
   return {
     onDraftChange,
+    // The pointer moving onto an `@` row gives it the one highlight.
+    onHoverMentionOption: setActiveSuggestion,
     onTextareaSelect: (element: NativeChatComposerInput) => {
       const caret = element.selectionStart ?? element.value.length
       setCaret(caret)

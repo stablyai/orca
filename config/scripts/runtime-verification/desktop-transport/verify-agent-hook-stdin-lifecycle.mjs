@@ -26,13 +26,12 @@ const MANAGED_SCRIPTS = [
   ['cursor-hook.sh', 'cursor'],
   ['devin-hook.sh', 'devin'],
   ['droid-hook.sh', 'droid'],
-  ['gemini-hook.sh', 'gemini'],
   ['grok-hook.sh', 'grok'],
   ['kimi-hook.sh', 'kimi'],
   ['openclaude-hook.sh', 'claude']
 ]
 
-const REQUIRED_JSON_STDOUT = new Set(['antigravity-hook.sh', 'copilot-hook.sh', 'gemini-hook.sh'])
+const REQUIRED_JSON_STDOUT = new Set(['antigravity-hook.sh', 'copilot-hook.sh'])
 
 function parseArgs(argv) {
   const result = { home: process.env.HOME ?? '', minMtime: 0 }

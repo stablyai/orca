@@ -23,6 +23,8 @@ import { DurablePushStore } from './delivery/durable-push-store.js'
 import { DurablePushWorker } from './delivery/durable-push-worker.js'
 import type { PushConfig } from './config.js'
 import { PushDeviceRegistryStore } from './devices/device-registry-store.js'
+import { PushBadgeCountStore } from './devices/push-badge-count-store.js'
+import { sendHostBadge, sendRemovalBadge } from './delivery/push-badge-send.js'
 import { createFcmAccessTokenProvider } from './providers/fcm/fcm-access-token.js'
 import {
   createFcmFetchTransport,
@@ -70,6 +72,7 @@ export function createPushServer(
   const challenges = new PushHostChallengeStore(database, config.publicUrl, now)
   const sessions = new PushHostSessionStore(database, now)
   const devices = new PushDeviceRegistryStore(database, now)
+  const badges = new PushBadgeCountStore(database, now)
   const deliveryStore = new DurablePushStore(
     database,
     now,
@@ -78,6 +81,7 @@ export function createPushServer(
   const apnsTransport = options.apnsTransport ?? (config.apns ? createApnsHttp2Transport() : null)
   const dispatcher = new PushDispatcher({
     devices,
+    badges,
     ...(config.apns && apnsTransport
       ? {
           apns: new ApnsClient({
@@ -99,6 +103,7 @@ export function createPushServer(
         status === 'sent' ? 'delivery_sent' : status === 'dead' ? 'delivery_dead' : 'delivery_error'
       )
   })
+  const badgeDeps = { devices, badges, deliveryStore, dispatcher, now }
   const worker = new DurablePushWorker(deliveryStore, dispatcher, {
     now,
     onRetry: () => observability.record('delivery_retry')
@@ -243,12 +248,17 @@ export function createPushServer(
   })
 
   app.delete('/v1/devices/:registrationId', async (context) => {
-    const deleted = await devices.deleteOwned(
-      context.get('hostFingerprint'),
-      context.req.param('registrationId')
-    )
+    const hostFingerprint = context.get('hostFingerprint')
+    const registrationId = context.req.param('registrationId')
+    const device = (await devices.findOwned(hostFingerprint, [registrationId])).get(registrationId)
+    const share = device ? await badges.shareOf(registrationId) : 0
+    const deleted = await devices.deleteOwned(hostFingerprint, registrationId)
     if (!deleted) return context.json({ error: 'not_found' }, 404)
     observability.record('device_deleted')
+    if (device) {
+      // After the response: the desktop's unregister need not wait on the phone's new total.
+      void sendRemovalBadge(badgeDeps, device, share).catch(() => undefined)
+    }
     return context.body(null, 204)
   })
 
@@ -260,6 +270,13 @@ export function createPushServer(
     const body = PushSendRequestSchema.safeParse(await context.req.json().catch(() => null))
     if (!body.success) return context.json({ error: 'invalid_request' }, 400)
     const hostFingerprint = context.get('hostFingerprint')
+    const { notification } = body.data
+    if (notification.badge !== undefined) {
+      const { registrationIds } = body.data
+      return context.json({
+        results: await sendHostBadge(badgeDeps, hostFingerprint, registrationIds, notification, notification.badge)
+      })
+    }
     const owned = await devices.findOwned(hostFingerprint, body.data.registrationIds)
     const results: PushSendResult[] = []
     for (const registrationId of body.data.registrationIds) {

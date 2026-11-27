@@ -1,14 +1,10 @@
-import {
-  isGooglePlayInstall,
-  prefersGooglePlayUpdate,
-  useWallAppUpdate
-} from '../../app-update/use-wall-app-update'
+import { isGooglePlayInstall, useWallAppUpdate } from '../../app-update/use-wall-app-update'
 import { openExternalLink } from '../../platform/external-links/external-link'
+import { leaveHostRoute } from '../../host-route-exit'
 import { useRouteHandoff } from '../../navigation/route-handoff'
 import { Platform, Pressable, Text, View } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { CompatVerdict } from '../../transport/connection/protocol-compat'
@@ -47,13 +43,12 @@ function blockRemedy(verdict: BlockedVerdict): BlockRemedy {
   }
 }
 
-// Play installs may only update through Play, and GitHub installs outside mainland China are steered
-// there too; other Android installs came from GitHub Releases.
+// Play installs may only update through Play; other Android installs came from GitHub Releases.
 function mobileUpdateChannel(): 'app-store' | 'google-play' | 'github-releases' {
   if (Platform.OS === 'ios') {
     return 'app-store'
   }
-  return isGooglePlayInstall || prefersGooglePlayUpdate ? 'google-play' : 'github-releases'
+  return isGooglePlayInstall ? 'google-play' : 'github-releases'
 }
 
 function mobileUpdateChannelTarget(t: Translate): { label: string; url: string } {
@@ -81,7 +76,7 @@ function blockTitle(remedy: BlockRemedy, t: Translate): string {
     case 'update-mobile':
       return t('components.protocolBlockScreen.updateMobileTitle', 'Update Orca Mobile')
     case 'update-desktop':
-      return t('components.protocolBlockScreen.updateDesktopTitle', 'Update Orca on your computer')
+      return t('components.protocolBlockScreen.updateDesktopTitle', 'Update Orca on this host')
     case 'refresh-bundle':
       return t(
         'components.protocolBlockScreen.refreshWorkspaceTitle',
@@ -94,7 +89,7 @@ function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, t: Translate): 
   if (remedy === 'refresh-bundle') {
     return t(
       'components.protocolBlockScreen.refreshWorkspaceBody',
-      'The workspace cached for this host is older than the desktop expects. Reconnect to this host to download the current one.'
+      'The workspace cached for this host is older than the host expects. Reconnect to this host to download the current one.'
     )
   }
   if (verdict.reason === 'mobile-too-old') {
@@ -102,17 +97,17 @@ function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, t: Translate): 
       case 'app-store':
         return t(
           'components.protocolBlockScreen.mobileTooOldAppStore',
-          'This desktop needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.'
+          'This host needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.'
         )
       case 'google-play':
         return t(
           'components.protocolBlockScreen.mobileTooOldGooglePlay',
-          'This desktop needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.'
+          'This host needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.'
         )
       case 'github-releases':
         return t(
           'components.protocolBlockScreen.mobileTooOldGitHubReleases',
-          'This desktop needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.'
+          'This host needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.'
         )
     }
   }
@@ -121,41 +116,46 @@ function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, t: Translate): 
       case 'app-store':
         return t(
           'components.protocolBlockScreen.workspaceNeedsUpdateAppStore',
-          "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again."
+          "This host's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again."
         )
       case 'google-play':
         return t(
           'components.protocolBlockScreen.workspaceNeedsUpdateGooglePlay',
-          "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again."
+          "This host's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again."
         )
       case 'github-releases':
         return t(
           'components.protocolBlockScreen.workspaceNeedsUpdateGitHubReleases',
-          "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again."
+          "This host's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again."
         )
     }
   }
   return t(
     'components.protocolBlockScreen.desktopTooOldBody',
-    'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
+    'Orca on this host is too old for your current Orca Mobile app. Update Orca there, then try this host again.'
   )
 }
 
-export function ProtocolBlockScreen({ verdict }: Props) {
-  useMobileColorScheme()
+/** Where this phone gets a newer Orca Mobile: the known update, else its store. */
+export function useMobileUpdateLink(): { label: string; url: string } {
   const t = useMobileTranslation()
-  const router = useRouteHandoff()
   const mobileUpdate = useWallAppUpdate()
-  const remedy = blockRemedy(verdict)
-  const mobileUpdateTarget = mobileUpdateChannelTarget(t)
-  const mobileAction = mobileUpdate
+  return mobileUpdate
     ? {
         label: t('components.protocolBlockScreen.getVersion', 'Get Orca {{version}}', {
           version: mobileUpdate.version
         }),
         url: mobileUpdate.url
       }
-    : { label: mobileUpdateTarget.label, url: mobileUpdateTarget.url }
+    : mobileUpdateChannelTarget(t)
+}
+
+export function ProtocolBlockScreen({ verdict }: Props) {
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
+  const router = useRouteHandoff()
+  const remedy = blockRemedy(verdict)
+  const mobileAction = useMobileUpdateLink()
   // No download to offer when the fix is a refetch: reconnecting is what this screen leaves you to do.
   const primaryAction =
     remedy === 'refresh-bundle'
@@ -199,8 +199,8 @@ export function ProtocolBlockScreen({ verdict }: Props) {
         <Pressable
           style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
           onPress={() => {
-            // Hand home replacement to shell; expo-router singleton inside page would render / in WebView instead of leaving it.
-            router.replace('/')
+            // Back to the Home under this screen, not a second one stacked on it (a page hands this to the shell).
+            leaveHostRoute(router)
           }}
         >
           <Text style={styles.secondaryButtonText}>
@@ -213,7 +213,7 @@ export function ProtocolBlockScreen({ verdict }: Props) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,

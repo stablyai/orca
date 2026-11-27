@@ -1,4 +1,7 @@
-import { replaceRecordEntries, replaceTabBuckets } from '@/store/keyed-record-transitions'
+import {
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '@/store/record-transitions/keyed-record-transitions'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
@@ -10,7 +13,7 @@ import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shu
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import '../../slices/agent-status/agent-status'
-import { collectSleepingAgentSessionRecordsForWorktree } from '../../slices/agent-status/agent-status-recovery-collection'
+import { collectSleepingAgentSessionRecordsForWorktree } from '../../slices/agent-status/sleep-recovery/agent-status-recovery-collection'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../terminal-state'
 import { equalStringSets, sortedUniquePtyIds } from '../pty/terminal-pty-identities'
 import { resolveTerminalPtyOwner } from '@/lib/workspace/ownership/terminal-worktree-route'
@@ -65,17 +68,35 @@ export function createTerminalPaneHibernationActions(
       ) {
         throw new Error('agent_hibernation_pane_binding_mismatch')
       }
+      // Main refuses Agent Sleep while orchestration work waits; ask before capturing anything.
+      const admission =
+        expectedRuntimePtyIds.length === 0
+          ? await window.api.pty.sleepAdmitted?.(opts.ptyId, opts.paneKey)
+          : undefined
+      if (admission?.admitted === false) {
+        throw new Error('orchestration_busy')
+      }
+      if (admission && opts.stillEligible && !(await opts.stillEligible())) {
+        throw new Error('agent_hibernation_candidate_changed')
+      }
       const sleepingAgentSessionRecords = collectSleepingAgentSessionRecordsForWorktree(
-        state,
+        admission ? get() : state,
         worktreeId,
         {
           paneKeys,
           captureMode: 'completed-agent-hibernation'
         }
       )
-      if (!sleepingAgentSessionRecords[opts.paneKey]) {
+      const sleptRecord = sleepingAgentSessionRecords[opts.paneKey]
+      if (!sleptRecord) {
         // Killing without a persisted resume record would strand the pane.
         throw new Error('agent_hibernation_capture_missing')
+      }
+      if (admission?.terminalHandle) {
+        sleepingAgentSessionRecords[opts.paneKey] = {
+          ...sleptRecord,
+          terminalHandle: admission.terminalHandle
+        }
       }
       const capture = shutdownBufferCaptures.get(opts.tabId)
       if (capture) {

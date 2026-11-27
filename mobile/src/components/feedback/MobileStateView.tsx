@@ -2,17 +2,13 @@ import { useState, type ReactNode } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { CircleAlert, SearchX, WifiOff, type LucideIcon } from 'lucide-react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import {
-  colors,
-  feedback,
-  radii,
-  spacing,
-  typography,
-  pressedStyle
-} from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { describeLoadError } from './load-error-description'
+
+// (44 - 32) / 2: the button's real touch target reaches 44 pt.
+const ACTION_TARGET_PADDING = 6
 
 export type MobileStateAction = { label: string; onPress: () => void }
 
@@ -26,6 +22,8 @@ type MobileStateViewProps = {
   /** Raw text a person can open for support, never shown by default. */
   details?: string | null
   action?: MobileStateAction | null
+  /** A second action beside the first, such as Back next to an update link. */
+  secondaryAction?: MobileStateAction | null
   loading?: boolean
   /** Keeps the content centred above a floating bottom bar. */
   bottomInset?: number
@@ -41,11 +39,13 @@ export function MobileStateView({
   message,
   details,
   action,
+  secondaryAction,
   loading = false,
   bottomInset = 0,
   children
 }: MobileStateViewProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   return (
     <View style={[styles.state, { paddingBottom: spacing.xl + bottomInset }]}>
       {loading ? (
@@ -58,28 +58,72 @@ export function MobileStateView({
       <Text style={loading ? styles.message : styles.title}>{title}</Text>
       {message ? <Text style={styles.message}>{message}</Text> : null}
       {details ? <MobileStateDetails details={details} /> : null}
-      {action ? <MobileStateButton label={action.label} onPress={action.onPress} /> : null}
+      {action && secondaryAction ? (
+        <View style={styles.actions}>
+          <MobileStateButton label={secondaryAction.label} onPress={secondaryAction.onPress} />
+          <MobileStateButton label={action.label} onPress={action.onPress} />
+        </View>
+      ) : action ? (
+        <MobileStateButton label={action.label} onPress={action.onPress} />
+      ) : null}
       {children ? <View style={styles.children}>{children}</View> : null}
     </View>
   )
 }
 
-/** The one action a centred state offers, such as Retry. */
-export function MobileStateButton({ label, onPress }: MobileStateAction) {
-  useMobileColorScheme()
+/** The one action a centred state offers, such as Retry; `inRow`, a row's small line button (a wait's Cancel). */
+export function MobileStateButton({
+  label,
+  onPress,
+  disabled,
+  inRow = false,
+  accessibilityLabel
+}: MobileStateAction & { disabled?: boolean; inRow?: boolean; accessibilityLabel?: string }) {
+  const styles = useThemedStyles(stylesSheet)
+  const a11y = {
+    onPress,
+    disabled,
+    accessibilityRole: 'button',
+    accessibilityLabel,
+    accessibilityState: { disabled }
+  } as const
+  if (inRow) {
+    return (
+      <Pressable
+        {...a11y}
+        style={({ pressed }) => [
+          styles.action,
+          styles.actionInRow,
+          pressed && styles.actionPressed,
+          disabled && styles.actionDisabled
+        ]}
+        hitSlop={8}
+      >
+        <Text style={styles.actionText}>{label}</Text>
+      </Pressable>
+    )
+  }
+  // The page ignores hitSlop, so the 44 pt target is real padding around the 32 pt button.
   return (
-    <Pressable
-      style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
-      onPress={onPress}
-      hitSlop={8}
-      accessibilityRole="button"
-    >
-      <Text style={styles.actionText}>{label}</Text>
+    <Pressable {...a11y} style={styles.actionTarget}>
+      {({ pressed }) => (
+        <View
+          style={[
+            styles.action,
+            styles.actionInTarget,
+            pressed && styles.actionPressed,
+            disabled && styles.actionDisabled
+          ]}
+        >
+          <Text style={styles.actionText}>{label}</Text>
+        </View>
+      )}
     </Pressable>
   )
 }
 
 function MobileStateDetails({ details }: { details: string }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [open, setOpen] = useState(false)
   return (
@@ -150,11 +194,10 @@ export function MobileOfflineState({
       title={
         hostName
           ? t('common.offline.waitingFor', 'Waiting for {{host}}', { host: hostName })
-          : t('common.offline.waiting', 'Waiting for desktop')
+          : t('common.offline.waiting', 'Waiting for host')
       }
       message={
-        message ??
-        t('common.offline.message', 'Check that your computer is awake and Orca is running.')
+        message ?? t('common.offline.message', 'Check that the host is awake and Orca is running.')
       }
       action={
         onReconnect
@@ -197,7 +240,7 @@ export function MobileNoMatchState({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   children: {
     alignSelf: 'stretch',
     marginTop: spacing.md
@@ -247,7 +290,16 @@ const styles = themedStyleSheet(() => ({
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised
   },
+  actionTarget: {
+    marginTop: spacing.sm - ACTION_TARGET_PADDING,
+    paddingVertical: ACTION_TARGET_PADDING
+  },
+  actionInTarget: { marginTop: 0 },
+  // bgRaised is a dark group's own fill, so the edge alone draws it there, as a line button.
+  actionInRow: { marginTop: 0, borderColor: colors.floatingCardBorder },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.sm },
   actionPressed: { opacity: feedback.pressedOpacity },
+  actionDisabled: { opacity: 0.5 },
   actionText: {
     color: colors.textPrimary,
     fontSize: 13,

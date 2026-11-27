@@ -13,7 +13,6 @@ import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-ha
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { spacing } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
 import { AutoHeight } from '../motion/AutoHeight'
@@ -22,7 +21,7 @@ import {
   bottomDrawerScrim,
   bottomDrawerTravel
 } from './bottom-drawer-drag-motion'
-import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
+import { bottomDrawerStylesSheet } from './bottom-drawer-styles'
 import {
   useBottomDrawerModalHost,
   useBottomDrawerModalHostBackClaim
@@ -37,6 +36,7 @@ import {
 import { hostOs } from '../../platform/host-os'
 import { hideDrawer, showDrawer, useBottomDrawerDrag } from './use-bottom-drawer-drag'
 import { useDrawerReducedMotion } from './bottom-drawer-constants'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 // The grabber row above the content: its padding plus the 5 pt bar.
 const HANDLE_AREA_HEIGHT = spacing.sm + 5 + spacing.md
@@ -56,6 +56,8 @@ export type MountedBottomDrawerProps = {
   zIndex?: number
   /** When this changes to a non-null value the content scrolls back to its top, e.g. a new page. */
   scrollResetKey?: string | null
+  /** False leaves the screen behind undimmed, for a sheet whose changes show there. */
+  dimsBackground?: boolean
 }
 
 export function MountedBottomDrawer({
@@ -69,9 +71,10 @@ export function MountedBottomDrawer({
   interactive = true,
   dismissible = true,
   zIndex = 1000,
-  scrollResetKey = null
+  scrollResetKey = null,
+  dimsBackground = true
 }: MountedBottomDrawerProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(bottomDrawerStylesSheet)
   const t = useMobileTranslation()
   const progress = useSharedValue(0)
   const fade = useSharedValue(0)
@@ -288,7 +291,9 @@ export function MountedBottomDrawer({
     >
       <GestureHandlerRootView style={styles.root}>
         {/* A pinned-under sheet keeps its dim, so a sheet stacked over it deepens the dim instead of flashing it. */}
-        <Animated.View style={[styles.backdrop, backdropStyle]}>
+        <Animated.View
+          style={[styles.backdrop, !dimsBackground && styles.backdropClear, backdropStyle]}
+        >
           {interactive ? <Pressable style={styles.backdropPressable} onPress={dismiss} /> : null}
         </Animated.View>
 

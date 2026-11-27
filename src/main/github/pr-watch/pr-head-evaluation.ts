@@ -1,4 +1,4 @@
-import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
+import { pullRequestKey } from '../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { evaluatePRCheckOccurrence } from './pr-check-occurrence'
 import {
   deleteInactiveCurrentPRHeads,
@@ -124,7 +124,7 @@ export function recordPRHeadObservation(
     }
     const prior = readPRCheckContexts(db, prKey, headSha)
     const evaluation = evaluatePRCheckOccurrence(read.rollup, true, prior)
-    replacePRCheckContexts(db, prKey, headSha, evaluation.contexts)
+    replacePRCheckContexts(db, prKey, headSha, evaluation.contexts, prior)
     if (evaluation.final) {
       deletePRPendingHead(db, prKey, headSha)
     } else if (isCurrentHead) {

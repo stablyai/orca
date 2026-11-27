@@ -1,7 +1,7 @@
 import { preserveFolderUpgradeWorktreePath } from '../../../workspaces/catalog/folder-upgrade-worktree-path'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { parseWorktreeId } from '../../worktree-logic'
-import { mergeWorktree } from '../../worktree-metadata-merge'
+import { parseWorktreeId } from '../paths/worktree-logic'
+import { mergeWorktree } from '../metadata/worktree-metadata-merge'
 import {
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId
@@ -18,10 +18,8 @@ import {
   toDetectedWorktree
 } from '../../../../shared/worktree/visibility/ownership'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../../../../shared/worktree/visibility/external-worktree-visibility'
-import {
-  areWorktreePathsEqual,
-  dedupeWorktreesByPath
-} from '../../../git/worktrees/catalog/worktree-path-comparison'
+import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
+import { collapsePathEqualWorktreeRows } from '../../../workspaces/catalog/path-equal-worktree-rows'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources
@@ -146,27 +144,33 @@ export function buildDetectedGitWorktrees(
   const settings = store.getSettings()
   const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
   const isLegacyRepoForVisibility = isLegacyRepoForExternalWorktreeVisibility(repo)
+  const allMeta = allMetaOverride ?? store.getAllWorktreeMeta?.()
+  const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
+  const readOwnedMeta = (worktreeId: string): WorktreeMeta | undefined => {
+    // Locator-keyed metadata is only a compatibility fallback when no host snapshot exists.
+    const legacyMeta = allMeta === undefined ? store.getWorktreeMeta?.(worktreeId) : undefined
+    const metaById = allMeta ?? (legacyMeta ? { [worktreeId]: legacyMeta } : {})
+    return (
+      readWorktreeMetaForRepo(store, worktreeId, repo) ??
+      getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
+    )
+  }
   // Keep failed removals retryable; other prunable registrations stay hidden (#8389).
-  const liveWorktrees = dedupeWorktreesByPath(
+  const liveWorktrees = collapsePathEqualWorktreeRows(
+    repo,
     preserveFolderUpgradeWorktreePath(repo, gitWorktrees).filter(
       (gitWorktree) => !gitWorktree.prunable || !!gitWorktree.removalError
-    )
+    ),
+    (worktreeId) => readOwnedMeta(worktreeId) !== undefined
   )
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
     [repo.path, ...liveWorktrees.map((worktree) => worktree.path)],
     resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults),
     resolveConfiguredWorktreeBasePaths(repo)
   )
-  const allMeta = allMetaOverride ?? store.getAllWorktreeMeta?.()
-  const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
   const detected = liveWorktrees.map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
-    // Locator-keyed metadata is only a compatibility fallback when no host snapshot exists.
-    const legacyMeta = allMeta === undefined ? store.getWorktreeMeta?.(worktreeId) : undefined
-    const metaById = allMeta ?? (legacyMeta ? { [worktreeId]: legacyMeta } : {})
-    const meta =
-      readWorktreeMetaForRepo(store, worktreeId, repo) ??
-      getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
+    const meta = readOwnedMeta(worktreeId)
     const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
     const detected = toDetectedWorktree({
       repo,

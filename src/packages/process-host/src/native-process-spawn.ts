@@ -8,6 +8,7 @@ import {
   type SpawnSyncReturns,
   type ExecFileSyncOptions
 } from 'node:child_process'
+import { constants, getPriority, setPriority } from 'node:os'
 import {
   nativeExecutableResolver,
   type NativeExecutableSelection
@@ -44,6 +45,25 @@ function spawnFailure(error: unknown): boolean {
   )
 }
 
+// Chromium's kPresentation nice (base/threading/platform_thread_linux.cc).
+const CHROMIUM_UI_THREAD_NICE = -8
+
+/** Chromium runs Electron's UI thread at nice -8 and children copy it, so reset theirs (#14639). */
+export function dropInheritedNiceBoost(pid: number | undefined): void {
+  if (process.platform !== 'linux' || !pid) {
+    return
+  }
+  try {
+    // Only -8 is reset so a user-chosen nice passes through; raising a
+    // same-user child's nice needs no privilege.
+    if (getPriority(pid) === CHROMIUM_UI_THREAD_NICE) {
+      setPriority(pid, constants.priority.PRIORITY_NORMAL)
+    }
+  } catch {
+    /* Best effort: the child may already be gone. */
+  }
+}
+
 export function spawnNativeProcess(
   program: string,
   args: readonly string[],
@@ -60,10 +80,12 @@ export function spawnNativeProcess(
   const file = nativeExecutableResolver.file(selected, options.env)
   const launch = (binary: string): ChildProcess => {
     try {
-      return spawn(binary, [...args], {
+      const child = spawn(binary, [...args], {
         ...options,
         ...(binary !== program ? { argv0: options.argv0 || program } : {})
       })
+      dropInheritedNiceBoost(child.pid)
+      return child
     } finally {
       observe?.(binary, args, performance.now() - startedAt)
       startedAt = performance.now()

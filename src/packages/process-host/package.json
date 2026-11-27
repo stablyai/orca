@@ -115,6 +115,11 @@
       "types": "./dist/wsl-distro-allowlist.d.ts",
       "default": "./dist/wsl-distro-allowlist.js"
     },
+    "./wsl-not-installed-latch": {
+      "orca-source": "./src/wsl-not-installed-latch.ts",
+      "types": "./dist/wsl-not-installed-latch.d.ts",
+      "default": "./dist/wsl-not-installed-latch.js"
+    },
     "./posix-group-termination": {
       "orca-source": "./src/posix-group-termination.ts",
       "types": "./dist/posix-group-termination.d.ts",
@@ -131,7 +136,7 @@
     "proper-lockfile": "4.1.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vitest": "5.0.5"
+    "vitest": "5.1.0"
   },
   "engines": {
     "node": ">=18"

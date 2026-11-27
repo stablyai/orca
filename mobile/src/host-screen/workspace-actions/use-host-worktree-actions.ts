@@ -26,6 +26,7 @@ import type { Worktree } from '../../worktree/workspace-list/workspace-list-type
 import { worktreeActivate, worktreePinWrite, worktreeSleep } from '../host-screen-operations'
 import type { HostScreenState } from '../use-host-screen-state'
 import { useHostWorktreeDelete } from './use-host-worktree-delete'
+import { useHostWorktreeRowWrites } from './use-host-worktree-row-writes'
 import { useHostMutation, type HostMutationPhase } from '../../query/host-mutation'
 import { workspaceRename } from './workspace-rename-mutation'
 
@@ -72,7 +73,8 @@ export function useHostWorktreeActions(args: {
 
   // Route server-workspace actions through the desktop to their owning server.
   const clientForRow = useCallback(
-    (item: Worktree) => client && rpcClientForExecutionHost(client, hostCapabilities, item.hostId),
+    (item: Pick<Worktree, 'hostId'>) =>
+      client && rpcClientForExecutionHost(client, hostCapabilities, item.hostId),
     [client, hostCapabilities]
   )
 
@@ -164,13 +166,29 @@ export function useHostWorktreeActions(args: {
 
   const putWorktreeToSleep = useCallback(
     (item: Worktree) => {
-      if (!client) {
+      // Slept at the row's owner, as desktop does; the paired desktop would sleep its own same-id row.
+      const rowClient = clientForRow(item)
+      if (!rowClient) {
         return
       }
-      setSleptIds((prev) => new Set(prev).add(getWorktreeRowIdentity(item)))
-      void worktreeSleep.request(client, { worktree: `id:${item.worktreeId}` }).catch(() => null)
+      const identity = getWorktreeRowIdentity(item)
+      setSleptIds((prev) => new Set(prev).add(identity))
+      void worktreeSleep
+        .request(rowClient, { worktree: `id:${item.worktreeId}` })
+        .then((reply) => worktreeSleep.interpret(reply).accepted)
+        .catch(() => false)
+        .then((accepted) => {
+          // A refused sleep must not leave the row drawn asleep.
+          if (!accepted) {
+            setSleptIds((prev) => {
+              const next = new Set(prev)
+              next.delete(identity)
+              return next
+            })
+          }
+        })
     },
-    [client, setSleptIds]
+    [clientForRow, setSleptIds]
   )
 
   const workspaceRenameWrite = useHostMutation(workspaceRename, { hostId: hostId ?? '', client })
@@ -193,6 +211,7 @@ export function useHostWorktreeActions(args: {
   )
 
   const worktreeDelete = useHostWorktreeDelete({ client, clientForRow, fetchWorktrees, state })
+  const rowWrites = useHostWorktreeRowWrites({ clientForRow, state })
 
   const handleRemoveHost = useCallback(async () => {
     if (!hostId) {
@@ -241,7 +260,8 @@ export function useHostWorktreeActions(args: {
   )
 
   const openWorktreeSession = useCallback(
-    (item: Worktree, paneKey?: string) => {
+    // A row not listed yet (a bot's home just made) opens from these fields alone.
+    (item: Pick<Worktree, 'worktreeId' | 'hostId' | 'displayName' | 'repo'>, paneKey?: string) => {
       const server = serverWorkspaces.hosts.find((host) => host.hostId === item.hostId)
       if (server?.relay === 'update-needed') {
         setServerNotice(serverUpdateNeededNotice(server.label))
@@ -292,6 +312,7 @@ export function useHostWorktreeActions(args: {
 
   return {
     ...worktreeDelete,
+    ...rowWrites,
     handleRemoveHost,
     leaveHost,
     navigateFromHostList,

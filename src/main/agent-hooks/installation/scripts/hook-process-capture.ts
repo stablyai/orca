@@ -71,8 +71,16 @@ export function buildHookProcessCapture(options: { reuseOnToolEvents?: boolean }
     ...darwin,
     '  fi ;;',
     'esac',
-    // A tmux pane's own server, socket and pane id; only a lookup hint for the host's attachment check.
+    ...buildHookTmuxPaneCapture()
+  ]
+}
+
+/** A tmux pane's own server, socket and pane id: a hook from inside tmux names a conversation its
+ *  server, not the Orca pane, keeps alive; also a lookup hint for the host's attachment check. */
+export function buildHookTmuxPaneCapture(): string[] {
+  return [
     'orca_tmux_pane=',
-    'case "${TMUX_PANE:-}" in %[0-9]*) [ -z "${TMUX:-}" ] || orca_tmux_pane="$TMUX_PANE ${TMUX%,*,*}" ;; esac'
+    'case "${TMUX_PANE:-}" in %[0-9]*) [ -z "${TMUX:-}" ] || orca_tmux_pane="$TMUX_PANE ${TMUX%,*,*}" ;; esac',
+    '[ "$orca_tmux_pane" != "${ORCA_INHERITED_TMUX:-}" ] || orca_tmux_pane='
   ]
 }

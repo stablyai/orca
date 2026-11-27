@@ -109,17 +109,25 @@ it('keeps bounded snapshot prefixes and controls in enqueue order', async () => 
   expect((await commit()).outcomes).toEqual([{ committed: true, value: 6 }])
 })
 
-it.each([false, true])(
-  'treats a lost COMMIT answer as indeterminate, whether the commit took effect: %s',
-  async (committed) => {
+it.each([
+  { ranFirst: null, failure: new Error('COMMIT answer lost') },
+  { ranFirst: 'COMMIT', failure: new Error('COMMIT answer lost') },
+  {
+    ranFirst: 'ROLLBACK',
+    failure: Object.assign(new Error('disk I/O error'), { code: 'ERR_SQLITE_ERROR', errcode: 10 })
+  }
+])(
+  'treats a COMMIT failure as indeterminate after running $ranFirst: $failure.message',
+  async ({ ranFirst, failure: commitFailure }) => {
+    const committed = ranFirst === 'COMMIT'
     const { db, batch } = fixture()
     const exec = db.exec.bind(db)
     vi.spyOn(db, 'exec').mockImplementation((sql) => {
       if (sql === 'COMMIT') {
-        if (committed) {
-          exec(sql)
+        if (ranFirst) {
+          exec(ranFirst)
         }
-        throw new Error('COMMIT answer lost')
+        throw commitFailure
       }
       exec(sql)
     })
@@ -142,6 +150,47 @@ it.each([false, true])(
   }
 )
 
+it('shares a transaction among small item writes but commits two 200 KB tool outputs alone', () => {
+  const toolOutput = (id: number, reservedBytes: number): JournalSqlRequest =>
+    prepareJournalSqlRequest(id, {
+      type: 'write',
+      command: {
+        target: { sessionId: `chat${id}`, epoch: 'epoch', ownerToken: 'owner' },
+        operation: {
+          kind: 'steps',
+          steps: [
+            {
+              kind: 'resolved-item',
+              reservedBytes,
+              options: { fence: 1, turnScope: { kind: 'thread' } },
+              resolution: {
+                kind: 'literal',
+                identity: { provider: 'orca', clientMessageId: `call${id}` },
+                body: {
+                  kind: 'tool-call',
+                  name: 'shell',
+                  callId: `call${id}`,
+                  input: { command: 'cat build.log' },
+                  state: 'completed'
+                }
+              }
+            }
+          ]
+        },
+        savedAt: 100
+      }
+    })
+  const queue = [
+    ...Array.from({ length: 20 }, (_, index) => toolOutput(index + 1, 8 * 1024)),
+    toolOutput(21, 200 * 1024),
+    toolOutput(22, 200 * 1024)
+  ]
+  const ids = () => takeJournalSqlReadyBatch(queue).map((request) => request.id)
+  expect(ids()).toEqual(Array.from({ length: 20 }, (_, index) => index + 1))
+  expect(ids()).toEqual([21])
+  expect(ids()).toEqual([22])
+})
+
 it('does not claim rollback when both command and outer rollback fail', async () => {
   const { db, batch } = fixture()
   const exec = db.exec.bind(db)
@@ -163,5 +212,63 @@ it('does not claim rollback when both command and outer rollback fail', async ()
     expect.objectContaining({ outcome: 'not-dispatched' })
   )
   exec('ROLLBACK')
+  expect(db.prepare('SELECT id FROM writes').all()).toEqual([])
+})
+
+it('admits later batches after a COMMIT that SQLite rejected is rolled back', async () => {
+  const { db, batch } = fixture()
+  db.exec(`PRAGMA foreign_keys=ON;
+    CREATE TABLE parent (id INTEGER PRIMARY KEY);
+    CREATE TABLE child (id INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED)`)
+  await expect(
+    batch.run([1], (id) => db.prepare('INSERT INTO child VALUES (?)').run(id))
+  ).rejects.toThrow(
+    expect.objectContaining({
+      outcome: 'rolled-back',
+      message: 'journal SQL batch failed: FOREIGN KEY constraint failed'
+    })
+  )
+  await batch.run([2], (id) => db.prepare('INSERT INTO parent VALUES (?)').run(id))
+  expect(db.prepare('SELECT id FROM child').all()).toEqual([])
+  expect(db.prepare('SELECT id FROM parent').all()).toEqual([{ id: 2 }])
+})
+
+it('admits later batches after SQLite rolls back a full database before COMMIT', async () => {
+  const { db, batch } = fixture()
+  db.pragma(`max_page_count=${Number(db.pragma('page_count', { simple: true }))}`)
+  const exec = db.exec.bind(db)
+  vi.spyOn(db, 'exec').mockImplementation((sql) => {
+    if (sql === 'COMMIT') {
+      // A real SQLITE_FULL, so SQLite itself rolls back as when COMMIT finds the disk full.
+      db.prepare('INSERT INTO writes VALUES (0, ?)').run('x'.repeat(65536))
+    }
+    exec(sql)
+  })
+  await expect(
+    batch.run([1], (id) => db.prepare('INSERT INTO writes VALUES (?, ?)').run(id, 'lost'))
+  ).rejects.toThrow(
+    expect.objectContaining({
+      outcome: 'rolled-back',
+      message: 'journal SQL batch failed: database or disk is full'
+    })
+  )
+  vi.restoreAllMocks()
+  await batch.run([2], (id) => db.prepare('INSERT INTO writes VALUES (?, ?)').run(id, 'written'))
+  expect(db.prepare('SELECT id FROM writes').all()).toEqual([{ id: 2 }])
+})
+
+it('keeps the full-database cause when SQLite rolls back the batch mid-command', async () => {
+  const { db, batch } = fixture()
+  db.pragma(`max_page_count=${Number(db.pragma('page_count', { simple: true }))}`)
+  await expect(
+    batch.run([1, 2], (id) =>
+      db.prepare('INSERT INTO writes VALUES (?, ?)').run(id, id === 1 ? 'x' : 'x'.repeat(65536))
+    )
+  ).rejects.toThrow(
+    expect.objectContaining({
+      outcome: 'rolled-back',
+      message: 'journal SQL batch failed: database or disk is full'
+    })
+  )
   expect(db.prepare('SELECT id FROM writes').all()).toEqual([])
 })

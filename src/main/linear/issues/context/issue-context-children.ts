@@ -22,7 +22,7 @@ export async function readChildren(
   if (depth <= 0) {
     return { items: [], meta: collectionMeta(0, LINEAR_CHILDREN_NODE_CAP, false) }
   }
-  const entry = getRequiredEntry(resolved.workspace.id)
+  const entry = await getRequiredEntry(resolved.workspace.id)
   let returned = 0
   let capReached = false
   let depthReached = false
@@ -55,7 +55,7 @@ export async function readChildren(
           return raw.data?.issue?.children ?? null
         })
       },
-      childrenPageSize(remainingDepth)
+      { pageSize: childrenPageSize(remainingDepth) }
     )
     if (response.hasMore || response.nodes.length > remaining) {
       capReached = true

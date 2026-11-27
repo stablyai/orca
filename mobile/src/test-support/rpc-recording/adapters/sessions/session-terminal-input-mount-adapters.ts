@@ -80,7 +80,6 @@ function mountTerminalClipboard(
         canSend: true,
         client,
         clientRef: { current: client },
-        connState: 'connected',
         connStateRef: { current: 'connected' },
         deviceTokenRef: { current: DEVICE_TOKEN },
         flushPendingLiveInputBeforeExternalSend: (handle: string) => {

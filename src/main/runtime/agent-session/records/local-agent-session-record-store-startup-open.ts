@@ -1,5 +1,5 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
-import { withPRWatchRecovery } from '../pr-watch-runtime'
+import { withPRWatchRecovery } from '../lifecycle/pr-watch-runtime'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import {
   createStructuredAgentSessionLogger,
@@ -29,8 +29,7 @@ export function localAgentSessionRecordStoreLocation(
   })
 }
 
-/** Boots the chat writer alongside other startup work; profiles without chats spawn nothing.
- *  `maintenanceAfter` is the host's own listening milestone, so background sweeps start after it. */
+/** Opens saved chats early; old-history cleanup on empty profiles depends on the serving open. */
 export function startLocalAgentSessionRecordStoreOpen(
   legacySessionTabIds: readonly string[],
   maintenanceAfter: Promise<void>

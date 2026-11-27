@@ -4,7 +4,12 @@ import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
 } from '../../worker-threads/worker-thread-entry-path'
-import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protocol'
+import type {
+  JournalSqlRequest,
+  JournalSqlResponse,
+  JournalSqlTiming
+} from './journal-sql-protocol'
+import { JournalSqlWriterStallReport } from './journal-sql-writer-stall-report'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
 import { prepareJournalSqlRequest } from './journal-sql-ready-batch'
 import type { JournalWriterCommand } from './journal-writer-command'
@@ -28,6 +33,7 @@ export class JournalSqlOwner {
       resolve: (response: JournalSqlResponse) => void
       reject: (error: Error) => void
       write: boolean
+      postedAt: number
     }
   >()
   private nextId = 0
@@ -38,6 +44,9 @@ export class JournalSqlOwner {
   private recordInstallation: Promise<JournalSqlStoredRecords> | undefined
   private closed: Promise<void> | undefined
   onFault: (error: Error) => void = () => {}
+  private readonly stalls = new JournalSqlWriterStallReport()
+  /** Every acknowledged request's round trip, for benchmarks. */
+  onTiming: ((roundTripMs: number, timing: JournalSqlTiming | undefined) => void) | undefined
 
   fault(error: Error): void {
     this.fail(error)
@@ -52,6 +61,7 @@ export class JournalSqlOwner {
     )
   ) {
     this.worker = spawnWorkerThread(workerPath, {
+      name: 'orca-journal-sql-writer',
       workerData: { filename, stateDirectory },
       execArgv: []
     })
@@ -130,6 +140,13 @@ export class JournalSqlOwner {
     return response.result
   }
 
+  /** Lift a chat's writes already queued as bulk once it starts sending. */
+  promote(sessionId: string): void {
+    if (!this.failure && !this.didExit && !this.closing) {
+      this.worker.postMessage({ id: 0, command: { type: 'promote', sessionId } })
+    }
+  }
+
   close(): Promise<void> {
     this.closed ??= this.finishClose().catch((error: unknown) => {
       this.closed = undefined
@@ -160,7 +177,8 @@ export class JournalSqlOwner {
         reject,
         write:
           command.type !== 'close' &&
-          !(command.type === 'maintenance' && command.operation.kind === 'projection-state')
+          !(command.type === 'maintenance' && command.operation.kind === 'projection-state'),
+        postedAt: performance.now()
       })
       try {
         this.worker.postMessage(prepareJournalSqlRequest(id, command))
@@ -203,6 +221,11 @@ export class JournalSqlOwner {
     const pending = response.id === undefined ? undefined : this.pending.get(response.id)
     if (response.id !== undefined) {
       this.pending.delete(response.id)
+    }
+    if (pending && 'timing' in response) {
+      const roundTripMs = performance.now() - pending.postedAt
+      this.stalls.record(roundTripMs, response.timing)
+      this.onTiming?.(roundTripMs, response.timing)
     }
     if (response.type === 'failed') {
       const cause = restoreJournalSqlFailure(response.error)

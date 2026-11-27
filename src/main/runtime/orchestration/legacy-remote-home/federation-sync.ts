@@ -132,6 +132,7 @@ async function syncFederatedDispatchPages(
       message: {
         id: item.message_id,
         runId: dispatch.run_id,
+        // isFederatedRelaySender depends on this exact shape: this from and no sender pane key.
         from: `dispatch:${dispatchId}`,
         to: `run:${dispatch.run_id}`,
         subject: message.subject,
@@ -139,6 +140,7 @@ async function syncFederatedDispatchPages(
         type: message.type,
         priority: message.priority,
         threadId: message.threadId ?? undefined,
+        replyTo: message.replyTo,
         payload: bindCoordinatorMutationPayload(message.type, message.payload, dispatchId)
       },
       lifecycle: parseFederatedLifecycle(message, item.message_id, dispatchId, dispatch.task_id)

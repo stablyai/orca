@@ -25,6 +25,7 @@ export type CommandHandler = (
 
 export type CommandRecord = {
   event: BrowserClientHostCommandEvent
+  retainedUrlDigest?: string
   status: 'queued' | 'running' | 'cancelling' | 'settled'
   promise: Promise<BrowserClientHostCommandResult>
   resolve: (result: BrowserClientHostCommandResult) => void

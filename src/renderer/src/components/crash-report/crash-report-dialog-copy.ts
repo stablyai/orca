@@ -64,8 +64,8 @@ export function getDialogDescription(
         'Send a privacy-safe diagnostic report to help us understand the failed UI surface.'
       )
     : t(
-        'auto.components.crash.report.CrashReportDialogSurface.closedDescription',
-        'Send a privacy-safe diagnostic report to help us understand what happened.'
+        'components.crash.report.CrashReportDialogSurface.closedSummary',
+        'Send a privacy-safe report so we can fix it.'
       )
 }
 
@@ -88,7 +88,7 @@ export function getNotesPlaceholder(
         'Optional: what were you doing before this UI error?'
       )
     : t(
-        'auto.components.crash.report.CrashReportDialogSurface.closedNotesPlaceholder',
-        'Optional: what were you doing before Orca closed?'
+        'components.crash.report.CrashReportDialogSurface.closedNotesQuestion',
+        'What were you doing? (optional)'
       )
 }

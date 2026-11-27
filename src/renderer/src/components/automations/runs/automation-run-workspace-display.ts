@@ -50,3 +50,27 @@ export function getAutomationRunWorkspaceDisplay(
       : undefined
   }
 }
+
+export function getAutomationRunDetailsWorkspaceName(
+  {
+    run,
+    worktree,
+    actionLabel,
+    workspaceRemoved
+  }: {
+    run: Pick<AutomationRun, 'workspaceId' | 'workspaceDisplayName'>
+    worktree: Pick<Worktree, 'displayName'> | null
+    actionLabel: string | null
+    workspaceRemoved: boolean
+  },
+  t: Translate = translate
+): string | null {
+  if (!run.workspaceId) {
+    return null
+  }
+  if (!worktree && (actionLabel || !workspaceRemoved)) {
+    return run.workspaceDisplayName?.trim() || actionLabel
+  }
+  const display = getAutomationRunWorkspaceDisplay({ run, worktree }, t)
+  return display.title ?? display.detailLabel
+}

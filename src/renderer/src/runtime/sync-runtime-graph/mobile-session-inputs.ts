@@ -5,7 +5,7 @@ import {
 } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { editorPlacementIndex } from '@/store/slices/editor/tabs/workspace-editor-files'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
-import { hostSessionTabIdsByLocalTabForWorktree } from '../web-session-tabs-sync/tracking-mappings'
+import { hostSessionTabIdsByLocalTabForWorktree } from '../web-session-tabs-sync/identity/tracking-mappings'
 import type { AppState } from '@/store/types'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { nativeChatLaunchAgentForLeaf } from '../../components/native-chat/pane/routing/native-chat-leaf-routing'
@@ -139,9 +139,10 @@ export function buildMobileSessionWorktreeInputs(
   )
   const browserWorkspaces =
     publication.browserTabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_BROWSER_WORKSPACES
+  const browserWorkspaceIds = browserWorkspaces.map((workspace) => workspace.id)
   const pagesByBrowserWorkspaceId = narrowRecordByKeys(
     state.browserPagesByWorkspace,
-    browserWorkspaces.map((workspace) => workspace.id)
+    browserWorkspaceIds
   )
   const browserPageIds: string[] = []
   for (const pages of pagesByBrowserWorkspaceId.values()) {
@@ -193,6 +194,11 @@ export function buildMobileSessionWorktreeInputs(
     certificateFailureByBrowserPageId: narrowRecordByKeys(
       state.browserCertificateFailuresByPageId,
       browserPageIds
+    ),
+    audibleBrowserPageIds: narrowRecordByKeys(state.browserAudiblePageIds, browserPageIds),
+    audioMutedBrowserWorkspaceIds: narrowRecordByKeys(
+      state.browserAudioMutedTabIds,
+      browserWorkspaceIds
     ),
     activeEditorFileId,
     activeEditorTabType: activeEditorFileId

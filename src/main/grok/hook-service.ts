@@ -49,10 +49,6 @@ function getConfigPath(): string {
   return join(resolveGrokHomeDir(), 'hooks', 'orca-status.json')
 }
 
-export function getManagedCommandForTests(scriptPath: string): string {
-  return getGrokManagedCommand(scriptPath)
-}
-
 function isSymbolicLinkSync(configPath: string): boolean {
   try {
     return lstatSync(configPath).isSymbolicLink()

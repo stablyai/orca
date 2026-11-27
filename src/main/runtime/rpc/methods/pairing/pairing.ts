@@ -1,5 +1,13 @@
 import { defineMethod } from '../../core'
 import {
+  DECLARE_ORCA_ACCOUNT_METHOD,
+  DeclareOrcaAccountParamsSchema
+} from '../../../../../shared/remote-runtime/pairing/paired-desktop-account-contract'
+import {
+  pairedCreatorInstanceOfTerminal,
+  pairedCreatorOfTerminal
+} from '../../server/pairing/paired-terminal-creators'
+import {
   DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
   DelegatedMobileDeviceSyncParamsSchema
 } from '../../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
@@ -18,6 +26,10 @@ import {
   PairingProvisionRelayParamsSchema
 } from '../../../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 import {
+  PAIRING_GET_DIRECT_ENDPOINTS_METHOD,
+  PairingGetDirectEndpointsParamsSchema
+} from '../../../../../shared/remote-runtime/pairing/pairing-direct-endpoints-contract'
+import {
   PAIRING_CREATE_OFFER_METHOD,
   PairingCreateOfferParamsSchema
 } from '../../../../../shared/remote-runtime/pairing/pairing-create-offer-contract'
@@ -32,7 +44,12 @@ export const PAIRING_METHODS = [
       if (!ctx.pairingOffers) {
         throw new Error('pairing_context_unavailable')
       }
-      return await ctx.pairingOffers.create(params)
+      const { callerTerminalHandle, ...offer } = params
+      return await ctx.pairingOffers.create(
+        offer,
+        pairedCreatorOfTerminal(callerTerminalHandle),
+        pairedCreatorInstanceOfTerminal(callerTerminalHandle)
+      )
     }
   }),
   defineMethod({
@@ -44,6 +61,17 @@ export const PAIRING_METHODS = [
         throw new Error('pairing_context_unavailable')
       }
       return await ctx.pairing.getEndpoints(params)
+    }
+  }),
+  defineMethod({
+    name: PAIRING_GET_DIRECT_ENDPOINTS_METHOD,
+    permission: 'pairing-admin',
+    params: PairingGetDirectEndpointsParamsSchema,
+    handler: async (_params, ctx) => {
+      if (!ctx.pairingDirectEndpoints) {
+        throw new Error('pairing_context_unavailable')
+      }
+      return { v: 1, endpoints: await ctx.pairingDirectEndpoints() }
     }
   }),
   defineMethod({
@@ -66,6 +94,15 @@ export const PAIRING_METHODS = [
         throw new Error('device_key_registration_unavailable')
       }
       return ctx.deviceSelf.registerDeviceKey(params)
+    }
+  }),
+  defineMethod({
+    name: DECLARE_ORCA_ACCOUNT_METHOD,
+    permission: 'device-self',
+    params: DeclareOrcaAccountParamsSchema,
+    handler: (params, ctx) => {
+      ctx.deviceSelf?.declareOrcaAccount(params.account, params.clientInstanceId)
+      return {}
     }
   }),
   defineMethod({

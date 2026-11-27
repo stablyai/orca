@@ -1,5 +1,6 @@
 import { TEXT_GENERATION_FAILURE_COPY } from '../../shared/text-generation/text-generation-failure-copy'
 import { codexForkHistory } from './codex-fork-history'
+import { codexForkModelOverrides } from './codex-fork-model-overrides'
 import {
   AgentConversationCopyError,
   AgentConversationCopyStartError,
@@ -204,7 +205,10 @@ export async function copyCodexConversation(
             threadId: input.providerSessionId,
             ...(lastTurnId ? { lastTurnId } : beforeTurnId ? { beforeTurnId } : {}),
             excludeTurns: true,
-            cwd
+            cwd,
+            // A copy is a user thread too, so its Full Access turns show a server's form.
+            threadSource: 'user',
+            ...codexForkModelOverrides(record.options?.model, metadata)
           })
         )
         const thread = asRecord(fork?.thread)

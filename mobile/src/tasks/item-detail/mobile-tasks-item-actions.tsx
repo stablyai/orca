@@ -1,28 +1,9 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
-import { translate } from '../../i18n/mobile-i18n'
-import { View, Pressable, Text } from 'react-native'
-import {
-  Plus,
-  ExternalLink,
-  Check,
-  Copy,
-  RefreshCw,
-  X,
-  GitBranch,
-  MoreHorizontal
-} from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
-import { openExternalLink } from '../../platform/external-links/external-link'
-import { styles } from '../mobile-tasks-legacy-styles'
-import {
-  taskExternalOpenLabel,
-  taskStatusActionLabel,
-  isGitHubPrMergeBlocked
-} from './mobile-tasks-item-comments'
+import { RefreshCw, X, GitBranch } from 'lucide-react-native'
+import { taskStatusActionLabel, isGitHubPrMergeBlocked } from './mobile-tasks-item-comments'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
-import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 
-/** The detail sheet's status and merge actions, which live behind its "…" button. */
+/** The detail page's status and merge actions, in the lower group of its ⋯ menu. */
 export function mobileTasksItemMenuActions(
   model: ConnectionPresentationModel
 ): ActionSheetAction[] {
@@ -31,7 +12,8 @@ export function mobileTasksItemMenuActions(
     mutatingStatus,
     setLinearStatusPickerItem,
     setMergeMethodTaskItem,
-    setPendingHostedStateChange
+    setPendingHostedStateChange,
+    t
   } = model
   if (!actionItem) {
     return []
@@ -58,11 +40,11 @@ export function mobileTasksItemMenuActions(
   ) {
     const blocked = isGitHubPrMergeBlocked(actionItem)
     actions.push({
-      label: translate('tasks.itemActions.mergePullRequest', 'Merge pull request'),
+      label: t('tasks.itemActions.mergePullRequest', 'Merge pull request'),
       icon: GitBranch,
       disabled: mutatingStatus || blocked,
       hint: blocked
-        ? translate('tasks.itemActions.mergeConflicts', 'GitHub reports merge conflicts.')
+        ? t('tasks.itemActions.mergeConflicts', 'GitHub reports merge conflicts.')
         : undefined,
       onPress: () => setMergeMethodTaskItem(actionItem)
     })
@@ -91,7 +73,7 @@ export function mobileTasksItemMenuActions(
     actionItem.source.state === 'opened'
   ) {
     actions.push({
-      label: translate('tasks.itemActions.mergeMergeRequest', 'Merge merge request'),
+      label: t('tasks.itemActions.mergeMergeRequest', 'Merge merge request'),
       icon: GitBranch,
       disabled: mutatingStatus,
       onPress: () => setMergeMethodTaskItem(actionItem)
@@ -99,106 +81,11 @@ export function mobileTasksItemMenuActions(
   }
   if (actionItem.provider === 'linear') {
     actions.push({
-      label: translate('tasks.itemActions.changeStatus', 'Change status'),
+      label: t('tasks.itemActions.changeStatus', 'Change status'),
       icon: GitBranch,
       disabled: mutatingStatus,
       onPress: () => setLinearStatusPickerItem(actionItem)
     })
   }
   return actions
-}
-
-function copyLinkLabel(provider: string): string {
-  if (provider === 'github') {
-    return translate('tasks.itemActions.copyGitHubLink', 'Copy GitHub link')
-  }
-  if (provider === 'linear') {
-    return translate('tasks.itemActions.copyLinearLink', 'Copy Linear link')
-  }
-  return translate('tasks.itemActions.copyLink', 'Copy link')
-}
-
-/** Start workspace, then Open, Copy and "…" as round buttons beside it. */
-export function renderMobileTasksItemActions(
-  model: ConnectionPresentationModel,
-  onOpenMenu: () => void
-) {
-  const {
-    actionItem,
-    taskDetailHandoff,
-    copiedLinkKey,
-    copyTaskLink,
-    copyTextToClipboard,
-    creatingKey,
-    openWorkspaceCreate,
-    setWorkspaceRepoPickerItem,
-    workspaceRepos
-  } = model
-  if (!actionItem) {
-    return null
-  }
-  const creating = creatingKey === actionItem.key
-  // GitHub keeps its own copy path; the rest copy the same URL through the plain clipboard.
-  const copyKey =
-    actionItem.provider === 'github'
-      ? `task:${actionItem.key}`
-      : `${actionItem.provider}-url:${actionItem.key}`
-  const copied = copiedLinkKey === copyKey
-  return (
-    <View style={styles.itemActionBar}>
-      <Pressable
-        style={({ pressed }) => [
-          styles.itemStartButton,
-          pressed && styles.itemStartButtonPressed,
-          creating && styles.itemStartButtonBusy
-        ]}
-        disabled={creating}
-        accessibilityRole="button"
-        accessibilityState={{ disabled: creating, busy: creating }}
-        testID="mobile-tasks-start-workspace"
-        onPress={() =>
-          taskDetailHandoff.closeThen(() => {
-            // Jira and Linear are not repo-scoped; ask for the target repo instead of choosing the first.
-            const needsRepoChoice =
-              actionItem.provider === 'linear' || actionItem.provider === 'jira'
-            if (needsRepoChoice && workspaceRepos.length > 1) {
-              setWorkspaceRepoPickerItem(actionItem)
-              return
-            }
-            openWorkspaceCreate(actionItem)
-          })
-        }
-      >
-        <Plus size={16} color={colors.bgBase} strokeWidth={2.4} />
-        <Text style={styles.itemStartText} numberOfLines={1}>
-          {creating
-            ? translate('tasks.itemActions.creating', 'Creating...')
-            : translate('tasks.itemActions.startWorkspace', 'Start workspace')}
-        </Text>
-      </Pressable>
-      <NavBarButton
-        icon={ExternalLink}
-        accessibilityLabel={taskExternalOpenLabel(actionItem)}
-        onPress={() => openExternalLink(actionItem.source.url)}
-      />
-      <NavBarButton
-        icon={copied ? Check : Copy}
-        accessibilityLabel={
-          copied ? translate('common.copied', 'Copied') : copyLinkLabel(actionItem.provider)
-        }
-        onPress={() =>
-          actionItem.provider === 'github'
-            ? void copyTaskLink(copyKey, actionItem.source.url)
-            : void copyTextToClipboard(copyKey, actionItem.source.url)
-        }
-      />
-      {mobileTasksItemMenuActions(model).length > 0 ? (
-        <NavBarButton
-          icon={MoreHorizontal}
-          accessibilityLabel={translate('tasks.itemActions.moreActions', 'More actions')}
-          onPress={onOpenMenu}
-        />
-      ) : null}
-    </View>
-  )
 }

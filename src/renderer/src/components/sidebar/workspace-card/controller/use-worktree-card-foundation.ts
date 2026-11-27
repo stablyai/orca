@@ -11,7 +11,10 @@ import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
-import { useRuntimeHostDisconnected } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import {
+  useAppStoreWithHostStatuses,
+  useRuntimeHostDisconnected
+} from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import {
   selectRuntimeAwareSshStatus,
@@ -24,8 +27,9 @@ import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-st
 
 export function useWorktreeCardFoundation({
   worktree,
-  repo
-}: Pick<WorktreeCardProps, 'worktree' | 'repo'>) {
+  repo,
+  compactLine = false
+}: Pick<WorktreeCardProps, 'worktree' | 'repo' | 'compactLine'>) {
   const openModal = useAppStore((s) => s.openModal)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
@@ -44,8 +48,10 @@ export function useWorktreeCardFoundation({
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const projectGroups = useAppStore((s) => s.projectGroups)
-  const newCardStyle = useAppStore(selectDrawsNewWorktreeCards)
-  const compactWorktreeCards = settings?.compactWorktreeCards === true
+  // A one-line card is always the Compact card, which only the default style has.
+  const drawsNewCards = useAppStore(selectDrawsNewWorktreeCards)
+  const newCardStyle = drawsNewCards && !compactLine
+  const compactWorktreeCards = compactLine || settings?.compactWorktreeCards === true
   const cardDetails = useMemo(
     () => getWorktreeCardDetails(cardProps, { compactWorktreeCards, newCardStyle }),
     [cardProps, compactWorktreeCards, newCardStyle]
@@ -163,12 +169,12 @@ export function useWorktreeCardFoundation({
   const sshOwnerEnvironmentId = useAppStore((s) =>
     repo?.connectionId ? runtimeEnvironmentIdUnlessTwin(s, worktree.id) : null
   )
-  const sshStatus = useAppStore((s) => {
+  const sshStatus = useAppStoreWithHostStatuses((s, statuses) => {
     // Why: runtime-owned SSH targets suppress their ssh:state-changed broadcasts, so don't show a false "disconnected" chip for them.
     if (!repo?.connectionId || isRuntimeOwnedSshTargetId(repo.connectionId)) {
       return null
     }
-    return selectRuntimeAwareSshStatus(s, sshOwnerEnvironmentId, repo.connectionId)
+    return selectRuntimeAwareSshStatus(s, statuses, sshOwnerEnvironmentId, repo.connectionId)
   })
   useEffect(() => {
     if (sshOwnerEnvironmentId) {
@@ -177,9 +183,9 @@ export function useWorktreeCardFoundation({
   }, [sshOwnerEnvironmentId])
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   // Require positive removal evidence; runtime-owned targets are absent from listTargets by design.
-  const sshTargetRemoved = useAppStore((s) =>
+  const sshTargetRemoved = useAppStoreWithHostStatuses((s, statuses) =>
     repo?.connectionId && !isRuntimeOwnedSshTargetId(repo.connectionId)
-      ? selectRuntimeAwareSshTargetRemoved(s, sshOwnerEnvironmentId, repo.connectionId)
+      ? selectRuntimeAwareSshTargetRemoved(s, statuses, sshOwnerEnvironmentId, repo.connectionId)
       : false
   )
 
@@ -202,7 +208,6 @@ export function useWorktreeCardFoundation({
   // Missing runtime probe data means unknown, not disconnected.
   const isRuntimeDisconnected = useRuntimeHostDisconnected(runtimeOwnerEnvironmentId || null)
   const [titleRenaming, setTitleRenaming] = useState(false)
-  const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
   // Why: read the target label from its owning host's store instead of exposing HUB-private SSH metadata as client-local state.
   const sshTargetLabel = useAppStore((s) =>
     repo?.connectionId
@@ -243,12 +248,11 @@ export function useWorktreeCardFoundation({
     isSshDisconnected,
     sshTargetRemoved,
     parsedRepoHost,
+    runtimeHostId,
     runtimeHostLabel,
     isRuntimeDisconnected,
     titleRenaming,
     setTitleRenaming,
-    showRenameErrorDialog,
-    setShowRenameErrorDialog,
     sshTargetLabel
   }
 }

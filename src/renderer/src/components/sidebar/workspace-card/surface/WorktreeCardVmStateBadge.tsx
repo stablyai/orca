@@ -4,6 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { SpinnerFrame } from '@/components/ui/LoadingSpinner'
 import { ephemeralVmErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import type { EphemeralVmFailure } from '../../../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 import type { ExecutionHostVmState } from '../../../../../../shared/execution-host/execution-host-health'
@@ -83,10 +84,9 @@ export function VmStateIcon({
     case 'provisioning':
     case 'waking':
       return (
-        <Loader2
-          className={cn(sizeClassName, 'animate-spin text-muted-foreground')}
-          aria-hidden="true"
-        />
+        <SpinnerFrame>
+          <Loader2 className={cn(sizeClassName, 'block text-muted-foreground')} />
+        </SpinnerFrame>
       )
     case 'resume_failed':
     case 'provision_failed':

@@ -3,12 +3,14 @@ import { AppearancePane } from '../appearance/AppearancePane'
 import { ChatSettingsSection } from '../chat/ChatSettingsSection'
 import { InputPane } from '../input/InputPane'
 import { NotificationsPane } from '../notifications/NotificationsPane'
+import { ServerNotificationsPane } from '../notifications/ServerNotificationsPane'
 import { ShortcutsPane } from '../shortcuts/ShortcutsPane'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SettingsRenderContext } from './settings-render-context'
+import { getSettingsHostServerName, type SettingsRenderContext } from './settings-render-context'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { SettingsHostScopeUnavailableNotice } from '../host-scope/SettingsHostScopePicker'
 
 export function renderAppearanceSettingsSection(
   context: SettingsRenderContext,
@@ -52,6 +54,7 @@ export type ChatSettingsRenderContext = {
     | 'sourceControlAiPromptDiscardSignal'
     | 'hasUnsavedChatPromptChanges'
     | 'showDesktopOnlySettings'
+    | 'settingsHostScope'
   >
   interactions: Pick<
     SettingsRenderContext['interactions'],
@@ -75,6 +78,7 @@ export function renderChatSettingsSection(context: ChatSettingsRenderContext): R
       hasUnsavedChatPromptChanges={model.hasUnsavedChatPromptChanges}
       searchEntries={navigation.getSectionSearchEntries('chat')}
       showDesktopOnlySettings={model.showDesktopOnlySettings}
+      hostScope={model.settingsHostScope}
       isMounted={view.isSectionMounted('chat')}
     />
   )
@@ -105,19 +109,32 @@ export function renderNotificationsSettingsSection(
   t: Translate = translate
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
+  const serverName = getSettingsHostServerName(model, t)
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="notifications"
       title={t('auto.components.settings.Settings.9907545fa3', 'Notifications')}
-      description={t(
-        'auto.components.settings.Settings.7210ac09c4',
-        'Native desktop notifications for agent activity and terminal events.'
-      )}
+      description={
+        serverName === null
+          ? t(
+              'auto.components.settings.Settings.7210ac09c4',
+              'Native desktop notifications for agent activity and terminal events.'
+            )
+          : t(
+              'components.settings.notifications.server.sectionDescription',
+              'Alerts {{host}} sends for its agents and terminals.',
+              { host: serverName }
+            )
+      }
       searchEntries={navigation.getSectionSearchEntries('notifications')}
     >
-      {view.isSectionMounted('notifications') ? (
+      {!view.isSectionMounted('notifications') ? null : !model.settingsHostScope.available ? (
+        <SettingsHostScopeUnavailableNotice />
+      ) : model.settingsHostScope.target.kind === 'environment' ? (
+        <ServerNotificationsPane environmentId={model.settingsHostScope.target.environmentId} />
+      ) : (
         <NotificationsPane settings={model.settings} updateSettings={model.updateSettings} />
-      ) : null}
+      )}
     </SettingsSection>
   ) : null
 }
@@ -150,7 +167,14 @@ export function renderStatsSettingsSection(
   context: SettingsRenderContext,
   t: Translate = translate
 ): React.JSX.Element {
-  const { navigation, view } = context
+  const { model, navigation, view } = context
+  const hostTarget = model.settingsHostScope.target
+  const hostName =
+    hostTarget.kind === 'environment'
+      ? (model.runtimeEnvironments.find(
+          (environment) => environment.id === hostTarget.environmentId
+        )?.name ?? hostTarget.environmentId)
+      : null
   return (
     <SettingsSection
       id="stats"
@@ -161,11 +185,13 @@ export function renderStatsSettingsSection(
       )}
       searchEntries={navigation.getSectionSearchEntries('stats')}
     >
-      {view.isSectionMounted('stats') ? (
+      {!view.isSectionMounted('stats') ? null : !model.settingsHostScope.available ? (
+        <SettingsHostScopeUnavailableNotice />
+      ) : (
         <SettingsGroup bodyClassName="py-4">
-          <StatsPane />
+          <StatsPane host={{ target: hostTarget, name: hostName }} />
         </SettingsGroup>
-      ) : null}
+      )}
     </SettingsSection>
   )
 }

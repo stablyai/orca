@@ -146,10 +146,6 @@ function shouldMigrateNow(repoId: string): boolean {
   return last === undefined || Date.now() - last >= MIGRATE_COOLDOWN_MS
 }
 
-export function _resetForkRemoteRefspecMigrationRateLimitForTests(): void {
-  lastMigratedAtByRepoId.clear()
-}
-
 /** Best-effort, rate-limited sweep; call sites fire this without awaiting it. */
 export async function migrateForkRemoteRefspecs(
   repoPath: string,

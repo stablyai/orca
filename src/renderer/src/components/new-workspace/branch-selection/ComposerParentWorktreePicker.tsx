@@ -5,6 +5,7 @@ import { Check, ChevronsUpDown, GitBranch } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Button } from '@/components/ui/button'
 import { Command, CommandInput, CommandList } from '@/components/ui/command'
+import { isCommandInputCaretKey } from '@/lib/keyboard/command-input-caret-keys'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -14,7 +15,7 @@ import {
   getIndexedWorktreeById,
   getIndexedWorktreeMap
 } from '@/store/slices/worktrees/listing/worktree-catalog-index'
-import { compareWorktreeDisplayName } from '@/lib/workspace/display/worktree-display-name-order'
+import { compareWorktreeDisplayName } from '../../../../../shared/worktree/display-name-order'
 import '@/components/sidebar/workspace-card/activity/worktree-card-empty-inputs'
 import { branchDisplayName } from '@/components/sidebar/workspace-card/identity/worktree-branch-display'
 import { getCyclicProjectedWorktreeLineageIds } from '../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
@@ -28,9 +29,9 @@ import {
   PICKER_ROW_OVERSCAN
 } from '@/components/sidebar/workspace-actions/parenting/worktree-parent-picker-placement'
 import {
-  getLineageChildrenByParentId,
+  getLineageChildrenByParentIdentity,
   getLineageChildWorktree
-} from '@/components/right-sidebar/folder-workspaces/folder-workspace-attached-worktrees'
+} from '../../../../../shared/folder-workspace-child-worktrees'
 import { COMBOBOX_POPOVER_SURFACE } from '../type-ahead/type-ahead-combobox-styles'
 import {
   sharesWorktreeLineageBoundary,
@@ -187,7 +188,7 @@ function getFolderWorkspaceSubtreeIds(
   }
 
   const subtreeIds = new Set(rootIds)
-  for (const children of getLineageChildrenByParentId(
+  for (const children of getLineageChildrenByParentIdentity(
     worktreeLineageById,
     worktreeById,
     rootIds
@@ -307,6 +308,9 @@ function ParentWorktreeCandidateList({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (isCommandInputCaretKey(event)) {
+        return
+      }
       // Why: cmdk's root handler only knows the mounted virtual window, so own navigation here.
       const navigate = (nextIndex: number): void => {
         event.preventDefault()

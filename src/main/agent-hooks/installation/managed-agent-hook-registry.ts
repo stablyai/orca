@@ -13,7 +13,6 @@ import { cursorHookService } from '../../cursor/hook-service'
 import { devinHookService } from '../../devin/hook-service'
 import { dshHookService } from '../../dsh/hook-service'
 import { droidHookService } from '../../droid/hook-service'
-import { geminiHookService } from '../../gemini/hook-service'
 import { grokHookService } from '../../grok/hook-service'
 import { hermesHookService } from '../../hermes/hook-service'
 import { jcodeHookService } from '../../jcode/hook-service'
@@ -45,7 +44,6 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['claude', (options) => claudeHookService.install({ claudeVersion: options?.cliVersion })],
   ['openclaude', () => openClaudeHookService.install()],
   ['codex', () => codexHookService.reconcileHooks()],
-  ['gemini', () => geminiHookService.install()],
   ['qoder', () => qoderHookService.install()],
   ['qoder-cn', () => qoderCnHookService.install()],
   ['qwen-code', () => qwenCodeHookService.install()],
@@ -72,7 +70,6 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
   ['claude', () => claudeHookService.refreshManagedScripts()],
   ['openclaude', () => openClaudeHookService.refreshManagedScripts()],
   ['codex', () => codexHookService.refreshManagedScripts()],
-  ['gemini', () => geminiHookService.refreshManagedScripts()],
   ['qoder', () => qoderHookService.refreshManagedScripts()],
   ['qoder-cn', () => qoderCnHookService.refreshManagedScripts()],
   ['qwen-code', () => qwenCodeHookService.refreshManagedScripts()],
@@ -96,7 +93,6 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['claude', () => claudeHookService.remove()],
   ['openclaude', () => openClaudeHookService.remove()],
   ['codex', () => codexHookService.remove()],
-  ['gemini', () => geminiHookService.remove()],
   ['qoder', () => qoderHookService.remove()],
   ['qoder-cn', () => qoderCnHookService.remove()],
   ['qwen-code', () => qwenCodeHookService.remove()],
@@ -126,7 +122,6 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
   ['claude', () => claudeHookService.getStatus()],
   ['openclaude', () => openClaudeHookService.getStatus()],
   ['codex', () => codexHookService.getStatus()],
-  ['gemini', () => geminiHookService.getStatus()],
   ['qoder', () => qoderHookService.getStatus()],
   ['qoder-cn', () => qoderCnHookService.getStatus()],
   ['qwen-code', () => qwenCodeHookService.getStatus()],

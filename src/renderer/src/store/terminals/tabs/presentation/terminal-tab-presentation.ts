@@ -1,4 +1,7 @@
-import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
+import {
+  replaceTabBuckets,
+  replaceRecordEntries
+} from '@/store/record-transitions/keyed-record-transitions'
 import { isDecorativeAgentTitleFrameChange } from '../../../../../../shared/agent-status/title/agent-decorative-title-signature'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { detectAgentStatusFromTitle } from '../../../../../../shared/agent-status/title/agent-title-status'
@@ -11,6 +14,7 @@ import {
   getTerminalTabOwnerWorktreeId
 } from '../../ownership/terminal-tab-owner-index'
 import { getTabIdFromPaneKey } from '../../pty/terminal-pty-identities'
+import type { AppState } from '../../../types'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../../terminal-state'
 import { sameAiVaultSessionTitle } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 
@@ -143,31 +147,30 @@ export function createTerminalTabPresentationActions(
         }
       })
     },
-    setRuntimePaneTitle: (tabId, paneId, title) => {
+    setRuntimePaneTitle: (tabId, paneId, title, options) => {
       set((s) => {
-        const currentByPane = s.runtimePaneTitlesByTabId[tabId] ?? {}
-        const prevTitle = currentByPane[paneId]
-        if (prevTitle === title) {
+        const panePatch = runtimePaneTitlePatch(s, tabId, paneId, title)
+        if (!options?.alsoTabTitle) {
+          return panePatch ?? s
+        }
+        // Why: one notification per title change; the tab update must see the pane's sortEpoch bump.
+        const tabResult = applyTerminalTabTitleUpdates(
+          {
+            activeWorktreeId: s.activeWorktreeId,
+            settings: s.settings,
+            sortEpoch: panePatch?.sortEpoch ?? s.sortEpoch,
+            tabsByWorktree: s.tabsByWorktree,
+            unifiedTabsByWorktree: s.unifiedTabsByWorktree
+          },
+          [{ tabId, title }]
+        )
+        if (tabResult.runtimeGraphChanged) {
+          scheduleRuntimeGraphSync()
+        }
+        if (!panePatch && !tabResult.patch) {
           return s
         }
-        if (prevTitle && isDecorativeAgentTitleFrameChange(prevTitle, title)) {
-          return s
-        }
-        // Why: re-sort hookless title changes only when their activity classification changes.
-        const classificationChanged =
-          detectAgentStatusFromTitle(prevTitle ?? '') !== detectAgentStatusFromTitle(title)
-        // Why: skip active-worktree remount side effects and orphaned panes.
-        const ownerWorktreeId = classificationChanged
-          ? getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
-          : null
-        const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
-        const shouldBump = classificationChanged && ownerWorktreeId !== null && !isActive
-        return {
-          runtimePaneTitlesByTabId: replaceRecordEntries(s.runtimePaneTitlesByTabId, [
-            [tabId, { ...currentByPane, [paneId]: title }]
-          ]),
-          ...(shouldBump ? { sortEpoch: s.sortEpoch + 1 } : {})
-        }
+        return { ...panePatch, ...tabResult.patch }
       })
     },
     clearRuntimePaneTitle: (tabId, paneId) => {
@@ -195,5 +198,36 @@ export function createTerminalTabPresentationActions(
         }
       })
     }
+  }
+}
+
+function runtimePaneTitlePatch(
+  s: AppState,
+  tabId: string,
+  paneId: number,
+  title: string
+): Partial<Pick<AppState, 'runtimePaneTitlesByTabId' | 'sortEpoch'>> | null {
+  const currentByPane = s.runtimePaneTitlesByTabId[tabId] ?? {}
+  const prevTitle = currentByPane[paneId]
+  if (prevTitle === title) {
+    return null
+  }
+  if (prevTitle && isDecorativeAgentTitleFrameChange(prevTitle, title)) {
+    return null
+  }
+  // Why: re-sort hookless title changes only when their activity classification changes.
+  const classificationChanged =
+    detectAgentStatusFromTitle(prevTitle ?? '') !== detectAgentStatusFromTitle(title)
+  // Why: skip active-worktree remount side effects and orphaned panes.
+  const ownerWorktreeId = classificationChanged
+    ? getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+    : null
+  const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
+  const shouldBump = classificationChanged && ownerWorktreeId !== null && !isActive
+  return {
+    runtimePaneTitlesByTabId: replaceRecordEntries(s.runtimePaneTitlesByTabId, [
+      [tabId, { ...currentByPane, [paneId]: title }]
+    ]),
+    ...(shouldBump ? { sortEpoch: s.sortEpoch + 1 } : {})
   }
 }

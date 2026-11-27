@@ -1,4 +1,9 @@
 import {
+  generationArgumentText,
+  generationOptionTokens,
+  type GenerationArgument
+} from './generation-argument'
+import {
   textGenerationFailure,
   type TextGenerationFailureFields
 } from '../../../text-generation/text-generation-failure-copy'
@@ -29,7 +34,6 @@ import {
   openCodeGenerationLauncherBoundary,
   mergeOpenCodeGenerationArgs
 } from '../../../text-generation/launch/opencode-generation-command'
-import { buildAntigravityGenerationInput } from '../../../text-generation/output/antigravity-generation-stream'
 
 // Share pure request/prompt-to-spawn validation and argv planning between local main and SSH JSON-RPC generators.
 
@@ -46,9 +50,9 @@ export type CommitMessagePlanInput = {
   toolFree?: boolean
 }
 
-export type CommitMessagePlan = {
+export type CommitMessagePlan<Argument = string> = {
   binary: string
-  args: string[]
+  args: Argument[]
   /** Non-null when the prompt should be piped via stdin. */
   stdinPayload: string | null
   /** Execution-host-owned prompt attachment, materialized only when starting the process. */
@@ -60,31 +64,25 @@ export type CommitMessagePlan = {
   label: string
   /** Leading command assignments, applied on the execution host. */
   env?: Record<string, string>
-  outputFormat?: 'opencode-json' | 'antigravity-stream-json' | 'kimi-stream-json'
+  outputFormat?: 'opencode-json' | 'kimi-stream-json'
   /** Resolved native-task inputs; the receiving execution runtime owns the server. */
   openCodeTask?: { prefixArgs: string[]; runArgs: string[] }
 }
 
 export type CommitMessagePlanResult =
-  | { ok: true; plan: CommitMessagePlan }
+  | { ok: true; plan: CommitMessagePlan; localArgs: GenerationArgument[] }
   | ({ ok: false } & TextGenerationFailureFields)
 
 const DEFAULT_SINGLETON_OPTIONS: readonly (readonly string[])[] = [['--model']]
-const ANTIGRAVITY_FORMAT_OPTIONS = [
-  '--input-format',
-  '-input-format',
-  '--output-format',
-  '-output-format'
-]
 
 function insertAdditionalAgentArgs(args: {
-  baseArgs: string[]
-  agentArgs: string[]
+  baseArgs: GenerationArgument[]
+  agentArgs: GenerationArgument[]
   promptDelivery: 'argv' | 'stdin' | 'file'
-  prompt: string
+  prompt?: GenerationArgument
   /** Built-in argv, whose `--` before the prompt ends options; a custom `--` may pass args through a wrapper. */
   builtIn?: boolean
-}): string[] {
+}): GenerationArgument[] {
   if (!args.agentArgs.length) {
     return args.baseArgs
   }
@@ -96,7 +94,8 @@ function insertAdditionalAgentArgs(args: {
   }
   if (
     args.promptDelivery === 'argv' &&
-    args.prompt.length > 0 &&
+    args.prompt !== undefined &&
+    generationArgumentText(args.prompt).length > 0 &&
     args.baseArgs.at(-1) === args.prompt
   ) {
     const insertAt = args.builtIn && args.baseArgs.at(-2) === '--' ? -2 : -1
@@ -127,18 +126,19 @@ export function planCommitMessageGeneration(
     if (!agentArgs.ok) {
       return agentArgs
     }
+    const localArgs = insertAdditionalAgentArgs({
+      baseArgs: planned.localArgs,
+      agentArgs: agentArgs.args,
+      promptDelivery: planned.stdinPayload === null ? 'argv' : 'stdin',
+      prompt: planned.trailingPrompt
+    })
     return {
       ok: true,
+      localArgs,
       plan: {
         binary: planned.binary,
-        args: insertAdditionalAgentArgs({
-          baseArgs: planned.args,
-          agentArgs: agentArgs.args,
-          promptDelivery: planned.stdinPayload === null ? 'argv' : 'stdin',
-          prompt
-        }),
+        args: localArgs.map(generationArgumentText),
         stdinPayload: planned.stdinPayload,
-        // Custom commands lack friendly names; use the binary in error labels.
         label: planned.binary,
         ...(planned.env ? { env: planned.env } : {})
       }
@@ -175,7 +175,11 @@ export function planCommitMessageGeneration(
   }
 
   const argvPrompt =
-    spec.promptDelivery === 'file' ? '@{prompt-file}' : spec.promptDelivery === 'argv' ? prompt : ''
+    spec.promptDelivery === 'file'
+      ? '@{prompt-file}'
+      : spec.promptDelivery === 'argv'
+        ? { value: prompt, literal: true as const }
+        : ''
   const agentArgs = planAdditionalAgentArgs(input.agentArgs, input.backslash)
   if (!agentArgs.ok) {
     return agentArgs
@@ -184,14 +188,8 @@ export function planCommitMessageGeneration(
   if (!command.ok) {
     return { ok: false, error: command.error }
   }
-  const prefixArgs =
-    input.agentId === 'antigravity'
-      ? compactRecipeOptions(command.prefixArgs, ANTIGRAVITY_FORMAT_OPTIONS)
-      : taskPolicyRecipeArgs(input.agentId, command.prefixArgs)
-  const recipeArgs =
-    input.agentId === 'antigravity'
-      ? compactRecipeOptions(agentArgs.args, ANTIGRAVITY_FORMAT_OPTIONS)
-      : taskPolicyRecipeArgs(input.agentId, agentArgs.args)
+  const prefixArgs = taskPolicyRecipeArgs(input.agentId, command.prefixArgs)
+  const recipeArgs = taskPolicyRecipeArgs(input.agentId, agentArgs.args)
   const baseArgs = spec.buildArgs({
     prompt: argvPrompt,
     model: input.model,
@@ -222,21 +220,24 @@ export function planCommitMessageGeneration(
   const generationArgs = mergeOpenCodeGenerationArgs(
     input.agentId,
     command.binary,
-    merged.prefixArgs,
+    merged.prefixArgs.map(generationArgumentText),
     args
   )
   const formatOption =
     input.agentId === 'opencode' || input.agentId === 'opencode2'
-      ? findOptionOccurrence(generationArgs, ['--format'], true)
+      ? findOptionOccurrence(generationOptionTokens(generationArgs), ['--format'], true)
       : null
   const kimiFormatOption =
     input.agentId === 'kimi'
       ? findRecipeOption(generationArgs, ['--output-format'], KIMI_VALUE_OPTIONS)
       : null
-  const directOpenCode = isDirectOpenCodeGenerationCommand(command.binary, merged.prefixArgs)
+  const directOpenCode = isDirectOpenCodeGenerationCommand(
+    command.binary,
+    merged.prefixArgs.map(generationArgumentText)
+  )
   const launcherBoundary = openCodeGenerationLauncherBoundary(
     command.binary,
-    merged.nativePrefixArgs
+    merged.nativePrefixArgs.map(generationArgumentText)
   )
   const nativePrefixArgs =
     launcherBoundary === null
@@ -248,15 +249,11 @@ export function planCommitMessageGeneration(
       : [...merged.nativePrefixOptions, ...merged.nativePrefixArgs.slice(launcherBoundary)]
   return {
     ok: true,
+    localArgs: generationArgs,
     plan: {
       binary: command.binary,
-      args: generationArgs,
-      stdinPayload:
-        input.agentId === 'antigravity'
-          ? buildAntigravityGenerationInput(prompt)
-          : spec.promptDelivery === 'stdin'
-            ? prompt
-            : null,
+      args: generationArgs.map(generationArgumentText),
+      stdinPayload: spec.promptDelivery === 'stdin' ? prompt : null,
       ...(spec.promptDelivery === 'file'
         ? {
             promptFile: {
@@ -269,28 +266,30 @@ export function planCommitMessageGeneration(
       ...(input.agentId === 'codex'
         ? {
             policyProbeArgs: [
-              ...compactRecipeOptions(merged.prefixArgs, ['--model', '-m']),
-              ...codexRecipeConfigArgs(merged.recipeArgs)
+              ...compactRecipeOptions(merged.prefixArgs.map(generationArgumentText), [
+                '--model',
+                '-m'
+              ]),
+              ...codexRecipeConfigArgs(merged.recipeArgs.map(generationArgumentText))
             ]
           }
         : {}),
-      ...(input.agentId === 'antigravity' ? { policyProbeArgs: merged.prefixArgs } : {}),
       ...(input.agentId === 'opencode' || input.agentId === 'opencode2'
         ? {
             openCodeTask: {
-              prefixArgs: directOpenCode ? [] : nativePrefixArgs,
+              prefixArgs: directOpenCode ? [] : nativePrefixArgs.map(generationArgumentText),
               runArgs: directOpenCode
-                ? generationArgs.slice(1)
-                : [...nativeRunOptions, ...args.slice(1)]
+                ? generationArgs.slice(1).map(generationArgumentText)
+                : [
+                    ...nativeRunOptions.map(generationArgumentText),
+                    ...args.slice(1).map(generationArgumentText)
+                  ]
             }
           }
         : {}),
       ...(formatOption?.value === 'json' ? { outputFormat: 'opencode-json' as const } : {}),
       ...(kimiFormatOption?.value === 'stream-json'
         ? { outputFormat: 'kimi-stream-json' as const }
-        : {}),
-      ...(input.agentId === 'antigravity'
-        ? { outputFormat: 'antigravity-stream-json' as const }
         : {}),
       ...(command.env ? { env: command.env } : {})
     }

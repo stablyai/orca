@@ -1,39 +1,26 @@
+import { Suspense } from 'react'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useAppStore } from '@/store/index'
 import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
-import CloseTerminalDialog from './CloseTerminalDialog'
+
+const RunningTerminalCloseDialogSurface = lazy(() => import('./RunningTerminalCloseDialogSurface'))
 
 /** Store-driven running-process confirmation lets tab/group/floating closes share the pane keyboard guard outside React context. */
-export default function RunningTerminalCloseDialog(): React.JSX.Element {
-  const request = useRunningTerminalCloseConfirmStore((state) => state.runningTerminalCloseConfirm)
-  const confirmClose = useRunningTerminalCloseConfirmStore(
-    (state) => state.confirmRunningTerminalClose
+export default function RunningTerminalCloseDialog(): React.JSX.Element | null {
+  const hasRequest = useRunningTerminalCloseConfirmStore(
+    (state) => state.runningTerminalCloseConfirm !== null
   )
-  const confirmAllCloses = useRunningTerminalCloseConfirmStore(
-    (state) => state.confirmAllRunningTerminalCloses
-  )
-  const dismissClose = useRunningTerminalCloseConfirmStore(
-    (state) => state.dismissRunningTerminalClose
-  )
-  const updateSettings = useAppStore((state) => state.updateSettings)
-  // Process probes can overlap the synchronous pinned queue; wait instead of stacking modal focus traps.
-  const pinnedRequest = useAppStore((state) => state.pinnedTabCloseConfirm)
+  const hasPinnedRequest = useAppStore((state) => state.pinnedTabCloseConfirm !== null)
+  const hasOpened = useLatchedOpen(hasRequest && !hasPinnedRequest)
+
+  if (!hasOpened) {
+    return null
+  }
 
   return (
-    <CloseTerminalDialog
-      open={request !== null && pinnedRequest === null}
-      copyKind={request?.copyKind ?? 'command'}
-      // Pass the queued subject so checkbox reset runs even while the dialog stays open.
-      {...(request ? { subjectKey: request.terminalTabId } : {})}
-      onCancel={dismissClose}
-      onConfirm={(dontAskAgain) => {
-        if (dontAskAgain) {
-          void updateSettings({ skipCloseTerminalWithRunningProcessConfirm: true })
-          // Why: the user just opted out of this prompt; a queued one must not still appear.
-          confirmAllCloses()
-          return
-        }
-        confirmClose()
-      }}
-    />
+    <Suspense fallback={null}>
+      <RunningTerminalCloseDialogSurface />
+    </Suspense>
   )
 }

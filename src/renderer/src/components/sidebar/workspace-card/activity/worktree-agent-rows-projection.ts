@@ -9,8 +9,8 @@ import { applyAgentRowLineage } from '@/components/dashboard/rows/agent-row-line
 import type { AppState } from '@/store/types'
 
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import { getAgentPaneExecutionHost } from '@/store/slices/agent-status/agent-pane-execution-host'
-import { recordChangeReaches } from '@/store/keyed-record-change-reads'
+import { getAgentPaneExecutionHost } from '@/store/slices/agent-status/pane-authority/agent-pane-execution-host'
+import { recordChangeReaches } from '@/store/record-transitions/keyed-record-change-reads'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { reuseArrayIfEqual } from './worktree-agent-row-selectors'
 
@@ -239,6 +239,7 @@ export function worktreeAgentProjectionInputs(state: AppState): readonly unknown
     state.ptyIdsByTabId,
     state.terminalLayoutsByTabId,
     state.runtimeAgentOrchestrationByPaneKey,
+    state.remoteAgentOrchestrationByHost,
     state.paneForegroundAgentByPaneKey,
     ...structuredAgentSessionOwnerInputs(state),
     state.runtimePaneTitlesByTabId,

@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import {
   connectBitbucket,
   disconnectBitbucket,
@@ -34,8 +35,8 @@ function normalizeConnectInput(value: unknown): BitbucketConnectArgs | null {
   }
 }
 
-export function registerBitbucketHandlers(): void {
-  ipcMain.handle(
+export function registerBitbucketHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle(
     'bitbucket:connect',
     async (_event, args: unknown): Promise<BitbucketConnectResult> => {
       const input = normalizeConnectInput(args)
@@ -51,12 +52,12 @@ export function registerBitbucketHandlers(): void {
     }
   )
 
-  ipcMain.handle('bitbucket:disconnect', async (): Promise<void> => {
-    disconnectBitbucket()
+  ipc.handle('bitbucket:disconnect', async (): Promise<void> => {
+    await disconnectBitbucket()
     _resetPreflightCache()
   })
 
-  ipcMain.handle('bitbucket:status', async (): Promise<BitbucketConnectionStatus> => {
+  ipc.handle('bitbucket:status', async (): Promise<BitbucketConnectionStatus> => {
     return getBitbucketConnectionStatus()
   })
 }

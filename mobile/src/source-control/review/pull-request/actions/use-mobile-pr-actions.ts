@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
-import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { ConnectionState } from '../../../../transport/connection/connection-state'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import {
@@ -45,7 +44,6 @@ function realMutations(client: UnvalidatedRpcRequestPort, worktreeId: string): P
 }
 
 export function useMobilePrActions(input: PrActionsInput) {
-  useMobileTranslation()
   const { client, connState, worktreeId, prNumber, headSha, prRepo, refetch } = input
   const [, forceRender] = useReducer((n: number) => n + 1, 0)
 
@@ -83,8 +81,8 @@ export function useMobilePrActions(input: PrActionsInput) {
     clearError: useCallback(() => engine.clearError(), [engine]),
     clearBlocked: useCallback(() => engine.clearBlocked(), [engine]),
     merge: useCallback(
-      (method?: Parameters<PrActionsEngine['merge']>[0]): Promise<boolean> =>
-        ready ? engine.merge(method) : Promise.resolve(false),
+      (...args: Parameters<PrActionsEngine['merge']>): Promise<boolean> =>
+        ready ? engine.merge(...args) : Promise.resolve(false),
       [engine, ready]
     ),
     setAutoMerge: useCallback(

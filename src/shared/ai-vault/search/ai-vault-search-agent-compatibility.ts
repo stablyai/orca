@@ -10,7 +10,6 @@ const LEGACY_SEARCH_AGENTS: readonly AiVaultAgent[] = [
   'omp',
   'prime-agent',
   'cursor',
-  'gemini',
   'antigravity',
   'rovo',
   'copilot',

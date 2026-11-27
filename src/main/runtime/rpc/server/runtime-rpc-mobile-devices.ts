@@ -2,12 +2,15 @@ import type {
   RelayDeviceBinding,
   RelayRevokeOutboxItem
 } from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
+import type { DeviceEntry, DeviceOrcaAccount, PairedDeviceTypist } from './pairing/device-entry'
+import type { DeviceSelfRpcContext } from '../core'
+import { pairedDeviceTypistOf } from './pairing/paired-device-typist'
 import type {
   DelegatedPhone,
   DelegatedMobileDeviceSyncResult
 } from '../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
-import type { DeviceEntry } from './pairing/device-entry'
 import { RuntimeRpcRequestAdmission } from './runtime-rpc-request-admission'
+import { settleRemovedPairedClient } from '../../orchestration/federation/client-asks/client-ask-queue'
 
 // Why: below dispatch so a caller-bound RPC context can revoke and mint mobile devices.
 export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
@@ -42,7 +45,11 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
       }
       visited.add(device.deviceId)
       for (const child of paired) {
-        if (child.parentDeviceId === device.deviceId || child.forkedFrom === device.deviceId) {
+        if (
+          child.parentDeviceId === device.deviceId ||
+          child.forkedFrom === device.deviceId ||
+          child.createdByDeviceId === device.deviceId
+        ) {
           visit(child)
         }
       }
@@ -63,16 +70,61 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
         this.mobileRelayPairingProvider?.onDemandStateChanged?.()
       }
       this.runtime.forgetClientNavigationState(deviceId)
+      if (device.scope === 'runtime') {
+        // Asks this Orca's agents sent that computer under this pairing will not be answered.
+        settleRemovedPairedClient(this.runtime, device)
+      }
       this.mobileSocketWiring?.terminateDeviceConnections(deviceId)
     }
     return true
   }
 
   /** Make the runtime device `parentDeviceId`'s phones exactly `phones`; dropped ones are fully revoked. */
+  /** Who typed a paired device's message; see `pairedDeviceTypistOf`. */
+  pairedDeviceTypist(
+    deviceId: string,
+    connectionClaim?: DeviceOrcaAccount | null
+  ): PairedDeviceTypist | null {
+    const registry = this.deviceRegistry
+    return registry
+      ? pairedDeviceTypistOf(
+          deviceId,
+          (id) => registry.getDevice(id),
+          connectionClaim ?? null,
+          (ownerId, instance) => this.declaredDesktopClients.accountOfInstance(ownerId, instance)
+        )
+      : null
+  }
+
+  /** A desktop socket's account claim: on its row (Slack naming) and the socket (who typed what). */
+  protected desktopAccountSelf(
+    device: Pick<DeviceEntry, 'deviceId' | 'scope'>,
+    connectionId: string
+  ): Pick<DeviceSelfRpcContext, 'declareOrcaAccount' | 'orcaAccount' | 'clientInstanceId'> {
+    return {
+      declareOrcaAccount: (account, clientInstanceId) => {
+        this.deviceRegistry?.setOrcaAccount(device.deviceId, account)
+        if (device.scope === 'runtime') {
+          this.declaredDesktopClients.declareAccount(connectionId, {
+            deviceId: device.deviceId,
+            account,
+            ...(clientInstanceId ? { clientInstanceId } : {})
+          })
+        }
+      },
+      orcaAccount: () => this.declaredDesktopClients.accountOf(connectionId),
+      clientInstanceId: () => this.declaredDesktopClients.instanceOf(connectionId)
+    }
+  }
+
+  /** The syncing socket's installation owns its phones: several desktops can share one row. */
   protected syncDelegatedMobileDevices(
     parentDeviceId: string,
-    phones: readonly DelegatedPhone[]
+    phones: readonly DelegatedPhone[],
+    connectionId?: string
   ): DelegatedMobileDeviceSyncResult {
+    const originClientInstanceId =
+      connectionId === undefined ? undefined : this.declaredDesktopClients.instanceOf(connectionId)
     const registry = this.deviceRegistry
     const parent = registry?.getDevice(parentDeviceId)
     if (!registry || parent?.scope !== 'runtime') {
@@ -86,14 +138,14 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
       throw new Error('delegated_device_revoke_failed')
     }
 
-    let devices = registry.upsertDelegatedMobileDevices(parent, phones)
+    let devices = registry.upsertDelegatedMobileDevices(parent, phones, originClientInstanceId)
     // A child removed on disk meanwhile is dropped by the save; one rerun mints it fresh.
     if (devices.length < phones.length) {
       const current = registry.getDevice(parentDeviceId)
       if (current?.scope !== 'runtime') {
         throw new Error('delegated_device_parent_unavailable')
       }
-      devices = registry.upsertDelegatedMobileDevices(current, phones)
+      devices = registry.upsertDelegatedMobileDevices(current, phones, originClientInstanceId)
     }
     return {
       devices: devices.map((device) => ({

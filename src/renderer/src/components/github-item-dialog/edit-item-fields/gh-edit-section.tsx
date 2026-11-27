@@ -1,9 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { useRepoLabels, useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
-import { useImmediateMutation } from '@/hooks/useIssueMetadata'
-import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
+import { useRepoLabels, useRepoAssignees } from '@/lib/work-items/github/useGitHubRepoMetadata'
+import { useImmediateMutation } from '@/hooks/useImmediateMutation'
+import {
+  useRepoLabelsBySlug,
+  useRepoAssigneesBySlug
+} from '@/lib/work-items/github/useGitHubSlugMetadata'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import {
@@ -12,7 +15,10 @@ import {
   validateTaskPageGitHubDuplicateTarget,
   type TaskPageGitHubCloseAction
 } from '@/components/task-page/github/issue-status/task-page-github-status-actions'
-import { parseGitHubItemRepository as parseOwnerRepoFromItemUrl } from '../../../../../shared/github/work-items/work-item-target'
+import {
+  parseGitHubItemRepository as parseOwnerRepoFromItemUrl,
+  resolveGitHubItemUrlRepository
+} from '../../../../../shared/github/work-items/work-item-target'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -100,7 +106,7 @@ function GHEditSectionItem({
     [projectOrigin, patchProjectRowContent]
   )
 
-  const issueRepo = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const issueRepo = useMemo(() => resolveGitHubItemUrlRepository(item), [item])
   const metadataOptions = useMemo(
     () => ({ target: ownerTarget, ownerRepo: issueRepo }),
     [ownerTarget, issueRepo]

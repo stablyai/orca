@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithAdmitWindowPublisher } from './session-window-publisher'
+import { OrcaRuntimeWithSleptLeafHandles } from './slept-leaf-handles'
 import type {
   RuntimeRendererSyncWindowGraph,
   RuntimeSyncWindowGraph,
@@ -8,17 +8,23 @@ import { assertUniqueRuntimeGraphTabIds } from './runtime-graph-tab-ids'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
-
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
-import { assertBrowserPageInventoryFrames } from '../session-tabs/mobile-session-inventory-base'
+import { AgentOrchestrationGraphRevision } from '../orchestration/crew/agent-orchestration-graph-revision'
+import { assertBrowserPageInventoryFrames } from '../session-tabs/inventory/mobile-session-inventory-base'
 
 type Graph = RuntimeSyncWindowGraph
 
-export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmitWindowPublisher {
+export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithSleptLeafHandles {
   /** Layout-owner builds: main's panes in place of the window's (session-tabs-inventory.ts). */
   protected abstract withMainSurfaces(windowId: number, graph: Graph): Graph
   declare protected terminalGroupGridSizes?: RuntimeSyncWindowGraph['terminalGroupGridSizes']
   declare protected singleGroupWorkspaceGridSize?: RuntimeSyncWindowGraph['singleGroupWorkspaceGridSize']
+  private readonly orchestrationReply = new AgentOrchestrationGraphRevision(
+    this.agentOrchestrationProjection
+  )
+
+  /** A serve or orcad host: no owner window here ever answers a card. */
+  servesWithoutWindow = (): boolean => this.servesHeadlessGraph
 
   shouldRelayTerminalBrowserOpens(): boolean {
     return this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
@@ -116,7 +122,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
       const connected = this.graphLeafConnected(ptyId, leaf.worktreeId)
       const tailSource = existing?.ptyId === ptyId ? existing : existingPty
 
-      nextLeaves.set(leafKey, {
+      const nextLeaf: RuntimeLeafRecord = {
         ...leaf,
         ptyId,
         ptyGeneration,
@@ -143,7 +149,8 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
           existing?.ptyId === ptyId && existing.paneTitle === leaf.paneTitle
             ? existing.paneTitleUpdatedAt
             : graphSyncedAt
-      })
+      }
+      nextLeaves.set(leafKey, nextLeaf)
 
       // Main-owned pane presence does not prove its terminal is connected.
       if (leaf.ptyId && connected && !this.mainDecidesLiveness(leaf.worktreeId)) {
@@ -158,10 +165,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
       }
 
       if (existing && (existing.ptyId !== ptyId || existing.ptyGeneration !== ptyGeneration)) {
-        // Adopt the first PTY into the pending handle mobile already subscribed to.
-        const adoptedFirstPty =
-          existing.ptyId === null && this.adoptFirstPtyForLeafHandle(leafKey, ptyId, ptyGeneration)
-        if (!adoptedFirstPty) {
+        if (!this.retainLeafHandle(nextLeaf, existing.ptyId, ptyId, ptyGeneration)) {
           this.invalidateLeafHandle(leafKey)
         }
       }
@@ -207,7 +211,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
           } else {
             this.invalidateLeafHandle(oldLeafKey)
           }
-        } else {
+        } else if (!this.carrySleptLeafHandle(oldLeafKey, nextLeaves)) {
           this.invalidateLeafHandle(oldLeafKey)
         }
       }
@@ -223,6 +227,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
     }
 
     this.terminalIdentity.replaceLeaves(nextLeaves)
+    this.pruneSleptLeafHandles()
     this.rebuildLeafPtyIndex()
     this.followExportedPaneKeys()
     this.reconcilePtyIncarnationHandles()
@@ -305,7 +310,6 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
       ) {
         throw new Error('Runtime graph publisher belongs to a superseded renderer generation')
       }
-      const agentOrchestrationByPaneKey = this.agentOrchestrationProjection.buildByPaneKey()
       const nativeChatLaunchDraftResolutions =
         this.getNativeChatLaunchDraftResolutionClientEventSnapshot().map(
           ({ tabId, text, createdAt }) => ({ tabId, text, createdAt })
@@ -315,7 +319,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
         ...(options?.includeAgentSenders === false || windowId === HEADLESS_RUNTIME_WINDOW_ID
           ? {}
           : this.agentSenderGraphReply(graph.agentSenderBase)),
-        ...(agentOrchestrationByPaneKey ? { agentOrchestrationByPaneKey } : {}),
+        ...this.orchestrationReply.since(graph.agentOrchestrationBase),
         ...(nativeChatLaunchDraftResolutions.length > 0
           ? { nativeChatLaunchDraftResolutions }
           : {}),

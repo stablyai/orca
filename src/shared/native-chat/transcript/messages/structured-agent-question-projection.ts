@@ -9,7 +9,7 @@ import { agentJournalLinkageFields } from '../../../agent-session/journal/agent-
 import type { NativeChatMessage } from '../../native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../../agent-session/view/structured-agent-session-projection'
 import { readAgentJournalTurn } from '../../../agent-session/lifecycle/records/agent-session-turn-record'
-import type { NativeChatResolvedPrompt } from '../../native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../input/questions/native-chat-resolution-receipt'
 
 type Projection = { message: NativeChatMessage | null; questionKey: string | null }
 type ItemProjector = (item: AgentJournalRenderItem) => NativeChatMessage | null

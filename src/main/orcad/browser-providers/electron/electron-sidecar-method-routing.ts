@@ -1,6 +1,7 @@
 export const TARGETLESS_BROWSER_METHODS: Record<string, true> = {
   browserProfileClearGoogleCookies: true,
   browserProfileClearDefaultCookies: true,
+  browserProfileClearCookies: true,
   browserProfileCreate: true,
   browserProfileDelete: true,
   browserProfileDetectBrowsers: true,
@@ -10,21 +11,23 @@ export const TARGETLESS_BROWSER_METHODS: Record<string, true> = {
   browserTabList: true
 }
 
+// RPC names that don't follow from the command name.
+const RUNTIME_METHOD_NAMES: Record<string, string> = {
+  browserOpenUrlOnClient: 'browser.openUrl',
+  browserProceedCertificate: 'browser.certificate.proceed',
+  browserSetViewport: 'browser.viewport',
+  browserSetGeolocation: 'browser.geolocation',
+  browserConsoleLog: 'browser.console',
+  browserNetworkLog: 'browser.network'
+}
+
 export function electronSidecarRuntimeMethodName(browserMethod: string): string {
-  if (browserMethod === 'browserOpenUrlOnClient') {
-    return 'browser.openUrl'
+  const named = RUNTIME_METHOD_NAMES[browserMethod]
+  if (named) {
+    return named
   }
   const suffix = browserMethod.slice('browser'.length)
-  if (suffix === 'ProceedCertificate') {
-    return 'browser.certificate.proceed'
-  }
-  if (suffix === 'SetViewport') {
-    return 'browser.viewport'
-  }
-  if (suffix === 'SetGeolocation') {
-    return 'browser.geolocation'
-  }
-  for (const group of ['Cookie', 'Intercept', 'Capture'] as const) {
+  for (const group of ['Cookie', 'Intercept', 'Capture', 'Grab'] as const) {
     if (suffix.startsWith(group)) {
       const action = suffix.slice(group.length)
       return `browser.${group.toLowerCase()}.${action[0].toLowerCase()}${action.slice(1)}`

@@ -1,3 +1,4 @@
+import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
 import { getWorkerTerminalAutoReleaseScheduler } from '../terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { OrchestrationDb } from './orchestration-db'
 import { OrchestrationDbMaintenance } from './maintenance/orchestration-db-maintenance'
@@ -6,6 +7,7 @@ import { structuredWorkerIdentityFromRow } from '../terminal-authority/structure
 import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
 import { committedHandBackTypes, type MailHandBack } from './messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'
+import { structuredMailboxCustody } from '../mailbox/routing/structured-session-mail-target'
 import { closeOrphanedTerminalApprovals } from '../workers/approvals/terminal-approval-orphans'
 import { OrcaRuntimeWithAutomationApiOperations } from '../../workspaces/persisted-surfaces/automation-api-operations'
 
@@ -18,6 +20,13 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   ): void
 
   protected abstract scheduleRestoredMessageRepoints(): void
+  protected abstract publishSleepingMail(scope?: { mailboxes?: Iterable<string> }): void
+  protected abstract owesAnySleepingMail(): boolean
+
+  abstract hasLiveTerminalForPaneKey(
+    paneKey: string,
+    context?: TerminalIdentityReadContext
+  ): boolean
 
   /** Mail a worker left unread when it reported before a restart still continues it. */
   protected abstract continueRestoredWorkerMail(db: OrchestrationDb): void
@@ -27,8 +36,14 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
     if (!this._orchestrationDb) {
       const db = new OrchestrationDb(this.orchestrationDbPath())
       this._orchestrationDb = db
-      this.orchestrationDbMaintenance = new OrchestrationDbMaintenance(db, (dispatchId) =>
-        isReleasedChatReadable(db, dispatchId)
+      this.orchestrationDbMaintenance = new OrchestrationDbMaintenance(
+        db,
+        (dispatchId) => isReleasedChatReadable(db, dispatchId),
+        {
+          isLiveHandle: (handle) => this.isLiveOrchestrationHandle(handle),
+          isLivePane: (paneKey) => this.hasLiveTerminalForPaneKey(paneKey),
+          waitedMailboxes: () => this.messageWaiters.map.keys()
+        }
       )
       this.orchestrationDbMaintenance.start()
       this.bindMailHandBack(this._orchestrationDb)
@@ -65,7 +80,24 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
     this.bindWorkerTerminalAutoRelease(db)
   }
 
+  /** Whether anyone can still read this mailbox: a waiter, an open terminal or a reachable chat. */
+  private isLiveOrchestrationHandle(handle: string): boolean {
+    return (
+      this.messageWaiters.has(handle) ||
+      this.orchestrationMailboxDeliveryTarget.reachesOpenTerminal(handle) ||
+      structuredMailboxCustody(handle, this._orchestrationDb) !== 'elsewhere'
+    )
+  }
+
   private bindMailHandBack(db: OrchestrationDb): void {
+    db.mailReadListener = (mailboxes) =>
+      queueMicrotask(() => {
+        if (this._orchestrationDb === db) {
+          this.publishSleepingMail({ mailboxes })
+        }
+      })
+    // Nobody asleep: a read can release no sleeping-mail hold, so it costs nothing extra.
+    db.mailReadWanted = () => this.owesAnySleepingMail()
     db.mailHandBackListener = (handBack) => this.offerHandedBackMail(db, handBack)
   }
 

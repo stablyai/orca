@@ -5,12 +5,26 @@ import { parseMessageTypes } from '../routing'
 import { checkRunMailbox } from './check-run'
 import { checkWorkerMailbox } from './check-worker'
 import { checkDirectMailbox } from './check-direct'
+import { withOwnDirectMail } from './check-own-direct-mail'
 import { CheckMailReconciliation } from './check-mail-reconciliation'
-import { checkedMailboxes, handsOverBatch, withReportFollowUps } from './mailbox-message-receipt'
+import { callerMailTaker } from '../../../../orchestration/db/messages/mail-taker'
+import {
+  checkedMailboxes,
+  handsOverBatch,
+  withReplyFollowUps,
+  withReportItems
+} from './mailbox-message-receipt'
 import { withRunCheckNext } from '../receipt-next'
-import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
-import { hasRunBindingKey } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import {
+  ORCHESTRATION_UNBOUND_RUN_ID,
+  orchestrationSkillRecoveryData
+} from '../../../../../../shared/orchestration/orchestration-rpc-contract'
+import {
+  hasRunBindingKey,
+  sessionCallerOf
+} from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
+import { resolveWorkerReporterIdentity } from '../../../../orchestration/workers/reports/reminted-worker-reporter'
 import {
   callerHoldsDispatchPane,
   dispatchFenced,
@@ -45,30 +59,65 @@ export const ORCHESTRATION_CHECK_METHODS = [
       const handle = params.terminal ?? 'unknown'
       const typeFilter = parseMessageTypes(params.types)
 
+      // A restart can reissue a surviving worker PTY's handle; the woken worker still checks with its env
+      // handle. Recover it by the Dispatch's exact recorded incarnation, as its ask and reports were.
+      const reporter = resolveWorkerReporterIdentity(runtime, db, {
+        from: handle,
+        authority: undefined,
+        hasSessionCaller: Boolean(orchestrationCaller),
+        evidence: orchestrationCompatibilityEvidence
+      })
       const caller = orchestrationCallerIdentity(runtime, {
         handle,
         session: orchestrationCaller,
         // Why: a live runtime handle is authoritative; pane metadata is only the restart fallback.
-        paneKey: runtime.getTerminalPaneKey(handle) ?? params.terminalPaneKey
+        paneKey: reporter.paneKey ?? params.terminalPaneKey
       })
       const paneKey = caller.paneKey ?? undefined
       const boundRun = hasRunBindingKey(caller) ? db.getCurrentRunForCoordinator(caller) : undefined
       const consumingCheck = params.peek !== true && params.all !== true && params.unread !== false
+      const reader = sessionCallerOf(orchestrationCaller)
       // Mail this check takes may still wait as a card in a chat's queue; that card must not run too.
-      const releasing = <T>(result: T): T => {
+      // The item line is read for this answer only; the check's recorded receipt never holds it.
+      const releasing = <T>(result: T): Promise<T> => {
         if (consumingCheck && params.ack && !params.wait) {
           runtime.withdrawStaleChatMail(checkedMailboxes(result))
         }
-        return consumingCheck && !(params.ack && !params.wait)
-          ? result
-          : withReportFollowUps(db, result)
+        return withReportItems(
+          runtime,
+          db,
+          consumingCheck && !(params.ack && !params.wait)
+            ? result
+            : withReplyFollowUps(runtime, db, reader, result)
+        )
       }
+      // A known worker's stale handle that exact recovery refused must not fall back to a by-handle or
+      // pane lookup, Run binding included: that could read its replaced Dispatch's mail, or a successor's
+      // instructions and Run mail in the same pane.
+      if (reporter.unrecoveredStaleWorker()) {
+        throw new OrchestrationError(
+          'dispatch_inactive',
+          `Terminal ${handle} no longer names a terminal, and its recorded worker process could not be recovered. Nothing was read.`
+        )
+      }
+      const { recovered } = reporter
+      // A recovered caller stays the exact Dispatch and process it was recovered as, at entry and after waits.
+      const recoveredLocalProcessCurrent = recovered
+        ? () =>
+            db.isDispatchProcessCurrent({
+              dispatchId: recovered.dispatchId,
+              paneKey: recovered.paneKey,
+              processIncarnation: reporter.processIncarnation()
+            })
+        : undefined
       const livePane = runtime.getTerminalPaneKey(handle)
       const process = runtime.getTerminalProcessIncarnation(handle)
+      // A recovered caller's stale handle names no terminal, so its recovered process is re-proved instead.
       const revalidateCaller = () => {
         if (
           runtime.getTerminalPaneKey(handle) !== livePane ||
-          runtime.getTerminalProcessIncarnation(handle) !== process
+          runtime.getTerminalProcessIncarnation(handle) !== process ||
+          (recovered && reporter.processIncarnation() === null)
         ) {
           throw new OrchestrationError(
             'consumer_fenced',
@@ -76,9 +125,16 @@ export const ORCHESTRATION_CHECK_METHODS = [
           )
         }
       }
-      const reconciliation = new CheckMailReconciliation(runtime, db, signal)
+      // run_unbound is the id the caller's own direct mail (bot item mail) carries, not a Run.
+      const unboundOnly = params.run === ORCHESTRATION_UNBOUND_RUN_ID
+      const reconciliation = new CheckMailReconciliation(
+        runtime,
+        db,
+        callerMailTaker(caller),
+        signal
+      )
       try {
-        if (params.run || boundRun) {
+        if (!unboundOnly && (params.run || boundRun)) {
           const result = await checkRunMailbox({
             params,
             runtime,
@@ -93,12 +149,32 @@ export const ORCHESTRATION_CHECK_METHODS = [
             orchestrationCompatibilityEvidence,
             recordMutationReceipt,
             reconciliation,
-            revalidateCaller
+            reader,
+            revalidateCaller,
+            recovered,
+            processIncarnation: reporter.processIncarnation,
+            recoveredLocalProcessCurrent
           })
-          return releasing(
+          const answer =
             consumingCheck && !(params.ack && !params.wait) && !handsOverBatch(result)
               ? await withRunCheckNext(runtime, result)
               : result
+          return await releasing(
+            !params.run && boundRun && consumingCheck && !params.ack && !params.wait
+              ? await withOwnDirectMail({
+                  runtime,
+                  db,
+                  reader,
+                  handle,
+                  runId: boundRun.id,
+                  typeFilter,
+                  format: params.format === true || params.inject === true,
+                  reconciliation,
+                  revalidate: revalidateCaller,
+                  record: recordMutationReceipt,
+                  result: answer
+                })
+              : answer
           )
         }
 
@@ -107,23 +183,31 @@ export const ORCHESTRATION_CHECK_METHODS = [
         if (activeDispatch && !callerHoldsDispatchPane(activeDispatch, paneKey)) {
           throw dispatchFenced()
         }
+        if (
+          activeDispatch &&
+          recovered &&
+          (activeDispatch.id !== recovered.dispatchId || !recoveredLocalProcessCurrent?.())
+        ) {
+          throw dispatchFenced()
+        }
         const remoteAttachment =
           !activeDispatch && paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
         if (
           remoteAttachment &&
-          !db.isRemoteAttachmentProcessCurrent({
-            dispatchId: remoteAttachment.dispatch_id,
-            paneKey: paneKey ?? null,
-            processIncarnation: runtime.getTerminalProcessIncarnation(handle)
-          })
+          ((recovered && remoteAttachment.dispatch_id !== recovered.dispatchId) ||
+            !db.isRemoteAttachmentProcessCurrent({
+              dispatchId: remoteAttachment.dispatch_id,
+              paneKey: paneKey ?? null,
+              processIncarnation: reporter.processIncarnation()
+            }))
         ) {
           throw new OrchestrationError(
             'dispatch_inactive',
             `Dispatch ${remoteAttachment.dispatch_id} is no longer attached to this worker process.`
           )
         }
-        if (activeDispatch || remoteAttachment) {
-          return releasing(
+        if ((activeDispatch || remoteAttachment) && !unboundOnly) {
+          return await releasing(
             await checkWorkerMailbox({
               params,
               runtime,
@@ -134,8 +218,12 @@ export const ORCHESTRATION_CHECK_METHODS = [
               signal,
               activeDispatch,
               remoteAttachment,
+              processIncarnation: reporter.processIncarnation,
+              recoveredLocalProcessCurrent,
+              recovered,
               recordMutationReceipt,
               reconciliation,
+              reader,
               revalidateCaller,
               acknowledgeOnly: !params.wait
             })
@@ -154,20 +242,22 @@ export const ORCHESTRATION_CHECK_METHODS = [
             orchestrationSkillRecoveryData()
           )
         }
-        return releasing(
+        return await releasing(
           await checkDirectMailbox({
-            params,
+            params: unboundOnly ? { ...params, run: undefined } : params,
+            ...(unboundOnly ? { runId: ORCHESTRATION_UNBOUND_RUN_ID } : {}),
             runtime,
             db,
             handle,
             typeFilter,
             signal,
             reconciliation,
+            reader,
             recordMutationReceipt,
             revalidateConsumer: () => {
               revalidateCaller()
               if (
-                db.getCurrentRunForCoordinator(caller) ||
+                (!unboundOnly && db.getCurrentRunForCoordinator(caller)) ||
                 db.getActiveDispatchForIdentity(handle, paneKey) ||
                 (paneKey && db.findActiveRemoteAttachmentForPane(paneKey))
               ) {

@@ -36,7 +36,7 @@ import { releaseStructuredWorkerSession } from './orchestration-structured-worke
 import {
   closeStructuredAgentSessionChild,
   type StructuredSessionSurfaceRuntime
-} from '../../../../agent-session/structured-agent-session-close'
+} from '../../../../agent-session/lifecycle/structured-agent-session-close'
 import {
   chatAssigneeJournal,
   type StructuredJournalSource
@@ -58,6 +58,8 @@ export type StructuredWorkerStopOutcome = {
   /** Whether a close was actually issued; the receipt's `processAction` may claim nothing more. */
   closeAttempted: boolean
   reason?: string
+  /** Its agent was still starting: settles when that start ends (see closeStructuredAgentSessionChild). */
+  whenStartEnds?: Promise<boolean>
 }
 
 /** Prove stop by observing no host-held session and no live lease after close; void close alone proves nothing.
@@ -71,6 +73,8 @@ export async function stopStructuredWorker(
   const closed = new Set<string>()
   // Any close this stop issued, so a later session's failure cannot erase an earlier close.
   let closeAttempted = false
+  // Why a stop settled without a proven exit, such as a start it cancelled.
+  let stoppedReason: string | undefined
   for (;;) {
     let sessionId: string
     try {
@@ -81,7 +85,7 @@ export async function stopStructuredWorker(
       return { stopped: false, closeAttempted, reason }
     }
     if (closed.has(sessionId)) {
-      return { stopped: true, closeAttempted }
+      return { stopped: true, closeAttempted, ...(stoppedReason ? { reason: stoppedReason } : {}) }
     }
     closed.add(sessionId)
     const outcome = await closeStructuredAgentSessionChild(sessionId, {
@@ -94,6 +98,7 @@ export async function stopStructuredWorker(
     if (!outcome.stopped) {
       return { ...outcome, closeAttempted }
     }
+    stoppedReason ??= outcome.reason
   }
 }
 

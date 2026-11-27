@@ -23,6 +23,8 @@ export type BundledSkillLocation = {
   reason: BundledSkillLeaveReason | null
   /** Replace/--force may back up this location and install Orca’s copy. */
   replaceable: boolean
+  /** What the host saw at `path`; Replace moves this whole object, so copy may only promise what it holds. */
+  observedKind: BundledSkillOp['observed']['kind']
 }
 
 const OP_STATE: Readonly<Record<string, BundledSkillLocationState>> = {
@@ -46,6 +48,13 @@ export function collapseHomePath(path: string, homeDirectory: string): string {
     return `~${path.slice(home.length)}`
   }
   return path
+}
+
+/** The host-side folder where Replace and the executor move old copies, in the home's own separator. */
+export function skillBackupDirectory(homeDirectory: string): string {
+  const separator = /^[a-z]:[\\/]|^\\\\/iu.test(homeDirectory) ? '\\' : '/'
+  const home = homeDirectory.replace(/[\\/]+$/u, '')
+  return [home, '.agents', '.orca-skill-backups'].join(separator)
 }
 
 function agentNames(agents: readonly string[]): string[] {
@@ -72,6 +81,7 @@ export function bundledSkillLocation(
       op.role === 'shared' ? { kind: 'shared' } : { kind: 'agents', names: agentNames(op.agents) },
     state,
     reason: op.reason && isBundledSkillLeaveReason(op.reason) ? op.reason : null,
-    replaceable: (op.kind === 'leave' && op.replaceable === true) || op.kind === 'replace'
+    replaceable: (op.kind === 'leave' && op.replaceable === true) || op.kind === 'replace',
+    observedKind: op.observed.kind
   }
 }

@@ -32,9 +32,10 @@ CREATE TABLE IF NOT EXISTS peer_run_corrections (
 );
 
 CREATE TABLE IF NOT EXISTS message_dispatch_provenance (
-  message_id  TEXT PRIMARY KEY,
-  dispatch_id TEXT NOT NULL,
-  task_id     TEXT NOT NULL
+  message_id      TEXT PRIMARY KEY,
+  dispatch_id     TEXT NOT NULL,
+  task_id         TEXT NOT NULL,
+  sender_snapshot TEXT
 );
 `
 
@@ -45,7 +46,9 @@ CREATE VIEW peer_run_dispatch_state AS
 SELECT d.id AS dispatch_id, pr.conversation_id, pr.home_run_id, pr.run_id AS peer_run_id,
   json_object(
     'id', d.id, 'taskId', d.task_id, 'status', d.status, 'workerState', w.state,
-    'lastFailure', d.last_failure, 'agent', json_extract(w.start_options, '$.agent')
+    'lastFailure', d.last_failure, 'agent', json_extract(w.start_options, '$.agent'),
+    'worktreeId', w.worktree_id, 'creatorDispatchId', d.creator_dispatch_id,
+    'followUpOf', d.follow_up_of_dispatch_id
   ) AS dispatch_json,
   json_object('status', t.status, 'result', t.result) AS task_json
 FROM dispatch_contexts d
@@ -93,7 +96,7 @@ export function peerRunDispatchStateStatements(
   )
 }
 
-/** A message filed in a peer Run's mailbox, once, with the Dispatch its sender worked for. */
+/** A message filed in a peer Run's mailbox, once, with its sender's Dispatch only when that Dispatch is this Run's. */
 function peerRunMailStatements(row: string): [string, string] {
   return queueItemStatements(
     `SELECT pr.conversation_id, ${row}.id AS message_id,
@@ -103,12 +106,13 @@ function peerRunMailStatements(row: string): [string, string] {
          'message', json_object(
            'from', ${row}.from_handle, 'type', ${row}.type, 'subject', ${row}.subject,
            'body', ${row}.body, 'payload', ${row}.payload, 'priority', ${row}.priority,
-           'threadId', ${row}.thread_id
+           'threadId', ${row}.thread_id, 'replyTo', ${row}.reply_to
          ),
          'dispatchId', p.dispatch_id, 'taskId', p.task_id
        ) AS payload
      FROM peer_runs pr
      LEFT JOIN message_dispatch_provenance p ON p.message_id = ${row}.id
+       AND p.dispatch_id IN (SELECT id FROM dispatch_contexts WHERE run_id = pr.run_id)
      WHERE ${row}.to_handle = 'run:' || pr.run_id
        AND NOT EXISTS (
          SELECT 1 FROM federation_relay_items

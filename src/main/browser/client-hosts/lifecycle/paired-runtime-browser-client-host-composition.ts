@@ -182,8 +182,8 @@ export class PairedRuntimeBrowserClientHostComposition<
     if (!this.closePromise) {
       throw new Error('paired_runtime_browser_client_host_composition_open')
     }
-    await this.closePromise
-    await this.deferredExecutorClose
+    // A failed close can still have page teardown running behind unsettled handlers.
+    await this.closePromise.finally(() => this.deferredExecutorClose)
   }
 
   private createHost(input: Start, requiresReconciliation: boolean): ComposedClientHost {

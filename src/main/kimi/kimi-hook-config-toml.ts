@@ -1,6 +1,7 @@
 // Preserve user TOML while managing marker blocks and positively recognized Orca hook tables.
 
 import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installation/configuration/hook-config-schema'
+import { isLoadableToml } from '../agent-hooks/installation/configuration/loadable-toml'
 import {
   findManagedTomlBlocks,
   findRecognizedManagedTables,
@@ -18,7 +19,8 @@ export const KIMI_HOOK_EVENTS = [
   'PostToolUseFailure',
   'PermissionRequest',
   'Stop',
-  'StopFailure'
+  'StopFailure',
+  'Interrupt'
 ] as const
 
 const MARKERS: ManagedTomlMarkers = {
@@ -142,20 +144,27 @@ function detectEol(configText: string): string {
   return configText.includes('\r\n') ? '\r\n' : '\n'
 }
 
+/**
+ * Text to write, or null to leave the file alone. installed is false when Orca's [[hooks]] would make
+ * Kimi reject the file (e.g. beside an inline `hooks = [...]`); the text then only drops Orca's own regions.
+ */
 export function applyManagedKimiHooks(
   configText: string,
   command: string,
   isManagedCommand: ManagedCommandMatcher
-): string {
+): { text: string; installed: boolean } | null {
   const eol = detectEol(configText)
-  const withoutManaged = stripManagedTomlRegions(
-    configText,
-    findOwnedRegions(configText, isManagedCommand)
-  ).text.replace(/\s+$/, '')
+  const removed = removeManagedKimiHooks(configText, isManagedCommand)
+  const withoutManaged = removed.text.replace(/\s+$/, '')
   const block = buildManagedKimiHooksBlock(command, eol)
-  return withoutManaged.length > 0
-    ? `${withoutManaged}${eol}${eol}${block}${eol}`
-    : `${block}${eol}`
+  const next =
+    withoutManaged.length > 0 ? `${withoutManaged}${eol}${eol}${block}${eol}` : `${block}${eol}`
+  // A config already broken for other reasons still gets the block, as before, so hooks work once fixed.
+  if (isLoadableToml(next) || !isLoadableToml(withoutManaged)) {
+    return { text: next, installed: true }
+  }
+  // Older installs appended a block beside an inline hooks array (#49505); dropping it lets Kimi load again.
+  return removed.changed ? { text: removed.text, installed: false } : null
 }
 
 export function removeManagedKimiHooks(

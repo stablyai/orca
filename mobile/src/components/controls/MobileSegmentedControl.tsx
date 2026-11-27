@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Pressable,
   ScrollView,
@@ -10,15 +10,15 @@ import {
 } from 'react-native'
 import { triggerSelection } from '../../platform/haptics/haptics'
 import { resolveTabStripScrollOffset } from './tab-strip-scroll'
-import { colors, concentricRadius, feedback, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-
+import { concentricRadius, feedback, radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 export type MobileSegment<Value extends string> = {
   value: Value
   label: string
   /** A longer spoken name where the short label leans on its surroundings. */
   accessibilityLabel?: string
+  /** Drawn after the label, e.g. a count with its dot. */
+  trailing?: ReactNode
 }
 
 type Props<Value extends string> = {
@@ -44,7 +44,7 @@ type Props<Value extends string> = {
 
 /** A pick-one pill control; each segment reads as a radio button, or as a tab with `tabs`. */
 export function MobileSegmentedControl<Value extends string>(props: Props<Value>) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const [trackWidth, setTrackWidth] = useState(0)
   const scrollRef = useRef<ScrollViewInstance>(null)
   const scrollX = useRef(0)
@@ -115,9 +115,21 @@ export function MobileSegmentedControl<Value extends string>(props: Props<Value>
           pressed && !active && styles.segmentPressed
         ]}
       >
-        <Text style={[styles.segmentText, active && styles.segmentTextActive]} numberOfLines={1}>
-          {segment.label}
-        </Text>
+        {segment.trailing ? (
+          <View style={styles.segmentRow}>
+            <Text
+              style={[styles.segmentText, active && styles.segmentTextActive]}
+              numberOfLines={1}
+            >
+              {segment.label}
+            </Text>
+            {segment.trailing}
+          </View>
+        ) : (
+          <Text style={[styles.segmentText, active && styles.segmentTextActive]} numberOfLines={1}>
+            {segment.label}
+          </Text>
+        )}
       </Pressable>
     )
   })
@@ -176,7 +188,7 @@ function segmentSpan(
   return span && { ...span, contentWidth: left + TRACK_INSET }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   segmented: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -191,6 +203,7 @@ const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     borderRadius: concentricRadius(radii.control, TRACK_INSET)
   },
+  segmentRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   segmentFill: { flex: 1, alignItems: 'center', paddingHorizontal: spacing.xs },
   segmentCrowdable: { flexGrow: 1, alignItems: 'center', paddingHorizontal: spacing.xs },
   // The inset sits on the content, so segments scroll out under the track's rounded edge.

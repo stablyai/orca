@@ -22,15 +22,15 @@ type PasteTerminalClipboardDeps = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   saveClipboardImageAsTempFile: SaveClipboardImageAsTempFile
   copiedFiles?: TerminalClipboardCopiedFiles
-  pasteText: (
-    text: string,
-    options?: TerminalPasteTextOptions
-  ) => boolean | void | Promise<boolean | void>
+  /** Paths from a DOM paste event; Chromium reads CF_HDROP-only copies (e.g. Zoom) that main cannot. */
+  eventCopiedFilePaths?: string[]
+  pasteText: (text: string, options?: TerminalPasteTextOptions) => boolean | Promise<boolean>
   connectionId?: string | null
   runtimeEnvironmentId?: string | null
   protectedMultilineTextPasteOptions?: TerminalPasteTextOptions
   onTextPasteError?: (error: unknown) => void
   onImagePasteError?: (error: unknown) => void
+  onLocalImagePasted?: (filePath: string) => void
 }
 
 export type TerminalClipboardPasteResult =
@@ -50,12 +50,14 @@ export async function pasteTerminalClipboard({
   readClipboardText,
   saveClipboardImageAsTempFile,
   copiedFiles,
+  eventCopiedFilePaths = [],
   pasteText,
   connectionId,
   runtimeEnvironmentId,
   protectedMultilineTextPasteOptions,
   onTextPasteError,
-  onImagePasteError
+  onImagePasteError,
+  onLocalImagePasted
 }: PasteTerminalClipboardDeps): Promise<TerminalClipboardPasteResult> {
   let text = ''
   // File-manager copies carry the file names as text; read the file list beside it.
@@ -69,7 +71,9 @@ export async function pasteTerminalClipboard({
     }
     // Image-only clipboards can reject text reads; still try the screenshot path.
   }
-  const copiedFilePaths = await copiedFilePathsRead
+  const mainCopiedFilePaths = await copiedFilePathsRead
+  const copiedFilePaths =
+    mainCopiedFilePaths.length > 0 ? mainCopiedFilePaths : eventCopiedFilePaths
   // Unlabelled files beside a picture (screenshot tools, Windows image files) keep the image path.
   if (
     copiedFiles &&
@@ -86,7 +90,7 @@ export async function pasteTerminalClipboard({
       const result = await (protectedMultilineTextPasteOptions
         ? pasteText(text, protectedMultilineTextPasteOptions)
         : pasteText(text))
-      if (result === false) {
+      if (result !== true) {
         return { status: 'skipped', reason: 'text-paste-rejected' }
       }
       return { status: 'pasted', kind: 'text' }
@@ -106,8 +110,11 @@ export async function pasteTerminalClipboard({
       forceBracketedPaste: true,
       recoverImagePasteWebglAtlas: true
     })
-    if (result === false) {
+    if (result !== true) {
       return { status: 'skipped', reason: 'image-paste-rejected' }
+    }
+    if (!connectionId && !runtimeEnvironmentId) {
+      onLocalImagePasted?.(filePath)
     }
     return { status: 'pasted', kind: 'image-path' }
   } catch (error) {

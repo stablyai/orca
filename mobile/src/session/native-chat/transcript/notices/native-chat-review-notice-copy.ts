@@ -1,4 +1,4 @@
-import type { NativeChatNoticeLook } from '../../../../../../src/shared/native-chat/native-chat-notice'
+import type { NativeChatNoticeLook } from '../../../../../../src/shared/native-chat/transcript/notices/native-chat-notice'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 
 type ReviewLook = Extract<

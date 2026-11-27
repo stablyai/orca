@@ -1,5 +1,5 @@
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
-import { setBoundedScopeCacheEntry } from '../../../../../../../shared/native-chat/native-chat-scope-cache'
+import { setBoundedScopeCacheEntry } from '../../../../../../../shared/native-chat/input/composer/native-chat-scope-cache'
 import {
   NATIVE_CHAT_PENDING_SEND_LIMIT,
   type NativeChatPendingSend
@@ -54,11 +54,6 @@ export function appendPendingSendCache(
   )
   const next = assignNativeChatPendingOccurrence(existing, entry)
   return writePendingSendCache(scope, [...existing, next])
-}
-
-export function clearPendingSendCacheForTests(): void {
-  pendingSendCache.clear()
-  pendingSendCounter = 0
 }
 
 // Synthetic launch ids never match real turns; reconcile normalized user text instead.

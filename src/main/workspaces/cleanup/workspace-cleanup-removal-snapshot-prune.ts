@@ -127,12 +127,3 @@ export async function finishWorkspaceCleanupRemovalSnapshotPruneBatch(
   }
   await finalizeBatch(snapshotDirectory, batch)
 }
-
-export function resetWorkspaceCleanupRemovalSnapshotPruneBatchesForTests(): void {
-  for (const batch of batches.values()) {
-    if (batch.expirationTimer) {
-      clearTimeout(batch.expirationTimer)
-    }
-  }
-  batches.clear()
-}

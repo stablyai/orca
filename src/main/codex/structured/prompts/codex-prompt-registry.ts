@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import type { AcpRequestPresentation } from '../../../acp/acp-dialects/acp-dialect'
+import { codexMcpFormPresentation } from './codex-mcp-form-elicitation'
 import {
   codexMcpToolApprovalDecisions,
   isCodexMcpToolApproval,
@@ -41,6 +43,9 @@ export type CodexPendingPrompt = {
   answers: Map<string, string>
   /** Set when the request limits the decisions, so an unoffered one is refused. */
   offeredDecisions?: readonly CodexMcpToolApprovalDecision[]
+  /** Set for an MCP server's form: turns the card's answers into Codex's reply. */
+  formReply?: AcpRequestPresentation['reply']
+  formBytes?: number
 }
 
 export type CodexAbandonedCommand = { threadId: string; itemId: string }
@@ -67,11 +72,13 @@ export function isCodexPromptMethod(method: string): boolean {
 /** A fresh registry id fences elicitation request ids reused after app-server restart. */
 function readPromptItemId(
   request: { id: number | string; method: string; params: unknown },
-  registryId: string
+  registryId: string,
+  isForm: boolean
 ) {
   if (request.method === CODEX_MCP_ELICITATION_METHOD) {
-    // Turn-less approvals escape turn stop and cleanup, so they keep the safe decline.
-    return isCodexMcpToolApproval(request.params) && readString(request.params, 'turnId')
+    // Turn-less elicitations escape turn stop and cleanup, so they keep the safe decline.
+    return (isForm || isCodexMcpToolApproval(request.params)) &&
+      readString(request.params, 'turnId')
       ? `mcp-elicitation:${registryId}:${request.id}`
       : null
   }
@@ -100,7 +107,11 @@ export class CodexPromptRegistry {
     method: string
     params: unknown
   }): CodexPendingPrompt | null {
-    const codexItemId = readPromptItemId(request, this.registryId)
+    const form =
+      request.method === CODEX_MCP_ELICITATION_METHOD
+        ? codexMcpFormPresentation(request.params)
+        : null
+    const codexItemId = readPromptItemId(request, this.registryId, form !== null)
     const threadId = readString(request.params, 'threadId')
     if (!isCodexPromptMethod(request.method) || !codexItemId || !threadId) {
       return null
@@ -132,9 +143,17 @@ export class CodexPromptRegistry {
       promptKey: isMcpElicitation
         ? codexItemId
         : (readString(request.params, 'approvalId') ?? codexItemId),
-      ...(isMcpElicitation
-        ? { offeredDecisions: codexMcpToolApprovalDecisions(request.params) }
-        : {}),
+      ...(form
+        ? {
+            formReply: form.reply,
+            formBytes: Buffer.byteLength(
+              JSON.stringify(readRecord(request.params).requestedSchema),
+              'utf8'
+            )
+          }
+        : isMcpElicitation
+          ? { offeredDecisions: codexMcpToolApprovalDecisions(request.params) }
+          : {}),
       questionIds,
       questionIdAliases:
         request.method === CODEX_USER_INPUT_METHOD
@@ -285,7 +304,7 @@ export class CodexPromptRegistry {
   }
 
   private kind(prompt: CodexPendingPrompt): 'approval' | 'question' {
-    return prompt.method === CODEX_USER_INPUT_METHOD ? 'question' : 'approval'
+    return prompt.method === CODEX_USER_INPUT_METHOD || prompt.formReply ? 'question' : 'approval'
   }
 
   private retainedPromptBytes(): number {

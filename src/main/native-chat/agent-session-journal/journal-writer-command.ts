@@ -3,7 +3,7 @@ import type { JournalSendAdmission } from './journal-send-admission'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { AgentSessionQueuedMessageMoveAnchor } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import type { AgentSessionProviderContextBoundary } from '../../../shared/agent-session/agent-session-provider-context'
+import type { AgentSessionProviderContextBoundary } from '../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import type {
   AgentJournalEpochReason,
   JournalEpochRow,
@@ -44,6 +44,9 @@ import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lif
 import type { JournalRewindCut } from './journal-domain-rewind-cut'
 
 /** The writer chooses the projection epoch; callers identify only their live open handle. */
+/** A fence recovers the last run's obligations; `keptWriter`: its writer still runs, so nothing is settled. */
+export type JournalOpenRecovery = { fence: number } | 'keptWriter'
+
 export type JournalWriterTarget = { sessionId: string; epoch: string; ownerToken: string }
 
 export type JournalWriterCoreOperation =
@@ -78,6 +81,8 @@ export type JournalWriterCommand = {
   facts?: JournalWriterHostFacts
   /** The host's clock at admission, so host-staged receipts agree with the row's time. */
   savedAt?: number
+  /** Scheduling only: the chat has a send in flight, so this write goes ahead of bulk work. */
+  urgent?: true
 }
 
 export type JournalWriterInputOperation =
@@ -102,7 +107,7 @@ export type JournalWriterInputOperation =
         messageId: string
         body: AgentJournalMessageItem
         requireAttachments?: true
-        holdReason?: QueuedMessageHoldReason
+        holdReason?: string
         options?: AgentSessionExecutionOptions
         deliveryMode?: 'queue' | 'steer'
         unattended?: boolean
@@ -112,6 +117,7 @@ export type JournalWriterInputOperation =
   | { kind: 'queue-hold'; messageIds: readonly string[]; reason: QueuedMessageHoldReason }
   | { kind: 'queue-withdraw'; messageIds: readonly string[] }
   | { kind: 'queue-move'; input: { messageId: string } & AgentSessionQueuedMessageMoveAnchor }
+  | { kind: 'queue-steer'; messageId: string }
   | { kind: 'queue-reopen-mark'; fence: number; since?: number }
   | { kind: 'pending-unknown'; fence: number; reason?: string }
   | { kind: 'pending-reject'; fence: number; rejection: AgentJournalDispatchRejection }
@@ -141,7 +147,7 @@ export type JournalWriterInputOperation =
       body: AgentJournalMessageItem
       options: JournalItemAppendOptions
     }
-  | { kind: 'open'; recover?: { fence: number } }
+  | { kind: 'open'; recover?: JournalOpenRecovery }
   | JournalWriterContextOperation
   | JournalWriterSettlementOperation
 

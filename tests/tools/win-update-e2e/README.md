@@ -212,3 +212,16 @@ powershell -File tests/tools/win-update-e2e/window-enum.ps1
   lines containing `FATAL`. Suppressed exceptions are only counted.
 - The harness assumes the packaged main honors `ORCA_E2E_USER_DATA_DIR` to
   relocate userData; verify this against a real packaged build.
+
+## Update scenario matrix (CI)
+
+`win-update-survival-e2e.yml` with `scenarios: true` builds this branch's installers (N, N+1, N+2,
+one with main's process check, one with the check trace) and runs `scenarios.mjs` plus two
+`run.mjs` passes on a disposable runner. Every update runs the real setup.exe as electron-updater
+does (`--updated /S`; `--force-run` is left out because it would start the app with the runner's
+real profile, so each step launches the installed app itself). It covers: a transitional update
+from a release, one leftover install-folder process (main's check vs this branch's), a fallback
+daemon in the install folder (`--daemon-fallback`), the relocated daemon surviving (`--updated`), a
+process the installer cannot end, two updates in a row, and a manual install with Orca running
+(the prompt is answered through `installer-dialog.ps1`). Results land in the
+`win-update-scenarios` artifact as `scenarios.md`/`scenarios.json` and the two harness logs.

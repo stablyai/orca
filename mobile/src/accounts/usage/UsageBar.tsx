@@ -1,17 +1,28 @@
 import { View, Text, ActivityIndicator, type StyleProp, type ViewStyle } from 'react-native'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, typography, type MobilePalette } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+
+import {
+  clampUsedPercent,
+  getDisplayedUsagePercentage,
+  type UsagePercentageDisplay
+} from '../../../../src/shared/agent-usage/display/usage-percentage-display'
+import { useUsagePercentageDisplay } from './usage-percentage-display-preference'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 import './usage-selectors'
 
-/** A meter's fill: the rounded, clamped percent and its consumption colour, shared by every usage meter. */
+/** A meter's fill: the shown percent (used or left) and its consumption colour, shared by every usage meter. */
 export function usageBarFill(
   usedPercent: number | null,
-  unavailable: boolean
-): { used: number | null; color: string } {
+  unavailable: boolean,
+  display: UsagePercentageDisplay,
+  colors: MobilePalette
+): { shown: number | null; color: string } {
   // Why: round then clamp so bar width, color, and label share one value (desktop parity).
-  const used = usedPercent == null ? null : Math.max(0, Math.min(100, Math.round(usedPercent)))
+  const used = usedPercent == null ? null : clampUsedPercent(usedPercent)
   // Why: same consumption bands as desktop barColor (green <60, amber <80, red ≥80).
   const color =
     unavailable || used == null
@@ -21,7 +32,25 @@ export function usageBarFill(
         : used >= 60
           ? colors.statusAmber
           : colors.statusGreen
-  return { used, color }
+  // Colour follows consumption either way, so a nearly empty remainder stays red (desktop parity).
+  return {
+    shown: usedPercent == null ? null : getDisplayedUsagePercentage(usedPercent, display),
+    color
+  }
+}
+
+/** "34%" when counting used, "66% left" when counting what remains, so a bare number stays unambiguous. */
+export function formatUsageBarValue(
+  shown: number | null,
+  display: UsagePercentageDisplay,
+  t: Translate
+): string {
+  if (shown == null) {
+    return '—'
+  }
+  return display === 'remaining'
+    ? t('accounts.usage.percentLeft', '{{value}}% left', { value: shown })
+    : `${shown}%`
 }
 
 // Match desktop/harness consumption meters: fresh empty/green, depleted full/red.
@@ -43,8 +72,11 @@ export function UsageBar({
   wideLabel?: boolean
   style?: StyleProp<ViewStyle>
 }) {
-  useMobileColorScheme()
-  const { used, color } = usageBarFill(usedPercent, unavailable)
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
+  const display = useUsagePercentageDisplay()
+  const { shown, color } = usageBarFill(usedPercent, unavailable, display, colors)
   return (
     <View style={[wideLabel ? styles.usageBarStack : styles.usageBarRow, style]}>
       <Text style={styles.usageLabel} numberOfLines={1}>
@@ -57,7 +89,7 @@ export function UsageBar({
               style={[
                 styles.usageFill,
                 {
-                  width: `${used ?? 0}%`,
+                  width: `${shown ?? 0}%`,
                   backgroundColor: color
                 }
               ]}
@@ -70,7 +102,9 @@ export function UsageBar({
               style={styles.usageSpinner}
             />
           ) : (
-            <Text style={styles.usageValue}>{unavailable || used == null ? '—' : `${used}%`}</Text>
+            <Text style={styles.usageValue}>
+              {formatUsageBarValue(unavailable ? null : shown, display, t)}
+            </Text>
           )}
         </View>
         {resetText ? (
@@ -83,7 +117,7 @@ export function UsageBar({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   usageBarRow: {
     flex: 1,
     flexDirection: 'row',
@@ -123,7 +157,7 @@ const styles = themedStyleSheet(() => ({
   usageValue: {
     fontSize: typography.metaSize,
     color: colors.textSecondary,
-    width: 36,
+    minWidth: 36,
     textAlign: 'right'
   },
   usageSpinner: {

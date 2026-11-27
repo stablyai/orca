@@ -5,6 +5,8 @@ export type CommitMessageAiModelCapability = {
   label: string
   thinkingLevels?: { id: string; label: string }[]
   defaultThinkingLevel?: string
+  /** The listing's own default, e.g. Codex's model/list default for the signed-in account. */
+  isDefault?: boolean
 }
 
 export type CommitMessageAiSettings = {

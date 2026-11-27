@@ -1,4 +1,5 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
+import { recomputeOn } from '../../../../hooks/recompute-on'
 import type { AgentSessionSlashCommand } from '../../../../../../src/shared/agent-session/agent-session-wire'
 import type { StructuredAgentId } from '../../../../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 
@@ -63,75 +64,82 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     sendStructured,
     sessionCommands
   } = args
-  const sendWithOutcome = useCallback(
-    async (
-      text: string,
-      images?: string[],
-      deadline?: number,
-      attachments?: readonly StructuredMobileSendAttachment[],
-      _sentAt?: number,
-      intent?: MobileNativeChatSendIntent
-    ): Promise<MobileNativeChatSendOutcome> => {
-      const origin = captureSendOrigin(text.trimEnd())
-      if (!origin) {
-        onSendError('Message not sent (disconnected)')
-        return 'rejected'
-      }
-      // A queued message never sat in the composer, so its send leaves the composer alone.
-      const queued = intent?.queued
-      const skills = queued ? [...queued.skills] : readMobileNativeChatPickedSkills(origin.draftKey)
-      if (!queued) {
-        clearDraftForSend(origin, text)
-      }
-      // Saved, journal id included, in the same write as the clear, so a kill mid-send can be checked against the journal.
-      const clientMessageId = structuredSessionOperationId()
-      const inFlightId = beginMobileNativeChatInFlightSend(origin, 'structured', text, {
-        clientMessageId,
-        command: intent?.goal === true || isSlashCommandDraft(text),
-        intent
-      })
-      const created: { clientMessageId?: string } = {}
-      const outcome = await sendStructured(text, images, deadline, attachments, skills, {
-        ...intent,
-        clientMessageId,
-        onCreated: (id) => {
-          created.clientMessageId = id
-          intent?.onCreated?.(id)
-        }
-      })
-      const handBack = () => {
-        if (queued) {
-          return
-        }
-        restoreRejectedDraft(origin, text)
-        restoreMobileNativeChatPickedSkills(origin.draftDestination, skills)
-      }
-      if (outcome === 'unknown' && created.clientMessageId) {
-        // Uncertain input stays an ordinary bubble until the journal records its id, else it returns to the composer.
-        holdUnconfirmed(created.clientMessageId, () => {
-          handBack()
-          intent?.onHandBack?.()
-          onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
-          settleMobileNativeChatInFlightSend(inFlightId)
-        })
-        return outcome
-      }
-      if (outcome === 'unknown') {
-        // A host command whose reply was lost minted no journal id; its text returns now, as a terminal chat's does.
-        settleMobileNativeChatInFlightSend(inFlightId)
-        if (queued) {
-          intent?.onHandBack?.()
-        } else {
-          restoreRejectedDraft(origin, text, { preserveConversationCommands: true })
-        }
-        return outcome
-      }
-      settleMobileNativeChatInFlightSend(inFlightId, outcome === 'rejected' ? 'kept' : 'sent')
-      if (outcome === 'rejected') {
-        handBack()
-      }
-      return outcome
-    },
+  const sendWithOutcome = useMemo(
+    () =>
+      recomputeOn(
+        [agent, sessionCommands],
+        () =>
+          async (
+            text: string,
+            images?: string[],
+            deadline?: number,
+            attachments?: readonly StructuredMobileSendAttachment[],
+            _sentAt?: number,
+            intent?: MobileNativeChatSendIntent
+          ): Promise<MobileNativeChatSendOutcome> => {
+            const origin = captureSendOrigin(text.trimEnd())
+            if (!origin) {
+              onSendError('Message not sent (disconnected)')
+              return 'rejected'
+            }
+            // A queued message never sat in the composer, so its send leaves the composer alone.
+            const queued = intent?.queued
+            const skills = queued
+              ? [...queued.skills]
+              : readMobileNativeChatPickedSkills(origin.draftKey)
+            if (!queued) {
+              clearDraftForSend(origin, text)
+            }
+            // Saved, journal id included, in the same write as the clear, so a kill mid-send can be checked against the journal.
+            const clientMessageId = structuredSessionOperationId()
+            const inFlightId = beginMobileNativeChatInFlightSend(origin, 'structured', text, {
+              clientMessageId,
+              command: intent?.goal === true || isSlashCommandDraft(text),
+              intent
+            })
+            const created: { clientMessageId?: string } = {}
+            const outcome = await sendStructured(text, images, deadline, attachments, skills, {
+              ...intent,
+              clientMessageId,
+              onCreated: (id) => {
+                created.clientMessageId = id
+                intent?.onCreated?.(id)
+              }
+            })
+            const handBack = () => {
+              if (queued) {
+                return
+              }
+              restoreRejectedDraft(origin, text)
+              restoreMobileNativeChatPickedSkills(origin.draftDestination, skills)
+            }
+            if (outcome === 'unknown' && created.clientMessageId) {
+              // Uncertain input stays an ordinary bubble until the journal records its id, else it returns to the composer.
+              holdUnconfirmed(created.clientMessageId, () => {
+                handBack()
+                intent?.onHandBack?.()
+                onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
+                settleMobileNativeChatInFlightSend(inFlightId)
+              })
+              return outcome
+            }
+            if (outcome === 'unknown') {
+              // A host command whose reply was lost minted no journal id; its text returns now, as a terminal chat's does.
+              settleMobileNativeChatInFlightSend(inFlightId)
+              if (queued) {
+                intent?.onHandBack?.()
+              } else {
+                restoreRejectedDraft(origin, text, { preserveConversationCommands: true })
+              }
+              return outcome
+            }
+            settleMobileNativeChatInFlightSend(inFlightId, outcome === 'rejected' ? 'kept' : 'sent')
+            if (outcome === 'rejected') {
+              handBack()
+            }
+            return outcome
+          }
+      ),
     [
       agent,
       captureSendOrigin,

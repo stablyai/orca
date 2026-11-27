@@ -108,6 +108,9 @@ function SplitNode({
       </div>
       <ResizeHandle
         direction={node.direction}
+        thin
+        avoidTabRows={isHorizontal && tabStrip === 'attached'}
+        layoutKey={node.second}
         onResizeStart={() => recordFeatureInteraction('terminal-panes')}
         onRatioChange={(nextRatio) =>
           ORCA_LAYOUT_OWNER_IS_MAIN

@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/class-names'
+import { keepPaneFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -30,7 +31,8 @@ export function DashboardAgentChildDisclosure({
     },
     [onToggleChildAgents]
   )
-  const stopMouseDown = useCallback((e: React.MouseEvent) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    keepPaneFocusPressProps.onMouseDown(e)
     e.stopPropagation()
   }, [])
   const stopKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -59,8 +61,9 @@ export function DashboardAgentChildDisclosure({
         variant="ghost"
         size="icon-xs"
         type="button"
+        {...keepPaneFocusPressProps}
         onClick={handleToggleChildren}
-        onMouseDown={stopMouseDown}
+        onMouseDown={handleMouseDown}
         onPointerDown={(event) => event.stopPropagation()}
         onKeyDown={stopKeyDown}
         data-agent-child-disclosure-button=""

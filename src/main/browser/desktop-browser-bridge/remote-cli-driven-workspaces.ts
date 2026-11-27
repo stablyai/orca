@@ -30,7 +30,3 @@ function isUnownedExtensionPage(webContentsId: number | undefined): boolean {
   const contents = webContentsId === undefined ? undefined : webContents.fromId(webContentsId)
   return Boolean(contents && !contents.isDestroyed() && parseChromeExtensionUrl(contents.getURL()))
 }
-
-export function resetRemoteCliDrivenWorkspacesForTests(): void {
-  drivenWorkspaceIds.clear()
-}

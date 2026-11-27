@@ -1,12 +1,12 @@
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Editor } from '@tiptap/react'
 import { Copy, Pencil, Unlink } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { addViewportSizeChangeListener } from '@/hooks/viewport-size-change-listener'
+import { addViewportSizeChangeListener } from '@/lib/window-activity/viewport-size-change-listener'
 import { isEditorAnchorVisible, observeAnchorAncestorVisibility } from './editor-anchor-visibility'
 
 export type LinkBubbleState = {
@@ -185,7 +185,9 @@ export function RichMarkdownLinkBubble({
   const t = useTranslate()
   const bubbleRef = useRef<HTMLDivElement | null>(null)
   const onDismissRef = useRef(onDismiss)
-  onDismissRef.current = onDismiss
+  useLayoutEffect(() => {
+    onDismissRef.current = onDismiss
+  })
 
   useEffect(() => {
     if (!anchorElement || !isEditorAnchorVisible(anchorElement)) {

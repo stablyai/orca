@@ -35,19 +35,12 @@ export function tokenTotal(value: unknown): number {
   return fields.reduce<number>((total, current) => total + numberValue(current), 0)
 }
 
-export function copilotModelMetricsTotal(value: unknown): number {
-  const metrics = asRecord(value)
-  if (!metrics) {
-    return 0
-  }
+export function copilotModelMetricsTotal(metrics: Record<string, unknown>): number {
   let total = 0
   for (const metric of Object.values(metrics)) {
-    const record = asRecord(metric)
-    const usage = asRecord(record?.usage)
-    if (!usage) {
-      continue
-    }
-    total += tokenTotal(usage)
+    const usage = asRecord(asRecord(metric)?.usage)
+    // inputTokens already includes cache reads and writes; outputTokens includes reasoning.
+    total += numberValue(usage?.inputTokens) + numberValue(usage?.outputTokens)
   }
   return total
 }

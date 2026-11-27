@@ -7,6 +7,7 @@ import { agentPickerArgumentsText } from './agent-launch-picker-authority'
 import { agentPickerEffectiveChoices } from './agent-launch-picker-effective-choices'
 import type { AgentPickerDraft, AgentPickerEntry } from './agent-launch-picker'
 import type { AgentChoicePatch } from '../choices/agent-launch-choices'
+import { agentPickerModels, withComposedParts } from './agent-launch-picker-catalog'
 import type { AgentPermissionChoice } from '../permissions/tui-agent-permission-choice'
 import { patchKeys, publishAccepted } from './agent-launch-picker-receipt'
 import {
@@ -127,6 +128,17 @@ export function acceptAgentPickerArguments(
   )
 }
 
+// The speed edit composes its model id from these, so it sees the parts the patch records.
+function composedChoices(draft: AgentPickerDraft, patch: AgentChoicePatch): Record<string, string> {
+  const options = { ...draft.choices.options }
+  for (const [id, value] of Object.entries(patch.options ?? {})) {
+    if (value !== null) {
+      options[id] = value
+    }
+  }
+  return options
+}
+
 /** One accepted breakdown feeds the full launch draft and the captured own-source writer. */
 export function applyAgentPickerEdit(
   entry: AgentPickerEntry,
@@ -171,9 +183,12 @@ export function applyAgentPickerEdit(
   if (edit.kind === 'accept-arguments') {
     return draft
   }
-  const patch: AgentChoicePatch =
+  const picked: AgentChoicePatch =
     edit.kind === 'choice'
-      ? edit.patch
+      ? edit.patch.options?.effort === TEXT_ACTION_DEFAULT_MODEL
+        ? // The Default level delegates effort, so the launch sends none and the agent picks.
+          { ...edit.patch, options: { ...edit.patch.options, effort: null } }
+        : edit.patch
       : edit.kind === 'permission'
         ? { permissionMode: edit.value }
         : edit.kind === 'speed'
@@ -192,16 +207,24 @@ export function applyAgentPickerEdit(
                           : null
                   }
                 }
-  const keys = new Set(patchKeys(patch))
   const source = agentPickerArgumentsText(entry, draft) ?? ''
   const visible = agentPickerPanelArguments(entry, draft)
   draft = { ...draft, literalKeys: visible.context.literalKeys }
   const catalog = getAgentSessionOptionLaunchCatalog(entry.agent)
-  const model = findCatalogModel(
-    catalog ?? { models: [], modelApply: {} },
-    visible.choices.model ?? ''
+  const modelOptions = visible.choices.model
+    ? (findCatalogModel(catalog ?? { models: [], modelApply: {} }, visible.choices.model)
+        ?.options ??
+      catalog?.unknownModelOptions ??
+      [])
+    : []
+  const patch = withComposedParts(
+    agentPickerModels(entry, draft.surface).find((row) => row.id === visible.choices.model),
+    visible.choices,
+    modelOptions,
+    picked
   )
-  const dependency = model?.options.some(
+  const keys = new Set(patchKeys(patch))
+  const dependency = modelOptions.some(
     (option) => keys.has(option.id) && option.apply.composedIntoModel
   )
   const result = reconcileAgentChoiceArgsDetailed({
@@ -227,7 +250,7 @@ export function applyAgentPickerEdit(
           (edit.kind === 'remove-chip' && (edit.key === 'fastMode' || edit.key === 'serviceTier'))
         ? (edit.kind === 'remove-chip' ? removeAgentPickerSpeed : editAgentPickerSpeed)(
             entry,
-            draft,
+            { ...draft, choices: { ...draft.choices, options: composedChoices(draft, patch) } },
             edit.key,
             patch.options![edit.key]!,
             visible.choices.model ?? edit.model

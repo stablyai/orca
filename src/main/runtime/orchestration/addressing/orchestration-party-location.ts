@@ -64,7 +64,7 @@ function locateTerminal(
   return { location: null, lost: 'terminal' }
 }
 
-/** Resolve assignee pane, handle or remote attachment; absence at a federated Run home never proves worker exit. */
+/** Resolve assignee pane, handle, remote attachment or placed worker; absence at a federated Run home never proves worker exit. */
 function locateDispatchAssignee(
   dispatchId: string,
   deps: PartyLocationDeps
@@ -78,10 +78,28 @@ function locateDispatchAssignee(
   const handle =
     (paneKey ? deps.terminalHandleForPaneKey(paneKey) : null) ??
     dispatch?.assignee_handle ??
-    remote?.terminal_handle
-  return handle && !handle.startsWith('dispatch:')
-    ? locateOrchestrationParty(handle, deps)
+    remote?.terminal_handle ??
+    (dispatch ? startingWorkerHandle(dispatchId, deps.db) : null)
+  if (handle && !handle.startsWith('dispatch:')) {
+    return locateOrchestrationParty(handle, deps)
+  }
+  // A worker started on a paired server has no assignee here; its terminal is that server's.
+  const federated = dispatch ? deps.db?.getFederatedDispatch(dispatchId) : undefined
+  return federated?.remote_terminal_handle
+    ? {
+        location: {
+          kind: 'terminal',
+          handle: federated.remote_terminal_handle,
+          environmentId: federated.environment_id
+        }
+      }
     : { location: null }
+}
+
+/** A starting worker gets its assignee only at hand-over; its placed terminal or chat is recorded first. */
+function startingWorkerHandle(dispatchId: string, db: OrchestrationDb | null): string | null {
+  const worker = db?.getWorkerDispatch(dispatchId)
+  return worker?.state === 'starting' ? worker.agent_terminal_handle : null
 }
 
 function locateSession(

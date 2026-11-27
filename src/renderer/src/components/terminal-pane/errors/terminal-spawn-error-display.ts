@@ -9,6 +9,7 @@ import {
   TERMINAL_PROCESS_LIMIT_HINT,
   TERMINAL_SPAWN_ISSUE_REQUEST
 } from '../../../../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
+import { withoutTerminalHostCapCounts } from '../../../../../shared/terminal/pty/lifecycle/terminal-host-cap-refusal'
 
 /** Swaps the host's English resource-limit hints for the viewer's locale. */
 export function localizeTerminalSpawnHints(error: string, t: Translate = translate): string {
@@ -25,7 +26,8 @@ export function localizeTerminalSpawnHints(error: string, t: Translate = transla
     TERMINAL_HOST_CAP_HINT
   )
   // Why a replacer: a translation containing `$&` would otherwise be read as a substitution.
-  return error
+  // The cap's counts are for agents; the toast keeps its translated hint.
+  return withoutTerminalHostCapCounts(error)
     .replaceAll(LEGACY_PTY_ALLOCATION_HINT, () => ptyAllocation)
     .replaceAll(PTY_ALLOCATION_HINT, () => ptyAllocation)
     .replaceAll(LEGACY_TERMINAL_PROCESS_LIMIT_HINT, () => processLimit)

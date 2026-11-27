@@ -4,6 +4,8 @@ import { glabHostnameArgs, glabRepoExecOptions } from '../projects/gitlab-projec
 import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import type { LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
 import type { ProjectRef } from '../projects/project-ref-parser'
+import { classifyGlabError } from '../requests/glab-error-classification'
+import { extractExecError } from '../../git/command-runner/process-capture/exec-error'
 
 /** Count unified hunks only; header-less agent diffs need the separate shared/native-chat-diff parser. */
 function countDiffLines(diff: string): { additions: number; deletions: number } {
@@ -32,7 +34,7 @@ function countDiffLines(diff: string): { additions: number; deletions: number } 
   return { additions, deletions }
 }
 
-function mapMRFile(raw: {
+type RawMRFile = {
   new_path?: string
   old_path?: string
   diff?: string
@@ -41,7 +43,9 @@ function mapMRFile(raw: {
   renamed_file?: boolean
   binary?: boolean
   too_large?: boolean
-}): GitLabMRFile {
+}
+
+function mapMRFile(raw: RawMRFile): GitLabMRFile {
   const diff = raw.diff ?? ''
   const counts = countDiffLines(diff)
   const status = raw.new_file
@@ -62,6 +66,11 @@ function mapMRFile(raw: {
   }
 }
 
+// Bound the visible snapshot to one page of GitLab's paginated diffs.
+const MR_FILES_PAGE_SIZE = 100
+// GitLab before 15.7 lacks the diffs route; skip its 404 once the changes route has worked.
+const changesRouteHosts = new Set<string>()
+
 export async function fetchMRFiles(
   repoPath: string,
   projectRef: ProjectRef,
@@ -69,15 +78,35 @@ export async function fetchMRFiles(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabMRFile[]> {
-  const { stdout } = await glabExecFileAsync(
-    [
-      'api',
-      ...glabHostnameArgs(projectRef, connectionId),
-      // GitLab replaces changes with paginated diffs; bound the visible snapshot to one page.
-      `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/diffs?per_page=100`
-    ],
-    glabRepoExecOptions(repoPath, connectionId, localGitOptions)
-  )
-  const data = JSON.parse(stdout) as Parameters<typeof mapMRFile>[0][]
-  return data.map(mapMRFile).filter((file) => file.path)
+  const readJson = async <T>(endpoint: string): Promise<T> => {
+    const { stdout } = await glabExecFileAsync(
+      [
+        'api',
+        ...glabHostnameArgs(projectRef, connectionId),
+        `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/${endpoint}`
+      ],
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+    )
+    return JSON.parse(stdout)
+  }
+  const readChanges = async (): Promise<RawMRFile[]> => {
+    // The legacy payload is the MR with its file entries under changes; it is not paginated.
+    const data = await readJson<{ changes?: RawMRFile[] }>('changes')
+    return (data.changes ?? []).slice(0, MR_FILES_PAGE_SIZE)
+  }
+  let files: RawMRFile[]
+  if (changesRouteHosts.has(projectRef.host)) {
+    files = await readChanges()
+  } else {
+    try {
+      files = await readJson<RawMRFile[]>(`diffs?per_page=${MR_FILES_PAGE_SIZE}`)
+    } catch (error) {
+      if (classifyGlabError(extractExecError(error).stderr).type !== 'not_found') {
+        throw error
+      }
+      files = await readChanges()
+      changesRouteHosts.add(projectRef.host)
+    }
+  }
+  return files.map(mapMRFile).filter((file) => file.path)
 }

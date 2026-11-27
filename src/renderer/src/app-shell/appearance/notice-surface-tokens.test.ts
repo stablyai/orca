@@ -1,105 +1,75 @@
 import { describe, expect, it } from 'vitest'
-import { hexToRgb, type Rgba } from '../../../../shared/color/rgba-contrast'
-import { noticeSurfaceTokens } from './notice-surface-tokens'
+import { contrastRatio, hexToRgb, mix, rgbaToHex } from '../../../../shared/color/rgba-contrast'
+import {
+  NOTICE_DESCRIPTION_TOKEN,
+  NOTICE_SURFACE_TOKEN,
+  noticeSurfaceTokensFor
+} from './notice-surface-tokens'
 
-const DARK_BUILT_INS = {
-  '--foreground': '#f0f0f0',
-  '--popover': '#171717',
-  '--popover-foreground': '#f0f0f0',
-  '--muted': '#262626',
-  '--muted-foreground': '#acacac',
-  '--accent': '#404040',
-  '--accent-foreground': '#f0f0f0'
-}
-const probe = (value: string): Rgba | null => (value.startsWith('#') ? hexToRgb(value) : null)
+const ratio = (a: string, b: string): number => contrastRatio(hexToRgb(a), hexToRgb(b))
+const blend80 = (text: string, surface: string): string =>
+  rgbaToHex(mix(hexToRgb(text), hexToRgb(surface), 80))
 
-/** WCAG 2 contrast written out here, so the check shares no math with the code under test. */
-function wcagContrast(firstHex: string, secondHex: string): number {
-  const luminance = (hex: string): number => {
-    const [r, g, b] = [1, 3, 5].map((start) => {
-      const c = Number.parseInt(hex.slice(start, start + 2), 16) / 255
-      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-    })
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
-  }
-  const [high, low] = [luminance(firstHex), luminance(secondHex)].sort((a, b) => b - a)
-  return (high + 0.05) / (low + 0.05)
-}
+describe('noticeSurfaceTokensFor', () => {
+  it('lifts a dark popover 15% toward the foreground so notices stand off the canvas', () => {
+    const tokens = noticeSurfaceTokensFor(
+      {
+        foreground: hexToRgb('#f0f0f0'),
+        popover: hexToRgb('#171717'),
+        popoverForeground: hexToRgb('#f0f0f0'),
+        mutedForeground: hexToRgb('#acacac')
+      },
+      'dark'
+    )
+    expect(tokens[NOTICE_SURFACE_TOKEN]).toBe('#383838')
+    expect(ratio(tokens[NOTICE_SURFACE_TOKEN], '#1e1e1e')).toBeGreaterThanOrEqual(1.4)
+    // Room to spare: the description keeps its quieter 80% blend.
+    expect(tokens[NOTICE_DESCRIPTION_TOKEN]).toBe(blend80('#f0f0f0', '#383838'))
+  })
 
-/** `over` with `top` painted at `alpha`, as the browser blends a bg-muted/N panel. */
-function composite(topHex: string, overHex: string, alpha: number): string {
-  return `#${[1, 3, 5]
-    .map((start) => {
-      const top = Number.parseInt(topHex.slice(start, start + 2), 16)
-      const under = Number.parseInt(overHex.slice(start, start + 2), 16)
-      return Math.round(top * alpha + under * (1 - alpha))
-        .toString(16)
-        .padStart(2, '0')
-    })
-    .join('')}`
-}
+  it('keeps the full dark lift and raises the description when the 80% blend would not read', () => {
+    const tokens = noticeSurfaceTokensFor(
+      {
+        foreground: hexToRgb('#f0f0f0'),
+        popover: hexToRgb('#181818'),
+        popoverForeground: hexToRgb('#a4a4a4'),
+        mutedForeground: hexToRgb('#a4a4a4')
+      },
+      'dark'
+    )
+    const surface = tokens[NOTICE_SURFACE_TOKEN]
+    expect(surface).toBe('#383838')
+    expect(ratio(surface, blend80('#a4a4a4', surface))).toBeLessThan(4.5)
+    expect(ratio(surface, tokens[NOTICE_DESCRIPTION_TOKEN])).toBeGreaterThanOrEqual(4.5)
+  })
 
-/** The emitted tokens are the painted colors, so their contrast is what the user sees. */
-function expectReadable(themeTokens: Record<string, string>): void {
-  const palette: Record<string, string> = { ...DARK_BUILT_INS, ...themeTokens }
-  const text = palette['--popover-foreground']
-  const notice: Record<string, string> = noticeSurfaceTokens(
-    themeTokens,
-    'dark',
-    DARK_BUILT_INS,
-    probe
-  )
-  const surface = notice['--notice-surface']
-  const muted = notice['--notice-muted-foreground']
-  expect(wcagContrast(surface, text)).toBeGreaterThanOrEqual(4.5)
-  // Toast descriptions paint popover text at 80%. Lifting must not push them under 4.5:1, nor
-  // below the unlifted popover's own contrast when the theme already sat under it.
-  const description = (under: string): number => wcagContrast(composite(text, under, 0.8), under)
-  expect(description(surface)).toBeGreaterThanOrEqual(
-    Math.min(4.5, description(palette['--popover']))
-  )
-  expect(wcagContrast(notice['--notice-secondary'], text)).toBeGreaterThanOrEqual(4.5)
-  expect(wcagContrast(surface, muted)).toBeGreaterThanOrEqual(4.5)
-  // UpdateErrorCardContent's bg-muted/30, /40 and /50 panels hold muted and body text. Without a
-  // --notice-muted token, main.css paints them from the palette's --muted.
-  const mutedPanel = notice['--notice-muted'] ?? palette['--muted']
-  for (const alpha of [0.3, 0.4, 0.5]) {
-    const panel = composite(mutedPanel, surface, alpha)
-    expect(wcagContrast(panel, muted)).toBeGreaterThanOrEqual(4.5)
-    expect(wcagContrast(panel, text)).toBeGreaterThanOrEqual(4.5)
-  }
-  // Hover fills (bg-accent, ghost dark:hover:bg-accent/50) paint accent-foreground or, for ghost
-  // buttons with hover:text-foreground, popover text. Without notice tokens, main.css paints the
-  // palette's --accent and --accent-foreground.
-  const accent = notice['--notice-accent'] ?? palette['--accent']
-  const accentText = notice['--notice-accent-foreground'] ?? palette['--accent-foreground']
-  for (const alpha of [0.5, 1]) {
-    const hover = composite(accent, surface, alpha)
-    expect(wcagContrast(hover, accentText)).toBeGreaterThanOrEqual(4.5)
-    expect(wcagContrast(hover, text)).toBeGreaterThanOrEqual(4.5)
-  }
-  // Dark outline buttons fill with dark:bg-input/30, /50 on hover, under popover text.
-  const input = notice['--notice-input'] ?? palette['--input']
-  if (input?.startsWith('#')) {
-    for (const alpha of [0.3, 0.5]) {
-      expect(wcagContrast(composite(input, surface, alpha), text)).toBeGreaterThanOrEqual(4.5)
-    }
-  }
-}
+  it('raises the description toward full popover text when 80% would read below 4.5:1', () => {
+    const tokens = noticeSurfaceTokensFor(
+      {
+        foreground: hexToRgb('#1a1a1a'),
+        popover: hexToRgb('#ffffff'),
+        popoverForeground: hexToRgb('#6e6e6e'),
+        mutedForeground: hexToRgb('#6e6e6e')
+      },
+      'light'
+    )
+    const surface = tokens[NOTICE_SURFACE_TOKEN]
+    expect(surface).toBe('#ffffff')
+    expect(ratio(surface, blend80('#6e6e6e', surface))).toBeLessThan(4.5)
+    expect(ratio(surface, tokens[NOTICE_DESCRIPTION_TOKEN])).toBeGreaterThanOrEqual(4.5)
+  })
 
-describe('noticeSurfaceTokens', () => {
-  // Popovers the theme validator accepts that once painted notice text under 4.5:1: #5a5a5a
-  // through Chromium's color-mix rounding and an over-lifted 80% description, #383838 through hex
-  // rounding, white-on-dark-base through dark muted panels, hover and outline fills, the rest
-  // unlifted.
-  it.each<Record<string, string>>([
-    { '--popover': '#5a5a5a' },
-    { '--popover': '#383838' },
-    { '--popover': '#444444' },
-    { '--popover': '#303030', '--popover-foreground': '#a0a0a0' },
-    { '--popover': '#ffffff', '--popover-foreground': '#111111' },
-    { '--popover': '#ffffff', '--popover-foreground': '#747474', '--input': '#262626' }
-  ])('keeps notice text 4.5:1 for an accepted %o', (themeTokens) => {
-    expectReadable(themeTokens)
+  it('leaves translucent popovers to the CSS defaults', () => {
+    expect(
+      noticeSurfaceTokensFor(
+        {
+          foreground: hexToRgb('#f0f0f0'),
+          popover: [36, 40, 56, 0.72],
+          popoverForeground: hexToRgb('#e8eaf2'),
+          mutedForeground: hexToRgb('#acacac')
+        },
+        'dark'
+      )
+    ).toEqual({})
   })
 })

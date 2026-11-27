@@ -258,16 +258,3 @@ export function driveCheckoutSuspectsWithin(
       scopes.some((scope) => scope === '' || suspect === scope || suspect.startsWith(`${scope}/`))
     )
 }
-
-export function driveCheckoutSuspectTrackerForTests(
-  worktreePath: string,
-  wslDistro = ''
-): DriveCheckoutSuspectPaths | undefined {
-  return trackers.get(wslWindowsCheckoutKey(worktreePath, wslDistro))
-}
-
-export function resetDriveCheckoutSuspectsForTests(): void {
-  trackers.clear()
-  stopObserving?.()
-  stopObserving = null
-}

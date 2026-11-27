@@ -3,8 +3,9 @@ import { toast } from 'sonner'
 import { trackBrowserExtensionsWebStoreOpened } from '@/diagnostics/telemetry/browser-extensions-telemetry'
 import { CHROME_WEB_STORE_HOME_URL } from '../../../../../../shared/browser/extensions/browser-extension-webstore'
 import { useTranslate } from '@/i18n/use-translate'
+import { browserExtensionFailureMessage } from './browser-extension-failure-message'
 import { useAppStore } from '@/store/index'
-import { LoadingSpinner } from '../../../LoadingSpinner'
+import { LoadingSpinner } from '../../../ui/LoadingSpinner'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
 
@@ -41,7 +42,7 @@ export function BrowserExtensionsWebStoreInstall({
           })
         )
       } else if (result.status === 'failed') {
-        toast.error(result.error)
+        toast.error(browserExtensionFailureMessage(t, result))
       }
     } finally {
       setInstalling(false)
@@ -109,7 +110,7 @@ export function BrowserExtensionsWebStoreInstall({
         disabled={disabled}
         onClick={() => void openStore()}
       >
-        {t('settings.browser.extensions.webStore.browse', 'Browse the Chrome Web Store')}
+        {t('settings.browser.extensions.webStore.browse', 'Chrome Web Store')}
       </Button>
     </div>
   )

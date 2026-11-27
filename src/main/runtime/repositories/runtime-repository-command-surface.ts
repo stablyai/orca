@@ -1,38 +1,21 @@
-import type { RuntimeGitHubRepositoryQueryCommands } from '../integrations/github/runtime-github-repository-query-commands'
-import type { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
+import type {
+  GitHubRepositoryQueryCommandName,
+  HostedReviewCommandName,
+  RuntimeGitHubRepositoryQuerySurface,
+  RuntimeHostedReviewSurface,
+  RuntimeRepositoryHooksSurface,
+  RuntimeRepositoryIssueCommandSurface
+} from './lazy-runtime-repository-review-commands'
 import type { RuntimeNestedRepoImport } from './runtime-nested-repo-import'
 import type { RuntimeProjectGroupController } from './runtime-project-group-controller'
 import type { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
 import type { RuntimeRepositoryForkBackfill } from './runtime-repository-fork-backfill'
 import type { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'
-import type { RuntimeRepositoryHooksCommands } from './runtime-repository-hooks-commands'
-import type { RuntimeRepositoryIssueCommand } from './runtime-repository-issue-command'
 import type { RuntimeRepositoryRefQueries } from './runtime-repository-ref-queries'
 import type { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
 import type { RuntimeRepositorySettingsController } from './runtime-repository-settings-controller'
 import type { RuntimeRepositorySparsePresets } from './runtime-repository-sparse-presets'
 import type { RuntimeServerEnvironmentCommands } from '../files/server-browse/runtime-server-environment-commands'
-
-type HostedReviewCommandName =
-  | 'getRepoSlug'
-  | 'getRepoUpstream'
-  | 'getRepoPRForBranch'
-  | 'getHostedReviewForBranch'
-  | 'getHostedReviewCreationEligibility'
-  | 'createHostedReview'
-  | 'createStackedHostedReview'
-type GitHubRepositoryQueryCommandName =
-  | 'listRepoWorkItems'
-  | 'listRepoIssues'
-  | 'getRepoWorkItem'
-  | 'getRepoWorkItemByOwnerRepo'
-  | 'getRepoWorkItemDetails'
-  | 'countRepoWorkItems'
-  | 'listRepoLabels'
-  | 'listRepoAssignableUsers'
-  | 'getGitHubRateLimit'
-  | 'listGitHubBindableAccounts'
-  | 'validateGitHubAccountBinding'
 
 export type RuntimeRepositoryCommandSurface = {
   listProjects: RuntimeProjectHostSetupController['listProjects']
@@ -64,8 +47,10 @@ export type RuntimeRepositoryCommandSurface = {
   isGitAvailable: RuntimeServerEnvironmentCommands['isGitAvailable']
   listSparsePresets: RuntimeRepositorySparsePresets['list']
   saveSparsePreset: RuntimeRepositorySparsePresets['save']
+  removeSparsePreset: RuntimeRepositorySparsePresets['remove']
   addRepo: RuntimeRepositoryRegistrationController['add']
   createRepo: RuntimeRepositoryRegistrationController['create']
+  getDefaultCreateProjectParent: RuntimeRepositoryRegistrationController['defaultCreateParent']
   cloneRepo: RuntimeRepositoryCloneController['clone']
   checkCloneTarget: RuntimeRepositoryCloneController['checkTarget']
   showRepo: RuntimeRepositorySettingsController['show']
@@ -75,13 +60,13 @@ export type RuntimeRepositoryCommandSurface = {
   removeProject: RuntimeRepositorySettingsController['remove']
   reorderRepos: RuntimeRepositorySettingsController['reorder']
   getRepoBaseRefDefault: RuntimeRepositoryRefQueries['getDefault']
-  getRepoHooks: RuntimeRepositoryHooksCommands['getRepoHooks']
-  checkRepoHooks: RuntimeRepositoryHooksCommands['checkRepoHooks']
-  inspectRepoSetupScriptImports: RuntimeRepositoryHooksCommands['inspectRepoSetupScriptImports']
-  readRepoIssueCommand: RuntimeRepositoryIssueCommand['read']
-  writeRepoIssueCommand: RuntimeRepositoryIssueCommand['write']
-} & Pick<RuntimeHostedReviewCommands, HostedReviewCommandName> &
-  Pick<RuntimeGitHubRepositoryQueryCommands, GitHubRepositoryQueryCommandName>
+  getRepoHooks: RuntimeRepositoryHooksSurface['getRepoHooks']
+  checkRepoHooks: RuntimeRepositoryHooksSurface['checkRepoHooks']
+  inspectRepoSetupScriptImports: RuntimeRepositoryHooksSurface['inspectRepoSetupScriptImports']
+  readRepoIssueCommand: RuntimeRepositoryIssueCommandSurface['read']
+  writeRepoIssueCommand: RuntimeRepositoryIssueCommandSurface['write']
+} & Pick<RuntimeHostedReviewSurface, HostedReviewCommandName> &
+  Pick<RuntimeGitHubRepositoryQuerySurface, GitHubRepositoryQueryCommandName>
 
 type RuntimeRepositoryCommandOwners = {
   projectHostSetups: RuntimeProjectHostSetupController
@@ -93,10 +78,10 @@ type RuntimeRepositoryCommandOwners = {
   repositoryClones: RuntimeRepositoryCloneController
   repositorySettings: RuntimeRepositorySettingsController
   repositoryRefQueries: RuntimeRepositoryRefQueries
-  hostedReviews: RuntimeHostedReviewCommands
-  gitHubRepositoryQueries: RuntimeGitHubRepositoryQueryCommands
-  repositoryHooks: RuntimeRepositoryHooksCommands
-  repositoryIssueCommand: RuntimeRepositoryIssueCommand
+  hostedReviews: RuntimeHostedReviewSurface
+  gitHubRepositoryQueries: RuntimeGitHubRepositoryQuerySurface
+  repositoryHooks: RuntimeRepositoryHooksSurface
+  repositoryIssueCommand: RuntimeRepositoryIssueCommandSurface
 }
 
 export function installRuntimeRepositoryCommandSurface(
@@ -148,6 +133,7 @@ export function installRuntimeRepositoryCommandSurface(
     isGitAvailable: server.isGitAvailable.bind(server),
     listSparsePresets: sparse.list.bind(sparse),
     saveSparsePreset: sparse.save.bind(sparse),
+    removeSparsePreset: sparse.remove.bind(sparse),
     addRepo: async (...args: Parameters<typeof registrations.add>) => {
       const repo = await registrations.add(...args)
       void target.repositoryForkBackfill.enqueue([repo])
@@ -160,6 +146,7 @@ export function installRuntimeRepositoryCommandSurface(
       }
       return result
     },
+    getDefaultCreateProjectParent: registrations.defaultCreateParent.bind(registrations),
     cloneRepo: async (...args: Parameters<typeof clones.clone>) => {
       const repo = await clones.clone(...args)
       void target.repositoryForkBackfill.enqueue([repo])
@@ -186,6 +173,7 @@ export function installRuntimeRepositoryCommandSurface(
     getRepoWorkItemByOwnerRepo: queries.getRepoWorkItemByOwnerRepo.bind(queries),
     getRepoWorkItemDetails: queries.getRepoWorkItemDetails.bind(queries),
     countRepoWorkItems: queries.countRepoWorkItems.bind(queries),
+    getRepoIssueSource: queries.getRepoIssueSource.bind(queries),
     listRepoLabels: queries.listRepoLabels.bind(queries),
     listRepoAssignableUsers: queries.listRepoAssignableUsers.bind(queries),
     getGitHubRateLimit: queries.getGitHubRateLimit.bind(queries),

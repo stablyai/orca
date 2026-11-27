@@ -17,9 +17,10 @@ import {
   Workflow
 } from 'lucide-react-native'
 import type { AgentChildRowModel } from '../../../../../../src/shared/agent-status/presentation/agent-child-row-model'
-import type { AgentSessionBackgroundTask } from '../../../../../../src/shared/agent-session/agent-session-background-task-wire'
-import { sayMobileBackgroundTask as say } from './mobile-background-task-copy'
+import type { AgentSessionBackgroundTask } from '../../../../../../src/shared/agent-session/background-tasks/agent-session-background-task-wire'
+import { mobileBackgroundTaskSay } from './mobile-background-task-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
 import {
   backgroundTasksHeaderContent,
   backgroundTasksHeaderText,
@@ -35,9 +36,9 @@ import {
 } from '../../../../../../src/shared/agent-status/presentation/background-tasks/background-task-roster'
 import { AGENT_WORKING_COLOR, AgentStateDot } from '../../../../agents/presentation/AgentStateDot'
 import { useNow } from '../../../../hooks/use-now'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography, type MobilePalette } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import {
   useMobileBackgroundTaskStops,
@@ -47,7 +48,7 @@ import {
   mobileAgentChildRowName,
   mobileAgentChildRowText
 } from '../../../../worktree/agent-lineage/mobile-agent-child-row-text'
-import { trayStripStyles as strip } from './mobile-native-chat-tray-strip-styles'
+import { trayStripStylesSheet } from './mobile-native-chat-tray-strip-styles'
 
 type TaskKind = AgentSessionBackgroundTask['kind']
 
@@ -61,8 +62,8 @@ export function BackgroundTaskKindIcon({
   /** Defaults to the strip's tone, where a monitor reads as live. */
   color?: string
 }): React.JSX.Element {
-  useMobileColorScheme()
-  const props = { size, color: color ?? kindIconColor(kind), strokeWidth: 2 }
+  const colors = useMobileColors()
+  const props = { size, color: color ?? kindIconColor(colors, kind), strokeWidth: 2 }
   switch (kind) {
     case 'agent':
       return <Bot {...props} />
@@ -80,7 +81,7 @@ export function BackgroundTaskKindIcon({
 // React Native has no root font; its points stand in for desktop's 16 px rem.
 const NARROW_STRIP_WIDTH = NARROW_BACKGROUND_TASKS_STRIP_REM * 16
 
-function kindIconColor(kind: TaskKind): string {
+function kindIconColor(colors: MobilePalette, kind: TaskKind): string {
   return kind === 'monitor' ? AGENT_WORKING_COLOR : colors.textMuted
 }
 
@@ -100,8 +101,11 @@ function TaskRow({
   stopping: Stopping
   onStop: (taskId: string) => void
 }): React.JSX.Element {
-  useMobileColorScheme()
-  const { lead, trail } = mobileAgentChildRowText(row, now)
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
+  const say = mobileBackgroundTaskSay(t)
+  const { lead, trail } = mobileAgentChildRowText(row, now, t)
   const meta = backgroundTaskRowMeta(row, hostNow)
   const stopId = backgroundTaskRowStopId(row, supportsTaskStop)
   const busy = stopId !== null && stopping.taskIds.has(stopId)
@@ -121,21 +125,17 @@ function TaskRow({
           </Text>
         ) : null}
         {stopId !== null ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={say('stopTask', { value0: mobileAgentChildRowName(row) })}
-            accessibilityState={{ disabled: busy }}
-            disabled={busy}
+          // Held until the task's row leaves after a confirmed stop.
+          <MobilePendingButton
+            label={say('stop')}
+            accessibilityLabel={say('stopTask', { value0: mobileAgentChildRowName(row, t) })}
             hitSlop={6}
-            style={({ pressed }) => [
-              styles.textAction,
-              pressed && strip.pressed,
-              busy && styles.disabled
-            ]}
+            style={styles.textAction}
+            labelStyle={styles.actionLabel}
+            spinnerColor={colors.textPrimary}
+            pending={busy}
             onPress={() => onStop(stopId)}
-          >
-            <Text style={styles.actionLabel}>{say('stop')}</Text>
-          </Pressable>
+          />
         ) : null}
       </View>
       {row.owned.length > 0 ? (
@@ -164,8 +164,11 @@ function MobileNativeChatBackgroundTasksImpl({
 }: {
   tasks: MobileStructuredBackgroundTasks
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const strip = useThemedStyles(trayStripStylesSheet)
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const say = useMemo(() => mobileBackgroundTaskSay(t), [t])
   const { view, rowContext } = tasks
   const [expanded, setExpanded] = useState(false)
   // Seed from usable window width to avoid changing form after first layout.
@@ -178,10 +181,11 @@ function MobileNativeChatBackgroundTasksImpl({
       view.children !== undefined
         ? buildBackgroundTaskGroupsFromViews(view.children, rowContext)
         : buildBackgroundTaskGroups(view.tasks, view.settledTasks, say),
-    [view.children, view.tasks, view.settledTasks, rowContext, t]
+    [view.children, view.tasks, view.settledTasks, rowContext, say]
   )
   const now = useNow(1_000, view.show && backgroundTasksStripTicks(groups, expanded))
-  if (!view.show) {
+  // A coordinator's feed can hold only its workers' presence; they have their own strip.
+  if (!view.show || (view.workerDock && groups.length === 0 && !view.incomplete)) {
     return null
   }
   // Elapsed anchors are host-stamped; read them on the host's clock, as the turn bar's start is.
@@ -255,22 +259,16 @@ function MobileNativeChatBackgroundTasksImpl({
               <Text style={styles.unavailable}>{say('detailsUnavailable')}</Text>
             ) : null}
             {view.offersStopAll ? (
-              <Pressable
-                accessibilityRole="button"
+              <MobilePendingButton
+                label={say('stop')}
                 accessibilityLabel={say('stopAll')}
-                accessibilityState={{ disabled: stopping.all }}
-                disabled={stopping.all}
                 hitSlop={6}
-                style={({ pressed }) => [
-                  styles.textAction,
-                  styles.stopAll,
-                  pressed && strip.pressed,
-                  stopping.all && styles.disabled
-                ]}
+                style={[styles.textAction, styles.stopAll]}
+                labelStyle={styles.actionLabel}
+                spinnerColor={colors.textPrimary}
+                pending={stopping.all}
                 onPress={() => onStop()}
-              >
-                <Text style={styles.actionLabel}>{say('stop')}</Text>
-              </Pressable>
+              />
             ) : null}
           </ScrollView>
         ) : null}
@@ -284,7 +282,7 @@ export const MobileNativeChatBackgroundTasks = memo(MobileNativeChatBackgroundTa
 // hitSlop requests 44pt hit rects; compact native parent bounds still limit their reach.
 const MIN_TOUCH_TARGET = 44
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   headerText: {
     flex: 1,
     minWidth: 0,
@@ -376,8 +374,5 @@ const styles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     fontSize: typography.metaSize,
     fontWeight: '500'
-  },
-  disabled: {
-    opacity: 0.5
   }
 }))

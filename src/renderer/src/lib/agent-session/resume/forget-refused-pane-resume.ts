@@ -4,44 +4,47 @@ import type { AgentProviderSessionMetadata } from '../../../../../shared/agent-s
 import type { AppState } from '@/store/types'
 import type { RefusedPaneResume } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
-/** Whether a saved claim names the refused conversation. Only local claims can: the host judged
- *  its own chats, and a remote host's same id is a different conversation. */
-export function namesRefusedResume(
-  refused: RefusedPaneResume,
-  claim: {
-    agent?: string
-    providerSession?: AgentProviderSessionMetadata
-    connectionId?: string | null
-  }
-): boolean {
+type ResumeClaim = {
+  agent?: string
+  providerSession?: AgentProviderSessionMetadata
+  connectionId?: string | null
+}
+
+/** For claims pinned to the pane's exact record or turn, which host it names doesn't matter. */
+export function namesConversation(refused: RefusedPaneResume, claim: ResumeClaim): boolean {
   return (
-    !claim.connectionId &&
     claim.agent === refused.agent &&
     agentProviderSessionsEqual(refused.agent, claim.providerSession, refused.providerSession)
   )
 }
 
-/**
- * Main refused `paneKey`'s saved resume because a native chat owns that conversation. Forgets it as
- * this pane's, whether or not the pane is mounted, so nothing offers or retries it here. Another
- * pane holding the same conversation is refused and forgotten at its own restore. Main already
- * forgot its own copy, so nothing is sent back.
- */
+/** Whether a saved claim names the refused conversation. Only local claims can: the host judged
+ *  its own chats, and a remote host's same id is a different conversation. */
+function namesRefusedResume(refused: RefusedPaneResume, claim: ResumeClaim): boolean {
+  return !claim.connectionId && namesConversation(refused, claim)
+}
+
+/** Forget the host-retired conversation even in unmounted panes; newer observations survive. */
 export function forgetRefusedPaneResume(
   state: AppState,
   paneKey: string,
   refused: RefusedPaneResume
 ): void {
   const expected = refused.expectedSavedRecord
-  const saved = expected && state.sleepingAgentSessionsByPaneKey[expected.paneKey]
+  const savedKey = expected?.paneKey ?? paneKey
+  const saved = state.sleepingAgentSessionsByPaneKey[savedKey]
+  const exact =
+    expected && saved?.capturedAt === expected.capturedAt && saved.updatedAt === expected.updatedAt
   if (
-    expected &&
     saved &&
-    saved.capturedAt === expected.capturedAt &&
-    saved.updatedAt === expected.updatedAt &&
-    namesRefusedResume(refused, saved)
+    (exact
+      ? namesConversation(refused, saved)
+      : // Main and window may capture the same accepted status at different times.
+        refused.expectedStatus &&
+        saved.updatedAt <= refused.expectedStatus.receivedAt &&
+        namesRefusedResume(refused, saved))
   ) {
-    state.clearSleepingAgentSession(expected.paneKey)
+    state.clearSleepingAgentSession(savedKey)
   }
   const identity = refused.expectedStatus
   if (!identity) {
@@ -53,7 +56,7 @@ export function forgetRefusedPaneResume(
       !live ||
       live.updatedAt > identity.receivedAt ||
       live.stateStartedAt !== identity.stateStartedAt ||
-      !namesRefusedResume(refused, { ...live, agent: live.agentType })
+      !namesConversation(refused, { ...live, agent: live.agentType })
     ) {
       return current
     }

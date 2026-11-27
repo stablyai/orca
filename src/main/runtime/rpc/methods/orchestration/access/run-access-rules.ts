@@ -1,8 +1,16 @@
-import type { RunRow, TaskRow } from '../../../../orchestration/db/orchestration-records'
+import type {
+  DispatchContextRow,
+  RunRow,
+  TaskRow
+} from '../../../../orchestration/db/orchestration-records'
+import { isSelfCreatedDispatch } from '../../../../orchestration/db/dispatch-creator-evaluation'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { taskNotFoundError } from '../../../../orchestration/coordinator/dispatch/task-dispatch-refusal'
 import { resolveRunScope } from '../runs/run-scope'
 import { parseOrchestrationTaskDepsFlag } from '../../../../orchestration/coordinator/dispatch/task-deps-flag'
+import { assertWorkerCanReport } from '../../../../orchestration/workers/reports/worker-report-admission'
+import { resolveWorkerReporterIdentity } from '../../../../orchestration/workers/reports/reminted-worker-reporter'
+import { assertLifecycleCallerIsNotAnotherParty } from '../messaging/lifecycle-caller-fence'
 import type { OrchestrationAccessRuleInput } from './orchestration-method-access'
 
 /** The Run a Run-scoped method acts in, under the one Run-binding rule tasks and gates share. */
@@ -52,18 +60,115 @@ export function taskCreateAccess(
   return { ...coordinatedRunAccess(input), deps }
 }
 
+export type TaskUpdateAccessGrant =
+  | { kind: 'status'; run: RunRow }
+  | { kind: 'note'; dispatch: DispatchContextRow }
+
 export function taskUpdateAccess(
-  input: OrchestrationAccessRuleInput<RunScopedParams & { id: string }>
-): RunAccess {
-  const { run } = coordinatedRunAccess(input)
-  const existing = input.ctx.runtime.getOrchestrationDb().getTask(input.params.id)
-  if (!existing || existing.run_id !== run.id) {
+  input: OrchestrationAccessRuleInput<
+    RunScopedParams & { id?: string; note?: string; senderPaneKey?: string }
+  >
+): TaskUpdateAccessGrant {
+  const db = input.ctx.runtime.getOrchestrationDb()
+  if (input.params.note === undefined) {
+    const { run } = coordinatedRunAccess(input)
+    const existing = input.params.id ? db.getTask(input.params.id) : undefined
+    if (!existing || existing.run_id !== run.id) {
+      throw new OrchestrationError(
+        'task_not_found',
+        `Task ${input.params.id} was not found in Run ${run.id}.`
+      )
+    }
+    return { kind: 'status', run }
+  }
+
+  const from = input.caller ?? input.ctx.orchestrationCaller?.address ?? 'unknown'
+  if (input.ctx.orchestrationCaller?.kind === 'peer') {
+    throw new OrchestrationError('forbidden', 'Coordinators cannot set worker progress notes.', {
+      effectsApplied: false
+    })
+  }
+  const reporter = resolveWorkerReporterIdentity(input.ctx.runtime, db, {
+    from,
+    authority: input.ctx.orchestrationCompatibilityCallerAuthority,
+    hasSessionCaller: Boolean(input.ctx.orchestrationCaller),
+    evidence: input.ctx.orchestrationCompatibilityEvidence,
+    candidateDispatchId: undefined
+  })
+  const paneKey = reporter.paneKey ?? input.params.senderPaneKey ?? undefined
+  const remote = paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
+  if (remote && paneKey) {
+    if (input.params.id && input.params.id !== remote.task_id) {
+      throw new OrchestrationError(
+        'sender_not_assignee',
+        `Worker ${from} owns active task ${remote.task_id}, not ${input.params.id}.`,
+        { effectsApplied: false }
+      )
+    }
     throw new OrchestrationError(
-      'task_not_found',
-      `Task ${input.params.id} was not found in Run ${run.id}.`
+      'unsupported_remote_dispatch',
+      `Passive task-update notes are not supported for legacy remote-attached Dispatch ${remote.dispatch_id}.`,
+      { effectsApplied: false }
     )
   }
-  return { run }
+
+  const active = db.getActiveDispatchForIdentity(from, paneKey)
+  const workingDispatch = active && !isSelfCreatedDispatch(active) ? active : undefined
+  if (!workingDispatch) {
+    let coordinatesRun = false
+    try {
+      coordinatedRunAccess(input)
+      coordinatesRun = true
+    } catch {
+      coordinatesRun = false
+    }
+    if (coordinatesRun) {
+      throw new OrchestrationError(
+        'forbidden',
+        'Coordinators cannot set worker progress notes; task-update --note is only for an active worker.',
+        { effectsApplied: false }
+      )
+    }
+    throw new OrchestrationError(
+      'dispatch_inactive',
+      'task-update --note requires an active worker Dispatch.',
+      { effectsApplied: false }
+    )
+  }
+  if (input.params.id !== undefined && input.params.id !== workingDispatch.task_id) {
+    throw new OrchestrationError(
+      'sender_not_assignee',
+      `Worker ${from} owns active task ${workingDispatch.task_id}, not ${input.params.id}.`,
+      { effectsApplied: false }
+    )
+  }
+  if (input.params.run !== undefined && input.params.run !== workingDispatch.run_id) {
+    throw new OrchestrationError(
+      'task_not_found',
+      `Task ${workingDispatch.task_id} was not found in Run ${input.params.run}.`,
+      { effectsApplied: false }
+    )
+  }
+  if (!input.ctx.orchestrationCaller) {
+    assertLifecycleCallerIsNotAnotherParty(input.ctx.runtime, {
+      from,
+      fromPaneKey: paneKey,
+      evidence: input.ctx.orchestrationCompatibilityEvidence
+    })
+  }
+  assertWorkerCanReport({
+    dispatchId: workingDispatch.id,
+    from,
+    workerState: db.getWorkerDispatch(workingDispatch.id)?.state,
+    processCurrent:
+      !workingDispatch.process_incarnation ||
+      db.isDispatchProcessCurrent({
+        dispatchId: workingDispatch.id,
+        paneKey: paneKey ?? null,
+        processIncarnation: reporter.processIncarnation()
+      })
+  })
+  return { kind: 'note', dispatch: workingDispatch }
 }
 
 export function dispatchAccess(

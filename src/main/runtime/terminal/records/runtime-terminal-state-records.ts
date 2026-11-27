@@ -20,7 +20,8 @@ import type { TerminalCommandPaint } from '../input/terminal-command-paint'
 import type { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirror'
 import type { LaunchEvidence } from '../launch/launch-evidence'
 import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
-import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import type { HostTerminalUsage } from '../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 
 type RuntimeTerminalTailState = {
   tailBuffer: string[]
@@ -65,6 +66,8 @@ export type RuntimeLeafRecord = Readonly<RuntimeSyncedLeaf> &
     paneTitleUpdatedAt: number | null
   }
 
+export type AdoptedRootProcess = { incarnationId: string | null; pid: number }
+
 export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   readonly ptyId: string
   readonly incarnationId: PtyIncarnationId | null
@@ -87,8 +90,14 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
     launchToken: string | null
     result: TerminalLaunchResult
   }
+  /** Terminals on its host as its own spawn left them; absent for reattaches, older and remote hosts. */
+  spawnHostTerminalUsage?: HostTerminalUsage
   /** The ORCA_PANE_KEY the execution host reports this PTY's env exported; absent when unreported. */
   spawnPaneKey?: string | null
+  /** The line count its released transcript reached, where a slept agent's cursors continue from. */
+  releasedLinesTotal?: number
+  /** The stopped process whose handle (and line cursors) this one took over, counted once. */
+  linesContinuedFrom?: string
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
@@ -119,7 +128,13 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
     programSignInRequiredSince?: number
   } | null
   lastAgentStatusStartedAtEpochMs: number | null
+  /** When lastAgentStatus last turned working: a later title turn starts after an earlier Done. */
+  lastAgentStatusWorkingStartedAtEpochMs?: number | null
+  /** Whether a working status ended since the agent was last idle, so the current status is no start at rest. */
+  lastAgentStatusEndedTurn?: boolean
   lastAgentStatusRichInvalidatedAtEpochMs: number | null
+  /** While lastAgentStatus is permission: a waiting/blocked hook observed after this raised the block. */
+  permissionWaitHookedAfterEpochMs?: number
   /** When a replacement process took over this PTY id; earlier hooks describe its predecessor. */
   providerGenerationResetAtEpochMs?: number
   lastOscTitle: string | null
@@ -141,6 +156,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   outputObservedSince?: number | null
   /** See terminal-command-paint.ts; absent until the pane's first output, and again after a gap or a new process. */
   commandPaint?: TerminalCommandPaint
+  /** The root PID reattach discovery listed for this incarnation: an old owner's only terminal anchor. */
+  adoptedRootProcess?: AdoptedRootProcess | null
 }
 
 export type RuntimePtyTabCloseAuthority = {
@@ -172,6 +189,8 @@ export type RuntimeHeadlessTerminal = {
   outputSequence: number
   writeChain: Promise<void>
   ownership: PtyShellOwnershipMirror
+  /** True when the owning daemon holds authoritative scrollback, so main mirrors only the viewport. */
+  providerOwnsScrollback?: boolean
   /** Output seq a renderer hydration seed already painted; queued live chunks at/below it are not rewritten. */
   rendererSeedSeq?: number
   /** Unfinished escape from skipped seed-covered chunks, written before the next uncovered chunk. */

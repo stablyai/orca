@@ -1,6 +1,8 @@
 import { ipcMain, nativeTheme, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 
+// oxlint-disable-next-line no-restricted-imports -- application handlers installed here move with the IPC registry, not the native window
 import type { Store } from '../persistence/loading-store/store'
+import type { NativeSettingsProjection } from '../core-desktop/native-settings-projection'
 import {
   acknowledgePendingTccPromptNotice,
   consumePendingTccPromptNotice,
@@ -9,7 +11,7 @@ import {
 } from '../macos-permissions/macos-tcc-prompt-notice'
 import { registerRepoHandlers } from '../ipc/repos'
 import { setRepoRemoteClientNotifier } from '../ipc/repos/repos-changed-notification'
-import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/watched-worktree-catalog-notification'
+import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/worktrees/listing/watched-worktree-catalog-notification'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup/workspace-cleanup'
 import { registerPtyHandlers } from '../ipc/pty/register-handlers'
@@ -18,7 +20,7 @@ import type {
   GetSelectedCodexHomePath,
   PrepareCodexSessionResume
 } from '../ipc/pty/host-env/types'
-import { registerDaemonManagementHandlers } from '../ipc/pty/pty-management'
+import { registerDaemonManagementHandlers } from '../ipc/pty/ipc/pty-management'
 import { registerSshHandlers } from '../ipc/ssh/ssh'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import {
@@ -26,6 +28,7 @@ import {
   requestSystemMediaAccess
 } from '../browser/site-settings/permissions/browser-media-access'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { hasWorkingUpdateAgents } from '../updater/lifecycle/update-agent-activity'
 import { reloadWithRendererCheckpoint } from './renderer-relays/native-unload-coordinator'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 import type {
@@ -43,10 +46,10 @@ import {
   scheduleWorktreeBaseDirectoryWatcherSync,
   setWorktreeBaseDirectoryWatcherSyncContext
 } from '../ipc/worktrees/creation/worktree-base-directory-watcher'
-import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
+import { startFolderRepoGitUpgradeWatch } from '../ipc/worktrees/listing/folder-repo-git-upgrade'
 import { scheduleMainWindowAutoUpdaterSetup } from '../updater/lifecycle/main-window-updater'
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
-import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-session/structured-agent-session-host-refusal'
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-session/installation/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { registerDroppedPathPreparation } from './file-drop/dropped-path-preparation-ipc'
 import { isPluginFramePermissionRequest } from './security/host-frame-permission-policy'
@@ -60,6 +63,7 @@ let activeTccPromptHandlerToken: number | null = null
 export async function attachMainWindowServices(
   mainWindow: BrowserWindow,
   store: Store,
+  nativeSettings: NativeSettingsProjection,
   runtime: OrcaRuntimeService,
   getSelectedCodexHomePath?: GetSelectedCodexHomePath,
   prepareClaudeAuth?: (
@@ -159,7 +163,10 @@ export async function attachMainWindowServices(
     return getAgentSessionAttachmentStore()
   })
   registerTccPromptNoticeHandlers(mainWindow)
-  scheduleMainWindowAutoUpdaterSetup(mainWindow, store, options)
+  scheduleMainWindowAutoUpdaterSetup(mainWindow, nativeSettings, {
+    ...options,
+    hasWorkingAgents: () => hasWorkingUpdateAgents(runtime.getAgentStatusSnapshotFn?.() ?? [])
+  })
   registerRuntimeWindowLifecycle(mainWindow, runtime)
 
   installPluginDesktopFrameServices(mainWindow, store)

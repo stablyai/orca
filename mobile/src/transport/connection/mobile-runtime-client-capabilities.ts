@@ -1,17 +1,18 @@
+import { AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY } from '../../../../src/shared/ai-vault/contracts/ai-vault-runtime-capabilities'
 import {
   AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY,
   AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
-} from '../../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
+} from '../../../../src/shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import {
   AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../src/shared/agent-session/agent-session-runtime-capabilities'
+} from '../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../src/shared/agent-session/requests/agent-session-current-requests-capability'
 import '../../../../src/shared/remote-runtime/protocol/protocol-version'
 import {
@@ -25,8 +26,10 @@ import {
 } from '../../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../src/shared/agent-session/options/protocol/agent-session-optional-model-capability'
 import { remoteRuntimeClientCapabilities } from '../../../../src/shared/remote-runtime/remote-runtime-client-capabilities'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/agent-session-create-capabilities'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../../src/shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
+import { MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/relay/mobile-desktop-relay-contract'
+import { TERMINAL_HOST_PANE_RESPAWN_CLIENT_CAPABILITY } from '../../../../src/shared/terminal/pty/lifecycle/host-pane-respawn-capability'
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilities([
   AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY,
@@ -55,17 +58,26 @@ export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilitie
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY,
+  // The session view follows a tab's terminal handle, so a pane the host restarts shows its new terminal.
+  TERMINAL_HOST_PANE_RESPAWN_CLIENT_CAPABILITY,
+  // Makes this connection eligible for the desktop's relay host list and row watches, so Home Bots'
+  // relay list stays live on relayHostsChanged.
+  MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY,
   // Every socket this list is sent on reads frames through MobileE2EEV2PhysicalChannel, which inflates them.
-  COMPRESSED_FRAMES_CLIENT_CAPABILITY
+  COMPRESSED_FRAMES_CLIENT_CAPABILITY,
+  // Mobile History has no depth footer, so a host may list each chat once.
+  AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY
 ])
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD =
   'runtime.clientCapabilities.update' as const
 
-export function mobileRuntimeClientCapabilityUpdateParams(): {
+export function mobileRuntimeClientCapabilityUpdateParams(
+  pageCapabilities: readonly string[] = []
+): {
   clientCapabilities: string[]
 } {
-  return { clientCapabilities: [...MOBILE_RUNTIME_CLIENT_CAPABILITIES] }
+  return { clientCapabilities: [...MOBILE_RUNTIME_CLIENT_CAPABILITIES, ...pageCapabilities] }
 }
 
 export function mobileRuntimeClientCapabilityUpdateRequest(args: {

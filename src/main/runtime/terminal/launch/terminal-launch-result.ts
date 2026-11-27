@@ -54,6 +54,8 @@ export function recordTerminalLaunchMetadata(
   launch: ReturnType<typeof resolveTerminalLaunchResult>,
   command: string | undefined
 ): TuiAgent | null {
+  // Its own spawn's count: a reattach or a remote host without one leaves none behind.
+  pty.spawnHostTerminalUsage = result.hostTerminalUsage
   if (launch.adoptedStablePane) {
     // A lower owner can supply facts before this runtime has a launch record, unless its launch ended.
     if (!pty.launchConfig && result.launchConfig && pty.launchEvidence?.kind !== 'gone') {

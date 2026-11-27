@@ -1,4 +1,4 @@
-import { Pencil, Pin, PinOff, X } from 'lucide-react'
+import { Copy, CopyX, ExternalLink, Eye, ListX, Pencil, Pin, PinOff, X } from 'lucide-react'
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -6,10 +6,10 @@ import {
   ContextMenuContent
 } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store/index'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import type { OpenFile } from '../../../store/slices/editor/types/open-file'
 import { useTranslate } from '@/i18n/use-translate'
-import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
+import { LocalOnlyMenuHint } from '@/components/ui/local-only-menu-hint'
 import {
   getRevealInFileManagerLabel,
   getWorkspaceFileRevealOwner,
@@ -134,10 +134,12 @@ export function EditorFileTabContextMenu({
         {t('auto.components.tab.bar.EditorFileTabContextMenu.1ba8492c5b', 'Close')}
         {closeShortcut ? <ContextMenuShortcut>{closeShortcut}</ContextMenuShortcut> : null}
       </ContextMenuItem>
-      <ContextMenuItem inset onSelect={onCloseOthers} disabled={tabCount <= 1}>
+      <ContextMenuItem onSelect={onCloseOthers} disabled={tabCount <= 1}>
+        <CopyX className="size-3.5" />
         {t('components.tab.bar.EditorFileTabContextMenu.closeOthers', 'Close Others')}
       </ContextMenuItem>
-      <ContextMenuItem inset onSelect={onCloseAll}>
+      <ContextMenuItem onSelect={onCloseAll}>
+        <ListX className="size-3.5" />
         {t('auto.components.tab.bar.EditorFileTabContextMenu.ba1369dd24', 'Close All Editor Tabs')}
         {closeAllShortcut ? <ContextMenuShortcut>{closeAllShortcut}</ContextMenuShortcut> : null}
       </ContextMenuItem>
@@ -146,7 +148,6 @@ export function EditorFileTabContextMenu({
       {canShowMarkdownPreview ? (
         <>
           <ContextMenuItem
-            inset
             onSelect={() => {
               onActivate()
               onOpenMarkdownPreview(
@@ -161,6 +162,7 @@ export function EditorFileTabContextMenu({
               )
             }}
           >
+            <Eye className="size-3.5" />
             {t(
               'auto.components.tab.bar.EditorFileTabContextMenu.bfd5797ef4',
               'Open Markdown Preview'
@@ -173,29 +175,29 @@ export function EditorFileTabContextMenu({
       {!isVirtualEditorFile(file) && (
         <>
           <ContextMenuItem
-            inset
             onSelect={() => {
               void window.api.ui.writeClipboardText(
                 formatClipboardFilePath(file.filePath, revealOwner)
               )
             }}
           >
+            <Copy className="size-3.5" />
             {t('auto.components.tab.bar.EditorFileTabContextMenu.5b85754786', 'Copy Path')}
           </ContextMenuItem>
           <ContextMenuItem
-            inset
             onSelect={() => {
               void window.api.ui.writeClipboardText(file.relativePath)
             }}
           >
+            <Copy className="size-3.5" />
             {t('auto.components.tab.bar.EditorFileTabContextMenu.52ce4f4605', 'Copy Relative Path')}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem
-            inset
             disabled={revealBlocked}
             onSelect={() => void revealInFileManager(file.filePath, revealOwner)}
           >
+            <ExternalLink className="size-3.5" />
             {getRevealInFileManagerLabel(t)}
             {revealBlocked ? <LocalOnlyMenuHint /> : null}
           </ContextMenuItem>

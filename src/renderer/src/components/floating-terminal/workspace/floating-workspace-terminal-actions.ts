@@ -1,15 +1,17 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
-import type { TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import type {
+  TabGroup,
+  WorkspaceVisibleTabType as TabCycleType
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { getGroupVisibleTabOrder } from '@/lib/workspace/tabs/order/group-tab-order'
 import {
   getNextTabAcrossAllTypes,
   getNextTerminalCycleTab,
   getNextTabWithinActiveType,
   getPreviousRecentTab,
-  type TabCycleType,
   type TypeCyclableTab
-} from '@/components/terminal/tab-type-cycle'
+} from '@/lib/workspace/tabs/tab-type-cycle'
 import type { AppState } from '@/store/types'
 import {
   selectEmptyFloatingWorkspacePanelVisible,
@@ -169,6 +171,10 @@ export function isFloatingWorkspacePanelFocused(
 // Use event-target membership when blur/IME churn leaves activeElement transiently body/null (F6/F7).
 export function isEventTargetInsideFloatingWorkspacePanel(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && target.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) !== null
+}
+
+export function isFloatingWorkspaceKeyTarget(target: EventTarget | null): boolean {
+  return isEventTargetInsideFloatingWorkspacePanel(target) || isFloatingWorkspacePanelFocused()
 }
 
 export function resolveKeyboardWorkspaceId(

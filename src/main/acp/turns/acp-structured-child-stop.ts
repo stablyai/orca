@@ -74,8 +74,14 @@ async function probeAcpBackgroundTaskStop(
 export async function probeAcpChildStops(
   connection: AcpStructuredConnection,
   dialect: AcpDialect,
-  initialized: InitializeResponse
+  initialized: InitializeResponse,
+  flowing = false
 ): Promise<AcpChildStops> {
+  // A kept agent is probed once its output flows (the daemon may hold it paused till then), and
+  // never once it ended: a write would close the connection its output arrives on.
+  if (connection.kept && (!flowing || connection.kept.agentExited)) {
+    return { subagents: false, backgroundTasks: false }
+  }
   const [subagents, backgroundTasks] = await Promise.all([
     dialect.childSessionStop?.supported(initialized) === true ||
       probeAcpSubagentStop(connection, dialect),

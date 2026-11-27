@@ -15,7 +15,6 @@ const AGENT_CLI_NAMES = [
   'crush',
   'cursor-agent',
   'droid',
-  'gemini',
   'goose',
   'grok',
   'kimi',
@@ -29,7 +28,6 @@ const REAL_AGENT_CLI_SWITCHES = [
   'ORCA_REAL_CLAUDE_CLI_TEST',
   'ORCA_REAL_CLAUDE_SUPERVISED_STOP',
   'ORCA_CODEX_CONTRACT_BINARY',
-  'ORCA_CODEX_NO_DAEMON_CONTRACT_BINARY',
   'ORCA_CODEX_TRUST_CONTRACT_BINARY',
   'ORCA_REPRO_CODEX_BINARY'
 ]

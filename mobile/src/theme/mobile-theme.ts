@@ -14,6 +14,8 @@ const darkColors = {
   // Sheets sit a step above the screen, their groups a step above the sheet (the desktop's sidebar and secondary).
   sheetSurface: '#171717',
   sheetGroup: '#262626',
+  // A page of grouped rows (Settings): the screen's own black in dark.
+  groupedPage: '#0a0a0a',
   // A translucent grey that reads on any surface: off switches, and chips or picked segments on a sheet group.
   translucentFill: 'rgba(120, 120, 128, 0.36)',
   // --chat-composer-surface painted over --chat-canvas, and --chat-composer-border.
@@ -35,6 +37,10 @@ const darkColors = {
   chatUserSurface: '#262626',
   chatUserBorder: 'rgba(250, 250, 250, 0.06)',
   chatForegroundStrong: '#e3e3e3',
+  // --chat-canvas: the chat's one ground, under its header, tabs, transcript and composer.
+  chatCanvas: '#161616',
+  // A box inside a chat or rendered Markdown: bgPanel would vanish on chatCanvas, so dark lifts it to bgRaised.
+  chatPanel: '#262626',
 
   // --foreground, --muted-foreground, --chat-foreground-faint
   textPrimary: '#fafafa',
@@ -54,6 +60,11 @@ const darkColors = {
   // --status-success, --status-warning, --destructive
   statusGreen: '#86efac',
   statusAmber: '#eab308',
+  // Desktop's --agent-question: something waits on the owner (an item that needs you).
+  agentQuestion: '#f97316',
+  // Desktop's --agent-question-text and bg-agent-question/12: the Needs you tag's words and fill.
+  agentQuestionText: '#fdba74',
+  agentQuestionTint: 'rgba(249, 115, 22, 0.12)',
   statusRed: '#ff6568',
   // Desktop's --destructive-foreground: dark ink on the light-red dark fill.
   onStatusRed: '#450a0a',
@@ -64,6 +75,7 @@ const darkColors = {
   statusPurple: '#d8b4fe',
   gitDecorationAdded: '#81b88b',
   gitDecorationDeleted: '#c74e39',
+  gitDecorationModified: '#e2c08d',
   // GitHub's (Primer) diff colours, Kelvin's choice for every phone diff: row ground, line-number cell over it,
   // the +/− sign, unchanged line numbers, and the blue "unchanged lines" fold band.
   diffAddedBg: 'rgba(46, 160, 67, 0.15)',
@@ -106,6 +118,8 @@ const lightColors: MobilePalette = {
   // Light inverts it: a grey sheet under white groups, as iOS does.
   sheetSurface: '#f5f5f5',
   sheetGroup: '#ffffff',
+  // Grey under white groups, as iOS does; on white the groups vanish.
+  groupedPage: '#f5f5f5',
   translucentFill: 'rgba(120, 120, 128, 0.16)',
   composerSurface: '#ffffff',
   composerBorder: 'rgba(10, 10, 10, 0.11)',
@@ -121,6 +135,8 @@ const lightColors: MobilePalette = {
   chatUserSurface: '#f5f5f5',
   chatUserBorder: 'rgba(10, 10, 10, 0.07)',
   chatForegroundStrong: '#1e1e1e',
+  chatCanvas: '#ffffff',
+  chatPanel: '#fafafa',
 
   textPrimary: '#0a0a0a',
   textSecondary: '#696969',
@@ -135,6 +151,9 @@ const lightColors: MobilePalette = {
 
   statusGreen: '#147638',
   statusAmber: '#ca8a04',
+  agentQuestion: '#ea580c',
+  agentQuestionText: '#c2410c',
+  agentQuestionTint: 'rgba(234, 88, 12, 0.12)',
   statusRed: '#e40014',
   onStatusRed: '#ffffff',
   mergeGreen: '#16a34a',
@@ -142,6 +161,7 @@ const lightColors: MobilePalette = {
   statusPurple: '#9333ea',
   gitDecorationAdded: '#587c0c',
   gitDecorationDeleted: '#ad0707',
+  gitDecorationModified: '#895503',
   diffAddedBg: '#dafbe1',
   diffDeletedBg: '#ffebe9',
   diffAddedGutter: '#aceebb',
@@ -175,9 +195,6 @@ export function paletteForScheme(scheme: MobileColorScheme): MobilePalette {
   return palettes[scheme]
 }
 
-// Live object rewritten in place on a scheme change; read it at render time, never copy at module scope.
-export const colors: MobilePalette = { ...darkColors }
-
 let currentScheme: MobileColorScheme = 'dark'
 const schemeListeners = new Set<() => void>()
 
@@ -185,12 +202,16 @@ export function getMobileColorScheme(): MobileColorScheme {
   return currentScheme
 }
 
+// For event handlers and effects; render code reads useMobileColors() so React Compiler sees the dependency.
+export function getMobilePalette(): MobilePalette {
+  return palettes[currentScheme]
+}
+
 export function applyMobileColorScheme(scheme: MobileColorScheme): void {
   if (scheme === currentScheme) {
     return
   }
   currentScheme = scheme
-  Object.assign(colors, palettes[scheme])
   for (const listener of schemeListeners) {
     listener()
   }
@@ -204,6 +225,8 @@ export function subscribeMobileColorScheme(listener: () => void): () => void {
 }
 
 export const spacing = {
+  /** Between quiet lines that read as one list (item lines in a chat). */
+  xxs: 2,
   xs: 4,
   sm: 8,
   md: 12,

@@ -19,10 +19,7 @@ import {
 } from './agent-status-store-codec'
 import { indexAgentStatusStoreState } from './agent-status-store-indexes'
 import type { AgentStatusRunAliasIndex } from '../contracts/agent-status-run-alias-index'
-import {
-  parseAgentStatusParentRecord,
-  type AgentStatusParentRecord
-} from './agent-status-store-parent'
+import type { AgentStatusParentRecord } from './agent-status-store-parent'
 import {
   agentStatusStoreStateFromSnapshot,
   createEmptyAgentStatusStoreState,
@@ -86,8 +83,8 @@ export function createAgentStatusStore(options: CreateAgentStatusStoreOptions): 
       if (!parsed) {
         return null
       }
-      const record = state.parents.get(serializeAgentStatusSubject(parsed))
-      return record ? deepFreezeAgentStatusStoreValue(parseAgentStatusParentRecord(record)) : null
+      // Rows are parsed and frozen on write; re-parsing per read made every status publication allocate per chat.
+      return state.parents.get(serializeAgentStatusSubject(parsed)) ?? null
     },
     getParents() {
       return [...state.parents.values()]

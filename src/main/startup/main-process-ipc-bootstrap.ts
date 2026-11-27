@@ -1,3 +1,4 @@
+import { readSessionWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
 import { ipcMain } from 'electron'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoption/unshown-live-terminal-placement'
@@ -9,6 +10,8 @@ import {
   quitAfterRendererStoppedAllSessions
 } from './main-window/main-window-actions'
 import { resolveOsOpenedDocuments } from './open-routing/os-opened-documents'
+import { openBotDeepLink } from '../bots/bot-deep-link-open'
+import { areHostBotsEnabled } from '../bots/bot-team-policy'
 import {
   onStructuredAgentSessionsHeldChanged,
   structuredAgentSessionsHeld
@@ -31,7 +34,7 @@ export function registerMainProcessIpcHandlers(): void {
       state.firstWindowStartupServicesReady,
       state.managedWslCliStartupBarrierReady
     ])
-    await state.runtime?.prepareStructuredAgentSessionStartupRestoration()
+    await state.core.runtime?.prepareStructuredAgentSessionStartupRestoration()
   })
   // Only hosts holding a saved/new structured chat have local rows for the renderer to mirror.
   ipcMain.handle('app:holdsStructuredAgentSessions', () => structuredAgentSessionsHeld())
@@ -55,12 +58,14 @@ export function registerMainProcessIpcHandlers(): void {
       localPtyProviderStartupReady: state.localPtyProviderStartupReady,
       reconcile: async () => {
         try {
-          await state.runtime?.refreshRestoredOrchestrationAuthority()
-          return await state.runtime?.reconcileLegacyWorkerTerminals({ materializeRenderer: true })
+          await state.core.runtime?.refreshRestoredOrchestrationAuthority()
+          return await state.core.runtime?.reconcileLegacyWorkerTerminals({
+            materializeRenderer: true
+          })
         } finally {
           // Main adopts unshown terminals after worker recovery attempts, even failures; the window no longer does.
           if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-            await placeUnshownLiveTerminalsBestEffort(state.runtime)
+            await placeUnshownLiveTerminalsBestEffort(state.core.runtime)
           }
         }
       },
@@ -70,7 +75,8 @@ export function registerMainProcessIpcHandlers(): void {
     }).finally(() => {
       // Only the pass after terminal reconnect leaves every restored worker terminal resolvable.
       if (options?.afterReconnect === true) {
-        state.runtime?.startupWorkerAuthority.finish()
+        state.core.runtime?.startupWorkerAuthority.finish()
+        void state.core.runtime?.reportWorkerStopsAcrossRestartOnce()
       }
     })
   )
@@ -78,13 +84,45 @@ export function registerMainProcessIpcHandlers(): void {
   ipcMain.handle('ui:consumePendingOpenSettings', (event) =>
     state.pendingOpenSettings.matches(event.sender.id, { consume: true })
   )
+  ipcMain.handle('ui:consumePendingSkillShare', () => state.deepLinks.consumeSkillShare())
+  ipcMain.handle('ui:consumePendingBotLink', () => {
+    // Bots off: the link only brings Orca forward.
+    if (!areHostBotsEnabled(state.store?.getSettings())) {
+      state.deepLinks.discardConnectorLinks()
+      state.deepLinks.consumeBotLink()
+      return null
+    }
+    // Rides the bot link's doorbell; the renderer pulls again for any link pending beside it.
+    const connectorLink = state.deepLinks.consumeConnectorLink()
+    if (connectorLink) {
+      return { kind: 'connector-link', ...connectorLink }
+    }
+    const accessRequest = state.deepLinks.consumeAccessRequest()
+    if (accessRequest) {
+      return { kind: 'access-request', ...accessRequest }
+    }
+    const botShareId = state.deepLinks.consumeBotShare()
+    if (botShareId) {
+      return { kind: 'bot-share', shareId: botShareId }
+    }
+    const link = state.deepLinks.consumeBotLink()
+    if (!link) {
+      return null
+    }
+    return state.store
+      ? openBotDeepLink(state.store, link, async (sessionId) =>
+          state.core.runtime
+            ? readSessionWorkers(state.core.runtime, sessionId, { connectorOnly: true })
+            : []
+        )
+      : { kind: 'missing' }
+  })
   ipcMain.handle('ui:consumePendingQuitAndStopAllSessions', (event) =>
     consumeQuitAndStopAllSessionsRequest(event.sender.id)
   )
   ipcMain.handle('ui:quitAfterStoppingAllSessions', (event) =>
     quitAfterRendererStoppedAllSessions(event.sender.id)
   )
-  ipcMain.handle('ui:consumePendingSkillShare', () => state.skillShareDeepLinks.consume())
   ipcMain.handle('ui:consumePendingPluginInstallLink', () => state.pluginInstallLinks.consume())
   // Pull delivers cold-start Open With and proves the listener is ready for later pushes.
   ipcMain.handle('ui:consumePendingMarkdownFileOpens', async () => {

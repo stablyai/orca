@@ -80,6 +80,7 @@ export async function sendTerminalStreamInput(
     text: string
     client: TerminalViewportClient | undefined
     isMobile: boolean
+    arrivedAt?: number
     /** Waits for the provider's handoff; one that may have written is `failed`, not `rejected`. */
     requireWriteSettlement?: boolean
   }
@@ -93,6 +94,7 @@ export async function sendTerminalStreamInput(
     const result = await runtime.sendTerminal(args.terminal, action, {
       inputKind: 'driving',
       inputSource,
+      arrivedAt: args.arrivedAt,
       ...settlement,
       ...(clientId
         ? {
@@ -152,10 +154,13 @@ export async function commitMobileInputFloorClaim(
 
 export function getTerminalSendGuardRefusedReason(
   error: unknown
-): 'no-agent' | 'permission' | undefined {
+): 'no-agent' | 'permission' | 'approval-unseen' | undefined {
   const message = error instanceof Error ? error.message : String(error)
   if (message.includes('terminal_guard_permission')) {
     return 'permission'
+  }
+  if (message.includes('terminal_guard_approval_unseen')) {
+    return 'approval-unseen'
   }
   if (message.includes('terminal_guard_no_agent')) {
     return 'no-agent'

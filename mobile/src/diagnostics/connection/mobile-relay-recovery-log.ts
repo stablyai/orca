@@ -11,6 +11,7 @@ export type RelayRecoveryLog = (
     level?: ConnectionLogLevel
     code?: ConnectionDiagnosticCode
     relayCloseCode?: number
+    relayCredentialRejected?: boolean
   }
 ) => void
 
@@ -32,6 +33,7 @@ export function createRelayRecoveryLog(
       path: 'relay',
       ...(evidence?.code ? { code: evidence.code } : {}),
       ...(evidence?.relayCloseCode ? { relayCloseCode: evidence.relayCloseCode } : {}),
+      ...(evidence?.relayCredentialRejected ? { relayCredentialRejected: true } : {}),
       message: `Relay: ${message}`,
       ...(detail ? { detail } : {})
     })

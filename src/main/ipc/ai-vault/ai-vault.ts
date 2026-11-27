@@ -4,6 +4,7 @@ import {
   type AiVaultProjectionDependency
 } from './ai-vault-projection-dependency'
 import { app, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { configureAiVaultSessionSources } from '../../ai-vault/discovery/ai-vault-scan-roots'
 import { resetAiVaultSessionListCacheForTests } from '../../ai-vault/listing/cached-session-list'
 import type { AiVaultSessionSources } from '../../ai-vault/discovery/ai-vault-scan-roots'
@@ -18,6 +19,7 @@ import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault/contract
 
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
+  AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS,
   isAiVaultScanCancelledError,
   type AiVaultFirstUserPromptArgs,
   type AiVaultListArgs,
@@ -34,7 +36,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host/execution-host'
-import { createSenderScopedRequestCancellations } from '../sender-scoped-request-cancellation'
+import { createSenderScopedRequestCancellations } from '../renderer-requests/sender-scoped-request-cancellation'
 import { discoverAiVaultHosts, type AiVaultHostDiscoveryResult } from './ai-vault-host-discovery'
 import {
   scanRuntimeAiVaultSessions,
@@ -207,7 +209,7 @@ async function scanAiVaultSessionsByHostScope(
       },
       scanner: handlerOptions.scanRuntimeAiVaultSessions,
       listArgs: args,
-      options: { signal }
+      options: { signal, responseTimeoutMs: AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS }
     })
   }
 
@@ -227,11 +229,15 @@ export async function getActiveRuntimeAiVaultHostInfosResult(): Promise<
   })
 }
 
-export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): void {
+export function registerAiVaultHandlers(
+  options: AiVaultHandlerOptions = {},
+  ipc: IpcHandleRegistrar = ipcMain,
+  registrationOptions?: { skipWindowFocusListener?: boolean }
+): void {
   handlerOptions = options
   // Configure the same source/cache instance used by runtime RPC and headless serve.
   configureAiVaultSessionSources(options)
-  ipcMain.handle('aiVault:listSessions', async (event, args?: AiVaultListArgs) => {
+  ipc.handle('aiVault:listSessions', async (event, args?: AiVaultListArgs) => {
     const requestToken =
       typeof args?.requestToken === 'string' && args.requestToken.length <= 128
         ? args.requestToken
@@ -251,12 +257,12 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
       listCancellations.finish(event, requestToken, controller)
     }
   })
-  ipcMain.handle(
+  ipc.handle(
     'aiVault:resolveSessionTitles',
     (_event, args: AiVaultSessionTitlesArgs): Promise<AiVaultSessionTitlesResult> =>
       resolveAiVaultSessionTitles(args)
   )
-  ipcMain.handle(
+  ipc.handle(
     'aiVault:cancelListSessions',
     (event, args: { requestToken?: string } | undefined): void => {
       if (typeof args?.requestToken === 'string' && args.requestToken.length <= 128) {
@@ -264,23 +270,25 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
       }
     }
   )
-  registerAiVaultResumeHandler(options)
-  ipcMain.handle(
+  registerAiVaultResumeHandler(options, ipc)
+  ipc.handle(
     'aiVault:listSubagentSessions',
     (_event, args?: AiVaultSubagentListArgs): Promise<AiVaultSubagentListResult> =>
       listAiVaultSubagentSessions(args)
   )
-  ipcMain.handle('aiVault:getFirstUserPrompt', (_event, args?: AiVaultFirstUserPromptArgs) =>
+  ipc.handle('aiVault:getFirstUserPrompt', (_event, args?: AiVaultFirstUserPromptArgs) =>
     handleAiVaultGetFirstUserPrompt(args)
   )
-  registerAiVaultDeleteHandler(aiVaultDeleteDeps)
+  registerAiVaultDeleteHandler(aiVaultDeleteDeps, ipc)
   registerAiVaultScanProgressBroadcast()
-  // macOS app activation skips DOM focus events, so emit the refresh signal here.
-  app.on('browser-window-focus', (_event, window) => {
-    if (!window.isDestroyed()) {
-      window.webContents.send('aiVault:windowFocused')
-    }
-  })
+  if (!registrationOptions?.skipWindowFocusListener) {
+    // macOS app activation skips DOM focus events, so emit the refresh signal here.
+    app.on('browser-window-focus', (_event, window) => {
+      if (!window.isDestroyed()) {
+        window.webContents.send('aiVault:windowFocused')
+      }
+    })
+  }
 }
 
 function resetAiVaultCacheForTests(): void {

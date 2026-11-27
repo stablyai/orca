@@ -1,10 +1,10 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import React, { createContext, useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
-import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-chat-slept-at'
-import { AgentStateDot } from '@/components/AgentStateDot'
-import { StateIndicatorTooltip } from '@/components/StateIndicatorTooltip'
+import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-sessions/structured-chat-slept-at'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
+import { StateIndicatorTooltip } from '@/components/agent/status/StateIndicatorTooltip'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import '@/components/sidebar/workspace-card/activity/worktree-card-empty-inputs'
 import { FilledBellIcon } from '@/components/sidebar/workspace-card/identity/worktree-card-glyphs'
@@ -19,6 +19,7 @@ import {
 import { getLiveAgentStatusByWorktreeId } from '@/lib/workspace/activity/worktree-activity-state'
 import type { LiveAgentWorktreeStatus } from '../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
+import { selectPaneForegroundAgentsForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import {
   resolveRecentWorkspaceTabStatus,
@@ -36,7 +37,7 @@ import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id
 import type { BrowserWorkspace } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 
 /** Confines the app's hottest status subscriptions here so only the dots re-render on their churn. */
 type PaletteLiveStatus = {
@@ -203,6 +204,9 @@ export function PaletteWorktreeStatusDot({
   const hasStructuredChat = useAppStore((s) =>
     hasAwakeStructuredChat(s.unifiedTabsByWorktree[worktree.id], s.structuredChatSleptAtByPaneKey)
   )
+  const paneForegroundAgentByPaneKey = useAppStore((s) =>
+    selectPaneForegroundAgentsForWorktree(s, worktree.id)
+  )
   if (!live) {
     return null
   }
@@ -216,7 +220,8 @@ export function PaletteWorktreeStatusDot({
       hasStructuredChat,
       agentStatusPaneIdsByTabId: live.agentStatusPaneIdsByTabId,
       stalePaneIdsByTabId: live.stalePaneIdsByTabId,
-      terminalLayoutsByTabId: live.paneSources.terminalLayoutsByTabId
+      terminalLayoutsByTabId: live.paneSources.terminalLayoutsByTabId,
+      paneForegroundAgentByPaneKey
     }
   )
   return (

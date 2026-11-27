@@ -1,12 +1,12 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
+import { radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
 const TILE_SIZE = 28
 const METER_LABEL_WIDTH = 26
 const METER_GAP = 10
 
-export const mobileHomeUsageStyles = themedStyleSheet(() => ({
+export const mobileHomeUsageStylesSheet = themedStyleSheet((colors) => ({
   screen: { flex: 1 },
   content: { paddingHorizontal: spacing.lg },
   loading: { alignItems: 'center', paddingVertical: 60 },
@@ -43,7 +43,7 @@ export const mobileHomeUsageStyles = themedStyleSheet(() => ({
   },
   fill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: radii.pill },
   meterValue: {
-    width: 40,
+    minWidth: 40,
     fontSize: 13,
     color: colors.textPrimary,
     textAlign: 'right',

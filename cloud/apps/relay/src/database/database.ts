@@ -113,7 +113,7 @@ export async function commitWithFinalWrite(
 // director at once and each runs a non-concurrent build over the whole table. POSTGRES_LOCK_TIMEOUT_MS
 // bounds how long that build waits for its lock, not how long it holds it. Build the index out of
 // band with CREATE INDEX CONCURRENTLY first, then add it here, where the pre-check skips it forever
-// after. relay-schema-lock-targets.test.ts pins the current list, so an addition fails CI.
+// after.
 // Constraint swaps are matched by NAME in pg_constraint, never by body, because the CHECK list is
 // generated from REGION_LIST. Changing a constraint's definition under the same name therefore does
 // nothing on boot: an operator drops it, and the next boot adds the current definition back.

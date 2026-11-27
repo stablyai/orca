@@ -1,6 +1,8 @@
 import type { editor } from 'monaco-editor'
 
 export type MonacoContentSyncMode = 'undoable' | 'read-only-live-tail'
+/** Mount-only: a stale retained model's undo entries describe text that no longer exists. */
+type MonacoMountSyncMode = MonacoContentSyncMode | 'reset-history'
 
 export function normalizeToModelEol(
   content: string,
@@ -14,6 +16,19 @@ export function normalizeToModelEol(
   }
   const separators = eol === '\r\n' ? /\r(?!\n)|(?<!\r)\n/g : /\r\n|\r|\n/g
   return content.replace(separators, eol)
+}
+
+/** A model without line breaks takes the ending of incoming text that has them, as a fresh load would. */
+function adoptIncomingLineEnding(model: editor.ITextModel, content: string): void {
+  const firstBreak = content.search(/\r\n|\n|\r/)
+  if (firstBreak === -1 || model.getLineCount() > 1) {
+    return
+  }
+  const eol = content.startsWith('\r\n', firstBreak) ? '\r\n' : '\n'
+  if (model.getEOL() !== eol) {
+    // Literal EndOfLineSequence values (LF = 0, CRLF = 1) keep this free of the Monaco runtime.
+    model.setEOL(eol === '\r\n' ? 1 : 0)
+  }
 }
 
 function applyModelEdit(
@@ -42,10 +57,17 @@ function replaceModelContent(
   model: editor.ITextModel,
   currentContent: string,
   content: string,
-  mode: MonacoContentSyncMode,
+  mode: MonacoMountSyncMode,
   withUndoStops: boolean
 ): void {
   if (currentContent === content) {
+    return
+  }
+  if (mode === 'reset-history') {
+    // setValue drops undo entries that describe replaced text, but re-detects the EOL from it.
+    const eol = model.getEndOfLineSequence()
+    model.setValue(content)
+    model.setEOL(eol)
     return
   }
   const fullRange = model.getFullModelRange()
@@ -60,7 +82,7 @@ function replaceModelContent(
 export function syncContentOnMount(
   editorInstance: editor.IStandaloneCodeEditor,
   content: string,
-  mode: MonacoContentSyncMode = 'undoable',
+  mode: MonacoMountSyncMode = 'undoable',
   currentContentSnapshot?: string
 ): boolean {
   const model = editorInstance.getModel()
@@ -68,6 +90,7 @@ export function syncContentOnMount(
     return false
   }
   const modelContent = currentContentSnapshot ?? model.getValue()
+  adoptIncomingLineEnding(model, content)
   const normalizedContent = normalizeToModelEol(content, model, modelContent)
   if (modelContent === normalizedContent) {
     return false
@@ -88,6 +111,7 @@ export function syncContentUpdate(
     return
   }
   const currentContent = model.getValue()
+  adoptIncomingLineEnding(model, content)
   const normalizedContent = normalizeToModelEol(content, model, currentContent)
   if (currentContent.length === normalizedContent.length) {
     replaceModelContent(editorInstance, model, currentContent, normalizedContent, mode, true)

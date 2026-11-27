@@ -15,6 +15,7 @@ import {
 import { staleSubagentRosterRevisions } from './item-lifecycle/journal-subagent-liveness'
 import { applyJournalDomainLifecycle } from './journal-domain-lifecycle'
 import { withdrawOpeningDerivedQueue } from './journal-open-queue-withdrawal'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 export type JournalOpenRecoveryResult = {
   failures: {
@@ -34,7 +35,8 @@ export function applyJournalSqlOpenCommand(
   savedAt: number
 ) {
   const opened = applyJournalSqlEditLeaseCommand(db, stateDirectory, command, savedAt)
-  const { recover } = command.operation
+  const requested = command.operation.recover
+  const recover = requested === 'keptWriter' ? undefined : requested
   const { target } = command
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: open returns its physical pre-recovery cursor.
   const openedThrough = opened.value as AgentJournalCursor
@@ -45,7 +47,10 @@ export function applyJournalSqlOpenCommand(
         .prepare('SELECT highest_fence FROM journal_chat_state WHERE session_id=? AND epoch=?')
         .get(target.sessionId, target.epoch)!.highest_fence
     )
-  settleOpeningLiveWork(db, target, savedAt)
+  // A kept writer's background work still runs; if it ended instead, its exit settles that work.
+  if (requested !== 'keptWriter') {
+    settleOpeningLiveWork(db, target, savedAt)
+  }
   const recovery: JournalOpenRecoveryResult = { failures: [], reopenFloor: null }
   const attempt = <Value>(
     step: JournalOpenRecoveryResult['failures'][number]['step'],
@@ -140,7 +145,9 @@ function settleOpeningLiveWork(
       AND (lifecycle_state IN ('running','pending') OR live_work=1) AND live_work=1
       ${after ? 'AND (ordinal,item_id)>(?,?)' : ''} ORDER BY ordinal,item_id LIMIT 128`)
       .all(target.sessionId, target.epoch, ...(after ?? []))
-    const items: AgentJournalRenderItem[] = rows.map((row) => JSON.parse(String(row.payload_json)))
+    const items: AgentJournalRenderItem[] = rows.map((row) =>
+      readJournalStoredItem(db, [target.sessionId, target.epoch], row.payload_json)
+    )
     const revisions = staleSubagentRosterRevisions(items)
     if (revisions.length > 0) {
       const head = db

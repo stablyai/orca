@@ -13,15 +13,19 @@ import {
   TerminalSquare
 } from 'lucide-react'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { BotAgentAvatar } from '@/components/bots/BotAgentAvatar'
 import { PluginContributionIcon } from '../../plugins/PluginContributionIcon'
 import { cn } from '@/lib/class-names'
-import { FilePathCursorTooltip, FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
+import {
+  FilePathCursorTooltip,
+  FilenameFirstPath
+} from '@/components/file-actions/file-path-cursor-tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { SEARCH_ENGINE_LABELS } from '../../../../../shared/browser/navigation/browser-url'
 import { formatBrowserHistoryUrl } from '@/lib/browser/history/browser-history-match'
 import type { ActiveOption } from './tab-create-entry-active-option'
-import { BrowserFavicon } from '@/components/browser-favicon'
+import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
 import { AgentLaunchSetupButton } from '../../agent/AgentLaunchSetupButton'
 import type { AgentPickerDraft } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 
@@ -319,6 +323,17 @@ function getActionPresentation(
       detail: entry.title ? `${entry.title} · ${url}` : url,
       icon: <BrowserFavicon faviconUrl={entry.faviconUrl} className="size-3.5" />,
       label: t('auto.components.tab.bar.TabBarCreateEntry.openPage', 'Open page'),
+      showDetail: true
+    }
+  }
+  if (option.kind === 'agent' && option.option.botChat) {
+    const { bot, agent, home } = option.option.botChat
+    return {
+      // The bot's name stands in for the list's "Side chats with" heading, which a search hides.
+      detail:
+        option.option.reason ?? (home ? t('bots.newHomeChat.hint', 'starts fresh') : bot.name),
+      icon: <BotAgentAvatar bot={bot} agent={agent} />,
+      label: option.option.label,
       showDetail: true
     }
   }

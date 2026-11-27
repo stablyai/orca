@@ -1,5 +1,4 @@
-// Upstream packaging bug: @xterm/addon-ligatures declares a missing module
-// entry. config/patches/@xterm__addon-ligatures* keeps the runtime import valid.
+// Upstream @xterm/addon-ligatures's module entry imports node:diagnostics_channel; config/patches and the Vite alias pin it to lib/addon-ligatures.js.
 import { LigaturesAddon } from '@xterm/addon-ligatures'
 import type { Terminal } from '@xterm/xterm'
 
@@ -92,8 +91,21 @@ function createCachedCharacterJoiner(
 
 /** Cache exact rows with bounded retention: TUIs repaint unchanged rows while upstream otherwise retries every ligature at every character. */
 export class TerminalLigaturesAddon extends LigaturesAddon {
+  private cache: LigatureRangeCache | null = null
+
+  clearCache(): void {
+    this.cache?.clear()
+  }
+
+  override dispose(): void {
+    this.cache?.clear()
+    this.cache = null
+    super.dispose()
+  }
+
   override activate(terminal: Terminal): void {
     const cache = new LigatureRangeCache()
+    this.cache = cache
     // Without a font family upstream never reads font files (whole-file parse per terminal OOMed renderers) and joins its common-ligature list, as before 1.4.247.
     const optionsWithoutFontFamily = new Proxy(terminal.options, {
       get(options, key) {

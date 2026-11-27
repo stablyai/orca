@@ -9,6 +9,17 @@ import {
   rememberRuntimeEnvironmentCompatibility,
   runtimeCompatibilityChecks
 } from './runtime-compatibility-cache'
+import { RUNTIME_IDLE_STOPPED_ERROR_CODE } from '../../../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-stop-signal'
+import { waitForPromiseWithSignal } from '../../../../../shared/concurrency/abort-signal-reason'
+
+function isIdleStopRefusal(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === RUNTIME_IDLE_STOPPED_ERROR_CODE
+  )
+}
 
 export async function ensureRuntimeEnvironmentCompatible(
   environmentId: string,
@@ -16,12 +27,22 @@ export async function ensureRuntimeEnvironmentCompatible(
     timeoutMs?: number
     reuseRecentCompatibilityFailure?: boolean
     expectedEnvironmentPairingRevision?: number
+    admissionSignal?: AbortSignal
+    /** The caller's own wake intent: the probe is what reaches an idle-stopped WSL host first. */
+    wake?: boolean
   } = {}
 ): Promise<RuntimeStatus | null> {
   const cached = getCachedRuntimeCompatibilityCheck(environmentId, options)
   if (cached) {
-    await cached.check
-    return cached.status
+    try {
+      await waitForPromiseWithSignal(cached.check, options.admissionSignal)
+      return cached.status
+    } catch (error) {
+      // A probe that met the idle stop proves nothing about compatibility; a wake probes afresh.
+      if (!options.wake || !isIdleStopRefusal(error)) {
+        throw error
+      }
+    }
   }
   const entry = compatibilityEntry()
   const check = (async () => {
@@ -30,7 +51,8 @@ export async function ensureRuntimeEnvironmentCompatible(
       method: 'status.get',
       params: undefined,
       timeoutMs: options.timeoutMs,
-      expectedEnvironmentPairingRevision: options.expectedEnvironmentPairingRevision
+      expectedEnvironmentPairingRevision: options.expectedEnvironmentPairingRevision,
+      wake: options.wake
     })
     const status = unwrapRuntimeRpcResult<RuntimeStatus>(
       response as RuntimeRpcResponse<RuntimeStatus>
@@ -50,8 +72,13 @@ export async function ensureRuntimeEnvironmentCompatible(
     return entry.status
   } catch (error) {
     if (runtimeCompatibilityChecks.get(environmentId) === entry) {
-      // Startup repo/group/folder bursts should pay one offline-host timeout, not three.
-      entry.failedAt = Date.now()
+      if (isIdleStopRefusal(error)) {
+        // Never a cached verdict: the next user call's wake must probe again.
+        runtimeCompatibilityChecks.delete(environmentId)
+      } else {
+        // Startup repo/group/folder bursts should pay one offline-host timeout, not three.
+        entry.failedAt = Date.now()
+      }
     }
     throw error
   }

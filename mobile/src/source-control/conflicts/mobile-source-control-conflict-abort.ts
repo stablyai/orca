@@ -1,4 +1,4 @@
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 
 export function isMobileConflictAborting(
   busyAction: string | null,
@@ -10,17 +10,21 @@ export function isMobileConflictAborting(
   return busyAction === `abort-${conflictOperation}`
 }
 
-export function mobileConflictAbortLabel(conflictOperation: string, aborting: boolean): string {
+export function mobileConflictAbortLabel(
+  conflictOperation: string,
+  aborting: boolean,
+  t: Translate
+): string {
   if (aborting) {
-    return translate('sourceControl.conflictAbort.aborting', 'Aborting…')
+    return t('sourceControl.conflictAbort.aborting', 'Aborting…')
   }
   switch (conflictOperation) {
     case 'merge':
-      return translate('sourceControl.conflictAbort.abortMerge', 'Abort merge')
+      return t('sourceControl.conflictAbort.abortMerge', 'Abort merge')
     case 'rebase':
-      return translate('sourceControl.conflictAbort.abortRebase', 'Abort rebase')
+      return t('sourceControl.conflictAbort.abortRebase', 'Abort rebase')
     default:
-      return translate('sourceControl.conflictAbort.abortOperation', 'Abort {{operation}}', {
+      return t('sourceControl.conflictAbort.abortOperation', 'Abort {{operation}}', {
         operation: conflictOperation
       })
   }

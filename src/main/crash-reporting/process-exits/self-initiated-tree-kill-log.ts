@@ -133,7 +133,3 @@ export function selfInitiatedTreeKillDetails(
     selfInitiatedKills: dropped > 0 ? `${kept.join(', ')} (+${dropped} more)` : kept.join(', ')
   }
 }
-
-export function resetSelfInitiatedTreeKillLogForTest(): void {
-  selfInitiatedKills = []
-}

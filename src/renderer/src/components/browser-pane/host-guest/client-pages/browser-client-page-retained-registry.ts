@@ -1,0 +1,320 @@
+import { releaseBrowserClientRetainedRendererPage } from './browser-client-page-retained-release'
+import { observeBrowserClientPageBootstrap } from './browser-client-page-bootstrap-readiness'
+import {
+  BrowserClientPageRendererIdentity,
+  type BrowserClientPageRendererIdentity as RendererPageIdentity
+} from '../../../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
+import {
+  createBrowserClientPageRetainedHost,
+  createBrowserClientPageRetainedRoot,
+  createBrowserClientPageWebview,
+  hasBrowserClientPageAttachedGuest,
+  readBrowserClientPageAttachedGuestId
+} from './browser-client-page-retained-elements'
+import { browserClientPageRetainedKey } from './browser-client-page-retained-key'
+import { takeFreedBrowserClientPageRevision } from './browser-client-page-freed-pages'
+import { retireBrowserGuestMetadata } from '../metadata/browser-guest-metadata-cache'
+import {
+  resolveBrowserClientPageRetainedLimits,
+  type BrowserClientPageRetainedLimits
+} from './browser-client-page-retained-limits'
+import {
+  retainBrowserClientPagePaint,
+  createBrowserClientPageLoadCommitHandler,
+  forgetBrowserClientPageGuestActivity,
+  trackBrowserClientPageGuestActivity
+} from './browser-client-page-paint-retention'
+import { rekeyBrowserClientRetainedPage } from './browser-client-page-retained-rekey'
+import type { BrowserClientRetainedRendererPage as RetainedPage } from './browser-client-page-retained-state'
+import {
+  attachBrowserClientRetainedPage,
+  enrolRetainedHostDragPassthrough,
+  findBrowserClientRetainedPageForAttachment,
+  findNewestAttachedBrowserClientRetainedPage,
+  type BrowserClientPageVisibleAttachment
+} from './browser-client-page-visible-attachment'
+import {
+  snapshotBrowserClientPageRendererMemoryProfile,
+  type BrowserClientPageRendererMemoryProfile
+} from './browser-client-page-retained-memory-profile'
+
+export class BrowserClientPageRetainedRegistry {
+  private readonly limits: BrowserClientPageRetainedLimits
+  private readonly pages = new Map<string, RetainedPage>()
+  private readonly partitionCounts = new Map<string, number>()
+  private root: HTMLDivElement | null = null
+  private disposed = false
+
+  constructor(
+    private readonly options: {
+      document: Document
+      createWebview?: () => Electron.WebviewTag
+      onPageMounted?: (page: { browserPageId: string; pageHostGeneration: number }) => void
+      maxPages?: number
+      maxPagesPerPartition?: number
+      attachTimeoutMs?: number
+    }
+  ) {
+    this.limits = resolveBrowserClientPageRetainedLimits(options)
+  }
+
+  mountPage(candidate: RendererPageIdentity): Promise<{ webContentsId: number }> {
+    let identity: RendererPageIdentity
+    try {
+      identity = BrowserClientPageRendererIdentity.parse(candidate)
+    } catch {
+      return Promise.reject(new Error('browser_client_page_renderer_identity_invalid'))
+    }
+    if (this.disposed) {
+      return Promise.reject(new Error('browser_client_page_renderer_registry_disposed'))
+    }
+    const key = browserClientPageRetainedKey(identity)
+    const existing = this.pages.get(key)
+    if (existing) {
+      if (existing.status === 'attaching') {
+        return existing.mount
+      }
+      if (existing.status === 'attached' && existing.webContentsId !== null) {
+        if (readBrowserClientPageAttachedGuestId(existing.webview) !== existing.webContentsId) {
+          this.fenceRendererLoss(existing)
+          return Promise.reject(new Error('browser_client_page_renderer_process_gone'))
+        }
+        return Promise.resolve({ webContentsId: existing.webContentsId })
+      }
+      // Main remounts a key only after its old guest is gone, as when Memory Saver remakes a page.
+      if (hasBrowserClientPageAttachedGuest(existing.webview)) {
+        return Promise.reject(new Error('browser_client_page_renderer_page_retiring'))
+      }
+      this.releasePage(existing)
+    }
+    if (this.pages.size >= this.limits.maxPages) {
+      return Promise.reject(new Error('browser_client_page_renderer_capacity'))
+    }
+    if ((this.partitionCounts.get(identity.partition) ?? 0) >= this.limits.maxPagesPerPartition) {
+      return Promise.reject(new Error('browser_client_page_renderer_partition_capacity'))
+    }
+    return this.createPage(identity, key).mount
+  }
+
+  attachPage(
+    identity: Pick<RendererPageIdentity, 'browserPageId' | 'pageHostGeneration'>,
+    container: HTMLElement
+  ): BrowserClientPageVisibleAttachment {
+    const page = findBrowserClientRetainedPageForAttachment(this.pages, identity)
+    return attachBrowserClientRetainedPage(page, this.pages, container)
+  }
+
+  hasAttachedPage(identity: Pick<RendererPageIdentity, 'browserPageId' | 'pageHostGeneration'>) {
+    return findBrowserClientRetainedPageForAttachment(this.pages, identity)?.status === 'attached'
+  }
+
+  findAttachedWebview(browserPageId: string): Electron.WebviewTag | null {
+    return findNewestAttachedBrowserClientRetainedPage(this.pages, browserPageId)?.webview ?? null
+  }
+
+  retirePage(candidate: RendererPageIdentity): void {
+    const parsed = BrowserClientPageRendererIdentity.safeParse(candidate)
+    if (!parsed.success) {
+      throw new Error('browser_client_page_renderer_identity_invalid')
+    }
+    const page = this.pages.get(browserClientPageRetainedKey(parsed.data))
+    if (!page || page.status === 'retiring') {
+      return
+    }
+    const wasAttaching = page.status === 'attaching'
+    page.releasePreparation()
+    page.status = 'retiring'
+    clearTimeout(page.attachTimer)
+    if (wasAttaching) {
+      page.rejectMount(new Error('browser_client_page_renderer_page_retired'))
+    }
+    this.disconnectPage(page)
+    if (
+      wasAttaching &&
+      !page.attachmentObserved &&
+      !hasBrowserClientPageAttachedGuest(page.webview)
+    ) {
+      this.releasePage(page)
+    }
+  }
+
+  rekeyPage(previousCandidate: RendererPageIdentity, nextCandidate: RendererPageIdentity): void {
+    rekeyBrowserClientRetainedPage(this.pages, previousCandidate, nextCandidate, (page) =>
+      this.fenceRendererLoss(page)
+    )
+  }
+
+  getMemoryProfile(): BrowserClientPageRendererMemoryProfile {
+    return snapshotBrowserClientPageRendererMemoryProfile(this.pages, this.partitionCounts.size)
+  }
+
+  dispose(): void {
+    if (this.disposed) {
+      return
+    }
+    this.disposed = true
+    for (const page of this.pages.values()) {
+      if (page.status === 'attaching') {
+        page.rejectMount(new Error('browser_client_page_renderer_registry_disposed'))
+      }
+      this.releasePage(page)
+    }
+    this.root?.remove()
+    this.root = null
+  }
+
+  private createPage(identity: RendererPageIdentity, key: string): RetainedPage {
+    const host = createBrowserClientPageRetainedHost(this.options.document, identity.browserPageId)
+    const webview = createBrowserClientPageWebview({
+      createWebview: this.options.createWebview,
+      document: this.options.document,
+      identity
+    })
+
+    let resolveMount!: RetainedPage['resolveMount']
+    let rejectMount!: RetainedPage['rejectMount']
+    const mount = new Promise<{ webContentsId: number }>((resolve, reject) => {
+      resolveMount = resolve
+      rejectMount = reject
+    })
+    const page = {} as RetainedPage
+    const onAttached = (): void => this.observeAttachment(page)
+    const releasePreparation = observeBrowserClientPageBootstrap(
+      webview,
+      () => page.status === 'attaching',
+      () => this.finishAttachment(page)
+    )
+    const onDestroyed = (): void => this.handleDestroyed(page)
+    const onRendererGone = (): void => this.fenceRendererLoss(page)
+    Object.assign(page, {
+      key,
+      identity,
+      host,
+      webview,
+      status: 'attaching',
+      webContentsId: null,
+      metadataRevision: takeFreedBrowserClientPageRevision(key),
+      attachmentObserved: false,
+      visibleAttachment: null,
+      mount,
+      resolveMount,
+      rejectMount,
+      attachTimer: setTimeout(
+        () => this.failAttachment(page, 'browser_client_page_renderer_attach_timeout'),
+        this.limits.attachTimeoutMs
+      ),
+      onAttached,
+      releasePreparation,
+      onDestroyed,
+      onRendererGone
+    })
+    page.onLoadCommit = createBrowserClientPageLoadCommitHandler(page)
+    page.releaseDragPassthroughSurface = enrolRetainedHostDragPassthrough(page)
+    page.releasePaintRetention = retainBrowserClientPagePaint(page)
+    webview.addEventListener('did-attach', onAttached)
+    webview.addEventListener('destroyed', onDestroyed)
+    webview.addEventListener('render-process-gone', onRendererGone)
+    webview.addEventListener('load-commit', page.onLoadCommit)
+    this.pages.set(key, page)
+    this.partitionCounts.set(
+      identity.partition,
+      (this.partitionCounts.get(identity.partition) ?? 0) + 1
+    )
+    host.appendChild(webview)
+    this.root ??= createBrowserClientPageRetainedRoot(this.options.document)
+    this.root.appendChild(host)
+    return page
+  }
+
+  private observeAttachment(page: RetainedPage): void {
+    if (this.pages.get(page.key) !== page || page.status !== 'attaching') {
+      return
+    }
+    page.attachmentObserved = true
+  }
+
+  private finishAttachment(page: RetainedPage): void {
+    if (this.pages.get(page.key) !== page || page.status !== 'attaching') {
+      return
+    }
+    let webContentsId: number
+    try {
+      webContentsId = page.webview.getWebContentsId()
+    } catch {
+      return
+    }
+    if (!Number.isInteger(webContentsId) || webContentsId <= 0) {
+      return
+    }
+    clearTimeout(page.attachTimer)
+    page.releasePreparation()
+    page.status = 'attached'
+    page.webContentsId = webContentsId
+    trackBrowserClientPageGuestActivity(page)
+    page.resolveMount({ webContentsId })
+    this.options.onPageMounted?.(page.identity)
+  }
+
+  private failAttachment(page: RetainedPage, errorCode: string): void {
+    if (this.pages.get(page.key) !== page || page.status !== 'attaching') {
+      return
+    }
+    page.releasePreparation()
+    page.status = 'retiring'
+    clearTimeout(page.attachTimer)
+    page.rejectMount(new Error(errorCode))
+    this.disconnectPage(page)
+    if (!page.attachmentObserved && !hasBrowserClientPageAttachedGuest(page.webview)) {
+      this.releasePage(page)
+    }
+  }
+
+  private fenceRendererLoss(page: RetainedPage): void {
+    if (this.pages.get(page.key) !== page || page.status === 'retiring') {
+      return
+    }
+    if (page.status === 'attaching') {
+      page.rejectMount(new Error('browser_client_page_renderer_process_gone'))
+    }
+    page.releasePreparation()
+    page.status = 'retiring'
+    clearTimeout(page.attachTimer)
+    this.disconnectPage(page)
+  }
+
+  private handleDestroyed(page: RetainedPage): void {
+    if (this.pages.get(page.key) !== page) {
+      return
+    }
+    if (page.status === 'attaching') {
+      page.rejectMount(new Error('browser_client_page_renderer_guest_destroyed'))
+    }
+    this.releasePage(page)
+  }
+
+  private releasePage(page: RetainedPage): void {
+    if (this.pages.get(page.key) !== page) {
+      return
+    }
+    retireBrowserGuestMetadata(page.webview, page.webContentsId)
+    forgetBrowserClientPageGuestActivity(page, this.pages.values())
+    releaseBrowserClientRetainedRendererPage(page)
+    this.pages.delete(page.key)
+    const nextCount = (this.partitionCounts.get(page.identity.partition) ?? 1) - 1
+    if (nextCount > 0) {
+      this.partitionCounts.set(page.identity.partition, nextCount)
+    } else {
+      this.partitionCounts.delete(page.identity.partition)
+    }
+  }
+
+  private disconnectPage(page: RetainedPage): void {
+    retireBrowserGuestMetadata(page.webview, page.webContentsId)
+    forgetBrowserClientPageGuestActivity(page, this.pages.values())
+    // Registry disposal or guest loss may precede pane detach; stop rect reads for the disconnected host now.
+    page.visibleAttachment?.stopTrackingViewport()
+    page.visibleAttachment = null
+    page.webview.remove()
+    page.host.remove()
+  }
+}

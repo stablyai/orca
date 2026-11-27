@@ -286,9 +286,3 @@ export function dropNativeChatPendingAttachmentsOwnedBy(owner: NativeChatCompose
       pendingOwner.executionHostId === owner.executionHostId
   )
 }
-
-export function clearNativeChatPendingAttachmentsForTests(): void {
-  chipScopes.clear()
-  pendingCache.clear()
-  pendingOwners.clear()
-}

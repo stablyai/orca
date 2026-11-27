@@ -6,7 +6,7 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { launchAgentOnHost } from '../../runtime/rpc/methods/agent-launch/agent-launch'
 import { reuseAutomationChat } from './automation-chat-session-reuse'
 import { buildHeadlessAutomationWorkspaceName } from './automation-workspace-create'
-import type { AutomationRunTargetResult } from '../ownership/run-target-resolution'
+import type { AutomationRepoRunTarget } from '../ownership/run-target-resolution'
 import { AutomationRunLaunchError, type AutomationLaunch } from './automation-launch'
 import {
   publishedLaunchTarget,
@@ -24,7 +24,7 @@ export type AutomationChatAgentLaunch = AutomationLaunch & {
 export type AutomationChatLaunchRequest = {
   automation: Automation
   run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor' | 'createdAt'>
-  target: Extract<AutomationRunTargetResult, { ok: true }>
+  target: AutomationRepoRunTarget
   runs: readonly AutomationRun[]
 }
 
@@ -35,7 +35,11 @@ export async function launchAutomationChatAgent(
   try {
     return await enrichAutomationRunTarget(runtime, await launchChat(runtime, request))
   } catch (error) {
-    if (error instanceof AutomationRunLaunchError) {
+    // A disabled agent refuses before anything starts, so its own words say what to change.
+    if (
+      error instanceof AutomationRunLaunchError ||
+      (error instanceof Error && 'code' in error && error.code === 'agent_unconfigured')
+    ) {
       throw error
     }
     console.error('[automations] chat launch failed:', error)

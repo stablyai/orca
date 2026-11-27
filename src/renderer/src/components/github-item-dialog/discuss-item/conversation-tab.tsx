@@ -11,7 +11,7 @@ import { groupPRComments } from '../../../../../shared/source-control/review-com
 import {
   getCommentReplyTargetCandidates,
   resolveCommentReplyTarget
-} from '@/components/comment-reply-target-state'
+} from '@/components/github/comment-reply-target-state'
 import {
   attachPRReviewReplyParent,
   canPostPRReviewThreadReply
@@ -25,7 +25,7 @@ import { githubCommentImageUploadAddress } from '@/components/github/github-comm
 import {
   resolveGitHubBodyDraft,
   shouldSyncGitHubBodyDraft
-} from '@/components/github-body-draft-state'
+} from '@/components/github/github-body-draft-state'
 import type {
   GitHubIssueTimelineItem,
   PRComment
@@ -169,7 +169,7 @@ export function ConversationTab({
         sourceContext,
         projectOrigin,
         body: resolvedBodyDraft,
-        parsedSlug: bodySlug
+        parsedSlug: prRepo
       })
       onBodyUpdated(resolvedBodyDraft, representation)
       setBodyEditing(false)
@@ -193,9 +193,9 @@ export function ConversationTab({
     bodyChanged,
     resolvedBodyDraft,
     bodySaving,
-    bodySlug,
     item,
     onBodyUpdated,
+    prRepo,
     projectOrigin,
     repoPath,
     sourceContext
@@ -308,7 +308,7 @@ export function ConversationTab({
                   repoId: item.repoId,
                   sourceContext,
                   type: item.type,
-                  prRepo: bodySlug
+                  prRepo
                 })
           }}
           item={item}

@@ -35,6 +35,7 @@ function scopeFixtureLocks(database: PushDatabase, scope: string): PushDatabase 
     lockQuotaScope: (key) => database.lockQuotaScope(`${scope}:${key}`),
     tryLockScope: (key) => database.tryLockScope(`${scope}:${key}`),
     tryLockSharedScope: (key) => database.tryLockSharedScope(`${scope}:${key}`),
+    afterCommit: (fn) => database.afterCommit(fn),
     close: () => database.close()
   }
 }
@@ -109,6 +110,7 @@ export function pauseAfter(database: PushDatabase, prefix = CANDIDATE_SQL) {
     lockQuotaScope: (key) => database.lockQuotaScope(key),
     tryLockScope: (key) => database.tryLockScope(key),
     tryLockSharedScope: (key) => database.tryLockSharedScope(key),
+    afterCommit: (fn) => database.afterCommit(fn),
     transaction: (run) =>
       database.transaction((tx) =>
         run({
@@ -119,6 +121,7 @@ export function pauseAfter(database: PushDatabase, prefix = CANDIDATE_SQL) {
           lockQuotaScope: (key) => tx.lockQuotaScope(key),
           tryLockScope: (key) => tx.tryLockScope(key),
           tryLockSharedScope: (key) => tx.tryLockSharedScope(key),
+          afterCommit: (fn) => tx.afterCommit(fn),
           query: async (sql, params) => {
             const rows = await tx.query(sql, params)
             if (!paused && sql.startsWith(prefix)) {

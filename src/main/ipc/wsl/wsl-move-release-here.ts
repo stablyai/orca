@@ -28,7 +28,7 @@ import {
   wslMoveHostCopyOutcome
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-host-copy-stop'
 import { beginWslMoveUndoRun } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
-import { runWslMoveHostAutomationsExclusive } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-undo-host-automations'
+import { runWslMoveHostAutomationsExclusive } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-host-automations-lock'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { wasWslHostKeptForPeers } from '../../wsl/host-lifecycle/wsl-host-kept-for-peers'
 
@@ -159,6 +159,12 @@ async function releaseWslMovesHereNow(
     const ports = createUndoPorts()
     for (const move of released) {
       ports.refocusHere?.(move)
+      try {
+        ports.unhideMovedEntries?.(move)
+      } catch (error) {
+        // Cosmetic and repeated by the startup prune; it must never block the reload below.
+        console.warn('[wsl-move] Could not unhide moved entries after undo:', error)
+      }
     }
     fenceHandedToReload = true
     reloadWslMoveWindowWithWritesHeld(releaseSpawnFence)
@@ -214,7 +220,7 @@ async function releaseOneMoveHere(
   const automations = (await ports.stopHostAutomations?.(move)) ?? {
     outcome: 'stopped',
     restore: async () => {},
-    applyHere: () => () => {}
+    applyHere: async () => async () => {}
   }
   if (automations.outcome !== 'stopped') {
     if (
@@ -252,12 +258,19 @@ async function releaseOneMoveHere(
       ...asleep
     }
   }
-  // Written here just before the release (the record keeps the choice), and undone if it refuses.
-  const revertHere = automations.applyHere()
+  // Written and flushed here before the release (the record keeps the choice), and undone if either refuses.
+  let revertHere: () => Promise<void>
+  try {
+    revertHere = await automations.applyHere()
+  } catch (error) {
+    console.warn('[wsl-move] Could not persist local automation states for undo:', error)
+    await automations.restore()
+    return { released: false, reason: 'failed', detail: 'local-automations', ...asleep }
+  }
   const release = releaseWslMove(userDataPath, move)
   if (!release.released) {
     try {
-      revertHere()
+      await revertHere()
     } finally {
       // The host's copies go back on even if putting the copies here back failed.
       await automations.restore()

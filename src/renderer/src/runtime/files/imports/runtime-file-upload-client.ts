@@ -143,9 +143,11 @@ export async function ensureRuntimeDropStagingIgnored(
   session: RuntimeFileImportSession
 ): Promise<void> {
   const destinationArgs = getRemoteFileArgs(context, destinationDir)
+  const destination = destinationArgs && normalizeRelativePath(destinationArgs.relativePath)
   if (
     !destinationArgs ||
-    normalizeRelativePath(destinationArgs.relativePath) !== DROP_STAGING_RELATIVE_DIR
+    (destination !== DROP_STAGING_RELATIVE_DIR &&
+      !destination?.startsWith(`${DROP_STAGING_RELATIVE_DIR}/`))
   ) {
     return
   }

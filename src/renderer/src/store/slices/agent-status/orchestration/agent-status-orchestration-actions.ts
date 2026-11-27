@@ -1,0 +1,134 @@
+import {
+  canonicalOrchestrationForRow,
+  recordOrchestrationProducer,
+  orchestrationProducer
+} from '@/runtime/agent-orchestration/visible-agent-orchestration'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
+import type {
+  AgentStatusEntry,
+  AgentStatusOrchestrationContext
+} from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusSlice } from '../contracts/agent-status-slice-contract'
+import type { AgentStatusRuntime } from '../status-ownership/agent-status-runtime'
+import {
+  getAgentRowGeneratedTitleText,
+  orchestrationLabelsMatchLiveDispatch
+} from '../../../../../../shared/agent-status/presentation/agent-row-primary-text'
+import {
+  mergeCurrentOrchestrationContext,
+  orchestrationContextsEqual
+} from './agent-status-orchestration-context'
+
+const EMPTY_CONTEXTS: Record<string, AgentStatusOrchestrationContext> = {}
+
+/** A host with no contexts left drops out, as when it is removed or unpaired. */
+function withHost(
+  s: Pick<AgentStatusSlice, 'remoteAgentOrchestrationByHost'>,
+  host: string,
+  contexts: Record<string, AgentStatusOrchestrationContext>
+): AgentStatusSlice['remoteAgentOrchestrationByHost'] {
+  if (Object.keys(contexts).length > 0) {
+    return { ...s.remoteAgentOrchestrationByHost, [host]: contexts }
+  }
+  const { [host]: _removed, ...rest } = s.remoteAgentOrchestrationByHost
+  return rest
+}
+
+export function createAgentStatusOrchestrationActions(
+  runtime: AgentStatusRuntime
+): Pick<AgentStatusSlice, 'setRuntimeAgentOrchestrationByPaneKey'> {
+  const { get, set } = runtime
+  return {
+    setRuntimeAgentOrchestrationByPaneKey: (
+      entries: Record<string, AgentStatusOrchestrationContext>,
+      producerHost = LOCAL_EXECUTION_HOST_ID
+    ) => {
+      const generatedTitleUpdates: AgentStatusEntry[] = []
+      set((s, changedPaneKeys) => {
+        // Each host's contexts live apart, so one host's reply never overwrites another's same pane key.
+        const local = producerHost === LOCAL_EXECUTION_HOST_ID
+        const previous = local
+          ? s.runtimeAgentOrchestrationByPaneKey
+          : (s.remoteAgentOrchestrationByHost[producerHost] ?? EMPTY_CONTEXTS)
+        const reconciled: Record<string, AgentStatusOrchestrationContext> = Object.fromEntries([])
+        let runtimeMapChanged = Object.keys(previous).length !== Object.keys(entries).length
+        for (const [key, context] of Object.entries(entries)) {
+          const old = previous[key]
+          const value =
+            old &&
+            orchestrationProducer(old) === producerHost &&
+            orchestrationContextsEqual(old, context)
+              ? old
+              : context
+          reconciled[key] = value
+          recordOrchestrationProducer(value, producerHost)
+          if (value !== old) {
+            runtimeMapChanged = true
+          }
+        }
+        const stored = runtimeMapChanged ? reconciled : previous
+        const remoteByHost = local
+          ? s.remoteAgentOrchestrationByHost
+          : withHost(s, producerHost, stored)
+        const canonicalState = local
+          ? { ...s, runtimeAgentOrchestrationByPaneKey: stored }
+          : { ...s, remoteAgentOrchestrationByHost: remoteByHost }
+        let nextLive = s.agentStatusByPaneKey
+        let liveChanged = false
+
+        for (const paneKey of Array.from(nextLive.keys())) {
+          const runtimeOrchestration = canonicalOrchestrationForRow(canonicalState, paneKey)
+          if (!runtimeOrchestration) {
+            continue
+          }
+          const liveEntry = nextLive.get(paneKey)
+          if (liveEntry) {
+            const merged = mergeCurrentOrchestrationContext(
+              liveEntry.orchestration,
+              runtimeOrchestration
+            )
+            if (merged !== liveEntry.orchestration) {
+              liveChanged = true
+              const nextEntry = { ...liveEntry, orchestration: merged }
+              changedPaneKeys.add(paneKey)
+              nextLive = nextLive.replace([[paneKey, nextEntry]])
+              // Why: only replace titles when labels match the live dispatch taskId; sticky completed context must not rename a later turn.
+              if (
+                (merged.displayName?.trim() || merged.taskTitle?.trim()) &&
+                orchestrationLabelsMatchLiveDispatch({
+                  prompt: nextEntry.prompt,
+                  orchestration: merged
+                })
+              ) {
+                generatedTitleUpdates.push(nextEntry)
+              }
+            }
+          }
+        }
+
+        if (!runtimeMapChanged && !liveChanged) {
+          return s
+        }
+
+        return {
+          ...(runtimeMapChanged
+            ? local
+              ? { runtimeAgentOrchestrationByPaneKey: reconciled }
+              : { remoteAgentOrchestrationByHost: remoteByHost }
+            : {}),
+          ...(liveChanged ? { agentStatusByPaneKey: nextLive } : {}),
+          ...(liveChanged ? { agentStatusEpoch: s.agentStatusEpoch + 1 } : {})
+        }
+      })
+      for (const entry of generatedTitleUpdates) {
+        get().setGeneratedTabTitleFromAgentPrompt(
+          entry.paneKey,
+          getAgentRowGeneratedTitleText(entry),
+          {
+            replaceExistingGeneratedTitle: true
+          }
+        )
+      }
+    }
+  }
+}

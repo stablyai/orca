@@ -23,6 +23,14 @@ export class ProfileStateWriterError extends Error {
   }
 }
 
+export function closedProfileStateWriterError(): ProfileStateWriterError {
+  return new ProfileStateWriterError(
+    'profile-state-writer-closed',
+    'Profile state writer is closing',
+    'known-failure'
+  )
+}
+
 export function profileStateWriterFailureOutcome(error: unknown): ProfileStateWriterFailureOutcome {
   if (
     error instanceof ProfileStateIndeterminateWriteError ||

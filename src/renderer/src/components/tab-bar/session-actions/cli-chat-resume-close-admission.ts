@@ -2,20 +2,22 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { admitStructuredLaunchOnHost } from '@/lib/agent-session/launch/structured-agent-session-host-admission'
-import { structuredChatUnavailableText } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
+import { structuredChatUnavailableToast } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { notifyHostPermissionRefused } from '@/lib/agent-session/launch/structured-agent-session-launch-permission-notice'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
 import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
-import { probePtyRunningWork } from '../../terminal/pty-running-work-probe'
+import { probePtyRunningWork } from '../../terminal/tab-lifecycle/pty-running-work-probe'
 import { waitForPromiseWithSignal } from '../../../../../shared/concurrency/abort-signal-reason'
-import { STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import {
   chatAgentsShareConversations,
   namesCliConversation
 } from '../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import { recognizeAgentProcess } from '../../../../../shared/agent-status/process/agent-process-recognition'
 import { reportCliChatResumeOwner } from './cli-chat-resume-feedback'
+import { agentSessionWriteFailureText } from '../../native-chat/messages/notices/agent-session-write-notice-text'
+import { agentSessionRefusalFailure } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { cliChatResumeClosingPaneKeys } from './cli-chat-resume-close-terminal'
 import { cliConversationExitGuidance } from '@/lib/agent-session/resume/history/cli-conversation-exit-guidance'
 import { structuredLaunchesHoldingIdentity } from '@/lib/agent-session/launch/structured-agent-session-launch-holders'
@@ -139,8 +141,9 @@ export async function admitCliChatResumeClose(
     )
     return null
   }
-  // The host's create refuses another terminal running the conversation; asked now, this terminal
-  // stays open. Its own panes are left out: the close stops them before create.
+  // The host's create refuses another terminal running the conversation, or one saved in another
+  // folder; asked now, this terminal stays open. Its own panes are left out: the close stops them
+  // before create.
   const support = await waitForPromiseWithSignal(
     admitStructuredLaunchOnHost(target, toRuntimeWorktreeSelector(source.workspaceId), agent, {
       providerSessionId: source.providerSessionId,
@@ -152,11 +155,19 @@ export async function admitCliChatResumeClose(
     return null
   }
   if (support.kind === 'refused') {
-    toast.error(cliConversationExitGuidance(source.agent))
+    toast.error(
+      support.refusal.code === 'agent_session_identity_required'
+        ? agentSessionWriteFailureText(agentSessionRefusalFailure(support.refusal), 'read-history')
+        : cliConversationExitGuidance(source.agent)
+    )
     return null
   }
   if (support.kind === 'declined') {
-    toast.error(structuredChatUnavailableText(support.reason))
+    const { description, action } = structuredChatUnavailableToast(
+      support.reason,
+      source.workspaceId
+    )
+    toast.error(description, action ? { action } : undefined)
     return null
   }
   // A host that could not say whether it checked the other writers still lets the switch go on:

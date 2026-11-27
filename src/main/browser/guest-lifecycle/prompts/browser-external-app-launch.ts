@@ -92,6 +92,12 @@ async function launchExternalApp(url: string): Promise<'failed' | undefined> {
   }
 }
 
+/** A streamed server page's link the user chose to open here; the same schemes are refused as for local pages. */
+export async function openStreamedBrowserExternalAppLink(rawUrl: unknown): Promise<boolean> {
+  const url = typeof rawUrl === 'string' ? toBrowserExternalAppUrl(rawUrl) : null
+  return url !== null && (await launchExternalApp(url.href)) !== 'failed'
+}
+
 // As in Chrome, remember only sites a network attacker can't impersonate.
 function isRememberableSite(site: string): boolean {
   if (site === BROWSER_SITE_PERMISSION_LOCAL_FILES_ORIGIN) {
@@ -137,7 +143,7 @@ function desktopUserClickAt(guest: Electron.WebContents, now: number): number | 
     : null
 }
 
-/** Require a local window prompt so remote pages cannot launch apps on the server. */
+/** Require a prompt so pages cannot launch apps unasked; a streamed page's viewer opens the link itself, never the server. */
 export function requestBrowserExternalAppLaunch(args: {
   requester: Electron.WebContents
   target: BrowserPagePromptTarget | null
@@ -158,8 +164,10 @@ export function requestBrowserExternalAppLaunch(args: {
   const site =
     origin ??
     (args.pageInitiated === false ? null : browserSitePermissionOrigin(pageUrl(requester)))
+  const streamed = target === 'stream-viewers'
+  // A server's remembered answers would launch apps on the server, so streamed pages always ask.
   const memory =
-    target && site && isRememberableSite(site)
+    target && !streamed && site && isRememberableSite(site)
       ? browserSessionSitePermissions(requester.session)
       : null
   const rememberSite = memory ? site : null
@@ -169,10 +177,13 @@ export function requestBrowserExternalAppLaunch(args: {
       kind: 'external-app',
       requester,
       target,
-      details: () => ({ appName: externalAppName(url.href), scheme, origin, rememberSite }),
+      details: () =>
+        streamed
+          ? { appName: null, scheme, origin, rememberSite, url: url.href }
+          : { appName: externalAppName(url.href), scheme, origin, rememberSite },
       parseAnswer: (value) => (value === true || value === 'always' ? value : undefined),
       settle: (answer) => {
-        if (!answer) {
+        if (!answer || streamed) {
           return undefined
         }
         if (answer === 'always' && rememberSite) {

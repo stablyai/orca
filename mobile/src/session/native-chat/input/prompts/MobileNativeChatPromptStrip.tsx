@@ -1,17 +1,25 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronUp } from 'lucide-react-native'
-import { colors, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+
+export type MobileNativeChatCollapsedPrompt = {
+  title: string
+  expand: () => void
+  /** The agent waits on this answer alone, so collapsing it gives no composer back. */
+  holdsInput?: true
+}
 
 /** A collapsed prompt's one line, above the queue; nothing while no prompt is collapsed. */
 export function MobileNativeChatPromptStrip({
   prompt
 }: {
-  prompt?: { title: string; expand: () => void } | null
+  prompt?: MobileNativeChatCollapsedPrompt | null
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   if (!prompt) {
     return null
@@ -34,7 +42,7 @@ export function MobileNativeChatPromptStrip({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   action: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   strip: {
     flexDirection: 'row',
@@ -43,7 +51,7 @@ const styles = themedStyleSheet(() => ({
     paddingLeft: spacing.md,
     paddingRight: spacing.sm,
     paddingVertical: spacing.xs,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle
   },

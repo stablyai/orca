@@ -33,7 +33,7 @@ function isChildAgentEvent(
   if (!sessionId) {
     return false
   }
-  if (state.dshChildSessionIdsByPaneKey.get(paneKey)?.has(sessionId)) {
+  if (state.childSessionIdsByPaneKey.get(paneKey)?.has(sessionId)) {
     return true
   }
   if (eventName !== 'SessionStart' && eventName !== 'UserPromptSubmit') {
@@ -55,10 +55,10 @@ function rememberChildSession(
   if (!childSessionId) {
     return
   }
-  let children = state.dshChildSessionIdsByPaneKey.get(paneKey)
+  let children = state.childSessionIdsByPaneKey.get(paneKey)
   if (!children) {
     children = new Set()
-    state.dshChildSessionIdsByPaneKey.set(paneKey, children)
+    state.childSessionIdsByPaneKey.set(paneKey, children)
   }
   children.add(childSessionId)
 }

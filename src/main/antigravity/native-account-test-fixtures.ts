@@ -44,10 +44,11 @@ export function refreshedWithoutIdToken(generation: number, refreshToken = 'refr
 
 export function harness(initial: string | null = credential('a')) {
   let native = initial
+  let signInHeld = false
   let vault: AntigravityAccountVault = { accounts: [], selectedAccountId: null }
   const store: AntigravityAccountStore = {
-    read: vi.fn(() => structuredClone(vault)),
-    write: vi.fn((next) => {
+    read: vi.fn(async () => structuredClone(vault)),
+    write: vi.fn(async (next) => {
       vault = structuredClone(next)
     })
   }
@@ -69,7 +70,12 @@ export function harness(initial: string | null = credential('a')) {
     store,
     backend,
     lookupIdentity,
-    service: new AntigravityAccountService(store, backend, Date.now, lookupIdentity),
+    service: new AntigravityAccountService(store, backend, Date.now, lookupIdentity, {
+      signInHoldsLogin: () => signInHeld
+    }),
+    setSignInHeld: (held: boolean) => {
+      signInHeld = held
+    },
     setNative: (contents: string | null) => {
       native = contents
     },

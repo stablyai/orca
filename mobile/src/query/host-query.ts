@@ -23,6 +23,7 @@ import {
 } from './host-query-key'
 import { holdsRestoredHostQueryData, type HostQueryPersist } from './host-query-persistence'
 import { hostReadClient } from './host-read-client'
+import { useKeptByKey } from '../hooks/use-kept-by-key'
 
 export type HostQuery<TInput extends HostQueryParams, TData> = {
   family: string
@@ -62,7 +63,8 @@ type HostQueryFetch<TInput extends HostQueryParams, TData> = (
 
 // `live` marks an action's read (readHostQueryLive), which must not be served from a host-side cache.
 // `previousFromStore` says `previous` is an earlier launch's copy that no read in this document confirmed.
-export type HostQueryRead = { live: boolean; previousFromStore: boolean }
+// `hostId` names the paired host, for a fetch that shares another family's per-host single-flight.
+export type HostQueryRead = { live: boolean; previousFromStore: boolean; hostId: string }
 
 export function defineHostQuery<TInput extends HostQueryParams, TData>(
   query: HostQuery<TInput, TData> & { fetch: HostQueryFetch<TInput, TData> }
@@ -93,7 +95,8 @@ function hostQueryOptions<TInput extends HostQueryParams, TData>(
       ? ({ client: queryClient }) =>
           fetch(hostReadClient(client), target, input, queryClient.getQueryData<TData>(queryKey), {
             live: false,
-            previousFromStore: holdsRestoredHostQueryData(queryClient, hashKey(queryKey))
+            previousFromStore: holdsRestoredHostQueryData(queryClient, hashKey(queryKey)),
+            hostId
           })
       : skipToken,
     meta: { streamBacked, signal, persist }
@@ -123,7 +126,8 @@ export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
     (() =>
       fetch(hostReadClient(client), target, input, undefined, {
         live: true,
-        previousFromStore: false
+        previousFromStore: false,
+        hostId
       }))
   if (!read && !live) {
     throw new Error(`${query.family} is read by its screen`)
@@ -236,13 +240,13 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
   // A screen alone on its page has no host list to keep the router; its signalled reads hold one.
   useHostEventRouter(hostId, enabled && query.signal ? client : null)
   // Same options object while nothing changed (target and input count by value), so TanStack's per-render setOptions is a no-op.
-  const keyHash = hashKey([target, input])
+  const keyed = useKeptByKey(hashKey([target, input]), { target, input })
   const queryOptions = useMemo((): UseQueryOptions<TData, Error, TData, HostQueryKey> => {
-    const observer = hostObserverOptions(query, client, hostId, target, input)
+    const observer = hostObserverOptions(query, client, hostId, keyed.target, keyed.input)
     // Disable through the observer, not skipToken: observers share the query's options, so a disabled
     // screen's skipToken would leave an enabled one's key with no fetch for invalidation or intervals.
     return enabled ? observer : { ...observer, enabled: false }
-  }, [query, client, hostId, keyHash, enabled])
+  }, [query, client, hostId, keyed, enabled])
   return useQuery({
     ...queryOptions,
     ...(options?.staleTime === undefined ? {} : { staleTime: options.staleTime }),
@@ -265,10 +269,11 @@ export function useHostQueries<TInput extends HostQueryParams, TData, TCombined>
   const { hostId, client } = host
   useHostConnectionInvalidation(hostId, client)
   useHostEventRouter(hostId, query.signal ? client : null)
-  const keyHash = hashKey([target, inputs])
+  const keyed = useKeptByKey(hashKey([target, inputs]), { target, inputs })
   const queries = useMemo(
-    () => inputs.map((input) => hostObserverOptions(query, client, hostId, target, input)),
-    [query, client, hostId, keyHash]
+    () =>
+      keyed.inputs.map((input) => hostObserverOptions(query, client, hostId, keyed.target, input)),
+    [query, client, hostId, keyed]
   )
   return useQueries({ queries, combine })
 }

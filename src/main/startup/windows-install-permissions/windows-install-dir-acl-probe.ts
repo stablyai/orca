@@ -130,10 +130,6 @@ function runProbe(options: WindowsInstallDirAclProbeOptions): void {
 // Probe once per process despite window reopen; ordinary install DACL is stable within a session.
 let probeStarted = false
 
-export function resetWindowsInstallDirAclProbeForTest(): void {
-  probeStarted = false
-}
-
 /** Defer Windows-only reads until after window creation; observability is ready. Return whether dispatched so reopen callers cannot await an onDone the process latch prevents. */
 export function probeWindowsInstallDirAcl(options: WindowsInstallDirAclProbeOptions = {}): boolean {
   if ((options.platform ?? process.platform) !== 'win32' || options.isServeMode === true) {

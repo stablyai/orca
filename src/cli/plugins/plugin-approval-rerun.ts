@@ -36,31 +36,55 @@ export function nextStepsOf(data: unknown): string[] {
     : []
 }
 
-export type PendingApproval = { pluginKey: string; approvalFingerprint: string }
-
-export function pendingApprovalsOf(data: unknown): PendingApproval[] {
-  if (typeof data !== 'object' || data === null || !('approvals' in data)) {
-    return []
-  }
-  const { approvals } = data
-  return Array.isArray(approvals)
-    ? approvals.filter(
-        (entry): entry is PendingApproval =>
+/** The entries of a host's error-data list whose `fields` are all strings. */
+function stringRecords<Field extends string>(
+  list: unknown,
+  fields: readonly Field[]
+): Record<Field, string>[] {
+  return Array.isArray(list)
+    ? list.filter(
+        (entry): entry is Record<Field, string> =>
           typeof entry === 'object' &&
           entry !== null &&
-          typeof entry.pluginKey === 'string' &&
-          typeof entry.approvalFingerprint === 'string'
+          fields.every((field) => typeof entry[field] === 'string')
       )
     : []
 }
 
+export type PendingApproval = { pluginKey: string; approvalFingerprint: string }
+
+export function pendingApprovalsOf(data: unknown): PendingApproval[] {
+  const approvals =
+    typeof data === 'object' && data !== null && 'approvals' in data ? data.approvals : null
+  return stringRecords(approvals, ['pluginKey', 'approvalFingerprint'])
+}
+
+export type UpdateFailure = { pluginKey: string; code: string; message: string }
+
+export function failedUpdatesOf(data: unknown): UpdateFailure[] {
+  const failed = typeof data === 'object' && data !== null && 'failed' in data ? data.failed : null
+  return stringRecords(failed, ['pluginKey', 'code', 'message'])
+}
+
 /** `update --all` re-runs per plugin: the same command with the key in place of --all. */
+function perPluginArgs(ctx: HandlerContext, pluginKey: string): string[] {
+  return (ctx.rawArgs ?? []).map((arg) => (arg === '--all' ? pluginKey : arg))
+}
+
 export function perPluginApprovalCommands(
   ctx: HandlerContext,
   approvals: PendingApproval[]
 ): string[] {
-  return approvals.map((approval) => {
-    const args = (ctx.rawArgs ?? []).map((arg) => (arg === '--all' ? approval.pluginKey : arg))
-    return `To approve ${approval.pluginKey}, run: ${approvalRerunCommand(args, approval.approvalFingerprint)}`
+  return approvals.map(
+    (approval) =>
+      `To approve ${approval.pluginKey}, run: ${approvalRerunCommand(perPluginArgs(ctx, approval.pluginKey), approval.approvalFingerprint)}`
+  )
+}
+
+/** A failed plugin's own update reports its error with the steps to fix it. */
+export function perPluginFailureCommands(ctx: HandlerContext, failed: UpdateFailure[]): string[] {
+  return failed.map((failure) => {
+    const command = ['orca', ...perPluginArgs(ctx, failure.pluginKey)]
+    return `To retry ${failure.pluginKey} and see how to fix it, run: ${command.map(quoteCliCommandArgument).join(' ')}`
   })
 }

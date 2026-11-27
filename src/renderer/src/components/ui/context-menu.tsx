@@ -3,6 +3,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { ChevronRightIcon, CircleIcon } from 'lucide-react'
 import * as ContextMenuPrimitive from 'radix-ui/context-menu'
 
+import { usePortalContainer } from './portal-container-context'
 import { cn } from '@/lib/class-names'
 import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
@@ -95,7 +96,7 @@ function ContextMenuSubContent({
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(pointerHighlight.ref)
   const subDensity = useMenuDensity(density)
   return (
-    <ContextMenuPrimitive.Portal>
+    <ContextMenuPrimitive.Portal container={usePortalContainer() ?? undefined}>
       <OverlayFocusScope value={scope}>
         <MenuDensityProvider value={subDensity}>
           <ContextMenuPrimitive.SubContent
@@ -135,7 +136,7 @@ function ContextMenuContent({
   const pointerHighlight = useMenuPointerHighlight(props)
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(pointerHighlight.ref)
   return (
-    <ContextMenuPrimitive.Portal>
+    <ContextMenuPrimitive.Portal container={usePortalContainer() ?? undefined}>
       <OverlayFocusScope value={scope}>
         <MenuDensityProvider value={density}>
           <ContextMenuPrimitive.Content

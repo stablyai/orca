@@ -1,7 +1,8 @@
 import {
   GIT_HISTORY_REFS_CAPABILITY,
   GIT_GRAPH_TAB_CAPABILITY,
-  GIT_COMMIT_ACTIONS_CAPABILITY
+  GIT_COMMIT_ACTIONS_CAPABILITY,
+  GIT_BLAME_CAPABILITY
 } from './git-graph-capabilities'
 export const GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY =
   'github.complete-pr-check-observation.v1' as const
@@ -24,7 +25,7 @@ export const GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE =
 export const GITLAB_MR_INVOLVEMENT_RUNTIME_CAPABILITY = 'gitlab.listMRs.involvement.v1' as const
 export const GITLAB_MR_INVOLVEMENT_UPDATE_REQUIRED_MESSAGE =
   'Filtering merge requests by you requires a newer Orca server. Update the server and try again.'
-// Commit-message generation: the host plans Antigravity with the model the user configured.
+// Still advertised so older clients send a saved Antigravity choice here, where it falls back.
 export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
   'git.antigravity-configured-model.v1' as const
 
@@ -32,6 +33,7 @@ export const SOURCE_CONTROL_RUNTIME_CAPABILITIES = [
   GIT_HISTORY_REFS_CAPABILITY,
   GIT_GRAPH_TAB_CAPABILITY,
   GIT_COMMIT_ACTIONS_CAPABILITY,
+  GIT_BLAME_CAPABILITY,
   GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY,
   GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,

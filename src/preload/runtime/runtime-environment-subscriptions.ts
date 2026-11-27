@@ -15,6 +15,8 @@ type RuntimeEnvironmentSubscribeArgs = {
   timeoutMs?: number
   expectedEnvironmentPairingRevision?: number
   expectedEnvironmentRuntimeId?: string
+  background?: boolean
+  wake?: boolean
 }
 
 type RuntimeEnvironmentSubscriptionCallbacks = {

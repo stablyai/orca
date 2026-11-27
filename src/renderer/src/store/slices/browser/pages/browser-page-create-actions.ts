@@ -1,3 +1,7 @@
+import {
+  queueKagiPrivateInitialNavigation,
+  discardKagiPrivateInitialNavigation
+} from '@/lib/kagi-private-initial-navigation'
 import { copyBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import type {
   BrowserSlice,
@@ -39,6 +43,9 @@ export function createBrowserPageCreateActions(
         options?.docLocation
       )
       if (!options?.browserRuntimeEnvironmentId && !options?.docLocation) {
+        queueKagiPrivateInitialNavigation(page.id, url)
+      }
+      if (!options?.browserRuntimeEnvironmentId && !options?.docLocation) {
         admitBrowserPageMount(page.id)
       }
       const addPage = (): void => {
@@ -75,8 +82,8 @@ export function createBrowserPageCreateActions(
             },
             browserTabsByWorktree: {
               ...s.browserTabsByWorktree,
-              [current.worktreeId]: (s.browserTabsByWorktree[current.worktreeId] ?? []).map(
-                (tab) => (tab.id === workspaceId ? nextWorkspace : tab)
+              [current.worktreeId]: (s.browserTabsByWorktree[current.worktreeId] ?? []).map((tab) =>
+                tab.id === workspaceId ? nextWorkspace : tab
               )
             },
             pendingAddressBarFocusByPageId: shouldFocusAddressBar
@@ -121,6 +128,7 @@ export function createBrowserPageCreateActions(
     },
 
     closeBrowserPage: (pageId) => {
+      discardKagiPrivateInitialNavigation(pageId)
       const closeHere = (): void => {
         let closedWorkspaceIdForLabel: string | null = null
         let docPageIdToRelease: string | null = null
