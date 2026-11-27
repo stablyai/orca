@@ -201,7 +201,11 @@ export function WorkerDockRoster(props: {
       setHeld(null)
     }
   }
-  useWorkerDockFooterFocus(root, pill, `${Boolean(props.stopAll)}:${clearable >= 2}`)
+  useWorkerDockFooterFocus(
+    root,
+    pill,
+    `${shown && props.expanded}:${Boolean(props.stopAll)}:${clearable >= 2}`
+  )
   const { focusRow, rememberFocus, forgetFocus } = useWorkerDockCardFocus({
     items,
     rows: props.rows,

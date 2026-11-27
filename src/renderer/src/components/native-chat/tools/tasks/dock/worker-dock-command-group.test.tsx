@@ -372,6 +372,40 @@ describe('kinds', () => {
     expect(document.activeElement).toBe(chip())
   })
 
+  it('hands focus to the message box when the footer Stop goes with the whole card', () => {
+    const w = worker('a')
+    const props: Props = {
+      tasks: [command('shell-1')],
+      settledTasks: [],
+      supportsTaskStop: false,
+      offersStopAll: true,
+      stoppingTaskIds: new Set(),
+      stoppingAll: false,
+      indicatorActive: true,
+      isVisible: true,
+      expanded: true,
+      onExpandedChange: () => {},
+      onStop: () => {},
+      sessionId: 'session-1',
+      workerRows: new Map([[w.id, w]]),
+      workerIdentities: [w]
+    }
+    const pane = (next: Partial<Props>) => (
+      <TooltipProvider>
+        <div data-native-chat-root="">
+          <NativeChatBackgroundTasksStatus {...props} {...next} />
+          <textarea data-native-chat-prompt-editor="" aria-label="Message" />
+        </div>
+      </TooltipProvider>
+    )
+    const view = render(pane({}))
+    screen.getByRole('button', { name: 'Stop subagents and commands' }).focus()
+    // The chat's last work ends: no rows, nothing unlisted, so the card and its pill go too.
+    view.rerender(pane({ tasks: [], workerRows: new Map(), workerIdentities: [] }))
+    expect(chip()).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Message' }))
+  })
+
   it('leaves focus the user moved elsewhere when the footer Stop goes away', () => {
     const view = renderTray({
       expanded: true,
