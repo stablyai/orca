@@ -52,9 +52,14 @@ export function useNativeChatQueueRoom(
     const items = new MutationObserver((records) => {
       if (
         records.some(
-          ({ target }) =>
+          ({ target, addedNodes, removedNodes }) =>
             target === dock ||
-            (target instanceof Element && target.matches(QUESTION_MUTATION_SELECTOR))
+            (target instanceof Element && target.matches(QUESTION_MUTATION_SELECTOR)) ||
+            [...addedNodes, ...removedNodes].some(
+              (node) =>
+                node instanceof Element &&
+                (node.matches(QUESTION_SELECTOR) || node.querySelector(QUESTION_SELECTOR) !== null)
+            )
         )
       ) {
         read()
