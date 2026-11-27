@@ -17,8 +17,15 @@ export type AgentPickerChoice = {
   matches?: (query: string) => boolean
   isDefault?: boolean
   onSetDefault?: () => void
+  /** The form holds it now; the row shows a check. */
+  checked?: boolean
+  /** First in a form's dropdown, over the agent tabs, rather than under the card. */
+  leading?: boolean
   onSelect: () => void
 }
+
+const choiceCheck = (checked: boolean | undefined) =>
+  checked ? <Check className="ml-auto size-3.5 shrink-0 text-muted-foreground" /> : null
 
 export type AgentLaunchSetupSearch = {
   entries: readonly AgentPickerEntry[]
@@ -124,33 +131,47 @@ export function AgentPickerSearchResults({
         >
           {choice.icon}
           <span className="min-w-0 flex-1 truncate">{choice.label}</span>
+          {choiceCheck(choice.checked)}
         </CommandItem>
       ))}
     </>
   )
 }
 
-/** The full-width rows under the card; ArrowUp from the first goes back to the search. */
+/** The full-width rows under the card (ArrowUp from the first goes back to the search), or over
+ *  the agent tabs (`top`: ArrowDown or Tab from the last goes on to them). */
 export function AgentPickerChoiceRows({
   ref,
   choices,
   disabled,
-  onLeaveUp
+  top,
+  onLeaveUp,
+  onLeaveDown
 }: {
-  ref: Ref<HTMLDivElement>
+  ref?: Ref<HTMLDivElement>
   choices: readonly AgentPickerChoice[]
   disabled?: boolean
-  onLeaveUp: () => void
+  top?: boolean
+  onLeaveUp?: () => void
+  onLeaveDown?: () => void
 }) {
   return (
     <div
       ref={ref}
-      className="border-t border-border p-1"
+      className={top ? 'shrink-0 border-b border-border p-1' : 'border-t border-border p-1'}
       onKeyDown={(event) => {
-        const first = event.currentTarget.querySelector('[role="menuitem"]')
-        if (event.key === 'ArrowUp' && event.target === first) {
+        const rows = event.currentTarget.querySelectorAll('[role^="menuitem"]')
+        const leave =
+          event.key === 'ArrowUp' && event.target === rows.item(0)
+            ? onLeaveUp
+            : (event.key === 'ArrowDown' || (event.key === 'Tab' && !event.shiftKey)) &&
+                event.target === rows.item(rows.length - 1)
+              ? onLeaveDown
+              : undefined
+        if (leave) {
           event.preventDefault()
-          onLeaveUp()
+          event.stopPropagation()
+          leave()
         }
       }}
     >
@@ -160,9 +181,16 @@ export function AgentPickerChoiceRows({
           isDefault={choice.isDefault ?? false}
           onSetDefault={choice.onSetDefault}
         >
-          <DropdownMenuItem disabled={disabled} onSelect={choice.onSelect}>
+          <DropdownMenuItem
+            disabled={disabled}
+            onSelect={choice.onSelect}
+            {...(choice.checked === undefined
+              ? {}
+              : { role: 'menuitemcheckbox', 'aria-checked': choice.checked })}
+          >
             {choice.icon}
-            {choice.label}
+            <span className="min-w-0 truncate">{choice.label}</span>
+            {choiceCheck(choice.checked)}
           </DropdownMenuItem>
         </AgentDefaultContextMenu>
       ))}

@@ -1,3 +1,4 @@
+import { AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY } from '../../../../src/shared/ai-vault/contracts/ai-vault-runtime-capabilities'
 import {
   AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY,
   AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
@@ -62,7 +63,9 @@ export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilitie
   // Home reads relayed servers' agents on relayHostRowsChanged, so a desktop may watch those servers for it.
   MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY,
   // Every socket this list is sent on reads frames through MobileE2EEV2PhysicalChannel, which inflates them.
-  COMPRESSED_FRAMES_CLIENT_CAPABILITY
+  COMPRESSED_FRAMES_CLIENT_CAPABILITY,
+  // Mobile History has no depth footer, so a host may list each chat once.
+  AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY
 ])
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD =

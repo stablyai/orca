@@ -49,6 +49,7 @@ import { linkedSkillsSection } from '../../native-chat/native-chat-skill-roots'
 import { noteManagedServerUse } from '../../node-runtime/managed-runtime-release'
 import type { AcpInstructionsLaunch } from './acp-instructions'
 import { acpInstructionsWithVisuals, visualsByInstructions } from './acp-visuals-instructions'
+import { withAcpToolFreeFolder } from '../session/acp-tool-free-run'
 import { withoutCallerIdentity } from '../../runtime/agent-session/environment/structured-session-child-env'
 
 /** The environment a launch's process gets; see `AcpLaunchSpec.sharedToolProcess`. */
@@ -69,6 +70,8 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   env: Record<string, string>
   envToDelete: string[]
   fullAccess: boolean
+  /** A tool-free run (`StructuredAgentLaunchBasis.toolFree`) and the empty folder it starts in. */
+  toolFree?: { cwd: string }
   /** See `AcpInstructionsLaunch`. */
   sessionMeta?: Record<string, unknown>
   sessionMetaOnReopen?: true
@@ -183,7 +186,7 @@ export function acpStructuredLaunchPart(
   agentSpec: AcpLaunchSpec,
   deps: AcpStructuredLaunchPartDeps
 ): StructuredAgentLaunchPartResolver<AcpStructuredLaunch> {
-  return async (basis, identity) => {
+  return withAcpToolFreeFolder(deps, async (basis, identity) => {
     const { record } = basis
     const movedHome = await homeBeforeFirstTurn(agentSpec, record, basis, deps.dataDirectory)
     const accountHome = movedHome ?? record.accountHome
@@ -332,5 +335,5 @@ export function acpStructuredLaunchPart(
         LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
       ]
     }
-  }
+  })
 }

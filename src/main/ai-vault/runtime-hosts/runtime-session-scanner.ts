@@ -226,6 +226,7 @@ function withRuntimeExecutionHost(
     sessions: result.sessions.map((session) =>
       retagRuntimeSession(session, executionHostId, pairingRevision)
     ),
+    ...(result.hiddenRowCount ? { hiddenRowCount: result.hiddenRowCount } : {}),
     issues: result.issues.map((issue) => ({ ...issue, executionHostId })),
     scannedAt: result.scannedAt,
     ...(result.fingerprint ? { fingerprint: result.fingerprint } : {})

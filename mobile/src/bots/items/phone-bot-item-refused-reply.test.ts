@@ -1,6 +1,10 @@
 import { expect, it } from 'vitest'
 import { createBotItemPendingCommentsHook } from '../../../../src/shared/bots/bot-item-pending-comments'
 import type { BotItemQuestionShape } from '../../../../src/shared/bots/bot-item-ask'
+import {
+  botItemReplyTargetKey,
+  sessionBotItemReplyTargets
+} from '../../../../src/shared/bots/bot-item-reply-target'
 import { botItemCommentDrafts } from './bot-item-comment-drafts'
 import { phoneBotItemReturnText } from './phone-bot-item-refused-reply'
 
@@ -89,4 +93,11 @@ it('keeps a short refused answer that typed words only contain inside a line', a
   expect(
     await refusedCardAnswer('inside', 'No', { askId: 'e2', shape: one, answers: ['No'] })
   ).toBe('Not yet\nNo')
+})
+
+it('a refused reply put back in an empty box answers no question', async () => {
+  const key = 'host\0agent\0put-back'
+  await refusedCardAnswer(key, 'Yes')
+  expect(botItemCommentDrafts.get(key)).toBe('Yes')
+  expect(JSON.parse(sessionBotItemReplyTargets.read(botItemReplyTargetKey(key))).bound).toBe('none')
 })

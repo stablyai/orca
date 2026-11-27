@@ -1,4 +1,7 @@
-import type { RuntimeTerminalListResult } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type {
+  RuntimeTerminalListResultWithoutPreview,
+  RuntimeTerminalSummaryWithoutPreview
+} from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toHostSessionTabId } from '../../../../../../shared/workspace-layout/terminal-surface-id'
@@ -166,15 +169,16 @@ export async function findActiveRuntimeTerminal(
     expectedEnvironmentPairingRevision?: number
     beforeSend?: () => void
   } = {}
-): Promise<RuntimeTerminalListResult['terminals'][number] | null> {
-  const { terminals } = await callRuntimeRpc<RuntimeTerminalListResult>(
+): Promise<RuntimeTerminalSummaryWithoutPreview | null> {
+  const { terminals } = await callRuntimeRpc<RuntimeTerminalListResultWithoutPreview>(
     runtimeTarget,
     'terminal.list',
     // Why: worktree ids can look like branch names or paths; keep the lookup unambiguous.
     {
       worktree: toRuntimeWorktreeSelector(worktreeId),
       limit: ACTIVE_AGENT_TERMINAL_LIST_LIMIT,
-      includeVisualLayouts: false
+      includeVisualLayouts: false,
+      includePreview: false
     },
     { timeoutMs, ...options }
   )

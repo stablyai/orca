@@ -11,6 +11,7 @@ import { remoteMemberKey } from './bot-group-mentions'
 import { remoteAnswerLines, remoteMemberAsked } from './bot-group-remote-context'
 import {
   BotGroupRemoteBotsSchema as RemoteBots,
+  BotGroupThreadName as ThreadName,
   BotGroupReplyMode,
   type BotGroup,
   type BotGroupMember,
@@ -143,6 +144,8 @@ export const BotGroupSend = Revision.extend({
 )
 export const BotGroupStop = Room.extend({ botId: z.string().min(1).optional() })
 export const BotGroupNewThread = GroupId.extend({})
+/** A thread named by hand. */
+export const BotGroupRenameThread = Room.required({ threadId: true }).extend({ title: ThreadName })
 export const BotGroupDelete = GroupId
 
 type GroupJournal = {

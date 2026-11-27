@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -100,7 +101,8 @@ export function useBrowserPageWebviewLifecycle({
   retryGuestRecoveryRef: MutableRefObject<() => void>
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
-}): void {
+}): { documentGeneration: number } {
+  const [documentGeneration, setDocumentGeneration] = useState(0)
   const [guestRecoveryGeneration, setGuestRecoveryGeneration] = useState(0)
   const guestRecoveryPendingRef = useRef(false)
   const validateVisibleGuestRegistrationRef = useRef<() => void>(() => {})
@@ -117,7 +119,7 @@ export function useBrowserPageWebviewLifecycle({
   const {
     tokenRef: annotationViewportBridgeTokenRef,
     sync: syncBrowserAnnotationViewportBridge,
-    invalidateDocument: invalidateBrowserAnnotationDocument
+    invalidateDocument: invalidateBridgeDocument
   } = annotationViewportBridge
 
   useLayoutEffect(() => {
@@ -151,6 +153,18 @@ export function useBrowserPageWebviewLifecycle({
     addBrowserHistoryEntryRef.current = addBrowserHistoryEntry
   }, [onSetUrl, onUpdatePageState, addBrowserHistoryEntry, onSetUrlRef, onUpdatePageStateRef])
 
+  const invalidateBrowserAnnotationDocument = useCallback(
+    (newDocument = false): void => {
+      if (newDocument) {
+        setDocumentGeneration((generation) => generation + 1)
+        invalidateBridgeDocument()
+      } else {
+        useAppStore.getState().invalidateBrowserPageAnnotationGeometry(browserTabId)
+        syncBrowserAnnotationViewportBridge()
+      }
+    },
+    [browserTabId, invalidateBridgeDocument, syncBrowserAnnotationViewportBridge]
+  )
   const invalidateBrowserAnnotationDocumentRef = useRef(invalidateBrowserAnnotationDocument)
   useLayoutEffect(() => {
     invalidateBrowserAnnotationDocumentRef.current = invalidateBrowserAnnotationDocument
@@ -221,4 +235,5 @@ export function useBrowserPageWebviewLifecycle({
       validateVisibleGuestRegistrationRef.current()
     }
   }, [browserTabId, isPaintable, isMountAdmitted])
+  return { documentGeneration }
 }

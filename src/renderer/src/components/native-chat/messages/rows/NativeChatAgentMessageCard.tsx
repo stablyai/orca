@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
-import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -14,7 +13,9 @@ import {
   agentMessageHeading,
   agentMessagePrimarySender,
   agentMessageCanCopy,
-  agentMessageWaitingQueuedId
+  agentMessageWaitingQueuedId,
+  agentMessageHeadingNamesRecipient,
+  type AgentMessageHeading
 } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/view/messages/agent-message-display-text'
 import { agentMessagePreviewLine } from '../../../../../../shared/agent-session/view/messages/agent-message-preview-line'
@@ -26,9 +27,8 @@ import {
 import { NativeChatAgentMessageSenderNames } from '../agent-senders/NativeChatAgentMessageSenders'
 import { useAgentMessageSenderView } from '../agent-senders/native-chat-agent-message-sender-view'
 import {
-  unnamedSenderLabel,
   useAgentMessageSenderBot,
-  useAgentMessageSenderLabel
+  useAgentMessageSenderName
 } from '../agent-senders/native-chat-agent-message-sender-label'
 import { BotAvatar, CarriedBotAvatar } from '@/components/bots/BotAvatar'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
@@ -41,16 +41,16 @@ import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAt
 import type { NativeChatEventBadge } from '../events/NativeChatEventRow'
 import { NativeChatAgentMessageRow } from './NativeChatAgentMessageRow'
 import { ItemChip } from '../../bot-items/NativeChatBotItemNoteRow'
-import { agentMessageRowLead } from './agent-message-row-lead'
+import {
+  agentMessageRowLead,
+  agentMessageRowFallback,
+  agentMessageRowRecipientName
+} from './agent-message-row-lead'
 import { NativeChatWaitingAgentMailActions } from '../../queue/NativeChatWaitingAgentMailActions'
 
 /** The one word drawn before the name for a start, a hand-off or a task; a plain message draws none. */
-function kindWord(
-  from: AgentMessageSource,
-  message: NativeChatMessage,
-  t: Translate = translate
-): string | null {
-  switch (agentMessageHeading(from, message)) {
+function kindWord(heading: AgentMessageHeading, t: Translate): string | null {
+  switch (heading) {
     case 'started':
     case 'started-agent':
       return t('components.native-chat.agentMessage.kind.started', 'Started')
@@ -105,16 +105,16 @@ export function NativeChatAgentMessageCard({
   const merged = message.mergedEvents ?? []
   const hasImages = message.blocks.some((block) => block.type === 'image-ref')
   const expandable = canCopy || merged.length > 0 || hasImages
-  const words = agentMessageRowLead(from, message, t)
+  const heading = agentMessageHeading(from, message)
+  const words = agentMessageRowLead(heading, t)
   const items = message.agentStartItems ?? []
   const forItems = t('components.native-chat.agentMessage.row.forItems', 'for')
   const preview = useMemo(() => agentMessagePreviewLine(text), [text])
-  const senderName = useAgentMessageSenderLabel(
-    sender ?? NO_SENDER,
-    worktreeId,
-    target,
-    senderDispatchId
-  )
+  const senderName = useAgentMessageSenderName(sender, worktreeId, target, senderDispatchId)
+  const label = senderName ?? agentMessageRowFallback(heading, t)
+  const title = agentMessageHeadingNamesRecipient(heading)
+    ? agentMessageRowRecipientName(label, t)
+    : label
   const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
   // Not taken by the agent yet: dimmed, with no time, until its delivered row replaces it in place.
   const waiting = message.queued === true
@@ -132,9 +132,9 @@ export function NativeChatAgentMessageCard({
         />
       }
       badge={agentMessageBadge(worker, view.dot)}
-      kind={kindWord(from, message, t)}
+      kind={kindWord(heading, t)}
       lead={words}
-      spokenNames={`${sender ? senderName : unnamedSenderLabel(t)}${shown.length + more > 1 ? ` +${shown.length + more - 1}` : ''}${items.length > 0 ? ` ${forItems} ${items.map((item) => item.title).join(', ')}` : ''}`}
+      spokenNames={`${label}${shown.length + more > 1 ? ` +${shown.length + more - 1}` : ''}${items.length > 0 ? ` ${forItems} ${items.map((item) => item.title).join(', ')}` : ''}`}
       names={(spoken) => (
         <>
           <NativeChatAgentMessageSenderNames
@@ -145,6 +145,9 @@ export function NativeChatAgentMessageCard({
             target={target}
             dispatchId={dispatchId}
             spoken={spoken}
+            name={senderName}
+            label={label}
+            title={title}
           />
           {/* A start joined with its item link names the items it was for. */}
           {items.length > 0 ? (
@@ -225,12 +228,14 @@ function MergedAgentMessage({
 }): React.JSX.Element {
   const t = useTranslate()
   const from = message.from
-  const words = from ? agentMessageRowLead(from, message, t) : null
+  const heading = from && agentMessageHeading(from, message)
   const text = agentMessageTranscriptText(message.blocks, from, message.shortened)
   return (
     <>
       <p className="flex min-w-0 items-center gap-1 text-xs text-chat-foreground-faint">
-        {words && words !== newerLead ? <span>{words}</span> : null}
+        {heading && agentMessageRowLead(heading, t) !== newerLead ? (
+          <span>{agentMessageRowLead(heading, t, true)}</span>
+        ) : null}
         {message.agentStartItems?.length ? (
           <>
             <span>{t('components.native-chat.agentMessage.row.forItems', 'for')}</span>
@@ -252,12 +257,6 @@ function MergedAgentMessage({
       ) : null}
     </>
   )
-}
-
-/** Stands in so the name hook runs in every render; its answer is unused without a sender. */
-const NO_SENDER: AgentMessageSource['senders'][number] = {
-  party: { address: '', terminalHandle: null, orcaSessionId: null },
-  name: null
 }
 
 const BOT_TILE = 'size-3.5 rounded-sm border-0 text-3xs'

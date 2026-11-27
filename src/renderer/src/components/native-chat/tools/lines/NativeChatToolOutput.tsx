@@ -66,7 +66,8 @@ export function NativeChatToolOutput({
       const item = await readStructuredAgentSessionItem(owner.target, owner.sessionId, itemId)
       const payload = item?.itemId === itemId ? nativeChatToolFullPayload(item.body) : null
       if (!payload) {
-        throw new Error('Output is unavailable')
+        finish({ failed: true })
+        return
       }
       finish({ full: payload })
     } catch {

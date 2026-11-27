@@ -9,12 +9,12 @@ import {
   WorktreeCardDeleteQuickAction,
   WorktreeCardPrimaryBadge,
   WorktreeCardPrimaryStar,
-  WorktreeCardRenameErrorButton,
   WorktreeCardRepoChip,
   WorktreeCardRuntimeHostMark,
   WorktreeCardSparseBadge
 } from '../identity/worktree-card-header-items'
 import { WorktreeCardNotificationsMutedBadge } from '../identity/WorktreeCardNotificationsMutedBadge'
+import { AutoNameFailedIndicator } from '../identity/AutoNameFailedIndicator'
 import {
   WorktreeCardConflictBadge,
   WorktreeCardFolderPath
@@ -122,12 +122,15 @@ export const CARD_IDENTITY_PARTS = {
       hostLabel={card.runtimeHostLabel}
     />
   )),
-  RenameError: part([], (_props, _children, card) => (
-    <WorktreeCardRenameErrorButton
-      onPointerDown={card.stopQuickActionPointerPropagation}
-      onOpen={card.handleOpenRenameErrorDialog}
-    />
-  )),
+  RenameError: part([], (_props, _children, card) =>
+    card.autoNameFailure ? (
+      <AutoNameFailedIndicator
+        card={card}
+        failure={card.autoNameFailure}
+        onPointerDown={card.stopQuickActionPointerPropagation}
+      />
+    ) : null
+  ),
   PrimaryBadge: part(['hasHoverDetails'], (props, _children, card) => (
     <WorktreeCardPrimaryBadge card={card} hasHoverDetails={props.hasHoverDetails === true} />
   )),

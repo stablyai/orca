@@ -9,7 +9,7 @@ import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-nam
 import { botItemQuestionShape } from '../../../../src/shared/bots/bot-item-ask'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
 import type { BotItemSentAnswers } from '../../../../src/shared/bots/use-bot-item-question-steps'
-import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
+import { MobileNativeChatMarkdown } from '../../session/native-chat/transcript/message-content/MobileNativeChatMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
@@ -109,7 +109,7 @@ export function MobileBotItemCommentCard({
         ) : null}
         <MobileBotItemCommentAttachments data={event.data} {...attachments}>
           {text.trim() ? (
-            <MobileMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
+            <MobileNativeChatMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
           ) : null}
         </MobileBotItemCommentAttachments>
         {shape.decisions.length > 0 ? (

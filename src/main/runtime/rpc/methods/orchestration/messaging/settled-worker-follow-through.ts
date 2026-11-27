@@ -28,6 +28,7 @@ import {
 import { captureReportedWorkerResumeSession } from '../worker/follow-up/worker-resume-session-capture'
 import { reportedWorkerOutcome } from '../worker/start/worker-start-receipt'
 import { afterWorkerStartWait } from '../worker/start/readiness/worker-start-waits'
+import { failedWorkerChatAttachment } from '../../../../orchestration/db/worker-dispatch/restart-cut-worker-start'
 
 /** After a report settles (or replays): save the worker's conversation, then continue mail it never read. */
 export function followThroughWorkerReport(
@@ -82,9 +83,9 @@ async function continueUnreadMail(
     return
   }
   if (
-    worker?.state === 'starting' &&
-    worker.runtime_epoch &&
-    worker.runtime_epoch !== runtime.getRuntimeId()
+    worker?.runtime_epoch &&
+    worker.runtime_epoch !== runtime.getRuntimeId() &&
+    (worker.state === 'starting' || failedWorkerChatAttachment(worker))
   ) {
     if (worker.agent_terminal_handle) {
       // Its agent may still run, so only the coordinator can tell whether to retry.

@@ -6,6 +6,7 @@ import {
   type AiVaultSessionTitlesResult
 } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { parseAgentSessionFileCached } from '../parse-cache/session-scanner-parse-cache'
+import { generatedSessionTitle } from '../parsing/session-scanner-accumulator'
 
 import {
   codexHomeFromSessionFilePath,
@@ -151,5 +152,11 @@ async function readSessionTitles(
   await Promise.all(
     Array.from({ length: Math.min(TITLE_PARSE_CONCURRENCY, bounded.length) }, parseNext)
   )
-  return { titles: resolved.filter((title): title is AiVaultSessionTitle => title !== null) }
+  return {
+    titles: resolved.filter(
+      (title): title is AiVaultSessionTitle =>
+        // History's "<Agent> <id prefix>" placeholder names nothing; the tab keeps the agent's live title.
+        title !== null && title.title !== generatedSessionTitle(title.agent, title.sessionId)
+    )
+  }
 }

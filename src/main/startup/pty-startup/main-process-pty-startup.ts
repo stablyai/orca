@@ -1,4 +1,6 @@
 import { installProviderProcessHost } from '../../provider-process/provider-process-spawn'
+import { installProviderRelayRoute } from '../../provider-relay/app-provider-relays'
+import { nativeChatIdleStopMs } from '../../../shared/native-chat/settings/native-chat-idle-stop'
 import { recordCodexMigrationPtySpawn } from '../../codex/history/backfill/desktop-codex-session-migration'
 import { app } from 'electron'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
@@ -10,6 +12,8 @@ import {
   getDaemonProvider,
   getDaemonEndpointFacts,
   getProviderProcessHostClient,
+  getProviderRelayHostClient,
+  getProviderRelayHostClients,
   listLiveDaemonPtyIds
 } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import { reportDaemonPtyCwdVerdict } from '../../daemon/observability/daemon-adoption-telemetry-event'
@@ -219,6 +223,21 @@ export function bindTerminalRuntimeStartupServices(
         })
       }
     )
+  }
+  // Chat agents run under the terminal daemon so they outlive a restart; Windows keeps today's launch.
+  if ((process.platform === 'darwin' || process.platform === 'linux') && !state.isServeMode) {
+    installProviderRelayRoute({
+      current: async () => {
+        await state.localPtyProviderStartupReady
+        return getProviderRelayHostClient()
+      },
+      all: async () => {
+        await state.localPtyProviderStartupReady
+        return getProviderRelayHostClients()
+      },
+      appVersion: app.getVersion(),
+      idleStopMs: () => nativeChatIdleStopMs(state.store?.getSettings())
+    })
   }
   state.firstWindowStartupServicesReady = services.then((value) => value.firstWindowReady)
   state.localPtyStartupReady = services.then((value) => value.localPtyReady)
