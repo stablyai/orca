@@ -181,6 +181,7 @@ describe('agent output through a real process worker', () => {
     return resolveProviderSpawner(undefined)!({ program: process.execPath, args: ['-e', script] })
   }
 
+  // Starts a real child through the worker, and process creation can take seconds on Windows.
   it('delivers every chunk, then end, then close, to a reader that pauses after each', async () => {
     const agent = startAgent(
       "process.stdout.write('a-'); setTimeout(() => process.stdout.write('b-'), 200); setTimeout(() => process.stdout.write('c'), 400)"
@@ -200,6 +201,7 @@ describe('agent output through a real process worker', () => {
     expect(events.slice(-1)).toEqual(['end'])
   }, 60_000)
 
+  // Starts a real child through the worker, and process creation can take seconds on Windows.
   it('keeps stderr flowing while unread stdout holds its own credit', async () => {
     const agent = startAgent(
       "process.stdout.write(Buffer.alloc(256 * 1024, 120), () => process.stderr.write('marker')); setInterval(() => {}, 1000)"
