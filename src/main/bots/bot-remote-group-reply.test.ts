@@ -327,7 +327,8 @@ it('keeps an explicit reply authoritative and preserves failure, empty and NO_RE
     ['Final after explicit reply', 'success'],
     ['Partial failure', 'failure'],
     ['', 'success'],
-    ['NO_REPLY', 'success']
+    ['NO_REPLY', 'success'],
+    ['Nothing to send. NO_REPLY', 'success']
   ].entries()) {
     const ask = await mention()
     if (index === 0) {

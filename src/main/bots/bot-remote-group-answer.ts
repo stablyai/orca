@@ -1,4 +1,4 @@
-import { addressedBotWords, isQuietBotResult } from '../../shared/bot-quiet-result'
+import { isQuietBotResult } from '../../shared/bot-quiet-result'
 import { isRemoteBotGroupSession } from '../../shared/bots/bot-remote-group-session'
 import { readAgentJournalTurnOutcome } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { structuredAgentSessionTurnReply } from '../../shared/agent-session/requests/structured-agent-session-turn-reply'
@@ -56,8 +56,8 @@ export async function remoteGroupAnswers(
         continue
       }
       const { botProse } = structuredAgentSessionTurnReply(snapshot.items, item.itemId)
-      const text = isQuietBotResult(botProse) ? addressedBotWords(botProse) : botProse.trim()
-      if (text) {
+      const text = botProse.trim()
+      if (text && !isQuietBotResult(text)) {
         answers.set(messageId, { text, operationId })
       }
     }
