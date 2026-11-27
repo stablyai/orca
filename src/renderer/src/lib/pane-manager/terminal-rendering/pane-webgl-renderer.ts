@@ -35,6 +35,7 @@ import {
 } from './terminal-webgl-atlas-memory-rebuild'
 import { requestAtlasChangeIntegrityCheck } from './terminal-webgl-atlas-change-hints'
 import { verifyPaneWebglAtlasIntegrity } from './terminal-webgl-atlas-integrity'
+import { detachHiddenDomRenderer } from './terminal-hidden-dom-renderer'
 
 export const ENABLE_WEBGL_RENDERER = true
 let suggestedRendererType: 'dom' | undefined
@@ -127,14 +128,22 @@ export function disposeWebgl(
   cancelPendingWebglRefresh(pane)
   panesAwaitingWebglAddon.delete(pane)
   untrackTerminalWebglAtlasPane(pane)
-  if (!pane.webglAddon) {
+  const hadWebgl = Boolean(pane.webglAddon)
+  if (pane.webglAddon) {
+    releaseXtermWebglContext(pane.webglAddon)
+    try {
+      pane.webglAddon.dispose()
+    } catch {}
+    pane.webglAddon = null
+  }
+  if (pane.webglAttachmentDeferred) {
+    // Disposing WebGL falls xterm back to DomRenderer (793 CSS rules per hidden pane); detach while hidden.
+    detachHiddenDomRenderer(pane.terminal)
     return
   }
-  releaseXtermWebglContext(pane.webglAddon)
-  try {
-    pane.webglAddon.dispose()
-  } catch {}
-  pane.webglAddon = null
+  if (!hadWebgl) {
+    return
+  }
   if (options?.refreshDimensions) {
     // Refit after teardown because DOM/WebGL cell metrics differ; otherwise Linux scrollbars desync and reflow jitters.
     pane.pendingWebglRefreshRafId = requestAnimationFrame(() => {

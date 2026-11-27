@@ -14,6 +14,7 @@ import {
 } from './fixture-session.mjs'
 import { runLoadingAndLayerChecks } from './loading-and-layer-checks.mjs'
 import { runChipNameChecks } from './chip-name-checks.mjs'
+import { runCommandGroupChecks } from './command-group-checks.mjs'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 
@@ -120,6 +121,7 @@ await check('opens and folds after a held gesture that ended outside the card', 
 )
 
 await runChipNameChecks({ check, scene, assert })
+await runCommandGroupChecks({ check, scene, assert, open, shot })
 
 await check('a worker waiting on you leads the pill and the card, then failed, running, done', () =>
   scene('askOpen720', {}, async (page) => {
@@ -393,23 +395,6 @@ await check('Clear failed in the footer clears every failure', () =>
     const after = await rows(page)
     assert(!after.some((row) => row.state === 'failed'), 'a failure is still shown')
     assert(after.length === 17, `expected 17 rows, saw ${after.length}`)
-  })
-)
-
-await check('Stop all shows in the panel header only when it applies, and stops', () =>
-  scene('stopAllOpen720', {}, async (page) => {
-    const stop = page.getByRole('button', { name: 'Stop all' })
-    const [box, header] = await Promise.all([stop.boundingBox(), toggle(page).boundingBox()])
-    assert(Math.abs(box.y + box.height / 2 - (header.y + header.height / 2)) <= 1, 'not in header')
-    await stop.click()
-    assert(
-      (await events(page)).some((event) => event.action === 'stop-all'),
-      'no Stop all'
-    )
-    await shot(page, 'header-stop-all')
-    await open('fourOpen720', {})
-    assert((await page.getByRole('button', { name: 'Stop all' }).count()) === 0, 'Stop all drawn')
-    assert((await page.locator('[data-worker-dock-footer]').count()) === 0, 'empty footer drawn')
   })
 )
 

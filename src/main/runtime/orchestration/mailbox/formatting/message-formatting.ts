@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import type { MessageRow } from '../../db/orchestration-records'
 import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/journal/answer-sender-snapshot'
 import {
@@ -9,6 +10,7 @@ import {
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
 import type { OrchestrationMailContent } from '../../../../../shared/agent-session/journal/agent-session-message-source'
+import { BOT_ITEM_MAIL_SENDER } from '../../../../../shared/bots/bot-item-mail-sender'
 import {
   formatReportFollowUpLine,
   type ReportFollowUpAction
@@ -20,12 +22,14 @@ import {
 
 // The fields of this host's own bot-request record that name a paired sender, in every shape it
 // has saved them.
-const RecordedPairedSender = z.object({
-  fromBotName: z.string().nullish(),
-  fromPairedComputer: z.string().optional(),
-  fromPairedServer: z.string().optional(),
-  fromComputer: z.string().nullish()
-})
+const RecordedPairedSender = lazyZodSchema(() =>
+  z.object({
+    fromBotName: z.string().nullish(),
+    fromPairedComputer: z.string().optional(),
+    fromPairedServer: z.string().optional(),
+    fromComputer: z.string().nullish()
+  })
+)
 
 /** A bot request from a paired computer is named as its record names it, so the header says what
  *  the request does: a server it was pulled from by this computer's name for it, never the name the
@@ -175,7 +179,7 @@ export function formatMessageBannerWithContent(
 
   if (authority === 'current' && options.followUp) {
     lines.push(`[${formatReportFollowUpLine(options.followUp, options.cliCommand ?? 'orca')}]`)
-  } else if (authority === 'current') {
+  } else if (authority === 'current' && msg.from_handle !== BOT_ITEM_MAIL_SENDER) {
     const explicitFrom =
       msg.to_handle.startsWith('run:') || msg.to_handle.startsWith('dispatch:')
         ? ''

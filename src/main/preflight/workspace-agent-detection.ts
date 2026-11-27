@@ -20,6 +20,7 @@ import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-work
 import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
 import type { Repo } from '../../shared/repository/repo-types'
 import {
+  resolveLocalProjectRuntimeForProject,
   resolveLocalWorkspaceRuntime,
   type ProjectRuntimeResolutionStore
 } from '../workspaces/execution-host/local-project-runtime-resolution'
@@ -55,6 +56,23 @@ export type WorkspaceAgentDetectionStore = ProjectRuntimeResolutionStore & {
 }
 
 export const HOST_DEFAULT_AGENT_DETECTION: AgentDetectionHost = { kind: 'local' }
+
+/** The configured Windows Agent runtime, which desktop probes with nothing focused (#18837). */
+export function resolveConfiguredWindowsAgentDetectionHost(
+  store: WorkspaceAgentDetectionStore
+): AgentDetectionHost {
+  if (process.platform !== 'win32' || !store.getSettings?.().localWindowsRuntimeDefault) {
+    return HOST_DEFAULT_AGENT_DETECTION
+  }
+  // 'local-project' is the renderer's id for a runtime resolved without a project.
+  const projectRuntime = resolveLocalProjectRuntimeForProject(store, {
+    id: 'local-project',
+    localWindowsRuntimePreference: { kind: 'inherit-global' }
+  })
+  return projectRuntime
+    ? { kind: 'local', context: { projectRuntime } }
+    : HOST_DEFAULT_AGENT_DETECTION
+}
 
 export type AgentDetectionWorkspace =
   | {

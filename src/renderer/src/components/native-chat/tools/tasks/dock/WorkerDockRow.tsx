@@ -1,5 +1,9 @@
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { workerDockKindLabel, workerDockStateLabel } from './worker-dock-labels'
+import {
+  workerDockKindLabel,
+  workerDockSpokenTitle,
+  workerDockStateLabel
+} from './worker-dock-labels'
 import { memo } from 'react'
 import { cn } from '@/lib/class-names'
 import { WorkerDockRowAction } from './WorkerDockRowAction'
@@ -81,9 +85,10 @@ export const WorkerDockRow = memo(function WorkerDockRow({
     row.progressNote
       ? row.progressNote
       : ''
+  const command = row?.kind === 'command'
   const label = [
     mixed && row ? workerDockKindLabel(t, row.kind) : '',
-    title,
+    row ? workerDockSpokenTitle(row.kind, title) : title,
     state,
     progress,
     remote
@@ -118,7 +123,14 @@ export const WorkerDockRow = memo(function WorkerDockRow({
           <WorkerDockGlyph glyph={row ? workerDockGlyph(row) : 'queued'} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="line-clamp-3 break-words">{title}</span>
+          {/* A command is one mono line; the tooltip carries the whole of it. */}
+          <span
+            className={
+              command ? 'truncate font-mono text-xs leading-5' : 'line-clamp-3 break-words'
+            }
+          >
+            {title}
+          </span>
           {progress ? (
             <span className="truncate text-xs text-muted-foreground">{progress}</span>
           ) : null}
@@ -137,7 +149,8 @@ export const WorkerDockRow = memo(function WorkerDockRow({
       <div
         data-worker-dock-hover=""
         className={cn(
-          'pointer-events-none absolute inset-y-0 right-0 flex items-center gap-1 rounded-r-md bg-accent pr-2 pl-1.5',
+          // Inset by the focus ring's width, so a focused row's ring closes on all four sides.
+          'pointer-events-none absolute inset-y-[2px] right-[2px] flex items-center gap-1 rounded-r-[4px] bg-accent pr-1.5 pl-1.5',
           pending
             ? 'opacity-100 [&>*]:pointer-events-auto'
             : 'opacity-0 group-hover/worker:opacity-100 group-hover/worker:[&>*:not(svg)]:pointer-events-auto group-focus-within/worker:opacity-100 [@media(pointer:coarse)]:opacity-100 [@media(pointer:coarse)]:[&>*:not(svg)]:pointer-events-auto'

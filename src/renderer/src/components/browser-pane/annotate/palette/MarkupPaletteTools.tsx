@@ -18,6 +18,7 @@ import {
   type MarkupTool
 } from '../drawing/markup-drawing-model'
 import { markupToolItems, type MarkupToolbarProps } from '../markup-tools/MarkupToolbar'
+import { useAnnotatePalettePopupSide } from './annotate-palette-position-store'
 
 /** Kept in the row; the rest of the drawing tools sit in the ⋯ menu so the palette stays one line. */
 const ROW_TOOLS: readonly MarkupTool[] = ['pen', 'highlight', 'arrow', 'rect']
@@ -37,6 +38,7 @@ function PaletteIconButton({
   onClick: () => void
   children: React.ReactNode
 }): React.JSX.Element {
+  const popupSide = useAnnotatePalettePopupSide()
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -53,7 +55,7 @@ function PaletteIconButton({
           {children}
         </Button>
       </TooltipTrigger>
-      <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
+      <TooltipContent data-annotate-palette-tooltip="" side={popupSide} sideOffset={6}>
         {label}
       </TooltipContent>
     </Tooltip>
@@ -86,6 +88,7 @@ export function MarkupPaletteTools({
   canClear?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const popupSide = useAnnotatePalettePopupSide()
   const items = markupToolItems(t)
   const compact = density === 'compact'
   const full = density === 'full'
@@ -126,11 +129,11 @@ export function MarkupPaletteTools({
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
-            <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
+            <TooltipContent data-annotate-palette-tooltip="" side={popupSide} sideOffset={6}>
               {moreLabel}
             </TooltipContent>
           </Tooltip>
-          <DropdownMenuContent align="start" side="bottom">
+          <DropdownMenuContent align="start" side={popupSide}>
             {menuItems.map((item) => (
               <DropdownMenuItem key={item.kind} onSelect={() => onToolChange(item.kind)}>
                 <item.icon className="size-3.5" />
@@ -168,11 +171,11 @@ export function MarkupPaletteTools({
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
+          <TooltipContent data-annotate-palette-tooltip="" side={popupSide} sideOffset={6}>
             {styleLabel}
           </TooltipContent>
         </Tooltip>
-        <PopoverContent side="bottom" align="start" className="w-auto">
+        <PopoverContent side={popupSide} align="start" className="w-auto">
           <div className="flex flex-wrap gap-1">
             {MARKUP_COLORS.map((swatch) => (
               <button
@@ -223,11 +226,11 @@ export function MarkupPaletteTools({
                 </Button>
               </PopoverTrigger>
             </TooltipTrigger>
-            <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
+            <TooltipContent data-annotate-palette-tooltip="" side={popupSide} sideOffset={6}>
               {fontSizeLabel}
             </TooltipContent>
           </Tooltip>
-          <PopoverContent side="bottom" align="start" className="w-auto">
+          <PopoverContent side={popupSide} align="start" className="w-auto">
             <div className="flex items-center gap-1">
               {MARKUP_FONT_SIZES.map((size) => (
                 <button

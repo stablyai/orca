@@ -39,6 +39,9 @@ export type AgentSessionCancelOutcome = {
 
 export type AgentSessionPromptCancelRoute = { kind: 'dismiss' } | { kind: 'stop' }
 
+/** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`. */
+type KeptLaunchOutgrown = boolean | undefined | Promise<boolean | undefined>
+
 export type StructuredAgentSessionAdapterStop = {
   /** Stop named tasks only; acknowledge each accepted stop immediately so later batch failures cannot erase it. */
   stopBackgroundTasks?(input: {
@@ -76,4 +79,13 @@ export type StructuredAgentSessionAdapterStop = {
     answer: boolean
     commit: () => Promise<void>
   }): Promise<void>
+  /** Open work, keyed as the provider's relay work markers key it, for a detached idle stop. */
+  relayOpenWork?(sessionId: string, rootTurnRunning: boolean): Record<string, string[][]> | null
+  /** A kept agent the chat reattached: true when it lacks the tools its launch has and ending it
+   *  loses no replayed output (the next new turn starts a child that has them); false when no tools
+   *  refresh may end it (its replay isn't durable yet, or its work can't be seen); undefined with
+   *  nothing to protect. It may first wait for a replay's last ack, so the send that follows
+   *  reaches the fresh agent; `toolsOutdated` (the host's `launchTools.outdated`) says whether
+   *  anything but its own launch could need that. */
+  keptLaunchOutgrown?(sessionId: string, toolsOutdated: boolean): KeptLaunchOutgrown
 }

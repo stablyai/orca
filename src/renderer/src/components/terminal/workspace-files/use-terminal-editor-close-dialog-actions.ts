@@ -36,6 +36,23 @@ export type TerminalEditorCloseDialogActionsInput = Pick<
   | 'windowCloseAfterDirtyRef'
 >
 
+async function awaitEditorSaveAndClose(
+  fileId: string,
+  fileClosed: Promise<boolean>,
+  notClosed: Promise<boolean>,
+  inFlightSaveFileIdRef: { current: string | null }
+): Promise<boolean> {
+  inFlightSaveFileIdRef.current = fileId
+  try {
+    // Why the race: a refused save keeps the tab open, so don't wait out the timeout for it.
+    return await Promise.race([fileClosed, notClosed])
+  } finally {
+    if (inFlightSaveFileIdRef.current === fileId) {
+      inFlightSaveFileIdRef.current = null
+    }
+  }
+}
+
 export function useTerminalEditorCloseDialogActions(
   controller: TerminalEditorCloseDialogActionsInput
 ) {
@@ -82,16 +99,12 @@ export function useTerminalEditorCloseDialogActions(
       }
       window.dispatchEvent(new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, { detail }))
     })
-    inFlightSaveFileIdRef.current = fileId
-    let closed = false
-    try {
-      // Why the race: a refused save keeps the tab open, so don't wait out the timeout for it.
-      closed = await Promise.race([waitForFileClosed(fileId, 10_000, tabId), notClosed])
-    } finally {
-      if (inFlightSaveFileIdRef.current === fileId) {
-        inFlightSaveFileIdRef.current = null
-      }
-    }
+    const closed = await awaitEditorSaveAndClose(
+      fileId,
+      waitForFileClosed(fileId, 10_000, tabId),
+      notClosed,
+      inFlightSaveFileIdRef
+    )
     if (!closed) {
       if (!useAppStore.getState().openFiles.some((candidate) => candidate.id === fileId)) {
         settleQueuedClose(fileId)

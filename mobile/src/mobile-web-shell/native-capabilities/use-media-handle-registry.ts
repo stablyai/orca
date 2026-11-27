@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { MediaHandleRegistry } from './media-handle-registry'
+import { recomputeOn } from '../../hooks/recompute-on'
 
 const readClock = (): number => Date.now()
 
@@ -15,10 +16,14 @@ export function useMediaHandleRegistry(args: {
   }, [args.discard])
   const registry = useMemo(
     () =>
-      new MediaHandleRegistry({
-        now: readClock,
-        discard: (uri) => discardRef.current(uri)
-      }),
+      recomputeOn(
+        [args.sessionId],
+        () =>
+          new MediaHandleRegistry({
+            now: readClock,
+            discard: (uri) => discardRef.current(uri)
+          })
+      ),
     [args.sessionId]
   )
   useEffect(() => () => registry.releaseAll(), [registry])

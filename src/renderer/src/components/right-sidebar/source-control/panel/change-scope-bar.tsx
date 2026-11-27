@@ -74,13 +74,11 @@ export function SourceControlChangeScopeBar({
   model,
   graphSupported,
   filter,
-  graphControl,
   overflowMenu
 }: SourceControlPanelReadyProps & {
   graphSupported: boolean
   /** Null where a folder card's header owns the filter toggle and its row. */
   filter?: SourceControlFileFilterProps | null
-  graphControl?: React.ReactNode
   overflowMenu?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
@@ -246,7 +244,6 @@ export function SourceControlChangeScopeBar({
                   }}
                 />
               ) : null}
-              {graphControl}
               {overflowMenu}
             </div>
           </div>

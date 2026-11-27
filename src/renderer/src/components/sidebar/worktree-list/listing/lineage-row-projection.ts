@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
 import { useMemo } from 'react'
+import { fingerprintStringList } from '../../../../../../shared/text/string-fingerprint'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getRenderRowKey, type RenderRow } from './render-row'
 import {
@@ -203,7 +204,12 @@ export function buildLineageRowProjection(
       stem: hasChildren ? guideX(index + 1) : null
     }
   })
-  return { frames, occurrencesByIdentity, rowIndexByKey, restoreSignal: JSON.stringify(rowKeys) }
+  return {
+    frames,
+    occurrencesByIdentity,
+    rowIndexByKey,
+    restoreSignal: fingerprintStringList(rowKeys)
+  }
 }
 
 export function useDraggedSubtreeRanges(

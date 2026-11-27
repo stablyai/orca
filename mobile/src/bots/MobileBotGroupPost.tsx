@@ -7,6 +7,10 @@ import {
 } from '../../../src/shared/bots/bot-group'
 import { stripSentImagePromptMarkers } from '../../../src/shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { MobileNativeChatMessage } from '../session/native-chat/transcript/messages/MobileNativeChatMessage'
+import { MobileNativeChatMessageTime } from '../session/native-chat/transcript/messages/MobileNativeChatMessageTime'
+import { stylesSheet as messageStylesSheet } from '../session/native-chat/transcript/messages/mobile-native-chat-message-styles'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from './host-bots-operations'
 import { MobileBotGroupPeerRequestLine } from './MobileBotGroupPeerRequestLine'
@@ -28,23 +32,31 @@ export function MobileBotGroupPost({
   onStop: (botId: string) => void
   onReply: (botId: string) => void
 }) {
+  const messageStyles = useThemedStyles(messageStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View>
       {message.author.kind === 'owner' ? (
-        <MobileNativeChatMessage
-          message={{
-            id: message.id,
-            role: 'user',
-            // The photos show under the words, so the [Image #N] the send wrote go, as on desktop.
-            blocks: botGroupOwnerMessageBlocks({
-              ...message,
-              text: stripSentImagePromptMarkers(message.text, message.images?.length ?? 0)
-            }),
-            timestamp: message.createdAt,
-            source: 'transcript',
-            ...(message.automationRun ? { automationRun: message.automationRun } : {})
-          }}
-        />
+        <>
+          <MobileNativeChatMessage
+            message={{
+              id: message.id,
+              role: 'user',
+              // The photos show under the words, so the [Image #N] the send wrote go, as on desktop.
+              blocks: botGroupOwnerMessageBlocks({
+                ...message,
+                text: stripSentImagePromptMarkers(message.text, message.images?.length ?? 0)
+              }),
+              timestamp: message.createdAt,
+              source: 'transcript',
+              ...(message.automationRun ? { automationRun: message.automationRun } : {})
+            }}
+          />
+          {/* A room is read later, so your own posts keep their time, as the bots' turns do. */}
+          <View style={[messageStyles.meta, styles.ownerTime]}>
+            <MobileNativeChatMessageTime timestamp={message.createdAt} fontScale={1} />
+          </View>
+        </>
       ) : (
         <MobileBotGroupPeerRequestLine message={message} />
       )}
@@ -65,3 +77,11 @@ export function MobileBotGroupPost({
     </View>
   )
 }
+
+const stylesSheet = themedStyleSheet(() => ({
+  ownerTime: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: spacing.lg,
+    marginTop: -spacing.xs
+  }
+}))

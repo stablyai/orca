@@ -1,6 +1,7 @@
 // The Connect card a bot asks Orca to put in its chat (`orca bot connectors --offer`). Older clients and
 // the phone paint its `text` as a plain line.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalPlainStatusItem
@@ -31,17 +32,19 @@ export type OfferSource = (typeof OFFER_SOURCES)[number]
 
 export const CONNECTOR_OFFER_PRESENTATION = 'connector-offer'
 
-export const ConnectorOfferSchema = z.object({
-  botId: z.string().min(1),
-  source: z.enum(OFFER_SOURCES),
-  /** A workspace or org the owner named that the bot isn't in yet: the card adds it. */
-  workspace: z.string().trim().min(1).max(200).optional(),
-  /** Already connected: the card adds access (GitHub repositories or organizations, or another
-   *  Slack or Linear workspace). */
-  addAccess: z.literal(true).optional(),
-  /** The host is signed out of Orca: the card is a Sign in line for the source's events. */
-  signIn: z.literal(true).optional()
-})
+export const ConnectorOfferSchema = lazyZodSchema(() =>
+  z.object({
+    botId: z.string().min(1),
+    source: z.enum(OFFER_SOURCES),
+    /** A workspace or org the owner named that the bot isn't in yet: the card adds it. */
+    workspace: z.string().trim().min(1).max(200).optional(),
+    /** Already connected: the card adds access (GitHub repositories or organizations, or another
+     *  Slack or Linear workspace). */
+    addAccess: z.literal(true).optional(),
+    /** The host is signed out of Orca: the card is a Sign in line for the source's events. */
+    signIn: z.literal(true).optional()
+  })
+)
 
 export type ConnectorOffer = z.infer<typeof ConnectorOfferSchema>
 

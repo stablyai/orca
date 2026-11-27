@@ -1,9 +1,9 @@
 import { StyleSheet } from 'react-native'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
 
-export const worktreeListRowStyles = themedStyleSheet(() => ({
+export const worktreeListRowStylesSheet = themedStyleSheet((colors) => ({
   worktreeRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -12,7 +12,9 @@ export const worktreeListRowStyles = themedStyleSheet(() => ({
     paddingRight: spacing.lg,
     // Reserve the active accent bar width so active/inactive rows align.
     borderLeftWidth: WORKTREE_ROW_LAYOUT.accentWidth,
-    borderLeftColor: 'transparent'
+    borderLeftColor: 'transparent',
+    // Opaque, so a swipe's action shows only where the row has moved off it.
+    backgroundColor: colors.bgBase
   },
   // The desktop's paused bot: its row and workspaces at 60%.
   worktreeRowDimmed: {

@@ -263,6 +263,24 @@ export class BotItemsHost {
       items.map((item) => item.uid),
       withWaitingAsks
     )
+    return this.viewsFromRows(items, rows, summary)
+  }
+
+  async showView(
+    item: BotItemRecord,
+    afterId: number,
+    limit: number
+  ): Promise<{ item: BotItem; events: BotItemEvent[] }> {
+    const { rows, events } = await this.store().showRows(item.uid, afterId, limit)
+    const [view] = await this.viewsFromRows([item], rows, false)
+    return { item: view!, events: events.map(eventViewOf) }
+  }
+
+  private async viewsFromRows(
+    items: readonly BotItemRecord[],
+    rows: Awaited<ReturnType<BotItemsRemote['viewRows']>>,
+    summary: boolean
+  ): Promise<BotItem[]> {
     const refs = Object.values(rows.links)
       .flat()
       .flatMap((link) => (link.kind === 'dispatch' ? [link.ref] : []))

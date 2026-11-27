@@ -1,17 +1,11 @@
 // The phone's words for the Google setup cards, in the computer's English (google-setup-card-copy,
 // google-setup-blocker-copy and google-copy in the renderer).
 import type { GoogleServiceChoice } from '../../../../../../src/shared/google/google-scopes'
-import {
-  GOOGLE_SETUP_ALLOW_NAMES_UP_TO,
-  type GoogleSetupAction,
-  type GoogleSetupBlocker
-} from '../../../../../../src/shared/google/google-setup-blocker'
 import type {
   GoogleSetupMode,
   GoogleSetupStep
 } from '../../../../../../src/shared/google/google-setup-run'
 import type { Translate } from '../../../../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../../../../i18n/ui-intl-locale'
 
 export function googleSetupPathTitle(t: Translate, mode: GoogleSetupMode): string {
   switch (mode) {
@@ -60,8 +54,12 @@ export function googleChoiceDescription(t: Translate, choice: GoogleServiceChoic
   }
 }
 
-export function googleServicesList(t: Translate, choices: readonly GoogleServiceChoice[]): string {
-  return new Intl.ListFormat(getUiIntlLocale(), { type: 'conjunction' }).format(
+export function googleServicesList(
+  t: Translate,
+  locale: string,
+  choices: readonly GoogleServiceChoice[]
+): string {
+  return new Intl.ListFormat(locale, { type: 'conjunction' }).format(
     choices.map((choice) => googleChoiceLabel(t, choice))
   )
 }
@@ -69,6 +67,7 @@ export function googleServicesList(t: Translate, choices: readonly GoogleService
 /** A step's name in the progress list. */
 export function googleSetupStepTitle(
   t: Translate,
+  locale: string,
   step: GoogleSetupStep,
   choices: readonly GoogleServiceChoice[]
 ): string {
@@ -79,7 +78,7 @@ export function googleSetupStepTitle(
       return t('chat.botCards.google.step.project', 'Create a project')
     case 'apis':
       return t('chat.botCards.google.step.apis', 'Turn on {{services}}', {
-        services: googleServicesList(t, choices)
+        services: googleServicesList(t, locale, choices)
       })
     case 'branding':
       return t('chat.botCards.google.step.branding', 'Set up Google’s sign-in screen')
@@ -185,126 +184,7 @@ export function googleSetupStepNotes(
   }
 }
 
-export function googleSetupActionText(t: Translate, action: GoogleSetupAction): string {
-  switch (action.id) {
-    case 'make-new-key':
-      return t('chat.botCards.google.action.makeNewKey', 'Make a new key')
-    case 'import-key':
-      return t('chat.botCards.google.action.importKey', 'Import a key file')
-    case 'allow':
-      return action.services.length <= GOOGLE_SETUP_ALLOW_NAMES_UP_TO
-        ? t('chat.botCards.google.action.allow', 'Allow {{services}}', {
-            services: googleServicesList(t, action.services)
-          })
-        : t('chat.botCards.google.action.signInAgain', 'Sign in again')
-    case 'continue-without':
-      return t('chat.botCards.google.action.continueWithout', 'Continue without them')
-    case 'keep-account':
-      return t('chat.botCards.google.action.keep', 'Keep {{email}}', { email: action.email })
-    case 'sign-in-again':
-      return action.email
-        ? t('chat.botCards.google.action.signInAs', 'Sign in as {{email}}', {
-            email: action.email
-          })
-        : t('chat.botCards.google.action.signInAgain', 'Sign in again')
-    case 'turn-on':
-      return t('chat.botCards.google.action.turnOn', 'Turn on')
-    case 'copy-for-admin':
-      return t('chat.botCards.google.action.copyForAdmin', 'Copy for your admin')
-    case 'check-again':
-      return t('chat.botCards.google.action.checkAgain', 'Check again')
-    case 'continue':
-      return t('chat.botCards.google.action.continue', 'Continue')
-    case 'start-over':
-      return t('chat.botCards.google.action.startOver', 'Start over')
-    case 'let-me':
-      return t('chat.botCards.google.letMe', 'Let me do this one')
-    case 'done':
-      return t('chat.botCards.google.done', 'Done')
-  }
-}
-
-export function googleSetupBlockerText(t: Translate, blocker: GoogleSetupBlocker): string {
-  switch (blocker.kind) {
-    case 'stopped':
-      return blocker.reason
-        ? t('chat.botCards.google.blocker.stoppedWhy', 'Setup stopped: {{reason}}', {
-            reason: blocker.reason
-          })
-        : t('chat.botCards.google.blocker.stopped', 'Setup stopped.')
-    case 'paused':
-      return t(
-        'chat.botCards.google.blocker.paused',
-        'The setup paused at {{step}}. Everything so far is saved.',
-        { step: googleSetupStepTitle(t, blocker.step, []) }
-      )
-    case 'needs-user':
-      return (
-        blocker.note ??
-        t('chat.botCards.google.blocker.yourTurn', 'Your turn: {{step}}.', {
-          step: googleSetupStepTitle(t, blocker.step, [])
-        })
-      )
-    case 'no-key':
-      return t('chat.botCards.google.blocker.noKey', 'Orca needs the app’s key first.')
-    case 'key-gone':
-      return t(
-        'chat.botCards.google.blocker.keyGone',
-        'This app’s key no longer works: it was removed in Google Cloud.'
-      )
-    case 'key-other-project':
-      return t(
-        'chat.botCards.google.blocker.keyOtherProject',
-        'The saved key is for project {{keyProject}}, not {{project}}.',
-        { keyProject: blocker.keyProjectId, project: blocker.projectId }
-      )
-    case 'other-account':
-      return t(
-        'chat.botCards.google.blocker.otherAccount',
-        'You signed in as {{signedIn}}; this setup was for {{wanted}}.',
-        { signedIn: blocker.signedIn, wanted: blocker.wanted }
-      )
-    case 'signed-out':
-      return t('chat.botCards.google.blocker.signedOut', 'The sign-in for {{email}} ended.', {
-        email: blocker.email
-      })
-    case 'needs-permission':
-      return t(
-        'chat.botCards.google.blocker.needsPermission',
-        'Almost there: allow {{services}}. Google shows a box for each one; tick them all.',
-        { services: googleServicesList(t, blocker.services) }
-      )
-    case 'api-off':
-      return t(
-        'chat.botCards.google.blocker.apiOff',
-        '{{services}} is turned off in Google Cloud.',
-        {
-          services: googleServicesList(t, blocker.services)
-        }
-      )
-    case 'admin-blocked':
-      return t(
-        'chat.botCards.google.blocker.adminBlocked',
-        'Your company’s Google admin blocked {{services}}.',
-        { services: googleServicesList(t, blocker.services) }
-      )
-    case 'check-failed':
-      return t('chat.botCards.google.blocker.checkFailed', 'Orca couldn’t check {{services}}.', {
-        services: googleServicesList(t, blocker.services)
-      })
-  }
-}
-
 /** The owner's three cards: how, which services, then their sign-in. */
 export function googleSetupOwnerStep(t: Translate, step: 1 | 2 | 3): string {
   return t('chat.botCards.google.ownerStep', 'Step {{step}} of 3', { step })
-}
-
-/** The admin's request, as the computer copies it. */
-export function googleAdminRequest(t: Translate, clientId: string): string {
-  return t(
-    'chat.botCards.google.adminRequest',
-    'Please mark this Google app as Trusted in the Admin console (Security › API controls › Manage third-party app access): {{clientId}}',
-    { clientId }
-  )
 }

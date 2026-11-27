@@ -19,6 +19,7 @@ import {
 } from './plugin-panel-path-icon'
 import { pluginPanelImageIconSchema } from './plugin-panel-image-icon'
 import { PLUGIN_ICON_RULE_TEXT } from '../images/plugin-image-fields'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 export const PLUGIN_PANEL_LIMIT = 64
 
@@ -109,11 +110,9 @@ const COMPONENTS_PANEL_ENTRY = /\.(?:m?js|tsx?|mts|jsx)$/i
 
 /** A built-in icon name, or (format 2) one inline SVG path drawn in the theme color, or (format
  *  2) a PNG or WebP image drawn in its own colors. */
-export const pluginPanelIconSchema = z.union([
-  z.enum(PLUGIN_PANEL_ICONS),
-  pluginPanelPathIconSchema,
-  pluginPanelImageIconSchema
-])
+export const pluginPanelIconSchema = lazyZodSchema(() =>
+  z.union([z.enum(PLUGIN_PANEL_ICONS), pluginPanelPathIconSchema, pluginPanelImageIconSchema])
+)
 
 export const pluginPanelContributionSchema = z
   .object({

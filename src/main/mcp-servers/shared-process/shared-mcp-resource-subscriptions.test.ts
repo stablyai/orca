@@ -74,4 +74,27 @@ describe('SharedMcpResourceSubscriptions', () => {
     expect([...subscriptions.subscribers(URI)]).toEqual(['b'])
     expect(watching()).toBe(true)
   })
+
+  it('keeps later subscribers waiting on the newest subscribe when an older one answers late', async () => {
+    const { subscriptions, request } = harness()
+    let answerOld!: () => void
+    let refuseNew!: () => void
+    const old = request(
+      'resources/subscribe',
+      'a',
+      () => new Promise((resolve) => (answerOld = resolve))
+    )
+    subscriptions.release('a')
+    const replacement = request('resources/subscribe', 'b', () =>
+      new Promise<void>((resolve) => (refuseNew = resolve)).then(refusal)
+    )
+    answerOld()
+    await old
+
+    const joins = request('resources/subscribe', 'c')
+    const results = Promise.allSettled([replacement, joins])
+    refuseNew()
+    expect((await results).map((result) => result.status)).toEqual(['rejected', 'rejected'])
+    expect([...subscriptions.subscribers(URI)]).toEqual([])
+  })
 })

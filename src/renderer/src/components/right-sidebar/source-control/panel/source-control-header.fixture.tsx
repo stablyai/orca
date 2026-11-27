@@ -15,7 +15,6 @@ import type {
   PrimaryAction,
   PrimaryActionInputs
 } from '../review/source-control-primary-action-types'
-import { GitGraphOpenButton } from '../sync/git-graph-open-button'
 import type { BaseRebaseActions } from './base-rebase-control'
 import { SourceControlChangeScopeBar } from './change-scope-bar'
 import { ALL_CHANGES_SCOPE, type SourceControlChangeScope } from './change-scope'
@@ -267,9 +266,6 @@ function Panel(scenario: Scenario) {
             {...props}
             graphSupported={graphSupport.support === true}
             filter={filter}
-            graphControl={
-              <GitGraphOpenButton worktreeId="fixture-workspace" support={graphSupport} iconOnly />
-            }
             overflowMenu={
               <SourceControlHeaderOverflowMenu
                 panelActions={panelActions}

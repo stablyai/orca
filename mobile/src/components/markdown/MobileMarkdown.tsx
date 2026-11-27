@@ -1,8 +1,12 @@
 import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
 import { memo, useContext, useMemo, type ReactNode } from 'react'
 import { Text as NativeText, View } from 'react-native'
-import { MARKDOWN_TONES, scaledMarkdownText, styles } from './mobile-markdown-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import {
+  markdownTonesSheet,
+  scaledMarkdownText,
+  stylesSheet,
+  type MarkdownToneName
+} from './mobile-markdown-styles'
 import { renderBlocks, type MarkdownBlockContext } from './blocks/mobile-markdown-blocks'
 import { MarkdownText } from './mobile-markdown-text'
 import { MobileMarkdownRemoteImage } from './blocks/MobileMarkdownRemoteImage'
@@ -15,6 +19,9 @@ import {
   useNativeChatFileLinkExistsFrom
 } from './links/mobile-markdown-links-context'
 import type { NativeChatVisualDirective } from '../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
+import { useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type Props = {
   content?: string
@@ -43,7 +50,7 @@ type Props = {
    *  GitHub text (PRs, Tasks, files) leaves them off, so `\[Bug\]` stays a bracket. */
   chatMath?: boolean
   /** The surface under the text: `userMessage` inside your own message's bubble. */
-  tone?: keyof typeof MARKDOWN_TONES
+  tone?: MarkdownToneName
   /** The content is a Slack message's drawn form: its mention links draw as mentions. */
   slackMentions?: boolean
 }
@@ -71,7 +78,10 @@ function MobileMarkdownContent({
   tone: toneName = 'default',
   slackMentions = false
 }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const tones = useThemedStyles(markdownTonesSheet)
+  const colors = useMobileColors()
+  const t = useMobileTranslation()
   // Interactive children own their touches and must forward the row action.
   const setup = useContext(MarkdownTextContext)
   const onOpenLink = useContext(MarkdownLinkHandlerContext)
@@ -102,7 +112,7 @@ function MobileMarkdownContent({
       </MarkdownText>
     ) : null
   }
-  const tone = MARKDOWN_TONES[toneName]
+  const tone = tones[toneName]
   const face = fontFamily ? { fontFamily } : null
   const ctx: MarkdownBlockContext = {
     growing,
@@ -111,6 +121,9 @@ function MobileMarkdownContent({
     onOpenLink,
     filePathsLinkedInTree: fileLinkExists !== undefined,
     tone,
+    styles,
+    colors,
+    t,
     textScale,
     lineSpacing,
     fontFamily,
@@ -158,7 +171,7 @@ function MobileMarkdownInner(props: Props): React.JSX.Element | null {
       androidTranscript,
       ...(onLongPress ? { onLongPress } : {})
     }),
-    [rangeSelectable, androidTranscript, onLongPress]
+    [androidTranscript, onLongPress]
   )
   return (
     <MarkdownTextContext.Provider value={setup}>

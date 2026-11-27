@@ -3,6 +3,7 @@ import {
   readPreviewAccessGrowth
 } from '../../plugins/catalog/plugin-update-approval'
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { PLUGIN_COMMIT_PATTERN } from '../../../shared/plugins/installation/plugin-install-lockfile'
@@ -78,25 +79,23 @@ export function registerPluginMarketplaceHandlers(
   pluginService: PluginService,
   services: PluginMarketplaceHandlerServices,
   getSettings: () => GlobalSettings,
-  approveConsent: PluginApproveConsent
+  approveConsent: PluginApproveConsent,
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
   // Why cached only: this runs on every file open, which must never wait on a catalog fetch.
-  ipcMain.handle(
-    'plugins:suggestForFileType',
-    async (_event, fileType: unknown, purpose: unknown) => {
-      const parsed = pluginFileTypeSchema.safeParse(fileType)
-      if (!parsed.success) {
-        return null
-      }
-      return findPluginFileTypeSuggestion({
-        fileType: parsed.data,
-        purpose: purpose === 'editor' ? 'editor' : 'open',
-        settings: getSettings(),
-        listings: await services.marketplace.listCachedPlugins(),
-        installed: pluginService.getDiscovered()
-      })
+  ipc.handle('plugins:suggestForFileType', async (_event, fileType: unknown, purpose: unknown) => {
+    const parsed = pluginFileTypeSchema.safeParse(fileType)
+    if (!parsed.success) {
+      return null
     }
-  )
+    return findPluginFileTypeSuggestion({
+      fileType: parsed.data,
+      purpose: purpose === 'editor' ? 'editor' : 'open',
+      settings: getSettings(),
+      listings: await services.marketplace.listCachedPlugins(),
+      installed: pluginService.getDiscovered()
+    })
+  })
   const refreshStaleCatalogs = createStaleMarketplaceRefresh(services.marketplace)
   // Startup defers the official seed; a marketplace view must not wait for that timer.
   const ensureOfficialSeed = async (waitForRefresh: boolean): Promise<void> => {
@@ -124,34 +123,34 @@ export function registerPluginMarketplaceHandlers(
     ])
     clearTimeout(timer)
   }
-  ipcMain.handle('plugins:listMarketplaces', async (_event, args: unknown) => {
+  ipc.handle('plugins:listMarketplaces', async (_event, args: unknown) => {
     await ensureOfficialSeed(listMarketplaceSchema.parse(args).waitForRefresh === true)
     return services.marketplace.listSources()
   })
-  ipcMain.handle('plugins:addMarketplace', async (_event, args: unknown) => {
+  ipc.handle('plugins:addMarketplace', async (_event, args: unknown) => {
     const source = pluginMarketplaceGitSourceSchema.parse(args)
     return services.marketplace.addSource(source)
   })
-  ipcMain.handle('plugins:removeMarketplace', async (_event, args: unknown) => {
+  ipc.handle('plugins:removeMarketplace', async (_event, args: unknown) => {
     const { sourceId } = removeMarketplaceSchema.parse(args)
     await services.marketplace.removeSource(sourceId)
     return services.marketplace.listSources()
   })
-  ipcMain.handle('plugins:refreshMarketplaces', async (_event, args: unknown) => {
+  ipc.handle('plugins:refreshMarketplaces', async (_event, args: unknown) => {
     const { sourceId } = refreshMarketplaceSchema.parse(args ?? {})
     return sourceId
       ? [await services.marketplace.refreshSource(sourceId)]
       : services.marketplace.refreshAll()
   })
-  ipcMain.handle('plugins:listMarketplacePlugins', async (_event, args: unknown) => {
+  ipc.handle('plugins:listMarketplacePlugins', async (_event, args: unknown) => {
     await ensureOfficialSeed(listMarketplaceSchema.parse(args).waitForRefresh === true)
     return services.marketplace.listPlugins()
   })
-  ipcMain.handle('plugins:previewMarketplacePlugin', async (_event, args: unknown) => {
+  ipc.handle('plugins:previewMarketplacePlugin', async (_event, args: unknown) => {
     const parsed = marketplacePluginSchema.parse(args)
     return services.installer.preview(parsed.marketplaceSourceId, parsed.pluginKey)
   })
-  ipcMain.handle('plugins:installMarketplacePlugin', async (_event, args: unknown) => {
+  ipc.handle('plugins:installMarketplacePlugin', async (_event, args: unknown) => {
     const { enableIfData, expectedFingerprint, fromInstallLink, ...identity } =
       installMarketplacePluginSchema.parse(args)
     return installCatalogReleaseWithApproval({
@@ -165,7 +164,7 @@ export function registerPluginMarketplaceHandlers(
       ...(enableIfData ? { enableIfData: { expectedFingerprint } } : {})
     })
   })
-  ipcMain.handle('plugins:previewMarketplaceUpdate', async (_event, args: unknown) => {
+  ipc.handle('plugins:previewMarketplaceUpdate', async (_event, args: unknown) => {
     const { pluginKey } = installedPluginSchema.parse(args)
     // Why refresh: the review is the user checking for updates, so a stale cached catalog would
     // offer the installed version back ("2.3.1 → 2.3.1, already installed").
@@ -177,26 +176,26 @@ export function registerPluginMarketplaceHandlers(
     }
     return { ...preview, accessGrowth: await readPreviewAccessGrowth(installed, preview) }
   })
-  ipcMain.handle(
+  ipc.handle(
     'plugins:getAutoUpdateState',
     (): PluginAutoUpdateState =>
       services.autoUpdater?.getState() ?? { updated: {}, needsReview: {} }
   )
-  ipcMain.handle(
+  ipc.handle(
     'plugins:takeUpdateReviewNotices',
     (): Promise<PluginUpdateReviewNotice[]> => services.reviewNotices?.take() ?? Promise.resolve([])
   )
   // Why never rejects: counts are decoration; a failure just hides them.
-  ipcMain.handle(
+  ipc.handle(
     'plugins:getInstallCounts',
     (): Promise<Record<string, number>> =>
       services.installStats?.getInstallCounts().catch(() => ({})) ?? Promise.resolve({})
   )
-  ipcMain.handle('plugins:getRollbackVersion', (_event, args: unknown) => {
+  ipc.handle('plugins:getRollbackVersion', (_event, args: unknown) => {
     const { pluginKey } = installedPluginSchema.parse(args)
     return services.installer.rollbackVersion(pluginKey)
   })
-  ipcMain.handle('plugins:rollbackMarketplacePlugin', async (_event, args: unknown) => {
+  ipc.handle('plugins:rollbackMarketplacePlugin', async (_event, args: unknown) => {
     const { pluginKey } = installedPluginSchema.parse(args)
     await pluginService.deactivatePlugin(pluginKey)
     const result = await services.installer.rollback(pluginKey)
