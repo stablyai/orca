@@ -166,7 +166,8 @@
       "scanCodeStep": "掃描 QR Code",
       "title": "與電腦配對",
       "tryAgain": "重試",
-      "codeNoLongerValid": "此配對碼已過期、已被使用或已被取代。請在電腦上顯示新的配對碼後重新掃描。"
+      "codeNoLongerValid": "此配對碼已過期、已被使用或已被取代。請在電腦上顯示新的配對碼後重新掃描。",
+      "runtimeAccessLink": "此連結是給另一個 Orca App 使用的。請在電腦上的「設定」→「行動版」中掃描 QR Code，或在伺服器上執行 orca pair --mobile。"
     },
     "terminalSettings": {
       "keepPhoneSize": "保持手機尺寸（預設）",
@@ -178,6 +179,31 @@
       "restoreAfterSeconds_one": "{{count}} 秒後",
       "restoreAfterSeconds_other": "{{count}} 秒後",
       "restoreHost": "還原 {{name}}",
+      "previewColumns_one": "{{count}} 欄",
+      "previewColumns_other": "{{count}} 欄",
+      "previewLabel": "終端機預覽",
+      "previewHeading": "預覽",
+      "fontHeading": "字型",
+      "fontDescription": "在終端機中用雙指縮放即可調整大小，設定會儲存在這裡。只會變更此裝置，不影響電腦上的終端機。",
+      "font": "字型",
+      "size": "大小",
+      "sizePoints": "{{size}} pt",
+      "smaller": "縮小",
+      "larger": "放大",
+      "lineSpacing": "行距",
+      "lineSpacingTight": "緊密",
+      "lineSpacingNormal": "普通",
+      "lineSpacingRoomy": "寬鬆",
+      "weight": "粗細",
+      "weightLight": "細",
+      "weightRegular": "一般",
+      "weightMedium": "中等",
+      "fontPickerTitle": "終端機字型",
+      "fontsOnDevice": "此裝置上",
+      "fontsIncluded": "Orca 內建",
+      "systemMono": "系統等寬",
+      "defaultFont": "預設",
+      "resetFont": "重設字型設定",
       "title": "終端機"
     }
   },
@@ -209,6 +235,12 @@
     }
   },
   "browser": {
+    "clientHost": {
+      "openOnNamed": "在 {{device}} 上開啟",
+      "openOn": "在其他電腦上開啟",
+      "offlineNamed": "{{device}} 已離線",
+      "offline": "顯示此頁面的電腦已離線"
+    },
     "addressField": {
       "urlPlaceholder": "網址"
     },
@@ -222,7 +254,9 @@
       "sendText": "傳送文字至瀏覽器",
       "dialogTitleWithOrigin": "{{origin}} 顯示",
       "dialogTitleNoOrigin": "此網頁顯示",
-      "dialogAnswer": "回答"
+      "dialogAnswer": "回答",
+      "stop": "停止",
+      "reconnect": "重新連線"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} 點擊修飾鍵"
@@ -231,6 +265,14 @@
       "deliveryUnconfirmed": "尚未確認是否送達，重試前請先檢查頁面",
       "dialogAnswerFailed": "回覆未能送達網頁。",
       "sent": "已傳送"
+    },
+    "stream": {
+      "updateApp": "請更新 Orca App，才能在這裡串流瀏覽器分頁。",
+      "hostCannotStream": "此主機無法在這裡串流瀏覽器分頁。",
+      "checking": "正在檢查電腦是否支援瀏覽器串流。",
+      "pageUnavailable": "瀏覽器頁面尚未就緒。",
+      "timedOut": "瀏覽器串流逾時。",
+      "stopped": "串流已停止"
     },
     "viewModeSwitch": {
       "mobileView": "顯示行動版網站",
@@ -248,7 +290,43 @@
       "certificateChallengeExpired": "此憑證的核准已過期。請重試此頁面以重新要求核准。",
       "certificateChallengeChanged": "憑證要求已變更。請重試該頁面並檢視新的警告。",
       "certificateProceedFailed": "Orca 無法核准此憑證要求。請重試該頁面後再試。",
-      "certificateChallengeUnavailable": "此憑證要求已無法使用。請重試該頁面以提出新的要求。"
+      "certificateChallengeUnavailable": "此憑證要求已無法使用。請重試該頁面以提出新的要求。",
+      "certificateProceedNeedsHostUpdate": "請更新此主機上的 Orca，才能從手機接受憑證警告。"
+    },
+    "pagePrompt": {
+      "downloadStarted": "正在下載至主機上的 {{path}}",
+      "downloadSaved": "已儲存至主機上的 {{path}}",
+      "downloadCanceled": "下載已取消。",
+      "downloadFailed": "無法完成下載。",
+      "answerFailed": "回覆未能送達網頁。",
+      "openFailed": "無法開啟可處理此 {{scheme}} 連結的應用程式。",
+      "localFiles": "本機檔案",
+      "ask": {
+        "camera": "使用相機",
+        "microphone": "使用麥克風",
+        "location": "取得位置資訊",
+        "notifications": "顯示通知",
+        "clipboard": "查看複製到剪貼簿的文字和圖片",
+        "midi": "使用 MIDI 裝置",
+        "windowManagement": "管理所有顯示器上的視窗",
+        "idleDetection": "得知你何時正在使用此裝置",
+        "localNetwork": "存取此裝置上的應用程式及區域網路上的裝置"
+      },
+      "fileTitle": "此檔案要求執行以下操作",
+      "permissionTitle": "{{site}} 要求執行以下操作",
+      "block": "封鎖",
+      "allow": "允許",
+      "signInTitle": "登入",
+      "signInDescription": "{{origin}} 要求輸入使用者名稱和密碼。",
+      "signInInsecure": "與此網站的連線並非私人連線。",
+      "signInRetry": "使用者名稱或密碼不正確。",
+      "signIn": "登入",
+      "openLinkTitle": "要開啟此 {{scheme}} 連結嗎？",
+      "openLinkDescription": "{{origin}} 要求開啟另一個應用程式。",
+      "openLinkAnonymous": "瀏覽器中的網頁要求開啟另一個應用程式。",
+      "openLink": "開啟連結",
+      "username": "使用者名稱",
+      "password": "密碼"
     }
   },
   "chat": {
@@ -2189,6 +2267,7 @@
   "home": {
     "appUpdateCard": {
       "dismissAccessibilityLabel": "關閉 Orca {{version}} 更新提示",
+      "update": "更新",
       "title": "Orca {{version}} 已推出",
       "updateAccessibilityLabel": "Orca {{version}} 已推出，點一下即可更新"
     },
@@ -2210,6 +2289,8 @@
       "connectedDescription": "您的電腦會顯示在這裡。所有資料皆採端對端加密。",
       "connectedTitle": "已連線",
       "description": "與電腦上的 Orca 配對，即可用手機查看代理程式狀態、開啟任何終端機，並推進工作。",
+      "pairDesktopButton": "配對電腦",
+      "scanCodeBelowDescription": "點一下下方的「配對電腦」，然後將相機對準螢幕上的 QR Code。",
       "openDesktopDescription": "前往「設定」→「行動版」，產生配對用的 QR Code。",
       "openDesktopTitle": "開啟 Orca 桌面版",
       "scanCodeTitle": "掃描 QR Code",
@@ -2228,6 +2309,17 @@
       "removeHostTitle": "移除主機",
       "tryAgain": "請再試一次。"
     },
+    "bottomBar": {
+      "connectFirst": "連線至電腦即可開始新工作。",
+      "newWorkspace": "新工作區"
+    },
+    "desktops": {
+      "pairDesktop": "配對電腦"
+    },
+    "sections": {
+      "tasks": "任務",
+      "tasksSubtitle": "瀏覽你的議題與審查"
+    },
     "stats": {
       "agentTime": "代理程式時間",
       "agentsSpawned": "已啟動代理程式",
@@ -2241,7 +2333,9 @@
       "automations": "自動化",
       "chooseDesktop": "{{desktop}}，選擇其他電腦",
       "feed": "動態",
-      "usage": "用量"
+      "usage": "用量",
+      "agents": "代理程式",
+      "bots": "機器人"
     },
     "usage": {
       "active": "使用中",
@@ -2254,6 +2348,10 @@
       "showUsageFor": "選擇要顯示用量的電腦",
       "updatedAgo": "{{time}}前更新",
       "updatedJustNow": "剛剛更新"
+    },
+    "activeAgents": {
+      "heading": "進行中",
+      "seeAll": "查看所有代理程式"
     },
     "bots": {
       "waits": {
@@ -2317,8 +2415,25 @@
       "hideSidebar": "隱藏側邊欄",
       "reconnect": "重新連線",
       "tasks": "任務",
+      "moreActions": "更多操作",
       "automations": "自動化",
+      "mcpServers": "MCP 伺服器",
       "sharedLinks": "共用連結"
+    },
+    "deleteConfirm": {
+      "changes_one": "{{count}} 項未提交的變更",
+      "changes_other": "{{count}} 項未提交的變更",
+      "changesAndIgnoredLost": "{{what}}及 Git 忽略的檔案將會遺失",
+      "lost": "{{what}}將會遺失",
+      "ignoredLost": "Git 忽略的檔案將會遺失",
+      "checking": "正在檢查變更…",
+      "unchecked": "無法檢查變更",
+      "ignoredNamesMore": "{{names}} 等檔案",
+      "ignoredNamesCount": "{{names}} 及另外 {{value0}} 個",
+      "ignoredUnchecked": "無法完整檢查 Git 忽略的檔案",
+      "needsUpdate": "請更新電腦上的 Orca，才能從手機刪除此工作區。",
+      "removeTitle": "移除工作區",
+      "removeFolderMessage": "要從 Orca 移除「{{name}}」嗎？磁碟上的資料夾會保留。"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "要刪除「{{name}}」（{{branch}}）嗎？",
@@ -2328,6 +2443,12 @@
       "primaryWorktreeDeleteHint": "主工作樹不能刪除。請改為移除專案。",
       "removeHost": "移除主機",
       "removeHostMessage": "要移除「{{name}}」嗎？之後可重新配對。",
+      "deleteFailed": "無法刪除「{{name}}」",
+      "markRead": "標記為已讀",
+      "markUnread": "標記為未讀",
+      "muteNotifications": "將通知靜音",
+      "unmuteNotifications": "取消通知靜音",
+      "moveToStatus": "移至狀態",
       "sleep": "休眠",
       "unpin": "取消固定",
       "rename": "重新命名"
@@ -2409,9 +2530,21 @@
       "showProperties": "顯示屬性",
       "sortBy": "排序方式",
       "syncedAcrossDevices": "已在您的裝置間同步",
+      "done": "完成",
+      "reset": "重設",
       "thisComputer": "本機",
       "waitingForDesktop": "仍在等待主機回應",
       "workspaceOptions": "工作區選項"
+    },
+    "hostBottomBar": {
+      "workspaceOptions": "工作區選項",
+      "activeFilters_one": "工作區選項（{{count}} 個篩選條件已啟用）",
+      "activeFilters_other": "工作區選項（{{count}} 個篩選條件已啟用）",
+      "search": "搜尋",
+      "newWorkspace": "新工作區"
+    },
+    "identity": {
+      "hostNotFound": "找不到主機"
     },
     "workspaceRenameSheet": {
       "title": "重新命名工作區",
@@ -3850,6 +3983,12 @@
         "heading": "語言",
         "systemWithCurrent": "系統（{{language}}）"
       },
+      "usage": {
+        "used": "已用",
+        "remaining": "剩餘",
+        "heading": "用量百分比",
+        "description": "「首頁」和「帳戶」中的用量列會顯示每項限額已用或剩餘多少。設定儲存在此手機上。"
+      },
       "theme": {
         "dark": "深色",
         "description": "「系統」會使用此裝置的淺色或深色設定。",
@@ -3894,6 +4033,28 @@
       "on": "開啟",
       "openInChatUi": "以聊天介面開啟工作階段",
       "title": "聊天介面"
+    },
+    "nativeChatText": {
+      "heading": "文字",
+      "footer": "在聊天中用雙指縮放即可調整，設定會儲存在這裡。",
+      "size": "文字大小",
+      "sizeDefault": "預設",
+      "sizePoints": "{{size}} pt",
+      "sizeSpoken": "{{size}} 點",
+      "font": "字型",
+      "fontPickerTitle": "聊天字型",
+      "fontSystem": "系統",
+      "fontSerif": "襯線",
+      "fontMono": "等寬",
+      "fontMonoSubtitle": "與程式碼相同",
+      "lineSpacing": "行距",
+      "spacingCompact": "緊密",
+      "spacingDefault": "預設",
+      "spacingRelaxed": "寬鬆",
+      "reset": "重設文字設定",
+      "previewQuestion": "為什麼恢復測試不穩定？",
+      "previewTools": "讀取了 3 個檔案 · 執行了 pnpm test",
+      "previewAnswer": "串流還在將緩衝資料寫出時，測試就開始等待 `setTimeout(0)`，因此只有資料先寫完，測試才會通過。"
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "無法載入通知傳送設定。請重新開啟此畫面再試一次。",
@@ -3964,6 +4125,7 @@
       "noneSelected": "尚未選擇",
       "selectModelFailed": "無法選擇模型",
       "speechModel": "語音模型",
+      "loading": "正在載入語音設定…",
       "speechModelHeading": "語音模型",
       "title": "語音",
       "toggleMode": "切換",
@@ -4013,6 +4175,7 @@
       }
     },
     "sharedLinks": {
+      "bots": "機器人",
       "title": "共用連結",
       "description": "你發布的連結。"
     }
@@ -6993,6 +7156,95 @@
     }
   },
   "mcpServers": {
-    "agentBlocked": "已被你所屬組織的 Claude 設定阻止"
+    "category": {
+      "coding": "程式開發",
+      "chat": "聊天",
+      "monitoring": "監控",
+      "docs": "文件與專案",
+      "more": "更多"
+    },
+    "searchApps": "搜尋應用程式",
+    "filterActive": "篩選，{{filter}}",
+    "filter": "篩選",
+    "allApps": "所有應用程式",
+    "added": "已新增",
+    "addTitle": "新增 MCP 伺服器",
+    "customServer": "自訂伺服器",
+    "customServerLine": "URL、命令或貼上的設定",
+    "noMatch": "沒有符合「{{query}}」的應用程式。",
+    "apps": "應用程式",
+    "header": "標頭",
+    "headerName": "名稱",
+    "headerValue": "值",
+    "removeHeader": "移除標頭",
+    "headers": "標頭",
+    "headerEmpty": "空白",
+    "addHeader": "新增標頭",
+    "addButton": "新增",
+    "sourceLabel": "伺服器 URL 或啟動命令",
+    "sourcePlaceholder": "https://… 或 npx …",
+    "sourceNote": "貼上伺服器 URL、啟動命令或 mcpServers 設定。",
+    "details": "詳情",
+    "trust": "只新增你信任的軟體。",
+    "serverType": "伺服器類型",
+    "urlMode": "連線到 URL",
+    "commandMode": "執行命令",
+    "serverName": "伺服器名稱",
+    "headersNone": "無",
+    "yours": "你的伺服器",
+    "addServer": "新增伺服器",
+    "fromPlugins": "來自外掛",
+    "inYourAgents": "在你的代理程式中",
+    "needsSignIn": "需要登入",
+    "wontStart": "無法啟動",
+    "signIn": "登入",
+    "projectsOnly": "僅限 {{projects}}",
+    "moreFor": "{{name}} 的更多操作",
+    "moveToOrca": "移至 Orca",
+    "copyToOrca": "複製到 Orca",
+    "signInAgain": "重新登入",
+    "signOut": "登出",
+    "workspaces": "工作區",
+    "account": "帳戶",
+    "signedIn": "已登入",
+    "agents": "代理程式",
+    "turnAllOn": "全部開啟",
+    "agentsUnread": "無法讀取此電腦上的代理程式。",
+    "agentBlocked": "已被你所屬組織的 Claude 設定阻止",
+    "advanced": "進階",
+    "sharedProcess": "讓代理程式共用單一行程",
+    "sharedProcessNote": "使用較少記憶體。會在工作區資料夾之外執行。",
+    "removeServer": "移除伺服器",
+    "url": "URL",
+    "command": "命令",
+    "arguments": "引數",
+    "title": "MCP 伺服器",
+    "reading": "正在讀取 MCP 伺服器…",
+    "unavailable": "{{host}} 上無法使用 MCP 伺服器",
+    "signedInTo": "已登入 {{app}}",
+    "allWorkspaces": "所有工作區",
+    "includingLater": "包含之後新增的工作區",
+    "appliesToNewNote": "變更會套用至新的工作階段。",
+    "allAgents": "所有代理程式",
+    "agentsOf": "{{on}}/{{total}} 個",
+    "workspacesAll": "全部",
+    "workspacesAllBut": "{{names}} 以外的所有工作區",
+    "workspacesNone": "無",
+    "appliesToNew": "將套用至新的工作階段",
+    "restartSessions": "重新啟動 {{count}} 個工作階段",
+    "restarted": "已重新啟動 {{count}} 個工作階段",
+    "agentFileTitle": "要為 {{agent}} 開啟 {{server}} 嗎？",
+    "agentFileMessage": "Orca 會將你的 MCP 伺服器保存在 {{agent}} 的設定檔（{{file}}）中。你自己的項目會維持原狀。",
+    "agentFilesMessage": "Orca 會將你的 MCP 伺服器保存在各代理程式的設定檔中。你自己的項目會維持原狀。",
+    "allow": "允許",
+    "removeTitle": "要移除 {{name}} 嗎？",
+    "remove": "移除",
+    "moveTitle": "要將 {{name}} 移至 Orca 嗎？",
+    "moveMessage": "Orca 會將它從 {{agents}} 的設定中移除，並保留備份。",
+    "move": "移動",
+    "workspacesCount": "{{count}} 個工作區",
+    "workspacesAllButCount": "全部（排除 {{count}} 個）",
+    "headerMissing": "請填寫 {{header}} 才能新增此伺服器。",
+    "servers": "伺服器"
   }
 }
