@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { FeishuInbox } from './feishu-inbox'
 import { cardData, type FeishuResponseChange } from './feishu-card-data'
+import { feishuPromptData } from './feishu-card-render'
 
 it('keeps button continuations on one persisted card, rejects stale clicks, and still hands off real prompts', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'feishu-inline-'))
@@ -80,6 +81,70 @@ it('keeps button continuations on one persisted card, rejects stale clicks, and 
       cardData.parse(JSON.parse(store.getCard(b.account, 'response:om_new_prompt')!.body)).response
         ?.final
     ).toBe('Complete answer')
+  } finally {
+    store.close()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+it('keeps native approval ownership on the latest response across restart and rejects the frozen card', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'feishu-approval-'))
+  const path = join(dir, 'db.sqlite')
+  let store = new FeishuInbox(path)
+  try {
+    const b = store.add('scope', 'bot', { name: 'p', appId: 'cli_app', brand: 'feishu' })
+    store.updateResponse(b.account, 'lane', 'om_one', 'oc_chat', {
+      kind: 'native',
+      value: { turnItemId: 't1', startedAt: 1, messages: [], tools: [] }
+    })
+    store.postedCard(b.account, 'response:om_one', 1, 'om_first_card')
+    store.putCard(
+      b.account,
+      'approval',
+      'lane',
+      'om_one',
+      'oc_chat',
+      feishuPromptData({
+        kind: 'approval',
+        promptId: 'native-approval',
+        raisedBy: 'conversation',
+        tool: 'Run a command?',
+        summary: 'printf approved',
+        options: [
+          { id: 'accept', label: 'Allow' },
+          { id: 'cancel', label: 'Stop' }
+        ]
+      })
+    )
+    store.updateResponse(b.account, 'lane', 'om_two', 'oc_chat', { kind: 'begin' })
+    store.updateResponse(b.account, 'lane', 'om_two', 'oc_chat', {
+      kind: 'handoff',
+      from: 'om_one',
+      turnItemId: 't1',
+      at: 2
+    })
+    store.postedCard(b.account, 'response:om_two', 1, 'om_latest_card')
+    const frozen = store.getCard(b.account, 'response:om_one')
+    store.close()
+    store = new FeishuInbox(path)
+    expect(store.claimCard(b.account, 'om_first_card', 'oc_chat', 'accept', 'approval')).toBeNull()
+    expect(store.claimCard(b.account, 'om_latest_card', 'oc_chat', 'accept', 'approval')?.id).toBe(
+      'approval'
+    )
+    expect(store.claimCard(b.account, 'om_latest_card', 'oc_chat', 'cancel', 'approval')).toBeNull()
+    store.closeCard(b.account, 'approval', '已选择：Allow')
+    store.updateResponse(b.account, 'lane', 'om_one', 'oc_chat', {
+      kind: 'final',
+      text: 'approved'
+    })
+    const last = store.getCard(b.account, 'response:om_two')!
+    expect(last.message).toBe('om_latest_card')
+    expect(cardData.parse(JSON.parse(last.body)).response).toMatchObject({
+      final: 'approved',
+      question: { id: 'approval', pending: false, inline: true, note: '已选择：Allow' }
+    })
+    expect(store.getCard(b.account, 'response:om_one')).toEqual(frozen)
+    expect(store.getCard(b.account, 'approval')?.message).toBeNull()
   } finally {
     store.close()
     await rm(dir, { recursive: true, force: true })
