@@ -127,7 +127,7 @@ function submissionOf(snapshot: GroupJournal, operationId: string) {
 }
 
 /** Native chat's own turn attribution, read per group operation: the operation's turn rows plus
- *  the workers it started. */
+ *  the workers it started. Null means the operation joined an existing turn. */
 export function indexBotGroupJournal(snapshot: GroupJournal) {
   const openedBy = new Map(
     [...structuredAgentTurnAnchors(snapshot.items, snapshot.submissions)].map(([turn, anchor]) => [
@@ -157,8 +157,11 @@ export function indexBotGroupJournal(snapshot: GroupJournal) {
   return (
     operationId: string,
     workerDispatchIds: readonly string[] = []
-  ): AgentJournalRenderItem[] => {
+  ): AgentJournalRenderItem[] | null => {
     const submission = submissionOf(snapshot, operationId)
+    if (submission?.dispatchState === 'accepted' && submission.answeredInTurn?.via === 'steer') {
+      return null
+    }
     const keys = [
       agentJournalSubmissionKey(submission?.clientMessageId ?? operationId),
       submission?.providerItemId ?? ''
@@ -180,10 +183,11 @@ export function botGroupTurnOperation(snapshot: GroupJournal, turnItemId: string
   const anchor = structuredAgentTurnAnchors(snapshot.items, snapshot.submissions).get(turnItemId)
   const submission = snapshot.submissions.find(
     (submission) =>
-      submission.answeredInTurn?.turnItemId === turnItemId ||
-      (anchor !== undefined &&
-        (submission.providerItemId === anchor ||
-          agentJournalSubmissionKey(submission.clientMessageId) === anchor))
+      submission.answeredInTurn?.via !== 'steer' &&
+      (submission.answeredInTurn?.turnItemId === turnItemId ||
+        (anchor !== undefined &&
+          (submission.providerItemId === anchor ||
+            agentJournalSubmissionKey(submission.clientMessageId) === anchor)))
   )
   return submission ? (submission.queuedMessageId ?? submission.clientMessageId) : null
 }
@@ -195,7 +199,7 @@ export function botGroupOperationAdmitted(snapshot: GroupJournal, operationId: s
 }
 
 export function createBotGroupJournalIndexer() {
-  const retained = new Map<string, AgentJournalRenderItem[]>()
+  const retained = new Map<string, AgentJournalRenderItem[] | null>()
   return (snapshot: GroupJournal, operationIds: readonly string[]) => {
     const allowed = new Set(operationIds)
     for (const id of retained.keys()) {
@@ -208,6 +212,7 @@ export function createBotGroupJournalIndexer() {
       const next = read(operationId, workers)
       const previous = retained.get(operationId)
       if (
+        next &&
         previous?.length === next.length &&
         next.every((item, index) => item === previous[index])
       ) {
@@ -224,7 +229,7 @@ export function botGroupTurnItems(
   operationId: string,
   workerDispatchIds: readonly string[] = []
 ): AgentJournalRenderItem[] {
-  return indexBotGroupJournal(snapshot)(operationId, workerDispatchIds)
+  return indexBotGroupJournal(snapshot)(operationId, workerDispatchIds) ?? []
 }
 
 export function botGroupCompletedText(items: readonly AgentJournalRenderItem[]): string | null {

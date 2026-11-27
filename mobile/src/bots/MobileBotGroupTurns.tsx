@@ -40,6 +40,7 @@ import { useThemedStyles } from '../theme/themed-styles'
 export type MobileBotGroupSession = StructuredMobileSession & {
   groupTurnItems: ReturnType<typeof indexBotGroupJournal>
 }
+const noItems: never[] = []
 const transcript = createStructuredQuestionProjection(projectStructuredAgentStartItem)
 
 export const MobileBotGroupReader = memo(function Reader({
@@ -84,7 +85,7 @@ export const MobileBotGroupReader = memo(function Reader({
       !loadingEarlier &&
       // Page only for a turn the session admitted; queued or refused ones have no older rows to find.
       turn.operationIds.some(
-        (id) => groupTurnItems(id).length === 0 && botGroupOperationAdmitted(session.journal, id)
+        (id) => groupTurnItems(id)?.length === 0 && botGroupOperationAdmitted(session.journal, id)
       )
     ) {
       void loadEarlier()
@@ -128,12 +129,12 @@ export function MobileBotGroupTurn({
   const colors = useMobileColors()
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
-  const items = useMemo(
-    () =>
-      turn.frozenItems ??
-      (session ? session.groupTurnItems(turn.operationId, turn.workerDispatchIds) : []),
-    [turn.frozenItems, session?.groupTurnItems, turn.operationId, turn.workerDispatchIds]
+  const readTurn = session?.groupTurnItems
+  const journalItems = useMemo(
+    () => turn.frozenItems ?? readTurn?.(turn.operationId, turn.workerDispatchIds),
+    [turn.frozenItems, readTurn, turn.operationId, turn.workerDispatchIds]
   )
+  const items = journalItems ?? noItems
   const lifecycle = items.find((item) => item.body.kind === 'turn')?.body
   const clock = lifecycle?.kind === 'turn' ? lifecycle : null
   const queued = session?.queued.holds(turn.operationId)
@@ -197,7 +198,7 @@ export function MobileBotGroupTurn({
       ),
     [messages, fold, turn.operationId, turn.answer]
   )
-  return (
+  return turn.joinedTurn || journalItems === null ? null : (
     // Group turns keep the action sheet for every link; the phone's link setting isn't read here.
     <MobileNativeChatRowOverlaysHost
       conversation={conversation}

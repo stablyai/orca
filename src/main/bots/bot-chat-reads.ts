@@ -12,11 +12,11 @@ export type BotChatReads = {
   /** At least every item observed at or after `since`, with the other items of their turns; callers
    *  still filter by time. */
   messagesSince: (sessionId: string, since: number) => Promise<readonly AgentJournalRenderItem[]>
-  /** The items of the turns these group operations opened, keyed by operation. */
+  /** The items of the turns these group operations opened, or null for ones that joined a turn. */
   turnItems: (
     sessionId: string,
     turns: readonly { operationId: string; workerDispatchIds?: readonly string[] }[]
-  ) => Promise<Map<string, AgentJournalRenderItem[]>>
+  ) => Promise<Map<string, AgentJournalRenderItem[] | null>>
 }
 
 /** A bot's chats as its turn ends read them, from the installed host; nothing before one is. */
