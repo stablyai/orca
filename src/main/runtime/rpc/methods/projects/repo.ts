@@ -174,7 +174,8 @@ export const REPO_METHODS = [
           params.updates as Parameters<typeof context.runtime.updateRepo>[1]
         ),
         context
-      )
+      ),
+      ...(params.updates.path === undefined ? {} : { pathApplied: true })
     })
   }),
   defineMethod({

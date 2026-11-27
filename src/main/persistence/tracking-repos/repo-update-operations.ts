@@ -92,6 +92,7 @@ export class RepoUpdatePersistenceOperations {
     updates: Partial<
       Pick<
         Repo,
+        | 'path'
         | 'displayName'
         | 'badgeColor'
         | 'repoIcon'

@@ -84,16 +84,21 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
     })
     printResult(result, json, formatRepoShow)
   },
-  'repo set': async ({ flags, client, json }) => {
+  'repo set': async ({ flags, client, cwd, json }) => {
     const repo = getRequiredStringFlag(flags, 'repo')
     const visibility = getOptionalStringFlag(flags, 'external-worktree-visibility')
     const browserProfile = getOptionalStringFlag(flags, 'browser-profile')
-    if (visibility === undefined && browserProfile === undefined) {
+    const pathFlag = getOptionalStringFlag(flags, 'path')
+    if (visibility === undefined && browserProfile === undefined && pathFlag === undefined) {
       throw new RuntimeClientError(
         'invalid_argument',
-        'Pass --external-worktree-visibility or --browser-profile.'
+        'Pass --path, --external-worktree-visibility or --browser-profile.'
       )
     }
+    const path =
+      pathFlag === undefined
+        ? undefined
+        : resolveRepoPathArgument(pathFlag, cwd, client.isRemote, 'Remote repo set')
     if (
       visibility !== undefined &&
       visibility !== 'show' &&
@@ -109,15 +114,28 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
       browserProfile === undefined
         ? undefined
         : await resolveBrowserProfileFlag(client, browserProfile)
-    const result = await client.call<{ repo: Record<string, unknown> }>('repo.update', {
-      repo,
-      updates: {
-        ...(visibility === undefined
-          ? {}
-          : { externalWorktreeVisibility: visibility === 'inherit' ? null : visibility }),
-        ...(browserProfileId === undefined ? {} : { browserProfileId })
+    const result = await client.call<{ repo: Record<string, unknown>; pathApplied?: boolean }>(
+      'repo.update',
+      {
+        repo,
+        updates: {
+          ...(path === undefined ? {} : { path }),
+          ...(visibility === undefined
+            ? {}
+            : { externalWorktreeVisibility: visibility === 'inherit' ? null : visibility }),
+          ...(browserProfileId === undefined ? {} : { browserProfileId })
+        }
       }
-    })
+    )
+    // A host from before path changes strips the field and answers with the unchanged row.
+    if (path !== undefined && result.result.pathApplied !== true) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        visibility === undefined && browserProfileId === undefined
+          ? "This Orca host does not support changing a project's path. Update Orca on that host."
+          : "This Orca host does not support changing a project's path, so only the other settings were saved. Update Orca on that host."
+      )
+    }
     // A host from before per-repo browser profiles drops the field and still answers with its row.
     if (
       browserProfileId !== undefined &&

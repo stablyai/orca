@@ -14,6 +14,7 @@ import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects
 import { teardownStops } from '../workspaces/removal/owned-session-teardown-policy'
 import { assertNoProjectWorktreeCreate } from '../../workspaces/creation/worktree-create-in-flight'
 import { releaseWorktreeCreatePreparationsForRepo } from '../../workspaces/creation/preparation/worktree-create-preparation-project-removal'
+import { relocateRepoPath } from './runtime-repository-relocation'
 
 const PROJECT_TERMINAL_STOP_BUDGET_MS = 10_000
 
@@ -30,6 +31,11 @@ type RuntimeRepositorySettingsDependencies = {
   invalidateWorktreeScan: (repoId: string) => void
   notifyReposChanged: () => void
   notifyWorktreesChanged: (repoId: string, options: { invalidateGitScans: false }) => void
+  notifyWorktreeFolderRenamed: (
+    repoId: string,
+    oldWorktreeId: string,
+    newWorktreeId: string
+  ) => void
 }
 
 type RepositoryUpdates = Partial<
@@ -68,6 +74,8 @@ type RepositoryUpdates = Partial<
   browserProfileId?: string | null
   /** Changes this one hook setting, keeping the rest of the saved row's. */
   setupAgentStartupPolicy?: SetupAgentStartupPolicy
+  /** Moves the project to another spelling or location of the same checkout; see relocateRepoPath. */
+  path?: string
 }
 
 // Main computes each row's `visible` from these over cached raw Git scans, so re-list without rescanning.
@@ -127,10 +135,16 @@ export class RuntimeRepositorySettingsController {
 
   async update(repoSelector: string, updates: RepositoryUpdates): Promise<Repo> {
     const store = this.requireStore()
-    const repo = await this.deps.resolveRepo(repoSelector)
+    let repo = await this.deps.resolveRepo(repoSelector)
     assertWslMoveRepoWritable(store, repo)
-    const { setupAgentStartupPolicy, ...rowUpdates } = updates
+    const { setupAgentStartupPolicy, path, ...rowUpdates } = updates
     const sanitizedUpdates = omitUndefined(rowUpdates)
+    if (path !== undefined) {
+      repo = await relocateRepoPath(store, repo, path, this.deps)
+      if (Object.keys(updates).every((key) => key === 'path')) {
+        return repo
+      }
+    }
     if ('worktreeBasePath' in updates && updates.worktreeBasePath === undefined) {
       sanitizedUpdates.worktreeBasePath = undefined
     }

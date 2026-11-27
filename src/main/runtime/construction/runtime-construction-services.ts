@@ -57,6 +57,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   abstract invalidateResolvedWorktreeCache(): void
   abstract invalidateWorktreeScanCacheForRepo(repoId: string): void
   abstract notifyWorktreesChanged(repoId: string, options?: { invalidateGitScans?: boolean }): void
+  abstract notifyWorktreeFolderRenamed(repoId: string, oldId: string, newId: string): void
   protected abstract notifyReposChanged(): void
   protected abstract isPtyKnownExited(ptyId: string): boolean
   protected abstract onPtyStopSettled(ptyId: string, stopped: boolean): void

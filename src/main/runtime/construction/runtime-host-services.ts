@@ -327,7 +327,9 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     forgetTerminalTopology: (repoId) => this.terminalTopologyRevisionByRepoId.delete(repoId),
     stopProjectTerminals: (repo, options) => this.stopTerminalsForProject(repo, options),
-    notifyWorktreesChanged: (repoId, options) => this.notifyWorktreesChanged(repoId, options)
+    notifyWorktreesChanged: (repoId, options) => this.notifyWorktreesChanged(repoId, options),
+    notifyWorktreeFolderRenamed: (repoId, oldId, newId) =>
+      this.notifyWorktreeFolderRenamed(repoId, oldId, newId)
   })
 
   protected readonly repositorySparsePresets = new RuntimeRepositorySparsePresets({

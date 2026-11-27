@@ -42,6 +42,7 @@ export type RuntimeStore = {
   getProfileStorageDirectory?: Store['getProfileStorageDirectory']
   getWorktreeMeta: Store['getWorktreeMeta']
   setWorktreeMeta: Store['setWorktreeMeta']
+  migrateWorktreeIdentity?: Store['migrateWorktreeIdentity']
   getWorktreeMetaForHost?: Store['getWorktreeMetaForHost']
   removeWorktreeMeta: Store['removeWorktreeMeta']
   removeUnhostedWorktreeMeta?: Store['removeUnhostedWorktreeMeta']

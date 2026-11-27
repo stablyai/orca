@@ -53,6 +53,8 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
   return z.object({
     ...selectorFields,
     updates: z.object({
+      // Older hosts strip it and keep the old path; the CLI checks the reply's pathApplied.
+      path: OptionalString,
       displayName: OptionalString,
       badgeColor: RepoBadgeColor,
       repoIcon: z
