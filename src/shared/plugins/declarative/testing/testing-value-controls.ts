@@ -126,6 +126,10 @@ export function createValueControls() {
         value += character
         edits.push(edit(element, value))
       }
+      if (edits.length === 0 && value !== base) {
+        // Nothing typed, yet the stored seed still holds `\r` breaks the panel renders as `\n`.
+        edits.push(edit(element, value))
+      }
       return edits
     },
     toggle(element: TestElement): ControlEdit {

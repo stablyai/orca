@@ -29,6 +29,15 @@ describe('typeInto', () => {
     expect(edits.map((edit) => edit.value)).toEqual(['a', 'a\n', 'a\nb', 'a\nb\n', 'a\nb\nc'])
   })
 
+  it('stores a CodeInput seed as LF when no characters are typed', () => {
+    const edits = createValueControls().typeInto(codeInput('a\r\nb\rc'), '', false)
+    expect(edits.map((edit) => edit.value)).toEqual(['a\nb\nc'])
+  })
+
+  it('emits no edit for an empty type onto an LF CodeInput seed', () => {
+    expect(createValueControls().typeInto(codeInput('a\nb'), '', false)).toEqual([])
+  })
+
   it('types CRLF and CR line breaks into an Input or Textarea unchanged', () => {
     for (const type of ['Input', 'Textarea'] as const) {
       const edits = createValueControls().typeInto(textControl(type, ''), 'a\r\nb', false)
