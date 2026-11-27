@@ -210,6 +210,12 @@ export function useNativeChatNewRowsMarker(
   const [seen, setSeen] = useState<Seen>(
     () => kept.saved ?? { watching, left: null, missed: null, arriving: false }
   )
+  // A transcript key that changes mid-view takes that transcript's own kept place, never this one's.
+  const [seenKey, setSeenKey] = useState(memoryKey)
+  if (seenKey !== memoryKey) {
+    setSeenKey(memoryKey)
+    setSeen(kept.saved ?? { watching, left: null, missed: null, arriving: false })
+  }
   const { write: keep } = kept
   useEffect(() => keep(seen), [keep, seen])
   const latest = useRef({ enabled, seen, slots, waitingSlots })

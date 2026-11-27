@@ -239,14 +239,10 @@ export function createAgentSessionRewindHook(
         const returned =
           (outcome.kind === 'done' || reason === 'outcome-unknown') &&
           returnTargetToComposer(captured, itemId)
-        if (!active.current || !isCurrent() || latest.current.sessionId !== captured.sessionId) {
-          return
-        }
-        if (returned) {
-          latest.current.onMessageReturned?.()
-        }
         const reset = latest.current.state.epoch !== expectedEpoch
-        if (outcome.kind === 'done') {
+        // Awaiting the reset is the conversation's, set even if this view was released meanwhile, so its successor
+        // still refuses sends into the conversation being replaced.
+        if (outcome.kind === 'done' && latest.current.sessionId === captured.sessionId) {
           const caughtUp =
             reset ||
             (outcome.value.sequence !== undefined &&
@@ -264,6 +260,14 @@ export function createAgentSessionRewindHook(
                     : {})
                 }
           )
+        }
+        if (!active.current || !isCurrent() || latest.current.sessionId !== captured.sessionId) {
+          return
+        }
+        if (returned) {
+          latest.current.onMessageReturned?.()
+        }
+        if (outcome.kind === 'done') {
           return
         }
         if (outcome.kind === 'dropped') {

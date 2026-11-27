@@ -141,6 +141,8 @@ export function useNativeChatReadingPosition({
           if (result === 'failed' || result === 'superseded') {
             // History didn't load; the bookmark stays for the next reveal.
             if (result === 'superseded') {
+              // Kept for a later remount; this view is past restoring, so a reveal won't pull the reader back.
+              freshMountRef.current = false
               latest.current.onGiveUp()
             }
             return
