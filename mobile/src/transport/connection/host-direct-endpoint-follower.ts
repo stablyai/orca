@@ -3,7 +3,7 @@ import {
   PairingGetDirectEndpointsResultSchema
 } from '../../../../src/shared/remote-runtime/pairing/pairing-direct-endpoints-contract'
 import {
-  directEndpointCandidate,
+  directEndpointCandidates,
   directEndpointListedByHost,
   type HostDirectEndpointFields
 } from '../../host-catalog/host-direct-endpoint-refresh'
@@ -30,8 +30,10 @@ const pairingDirectEndpointsRead = bindDeferredRpcOperation(
   })
 )
 
-// A replacement that did not answer is not dialed again on every screen focus.
+// Replacements that did not answer are not dialed again on every screen focus.
 const FAILED_REPLACEMENT_RETRY_MS = 60_000
+// Each miss costs a full probe timeout; the next read continues where this one stopped.
+const MAX_REPLACEMENT_DIALS_PER_READ = 3
 
 export type HostDirectEndpointFollower = {
   /** The saved direct endpoint, moved once the desktop's replacement answered from this phone. */
@@ -65,7 +67,10 @@ export function createHostDirectEndpointFollower(args: {
   let syncedWithStorage = settledRow !== undefined
   // After one answer only a desktop-owned row can change, so manual and unknown rows stop asking.
   let answered = false
-  let failedReplacement: { endpoint: string; at: number } | null = null
+  // Where the next read resumes in the desktop's list, so capped reads work through it instead of
+  // repeating the same misses; both reset on each connection, where earlier misses may now answer.
+  let nextReplacement = 0
+  let missedAt: number | null = null
   let connection = 0
   let verifying: AbortController | null = null
   let stopped = false
@@ -79,15 +84,9 @@ export function createHostDirectEndpointFollower(args: {
       saved = fields
     }
   }
-  const tryReplacement = async (replacement: string): Promise<void> => {
-    if (
-      stopped ||
-      !args.isForeground() ||
-      (failedReplacement?.endpoint === replacement &&
-        args.now() - failedReplacement.at < FAILED_REPLACEMENT_RETRY_MS)
-    ) {
-      return
-    }
+  const tryReplacement = async (
+    replacement: string
+  ): Promise<'reached' | 'missed' | 'abandoned'> => {
     const attempt = connection
     const controller = new AbortController()
     verifying = controller
@@ -102,15 +101,29 @@ export function createHostDirectEndpointFollower(args: {
     })
     if (!reached) {
       // A miss on an older connection says nothing about the network the new one is on.
-      if (attempt === connection && !controller.signal.aborted) {
-        failedReplacement = { endpoint: replacement, at: args.now() }
-      }
-      return
+      return attempt === connection && !controller.signal.aborted ? 'missed' : 'abandoned'
     }
     // Return probes dial the saved endpoint and own promotion; this dial only proved it reachable.
     reached.close()
-    failedReplacement = null
+    nextReplacement = 0
+    missedAt = null
     adoptSaved(await adoptHostDirectEndpoint(hostId, saved.endpoint, replacement))
+    return 'reached'
+  }
+  const tryReplacements = async (candidates: readonly string[]): Promise<void> => {
+    const dials = Math.min(MAX_REPLACEMENT_DIALS_PER_READ, candidates.length)
+    for (let dial = 0; dial < dials; dial += 1) {
+      if (stopped || !args.isForeground()) {
+        return
+      }
+      const index = nextReplacement % candidates.length
+      const replacement = candidates[index]
+      if (replacement === undefined || (await tryReplacement(replacement)) !== 'missed') {
+        return
+      }
+      nextReplacement = index + 1
+    }
+    missedAt = args.now()
   }
   const read = async (): Promise<void> => {
     const reply = await pairingDirectEndpointsRead.request(client, {})
@@ -125,9 +138,12 @@ export function createHostDirectEndpointFollower(args: {
       syncedWithStorage = true
     }
     answered = true
-    const replacement = directEndpointCandidate(saved, endpoints)
-    if (replacement !== null) {
-      await tryReplacement(replacement)
+    if (missedAt !== null && args.now() - missedAt < FAILED_REPLACEMENT_RETRY_MS) {
+      return
+    }
+    const candidates = directEndpointCandidates(saved, endpoints)
+    if (candidates.length > 0) {
+      await tryReplacements(candidates)
     }
   }
   const refresh = (): void => {
@@ -163,7 +179,8 @@ export function createHostDirectEndpointFollower(args: {
       // A new connection may be on a new network, where an earlier miss can now answer.
       connection += 1
       unsupported = false
-      failedReplacement = null
+      nextReplacement = 0
+      missedAt = null
       refresh()
     },
     refresh,
