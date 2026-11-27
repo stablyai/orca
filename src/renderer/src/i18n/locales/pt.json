@@ -3192,7 +3192,7 @@
         "updatingCount": "{{value0}} atualizando",
         "failedCount": "{{value0}} com falha",
         "failed": "Falhou",
-        "retryAll": "Tentar todos de novo",
+        "retryAll": "Repetir todos",
         "manualHelp": "Atualização manual de {{name}}",
         "updateAllNarrow": "Tudo",
         "retryAllNarrow": "Repetir"

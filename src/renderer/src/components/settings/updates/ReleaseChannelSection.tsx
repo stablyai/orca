@@ -232,7 +232,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
                 onSelect={setSelectedTag}
                 disabled={runningChannel === null || loading || !builds || builds.length === 0}
                 placeholder={
-                  loading || (builds === null && loadError === null)
+                  loading || (builds === null && shownError === null)
                     ? t(
                         'auto.components.settings.ReleaseChannelSection.loadingBuilds',
                         'Loading builds…'

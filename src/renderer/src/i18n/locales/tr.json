@@ -2290,7 +2290,7 @@
         "browserBlockGuidance": "Tarayıcı işlemini (PID {{pids}}) sonlandırıp yeniden deneyin. Sunucusu çalışmaya devam eder.",
         "browserBlockGuidanceMany": "Tarayıcı işlemlerini (PID {{pids}}) sonlandırıp yeniden deneyin. Sunucuları çalışmaya devam eder.",
         "blocked": "Engellendi",
-        "heldNarrow": "{{version}}: {{date}}",
+        "heldNarrow": "{{version}} {{date}} itibarıyla",
         "notes": "Notlar",
         "checking": "Denetleniyor…",
         "upToDate": "Güncel",

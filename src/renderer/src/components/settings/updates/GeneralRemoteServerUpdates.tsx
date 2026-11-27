@@ -301,7 +301,10 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
                 : t('settings.about.servers.updateOne', 'Update {{name}}', {
                     name: eligible[0].name
                   })
-              : undefined
+              : // The narrow card shows a short form; assistive tech always gets the full action.
+                onlyFailed
+                ? t('settings.about.servers.retryAll', 'Retry all')
+                : t('settings.about.servers.updateAll', 'Update all')
           }
           armedLabel={
             eligible.length === 1
