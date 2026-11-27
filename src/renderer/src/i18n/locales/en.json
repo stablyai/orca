@@ -3547,6 +3547,9 @@
       }
     },
     "components": {
+      "railPage": {
+        "closeSearch": "Close search"
+      },
       "hostPicker": {
         "searchHosts": "Search hosts…",
         "noHostsMatch": "No hosts match.",
@@ -25359,6 +25362,7 @@
     }
   },
   "common": {
+    "search": "Search",
     "retry": "Retry",
     "cancel": "Cancel",
     "unassigned": "Unassigned",
@@ -26794,7 +26798,8 @@
       "d286d1ab85": "Clear pane title",
       "botItemBack": "Back to items",
       "botItemPrevious": "Previous item",
-      "botItemNext": "Next item"
+      "botItemNext": "Next item",
+      "pageSearch": "Search this page"
     },
     "group": {
       "global": "Global",
