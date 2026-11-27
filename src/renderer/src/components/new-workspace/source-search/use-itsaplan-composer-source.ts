@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
 import { itsaplanIssueListCacheKey } from '@/store/slices/itsaplan/itsaplan-slice-contract'
-import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import type {
   ItsaplanIssue,
   ItsaplanIssueListQuery
@@ -32,9 +31,6 @@ export function useItsaplanComposerSource({
   itsaplanSourceContext: TaskSourceContext | null
 } {
   const status = useAppStore((s) => s.itsaplanStatus)
-  const statusCurrent = useAppStore(
-    (s) => s.itsaplanStatusContextKey === getProviderRuntimeContextKey(s.settings)
-  )
   const refreshStatus = useAppStore((s) => s.refreshItsaplanStatus)
   const projects = useAppStore((s) => s.itsaplanProjects)
   const loadProjects = useAppStore((s) => s.loadItsaplanProjects)
@@ -43,12 +39,12 @@ export function useItsaplanComposerSource({
   const instance = status?.instance ?? null
   const active = enabled && mode === 'itsaplan'
 
-  // Why: the tab is shown only when connected, so the status must load before the tab is picked.
+  // Why: the tab shows only when connected; host changes are refreshed by the app-level status hook.
   useEffect(() => {
-    if (enabled && (status === null || !statusCurrent)) {
+    if (enabled && status === null) {
       void refreshStatus().catch(() => {})
     }
-  }, [enabled, refreshStatus, status, statusCurrent])
+  }, [enabled, refreshStatus, status])
   useEffect(() => {
     if (active && connected && projects === null) {
       void loadProjects().catch(() => {})
