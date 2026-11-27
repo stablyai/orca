@@ -1,4 +1,6 @@
+import { once } from 'node:events'
 import { setFlagsFromString } from 'node:v8'
+import { Worker } from 'node:worker_threads'
 import { afterEach, describe, expect, it } from 'vitest'
 import { MAIN_WORKER_HEAP_LIMIT_MB, spawnWorkerThread } from './worker-thread-spawn'
 import { WorkerThreadRequestQueue } from './worker-thread-request-queue'
@@ -15,18 +17,20 @@ parentPort.on('message', (request) => {
 `
 
 const originalType = process.type
-// V8 flags are process-wide; put back any launch heap flag (e.g. CI's NODE_OPTIONS) for later files.
-// NODE_OPTIONS may quote values; command-line flags win over it, and the last repeat wins.
-const nodeOptions = (process.env.NODE_OPTIONS?.match(/(?:[^\s"]+|"[^"]*")+/g) ?? []).map((arg) =>
-  arg.replaceAll('"', '')
-)
-const launchHeapFlag = [...nodeOptions, ...process.execArgv].findLast((arg) =>
-  /^--max[-_]old[-_]space[-_]size=/.test(arg)
-)
 afterEach(() => {
   Object.defineProperty(process, 'type', { value: originalType, configurable: true })
-  setFlagsFromString(launchHeapFlag ?? '--max-old-space-size=0')
 })
+
+/** Measured, not parsed: what a launch --max-old-space-size actually leaves workers with. */
+async function workerHeapLimitMb(maxOldGenerationSizeMb: number): Promise<number> {
+  const worker = new Worker(
+    "require('node:worker_threads').parentPort.postMessage(require('node:v8').getHeapStatistics().heap_size_limit)",
+    { eval: true, execArgv: [], resourceLimits: { maxOldGenerationSizeMb } }
+  )
+  const [bytes] = (await once(worker, 'message')) as [number]
+  await worker.terminate()
+  return Math.round(bytes / 2 ** 20)
+}
 
 function asMainProcess(): void {
   Object.defineProperty(process, 'type', { value: 'browser', configurable: true })
@@ -63,8 +67,13 @@ describe('spawnWorkerThread heap limit', () => {
   // Filling a 512 MB worker heap takes seconds on a loaded CI runner.
   it('a worker that runs out of heap fails only its own call; the next call gets a fresh worker', async () => {
     asMainProcess()
-    // A process-wide --max-old-space-size (CI's NODE_OPTIONS) overrides a worker's own limit.
+    // A process-wide --max-old-space-size (e.g. NODE_OPTIONS) overrides a worker's own limit; V8
+    // flags are process-wide, so later files in this process get the launch value back.
+    const probeMb = 32
+    const limitBefore = await workerHeapLimitMb(probeMb)
     setFlagsFromString('--max-old-space-size=0')
+    const youngMb = (await workerHeapLimitMb(probeMb)) - probeMb
+    const launchOldSpaceMb = limitBefore - youngMb > probeMb ? limitBefore - youngMb : 0
     let spawned = 0
     const queue = new WorkerThreadRequestQueue<
       { id: number; exhaust?: boolean },
@@ -100,6 +109,7 @@ describe('spawnWorkerThread heap limit', () => {
       expect(spawned).toBe(2)
     } finally {
       queue.dispose()
+      setFlagsFromString(`--max-old-space-size=${launchOldSpaceMb}`)
     }
   }, 60_000)
 })
