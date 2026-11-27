@@ -10,7 +10,7 @@ export const keepFocusPressProps = {
 }
 
 // Pane surfaces: the workbench (terminal hosts included), the floating terminal panel and Activity's terminal slots.
-const PANE_SURFACE_SELECTOR =
+export const PANE_SURFACE_SELECTOR =
   '[data-terminal-workbench-container], [data-floating-terminal-panel], [data-activity-terminal-slot-id]'
 
 /**

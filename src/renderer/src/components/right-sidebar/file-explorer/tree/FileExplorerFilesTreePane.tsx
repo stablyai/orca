@@ -5,6 +5,10 @@ import { dirname } from '@/lib/path'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
+import {
+  KEEPS_FOCUS_ATTRIBUTE,
+  PANE_SURFACE_SELECTOR
+} from '@/lib/overlay-interaction/focus-keeping-press'
 import type { RuntimeFileListState } from '@/components/file-actions/quick-open/quick-open-file-list'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { RightSidebarExplorerView } from '../../../../../../shared/ui-chrome/ui-chrome-types'
@@ -18,6 +22,27 @@ import type { useFileExplorerTree } from './useFileExplorerTree'
 import type { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-state'
 import type { WslHostUnavailableReason } from '../../../../runtime/hosts/wsl/wsl-host-availability'
 import type { WslHostReadOutage } from '../../../wsl-host-stopped/use-stopped-wsl-host'
+
+/**
+ * The Files background owns no focus: a press there selects nothing, so it must not take the terminal's
+ * keyboard focus. Row presses and the inline rename input keep their own behaviour.
+ */
+const FILE_EXPLORER_ROW_SELECTOR = '[data-file-explorer-row]'
+const FOCUS_OWNING_TARGETS = `${FILE_EXPLORER_ROW_SELECTOR}, [data-slot="context-menu-trigger"], input, textarea`
+
+export function isFilesTreeBackgroundPress(target: EventTarget | null): boolean {
+  if (!(target instanceof Element) || target.closest(FOCUS_OWNING_TARGETS) !== null) {
+    return false
+  }
+  // Only a pane the press cannot unmount is worth keeping focus in; otherwise the press lands on a caret target.
+  return document.activeElement?.closest(PANE_SURFACE_SELECTOR) != null
+}
+
+function keepFocusOnBackgroundPress(event: React.MouseEvent<HTMLDivElement>): void {
+  if (isFilesTreeBackgroundPress(event.target)) {
+    event.preventDefault()
+  }
+}
 
 type FileExplorerFilesTreePaneProps = {
   activeRepo: Repo | null
@@ -148,6 +173,15 @@ export function FileExplorerFilesTreePane({
       viewportRef={scrollRef}
       viewportTabIndex={-1}
       viewportClassName="h-full min-h-0 py-2"
+      viewportProps={
+        {
+          // Radix's viewport props type omits arbitrary data attributes; the spread still reaches the DOM.
+          [KEEPS_FOCUS_ATTRIBUTE]: '',
+          onMouseDown: keepFocusOnBackgroundPress,
+          onContextMenuCapture: handleExplorerBackgroundContextMenuCapture,
+          onDoubleClick: handleExplorerBackgroundDoubleClick
+        } as React.ComponentProps<typeof ScrollArea>['viewportProps']
+      }
       onWheelCapture={handleWheelCapture}
       onDragOverCapture={rootDragHandlers.onDragOverCapture}
       onDragOver={rootDragHandlers.onDragOver}
@@ -157,10 +191,6 @@ export function FileExplorerFilesTreePane({
       onDragEnd={() => {
         stopDragEdgeScroll()
         setDropTargetDir(null)
-      }}
-      viewportProps={{
-        onContextMenuCapture: handleExplorerBackgroundContextMenuCapture,
-        onDoubleClick: handleExplorerBackgroundDoubleClick
       }}
     >
       {treeError !== null &&
