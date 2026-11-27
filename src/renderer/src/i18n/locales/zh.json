@@ -2816,6 +2816,9 @@
       }
     },
     "components": {
+      "railPage": {
+        "closeSearch": "关闭搜索"
+      },
       "hostPicker": {
         "searchHosts": "搜索主机…",
         "noHostsMatch": "没有匹配的主机",
@@ -17680,7 +17683,7 @@
           "stepsFailedOfTotal_other": "{{failed}} / {{count}} 个步骤失败"
         },
         "ExternalFileChangeBanner": {
-          "7c41e90d12": "你有未保存的修改时，磁盘上的文件发生了更改。覆盖会替换磁盘上较新的内容",
+          "7c41e90d12": "你有未保存的修改时，磁盘上的文件发生了更改，覆盖会替换磁盘上较新的内容",
           "3fa2b8d417": "从磁盘重新加载",
           "a95d02c644": "保留我的编辑",
           "overwrite": "覆盖",
@@ -24940,6 +24943,7 @@
     "antigravityChatToCli": "聊天 → CLI"
   },
   "common": {
+    "search": "搜索",
     "retry": "重试",
     "cancel": "取消",
     "unassigned": "未分配",
@@ -26261,7 +26265,8 @@
       "tabNewBrowserSplitRight": "在右侧拆分窗格中新建浏览器标签页",
       "5468defe61": "折叠/展开所有项目",
       "botItemPrevious": "上一个事项",
-      "botItemNext": "下一个事项"
+      "botItemNext": "下一个事项",
+      "pageSearch": "在此页面中搜索"
     },
     "group": {
       "global": "全局",
@@ -29876,7 +29881,13 @@
       },
       "repositoriesIn": "{{accounts}} 中的仓库",
       "repositoryCount_one": "{{accounts}} 中的 {{count}} 个仓库",
-      "repositoryCount_other": "{{accounts}} 中的 {{count}} 个仓库"
+      "repositoryCount_other": "{{accounts}} 中的 {{count}} 个仓库",
+      "ghSignedOut": {
+        "thisComputer": "这台电脑",
+        "status": "gh 已退出登录（{{host}}）",
+        "line": "gh 已退出登录（{{host}}），请在该电脑上运行 <code>gh auth login</code>",
+        "copy": "复制 {{text}}"
+      }
     },
     "access": {
       "thisComputer": "此电脑",
