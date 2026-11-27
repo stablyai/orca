@@ -43,10 +43,11 @@ export function resolvePaneLaunchTuiAgent(
   return isTuiAgent(candidate) ? candidate : null
 }
 
-// jcode queries colors before its input loop is ready; skip renderer replies like main ingress to avoid pre-typed composer text (#12112).
+// jcode and agy paint an early OSC 10/11 reply as composer text (#12112, #51192).
 export function paneShouldAnswerOscColorQueries(
   state: PaneLaunchAgentStoreSlice,
   pane: PaneLaunchAgentPaneSlice
 ): boolean {
-  return resolvePaneLaunchTuiAgent(state, pane) !== 'jcode'
+  const agent = resolvePaneLaunchTuiAgent(state, pane)
+  return agent !== 'jcode' && agent !== 'antigravity'
 }
