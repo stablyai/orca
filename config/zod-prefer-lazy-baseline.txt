@@ -176,7 +176,6 @@
 2 src/shared/bots/bot-chat-tree-schema.ts
 1 src/shared/bots/bot-connector-offer.ts
 8 src/shared/bots/bot-first-look.ts
-15 src/shared/bots/bot-group-schema.ts
 12 src/shared/bots/bot-group.ts
 3 src/shared/bots/bot-import-cards.ts
 2 src/shared/bots/bot-import.ts
@@ -294,7 +293,6 @@
 2 src/shared/rpc-contract/accounts/accounts-params.ts
 2 src/shared/rpc-contract/artifacts/artifacts-params.ts
 7 src/shared/rpc-contract/automation-bot-params.ts
-21 src/shared/rpc-contract/bots-params.ts
 1 src/shared/rpc-contract/bots-tools-params.ts
 2 src/shared/rpc-contract/browser/browser-extras-params.ts
 1 src/shared/rpc-contract/browser/browser-observation-params.ts
