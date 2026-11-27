@@ -256,7 +256,7 @@ const styles = themedStyleSheet(() => ({
   shown: { flexShrink: 1, minHeight: 0, maxHeight: '60%' },
   answering: { maxHeight: '100%' },
   terminalCard: {
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle,
     padding: spacing.md,

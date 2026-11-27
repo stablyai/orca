@@ -147,26 +147,17 @@
       "runtimeAccessLink": "Dieser Link ist für eine andere Orca-App. Den Code auf dem Computer unter Einstellungen → Mobil scannen oder orca pair --mobile auf dem Server ausführen."
     },
     "terminalSettings": {
-      "keepPhoneSize": "Smartphone-Größe beibehalten (Standard)",
-      "leaveAppDescription": "Während ein Terminal auf dem Smartphone verwendet wird, verkleinert Orca es auf die Bildschirmgröße des Smartphones. Diese Einstellung legt fest, ob es beim Schließen oder Verlassen der App in Smartphone-Größe bleibt (damit interaktive CLI-Tools ihr Layout beibehalten) oder wieder an den Desktop angepasst wird. Über „Wiederherstellen“ im Desktop-Banner lässt sich die Größe jederzeit manuell anpassen.",
       "leaveAppHeading": "Beim Verlassen der App",
-      "noPairedDesktops": "Noch keine Desktops gekoppelt. Einen Desktop koppeln, um das Terminalverhalten festzulegen.",
       "restoreAfterMinutes_one": "Nach {{count}} Minute",
       "restoreAfterMinutes_other": "Nach {{count}} Minuten",
       "restoreAfterSeconds_one": "Nach {{count}} s",
       "restoreAfterSeconds_other": "Nach {{count}} s",
-      "restoreHost": "{{name}} wiederherstellen",
       "previewColumns_one": "{{count}} Spalte",
       "previewColumns_other": "{{count}} Spalten",
       "previewLabel": "Terminal-Vorschau",
-      "previewHeading": "VORSCHAU",
-      "fontHeading": "SCHRIFT",
-      "fontDescription": "Im Terminal mit zwei Fingern auf- oder zuziehen, um die Größe zu ändern; sie wird hier gespeichert. Gilt nur für dieses Gerät, nicht für das Desktop-Terminal.",
       "font": "Schriftart",
       "size": "Größe",
       "sizePoints": "{{size}} pt",
-      "smaller": "Kleiner",
-      "larger": "Größer",
       "lineSpacing": "Zeilenabstand",
       "lineSpacingTight": "Eng",
       "lineSpacingNormal": "Normal",
@@ -226,22 +217,15 @@
     },
     "paneView": {
       "forward": "Vorwärts",
-      "keyboardPlaceholder": "Text auf der Seite eingeben…",
       "reload": "Neu laden",
-      "sendText": "Text an den Browser senden",
       "dialogTitleWithOrigin": "{{origin}} meldet",
       "dialogTitleNoOrigin": "Diese Seite meldet",
-      "dialogAnswer": "Antwort",
       "stop": "Stoppen",
       "reconnect": "Erneut verbinden"
     },
-    "pointerModifiers": {
-      "clickModifier": "{{key}} als Klick-Modifikator"
-    },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "Übertragung nicht bestätigt – vor erneutem Versuch Seite prüfen",
-      "dialogAnswerFailed": "Die Antwort hat die Seite nicht erreicht.",
-      "sent": "Gesendet"
+      "dialogAnswerFailed": "Die Antwort hat die Seite nicht erreicht."
     },
     "stream": {
       "updateApp": "Die Orca-App aktualisieren, um Browser-Tabs hier zu streamen.",
@@ -250,10 +234,6 @@
       "pageUnavailable": "Browserseite ist noch nicht verfügbar.",
       "timedOut": "Zeitüberschreitung beim Browser-Stream.",
       "stopped": "Stream gestoppt"
-    },
-    "viewModeSwitch": {
-      "mobileView": "Mobile Ansicht der Website anzeigen",
-      "webView": "Desktop-Ansicht der Website anzeigen"
     },
     "loadFailure": {
       "retry": "Erneut versuchen",
@@ -332,7 +312,6 @@
       "addToMessage": "Zur Nachricht hinzufügen",
       "attachImage": "Bild anhängen",
       "cancelEditing": "Bearbeitung abbrechen",
-      "placeholder": "Frage stellen, @ für Dateiverweise, / für Befehle",
       "saveEditedMessage": "Bearbeitete Nachricht speichern",
       "sendMessage": "Nachricht senden",
       "sendQueue": "Einreihen",
@@ -342,10 +321,7 @@
       "sendSteerHint": "Fließt in das ein, was der Agent gerade tut"
     },
     "contextUsage": {
-      "label": "Kontext: {{used}} von {{window}} Token, {{percent}} % genutzt",
-      "title": "Kontext",
-      "estimated": "Anhand der letzten Antwort geschätzt.",
-      "deferredNote": "Bei Bedarf geladen. Nicht in der Nutzung enthalten."
+      "title": "Kontext"
     },
     "composerAttachments": {
       "attachedImage": "Angehängtes Bild",
@@ -357,7 +333,6 @@
       "uploadingFile": "{{name}} wird hochgeladen"
     },
     "composerPlaceholder": {
-      "prompt": "Frage stellen, @ für Dateiverweise, / für Befehle",
       "waitingForTerminal": "Warten auf Terminal…"
     },
     "diffCard": {
@@ -373,9 +348,7 @@
     },
     "message": {
       "copyMessage": "Nachricht kopieren",
-      "forkFromResponse": "Ab dieser Antwort abzweigen",
-      "scrollMessageToTop": "Diese Nachricht ganz nach oben scrollen",
-      "forkFromResponseHint": "Ein neuer Chat mit dieser vollständigen Antwort bis zum Ende des Durchgangs"
+      "forkFromResponse": "Ab dieser Antwort abzweigen"
     },
     "messageActionsSheet": {
       "clipboardRejected": "Die Zwischenablage hat den Text abgewiesen.",
@@ -407,10 +380,8 @@
     },
     "nativeChatToolLine": {
       "added": "Hinzugefügt",
-      "copyCommand": "Befehl kopieren",
       "deleted": "Gelöscht",
       "durationHours": "{{hours}} h {{minutes}} min {{seconds}} s",
-      "durationMilliseconds": "{{milliseconds}} ms",
       "durationMinutes": "{{minutes}} min {{seconds}} s",
       "durationSeconds": "{{seconds}} s",
       "edited": "Bearbeitet",
@@ -588,8 +559,6 @@
       "xhighShort": "Sehr hoch"
     },
     "sessionOptionPickers": {
-      "agentWorking": "Agent arbeitet",
-      "backToModels": "Zurück zu den Modellen",
       "dispatchUnconfirmed": "An den Agenten gesendet — nicht bestätigt",
       "modelFullAccessLabel": "Modell, {{value}}, Vollzugriff",
       "modelLabel": "Modell, {{value}}",
@@ -597,7 +566,6 @@
       "applying": "Wird angewendet…",
       "onAttach": "Wird angewendet, sobald der Chat verbunden ist",
       "heldPickRefused": "{{picked}} ist in diesem Chat nicht verfügbar. {{kept}} beibehalten.",
-      "optionsSection": "Optionen",
       "permissionsLabel": "Berechtigungen, {{value}}",
       "settingsLocked": "Die Modelleinstellungen werden nach diesem Durchgang freigegeben.",
       "workingAnnouncement": "Der Agent arbeitet. Die Modelleinstellungen werden nach diesem Durchgang freigegeben."
@@ -607,9 +575,6 @@
       "notReportedMarker": "Nicht gemeldet",
       "moreModels": "Weitere Modelle",
       "fewerModels": "Weniger Modelle"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "An den Agenten gesendet — nicht bestätigt"
     },
     "stopButton": {
       "stopAgent": "Agenten stoppen",
@@ -1023,12 +988,8 @@
       "monitoring": "Hintergrundaufgaben werden überwacht",
       "unverifiable": "Keine aktuelle Meldung"
     },
-    "authFailedBanner": {
-      "message": "Authentifizierung fehlgeschlagen – zuerst erneut verbinden; bei weiteren Fehlern vom Computer aus erneut koppeln."
-    },
     "authFailedBannerActions": {
-      "repair": "Erneut koppeln",
-      "webNote": "Diesen Host über die Orca-App erneut verbinden oder entfernen."
+      "repair": "Erneut koppeln"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "Zurücksetzung bereits erfolgt",
@@ -1191,13 +1152,9 @@
       "openHost": "{{title}} öffnen",
       "pairingInvalid": "Kopplung ungültig",
       "pairingTemporarilyUnavailable": "Kopplung vorübergehend nicht verfügbar",
-      "repairHint": "Zum erneuten Koppeln mit dem Desktop tippen",
-      "sameNetworkOnlyHint": "Verbindet sich nur im selben WLAN oder über Tailscale. Für Verbindungen von überall auf dem Desktop anmelden und erneut koppeln",
       "unlockHint": "Telefon entsperren, dann zum erneuten Versuch tippen",
-      "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} aktiv"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "Netzwerkdiagnose anzeigen"
+      "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} aktiv",
+      "tapToPairAgain": "Zum erneuten Koppeln mit dem Desktop tippen"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Host-Kompatibilität wird geprüft"
@@ -1256,11 +1213,9 @@
       "agent": "Agent",
       "connectTarget": "Mit Ziel verbinden",
       "options": "Optionen",
-      "createWorkspace": "Arbeitsbereich erstellen",
       "startFrom": "Ausgangspunkt",
       "loadingProjects": "Projekte werden geladen…",
       "connectTargetFirst": "Zuerst mit dem Ziel verbinden",
-      "createWorktree": "Worktree erstellen",
       "noProjectsFound": "Keine Projekte gefunden",
       "note": "Notiz",
       "notePlaceholder": "Notiz schreiben",
@@ -1388,19 +1343,10 @@
       "failed": "Fehlgeschlagen"
     },
     "terminalShortcutSettings": {
-      "addDescription": "Tastenkombination oder Textmakro erstellen",
-      "addShortcut": "Eigenes Tastenkürzel hinzufügen…",
-      "customShortcuts": "Eigene Tastenkürzel",
-      "empty": "Noch keine eigenen Tastenkürzel definiert.",
       "removeShortcut": "{{label}} entfernen",
-      "resetDefaults": "Auf Standard zurücksetzen",
-      "resetDescription": "Alle integrierten Tastenkürzel in der ursprünglichen Reihenfolge anzeigen",
       "moreKeys": "Weitere Tasten",
-      "moreKeysDescription": "Diese Tasten befinden sich unter ⋯ in der Terminal-Tastenleiste. Blende Tasten ein oder aus und halte den Griff gedrückt, um sie in die gewünschte Reihenfolge zu ziehen. Tasten, die bereits in der Leiste sind, etwa Esc oder die Pfeiltasten, erscheinen nicht unter ⋯.",
-      "directionPad": "Steuerkreuz",
       "showDirectionPad": "Steuerkreuz anzeigen",
-      "showDirectionPadDescription": "Das Steuerkreuz in der Seitenleiste anheften. Andernfalls werden dort die einzelnen Pfeiltasten angezeigt.",
-      "showShortcut": "Tastenkürzel {{label}} anzeigen"
+      "showDirectionPadDescription": "Das Steuerkreuz in der Seitenleiste anheften. Andernfalls werden dort die einzelnen Pfeiltasten angezeigt."
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Ratenlimit-Zurücksetzung verwenden?",
@@ -1419,13 +1365,10 @@
     "voiceModelList": {
       "deleteModel": "{{label}} löschen",
       "downloadModel": "{{label}} herunterladen",
-      "inUse": "In Verwendung",
       "modelExtracting": "{{size}} · wird entpackt…",
       "modelProgress": "{{size}} · {{progress}} %",
       "modelSize": "{{size}} MB",
-      "recommended": "Empfohlen",
-      "use": "Verwenden",
-      "useModel": "{{label}} verwenden"
+      "recommended": "Empfohlen"
     },
     "workspaceDetailPlaceholder": {
       "description": "Einen Arbeitsbereich in der Seitenleiste auswählen, um dessen Terminal hier zu öffnen.",
@@ -1485,8 +1428,8 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_one": "{{count}} geänderte Datei",
-        "changedFiles_other": "{{count}} geänderte Dateien",
+        "changed_one": "{{count}} geänderte Datei",
+        "changed_other": "{{count}} geänderte Dateien",
         "partial": "Teilweiser Diff",
         "showMoreFiles": "{{count}} weitere anzeigen"
       },
@@ -1916,41 +1859,33 @@
     },
     "automationsTab": {
       "connectDesktop": "{{desktop}} verbinden, um Automatisierungen anzuzeigen und auszuführen.",
-      "createHint": "Auf + tippen, um einen Agenten zu planen.",
       "emptyTitle": "Agentenarbeit planen",
-      "lastStatus": "Zuletzt: {{status}}",
       "newAutomation": "Neue Automatisierung",
-      "noAutomations": "Noch keine Automatisierungen",
-      "pairDesktop": "Einen Desktop koppeln, um Automatisierungen anzuzeigen und auszuführen.",
-      "paused": "Pausiert",
       "scheduled": "Geplant",
       "showFor": "Automatisierungen anzeigen für",
       "toggleFailed": "{{name}} konnte nicht aktualisiert werden",
-      "updateDesktop": "Orca auf {{desktop}} aktualisieren, um Automatisierungen zu nutzen."
+      "updateDesktop": "Orca auf {{desktop}} aktualisieren, um Automatisierungen zu nutzen.",
+      "pairComputer": "Einen Desktop koppeln, um Automatisierungen anzuzeigen und auszuführen."
     },
     "listFooter": {
-      "hostPickerTitle": "Aufgaben auf Host öffnen"
+      "openTasksOn": "Aufgaben auf Host öffnen"
     },
     "listHeader": {
-      "desktopsHeading": "Desktop-Computer"
+      "computersHeading": "Desktop-Computer"
     },
     "screen": {
       "pairingCheckFailed": "Kopplung konnte nicht geprüft werden",
-      "removeHostFailed": "Host konnte nicht entfernt werden",
-      "removeHostMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
-      "removeHostTitle": "Host entfernen",
-      "tryAgain": "Bitte erneut versuchen."
+      "tryAgain": "Bitte erneut versuchen.",
+      "removeComputerFailed": "Host konnte nicht entfernt werden",
+      "removeComputerTitle": "Host entfernen",
+      "removeComputerMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
+      "sameNetworkOnly": "Verbindet sich nur im selben WLAN oder über Tailscale. Für Verbindungen von überall auf dem Desktop anmelden und erneut koppeln"
     },
     "bottomBar": {
-      "connectFirst": "Einen Desktop verbinden, um neue Arbeit zu starten.",
       "newWorkspace": "Neuer Arbeitsbereich"
     },
-    "desktops": {
-      "pairDesktop": "Desktop koppeln"
-    },
     "sections": {
-      "tasks": "Aufgaben",
-      "tasksSubtitle": "Issues und Reviews ansehen"
+      "tasks": "Aufgaben"
     },
     "stats": {
       "agentTime": "Agentenzeit",
@@ -1963,23 +1898,23 @@
     },
     "tabs": {
       "automations": "Automatisierungen",
-      "chooseDesktop": "{{desktop}}, anderen Desktop auswählen",
       "feed": "Feed",
       "usage": "Nutzung",
       "agents": "Agenten",
-      "bots": "Bots"
+      "bots": "Bots",
+      "chooseComputer": "{{desktop}}, anderen Desktop auswählen"
     },
     "usage": {
       "active": "Aktiv",
-      "addAccounts": "Konten auf dem Desktop unter Einstellungen → Konten hinzufügen.",
       "connectDesktop": "{{desktop}} verbinden, um die Nutzung der Agentenkonten zu sehen.",
       "emptyTitle": "Noch keine Nutzung",
-      "openAccountsHint": "Öffnet die Konten dieses Desktops",
-      "pairDesktop": "Einen Desktop koppeln, um die Nutzung der Agentenkonten zu sehen.",
       "refresh": "Nutzung aktualisieren",
       "showUsageFor": "Nutzung anzeigen für",
       "updatedAgo": "Vor {{time}} aktualisiert",
-      "updatedJustNow": "Gerade eben aktualisiert"
+      "updatedJustNow": "Gerade eben aktualisiert",
+      "pairComputer": "Einen Desktop koppeln, um die Nutzung der Agentenkonten zu sehen.",
+      "addAccountsOnComputer": "Konten auf dem Desktop unter Einstellungen → Konten hinzufügen.",
+      "openComputerAccountsHint": "Öffnet die Konten dieses Desktops"
     },
     "activeAgents": {
       "heading": "Aktiv",
@@ -2010,31 +1945,27 @@
       "updateStepsServer": "Orca auf dem Server aktualisieren und anschließend neu starten.",
       "orcaVersion": "Orca-Version",
       "goBack": "Zurück navigieren",
-      "hostNamePlaceholder": "Host-Name",
-      "hostRemoved": "Dieser Host wurde von diesem Smartphone entfernt.",
-      "loadFailed": "Host konnte nicht geladen werden.",
-      "missingHost": "Host fehlt.",
       "name": "Name",
-      "saveFailed": "Host konnte nicht gespeichert werden.",
-      "saveHost": "Host speichern",
-      "title": "Host bearbeiten",
-      "removeHost": "Host entfernen"
+      "editComputer": "Host bearbeiten",
+      "computerRemoved": "Dieser Host wurde von diesem Smartphone entfernt.",
+      "couldNotLoad": "Host konnte nicht geladen werden.",
+      "couldNotSave": "Host konnte nicht gespeichert werden.",
+      "save": "Speichern"
     }
   },
   "hostScreen": {
     "hostListActionSheetActions": {
       "connect": "Verbinden",
       "disconnect": "Verbindung trennen",
-      "editHost": "Host bearbeiten",
       "networkDiagnostics": "Netzwerkdiagnose",
-      "reconnect": "Erneut verbinden"
+      "reconnect": "Erneut verbinden",
+      "editComputer": "Host bearbeiten"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Arbeitsbereich wird erstellt…"
     },
     "hostScreenHeader": {
       "accounts": "Konten",
-      "backToHosts": "Zurück zu den Hosts",
       "floatingWorkspace": "Schwebender Arbeitsbereich",
       "hideSidebar": "Seitenleiste ausblenden",
       "reconnect": "Erneut verbinden",
@@ -2134,27 +2065,19 @@
       "exceptDefaultBranch": "Außer Standard-Branch",
       "filters": "Filter",
       "groupBy": "Gruppieren nach",
-      "hideAutomationCreated": "Durch Automatisierungen erstellte ausblenden",
-      "hideCliCreated": "Per CLI erstellte ausblenden",
       "hideDefaultBranch": "Standard-Branch ausblenden",
-      "hideDetachedHead": "Losgelösten HEAD ausblenden",
-      "hideOtherClientWorkspaces": "Arbeitsbereiche anderer Clients ausblenden",
       "hideSleeping": "Ruhende Arbeitsbereiche ausblenden",
-      "hosts": "Hosts",
       "localLinux": "Lokales Linux",
       "localMac": "Lokaler Mac",
       "localWindows": "Lokales Windows",
       "projectOrder": "Projektreihenfolge",
       "projects": "Projekte",
-      "savingToDesktop": "Wird auf dem Host gespeichert",
       "show": "Anzeigen",
       "showProperties": "Eigenschaften anzeigen",
       "sortBy": "Sortieren nach",
-      "syncedAcrossDevices": "Geräteübergreifend synchronisiert",
       "done": "Fertig",
       "reset": "Leeren",
       "thisComputer": "Dieser Computer",
-      "waitingForDesktop": "Es wird noch auf den Host gewartet",
       "workspaceOptions": "Arbeitsbereichsoptionen"
     },
     "hostBottomBar": {
@@ -2179,7 +2102,6 @@
       "accounts": "Konten",
       "agentSessionHistory": "Verlauf der Agentensitzungen",
       "changes": "Änderungen",
-      "editHost": "Host bearbeiten",
       "host": "Host",
       "pullRequest": "Pull Request",
       "sourceControl": "Quellcodeverwaltung",
@@ -2187,12 +2109,13 @@
       "terminal": "Terminal",
       "workspace": "Arbeitsbereich",
       "automations": "Automatisierungen",
-      "mcpServers": "MCP-Server"
+      "mcpServers": "MCP-Server",
+      "editComputer": "Host bearbeiten"
     }
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "Arbeitsbereich auf Host erstellen"
+      "newWorkspaceOn": "Arbeitsbereich auf Host erstellen"
     },
     "loadingDrawer": {
       "downloadProgress": "Wird heruntergeladen… {{progress}}",
@@ -2211,14 +2134,8 @@
       "silentName": "Lautlose Orca-Benachrichtigungen"
     },
     "notificationDeliverySection": {
-      "footer": "Die Benachrichtigungsarten richten sich nach den Benachrichtigungseinstellungen des jeweiligen gekoppelten Computers. Nach 7 Tagen ohne Nutzung dieser App werden Benachrichtigungen pausiert; zum Fortsetzen die App öffnen und erneut verbinden.",
       "onlyWhenAgentNeedsInput": "Nur wenn ein Agent mich braucht",
-      "onlyWhenAgentNeedsInputHint": "Berechtigungsanfragen und Rückfragen. Abgeschlossene Agenten werden übersprungen.",
-      "onlyWhenAway": "Nur bei Abwesenheit vom Computer",
-      "onlyWhenAwayHint": "Nach 3 Minuten ohne Tastatur- oder Mausaktivität oder bei gesperrtem Computer.",
-      "sound": "Benachrichtigungston",
-      "suppressWhileFocused": "Geöffneten Arbeitsbereich ausnehmen",
-      "suppressWhileFocusedHint": "Für den auf diesem Smartphone geöffneten Arbeitsbereich keine Benachrichtigungen senden."
+      "sound": "Benachrichtigungston"
     }
   },
   "onboarding": {
@@ -2433,8 +2350,8 @@
       "titleLabel": "Titel",
       "descriptionLabel": "Beschreibung",
       "writeWithAi": "Mit KI schreiben",
-      "descriptionPlaceholder": "Optional",
-      "draft": "Als Entwurf erstellen"
+      "draft": "Als Entwurf erstellen",
+      "create": "Erstellen"
     },
     "screens": {
       "hideLog": "Protokoll ausblenden",
@@ -2906,9 +2823,7 @@
       "readOnly": "Schreibgeschützt"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "{{count}} verfügbar",
       "commands": "Befehle",
-      "fileTypes": "PDF, Text, Code…",
       "files": "Dateien",
       "photos": "Fotos",
       "skills": "Skills",
@@ -2933,11 +2848,8 @@
     },
     "nativeChatRenderData": {
       "defaultAgentLabel": "dem Agenten",
-      "emptySubtitle": "Von {{agent}} Code prüfen, Ausgaben erklären oder eine Änderung vornehmen lassen.",
       "emptyTitle": "Chat mit {{agent}} starten",
-      "errorSubtitle": "Das Protokoll konnte nicht gelesen werden. Zurück zum Terminal wechseln, um weiterzuarbeiten.",
       "errorTitle": "Unterhaltung konnte nicht geladen werden",
-      "notFoundSubtitle": "Eine Nachricht senden, um eine Unterhaltung zu starten, oder die Terminalansicht öffnen, um die aktuelle Aktivität von {{agent}} zu sehen.",
       "notFoundTitle": "Unterhaltung noch nicht gefunden"
     },
     "nativeChatToggleAction": {
@@ -2986,7 +2898,6 @@
     },
     "quickCommandEditorForm": {
       "action": "Aktion",
-      "addQuickCommand": "Schnellbefehl hinzufügen",
       "advanced": "Erweitert",
       "agent": "Agent",
       "agentPrompt": "Agenten-Prompt",
@@ -3005,7 +2916,6 @@
       "promptSizeCharacters": "{{used}} / {{max}} Zeichen",
       "promptSizeKilobytes": "{{used}} KB / {{max}} KB",
       "promptTooLong": "Zu lang zum Speichern.",
-      "scope": "Geltungsbereich",
       "terminalCommand": "Terminal-Befehl"
     },
     "quickCommandLaunch": {
@@ -3034,9 +2944,9 @@
       "chooseAgentTitle": "Agenten auswählen",
       "deleteConfirmMessage": "Dieser Schnellbefehl wird aus der Liste gespeicherter Befehle entfernt.",
       "editTitle": "Schnellbefehl bearbeiten",
-      "editorDescription": "Terminal-Befehle oder Agenten-Prompts für den Schnellzugriff speichern.",
       "title": "Schnellbefehle",
-      "untitled": "Ohne Titel"
+      "untitled": "Ohne Titel",
+      "add": "Hinzufügen"
     },
     "routeHelpers": {
       "connected": "Verbunden",
@@ -3506,7 +3416,6 @@
     },
     "appearance": {
       "language": {
-        "description": "„System“ übernimmt die Gerätesprache. Berechtigungsabfragen verwenden immer die Gerätesprache.",
         "heading": "Sprache",
         "systemWithCurrent": "System ({{language}})"
       },
@@ -3527,15 +3436,10 @@
     },
     "browserSettingsScreen": {
       "askEachTime": "Jedes Mal fragen",
-      "askEachTimeDescription": "Jedes Mal zwischen Orca-Browser, Smartphone-Browser und Link kopieren wählen.",
       "desktopBrowser": "Orca-Browser auf dem Desktop",
-      "desktopBrowserDescription": "Im gestreamten Browser des gekoppelten Desktops öffnen.",
-      "terminalAndChatLinksDescription": "Auswählen, wo Weblinks aus der Terminalausgabe und dem Chat beim Antippen geöffnet werden.",
-      "linksHeading": "Links",
       "loadFailed": "Browser-Einstellungen konnten nicht geladen werden. Erneut versuchen.",
       "openLinks": "Links öffnen",
       "phoneBrowser": "Browser auf dem Smartphone",
-      "phoneBrowserDescription": "In Safari, Chrome oder einem anderen Browser auf diesem Smartphone öffnen.",
       "saveFailed": "Browser-Einstellungen konnten nicht gespeichert werden. Erneut versuchen.",
       "title": "Browser"
     },
@@ -3551,13 +3455,6 @@
     "menuScreen": {
       "privacyPolicy": "Datenschutzerklärung",
       "support": "Hilfe"
-    },
-    "nativeChatSettingsScreen": {
-      "defaultViewDescription": "Festlegen, wie Sitzungen unterstützter Agenten (Claude, Codex und anderer chatfähiger Agenten) auf diesem Gerät geöffnet werden. Das Terminal zeigt die CLI direkt an; die Chat-Oberfläche zeigt eine Chatansicht wie in der Desktop-App. Die Ansicht jeder Sitzung lässt sich weiterhin über das Menü wechseln, das durch langes Drücken geöffnet wird.",
-      "defaultViewHeading": "Standardansicht",
-      "off": "Aus",
-      "on": "Ein",
-      "openInChatUi": "Sitzungen in der Chat-Oberfläche öffnen"
     },
     "nativeChatText": {
       "heading": "TEXT",
@@ -3636,22 +3533,14 @@
     "voiceSettingsScreen": {
       "connectDesktop": "Mit einem Desktop verbinden, um die Einstellungen für die Spracheingabe zu verwalten.",
       "deleteFailed": "Löschen fehlgeschlagen",
-      "dictationDescription": "Text in jeden fokussierten Bereich auf dem Desktop diktieren.",
-      "dictationHeading": "Diktat",
-      "dictationMode": "Diktatmodus",
-      "dictationModeDescription": "Umschalten: einmal zum Starten und erneut zum Stoppen drücken. Gedrückt halten: währenddessen diktieren.",
-      "dictationModeWithAutoDescription": "Automatisch: Tippen zum Starten und Stoppen; am Computer nimmt das Gedrückthalten des Kürzels auf, bis Sie loslassen. Gedrückt halten: währenddessen diktieren. Umschalten: einmal zum Starten und erneut zum Stoppen drücken.",
       "autoMode": "Automatisch",
       "downloadFailed": "Download fehlgeschlagen",
-      "enableDictation": "Diktat aktivieren",
       "holdMode": "Gedrückt halten",
       "loadFailed": "Einstellungen für die Spracheingabe konnten nicht geladen werden.",
       "loadFailedMessage": "Die Einstellungen für die Spracheingabe konnten nicht geladen werden.",
       "noneSelected": "Keines ausgewählt",
       "selectModelFailed": "Modell konnte nicht ausgewählt werden",
-      "speechModel": "Spracherkennungsmodell",
       "loading": "Spracheinstellungen werden geladen…",
-      "speechModelHeading": "Spracherkennungsmodell",
       "title": "Spracheingabe",
       "toggleMode": "Umschalten",
       "updateFailed": "Aktualisierung fehlgeschlagen"
@@ -3661,7 +3550,6 @@
     },
     "voiceTranscribeOn": {
       "heading": "Transkribieren auf",
-      "description": "Was dieses Telefon hört, bleibt auf ihm. Automatisch nutzt deinen Computer, wenn dieses Telefon nicht transkribieren kann.",
       "automatic": "Automatisch",
       "phone": "Dieses Telefon",
       "computer": "Computer",
@@ -4627,27 +4515,21 @@
     },
     "tasksCreateDrawers": {
       "connect": "Verbinden",
-      "connectLinearWorkspace": "Linear-Arbeitsbereich verbinden",
-      "createIssue": "Issue erstellen",
       "createWorkspaceIn": "Arbeitsbereich im Repository erstellen",
       "description": "Beschreibung",
-      "descriptionPlaceholder": "Kontext hinzufügen",
-      "fileIn": "In {{slug}} erstellen",
-      "issueSource": "Issue-Quelle",
       "keySecurityHint": "Der Schlüssel wird über den Schlüsselbund des Host-Betriebssystems verschlüsselt und lokal gespeichert.",
-      "linearConnectSubtitle": "Persönlichen API-Schlüssel einfügen, um Issues aus diesem Arbeitsbereich anzuzeigen.",
       "linearSettingsLink": "Linear-Einstellungen öffnen",
       "linearTeam": "Linear-Team",
-      "linearTeamSubtitle": "Issue im ausgewählten Linear-Team erstellen.",
-      "newIssueTitle": "Neues {{providerLabel}}-Issue",
       "origin": "Origin",
       "personalApiKey": "Persönlicher API-Schlüssel",
       "repository": "Repository",
-      "repositorySubtitle": "Issue im ausgewählten Repository erstellen.",
       "team": "Team",
       "title": "Titel",
-      "titlePlaceholder": "Aufgabentitel",
-      "upstream": "Upstream"
+      "upstream": "Upstream",
+      "newIssue": "Neues Issue",
+      "create": "Erstellen",
+      "fileInRow": "Ablegen in",
+      "connectLinear": "Linear verbinden"
     },
     "workspaceAgentSelection": {
       "blankTerminal": "Leeres Terminal"
@@ -4705,7 +4587,6 @@
       "directories_other": "{{count}} Verzeichnisse",
       "editSparsePreset": "Voreinstellung für partiellen Checkout bearbeiten",
       "nameLabel": "Name",
-      "namePlaceholder": "Renderer-Oberfläche",
       "newSparsePreset": "Neue Voreinstellung für partiellen Checkout",
       "runSetupAndCreate": "Einrichten und erstellen",
       "setupSubtitle": "Für {{name}} muss vor dem Erstellen dieses Arbeitsbereichs eine Einrichtungsoption gewählt werden.",
@@ -4828,8 +4709,7 @@
       "noFilterMatches": "Keine Arbeitsbereiche entsprechen den Filtern",
       "reopen": "Zum Aktualisieren erneut öffnen",
       "reopenDetail": "Dieser Host listet Arbeitsbereiche in einem Format auf, das diese Seite noch nicht unterstützt.",
-      "loading": "Arbeitsbereiche werden geladen…",
-      "retryingAutomatically": "Wird automatisch erneut versucht."
+      "loading": "Arbeitsbereiche werden geladen…"
     },
     "workspaceListSections": {
       "all": "Alle",
@@ -4873,7 +4753,6 @@
       "skipped": "Übersprungen",
       "started": "Gestartet",
       "trigger": "Auslöser",
-      "run": "Ausführung",
       "output": "Ausgabe",
       "noOutput": "Keine Ausgabe verfügbar.",
       "loadingRuns": "Ausführungen werden geladen…",
@@ -4900,10 +4779,6 @@
       "loadMoreWorkspaces": "Weitere Arbeitsbereiche laden",
       "installAndEnableAnAgentOnThisHostThenRetry": "Installiere und aktiviere einen Agenten auf diesem Host und versuche es erneut.",
       "loadingAutomations": "Automatisierungen werden geladen…",
-      "letYourAgentsWorkOnASchedule": "Lass deine Agenten nach Zeitplan arbeiten",
-      "createAnAutomationToRunATaskOnThisHost": "Erstelle eine Automatisierung, um eine Aufgabe auf diesem Host auszuführen.",
-      "nextDate": "Nächste: {{date}}",
-      "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Verbinde dich erneut mit diesem Host, um zu aktualisieren oder Änderungen vorzunehmen. Gespeicherte Informationen bleiben unten verfügbar.",
       "recentRuns": "Letzte Ausführungen",
       "outcome": "Ergebnis",
       "allOutcomes": "Alle Ergebnisse",
@@ -4912,14 +4787,9 @@
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Das ursprüngliche Agentenfenster konnte nicht überprüft werden. Verbinde dich erneut und versuche es noch einmal.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "Das ursprüngliche Agentenfenster kann nicht mehr geöffnet werden. Gespeicherte Ausgaben bleiben hier.",
       "allRuns": "Alle Ausführungen",
-      "thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow": "Diese Ausführung ist nicht mehr im gespeicherten Verlauf des Hosts. Die zuletzt gespeicherten Informationen bleiben unten.",
       "scheduledFor": "Geplant für",
-      "notCreated": "Nicht erstellt",
-      "projectHost": "Projekthost",
-      "notRecorded": "Nicht aufgezeichnet",
       "capturedTruncated": "Erfasst {{date}} · Ausgabe vom Host gekürzt",
       "capturedDate": "Erfasst {{date}}",
-      "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "Das ursprüngliche Agentenfenster ist nicht verfügbar. Gespeicherte Ausgaben bleiben hier.",
       "openAgent": "Agenten öffnen",
       "retryHistory": "Verlauf erneut laden",
       "fullOutputUnavailable": "Die vollständige Ausgabe konnte nicht geladen werden.",
@@ -5470,6 +5340,11 @@
         "skipped": "Übersprungen",
         "heldImagesLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Fotos aufnimmt. Entferne einige und versuche es erneut.",
         "heldSkillsLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Skills aufnimmt. Entferne einige und versuche es erneut."
+      },
+      "wait": {
+        "offlineSave": "{{host}} ist offline. Dein Text bleibt erhalten; Sichern geht wieder, sobald er zurück ist.",
+        "placeholder": "Wartet auf",
+        "count": "{{count}} Einträge"
       }
     },
     "needs": {

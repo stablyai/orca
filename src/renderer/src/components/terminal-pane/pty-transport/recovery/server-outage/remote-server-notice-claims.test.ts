@@ -1,69 +1,53 @@
 // @vitest-environment happy-dom
-import { act, renderHook } from '@testing-library/react'
-import { expect, it, vi } from 'vitest'
-import {
-  usePublishRemoteServerNoticeShowing,
-  useRemoteServerNoticeClaim,
-  useRemoteServerOutageCardInputs,
-  useRemoteServerOutageIds,
-  useReportRemoteServerPaneRetries
-} from './remote-server-notice-claims'
-import type { RemoteServerPaneRetries } from './remote-server-pane-retries'
+import { act, cleanup, renderHook } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
+import { CALM_STATUS_HEALTHY_HOLD_MS } from '../../../../../../../shared/remote-runtime/connection-status/calm-status-reveal'
+import { useRemoteServerNoticeClaim } from './remote-server-notice-claims'
 
-it('keeps the outage clock through a surface handoff and a held card, then releases it', () => {
-  const environmentId = 'fixture-server'
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
+
+function mountSurface(environmentId: string, down = true, canSpeak = true) {
+  return renderHook(() => useRemoteServerNoticeClaim(environmentId, down, canSpeak))
+}
+
+it('lets one visible surface per down server show its notice, keeps the rest quiet, and hands off on unmount', () => {
   vi.useFakeTimers()
   vi.setSystemTime(10_000)
-  try {
-    const host = renderHook(
-      ({ showing }) => {
-        usePublishRemoteServerNoticeShowing(environmentId, showing)
-        return {
-          ids: useRemoteServerOutageIds(),
-          card: useRemoteServerOutageCardInputs(environmentId)
-        }
-      },
-      { initialProps: { showing: false } }
-    )
-    const mountSurface = (retries: RemoteServerPaneRetries) =>
-      renderHook(() => {
-        useReportRemoteServerPaneRetries(environmentId, retries)
-        return useRemoteServerNoticeClaim(environmentId, true, true)
-      })
+  const first = mountSurface('server-x')
+  const second = mountSurface('server-x')
+  const hidden = mountSurface('server-x', true, false)
 
-    const first = mountSurface('latched')
-    expect(host.result.current.card).toEqual({
-      speaking: true,
-      down: true,
-      since: 10_000,
-      stopped: true
-    })
-    const retrying = mountSurface('retrying')
-    expect(host.result.current.card.stopped).toBe(false)
-    retrying.unmount()
-    expect(host.result.current.card.stopped).toBe(true)
+  expect(first.result.current).toEqual({ speaks: true, quiet: true, since: 10_000 })
+  expect(second.result.current).toEqual({ speaks: false, quiet: true, since: 10_000 })
+  expect(hidden.result.current).toEqual({ speaks: false, quiet: true, since: 10_000 })
 
-    host.rerender({ showing: true })
-    first.unmount()
-    act(() => {
-      vi.advanceTimersByTime(10)
-    })
-    const next = mountSurface('latched')
-    expect(next.result.current).toEqual({ quiet: true, showing: true })
-    expect(host.result.current.card.since).toBe(10_000)
+  vi.setSystemTime(20_000)
+  first.unmount()
+  // The outage clock survives the handoff, so the notice does not restart its timer.
+  expect(second.result.current).toEqual({ speaks: true, quiet: true, since: 10_000 })
 
-    next.unmount()
-    act(() => {
-      vi.advanceTimersByTime(10_000)
-    })
-    expect(host.result.current.ids).toEqual([environmentId])
-    host.rerender({ showing: false })
-    act(() => {
-      vi.advanceTimersByTime(10_000)
-    })
-    expect(host.result.current.ids).toEqual([])
-    host.unmount()
-  } finally {
-    vi.useRealTimers()
-  }
+  second.unmount()
+  hidden.unmount()
+  act(() => {
+    vi.advanceTimersByTime(CALM_STATUS_HEALTHY_HOLD_MS)
+  })
+  const later = mountSurface('server-x')
+  expect(later.result.current.since).toBe(20_000 + CALM_STATUS_HEALTHY_HOLD_MS)
+})
+
+it("gives another server's surfaces their own speaker and leaves a healthy server's panes unquieted", () => {
+  const onX = mountSurface('server-x')
+  const onY = mountSurface('server-y')
+  const healthy = mountSurface('server-z', false)
+
+  expect(onX.result.current.speaks).toBe(true)
+  expect(onY.result.current.speaks).toBe(true)
+  expect(healthy.result.current).toEqual({ speaks: false, quiet: false, since: null })
+
+  onX.unmount()
+  expect(onY.result.current.speaks).toBe(true)
+  expect(healthy.result.current.quiet).toBe(false)
 })

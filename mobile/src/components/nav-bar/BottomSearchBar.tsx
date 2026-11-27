@@ -247,14 +247,13 @@ const styles = themedStyleSheet(() => ({
     flex: 1,
     minWidth: 0
   },
+  // The pill wears the round buttons' fill and hairline, so the bar reads as one set.
   field: {
     minHeight: BUTTON_SIZE,
     borderRadius: radii.pill,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6
+    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.composerBorder
   },
   button: {
     width: BUTTON_SIZE,
@@ -264,12 +263,7 @@ const styles = themedStyleSheet(() => ({
     justifyContent: 'center',
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.composerBorder,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6
+    borderColor: colors.composerBorder
   },
   buttonEmphasis: {
     backgroundColor: colors.createActionFill,

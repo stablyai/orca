@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type { Store } from '../../persistence/loading-store/store'
 import { runPreflightCheck } from '../../preflight/agent-detection'
 import { detectRemoteWindowsTerminalCapabilities } from './preflight-remote-windows-terminal-capabilities'
@@ -42,7 +43,8 @@ function runPreflightAct<T>(
 
 export function registerPreflightHandlers(
   store?: Pick<Store, 'getSettings'>,
-  runtime?: Pick<OrcaRuntimeService, 'readQueuedLaunchPty'>
+  runtime?: Pick<OrcaRuntimeService, 'readQueuedLaunchPty'>,
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
   const detectionOptions = (args?: AgentDetectionRequest) => {
     if (!args?.enabledOnly) {
@@ -58,7 +60,7 @@ export function registerPreflightHandlers(
       agentCmdOverrides: settings.agentCmdOverrides
     }
   }
-  ipcMain.handle(
+  ipc.handle(
     'preflight:check',
     async (
       _event,
@@ -69,7 +71,7 @@ export function registerPreflightHandlers(
   )
 
   // Mount-time detection must not start a stopped distro; opening an agent picker wakes it.
-  ipcMain.handle(
+  ipc.handle(
     'preflight:detectAgents',
     async (_event, args?: AgentDetectionRequest & PreflightWake & { launch?: unknown }) => {
       if (args?.launch !== undefined) {
@@ -91,11 +93,11 @@ export function registerPreflightHandlers(
     }
   )
 
-  ipcMain.handle('preflight:zcodeInteractiveCapability', async () =>
+  ipc.handle('preflight:zcodeInteractiveCapability', async () =>
     readZCodeInteractiveCapability(store?.getSettings())
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'preflight:refreshAgents',
     async (_event, args?: AgentDetectionRequest & PreflightWake & { userInitiated?: boolean }) =>
       runPreflightAct(args, async () => {
@@ -110,13 +112,13 @@ export function registerPreflightHandlers(
       })
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'preflight:detectRemoteAgents',
     async (_event, args: { connectionId: string }): Promise<string[]> =>
       detectAgentsOnHost({ kind: 'ssh', connectionId: args.connectionId })
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'preflight:detectRemoteWindowsTerminalCapabilities',
     async (_event, args: { connectionId: string }): Promise<RemoteWindowsTerminalCapabilities> => {
       return detectRemoteWindowsTerminalCapabilities(args)

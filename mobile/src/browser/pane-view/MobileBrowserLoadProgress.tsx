@@ -27,7 +27,7 @@ function timing(value: Animated.Value, toValue: number, duration: number) {
   })
 }
 
-/** A thin line along the bottom edge of the address field while the desktop page loads. */
+/** A thin line along the bottom edge of the address pill while the desktop page loads. */
 export function MobileBrowserLoadProgress({
   loading,
   failed
@@ -121,7 +121,7 @@ export function MobileBrowserLoadProgress({
 const styles = themedStyleSheet(() => ({
   clip: {
     ...StyleSheet.absoluteFill,
-    borderRadius: radii.control,
+    borderRadius: radii.pill,
     overflow: 'hidden'
   },
   line: {

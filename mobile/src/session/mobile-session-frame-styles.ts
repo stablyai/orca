@@ -24,6 +24,10 @@ export const mobileSessionFrameStyles = themedStyleSheet(() => ({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle
   },
+  sessionChromeOnChat: {
+    backgroundColor: colors.chatCanvas,
+    borderBottomColor: 'transparent'
+  },
   contentFrame: {
     flex: 1,
     minHeight: 0

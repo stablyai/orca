@@ -147,26 +147,17 @@
       "runtimeAccessLink": "このリンクは別の Orca アプリ用です。コンピュータの「設定」→「モバイル」にあるコードをスキャンするか、サーバーで orca pair --mobile を実行してください。"
     },
     "terminalSettings": {
-      "keepPhoneSize": "スマートフォンサイズを維持（デフォルト）",
-      "leaveAppDescription": "スマートフォンでターミナルを使用している間、Orca は画面に合わせてターミナルを縮小します。アプリを閉じたり別のアプリに切り替えたりしたときに、スマートフォンサイズを維持して対話型 CLI ツールのレイアウトを保つか、デスクトップのサイズに戻すかを設定します。デスクトップのバナーにある「復元する」で、いつでも手動でサイズを戻せます。",
       "leaveAppHeading": "アプリを離れたとき",
-      "noPairedDesktops": "ペアリング済みのデスクトップはまだありません。ペアリングすると、ターミナルの動作を設定できます。",
       "restoreAfterMinutes_one": "{{count}} 分後",
       "restoreAfterMinutes_other": "{{count}} 分後",
       "restoreAfterSeconds_one": "{{count}} 秒後",
       "restoreAfterSeconds_other": "{{count}} 秒後",
-      "restoreHost": "「{{name}}」のサイズ復元",
       "previewColumns_one": "{{count}} 列",
       "previewColumns_other": "{{count}} 列",
       "previewLabel": "ターミナルのプレビュー",
-      "previewHeading": "プレビュー",
-      "fontHeading": "フォント",
-      "fontDescription": "ターミナル内でピンチするとサイズを変更でき、ここに保存されます。変更はこのデバイスにのみ適用され、デスクトップのターミナルは変わりません。",
       "font": "フォント",
       "size": "サイズ",
       "sizePoints": "{{size}} pt",
-      "smaller": "小さく",
-      "larger": "大きく",
       "lineSpacing": "行間",
       "lineSpacingTight": "狭い",
       "lineSpacingNormal": "通常",
@@ -226,22 +217,15 @@
     },
     "paneView": {
       "forward": "進む",
-      "keyboardPlaceholder": "ページに入力…",
       "reload": "リロード",
-      "sendText": "ブラウザにテキストを送信",
       "dialogTitleWithOrigin": "{{origin}} の内容",
       "dialogTitleNoOrigin": "このページの内容",
-      "dialogAnswer": "回答",
       "stop": "停止",
       "reconnect": "再接続"
     },
-    "pointerModifiers": {
-      "clickModifier": "クリック時の修飾キー {{key}}"
-    },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "送信を確認できません。再試行する前にページを確認してください。",
-      "dialogAnswerFailed": "回答をページに送信できませんでした。",
-      "sent": "送信済み"
+      "dialogAnswerFailed": "回答をページに送信できませんでした。"
     },
     "stream": {
       "updateApp": "ここでブラウザのタブをストリーミングするには、Orca アプリを更新してください。",
@@ -250,10 +234,6 @@
       "pageUnavailable": "ブラウザのページはまだ利用できません。",
       "timedOut": "ブラウザのストリーミングがタイムアウトしました。",
       "stopped": "ストリーミングが停止しました"
-    },
-    "viewModeSwitch": {
-      "mobileView": "ウェブサイトのモバイル表示に切り替え",
-      "webView": "ウェブサイトのデスクトップ表示に切り替え"
     },
     "loadFailure": {
       "retry": "再試行",
@@ -332,7 +312,6 @@
       "addToMessage": "メッセージに追加",
       "attachImage": "画像を添付",
       "cancelEditing": "編集をキャンセル",
-      "placeholder": "何でも聞いてください。@ でファイルを参照、/ でコマンドを実行",
       "saveEditedMessage": "編集したメッセージを保存",
       "sendMessage": "メッセージを送信",
       "sendQueue": "キューに入れる",
@@ -342,10 +321,7 @@
       "sendSteerHint": "Agent が今行っている作業に加えます"
     },
     "contextUsage": {
-      "label": "コンテキスト {{used}} / {{window}} トークン、{{percent}}% 使用済み",
-      "title": "コンテキスト",
-      "estimated": "最後の応答から推定。",
-      "deferredNote": "必要時に読み込まれます。使用量には含まれません。"
+      "title": "コンテキスト"
     },
     "composerAttachments": {
       "attachedImage": "添付画像",
@@ -357,7 +333,6 @@
       "uploadingFile": "「{{name}}」をアップロード中"
     },
     "composerPlaceholder": {
-      "prompt": "何でも聞いてください。@ でファイルを参照、/ でコマンドを実行",
       "waitingForTerminal": "ターミナルを待っています…"
     },
     "diffCard": {
@@ -373,9 +348,7 @@
     },
     "message": {
       "copyMessage": "メッセージをコピーする",
-      "forkFromResponse": "この応答から分岐",
-      "scrollMessageToTop": "このメッセージを一番上までスクロールします",
-      "forkFromResponseHint": "このターンの終わりまでの応答全体を含む新しいチャット"
+      "forkFromResponse": "この応答から分岐"
     },
     "messageActionsSheet": {
       "clipboardRejected": "クリップボードがテキストを受け付けませんでした。",
@@ -407,10 +380,8 @@
     },
     "nativeChatToolLine": {
       "added": "追加",
-      "copyCommand": "コマンドをコピー",
       "deleted": "削除",
       "durationHours": "{{hours}}時間 {{minutes}}分 {{seconds}}秒",
-      "durationMilliseconds": "{{milliseconds}}ミリ秒",
       "durationMinutes": "{{minutes}}分 {{seconds}}秒",
       "durationSeconds": "{{seconds}}秒",
       "edited": "編集",
@@ -588,8 +559,6 @@
       "xhighShort": "最高"
     },
     "sessionOptionPickers": {
-      "agentWorking": "Agent が作業中",
-      "backToModels": "モデル一覧に戻る",
       "dispatchUnconfirmed": "Agent に送信済み — 未確認",
       "modelFullAccessLabel": "モデル、{{value}}、フルアクセス",
       "modelLabel": "モデル、{{value}}",
@@ -597,7 +566,6 @@
       "applying": "適用中…",
       "onAttach": "チャットの接続時に適用されます",
       "heldPickRefused": "このチャットでは {{picked}} を利用できません。{{kept}} のままにしました。",
-      "optionsSection": "オプション",
       "permissionsLabel": "権限、{{value}}",
       "settingsLocked": "このターンが完了すると、モデル設定を変更できます。",
       "workingAnnouncement": "Agent が作業中です。このターンが完了すると、モデル設定を変更できます。"
@@ -607,9 +575,6 @@
       "notReportedMarker": "未報告",
       "moreModels": "その他のモデル",
       "fewerModels": "表示を減らす"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "Agent に送信済み — 未確認"
     },
     "stopButton": {
       "stopAgent": "Agent を停止",
@@ -1018,12 +983,8 @@
       "monitoring": "バックグラウンドタスクを監視中",
       "unverifiable": "最近の更新なし"
     },
-    "authFailedBanner": {
-      "message": "認証に失敗しました。まず再接続してください。失敗が続く場合は、デスクトップから再ペアリングしてください。"
-    },
     "authFailedBannerActions": {
-      "repair": "再ペアリング",
-      "webNote": "Orca アプリで、このホストに再接続するか、削除してください。"
+      "repair": "再ペアリング"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "リセット適用済み",
@@ -1186,13 +1147,9 @@
       "openHost": "「{{title}}」を開く",
       "pairingInvalid": "ペアリングが無効",
       "pairingTemporarilyUnavailable": "ペアリングが一時的に利用できません",
-      "repairHint": "タップしてデスクトップと再ペアリングしてください。",
-      "sameNetworkOnlyHint": "同じ Wi-Fi または Tailscale でのみ接続できます。どこからでも接続するには、デスクトップでサインインしてもう一度ペアリングしてください",
       "unlockHint": "スマートフォンのロックを解除してから、タップして再試行してください。",
-      "worktreeAccessibilitySummary": "{{summary}}、{{activeCount}} 件がアクティブ"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "ネットワーク診断を表示"
+      "worktreeAccessibilitySummary": "{{summary}}、{{activeCount}} 件がアクティブ",
+      "tapToPairAgain": "タップしてデスクトップと再ペアリングしてください。"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "ホストの互換性を確認中"
@@ -1251,11 +1208,9 @@
       "agent": "Agent",
       "connectTarget": "接続先に接続",
       "options": "オプション",
-      "createWorkspace": "ワークスペースを作成",
       "startFrom": "作成元",
       "loadingProjects": "プロジェクトを読み込み中…",
       "connectTargetFirst": "先に接続先へ接続",
-      "createWorktree": "ワークツリーを作成する",
       "noProjectsFound": "プロジェクトが見つかりません",
       "note": "注記",
       "notePlaceholder": "メモを書く",
@@ -1383,19 +1338,10 @@
       "failed": "失敗"
     },
     "terminalShortcutSettings": {
-      "addDescription": "キーの組み合わせやテキストマクロを作成",
-      "addShortcut": "カスタムショートカットを追加…",
-      "customShortcuts": "カスタムショートカット",
-      "empty": "カスタムショートカットはまだ設定されていません。",
       "removeShortcut": "{{label}} を削除",
-      "resetDefaults": "初期設定に戻す",
-      "resetDescription": "すべての組み込みショートカットキーを元の順序で表示",
       "moreKeys": "その他のキー",
-      "moreKeysDescription": "これらのキーは、ターミナルのキー列にある ⋯ の下に表示されます。キーの表示・非表示を切り替え、ハンドルを長押ししてドラッグすると順序を変更できます。Esc や矢印キーなど、キー列にすでにあるキーは ⋯ に表示されません。",
-      "directionPad": "方向パッド",
       "showDirectionPad": "方向パッドを表示",
-      "showDirectionPadDescription": "矢印パッドをサイドレールに固定します。オフの場合、レールに各矢印キーが表示されます。",
-      "showShortcut": "{{label}} ショートカットを表示"
+      "showDirectionPadDescription": "矢印パッドをサイドレールに固定します。オフの場合、レールに各矢印キーが表示されます。"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "レート制限のリセット枠を使用しますか？",
@@ -1414,13 +1360,10 @@
     "voiceModelList": {
       "deleteModel": "{{label}} を削除",
       "downloadModel": "{{label}} をダウンロード",
-      "inUse": "使用中",
       "modelExtracting": "{{size}} · 展開中…",
       "modelProgress": "{{size}} · {{progress}}%",
       "modelSize": "{{size}} MB",
-      "recommended": "推奨",
-      "use": "使用",
-      "useModel": "{{label}} を使用"
+      "recommended": "推奨"
     },
     "workspaceDetailPlaceholder": {
       "description": "サイドバーからワークスペースを選択すると、そのターミナルがここに開きます。",
@@ -1480,8 +1423,8 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_one": "変更されたファイル {{count}} 個",
-        "changedFiles_other": "変更されたファイル {{count}} 個",
+        "changed_one": "変更されたファイル {{count}} 個",
+        "changed_other": "変更されたファイル {{count}} 個",
         "partial": "部分的な差分",
         "showMoreFiles": "さらに {{count}} 個を表示"
       },
@@ -1911,41 +1854,33 @@
     },
     "automationsTab": {
       "connectDesktop": "自動化を表示・実行するには、{{desktop}} に接続してください。",
-      "createHint": "+ をタップすると Agent の実行を予定できます。",
       "emptyTitle": "Agent の作業を予定",
-      "lastStatus": "前回：{{status}}",
       "newAutomation": "新しい自動化",
-      "noAutomations": "自動化はまだありません",
-      "pairDesktop": "自動化を表示・実行するには、デスクトップとペアリングしてください。",
-      "paused": "一時停止中",
       "scheduled": "スケジュール実行",
       "showFor": "自動化を表示するデスクトップ",
       "toggleFailed": "{{name}} を更新できませんでした",
-      "updateDesktop": "自動化を使用するには、{{desktop}} の Orca を更新してください。"
+      "updateDesktop": "自動化を使用するには、{{desktop}} の Orca を更新してください。",
+      "pairComputer": "自動化を表示・実行するには、デスクトップとペアリングしてください。"
     },
     "listFooter": {
-      "hostPickerTitle": "タスクを開くホスト"
+      "openTasksOn": "タスクを開くホスト"
     },
     "listHeader": {
-      "desktopsHeading": "デスクトップ"
+      "computersHeading": "デスクトップ"
     },
     "screen": {
       "pairingCheckFailed": "ペアリングを確認できませんでした",
-      "removeHostFailed": "ホストを削除できませんでした",
-      "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
-      "removeHostTitle": "ホストを削除",
-      "tryAgain": "再試行してください。"
+      "tryAgain": "再試行してください。",
+      "removeComputerFailed": "ホストを削除できませんでした",
+      "removeComputerTitle": "ホストを削除",
+      "removeComputerMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
+      "sameNetworkOnly": "同じ Wi-Fi または Tailscale でのみ接続できます。どこからでも接続するには、デスクトップでサインインしてもう一度ペアリングしてください"
     },
     "bottomBar": {
-      "connectFirst": "新規作業を始めるには、デスクトップに接続してください。",
       "newWorkspace": "新規ワークスペース"
     },
-    "desktops": {
-      "pairDesktop": "デスクトップとペアリング"
-    },
     "sections": {
-      "tasks": "タスク",
-      "tasksSubtitle": "Issue とレビューを閲覧"
+      "tasks": "タスク"
     },
     "stats": {
       "agentTime": "Agent 時間",
@@ -1958,23 +1893,23 @@
     },
     "tabs": {
       "automations": "自動化",
-      "chooseDesktop": "{{desktop}}、別のデスクトップを選択",
       "feed": "フィード",
       "usage": "使用状況",
       "agents": "Agent",
-      "bots": "Bots"
+      "bots": "Bots",
+      "chooseComputer": "{{desktop}}、別のデスクトップを選択"
     },
     "usage": {
       "active": "使用中",
-      "addAccounts": "デスクトップの「設定」→「アカウント」からアカウントを追加してください。",
       "connectDesktop": "Agent アカウントの使用状況を表示するには、{{desktop}} に接続してください。",
       "emptyTitle": "使用状況はまだありません",
-      "openAccountsHint": "このデスクトップのアカウントを開きます",
-      "pairDesktop": "Agent アカウントの使用状況を表示するには、デスクトップとペアリングしてください。",
       "refresh": "使用状況を更新",
       "showUsageFor": "使用状況を表示するデスクトップ",
       "updatedAgo": "{{time}}前に更新",
-      "updatedJustNow": "たった今更新"
+      "updatedJustNow": "たった今更新",
+      "pairComputer": "Agent アカウントの使用状況を表示するには、デスクトップとペアリングしてください。",
+      "addAccountsOnComputer": "デスクトップの「設定」→「アカウント」からアカウントを追加してください。",
+      "openComputerAccountsHint": "このデスクトップのアカウントを開きます"
     },
     "activeAgents": {
       "heading": "アクティブ",
@@ -2005,31 +1940,27 @@
       "updateStepsServer": "サーバーで Orca を更新してから、再起動してください。",
       "orcaVersion": "Orca のバージョン",
       "goBack": "戻る",
-      "hostNamePlaceholder": "ホスト名",
-      "hostRemoved": "このホストはこのスマートフォンから削除されました。",
-      "loadFailed": "ホストの読み込みに失敗しました。",
-      "missingHost": "ホストが指定されていません。",
       "name": "名前",
-      "saveFailed": "ホストの保存に失敗しました。",
-      "saveHost": "ホストを保存",
-      "title": "ホストを編集",
-      "removeHost": "ホストを削除"
+      "editComputer": "ホストを編集",
+      "computerRemoved": "このホストはこのスマートフォンから削除されました。",
+      "couldNotLoad": "ホストの読み込みに失敗しました。",
+      "couldNotSave": "ホストの保存に失敗しました。",
+      "save": "保存"
     }
   },
   "hostScreen": {
     "hostListActionSheetActions": {
       "connect": "接続",
       "disconnect": "切断",
-      "editHost": "ホストを編集",
       "networkDiagnostics": "ネットワーク診断",
-      "reconnect": "再接続"
+      "reconnect": "再接続",
+      "editComputer": "ホストを編集"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "ワークスペースを作成中…"
     },
     "hostScreenHeader": {
       "accounts": "アカウント",
-      "backToHosts": "ホスト一覧に戻る",
       "floatingWorkspace": "フローティングワークスペース",
       "hideSidebar": "サイドバーを非表示",
       "reconnect": "再接続",
@@ -2129,27 +2060,19 @@
       "exceptDefaultBranch": "デフォルトのブランチを除く",
       "filters": "フィルター",
       "groupBy": "グループ化",
-      "hideAutomationCreated": "自動化で作成されたワークスペースを非表示",
-      "hideCliCreated": "CLI が作成したものを非表示",
       "hideDefaultBranch": "デフォルトのブランチを非表示にする",
-      "hideDetachedHead": "分離 HEAD を非表示",
-      "hideOtherClientWorkspaces": "他のクライアントのワークスペースを非表示にする",
       "hideSleeping": "スリープ中を非表示",
-      "hosts": "ホスト",
       "localLinux": "ローカル Linux",
       "localMac": "ローカル Mac",
       "localWindows": "ローカル Windows",
       "projectOrder": "プロジェクトの順序",
       "projects": "プロジェクト",
-      "savingToDesktop": "ホストに保存中",
       "show": "表示",
       "showProperties": "プロパティを表示する",
       "sortBy": "並べ替え",
-      "syncedAcrossDevices": "デバイス間で同期されます",
       "done": "完了",
       "reset": "リセット",
       "thisComputer": "このコンピュータ",
-      "waitingForDesktop": "まだホストの応答を待っています",
       "workspaceOptions": "ワークスペースのオプション"
     },
     "hostBottomBar": {
@@ -2174,7 +2097,6 @@
       "accounts": "アカウント",
       "agentSessionHistory": "Agent セッション履歴",
       "changes": "変更点",
-      "editHost": "ホストを編集",
       "host": "ホスト",
       "pullRequest": "PR",
       "sourceControl": "ソース管理",
@@ -2182,12 +2104,13 @@
       "terminal": "ターミナル",
       "workspace": "ワークスペース",
       "automations": "自動化",
-      "mcpServers": "MCP サーバー"
+      "mcpServers": "MCP サーバー",
+      "editComputer": "ホストを編集"
     }
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "ワークスペースの作成先ホスト"
+      "newWorkspaceOn": "ワークスペースの作成先ホスト"
     },
     "loadingDrawer": {
       "downloadProgress": "ダウンロード中… {{progress}}",
@@ -2206,14 +2129,8 @@
       "silentName": "Orca のサイレント通知"
     },
     "notificationDeliverySection": {
-      "footer": "通知の種類は、ペアリング済みの各デスクトップの通知設定に従います。このアプリを7日間使用しないと通知が一時停止します。再開するには、アプリを開いて再接続してください。",
       "onlyWhenAgentNeedsInput": "Agent が対応を求めているときのみ",
-      "onlyWhenAgentNeedsInputHint": "権限リクエストと質問のみ通知します。Agent の完了は通知しません。",
-      "onlyWhenAway": "デスクトップから離れているときのみ",
-      "onlyWhenAwayHint": "キーボードやマウスの操作が 3 分間ないとき、またはロック中に通知します。",
-      "sound": "通知音",
-      "suppressWhileFocused": "表示中は通知しない",
-      "suppressWhileFocusedHint": "このスマートフォンで開いているワークスペースの通知を省略します。"
+      "sound": "通知音"
     }
   },
   "onboarding": {
@@ -2428,8 +2345,8 @@
       "titleLabel": "タイトル",
       "descriptionLabel": "説明",
       "writeWithAi": "AI で作成",
-      "descriptionPlaceholder": "任意",
-      "draft": "下書きとして作成"
+      "draft": "下書きとして作成",
+      "create": "作成"
     },
     "screens": {
       "hideLog": "ログを非表示",
@@ -2901,9 +2818,7 @@
       "readOnly": "読み取り専用"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "{{count}} 件が利用可能",
       "commands": "コマンド",
-      "fileTypes": "PDF、テキスト、コード…",
       "files": "ファイル",
       "photos": "写真",
       "skills": "スキル",
@@ -2928,11 +2843,8 @@
     },
     "nativeChatRenderData": {
       "defaultAgentLabel": "Agent",
-      "emptySubtitle": "{{agent}} にコードの確認や出力の説明、変更を依頼してください。",
       "emptyTitle": "{{agent}} とチャットを開始",
-      "errorSubtitle": "トランスクリプトを読み取ることができませんでした。作業を続けるには、ターミナルに切り替えてください。",
       "errorTitle": "会話を読み込めませんでした",
-      "notFoundSubtitle": "メッセージを送信して会話を始めるか、ターミナル表示を開いて {{agent}} の動作を確認してください。",
       "notFoundTitle": "この会話はまだ見つかりません"
     },
     "nativeChatToggleAction": {
@@ -2981,7 +2893,6 @@
     },
     "quickCommandEditorForm": {
       "action": "操作",
-      "addQuickCommand": "クイックコマンドを追加",
       "advanced": "詳細設定",
       "agent": "Agent",
       "agentPrompt": "Agent プロンプト",
@@ -3000,7 +2911,6 @@
       "promptSizeCharacters": "{{used}} / {{max}} 文字",
       "promptSizeKilobytes": "{{used}} KB / {{max}} KB",
       "promptTooLong": "長すぎるため保存できません。",
-      "scope": "スコープ",
       "terminalCommand": "ターミナルコマンド"
     },
     "quickCommandLaunch": {
@@ -3029,9 +2939,9 @@
       "chooseAgentTitle": "Agent を選択",
       "deleteConfirmMessage": "このクイックコマンドは保存されたリストから削除されます。",
       "editTitle": "クイックコマンドの編集",
-      "editorDescription": "ターミナルコマンドや Agent プロンプトを保存して、すぐに使えるようにします。",
       "title": "クイックコマンド",
-      "untitled": "無題"
+      "untitled": "無題",
+      "add": "追加"
     },
     "routeHelpers": {
       "connected": "接続済み",
@@ -3501,7 +3411,6 @@
     },
     "appearance": {
       "language": {
-        "description": "「システム」はこのデバイスの言語に従います。権限の確認画面には常にデバイスの言語が使われます。",
         "heading": "言語",
         "systemWithCurrent": "システム（{{language}}）"
       },
@@ -3522,15 +3431,10 @@
     },
     "browserSettingsScreen": {
       "askEachTime": "毎回確認する",
-      "askEachTimeDescription": "Orca ブラウザ、スマートフォンのブラウザ、リンクのコピーから毎回選びます。",
       "desktopBrowser": "デスクトップの Orca ブラウザ",
-      "desktopBrowserDescription": "ペアリング済みのデスクトップからストリーミングされるブラウザで開きます。",
-      "terminalAndChatLinksDescription": "ターミナル出力とチャットでタップした Web リンクを開く場所を選択してください。",
-      "linksHeading": "リンク",
       "loadFailed": "ブラウザ設定を読み込めませんでした。再試行してください。",
       "openLinks": "リンクを開く",
       "phoneBrowser": "スマートフォンのブラウザ",
-      "phoneBrowserDescription": "このスマートフォンの Safari、Chrome などのブラウザで開きます。",
       "saveFailed": "ブラウザ設定を保存できませんでした。再試行してください。",
       "title": "ブラウザ"
     },
@@ -3546,13 +3450,6 @@
     "menuScreen": {
       "privacyPolicy": "プライバシーポリシー",
       "support": "サポート"
-    },
-    "nativeChatSettingsScreen": {
-      "defaultViewDescription": "対応する Agent セッション（Claude、Codex など、チャットに対応した Agent）をこのデバイスで開く際の表示方法を選択してください。「ターミナル」では CLI をそのまま表示し、「Chat UI」ではデスクトップアプリと同様のチャット画面を表示します。各セッションの表示方法は、長押しメニューから個別に切り替えられます。",
-      "defaultViewHeading": "デフォルトの表示",
-      "off": "オフ",
-      "on": "オン",
-      "openInChatUi": "セッションをチャット UI で開く"
     },
     "nativeChatText": {
       "heading": "テキスト",
@@ -3631,22 +3528,14 @@
     "voiceSettingsScreen": {
       "connectDesktop": "音声設定を管理するには、デスクトップに接続してください。",
       "deleteFailed": "削除に失敗しました",
-      "dictationDescription": "デスクトップでフォーカスされている任意のペインに、音声でテキストを入力できます。",
-      "dictationHeading": "ディクテーション",
-      "dictationMode": "ディクテーションモード",
-      "dictationModeDescription": "トグル：1 回押すと開始し、もう一度押すと停止します。ホールド：押している間だけ音声入力します。",
-      "dictationModeWithAutoDescription": "自動：タップで開始と停止。コンピュータではショートカットを押し続けると離すまで録音します。ホールド：押している間だけ音声入力します。トグル：1 回押すと開始し、もう一度押すと停止します。",
       "autoMode": "自動",
       "downloadFailed": "ダウンロードに失敗しました",
-      "enableDictation": "音声ディクテーションを有効にする",
       "holdMode": "ホールド",
       "loadFailed": "音声設定の読み込みに失敗しました。",
       "loadFailedMessage": "音声設定の読み込みに失敗しました。",
       "noneSelected": "未選択",
       "selectModelFailed": "モデルを選択できませんでした",
-      "speechModel": "音声モデル",
       "loading": "音声設定を読み込み中…",
-      "speechModelHeading": "音声モデル",
       "title": "音声",
       "toggleMode": "トグル",
       "updateFailed": "更新できませんでした"
@@ -3656,7 +3545,6 @@
     },
     "voiceTranscribeOn": {
       "heading": "文字起こしの場所",
-      "description": "この端末で聞き取った音声は端末の外に出ません。「自動」では、この端末で文字起こしできないときにコンピュータを使います。",
       "automatic": "自動",
       "phone": "この端末",
       "computer": "コンピュータ",
@@ -4622,27 +4510,21 @@
     },
     "tasksCreateDrawers": {
       "connect": "接続",
-      "connectLinearWorkspace": "Linear ワークスペースに接続",
-      "createIssue": "Issue を作成",
       "createWorkspaceIn": "ワークスペースの作成先リポジトリ",
       "description": "説明",
-      "descriptionPlaceholder": "背景情報を追加",
-      "fileIn": "{{slug}} に登録",
-      "issueSource": "Issue ソース",
       "keySecurityHint": "キーはホスト OS のキーチェーンで暗号化され、ローカルに保存されます。",
-      "linearConnectSubtitle": "ワークスペースの Issue を閲覧するには、個人用 API キーを貼り付けてください。",
       "linearSettingsLink": "Linearの設定を開く",
       "linearTeam": "Linear チーム",
-      "linearTeamSubtitle": "選択した Linear チームに Issue を作成します。",
-      "newIssueTitle": "{{providerLabel}} の新規 Issue",
       "origin": "オリジン",
       "personalApiKey": "個人用APIキー",
       "repository": "リポジトリ",
-      "repositorySubtitle": "選択したリポジトリに Issue を作成します。",
       "team": "チーム",
       "title": "タイトル",
-      "titlePlaceholder": "タスクのタイトル",
-      "upstream": "upstream"
+      "upstream": "upstream",
+      "newIssue": "新しい Issue",
+      "create": "作成",
+      "fileInRow": "登録先",
+      "connectLinear": "Linear に接続"
     },
     "workspaceAgentSelection": {
       "blankTerminal": "ブランクターミナル"
@@ -4700,7 +4582,6 @@
       "directories_other": "{{count}} 個のディレクトリ",
       "editSparsePreset": "スパースプリセットを編集",
       "nameLabel": "名前",
-      "namePlaceholder": "レンダラー UI",
       "newSparsePreset": "新しいスパースプリセット",
       "runSetupAndCreate": "セットアップを実行して作成",
       "setupSubtitle": "{{name}} でこのワークスペースを作成する前に、セットアップの実行有無を選択してください。",
@@ -4823,8 +4704,7 @@
       "noFilterMatches": "フィルターに一致するワークスペースがありません",
       "reopen": "開き直して更新",
       "reopenDetail": "このページは、このホストのワークスペース一覧の形式にまだ対応していません。",
-      "loading": "ワークスペースを読み込み中…",
-      "retryingAutomatically": "自動的に再試行しています。"
+      "loading": "ワークスペースを読み込み中…"
     },
     "workspaceListSections": {
       "all": "全て",
@@ -4869,7 +4749,6 @@
       "skipped": "スキップ済み",
       "started": "開始済み",
       "trigger": "トリガー",
-      "run": "実行",
       "output": "出力",
       "noOutput": "出力内容はありません。",
       "loadingRuns": "実行を読み込み中…",
@@ -4896,10 +4775,6 @@
       "loadMoreWorkspaces": "ワークスペースをさらに読み込む",
       "installAndEnableAnAgentOnThisHostThenRetry": "このホストにAgentをインストールして有効にし、再試行してください。",
       "loadingAutomations": "自動化を読み込み中…",
-      "letYourAgentsWorkOnASchedule": "Agentをスケジュールに従って実行",
-      "createAnAutomationToRunATaskOnThisHost": "このホストでタスクを実行する自動化を作成します。",
-      "nextDate": "次回：{{date}}",
-      "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "更新や変更を行うには、このホストに再接続してください。保存済みの情報は引き続き以下で確認できます。",
       "recentRuns": "最近の実行",
       "outcome": "結果",
       "allOutcomes": "すべての結果",
@@ -4908,14 +4783,9 @@
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "元のAgentペインを確認できませんでした。再接続して再試行してください。",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "元のAgentペインは開けなくなりました。保存済みの出力はここに残ります。",
       "allRuns": "すべての実行",
-      "thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow": "この実行はホストの保持履歴にありません。最後に保存された情報は以下に残ります。",
       "scheduledFor": "実行予定日時",
-      "notCreated": "未作成",
-      "projectHost": "プロジェクトのホスト",
-      "notRecorded": "未記録",
       "capturedTruncated": "取得日時：{{date}} · ホストにより出力が切り詰められました",
       "capturedDate": "取得日時：{{date}}",
-      "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "元のAgentペインは利用できません。保存済みの出力はここに残ります。",
       "openAgent": "Agentを開く",
       "retryHistory": "履歴を再読み込み",
       "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
@@ -5465,6 +5335,11 @@
         "skipped": "スキップ済み",
         "heldImagesLimit": "回答は1件のコメントとして送信され、写真は{{max}}枚までです。いくつか削除して、もう一度お試しください。",
         "heldSkillsLimit": "回答は1件のコメントとして送信され、スキルは{{max}}個までです。いくつか削除して、もう一度お試しください。"
+      },
+      "wait": {
+        "offlineSave": "{{host}} はオフラインです。入力した内容は保持され、戻ると保存できるようになります。",
+        "placeholder": "待ち",
+        "count": "{{count}} 件"
       }
     },
     "needs": {

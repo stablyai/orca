@@ -48,6 +48,7 @@ import {
   inServerTerms,
   serverNeverAnswered
 } from './remote-owned-answers'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 
 type StartParams = z.infer<typeof WorkerStartParams>
 type StartContext = Pick<
@@ -123,13 +124,15 @@ function adoptedTaskId(key: string): string {
   return `task_${createHash('sha256').update(`task\n${key}`).digest('hex').slice(0, 12)}`
 }
 
-const StartedOnServer = z.object({
-  dispatchId: z.string().min(1),
-  run: z.object({ id: z.string().min(1) }).optional(),
-  agent: z.string().nullable().optional(),
-  launch: z.unknown().optional(),
-  state: z.string().optional()
-})
+const StartedOnServer = lazyZodSchema(() =>
+  z.object({
+    dispatchId: z.string().min(1),
+    run: z.object({ id: z.string().min(1) }).optional(),
+    agent: z.string().nullable().optional(),
+    launch: z.unknown().optional(),
+    state: z.string().optional()
+  })
+)
 
 /**
  * worker-start --on a server that owns its workers: the Task stays in this Orca's graph, and the

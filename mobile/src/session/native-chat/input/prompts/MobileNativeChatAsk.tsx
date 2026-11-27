@@ -36,6 +36,7 @@ import { MobileNativeChatAskOptionRow } from './MobileNativeChatAskOptionRow'
 import { MobileNativeChatOptionPreviewSheet } from '../session-options/MobileNativeChatOptionPreviewSheet'
 import { mobileNativeChatAskStyles as styles } from './MobileNativeChatAsk.styles'
 import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-scroll'
+import { composerInputStyles } from '../../../../components/composer-input/composer-input-styles'
 
 type Props = {
   prompt: AskPrompt
@@ -370,7 +371,7 @@ export function MobileNativeChatAsk({
           <MessageBox
             inputRef={inputRef}
             onFocus={revealReply}
-            style={styles.other}
+            style={[composerInputStyles.filledFill, styles.other]}
             value={otherText[index] ?? ''}
             onChangeText={(v) => setOther(index, v)}
             placeholder={

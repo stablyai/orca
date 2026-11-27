@@ -400,12 +400,7 @@ function MobileNativeChatMessageImpl({
         {isUser ? <Marks.MobileNativeChatUserMessageNotes message={message} /> : null}
         {unsentNotice ? <Text style={styles.unsentNotice}>{unsentNotice}</Text> : null}
         {isChatTurn && !agentFrom && !withoutMeta ? (
-          <MobileNativeChatMessageMeta
-            message={message}
-            rowKey={rowKey ?? message.id}
-            fontScale={fontScale}
-            rewindable={rewindable}
-          />
+          <MobileNativeChatMessageMeta message={message} rewindable={rewindable} />
         ) : null}
       </View>
       {turnStatusAbove ? null : statusRow}

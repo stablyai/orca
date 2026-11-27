@@ -1,10 +1,7 @@
-import { app } from 'electron'
 import { registerAppHandlers } from '../app'
 import { canCreateWslHostService } from '../wsl/wsl-host-service-availability'
 import { registerNonWindowsWslIpcStubs } from '../wsl/non-windows-wsl-ipc-stubs'
 import { installProjectRuntimeGitRouter } from '../../workspaces/execution-host/project-runtime-git-router'
-import { registerCliHandlers } from '../cli'
-import { registerPreflightHandlers } from '../preflight/preflight'
 import type { Store } from '../../persistence/loading-store/store'
 import { resolveDesktopAuthorizedPath } from '../filesystem/access/local-file-access-resolution'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -22,11 +19,9 @@ import { registerRateLimitHandlers } from '../rate-limits'
 import { registerRuntimeHandlers } from '../runtime'
 import { registerRuntimeHostHandlers } from './runtime-host-handler-registration'
 import { registerLazyEphemeralVmHandlers } from '../ephemeral-vm/lazy-ephemeral-vm-handlers'
-import { registerAiVaultHandlers } from '../ai-vault/ai-vault'
-import { registerAiVaultSearchHandlers } from '../ai-vault/ai-vault-search'
+import { registerLazyAiVaultHandlers } from '../ai-vault/lazy-ai-vault-handlers'
 import { registerNativeChatHandlers } from '../native-chat'
 import { registerNotificationHandlers } from '../notifications/notifications'
-import { registerOnboardingHandlers } from '../onboarding'
 import { registerDashboardPopoutHandlers } from '../dashboard/dashboard-popout'
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser/browser'
 import { setTrustedBrowserRendererWebContentsId } from '../browser/browser-renderer-trust'
@@ -37,7 +32,6 @@ import {
   registerLazySkillsHandlers
 } from '../skills/lazy-skills-handlers'
 import { registerWorkspacePortHandlers } from '../ports/workspace-ports'
-import { registerLocalhostWorktreeLabelHandlers } from '../ports/localhost-worktree-labels'
 import { registerAutomationHandlers } from '../automations'
 import { registerKeybindingHandlers } from '../keybindings'
 import { registerTelemetryHandlers } from '../telemetry'
@@ -49,7 +43,6 @@ import { registerLazySpeechHandlers } from '../lazy-speech-handlers'
 import { registerOrcaProfileHandlers } from '../profiles/orca-profiles'
 import { registerCodexAccountHandlers } from '../accounts/codex-accounts'
 import { registerAgentHookHandlers } from '../agent-hooks/agent-hooks'
-import { registerCodexConfigSyncHandlers } from '../accounts/codex-config-sync'
 import { getPtyIdForPaneKey } from '../pty/pane/key-state'
 import { registerClaudeAccountHandlers } from '../accounts/claude-accounts'
 import { registerUpdaterHandlers } from '../../updater/lifecycle/main-window-updater'
@@ -64,22 +57,12 @@ import type { AgentAwakeService } from '../../power/agent-awake-service'
 import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 import type { KeybindingService } from '../../keybindings/keybinding-service'
 import {
-  getSavedRuntimeAiVaultHostInfos,
-  deleteRuntimeAiVaultSession,
-  prepareRuntimeAiVaultSessionResume,
-  resolveRuntimeAiVaultSessionTitles,
-  scanRuntimeAiVaultSessions
-} from '../../ai-vault/runtime-hosts/runtime-session-scanner'
-import { callRuntimeSessionSearch } from '../../ai-vault/runtime-hosts/runtime-session-search-call'
-import { configureRuntimeAiVaultSessionDelete } from '../ai-vault/ai-vault-delete'
-import {
   ensurePersistedStructuredAgentSessionHostUnlessRefused,
   ensureStructuredAgentSessionHostUnlessRefused
 } from '../../runtime/agent-session/installation/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { PluginService } from '../../plugins/plugin-service'
 import type { PluginMarketplaceHandlerServices } from '../plugins/plugin-marketplaces'
-import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/catalog/runtime-environment-registry-root'
 import {
   closeNotificationDismissalsBeforeRelaunch,
   type CoreHandlerLifecycleOptions
@@ -87,6 +70,7 @@ import {
 import { registerLazyRareIpcHandlers } from './lazy-rare-ipc-handlers'
 import { registerLazyAccountAndDiagnosticIpcHandlers } from './lazy-account-and-diagnostic-ipc-handlers'
 import { registerLazySecondaryIpcHandlers } from './lazy-secondary-ipc-handlers'
+import { registerLazySetupIpcHandlers } from './lazy-setup-ipc-handlers'
 
 let registration: Promise<void> | null = null
 
@@ -124,12 +108,10 @@ export async function registerCoreHandlers(
       // Restart/profile switching closes this through will-quit; this callback covers relaunch exit.
       onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)
     })
-    registerCliHandlers()
     registerLazyRareIpcHandlers(store)
-    registerPreflightHandlers(store, runtime)
+    registerLazySetupIpcHandlers(store, codexAccounts, runtime)
     registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
     registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
-    registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
     registerClaudeAccountHandlers(claudeAccounts, (change, held) =>
       runtime.moveRunningClaudePanes(change, held)
     )
@@ -145,7 +127,6 @@ export async function registerCoreHandlers(
     }
     registerStatsHandlers(stats)
     registerNotificationHandlers(store, runtime)
-    registerOnboardingHandlers(store)
     registerDashboardPopoutHandlers(store, keybindings)
     registerSettingsHandlers(store, agentAwakeService)
     registerLazySkillsHandlers(store, runtime)
@@ -174,7 +155,6 @@ export async function registerCoreHandlers(
     registerUIHandlers(store, { isDashboardPopoutRenderer })
     registerLazyEmulatorHandlers((id) => runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id))
     registerWorkspacePortHandlers(store)
-    registerLocalhostWorktreeLabelHandlers(store)
     registerFilesystemHandlers(store, commitMessageAgentEnv)
     registerFilesystemWatcherHandlers()
     registerRuntimeHandlers(runtime)
@@ -196,42 +176,11 @@ export async function registerCoreHandlers(
       ensurePersistedStructuredAgentSessionHostUnlessRefused(() =>
         runtime.ensureStructuredAgentSessionHost()
       )
-    registerAiVaultSearchHandlers({
-      callRuntimeSearch: (environmentId, method, params) =>
-        callRuntimeSessionSearch(
-          getRuntimeEnvironmentRegistryRoot(),
-          environmentId,
-          method,
-          params
-        ),
-      ensureStructuredSessionOwnership
-    })
-    registerAiVaultHandlers({
-      getUserDataPath: () => app.getPath('userData'),
+    registerLazyAiVaultHandlers({
       ensureStructuredSessionOwnership,
       getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
-      prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,
-      getActiveRuntimeAiVaultHostInfos: async () =>
-        await getSavedRuntimeAiVaultHostInfos(getRuntimeEnvironmentRegistryRoot()),
-      scanRuntimeAiVaultSessions: async (environmentId, args, options) =>
-        scanRuntimeAiVaultSessions(
-          getRuntimeEnvironmentRegistryRoot(),
-          environmentId,
-          args,
-          options
-        ),
-      resolveRuntimeAiVaultSessionTitles: async (environmentId, args) =>
-        resolveRuntimeAiVaultSessionTitles(
-          getRuntimeEnvironmentRegistryRoot(),
-          environmentId,
-          args
-        ),
-      prepareRuntimeSessionResume: async (environmentId, args) =>
-        prepareRuntimeAiVaultSessionResume(getRuntimeEnvironmentRegistryRoot(), environmentId, args)
+      prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume
     })
-    configureRuntimeAiVaultSessionDelete((environmentId, args) =>
-      deleteRuntimeAiVaultSession(getRuntimeEnvironmentRegistryRoot(), environmentId, args)
-    )
     registerNativeChatHandlers()
     registerClipboardHandlers((path) => resolveDesktopAuthorizedPath(path, store), {
       localChatAttachmentStore: async () => {

@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'expo-router'
-import { Globe } from 'lucide-react-native'
 import { ListRow } from '../components/list/ListGroup'
-import { PickerModal, type PickerOption } from '../components/sheets/PickerModal'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
@@ -11,44 +9,29 @@ import {
   saveLinkOpenMode,
   type MobileLinkOpenMode
 } from '../storage/preferences'
-import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { SettingsNote, SettingsScreen, SettingsSection } from './settings-screen-frame'
 
-function linkModeOptions(t: Translate): PickerOption<MobileLinkOpenMode>[] {
+function linkModeOptions(
+  t: Translate
+): { value: MobileLinkOpenMode; label: string; subtitle: string }[] {
   return [
     {
       value: 'ask',
       label: t('settings.browserSettingsScreen.askEachTime', 'Ask each time'),
-      subtitle: t(
-        'settings.browserSettingsScreen.askEachTimeDescription',
-        'Choose Orca browser, phone browser, or copy the link each time.'
-      )
+      subtitle: t('settings.browserSettingsScreen.askHint', 'Pick a browser or copy the link')
     },
     {
       value: 'orca-browser',
       label: t('settings.browserSettingsScreen.desktopBrowser', 'Orca browser on desktop'),
-      subtitle: t(
-        'settings.browserSettingsScreen.desktopBrowserDescription',
-        'Open in the streamed browser from your paired desktop.'
-      )
+      subtitle: t('settings.browserSettingsScreen.desktopHint', 'Streamed from your computer')
     },
     {
       value: 'phone-browser',
       label: t('settings.browserSettingsScreen.phoneBrowser', 'Phone browser'),
-      subtitle: t(
-        'settings.browserSettingsScreen.phoneBrowserDescription',
-        'Open in Safari, Chrome, or another browser on this phone.'
-      )
+      subtitle: t('settings.browserSettingsScreen.phoneHint', 'Safari, Chrome or another app')
     }
   ]
-}
-
-function linkModeLabel(
-  mode: MobileLinkOpenMode,
-  options: PickerOption<MobileLinkOpenMode>[]
-): string {
-  return options.find((option) => option.value === mode)?.label ?? options[0]!.label
 }
 
 export default function BrowserSettingsScreen({
@@ -60,7 +43,6 @@ export default function BrowserSettingsScreen({
   useMobileColorScheme()
   const router = useRouter()
   const [linkMode, setLinkMode] = useState<MobileLinkOpenMode>(DEFAULT_LINK_OPEN_MODE)
-  const [pickerOpen, setPickerOpen] = useState(false)
   const [error, setError] = useState<'load' | 'save' | null>(null)
   const options = linkModeOptions(t)
   const selectionRevision = useRef(0)
@@ -131,41 +113,22 @@ export default function BrowserSettingsScreen({
     <SettingsScreen
       title={t('settings.browserSettingsScreen.title', 'Browser')}
       onBack={onBack ?? (() => router.back())}
-      overlays={
-        <PickerModal<MobileLinkOpenMode>
-          visible={pickerOpen}
-          title={t('settings.browserSettingsScreen.openLinks', 'Open links')}
-          options={options}
-          selected={linkMode}
-          onSelect={selectLinkMode}
-          onClose={() => setPickerOpen(false)}
-        />
-      }
     >
       <SettingsSection
         first
-        title={t('settings.browserSettingsScreen.linksHeading', 'Links')}
-        footer={
-          <>
-            <SettingsNote>
-              {t(
-                'settings.browserSettingsScreen.terminalAndChatLinksDescription',
-                'Choose where web links tapped in terminal output and chat open.'
-              )}
-            </SettingsNote>
-            {errorNote}
-          </>
-        }
+        radioGroup
+        title={t('settings.browserSettingsScreen.openLinks', 'Open links')}
+        footer={errorNote}
       >
-        <ListRow
-          key="linkMode"
-          title={t('settings.browserSettingsScreen.openLinks', 'Open links')}
-          subtitle={linkModeLabel(linkMode, options)}
-          leading={<Globe size={18} color={colors.textSecondary} />}
-          navigates
-          accessibilityLabel={t('settings.browserSettingsScreen.openLinks', 'Open links')}
-          onPress={() => setPickerOpen(true)}
-        />
+        {options.map((option) => (
+          <ListRow
+            key={option.value}
+            title={option.label}
+            subtitle={option.subtitle}
+            selected={linkMode === option.value}
+            onPress={() => selectLinkMode(option.value)}
+          />
+        ))}
       </SettingsSection>
     </SettingsScreen>
   )

@@ -143,13 +143,9 @@ export function VoiceTranscribeOnSection() {
 
   return (
     <SettingsSection
-      first
       radioGroup
       title={t('settings.voiceTranscribeOn.heading', 'Transcribe on')}
-      footer={t(
-        'settings.voiceTranscribeOn.description',
-        'Speech heard on this phone stays on it. Automatic uses your computer when this phone can’t transcribe.'
-      )}
+      footer={t('settings.voiceTranscribeOn.footer', 'Automatic uses this phone when it can.')}
     >
       <ListRow
         key="automatic"

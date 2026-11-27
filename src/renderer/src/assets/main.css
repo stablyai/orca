@@ -1136,6 +1136,11 @@ body[data-modal-overlay-open]
   scrollbar-gutter: stable;
 }
 
+[data-rail-page-container-gutter] {
+  /* The difference is the scrollbar's reserved width in a full-width row. */
+  --rail-page-row-end: max(0px, calc(var(--rail-page-gutter) - 100cqi + 100%));
+}
+
 .rail-page-container {
   container: rail-page / inline-size;
 }
@@ -2441,34 +2446,6 @@ html.native-shell .app-layout {
 
 .compact-agent-expansion-grid-expanded {
   grid-template-rows: 1fr;
-}
-
-/* A click on a down pane's veil points at its server card: two short shakes, or a brief outline without motion. */
-@keyframes remote-server-outage-nudge {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-
-  25% {
-    transform: translateX(-4px);
-  }
-
-  75% {
-    transform: translateX(4px);
-  }
-}
-
-.remote-server-outage-nudge {
-  animation: remote-server-outage-nudge 250ms ease-in-out 2;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .remote-server-outage-nudge {
-    animation: none;
-    outline: 2px solid var(--status-warning);
-    outline-offset: 2px;
-  }
 }
 
 /* Keep rotation on the compositor: JS style writes caused typing stalls (#12359). */

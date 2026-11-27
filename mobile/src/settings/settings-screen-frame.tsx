@@ -123,6 +123,8 @@ export function SettingsNote({
   return (
     <Text
       accessibilityRole={alert || error ? 'alert' : undefined}
+      // Android announces newly shown text only through a live region.
+      accessibilityLiveRegion={alert || error ? 'polite' : undefined}
       style={[settingsScreenStyles.note, error && settingsScreenStyles.noteError]}
     >
       {children}

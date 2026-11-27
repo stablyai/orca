@@ -169,7 +169,6 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
   const spokenState = row.dotState === 'monitoring' ? agentStateLabel(row.dotState) : stateWord
   const place = [
     props.footer === 'agent' ? formatAgentTypeLabel(agent.agentType) : row.entry.workspaceName,
-    row.entry.executionHost?.label,
     props.nameDesktop ? desktop : null
   ]
     .filter(Boolean)
@@ -348,7 +347,7 @@ const styles = themedStyleSheet(() => ({
   titleLine: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
   // Opaque so a swipe's actions stay hidden until the row slides off them.
   row: { backgroundColor: colors.bgPanel },
-  title: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 20, color: colors.textPrimary },
+  title: { flex: 1, minWidth: 0, fontSize: 16, lineHeight: 20, color: colors.textPrimary },
   titleUnread: { fontWeight: '600' },
   time: { fontSize: 12, color: colors.textMuted, fontVariant: ['tabular-nums'] },
   preview: { fontSize: 14, lineHeight: 19, color: colors.textSecondary },

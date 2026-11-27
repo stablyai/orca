@@ -25,12 +25,13 @@ import { retryRemoteAskNotices } from '../../../rpc/methods/orchestration/messag
 import { deletedCoordinatorChat } from '../../../rpc/methods/orchestration/messaging/deleted-coordinator-chat'
 import { settleRemovedPairedServer, settleRepairedServer } from './paired-server-changes'
 import * as asksLoop from '../paired-server-asks/paired-server-asks-loop'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 
 // Under the relay edge's idle cutoff, so an idle pull ends by itself instead of being dropped.
 const PULL_WAIT_MS = 20_000
 const PULL_TIMEOUT_MS = PULL_WAIT_MS + 15_000
 
-const PulledPeerMail = z.object({ items: z.array(PeerMailItem) })
+const PulledPeerMail = lazyZodSchema(() => z.object({ items: z.array(PeerMailItem) }))
 
 /** What this Orca's pull loop last heard from a paired server; nothing until its first pull settles. */
 export type PeerServerAnswerStatus = {

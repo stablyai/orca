@@ -6,7 +6,7 @@ import { formatMobileNativeChatActiveTurnLabel } from './native-chat-turn-status
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
 import { LoadingSpinner } from '../../../../components/feedback/LoadingSpinner'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
+import { colors, feedback, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatReasoningBody } from '../message-content/MobileNativeChatReasoningRow'
@@ -91,7 +91,7 @@ const styles = themedStyleSheet(() => ({
     overflow: 'visible'
   },
   pressed: {
-    opacity: 0.6
+    opacity: feedback.pressedOpacity
   },
   label: {
     color: colors.textMuted,

@@ -12,6 +12,7 @@ import {
 import { linkMobilePr } from '../../creation/mobile-pr-link'
 import { TextField } from '../../../../components/composer-input/TextField'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { composerInputStyles } from '../../../../components/composer-input/composer-input-styles'
 
 type Props = {
   client: RpcClient | null
@@ -89,6 +90,7 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
         autoCapitalize="none"
         autoCorrect={false}
         editable={!submitting}
+        style={composerInputStyles.filledField}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Pressable
