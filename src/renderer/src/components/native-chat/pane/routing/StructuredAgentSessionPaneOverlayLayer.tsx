@@ -14,7 +14,10 @@ import { NativeChatComposerEditorOwner } from '../../composer/editor/native-chat
 import { NativeChatHostOutageOwner } from '../../host-access/native-chat-host-outage-owner'
 import { NativeChatPaneLifetime } from '../ownership/native-chat-pane-lifetime'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
-import { NativeChatViewTabContext, openNativeChatViewTabs } from '../ownership/native-chat-view-memory'
+import {
+  NativeChatViewTabContext,
+  openNativeChatViewTabs
+} from '../ownership/native-chat-view-memory'
 import { chatViewRetention, useRetainedChatViewKey } from './native-chat-view-retention'
 import { watchClosedChatTabs } from './native-chat-closed-tab-release'
 
