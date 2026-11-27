@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto'
+import { extractString } from '../../../../shared/text/trimmed-string'
+import { readOpenCodeJsonRecord } from './session-scanner-opencode-parser'
 import { basename, extname, join, relative } from 'node:path'
 import {
   wslGatedReaddir,
@@ -45,9 +47,25 @@ export async function openCodeDependencySignature(
     )
   }
   for (const name of await namesIn(messages)) {
-    await observe(join(messages, name))
-    const messageId = name.slice(0, -5)
-    if (!messageId || messageId === '.' || messageId === '..' || /[/\\\0]/.test(messageId)) {
+    const messagePath = join(messages, name)
+    await observe(messagePath)
+    const message = await readOpenCodeJsonRecord(messagePath, signal)
+    const role = extractString(message?.role)
+    if (
+      !message ||
+      (role !== 'user' && role !== 'assistant') ||
+      (message.content !== undefined && message.content !== null)
+    ) {
+      continue
+    }
+    const messageId = message.id
+    if (
+      typeof messageId !== 'string' ||
+      !messageId ||
+      messageId === '.' ||
+      messageId === '..' ||
+      /[/\\\0]/.test(messageId)
+    ) {
       continue
     }
     const parts = join(storageRoot, 'part', messageId)
