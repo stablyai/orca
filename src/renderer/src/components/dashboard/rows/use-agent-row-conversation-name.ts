@@ -8,7 +8,7 @@ import { useStructuredChatTabNaming } from '@/runtime/native-chat/naming/structu
 import type { AppState } from '@/store/types'
 import type { DashboardAgentRow } from './dashboard-agent-row'
 import { useBotForWorkspace } from '@/components/bots/bot-workspace'
-import { botHomeShownName } from '../../../../../shared/bots/bot-home-of'
+import { isOwnBotHome } from '../../../../../shared/bots/bot-home-of'
 
 type WorktreeTabs = NonNullable<AppState['tabsByWorktree'][string]>
 
@@ -62,9 +62,9 @@ export function useAgentRowConversationNaming(agent: DashboardAgentRow): {
     structuredTab ? agent.tab.worktreeId : null,
     structuredTab?.executionHostId
   )
-  // A Home goes by its person's name as their share row has it now, never the chat's saved name.
+  // The viewer's own Home is "Home"; every other chat, a teammate's Home too, by the host's name.
   const conversationName =
-    (structuredTab ? botHomeShownName(homeBot, structuredTab.entityId) : null) ?? chatNaming.name
+    structuredTab && isOwnBotHome(homeBot, structuredTab.entityId) ? 'Home' : chatNaming.name
   // Parse once per render; selectors run on every store write and must stay allocation-free.
   const ownLeafId = cannotOwnTabName ? null : parsePaneKey(agent.paneKey)?.leafId
   // Select this split pane’s primitive title so sibling focus/title changes cannot rename or re-render its row.

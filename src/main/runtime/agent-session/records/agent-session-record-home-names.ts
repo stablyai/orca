@@ -1,6 +1,7 @@
-// A teammate's Home on the owner's host is titled from the teammate's share row, which is the only
-// copy of their name: the record store's reads put "<name>’s Home" on the record (their email until a
-// name arrives), and nothing ever writes it. A name the owner gave the Home wins.
+// The one place a teammate's Home is titled. On the owner's host its title comes from the teammate's
+// share row, the only copy of their name: the record store's reads put "<name>’s Home" on the record
+// (their email until a name arrives), and nothing ever writes it. A name the owner gave the Home wins.
+// Everything else that shows a Home reads the store; a census test keeps it that way.
 import type { Bot } from '../../../../shared/bot-types'
 import { botHomeName, botHomes, legacyTeammateHomeNames } from '../../../../shared/bots/bot-home-of'
 
@@ -9,6 +10,7 @@ type NamedRecord = { sessionId: string; conversationName?: string; conversationN
 /** A teammate Home's title, and the names Orca saved on one in older builds (not the owner's). */
 type TeammateHome = { name: string; orcaNames: ReadonlySet<string> }
 
+const NO_BOTS: readonly Pick<Bot, 'chatSessionId' | 'shares'>[] = []
 let readBots: (() => readonly Pick<Bot, 'chatSessionId' | 'shares'>[]) | null = null
 
 /** The runtime's bots, whose share rows name their teammates' Homes. */
@@ -26,7 +28,7 @@ export function teammateHomesByRoot(
   rootOf: (sessionId: string) => string,
   lineage: object
 ): ReadonlyMap<string, TeammateHome> {
-  const bots = readBots?.() ?? []
+  const bots = readBots?.() ?? NO_BOTS
   if (kept?.bots === bots && kept.lineage === lineage) {
     return kept.homes
   }
@@ -70,8 +72,25 @@ export function withTeammateHomeName<R extends NamedRecord>(
   return next
 }
 
+/** A teammate's Home title, for a Home row with no chat yet (the chats tree's placeholder). */
+export function teammateHomeTitle(bot: Pick<Bot, 'shares'>, accountId: string): string {
+  return botHomeName(bot, { accountId })
+}
+
+/** Each teammate Home's title by the session its share points at: what a share change is compared
+ *  by, and what the chats-tree index keys its cache on. */
+export function teammateHomeTitlesBySession(
+  bot: Pick<Bot, 'chatSessionId' | 'shares'>
+): Map<string, string> {
+  return new Map(
+    botHomes(bot).flatMap((home) =>
+      home.of === 'owner' ? [] : [[home.sessionId, botHomeName(bot, home.of)] as const]
+    )
+  )
+}
+
 /** A store's reads as readers see them: each teammate Home titled, by `rootOf` (its /clear root). */
-export function teammateHomeTitles(source: {
+export function recordHomeTitles(source: {
   rootOf: (sessionId: string) => string
   lineage: () => object
 }) {

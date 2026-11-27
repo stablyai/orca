@@ -160,30 +160,11 @@ export function legacyTeammateHomeNames(
   return [...new Set(people)].map(teammateHomeName)
 }
 
-/** A chat's Home as its viewer titles it: their own Home slot ("Home", whatever the host named it),
- *  a teammate's (named from their share row as it is now), or null for any other chat. The one rule
- *  desktop and phone tabs both title by. */
-export type BotHomeTitle = { kind: 'own' } | { kind: 'teammate'; name: string } | null
-
-export function botHomeTitleOf(bot: HomeBot | null, sessionId: string): BotHomeTitle {
-  if (!bot) {
-    return null
-  }
-  if (bot.chatSessionId === sessionId) {
-    return { kind: 'own' }
-  }
-  const of = botHomeOfSession(bot, sessionId)
-  return of && of !== 'owner'
-    ? { kind: 'teammate', name: botSharePersonName(bot, of.accountId) }
-    : null
-}
-
-/** The name anything titling a chat by its tab shows for a Home (dashboard rows, notifications):
- *  "Home" for the viewer's own, "<name>’s Home" from a teammate's share row as it is now, null for
- *  any other chat, which keeps its own name. */
-export function botHomeShownName(bot: HomeBot | null, sessionId: string): string | null {
-  const title = botHomeTitleOf(bot, sessionId)
-  return title === null ? null : title.kind === 'own' ? BOT_HOME_NAME : teammateHomeName(title.name)
+/** Whether this chat is the viewer's own Home slot (the owner's Home on their computer, a teammate's on
+ *  theirs), shown as "Home" whatever the host named it. A teammate's Home on the owner's computer is
+ *  titled by the host's chat records (agent-session-record-home-names.ts), never here. */
+export function isOwnBotHome(bot: Pick<Bot, 'chatSessionId'> | null, sessionId: string): boolean {
+  return bot !== null && bot.chatSessionId === sessionId
 }
 
 /** Whose Home this session is, compared by /clear root; null for any other chat. A renderer has no

@@ -1,4 +1,4 @@
-import { teammateHomeTitles } from './agent-session-record-home-names'
+import { recordHomeTitles } from './agent-session-record-home-names'
 import { AgentSessionClearedFromIndex } from './agent-session-cleared-from-index'
 import type * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import type { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
@@ -136,7 +136,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordForgets {
     lineage: () => this.transactions.lineageRevision()
   })
   // Reads hand out a teammate's Home titled (agent-session-record-home-names.ts); writes never see it.
-  private readonly titles = teammateHomeTitles({
+  private readonly titles = recordHomeTitles({
     rootOf: this.clearedFrom.rootOf,
     lineage: () => this.transactions.lineageRevision()
   })

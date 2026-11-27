@@ -1,5 +1,6 @@
 // One chats tree on the agent's host, projected for whoever reads it: the owner sees every chat, with
 // teammates' Homes named as theirs; a teammate sees their own chats, with their Home as the Home row.
+import { teammateHomeTitle } from '../runtime/agent-session/records/agent-session-record-home-names'
 import type { BotChatTreeChat, BotChatTreeRead } from '../../shared/bots/bot-chat-tree'
 import {
   HOME_CHAT_TITLE,
@@ -9,7 +10,6 @@ import {
 } from '../../shared/bots/bot-chat-tree-model'
 import type { Bot } from '../../shared/bot-types'
 import {
-  botHomeName,
   botHomePlaceholderAccount,
   botSharePersonName,
   type BotHomeOf
@@ -63,7 +63,7 @@ function ownerView(
       {
         ...wireChat(chat),
         homeOf: botSharePersonName(viewer.bot, of.accountId),
-        ...(isPlaceholder(chat) ? { title: botHomeName(viewer.bot, of) } : {})
+        ...(isPlaceholder(chat) ? { title: teammateHomeTitle(viewer.bot, of.accountId) } : {})
       }
     ]
   })

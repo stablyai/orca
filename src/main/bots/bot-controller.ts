@@ -1,4 +1,4 @@
-import { provideTeammateHomeBots } from '../runtime/agent-session/records/agent-session-record-home-names'
+import { BotShareNameChanges } from './bot-share-name-changes'
 import {
   type BotStore,
   persistBotStore,
@@ -78,11 +78,12 @@ export class BotController {
   /** The drawn Slack icons of colored or dressed mascots, kept in Orca's app data. */
   readonly slackIcons: BotSlackIcons
 
+  /** Fires when a teammate Home's title changes (bot-share-name-changes.ts). */
+  readonly shareNames = new BotShareNameChanges()
+
   constructor(private readonly deps: BotControllerDependencies) {
     this.memory = hostBotMemoryRecord(deps.filesystem)
     this.slackIcons = botSlackIconsOf(this, deps, (work) => this.serialize(work))
-    // The chat records title teammates' Homes from these bots' share rows.
-    provideTeammateHomeBots(() => this.list())
   }
 
   /** Off, bots take no conversations or runs, and nothing creates or opens one; their homes stay. */
@@ -252,6 +253,7 @@ export class BotController {
         store.updateFolderWorkspace(bot.folderWorkspaceId, { name: next.name })
       }
       store.saveBot(next)
+      this.shareNames.saved(bot, next)
       this.deps.notifyBotsWritten(next.name !== bot.name)
       if (next.agent !== bot.agent) {
         this.deps.botAgentChanged?.(next)
@@ -305,6 +307,7 @@ export class BotController {
       const bot = requireStoredBot(store, botId)
       const next: Bot = { ...bot, ...withBotHome(bot, of, sessionId), updatedAt: Date.now() }
       store.saveBot(next)
+      this.shareNames.saved(bot, next)
       this.deps.notifyBotsWritten(false)
       return next
     })

@@ -1,6 +1,7 @@
 // What a bot's chats tree is built from on its host, apart from live status, tabs and read state: the
 // chats its records name and the Dispatches they started. The index keeps one per bot between reads;
 // a full build from every record is the same function, and the index's oracle.
+import { teammateHomeTitlesBySession } from '../runtime/agent-session/records/agent-session-record-home-names'
 import { botChatPreviewText } from '../../shared/bots/bot-chat-preview-text'
 import type { AgentSessionConversationView } from '../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { defaultAgentChatLabel } from '../../shared/agent-session/conversation-naming/agent-session-chat-label'
@@ -75,6 +76,8 @@ export function botChatInputsKey(inputs: BotChatInputs): string {
   return JSON.stringify([
     bot.folderWorkspaceId,
     botHomes(bot).map((home) => home.sessionId),
+    // Teammate Homes are titled at read time; a title change must rebuild what was built from it.
+    [...teammateHomeTitlesBySession(bot)],
     inputs.runs.map((run) => [
       run.id,
       run.automationId,

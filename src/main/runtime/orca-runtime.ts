@@ -13,10 +13,8 @@ import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-
 import { installRuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { publishNativeChatPreferenceChanges } from './agent-session/launch/runtime-native-chat-preference-events'
 import { publishSettingsChanges } from './client/settings/runtime-settings-change-events'
-import {
-  publishBotSidebarViewChanges,
-  publishWorkspaceViewChanges
-} from './client/settings/runtime-workspace-view-change-events'
+import { publishWorkspaceViewChanges } from './client/settings/runtime-workspace-view-change-events'
+import { publishBotViewChanges } from '../bots/bot-view-change-publication'
 import { syncPRAutoRefreshCadence } from '../github/pull-requests/refresh/pr-auto-refresh-cadence-sync'
 import { sidebarFactsRuntime } from './sidebar-inputs/orca-runtime-sidebar-temporal'
 import { OrcaRuntimeWithRelayHostNotices } from './construction/orca-runtime-relay-host-notices'
@@ -208,7 +206,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithRelayHostNotices {
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
     registerWorktreeCatalogRoutes(this.store)
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
-    publishBotSidebarViewChanges(this.store, () => this.notifyBotsChanged({ kinds: ['bot'] }))
+    publishBotViewChanges(this.store, this)
     publishNativeChatPreferenceChanges(this.store, (event) => this.emitClientEvent(event))
     publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
     announceAgentCliUpdatesFinished((event) => this.emitClientEvent(event))

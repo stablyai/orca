@@ -6,15 +6,17 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 
 type NamedRecord = Pick<
   AgentSessionRecord,
-  'conversationName' | 'conversationNameSource' | 'forkedFrom' | 'provider'
+  'sessionId' | 'conversationName' | 'conversationNameSource' | 'forkedFrom' | 'provider'
 >
 type RecordReader = { getRecord: (sessionId: string) => NamedRecord | null | undefined }
 
-/** The record's shown name, read against its source on the same host; null while unnamed. */
+/** The record's shown name, read against its source on the same host; null while unnamed. The record
+ *  is read again through the store, so a raw one (a writable record) is titled as every reader sees it. */
 export function agentSessionRecordShownName(
   store: RecordReader,
-  record: NamedRecord
+  stored: NamedRecord
 ): string | null {
+  const record = store.getRecord(stored.sessionId) ?? stored
   const source = record.forkedFrom ? store.getRecord(record.forkedFrom.sessionId) : null
   return agentSessionShownName(
     record,
