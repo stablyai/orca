@@ -91,8 +91,14 @@ export function answerUnavailable(
   res.end(JSON.stringify(errors ?? { error: UNAVAILABLE }))
 }
 
+/**
+ * A kept bot token the keychain won't open. On Linux the keyring a run of Orca started locked stays
+ * unreadable to it after an unlock (its key is chosen at startup), so only a restart of Orca helps.
+ */
 export const CREDENTIALS_LOCKED =
-  "Orca can't unlock this bot's credentials yet (the keychain is locked). Your session is still running; try again shortly."
+  process.platform === 'linux'
+    ? "Orca can't unlock this bot's credentials (the keyring is locked). Ask the user to unlock the keyring and restart Orca. Your session is still running."
+    : "Orca can't unlock this bot's credentials yet (the keychain is locked). Your session is still running; try again shortly."
 /** Only a body this small is read for its ids; anything else is answered without one. */
 const LOCKED_ID_READ_MAX_BYTES = 64 * 1024
 
