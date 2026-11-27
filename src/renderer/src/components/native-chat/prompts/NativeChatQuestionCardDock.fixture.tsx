@@ -32,7 +32,10 @@ function ConstrainedPane({ width, height }: { width: number; height: number }) {
                     label: 'Narrow the ignore file',
                     description: 'Sign off only the rule ids this needs.'
                   },
-                  { label: 'Keep the whole sign-off', description: 'Add a comment on why it stays.' },
+                  {
+                    label: 'Keep the whole sign-off',
+                    description: 'Add a comment on why it stays.'
+                  },
                   { label: 'Ask the reviewer first', description: 'Post a thread before editing.' },
                   { label: 'Something else', description: 'Type another approach below.' }
                 ]
