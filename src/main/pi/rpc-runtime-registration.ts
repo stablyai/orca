@@ -10,11 +10,18 @@ import {
 import { PI_RPC_AGENT } from './rpc-agent-definition'
 import { piRpcLaunchPart } from './rpc/launch/rpc-launch-resolution'
 import { PiRpcSessionAdapter } from './rpc/rpc-session-adapter'
+import { PiAtRestCommandCatalog } from './rpc/options/rpc-at-rest-commands'
 import { PI_RPC_RUNTIME_METADATA } from './rpc-runtime-metadata'
 
 function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps } = context
   return new PiRpcSessionAdapter({
+    atRestCommands: new PiAtRestCommandCatalog({
+      resolveWorkspacePath: deps.resolveWorkspacePath,
+      resolveEnvironment: () => context.environment.resolveAgentEnvironment('pi'),
+      refreshEnvironmentAfterMiss: context.environment.refreshAfterMissingProgram,
+      resolveCommandSettings: deps.resolveAgentCommandSettings
+    }),
     resolveLaunch:
       deps.resolvePiLaunch ??
       composeStructuredLaunch(
