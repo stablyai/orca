@@ -6,7 +6,7 @@ import {
   pluginPathFieldDoc,
   PLUGIN_MANIFEST_V2_SINCE
 } from '../manifest/plugin-schema-field-docs'
-import { lazyZodSchema } from '../../schema/lazy-zod-schema'
+import { lazyZodSchema, unwrapLazyZodSchema } from '../../schema/lazy-zod-schema'
 
 const NEXT = PLUGIN_MANIFEST_V2_SINCE
 
@@ -172,13 +172,16 @@ const catalogImageSchema = lazyZodSchema(() =>
     .meta({ id: 'CatalogImage', description: 'An image stored in the catalog repository.' })
 )
 
-export const pluginCatalogImagesSchema = lazyZodSchema(() =>
-  z
+export const pluginCatalogImagesSchema = lazyZodSchema(() => {
+  // z.toJSONSchema sees one "CatalogImage" object: mixing the proxy (array element)
+  // with the materialized schema (.optional() result) would duplicate the registry id.
+  const catalogImage = unwrapLazyZodSchema(catalogImageSchema)
+  return z
     .strictObject({
-      icon: catalogImageSchema.optional(),
-      cover: catalogImageSchema.optional(),
+      icon: catalogImage.optional(),
+      cover: catalogImage.optional(),
       screenshots: z
-        .array(catalogImageSchema)
+        .array(catalogImage)
         .max(PLUGIN_SCREENSHOT_LIMIT)
         .optional()
         .meta(pluginFieldDoc(`Screenshots, at most ${PLUGIN_SCREENSHOT_LIMIT}.`, NEXT))
@@ -187,6 +190,6 @@ export const pluginCatalogImagesSchema = lazyZodSchema(() =>
       id: 'CatalogImages',
       description: `Images extracted from the release by catalog CI, which re-encodes them and strips metadata. Same rules as the manifest: icon ${imageRuleText('icon')} Cover ${imageRuleText('cover')} Screenshots ${imageRuleText('screenshot')} Images must not imitate Orca's trust badges.`
     })
-)
+})
 
 export type PluginCatalogImages = z.infer<typeof pluginCatalogImagesSchema>
