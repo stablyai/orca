@@ -6,7 +6,7 @@ export function mapWithConcurrency<T, R>(
 ): Promise<R[]> {
   const workerCount = concurrencyWorkerCount(limit, items.length)
   if (items.length <= workerCount) {
-    return Promise.all(items.map(fn))
+    return Promise.all(items.map((item, index) => startWorker(fn, item, index)))
   }
 
   const results: R[] = []
@@ -43,7 +43,9 @@ export function forEachWithConcurrency<T>(
 ): Promise<void> {
   const workerCount = concurrencyWorkerCount(limit, items.length)
   if (items.length <= workerCount) {
-    return Promise.all(items.map(fn)).then(() => undefined)
+    return Promise.all(items.map((item, index) => startWorker(fn, item, index))).then(
+      () => undefined
+    )
   }
 
   let nextIndex = 0
@@ -56,6 +58,20 @@ export function forEachWithConcurrency<T>(
       }
     })
   ).then(() => undefined)
+}
+
+// Why: a worker that throws before returning must reject like the queued path; an async wrapper
+// would cost an extra promise per item.
+function startWorker<T, R>(
+  fn: (item: T, index: number) => Promise<R>,
+  item: T,
+  index: number
+): Promise<R> {
+  try {
+    return fn(item, index)
+  } catch (error) {
+    return Promise.reject(error)
+  }
 }
 
 function concurrencyWorkerCount(limit: number, itemCount: number): number {

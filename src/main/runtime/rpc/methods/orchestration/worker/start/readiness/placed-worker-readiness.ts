@@ -36,7 +36,7 @@ export async function handOverWhenReady(
     launchedAt: number
     receipt: Pick<
       Parameters<typeof continueWorkerStartInBackground>[0],
-      'runId' | 'taskId' | 'launch' | 'mode'
+      'runId' | 'taskId' | 'launch' | 'mode' | 'warning'
     >
     handOver: (deliveryDeadline?: number) => Promise<unknown>
     bindTerminal: () => void

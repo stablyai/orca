@@ -583,11 +583,10 @@
         "pageChanged": "This page closed or changed profile during the import. Try again."
       },
       "notice": {
-        "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",
-        "importedMore_other": "Imported {{count}} cookies for {{domains}} +{{more}} more. Reload the page to use them.",
-        "imported_one": "Imported {{count}} cookie for {{domains}}. Reload the page to use them.",
-        "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them.",
-        "failed": "Cookie import failed: {{reason}}"
+        "failed": "Cookie import failed: {{reason}}",
+        "importedCount_one": "Imported {{countLabel}} cookie",
+        "importedCount_other": "Imported {{countLabel}} cookies",
+        "reload": "Reload"
       },
       "routedPage": {
         "label": "Browsers on this device",
@@ -635,10 +634,53 @@
       "resetZoom": "Reset zoom",
       "resetViewport": "Reset viewport size",
       "findOnPage": "Find on page",
-      "profile": "Profile"
+      "profile": "Profile",
+      "annotateModeWithShortcut": "Annotate, grab or draw ({{value0}})",
+      "annotateMode": "Annotate, grab or draw"
     },
     "loadStall": {
       "waitingForHost": "Waiting for {{host}}…"
+    },
+    "annotatePalette": {
+      "annotateTooltip": "Annotate: comment on an element (A)",
+      "grabTooltip": "Grab: copy an element's context (G)",
+      "drawTooltip": "Draw: mark up a screenshot (D)",
+      "positionLeft": "Left",
+      "positionRight": "Right",
+      "positionTop": "Top",
+      "positionMiddle": "Middle",
+      "positionBottom": "Bottom",
+      "label": "Annotate tools",
+      "tools": "Tool",
+      "copy": "Copy",
+      "copyTitle": "Copy the picked element",
+      "copied": "Copied",
+      "screenshot": "Screenshot",
+      "screenshotTitle": "Copy a screenshot of the picked element",
+      "done": "Done",
+      "doneTitle": "Done (Esc)",
+      "move": "Move toolbar",
+      "positionValueBothAxes": "{{side}} {{percent}}%, {{vertical}} {{verticalPercent}}%",
+      "annotateTooltipNoKey": "Annotate: comment on an element",
+      "grabTooltipNoKey": "Grab: copy an element's context",
+      "drawTooltipNoKey": "Draw: mark up a screenshot",
+      "moveAnywhereTooltip": "Drag or use arrow keys to move · double-click to reset · hold {{key}} to see under",
+      "copyMarkup": "Copy markup",
+      "pickFirst": "Pick an element first",
+      "moreDrawTools": "More drawing tools",
+      "showNotes": "Show notes",
+      "noteCountOne": "1 note",
+      "noteCount": "{{count}} notes",
+      "drawingDiscarded": "Drawing discarded",
+      "undo": "Undo",
+      "collapseNotes": "Collapse notes",
+      "expandNotes": "Expand notes",
+      "clearNotes": "Clear notes",
+      "waitingForPage": "Waiting for page…",
+      "pageDidNotLoad": "Page didn't load",
+      "discardDrawing": "Discard drawing",
+      "discardDrawingTitle": "Discard drawing (Esc)",
+      "positionCenter": "Center"
     },
     "profileCookieClear": {
       "label": "Cookies",
@@ -658,6 +700,12 @@
       "failed": "Couldn't clear cookies in {{profile}} on {{host}}. Try again.",
       "failedLocal": "Couldn't clear cookies in {{profile}} on this computer. Try again.",
       "sshHostOption": "{{host}} (SSH)"
+    },
+    "grabToast": {
+      "noScreenshot": "No screenshot available",
+      "hoverReadFailed": "Could not read the hovered element",
+      "noHover": "No element hovered",
+      "copyFailed": "Couldn't copy"
     }
   },
   "editor": {
@@ -843,7 +891,6 @@
         "sshToggleDescription": "Show configured SSH and remote Orca hosts when any are available.",
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
-        "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
         "cursorToggleDescription": "Show Cursor plan usage when signed in through cursor-agent or Cursor IDE.",
         "zcodeToggleDescription": "Show ZCode Coding Plan quota usage.",
@@ -2465,10 +2512,6 @@
         },
         "worktrees": {
           "e50495aae6": "Force Delete Branch",
-          "14bc053a47": "Local {{value0}} was not refreshed",
-          "localBaseRefRefreshFailedForWorktree": "Local {{value0}} was not refreshed for \"{{value1}}\"",
-          "903b51c2ed": "Workspace created from {{value0}}, but Orca could not fast-forward local {{value1}}. {{value2}}",
-          "localBaseRefRefreshFailedDescriptionNamed": "Workspace \"{{value0}}\" was created from {{value1}}, but Orca could not fast-forward local {{value2}}. {{value3}}",
           "localBaseRefRefreshFailedDetailDirtyNamed": "The worktree at {{value0}} (where local {{value1}} is checked out) has uncommitted changes. Commit, stash, or discard those changes, then update local {{value1}} manually.",
           "localBaseRefRefreshFailedDetailDirty": "The worktree where local {{value0}} is checked out has uncommitted changes. Commit, stash, or discard those changes, then update local {{value0}} manually.",
           "localBaseRefRefreshFailedDetailNotFastForward": "Local {{value0}} does not exist or cannot be fast-forwarded cleanly from the remote base. Check for local-only commits before updating it manually.",
@@ -2514,7 +2557,13 @@
           },
           "createdWithoutParentNesting": "Created without nesting under \"{{value0}}\"",
           "createdWithoutParentNestingUnnamed": "Created without nesting under the selected parent",
-          "createdWithoutParentNestingDetail": "The parent workspace was no longer available. You can set it from the workspace menu."
+          "createdWithoutParentNestingDetail": "The parent workspace was no longer available. You can set it from the workspace menu.",
+          "localBaseRefNotUpdated": "{{value0}} not updated",
+          "localBaseRefNotUpdatedDirty": "Uncommitted changes in {{value0}}.",
+          "localBaseRefNotUpdatedNotFastForward": "Local-only commits on {{value0}}.",
+          "localBaseRefNotUpdatedError": "Git error.",
+          "localBaseRefHideDetails": "Hide details",
+          "localBaseRefShowDetails": "Details"
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -3992,9 +4041,9 @@
         "setLocationTooltip": "Choose a folder or clone this project onto {{host}}.",
         "addHost": "Add host",
         "addSshHost": "Add SSH host",
-        "addSshHostHint": "Use an existing machine over SSH",
+        "addSshHostHint": "Connect over SSH",
         "addRemoteOrcaServer": "Add Remote Orca Server",
-        "addRemoteOrcaServerHint": "Pair another Orca runtime",
+        "addRemoteOrcaServerHint": "Orca on another computer",
         "hostConnectionFailed": "Connection failed",
         "connect": "Connect",
         "reconnect": "Reconnect",
@@ -5583,6 +5632,11 @@
             "waitingTitle": "Waiting for {{server}}",
             "waitingBody": "Orca reattaches this terminal when the server offers it again or the connection changes. Reconnect to try now.",
             "downFor": "Down for {{duration}}",
+            "cantReachTitle": "Can't reach {{server}}",
+            "detailsButton": "Details",
+            "tailscaleHintTitle": "Check the Tailscale path",
+            "reconnectNowButton": "Reconnect now",
+            "copyPingCommand": "Copy command",
             "tailscaleHint": "Check the Tailscale path:",
             "fallbackServerName": "the server",
             "connectionLostTitle": "Reconnecting to {{server}}",
@@ -6012,7 +6066,6 @@
             "c0e972d726": "Cancel",
             "3bbf140864": "MiniMax Usage",
             "remoteServerLabel": "Remote server",
-            "antigravityUsage": "Antigravity Usage",
             "grokUsageMenu": "Grok Usage",
             "floatingTerminalNewActivity": "{{label}}, new activity",
             "4fba7dc1e7": "{{value0}} bal",
@@ -6472,16 +6525,9 @@
             "mainWorktree": "main worktree",
             "detached": "detached"
           },
-          "antigravity": {
-            "unknownAccount": "Google account",
-            "accounts": "Saved Antigravity Accounts",
-            "readAgo": "Read {{time}}",
-            "notRead": "Usage unknown: not read yet"
-          },
           "AccountSwitchList": {
             "used": "Used",
             "left": "Left",
-            "reset": "Reset",
             "accounts": "Accounts"
           },
           "InlineUsageBars": {
@@ -7370,8 +7416,8 @@
           "addSshHost": "Add SSH host",
           "addRemoteServer": "Add remote server",
           "addRemoteHost": "Add remote host",
-          "addSshHostDetail": "Use an existing machine over SSH.",
-          "addRemoteServerDetail": "Pair with Orca running on another computer.",
+          "addSshHostDetail": "Connect to a machine over SSH.",
+          "addRemoteServerDetail": "Orca on another computer, no SSH needed.",
           "addRemoteHostDetail": "SSH host or Orca server",
           "addWslHost": "Add WSL distro",
           "addWslHostDetail": "Run an Orca server inside a WSL 2 distro. Experimental.",
@@ -8485,7 +8531,7 @@
           "serverSaveFailed": "Failed to add remote server.",
           "serverTitle": "Add remote server",
           "sshTitle": "Add SSH host",
-          "serverDescription": "Pair with Orca running on another computer.",
+          "serverDescription": "Pair with Orca on another computer on the same network.",
           "serverRunsAsYou": "This device will be able to run commands as you on this server.",
           "sshDescription": "Add a persistent machine you can log into over SSH.",
           "serverSshTitle": "Add SSH host to {{server}}",
@@ -10422,6 +10468,7 @@
           "localLink": "Local-only link",
           "localLinkHelp": "This link only works in a browser or Orca client running on this computer.",
           "noExternalAddress": "No address for another device was found. Connect this computer to a LAN or Tailscale, refresh, or choose Custom address.",
+          "interfaceDisconnected": "{{address}} is disconnected. Reconnect it and refresh, or choose another address to create a link.",
           "customInvalid": "Enter a valid host, host:port, IPv6 address, or ws(s):// URL.",
           "thisComputer": "This computer",
           "whoOpens": "Who will open the link",
@@ -11315,7 +11362,6 @@
             "d77537b580": "opencode-go",
             "a9d56852eb": "opencode",
             "7f72de7cbe": "Show OpenCode Go token and cost usage in the status bar.",
-            "51b0ccd6a2": "google",
             "97957e374e": "openai",
             "8dfd676c28": "codex",
             "e9e4412545": "Show Codex token and cost usage in the status bar.",
@@ -11357,8 +11403,6 @@
               "pr": "pr",
               "duplicate": "duplicate"
             },
-            "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar.",
-            "antigravityKeyword": "antigravity",
             "e7d1b0f3a5": "Show Grok weekly credit usage from Grok CLI OAuth.",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
@@ -11412,8 +11456,7 @@
             "c29089716e": "Kimi usage",
             "96e32c1118": "MiniMax usage",
             "e8d2710689": "Muse usage",
-            "aff6e6afdf": "IDE font",
-            "ba1f9d39a6": "Antigravity usage"
+            "aff6e6afdf": "IDE font"
           }
         },
         "auto": {
@@ -15155,7 +15198,7 @@
             "reset": "time until reset, e.g. 3h 15m",
             "resetAt": "reset clock time, e.g. 20:50",
             "optional": "dropped when a placeholder inside is empty",
-            "usagePools": "named usage pools, e.g. Antigravity models"
+            "namedUsagePools": "named usage pools, e.g. Cursor plan pools"
           }
         },
         "RepositoryRemoveProjectSection": {
@@ -15236,7 +15279,8 @@
             "741ff8a0d2": "Push & Create {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "Select a workspace to browse files"
+            "79b1537dd3": "Select a workspace to browse files",
+            "2f4483d6c4": "No files match this filter"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "New Folder",
@@ -15279,6 +15323,7 @@
             "31b4c3195d": "More Explorer Actions",
             "d95e30fe28": "Refresh Explorer",
             "6026b16950": "Collapse All",
+            "c1f3f3ec70": "Search file contents",
             "openInApp": "Open in {{app}}"
           },
           "FileExplorerTreeStatus": {
@@ -15391,6 +15436,17 @@
             "localPortInUse": "Port {{port}} is already in use. Choose a different local port.",
             "localPortRequiresPrivileges": "Port {{port}} requires elevated privileges. Use a local port ≥ 1024."
           },
+          "Search": {
+            "1abfb25a66": "Type to search in files",
+            "d56d140747": "Press Enter to search",
+            "98c8435e36": "Select a workspace to search",
+            "dcc294f28d": "(results truncated)",
+            "resultsInFiles": "{{results}} in {{files}}",
+            "resultCount_one": "{{count}} result",
+            "resultCount_other": "{{count}} results",
+            "fileCount_one": "{{count}} file",
+            "fileCount_other": "{{count}} files"
+          },
           "SearchFilters": {
             "01e4671ccf": "e.g. *.min.js, dist/**",
             "0a6412a895": "files to exclude",
@@ -15400,9 +15456,11 @@
           "SearchHeader": {
             "6234a5ef85": "Use Regular Expression",
             "4567e6e0b6": "Match Whole Word",
-            "464ae3974f": "Match Case"
+            "464ae3974f": "Match Case",
+            "693cbeadd0": "Search"
           },
           "SearchQueryRow": {
+            "queryLabel": "Search files",
             "clearLabel": "Clear search"
           },
           "SearchResultItems": {
@@ -15433,7 +15491,6 @@
             "476b77745b": "Change Base Ref",
             "ed34038d0d": "Refresh branch compare",
             "493f963029": "Change base ref",
-            "11b5dd8e41": "Comparing against",
             "a9bf7c171a": "Commit Failed",
             "011f9713fc": "Commit blocked",
             "cc199ccc5f": "More commit and remote actions",
@@ -15577,8 +15634,6 @@
             "c8e4a1f902": "Filter: {{value0}}",
             "b3c8f1a902": "Filter files by name",
             "d4f8c2a901": "Clear and close filter",
-            "e8a1c4b203": "vs",
-            "4b4a7de138": "Open review page in browser",
             "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR.",
             "pushRecovery": {
               "4b37ae99b0": "Start the default AI agent to fix this push failure",
@@ -15598,7 +15653,6 @@
             "97e7124eac": "Could not refresh Source Control. Try again.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Current branch: {{value0}}",
-            "c7d4e2f801": "Change base ref: {{value0}}",
             "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR.",
             "entryStageFailed": "Failed to stage “{{value0}}”",
             "entryUnstageFailed": "Failed to unstage “{{value0}}”",
@@ -15646,9 +15700,6 @@
             "keepFile": "Keep file",
             "keepDeletion": "Keep deletion",
             "refreshAll": "Refresh all",
-            "baseUpToDate": "Up to date",
-            "rebaseOperationInProgress": "Wait for the current Git operation to finish",
-            "rebaseButton": "Rebase",
             "rebaseConflictCount_one": "{{count}} conflict",
             "rebaseConflictCount_other": "{{count}} conflicts",
             "rebasePaused": "Rebase paused",
@@ -15678,9 +15729,7 @@
             "scopeUncommitted": "Uncommitted",
             "scopeAllChanges": "All changes",
             "scopeNone": "None",
-            "scopeOpenDiff": "Open diff",
             "scopeShowAll": "Show all changes",
-            "scopeLoadingBranchChanges": "Loading branch changes…",
             "scopeBranchCommits": "Commits on this branch",
             "scopeRecentCommits": "Recent commits",
             "scopeCompareTo": "Compare to {{ref}}",
@@ -15697,7 +15746,8 @@
             "scopeOlderHistory": "Older history in Git Graph",
             "scopeNoUncommitted": "No uncommitted changes.",
             "scopeCommitFiles": "Files",
-            "gitGraphButton": "Graph"
+            "gitGraphButton": "Graph",
+            "compareLoadingAgainst": "Comparing against {{base}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -16559,6 +16609,16 @@
             "description": "\"{{value0}}\" will be deleted. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
             "remoteDescription": "\"{{value0}}\" will be deleted from {{value2}}. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
             "confirm": "Delete"
+          },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "Find files",
+            "4d5a6b2a49": "Clear file filter",
+            "7a9fb1e6aa": "Contents"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "Names",
+            "b3c8f1a902": "Filter files by name",
+            "f8a2c4d1e0": "Explorer search mode"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "No file changes in this commit"
@@ -19157,8 +19217,6 @@
             "fa6ea61de3": "Cancel",
             "c2ef0359b9": "Copy Contents",
             "f2d0c22d67": "Delete annotation {{value0}}",
-            "11c5084aa2": "Clear annotations",
-            "734e4343ec": "Clear browser annotations",
             "95af781091": "Send feedback to an agent",
             "ac39b9366b": "Send",
             "366bf5d62c": "New Tab",
@@ -19192,21 +19250,14 @@
             "b71dc3d930": "Reconnect",
             "d51ef37351": "Copy",
             "6f4ab3592b": "Copied",
-            "499b31b84e": "Copy All",
             "168350ae6a": "Click or hover an element, then press C to copy or S to screenshot.",
-            "e852e20cea": "Copied — press S to screenshot, or select another element",
             "777b5bc4ec": "Click an element to add feedback for the agent.",
             "b733a91bd9": "Add feedback for the selected element.",
             "4328a0a062": "Grab failed: {{value0}}",
             "759f32af29": "Downloading",
             "4300f38145": "Downloading from {{value0}}{{value1}}",
-            "cc4a071d3a": "Annotate page element ({{value0}})",
             "572046436a": "Remote browser",
             "b313a7275b": "Opening remote browser",
-            "ea6af700da": "{{value0}} annotation",
-            "c13693fe27": "{{value0}} annotations",
-            "074f0ed10b": "{{value0}} annotation ready. Select another element or copy all feedback.",
-            "a2164a6e5a": "{{value0}} annotations ready. Select another element or copy all feedback.",
             "9f6f2e8c19": "The downloaded file path is unavailable.",
             "0c79b7634d": "Could not open the downloaded file. It may have been moved or deleted.",
             "397d9dc923": "Could not show the downloaded file. It may have been moved or deleted.",
@@ -19236,7 +19287,13 @@
             "devToolsDockRight": "Dock to right",
             "devToolsDockBottom": "Dock to bottom",
             "devToolsUndock": "Open in separate window",
-            "devToolsClose": "Close DevTools"
+            "devToolsClose": "Close DevTools",
+            "499b31b84e": "Copy All",
+            "e852e20cea": "Copied — press S to screenshot, or select another element",
+            "074f0ed10b": "{{value0}} annotation ready. Select another element or copy all feedback.",
+            "a2164a6e5a": "{{value0}} annotations ready. Select another element or copy all feedback.",
+            "11c5084aa2": "Clear annotations",
+            "734e4343ec": "Clear browser annotations"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",
@@ -19322,8 +19379,6 @@
                     "c16f932cb3": "Save",
                     "024467ceac": "Cancel",
                     "449d2c2629": "Annotation intent",
-                    "38d320108c": "Collapse annotations",
-                    "9f209891a7": "Expand annotations",
                     "includePageDetails": "Include page details",
                     "copyFeedback": "Copy feedback",
                     "copyFeedbackWithPageDetails": "Copy feedback with page details"
@@ -23040,21 +23095,14 @@
         "notNow": "Not now",
         "retry": "Retry",
         "dismiss": "Dismiss",
-        "openWorker": "Open worker",
         "remoteOwner": "Stop or clear this from the computer it runs on",
-        "workspaceRemoved": "This worker's workspace was removed",
-        "restore": "Show in dock again",
         "alreadyStopped": "Already stopped",
         "cantStop": "Can't stop now",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
         "loadingWorker": "Loading worker…",
         "resultUnavailable": "Worker result unavailable",
-        "showDetails": "Show details",
-        "hideDetails": "Hide details",
-        "close": "Close",
         "workersRegion": "Workers",
-        "doneResult": "Done · open result",
         "clearName": "Clear {{name}}",
         "stopUnavailable": "Stop {{name}} · {{title}} unavailable · {{reason}}",
         "stopName": "Stop {{name}} · {{title}}",
@@ -23078,8 +23126,6 @@
         "task": "Task",
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
-        "stopped": "Stopped",
-        "finished": "Finished",
         "failedCount": "{{count}} failed",
         "needsYouCount": "{{count}} needs you",
         "newQuestions_one": "{{count}} new worker question waiting on you",
@@ -24965,9 +25011,6 @@
         "planModelWithoutThinking": "Model \"{{model}}\" does not support a thinking effort level.",
         "planThinkingLevelInvalid": "Thinking level \"{{level}}\" is not valid for {{model}}.",
         "openCodeInvalidEvents": "OpenCode returned invalid JSON events.",
-        "antigravityInvalidEvents": "Antigravity returned invalid JSON events.",
-        "antigravityInvalidResult": "Antigravity returned an invalid result.",
-        "antigravityNoFinalResult": "Antigravity returned no final result.",
         "kimiUnreadableOutput": "Kimi returned output Orca couldn't read. Try again.",
         "kimiSessionOccupied": "Kimi couldn't use this session because it is active in another client. Stop the session there or exit that client, then try again.",
         "kimiInterrupted": "Kimi was interrupted before it finished generating text. Try again.",
@@ -25454,29 +25497,20 @@
       "label": "Explorer root",
       "full": "Repository root",
       "back": "Back to {{path}}",
+      "searchScope": "Search scope: workspace files",
       "retry": "Retry",
       "sparseStatus": "Sparse checkout",
       "scopeDetails": "About sparse checkout scope",
       "scopeExplanation": "The folder picker changes what you see, not which files are checked out. Repository root includes the checked-out root and ancestor files.",
+      "searchExplanation": "Names filters the folder you are viewing. Contents searches across the workspace. Files omitted by sparse checkout are not searched.",
+      "findInFolder": "Find in {{path}}",
       "folderLoadError": "Could not load this folder:",
-      "emptyFolder": "No files in this folder",
-      "combinedSearchExplanation": "Search finds file names in the folder you are viewing and text across the workspace. Files omitted by sparse checkout are not searched."
+      "emptyFolder": "No files in this folder"
     },
     "trashFailed": {
       "titleRecycleBin": "Couldn't move '{{name}}' to the Recycle Bin. Delete it permanently?",
       "titleTrash": "Couldn't move '{{name}}' to the Trash. Delete it permanently?",
       "description": "This cannot be undone."
-    },
-    "combinedSearch": {
-      "text": "Text",
-      "filesIn": "Files in {{path}}",
-      "files": "Files",
-      "showAll": "Show all {{count}}",
-      "noResults": "No results",
-      "placeholder": "Search",
-      "placeholderScoped": "Search {{path}}",
-      "textInWorkspace": "Text in workspace",
-      "refine": "Too many matches"
     }
   },
   "sparsePreset": {
@@ -25535,9 +25569,6 @@
       "retry": "Retry",
       "changed": "The native account changed. Select a saved account again before launching agy.",
       "refresh": "Refresh accounts",
-      "usage": "Refresh usage",
-      "usageWithReading": "Refresh usage ({{reading}})",
-      "usageReading": "Session: {{session}} · Weekly: {{weekly}}",
       "saved": "Saved Google account",
       "remove": "Remove",
       "searchDescription": "Save and select native agy Google accounts on the execution host.",
@@ -25558,8 +25589,6 @@
       "settingsIncomplete": "Choose an Antigravity account type and enter its Google Cloud project and location.",
       "settingsLoadFailed": "Orca couldn't load your Antigravity sign-in settings. Try again.",
       "settingsSaveFailed": "Orca couldn't save your Antigravity sign-in settings. Try again.",
-      "lastReading": "{{reading}} · Read {{time}}",
-      "noReading": "Usage unknown: not read yet",
       "fd47b5a5dd": "Antigravity accounts",
       "personalOption": "Your personal Google AI plan",
       "enterpriseOption": "Your organization's license",
@@ -25590,7 +25619,6 @@
       "currentNotSaved": "Current agy login · not saved",
       "noEmailNotSaved": "agy didn't report an email · not saved",
       "saveShort": "Save",
-      "readAt": "Read {{time}}",
       "active": "Active",
       "runtime": "Runtime",
       "chatTitle": "Antigravity Chat",
@@ -25750,7 +25778,7 @@
       "toggle": "Toggle search details",
       "active": "{{count}} active"
     },
-    "unavailable": "Not available here"
+    "noResults": "No results. Try another search or adjust your filters."
   },
   "workspaceDeletion": {
     "preferenceSaveFailed": "Could not save deletion preference",
@@ -28083,6 +28111,7 @@
       "stop": "Stop",
       "stopWorker": "Stop {{value0}}",
       "agent": "Agent",
+      "progress": "Progress",
       "result": "Result",
       "workspace": "Workspace",
       "branch": "Branch",
@@ -30735,6 +30764,7 @@
       "continuesTip": "Continues automatically at {{time}}",
       "hitTip": "{{agent}} hit its usage limit · resets {{time}}",
       "continuesShort": "Continues {{time}}",
+      "rowLine": "Usage limit · {{time}}",
       "hitShort": "Hit limit",
       "stoppedCount": "{{count}} stopped"
     },

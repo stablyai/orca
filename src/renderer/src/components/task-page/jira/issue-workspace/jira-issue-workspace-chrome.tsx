@@ -29,13 +29,15 @@ export function JiraIssueWorkspaceHeader({
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
+  // Label the site by host: siteName is the connected account's name and read as the last editor.
+  const siteHost = URL.parse(displayed.url)?.host
   return (
     <div className="flex-none border-b border-border/50 bg-muted/30 px-4 py-3">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
             <span className="font-mono">{displayed.key}</span>
-            {displayed.siteName ? <span>{displayed.siteName}</span> : null}
+            {siteHost ? <span>{siteHost}</span> : null}
             <span>{displayed.project.key}</span>
             <span>{formatUiRelativeTimeFromDate(displayed.updatedAt, undefined, intlLocale)}</span>
             {issueLoading ? <LoaderCircle className="size-3 animate-spin" /> : null}
