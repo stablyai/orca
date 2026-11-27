@@ -227,3 +227,8 @@ export const DEFAULT_LAZY_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] = [
   ),
   prefixRpcMethodGroup(['speech.'], async () => (await import('./speech/speech')).SPEECH_METHODS)
 ]
+
+export const DEFAULT_RPC_DISPATCH_CONFIG = {
+  methods: EAGER_RPC_METHODS,
+  lazyGroups: DEFAULT_LAZY_RPC_METHOD_GROUPS
+} as const

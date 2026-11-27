@@ -50,7 +50,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-
 import { reapLeftoverMacOSPermissionStatusHelpers } from '../computer/macos-permissions/macos-permission-status-leftover-reap'
 import { repairDuplicatePtyPanesOnStart } from '../runtime/terminal/identity/moved-pane-owner-rekey'
 import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
-import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
+import { DEFAULT_RPC_DISPATCH_CONFIG } from '../runtime/rpc/methods/eager-rpc-method-registry'
 import { startWorkspaceCleanupRunner } from '../workspaces/cleanup/workspace-cleanup-runner-startup'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { installHookStatusSessionTabsRepublish } from '../agent-hooks/runtime/hook-status-session-tabs-republish'
@@ -163,7 +163,7 @@ function startBrowserAutomation(
   runtime.setAgentBrowserBridge(agentBrowserBridge)
   // Reclaim browser daemons orphaned by prior crashes/SIGKILL.
   void agentBrowserBridge.sweepOrphanedSessions()
-  const dispatcher = new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
+  const dispatcher = new RpcDispatcher({ runtime, ...DEFAULT_RPC_DISPATCH_CONFIG })
   native.configureBrowserAutomation(async (method, params, agent, signal) => {
     const response = await dispatcher.dispatch(
       { id: randomUUID(), authToken: 'local-browser-client-automation', method, params },
