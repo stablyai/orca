@@ -396,7 +396,6 @@
 1 src/renderer/src/components/settings/voice/VoiceMicrophoneSetting.tsx
 2 src/renderer/src/components/settings/voice/VoicePane.tsx
 1 src/renderer/src/components/settings/wsl/hosts/WslHostsSection.tsx
-4 src/renderer/src/components/setup-guide/SetupGuideSidebarEntry.tsx
 1 src/renderer/src/components/setup-guide/use-setup-guide-progress.ts
 2 src/renderer/src/components/setup-guide/use-setup-guide-telemetry.ts
 2 src/renderer/src/components/shared/useDaemonActions.tsx
