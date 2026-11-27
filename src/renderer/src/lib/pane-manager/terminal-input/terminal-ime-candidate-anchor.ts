@@ -1,4 +1,4 @@
-import type { IDisposable, Terminal } from '@xterm/xterm'
+import type { IBuffer, IDisposable, Terminal } from '@xterm/xterm'
 import { resolveAppDrawnImeCaret, type TerminalImeAnchor } from './terminal-ime-anchor'
 
 type ImeAnchorCellMetrics = {
@@ -8,8 +8,9 @@ type ImeAnchorCellMetrics = {
   rows: number
 }
 
-// An app-drawn caret only stays valid while the viewport and grid stay put.
+// An app-drawn caret only stays valid while the buffer, viewport and grid stay put.
 type AppDrawnCaret = TerminalImeAnchor & {
+  bufferType: IBuffer['type']
   baseY: number
   cols: number
   rows: number
@@ -88,6 +89,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     const cursorVisible = terminal.modes.showCursor
     const knownCaret =
       lastCaret &&
+      lastCaret.bufferType === buf.type &&
       lastCaret.baseY === buf.baseY &&
       lastCaret.cols === terminal.cols &&
       lastCaret.rows === terminal.rows
@@ -107,6 +109,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
       ? {
           row: anchor.row,
           column: anchor.column,
+          bufferType: buf.type,
           baseY: buf.baseY,
           cols: terminal.cols,
           rows: terminal.rows
