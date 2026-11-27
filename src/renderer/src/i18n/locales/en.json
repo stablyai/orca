@@ -22177,6 +22177,14 @@
           "followedUp": "Follow-up",
           "handedOff": "Handed off",
           "task": "Task"
+        },
+        "unnamedRecipient": "an agent",
+        "recipientName": "{{name}}",
+        "event": {
+          "followedUp": "Sent follow-up",
+          "update": "Update",
+          "message": "Message",
+          "handedOff": "Handed off"
         }
       },
       "goal": {

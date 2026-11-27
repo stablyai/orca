@@ -822,6 +822,14 @@
         "followedUp": "후속 메시지",
         "handedOff": "인계됨",
         "task": "작업"
+      },
+      "unnamedRecipient": "에이전트",
+      "event": {
+        "followedUp": "후속 메시지 보냄",
+        "update": "업데이트",
+        "message": "메시지",
+        "handedOff": "인계됨",
+        "task": "작업"
       }
     },
     "hostOutage": {

@@ -22113,6 +22113,13 @@
           "followedUp": "Takip",
           "handedOff": "Devredildi",
           "task": "Görev"
+        },
+        "unnamedRecipient": "bir ajan",
+        "event": {
+          "followedUp": "Takip mesajı gönderildi",
+          "update": "Güncelleme",
+          "message": "Mesaj",
+          "handedOff": "Devredildi"
         }
       },
       "goal": {

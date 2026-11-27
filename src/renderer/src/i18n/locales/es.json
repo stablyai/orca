@@ -21450,6 +21450,13 @@
           "followedUp": "Seguimiento",
           "handedOff": "Traspasado",
           "task": "Tarea"
+        },
+        "unnamedRecipient": "un agente",
+        "event": {
+          "followedUp": "Seguimiento enviado",
+          "update": "Actualización",
+          "message": "Mensaje",
+          "handedOff": "Traspasado"
         }
       },
       "goal": {

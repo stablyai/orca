@@ -22947,7 +22947,14 @@
           "handedOff": "Repassado",
           "task": "Tarefa"
         },
-        "goToAgent": "Vá para o agente"
+        "goToAgent": "Vá para o agente",
+        "unnamedRecipient": "um agente",
+        "event": {
+          "followedUp": "Acompanhamento enviado",
+          "update": "Atualização",
+          "message": "Mensagem",
+          "handedOff": "Repassado"
+        }
       },
       "goal": {
         "placeholder": "Descreva seu objetivo e defina resultados mensuráveis para obter os melhores resultados",

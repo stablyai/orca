@@ -862,6 +862,16 @@
         "needsAuth_many": "{{count}} connexions requises"
       },
       "pasteHint": "Lorsque le navigateur arrive sur une page qui ne se charge pas, copiez son adresse et collez-la ici."
+    },
+    "agentMessage": {
+      "unnamedRecipient": "un agent",
+      "event": {
+        "followedUp": "Suivi envoyé",
+        "update": "Mise à jour",
+        "message": "Message",
+        "handedOff": "Transféré",
+        "task": "Tâche"
+      }
     }
   },
   "common": {

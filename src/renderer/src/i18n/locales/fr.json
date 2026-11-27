@@ -21070,6 +21070,13 @@
           "followedUp": "Suivi",
           "handedOff": "Transféré",
           "task": "Tâche"
+        },
+        "unnamedRecipient": "un agent",
+        "event": {
+          "followedUp": "Suivi envoyé",
+          "update": "Mise à jour",
+          "message": "Message",
+          "handedOff": "Transféré"
         }
       },
       "goal": {

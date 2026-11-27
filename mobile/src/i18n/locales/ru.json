@@ -994,8 +994,8 @@
       "row": {
         "started": "Запущен",
         "reopened": "Открыт заново",
-        "followedUp": "Отправлено уточнение для",
-        "handedOff": "Передано",
+        "followedUp": "Дослано получателю:",
+        "handedOff": "Передано получателю:",
         "task": "Задача от",
         "update": "Обновление от",
         "message": "Сообщение от",
@@ -1006,8 +1006,16 @@
         "started": "Запущен",
         "reopened": "Открыт заново",
         "task": "Задача",
-        "followedUp": "Уточнение",
-        "handedOff": "Передано"
+        "followedUp": "Дослано получателю:",
+        "handedOff": "Передано получателю:"
+      },
+      "unnamedRecipient": "агент",
+      "event": {
+        "followedUp": "Дополнение отправлено",
+        "update": "Обновление",
+        "message": "Сообщение",
+        "handedOff": "Работа передана",
+        "task": "Задача"
       }
     },
     "urlRequest": {

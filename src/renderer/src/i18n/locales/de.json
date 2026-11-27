@@ -21841,9 +21841,17 @@
         "kind": {
           "started": "Gestartet",
           "reopened": "Erneut geöffnet",
-          "followedUp": "Nachfrage",
-          "handedOff": "Übergeben",
+          "followedUp": "Nachfrage an",
+          "handedOff": "Übergeben an",
           "task": "Aufgabe"
+        },
+        "unnamedRecipient": "einen Agenten",
+        "recipientName": "an {{name}}",
+        "event": {
+          "followedUp": "Nachfrage gesendet",
+          "update": "Update",
+          "message": "Nachricht",
+          "handedOff": "Übergeben"
         }
       },
       "goal": {
