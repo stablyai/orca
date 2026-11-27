@@ -321,13 +321,10 @@ export function spawnCodexAppServerConnection(
 }
 
 /** One chat's own app-server, run under the terminal daemon where it can, so it outlives a restart. */
-export function spawnRelayedCodexAppServerConnection(relay: {
-  chatKey: string
-  only?: 'reattach'
-}): typeof spawnCodexAppServerConnection {
-  return (launch, handlers = {}) =>
+export const spawnRelayedCodexAppServerConnection =
+  (relay: { chatKey: string; only?: 'reattach' }): typeof spawnCodexAppServerConnection =>
+  (launch, handlers = {}) =>
     connectCodexAppServer(launch, handlers, spawnProcess, false, relay)
-}
 
 export function openCodexAppServerConnection(
   launch: CodexAppServerLaunch,

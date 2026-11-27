@@ -213,8 +213,8 @@ export class SharedToolCallerStore {
   async forgetOwner(owner: string): Promise<void> {
     await this.load()
     let changed = false
-    for (const runs of [...this.chats.values()]) {
-      for (const entry of [...runs.values()]) {
+    for (const runs of this.chats.values()) {
+      for (const entry of runs.values()) {
         if (entry.stored.owner === owner) {
           this.remove(entry)
           changed = true
