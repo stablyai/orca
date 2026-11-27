@@ -50,7 +50,7 @@ function documentIsHidden(): boolean {
 }
 
 /** Transition snapshots paint above all z-index layers; skip morphing while a terminal dialog is open. */
-function terminalDialogIsOpen(): boolean {
+export function terminalDialogIsOpen(): boolean {
   return document.querySelector('[role="dialog"][data-state="open"]') !== null
 }
 

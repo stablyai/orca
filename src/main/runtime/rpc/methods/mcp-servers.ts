@@ -8,6 +8,7 @@ import {
   McpServerConnect,
   McpServerDiscover,
   McpServerImport,
+  McpServerMove,
   McpServerProblems,
   McpServerSessions,
   McpServerSetAgentEnabled,
@@ -262,16 +263,16 @@ export const MCP_SERVER_METHODS = [
   defineMethod({
     name: 'mcpServers.move',
     permission: 'workspace',
-    params: McpServerImport,
+    params: McpServerMove,
     handler: (params, context) =>
-      onHost(context, () => importAgentMcpServer(context, params.key, moveAgentMcpServer), true)
+      onHost(context, () => importAgentMcpServer(context, params, moveAgentMcpServer), true)
   }),
   defineMethod({
     name: 'mcpServers.copy',
     permission: 'workspace',
     params: McpServerImport,
     handler: (params, context) =>
-      onHost(context, () => importAgentMcpServer(context, params.key, copyAgentMcpServer), true)
+      onHost(context, () => importAgentMcpServer(context, params, copyAgentMcpServer), 'written')
   }),
   defineMethod({
     name: 'mcpServers.agentFiles.allow',
@@ -302,12 +303,15 @@ export const MCP_SERVER_METHODS = [
   }),
   defineMethod({
     name: 'mcpServers.sessions.stale',
+    // Terminals that outlived the host's restart count only once it has taken them back.
+    requires: ['unshownPlacement'],
     permission: 'workspace',
     params: McpServerSessions,
     handler: (_params, context) => onHost(context, () => context.runtime.countMcpStaleTerminals())
   }),
   defineMethod({
     name: 'mcpServers.sessions.restart',
+    requires: ['unshownPlacement'],
     permission: 'workspace',
     params: McpServerSessions,
     handler: (_params, context) => onHost(context, () => context.runtime.restartMcpStaleTerminals())

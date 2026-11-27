@@ -27,12 +27,29 @@ import {
 } from './bot-catalog-snapshot'
 import { openBotHome, openBotHomeTab, refreshBots } from './bot-catalog'
 import { botHostTarget, botTarget } from './bot-hosts'
-import { activateAiVaultStructuredSession } from './agent-session/open/activate-ai-vault-structured-session'
+import {
+  activateAiVaultStructuredSession,
+  structuredSessionOpenFeedback
+} from './agent-session/open/activate-ai-vault-structured-session'
+import { pairedBotThreadOpenDeps } from './agent-session/open/open-existing-structured-session'
+import { activateStructuredAgentSessionById } from './agent-session/structured-agent-session-tab-activation'
 import { isHome } from '../../../shared/bots/bot-homes'
 import type { BotDeepLink } from '../../../shared/bot-deep-link'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { getRuntimeEnvironmentRegistration } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
+import {
+  bindPendingBotThreadChat,
+  bindPendingBotThreadHost,
+  cancelPendingBotThreadOpen,
+  runBotThreadOpen
+} from './agent-session/open/bot-thread-open-lifecycle'
+import {
+  withBotThreadOpenNavigation,
+  type BotThreadNavigate
+} from './agent-session/open/bot-thread-open-navigation'
 
 type LinkConversation = NonNullable<BotDeepLink['conversation']>
 
@@ -95,35 +112,98 @@ async function serverThreadSession(
  * link's thread, so a server's bot opens the server's chat for it. A thread no computer has a chat
  * for (its message never arrived, or the chat is gone) only says so: its Home is a different chat.
  */
-export async function openBotLinkHome(
+export function openBotLinkHome(
   botId: string,
   conversation: LinkConversation | null
 ): Promise<void> {
+  if (!conversation) {
+    cancelPendingBotThreadOpen()
+    return resolveBotLinkHome(botId)
+  }
+  return runBotThreadOpen(
+    JSON.stringify([botId, conversation.source, conversation.externalId]),
+    (signal) =>
+      withBotThreadOpenNavigation(signal, (navigate) =>
+        resolveBotLinkHome(botId, { conversation, signal, navigate })
+      )
+  )
+}
+
+async function resolveBotLinkHome(
+  botId: string,
+  link?: { conversation: LinkConversation; signal: AbortSignal; navigate: BotThreadNavigate }
+): Promise<void> {
   await refreshBots()
+  if (link?.signal.aborted) {
+    return
+  }
   const resolution = resolveBotLink(botId, botLinkHostAnswers())
   switch (resolution.kind) {
     case 'open': {
       const { hostId, bot } = resolution.match
-      if (!conversation) {
+      if (!link) {
         await openBotHomeTab(bot)
         return
       }
+      const { conversation, signal, navigate } = link
+      const target = botTarget(bot)
+      const environmentId = runtimeTargetEnvironmentId(target)
+      const registration = environmentId
+        ? getRuntimeEnvironmentRegistration(environmentId)
+        : undefined
+      const currentPairing = (): boolean =>
+        !environmentId || getRuntimeEnvironmentRegistration(environmentId) === registration
+      if (environmentId) {
+        const connection = getRuntimeEnvironmentConnectionGeneration(environmentId)
+        bindPendingBotThreadHost(
+          signal,
+          () =>
+            currentPairing() &&
+            getRuntimeEnvironmentConnectionGeneration(environmentId) === connection
+        )
+      }
       const sessionId =
         hostId === LOCAL_EXECUTION_HOST_ID ? null : await serverThreadSession(bot, conversation)
+      if (signal.aborted || !currentPairing()) {
+        return
+      }
       if (!sessionId) {
         sayThreadMissing()
         return
       }
-      // A server's chat tabs reach this window only once its home is open here, as the sidebar opens it.
-      if (!openBotHome(bot)) {
+      const workspaceId = folderWorkspaceKey(bot.folderWorkspaceId)
+      bindPendingBotThreadChat(signal, {
+        executionHostId: hostId,
+        worktreeId: workspaceId,
+        sessionId
+      })
+      // Home selects the paired workspace and starts its ordinary tab subscription.
+      if (!navigate(() => openBotHome(bot))) {
         return
       }
+      const current = (): boolean => {
+        const { activeWorktreeId, activeWorkspaceExecutionHostId, activeView } =
+          useAppStore.getState()
+        return (
+          !signal.aborted &&
+          currentPairing() &&
+          activeWorktreeId === workspaceId &&
+          activeWorkspaceExecutionHostId === hostId &&
+          activeView === 'terminal'
+        )
+      }
       await activateAiVaultStructuredSession(
+        { structuredSession: { workspaceId, sessionId } },
         {
-          structuredSession: { workspaceId: folderWorkspaceKey(bot.folderWorkspaceId), sessionId }
+          deps: {
+            ...structuredSessionOpenFeedback,
+            ...pairedBotThreadOpenDeps(workspaceId, sessionId, target, signal, current, (args) =>
+              navigate(() => activateStructuredAgentSessionById(args))
+            )
+          },
+          retry: () => openBotLinkHome(botId, conversation)
         },
-        undefined,
-        botTarget(bot)
+        target
       )
       return
     }
@@ -149,7 +229,7 @@ export async function openBotLinkHome(
       return
     case 'missing':
       // An unknown or deleted bot opens nothing, as before bare links were read.
-      if (conversation) {
+      if (link) {
         sayThreadMissing()
       }
   }

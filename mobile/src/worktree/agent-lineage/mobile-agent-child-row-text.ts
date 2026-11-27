@@ -5,60 +5,61 @@ import {
 } from '../../../../src/shared/agent-status/presentation/agent-child-row-lead-trail'
 import type { AgentChildRowModel } from '../../../../src/shared/agent-status/presentation/agent-child-row-model'
 import type { AgentChildDisplayState } from '../../../../src/shared/agent-status/child-work/agent-status-child-work-display'
-import { sayMobileBackgroundTask } from '../../session/native-chat/input/tasks/mobile-background-task-copy'
-import { translate } from '../../i18n/mobile-i18n'
+import { mobileBackgroundTaskSay } from '../../session/native-chat/input/tasks/mobile-background-task-copy'
+import type { Translate } from '../../i18n/mobile-i18n'
 import { agentStateLabel } from './agent-row-display'
 
-export function mobileAgentChildStateLabel(state: AgentChildDisplayState): string {
+export function mobileAgentChildStateLabel(state: AgentChildDisplayState, t: Translate): string {
   return state === 'unverifiable'
-    ? translate('session.agentChildRow.noRecentUpdate', 'No recent update')
-    : agentStateLabel(state)
+    ? t('session.agentChildRow.noRecentUpdate', 'No recent update')
+    : agentStateLabel(state, t)
 }
 
-function mobileAgentChildRowCopy() {
+function mobileAgentChildRowCopy(t: Translate) {
   return {
-    stateLabel: mobileAgentChildStateLabel,
-    ended: () => translate('session.agentChildRow.ended', 'Ended'),
-    sayBackgroundTask: sayMobileBackgroundTask
+    stateLabel: (state: AgentChildDisplayState) => mobileAgentChildStateLabel(state, t),
+    ended: () => t('session.agentChildRow.ended', 'Ended'),
+    sayBackgroundTask: mobileBackgroundTaskSay(t)
   }
 }
 
-function noUpdateDuration(deltaMs: number): string {
+function noUpdateDuration(deltaMs: number, t: Translate): string {
   const minutes = Math.max(0, Math.floor(deltaMs / 60_000))
   if (minutes < 60) {
     const count = minutes
     return count === 1
-      ? translate('session.agentChildRow.minutes_one', '{{count}}m', { count })
-      : translate('session.agentChildRow.minutes_other', '{{count}}m', { count })
+      ? t('session.agentChildRow.minutes_one', '{{count}}m', { count })
+      : t('session.agentChildRow.minutes_other', '{{count}}m', { count })
   }
   const hours = Math.floor(minutes / 60)
   if (hours < 24) {
     const count = hours
     return count === 1
-      ? translate('session.agentChildRow.hours_one', '{{count}}h', { count })
-      : translate('session.agentChildRow.hours_other', '{{count}}h', { count })
+      ? t('session.agentChildRow.hours_one', '{{count}}h', { count })
+      : t('session.agentChildRow.hours_other', '{{count}}h', { count })
   }
   const count = Math.floor(hours / 24)
   return count === 1
-    ? translate('session.agentChildRow.days_one', '{{count}}d', { count })
-    : translate('session.agentChildRow.days_other', '{{count}}d', { count })
+    ? t('session.agentChildRow.days_one', '{{count}}d', { count })
+    : t('session.agentChildRow.days_other', '{{count}}d', { count })
 }
 
-export function mobileAgentChildRowName(row: AgentChildRowModel): string {
-  return agentChildRowName(row, mobileAgentChildStateLabel)
+export function mobileAgentChildRowName(row: AgentChildRowModel, t: Translate): string {
+  return agentChildRowName(row, (state) => mobileAgentChildStateLabel(state, t))
 }
 
 export function mobileAgentChildRowText(
   row: AgentChildRowModel,
-  now: number
+  now: number,
+  t: Translate
 ): { lead: string; trail: string } {
   const detail =
     row.detail?.kind === 'no-update'
-      ? translate('session.agentChildRow.noUpdate', 'No update in {{value0}}', {
-          value0: noUpdateDuration(now - row.recencyAt)
+      ? t('session.agentChildRow.noUpdate', 'No update in {{value0}}', {
+          value0: noUpdateDuration(now - row.recencyAt, t)
         })
       : row.detail?.kind === 'role' && (!row.detail.agentType || row.detail.agentType === 'unknown')
-        ? translate('session.agentChildRow.agent', 'Agent')
-        : agentChildRowDetailText(row, now, mobileAgentChildRowCopy())
-  return agentChildRowLeadTrail(mobileAgentChildRowName(row), detail)
+        ? t('session.agentChildRow.agent', 'Agent')
+        : agentChildRowDetailText(row, now, mobileAgentChildRowCopy(t))
+  return agentChildRowLeadTrail(mobileAgentChildRowName(row, t), detail)
 }

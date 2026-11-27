@@ -12,7 +12,6 @@ import {
   startPreGoneSystemMemorySampling
 } from '../memory/pre-gone-host-memory'
 import { preGonePtyTreeMemoryDetails } from '../memory/pre-gone-pty-tree-memory'
-import { observeMainMemorySample } from '../../memory/main-memory-spike-capture'
 
 type ProcessMetricLike = {
   pid?: unknown
@@ -149,6 +148,10 @@ function processMetricIdentity(metric: ProcessMetricLike): ProcessMetricIdentity
   }
 }
 
+export function readLiveProcessMetricDetails(): CrashReportDetails {
+  return getLiveProcessGoneMetrics().details
+}
+
 function getLiveProcessGoneMetrics(): LiveProcessGoneMetrics {
   try {
     const metrics = app.getAppMetrics()
@@ -201,10 +204,6 @@ export function samplePreGoneProcessMetrics(nowMs: number = Date.now()): void {
     const metrics = app.getAppMetrics()
     const details = collectProcessGoneMetricDetails(metrics)
     preGoneSample = { details, processes: sampledProcessIdentities(metrics), sampledAtMs: nowMs }
-    const mainMB = details.processMetricsBrowserWorkingSetMB
-    if (typeof mainMB === 'number') {
-      observeMainMemorySample(mainMB, nowMs, details)
-    }
   } catch {
     // Preserve the last good sample when enumeration fails.
   }

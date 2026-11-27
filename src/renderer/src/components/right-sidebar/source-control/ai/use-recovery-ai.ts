@@ -13,6 +13,7 @@ import {
   launchSourceControlRecoveryAgentWithDefault
 } from './recovery-launch'
 import type { SourceControlAiStoreSnapshot } from './controller-types'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 type SourceControlRecoveryAiParams = {
   activeWorktreeId: string | null | undefined
@@ -67,25 +68,27 @@ export function useSourceControlRecoveryAi({
       }
 
       setIsLaunchingCommitFailureAgent(true)
-      try {
-        return await launchSourceControlRecoveryAgentWithDefault({
-          activeWorktreeId,
-          placementWorkspaceId: scope?.placementWorkspaceId,
-          initialCwd: scope ? (worktreePath ?? undefined) : undefined,
-          executionHostId: scope?.executionHostId,
-          activeGroupId,
-          activeSourceControlLaunchPlatform,
-          sourceRepoConnectionId,
-          actionId: 'fixCommitFailure',
-          basePrompt: commitFailureRecoveryPrompt,
-          promptOverride,
-          getLaunchActionRecipe,
-          getStoreState,
-          copy: getDefaultSourceControlRecoveryLaunchCopy('commit')
-        })
-      } finally {
-        setIsLaunchingCommitFailureAgent(false)
-      }
+      return runWithFinally(
+        () =>
+          launchSourceControlRecoveryAgentWithDefault({
+            activeWorktreeId,
+            placementWorkspaceId: scope?.placementWorkspaceId,
+            initialCwd: scope ? (worktreePath ?? undefined) : undefined,
+            executionHostId: scope?.executionHostId,
+            activeGroupId,
+            activeSourceControlLaunchPlatform,
+            sourceRepoConnectionId,
+            actionId: 'fixCommitFailure',
+            basePrompt: commitFailureRecoveryPrompt,
+            promptOverride,
+            getLaunchActionRecipe,
+            getStoreState,
+            copy: getDefaultSourceControlRecoveryLaunchCopy('commit')
+          }),
+        () => {
+          setIsLaunchingCommitFailureAgent(false)
+        }
+      )
     },
     [
       scope,
@@ -109,25 +112,27 @@ export function useSourceControlRecoveryAi({
       }
 
       setIsLaunchingPushFailureAgent(true)
-      try {
-        return await launchSourceControlRecoveryAgentWithDefault({
-          activeWorktreeId,
-          placementWorkspaceId: scope?.placementWorkspaceId,
-          initialCwd: scope ? (worktreePath ?? undefined) : undefined,
-          executionHostId: scope?.executionHostId,
-          activeGroupId,
-          activeSourceControlLaunchPlatform,
-          sourceRepoConnectionId,
-          actionId: 'fixPushFailure',
-          basePrompt: pushRecoveryPrompt,
-          promptOverride,
-          getLaunchActionRecipe,
-          getStoreState,
-          copy: getDefaultSourceControlRecoveryLaunchCopy('push')
-        })
-      } finally {
-        setIsLaunchingPushFailureAgent(false)
-      }
+      return runWithFinally(
+        () =>
+          launchSourceControlRecoveryAgentWithDefault({
+            activeWorktreeId,
+            placementWorkspaceId: scope?.placementWorkspaceId,
+            initialCwd: scope ? (worktreePath ?? undefined) : undefined,
+            executionHostId: scope?.executionHostId,
+            activeGroupId,
+            activeSourceControlLaunchPlatform,
+            sourceRepoConnectionId,
+            actionId: 'fixPushFailure',
+            basePrompt: pushRecoveryPrompt,
+            promptOverride,
+            getLaunchActionRecipe,
+            getStoreState,
+            copy: getDefaultSourceControlRecoveryLaunchCopy('push')
+          }),
+        () => {
+          setIsLaunchingPushFailureAgent(false)
+        }
+      )
     },
     [
       scope,

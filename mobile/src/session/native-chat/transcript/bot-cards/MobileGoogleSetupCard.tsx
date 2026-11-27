@@ -7,9 +7,8 @@ import {
 } from '../../../../../../src/shared/google/google-setup-card'
 import { useHostBotById } from '../../../../bots/host-bot-store'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
 import { useMobileBotCardHost } from './mobile-bot-card-host'
 import { useMobileGoogleSetup } from './mobile-google-setup-store'
@@ -38,7 +37,7 @@ export function MobileGoogleSetupCard({
   fallback: string
   fontScale: number
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const host = useMobileBotCardHost()
   const bot = useHostBotById(card.botId)
@@ -92,6 +91,6 @@ export function MobileGoogleSetupCard({
   }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   line: { color: colors.textMuted }
 }))

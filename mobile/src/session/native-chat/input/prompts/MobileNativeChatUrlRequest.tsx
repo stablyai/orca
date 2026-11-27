@@ -8,9 +8,8 @@ import {
   canOpenExternalLink,
   openExternalLink
 } from '../../../../platform/external-links/external-link'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { scaledType } from '../../transcript/messages/mobile-native-chat-message-styles'
 
@@ -30,7 +29,7 @@ export function openUrlRequestPage(url: string): void {
 
 /** Where the page goes: its host to judge it by, then the whole link. */
 export function MobileNativeChatUrlTarget({ url }: { url: string }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const target = readApprovalUrl(url)
   if (!target) {
     return null
@@ -59,7 +58,7 @@ export function MobileNativeChatUrlRequestReceipt({
   finished: boolean
   fontScale: number
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const meta = [styles.meta, scaledType(typography.metaSize, fontScale, 5)]
   if (finished) {
@@ -112,7 +111,7 @@ export function MobileNativeChatUrlRequestReceipt({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   target: {
     gap: spacing.xs
   },
@@ -134,7 +133,7 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
+    backgroundColor: colors.chatPanel
   },
   finished: {
     paddingVertical: spacing.sm

@@ -1,4 +1,3 @@
-import type { UsageLimitAccountScope } from './structured-agent-session-usage-limit-account-scope'
 import { rateLimitShowsRoom } from '../../../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
 import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
@@ -9,6 +8,11 @@ import {
   type AgentSessionLaunchedAccount
 } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
+import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
+import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
+import type { UsageLimitAccountScope } from './structured-agent-session-usage-limit-account-types'
+import { switchFreeIdentity, type SwitchReset } from './structured-agent-session-usage-limit-chain'
+import type { NativeChatUsageLimitCut } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 
 export function sameAccountHome(
   left: AgentSessionAccountHome,
@@ -36,11 +40,31 @@ export function usageLimitCutLaunch(
   }
 }
 
-/** Only room ends a relaunched cut's wait early, and the poller may be idle: ask for it, a first
- *  reading too while the provider has none. */
-export function askForRoom(scope: UsageLimitAccountScope | undefined, notWithinMs: number): void {
-  const ask = scope?.account?.refresh ?? scope?.bootstrap
-  ask?.(notWithinMs)
+/** What a chat's attribution was computed under: the sources' witness and the launch the record
+ *  named. A send binds to both. */
+export type UsageLimitAttributionBinding = {
+  witness: string | undefined
+  launchFence: number | undefined
+  runtimeFence: number | undefined
+}
+
+type AttributionHost = Pick<StructuredAgentSessionHostDeps, 'usageLimitAutoContinue'> & {
+  store: Pick<AgentSessionRecordStore, 'getRecord'>
+}
+
+export function usageLimitAttributionBindingHolds(
+  id: string,
+  host: AttributionHost,
+  binding: UsageLimitAttributionBinding | undefined
+): boolean {
+  const record = host.store.getRecord(id)
+  return (
+    binding !== undefined &&
+    record !== null &&
+    host.usageLimitAutoContinue?.accountWitness?.(record.provider) === binding.witness &&
+    record.lease?.runtimeFence === binding.runtimeFence &&
+    record.launchedAccount?.fence === binding.launchFence
+  )
 }
 
 type Relaunch = {
@@ -48,17 +72,29 @@ type Relaunch = {
   to: AgentSessionAccountHome
   fence: number | undefined
   at: number
+  cutEndedAt: number
   /** The newest reading seen since the relaunch; an older one arriving later never speaks. */
   seenAt?: number
   /** The first room of the current unbroken run of room readings, and the account it read. */
   room?: { at: number; account: string }
 }
 
+const SWITCH_READ_INTERVAL_MS = 10 * 60_000
+
 /** Cuts whose account is unknown after a relaunch. The account the chat starts on now may not be the
  *  one the cut hit, so room in its live reading, taken since this launch was first seen, releases
  *  the cut before its own reset. Derived each pass from readings; nothing is saved. */
 export class UsageLimitRelaunchedCuts {
   private readonly relaunches = new Map<string, Relaunch>()
+  private readonly switchReads = new Map<string, number>()
+
+  beginPass(now: number): void {
+    for (const [key, askedAt] of this.switchReads) {
+      if (askedAt + SWITCH_READ_INTERVAL_MS <= now) {
+        this.switchReads.delete(key)
+      }
+    }
+  }
 
   /** `to` is where the chat would start now, after the launch at `fence`; null when the cut's launch
    *  still names its account. */
@@ -67,23 +103,66 @@ export class UsageLimitRelaunchedCuts {
     cut: string,
     to: AgentSessionAccountHome | null,
     fence: number | undefined,
-    now: number
-  ): void {
+    now: number,
+    cutEndedAt = Number.NEGATIVE_INFINITY
+  ): boolean {
     const current = this.relaunches.get(id)
     if (!to) {
       this.relaunches.delete(id)
+      return false
     } else if (
       current?.cut !== cut ||
       current.fence !== fence ||
       !sameAccountHome(current.to, to)
     ) {
       // As with a move: only a reading taken after this launch was first seen speaks for it.
-      this.relaunches.set(id, { cut, to, fence, at: now })
+      this.relaunches.set(id, { cut, to, fence, at: now, cutEndedAt })
+      return true
     }
+    return false
   }
 
-  waits(id: string, cut: string): boolean {
-    return this.relaunches.get(id)?.cut === cut
+  at(id: string, cut: string): number | undefined {
+    const relaunch = this.relaunches.get(id)
+    return relaunch?.cut === cut ? relaunch.at : undefined
+  }
+
+  askForRoom({
+    id,
+    cut,
+    provider,
+    scope,
+    now
+  }: {
+    id: string
+    cut: NativeChatUsageLimitCut & SwitchReset
+    provider: string | undefined
+    scope: UsageLimitAccountScope | undefined
+    now: number
+  }): void {
+    if (
+      cut.resetFromSwitch !== true ||
+      !provider ||
+      !scope ||
+      this.at(id, switchFreeIdentity(cut)) === undefined
+    ) {
+      return
+    }
+    const key = JSON.stringify([provider, scope.scope])
+    if ((this.switchReads.get(key) ?? Number.NEGATIVE_INFINITY) + SWITCH_READ_INTERVAL_MS > now) {
+      return
+    }
+    const reading = scope.account?.read()
+    // Suppress a refresh only when this exact reading releases the relaunched cut. In particular,
+    // live-session and overdue readings that merely look like room must not strand recovery.
+    const usable =
+      reading !== null &&
+      reading !== undefined &&
+      this.roomAt(id, switchFreeIdentity(cut), scope.account?.key, reading, now) !== undefined
+    const ask = usable ? undefined : (scope.account?.refresh ?? scope.bootstrap)
+    if (ask?.(SWITCH_READ_INTERVAL_MS)) {
+      this.switchReads.set(key, now)
+    }
   }
 
   /** When room released the cut, while the live reading of `account` still shows it: the first
@@ -102,7 +181,7 @@ export class UsageLimitRelaunchedCuts {
       account === undefined ||
       reading?.status !== 'ok' ||
       reading.usageMetadata?.source === 'live-session' ||
-      reading.updatedAt < Math.max(relaunch.at, relaunch.seenAt ?? Number.NEGATIVE_INFINITY)
+      reading.updatedAt < Math.max(relaunch.cutEndedAt, relaunch.seenAt ?? Number.NEGATIVE_INFINITY)
     ) {
       return undefined
     }
@@ -136,5 +215,6 @@ export class UsageLimitRelaunchedCuts {
 
   clear(): void {
     this.relaunches.clear()
+    this.switchReads.clear()
   }
 }

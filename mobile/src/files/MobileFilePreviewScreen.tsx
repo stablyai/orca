@@ -13,7 +13,6 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { getWorktreeLabel } from '../worktree/row-presentation/worktree-label'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useForceReconnect } from '../transport/connection/host-client-hooks'
 import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
 import { connectionRetryAction } from '../transport/connection/connection-retry-action'
@@ -40,7 +39,7 @@ import {
   isEditableMobileTerminalArtifactPreview,
   shouldKeepDirtyDraftOnPreviewLoadResult
 } from './terminal-artifacts/mobile-file-preview-editability'
-import { filePreviewStyles as styles } from './preview/mobile-file-preview-styles'
+import { filePreviewStylesSheet } from './preview/mobile-file-preview-styles'
 import { mobileMarkdownFileLink } from './markdown/mobile-markdown-file-link'
 import { useMobileFilePreviewBack } from './preview/use-mobile-file-preview-back'
 import {
@@ -48,6 +47,7 @@ import {
   MobileFilePreviewEditDraft
 } from './terminal-artifacts/MobileFilePreviewEditDraft'
 import { dropDocumentEditDraft } from '../drafts/document-edit-draft-rows'
+import { useThemedStyles } from '../theme/themed-styles'
 
 type Props = {
   route: MobileFilePreviewRouteState
@@ -73,9 +73,9 @@ function WorkspaceFilePreviewScreen({ route }: Props) {
 }
 
 function MobileFilePreviewDocument({ route }: Props) {
+  const styles = useThemedStyles(filePreviewStylesSheet)
   const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
-  useMobileColorScheme()
   // Use the shared route handoff to keep this screen within the bundle asset budget.
   const router = useWorkspaceRouteHandoff()
   const previewParams = route.ok ? route.params : null
@@ -246,7 +246,8 @@ function MobileFilePreviewDocument({ route }: Props) {
   const title = previewParams?.name ?? displayNameFromPreviewPath(displayPath)
   const worktreeLabel = getWorktreeLabel(
     previewParams?.worktreeName,
-    previewParams?.worktreeId ?? ''
+    previewParams?.worktreeId ?? '',
+    t
   )
   const [markdownMode, setMarkdownMode] = useMarkdownPreviewMode(displayPath, lineColumn?.line)
   const isEditableTerminalArtifact =

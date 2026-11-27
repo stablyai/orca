@@ -1,7 +1,7 @@
 import { Text, View } from 'react-native'
-import { colors, radii } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { radii, type MobilePalette } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 const AVATAR_TONES = [
   'accentBlue',
@@ -11,7 +11,7 @@ const AVATAR_TONES = [
   'statusRed'
 ] as const
 
-function avatarTone(login: string): string {
+function avatarTone(login: string, colors: MobilePalette): string {
   let hash = 0
   for (const char of login) {
     hash = (hash * 31 + char.charCodeAt(0)) | 0
@@ -30,9 +30,10 @@ export function PrCommentAvatar({
   label?: string
   size?: number
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const name = login.replace(/\[bot\]$/i, '')
-  const tone = avatarTone(name)
+  const tone = avatarTone(name, colors)
   return (
     <View
       style={[styles.avatar, { width: size, height: size, backgroundColor: `${tone}33` }]}
@@ -46,7 +47,7 @@ export function PrCommentAvatar({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   avatar: { borderRadius: radii.pill, alignItems: 'center', justifyContent: 'center' },
   initials: { fontWeight: '700' }
 }))

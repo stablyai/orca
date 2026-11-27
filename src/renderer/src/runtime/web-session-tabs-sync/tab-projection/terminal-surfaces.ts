@@ -72,15 +72,22 @@ export function buildMirroredAgentTabs(
   fallbackGroupId: string,
   sortOffset: number,
   currentUnifiedTabs: readonly Tab[],
-  now: number
+  now: number,
+  options: {
+    mayAdopt?: (tab: Tab) => boolean
+    mayProject?: (tab: RuntimeMobileSessionAgentTab) => boolean
+    currentTabsById?: ReadonlyMap<string, Tab>
+  } = {}
 ): MirroredAgentTab[] {
+  const { mayAdopt = () => true, mayProject } = options
   const agentTabs = snapshot.tabs
     .filter(isAgentSessionTab)
     .filter(
       (tab) =>
+        (!mayProject || mayProject(tab)) &&
         !hasStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)
     )
-  const occupiedIds = new Set(currentUnifiedTabs.map((tab) => tab.id))
+  const occupiedIds = options.currentTabsById ?? new Set(currentUnifiedTabs.map((tab) => tab.id))
   const assignedIds = new Set<string>()
   const replacementTabs = new Map<string, Tab>()
   const replacementIds = new Set<string>()
@@ -91,13 +98,16 @@ export function buildMirroredAgentTabs(
     const existing =
       currentUnifiedTabs.find(
         (candidate) =>
-          candidate.contentType === 'agent-session' && candidate.entityId === tab.sessionId
+          candidate.contentType === 'agent-session' &&
+          candidate.entityId === tab.sessionId &&
+          mayAdopt(candidate)
       ) ??
       currentUnifiedTabs.find(
         (candidate) =>
           !replacementIds.has(candidate.id) &&
           candidate.contentType === 'agent-session' &&
-          candidate.entityId === tab.replacesSessionId
+          candidate.entityId === tab.replacesSessionId &&
+          mayAdopt(candidate)
       )
     if (existing) {
       replacementTabs.set(tab.sessionId, existing)
@@ -111,7 +121,8 @@ export function buildMirroredAgentTabs(
         (candidate) =>
           !replacementIds.has(candidate.id) &&
           candidate.contentType === 'agent-session' &&
-          candidate.entityId === tab.sessionId
+          candidate.entityId === tab.sessionId &&
+          mayAdopt(candidate)
       )
     const launch = readStructuredAgentLaunchRecord(tab.sessionId)
     const address =
@@ -124,11 +135,10 @@ export function buildMirroredAgentTabs(
     let localId = existing?.id ?? baseId
     if (!existing || assignedIds.has(localId)) {
       let suffix = 0
-      while (occupiedIds.has(localId)) {
+      while (occupiedIds.has(localId) || assignedIds.has(localId)) {
         localId = `${baseId}:history-${++suffix}`
       }
     }
-    occupiedIds.add(localId)
     assignedIds.add(localId)
     return {
       hostTabId: tab.id,

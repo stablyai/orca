@@ -57,6 +57,11 @@ const RATCHET_INPUTS = {
     'config/main-blocking-worker-entries.json',
     'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs'
   ],
+  'check-mobile-react-compiler-hazard-ratchet.mjs': [
+    'mobile/app/',
+    'mobile/src/',
+    'mobile/web-entry/'
+  ],
   'check-react-compiler-compat-ratchet.mjs': ['src/renderer/src/'],
   'check-recurring-timer-ratchet.mjs': [
     'src/main/',
@@ -75,6 +80,12 @@ const RATCHET_INPUTS = {
     'src/renderer/src/',
     'config/oxlint-plugins/app-store-performance.mjs',
     'config/oxlint-whole-hot-map-ratchet.json'
+  ],
+  'check-zod-prefer-lazy-ratchet.mjs': [
+    'src/main/',
+    'src/shared/',
+    'config/oxlint-plugins/zod-prefer-lazy-schema.mjs',
+    'config/oxlint-zod-prefer-lazy-ratchet.json'
   ],
   'check-workspace-record-read-ratchet.mjs': ['src/renderer/src/'],
   'check-worktree-id-composer-ratchet.mjs': ['src/', 'mobile/src/']
@@ -410,10 +421,12 @@ const RATCHET_SHARED_MODULES = {
     'check-main-blocking-helper-ratchet.mjs'
   ],
   'config/scripts/static-analysis/ratchets/react-compiler/react-compiler-hazards.mjs': [
+    'check-mobile-react-compiler-hazard-ratchet.mjs',
     'check-react-compiler-compat-ratchet.mjs'
   ],
   'config/react-compiler-uncompiled-files.txt': ['check-react-compiler-compat-ratchet.mjs'],
   'config/scripts/localization/reactive-translate/render-path-translate.mjs': [
+    'check-mobile-react-compiler-hazard-ratchet.mjs',
     'check-render-path-translate-ratchet.mjs'
   ]
 }

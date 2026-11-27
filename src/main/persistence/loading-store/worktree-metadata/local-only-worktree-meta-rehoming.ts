@@ -9,10 +9,8 @@ import {
   getWorktreeIdFromHostIdentity
 } from '../../../../shared/worktree/host-qualified-identity'
 import { isLocalOnlyWorktreeMetaId } from '../../../../shared/worktree/metadata/local-only-worktree-meta-ids'
-import {
-  pruneUnreferencedWorktreeIdentityMeta,
-  resolveAliasIdentityKey
-} from './worktree-identity-metadata'
+import { pruneUnreferencedWorktreeIdentityMeta } from './worktree-identity-metadata'
+import { resolveAliasIdentityKey } from './worktree-identity-alias'
 
 /** Rehome floating/setup metadata locally; prefer local/unstamped rows, then the newest remote copy. */
 export function rehomeLocalOnlyWorktreeMetadata(state: PersistedState): boolean {

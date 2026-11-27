@@ -2,14 +2,13 @@ import { MobileFileMediaPreview } from '../media/MobileFileMediaPreview'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { Text, View } from 'react-native'
 import { FileText } from 'lucide-react-native'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { MobileFilePreviewResult } from './mobile-file-preview-response'
 import { MobileFileMarkdownPreview } from '../markdown/MobileFileMarkdownPreview'
 import type { MarkdownPreviewMode } from '../markdown/MobileMarkdownPreviewModeBar'
 import { MobileFilePreviewEditableSource } from './MobileFilePreviewEditableSource'
 import { MobileFilePreviewSourceText } from './MobileFilePreviewSourceText'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { filePreviewStylesSheet } from './mobile-file-preview-styles'
 import { MobilePanZoomImage } from '../media/presentation/MobilePanZoomImage'
 import { MobileHtmlPreview } from './documents/MobileHtmlPreview'
 import { MobileSvgPreview } from './documents/MobileSvgPreview'
@@ -19,6 +18,7 @@ import {
   MobileStateView
 } from '../../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type Props = {
   preview: MobileFilePreviewResult
@@ -40,7 +40,7 @@ type Props = {
 }
 
 export function MobileFilePreviewBody({ preview, ...options }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(filePreviewStylesSheet)
   const t = useMobileTranslation()
   if (preview.status === 'loading') {
     return <MobileStateView loading title={preview.message} />

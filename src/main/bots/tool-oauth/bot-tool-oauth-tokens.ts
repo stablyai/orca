@@ -1,11 +1,5 @@
 // A sign-in's access token: refreshed silently (never a browser, never a registration), once per
 // credential at a time, and committed only over the revision it started from.
-import { refreshAuthorization } from '@modelcontextprotocol/sdk/client/auth.js'
-import {
-  InvalidClientError,
-  InvalidGrantError,
-  UnauthorizedClientError
-} from '@modelcontextprotocol/sdk/server/auth/errors.js'
 import type { OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js'
 import type { BotToolSignInStatus } from '../../../shared/bot-tool-sign-in'
 import {
@@ -83,6 +77,13 @@ async function refreshOnce(key: BotToolOAuthKey): Promise<void> {
   const issuer = record.issuer
   const fetchFn = fetchFor(entry.url, AbortSignal.timeout(TOKEN_DEADLINE_MS))
   let tokens: OAuthTokens
+  const [
+    { refreshAuthorization },
+    { InvalidClientError, InvalidGrantError, UnauthorizedClientError }
+  ] = await Promise.all([
+    import('@modelcontextprotocol/sdk/client/auth.js'),
+    import('@modelcontextprotocol/sdk/server/auth/errors.js')
+  ])
   try {
     const metadata = await issuerMetadata(issuer, fetchFn)
     if (!metadata) {

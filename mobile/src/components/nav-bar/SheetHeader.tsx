@@ -2,9 +2,9 @@ import { Fragment, isValidElement, type ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronLeft, X } from 'lucide-react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { NAV_BAR_BUTTON_SIZE, NavBarButton, NavBarButtonOnSheetContext } from './NavBarButton'
 import { useSheetPageTop } from './sheet-page-scroll'
 
@@ -45,7 +45,7 @@ export function SheetHeader({
   trailingButtons,
   titleAboveActions
 }: SheetHeaderProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   useSheetPageTop(title)
   // Sides as narrow as one round button when that's all either holds, so the title gets the room.
@@ -117,7 +117,8 @@ export function SheetHeader({
 }
 
 function TextAction({ action, emphasis }: { action: SheetTextAction; emphasis: boolean }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Pressable
       onPress={action.onPress}
@@ -142,7 +143,7 @@ function TextAction({ action, emphasis }: { action: SheetTextAction; emphasis: b
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   heading: { alignItems: 'center', paddingTop: spacing.sm, paddingHorizontal: spacing.md },
   header: {
     height: 52,

@@ -4,7 +4,7 @@ import { subscribeWindowParkVisibility } from '@/lib/window-activity/window-park
 import { isDocumentVisibilityProvenStale } from '@/components/terminal-pane/viewport/visibility/stale-document-visibility'
 
 /** How long an all-resumed report stays on its own. */
-const RESUMED_TOAST_MS = 5000
+export const RESUMED_TOAST_MS = 8000
 
 type WindowVisibility = 'visible' | 'stale-hidden' | 'hidden'
 
@@ -24,12 +24,13 @@ function canBeSeen(visibility: WindowVisibility, windowFocused: boolean): boolea
  * The report owns its timer because Sonner's stays paused while Chromium reports a focused
  * window as hidden. The countdown runs only while the report can be seen, restarts each time
  * the window regains focus, and holds while the pointer or keyboard focus is on the toast.
- * Opening Details keeps the report until it is closed.
+ * Opening Details keeps the report until it is closed, while the report still offers Details.
  */
 export function useResumeToastAutoDismiss(
   transient: boolean,
   onExpire: () => void,
-  rootRef: RefObject<HTMLElement | null>
+  rootRef: RefObject<HTMLElement | null>,
+  detailsShown = true
 ): { onDetailsOpened: () => void } {
   const [detailsOpened, setDetailsOpened] = useState(false)
   const [focusWithin, setFocusWithin] = useState(false)
@@ -38,7 +39,8 @@ export function useResumeToastAutoDismiss(
   const [focusReturns, setFocusReturns] = useState(0)
   const visibility = useSyncExternalStore(subscribeWindowParkVisibility, getWindowVisibility)
   const visible = canBeSeen(visibility, windowFocused)
-  const autoDismiss = transient && visible && !detailsOpened && !focusWithin && !pointerWithin
+  const autoDismiss =
+    transient && visible && !(detailsOpened && detailsShown) && !focusWithin && !pointerWithin
 
   useEffect(() => {
     const onFocus = (): void => {
@@ -83,6 +85,18 @@ export function useResumeToastAutoDismiss(
       boundary.removeEventListener('focusout', onFocusOut)
     }
   }, [rootRef])
+
+  // A focused button that unmounts (Retry, a row's Dismiss) leaves without a focusout.
+  useEffect(() => {
+    if (!focusWithin) {
+      return
+    }
+    const root = rootRef.current
+    const boundary = root?.closest<HTMLElement>('[data-sonner-toast]') ?? root
+    if (!boundary?.contains(document.activeElement)) {
+      setFocusWithin(false)
+    }
+  }, [focusWithin, transient, detailsShown, rootRef])
 
   // Becoming visible or regaining focus starts a fresh countdown, even if autoDismiss stayed true.
   useEffect(() => {

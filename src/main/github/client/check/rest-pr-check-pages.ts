@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
 import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { githubHostExecOptions } from '../../repositories/github-repository-host'
@@ -8,35 +9,43 @@ import type { GhExecOptions } from '../github-exec-scope'
 import { assertRateLimitBudget } from '../lookup/pr-lookup-rate-limit'
 import { isPendingApprovalSuiteWithoutRuns, PENDING_APPROVAL_ROLLUP_ROW } from './pr-check-rollup'
 
-const checkRunSchema = z.object({
-  id: z.number().optional(),
-  name: z.string().optional(),
-  status: z.string(),
-  conclusion: z.string().nullable(),
-  html_url: z.string().nullish(),
-  details_url: z.string().nullish(),
-  started_at: z.string().nullish(),
-  completed_at: z.string().nullish(),
-  check_suite: z.object({ id: z.number() }).nullish()
-})
-const commitStatusSchema = z.object({
-  context: z.string().optional(),
-  state: z.string(),
-  target_url: z.string().nullish(),
-  created_at: z.string().nullish()
-})
-const workflowRunSchema = z.object({
-  id: z.number(),
-  check_suite_id: z.number().nullish(),
-  status: z.string().nullable(),
-  conclusion: z.string().nullable()
-})
-const checkSuiteSchema = z.object({
-  id: z.number().optional(),
-  status: z.string().nullable(),
-  conclusion: z.string().nullable(),
-  app: z.object({ name: z.string().nullish(), slug: z.string().nullish() }).nullish()
-})
+const checkRunSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.number().optional(),
+    name: z.string().optional(),
+    status: z.string(),
+    conclusion: z.string().nullable(),
+    html_url: z.string().nullish(),
+    details_url: z.string().nullish(),
+    started_at: z.string().nullish(),
+    completed_at: z.string().nullish(),
+    check_suite: z.object({ id: z.number() }).nullish()
+  })
+)
+const commitStatusSchema = lazyZodSchema(() =>
+  z.object({
+    context: z.string().optional(),
+    state: z.string(),
+    target_url: z.string().nullish(),
+    created_at: z.string().nullish()
+  })
+)
+const workflowRunSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.number(),
+    check_suite_id: z.number().nullish(),
+    status: z.string().nullable(),
+    conclusion: z.string().nullable()
+  })
+)
+const checkSuiteSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.number().optional(),
+    status: z.string().nullable(),
+    conclusion: z.string().nullable(),
+    app: z.object({ name: z.string().nullish(), slug: z.string().nullish() }).nullish()
+  })
+)
 
 export type RestCheckRun = z.infer<typeof checkRunSchema>
 export type RestCommitStatus = z.infer<typeof commitStatusSchema>

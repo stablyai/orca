@@ -1,9 +1,9 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing } from '../../../theme/mobile-theme'
+import { radii, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { LIST_LEADING_INSET, LIST_ROW_PADDING } from '../../../components/list/ListGroup'
 
-export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
+export const smartWorkspaceSourceDrawerStylesSheet = themedStyleSheet((colors) => ({
   root: {
     flex: 1,
     minHeight: 0

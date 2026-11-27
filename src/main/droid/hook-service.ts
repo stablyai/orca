@@ -17,7 +17,7 @@ import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-
 import { wrapWindowsBatchHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import {
-  readHooksJsonRemote,
+  readHooksJsonRemoteWithRaw,
   writeHooksJsonRemote
 } from '../agent-hooks/installation/configuration/hooks-json-remote'
 import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
@@ -244,31 +244,63 @@ export class DroidHookService {
   // Remote installs always use POSIX scripts and paths, including from Windows clients.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const home = remoteHome.replace(/\/$/, '')
-    const remoteSettingsPath = `${home}/.factory/settings.json`
+    const remoteFactoryDir = `${home}/.factory`
+    const remoteSettingsPath = `${remoteFactoryDir}/settings.json`
     const remoteScriptPath = `${home}/.orca/agent-hooks/droid-hook.sh`
     try {
-      const hooksFile = await readDroidHooksFileRemote(sftp, `${home}/.factory`)
-      const settings = await readHooksJsonRemote(sftp, remoteSettingsPath)
-      if (!settings) {
-        return droidHookError(remoteSettingsPath, 'Could not parse remote Factory settings.json')
-      }
-
       const command = wrapPosixHookCommand(remoteScriptPath)
-      const { hooks, settingsHooks, next } = nextDroidConfigFiles(
-        { hooksFile, settingsPath: remoteSettingsPath, settings },
-        'droid-hook.sh',
-        command
-      )
       // Publish the script before config so interrupted installs cannot reference a missing file.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
-      if (hooks) {
-        await writeHooksJsonRemote(sftp, hooksFile.path, hooks)
-      }
-      if (settingsHooks) {
-        await writeHooksJsonRemote(sftp, remoteSettingsPath, next.settings)
-      }
 
-      return buildStatus(next, command, 'droid-hook.sh')
+      for (let attempt = 0; ; attempt++) {
+        const hooksFile = await readDroidHooksFileRemote(sftp, remoteFactoryDir)
+        const settingsSnapshot = await readHooksJsonRemoteWithRaw(sftp, remoteSettingsPath)
+        if (!settingsSnapshot.config) {
+          return droidHookError(remoteSettingsPath, 'Could not parse remote Factory settings.json')
+        }
+
+        const { hooks, settingsHooks, next } = nextDroidConfigFiles(
+          { hooksFile, settingsPath: remoteSettingsPath, settings: settingsSnapshot.config },
+          'droid-hook.sh',
+          command
+        )
+        // A save after the read is kept; re-read and redo the merge on the user's revision.
+        if (hooks) {
+          const wroteHooks = await writeHooksJsonRemote(sftp, hooksFile.path, hooks, {
+            computedFrom: hooksFile.raw
+          })
+          if (!wroteHooks) {
+            if (attempt === 2) {
+              return droidHookError(
+                hooksFile.path,
+                `${hooksFile.path} kept changing while Orca updated it`
+              )
+            }
+            continue
+          }
+        }
+        if (settingsHooks) {
+          const wroteSettings = await writeHooksJsonRemote(
+            sftp,
+            remoteSettingsPath,
+            next.settings,
+            {
+              computedFrom: settingsSnapshot.raw
+            }
+          )
+          if (!wroteSettings) {
+            if (attempt === 2) {
+              return droidHookError(
+                remoteSettingsPath,
+                `${remoteSettingsPath} kept changing while Orca updated it`
+              )
+            }
+            continue
+          }
+        }
+
+        return buildStatus(next, command, 'droid-hook.sh')
+      }
     } catch (err) {
       return droidHookError(remoteSettingsPath, err instanceof Error ? err.message : String(err))
     }

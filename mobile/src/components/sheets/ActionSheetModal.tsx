@@ -1,9 +1,9 @@
 import { useRef, type ReactNode } from 'react'
-import { ActivityIndicator, View, Text } from 'react-native'
+import { ActivityIndicator, Pressable, View, Text } from 'react-native'
 import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../bottom-drawer/BottomDrawer'
 import { LIST_LEADING_INSET, LIST_ROW_PADDING, ListGroup, ListRow } from '../list/ListGroup'
 
@@ -19,6 +19,10 @@ export type ActionSheetAction = {
   status?: string
   /** Marks the choice that is current, as a trailing check. */
   checked?: boolean
+  /** Opens another screen or sheet: a trailing chevron. */
+  navigates?: boolean
+  /** Actions sharing a group sit in one rounded group, the groups in order of first use. */
+  group?: string
   loading?: boolean
   skipAutoClose?: boolean
   closeBeforePress?: boolean
@@ -37,6 +41,8 @@ type Props = {
   /** Puts destructive actions in their own group below the rest. */
   groupDestructive?: boolean
   actions: ActionSheetAction[]
+  /** A centred Cancel row in its own group, for a question that must offer a way out. */
+  cancelLabel?: string
   onClose: () => void
   /** Runs once the sheet has slid away, after any closeBeforePress action. */
   onAfterClose?: () => void
@@ -61,6 +67,7 @@ type ContentProps = {
   /** Drawn between the header and the actions. */
   children?: ReactNode
   actions: ActionSheetAction[]
+  cancelLabel?: string
   onClose?: () => void
 }
 
@@ -72,16 +79,20 @@ export function ActionSheetContent({
   groupDestructive = false,
   children,
   actions,
+  cancelLabel,
   onClose
 }: ContentProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const groups = (
-    groupDestructive
-      ? [
-          { key: 'actions', actions: actions.filter((action) => !action.destructive) },
-          { key: 'destructive', actions: actions.filter((action) => action.destructive) }
-        ]
-      : [{ key: 'actions', actions }]
+    actions.some((action) => action.group !== undefined)
+      ? groupActions(actions)
+      : groupDestructive
+        ? [
+            { key: 'actions', actions: actions.filter((action) => !action.destructive) },
+            { key: 'destructive', actions: actions.filter((action) => action.destructive) }
+          ]
+        : [{ key: 'actions', actions }]
   ).filter((group) => group.actions.length > 0)
   return (
     <>
@@ -153,6 +164,7 @@ export function ActionSheetContent({
                   ) : undefined
                 }
                 selected={action.checked ? true : undefined}
+                navigates={action.navigates}
                 destructive={action.destructive}
                 disabled={action.disabled}
                 busy={action.loading}
@@ -167,8 +179,30 @@ export function ActionSheetContent({
           })}
         </ListGroup>
       ))}
+      {cancelLabel && onClose ? (
+        <ListGroup style={groups.length > 0 ? styles.laterGroup : undefined}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onClose}
+            style={({ pressed }) => [styles.cancelRow, pressed && styles.cancelPressed]}
+          >
+            <Text style={styles.cancelLabel}>{cancelLabel}</Text>
+          </Pressable>
+        </ListGroup>
+      ) : null}
     </>
   )
+}
+
+function groupActions(
+  actions: readonly ActionSheetAction[]
+): { key: string; actions: ActionSheetAction[] }[] {
+  const groups = new Map<string, ActionSheetAction[]>()
+  for (const action of actions) {
+    const key = action.group ?? ''
+    groups.set(key, [...(groups.get(key) ?? []), action])
+  }
+  return [...groups].map(([key, grouped]) => ({ key: key || 'actions', actions: grouped }))
 }
 
 export function ActionSheetModal({
@@ -179,6 +213,7 @@ export function ActionSheetModal({
   headerIcon,
   groupDestructive,
   actions,
+  cancelLabel,
   onClose,
   onAfterClose
 }: Props) {
@@ -214,13 +249,14 @@ export function ActionSheetModal({
         headerIcon={headerIcon}
         groupDestructive={groupDestructive}
         actions={sequencedActions}
+        cancelLabel={cancelLabel}
         onClose={onClose}
       />
     </BottomDrawer>
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   header: {
     paddingHorizontal: LIST_ROW_PADDING,
     paddingBottom: spacing.sm
@@ -252,5 +288,9 @@ const styles = themedStyleSheet(() => ({
   subjectText: { flex: 1, minWidth: 0, gap: 2 },
   subjectTitle: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
   subjectMessage: { fontSize: 13, color: colors.textSecondary },
-  laterGroup: { marginTop: spacing.md }
+  laterGroup: { marginTop: spacing.md },
+  // A ListRow's 48 pt and 15 pt title, centred: the row answers the sheet rather than naming a thing.
+  cancelRow: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  cancelPressed: { backgroundColor: colors.translucentFill },
+  cancelLabel: { fontSize: 15, color: colors.textPrimary }
 }))

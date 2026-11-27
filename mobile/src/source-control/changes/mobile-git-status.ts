@@ -3,9 +3,8 @@ import type {
   GitStagingArea as MobileGitStagingArea
 } from '../../../../src/shared/git/status/git-status-types'
 
-import { translate } from '../../i18n/mobile-i18n'
-import { colors } from '../../theme/mobile-theme'
-
+import type { Translate } from '../../i18n/mobile-i18n'
+import type { MobilePalette } from '../../theme/mobile-theme'
 import {
   buildSourceControlDisplaySections,
   groupSourceControlEntries,
@@ -42,20 +41,21 @@ export type MobileSourceControlSection<TEntry extends MobileGitStatusEntry = Mob
     data: TEntry[]
   }
 
-function sectionTitles(): Record<SourceControlDisplaySectionId, string> {
+function sectionTitles(t: Translate): Record<SourceControlDisplaySectionId, string> {
   return {
-    conflicts: translate('sourceControl.gitStatus.conflicts', 'Conflicts'),
-    unstaged: translate('sourceControl.gitStatus.uncommitted', 'Uncommitted'),
-    staged: translate('sourceControl.gitStatus.staged', 'Staged')
+    conflicts: t('sourceControl.gitStatus.conflicts', 'Conflicts'),
+    unstaged: t('sourceControl.gitStatus.uncommitted', 'Uncommitted'),
+    staged: t('sourceControl.gitStatus.staged', 'Staged')
   }
 }
 
 // Desktop's sections: conflicts pinned on top, then the user's group order, sorted like desktop.
 export function buildMobileSourceControlSections<TEntry extends MobileGitStatusEntry>(
   entries: readonly TEntry[],
-  groupOrder: SourceControlGroupOrder
+  groupOrder: SourceControlGroupOrder,
+  t: Translate
 ): MobileSourceControlSection<TEntry>[] {
-  const titles = sectionTitles()
+  const titles = sectionTitles(t)
   return buildSourceControlDisplaySections(
     groupSourceControlEntries(entries.filter(hasKnownArea)),
     resolveSourceControlGroupOrder(groupOrder)
@@ -132,7 +132,7 @@ export function isMobileGitTransientRefreshError(
   return code === 'request_aborted' || normalized === 'aborting' || normalized === 'request_aborted'
 }
 
-export function statusColor(status: MobileGitFileStatus): string {
+export function statusColor(status: MobileGitFileStatus, colors: MobilePalette): string {
   switch (status) {
     case 'added':
     case 'copied':

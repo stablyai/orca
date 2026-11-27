@@ -1,11 +1,7 @@
 // A sign-in to a bot's app in the user's browser: registration, PKCE and the code exchange, owned by
 // the caller that started it, spent once, and expiring.
 import { randomBytes, timingSafeEqual } from 'node:crypto'
-import {
-  exchangeAuthorization,
-  registerClient,
-  startAuthorization
-} from '@modelcontextprotocol/sdk/client/auth.js'
+import type { startAuthorization as StartAuthorizationFn } from '@modelcontextprotocol/sdk/client/auth.js'
 import type {
   AuthorizationServerMetadata,
   OAuthClientInformationMixed,
@@ -129,6 +125,8 @@ export async function beginBotToolSignIn(
     stored.redirectUri === redirectUri
       ? stored.client
       : undefined
+  const { registerClient, startAuthorization } =
+    await import('@modelcontextprotocol/sdk/client/auth.js')
   if (!client) {
     try {
       client = await registerClient(need.issuer, {
@@ -142,7 +140,7 @@ export async function beginBotToolSignIn(
   }
   const state = randomBytes(32).toString('base64url')
   const scope = requestedScope(need)
-  let started: Awaited<ReturnType<typeof startAuthorization>>
+  let started: Awaited<ReturnType<typeof StartAuthorizationFn>>
   try {
     started = await startAuthorization(need.issuer, {
       metadata: need.metadata,
@@ -216,6 +214,7 @@ function makeAttempt(
       const deadline = AbortSignal.any([controller.signal, AbortSignal.timeout(TOKEN_DEADLINE_MS)])
       let tokens: OAuthTokens
       try {
+        const { exchangeAuthorization } = await import('@modelcontextprotocol/sdk/client/auth.js')
         tokens = await exchangeAuthorization(server.issuer, {
           metadata: server.metadata,
           clientInformation: started.client,

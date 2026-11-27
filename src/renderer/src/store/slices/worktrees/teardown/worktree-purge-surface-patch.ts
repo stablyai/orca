@@ -70,6 +70,7 @@ export function buildWorktreePurgeSurfacePatch(
     manuallyUnreadTurnsByPaneKey: omitByPaneKeyTabPrefix(s.manuallyUnreadTurnsByPaneKey),
     paneForegroundAgentByPaneKey: omitByPaneKeyTabPrefix(s.paneForegroundAgentByPaneKey),
     sleepingAgentSessionsByPaneKey: sleeping.sleepingAgentSessionsByPaneKey,
+    structuredChatSleptAtByPaneKey: omitByPaneKeyTabPrefix(s.structuredChatSleptAtByPaneKey),
     ...removeTabsAttention(s, doomedTabIds),
     lastTerminalInputAtByPaneKey: omitByPaneKeyTabPrefix(s.lastTerminalInputAtByPaneKey),
     browserPagesByWorkspace: omitByBrowserWorkspaceId(s.browserPagesByWorkspace),

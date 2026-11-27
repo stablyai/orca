@@ -1,19 +1,20 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { colors, pressedStyle } from '../../../../theme/mobile-theme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../../../../theme/mobile-theme'
 import type { PrSidebarData } from '../mobile-pr-sidebar-state'
 import { isPrSidebarDetailsPlaceholder } from '../mobile-pr-sidebar-state'
 import { canEditPRTitle } from '../actions/pr-title-edit'
 import { AutoHeight } from '../../../../components/motion/AutoHeight'
 import { PrMarkdown } from '../PrMarkdown'
 import type { MobilePrTab } from '../use-mobile-pr-tab'
-import { prTabStyles as styles } from '../pr-tab-styles'
+import { prTabStylesSheet } from '../pr-tab-styles'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 // The PR tab's changes card and its collapsed description.
 export function PrChangesCard({ data, onPress }: { data: PrSidebarData; onPress?: () => void }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(prTabStylesSheet)
   const t = useMobileTranslation()
   const details = data.details && !isPrSidebarDetailsPlaceholder(data.details) ? data.details : null
   // Older hosts send no file list; a zero card would claim the PR is empty.
@@ -77,7 +78,8 @@ export function PrChangesCard({ data, onPress }: { data: PrSidebarData; onPress?
 const COLLAPSED_DESCRIPTION_HEIGHT = 84
 
 export function PrDescription({ tab, data }: { tab: MobilePrTab; data: PrSidebarData }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(prTabStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
   const [overflows, setOverflows] = useState(false)

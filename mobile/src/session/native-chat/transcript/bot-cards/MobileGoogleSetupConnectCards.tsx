@@ -10,7 +10,8 @@ import {
 import { BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../../../src/shared/bot-runtime-capabilities'
 import { useBotPanelOpener } from '../../../../bots/bot-item-open'
 import { useRouteCapability } from '../../../../worktree/execution-hosts/use-route-capability'
-import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../../../i18n/use-mobile-translation'
 import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePill'
 import { MobileBotCardActions } from './MobileBotCardFrame'
 import { googleStatusRead } from './mobile-bot-card-operations'
@@ -22,7 +23,7 @@ import {
   MobileGoogleSetupReceipt,
   type MobileGoogleSetupScope
 } from './MobileGoogleSetupCardParts'
-import { MobileGoogleSetupBlockerPanel } from './MobileGoogleSetupProgressCards'
+import { MobileGoogleSetupBlockerPanel } from './MobileGoogleSetupBlockerPanel'
 
 export function MobileGoogleSetupConnectCard({
   scope,
@@ -116,6 +117,7 @@ export function MobileGoogleSetupConnectedCard({
   scope: MobileGoogleSetupScope
 }): React.JSX.Element {
   const t = useMobileTranslation()
+  const locale = intlLocaleFor(useMobileUiLocale())
   const { run, client, fontScale } = scope
   const [ready, setReady] = useState<GoogleServiceChoice[]>(run.services ?? [])
   const account = run.account
@@ -147,7 +149,7 @@ export function MobileGoogleSetupConnectedCard({
         ready.length > 0
           ? t('chat.botCards.google.connected.canUse', '{{bot}} can use {{services}}.', {
               bot: scope.botName,
-              services: googleServicesList(t, ready)
+              services: googleServicesList(t, locale, ready)
             })
           : null
       }

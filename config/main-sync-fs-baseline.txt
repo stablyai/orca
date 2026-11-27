@@ -111,7 +111,7 @@
 36 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-harness.ts
 6 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-interference-shims.ts
 1 src/main/codex-accounts/login/codex-login-auth-snapshot.ts
-4 src/main/codex-accounts/managed-homes/codex-config-mirror.ts
+2 src/main/codex-accounts/managed-homes/codex-config-mirror.ts
 5 src/main/codex-accounts/managed-homes/codex-managed-home-lifecycle.ts
 6 src/main/codex-accounts/managed-homes/codex-managed-home-path.ts
 1 src/main/codex-accounts/managed-homes/guest-codex-account-homes.ts
@@ -251,7 +251,7 @@
 1 src/main/hang-watchdog/previous-hang-detection.ts
 9 src/main/hang-watchdog/renderer-hang-records.ts
 1 src/main/hermes/hermes-default-home.ts
-10 src/main/hermes/hermes-home-filesystem.ts
+7 src/main/hermes/hermes-home-filesystem.ts
 2 src/main/hermes/hook-service.ts
 2 src/main/host/secret-protection-report.ts
 1 src/main/ipc/app.ts
