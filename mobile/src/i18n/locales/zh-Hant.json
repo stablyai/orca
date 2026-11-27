@@ -2654,8 +2654,8 @@
       "titleLabel": "標題",
       "descriptionLabel": "描述",
       "writeWithAi": "使用 AI 撰寫",
-      "descriptionPlaceholder": "選填",
-      "draft": "建立為草稿"
+      "draft": "建立為草稿",
+      "create": "建立"
     },
     "screens": {
       "hideLog": "隱藏記錄",

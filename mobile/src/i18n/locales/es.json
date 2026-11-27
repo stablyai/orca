@@ -2437,8 +2437,8 @@
       "titleLabel": "Título",
       "descriptionLabel": "Descripción",
       "writeWithAi": "Escribir con IA",
-      "descriptionPlaceholder": "Opcional",
-      "draft": "Crear como borrador"
+      "draft": "Crear como borrador",
+      "create": "Crear"
     },
     "screens": {
       "hideLog": "Ocultar registro",

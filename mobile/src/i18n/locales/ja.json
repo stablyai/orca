@@ -2359,8 +2359,8 @@
       "titleLabel": "タイトル",
       "descriptionLabel": "説明",
       "writeWithAi": "AI で作成",
-      "descriptionPlaceholder": "任意",
-      "draft": "下書きとして作成"
+      "draft": "下書きとして作成",
+      "create": "作成"
     },
     "screens": {
       "hideLog": "ログを非表示",
