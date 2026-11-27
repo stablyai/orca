@@ -1,5 +1,5 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { ChevronDown, LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
+import { ChevronDown, LoaderCircle, Plus, RefreshCw, Search, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -59,7 +59,9 @@ export function TaskPageItsaplanFilters({
     setItsaplanSearchInput,
     setAppliedItsaplanSearch,
     itsaplanLoading,
-    refreshItsaplan
+    refreshItsaplan,
+    itsaplanProjectRef,
+    setNewItsaplanIssueOpen
   } = model
   const stateOptions = getItsaplanStateTypeOptions()
   const members = itsaplanMetadata?.members ?? []
@@ -209,6 +211,23 @@ export function TaskPageItsaplanFilters({
             </button>
           ) : null}
         </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setNewItsaplanIssueOpen(true)}
+              disabled={!itsaplanProjectRef}
+              aria-label={t('taskProviders.itsaplan.newIssue', 'New issue')}
+              className="size-8 border-border/50 bg-transparent hover:bg-muted/50"
+            >
+              <Plus className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {t('taskProviders.itsaplan.newIssue', 'New issue')}
+          </TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
