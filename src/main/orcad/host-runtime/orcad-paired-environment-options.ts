@@ -1,6 +1,10 @@
 import { createOrchestrationEnvironmentTransport } from '../../ipc/runtime-environments/requests/orchestration-environment-transport'
 import type { RuntimeConstructionDependencies } from '../../runtime/construction/runtime-construction-dependencies'
 import type { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
+import {
+  NO_SHARED_HOSTS,
+  setSharedHosts
+} from '../../../shared/remote-runtime/pairing/shared-host-keys'
 
 type PairedEnvironmentRuntimeOptions = Required<
   Pick<
@@ -16,6 +20,8 @@ export function createOrcadPairedEnvironmentOptions(): {
   bindRpc: (rpc: Pick<OrcaRuntimeRpcServer, 'getDeviceRegistry' | 'pairedDeviceTypist'>) => void
 } {
   let rpc: Pick<OrcaRuntimeRpcServer, 'getDeviceRegistry' | 'pairedDeviceTypist'> | null = null
+  // A headless host's own profile accepts no shares.
+  setSharedHosts(NO_SHARED_HOSTS)
   return {
     runtimeOptions: {
       // A headless host is a Run home too; it places workers on its own paired servers (#36853).

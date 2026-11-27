@@ -35,6 +35,7 @@ import {
   receivingBot,
   refuse,
   toOtherChat,
+  type ActingMail,
   type ActingSender,
   type ReceivingBot
 } from './bot-recipient'
@@ -63,11 +64,10 @@ export function mayReachBot(
 /** Mail that reaches a bot, by any address, is held to who the sending turn is for; null for other mail. */
 export async function sendToBot(
   context: Pick<RpcContext, 'runtime' | 'orchestrationCaller' | 'recordMutationReceipt'>,
-  mail: {
+  mail: ActingMail & {
     params: SendParamsInput
     from: string
     to: string
-    sender: OrchestrationCallerIdentity
     routing: { run: RunRow | undefined }
     /** `--chat new`: the request opens a new chat on the receiving bot. */
     newChat?: boolean
@@ -92,7 +92,7 @@ export async function sendToBot(
       'Group bot sessions accept peer requests only from current members of their own group.'
     )
   }
-  const acting = await readActingSender(runtime, db, callerSessionId, mail.sender, receiving)
+  const acting = await readActingSender(runtime, db, callerSessionId, mail, receiving)
   if (!acting) {
     return null
   }
@@ -111,7 +111,7 @@ export async function sendToBot(
   return { receipt, nudge: () => held.splice(0).forEach((nudge) => nudge()) }
 }
 
-type SendBotRequestArgs = {
+type SendBotRequestArgs = Pick<ActingMail, 'teammate'> & {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   params: SendParamsInput
@@ -152,7 +152,7 @@ async function admitBotRequestMail(
   card: ReturnType<typeof ownerChatCard>,
   asked: Pick<BotRequestRecord, 'askedInConversation'>
 ): Promise<unknown> {
-  const { runtime, db, params, receiving, acting } = args
+  const { runtime, db, params, receiving, acting, teammate } = args
   const chain = botRequestChain(db, acting.sessionId, acting.turn)
   /** Checked now and again just before storing, after every wait, against the bot as it is then. */
   const check = () => {
@@ -324,8 +324,8 @@ async function admitBotRequestMail(
     const home = receiving.chat !== null && receiving.chat === target.chatSessionId
     return admit(args.to, false, await failureHeldChat(runtime, receiving.chat, home)).receipt
   }
-  // Held through the store, so a new Chat can't retire this one between choosing it and mailing it.
-  return runtimeBotChats(runtime).withChat(target.id, 'owner', async (sessionId) => {
+  // Held through the store, so a new Chat can't retire it before mailing; a teammate's goes to their Home.
+  return runtimeBotChats(runtime).withChat(target.id, teammate ?? 'owner', async (sessionId) => {
     const held = await failureHeldChat(runtime, sessionId, true)
     return admit(sessionAddress(sessionId), false, held).receipt
   })

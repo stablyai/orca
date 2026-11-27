@@ -43,19 +43,20 @@ function dropQueuedClientItems(
 function endClientPairings(
   runtime: OrcaRuntimeService,
   environmentIds: readonly string[],
-  serverName: string,
-  reason: string,
+  /** Who is told why; null tells no one. */
+  told: { serverName: string; reason: string } | null,
   // Kept when the computer still pulls under it: only older pairings' mail is lost.
   currentPairing: string | null = null
 ): void {
   const db = runtime.getOrchestrationDb()
   for (const environmentId of environmentIds) {
-    tellUnpairedPeerQuestions(runtime, db, {
-      environmentId,
-      serverName,
-      reason,
-      ...(currentPairing ? { currentPairing } : {})
-    })
+    if (told) {
+      tellUnpairedPeerQuestions(runtime, db, {
+        environmentId,
+        ...told,
+        ...(currentPairing ? { currentPairing } : {})
+      })
+    }
     dropQueuedClientItems(db, environmentId, currentPairing)
   }
 }
@@ -88,17 +89,17 @@ export function settleReplacedClientPairing(
   endClientPairings(
     runtime,
     environmentIds,
-    params.name,
-    `The pairing with ${params.name} was re-made.`,
+    { serverName: params.name, reason: `The pairing with ${params.name} was re-made.` },
     params.currentFingerprint
   )
 }
 
 /** A paired computer's device was removed here: its askers are told, and it stops listening. A
- *  failure is logged, never thrown: the revoke itself already happened. */
+ *  share's device (`name` null) stops listening and loses what it hadn't taken, but tells no one: its
+ *  askers see what they saw before. A failure is logged, never thrown: the revoke already happened. */
 export function settleRemovedPairedClient(
   runtime: OrcaRuntimeService,
-  device: { deviceId: string; name: string }
+  device: { deviceId: string; name: string | null }
 ): void {
   try {
     settleRemovedClientDevice(runtime, device)
@@ -109,7 +110,7 @@ export function settleRemovedPairedClient(
 
 function settleRemovedClientDevice(
   runtime: OrcaRuntimeService,
-  device: { deviceId: string; name: string }
+  device: { deviceId: string; name: string | null }
 ): void {
   forgetClientAskDevice(runtime, device.deviceId)
   const db = runtime.getOrchestrationDb()
@@ -123,8 +124,12 @@ function settleRemovedClientDevice(
   endClientPairings(
     runtime,
     environmentIds,
-    device.name,
-    `${device.name} was removed from this Orca's paired computers.`
+    device.name === null
+      ? null
+      : {
+          serverName: device.name,
+          reason: `${device.name} was removed from this Orca's paired computers.`
+        }
   )
 }
 

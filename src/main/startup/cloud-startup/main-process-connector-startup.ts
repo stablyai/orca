@@ -1,4 +1,7 @@
 import { app, powerMonitor } from 'electron'
+import { SharedBotHostStore } from '../../bots/shared-with-me/shared-bot-host-store'
+import { keptSharedHostRegistry } from '../../bots/shared-with-me/shared-bot-host-key'
+import { setSharedHosts } from '../../../shared/remote-runtime/pairing/shared-host-keys'
 import { join } from 'node:path'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
 import { installConnectorHost } from '../../connector-cloud/connector-host-install'
@@ -38,6 +41,16 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
     keyStagingDir: join(userDataPath, 'google-setup-keys')
   })
   if (serve) {
+    // Its profile's kept shares, read only, so their mail is never taken for a share that ended.
+    const kept = new SharedBotHostStore(userDataPath)
+    const loaded = kept.load()
+    setSharedHosts(
+      keptSharedHostRegistry(
+        kept,
+        () => kept.list(),
+        () => loaded
+      )
+    )
     return
   }
   powerMonitor.on('resume', host.refreshLinearLogins)

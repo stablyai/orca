@@ -78,6 +78,10 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
         }
         await store.remove(device.deviceId)
         this.runtime.forgetClientNavigationState(device.deviceId)
+        if (device.scope === 'runtime') {
+          // As a removed paired computer, but its askers are told nothing new.
+          settleRemovedPairedClient(this.runtime, { deviceId: device.deviceId, name: null })
+        }
       }
       return true
     } finally {

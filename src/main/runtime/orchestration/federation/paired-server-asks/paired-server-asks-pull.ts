@@ -9,7 +9,7 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import { ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { PeerMailClientAsksPull } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { getPublishedHostDescriptor } from '../../../hosts/platform-probe/host-descriptor'
-import { peerMailPairing } from '../peer-mail/peer-mail-delivery'
+import { peerMailPairing, takesPeerMailFromHere } from '../peer-mail/peer-mail-delivery'
 import type { OrchestrationWorkerServer } from '../environment-transport'
 import {
   getAnnouncedPairing,
@@ -111,7 +111,8 @@ async function statusSupport(
   )
   const serverInstallationId = status.success ? status.data.hostDescriptor?.installationId : null
   return serverInstallationId &&
-    status.data?.capabilities?.includes(ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY)
+    status.data?.capabilities?.includes(ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY) &&
+    takesPeerMailFromHere(server, status.data.capabilities)
     ? { serverInstallationId }
     : null
 }

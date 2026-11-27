@@ -13,6 +13,7 @@ import {
 } from '../../../../shared/remote-runtime/pairing/shared-host-keys'
 import { parseRuntimeRelayEndpoint } from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
 import { SharedBotHosts } from '../../../bots/shared-with-me/shared-bot-hosts'
+import { keptSharedHostRegistry } from '../../../bots/shared-with-me/shared-bot-host-key'
 import {
   RELAY_TEST_INVITE,
   startHostOverRelay
@@ -161,7 +162,13 @@ it(
       held: [],
       phones: []
     })
-    setSharedHosts((environmentId) => hosts.sharedHost(environmentId))
+    setSharedHosts(
+      keptSharedHostRegistry(
+        hosts.store,
+        () => hosts.listed(),
+        () => hosts.ready()
+      )
+    )
     setSharedHostsOwner(hosts)
     cleanups.push(() => setSharedHostsOwner(null))
     cleanups.push(() => closeRemoteRuntimeRequestConnection(ENVIRONMENT_ID))

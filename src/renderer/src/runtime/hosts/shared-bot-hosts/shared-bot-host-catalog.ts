@@ -26,6 +26,10 @@ let hydrated = false
 // Main's first answer, which catalogs listing every host wait for (none outside a desktop window).
 let firstAnswer: Promise<void> = Promise.resolve()
 const listeners = new Set<() => void>()
+// Settles once main has said which agents are shared (a failed read never does), for readers that
+// must not take "not listed yet" for "not shared".
+let markListed = (): void => {}
+let listed = new Promise<void>((resolve) => (markListed = resolve))
 let hostsChanged: SharedBotHostsChanged = () => {}
 
 /** Called when the set of shared hosts changes (never for a link-state change alone), with the
@@ -39,6 +43,7 @@ function setState(next: SharedBotHostsState): void {
   requests = next.sharing === false ? NO_REQUESTS : (next.requests ?? NO_REQUESTS)
   sharing = next.sharing
   hydrated = true
+  markListed()
   applyHosts(before)
   for (const listener of listeners) {
     listener()
@@ -72,6 +77,7 @@ export function installSharedBotHostCatalog(
     requests = NO_REQUESTS
     sharing = null
     hydrated = false
+    listed = new Promise<void>((resolve) => (markListed = resolve))
     applyHosts(before)
     hostsChanged = () => {}
     for (const listener of listeners) {
@@ -104,6 +110,16 @@ export function sharedBotHostFor(target: RuntimeClientTarget): SharedBotHostView
   return target.kind === 'environment'
     ? (views.find((view) => view.environmentId === target.environmentId) ?? null)
     : null
+}
+
+/** Whether `environmentId` is a shared agent's host, once main has said which are: before then (or
+ *  after a failed read) it waits, never answering "not shared". A paired web window keeps none. */
+export async function isSharedBotHostOnceListed(environmentId: string): Promise<boolean> {
+  if (isPairedWebClientWindow()) {
+    return false
+  }
+  await listed
+  return sharedBotHostFor({ kind: 'environment', environmentId }) !== null
 }
 
 /** Whether `environmentId` may be a shared agent's host: one listed, or any before main has said which

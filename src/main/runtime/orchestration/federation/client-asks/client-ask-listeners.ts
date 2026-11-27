@@ -13,6 +13,8 @@ export type ClientAskListener = {
   /** The pairing fingerprint this Orca keys the computer's conversations by. */
   fingerprint: string
   session: string
+  /** A teammate's computer pulls once per agent shared with it: the agent this pull's share is of. */
+  sharedBotId?: string
 }
 
 export type ClientAskPull = { key: string; session: string }
@@ -41,7 +43,7 @@ const keyOf = (deviceId: string, installationId: string): string => `${deviceId}
 /** A pull naming a session begins; a leave ends the session and returns null. */
 export function clientAskPullStarted(
   owner: ClientAskListenerOwner,
-  caller: { deviceId: string; fingerprint: string },
+  caller: { deviceId: string; fingerprint: string; sharedBotId?: string },
   pull: z.infer<typeof PeerMailClientAsksPull>
 ): ClientAskPull | null {
   const listeners = listenersOf(owner)
@@ -82,7 +84,8 @@ export function clientAskPullStarted(
     installationId: pull.installationId,
     name: pull.name,
     fingerprint: caller.fingerprint,
-    session: pull.session
+    session: pull.session,
+    ...(caller.sharedBotId ? { sharedBotId: caller.sharedBotId } : {})
   })
   return { key, session: pull.session }
 }
@@ -129,13 +132,23 @@ export function forgetClientAskDevice(owner: ClientAskListenerOwner, deviceId: s
   }
 }
 
-/** The one listening computer a selector names; refused when none is connected or two share it. */
+/** The one listening computer a selector names for the asking agent; refused when none is connected
+ *  or two share it. A teammate's computer listens once per agent shared with it, and each of those
+ *  pulls carries only its own agent's asks: on that computer preferred for that agent, never for
+ *  any other. */
 export function requireListeningClient(
   owner: ClientAskListenerOwner,
   selector: string,
-  nothingDone: string
+  nothingDone: string,
+  askingBotId: string | null
 ): ClientAskListener {
-  const listening = listeningClients(owner, selector)
+  const reachable = listeningClients(owner, selector).filter(
+    (listener) => listener.sharedBotId === undefined || listener.sharedBotId === askingBotId
+  )
+  // Only one computer's own pairing and share are told apart; two computers stay ambiguous.
+  const oneComputer = new Set(reachable.map((listener) => listener.installationId)).size === 1
+  const ownShare = reachable.filter((listener) => listener.sharedBotId !== undefined)
+  const listening = oneComputer && ownShare.length === 1 ? ownShare : reachable
   if (listening.length > 1) {
     throw new OrchestrationError(
       'invalid_argument',

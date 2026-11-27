@@ -1,7 +1,10 @@
 // A kept share as the paired path reaches its host (shared-host-keys.ts): its device key signs in,
 // and its entry keeps the Relay invite and resume credential.
 import nacl from 'tweetnacl'
-import type { SharedHost } from '../../../shared/remote-runtime/pairing/shared-host-keys'
+import type {
+  SharedHost,
+  SharedHostRegistry
+} from '../../../shared/remote-runtime/pairing/shared-host-keys'
 import type { SharedBotHostEntry, SharedBotHostStore } from './shared-bot-host-store'
 import { nextPairingStep } from './shared-bot-pairing'
 
@@ -49,4 +52,21 @@ export function hasRelayCredential(entry: SharedBotHostEntry | undefined, now: n
     (entry.pendingResume !== undefined ||
       nextPairingStep(entry, { hostOnline: false }, now).kind === 'connect')
   )
+}
+
+/** The kept shares as the paired path reads them: those `listed` still, once `ready` loaded them. */
+export function keptSharedHostRegistry(
+  store: SharedBotHostStore,
+  listed: () => readonly SharedBotHostEntry[],
+  ready: () => Promise<void>
+): SharedHostRegistry {
+  return {
+    host: (environmentId) => {
+      const entry = store.list().find((kept) => kept.environmentId === environmentId)
+      return entry ? sharedHostOfEntry(store, entry) : null
+    },
+    // Those whose host has made its offer, as `host` answers them.
+    environmentIds: () => listed().flatMap((entry) => (entry.offer ? [entry.environmentId] : [])),
+    ready
+  }
 }

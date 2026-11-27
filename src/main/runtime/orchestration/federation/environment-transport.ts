@@ -13,6 +13,8 @@ export type OrchestrationWorkerServer = {
   peerFingerprint: string
   homePeerFingerprint?: string
   pairingRevision?: number
+  /** The host of an agent shared with this computer, reached over its share as a paired server. */
+  sharedHost?: true
 }
 
 /** Callers that already proved the contract, or that pin the pairing generation they resolved against. */
@@ -32,7 +34,7 @@ export type OrchestrationEnvironmentSendOptions = {
 
 export type OrchestrationEnvironmentTransport = {
   resolve(selector: string): OrchestrationWorkerServer | Promise<OrchestrationWorkerServer>
-  /** Every server paired to this host, by id and name. */
+  /** Every server paired to this host, and every shared agent's host, by id and name. */
   list?(): Promise<readonly { environmentId: string; name: string }[]>
   /** False once the server is removed from this host, so its relays stop instead of retrying forever. */
   hasEnvironment?(environmentId: string): boolean | Promise<boolean>
@@ -55,9 +57,18 @@ export function fingerprintOrchestrationPeer(publicKeyB64: string): string {
 
 /** How a home names a paired runtime and itself; the runtime derives the same pair from its own
  *  pairing key and from the home's credential when it authenticates the home's socket. */
-export function pairedOrchestrationPeers(hostPublicKeyB64: string, deviceToken: string) {
+export function pairedOrchestrationPeers(
+  hostPublicKeyB64: string,
+  deviceToken: string,
+  { share = false }: { share?: boolean } = {}
+) {
+  const host = fingerprintOrchestrationPeer(hostPublicKeyB64)
+  const homePeerFingerprint = fingerprintAuthenticatedPairingCredential(deviceToken)
   return {
-    peerFingerprint: fingerprintOrchestrationPeer(hostPublicKeyB64),
-    homePeerFingerprint: fingerprintAuthenticatedPairingCredential(deviceToken)
+    // A share is a pairing of its own: two agents shared from one computer are two servers here.
+    peerFingerprint: share
+      ? createHash('sha256').update(`${host}\0${homePeerFingerprint}`).digest('base64url')
+      : host,
+    homePeerFingerprint
   }
 }

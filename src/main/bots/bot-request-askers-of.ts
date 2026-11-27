@@ -19,6 +19,21 @@ export function requestAskersOf(
     : turn.askers
 }
 
+/** The turn, also acting for whom a paired computer's sending turn acted for. They join its own
+ *  askers, never replace them, and a mixed list is held to its least trusted: never wider. */
+export function withCarriedAskers<T extends Pick<BotActingTurn, 'askers' | 'askedBy'>>(
+  turn: T,
+  carried: readonly BotRequestAsker[] = []
+): T {
+  return carried.length === 0
+    ? turn
+    : {
+        ...turn,
+        askers: distinctAskers([...turn.askers, ...carried]),
+        askedBy: distinctAskers([...turn.askedBy, ...carried])
+      }
+}
+
 /** Who asked a turn bot requests opened (`records`, as Orca keeps them): who each request records,
  *  the owner when they typed in the turn themselves, and someone Orca can't name for a paired
  *  device it can't place as the owner. A status asks for no work, so beside anyone who typed in the

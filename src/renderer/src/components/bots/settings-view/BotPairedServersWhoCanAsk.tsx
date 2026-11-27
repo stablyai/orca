@@ -19,11 +19,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import { callBotRpc } from '@/lib/bot-hosts'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import { readBotHostIds, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import type { Bot } from '../../../../../shared/bot-types'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { botMentionServer } from '../bot-mention-server'
+import { serverAsksAgentsHere } from '../paired-server-asks-on'
 import { useBotHostLabels } from '../use-bot-host-label'
 
 const Allowances = z.object({
@@ -68,7 +67,7 @@ function useAskingServers(): string[] {
     let live = true
     void Promise.all(
       ids.map((id) =>
-        runtimeEnvironmentSupportsCapability(id, ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY)
+        serverAsksAgentsHere(id)
           .then((supported) => (supported ? id : null))
           .catch(() => null)
       )

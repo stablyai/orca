@@ -8,6 +8,7 @@ import { subscribeRuntimeRpc } from '../../rpc/subscriptions/runtime-rpc-subscri
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../rpc/testing/runtime-compatibility-test-fixture'
 import {
   installSharedBotHostCatalog,
+  isSharedBotHostOnceListed,
   readSharedBotHosts,
   readTeamSharingOffered
 } from './shared-bot-host-catalog'
@@ -331,4 +332,25 @@ it('drops an ended share’s repos where the share ends, and republishes the cat
   // The share ends: its host's repos go, so nothing of it reaches Projects or settings.
   push({ hosts: [], sharing: true })
   expect(useAppStore.getState().repos).toEqual([])
+})
+
+describe('whether a host is a shared agent’s, once main has listed them', () => {
+  it('waits for main’s answer, and never takes a failed read for "not shared"', async () => {
+    uninstall()
+    let fail: (error: Error) => void = () => {}
+    window.api.sharedBotHosts.list = () =>
+      new Promise<SharedBotHostsState>((_resolve, reject) => (fail = reject))
+    uninstall = installSharedBotHostCatalog()
+    let answer: boolean | undefined
+    void isSharedBotHostOnceListed(HOST.environmentId).then((shared) => (answer = shared))
+
+    fail(new Error('main is busy'))
+    // A zero-delay yield: an answer read from no list would have settled by now.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(answer).toBeUndefined()
+
+    changed({ hosts: [HOST], sharing: true })
+    await vi.waitFor(() => expect(answer).toBe(true))
+    await expect(isSharedBotHostOnceListed('paired-env')).resolves.toBe(false)
+  })
 })

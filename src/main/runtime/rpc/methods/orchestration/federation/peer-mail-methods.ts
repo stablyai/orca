@@ -6,6 +6,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import type { FederationRelayItemRow } from '../../../../orchestration/db/orchestration-records'
 import { withDeliveryHoldWarning } from '../messaging/send-delivery-hold'
 import { deliverPeerMailToBot } from './peer-mail-bot-delivery'
+import { workspaceTeammateOf } from '../../../../../bots/team-share/agent-workspace-tracker'
 import { storePeerMailForAgent } from './peer-mail-agent-store'
 import { peerMailSenderSnapshot } from '../../../../orchestration/federation/peer-mail/peer-mail-sender-snapshot'
 import { waitForPeerMail } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
@@ -28,7 +29,8 @@ const NOTHING_DELIVERED = { effectsApplied: false } as const
 const MAX_PULL_WAIT_MS = 25_000
 const PULL_PAGE_SIZE = 50
 
-/** Mail between servers comes only from a paired computer's Orca, never a phone or this Orca's own clients. */
+/** Mail between servers comes only from a paired computer's Orca or a teammate's (over a share's
+ *  device, admitted by teammate-method-classes.json), never a phone or this Orca's own clients. */
 export function requireRuntimePairing(
   ctx: Pick<RpcContext, 'clientKind' | 'pairedDeviceId' | 'authenticatedCallerFingerprint'>
 ): string {
@@ -143,7 +145,13 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
         return replayed
       }
       const senderSnapshot = peerMailSenderSnapshot(params.senderLabel, params.sender)
-      const routed = await deliverPeerMailToBot(runtime, params, peerFingerprint, senderSnapshot)
+      const routed = await deliverPeerMailToBot(
+        runtime,
+        params,
+        peerFingerprint,
+        senderSnapshot,
+        workspaceTeammateOf(ctx)
+      )
       if (routed === 'delivered') {
         return { message: { id: params.messageId, to: params.to } }
       }
@@ -182,7 +190,11 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
         asks && ctx.pairedDeviceId
           ? clientAskPullStarted(
               ctx.runtime,
-              { deviceId: ctx.pairedDeviceId, fingerprint: peerFingerprint },
+              {
+                deviceId: ctx.pairedDeviceId,
+                fingerprint: peerFingerprint,
+                sharedBotId: workspaceTeammateOf(ctx)?.botId
+              },
               asks
             )
           : null
