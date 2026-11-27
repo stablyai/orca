@@ -2051,12 +2051,14 @@ html.native-shell .app-layout {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 18%, transparent);
 }
 
-/* Family paint owns the surface in both themes, including secondary occurrences. */
+/* Family paint owns the surface in both themes, including secondary occurrences. It snaps clear
+   because the family box has no fade, so a fading hover wash would stack on it after a click. */
 .worktree-sidebar-family-root [data-worktree-card-surface][data-worktree-card-active],
 .dark .worktree-sidebar-family-root [data-worktree-card-surface][data-worktree-card-active] {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
+  transition-property: opacity;
 }
 
 /* Lineage connectors: quiet enough to sit behind cards, strong enough to read the tree at a glance. */
@@ -2082,9 +2084,10 @@ html.native-shell .app-layout {
   --worktree-lineage-title-center: 19px;
 }
 
-/* Continuous segments must not cast a horizontal shadow at every virtual boundary. */
-[data-worktree-family-segment],
-.dark [data-worktree-family-segment] {
+/* Continuous segments must not cast a horizontal shadow at every virtual boundary.
+   A closed family is one segment covering one card, so it keeps the card's shadow. */
+[data-worktree-family-segment]:not([data-worktree-family-closed]),
+.dark [data-worktree-family-segment]:not([data-worktree-family-closed]) {
   box-shadow: none;
 }
 
