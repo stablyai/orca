@@ -2247,13 +2247,13 @@
       "showFor": "选择要显示自动化的桌面",
       "toggleFailed": "无法更新 {{name}}",
       "updateDesktop": "请更新 {{desktop}} 上的 Orca，以使用自动化",
-      "pairComputer": "请先配对桌面，才能查看和运行自动化。"
+      "pairComputer": "请先配对一台电脑，才能查看和运行自动化"
     },
     "listFooter": {
       "openTasksOn": "选择打开任务的主机"
     },
     "listHeader": {
-      "computersHeading": "台式机"
+      "computersHeading": "电脑"
     },
     "screen": {
       "pairingCheckFailed": "无法检查配对状态",
@@ -2261,7 +2261,7 @@
       "removeComputerFailed": "无法移除主机",
       "removeComputerTitle": "移除主机",
       "removeComputerMessage": "要移除“{{name}}”吗？之后可重新配对",
-      "sameNetworkOnly": "仅能在同一 Wi-Fi 或 Tailscale 下连接。如需随时随地连接，请在桌面端登录并重新配对"
+      "sameNetworkOnly": "仅能在同一 Wi-Fi 或 Tailscale 下连接。如需随时随地连接，请在电脑上登录 Orca 并重新配对"
     },
     "bottomBar": {
       "newWorkspace": "新建工作区"
@@ -2284,7 +2284,7 @@
       "usage": "使用情况",
       "agents": "智能体",
       "bots": "Bots",
-      "chooseComputer": "{{desktop}}，选择其他桌面"
+      "chooseComputer": "{{desktop}}，选择其他电脑"
     },
     "usage": {
       "active": "使用中",
@@ -2294,9 +2294,9 @@
       "showUsageFor": "选择要显示使用情况的桌面",
       "updatedAgo": "{{time}}前更新",
       "updatedJustNow": "刚刚更新",
-      "pairComputer": "请先配对桌面，才能查看智能体账户使用情况。",
-      "addAccountsOnComputer": "请在桌面的“设置 → 账户”中添加账户。",
-      "openComputerAccountsHint": "打开此桌面的账户"
+      "pairComputer": "请先配对一台电脑，才能查看智能体账户使用情况",
+      "addAccountsOnComputer": "请在电脑上 Orca 的“设置 → 账户”中添加账户",
+      "openComputerAccountsHint": "打开此电脑的账户"
     },
     "activeAgents": {
       "heading": "活跃",
@@ -2322,10 +2322,10 @@
         "items_one": "事项",
         "items_other": "{{count}} 个事项"
       },
-      "pairComputer": "配对一台桌面端，即可在这里查看它的 bots"
+      "pairComputer": "配对一台电脑，即可在这里查看它的 bots"
     },
     "computers": {
-      "pairComputer": "配对桌面"
+      "pairComputer": "配对电脑"
     }
   },
   "hooks": {
@@ -6646,7 +6646,7 @@
       },
       "wait": {
         "placeholder": "等待",
-        "offlineSave": "{{host}} 已离线。你输入的内容会保留，恢复连接后即可保存。",
+        "offlineSave": "{{host}} 已离线。你输入的内容会保留，恢复连接后即可保存",
         "count": "{{count}} 项"
       },
       "group": {
@@ -8211,9 +8211,9 @@
       "unread": "未读",
       "hideWorkers": "隐藏 {{workers}}",
       "showWorkers": "显示 {{workers}}",
-      "pairComputer": "配对桌面后，即可在这里查看它的智能体",
-      "noComputerTitle": "未连接桌面",
-      "noComputerBody": "连接桌面后，智能体会显示在这里"
+      "pairComputer": "配对电脑后，即可在这里查看它的智能体",
+      "noComputerTitle": "未连接电脑",
+      "noComputerBody": "连接电脑后，智能体会显示在这里"
     },
     "actions": {
       "offlineHint": "它所在的桌面已离线",
@@ -8231,7 +8231,7 @@
       "workspace": "工作区",
       "project": "项目",
       "agent": "智能体",
-      "computer": "桌面"
+      "computer": "电脑"
     },
     "options": {
       "groupBy": "分组依据",
@@ -8270,7 +8270,7 @@
       "reset": "重置",
       "done": "完成",
       "computer": "电脑",
-      "allComputers": "所有桌面",
+      "allComputers": "所有电脑",
       "show": "显示",
       "workers": "工作者"
     }
