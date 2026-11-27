@@ -273,13 +273,14 @@ it('shares the tab walk on a fresh array and releases the receipt and fallback a
   const marks = load({ manuallyUnreadTurnsByPaneKey: { [OLD]: 70 } })
   const unmatchedTab = { ...CHAT_TAB, id: 'another-tab', sessionId: 'another-session' }
   let rowsRead = 0
-  const tabs = new Proxy([unmatchedTab], {
-    get: (target, key: PropertyKey) => {
-      if (key === '0') {
-        rowsRead += 1
-      }
-      return target[key as keyof typeof target]
-    }
+  const tabs = [unmatchedTab]
+  Object.defineProperty(tabs, 0, {
+    get: () => {
+      rowsRead += 1
+      return unmatchedTab
+    },
+    enumerable: true,
+    configurable: true
   })
   marks.frame('w1', tabs)
   expect(rowsRead).toBe(1)
@@ -288,13 +289,15 @@ it('shares the tab walk on a fresh array and releases the receipt and fallback a
   marks.frame('w2', [], true, true)
   marks.census('w1', 'w2')
   let streamRowsRead = 0
-  const updatedTabs = new Proxy([{ ...unmatchedTab, title: 'Updated title' }], {
-    get: (target, key: PropertyKey) => {
-      if (key === '0' || key === '1') {
-        streamRowsRead += 1
-      }
-      return target[key as keyof typeof target]
-    }
+  const updatedTab = { ...unmatchedTab, title: 'Updated title' }
+  const updatedTabs = [updatedTab]
+  Object.defineProperty(updatedTabs, 0, {
+    get: () => {
+      streamRowsRead += 1
+      return updatedTab
+    },
+    enumerable: true,
+    configurable: true
   })
   const snapshot: RuntimeMobileSessionTabsResult = {
     worktree: 'w1',
