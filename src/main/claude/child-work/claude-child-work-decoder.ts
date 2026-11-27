@@ -105,10 +105,6 @@ export class ClaudeChildWorkDecoder {
   observeWaiting(waiting: ReadonlySet<string>): void {
     const previous = this.waiting
     this.waiting = waiting
-    // Checked on every frame; usually nothing waits before or after.
-    if (previous.size === 0 && waiting.size === 0) {
-      return
-    }
     for (const id of new Set([...previous, ...waiting])) {
       const task = this.live.get(id)
       if (task && previous.has(id) !== waiting.has(id)) {

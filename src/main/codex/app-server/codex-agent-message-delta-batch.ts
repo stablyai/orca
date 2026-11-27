@@ -1,3 +1,6 @@
+import type { NdjsonRejectedRecord } from '../../../shared/json-stream/main-process-ndjson-framer'
+import { isProviderRecord } from '../../provider-process/provider-json-record'
+
 const AGENT_MESSAGE_DELTA_METHOD = 'item/agentMessage/delta'
 
 type DeltaParams = { threadId: string; turnId: string; itemId: string; delta: string }
@@ -14,10 +17,10 @@ function deltaParams(message: Record<string, unknown>): DeltaParams | null {
     return null
   }
   const params = message.params
-  if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+  if (!isProviderRecord(params)) {
     return null
   }
-  const { threadId, turnId, itemId, delta, ...rest } = params as Record<string, unknown>
+  const { threadId, turnId, itemId, delta, ...rest } = params
   // Unknown fields can't be merged safely, so such a delta passes through alone.
   return typeof threadId === 'string' &&
     typeof turnId === 'string' &&
@@ -47,7 +50,9 @@ export function createCodexAgentMessageDeltaBatch(
     }
     const { message, params, parts } = held
     held = null
-    dispatch(parts.length === 1 ? message : { ...message, params: { ...params, delta: parts.join('') } })
+    dispatch(
+      parts.length === 1 ? message : { ...message, params: { ...params, delta: parts.join('') } }
+    )
   }
 
   return {
@@ -83,5 +88,46 @@ export function createCodexAgentMessageDeltaBatch(
       }
     },
     flush
+  }
+}
+
+/** The connection's record-reader callbacks: every record, rejection and failure first hands on
+ *  a held delta, so nothing overtakes it. */
+export function batchedCodexRecordCallbacks(input: {
+  dispatch: (message: Record<string, unknown>) => void
+  rejectOversized: (rejected: NdjsonRejectedRecord & { kind: 'line-too-long' }) => void
+  onUnhandledFrame: (kind: 'frame:invalid-json', line: string) => void
+  onFatal: (error: Error) => void
+}): {
+  onRecord: (record: unknown, line: string) => void
+  onRejected: (rejected: NdjsonRejectedRecord) => void
+  onFatal: (error: Error) => void
+} {
+  const deltas = createCodexAgentMessageDeltaBatch(input.dispatch, input.onFatal)
+  return {
+    onRecord: (record, line) => {
+      if (isProviderRecord(record)) {
+        deltas.dispatch(record)
+        return
+      }
+      deltas.flush()
+      input.onUnhandledFrame('frame:invalid-json', line)
+    },
+    onRejected: (rejected) => {
+      deltas.flush()
+      if (rejected.kind === 'invalid-json') {
+        input.onUnhandledFrame('frame:invalid-json', rejected.line)
+      } else {
+        input.rejectOversized(rejected)
+      }
+    },
+    onFatal: (error) => {
+      try {
+        deltas.flush()
+      } catch {
+        // The reader is failing already; its own error is the one reported.
+      }
+      input.onFatal(error)
+    }
   }
 }
