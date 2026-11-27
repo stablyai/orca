@@ -112,7 +112,10 @@ struct ApproveOrcaPromptIntent: AppIntent {
 
   func perform() async throws -> some IntentResult & ProvidesDialog {
     let prompts = try await SiriBridgeClient.shared.overview().prompts
-    guard let prompt = prompts.first, let option = SiriSpeech.approveOption(prompt) else {
+    // A prompt with no plain Yes (a text question) mustn't hide a later one that can be approved.
+    guard let prompt = prompts.first(where: { SiriSpeech.approveOption($0) != nil }),
+      let option = SiriSpeech.approveOption(prompt)
+    else {
       return .result(dialog: "Nothing is waiting for approval.")
     }
     // Say what will run before it runs; "no" cancels.

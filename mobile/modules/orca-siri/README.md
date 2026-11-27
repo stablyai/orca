@@ -48,6 +48,9 @@ Siri / CarPlay ─> App Intent (Swift, app target) ─HTTPS + Siri token─> wat
   - Each agent has `id` (its pane key), `name`, `workspace`, `agentType`, `state`, `needsApproval`, `task` and `lastMessage`.
   - `task` and `lastMessage` are cleaned of markdown so they can be spoken.
 - `POST /siri/v1/answer` with `{ promptId, decision: "option", optionId }` or `{ promptId, decision: "text", text }`.
+  - The Siri token may only pick an option labelled exactly "Yes" or starting with "No"; anything else returns 403. The Watch token may pick any option, because the Watch asks for a second tap first.
+  - The terminal is re-read just before the key is typed, and the dialog must match the one that was listed (409 if not).
+  - `{ confirmed: false }` means the key went in but the prompt hadn't left within about 3 s. It isn't an error.
 - The first `detail` line of each prompt is a short spoken action: a file name not a path, a host not a URL, the first command of a chain ("Bash: git branch --unset-upstream, and 2 more"). The Watch endpoint still gets the full detail.
 - Folder workspaces (`folder:<uuid>`) get an empty `workspace`, so Siri never reads out an ID.
 - `POST /siri/v1/message` with `{ agentId, text }`.
@@ -59,12 +62,13 @@ Siri / CarPlay ─> App Intent (Swift, app target) ─HTTPS + Siri token─> wat
   - The Siri token can use prompts, answer, agents and message.
   - Calling outside your scope returns 403.
 - **Rate limit:** each token gets 20 writes per minute. Over the limit returns 429.
+- **Deadlines:** a write that can't start within 7 s of a Siri request (15 s for the Watch) returns 504 and types nothing, so an answer never lands after the phone or Watch already gave up.
 
 ## Setup
 
 1. **Install the new bridge on the Mac.** `launchd` runs a copy, so copy the new script over and restart the service:
    ```bash
-   cp modules/orca-watch-action-spike/watch-bridge/watch-bridge.mjs ~/.orca/watch-bridge/
+   cp modules/orca-watch-action-spike/watch-bridge/*.mjs ~/.orca/watch-bridge/
    launchctl kickstart -k gui/$(id -u)/com.cjna.orca-watch-bridge
    ```
    The Siri token is created on first start at `~/.orca/siri-bridge-token`.
@@ -118,4 +122,6 @@ Siri / CarPlay ─> App Intent (Swift, app target) ─HTTPS + Siri token─> wat
 - [ ] Rename the Message and Tell phrases so they don't collide with Messages.
 - [ ] Call `OrcaAppShortcuts.updateAppShortcutParameters()` after each overview, so "What is {agent} doing" matches agent names.
 - [ ] Native chat (agent-session) tabs are not covered: only terminal agents are. Prompts still come from reading Claude's dialog off the terminal screen.
+- [ ] The key that answers a prompt isn't conditional on the dialog: if the dialog changes between the bridge's last read and the key, the key lands on the new dialog. Closing that needs a conditional send in the runtime (`orca terminal send` has no prompt identity). Until then the window is one terminal read.
+- [ ] Switching `ORCA_SIRI` off needs a fresh `ios/` (`npx expo prebuild --platform ios --clean`). `expo run:ios` reuses an existing `ios/` without running config plugins, and the plugin refuses to prebuild into an `ios/` that still has the intents.
 - [ ] Next: a CarPlay voice-based conversational app (`com.apple.developer.carplay-voice-based-conversation`, iOS 26.4+, `CPVoiceControlTemplate`).

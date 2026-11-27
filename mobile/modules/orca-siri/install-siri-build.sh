@@ -33,17 +33,26 @@ if [ -z "$DEVICE" ]; then
 fi
 echo "iPhone $DEVICE, bundle id $BUNDLE_ID"
 
+BUILD_MARK=""
 if [ "$BUILD" = 1 ]; then
   cd "$MOBILE_DIR"
   export ORCA_SIRI=1 ORCA_WATCH_SPIKE="${ORCA_WATCH_SPIKE:-1}" ORCA_IOS_BUNDLE_ID="$BUNDLE_ID" CI=1
   [ "$CLEAN" = 1 ] && npx expo prebuild --platform ios --clean
-  # Builds and usually installs too; a locked phone only fails the launch, which the install below covers.
+  BUILD_MARK="$(mktemp)"
+  trap 'rm -f "$BUILD_MARK"' EXIT
+  # Also installs; on a locked phone only the launch fails, so the exit code alone can't tell a failed build.
   npx expo run:ios --device "$DEVICE" --configuration Release --no-bundler || true
 fi
 
+# ls -t picks the newest DerivedData build when several exist.
+# shellcheck disable=SC2012
 APP="$(ls -td "$HOME"/Library/Developer/Xcode/DerivedData/Orca-*/Build/Products/Release-iphoneos/Orca.app 2>/dev/null | head -1)"
 if [ -z "$APP" ]; then
   echo "No Release build found. Run with --build." >&2
+  exit 1
+fi
+if [ -n "$BUILD_MARK" ] && [ -z "$(find "$APP" -newer "$BUILD_MARK" -print -quit)" ]; then
+  echo "The build failed, so the older app at $APP was not installed. See the Xcode errors above." >&2
   exit 1
 fi
 built_id="$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")"

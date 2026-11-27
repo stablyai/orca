@@ -39,6 +39,22 @@ function withSiriBuildFiles(config) {
   })
 }
 
-module.exports = function withIosSiriAppIntents(config) {
-  return withSiriBuildFiles(withSiriSources(config))
+// Expo has no helper to remove a source file from the Xcode project, so switching ORCA_SIRI off needs a
+// clean prebuild. Fail loudly instead of building an app that still registers the intents.
+function withoutStaleSiriSources(config) {
+  return withXcodeProject(config, (cfg) => {
+    const { projectName } = cfg.modRequest
+    const stale = FILES.filter((file) => cfg.modResults.hasFile(`${projectName}/${file}`))
+    if (stale.length > 0) {
+      throw new Error(
+        `ios/ was generated with ORCA_SIRI=1 and still compiles ${stale.join(', ')}. ` +
+          'Run `npx expo prebuild --platform ios --clean` to build without Siri.'
+      )
+    }
+    return cfg
+  })
+}
+
+module.exports = function withIosSiriAppIntents(config, { enabled } = { enabled: true }) {
+  return enabled ? withSiriBuildFiles(withSiriSources(config)) : withoutStaleSiriSources(config)
 }

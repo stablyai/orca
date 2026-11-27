@@ -2,12 +2,11 @@ import Foundation
 
 /// The sentences Siri speaks. Kept short and free of markup: in CarPlay they're heard, not read.
 public enum SiriSpeech {
-  /// The plain "Yes". Never a "Yes, and …" option: those change Claude's mode for the whole session,
-  /// which the Watch app also guards behind a second tap.
+  /// Exactly "Yes". Any longer "Yes, …" option can change Claude's mode for the whole session (the
+  /// Watch app guards those behind a second tap; the bridge refuses them from the Siri token).
   public static func approveOption(_ prompt: SiriPrompt) -> SiriPromptOption? {
-    prompt.options.first { option in
-      let label = option.label.lowercased()
-      return label.hasPrefix("yes") && !label.hasPrefix("yes, and")
+    prompt.options.first {
+      $0.label.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare("yes") == .orderedSame
     }
   }
 
@@ -37,10 +36,10 @@ public enum SiriSpeech {
       waiting == 0
       ? "Nothing is waiting."
       : "\(waiting) \(waiting == 1 ? "prompt is" : "prompts are") waiting for you."
-    let counts = ["working", "waiting", "done"].compactMap { state -> String? in
+    let counts = ["working", "waiting", "blocked", "done"].compactMap { state -> String? in
       let count = overview.agents.filter { $0.state == state }.count
       guard count > 0 else { return nil }
-      return "\(count) \(state == "done" ? "done" : state)"
+      return "\(count) \(state)"
     }
     guard !counts.isEmpty else { return "\(head) No agents are running." }
     let total = overview.agents.count

@@ -34,6 +34,7 @@ module.exports = ({ config }) => ({
           ]
         : plugin
     ),
-    ...(process.env.ORCA_SIRI === '1' ? ['./plugins/ios-siri-app-intents.js'] : [])
+    // Runs on every prebuild so an ios/ folder generated with ORCA_SIRI=1 can't silently keep the intents.
+    ['./plugins/ios-siri-app-intents.js', { enabled: process.env.ORCA_SIRI === '1' }]
   ]
 })
