@@ -44,7 +44,7 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       ...BOT_NOTES,
       "What each is for is the first paragraph of its SOUL.md. `orca orchestration send --to bot:<name>` mails that bot's Chat.",
-      'It also lists the bots on paired servers this computer reaches with `--on <server>`. On a paired server, it lists each computer paired to it that is connected now, with its `--on-client` address and the bots that computer lets this Orca ask, by name and address only (what each is for stays on that computer).'
+      'It also lists the bots on paired servers this computer reaches with `--on <server>`. On a paired server, it lists each computer paired to it that is connected now and whose `--on-client` address picks it out alone (one with a malformed or ambiguous id is left out, so a missing one may still be connected), with its `--on-client` address and the bots that computer lets this Orca ask, by name and address only (what each is for stays on that computer).'
     ]
   },
   {
