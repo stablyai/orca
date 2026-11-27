@@ -59,8 +59,6 @@
 1 src/renderer/src/components/browser-pane/assemble-chrome/toolbar/use-browser-chrome-tool-fold.ts
 1 src/renderer/src/components/browser-pane/devtools-dock/BrowserDevToolsDock.tsx
 1 src/renderer/src/components/browser-pane/host-guest/use-browser-page-webview-lifecycle.ts
-7 src/renderer/src/components/browser-pane/page-prompts/browser-extension-install-dialog.tsx
-2 src/renderer/src/components/browser-pane/page-prompts/browser-webauthn-account-dialog.tsx
 2 src/renderer/src/components/browser-pane/passwords/BrowserPasswordFillDropdown.tsx
 4 src/renderer/src/components/browser-pane/stream-remote/use-remote-browser-page-lifecycle.ts
 3 src/renderer/src/components/browser-pane/workspace-doc/doc-preview-directory-access.tsx
