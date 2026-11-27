@@ -10,7 +10,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import type { Worktree } from '../../../../shared/worktree/types'
 import { isActiveSidebarWorkspace } from '../../../../shared/sidebar-list/selection/active-workspace'
 import { getWorktreeLineageGroupKey } from '../../../../shared/sidebar-list/sections/group-keys'
-import { getActiveSidebarWorkspaceId } from '../../../../shared/workspace/identity/workspace-scope'
+import { selectHighlightedSidebarWorkspaceId } from '@/components/sidebar/highlighted-sidebar-workspace'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { botWorkerLineRowKey } from '../../../../shared/sidebar-list/sidebar-reveal-target'
 import { botLineLanes, lanesNeedingYouFirst } from '../../../../shared/bots/bot-line-lanes'
@@ -43,12 +43,7 @@ export function AttachedWorktreeCards({
   /** Runs when a card is opened, as a sidebar card closes the workspace board. */
   onOpen?: () => void
 }): React.JSX.Element {
-  // Full-page Tasks/Activity views have no selected workspace card, as in the workspace list.
-  const activeWorktreeId = useAppStore((s) =>
-    s.activeView === 'tasks' || s.activeView === 'activity'
-      ? null
-      : getActiveSidebarWorkspaceId(s.activeWorkspaceKey, s.activeWorktreeId)
-  )
+  const activeWorktreeId = useAppStore(selectHighlightedSidebarWorkspaceId)
   const activeHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId ?? null)
   const repos = useAppStore((s) => s.repos)
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)

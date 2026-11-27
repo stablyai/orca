@@ -1,4 +1,5 @@
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { selectHighlightedSidebarWorkspaceId } from '@/components/sidebar/highlighted-sidebar-workspace'
 import React, { useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
@@ -106,7 +107,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
-  const activeView = useAppStore((s) => s.activeView)
+  const highlightedSidebarWorktreeId = useAppStore(selectHighlightedSidebarWorkspaceId)
   const activeModal = useAppStore((s) => s.activeModal)
   const pendingRevealWorktree = useAppStore((s) => s.pendingRevealWorktree)
   const pendingRevealSidebarRow = useAppStore((s) => s.pendingRevealSidebarRow)
@@ -190,13 +191,10 @@ const WorktreeList = React.memo(function WorktreeList({
       )
     )
   }, [allProjectsCollapsed, projectCollapseKeys, setCollapsedGroups])
-  // Full-page Tasks/Activity views have no selected worktree card.
-  const activeCardWorktreeId =
-    activeView === 'tasks' || activeView === 'activity' ? null : currentSidebarWorktreeId
   const selection = useSidebarWorktreeSelection({
     sectionRows: rowModel.sectionRows,
     pinnedDisplayPolicy,
-    active: { worktreeId: activeCardWorktreeId, hostId: activeWorkspaceExecutionHostId }
+    active: { worktreeId: highlightedSidebarWorktreeId, hostId: activeWorkspaceExecutionHostId }
   })
   const statusMutations = useWorktreeStatusMutations({
     workspaceStatuses: boardStatuses,
@@ -324,7 +322,7 @@ const WorktreeList = React.memo(function WorktreeList({
         hostOptions={rowModel.hostOptions}
         occurrencePlan={rowModel.occurrencePlan}
         visibleProjectRepoIdsBySection={visibleProjectRepoIdsBySection}
-        activeWorktreeId={activeCardWorktreeId}
+        activeWorktreeId={highlightedSidebarWorktreeId}
         activeWorkspaceExecutionHostId={activeWorkspaceExecutionHostId}
         currentWorktreeId={currentSidebarWorktreeId}
         groupBy={groupBy}
