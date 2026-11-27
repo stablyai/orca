@@ -119,10 +119,11 @@ function createBotHomesSelector(
   }
 }
 
-/** One host's bots, for what belongs to that computer, such as its own accounts in Settings › Bots. */
-export function useHostBots(hostId: ExecutionHostId): readonly Bot[] {
-  const read = (): readonly Bot[] => readHostBots(hostId)
-  return useSyncExternalStore(subscribe, read, read)
+/** One host's bots, for what belongs to that computer, such as its own accounts in Settings › Bots;
+ *  `enabled: false` reads nothing and starts no listing. */
+export function useHostBots(hostId: ExecutionHostId, enabled = true): readonly Bot[] {
+  const read = (): readonly Bot[] => (enabled ? readHostBots(hostId) : NO_BOTS)
+  return useSyncExternalStore(enabled ? subscribe : subscribeToNothing, read, read)
 }
 
 const readNoBot = (): null => null

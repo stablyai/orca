@@ -161,12 +161,12 @@ function ConnectedResumeToast({
 
   const botsEnabled = useBotsEnabled()
   const hostId = getRuntimeTargetHostId(store.target)
-  const hostBots = useHostBots(hostId)
+  const hostBots = useHostBots(hostId, botsEnabled)
   const feed = getStructuredAgentSessionStatusFeed(store.target)
   const nameFor = (sessionId: string, fallback: string) =>
     structuredChatShownName(feed, sessionId)?.trim() || fallback
   const botFor = (candidate: ResumeCandidate): Bot | null =>
-    botsEnabled ? resumeRowBot(hostBots, candidate, hostId) : null
+    resumeRowBot(hostBots, candidate, hostId)
 
   const onRowAction = (action: ResumeFailureAction, sessionId: string): void => {
     if (action === 'dismiss') {

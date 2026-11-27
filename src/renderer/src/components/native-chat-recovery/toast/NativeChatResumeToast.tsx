@@ -158,9 +158,17 @@ export function NativeChatResumeToast({
   const [moreBelow, setMoreBelow] = useState(false)
   const rowCount = view.rows.length
   useEffect(() => {
-    if (expanded && listRef.current) {
-      setMoreBelow(hasMoreBelow(listRef.current))
+    const list = listRef.current
+    if (!expanded || !list) {
+      return
     }
+    // Rows grow once a late bot name lands, which the capped list's own box doesn't show.
+    const observer = new ResizeObserver(() => setMoreBelow(hasMoreBelow(list)))
+    observer.observe(list)
+    for (const row of list.children) {
+      observer.observe(row)
+    }
+    return () => observer.disconnect()
   }, [expanded, rowCount])
   const offering = view.phase === 'offer'
   const showResume = offering && view.resumable.length > 0
@@ -227,35 +235,38 @@ export function NativeChatResumeToast({
         </Button>
       </div>
       <div id={listId} hidden={!expanded} className="border-t border-border">
-        <div className="relative">
-          <ul
-            ref={listRef}
-            aria-label={t('auto.components.NativeChatResumeToast.listLabel', 'Agents')}
-            className="scrollbar-sleek max-h-64 overflow-y-auto p-1"
-            onScroll={(event) => setMoreBelow(hasMoreBelow(event.currentTarget))}
-          >
-            {view.rows.map((row) => (
-              <NativeChatResumeToastRow
-                key={row.candidate.sessionId}
-                row={row}
-                name={nameFor(
-                  row.candidate.sessionId,
-                  firstLine(row.candidate.latestPrompt) ||
-                    t('auto.components.NativeChatResumeToast.untitled', 'Untitled agent')
-                )}
-                bot={botFor?.(row.candidate)}
-                age={formatShortTimeAgo(row.candidate.recordedAt, listedAt)}
-                busy={busy}
-                remote={machineName !== undefined}
-                onAction={onRowAction}
-              />
-            ))}
-          </ul>
-          {/* The cap hides rows; a fade says the list goes on until it is scrolled to the end. */}
-          {moreBelow && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-popover to-transparent" />
-          )}
-        </div>
+        {/* Rows mount only once opened, so an unopened toast fetches no bot avatars. */}
+        {expanded && (
+          <div className="relative">
+            <ul
+              ref={listRef}
+              aria-label={t('auto.components.NativeChatResumeToast.listLabel', 'Agents')}
+              className="scrollbar-sleek max-h-64 overflow-y-auto p-1"
+              onScroll={(event) => setMoreBelow(hasMoreBelow(event.currentTarget))}
+            >
+              {view.rows.map((row) => (
+                <NativeChatResumeToastRow
+                  key={row.candidate.sessionId}
+                  row={row}
+                  name={nameFor(
+                    row.candidate.sessionId,
+                    firstLine(row.candidate.latestPrompt) ||
+                      t('auto.components.NativeChatResumeToast.untitled', 'Untitled agent')
+                  )}
+                  bot={botFor?.(row.candidate)}
+                  age={formatShortTimeAgo(row.candidate.recordedAt, listedAt)}
+                  busy={busy}
+                  remote={machineName !== undefined}
+                  onAction={onRowAction}
+                />
+              ))}
+            </ul>
+            {/* The cap hides rows; a fade says the list goes on until it is scrolled to the end. */}
+            {moreBelow && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-popover to-transparent" />
+            )}
+          </div>
+        )}
         <div className="space-y-1.5 border-t border-border px-3.5 py-2.5 text-xs text-muted-foreground">
           {/* Balanced, so a longer locale wraps into even lines instead of orphaning a word; CJK breaks only between phrases. */}
           <p className="text-balance break-keep">
