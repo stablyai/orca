@@ -21,6 +21,7 @@ import { withObservedProviderExit } from '../../native-chat/agent-session-wire/s
 import { createClaudeControlSurface } from '../sdk-transport/claude-agent-sdk-control-requests'
 import { relayedClaudeChildTree } from './claude-relayed-child-tree'
 import { claudeKeptLaunchOutgrown, feedClaudeKeptModeLines } from './claude-relay-kept-mode'
+import { createClaudeKeptLinePump } from './claude-kept-line-pump'
 import { DaemonProtocolError } from '../../daemon/protocol/daemon-errors'
 
 /** Present on a connection to an agent that kept running while Orca was closed. */
@@ -190,29 +191,6 @@ export async function openKeptClaudeAgentConnection(
     void write(line).catch(inputBroke)
   })
   const inbox = createClaudeUserMessageQueue()
-  // A head index, not shift(): a replay can be tens of thousands of lines.
-  let lines: string[] = []
-  let head = 0
-  let partial = ''
-  let draining: Promise<void> = Promise.resolve()
-  // One drain at a time, so lines keep their order across a paused read. No timer may run while
-  // lines wait here: an ack then would cover output the chat never got.
-  const pump = (): Promise<void> => {
-    draining = draining.then(async () => {
-      while (head < lines.length) {
-        await readingBarrier?.promise
-        try {
-          deliver(lines[head++])
-        } finally {
-          // Acks cover only lines the chat took, so a pause or crash here replays the rest.
-          records.taken()
-        }
-      }
-      lines = []
-      head = 0
-    })
-    return draining
-  }
   const deliver = (line: string): void => {
     let message: unknown
     try {
@@ -228,18 +206,19 @@ export async function openKeptClaudeAgentConnection(
     }
     handlers.onMessage?.(message)
   }
+  // A line that couldn't be delivered is never acked: the agent is closed as broken, and the
+  // next message resumes from Claude's transcript.
+  const pump = createClaudeKeptLinePump({
+    deliver,
+    taken: () => records.taken(),
+    paused: () => readingBarrier?.promise,
+    failed: inputBroke
+  })
   child.stdout.setEncoding('utf8')
   child.stdout.on('data', (chunk: string) => {
     handlers.onStdout?.(chunk)
     reattachedStdout?.(chunk)
-    const parts = (partial + chunk).split('\n')
-    partial = parts.pop() ?? ''
-    for (const part of parts) {
-      if (part.length > 0) {
-        lines.push(part)
-      }
-    }
-    void pump()
+    pump.push(chunk)
   })
 
   const onEnd = (): void => {
@@ -268,13 +247,7 @@ export async function openKeptClaudeAgentConnection(
     // Output already relayed reaches the chat before its exit does.
     void finished(child.stdout)
       .catch(() => {})
-      .then(() => {
-        if (partial.length > 0) {
-          lines.push(partial)
-          partial = ''
-        }
-        return pump()
-      })
+      .then(() => pump.finish())
       .finally(onEnd)
   })
 
@@ -342,7 +315,7 @@ export async function openKeptClaudeAgentConnection(
     resumeReading: () => {
       readingBarrier?.resolve()
       readingBarrier = null
-      void pump()
+      void pump.pump()
     },
     send: (message, beforeDispatch) => {
       if (closing || terminalError || managed.rootVerdict === 'exited') {
