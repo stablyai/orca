@@ -126,4 +126,31 @@ describe('scanAiVaultSessions — Codex archived rollouts', () => {
     expect(result.sessions.map((session) => session.sessionId)).toEqual([LIVE_ID])
     expect(result.issues.filter((issue) => issue.agent === 'codex')).toEqual([])
   })
+
+  // Why: a configured root ending in `.` is still the sessions folder; deriving the sibling
+  // from it lexically would look for `sessions/archived_sessions`.
+  it('finds the archive for a sessions dir written with a trailing dot component', async () => {
+    const { roots, sessionsDir, archivedDir } = await codexRoots()
+    await mkdir(join(sessionsDir, '2026', '05', '01'), { recursive: true })
+    await writeFile(
+      liveRolloutPath(sessionsDir, LIVE_ID),
+      rolloutRecords(LIVE_ID, 'live question', '/repo/app')
+    )
+    await writeFile(
+      join(archivedDir, `${archivedRolloutName(ARCHIVED_ID)}.zst`),
+      zstdCompressSync(
+        Buffer.from(rolloutRecords(ARCHIVED_ID, 'archived question', '/repo/archived'))
+      )
+    )
+
+    const result = await scanAiVaultSessions({
+      ...roots,
+      codexSessionsDir: `${sessionsDir}/.`,
+      platform: 'darwin'
+    })
+
+    expect(result.sessions.map((session) => session.sessionId).sort()).toEqual(
+      [LIVE_ID, ARCHIVED_ID].sort()
+    )
+  })
 })

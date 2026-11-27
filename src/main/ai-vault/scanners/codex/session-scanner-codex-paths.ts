@@ -18,7 +18,9 @@ export function codexRootDirsForSessionsDir(sessionsDir: string): string[] {
   if (!trimmed) {
     return []
   }
-  return [trimmed, join(dirname(trimmed), 'archived_sessions')]
+  // Resolve first so a trailing `.` yields Codex's home, not the sessions folder itself.
+  const sessionsRoot = resolve(trimmed)
+  return [trimmed, join(dirname(sessionsRoot), 'archived_sessions')]
 }
 
 export function uniqueCodexSessionsDirs(paths: readonly string[]): string[] {
