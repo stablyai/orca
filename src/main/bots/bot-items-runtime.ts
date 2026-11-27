@@ -25,9 +25,7 @@ import { eventViewOf } from './bot-items-rows'
 import type { BotItemMail, BotItemRecord, BotItemSource } from './bot-items-schema'
 import type { BotWorkRuntime } from './bot-work-runtime'
 import type { BotsDbWorkerClient } from './db-worker/bots-db-worker-client'
-import { BotItemUsageLimitWaits } from './bot-item-usage-limit-wait'
-import { BotItemAskWithdrawals, linkedWorkerTitles } from './bot-item-ask-withdrawals'
-import { botItemAskWhileWorker } from './bot-item-ask-while-worker'
+import { BotItemMinuteChecks } from './bot-items-minute-checks'
 
 export type BotItemsHostDeps = {
   workRuntime: BotWorkRuntime
@@ -56,8 +54,7 @@ export class BotItemsHost {
   private readonly join: BotItemLinkJoin
   private readonly workerLinks: BotItemWorkerLinks
   private mailing: Promise<void> | null = null
-  private readonly usageLimitWaits: BotItemUsageLimitWaits
-  private readonly askWithdrawals: BotItemAskWithdrawals
+  private readonly minuteChecks: BotItemMinuteChecks
   private mailAgain = false
 
   constructor(private readonly deps: BotItemsHostDeps) {
@@ -73,22 +70,13 @@ export class BotItemsHost {
       changed: (store, uids) => this.changedItems(store, uids),
       warn
     })
-    this.usageLimitWaits = new BotItemUsageLimitWaits({
-      store: () => this.openedStore(),
+    this.minuteChecks = new BotItemMinuteChecks({
+      openedStore: () => this.openedStore(),
+      sendOwedMail: () => this.sendOwedMail(),
       join: this.join,
-      sessionOf: (dispatchId) => {
-        const session = db()?.getDispatchContextById(dispatchId)?.assignee_orca_session_id
-        return session ? deps.chatRoot(session) : null
-      },
-      root: deps.chatRoot,
+      db,
+      chatRoot: deps.chatRoot,
       changed: (items) => this.notifyChanged(items)
-    })
-    this.askWithdrawals = new BotItemAskWithdrawals({
-      store: () => this.openedStore(),
-      worker: (ref) => botItemAskWhileWorker(db(), ref),
-      workerTitle: linkedWorkerTitles(this.join),
-      changed: (items) => this.notifyChanged(items),
-      sendOwedMail: () => this.sendOwedMail()
     })
   }
 
@@ -101,8 +89,7 @@ export class BotItemsHost {
       this.stores.set(path, store)
     }
     if (startUsageLimitWaits) {
-      // With items to move: workers stopping on a usage limit move theirs to Waiting.
-      this.usageLimitWaits.start()
+      this.minuteChecks.start()
     }
     return store.remote
   }
@@ -150,13 +137,12 @@ export class BotItemsHost {
       this.store()
     }
     await this.sendOwedMail()
-    // An ask whose worker ended or time passed while Orca was closed is withdrawn now.
-    this.askWithdrawals.tick()
+    this.minuteChecks.recovered()
   }
 
   /** Leaves the bots DB worker client alone: the runtime owns it, shared with the work record. */
   dispose(): void {
-    this.usageLimitWaits.stop()
+    this.minuteChecks.stop()
     this.stores.clear()
   }
 
@@ -199,8 +185,7 @@ export class BotItemsHost {
   changed(items: readonly Pick<BotItemRecord, 'uid' | 'ownerBotId'>[]): void {
     this.notifyChanged(items)
     if (items.length > 0) {
-      this.usageLimitWaits.recheck()
-      this.askWithdrawals.itemsChanged()
+      this.minuteChecks.itemsChanged()
     }
   }
 
@@ -211,11 +196,9 @@ export class BotItemsHost {
     }
   }
 
-  /** The scheduler's minute: a usage-limit stop whose time passed unannounced ends, and an ask whose
-   *  `--while` settled is withdrawn. */
+  /** The scheduler's minute: see BotItemMinuteChecks. */
   minuteTick(now: number): void {
-    this.usageLimitWaits.tick(now)
-    this.askWithdrawals.tick(now)
+    this.minuteChecks.tick(now)
   }
 
   /** Mail every change still owed. One pass at a time; a call during one makes it run again,
@@ -322,8 +305,7 @@ export class BotItemsHost {
   dispatchChanged(dispatchId: string | null): void {
     if (dispatchId !== null) {
       this.workerLinks.dispatchChanged(dispatchId)
-      // A worker that finished can leave only stopped ones on its item.
-      this.usageLimitWaits.recheck()
+      this.minuteChecks.workerChanged()
     }
   }
 
