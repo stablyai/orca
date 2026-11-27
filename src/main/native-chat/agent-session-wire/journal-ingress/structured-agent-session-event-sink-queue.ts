@@ -41,12 +41,11 @@ export class StructuredAgentSessionSinkQueue {
     source: Parameters<StructuredAgentSessionSinkSnapshots['bindLiveText']>[0]
   ): (() => void) => this.snapshots.bindLiveText(source)
 
-  liveText = (readers?: events.LiveTextReaders): readonly AgentJournalRenderItem[] => {
-    const target = this.target
-    return !target || this.closed || this.failure !== null || this.snapshots.held
-      ? []
-      : this.snapshots.readLiveText(target.journal.cursor().epoch, readers)
-  }
+  private liveEpoch = (): string | null =>
+    !this.target || this.closed || this.failure !== null ? null : this.target.journal.cursor().epoch
+  liveText = (readers?: events.LiveTextReaders): readonly AgentJournalRenderItem[] =>
+    this.snapshots.readLiveText(this.liveEpoch(), readers)
+  hasLiveText = (): boolean => this.snapshots.hasLiveText(this.liveEpoch())
 
   flushLiveText = (): void => this.snapshots.flushLiveText()
 
@@ -112,9 +111,7 @@ export class StructuredAgentSessionSinkQueue {
   observeSettledTurns = (listener: (turnItemIds: readonly string[]) => void): (() => void) => {
     const registered = (turnItemIds: readonly string[]) => listener(turnItemIds)
     this.settledTurnListeners.add(registered)
-    return () => {
-      this.settledTurnListeners.delete(registered)
-    }
+    return () => void this.settledTurnListeners.delete(registered)
   }
 
   bindReadingControl(control: events.StructuredAgentSessionReadingControl): () => void {
@@ -179,6 +176,10 @@ export class StructuredAgentSessionSinkQueue {
     }
     return new Promise((resolve) => this.waiters.push({ through, resolve }))
   }
+
+  /** Waits for the writes already admitted, without flushing live text or sealing a batch. */
+  landed = (): Promise<events.StructuredAgentSessionSinkBarrier> =>
+    this.waitThrough(this.acceptedSequence)
 
   /** Unlike barrier, report close-dropped admitted writes as not landed. */
   written = async (): Promise<events.StructuredAgentSessionSinkBarrier> => {

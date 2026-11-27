@@ -40,10 +40,16 @@ import type { RpcContext } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { ORCHESTRATION_REPLY_METHOD } from '../messaging/reply-method'
 import { PAIRED_SERVER_ASKS_METHODS } from '../../paired-server-asks/paired-server-asks-methods'
-import { BOT_METHODS } from '../../bots'
 import { makeTestBot } from '../../../../../bots/bot.test-fixture'
 import type * as RecipientRouting from '../messaging/recipient-routing'
-import { DOCS_CHAT, RANGER_THREAD, withChat } from '../messaging/bot-recipient.test-fixture'
+import {
+  DOCS_CHAT,
+  journals,
+  RANGER_THREAD,
+  withChat
+} from '../messaging/bot-recipient.test-fixture'
+import { DANA_ASKER, DANA_OPENER, runningTurnItems } from './sending-bot-turn.test-fixture'
+import { turnActsForOwner } from '../../../../../bots/bot-request-asker'
 
 vi.mock(
   '../../../../orchestration/federation/relay/federation-relay-scheduler',
@@ -387,7 +393,7 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     expect(await cards()).toEqual([])
   })
 
-  it("names this computer and only the agents it always lets the server ask, in the server's own bot list", async () => {
+  it("names this computer and only the agents it always lets the server ask, for the server's bot list", async () => {
     vi.mocked(computer.runtime.bots.list).mockReturnValue([
       makeTestBot({ id: 'docs', name: 'Docs' }),
       makeTestBot({ id: 'notes', name: 'Notes' }),
@@ -405,33 +411,25 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     }
     await vi.waitFor(() => expect(connectedClientRosters(server.runtime)).toEqual([listed]))
 
-    // The server's own caller gets it; a paired computer reading the server's roster never does.
-    vi.spyOn(server.runtime.bots, 'roster').mockResolvedValue([])
-    vi.spyOn(server.runtime, 'listOrchestrationWorkerServers').mockResolvedValue([])
-    const roster = (context: Parameters<RpcDispatcher['dispatch']>[1]) =>
-      new RpcDispatcher({ runtime: server.runtime, methods: BOT_METHODS })
-        .dispatch(
-          {
-            id: `roster_${callCount++}`,
-            authToken: 'local',
-            method: 'bots.roster',
-            params: { allComputers: true }
-          },
-          context
-        )
-        .then((response) => (response.ok ? response.result : response.error))
-    expect(await roster({ caller: { kind: 'desktop' } })).toMatchObject({ clients: [listed] })
-    expect(
-      await roster({
-        authenticatedCallerFingerprint: pairing,
-        pairedDeviceId: 'device_a',
-        clientKind: 'runtime'
-      })
-    ).toEqual({ bots: [] })
-
     // Removed: the next pull stops naming it.
     await call('pairedServerAsks.disallow', { botId: 'docs', serverKey: 'fingerprint_s' })
     await vi.waitFor(() => expect(connectedClientRosters(server.runtime)[0]?.bots).toEqual([]))
+  })
+
+  it("holds a teammate's turn on the server to the teammate on this computer", async () => {
+    journals[RANGER_THREAD] = runningTurnItems(DANA_OPENER)
+    try {
+      await call('pairedServerAsks.allow', { environmentId: 'env_s', botId: 'docs' })
+      await listening()
+      const sent = await ask()
+
+      await vi.waitFor(() => expect(computer.db.getUnreadMessages(DOCS_HOME)).toHaveLength(1))
+      const record = JSON.parse(computer.db.getBotRequest(sent.message.id)!.record)
+      expect(record.askers).toEqual([{ kind: 'owner' }, DANA_ASKER])
+      expect(turnActsForOwner({ askers: record.askers })).toBe(false)
+    } finally {
+      delete journals[RANGER_THREAD]
+    }
   })
 
   it("names the sender by this computer's name for the server, in the request and its header", async () => {

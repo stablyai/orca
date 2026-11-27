@@ -12,6 +12,7 @@ import {
   listLocalCommandPaths
 } from '../command-path/command-path-resolver'
 import { buildLocalPreflightEnv } from './preflight-local-env'
+import { withConfiguredProxyEnv } from '../../network/configured-proxy-child-env'
 import { runPreflightCommandInWsl } from './preflight-wsl-command'
 import type { WslPreflightTarget } from './preflight-wsl-agent-detection'
 
@@ -53,9 +54,16 @@ async function withPreflightTimeout<T>(
 export async function execLocalPreflightCommandOrThrow(
   command: string,
   args: string[],
-  options: { env?: NodeJS.ProcessEnv; timeoutMs?: number; terminationBarrier?: boolean } = {}
+  options: {
+    env?: NodeJS.ProcessEnv
+    timeoutMs?: number
+    terminationBarrier?: boolean
+    // For probes that call a network API (e.g. `gh`/`glab auth status`), which need the Settings proxy.
+    configuredProxy?: boolean
+  } = {}
 ): Promise<PreflightCommandResult> {
-  const env = options.env ?? buildLocalPreflightEnv()
+  const baseEnv = options.env ?? buildLocalPreflightEnv()
+  const env = options.configuredProxy ? withConfiguredProxyEnv(baseEnv) : baseEnv
   const timeoutMs = options.timeoutMs ?? PREFLIGHT_COMMAND_TIMEOUT_MS
   // Node cannot execFile a batch shim; the shared runner handles its argv safely.
   if (

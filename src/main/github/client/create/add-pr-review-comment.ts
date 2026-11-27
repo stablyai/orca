@@ -64,7 +64,7 @@ export async function addPRReviewComment(
     }
     return {
       ok: true,
-      comment: mapReviewCommentResponse(data, args.body, args.path, args.line, args.startLine)
+      comment: await mapReviewCommentResponse(data, args.body, args.path, args.line, args.startLine)
     }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
@@ -115,7 +115,7 @@ export async function addPRReviewCommentReply(
     }
     return {
       ok: true,
-      comment: mapReviewCommentResponse(data, body, path, line, undefined, threadId)
+      comment: await mapReviewCommentResponse(data, body, path, line, undefined, threadId)
     }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)

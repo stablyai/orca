@@ -867,6 +867,14 @@
         "followedUp": "Acompanhamento",
         "handedOff": "Repassado",
         "task": "Tarefa"
+      },
+      "unnamedRecipient": "um agente",
+      "event": {
+        "followedUp": "Acompanhamento enviado",
+        "update": "Atualização",
+        "message": "Mensagem",
+        "handedOff": "Repassado",
+        "task": "Tarefa"
       }
     },
     "hostOutage": {

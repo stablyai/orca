@@ -10,6 +10,7 @@ import type { ManagedRuntime, ManagedRuntimePin } from '../../node-runtime/manag
 import { followLatestRelease } from '../../node-runtime/managed-runtime-latest-release'
 import { requireRuntimeAnswersVersion } from '../../node-runtime/managed-runtime-version-check'
 import { isMuslHost } from '../../node-runtime/linux-libc-probe'
+import { claudeManagedSettingsFile } from '../configuration/claude-managed-settings-file'
 
 const RELEASES = 'https://downloads.claude.ai/claude-code-releases'
 
@@ -54,14 +55,9 @@ export async function claudeUpdateChannel(
   platform: NodeJS.Platform = process.platform
 ): Promise<'latest' | 'stable'> {
   const configDir = env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
-  const managed =
-    platform === 'darwin'
-      ? '/Library/Application Support/ClaudeCode'
-      : platform === 'win32'
-        ? join(env.PROGRAMFILES || 'C:\\Program Files', 'ClaudeCode')
-        : '/etc/claude-code'
+  const files = [join(configDir, 'settings.json'), claudeManagedSettingsFile(env, platform)]
   const channels = await Promise.all(
-    [join(configDir, 'settings.json'), join(managed, 'managed-settings.json')].map(async (path) => {
+    files.map(async (path) => {
       try {
         return channelSettingsSchema.safeParse(JSON.parse(await readFile(path, 'utf8'))).data
           ?.autoUpdatesChannel

@@ -3834,6 +3834,15 @@
         "message": "Message from",
         "notSentYet": "not sent yet"
       },
+      "unnamedRecipient": "an agent",
+      "recipientName": "{{name}}",
+      "event": {
+        "followedUp": "Sent follow-up",
+        "update": "Update",
+        "message": "Message",
+        "handedOff": "Handed off",
+        "task": "Task"
+      },
       "kind": {
         "started": "Started",
         "reopened": "Reopened",

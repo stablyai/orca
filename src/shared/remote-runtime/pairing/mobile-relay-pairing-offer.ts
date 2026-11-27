@@ -6,9 +6,10 @@ import {
   PAIRING_RELAY_URL_MAX_CHARACTERS
 } from './mobile-pairing-protocol-limits'
 import { RuntimeHostDescriptorSchema } from '../host-status/runtime-host-descriptor'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 export const PAIRING_OFFER_VERSION = 2
-const PairingScopeSchema = z.enum(['mobile', 'runtime'])
+const PairingScopeSchema = lazyZodSchema(() => z.enum(['mobile', 'runtime']))
 const BASE64URL_16_PATTERN = /^[A-Za-z0-9_-]{16}$/
 const BASE64URL_43_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const MAX_INVITE_TTL_MS = 10 * 60 * 1000

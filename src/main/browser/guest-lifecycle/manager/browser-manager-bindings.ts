@@ -35,7 +35,12 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
         resolveRenderer: (tabId) =>
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
         hasActiveGrabOp: (tabId) => this.hasActiveGrabOp(tabId),
-        getKeybindings: () => this.settingsResolver?.().keybindings
+        getKeybindings: () => this.settingsResolver?.().keybindings,
+        isCurrentGuest: () =>
+          this.getAuthorizedGuest(
+            browserTabId,
+            this.rendererWebContentsIdByTabId.get(browserTabId) ?? -1
+          ) === guest
       })
     )
   }

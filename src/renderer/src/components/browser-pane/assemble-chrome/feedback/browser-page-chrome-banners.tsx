@@ -64,7 +64,8 @@ export function BrowserPageChromeBanners({
   setResourceNotice,
   onReloadPage,
   tools,
-  worktreeId
+  worktreeId,
+  showGrabBanner = true
 }: {
   resourceNotice: BrowserResourceNotice | null
   setResourceNotice: (notice: string | null) => void
@@ -74,6 +75,7 @@ export function BrowserPageChromeBanners({
     'grab' | 'grabAnnotations' | 'annotationSend'
   >
   worktreeId: string
+  showGrabBanner?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -97,7 +99,7 @@ export function BrowserPageChromeBanners({
           </button>
         </div>
       ) : null}
-      <BrowserGuestGrabBanner tools={tools} worktreeId={worktreeId} />
+      {showGrabBanner ? <BrowserGuestGrabBanner tools={tools} worktreeId={worktreeId} /> : null}
     </>
   )
 }

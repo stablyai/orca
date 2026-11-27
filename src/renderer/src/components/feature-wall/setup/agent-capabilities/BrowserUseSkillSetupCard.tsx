@@ -6,14 +6,20 @@ import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActivePr
 import { AgentSkillSetupPanel } from '@/components/skills/setup/AgentSkillSetupPanel'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
+import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../../../../shared/orca-profiles/orca-cloud-team-policy'
 
 export function BrowserUseSkillSetupCard(props: {
   compact?: boolean
   skill: InstalledAgentSkillState
-}): JSX.Element {
+}): JSX.Element | null {
   const t = useTranslate()
+  const blocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.browserUse)
   const { compact, skill } = props
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+  if (blocked) {
+    return null
+  }
 
   const handleBeforeInstall = (): void => {
     useAppStore.getState().recordFeatureInteraction('agent-browser-setup')

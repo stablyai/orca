@@ -11,21 +11,35 @@ const pendingAnyTabRegistrations = new Set<() => void>()
 function waitForRegistrationSet(
   registrationResolvers: Set<() => void>,
   timeoutMs: number,
-  onEmpty: () => void
+  onEmpty: () => void,
+  signal?: AbortSignal
 ): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.reject(new Error('Tab registration cancelled'))
+  }
   return new Promise<void>((resolve, reject) => {
-    const resolveRegistration = (): void => {
+    const cleanup = (): void => {
       clearTimeout(timer)
-      resolve()
-    }
-    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', abort)
       registrationResolvers.delete(resolveRegistration)
       if (registrationResolvers.size === 0) {
         onEmpty()
       }
+    }
+    const resolveRegistration = (): void => {
+      cleanup()
+      resolve()
+    }
+    const abort = (): void => {
+      cleanup()
+      reject(new Error('Tab registration cancelled'))
+    }
+    const timer = setTimeout(() => {
+      cleanup()
       reject(new Error('Tab registration timed out'))
     }, timeoutMs)
     registrationResolvers.add(resolveRegistration)
+    signal?.addEventListener('abort', abort, { once: true })
   })
 }
 
@@ -67,16 +81,22 @@ export function waitForTabRegistration(browserPageId: string, timeoutMs = 8_000)
 
 export function waitForNextTabRegistration(
   browserPageId: string,
-  timeoutMs: number
+  timeoutMs: number,
+  signal?: AbortSignal
 ): Promise<void> {
   let registrationResolvers = pendingTabRegistrations.get(browserPageId)
   if (!registrationResolvers) {
     registrationResolvers = new Set()
     pendingTabRegistrations.set(browserPageId, registrationResolvers)
   }
-  return waitForRegistrationSet(registrationResolvers, timeoutMs, () => {
-    pendingTabRegistrations.delete(browserPageId)
-  })
+  return waitForRegistrationSet(
+    registrationResolvers,
+    timeoutMs,
+    () => {
+      pendingTabRegistrations.delete(browserPageId)
+    },
+    signal
+  )
 }
 
 export function waitForWorktreeTabRegistration(

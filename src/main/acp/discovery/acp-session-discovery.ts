@@ -73,8 +73,8 @@ export function runAcpSessionDiscovery<T>(
   return { answer, completion }
 }
 
-/** Reads the commands a throwaway session reports, deleting it when the agent can; without
- *  `disposableStorage` an agent that cannot delete is not asked. */
+/** Reads the commands a throwaway session reports, deleting it when the agent can; an agent that
+ *  cannot is asked only when its caller disposes of the session (`disposableStorage`). */
 export async function readAcpSessionCommands(input: {
   connection: AcpDiscoveryConnection
   dialect: AcpDialect
@@ -83,6 +83,8 @@ export async function readAcpSessionCommands(input: {
   signal: AbortSignal
   check: () => void
   disposableStorage: boolean
+  /** The session this scan started, for a caller that disposes of it. */
+  onSession?: (sessionId: string) => void
   logger?: StructuredAgentSessionLogger
 }): Promise<AtRestCommandScan> {
   const { connection, signal, check } = input
@@ -122,10 +124,13 @@ export async function readAcpSessionCommands(input: {
     if (!deletes && !input.disposableStorage) {
       return { commands: undefined, fromAgent: false }
     }
-    const started = await awaitAcpDiscovery(
-      connection.start({ cwd: input.cwd, mcpServers: [] }),
-      signal
+    const starting = connection.start({ cwd: input.cwd, mcpServers: [] })
+    // A session that answers after a cancel is still the caller's to dispose of.
+    void starting.then(
+      (session) => input.onSession?.(session.sessionId),
+      () => {}
     )
+    const started = await awaitAcpDiscovery(starting, signal)
     nativeId = started.sessionId
     try {
       check()

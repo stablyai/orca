@@ -855,6 +855,16 @@
         "needsAuth_many": "{{count}} requieren iniciar sesión"
       },
       "pasteHint": "Cuando el navegador llegue a una página que no se carga, copia su dirección y pégala aquí."
+    },
+    "agentMessage": {
+      "unnamedRecipient": "un agente",
+      "event": {
+        "followedUp": "Seguimiento enviado",
+        "update": "Actualización",
+        "message": "Mensaje",
+        "handedOff": "Traspasado",
+        "task": "Tarea"
+      }
     }
   },
   "common": {

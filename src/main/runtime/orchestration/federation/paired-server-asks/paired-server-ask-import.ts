@@ -26,6 +26,7 @@ import {
 } from '../../db/federation/paired-server-asks-store'
 import type { PairedServerAsks } from './paired-server-asks-pull'
 import { notifyPairedServerCardsChanged } from './paired-server-card-notices'
+import { replySubject } from '../../../../../shared/orchestration/mailbox/reply-subject'
 
 const Withdrawn = z.object({ requestId: z.string().min(1) })
 
@@ -68,7 +69,7 @@ export function declinePairedServerAsk(
   queuePeerMailReply(db, ask.conversationId, noticeId, {
     senderLabel: `${ask.to} on ${machine}`,
     fromAddress: ask.to,
-    subject: ask.subject.startsWith('Re: ') ? ask.subject : `Re: ${ask.subject}`,
+    subject: replySubject(ask.subject),
     body: `Declined on ${machine}.`,
     threadId: ask.messageId,
     replyTo: ask.messageId,
