@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { Keyboard, Platform } from 'react-native'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { translate } from '../../i18n/mobile-i18n'
@@ -60,23 +60,31 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
     () => ({ hostId, executionHost, worktreeId }),
     [executionHost, hostId, worktreeId]
   )
-  const updateMarkdownLocalContent = useCallback((tabId: string, content: string) => {
-    setMarkdownDocs((prev) => {
-      const current = prev.get(tabId)
-      if (current?.status !== 'ready') {
-        return prev
+  // Tabs typed in while their save was on the wire: that save must not claim the newer text.
+  const editedDuringSaveRef = useRef(new Set<string>())
+  const updateMarkdownLocalContent = useCallback(
+    (tabId: string, content: string) => {
+      if (markdownSaveInFlightRef.current.has(tabId)) {
+        editedDuringSaveRef.current.add(tabId)
       }
-      const next = new Map(prev)
-      next.set(tabId, {
-        ...current,
-        localRevision: (current.localRevision ?? 0) + 1,
-        localContent: content,
-        isDirty: content !== current.content,
-        saveError: undefined
+      setMarkdownDocs((prev) => {
+        const current = prev.get(tabId)
+        if (current?.status !== 'ready') {
+          return prev
+        }
+        const next = new Map(prev)
+        next.set(tabId, {
+          ...current,
+          localRevision: (current.localRevision ?? 0) + 1,
+          localContent: content,
+          isDirty: content !== current.content,
+          saveError: undefined
+        })
+        return next
       })
-      return next
-    })
-  }, [])
+    },
+    [markdownSaveInFlightRef, setMarkdownDocs]
+  )
 
   const copyMarkdownText = useCallback(
     async (text: string) => {
@@ -210,6 +218,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
         return false
       }
       markdownSaveInFlightRef.current.add(tab.id)
+      editedDuringSaveRef.current.delete(tab.id)
       const saveSeq = (markdownSaveSeqRef.current.get(tab.id) ?? 0) + 1
       markdownSaveSeqRef.current.set(tab.id, saveSeq)
       setMarkdownDocs((prev) => {
@@ -235,21 +244,28 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
         if (markdownSaveSeqRef.current.get(tab.id) !== saveSeq) {
           return false
         }
+        const editedSince = editedDuringSaveRef.current.has(tab.id)
         setMarkdownDocs((prev) => {
           const existing = prev.get(tab.id)
           const revision =
             existing?.status === 'ready' ? existing.localRevision : current.localRevision
+          // Edits typed while this save was sending stay a dirty draft on top of what landed.
+          const localContent =
+            editedSince && existing?.status === 'ready' ? existing.localContent : result.content
           return new Map(prev).set(tab.id, {
             localRevision: (revision ?? 0) + 1,
             status: 'ready',
             content: result.content,
-            localContent: result.content,
+            localContent,
             baseVersion: result.version,
-            isDirty: false,
+            isDirty: localContent !== result.content,
             editable: true
           })
         })
         markdownSaveSeqRef.current.delete(tab.id)
+        if (editedSince) {
+          return false
+        }
         // The reader may be gone by now (another tab is showing), so the saved edits leave the store here.
         dropDocumentEditDraft(markdownTabDraftKey(draftScope, tab.id))
         triggerSuccess()
