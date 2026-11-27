@@ -1,8 +1,6 @@
 import { expect, it } from 'vitest'
 import contractJson from '../../../shared/remote-runtime/orcad-distribution/local-build-compatibility-contract.json'
-import {
-  LOCAL_BUILD_COMPATIBILITY_CONTRACT
-} from '../../../shared/remote-runtime/orcad-distribution/local-build-compatibility-contract'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../../shared/remote-runtime/orcad-distribution/local-build-compatibility-contract'
 import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS, PROTOCOL_VERSION } from './daemon-protocol-version'
 import {
   PROVIDER_RELAY_CAPABILITIES_BY_PROTOCOL,
