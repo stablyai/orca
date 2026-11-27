@@ -32,7 +32,7 @@ export async function readClipboardPasteContent(
         .then((html) => (clipboardHtmlMayHaveLinks(html) ? html : ''))
         .catch(() => '')
     : ''
-  if (!shouldProbeClipboardPasteImage(options.imageProbe, text, filePaths)) {
+  if (!shouldProbeClipboardPasteImage(options.imageProbe, text, filePaths, process.platform)) {
     return { text, filePaths, linkHtml, hasImage: false }
   }
   try {

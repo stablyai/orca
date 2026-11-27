@@ -1,4 +1,5 @@
 import { clipboardHasImage } from './web-clipboard-api'
+import { getBrowserPlatform } from '../web-storage'
 import {
   assertClipboardTextWithinLimitWithYield,
   type ReadClipboardTextOptions
@@ -23,7 +24,7 @@ export async function readWebClipboardPasteContent(
   const text = await readWebClipboardText(options)
   const filePaths: string[] = []
   // Each browser clipboard read can prompt, so probe only when the caller needs the answer.
-  if (!shouldProbeClipboardPasteImage(options?.imageProbe, text, filePaths)) {
+  if (!shouldProbeClipboardPasteImage(options?.imageProbe, text, filePaths, getBrowserPlatform())) {
     return { text, filePaths, linkHtml: '', hasImage: false }
   }
   try {

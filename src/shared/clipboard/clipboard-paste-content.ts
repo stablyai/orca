@@ -1,4 +1,5 @@
 import type { ReadClipboardTextOptions } from './clipboard-text'
+import { textOnlyLabelsCopiedFiles } from '../native-chat/input/composer/native-chat-clipboard-event'
 
 export type ReadClipboardPasteContentOptions = ReadClipboardTextOptions & {
   /** Also return the HTML flavor when it may carry links. */
@@ -11,21 +12,23 @@ export type ReadClipboardPasteContentOptions = ReadClipboardTextOptions & {
 
 export type ClipboardPasteImageProbe = 'always' | 'without-text' | 'files-without-text'
 
+/** Copied-file pastes skip the image check, except a text-less macOS copy that may be a screenshot tool's picture. */
 export function shouldProbeClipboardPasteImage(
   probe: ClipboardPasteImageProbe | undefined,
   text: string,
-  filePaths: readonly string[]
+  filePaths: readonly string[],
+  platform: NodeJS.Platform
 ): boolean {
-  switch (probe) {
-    case 'always':
-      return true
-    case 'without-text':
-      return text === ''
-    case 'files-without-text':
-      return text === '' && filePaths.length > 0
-    default:
-      return false
+  if (probe === undefined) {
+    return false
   }
+  if (probe === 'files-without-text') {
+    return text === '' && filePaths.length > 0
+  }
+  if (filePaths.length > 0 && (text === '' || textOnlyLabelsCopiedFiles(text, filePaths))) {
+    return text === '' && platform === 'darwin'
+  }
+  return probe === 'always' || text === ''
 }
 
 /** Everything one paste needs, read from a single clipboard snapshot. */
