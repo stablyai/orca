@@ -26,6 +26,38 @@ export function isProjectOrPinnedSectionGroupKey(key: string): boolean {
 
 export const ALL_GROUP_KEY = 'all'
 
+/** Section headers owned by a single `groupBy` mode; never top-level sections, pinned, lineage, or hosts. */
+export function isGroupByModeSectionKey(key: string): boolean {
+  return (
+    isProjectSectionGroupKey(key) ||
+    key === ALL_GROUP_KEY ||
+    key.startsWith(`${ALL_GROUP_KEY}:host:`) ||
+    key.startsWith('workspace-status:') ||
+    key.startsWith('pr:')
+  )
+}
+
+/** Drops mode-specific section folds while preserving orthogonal folds (Bots, Projects, hosts, pinned, lineage). */
+export function clearGroupByModeCollapsedGroups(collapsedGroups: Set<string>): Set<string> {
+  let hasModeKey = false
+  for (const key of collapsedGroups) {
+    if (isGroupByModeSectionKey(key)) {
+      hasModeKey = true
+      break
+    }
+  }
+  if (!hasModeKey) {
+    return collapsedGroups
+  }
+  const next = new Set<string>()
+  for (const key of collapsedGroups) {
+    if (!isGroupByModeSectionKey(key)) {
+      next.add(key)
+    }
+  }
+  return next
+}
+
 export const LINEAGE_GROUP_PREFIX = 'lineage:'
 
 export function getLineageGroupKey(worktreeId: string): string {
