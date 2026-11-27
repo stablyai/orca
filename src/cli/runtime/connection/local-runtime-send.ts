@@ -57,8 +57,13 @@ export async function sendLocalRuntimeRequest<TResult>(
       }
       throw restartingOr(error)
     }
-    // A replacement runtime may lack the capability this request was shaped for.
-    if (request.pinnedRuntimeId && metadata.runtimeId !== request.pinnedRuntimeId) {
+    // A request shaped by an earlier answer must not reach a replacement that may lack what it saw.
+    const pin =
+      request.pinnedRuntimeId ??
+      (restartWait.restart && request.method !== 'status.get' ? restartWait.servedBy : null)
+    if (pin && metadata.runtimeId !== pin) {
+      // Refuse once; the caller's rerun starts over against the new runtime.
+      restartWait.servedBy = null
       throw runtimeRestartedSincePreflightError()
     }
     let expectedRuntimeSource
@@ -98,7 +103,7 @@ export async function sendLocalRuntimeRequest<TResult>(
           ...(request.requestSelection ? { requestSelection: request.requestSelection } : {})
         }
       )
-      restartWait.settle()
+      restartWait.settle(metadata.runtimeId)
       return { metadata, response }
     } catch (error) {
       // Only a refused connect proves nothing was sent; a dropped request may have applied.

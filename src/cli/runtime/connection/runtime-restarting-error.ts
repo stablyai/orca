@@ -20,7 +20,7 @@ export function runtimeRestartingError(restart: RuntimeRestartMarker): RuntimeCl
 export function runtimeRestartedSincePreflightError(): RuntimeClientError {
   return new RuntimeClientError(
     'runtime_unavailable',
-    'Orca restarted after this command checked what it supports, so nothing was sent.',
+    'Orca restarted while this command was running, so nothing was sent.',
     {
       requestSent: false,
       nextSteps: ['Run the command again; it checks the restarted Orca first.']

@@ -52,6 +52,8 @@ export class RuntimeRestartWait {
   private deadline: number | null = null
   /** The last active restart seen; set once a wait has started. */
   restart: RuntimeRestartMarker | null = null
+  /** The runtime that last answered this command; what it learned may not hold for a replacement. */
+  servedBy: string | null = null
   private readonly now: () => number
   private readonly sleep: (ms: number) => Promise<void>
   private readonly budgetMs: number
@@ -66,9 +68,10 @@ export class RuntimeRestartWait {
   }
 
   /** A reached runtime ends the restart, so a long-lived client gets a fresh budget next time. */
-  settle(): void {
+  settle(runtimeId: string): void {
     this.deadline = null
     this.restart = null
+    this.servedBy = runtimeId
   }
 
   /** Sleeps within the budget a wait already started; false once it is spent or none started. */
