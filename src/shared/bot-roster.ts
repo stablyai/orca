@@ -186,7 +186,9 @@ export function formatPairedClient(client: BotRosterClient): string {
           `  Bots it lets this Orca's agents ask${client.moreBots ? ' (it allows more than are named here)' : ''}: ${listed}`,
           `  Ask one: ${ask}. For its bots not named here, ${others}`
         ]
-      : [`  None of its bots are named here. For any of them, ${others} Then: ${ask}.`])
+      : [
+          `  None of its bots are named here${client.moreBots ? ', though it allows some' : ''}. For any of them, ${others} Then: ${ask}.`
+        ])
   ].join('\n')
 }
 
