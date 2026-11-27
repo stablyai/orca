@@ -5,13 +5,16 @@ import type {
   PluginSurface
 } from '../../../../shared/plugins/frames/plugin-protocol'
 import { executePluginHostCall, type ExecutePluginHostCallInput } from './plugin-host-methods'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 
-const pluginHostCallRequestSchema = z
-  .object({
-    method: z.string().min(1).max(128),
-    params: z.unknown().optional()
-  })
-  .strict()
+const pluginHostCallRequestSchema = lazyZodSchema(() =>
+  z
+    .object({
+      method: z.string().min(1).max(128),
+      params: z.unknown().optional()
+    })
+    .strict()
+)
 
 export type PluginHostCallPolicy = Pick<
   ExecutePluginHostCallInput,

@@ -11,7 +11,6 @@ import { ConfirmContent } from '../../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import { mobileBotAccessCopy } from '../mobile-bot-access-copy'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotAccessDecisionContent } from '../MobileBotAccessDecision'
@@ -24,6 +23,7 @@ import {
   whoCanAskName
 } from '../MobileWhoCanAskRows'
 import type { BotAccessRequests } from '../use-bot-access-requests'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 /**
  * One workspace's Who can ask: its requests, then You and its people, each removable. `overlay` replaces
@@ -165,6 +165,7 @@ export function ConnectorHandoff(props: {
   /** Shows the sign-in on this phone; null where the host can't stream it here. */
   onOpenPage: (() => void) | null
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   return (
     <SettingsSection

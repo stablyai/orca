@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import {
   useCallback,
   useEffect,
@@ -87,7 +88,7 @@ export function useMobileScreenDictation(
         return
       }
       triggerError()
-      showToast(dictationFailureMessage(message))
+      showToast(dictationFailureMessage(message, translate))
     },
     [setShowDictationSetup, showToast]
   )

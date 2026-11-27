@@ -274,6 +274,25 @@ export function hasUnambiguousStartTime(startedAt: string, capturedAtMs: number)
   return startedAtMs < Math.floor(capturedAtMs / 1_000) * 1_000
 }
 
+/** Recorded rows still live with the same start time and group; a duplicated live PID is ambiguous and never matches. */
+export function liveIdentityMatches(
+  recorded: readonly ProcessTableRow[],
+  live: readonly ProcessTableRow[]
+): ProcessTableRow[] {
+  const expectedPids = new Set(recorded.map((row) => row.pid))
+  const liveTargets = new Map<number, ProcessTableRow | null>()
+  // Index only the small set of signal targets, not the whole process table.
+  for (const row of live) {
+    if (expectedPids.has(row.pid)) {
+      liveTargets.set(row.pid, liveTargets.has(row.pid) ? null : row)
+    }
+  }
+  return recorded.filter((row) => {
+    const current = liveTargets.get(row.pid)
+    return current?.startedAt === row.startedAt && current.pgid === row.pgid
+  })
+}
+
 /** Reach detached descendants with SIGTERM, then escalate only survivors whose identity excludes same-second PID reuse. */
 export function terminateDescendantSnapshot(
   snapshot: DescendantSnapshot,
@@ -295,24 +314,12 @@ export function terminateDescendantSnapshot(
       if (!capture) {
         return
       }
-      const expectedPids = new Set(snapshot.descendants.map((row) => row.pid))
-      const liveTargets = new Map<number, ProcessTableRow | null>()
-      // Index only the small set of signal targets, not the whole process table.
-      for (const live of capture.rows) {
-        if (expectedPids.has(live.pid)) {
-          // Duplicate PID rows make identity ambiguous, so never escalate them.
-          liveTargets.set(live.pid, liveTargets.has(live.pid) ? null : live)
-        }
-      }
-      for (const row of snapshot.descendants) {
-        const live = liveTargets.get(row.pid)
+      for (const row of liveIdentityMatches(snapshot.descendants, capture.rows)) {
         if (
           hasUnambiguousStartIdentity(
             row,
             snapshot.capturedAtMsByPid?.[String(row.pid)] ?? snapshot.capturedAtMs
-          ) &&
-          live?.startedAt === row.startedAt &&
-          live.pgid === row.pgid
+          )
         ) {
           sendSignal(row.pid, 'SIGKILL')
         }

@@ -25,7 +25,8 @@ import type {
 import {
   ENVIRONMENT_STORE_READ_OPERATIONS as readers,
   clearEnvironmentListCache,
-  runCachedListEnvironments
+  isCacheableEnvironmentStoreRead,
+  runCachedEnvironmentStoreRead
 } from './runtime-environment-store-list-cache'
 
 type Pending = {
@@ -281,15 +282,13 @@ export function submitEnvironmentStoreCommand(
     return enqueueEnvironmentStoreCommand(command, servingWsl, observe)
   }
   if (
-    command.operation === 'listEnvironments' &&
-    !command.args[1]?.requireStoreFile &&
-    !command.args[1]?.recoverBlankStore &&
+    isCacheableEnvironmentStoreRead(command) &&
     queue.length === 0 &&
     !owner?.active &&
     !retiring
   ) {
-    return runCachedListEnvironments({
-      userDataPath: command.args[0],
+    return runCachedEnvironmentStoreRead({
+      command,
       servingWsl,
       observe,
       readWrites: () => writes,

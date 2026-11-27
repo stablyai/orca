@@ -104,6 +104,8 @@ export type StubOptions = {
   host?: 'paste' | 'finishing' | 'old-host'
   /** A Google setup run the host still has open for every bot. */
   googleSetupRunning?: boolean
+  /** gh is signed out on the host the bot runs on. */
+  ghSignedOut?: boolean
   /** The bot's hooks and the calls each one lists; none by default. */
   webhooks?: { hooks: WebhookSummary[]; calls: WebhookCallRow[] }
 }
@@ -200,7 +202,8 @@ export function stub(options: StubOptions): void {
             defaultBotId: null,
             linkedAccounts: []
           }
-        ]
+        ],
+        ...(options.ghSignedOut ? { gh: 'signed-out' } : {})
       }
     }),
     users: notAnswered,

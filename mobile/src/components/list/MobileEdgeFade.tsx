@@ -1,8 +1,8 @@
 import { useId } from 'react'
 import { StyleSheet, View } from 'react-native'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export function MobileEdgeFade({
   edge,
@@ -14,7 +14,7 @@ export function MobileEdgeFade({
   /** The surface it fades into; the panel's by default. */
   color?: string
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const id = `edge-fade-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
   const horizontal = edge === 'left' || edge === 'right'
   const start = edge === 'top' || edge === 'left'

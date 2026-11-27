@@ -1,11 +1,11 @@
 import { GitBranch, MessageSquarePlus } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
-import { colors } from '../theme/mobile-theme'
+import type { MobilePalette } from '../theme/mobile-theme'
 import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
 import { MobileAgentSessionHistoryIcon } from './MobileAgentSessionHistoryIcon'
-import { translate } from '../i18n/mobile-i18n'
+import type { Translate } from '../i18n/mobile-i18n'
 import { readAgentLaunchSupport } from '../session/agent-launch/agent-launch-request'
 import { AI_VAULT_SESSION_HANDOFF_RUNTIME_CAPABILITY } from '../../../src/shared/ai-vault/contracts/ai-vault-runtime-capabilities'
 
@@ -18,6 +18,8 @@ type Args = {
   hostCapabilities: readonly string[]
   navigate: (target: string) => void
   onDone: () => void
+  t: Translate
+  colors: MobilePalette
 }
 
 // Gate history action on aiVault.v1 so navigation cannot call a missing RPC; actions also include Source Control.
@@ -29,7 +31,7 @@ export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] 
   const actions: ActionSheetAction[] = [
     {
       id: 'sourceControl',
-      label: translate('agentHistory.worktreeNavigationActions.sourceControl', 'Source Control'),
+      label: args.t('agentHistory.worktreeNavigationActions.sourceControl', 'Source control'),
       icon: GitBranch,
       onPress: () => {
         const params = new URLSearchParams({ name: args.worktreeName, origin: 'host' })
@@ -59,12 +61,9 @@ export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] 
   }
   actions.push({
     id: 'agentSessionHistory',
-    label: translate(
-      'agentHistory.worktreeNavigationActions.agentSessionHistory',
-      'Agent Session History'
-    ),
+    label: args.t('agentHistory.worktreeNavigationActions.agentSessionHistory', 'Agent history'),
     renderIcon: () =>
-      MobileAgentSessionHistoryIcon({ size: 16, color: colors.textSecondary, strokeWidth: 2 }),
+      MobileAgentSessionHistoryIcon({ size: 16, color: args.colors.textSecondary, strokeWidth: 2 }),
     onPress: () => openHistory()
   })
   // History picks the session to hand off; the new agent starts through the host's durable launch.
@@ -76,7 +75,7 @@ export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] 
   ) {
     actions.push({
       id: 'handoffAgentSession',
-      label: translate('agentHistory.handoff.title', 'Hand off to agent'),
+      label: args.t('agentHistory.handoff.title', 'Hand off to agent'),
       icon: MessageSquarePlus,
       onPress: () => openHistory('handoff')
     })

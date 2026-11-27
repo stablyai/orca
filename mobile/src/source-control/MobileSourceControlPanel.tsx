@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useHostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
 import { View } from 'react-native'
-import { GitBranch, RefreshCw } from 'lucide-react-native'
+import { GitBranch } from 'lucide-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   MobileLoadErrorState,
   MobileOfflineState,
   MobileStateView
 } from '../components/feedback/MobileStateView'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { connectionRetryAction } from '../transport/connection/connection-retry-action'
 import { useMobileSourceControlState } from './use-mobile-source-control-state'
@@ -21,17 +20,18 @@ import {
   resolveMobileSourceControlReviewInputs
 } from './workflows/mobile-source-control-primary-action'
 import { MobileSourceControlModals } from './panel/MobileSourceControlModals'
+import { useMobileSourceControlChangesMenu } from './panel/use-mobile-source-control-changes-menu'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { MobileSourceControlHubCommitsPage } from './panel/MobileSourceControlHubCommitsPage'
 import { MobileSourceControlNextStepBar } from './panel/MobileSourceControlNextStepBar'
 import { useMobileSourceControlNextStep } from './panel/use-mobile-source-control-next-step'
 import { OptionPager } from '../components/bottom-drawer/BottomDrawer'
 import { useSourceControlHubNavigation } from './panel/use-source-control-hub-navigation'
-import { styles } from './mobile-source-control-styles'
-import { hubStyles } from './panel/mobile-source-control-hub-styles'
+import { stylesSheet } from './mobile-source-control-styles'
+import { hubStylesSheet } from './panel/mobile-source-control-hub-styles'
 import {
   SOURCE_CONTROL_HUB_TABS,
-  SOURCE_CONTROL_HUB_TAB_LABELS,
+  sourceControlHubTabLabel,
   type SourceControlHubRouteTab
 } from './panel/mobile-source-control-hub-tab'
 import { groupMobileSourceControlMenu } from './workflows/mobile-source-control-actions'
@@ -44,6 +44,7 @@ import {
   type MobilePrTabOpeners
 } from './panel/use-mobile-source-control-pr-tab'
 import { openExternalLink as openMobilePrUrl } from '../platform/external-links/external-link'
+import { useThemedStyles } from '../theme/themed-styles'
 
 export type MobileSourceControlPanelProps = {
   hostId: string
@@ -65,7 +66,8 @@ export function MobileSourceControlPanel({
   backInPlace,
   onRequestClose
 }: MobileSourceControlPanelProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const hubStyles = useThemedStyles(hubStylesSheet)
   const t = useMobileTranslation()
   const {
     screens: hubScreens,
@@ -155,7 +157,7 @@ export function MobileSourceControlPanel({
     [actionSheetActions]
   )
   const primaryAction = useMemo(
-    () => buildMobileSourceControlPrimaryAction({ ...primaryActionArgs, review }),
+    () => buildMobileSourceControlPrimaryAction({ ...primaryActionArgs, review }, t),
     [primaryActionArgs, review, t]
   )
   const isHostedRepo = prController.prSidebarIsGithubRepo
@@ -199,23 +201,14 @@ export function MobileSourceControlPanel({
     prController,
     includeDetails: activeTab === 'pr'
   })
-  // Changes: the rarer git actions, then Refresh, then Force push last and red.
-  const changesMenuGroups = useMemo(
-    () => [
-      ...gitMenu.groups,
-      [
-        {
-          id: 'refresh',
-          label: t('sourceControl.header.refresh', 'Refresh source control'),
-          icon: RefreshCw,
-          disabled: ioBusy,
-          onPress: onRefresh
-        }
-      ],
-      ...(gitMenu.forcePush ? [[{ ...gitMenu.forcePush, destructive: true }]] : [])
-    ],
-    [gitMenu, ioBusy, onRefresh, t]
-  )
+  // Changes: the git actions that apply, then Refresh, then Force push and Abort last and red.
+  const { groups: changesMenuGroups, abortConfirm } = useMobileSourceControlChangesMenu({
+    gitMenu,
+    busyAction,
+    conflictOperation: state.status?.conflictOperation,
+    onRefresh,
+    abortConflictOperation: state.abortConflictOperation
+  })
   const hostConnection = useHostConnectionInputs(hostId)
   const { prTab, prMenuGroups, branchCompare } = useMobileSourceControlPrTab({
     state,
@@ -270,7 +263,7 @@ export function MobileSourceControlPanel({
         <MobileSegmentedControl
           segments={SOURCE_CONTROL_HUB_TABS.map((tab) => ({
             value: tab,
-            label: SOURCE_CONTROL_HUB_TAB_LABELS[tab]
+            label: sourceControlHubTabLabel(tab, t)
           }))}
           selected={activeTab}
           onSelect={selectTab}
@@ -392,6 +385,7 @@ export function MobileSourceControlPanel({
         }
       />
       <MobileSourceControlModals state={state} />
+      {abortConfirm}
       <MobilePrTabSheets tab={prTab} />
     </View>
   )

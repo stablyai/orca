@@ -583,11 +583,10 @@
         "pageChanged": "This page closed or changed profile during the import. Try again."
       },
       "notice": {
-        "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",
-        "importedMore_other": "Imported {{count}} cookies for {{domains}} +{{more}} more. Reload the page to use them.",
-        "imported_one": "Imported {{count}} cookie for {{domains}}. Reload the page to use them.",
-        "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them.",
-        "failed": "Cookie import failed: {{reason}}"
+        "failed": "Cookie import failed: {{reason}}",
+        "importedCount_one": "Imported {{countLabel}} cookie",
+        "importedCount_other": "Imported {{countLabel}} cookies",
+        "reload": "Reload"
       },
       "routedPage": {
         "label": "Browsers on this device",
@@ -635,10 +634,53 @@
       "resetZoom": "Reset zoom",
       "resetViewport": "Reset viewport size",
       "findOnPage": "Find on page",
-      "profile": "Profile"
+      "profile": "Profile",
+      "annotateModeWithShortcut": "Annotate, grab or draw ({{value0}})",
+      "annotateMode": "Annotate, grab or draw"
     },
     "loadStall": {
       "waitingForHost": "Waiting for {{host}}…"
+    },
+    "annotatePalette": {
+      "annotateTooltip": "Annotate: comment on an element (A)",
+      "grabTooltip": "Grab: copy an element's context (G)",
+      "drawTooltip": "Draw: mark up a screenshot (D)",
+      "positionLeft": "Left",
+      "positionRight": "Right",
+      "positionTop": "Top",
+      "positionMiddle": "Middle",
+      "positionBottom": "Bottom",
+      "label": "Annotate tools",
+      "tools": "Tool",
+      "copy": "Copy",
+      "copyTitle": "Copy the picked element",
+      "copied": "Copied",
+      "screenshot": "Screenshot",
+      "screenshotTitle": "Copy a screenshot of the picked element",
+      "done": "Done",
+      "doneTitle": "Done (Esc)",
+      "move": "Move toolbar",
+      "positionValueBothAxes": "{{side}} {{percent}}%, {{vertical}} {{verticalPercent}}%",
+      "annotateTooltipNoKey": "Annotate: comment on an element",
+      "grabTooltipNoKey": "Grab: copy an element's context",
+      "drawTooltipNoKey": "Draw: mark up a screenshot",
+      "moveAnywhereTooltip": "Drag or use arrow keys to move · double-click to reset · hold {{key}} to see under",
+      "copyMarkup": "Copy markup",
+      "pickFirst": "Pick an element first",
+      "moreDrawTools": "More drawing tools",
+      "showNotes": "Show notes",
+      "noteCountOne": "1 note",
+      "noteCount": "{{count}} notes",
+      "drawingDiscarded": "Drawing discarded",
+      "undo": "Undo",
+      "collapseNotes": "Collapse notes",
+      "expandNotes": "Expand notes",
+      "clearNotes": "Clear notes",
+      "waitingForPage": "Waiting for page…",
+      "pageDidNotLoad": "Page didn't load",
+      "discardDrawing": "Discard drawing",
+      "discardDrawingTitle": "Discard drawing (Esc)",
+      "positionCenter": "Center"
     },
     "profileCookieClear": {
       "label": "Cookies",
@@ -658,6 +700,12 @@
       "failed": "Couldn't clear cookies in {{profile}} on {{host}}. Try again.",
       "failedLocal": "Couldn't clear cookies in {{profile}} on this computer. Try again.",
       "sshHostOption": "{{host}} (SSH)"
+    },
+    "grabToast": {
+      "noScreenshot": "No screenshot available",
+      "hoverReadFailed": "Could not read the hovered element",
+      "noHover": "No element hovered",
+      "copyFailed": "Couldn't copy"
     }
   },
   "editor": {
@@ -843,7 +891,6 @@
         "sshToggleDescription": "Show configured SSH and remote Orca hosts when any are available.",
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
-        "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
         "cursorToggleDescription": "Show Cursor plan usage when signed in through cursor-agent or Cursor IDE.",
         "zcodeToggleDescription": "Show ZCode Coding Plan quota usage.",
@@ -1061,6 +1108,12 @@
           "added": "Added {{name}}",
           "browse": "Chrome Web Store",
           "openFailed": "Open a workspace to browse the Chrome Web Store."
+        },
+        "failure": {
+          "supportDisabled": "Turn on browser extensions in Settings › Browser › Extensions",
+          "invalidWebStoreInput": "Paste a Chrome Web Store link or a 32-letter extension ID",
+          "profileUnavailable": "Browser profile is not available for extensions",
+          "alreadyAdded": "{{name}} is already added"
         },
         "enabledToggleLabel": "Turn browser extensions on or off"
       },
@@ -2050,6 +2103,9 @@
     "computerUse": {
       "teamDisabled": "Computer Use is turned off by your team."
     },
+    "browserUse": {
+      "teamDisabled": "Browser Use is turned off by your team."
+    },
     "artifacts": {
       "teamDisabled": "Artifact sharing is turned off by your team."
     },
@@ -2475,10 +2531,6 @@
         },
         "worktrees": {
           "e50495aae6": "Force Delete Branch",
-          "14bc053a47": "Local {{value0}} was not refreshed",
-          "localBaseRefRefreshFailedForWorktree": "Local {{value0}} was not refreshed for \"{{value1}}\"",
-          "903b51c2ed": "Workspace created from {{value0}}, but Orca could not fast-forward local {{value1}}. {{value2}}",
-          "localBaseRefRefreshFailedDescriptionNamed": "Workspace \"{{value0}}\" was created from {{value1}}, but Orca could not fast-forward local {{value2}}. {{value3}}",
           "localBaseRefRefreshFailedDetailDirtyNamed": "The worktree at {{value0}} (where local {{value1}} is checked out) has uncommitted changes. Commit, stash, or discard those changes, then update local {{value1}} manually.",
           "localBaseRefRefreshFailedDetailDirty": "The worktree where local {{value0}} is checked out has uncommitted changes. Commit, stash, or discard those changes, then update local {{value0}} manually.",
           "localBaseRefRefreshFailedDetailNotFastForward": "Local {{value0}} does not exist or cannot be fast-forwarded cleanly from the remote base. Check for local-only commits before updating it manually.",
@@ -2524,7 +2576,13 @@
           },
           "createdWithoutParentNesting": "Created without nesting under \"{{value0}}\"",
           "createdWithoutParentNestingUnnamed": "Created without nesting under the selected parent",
-          "createdWithoutParentNestingDetail": "The parent workspace was no longer available. You can set it from the workspace menu."
+          "createdWithoutParentNestingDetail": "The parent workspace was no longer available. You can set it from the workspace menu.",
+          "localBaseRefNotUpdated": "{{value0}} not updated",
+          "localBaseRefNotUpdatedDirty": "Uncommitted changes in {{value0}}.",
+          "localBaseRefNotUpdatedNotFastForward": "Local-only commits on {{value0}}.",
+          "localBaseRefNotUpdatedError": "Git error.",
+          "localBaseRefHideDetails": "Hide details",
+          "localBaseRefShowDetails": "Details"
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -3499,6 +3557,9 @@
       }
     },
     "components": {
+      "railPage": {
+        "closeSearch": "Close search"
+      },
       "hostPicker": {
         "searchHosts": "Search hosts…",
         "noHostsMatch": "No hosts match.",
@@ -4002,9 +4063,9 @@
         "setLocationTooltip": "Choose a folder or clone this project onto {{host}}.",
         "addHost": "Add host",
         "addSshHost": "Add SSH host",
-        "addSshHostHint": "Use an existing machine over SSH",
+        "addSshHostHint": "Connect over SSH",
         "addRemoteOrcaServer": "Add Remote Orca Server",
-        "addRemoteOrcaServerHint": "Pair another Orca runtime",
+        "addRemoteOrcaServerHint": "Orca on another computer",
         "hostConnectionFailed": "Connection failed",
         "connect": "Connect",
         "reconnect": "Reconnect",
@@ -4239,6 +4300,8 @@
         "8c967b4d15": "Later"
       },
       "TaskPage": {
+        "issueFilterState": "State",
+        "issueFilterPreset": "Preset",
         "gitlabLoadFailed": "Could not load GitLab work items. Refresh to try again.",
         "ff69a30681": "Cancel",
         "8ff6fdc368": "Creating…",
@@ -4947,12 +5010,7 @@
           "ea3416d646": "Assignee",
           "b1d9fdea08": "Label",
           "24754c44ad": "Author",
-          "764a0b4ce1": "Status",
-          "f0cf6dd591": "off",
-          "1e9b5244f2": "on",
           "b930de7194": "Draft only",
-          "e0002f1eba": "selected",
-          "2b2f019091": "Any state",
           "0fd3249e2e": "Closed",
           "d78b60b5c2": "Open",
           "bd162b7d5a": "Merged",
@@ -4961,7 +5019,6 @@
           "labelCount_other": "{{count}} labels",
           "authorCount_one": "{{count}} author",
           "authorCount_other": "{{count}} authors",
-          "allStates": "All",
           "filterPullRequests": "Filter pull requests",
           "filterIssues": "Filter issues",
           "filterOrTypeLogin": "Filter or type a login...",
@@ -6022,7 +6079,6 @@
             "c0e972d726": "Cancel",
             "3bbf140864": "MiniMax Usage",
             "remoteServerLabel": "Remote server",
-            "antigravityUsage": "Antigravity Usage",
             "grokUsageMenu": "Grok Usage",
             "floatingTerminalNewActivity": "{{label}}, new activity",
             "4fba7dc1e7": "{{value0}} bal",
@@ -6482,16 +6538,9 @@
             "mainWorktree": "main worktree",
             "detached": "detached"
           },
-          "antigravity": {
-            "unknownAccount": "Google account",
-            "accounts": "Saved Antigravity Accounts",
-            "readAgo": "Read {{time}}",
-            "notRead": "Usage unknown: not read yet"
-          },
           "AccountSwitchList": {
             "used": "Used",
             "left": "Left",
-            "reset": "Reset",
             "accounts": "Accounts"
           },
           "InlineUsageBars": {
@@ -6849,7 +6898,6 @@
           "c13b82793c": "Manage installs",
           "aee7b99cc6": "Install from link",
           "filterProvider": "Filter by agent",
-          "filterSource": "Filter by source",
           "allSources": "All",
           "clearFilters": "Clear filters",
           "closeSkills": "Close skills",
@@ -7380,8 +7428,8 @@
           "addSshHost": "Add SSH host",
           "addRemoteServer": "Add remote server",
           "addRemoteHost": "Add remote host",
-          "addSshHostDetail": "Use an existing machine over SSH.",
-          "addRemoteServerDetail": "Pair with Orca running on another computer.",
+          "addSshHostDetail": "Connect to a machine over SSH.",
+          "addRemoteServerDetail": "Orca on another computer, no SSH needed.",
           "addRemoteHostDetail": "SSH host or Orca server",
           "addWslHost": "Add WSL distro",
           "addWslHostDetail": "Run an Orca server inside a WSL 2 distro. Experimental.",
@@ -8495,7 +8543,7 @@
           "serverSaveFailed": "Failed to add remote server.",
           "serverTitle": "Add remote server",
           "sshTitle": "Add SSH host",
-          "serverDescription": "Pair with Orca running on another computer.",
+          "serverDescription": "Pair with Orca on another computer on the same network.",
           "serverRunsAsYou": "This device will be able to run commands as you on this server.",
           "sshDescription": "Add a persistent machine you can log into over SSH.",
           "serverSshTitle": "Add SSH host to {{server}}",
@@ -10432,6 +10480,7 @@
           "localLink": "Local-only link",
           "localLinkHelp": "This link only works in a browser or Orca client running on this computer.",
           "noExternalAddress": "No address for another device was found. Connect this computer to a LAN or Tailscale, refresh, or choose Custom address.",
+          "interfaceDisconnected": "{{address}} is disconnected. Reconnect it and refresh, or choose another address to create a link.",
           "customInvalid": "Enter a valid host, host:port, IPv6 address, or ws(s):// URL.",
           "thisComputer": "This computer",
           "whoOpens": "Who will open the link",
@@ -11325,7 +11374,6 @@
             "d77537b580": "opencode-go",
             "a9d56852eb": "opencode",
             "7f72de7cbe": "Show OpenCode Go token and cost usage in the status bar.",
-            "51b0ccd6a2": "google",
             "97957e374e": "openai",
             "8dfd676c28": "codex",
             "e9e4412545": "Show Codex token and cost usage in the status bar.",
@@ -11367,8 +11415,6 @@
               "pr": "pr",
               "duplicate": "duplicate"
             },
-            "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar.",
-            "antigravityKeyword": "antigravity",
             "e7d1b0f3a5": "Show Grok weekly credit usage from Grok CLI OAuth.",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
@@ -11422,8 +11468,7 @@
             "c29089716e": "Kimi usage",
             "96e32c1118": "MiniMax usage",
             "e8d2710689": "Muse usage",
-            "aff6e6afdf": "IDE font",
-            "ba1f9d39a6": "Antigravity usage"
+            "aff6e6afdf": "IDE font"
           }
         },
         "auto": {
@@ -13539,7 +13584,12 @@
             "terminalRun": "Run commands in your terminals, including SSH",
             "terminalRead": "Read the output of your terminals, including SSH",
             "workspaceWrite": "Open your workspaces and files, and run built-in commands",
-            "agentLaunch": "Start agents in your workspaces, including SSH"
+            "agentLaunch": "Start agents in your workspaces, including SSH",
+            "appearanceWrite": "Publish and select desktop application, editor and terminal colors",
+            "workspaceCreate": "Create workspaces (new Git branches and worktrees) in your projects, local and SSH; a project's setup script runs as its settings say",
+            "automationRead": "Read your automations: their names, prompts, agents, projects, workspaces and schedules",
+            "automationWrite": "Create automations that start agents in your projects on a schedule, even when the plugin is not running, and change or delete them (Orca asks you first for ones the plugin did not create, and before it changes what one with extra agent settings runs)",
+            "historyRead": "Read the list of your past agent sessions on this computer, from the history files of the coding agents Orca supports, including running WSL distributions on Windows (not SSH or other machines, Antigravity IDE conversations or subagent transcripts): each session's title, which is often the start of its first message, agent, workspace, branch, times, and message and token counts; never the conversation itself"
           },
           "decisionFailed": "Could not save the permission decision. Try again.",
           "fullAccessWarning": "Full access: runs as a normal program and can read your files, use your saved logins and SSH keys, use the network, run other programs and control Orca, including your terminals and agents.",
@@ -15165,7 +15215,7 @@
             "reset": "time until reset, e.g. 3h 15m",
             "resetAt": "reset clock time, e.g. 20:50",
             "optional": "dropped when a placeholder inside is empty",
-            "usagePools": "named usage pools, e.g. Antigravity models"
+            "namedUsagePools": "named usage pools, e.g. Cursor plan pools"
           }
         },
         "RepositoryRemoveProjectSection": {
@@ -15246,7 +15296,8 @@
             "741ff8a0d2": "Push & Create {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "Select a workspace to browse files"
+            "79b1537dd3": "Select a workspace to browse files",
+            "2f4483d6c4": "No files match this filter"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "New Folder",
@@ -15289,6 +15340,7 @@
             "31b4c3195d": "More Explorer Actions",
             "d95e30fe28": "Refresh Explorer",
             "6026b16950": "Collapse All",
+            "c1f3f3ec70": "Search file contents",
             "openInApp": "Open in {{app}}"
           },
           "FileExplorerTreeStatus": {
@@ -15401,6 +15453,17 @@
             "localPortInUse": "Port {{port}} is already in use. Choose a different local port.",
             "localPortRequiresPrivileges": "Port {{port}} requires elevated privileges. Use a local port ≥ 1024."
           },
+          "Search": {
+            "1abfb25a66": "Type to search in files",
+            "d56d140747": "Press Enter to search",
+            "98c8435e36": "Select a workspace to search",
+            "dcc294f28d": "(results truncated)",
+            "resultsInFiles": "{{results}} in {{files}}",
+            "resultCount_one": "{{count}} result",
+            "resultCount_other": "{{count}} results",
+            "fileCount_one": "{{count}} file",
+            "fileCount_other": "{{count}} files"
+          },
           "SearchFilters": {
             "01e4671ccf": "e.g. *.min.js, dist/**",
             "0a6412a895": "files to exclude",
@@ -15410,9 +15473,11 @@
           "SearchHeader": {
             "6234a5ef85": "Use Regular Expression",
             "4567e6e0b6": "Match Whole Word",
-            "464ae3974f": "Match Case"
+            "464ae3974f": "Match Case",
+            "693cbeadd0": "Search"
           },
           "SearchQueryRow": {
+            "queryLabel": "Search files",
             "clearLabel": "Clear search"
           },
           "SearchResultItems": {
@@ -15443,7 +15508,6 @@
             "476b77745b": "Change Base Ref",
             "ed34038d0d": "Refresh branch compare",
             "493f963029": "Change base ref",
-            "11b5dd8e41": "Comparing against",
             "a9bf7c171a": "Commit Failed",
             "011f9713fc": "Commit blocked",
             "cc199ccc5f": "More commit and remote actions",
@@ -15587,8 +15651,6 @@
             "c8e4a1f902": "Filter: {{value0}}",
             "b3c8f1a902": "Filter files by name",
             "d4f8c2a901": "Clear and close filter",
-            "e8a1c4b203": "vs",
-            "4b4a7de138": "Open review page in browser",
             "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR.",
             "pushRecovery": {
               "4b37ae99b0": "Start the default AI agent to fix this push failure",
@@ -15608,7 +15670,6 @@
             "97e7124eac": "Could not refresh Source Control. Try again.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Current branch: {{value0}}",
-            "c7d4e2f801": "Change base ref: {{value0}}",
             "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR.",
             "entryStageFailed": "Failed to stage “{{value0}}”",
             "entryUnstageFailed": "Failed to unstage “{{value0}}”",
@@ -15656,9 +15717,6 @@
             "keepFile": "Keep file",
             "keepDeletion": "Keep deletion",
             "refreshAll": "Refresh all",
-            "baseUpToDate": "Up to date",
-            "rebaseOperationInProgress": "Wait for the current Git operation to finish",
-            "rebaseButton": "Rebase",
             "rebaseConflictCount_one": "{{count}} conflict",
             "rebaseConflictCount_other": "{{count}} conflicts",
             "rebasePaused": "Rebase paused",
@@ -15688,9 +15746,7 @@
             "scopeUncommitted": "Uncommitted",
             "scopeAllChanges": "All changes",
             "scopeNone": "None",
-            "scopeOpenDiff": "Open diff",
             "scopeShowAll": "Show all changes",
-            "scopeLoadingBranchChanges": "Loading branch changes…",
             "scopeBranchCommits": "Commits on this branch",
             "scopeRecentCommits": "Recent commits",
             "scopeCompareTo": "Compare to {{ref}}",
@@ -15707,7 +15763,8 @@
             "scopeOlderHistory": "Older history in Git Graph",
             "scopeNoUncommitted": "No uncommitted changes.",
             "scopeCommitFiles": "Files",
-            "gitGraphButton": "Graph"
+            "gitGraphButton": "Graph",
+            "compareLoadingAgainst": "Comparing against {{base}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -16570,6 +16627,16 @@
             "remoteDescription": "\"{{value0}}\" will be deleted from {{value2}}. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
             "confirm": "Delete"
           },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "Find files",
+            "4d5a6b2a49": "Clear file filter",
+            "7a9fb1e6aa": "Contents"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "Names",
+            "b3c8f1a902": "Filter files by name",
+            "f8a2c4d1e0": "Explorer search mode"
+          },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "No file changes in this commit"
           },
@@ -17222,34 +17289,11 @@
             "0bb39f8fe6": "Send",
             "69334b4b10": "Voice dictation",
             "29f2d13839": "Type a command…",
-            "817090af40": "Ctrl+C",
-            "53ff909568": "Tab",
-            "4930eaaae7": "Esc",
             "fa22927f13": "Paste",
             "985373052e": "Switch to phone mode",
-            "58a9ee6003": "tool-call formatting. Want me to add the diff next?",
-            "aa64b519c6": "terminal screen. Tokyonight palette, Menlo, real claude",
-            "e75112c834": "I've replaced the pair-scan slide with a high-fidelity",
-            "3ce3e8c892": "14 passed, 1 skipped (1.8s)",
-            "4b3666f9a9": "src/cache/worktree-cache.test.ts",
-            "1d448b69f7": "PASS",
-            "d39445686a": "src/transport/host-store.test.ts",
-            "a6e7cdc688": "pnpm test --filter mobile",
-            "21b67dfc92": "Bash",
-            "d6d1041a1c": "⎿ Replaced pair-scan slide with terminal session",
-            "336c0e070e": "mobile/orca-mobile-sidebar-mock-v3.html",
-            "6d4ebd5833": "Edit",
-            "fc83e0d5ef": "⎿ Read 2103 lines",
-            "80cc356591": "Read",
-            "2c10d43745": "claude",
-            "e0f98be657": "orca/feat-mobile-page",
-            "2defc05141": "dev@mac",
-            "da121ba48d": "PLAN.md",
-            "e4befee569": "shell",
             "606aa93192": "Files",
             "94febb0976": "Source control",
             "8d6516312d": "2 terminals · claude active",
-            "8432787c4e": "feat/mobile-page",
             "8fd998acd3": "Back"
           },
           "WorktreeListSlide": {
@@ -19167,8 +19211,6 @@
             "fa6ea61de3": "Cancel",
             "c2ef0359b9": "Copy Contents",
             "f2d0c22d67": "Delete annotation {{value0}}",
-            "11c5084aa2": "Clear annotations",
-            "734e4343ec": "Clear browser annotations",
             "95af781091": "Send feedback to an agent",
             "ac39b9366b": "Send",
             "366bf5d62c": "New Tab",
@@ -19202,21 +19244,14 @@
             "b71dc3d930": "Reconnect",
             "d51ef37351": "Copy",
             "6f4ab3592b": "Copied",
-            "499b31b84e": "Copy All",
             "168350ae6a": "Click or hover an element, then press C to copy or S to screenshot.",
-            "e852e20cea": "Copied — press S to screenshot, or select another element",
             "777b5bc4ec": "Click an element to add feedback for the agent.",
             "b733a91bd9": "Add feedback for the selected element.",
             "4328a0a062": "Grab failed: {{value0}}",
             "759f32af29": "Downloading",
             "4300f38145": "Downloading from {{value0}}{{value1}}",
-            "cc4a071d3a": "Annotate page element ({{value0}})",
             "572046436a": "Remote browser",
             "b313a7275b": "Opening remote browser",
-            "ea6af700da": "{{value0}} annotation",
-            "c13693fe27": "{{value0}} annotations",
-            "074f0ed10b": "{{value0}} annotation ready. Select another element or copy all feedback.",
-            "a2164a6e5a": "{{value0}} annotations ready. Select another element or copy all feedback.",
             "9f6f2e8c19": "The downloaded file path is unavailable.",
             "0c79b7634d": "Could not open the downloaded file. It may have been moved or deleted.",
             "397d9dc923": "Could not show the downloaded file. It may have been moved or deleted.",
@@ -19246,7 +19281,13 @@
             "devToolsDockRight": "Dock to right",
             "devToolsDockBottom": "Dock to bottom",
             "devToolsUndock": "Open in separate window",
-            "devToolsClose": "Close DevTools"
+            "devToolsClose": "Close DevTools",
+            "499b31b84e": "Copy All",
+            "e852e20cea": "Copied — press S to screenshot, or select another element",
+            "074f0ed10b": "{{value0}} annotation ready. Select another element or copy all feedback.",
+            "a2164a6e5a": "{{value0}} annotations ready. Select another element or copy all feedback.",
+            "11c5084aa2": "Clear annotations",
+            "734e4343ec": "Clear browser annotations"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",
@@ -19332,8 +19373,6 @@
                     "c16f932cb3": "Save",
                     "024467ceac": "Cancel",
                     "449d2c2629": "Annotation intent",
-                    "38d320108c": "Collapse annotations",
-                    "9f209891a7": "Expand annotations",
                     "includePageDetails": "Include page details",
                     "copyFeedback": "Copy feedback",
                     "copyFeedbackWithPageDetails": "Copy feedback with page details"
@@ -19705,10 +19744,10 @@
           "failed": "Failed",
           "succeeded": "Succeeded",
           "neverRan": "Never ran",
-          "filters": "Filters",
           "all": "All",
           "clear": "Clear filters",
           "agent": "Agent",
+          "bot": "Bot",
           "lastRun": "Last run"
         },
         "AutomationListSortHeader": {
@@ -20358,7 +20397,6 @@
       "linear-issue-attribute-filter-dropdowns": {
         "removeFilter": "Remove {{value0}} filter",
         "teamRequired": "Select a team to load status, assignees, and labels for this workspace.",
-        "filters": "Filters",
         "allWorkspacesTitle": "Select one workspace",
         "allWorkspacesBody": "Status, assignee, and label filters use ids from a single Linear workspace. Choose one workspace to filter by those attributes.",
         "clearAll": "Clear all filters",
@@ -20911,18 +20949,8 @@
         "create": "Create"
       },
       "NativeChatResumeToast": {
-        "resumingOn_one": "Resuming {{count}} agent on {{machine}}…",
-        "resumingOn_other": "Resuming {{count}} agents on {{machine}}…",
         "resuming_one": "Resuming {{count}} agent…",
         "resuming_other": "Resuming {{count}} agents…",
-        "resumedOn_one": "Resumed {{count}} agent on {{machine}}.",
-        "resumedOn_other": "Resumed {{count}} agents on {{machine}}.",
-        "resumedUpdate_one": "Resumed {{count}} agent after the update.",
-        "resumedUpdate_other": "Resumed {{count}} agents after the update.",
-        "resumedRestart_one": "Resumed {{count}} agent after the restart.",
-        "resumedRestart_other": "Resumed {{count}} agents after the restart.",
-        "partial_one": "Resumed {{resumed}} of {{total}} agents. {{count}} needs you.",
-        "partial_other": "Resumed {{resumed}} of {{total}} agents. {{count}} need you.",
         "stoppedOn_one": "{{count}} agent stopped on {{machine}}.",
         "stoppedOn_other": "{{count}} agents stopped on {{machine}}.",
         "stoppedUpdate_one": "{{count}} agent stopped when Orca updated.",
@@ -20935,8 +20963,6 @@
         "close": "Close",
         "listLabel": "Agents",
         "untitled": "Untitled agent",
-        "willAsk": "Orca asks agents to continue. Queued messages may be sent.",
-        "asked": "Orca asked agents to continue. Queued messages may be sent.",
         "resumedAutomatically": "Resumed automatically.",
         "changeInSettings": "Change in Settings",
         "dismissAll": "Dismiss all",
@@ -20946,7 +20972,16 @@
         "stateResumed": "Resumed",
         "stateNeedsYou": "Needs you",
         "stateResuming": "Resuming",
-        "stateStopped": "Stopped"
+        "stateStopped": "Stopped",
+        "resumingOne": "Resuming {{name}}…",
+        "failedOne": "Couldn’t resume {{name}}",
+        "failedSome_one": "Couldn’t resume {{count}} of {{total}}",
+        "failedSome_other": "Couldn’t resume {{count}} of {{total}}",
+        "resumedOne": "Resumed {{name}}",
+        "resumedMany_one": "Resumed {{count}} agent",
+        "resumedMany_other": "Resumed {{count}} agents",
+        "needYou_one": "{{count}} needs you",
+        "needYou_other": "{{count}} need you"
       },
       "RunTargetCombobox": {
         "noWslDistros": "No WSL distros found",
@@ -21929,7 +21964,6 @@
         "expand": "Expand"
       },
       "question": {
-        "step": "Step {{value0}}",
         "otherPlaceholder": "Type your answer",
         "cancel": "Cancel",
         "send": "Submit",
@@ -21941,12 +21975,11 @@
         "recommended": "Recommended",
         "stepOf": "{{value0}} of {{value1}}",
         "answered": "Answered",
-        "title": "Question",
         "previous": "Previous question",
         "nextQuestion": "Next question",
         "back": "Back",
         "skipAndSubmit": "Skip and submit",
-        "stepLabel": "{{value0}}, {{value1}} of {{value2}}: {{value3}}"
+        "questionStepLabel": "{{value0}}, {{value1}} of {{value2}}"
       },
       "ask": {
         "awaiting": "Awaiting user input:",
@@ -22131,6 +22164,14 @@
           "followedUp": "Follow-up",
           "handedOff": "Handed off",
           "task": "Task"
+        },
+        "unnamedRecipient": "an agent",
+        "recipientName": "{{name}}",
+        "event": {
+          "followedUp": "Sent follow-up",
+          "update": "Update",
+          "message": "Message",
+          "handedOff": "Handed off"
         }
       },
       "goal": {
@@ -22232,6 +22273,7 @@
       "explicitChatWslMoveToHost": "Chat is not available in a WSL folder opened from Windows. Run the project on a WSL host to chat there, or open the agent in a terminal.",
       "explicitChatWslRunAsHost": "Run {{distro}} as a host",
       "explicitChatSsh": "Chat is not available over SSH. Open the agent in a terminal instead.",
+      "explicitChatWorkspaceAccess": "Orca doesn't have permission to open this workspace folder. Check the folder's permissions and try again.",
       "explicitChatUnavailable": "This workspace cannot run the chat. Check the agent installation or open it in a terminal.",
       "structuredSessionHostDeclined": "Opened {{value0}} in a terminal",
       "structuredSessionTerminalNotVisible": "Orca opened {{value0}} in a terminal, but couldn't show it here when the launch finished. Your chat draft was kept.",
@@ -23050,21 +23092,14 @@
         "notNow": "Not now",
         "retry": "Retry",
         "dismiss": "Dismiss",
-        "openWorker": "Open worker",
         "remoteOwner": "Stop or clear this from the computer it runs on",
-        "workspaceRemoved": "This worker's workspace was removed",
-        "restore": "Show in dock again",
         "alreadyStopped": "Already stopped",
         "cantStop": "Can't stop now",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
         "loadingWorker": "Loading worker…",
         "resultUnavailable": "Worker result unavailable",
-        "showDetails": "Show details",
-        "hideDetails": "Hide details",
-        "close": "Close",
         "workersRegion": "Workers",
-        "doneResult": "Done · open result",
         "clearName": "Clear {{name}}",
         "stopUnavailable": "Stop {{name}} · {{title}} unavailable · {{reason}}",
         "stopName": "Stop {{name}} · {{title}}",
@@ -23088,8 +23123,6 @@
         "task": "Task",
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
-        "stopped": "Stopped",
-        "finished": "Finished",
         "failedCount": "{{count}} failed",
         "needsYouCount": "{{count}} needs you",
         "newQuestions_one": "{{count}} new worker question waiting on you",
@@ -23107,7 +23140,18 @@
         "unlisted": "Background work running",
         "unread": "Workers couldn’t load",
         "unreadDetail": "Workers will show here once they load",
-        "chipLabel": "{{label}}, latest: {{title}}"
+        "chipLabel": "{{label}}, latest: {{title}}",
+        "backgroundCommandCount_one": "{{count}} background command",
+        "backgroundCommandCount_other": "{{count}} background commands",
+        "commandCount_one": "{{count}} command",
+        "commandCount_other": "{{count}} commands",
+        "mixedRegion": "Workers and background commands",
+        "commandsRegion": "Background commands",
+        "stopSubagentsAndCommands": "Stop subagents and commands",
+        "workersKeepRunning": "Workers keep running",
+        "clearFailedWorkers": "Clear failed workers",
+        "mixedCount": "{{workers}} · {{commands}}",
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Set up a webhook",
@@ -24975,9 +25019,6 @@
         "planModelWithoutThinking": "Model \"{{model}}\" does not support a thinking effort level.",
         "planThinkingLevelInvalid": "Thinking level \"{{level}}\" is not valid for {{model}}.",
         "openCodeInvalidEvents": "OpenCode returned invalid JSON events.",
-        "antigravityInvalidEvents": "Antigravity returned invalid JSON events.",
-        "antigravityInvalidResult": "Antigravity returned an invalid result.",
-        "antigravityNoFinalResult": "Antigravity returned no final result.",
         "kimiUnreadableOutput": "Kimi returned output Orca couldn't read. Try again.",
         "kimiSessionOccupied": "Kimi couldn't use this session because it is active in another client. Stop the session there or exit that client, then try again.",
         "kimiInterrupted": "Kimi was interrupted before it finished generating text. Try again.",
@@ -25322,6 +25363,8 @@
     }
   },
   "common": {
+    "new": "New",
+    "search": "Search",
     "retry": "Retry",
     "cancel": "Cancel",
     "unassigned": "Unassigned",
@@ -25464,29 +25507,20 @@
       "label": "Explorer root",
       "full": "Repository root",
       "back": "Back to {{path}}",
+      "searchScope": "Search scope: workspace files",
       "retry": "Retry",
       "sparseStatus": "Sparse checkout",
       "scopeDetails": "About sparse checkout scope",
       "scopeExplanation": "The folder picker changes what you see, not which files are checked out. Repository root includes the checked-out root and ancestor files.",
+      "searchExplanation": "Names filters the folder you are viewing. Contents searches across the workspace. Files omitted by sparse checkout are not searched.",
+      "findInFolder": "Find in {{path}}",
       "folderLoadError": "Could not load this folder:",
-      "emptyFolder": "No files in this folder",
-      "combinedSearchExplanation": "Search finds file names in the folder you are viewing and text across the workspace. Files omitted by sparse checkout are not searched."
+      "emptyFolder": "No files in this folder"
     },
     "trashFailed": {
       "titleRecycleBin": "Couldn't move '{{name}}' to the Recycle Bin. Delete it permanently?",
       "titleTrash": "Couldn't move '{{name}}' to the Trash. Delete it permanently?",
       "description": "This cannot be undone."
-    },
-    "combinedSearch": {
-      "text": "Text",
-      "filesIn": "Files in {{path}}",
-      "files": "Files",
-      "showAll": "Show all {{count}}",
-      "noResults": "No results",
-      "placeholder": "Search",
-      "placeholderScoped": "Search {{path}}",
-      "textInWorkspace": "Text in workspace",
-      "refine": "Too many matches"
     }
   },
   "sparsePreset": {
@@ -25545,9 +25579,6 @@
       "retry": "Retry",
       "changed": "The native account changed. Select a saved account again before launching agy.",
       "refresh": "Refresh accounts",
-      "usage": "Refresh usage",
-      "usageWithReading": "Refresh usage ({{reading}})",
-      "usageReading": "Session: {{session}} · Weekly: {{weekly}}",
       "saved": "Saved Google account",
       "remove": "Remove",
       "searchDescription": "Save and select native agy Google accounts on the execution host.",
@@ -25568,8 +25599,6 @@
       "settingsIncomplete": "Choose an Antigravity account type and enter its Google Cloud project and location.",
       "settingsLoadFailed": "Orca couldn't load your Antigravity sign-in settings. Try again.",
       "settingsSaveFailed": "Orca couldn't save your Antigravity sign-in settings. Try again.",
-      "lastReading": "{{reading}} · Read {{time}}",
-      "noReading": "Usage unknown: not read yet",
       "fd47b5a5dd": "Antigravity accounts",
       "personalOption": "Your personal Google AI plan",
       "enterpriseOption": "Your organization's license",
@@ -25600,7 +25629,6 @@
       "currentNotSaved": "Current agy login · not saved",
       "noEmailNotSaved": "agy didn't report an email · not saved",
       "saveShort": "Save",
-      "readAt": "Read {{time}}",
       "active": "Active",
       "runtime": "Runtime",
       "chatTitle": "Antigravity Chat",
@@ -25619,7 +25647,9 @@
       "chatOtherWindow": "Sign-in is in progress in another window.",
       "chatPageDidntOpen": "Page didn't open?",
       "chatPasteCode": "Paste the code",
-      "chatPasteCodeLabel": "The code Google shows after you sign in, or that page's address"
+      "chatPasteCodeLabel": "The code Google shows after you sign in, or that page's address",
+      "launchesUse": "New agy launches use this account",
+      "loginNow": "agy's login right now"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -25760,7 +25790,7 @@
       "toggle": "Toggle search details",
       "active": "{{count}} active"
     },
-    "unavailable": "Not available here"
+    "noResults": "No results. Try another search or adjust your filters."
   },
   "workspaceDeletion": {
     "preferenceSaveFailed": "Could not save deletion preference",
@@ -26235,7 +26265,9 @@
     "statusFilters": {
       "loadFailed": "Could not load Jira status filters.",
       "saveFailed": "Could not save Jira status filters.",
+      "unavailable": "No statuses are available for this view yet.",
       "manualQuery": "Status filters apply to preset views. Clear the search to use them.",
+      "favouriteActive": "Clear the Jira favourite or choose a preset view to use status filters.",
       "label": "Filter Jira issues by status",
       "clear": "Clear statuses",
       "jql": "Status filter JQL",
@@ -26705,6 +26737,7 @@
       "fileExplorerCopyPath": "Copy file path",
       "fileExplorerCopyRelativePath": "Copy relative file path",
       "fileExplorerDelete": "Delete file",
+      "fileExplorerToggleDotfiles": "Toggle dotfiles",
       "terminalCopySelection": "Copy terminal selection",
       "terminalSelectAll": "Select all terminal text",
       "terminalPaste": "Paste into terminal",
@@ -26772,7 +26805,8 @@
       "d286d1ab85": "Clear pane title",
       "botItemBack": "Back to items",
       "botItemPrevious": "Previous item",
-      "botItemNext": "Next item"
+      "botItemNext": "Next item",
+      "pageSearch": "Search this page"
     },
     "group": {
       "global": "Global",
@@ -27790,7 +27824,7 @@
       "takesOver": "Takes over",
       "agentsKeepRunning": "Their agents keep running.",
       "fromTemplate": "Template",
-      "uploadDropOrPaste": "<upload>Upload</upload>, drop, or paste an image",
+      "uploadOrPaste": "<upload>Upload</upload> or paste",
       "purposeLabel": "Identity",
       "purposePlaceholder": "Who it is and what it does",
       "uploadPasteOrDrop": "or upload, paste or drop your own",
@@ -28093,6 +28127,7 @@
       "stop": "Stop",
       "stopWorker": "Stop {{value0}}",
       "agent": "Agent",
+      "progress": "Progress",
       "result": "Result",
       "workspace": "Workspace",
       "branch": "Branch",
@@ -28420,7 +28455,13 @@
       },
       "repositoriesIn": "Repositories in {{accounts}}",
       "repositoryCount_one": "{{count}} repository in {{accounts}}",
-      "repositoryCount_other": "{{count}} repositories in {{accounts}}"
+      "repositoryCount_other": "{{count}} repositories in {{accounts}}",
+      "ghSignedOut": {
+        "thisComputer": "this computer",
+        "status": "gh signed out on {{host}}",
+        "line": "gh is signed out on {{host}}. Run <code>gh auth login</code> there.",
+        "copy": "Copy {{text}}"
+      }
     },
     "automations": {
       "paused": "Paused",
@@ -28933,7 +28974,8 @@
       },
       "deliveryUnconfirmed": "Delivery unconfirmed",
       "starting": "Starting…",
-      "notStarted": "Not started"
+      "notStarted": "Not started",
+      "renameThreadNeedsHostUpdate": "Update Orca on {{host}} to rename threads."
     },
     "google": {
       "turnOn": {
@@ -30745,6 +30787,7 @@
       "continuesTip": "Continues automatically at {{time}}",
       "hitTip": "{{agent}} hit its usage limit · resets {{time}}",
       "continuesShort": "Continues {{time}}",
+      "rowLine": "Usage limit · {{time}}",
       "hitShort": "Hit limit",
       "stoppedCount": "{{count}} stopped"
     },

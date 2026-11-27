@@ -8,7 +8,7 @@ import {
   normalizeFilePath
 } from '../links/markdown-file-path-detection'
 import { routeMarkdownHref } from '../links/markdown-href-routing'
-import { styles, type MarkdownTone } from '../mobile-markdown-styles'
+import type { MarkdownStyles, MarkdownTone } from '../mobile-markdown-styles'
 import { MarkdownText } from '../mobile-markdown-text'
 import { plainText } from './mobile-markdown-plain-text'
 import { MobileMarkdownMath } from '../math/MobileMarkdownMath'
@@ -21,6 +21,7 @@ export type MarkdownInlineContext = {
   /** Host-confirmed paths are already links in the tree; draw no others. */
   filePathsLinkedInTree?: boolean
   tone: MarkdownTone
+  styles: MarkdownStyles
   textScale: number
   /** Chat text: desktop chat's math delimiters and sizes; otherwise GitHub's. */
   chatMath: boolean
@@ -53,7 +54,7 @@ export function openMarkdownHref(
 function renderTextRun(
   text: string,
   key: string,
-  { onOpenFile, filePathsLinkedInTree, tone }: MarkdownInlineContext,
+  { onOpenFile, filePathsLinkedInTree, tone, styles }: MarkdownInlineContext,
   outer: SpanStyle
 ): ReactNode {
   if (!onOpenFile || filePathsLinkedInTree) {
@@ -88,7 +89,7 @@ function renderLink(
   return (
     <MarkdownText
       key={key}
-      style={[outer, styles.link, ctx.tone.link]}
+      style={[outer, ctx.styles.link, ctx.tone.link]}
       onPress={() => openMarkdownHref(url, ctx)}
     >
       {label}
@@ -104,12 +105,13 @@ function renderInlineCode(
   outer: SpanStyle,
   onPress?: () => void
 ): ReactNode {
-  const size = ctx.textScale !== 1 ? { fontSize: styles.inlineCode.fontSize * ctx.textScale } : null
-  const style = [outer, styles.inlineCode, size, ctx.tone.inlineCode]
+  const size =
+    ctx.textScale !== 1 ? { fontSize: ctx.styles.inlineCode.fontSize * ctx.textScale } : null
+  const style = [outer, ctx.styles.inlineCode, size, ctx.tone.inlineCode]
   return onPress ? (
     <MarkdownText
       key={key}
-      style={[...style, styles.inlineCodeLink, ctx.tone.link]}
+      style={[...style, ctx.styles.inlineCodeLink, ctx.tone.link]}
       onPress={onPress}
     >
       {code}
@@ -138,10 +140,10 @@ function renderPhrasing(
       const emphasis =
         node.type === 'strong'
           ? // A tone recolours bold text, but bold keeps its weight over a tone's weight.
-            [styles.bold, ctx.tone.text, { fontWeight: styles.bold.fontWeight }]
+            [ctx.styles.bold, ctx.tone.text, { fontWeight: ctx.styles.bold.fontWeight }]
           : node.type === 'emphasis'
-            ? styles.italic
-            : styles.strike
+            ? ctx.styles.italic
+            : ctx.styles.strike
       const spanStyle = [outer, emphasis]
       return (
         <MarkdownText key={key} style={spanStyle}>
@@ -164,11 +166,11 @@ function renderPhrasing(
     case 'htmlSpan': {
       const tagStyle =
         node.tag === 'kbd'
-          ? [styles.inlineCode, styles.kbd, ctx.tone.inlineCode]
+          ? [ctx.styles.inlineCode, ctx.styles.kbd, ctx.tone.inlineCode]
           : node.tag === 'sup' || node.tag === 'sub'
-            ? [styles[node.tag], ctx.textScale !== 1 ? { fontSize: 10 * ctx.textScale } : null]
+            ? [ctx.styles[node.tag], ctx.textScale !== 1 ? { fontSize: 10 * ctx.textScale } : null]
             : node.tag === 'ins'
-              ? styles.ins
+              ? ctx.styles.ins
               : null
       const spanStyle = [outer, tagStyle]
       return (
@@ -197,9 +199,9 @@ function renderPhrasing(
           key={key}
           style={[
             outer,
-            styles.sup,
+            ctx.styles.sup,
             ctx.textScale !== 1 ? { fontSize: 10 * ctx.textScale } : null,
-            styles.footnoteReference,
+            ctx.styles.footnoteReference,
             ctx.tone.link
           ]}
         >
@@ -208,7 +210,7 @@ function renderPhrasing(
       )
     case 'mention':
       return (
-        <MarkdownText key={key} style={[outer, styles.mention]}>
+        <MarkdownText key={key} style={[outer, ctx.styles.mention]}>
           {node.value}
         </MarkdownText>
       )

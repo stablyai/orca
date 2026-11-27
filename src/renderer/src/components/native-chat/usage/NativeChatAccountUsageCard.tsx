@@ -192,9 +192,8 @@ function ChatUsageReset({
       onRefresh(reply?.outcome ? resetOutcomeNotice(reply.outcome) : null)
     } catch {
       setFailed(true)
-    } finally {
-      setBusy(false)
     }
+    setBusy(false)
   }
   return (
     <>

@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { TriangleAlert } from 'lucide-react-native'
-import { colors, radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { AgentHistoryRestartOffer } from './use-agent-history-restart-offer'
 import type { AgentHistoryHandoffLaunchNotice } from './use-agent-history-handoff'
@@ -30,19 +30,19 @@ export function AgentHistoryScanNotices({
   sessions: readonly unknown[]
   issues: readonly AiVaultScanIssue[]
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const scan = { sessions, issues }
   const blocking = blockingAiVaultScanIssue(scan)
   const notices = aiVaultScanNoticeIssues(scan)
   const skipped = skippedAiVaultTranscriptIssues(scan)
+  // One notice at a time, the one that matters most, so the sessions stay in view.
   return (
     <>
       {blocking ? (
         <View style={styles.notice}>
           <Text style={styles.hostIssueText}>{blocking.message}</Text>
         </View>
-      ) : null}
-      {notices.length > 0 ? (
+      ) : notices.length > 0 ? (
         <View style={styles.notice}>
           <AutoHeight maxHeight={ISSUE_LIST_MAX_HEIGHT}>
             <ScrollView contentContainerStyle={styles.noticeList} nestedScrollEnabled>
@@ -57,15 +57,17 @@ export function AgentHistoryScanNotices({
             </ScrollView>
           </AutoHeight>
         </View>
+      ) : skipped.length > 0 ? (
+        <AgentHistorySkippedNotice issues={skipped} />
       ) : null}
-      {skipped.length > 0 ? <AgentHistorySkippedNotice issues={skipped} /> : null}
     </>
   )
 }
 
 /** Says how many transcripts the scan skipped, with the paths and reasons one tap away. */
 function AgentHistorySkippedNotice({ issues }: { issues: readonly AiVaultScanIssue[] }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const [shown, setShown] = useState(false)
   const count = issues.length
@@ -176,11 +178,17 @@ export function AgentHistoryHandoffNotice({
   )
 }
 
+/** Whether the restart offer has something to say. */
+export function agentHistoryInterruptedShown(offer: AgentHistoryRestartOffer): boolean {
+  return offer.count > 0 || offer.failedCount > 0 || offer.requestFailed
+}
+
 /** Desktop's resume-after-restart offer, as the phone's notice strip: "3 chats were interrupted · Resume all". */
 export function AgentHistoryInterruptedNotice({ offer }: { offer: AgentHistoryRestartOffer }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { count, failedCount, requestFailed, resuming } = offer
-  const shown = count > 0 || failedCount > 0 || requestFailed
+  const shown = agentHistoryInterruptedShown(offer)
   const message = requestFailed
     ? t('agentHistory.interrupted.failed', "Couldn't resume the interrupted chats.")
     : count > 0
@@ -219,7 +227,7 @@ export function AgentHistoryInterruptedNotice({ offer }: { offer: AgentHistoryRe
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   notice: {
     marginHorizontal: spacing.lg,
     marginTop: spacing.sm,

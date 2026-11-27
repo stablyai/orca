@@ -54,6 +54,14 @@ export function collectRuntimePaneLeafIds(
   return [...collectRuntimePaneLeafIds(node.first), ...collectRuntimePaneLeafIds(node.second)]
 }
 
+/** Ascending live slot ids 1..n, one per leaf, keep mount/replay creation order; closing a pane makes them sparse. */
+export function liveSlotIdsAreDense(liveSlotIds: readonly number[], leafCount: number): boolean {
+  return (
+    liveSlotIds.length === leafCount &&
+    liveSlotIds.every((paneId, index) => paneId === FIRST_PANE_ID + index)
+  )
+}
+
 export function resolveRuntimePaneTitleLeafId(
   tabLayout: { root?: TerminalLayoutSnapshot['root'] } | undefined,
   runtimePaneId: string

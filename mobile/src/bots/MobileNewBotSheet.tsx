@@ -10,8 +10,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { triggerError } from '../platform/haptics/haptics'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
 import { spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { RpcRefusedError } from '../transport/rpc/rpc-refused-error'
 import { isBotMascotId, mascotAvatar, randomMascotAvatar } from '../../../src/shared/bot-avatar'
@@ -33,8 +32,8 @@ import { botCreate } from './bot-sheet-operations'
 import type { ListedBot, PhoneBot } from './host-bots-operations'
 import { mobileBotAvatarSource } from './host-bot-row-facts'
 import type { NewBotComputer } from './new-bot-computers'
+import { groupFieldStylesSheet } from '../components/composer-input/composer-input-styles'
 import {
-  groupFieldStyles,
   newBotComputerNote,
   NewBotAgentRow,
   NewBotAgentSheet,
@@ -92,7 +91,8 @@ export function MobileNewBotSheet(props: NewBotSheetProps) {
 }
 
 function NewBotForm(props: NewBotSheetProps) {
-  useMobileColorScheme()
+  const groupFieldStyles = useThemedStyles(groupFieldStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { seed } = props
   const [name, setName] = useState(seed?.proposal.name ?? '')
@@ -434,6 +434,6 @@ function NewBotForm(props: NewBotSheetProps) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   picture: { alignItems: 'center', paddingTop: spacing.sm, paddingBottom: spacing.lg }
 }))

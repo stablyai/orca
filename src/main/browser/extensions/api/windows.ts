@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
@@ -23,40 +24,48 @@ import {
 import { requireOpenableUrl } from '../tabs-and-windows/browser-extension-requested-navigation'
 import { findBrowserExtensionCallerAgentPage } from '../tabs-and-windows/browser-extension-agent-caller'
 
-const windowIdSchema = z.number().int()
-const queryOptionsSchema = z
-  .object({ populate: z.boolean(), windowTypes: z.array(z.string()) })
-  .partial()
-  .loose()
-const windowStateSchema = z.enum(['normal', 'minimized', 'maximized', 'fullscreen'])
-const createDataSchema = z
-  .object({
-    url: z.union([z.string(), z.array(z.string())]),
-    tabId: z.number().int(),
-    left: z.number().int(),
-    top: z.number().int(),
-    width: z.number().int().positive(),
-    height: z.number().int().positive(),
-    focused: z.boolean(),
-    incognito: z.boolean(),
-    type: z.enum(['normal', 'popup', 'panel']),
-    state: windowStateSchema,
-    setSelfAsOpener: z.boolean()
-  })
-  .partial()
-  .loose()
-const updateInfoSchema = z
-  .object({
-    left: z.number().int(),
-    top: z.number().int(),
-    width: z.number().int().positive(),
-    height: z.number().int().positive(),
-    focused: z.boolean(),
-    drawAttention: z.boolean(),
-    state: windowStateSchema
-  })
-  .partial()
-  .loose()
+const windowIdSchema = lazyZodSchema(() => z.number().int())
+const queryOptionsSchema = lazyZodSchema(() =>
+  z
+    .object({ populate: z.boolean(), windowTypes: z.array(z.string()) })
+    .partial()
+    .loose()
+)
+const windowStateSchema = lazyZodSchema(() =>
+  z.enum(['normal', 'minimized', 'maximized', 'fullscreen'])
+)
+const createDataSchema = lazyZodSchema(() =>
+  z
+    .object({
+      url: z.union([z.string(), z.array(z.string())]),
+      tabId: z.number().int(),
+      left: z.number().int(),
+      top: z.number().int(),
+      width: z.number().int().positive(),
+      height: z.number().int().positive(),
+      focused: z.boolean(),
+      incognito: z.boolean(),
+      type: z.enum(['normal', 'popup', 'panel']),
+      state: windowStateSchema,
+      setSelfAsOpener: z.boolean()
+    })
+    .partial()
+    .loose()
+)
+const updateInfoSchema = lazyZodSchema(() =>
+  z
+    .object({
+      left: z.number().int(),
+      top: z.number().int(),
+      width: z.number().int().positive(),
+      height: z.number().int().positive(),
+      focused: z.boolean(),
+      drawAttention: z.boolean(),
+      state: windowStateSchema
+    })
+    .partial()
+    .loose()
+)
 
 type QueryOptions = z.infer<typeof queryOptionsSchema>
 

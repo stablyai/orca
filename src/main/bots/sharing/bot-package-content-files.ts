@@ -16,8 +16,8 @@ import { ownSkillFiles, unpackableWhy } from './bot-share-skills'
 
 /** The picked parts of a bot's home, as they are now. A skill folder is read through the skill
  *  package observer, which refuses links and holds the size and depth limits; a skill nested inside
- *  it is its own part and stays out. A picked skill whose files can't all be read is refused whole,
- *  with why, so it never stops the rest from going out. */
+ *  it is its own part and stays out. A picked skill or note whose files can't be read is refused
+ *  whole, with why, so it never stops the rest from going out. */
 export async function sharerRawFiles(
   shareable: BotShareable,
   bot: BotPackageV1
@@ -42,8 +42,13 @@ export async function sharerRawFiles(
   }
   for (const { topic } of bot.memory) {
     const note = shareable.memory.find((entry) => entry.topic === topic)
-    if (note) {
+    if (!note) {
+      continue
+    }
+    try {
       files.push({ path: `memory/${topic}.md`, bytes: await readFile(note.path) })
+    } catch {
+      refused.push({ kind: 'memory', name: topic, why: 'unreadable' })
     }
   }
   return { files, refused }
@@ -61,18 +66,22 @@ async function skillRawFiles(name: string, directory: string): Promise<BotPackag
   return files
 }
 
-/** The shareable without the picked skills packing refused, which join its left-out parts. */
-export function withoutRefusedSkills(
+/** The shareable without the picked parts packing refused, which join its left-out parts. */
+export function withoutRefusedParts(
   shareable: BotShareable,
   refused: readonly BotShareLeftOut[]
 ): BotShareable {
   if (refused.length === 0) {
     return shareable
   }
-  const names = new Set(refused.map((entry) => entry.name))
+  const refusedNames = (kind: BotShareLeftOut['kind']) =>
+    new Set(refused.filter((entry) => entry.kind === kind).map((entry) => entry.name))
+  const skills = refusedNames('skill')
+  const notes = refusedNames('memory')
   return {
     ...shareable,
-    skills: shareable.skills.filter((skill) => !names.has(skill.name)),
+    skills: shareable.skills.filter((skill) => !skills.has(skill.name)),
+    memory: shareable.memory.filter((note) => !notes.has(note.topic)),
     leftOut: [...shareable.leftOut, ...refused]
   }
 }

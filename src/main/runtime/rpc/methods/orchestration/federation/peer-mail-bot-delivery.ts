@@ -5,13 +5,15 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { routeBotMail } from '../messaging/bot-chat-address'
 import { botAddressReach } from '../messaging/bot-recipient'
 import { pairedLabelComputer } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
+import { readPeerMailAskers } from './peer-mail-askers'
 import { agentMessageSenderName } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 
 // Deliveries being admitted on this Orca, by message id.
 const admitting = new Set<string>()
 
-/** Peer mail that reaches a bot is admitted as this Orca's own bot mail is, for the owner: a paired
- *  computer has full access here. `{ to }` is mail for an agent that is no bot, stored as peer mail. */
+/** Peer mail that reaches a bot is admitted as this Orca's own bot mail is, for the owner and whoever
+ *  else the sending turn acts for: a paired computer has full access here. `{ to }` is mail for an
+ *  agent that is no bot, stored as peer mail. */
 export async function deliverPeerMailToBot(
   runtime: OrcaRuntimeService,
   params: z.infer<typeof PeerMailDeliverParams>,
@@ -84,6 +86,7 @@ export async function deliverPeerMailToBot(
         routing: { run: undefined },
         messageId: params.messageId,
         senderSnapshot,
+        carriedAskers: readPeerMailAskers(params.askers ?? []),
         // Who it is from, either side of the pairing: a server this computer pulls from by this
         // computer's catalog name for it, a client by its Orca's name for itself. It grants nothing here.
         pairedSender: {

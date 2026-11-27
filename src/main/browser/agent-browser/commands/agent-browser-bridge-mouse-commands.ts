@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { BrowserMouseModifier } from '../../cdp/input/cdp-pointer-targets'
 import { BrowserError } from '../../browser-error'
 import {
@@ -19,11 +20,13 @@ import { assertFinitePointerValues } from '../../cdp/input/cdp-pointer-input'
 import { assertUploadFilesExist } from '../../cdp/input/browser-upload-files'
 import { noteInjectedRightPress } from '../../guest-lifecycle/input/browser-guest-context-menu-target'
 
-const AgentBrowserDevice = z.object({
-  width: z.number().positive(),
-  height: z.number().positive(),
-  deviceScaleFactor: z.number().positive()
-})
+const AgentBrowserDevice = lazyZodSchema(() =>
+  z.object({
+    width: z.number().positive(),
+    height: z.number().positive(),
+    deviceScaleFactor: z.number().positive()
+  })
+)
 
 export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridgePointerCommands {
   async mouseClick(

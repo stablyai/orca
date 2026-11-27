@@ -29,7 +29,7 @@ import {
 } from '../../../../../src/shared/agent-session/agent-discovery/agent-session-registered-agents'
 import type { TuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent as isMobileTuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent-config'
-import { translate } from '../../../i18n/mobile-i18n'
+import type { Translate } from '../../../i18n/mobile-i18n'
 import type { MobileAgentLaunchContext } from '../../../session/agent-launch/mobile-new-tab-agent-loader'
 
 export type MobileSourceControlLaunchAgent =
@@ -66,6 +66,7 @@ export type MobileLaunchChatHost = {
 export function resolveMobileSourceControlLaunchAgent(
   context: MobileAgentLaunchContext,
   actionId: SourceControlLaunchActionId | null,
+  t: Translate,
   chatHost?: MobileLaunchChatHost
 ): MobileSourceControlLaunchAgent {
   const settings = readLaunchAgentSettings(context.settings)
@@ -91,7 +92,7 @@ export function resolveMobileSourceControlLaunchAgent(
   ) {
     return {
       kind: 'unavailable',
-      message: translate(
+      message: t(
         'session.sourceControlLaunchAgent.savedAgentUnavailable',
         'The saved agent for this action is not available on this workspace host.'
       )
@@ -108,7 +109,7 @@ export function resolveMobileSourceControlLaunchAgent(
     ? { kind: 'agent', agent, recipe, chatOnly: !enabledDetected.includes(agent) }
     : {
         kind: 'unavailable',
-        message: translate(
+        message: t(
           'session.sourceControlLaunchAgent.noEnabledAgent',
           'No enabled AI agent was detected on this workspace host.'
         )

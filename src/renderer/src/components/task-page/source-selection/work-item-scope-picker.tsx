@@ -32,6 +32,7 @@ export function WorkItemScopePicker<T>({
   emptyLabel,
   disabled,
   size = 'default',
+  triggerClassName,
   returnFocusRef
 }: {
   options: readonly WorkItemScopeOption<T>[]
@@ -43,6 +44,7 @@ export function WorkItemScopePicker<T>({
   searchPlaceholder: string
   emptyLabel: string
   disabled?: boolean
+  triggerClassName?: string
   size?: 'default' | 'xs'
   returnFocusRef?: React.RefObject<HTMLElement | null>
 }): React.JSX.Element {
@@ -65,7 +67,11 @@ export function WorkItemScopePicker<T>({
           aria-expanded={open}
           disabled={disabled}
           onKeyDown={(event) => event.stopPropagation()}
-          className={cn('justify-between', size === 'xs' ? 'min-w-0 max-w-full' : 'w-full')}
+          className={cn(
+            'justify-between',
+            size === 'xs' ? 'min-w-0 max-w-full' : 'w-full',
+            triggerClassName
+          )}
         >
           <span className="truncate">{selectedLabel ?? allLabel}</span>
           <ChevronsUpDown

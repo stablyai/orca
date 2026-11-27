@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import {
   BrowserExtensionApiError,
@@ -28,9 +29,11 @@ export const STORAGE_SYNC_QUOTAS = {
 
 type StorageChanges = Record<string, { oldValue?: unknown; newValue?: unknown }>
 
-const keyListSchema = z.union([z.string(), z.array(z.string())])
-const itemsSchema = z.record(z.string(), z.unknown())
-const getKeysSchema = z.union([z.null(), keyListSchema, itemsSchema]).optional()
+const keyListSchema = lazyZodSchema(() => z.union([z.string(), z.array(z.string())]))
+const itemsSchema = lazyZodSchema(() => z.record(z.string(), z.unknown()))
+const getKeysSchema = lazyZodSchema(() =>
+  z.union([z.null(), keyListSchema, itemsSchema]).optional()
+)
 
 /** Chrome stores JSON values: functions and undefined members drop out; undefined means "skip". */
 function toStoredValue(value: unknown): unknown {
