@@ -130,8 +130,11 @@ export function mapGhosttyToOrca(
         }
         const idxStr = entry.slice(0, eqIdx).trim()
         const color = entry.slice(eqIdx + 1).trim()
-        const index = Number.parseInt(idxStr, 10)
-        if (Number.isNaN(index) || !HEX_COLOR_RE.test(color)) {
+        // Ghostty accepts decimal and 0x/0o/0b indices; parseInt(..., 10) maps each prefix to black.
+        const index = /^(?:\d+|0x[\da-f]+|0o[0-7]+|0b[01]+)$/i.test(idxStr)
+          ? Number(idxStr)
+          : Number.NaN
+        if (!Number.isInteger(index) || index > 255 || !HEX_COLOR_RE.test(color)) {
           continue
         }
         const mapped = PALETTE_INDEX_MAP[index]
