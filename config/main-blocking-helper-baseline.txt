@@ -58,7 +58,6 @@
 4 src/main/amp/hook-service.ts
 8 src/main/antigravity/hook-service.ts
 1 src/main/antigravity/native-account-host.ts
-2 src/main/antigravity/native-account-launch.ts
 4 src/main/antigravity/native-credential-backend.ts
 1 src/main/antigravity/native-file-credentials.ts
 12 src/main/antigravity/native-windows-credentials.ts
@@ -635,12 +634,11 @@
 2 src/main/ipc/pty/ipc/codex-shared-server.ts
 1 src/main/ipc/pty/ipc/newer-daemon-hold.ts
 2 src/main/ipc/pty/ipc/pty-management.ts
-2 src/main/ipc/pty/ipc/spawn-env.ts
+1 src/main/ipc/pty/ipc/spawn-env.ts
 1 src/main/ipc/pty/ipc/spawn-run.ts
-2 src/main/ipc/pty/provider/local-configure.ts
+1 src/main/ipc/pty/provider/local-configure.ts
 2 src/main/ipc/pty/register-handlers.ts
 1 src/main/ipc/pty/register-headless-runtime.ts
-1 src/main/ipc/pty/runtime/spawn-options.ts
 1 src/main/ipc/pty/spawn/spawn-begin.ts
 1 src/main/ipc/pty/spawn/spawn-options-assembly.ts
 1 src/main/ipc/register-core-handlers/lazy-account-and-diagnostic-ipc-handlers.ts # diagnostics charge moved from direct registration; the module imports on first invoke, so mkdirSync never runs at boot
