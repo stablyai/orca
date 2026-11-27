@@ -5,7 +5,11 @@ import { botFailure, botFailureEnglishTable } from '../../shared/bots/bot-failur
 import { OWNER_ACTS_FOR } from '../../shared/bots/bot-acts-for'
 import { randomUUID } from 'node:crypto'
 import type { Bot } from '../../shared/bot-types'
-import { botLookAround, lookAroundSupported } from '../../shared/bots/bot-look-around'
+import {
+  botForLookAround,
+  botLookAround,
+  lookAroundSupported
+} from '../../shared/bots/bot-look-around'
 import type { BotAutomationSessions } from '../automations/bot-automation-launch'
 import type { BotTurnEnd, BotTurnWatch } from './bot-run-turn-watch'
 import type { LookUsageLimit } from './bot-background-run-history'
@@ -266,7 +270,7 @@ export class BotLookAroundRunner {
           setup: () => this.deps.watchTurns(),
           start: async () => {
             await gate.beforeFirstMessage()
-            const send = await this.deps.sessions.startConversation(bot, {
+            const send = await this.deps.sessions.startConversation(botForLookAround(bot), {
               text,
               title: 'Look around',
               sessionId,

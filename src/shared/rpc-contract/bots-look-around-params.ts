@@ -3,6 +3,7 @@ import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import {
   LOOK_AROUND_EVERY_CHOICES,
   LOOK_AROUND_FOCUS_MAX_LENGTH,
+  LookAroundAgentSetupSchema,
   SUGGESTION_LIMITS
 } from '../bots/bot-look-around'
 import { OFFER_SOURCES } from '../bots/bot-connector-offer'
@@ -45,6 +46,7 @@ export const BotUpNextSeen = lazyZodSchema(() =>
 /** `orca bot look-around set`: the bot changes its own Look around when its owner asks in chat. */
 export const BotLookAroundSet = lazyZodSchema(() =>
   z.object({
+    agentSetup: LookAroundAgentSetupSchema.nullable().optional(),
     /** Absent: the bot whose chat ran the command. */
     botId: OptionalString,
     callerSessionId: OptionalString,

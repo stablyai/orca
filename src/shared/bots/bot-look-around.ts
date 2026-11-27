@@ -4,7 +4,8 @@ import type { BotFailure } from './bot-failure-copy'
 import * as z from 'zod'
 import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { containsSecretLike } from '../crash-reporting/crash-report-redaction'
-import type { BotAgent } from '../bot-types'
+import type { Bot, BotAgent } from '../bot-types'
+import { BotAgentSetupSchema, botOnSetup } from './bot-agent-setup'
 import { startOfLocalDay } from '../automations/scheduling/automation-cron-occurrence'
 
 /** Only these agents have a place where Orca can hold a run to reads. */
@@ -40,6 +41,13 @@ export const LOOK_AROUND_EVERY_LABELS: Record<LookAroundEvery, string> = {
 
 export const LOOK_AROUND_FOCUS_MAX_LENGTH = 500
 
+export const LookAroundAgentSetupSchema = lazyZodSchema(() =>
+  BotAgentSetupSchema.refine(
+    (setup) => lookAroundSupported(setup.agent),
+    'Look around needs Claude Code or Codex.'
+  )
+)
+
 export const BotLookAroundSchema = lazyZodSchema(() =>
   z.object({
     on: z.boolean(),
@@ -49,11 +57,18 @@ export const BotLookAroundSchema = lazyZodSchema(() =>
     /** What to look for, in the owner's words; empty means anything waiting on them. */
     focus: z.string().max(LOOK_AROUND_FOCUS_MAX_LENGTH),
     /** When it was last turned on; a slot before it is never caught up. Absent: on all along. */
-    since: z.number().optional()
+    since: z.number().optional(),
+    agentSetup: LookAroundAgentSetupSchema.optional().catch(undefined)
   })
 )
 
 export type BotLookAround = z.infer<typeof BotLookAroundSchema>
+
+export const BotLookAroundPatchSchema = lazyZodSchema(() =>
+  BotLookAroundSchema.omit({ since: true })
+    .partial()
+    .extend({ agentSetup: LookAroundAgentSetupSchema.nullable().optional() })
+)
 
 export const LOOK_AROUND_DEFAULTS: BotLookAround = {
   on: true,
@@ -67,6 +82,13 @@ export function botLookAround(bot: { lookAround?: BotLookAround }): BotLookAroun
   return bot.lookAround ?? LOOK_AROUND_DEFAULTS
 }
 
+export function botForLookAround<B extends Pick<Bot, 'agent' | 'launch' | 'lookAround'>>(
+  bot: B
+): B {
+  const setup = botLookAround(bot).agentSetup
+  return setup ? botOnSetup(bot, setup) : bot
+}
+
 /** Which day a look was, on the viewer's wall clock, for "Looked yesterday 4:12 PM". */
 export function lookedDay(at: number, now: number): 'today' | 'yesterday' | 'earlier' {
   const day = startOfLocalDay(at)
@@ -78,17 +100,19 @@ export function lookedDay(at: number, now: number): 'today' | 'yesterday' | 'ear
  *  stamps when, so a slot from before is never caught up. */
 export function patchLookAround(
   setting: BotLookAround,
-  patch: Partial<Omit<BotLookAround, 'since'>>,
+  patch: z.infer<typeof BotLookAroundPatchSchema>,
   now: number
 ): BotLookAround {
   const on = patch.on ?? setting.on
   const since = on && !setting.on ? now : setting.since
+  const agentSetup = patch.agentSetup === undefined ? setting.agentSetup : patch.agentSetup
   return {
     on,
     every: patch.every ?? setting.every,
     weekdaysOnly: patch.weekdaysOnly ?? setting.weekdaysOnly,
     focus: patch.focus ?? setting.focus,
-    ...(since !== undefined ? { since } : {})
+    ...(since !== undefined ? { since } : {}),
+    ...(agentSetup ? { agentSetup } : {})
   }
 }
 

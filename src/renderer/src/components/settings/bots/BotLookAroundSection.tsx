@@ -18,6 +18,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
+  botForLookAround,
   botLookAround,
   LOOK_AROUND_EVERY_CHOICES,
   LOOK_AROUND_FOCUS_MAX_LENGTH,
@@ -120,7 +121,7 @@ export function BotLookAroundSection({
             description={t(
               'settings.bots.lookAround.everyDescription',
               'Each look uses your {{agent}} plan, like a short chat.',
-              { agent: botAgentLabel(bot.agent) }
+              { agent: botAgentLabel(botForLookAround(bot).agent) }
             )}
             control={
               <Select

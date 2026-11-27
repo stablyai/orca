@@ -15,6 +15,7 @@ import {
   type BotLookAround
 } from '../../../../shared/bots/bot-look-around'
 import type { Bot } from '../../../../shared/bot-types'
+import { sameBotAgentSetup } from '../../../../shared/bots/bot-agent-setup'
 import { resolve, suggest } from '../../../bots/bot-look-around-state'
 import { markUpNextSeen, upNextUnseenByBot } from '../../../bots/bot-look-around-seen'
 import { botOfSession } from '../../../bots/bot-session-tabs'
@@ -44,6 +45,14 @@ export function lookAroundChangeText(before: BotLookAround, after: BotLookAround
     return after.on ? 'Look around turned on' : 'Look around turned off'
   }
   const parts: string[] = []
+  if (!sameBotAgentSetup(before.agentSetup, after.agentSetup)) {
+    const setup = after.agentSetup
+    parts.push(
+      setup
+        ? `agent: ${setup.agent}${setup.launch?.model ? ` · ${setup.launch.model}` : ''}${setup.launch?.options?.effort ? ` · effort ${setup.launch.options.effort}` : ''}`
+        : 'uses the bot’s agent and model'
+    )
+  }
   if (before.focus !== after.focus) {
     parts.push(after.focus ? `looks for: ${after.focus}` : 'looks for anything waiting on you')
   }
@@ -74,12 +83,12 @@ async function setLookAround(params: BotLookAroundSetParams, context: RpcContext
   if (!lookAroundSupported(bot.agent)) {
     throw new InvalidArgumentError('Look around needs a Claude Code or Codex bot.')
   }
-  const { on, every, weekdaysOnly, focus } = params
+  const { on, every, weekdaysOnly, focus, agentSetup } = params
   // Read as saved, inside the update queue, so an owner's edit in Settings is not undone.
   let before = botLookAround(bot)
   const saved = await runtime.bots.update(bot.id, (current) => {
     before = botLookAround(current)
-    return { lookAround: { on, every, weekdaysOnly, focus } }
+    return { lookAround: { on, every, weekdaysOnly, focus, agentSetup } }
   })
   const change = lookAroundChangeText(before, botLookAround(saved))
   noteInChat(caller, change)
