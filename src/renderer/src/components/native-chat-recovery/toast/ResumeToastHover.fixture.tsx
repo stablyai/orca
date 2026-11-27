@@ -88,47 +88,9 @@ function Corner({ stacked = false }: { stacked?: boolean }): React.JSX.Element {
   )
 }
 
-const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
-
-function card(frame: HTMLElement): HTMLElement {
-  const found = frame.querySelector<HTMLElement>('[data-sonner-toast] section')
-  if (!found) {
-    throw new Error('The resume report never appeared')
-  }
-  return found
-}
-
-// 600px is the narrowest main window, where the toaster also switches to its narrow layout.
+// Scenes for tests/component-fixtures/resume-toast-hover.spec.ts, which hovers them with a real pointer
+// at a 600px viewport (the narrowest main window, where the toaster switches to its narrow layout).
 export const corner = defineFixture({ width: 600, render: () => <Corner /> })
 
-async function expectStillOnHover(frame: HTMLElement): Promise<void> {
-  // Past the chunk load and the toaster's 400ms enter transition.
-  await wait(800)
-  const before = card(frame).getBoundingClientRect().top
-  card(frame).dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
-  card(frame).dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))
-  await wait(600)
-  const after = card(frame).getBoundingClientRect().top
-  if (Math.abs(after - before) > 0.5) {
-    throw new Error(`Hovering moved the resume report by ${after - before}px`)
-  }
-}
-
-/** Hovering expands the toaster; the report must stay exactly where it was. */
-export const hoverStaysPut = defineFixture({
-  width: 600,
-  render: () => <Corner />,
-  interact: expectStillOnHover
-})
-
-/** With another toast behind it, hovering fans that one out above; the report still stays put. */
-export const stackedHoverStaysPut = defineFixture({
-  width: 600,
-  render: () => <Corner stacked />,
-  interact: async (frame) => {
-    await expectStillOnHover(frame)
-    if (frame.querySelectorAll('[data-sonner-toast]').length !== 2) {
-      throw new Error('Expected the report stacked in front of one other toast')
-    }
-  }
-})
+/** Another toast was already up when the report arrived, so the report sits in front of it. */
+export const stacked = defineFixture({ width: 600, render: () => <Corner stacked /> })

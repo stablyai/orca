@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { lazyWithRetry as lazy, loadLazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import {
   closePluginUpdateReviewDialog,
   usePluginUpdateReviewDialogStore
@@ -13,16 +13,11 @@ import {
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { useOrcaVersion } from '../state/use-plugin-page-navigation'
 
-// Why load before issuing: the toaster sizes a toast from its first render, and a Suspense fallback
-// measures 0px, which drops the hovered card below its anchor and makes it jump.
-const loadPluginUpdateReviewToast = () =>
-  loadLazyWithRetry(
-    () =>
-      import('../review/PluginUpdateReviewToast').then((module) => ({
-        default: module.PluginUpdateReviewToast
-      })),
-    { reloadKey: 'plugin-update-review-toast' }
-  )
+const PluginUpdateReviewToast = lazy(() =>
+  import('../review/PluginUpdateReviewToast').then((module) => ({
+    default: module.PluginUpdateReviewToast
+  }))
+)
 const PluginUpdateAllDialog = lazy(() =>
   import('./PluginUpdateAllDialog').then((module) => ({
     default: module.PluginUpdateAllDialog
@@ -51,39 +46,35 @@ function useHeldUpdateToast(): void {
       return
     }
     let current = true
-    void loadPluginUpdateReviewToast()
-      .then(({ default: PluginUpdateReviewToast }) => {
-        // Why shown again on resize: sonner measures a toast only when it is shown, and a stale height
-        // drops the hovered card under the window edge and overlaps the toasts stacked behind it.
-        // Why current: a resize from an older render must not bring back the notices it showed.
-        const show = (): void => {
-          if (!current) {
-            return
-          }
-          toast.custom(
-            () => (
-              <PluginUpdateReviewToast
-                key={pluginUpdateReviewNoticesKey(notices)}
-                notices={notices}
-                onResolved={resolvePluginUpdateReviews}
-                onResize={show}
-              />
-            ),
-            {
-              id: TOAST_ID,
-              duration: Infinity,
-              closeButton: false,
-              unstyled: true,
-              // Why: a swipe or Escape dismisses it too, and those notices are then handled.
-              onDismiss: () => resolvePluginUpdateReviews(notices)
-            }
-          )
+    // Why shown again on resize: sonner measures a toast only when it is shown, and a stale height
+    // drops the hovered card under the window edge and overlaps the toasts stacked behind it.
+    // Why current: a resize from an older render must not bring back the notices it showed.
+    const show = (): void => {
+      if (!current) {
+        return
+      }
+      toast.custom(
+        () => (
+          <Suspense fallback={null}>
+            <PluginUpdateReviewToast
+              key={pluginUpdateReviewNoticesKey(notices)}
+              notices={notices}
+              onResolved={resolvePluginUpdateReviews}
+              onResize={show}
+            />
+          </Suspense>
+        ),
+        {
+          id: TOAST_ID,
+          duration: Infinity,
+          closeButton: false,
+          unstyled: true,
+          // Why: a swipe or Escape dismisses it too, and those notices are then handled.
+          onDismiss: () => resolvePluginUpdateReviews(notices)
         }
-        show()
-      })
-      .catch((error: unknown) => {
-        console.warn('[plugins] update review toast failed to load:', error)
-      })
+      )
+    }
+    show()
     return () => {
       current = false
     }

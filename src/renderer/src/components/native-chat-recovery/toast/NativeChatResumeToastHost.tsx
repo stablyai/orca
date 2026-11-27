@@ -1,6 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
-import { loadLazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import {
   localNativeChatRestartStore,
   useLocalRestartOffersEnabled,
@@ -9,17 +8,17 @@ import {
 } from '../offers/native-chat-resume-on-restart-store'
 import type { NativeChatRestartStore } from '../offers/native-chat-restart-runtime-store'
 import { useNativeChatRestartRuntimes } from '../offers/native-chat-restart-runtimes'
+import { createSharedChunkLoad } from './shared-chunk-load'
 
 // Why load before issuing: the toaster sizes a toast from its first render, and a Suspense fallback
 // measures 0px, which drops the hovered card below its anchor and makes it jump.
-const loadConnectedNativeChatResumeToast = () =>
-  loadLazyWithRetry(
-    () =>
-      import('./ConnectedNativeChatResumeToast').then((module) => ({
-        default: module.ConnectedNativeChatResumeToast
-      })),
-    { reloadKey: 'connected-native-chat-resume-toast' }
-  )
+const requestConnectedNativeChatResumeToast = createSharedChunkLoad(
+  () =>
+    import('./ConnectedNativeChatResumeToast').then((module) => ({
+      default: module.ConnectedNativeChatResumeToast
+    })),
+  'connected-native-chat-resume-toast'
+)
 
 export function NativeChatResumeToasts(): React.JSX.Element {
   const enabled = useLocalRestartOffersEnabled()
@@ -67,7 +66,8 @@ export function NativeChatResumeToastHost({
         store.releaseFinishedNativeChatRestartRun()
       }
     }
-    void loadConnectedNativeChatResumeToast()
+    const request = requestConnectedNativeChatResumeToast()
+    void request.loaded
       .then(({ default: ConnectedNativeChatResumeToast }) => {
         if (!owned) {
           return
@@ -91,6 +91,7 @@ export function NativeChatResumeToastHost({
       })
     return () => {
       owned = false
+      request.release()
       toast.dismiss(id)
     }
   }, [visible, id, store])
