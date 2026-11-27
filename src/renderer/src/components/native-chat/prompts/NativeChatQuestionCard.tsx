@@ -317,14 +317,14 @@ export function NativeChatQuestionCard({
             className="native-chat-question-card-body scrollbar-sleek flex min-h-0 shrink flex-col [[data-native-chat-dock-fit~=card]_&]:min-h-[calc(var(--spacing)*26)] [[data-native-chat-dock-fit~=card]_&]:overflow-y-auto"
           >
             <div
-              // The fit keeps two lines of the question (or all of a shorter one) in view.
+              // The question is shown in full: an answer needs the whole question, so capping its
+              // height hid the reason it was being asked. The options and the answer field, each with
+              // their own cap, take the squeeze in a short pane; this keeps a two-line floor there.
               data-native-chat-dock-floor-lines={2}
               className={cn(
                 // The card's heading, one step above its body text and scaling with it; it fades while more lies below.
                 'native-chat-question-card-question min-h-[1lh] shrink overflow-y-auto px-3.5 text-[length:calc(var(--text-sm)*15/13)] leading-snug font-semibold text-foreground scrollbar-sleek',
-                // Capped at whole lines plus its own top padding, so a long question never shows a cut line.
-                'max-h-[calc(4lh+var(--spacing)*3)] pt-3 [[data-native-chat-dock-fit~=card]_&]:max-h-[calc(2lh+var(--spacing)*3)]',
-                // In a scrolling body the question keeps two lines (scrolling for the rest), so option 1 starts in view.
+                'pt-3',
                 '[[data-native-chat-dock-fit~=card]_&]:shrink-0'
               )}
             >

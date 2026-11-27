@@ -82,6 +82,16 @@ export const multiline = defineFixture({
   )
 })
 
+export const longQuestion = defineFixture({
+  width: 560,
+  render: () => (
+    <QuestionControls
+      question="tools/ci/check-openapi-breaking-changes.sh:27 — a reviewer (‼️ Must do): the sign-off files api/breaking-changes/{customer-facing,mobile}.md are passed whole to oasdiff --err-ignore, so a line signed off months ago keeps allowing the same break on that endpoint today. Should I narrow the ignore file to the exact rule ids this change needs, or keep the whole-file sign-off and add a comment explaining why?"
+      description="Narrow the ignore file.&#10;Keeps the old sign-off from suppressing new rules."
+    />
+  )
+})
+
 function PendingAsyncQuestion() {
   const [pending, setPending] = useState(false)
   const title = 'What would you most like to do this weekend?'
