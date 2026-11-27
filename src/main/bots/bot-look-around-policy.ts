@@ -183,6 +183,16 @@ export function lookAroundCommandRefusal(
   return null
 }
 
+/** Whether a Bash command is only Orca reads, each naming this session's CLI the way a bot's
+ *  preamble does. Claude asks before any command with a variable in braces, whatever the rules say. */
+export function ownOrcaReadsOnly(command: unknown): boolean {
+  return (
+    typeof command === 'string' &&
+    lookAroundCommandRefusal(command) === null &&
+    chainParts(unwrapShell(command)).every((part) => part.startsWith(BOT_CLI_PREFIX))
+  )
+}
+
 /** Whether a shell command is reads the run may make. */
 export function lookAroundCommandAllowed(
   command: string,
