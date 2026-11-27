@@ -15,6 +15,7 @@ import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../../ai-vault/parsing/session-json-object'
 import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
 
+import { readKimiWireSessionWorkDir } from '../../../ai-vault/scanners/kimi/session-scanner-kimi-paths'
 import { parseHermesSqliteSessionViaWorker } from '../../../ai-vault/scanners/hermes/session-scanner-hermes-worker'
 import { readOpenCodeTranscriptSignalViaWorker } from '../../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { samePiDirectory } from '../../../pi/rpc/launch/rpc-launch-resolution'
@@ -229,8 +230,8 @@ const ADOPTED_FOLDER_HEAD_BYTES = 16 * 1024 * 1024
 const ADOPTED_SUMMARY_BYTES = 1024 * 1024
 
 function folderCheckedTranscriptAgent(agent: AgentType) {
-  // Droid loads a session only in the folder it was saved in.
-  if (agent === 'droid') {
+  // Droid and Kimi load a session only in the folder it was saved in.
+  if (agent === 'droid' || agent === 'kimi') {
     return agent
   }
   const transcriptAgent = agent === 'pi' ? 'omp' : resolveNativeChatTranscriptAgent(agent)
@@ -271,6 +272,8 @@ export async function resolveAdoptedTranscriptFolder(
     let actual: { cwd: string | null } | null = null
     if (input.agent === 'hermes') {
       actual = await readAdoptedHermesIdentity(input.filePath, source)
+    } else if (input.agent === 'kimi') {
+      actual = { cwd: await readKimiWireSessionWorkDir(input.filePath) }
     } else if (transcriptAgent === 'opencode') {
       actual = await readAdoptedOpenCodeIdentity(input.filePath, source, input.signal)
     } else if (transcriptAgent) {
