@@ -74,4 +74,43 @@ describe('prepareKimiImport', () => {
         : result
     ).toEqual(['msg_alpha', 'reply-alpha', 'msg_delta', 'reply-delta'])
   })
+
+  it('finds nothing to adopt once every turn was undone', async () => {
+    const wire = join(root, 'wd_repo_9b1d92600e40', SESSION, 'agents', 'main', 'wire.jsonl')
+    await mkdir(join(wire, '..'), { recursive: true })
+    await writeFile(
+      wire,
+      `${WIRE.slice(0, 5).join('\n')}\n${undo('b1', { branch: 'main', line: 1 }, 6).join('\n')}\n`
+    )
+    const result = await prepareKimiImport(
+      SESSION,
+      { filePath: wire },
+      { inlineHeadBytes: 16 * 1024 },
+      1024 * 1024
+    )
+    expect(result).toMatchObject({ ok: true, items: [], sourceEmpty: true })
+  })
+
+  it('keeps the conversation when undone turns alone would fill the history budget', async () => {
+    const undone = Array.from({ length: 20 }, (_, index) =>
+      user(`msg_undone_${index}`, 'x'.repeat(1024))
+    )
+    const wire = join(root, 'wd_repo_9b1d92600e40', SESSION, 'agents', 'main', 'wire.jsonl')
+    await mkdir(join(wire, '..'), { recursive: true })
+    await writeFile(
+      wire,
+      `${[...WIRE.slice(0, 3), ...undone, ...undo('b1', { branch: 'main', line: 3 }, 24)].join('\n')}\n`
+    )
+    const result = await prepareKimiImport(
+      SESSION,
+      { filePath: wire },
+      { inlineHeadBytes: 16 * 1024 },
+      4096
+    )
+    expect(
+      result.ok
+        ? result.items.map((item) => item.identity.provider === 'legacy' && item.identity.recordId)
+        : result
+    ).toEqual(['msg_alpha', 'reply-alpha'])
+  })
 })

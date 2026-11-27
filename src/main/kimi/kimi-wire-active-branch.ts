@@ -12,7 +12,7 @@ export function createKimiActiveBranch() {
   const edges: SwitchEdge[] = []
   let lastLine = 0
   return {
-    /** The record's line number; call once per record, in file order. */
+    /** Numbers the next record; call once per record, in file order. */
     number(line: string): number {
       lastLine++
       if (line.includes('"agent.switched"')) {
@@ -23,12 +23,12 @@ export function createKimiActiveBranch() {
       }
       return lastLine
     },
-    /** Whether a line is on the conversation's chain; a chain Kimi could not walk keeps every line. */
+    /** Whether a line is on the conversation's chain; a chain Kimi could not walk keeps every line,
+     *  as do lines appended after the ones numbered, which continue the last branch. */
     onActiveChain(): (line: number) => boolean {
       const ranges = activeChainRanges(edges, lastLine)
-      return ranges
-        ? (line) => ranges.some(([floor, ceil]) => line >= floor && line <= ceil)
-        : () => true
+      const numbered = lastLine
+      return ranges ? (line) => line > numbered || inRanges(ranges, line) : () => true
     }
   }
 }
@@ -47,6 +47,8 @@ function readSwitchEdge(line: string, lineNumber: number): SwitchEdge | null {
   return { line: lineNumber, branch: record.branch, base: { branch: base.branch, line: base.line } }
 }
 
+/** The chain's lines as ascending, disjoint ranges. Null when a base names no branch or loops,
+ *  where Kimi itself refuses the chain. */
 function activeChainRanges(edges: SwitchEdge[], lastLine: number): [number, number][] | null {
   if (edges.length === 0) {
     return null
@@ -62,17 +64,50 @@ function activeChainRanges(edges: SwitchEdge[], lastLine: number): [number, numb
   segments.set(branch, { edge: opening, toLine: lastLine })
   const ranges: [number, number][] = []
   const visited = new Set<string>()
-  const walk = (name: string, upto: number | undefined): boolean => {
+  let name = branch
+  let upto: number | undefined
+  for (;;) {
     const segment = segments.get(name)
     if (!segment || visited.has(name)) {
-      return false
+      return null
     }
     visited.add(name)
-    if (segment.edge && !walk(segment.edge.base.branch, segment.edge.base.line)) {
-      return false
-    }
     ranges.push([segment.edge ? segment.edge.line + 1 : 1, upto ?? segment.toLine])
-    return true
+    if (!segment.edge) {
+      return mergedRanges(ranges)
+    }
+    name = segment.edge.base.branch
+    upto = segment.edge.base.line
   }
-  return walk(branch, undefined) ? ranges : null
+}
+
+// A base line may reach past its own segment, so ranges can overlap; the chain is their union.
+function mergedRanges(ranges: [number, number][]): [number, number][] {
+  const merged: [number, number][] = []
+  for (const [floor, ceil] of ranges.sort((a, b) => a[0] - b[0])) {
+    const last = merged.at(-1)
+    if (last && floor <= last[1] + 1) {
+      last[1] = Math.max(last[1], ceil)
+    } else if (floor <= ceil) {
+      merged.push([floor, ceil])
+    }
+  }
+  return merged
+}
+
+function inRanges(ranges: [number, number][], line: number): boolean {
+  let low = 0
+  let high = ranges.length - 1
+  while (low <= high) {
+    const middle = (low + high) >> 1
+    const [floor, ceil] = ranges[middle]
+    if (line < floor) {
+      high = middle - 1
+    } else if (line > ceil) {
+      low = middle + 1
+    } else {
+      return true
+    }
+  }
+  return false
 }
