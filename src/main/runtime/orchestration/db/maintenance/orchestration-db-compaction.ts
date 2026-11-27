@@ -1,4 +1,4 @@
-import { link, readFile, writeFile } from 'node:fs/promises'
+import { link, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import Database from '../../../../sqlite/sync-database'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -7,22 +7,24 @@ import { runCompactionChild, type CompactionChild } from './orchestration-db-com
 import { renameFileWithWindowsRetryAsync } from '../../../../../shared/file-write/windows-retry-file-operations'
 import { syncDirectory } from '../../../../filesystem/durable-file-write'
 import { settleWithinMs } from '../../../../startup/quit/quit-teardown-deadline'
-import { availableBytesIn, removeQuietly, sizeOf } from './orchestration-db-compaction-files'
+import {
+  availableBytesIn,
+  removeQuietly,
+  sizeOf,
+  writeQuietly
+} from './orchestration-db-compaction-files'
+import {
+  ATTEMPT_SPACING_MS,
+  MAX_ATTEMPT_SPACING_MS,
+  MAX_COPIES,
+  MIN_COPY_BUDGET_MS,
+  attemptSpacingMs,
+  copyBudgetMs
+} from './orchestration-db-compaction-schedule'
 
 const MIB = 1024 * 1024
 // Maintenance minutes with no write before copying; a write after the copy makes it stale.
 const QUIET_TICKS = 5
-// Each copy rewrites the live data, so a file whose copies keep going stale waits longer each time: an
-// hour after the first, doubling up to a day. After this many it gives up, and the file keeps its size.
-const MAX_COPIES = 3
-const ATTEMPT_SPACING_MS = 60 * 60_000
-const MAX_ATTEMPT_SPACING_MS = 24 * ATTEMPT_SPACING_MS
-// The copy blocks no one; this only bounds the disk and CPU it uses, at a slow disk's pace.
-const MIN_COPY_BUDGET_MS = 120_000
-const SLOW_COPY_BYTES_PER_MS = (4 * MIB) / 1000
-const MAX_BUDGET_DOUBLINGS = 6
-// Node fires a longer timer after 1 ms.
-const MAX_TIMER_MS = 2_147_483_647
 // Retention waits at most this long for a quit to use a ready copy, then prunes and the copy goes stale.
 const MAX_PRUNE_DEFERRAL_MS = MAX_ATTEMPT_SPACING_MS
 // journal_size_limit: closing at quit checkpoints at most this much.
@@ -44,12 +46,6 @@ function readFileState(db: Database.Database): { legacy: boolean; liveBytes: num
     legacy: Number(row.auto_vacuum) === 0,
     liveBytes: (Number(row.page_count) - Number(row.freelist_count)) * Number(row.page_size)
   }
-}
-
-function attemptSpacingMs(attempts: number): number {
-  return attempts === 0
-    ? 0
-    : Math.min(ATTEMPT_SPACING_MS * 2 ** (attempts - 1), MAX_ATTEMPT_SPACING_MS)
 }
 
 /**
@@ -184,20 +180,17 @@ export class OrchestrationDbCompaction {
     this.attempts++
     this.lastAttemptAt = now
     // Counted before it starts, so a quit or crash mid-copy still counts.
-    const counted = await writeFile(this.attemptsPath, `${this.attempts} ${now}`).then(
-      () => true,
-      () => false
-    )
-    if (!counted || this.stopped) {
+    const counted = await writeQuietly(this.attemptsPath, `${this.attempts} ${now}`)
+    if (!counted || this.stopped || this.stamp() !== stamp) {
+      // No copy, so no count: a commit during the write would stale it before its watch starts.
+      this.attempts--
+      this.heldAt = now
+      if (counted) {
+        await writeQuietly(this.attemptsPath, `${this.attempts} ${now}`)
+      }
       return
     }
-    // Doubled with each attempt, so a disk slower than assumed still finishes one in the end.
-    const budgetMs = Math.min(
-      Math.max(MIN_COPY_BUDGET_MS, Math.round(state.liveBytes / SLOW_COPY_BYTES_PER_MS)) *
-        2 ** Math.min(this.attempts - 1, MAX_BUDGET_DOUBLINGS),
-      MAX_TIMER_MS
-    )
-    const copied = await this.runChild(stamp, budgetMs)
+    const copied = await this.runChild(stamp, copyBudgetMs(state.liveBytes, this.attempts))
     if (copied && !this.stopped && this.stamp() === stamp) {
       this.ready = { stamp, at: Date.now() }
     } else if (!this.stopped) {
