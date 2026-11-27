@@ -136,7 +136,7 @@ export async function agentConversationPlaces(
 }
 
 /** The conversation's own status rows, one per place it is open now: none when it isn't open. */
-async function agentConversationStatuses(resolved: ResolvedAgentConversation) {
+export async function agentConversationStatuses(resolved: ResolvedAgentConversation) {
   let paneKeys: string[]
   if (resolved.kind === 'chat') {
     // A chat's status row is keyed by the session that runs its conversation now.

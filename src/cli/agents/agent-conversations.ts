@@ -15,6 +15,7 @@ import {
 } from '../hosts/omitted-host-scope-selectors'
 import {
   AGENT_READ_MAX_LIMIT,
+  type AgentCloseResult,
   type AgentConversationRow,
   type AgentListResult,
   type AgentReadEntry,
@@ -61,6 +62,12 @@ export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
       id: getRequiredStringFlag(flags, 'id')
     })
     printResult(result, json, formatAgentShow)
+  },
+  'agent close': async ({ flags, client, json }) => {
+    const result = await callAgentMethod<AgentCloseResult>(client, 'agent.close', {
+      id: getRequiredStringFlag(flags, 'id')
+    })
+    printResult(result, json, formatAgentClose)
   },
   'agent read': async ({ flags, client, json }) => {
     const limit = getOptionalPositiveIntegerFlag(flags, 'limit')
@@ -147,6 +154,24 @@ function formatAgentShow(result: AgentShowResult): string {
     return `Agent ${id} (${result.kind}) isn't open in any workspace right now.`
   }
   return result.places.map(formatAgentRow).join('\n\n')
+}
+
+function formatAgentClose(result: AgentCloseResult): string {
+  const id = `${ORCA_SESSION_ADDRESS_PREFIX}${result.orcaSessionId}`
+  if (result.closed.length === 0 && result.skipped.length === 0) {
+    return `Agent ${id} (${result.kind}) isn't open in any workspace, so nothing was closed.`
+  }
+  return [
+    ...(result.closed.length > 0
+      ? [
+          `Closed agent ${id} in ${result.closed.length} place(s):`,
+          ...result.closed.map(formatAgentRow)
+        ]
+      : []),
+    ...(result.skipped.length > 0
+      ? [`Left open (no live tab to close):`, ...result.skipped.map(formatAgentRow)]
+      : [])
+  ].join('\n')
 }
 
 function formatTool(tool: AgentReadTool): string {

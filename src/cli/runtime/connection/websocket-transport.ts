@@ -54,8 +54,17 @@ const AGENT_READ_CLIENT_CAPABILITIES = [
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY
 ] as const
 
+// Closing a chat goes through the structured-session gate; terminal close ignores this capability.
+const AGENT_CLOSE_CLIENT_CAPABILITIES = [
+  ...CLI_CLIENT_CAPABILITIES,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+] as const
+
 function clientCapabilitiesFor(method: string) {
-  return method === 'agent.read' ? AGENT_READ_CLIENT_CAPABILITIES : CLI_CLIENT_CAPABILITIES
+  if (method === 'agent.read') {
+    return AGENT_READ_CLIENT_CAPABILITIES
+  }
+  return method === 'agent.close' ? AGENT_CLOSE_CLIENT_CAPABILITIES : CLI_CLIENT_CAPABILITIES
 }
 
 export async function sendWebSocketRequest<TResult>(

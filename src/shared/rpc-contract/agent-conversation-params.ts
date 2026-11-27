@@ -18,6 +18,12 @@ export const AgentShowParams = lazyZodSchema(() =>
   })
 )
 
+export const AgentCloseParams = lazyZodSchema(() =>
+  z.object({
+    id: requiredString('Missing agent ID')
+  })
+)
+
 export const AgentReadParams = lazyZodSchema(() =>
   z.object({
     id: requiredString('Missing agent ID'),
