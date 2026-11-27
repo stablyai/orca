@@ -1,3 +1,4 @@
+import type { NotchApi } from './api/window-ui/notch-api'
 import type {
   ClaudeAccountsApi,
   CodexAccountsApi,
@@ -97,6 +98,7 @@ import type {
 type Merged<T> = { [K in keyof T]: T[K] }
 
 export type PreloadApi = {
+  notch?: NotchApi
   app: AppApi
   orcaProfiles: OrcaProfileApi
   platform: PlatformApi

@@ -64,7 +64,8 @@ if (runtime === 'node') {
 } else if (runtime === 'electron') {
   ensureElectronRuntime()
   if (process.platform === 'darwin') {
-    ensureMacMenuDeadKeyAddon()
+    ensureMacNativeAddon('macos-menu-dead-key', 'orca_menu_dead_key.node', 'menu-dead-key.m')
+    ensureMacNativeAddon('macos-notch-window', 'orca_notch_window.node', 'notch-window.m')
   }
 } else {
   console.error(
@@ -75,12 +76,12 @@ if (runtime === 'node') {
 
 // Why: `pnpm dev` runs this on every launch; skip the multi-second node-gyp rebuild while the
 // addon is current, and keep dev usable without it because the app only warns when it is missing.
-function ensureMacMenuDeadKeyAddon() {
-  const sourceDir = resolve(projectDir, 'native/macos-menu-dead-key')
-  const addon = resolve(projectDir, 'out/native/orca_menu_dead_key.node')
+function ensureMacNativeAddon(nativeDir, addonName, sourceFile) {
+  const sourceDir = resolve(projectDir, 'native', nativeDir)
+  const addon = resolve(projectDir, 'out/native', addonName)
   const expectedArch = process.arch === 'x64' ? 'x86_64' : process.arch
   const sourcesChangedAt = Math.max(
-    ...['binding.gyp', 'menu-dead-key.m'].map((file) => statSync(resolve(sourceDir, file)).mtimeMs)
+    ...['binding.gyp', sourceFile].map((file) => statSync(resolve(sourceDir, file)).mtimeMs)
   )
   const current =
     existsSync(addon) &&
@@ -93,9 +94,9 @@ function ensureMacMenuDeadKeyAddon() {
     const {
       buildMacNativeAddon
     } = require('../../desktop-distribution/macos/build-macos-native-addon.cjs')
-    buildMacNativeAddon(dirname(addon), process.arch, 'macos-menu-dead-key', basename(addon))
+    buildMacNativeAddon(dirname(addon), process.arch, nativeDir, basename(addon))
   } catch (error) {
-    console.warn('[native-runtime] Could not build the macOS menu dead-key guard:', error)
+    console.warn(`[native-runtime] Could not build ${nativeDir}:`, error)
   }
 }
 

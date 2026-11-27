@@ -1,3 +1,8 @@
+import {
+  clearNotchViewedPanes,
+  resetNotchRevealReadiness,
+  syncNotchAgentStatus
+} from '../../notch/notch-desktop-lifecycle'
 import { app, type BrowserWindow } from 'electron'
 import { createMainWindow, loadMainWindow } from '../../window/createMainWindow'
 import {
@@ -105,6 +110,7 @@ export async function openMainWindow(options: MainWindowOpenOptions = {}): Promi
     getIsQuitting: () => state.isQuitting,
     onQuitAborted: () => {
       state.isQuitting = false
+      syncNotchAgentStatus()
       clearExpectedRendererReload()
     },
     onRendererProcessGone: (details, webContentsId, liveness) => {
@@ -173,6 +179,10 @@ export async function openMainWindow(options: MainWindowOpenOptions = {}): Promi
       recordDurableCrashBreadcrumb(`renderer_recovery_reload_${status}`, outcome)
     }
   })
+  window.webContents.on('did-start-loading', resetNotchRevealReadiness)
+  window.on('hide', clearNotchViewedPanes)
+  window.on('minimize', clearNotchViewedPanes)
+  window.on('closed', clearNotchViewedPanes)
   recordCrashBreadcrumb('main_window_created')
   logStartupMilestone('window-created')
   const createTray = createSystemTrayDeferred(window, () => logStartupMilestone('tray-created'))

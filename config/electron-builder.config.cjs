@@ -496,6 +496,13 @@ module.exports = {
         'orca_menu_dead_key.node'
       )
       await signMacStandaloneHelper(menuDeadKeyAddon, 'Menu dead-key guard', context.packager)
+      const notchWindowAddon = buildMacNativeAddon(
+        resourcesDir,
+        architecture,
+        'macos-notch-window',
+        'orca_notch_window.node'
+      )
+      await signMacStandaloneHelper(notchWindowAddon, 'Notch window visibility', context.packager)
       const version = context.packager.appInfo.version
       let commit = process.env.ORCA_BUILD_COMMIT || process.env.GITHUB_SHA || 'unknown'
       if (commit === 'unknown') {
@@ -598,6 +605,11 @@ module.exports = {
       await signMacStandaloneHelper(
         join(resourcesDir, 'bin', 'journal-file-lock'),
         'journal file lock',
+        context.packager
+      )
+      await signMacStandaloneHelper(
+        join(resourcesDir, '..', 'MacOS', 'orca-screen-geometry'),
+        'orca-screen-geometry',
         context.packager
       )
       await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
@@ -738,6 +750,10 @@ module.exports = {
     ],
     // macOS 26 UNUserNotificationCenter aborts helpers launched from Resources; execute from Contents/MacOS (#7929).
     extraFiles: [
+      {
+        from: 'native/screen-geometry-macos/.build/release/orca-screen-geometry',
+        to: 'MacOS/orca-screen-geometry'
+      },
       {
         from: 'native/notification-status-macos/.build/release/orca-notification-status',
         to: 'MacOS/orca-notification-status'

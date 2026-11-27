@@ -4644,6 +4644,10 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   }
 }
 
+html[data-orca-notch] body {
+  background: transparent;
+}
+
 /* Holding Alt fades the browser annotate palette so the page under it can be picked; its own tooltips go too. */
 :root[data-browser-annotate-see-through] [data-annotate-palette-tooltip] {
   display: none;

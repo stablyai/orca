@@ -23,7 +23,11 @@ import {
   getTypographyEntries,
   getZoomEntries
 } from './appearance-search'
-import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
+import {
+  getMenuBarIconEntries,
+  getSystemTrayEntries,
+  getNotchAgentStatusEntries
+} from './appearance-system-presence-search'
 import {
   getSidebarEntries,
   getLeftSidebarAppearanceEntry,
@@ -115,7 +119,8 @@ export function AppearancePane({
     ...getTitlebarEntries(),
     ...getReduceVisualEffectsEntries(),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
-    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
+    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac }),
+    ...getNotchAgentStatusEntries()
   ]
   const terminalSearchEntries = [
     { title: terminalTitle },

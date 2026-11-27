@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { notchApi } from './api/window-ui/notch-bridge'
 import { HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL } from '../shared/app-lifecycle/windows/hidden-window-frame-pump'
 import { installHiddenWindowFramePump } from './renderer/hidden-window-frame-pump'
 import type { PreloadApi } from './api-types'
@@ -113,6 +114,7 @@ const telemetryGetConsentStateApi: PreloadApi['telemetryGetConsentState'] = () =
   ipcRenderer.invoke('telemetry:getConsentState')
 
 const api = {
+  notch: notchApi,
   app: appApi,
   orcaProfiles: orcaProfilesApi,
   platform: platformApi,

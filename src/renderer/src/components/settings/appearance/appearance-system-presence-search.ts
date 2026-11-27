@@ -101,3 +101,28 @@ export function getMenuBarIconEntries(
     options.showMenuBarIcon ?? (getRendererAppPlatform() === 'darwin' && !isWebClientLocation())
   return show ? getMenuBarIconEntryCatalog() : []
 }
+
+export function getNotchAgentStatusEntries(): SettingsSearchEntry[] {
+  if (getRendererAppPlatform() !== 'darwin' || isWebClientLocation()) {
+    return []
+  }
+  return [
+    {
+      title: translate('settings.appearance.notch.title', 'Show agent status at the notch'),
+      description: translate(
+        'settings.appearance.notch.description',
+        'See running agents and sessions that need attention without opening Orca.'
+      ),
+      keywords: [
+        ...translateSearchKeyword('settings.appearance.notch.keyword.notch', 'notch', {
+          englishOnly: true
+        }),
+        ...translateSearchKeyword('settings.appearance.notch.keyword.agents', 'agents'),
+        ...translateSearchKeyword('settings.appearance.notch.keyword.status', 'status'),
+        ...translateSearchKeyword('settings.appearance.notch.keyword.island', 'dynamic island', {
+          englishOnly: true
+        })
+      ]
+    }
+  ]
+}

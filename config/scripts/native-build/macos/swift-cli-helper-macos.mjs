@@ -53,6 +53,7 @@ const DEV_SWIFT_CLI_HELPERS = [
     'orca-keyboard-layout',
     'shifted Option composition stays conservative'
   ],
+  ['screen-geometry-macos', 'orca-screen-geometry', 'agent status uses a capsule'],
   ['process-footprint-macos', 'orca-process-footprint', 'memory panel falls back to top'],
   ['socket-owner-macos', 'orca-socket-owner', 'paired port forwards refuse to start']
 ]

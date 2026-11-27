@@ -40,6 +40,8 @@ type DesktopWindowSettings = {
   minimizeToTrayOnClose?: boolean
   /** macOS: toggles the additive menu-bar entry (Orca survives last-window close); doesn't change Dock behavior. */
   showMenuBarIcon?: boolean
+  /** macOS: agent overview beside the camera cutout, enabled unless explicitly disabled. */
+  showNotchAgentStatus?: boolean
   /** Linux: disables titlebar dragging and keeps only the close button. */
   linuxTilingWindowMode?: boolean
 }

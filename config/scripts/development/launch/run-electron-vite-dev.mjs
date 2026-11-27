@@ -249,7 +249,6 @@ function prepareMacDevElectronApp() {
     2
   )
   const executablePath = path.join(appPath, 'Contents', 'MacOS', 'Electron')
-  // Require Chromium resources to avoid blank crash; optional swiftc keyboard helper only degrades keyboard behavior when absent.
   const chromiumResourcePath = path.join(
     appPath,
     'Contents',
@@ -262,6 +261,7 @@ function prepareMacDevElectronApp() {
     chromiumResourcePath,
     path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout'),
     path.join(appPath, 'Contents', 'MacOS', 'orca-process-footprint'),
+    path.join(appPath, 'Contents', 'MacOS', 'orca-screen-geometry'),
     path.join(appPath, 'Contents', 'MacOS', 'orca-socket-owner')
   ]
 
@@ -277,10 +277,7 @@ function prepareMacDevElectronApp() {
       return false
     }
     // Interrupted copy may leave marker/executable but omit Chromium resources, causing blank crash.
-    return (
-      existsSync(executablePath) &&
-      requiredResourcePaths.every((resourcePath) => existsSync(resourcePath))
-    )
+    return existsSync(executablePath) && requiredResourcePaths.every(existsSync)
   }
 
   if (copiedAppIsUsable()) {

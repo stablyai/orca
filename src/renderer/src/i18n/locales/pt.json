@@ -1720,6 +1720,14 @@
           "saveFailed": "Não foi possível salvar o ícone personalizado."
         }
       },
+      "notch": {
+        "title": "Mostrar status dos agentes no notch",
+        "description": "Veja os agentes em execução e as sessões que precisam de atenção sem abrir o Orca.",
+        "keyword": {
+          "agents": "agentes",
+          "status": "status"
+        }
+      },
       "uiZoom": {
         "zoomOut": "Diminuir zoom",
         "zoomIn": "Aumentar zoom"
@@ -31773,6 +31781,22 @@
       "groupRoom": "O chat de uma sala de grupo não pode ser excluído",
       "workerOwed": "Uma orquestração ainda aguarda este chat",
       "home": "O Home Chat de um agente gerenciado não pode ser excluído"
+    }
+  },
+  "notch": {
+    "agentSession": "Sessão do agente",
+    "sessionList": "Sessões de agentes",
+    "sessionUnavailable": "Não foi possível abrir esta sessão do agente.",
+    "status": {
+      "working": "{{count}} em execução",
+      "attention": "{{count}} aguardando resposta",
+      "done": "Concluídos: {{count}}",
+      "idle": "Nenhum agente em execução"
+    },
+    "rowState": {
+      "working": "Em execução",
+      "attention": "Precisa de você",
+      "done": "Concluído"
     }
   },
   "activityBar": {
