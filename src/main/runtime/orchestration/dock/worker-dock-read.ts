@@ -4,7 +4,7 @@ export { acknowledgeWorkerDock } from './worker-dock-acknowledgment'
 import { readWorkerDockSnapshot } from './worker-dock-read-snapshot'
 import {
   workerLaunchModel,
-  workerStartOptionsAgent
+  workerStartOptionsAgentValue
 } from '../workers/launch/worker-launch-observation'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
@@ -178,8 +178,7 @@ export function readWorkerDock(
         throw new Error('Worker dock snapshot changed inside its read transaction.')
       }
       const launch = launchOptions(row.start_options)
-      const agent =
-        typeof row.start_options === 'string' ? workerStartOptionsAgent(row.start_options) : null
+      const agent = workerStartOptionsAgentValue(launch)
       const active = row.state === 'starting' || row.state === 'ready'
       return WorkerDockEntry.parse({
         ...identity,
