@@ -29450,6 +29450,7 @@
       "deliveryUnconfirmed": "投递未确认",
       "starting": "正在启动…",
       "notStarted": "尚未启动",
+      "renameThreadNeedsHostUpdate": "需要先更新 {{host}} 上的 Orca，才能重命名话题",
       "pickLocalBot": "请选择此电脑上的 bot"
     },
     "settingsView": {
