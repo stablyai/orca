@@ -183,13 +183,13 @@ export function lookAroundCommandRefusal(
   return null
 }
 
-/** Whether a Bash command is only Orca reads, each naming this session's CLI the way a bot's
- *  preamble does. Claude asks before any command with a variable in braces, whatever the rules say. */
+/** Whether a Bash command is only Orca reads, each part naming this session's CLI the way Orca's
+ *  prompts do. Checked as written: a shell wrapper would run a login shell first. */
 export function ownOrcaReadsOnly(command: unknown): boolean {
   return (
     typeof command === 'string' &&
-    lookAroundCommandRefusal(command) === null &&
-    chainParts(unwrapShell(command)).every((part) => part.startsWith(BOT_CLI_PREFIX))
+    chainParts(command).every((part) => part.startsWith(BOT_CLI_PREFIX)) &&
+    lookAroundCommandRefusal(command) === null
   )
 }
 

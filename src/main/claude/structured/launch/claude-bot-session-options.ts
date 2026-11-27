@@ -1,8 +1,8 @@
-import type { HookCallback, Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk'
+import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk'
 import { claudeLaunchServers } from '../../../bots/bot-tools-claude'
 import { botToolsOffInstruction } from '../../../bots/bot-launch-tools'
 import type { SessionMcpTools } from '../../../mcp-servers/session-mcp-tools'
-import { ownOrcaReadsOnly, type ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
+import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import {
   linkedSkillsSection,
   type LinkedSkillProject
@@ -11,18 +11,6 @@ import {
   type ClaudeReadOnlyOptions,
   claudeReadOnlyOptions
 } from '../../claude-structured-read-only-options'
-
-/** Claude offers no allow rule for a command naming the CLI through a variable, so every Orca read
- *  would wait on a prompt; Orca answers those, and anything else keeps Claude's own check. */
-const allowOwnOrcaReads: HookCallback = async (input) =>
-  input.hook_event_name === 'PreToolUse' &&
-  input.tool_name === 'Bash' &&
-  typeof input.tool_input === 'object' &&
-  input.tool_input !== null &&
-  'command' in input.tool_input &&
-  ownOrcaReadsOnly(input.tool_input.command)
-    ? { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow' } }
-    : {}
 
 /** What a chat adds over the base launch: its instructions, a read-only session's limits, and a
  *  bot's own tools on top of the owner's (a read-only session gets none, nor one whose managed
@@ -54,9 +42,7 @@ export async function claudeBotSessionOptions(
     ...(instructions
       ? { systemPrompt: { type: 'preset', preset: 'claude_code', append: instructions } }
       : {}),
-    ...(basis.readOnly
-      ? claudeReadOnlyOptions(basis.readOnly)
-      : { hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [allowOwnOrcaReads] }] } }),
+    ...(basis.readOnly ? claudeReadOnlyOptions(basis.readOnly) : {}),
     // The user's own CLI may predate reading MCP servers from initialize, the SDK's planned default.
     ...(tools.servers.length > 0 && !toolsOff
       ? { mcpServers: claudeLaunchServers(tools), mcpServersDelivery: 'argv' as const }
