@@ -14,7 +14,6 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
@@ -24,6 +23,7 @@ import { MobileConnectorTryIt } from './MobileConnectorTryIt'
 import type { ConnectorPage } from './connector-pages'
 import type { PhoneLinearView } from './use-phone-connector-account'
 import { usePhoneConnectTrip, useSignInOnOpen } from './use-phone-connect-trip'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 // Linear never returns from its own error page, so after this long the wait says what it likely is.
 const STUCK_MS = 30_000
@@ -72,6 +72,7 @@ export function MobileBotLinearSetup(props: {
   /** Turned on, after Try it: the workspace's page takes over. */
   onDone: (workspaceId: string) => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { bot, linear, hostName } = props
   const clipboard = useClipboardWriter()

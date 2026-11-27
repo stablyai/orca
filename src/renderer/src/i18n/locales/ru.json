@@ -637,7 +637,12 @@
         "pageChanged": "Эта страница была закрыта или сменила профиль во время импорта. Попробуйте ещё раз."
       },
       "notice": {
-        "failed": "Не удалось импортировать файлы cookie: {{reason}}"
+        "failed": "Не удалось импортировать файлы cookie: {{reason}}",
+        "importedCount_one": "Импортировано файлов cookie: {{countLabel}}",
+        "importedCount_few": "Импортировано файлов cookie: {{countLabel}}",
+        "importedCount_many": "Импортировано файлов cookie: {{countLabel}}",
+        "importedCount_other": "Импортировано файлов cookie: {{countLabel}}",
+        "reload": "Перезагрузить"
       },
       "routedPage": {
         "label": "Браузеры на этом устройстве",
@@ -685,10 +690,52 @@
       "resetZoom": "Сбросить масштаб",
       "resetViewport": "Сбросить размер области просмотра",
       "findOnPage": "Найти на странице",
-      "profile": "Профиль"
+      "profile": "Профиль",
+      "annotateModeWithShortcut": "Пометки, захват и рисование ({{value0}})",
+      "annotateMode": "Пометки, захват и рисование"
     },
     "loadStall": {
       "waitingForHost": "Ожидание ответа от {{host}}…"
+    },
+    "annotatePalette": {
+      "annotateTooltip": "Пометка: оставить комментарий к элементу (A)",
+      "grabTooltip": "Захват: скопировать контекст элемента (G)",
+      "drawTooltip": "Рисование: сделать пометку на снимке экрана (D)",
+      "positionLeft": "Слева",
+      "positionRight": "Справа",
+      "positionTop": "Сверху",
+      "positionMiddle": "Посередине",
+      "positionBottom": "Снизу",
+      "label": "Инструменты для пометок",
+      "tools": "Инструмент",
+      "copy": "Копировать",
+      "copyTitle": "Скопировать выбранный элемент",
+      "copied": "Скопировано",
+      "screenshot": "Снимок экрана",
+      "screenshotTitle": "Скопировать снимок выбранного элемента",
+      "done": "Готово",
+      "doneTitle": "Готово (Esc)",
+      "move": "Переместить панель инструментов",
+      "annotateTooltipNoKey": "Пометка: оставить комментарий к элементу",
+      "grabTooltipNoKey": "Захват: скопировать контекст элемента",
+      "drawTooltipNoKey": "Рисование: сделать пометку на снимке экрана",
+      "moveAnywhereTooltip": "Перетащите или переместите стрелками · двойной щелчок — сброс · удерживайте {{key}}, чтобы увидеть, что под панелью",
+      "copyMarkup": "Копировать разметку",
+      "pickFirst": "Сначала выберите элемент",
+      "moreDrawTools": "Другие инструменты рисования",
+      "showNotes": "Показать заметки",
+      "noteCountOne": "1 заметка",
+      "noteCount": "Заметок: {{count}}",
+      "drawingDiscarded": "Рисунок удалён",
+      "undo": "Отменить",
+      "collapseNotes": "Свернуть заметки",
+      "expandNotes": "Развернуть заметки",
+      "clearNotes": "Очистить заметки",
+      "waitingForPage": "Ожидание загрузки страницы…",
+      "pageDidNotLoad": "Страница не загрузилась",
+      "discardDrawing": "Удалить рисунок",
+      "discardDrawingTitle": "Удалить рисунок (Esc)",
+      "positionCenter": "По центру"
     },
     "profileCookieClear": {
       "label": "Файлы cookie",
@@ -708,6 +755,12 @@
       "failed": "Не удалось очистить файлы cookie в профиле {{profile}} на сервере {{host}}. Повторите попытку.",
       "failedLocal": "Не удалось очистить файлы cookie в профиле {{profile}} на этом компьютере. Повторите попытку.",
       "sshHostOption": "{{host}} (SSH)"
+    },
+    "grabToast": {
+      "noScreenshot": "Снимок экрана недоступен",
+      "hoverReadFailed": "Не удалось прочитать данные элемента под указателем",
+      "noHover": "Под указателем нет элемента",
+      "copyFailed": "Не удалось скопировать"
     }
   },
   "editor": {
@@ -1101,6 +1154,12 @@
         "sourceWebStore": "Chrome Web Store",
         "title": "Расширения",
         "toggleLabel": "Включить или выключить {{name}}",
+        "failure": {
+          "supportDisabled": "Включите расширения браузера в разделе «Настройки › Браузер › Расширения»",
+          "invalidWebStoreInput": "Вставьте ссылку из Chrome Web Store или идентификатор расширения из 32 букв",
+          "profileUnavailable": "Профиль браузера недоступен для расширений",
+          "alreadyAdded": "Расширение {{name}} уже добавлено"
+        },
         "enabledToggleLabel": "Включить или выключить расширения браузера"
       },
       "passwords": {
@@ -2111,6 +2170,9 @@
           "memory": "память"
         }
       }
+    },
+    "browserUse": {
+      "teamDisabled": "Ваша команда отключила управление браузером агентами."
     },
     "navigation": {
       "accounts": {
@@ -5058,12 +5120,7 @@
           "ea3416d646": "Исполнитель",
           "b1d9fdea08": "Метка",
           "24754c44ad": "Автор",
-          "764a0b4ce1": "Статус",
-          "f0cf6dd591": "выкл.",
-          "1e9b5244f2": "вкл.",
           "b930de7194": "Только черновики",
-          "e0002f1eba": "выбрано",
-          "2b2f019091": "Любой статус",
           "0fd3249e2e": "Закрыто",
           "d78b60b5c2": "Открытые",
           "bd162b7d5a": "Слит",
@@ -5076,7 +5133,6 @@
           "authorCount_few": "{{count}} автора",
           "authorCount_many": "{{count}} авторов",
           "authorCount_other": "{{count}} автора",
-          "allStates": "Все",
           "filterPullRequests": "Фильтр пул-реквестов",
           "filterIssues": "Фильтр задач",
           "filterOrTypeLogin": "Отфильтруйте или введите логин...",
@@ -5722,11 +5778,6 @@
             "waitingTitle": "Ожидание {{server}}",
             "waitingBody": "Orca подключит этот терминал, когда сервер снова предоставит его или изменится соединение. Подключитесь заново, чтобы попробовать сейчас.",
             "downFor": "Недоступен {{duration}}",
-            "cantReachTitle": "Нет связи с {{server}}",
-            "detailsButton": "Подробнее",
-            "tailscaleHintTitle": "Проверьте маршрут Tailscale",
-            "reconnectNowButton": "Подключиться сейчас",
-            "copyPingCommand": "Скопировать команду",
             "tailscaleHint": "Проверьте маршрут Tailscale:",
             "fallbackServerName": "сервер",
             "connectionLostTitle": "Повторное подключение к {{server}}",
@@ -7050,7 +7101,6 @@
           "c13b82793c": "Управление установками",
           "aee7b99cc6": "Установить по ссылке",
           "filterProvider": "Фильтр по агенту",
-          "filterSource": "Фильтр по источнику",
           "allSources": "Все",
           "clearFilters": "Сбросить фильтры",
           "closeSkills": "Закрыть навыки",
@@ -10799,6 +10849,7 @@
           "accessLinkHelp": "Вставьте это в «Добавить сервер» в другой Orca.",
           "staleAddressCreate": "Адрес подключения изменился. Создайте новую ссылку для {{address}}.",
           "add-custom": "Использовать свой адрес…",
+          "interfaceDisconnected": "Адрес {{address}} отключён. Восстановите подключение и обновите список адресов или выберите другой адрес для создания ссылки.",
           "linkExpired": "Срок действия ссылки истёк",
           "unusedLinkExpires": "Неиспользованная ссылка истекает в {{time}}"
         },
@@ -14608,7 +14659,12 @@
             "rollbackStopIncomplete": "Не выполнено: Orca не удалось подтвердить, что текущий сервер завершил работу, поэтому откат не выполнен. Перед повторной попыткой проверьте orcad.log в папке установки сервера в ~/.orca-remote на хосте.",
             "failed": "Orca не удалось завершить действие на сервере. Повторите попытку.",
             "defaultServer": "Не выполнено: этот сервер выбран по умолчанию для новых проектов. Перед остановкой выберите другой в разделе «Новые проекты открываются на».",
-            "wslMoveRunning": "Не выполнено: на этот сервер переносится проект. Orca обновит сервер после завершения переноса."
+            "wslMoveRunning": "Не выполнено: на этот сервер переносится проект. Orca обновит сервер после завершения переноса.",
+            "recoveryRequired": "Не выполнено: хост заблокирован прерванным обновлением или остановкой. Нажмите «Восстановить» или «Отменить остановку», если Orca это предлагает, и повторите попытку.",
+            "snapshotSpace": "Не выполнено: на этом хосте нет места для копии, которую Orca создаёт перед обновлением. Освободите место на хосте и повторите попытку.",
+            "policyRefused": "Не выполнено: Orca не будет активировать эту сборку на этом хосте. Проверьте хост и обновите ещё раз или сначала обновите Orca, если последней его запускала более новая версия Orca.",
+            "hostNewer": "Не выполнено: сервер на этом хосте последней запускала более новая версия Orca. Обновите Orca и повторите попытку.",
+            "preflightFailed": "Не выполнено: новый сервер Orca не прошёл проверку запуска на этом хосте, поэтому Orca оставила хост без изменений."
           },
           "reassurance": "Работает на каждом сервере через ваше SSH-подключение. Код и файлы остаются на месте. На сервер переносится только список проектов, вкладок и терминалов Orca."
         },
@@ -15469,7 +15525,8 @@
             "windows": "процент окна",
             "reset": "время до сброса, например 3h 15m",
             "resetAt": "время сброса по часам, например 20:50",
-            "optional": "опускается, если плейсхолдер внутри пуст"
+            "optional": "опускается, если плейсхолдер внутри пуст",
+            "namedUsagePools": "именованные пулы расхода, например пулы плана Cursor"
           }
         },
         "RepositoryRemoveProjectSection": {
@@ -20217,10 +20274,10 @@
           "failed": "Ошибка",
           "succeeded": "Успешно",
           "neverRan": "Ещё не запускалась",
-          "filters": "Фильтры",
           "all": "Все",
           "clear": "Сбросить фильтры",
           "agent": "Агент",
+          "bot": "Бот",
           "lastRun": "Последний запуск"
         },
         "AutomationListSortHeader": {
@@ -20922,7 +20979,6 @@
       "linear-issue-attribute-filter-dropdowns": {
         "removeFilter": "Убрать фильтр {{value0}}",
         "teamRequired": "Выберите команду, чтобы загрузить статусы, исполнителей и метки этого рабочего пространства.",
-        "filters": "Фильтры",
         "allWorkspacesTitle": "Выберите одно рабочее пространство",
         "allWorkspacesBody": "Фильтры статуса, исполнителя и меток используют идентификаторы одного рабочего пространства Linear. Выберите одно рабочее пространство для фильтрации по этим свойствам.",
         "clearAll": "Очистить все фильтры",
@@ -21462,30 +21518,10 @@
         "keyword-hooks": "хуки"
       },
       "NativeChatResumeToast": {
-        "resumingOn_one": "Возобновляется {{count}} агент на {{machine}}…",
-        "resumingOn_few": "Возобновляются {{count}} агента на {{machine}}…",
-        "resumingOn_many": "Возобновляются {{count}} агентов на {{machine}}…",
-        "resumingOn_other": "Возобновляются {{count}} агента на {{machine}}…",
         "resuming_one": "Возобновляется {{count}} агент…",
         "resuming_few": "Возобновляются {{count}} агента…",
         "resuming_many": "Возобновляются {{count}} агентов…",
         "resuming_other": "Возобновляются {{count}} агента…",
-        "resumedOn_one": "Возобновлён {{count}} агент на {{machine}}.",
-        "resumedOn_few": "Возобновлены {{count}} агента на {{machine}}.",
-        "resumedOn_many": "Возобновлено {{count}} агентов на {{machine}}.",
-        "resumedOn_other": "Возобновлено {{count}} агента на {{machine}}.",
-        "resumedUpdate_one": "После обновления возобновлён {{count}} агент.",
-        "resumedUpdate_few": "После обновления возобновлены {{count}} агента.",
-        "resumedUpdate_many": "После обновления возобновлено {{count}} агентов.",
-        "resumedUpdate_other": "После обновления возобновлено {{count}} агента.",
-        "resumedRestart_one": "После перезапуска возобновлён {{count}} агент.",
-        "resumedRestart_few": "После перезапуска возобновлены {{count}} агента.",
-        "resumedRestart_many": "После перезапуска возобновлено {{count}} агентов.",
-        "resumedRestart_other": "После перезапуска возобновлено {{count}} агента.",
-        "partial_one": "Возобновлено {{resumed}} из {{total}}. {{count}} ждёт вас.",
-        "partial_few": "Возобновлено {{resumed}} из {{total}}. {{count}} ждут вас.",
-        "partial_many": "Возобновлено {{resumed}} из {{total}}. {{count}} ждут вас.",
-        "partial_other": "Возобновлено {{resumed}} из {{total}}. {{count}} ждут вас.",
         "stoppedOn_one": "{{count}} агент остановлен на {{machine}}.",
         "stoppedOn_few": "{{count}} агента остановлены на {{machine}}.",
         "stoppedOn_many": "{{count}} агентов остановлено на {{machine}}.",
@@ -21504,8 +21540,6 @@
         "close": "Закрыть",
         "listLabel": "Агенты",
         "untitled": "Агент без названия",
-        "willAsk": "Orca попросит продолжить. Сообщения из очереди могут быть отправлены.",
-        "asked": "Orca попросила продолжить. Сообщения из очереди могут быть отправлены.",
         "resumedAutomatically": "Возобновлено автоматически.",
         "changeInSettings": "Изменить в настройках",
         "dismissAll": "Скрыть все",
@@ -21515,7 +21549,22 @@
         "stateResumed": "Возобновлён",
         "stateNeedsYou": "Ждёт вас",
         "stateResuming": "Возобновляется",
-        "stateStopped": "Остановлен"
+        "stateStopped": "Остановлен",
+        "resumingOne": "Возобновление: {{name}}…",
+        "failedOne": "Не удалось возобновить {{name}}",
+        "failedSome_one": "Не удалось возобновить {{count}} из {{total}}",
+        "failedSome_few": "Не удалось возобновить {{count}} из {{total}}",
+        "failedSome_many": "Не удалось возобновить {{count}} из {{total}}",
+        "failedSome_other": "Не удалось возобновить {{count}} из {{total}}",
+        "resumedOne": "Возобновлено: {{name}}",
+        "resumedMany_one": "Возобновлён {{count}} агент",
+        "resumedMany_few": "Возобновлены {{count}} агента",
+        "resumedMany_many": "Возобновлено {{count}} агентов",
+        "resumedMany_other": "Возобновлено {{count}} агента",
+        "needYou_one": "{{count}} ждёт вас",
+        "needYou_few": "{{count}} ждут вас",
+        "needYou_many": "{{count}} ждут вас",
+        "needYou_other": "{{count}} ждут вас"
       },
       "RunTargetCombobox": {
         "noWslDistros": "Дистрибутивы WSL не найдены",
@@ -22787,6 +22836,7 @@
       "htmlView": "Вид HTML",
       "htmlViewCode": "Код",
       "htmlViewPreview": "Предпросмотр",
+      "htmlViewPreviewWaiting": "Предпросмотр появится, когда блок кода будет готов.",
       "context": {
         "unavailable": "Размер контекста пока неизвестен. Он появится после следующего ответа агента.",
         "summary": "Контекст: {{used}} / {{window}} токенов ({{percent}}%), оценка по последнему ответу.",
@@ -24272,7 +24322,7 @@
       "selectAgent": "Выберите агента",
       "detectingAgents": "Поиск агентов на компьютере этого рабочего пространства…",
       "detectionFailed": "Не удалось найти агентов на компьютере этого рабочего пространства.",
-      "noAgents": "No enabled agents were detected on this workspace host.",
+      "noAgents": "На компьютере этого рабочего пространства не найдено включённых агентов.",
       "onlySourceFamilyDetected": "На компьютере этого рабочего пространства доступны только агенты, у которых общий лимит использования с {{agent}}. Включите или установите другого агента.",
       "context": "Контекст",
       "starting": "Запуск…",
@@ -24980,8 +25030,8 @@
       "createDescription": "Выберите проект и название рабочего пространства. При желании выберите агента для запуска.",
       "setupCheckFailed": "Не удалось проверить конфигурацию настройки. Повторите попытку.",
       "directSetup": {
-        "run": "Run setup",
-        "skip": "Skip setup",
+        "run": "Запустить настройку",
+        "skip": "Пропустить настройку",
         "description": "Выберите, выполнять ли настройку перед созданием этого рабочего пространства.",
         "cancel": "Отмена",
         "retry": "Повторить",
@@ -25277,7 +25327,7 @@
       "useDaemonActions": {
         "restartFailed": "Не удалось перезапустить службу терминалов.",
         "killAllSessionsDescription": "Завершает все сеансы терминала и их агентов, включая сеансы без открытой вкладки. Несохранённая работа будет потеряна.",
-        "someSessionsUnchecked": "Some sessions couldn’t be checked."
+        "someSessionsUnchecked": "Не удалось проверить некоторые сессии."
       }
     },
     "sidebar": {
@@ -26171,7 +26221,7 @@
       "alsoStop": "Также остановить работающий сервер (закроет все сеансы Codex, которые его используют, в том числе вне Orca)",
       "couldNotTurnOff": "Не удалось отключить общий доступ.",
       "stopFailedAfterOff": "Общий доступ отключён, но сервер не остановился.",
-      "turnOffAndStop": "Turn off and stop server"
+      "turnOffAndStop": "Отключить общий доступ и остановить сервер"
     },
     "paneMove": {
       "failed": "Не удалось переместить панель в новую вкладку."
@@ -26408,7 +26458,9 @@
       "chatOtherWindow": "Вход выполняется в другом окне.",
       "chatPageDidntOpen": "Страница не открылась?",
       "chatPasteCode": "Вставьте код",
-      "chatPasteCodeLabel": "Код, который Google показывает после входа, или адрес той страницы"
+      "chatPasteCodeLabel": "Код, который Google показывает после входа, или адрес той страницы",
+      "launchesUse": "Новые запуски agy используют этот аккаунт",
+      "loginNow": "Текущий вход agy"
     },
     "claude": {
       "added": "Учётная запись добавлена. Выберите её для следующего запуска Claude.",
@@ -28517,6 +28569,7 @@
       "stop": "Остановить",
       "stopWorker": "Остановить: {{value0}}",
       "agent": "Агент",
+      "progress": "Ход работы",
       "result": "Результат",
       "workspace": "Рабочее пространство",
       "branch": "Ветка",
@@ -28711,7 +28764,7 @@
       "reports": "Сообщает",
       "takesOver": "Берёт на себя",
       "agentsKeepRunning": "Их агенты продолжают работать.",
-      "uploadDropOrPaste": "<upload>Загрузите</upload>, перетащите или вставьте изображение",
+      "uploadOrPaste": "<upload>Загрузите изображение</upload> или вставьте его",
       "purposeLabel": "Личность",
       "purposePlaceholder": "Кто это и чем занимается",
       "uploadPasteOrDrop": "или загрузите, вставьте либо перетащите своё",
@@ -29707,7 +29760,8 @@
       },
       "deliveryUnconfirmed": "Доставка не подтверждена",
       "starting": "Запуск…",
-      "notStarted": "Не запущен"
+      "notStarted": "Не запущен",
+      "renameThreadNeedsHostUpdate": "Чтобы переименовывать обсуждения, обновите Orca на {{host}}."
     },
     "host": {
       "errors": {
@@ -30305,7 +30359,13 @@
       "repositoryCount_one": "{{count}} репозиторий в {{accounts}}",
       "repositoryCount_few": "{{count}} репозитория в {{accounts}}",
       "repositoryCount_many": "{{count}} репозиториев в {{accounts}}",
-      "repositoryCount_other": "{{count}} репозитория в {{accounts}}"
+      "repositoryCount_other": "{{count}} репозитория в {{accounts}}",
+      "ghSignedOut": {
+        "thisComputer": "этот компьютер",
+        "status": "Вход в gh не выполнен ({{host}})",
+        "line": "Вход в gh не выполнен ({{host}}). Выполните там команду <code>gh auth login</code>.",
+        "copy": "Копировать {{text}}"
+      }
     },
     "accessRequest": {
       "toast": "{{person}} запросил(а) доступ к {{name}}",
@@ -31618,7 +31678,7 @@
       "summary": "Orca перестала отвечать",
       "title": "Сообщить о зависании",
       "includeRedacted": "Приложить сохранённый отчёт о зависании и недавние журналы (без личных данных)",
-      "uncheckAttachments": "Uncheck \"Include the saved freeze report and recent logs (redacted)\" and try again, or copy the details."
+      "uncheckAttachments": "Снимите флажок «Приложить сохранённый отчёт о зависании и недавние журналы (без личных данных)» и повторите попытку или скопируйте сведения."
     },
     "includeRecentLogsRedacted": "Приложить недавние журналы (без личных данных)",
     "details": "Подробности",

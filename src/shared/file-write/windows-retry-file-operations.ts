@@ -2,7 +2,9 @@ import { copyFileSync, renameSync, rmSync } from 'node:fs'
 import { rename } from 'node:fs/promises'
 import { setTimeout } from 'node:timers/promises'
 
-// Windows AV/CLI file handles transiently cause EPERM/EACCES/EBUSY during replacement. Bound retries (~750ms) cover typical scans without hiding persistent permission errors (#1507).
+// Windows AV/CLI file handles transiently cause EPERM/EACCES/EBUSY during replacement. Bound retries (~750ms by default) cover typical scans without hiding persistent permission errors (#1507).
+const DEFAULT_ATTEMPTS = 6
+
 export function renameFileWithWindowsRetry(
   source: string,
   target: string,
@@ -27,9 +29,11 @@ export function renameFileWithWindowsRetry(
 export async function renameFileWithWindowsRetryAsync(
   source: string,
   target: string,
-  isCurrent: () => boolean = () => true
+  isCurrent: () => boolean = () => true,
+  { attempts = DEFAULT_ATTEMPTS, signal }: { attempts?: number; signal?: AbortSignal } = {}
 ): Promise<boolean> {
   for (let attempt = 1; ; attempt++) {
+    signal?.throwIfAborted()
     if (!isCurrent()) {
       return false
     }
@@ -37,10 +41,10 @@ export async function renameFileWithWindowsRetryAsync(
       await rename(source, target)
       return true
     } catch (error) {
-      if (!shouldRetryFileOperation(error, attempt)) {
+      if (!shouldRetryFileOperation(error, attempt, attempts)) {
         throw error
       }
-      await setTimeout(attempt * 50)
+      await setTimeout(attempt * 50, undefined, { signal })
     }
   }
 }
@@ -69,10 +73,14 @@ function runFileOperationWithWindowsRetry(operation: () => void): void {
   }
 }
 
-function shouldRetryFileOperation(error: unknown, attempt: number): boolean {
+function shouldRetryFileOperation(
+  error: unknown,
+  attempt: number,
+  attempts = DEFAULT_ATTEMPTS
+): boolean {
   return (
     process.platform === 'win32' &&
-    attempt < 6 &&
+    attempt < attempts &&
     error instanceof Error &&
     'code' in error &&
     (error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EBUSY')

@@ -4617,19 +4617,13 @@
           "ea3416d646": "負責人",
           "b1d9fdea08": "標籤",
           "24754c44ad": "作者",
-          "764a0b4ce1": "狀態",
-          "f0cf6dd591": "關",
-          "1e9b5244f2": "開",
           "b930de7194": "僅草稿",
-          "e0002f1eba": "已選擇",
-          "2b2f019091": "任意狀態",
           "0fd3249e2e": "已關閉",
           "d78b60b5c2": "開放",
           "bd162b7d5a": "已合併",
           "draft": "草稿",
           "labelCount_other": "{{count}} 個標籤",
           "authorCount_other": "{{count}} 位作者",
-          "allStates": "全部",
           "filterPullRequests": "篩選 PR",
           "filterIssues": "篩選議題",
           "filterOrTypeLogin": "篩選或輸入登入名稱...",
@@ -5254,11 +5248,6 @@
             "waitingTitle": "正在等待 {{server}}",
             "waitingBody": "伺服器再次提供此終端機或連線狀態變更時，Orca 會重新連接此終端機。點選「重新連線」可立即重試。",
             "downFor": "已中斷連線 {{duration}}",
-            "cantReachTitle": "無法連線至 {{server}}",
-            "detailsButton": "詳細資訊",
-            "tailscaleHintTitle": "檢查 Tailscale 連線路徑",
-            "reconnectNowButton": "立即重新連線",
-            "copyPingCommand": "複製指令",
             "tailscaleHint": "檢查 Tailscale 連線路徑：",
             "fallbackServerName": "伺服器",
             "connectionLostTitle": "正在重新連線至 {{server}}",
@@ -6472,7 +6461,6 @@
           "c13b82793c": "管理安裝",
           "aee7b99cc6": "從連結安裝",
           "filterProvider": "按代理程式篩選",
-          "filterSource": "按來源篩選",
           "allSources": "全部",
           "clearFilters": "清除篩選",
           "closeSkills": "關閉技能",
@@ -13810,7 +13798,12 @@
             "rollbackStopIncomplete": "未完成：Orca 無法確認目前的伺服器已結束，因此沒有回復舊版。請先檢查主機上 ~/.orca-remote 中伺服器安裝資料夾內的 orcad.log，再重試。",
             "failed": "Orca 無法在伺服器上完成此操作。請重試。",
             "defaultServer": "未完成：此伺服器是新專案的預設主機。停止前，請先在「新專案開啟位置」選擇其他主機。",
-            "wslMoveRunning": "未完成：有專案正在移至此伺服器。移動完成後，Orca 會更新它。"
+            "wslMoveRunning": "未完成：有專案正在移至此伺服器。移動完成後，Orca 會更新它。",
+            "recoveryRequired": "未完成：中斷的更新或停止作業正佔用此主機。如果 Orca 提供「恢復」或「取消停止」，請使用後再重試。",
+            "snapshotSpace": "未完成：此主機沒有足夠空間存放 Orca 在更新前建立的副本。請釋放主機空間後重試。",
+            "policyRefused": "未完成：Orca 不會在此主機上啟用此建置版本。請檢查主機後再次更新；如果上次執行它的是較新版本的 Orca，請先更新 Orca。",
+            "hostNewer": "未完成：上次執行此主機伺服器的是較新版本的 Orca。請更新 Orca 後重試。",
+            "preflightFailed": "未完成：新的 Orca 伺服器未通過此主機上的啟動檢查，因此 Orca 沒有變更此主機。"
           },
           "reassurance": "在各臺主機上執行，並透過自己的 SSH 連線存取。程式碼與檔案會留在原處，只有 Orca 的專案、分頁與終端機清單會遷移至主機。"
         },
@@ -19189,10 +19182,10 @@
           "failed": "失敗",
           "succeeded": "成功",
           "neverRan": "從未執行",
-          "filters": "篩選條件",
           "all": "全部",
           "clear": "清除篩選",
           "agent": "代理程式",
+          "bot": "機器人",
           "lastRun": "最後一次執行"
         },
         "AutomationListSortHeader": {
@@ -19819,7 +19812,6 @@
       "linear-issue-attribute-filter-dropdowns": {
         "removeFilter": "移除 {{value0}} 篩選器",
         "teamRequired": "選擇一個團隊以載入此工作區的狀態、負責人和標籤。",
-        "filters": "篩選器",
         "allWorkspacesTitle": "選擇一個工作區",
         "allWorkspacesBody": "狀態、負責人和標籤篩選器使用單一 Linear 工作區的 ID。請選擇一個工作區以依這些屬性進行篩選。",
         "clearAll": "清除所有篩選器",
@@ -20358,12 +20350,7 @@
         "create": "建立"
       },
       "NativeChatResumeToast": {
-        "resumingOn_other": "正在恢復 {{machine}} 上的 {{count}} 個聊天…",
         "resuming_other": "正在恢復 {{count}} 個聊天…",
-        "resumedOn_other": "已恢復 {{machine}} 上的 {{count}} 個聊天。",
-        "resumedUpdate_other": "更新後已恢復 {{count}} 個聊天。",
-        "resumedRestart_other": "重新啟動後已恢復 {{count}} 個聊天。",
-        "partial_other": "已恢復 {{total}} 個聊天中的 {{resumed}} 個。{{count}} 個需要你處理。",
         "stoppedOn_other": "{{machine}} 上有 {{count}} 個聊天已停止。",
         "stoppedUpdate_other": "Orca 更新時有 {{count}} 個聊天已停止。",
         "stoppedRestart_other": "Orca 關閉時有 {{count}} 個聊天已停止。",
@@ -20373,8 +20360,6 @@
         "close": "關閉",
         "listLabel": "聊天",
         "untitled": "無標題聊天",
-        "willAsk": "Orca 會要求聊天繼續。排隊中的訊息可能會被傳送。",
-        "asked": "Orca 已要求聊天繼續。排隊中的訊息可能會被傳送。",
         "resumedAutomatically": "已自動恢復。",
         "changeInSettings": "在設定中變更",
         "dismissAll": "全部忽略",
@@ -20384,7 +20369,13 @@
         "stateResumed": "已恢復",
         "stateNeedsYou": "需要你處理",
         "stateResuming": "正在恢復",
-        "stateStopped": "已停止"
+        "stateStopped": "已停止",
+        "resumingOne": "正在恢復 {{name}}…",
+        "failedOne": "無法恢復 {{name}}",
+        "failedSome_other": "無法恢復：{{total}} 個中的 {{count}} 個",
+        "resumedOne": "已恢復 {{name}}",
+        "resumedMany_other": "已恢復 {{count}} 個聊天",
+        "needYou_other": "{{count}} 個需要你處理"
       },
       "RunTargetCombobox": {
         "noWslDistros": "找不到 WSL 發行版",
@@ -24895,7 +24886,9 @@
       "chatOtherWindow": "另一個視窗正在進行登入。",
       "chatPageDidntOpen": "頁面沒有開啟？",
       "chatPasteCode": "貼上代碼",
-      "chatPasteCodeLabel": "登入後 Google 顯示的代碼，或該頁面的網址"
+      "chatPasteCodeLabel": "登入後 Google 顯示的代碼，或該頁面的網址",
+      "launchesUse": "新啟動的 agy 將使用此帳號",
+      "loginNow": "agy 目前的登入"
     },
     "claude": {
       "added": "已新增帳戶。選擇它即可將其用於你下次啟動的 Claude。",

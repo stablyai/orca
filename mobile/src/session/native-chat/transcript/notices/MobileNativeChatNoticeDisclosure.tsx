@@ -1,10 +1,11 @@
 import { Pressable, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
-import { colors, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
-import { toolStyles } from '../tool-results/mobile-native-chat-tool-styles'
+import { toolStylesSheet } from '../tool-results/mobile-native-chat-tool-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 /** A notice's one-line summary that opens its details. */
 export function MobileNativeChatNoticeDisclosure({
@@ -20,6 +21,9 @@ export function MobileNativeChatNoticeDisclosure({
   onPress: () => void
   onLongPress?: () => void
 }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const toolStyles = useThemedStyles(toolStylesSheet)
   return (
     <Pressable
       accessibilityRole="button"
@@ -43,7 +47,7 @@ export function MobileNativeChatNoticeDisclosure({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   disclosure: {
     flexDirection: 'row',
     alignItems: 'center',

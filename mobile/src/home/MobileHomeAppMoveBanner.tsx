@@ -4,14 +4,15 @@ import { openAppMoveScreen, playStoreAvailable } from '../app-move/app-move-gate
 import { isRetiredGithubAndroidApp } from '../app-update/app-update-runtime'
 import { OrcaLogo } from '../components/icons/OrcaLogo'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 
 /** Not dismissible: the retired GitHub app gets no more updates, so Home keeps pointing at the new one. */
 export function MobileHomeAppMoveBanner() {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   if (!isRetiredGithubAndroidApp) {
     return null
   }
@@ -38,7 +39,7 @@ export function MobileHomeAppMoveBanner() {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   banner: {
     flexDirection: 'row',
     alignItems: 'center',

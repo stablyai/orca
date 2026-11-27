@@ -1,7 +1,7 @@
 import type { JiraIssueFilter } from '../../../../src/shared/jira/jira-types'
 import type { TaskProvider } from '../../../../src/shared/work-items/task-providers'
 import type { PickerOption } from '../../components/sheets/PickerModal'
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 import { JIRA_FILTER_LABELS } from '../providers/jira/mobile-jira-issue-filters'
 
 export const PROVIDER_LABELS: Record<TaskProvider, string> = {
@@ -11,62 +11,43 @@ export const PROVIDER_LABELS: Record<TaskProvider, string> = {
   jira: 'Jira'
 }
 
-export const PROVIDER_EMPTY_LABELS: Record<TaskProvider, string> = {
-  get github() {
-    return translate('tasks.taskViewOptions.noGitHubTasks', 'No GitHub tasks')
-  },
-  get gitlab() {
-    return translate('tasks.taskViewOptions.noGitLabTasks', 'No GitLab tasks')
-  },
-  get linear() {
-    return translate('tasks.taskViewOptions.noLinearTasks', 'No Linear tasks')
-  },
-  get jira() {
-    return translate('tasks.taskViewOptions.noJiraTasks', 'No Jira tasks')
+export function providerEmptyLabel(t: Translate, provider: TaskProvider): string {
+  switch (provider) {
+    case 'github':
+      return t('tasks.taskViewOptions.noGitHubTasks', 'No GitHub tasks')
+    case 'gitlab':
+      return t('tasks.taskViewOptions.noGitLabTasks', 'No GitLab tasks')
+    case 'linear':
+      return t('tasks.taskViewOptions.noLinearTasks', 'No Linear tasks')
+    case 'jira':
+      return t('tasks.taskViewOptions.noJiraTasks', 'No Jira tasks')
   }
 }
 
-export const JIRA_FILTER_OPTIONS: PickerOption<JiraIssueFilter>[] = [
-  {
-    value: 'assigned',
-    get label() {
-      return JIRA_FILTER_LABELS.assigned
+export function jiraFilterOptions(t: Translate): PickerOption<JiraIssueFilter>[] {
+  return [
+    {
+      value: 'assigned',
+      label: JIRA_FILTER_LABELS.assigned,
+      subtitle: t('tasks.taskViewOptions.assignedSubtitle', 'Unresolved issues assigned to you')
     },
-    get subtitle() {
-      return translate(
-        'tasks.taskViewOptions.assignedSubtitle',
-        'Unresolved issues assigned to you'
-      )
-    }
-  },
-  {
-    value: 'reported',
-    get label() {
-      return JIRA_FILTER_LABELS.reported
+    {
+      value: 'reported',
+      label: JIRA_FILTER_LABELS.reported,
+      subtitle: t('tasks.taskViewOptions.reportedSubtitle', 'Unresolved issues you reported')
     },
-    get subtitle() {
-      return translate('tasks.taskViewOptions.reportedSubtitle', 'Unresolved issues you reported')
-    }
-  },
-  {
-    value: 'all',
-    get label() {
-      return JIRA_FILTER_LABELS.all
-    },
-    get subtitle() {
-      return translate(
+    {
+      value: 'all',
+      label: JIRA_FILTER_LABELS.all,
+      subtitle: t(
         'tasks.taskViewOptions.allSubtitle',
         'Unresolved issues across the selected sites'
       )
-    }
-  },
-  {
-    value: 'done',
-    get label() {
-      return JIRA_FILTER_LABELS.done
     },
-    get subtitle() {
-      return translate('tasks.taskViewOptions.doneSubtitle', 'Your recently resolved issues')
+    {
+      value: 'done',
+      label: JIRA_FILTER_LABELS.done,
+      subtitle: t('tasks.taskViewOptions.doneSubtitle', 'Your recently resolved issues')
     }
-  }
-]
+  ]
+}

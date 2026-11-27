@@ -2,7 +2,7 @@ import { credentialFileExists } from '../credentials/credential-file-io'
 import { resolve } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/process/agent-process-recognition'
-import { isAntigravityFileStorageHost } from './native-credential-backend'
+import { isAntigravityFileStorageHostAsync } from './native-file-credentials'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { getAntigravityAccountService, getAntigravityAccountVaultPath } from './native-account-host'
 
@@ -41,11 +41,24 @@ export async function prepareAntigravityAccountForLaunch(args: {
   if (
     args.envToDelete?.some((key) => ['HOME', 'USERPROFILE'].includes(key)) ||
     (home && resolve(home) !== resolve(getAppEnvironment().getPath('home'))) ||
-    isAntigravityFileStorageHost(env) !== isAntigravityFileStorageHost(process.env)
+    (await isAntigravityFileStorageHostAsync(env)) !==
+      (await isAntigravityFileStorageHostAsync(process.env))
   ) {
     throw new Error(
       'This agy launch uses a different credential authority from the selected Antigravity account.'
     )
   }
   await (await getAntigravityAccountService({ runtime: 'host' })).prepareForLaunch()
+}
+
+/** Chats never had the launch gate: put the selected account back when that's safe, else start on
+ *  agy's current login as before. */
+export async function restoreAntigravityAccountForChat(
+  env: Readonly<Record<string, string>>
+): Promise<void> {
+  try {
+    await prepareAntigravityAccountForLaunch({ launchAgent: 'antigravity', env: { ...env } })
+  } catch (error) {
+    console.warn("[antigravity] chat starts on agy's current login:", error)
+  }
 }

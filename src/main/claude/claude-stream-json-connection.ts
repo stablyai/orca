@@ -11,7 +11,6 @@ import {
   createClaudeControlSurface,
   type ClaudeControlSurface
 } from './sdk-transport/claude-agent-sdk-control-requests'
-import { createClaudeChildTreeReaper } from './child-process/claude-agent-sdk-exit-proof'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { claudeChildCloseProven } from './child-process/claude-child-exit-proof-ladder'
@@ -52,12 +51,17 @@ export type ClaudeStreamJsonLaunch = {
   env?: Record<string, string>
   /** Delete these keys after merging inherited and launch env. */
   envToDelete?: readonly string[]
+  /** The chat whose agent runs under the terminal daemon where it can, so it outlives a restart. */
+  relayChatKey?: string
 }
 
 export type ClaudeStreamJsonConnectionHandlers = {
   onMessage?: (message: Record<string, unknown>) => void
   /** Raw stdout before the SDK reads it, for state that must keep wire order with permission requests. */
   onStdout?: (chunk: Buffer | string) => void
+  /** The connection is to an agent kept from before this app, ahead of any of its output; may
+   *  return a raw stdout observer for the kept connection. */
+  onReattach?: () => ((chunk: string) => void) | void
   /** The SDK handles request IDs, aborts and deduplication; cannot combine with permissionPromptToolName. */
   canUseTool?: CanUseTool
   /** `request_user_dialog` control; the CLI only emits kinds declared in `supportedDialogKinds`. */
@@ -84,6 +88,8 @@ export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
   /** What the ladder has observed so far; read after a `close()` that returned false. */
   readonly exitVerdict: ClaudeChildExitVerdict
   readonly executableMissing?: boolean
+  /** Handed to the terminal host at quit, where the agent keeps running. */
+  readonly handedOff?: boolean
   exited?: Promise<Error>
   startupFailure?: () => Error | undefined
   pauseReading?: () => void
@@ -122,6 +128,8 @@ export async function openClaudeStreamJsonConnection(
       ...(handlers.onUserDialog ? { onUserDialog: handlers.onUserDialog } : {})
     }
   })
+  // A failed launch also fails the stand-in the SDK holds, which ends the query.
+  await spawner.bound
   const managed = spawner.managed
   const child = managed?.child
   if (!child || !managed) {
@@ -139,9 +147,7 @@ export async function openClaudeStreamJsonConnection(
     if (closing || managed.rootVerdict === 'exited' || terminalError || readingBarrier) {
       return
     }
-    readingBarrier = new Promise<void>((resolve) => {
-      releaseReadingBarrier = resolve
-    })
+    ;({ promise: readingBarrier, resolve: releaseReadingBarrier } = Promise.withResolvers<void>())
   }
   const resumeReading = (): void => {
     const release = releaseReadingBarrier
@@ -152,11 +158,7 @@ export async function openClaudeStreamJsonConnection(
   const waitUntilReadable = (): Promise<void> => readingBarrier ?? Promise.resolve()
   // Share descendant evidence across close retries and fault cleanup.
   const rootSettled = (): boolean => managed.rootVerdict === 'exited'
-  const tree = createClaudeChildTreeReaper(child, {
-    site: 'claude-structured-child-close',
-    exited: rootSettled,
-    supervised: managed.supervised
-  })
+  const tree = spawner.treeReaper(rootSettled)
 
   // Observe descendants on first output to avoid startup scans while still catching natural-exit races.
   let outputObservationArmed = false
@@ -226,6 +228,7 @@ export async function openClaudeStreamJsonConnection(
             throw new Error('claude stream-json yielded a non-object message')
           }
           handlers.onMessage?.(next.value)
+          spawner.handled(next.value)
         }
       } finally {
         if (!completed) {
@@ -244,9 +247,7 @@ export async function openClaudeStreamJsonConnection(
     }
     handleUnexpectedEnd(error)
   })
-  child.on('close', () => {
-    handleUnexpectedEnd(undefined, true)
-  })
+  child.on('close', () => handleUnexpectedEnd(undefined, true))
   child.stdin.on('error', (error) => {
     if (!closing) {
       void handleTransportFailure(error)
@@ -321,6 +322,9 @@ export async function openClaudeStreamJsonConnection(
     },
     get executableMissing() {
       return managed.executableMissing
+    },
+    get handedOff() {
+      return 'handedOff' in managed.child && managed.child.handedOff === true
     },
     get exitVerdict() {
       return {

@@ -1,5 +1,4 @@
 import React from 'react'
-import { DetachedHeadBadge } from '@/components/source-control/DetachedHeadBadge'
 import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import CacheTimer from '../activity/CacheTimer'
@@ -7,6 +6,7 @@ import { TruncatedSidebarLabel } from '../../../ui/truncated-sidebar-label'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import {
   WorktreeCardDeleteQuickAction,
+  WorktreeCardDetachedHeadBadge,
   WorktreeCardPrimaryBadge,
   WorktreeCardPrimaryStar,
   WorktreeCardRepoChip,
@@ -14,7 +14,15 @@ import {
   WorktreeCardSparseBadge
 } from '../identity/worktree-card-header-items'
 import { WorktreeCardNotificationsMutedBadge } from '../identity/WorktreeCardNotificationsMutedBadge'
-import { AutoNameFailedIndicator } from '../identity/AutoNameFailedIndicator'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+
+const LazyAutoNameFailedIndicator = lazyWithRetry(
+  () =>
+    import('../identity/AutoNameFailedIndicator').then((module) => ({
+      default: module.AutoNameFailedIndicator
+    })),
+  { reloadKey: 'auto-name-failed-indicator' }
+)
 import {
   WorktreeCardConflictBadge,
   WorktreeCardFolderPath
@@ -124,11 +132,13 @@ export const CARD_IDENTITY_PARTS = {
   )),
   RenameError: part([], (_props, _children, card) =>
     card.autoNameFailure ? (
-      <AutoNameFailedIndicator
-        card={card}
-        failure={card.autoNameFailure}
-        onPointerDown={card.stopQuickActionPointerPropagation}
-      />
+      <React.Suspense fallback={null}>
+        <LazyAutoNameFailedIndicator
+          card={card}
+          failure={card.autoNameFailure}
+          onPointerDown={card.stopQuickActionPointerPropagation}
+        />
+      </React.Suspense>
     ) : null
   ),
   PrimaryBadge: part(['hasHoverDetails'], (props, _children, card) => (
@@ -170,13 +180,12 @@ export const CARD_IDENTITY_PARTS = {
   FolderPath: part([], (_props, _children, { worktree }) => (
     <WorktreeCardFolderPath path={worktree.path} />
   )),
-  DetachedHead: part([], (_props, _children, { detachedHeadDisplay }) =>
-    detachedHeadDisplay ? (
-      <DetachedHeadBadge
-        display={detachedHeadDisplay}
-        label="sidebar"
-        side="right"
-        className="h-[16px]"
+  DetachedHead: part(['hasHoverDetails'], (props, _children, card) =>
+    card.detachedHeadDisplay ? (
+      <WorktreeCardDetachedHeadBadge
+        card={card}
+        hasHoverDetails={props.hasHoverDetails === true}
+        display={card.detachedHeadDisplay}
       />
     ) : null
   ),

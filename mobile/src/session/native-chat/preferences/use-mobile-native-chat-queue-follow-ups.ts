@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react'
+import { recomputeOn } from '../../../hooks/recompute-on'
 import { nativeChatQueueFollowUps } from '../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import {
@@ -37,6 +38,7 @@ export function useMobileNativeChatQueueFollowUps(
     [pairedPreference, preference]
   )
   // Both stores read the combined value, so only a change to what Send uses re-renders.
-  useSyncExternalStore(subscribePaired, getSnapshot, defaultSnapshot)
-  return useSyncExternalStore(subscribe, getSnapshot, defaultSnapshot)
+  const pairedSnapshot = useSyncExternalStore(subscribePaired, getSnapshot, defaultSnapshot)
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, defaultSnapshot)
+  return recomputeOn([pairedSnapshot], () => snapshot)
 }

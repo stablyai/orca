@@ -20,3 +20,11 @@ export function supportsVisibleProjectionSnapshotFromRuntimeController(ptyId: st
     return false
   }
 }
+
+export function canProvideAuthoritativeBufferSnapshotFromRuntimeController(ptyId: string): boolean {
+  try {
+    return getProviderForPty(ptyId).canProvideAuthoritativeBufferSnapshot?.(ptyId) === true
+  } catch {
+    return false
+  }
+}

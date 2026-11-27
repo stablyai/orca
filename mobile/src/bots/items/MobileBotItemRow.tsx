@@ -12,11 +12,12 @@ import {
 import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-name'
 import { botItemQuestionLine } from '../../../../src/shared/bots/bot-item-ask'
 import { ListRow } from '../../components/list/ListGroup'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
@@ -49,7 +50,10 @@ export function MobileBotItemRow({
   /** In a group's list: the bot the item is from, named under its title. */
   owner?: { name: string; avatar: MobileBotAvatarSource }
 }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const asking = !stale && !snoozed && item.status === 'needs_you'
   // Only Needs you and Waiting have a second line, the bot's question or what it waits on; In
   // progress's spinner is its live signal.
@@ -92,9 +96,9 @@ export function MobileBotItemRow({
           <Text style={styles.age}>
             {snoozed && item.snoozedUntil !== null
               ? t('bots.items.snooze.rowUntil', 'until {{when}}', {
-                  when: formatPhoneSnoozeTime(item.snoozedUntil, now)
+                  when: formatPhoneSnoozeTime(item.snoozedUntil, now, intlLocale)
                 })
-              : formatTimeAgo(botItemActivityAt(item, now), now)}
+              : formatTimeAgo(botItemActivityAt(item, now), now, t)}
           </Text>
         </View>
       }
@@ -123,8 +127,9 @@ function itemQuestionLine(item: BotItem, t: Translate): string | undefined {
 
 /** An ask's age in a Needs you row, in the item rows' muted style. */
 export function MobileBotAskAge({ at, now }: { at: number; now: number }) {
-  useMobileColorScheme()
-  return <Text style={styles.age}>{formatTimeAgo(at, now)}</Text>
+  const t = useMobileTranslation()
+  const styles = useThemedStyles(stylesSheet)
+  return <Text style={styles.age}>{formatTimeAgo(at, now, t)}</Text>
 }
 
 /** In a group's list: the member a row is from, its face and name, then the row's own line. */
@@ -135,7 +140,7 @@ export function MobileBotItemOwnerLine({
   owner: { name: string; avatar: MobileBotAvatarSource }
   line?: string
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.owner}>
       <MobileBotAvatar avatar={owner.avatar} size={14} />
@@ -156,7 +161,8 @@ export function MobileBotItemSelectionBar({
   onMove: () => void
   onClear: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <View style={styles.bar}>
@@ -183,7 +189,7 @@ export function MobileBotItemSelectionBar({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   trailing: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   owner: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   ownerText: { flexShrink: 1, fontSize: typography.metaSize, color: colors.textSecondary },

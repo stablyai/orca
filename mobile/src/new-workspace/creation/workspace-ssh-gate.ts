@@ -3,7 +3,7 @@ import type {
   SshConnectionStatus
 } from '../../../../src/shared/remote-runtime/ssh/ssh-types'
 import { ORCAD_RECLAIM_STALE_LOCK_FLAG } from '../../../../src/shared/remote-runtime/orcad-lifecycle/orcad-stale-lock-reclaim'
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 
 // Keep unread SSH fields optional so an omitted member cannot drop auth-failed state into connected fallback.
 export type WorkspaceSshRecord = Omit<
@@ -27,29 +27,29 @@ function isWorkspaceSshConnectInProgress(status: SshConnectionStatus | null): bo
   return status === 'connecting' || status === 'deploying-relay' || status === 'reconnecting'
 }
 
-export function workspaceSshStatusLabel(status: SshConnectionStatus | null): string {
+export function workspaceSshStatusLabel(status: SshConnectionStatus | null, t: Translate): string {
   if (status === 'connected') {
-    return translate('tasks.workspaceSshGate.connected', 'Connected')
+    return t('tasks.workspaceSshGate.connected', 'Connected')
   }
   if (status === 'connecting') {
-    return translate('tasks.workspaceSshGate.connecting', 'Connecting')
+    return t('tasks.workspaceSshGate.connecting', 'Connecting')
   }
   if (status === 'deploying-relay') {
-    return translate('tasks.workspaceSshGate.deployingRelay', 'Deploying relay')
+    return t('tasks.workspaceSshGate.deployingRelay', 'Deploying relay')
   }
   if (status === 'reconnecting') {
-    return translate('tasks.workspaceSshGate.reconnecting', 'Reconnecting')
+    return t('tasks.workspaceSshGate.reconnecting', 'Reconnecting')
   }
   if (status === 'auth-failed') {
-    return translate('tasks.workspaceSshGate.authenticationFailed', 'Authentication failed')
+    return t('tasks.workspaceSshGate.authenticationFailed', 'Authentication failed')
   }
   if (status === 'reconnection-failed') {
-    return translate('tasks.workspaceSshGate.reconnectFailed', 'Reconnect failed')
+    return t('tasks.workspaceSshGate.reconnectFailed', 'Reconnect failed')
   }
   if (status === 'error') {
-    return translate('tasks.workspaceSshGate.connectionFailed', 'Connection failed')
+    return t('tasks.workspaceSshGate.connectionFailed', 'Connection failed')
   }
-  return translate('tasks.workspaceSshGate.disconnected', 'Disconnected')
+  return t('tasks.workspaceSshGate.disconnected', 'Disconnected')
 }
 
 export function deriveWorkspaceSshGate(args: {

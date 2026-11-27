@@ -42,8 +42,7 @@ function mappedPushBranch(spec: string, branch: string): string | null {
     if (!fullBranch.startsWith(prefix) || !fullBranch.endsWith(suffix)) {
       return null
     }
-    target = destination.replace(
-      '*',
+    target = destination.replace('*', () =>
       fullBranch.slice(prefix.length, fullBranch.length - suffix.length)
     )
   } else if (normalized !== fullBranch) {

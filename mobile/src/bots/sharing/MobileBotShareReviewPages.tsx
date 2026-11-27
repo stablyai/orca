@@ -3,7 +3,8 @@
 import { BOT_SHARE_MEMORY_INDEX } from '../../../../src/shared/bots/bot-share-received'
 import { reviewPartFiles, toolHost } from '../../../../src/shared/bots/bot-share-review-files'
 import { ListRow, SectionHeader } from '../../components/list/ListGroup'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import { SettingsSection } from '../../settings/settings-screen-frame'
 import { botShareFlagLabel } from './bot-share-copy'
 import {
@@ -20,6 +21,7 @@ import { eventWhen, scheduleWhen, type SharePartPage } from './mobile-share-page
 
 export function MobileBotShareReviewPage(props: { page: ReviewPage; ctx: ReviewContext }) {
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { page, ctx } = props
   const { review } = ctx
   const { bot } = review
@@ -54,9 +56,9 @@ export function MobileBotShareReviewPage(props: { page: ReviewPage; ctx: ReviewC
                   flag ? (
                     <FlagLine secret={spots.some((spot) => spot.flag.kind === 'secret')}>
                       {flag.flag.line === null
-                        ? botShareFlagLabel(flag.flag.kind)
+                        ? botShareFlagLabel(flag.flag.kind, t)
                         : t('bots.share.review.flagLine', '{{flag}}, line {{line}}', {
-                            flag: botShareFlagLabel(flag.flag.kind),
+                            flag: botShareFlagLabel(flag.flag.kind, t),
                             line: flag.flag.line
                           })}
                     </FlagLine>
@@ -76,19 +78,19 @@ export function MobileBotShareReviewPage(props: { page: ReviewPage; ctx: ReviewC
             <ListRow
               key={schedule.id}
               title={schedule.name}
-              subtitle={scheduleWhen(schedule.rrule)}
+              subtitle={scheduleWhen(schedule.rrule, t, intlLocale)}
               value={t('bots.share.review.off', 'Off')}
               navigates
               onPress={part({
                 part: `schedule:${schedule.id}`,
                 title: schedule.name,
-                detail: scheduleWhen(schedule.rrule)
+                detail: scheduleWhen(schedule.rrule, t, intlLocale)
               })}
             />
           ))}
           {bot.eventSuggestions.map((event) => {
             const when = t('bots.share.review.suggested', 'Suggested · {{when}}', {
-              when: eventWhen(event.source, event.event).toLowerCase()
+              when: eventWhen(event.source, event.event, t).toLowerCase()
             })
             return (
               <ListRow

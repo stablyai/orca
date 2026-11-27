@@ -60,7 +60,6 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     activeHandleRef,
     activeSessionTabTypeRef,
     canSend,
-    connState,
     connStateRef,
     clientRef,
     deviceTokenRef,

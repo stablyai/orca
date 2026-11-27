@@ -1,8 +1,10 @@
 import { Pressable, Text, View } from 'react-native'
 import { X } from 'lucide-react-native'
-import { colors, pressedStyle } from '../../../theme/mobile-theme'
+import { pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { styles } from '../mobile-native-chat-view-styles'
+import { stylesSheet } from '../mobile-native-chat-view-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 export function MobileNativeChatSendErrorBanner({
   message,
@@ -12,6 +14,8 @@ export function MobileNativeChatSendErrorBanner({
   /** Present for an error that stays until dismissed, such as a failed Continue. */
   onDismiss?: () => void
 }): React.JSX.Element | null {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   if (!message) {
     return null

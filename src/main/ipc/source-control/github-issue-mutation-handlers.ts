@@ -1,6 +1,7 @@
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { OptionalGhAccountExpectation } from '../../../shared/rpc-contract/github/github-repo-target-params'
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type { GitHubIssueUpdate } from '../../../shared/work-items/issue-mutation-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
@@ -16,8 +17,11 @@ import {
 } from './github-repo-routing'
 import { broadcastGitHubWorkItemMutation } from './github-work-item-mutation-events'
 
-export function registerGitHubIssueMutationHandlers(store: Store): void {
-  ipcMain.handle(
+export function registerGitHubIssueMutationHandlers(
+  store: Store,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle(
     'gh:updateIssue',
     async (
       event,
@@ -53,7 +57,7 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:addIssueComment',
     async (
       event,
@@ -99,7 +103,7 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:listLabels',
     (
       _event,
@@ -135,7 +139,7 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:listAssignableUsers',
     (
       _event,
