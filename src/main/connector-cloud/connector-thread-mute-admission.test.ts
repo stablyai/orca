@@ -34,6 +34,7 @@ import { closeTestStores, createStore, testState } from '../persistence/persiste
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { ConversationChain } from '../external-conversations/external-conversation-chain'
 import { dispatchDelivery } from './connector-deliveries'
+import { placeLaunchTarget } from './connector-places'
 import { handleThreadMute, type ThreadMuteDeps } from './connector-thread-mute'
 import { threadMuteSaves, threadMuteSaving } from './connector-thread-mute-saves'
 import { ProfileStateIndeterminateWriteError } from '../persistence/profile-state/database/profile-state-write-transaction'
@@ -150,6 +151,12 @@ function connector(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mute path calls only these seam members.
   const seam = {
     receipts,
+    linkedChat: (key: ConnectorConversation) => {
+      const linked = findLink(store, key)
+      return linked
+        ? { worktreeId: linked.workspace.worktreeId, sessionId: linked.link.sessionId }
+        : null
+    },
     // As the real seam does, a turn runs under its own durable receipt.
     send: (_host: unknown, key: ConnectorConversation, id: string, message: { text: string }) =>
       receipts.run(key, id, 'connector.send', [message.text], async () => {
@@ -423,6 +430,42 @@ describe('a muted bot thread', () => {
     expect(reopened.starts).toEqual([])
     expect(reopened.automationsTaken).toEqual([])
   })
+
+  it.each(['start', 'send'] as const)(
+    'recovers an admitted %s automation when its receipt survived but its bookkeeping did not',
+    async (kind) => {
+      await botHome({ first: true })
+      const text = 'check the build'
+      const automations = [
+        {
+          automationId: 'build-check',
+          triggerId: 't1',
+          botId: 'bot1',
+          event: { key: THREAD, actorId: 'U1', occurredAt: 1_800_000_000_000, text }
+        }
+      ]
+      const delivery =
+        kind === 'start'
+          ? start(FIRST, text, { mentioned: false, automations })
+          : send(FIRST, text, { automations })
+      const payload =
+        'placeId' in delivery ? [delivery.agent, placeLaunchTarget(delivery.placeId), text] : [text]
+      const receipts = new DeliveryReceipts(() => orchestration)
+      // The turn was admitted before the bot left, but the process stopped before recording its automation.
+      await receipts.run(FIRST, delivery.deliveryId, `connector.${kind}`, payload, async () => ({
+        outcome: 'accepted'
+      }))
+      await closeTestStores()
+      orchestration.close()
+      orchestration = new OrchestrationDb(join(testState.dir, 'orchestration.db'))
+
+      const reopened = connector(createStore())
+      expect(await reopened.deliver(delivery)).toEqual({ outcome: 'accepted', inTurn: true })
+      expect(reopened.automationsTaken).toEqual(['build-check'])
+      expect(reopened.turns).toEqual([])
+      expect(reopened.starts).toEqual([])
+    }
+  )
 
   it('admits no unmentioned reply, and one turn for a mention that unmutes it on disk', async () => {
     const store = await botHome({ first: true })
