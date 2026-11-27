@@ -13,6 +13,7 @@ import {
 } from './terminal-webgl-atlas-rebuild-interaction'
 import { isXtermInstanceDisposed } from '../terminal-output/xterm-instance-disposed'
 import { paintReplacementCanvasNow } from './terminal-render-pause-release'
+import { restoreDomRendererIfMissing } from './terminal-hidden-dom-renderer'
 
 export function clearPaneWebglContextLossForRetry(pane: ManagedPaneInternal): boolean {
   if (!pane.webglDisabledAfterContextLoss) {
@@ -60,6 +61,9 @@ export function restoreWebglAfterChatCover(terminal: ManagedPaneInternal['termin
     pane.container.isConnected
   ) {
     reattachWebglIfNeeded(pane)
+    if (!pane.webglAddon) {
+      restoreDomRendererIfMissing(pane.terminal)
+    }
   }
 }
 
