@@ -38,14 +38,37 @@ function labelledFileName(line: string): string {
   return /^(?:\/|[A-Za-z]:[\\/])/.test(line) ? lastPathSegment(line) : line
 }
 
+/** True once `text` has more than `max` lines (split on \r\n, \r or \n), scanning no further. */
+function hasMoreLinesThan(text: string, max: number): boolean {
+  let lines = 1
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i)
+    if (code !== 10 && code !== 13) {
+      continue
+    }
+    if (code === 13 && text.charCodeAt(i + 1) === 10) {
+      i += 1
+    }
+    lines += 1
+    if (lines > max) {
+      return true
+    }
+  }
+  return false
+}
+
 /** Treat one filename/path/file URL per copied file as attachment labels, not prompt text. */
 export function textOnlyLabelsCopiedFiles(text: string, files: readonly string[]): boolean {
   if (files.length === 0) {
     return false
   }
+  const trimmed = text.trim()
+  // Runs on main for every file paste: reject long prompt text before splitting or sorting it.
+  if (hasMoreLinesThan(trimmed, files.length)) {
+    return false
+  }
   const names = files.map(lastPathSegment).sort()
-  const labels = text
-    .trim()
+  const labels = trimmed
     .split(/\r\n|\r|\n/)
     .map((line) => labelledFileName(line.trim()))
     .sort()
