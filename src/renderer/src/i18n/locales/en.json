@@ -19733,7 +19733,7 @@
           "bot": "Bot",
           "lastRun": "Last run",
           "removeBotFilterButton": "Remove Bot filter: {{name}}",
-          "botFilterRowLabel": "Bot: {{name}}, remove filter"
+          "botFilterRowRemoveLabel": "{{label}}, remove filter"
         },
         "AutomationListSortHeader": {
           "sortedAscending": "{{value0}}, sorted ascending",

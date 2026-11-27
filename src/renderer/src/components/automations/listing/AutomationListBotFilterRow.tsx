@@ -4,6 +4,7 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { MENU_SUB_TRIGGER_CHEVRON_CLASS } from '@/components/ui/menu-item'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
+import { botFilterRowNames } from './bot-filter-row-names'
 
 /** The Bot pill's ×, which shows no text of its own. One key, so each language orders the name itself. */
 export function useRemoveBotFilterLabel(): (name: string) => string {
@@ -24,20 +25,12 @@ export function BotFilterMenuRow({
   name: string
   onClear: () => void
 }): React.JSX.Element {
-  const t = useTranslate()
-  // Starts with the row's visible text (WCAG 2.5.3), so speaking "Bot: <name>" reaches it.
-  const label = t(
-    'auto.components.automations.AutomationListFilterMenu.botFilterRowLabel',
-    'Bot: {{name}}, remove filter',
-    { name }
-  )
+  const { label, accessibleName } = botFilterRowNames(useTranslate(), name)
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <DropdownMenuItem aria-label={label} onSelect={onClear}>
-          <span className="min-w-0 truncate">
-            {t('auto.components.automations.AutomationListFilterMenu.bot', 'Bot')}: {name}
-          </span>
+        <DropdownMenuItem aria-label={accessibleName} onSelect={onClear}>
+          <span className="min-w-0 truncate">{label}</span>
           <X className={MENU_SUB_TRIGGER_CHEVRON_CLASS} aria-hidden />
         </DropdownMenuItem>
       </TooltipTrigger>
