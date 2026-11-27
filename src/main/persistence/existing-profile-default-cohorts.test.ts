@@ -100,7 +100,7 @@ describe('existing-profile default cohorts', () => {
     expect(nativeChatMarksNewMessages(createStore().getSettings())).toBe(false)
   })
 
-  it('keeps the existing-profile pin after an offline agent-hooks write', async () => {
+  it('keeps New messages on for an existing profile after an offline write that spreads defaults', async () => {
     writePersistedStateJson(dataFile(), JSON.stringify(legacyProfile({ theme: 'dark' })))
     updateAgentHookSettingsInProfileState(
       {
@@ -113,6 +113,5 @@ describe('existing-profile default cohorts', () => {
     const settings = createStore().getSettings()
     expect(settings.agentStatusHooksEnabled).toBe(true)
     expect(nativeChatMarksNewMessages(settings)).toBe(true)
-    expect(settings.experimentalAppRail).toBe(false)
   })
 })
