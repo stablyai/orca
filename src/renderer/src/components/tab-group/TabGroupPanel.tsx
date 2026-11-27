@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useMemo, useRef } from 'react'
+import { Suspense, useCallback, useMemo, useRef, type CSSProperties } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { useAppStore } from '../../store/index'
@@ -252,6 +252,14 @@ export default function TabGroupPanel({
     'flex min-w-0 items-center gap-0.5 overflow-hidden pl-1.5 pr-0.5 transition-opacity duration-150',
     !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
   )
+  const splitFocusStyle: CSSProperties | undefined =
+    hasSplitGroups && !isFocused
+      ? {
+          ...(backdropActive ? {} : { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY }),
+          '--tab-active-foreground': 'var(--muted-foreground)',
+          '--tab-active-indicator': 'var(--muted-foreground)'
+        }
+      : undefined
   return (
     <div
       // Why: store focus (last focused group), not DOM focus, so clicking the sidebar or a dialog keeps the active tab's underline.
@@ -267,15 +275,7 @@ export default function TabGroupPanel({
           : ''
       }`}
       // Why not over a window backdrop (material or theme image): group opacity would let it bleed through opaque chrome.
-      style={
-        hasSplitGroups && !isFocused
-          ? {
-              ...(backdropActive ? {} : { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY }),
-              '--tab-active-foreground': 'var(--muted-foreground)',
-              '--tab-active-indicator': 'var(--muted-foreground)'
-            } as React.CSSProperties
-          : undefined
-      }
+      style={splitFocusStyle}
       onPointerDown={commands.focusGroup}
       // Why: keyboard/AT focus can enter a split group without a pointer event, so sync group focus to DOM focus for global shortcuts.
       onFocusCapture={commands.focusGroup}

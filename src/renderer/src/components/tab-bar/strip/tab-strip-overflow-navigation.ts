@@ -7,10 +7,7 @@ import {
   scrollStripSidewaysOnWheel,
   type TabStripOverflowState
 } from './tab-strip-scroll-metrics'
-import {
-  isTabStripPointerGestureActive,
-  onTabStripPointerGestureRelease
-} from './tab-strip-pointer-gesture'
+import { isTabStripPointerGestureActive } from './tab-strip-pointer-gesture'
 import {
   captureTabStripScrollAnchor,
   isLastTabStripTab,
@@ -19,14 +16,11 @@ import {
 } from './tab-strip-scroll-anchor'
 import {
   findOffscreenOpenedTabStripSlot,
-  findTabStripSlot,
   getActiveTabDockSide,
   readTabStripSlotIds,
-  revealTabStripSlot,
   updateTabStripDockAvailability,
   type ActiveTabDockSide
 } from './tab-strip-slot-geometry'
-import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 import { useTabDragActive } from '../../tab-group/drag/tab-drag-context'
 import {
   notifyTabStripListeners,
@@ -35,29 +29,8 @@ import {
   useTabStripCommitStartScroll,
   useTabStripListenerSubscribe
 } from './tab-strip-window'
-
-const TAB_STRIP_SCROLL_FRACTION = 0.75
-const TAB_STRIP_MIN_SCROLL_STEP_PX = 120
-
-export function scrollTabStripByStep(
-  el: HTMLElement,
-  direction: 'start' | 'end',
-  behavior: ScrollBehavior = 'smooth'
-): void {
-  const scrollStep = Math.max(
-    TAB_STRIP_MIN_SCROLL_STEP_PX,
-    el.clientWidth * TAB_STRIP_SCROLL_FRACTION
-  )
-  el.scrollBy({
-    left: direction === 'start' ? -scrollStep : scrollStep,
-    behavior: motionSafeScrollBehavior(behavior)
-  })
-}
-
-function isTabStripScrolledToEnd(el: HTMLElement): boolean {
-  const max = Math.max(0, el.scrollWidth - el.clientWidth)
-  return el.scrollLeft >= max - 2
-}
+import { isTabStripScrolledToEnd, scrollTabStripByStep } from './tab-strip-scroll-controls'
+import { useRevealFocusedTabStripSlot } from './use-reveal-focused-tab-strip-slot'
 
 export function useTabStripOverflowNavigation({
   activeVisibleTabId,
@@ -93,9 +66,6 @@ export function useTabStripOverflowNavigation({
   const stickToEndRef = useRef(false)
   const tabClosedThisCommitRef = useRef(false)
   const activeTabIdRef = useRef<string | null>(null)
-  const activeDockSlotIdRef = useRef<string | null>(activeDockSlotId)
-  const isFocusedRef = useRef(isFocused)
-  const previousFocusRef = useRef(isFocused)
   const slotIdsRef = useRef<readonly string[]>(slotIds)
   const hoverDeferredRevealIdsRef = useRef<Set<string>>(new Set())
   const scrollAnchorRef = useRef<{
@@ -220,10 +190,6 @@ export function useTabStripOverflowNavigation({
     activeTabIdRef.current = activeVisibleTabId
   }, [activeVisibleTabId])
   useLayoutEffect(() => {
-    activeDockSlotIdRef.current = activeDockSlotId
-    isFocusedRef.current = isFocused
-  }, [activeDockSlotId, isFocused])
-  useLayoutEffect(() => {
     slotIdsRef.current = slotIds
   }, [slotIds])
 
@@ -300,62 +266,16 @@ export function useTabStripOverflowNavigation({
     recordScrollAnchor()
   }, [layoutKey, recordScrollAnchor, updateTabStripOverflowState, worktreeId])
 
-  const revealFocusedSlot = useCallback((): void => {
-    const strip = tabStripRef.current
-    const activeSlotId = activeDockSlotIdRef.current ?? activeTabIdRef.current
-    if (!strip || !activeSlotId) {
-      recordScrollAnchor()
-      return
-    }
-    const activeSlot = findTabStripSlot(strip, activeSlotId)
-    if (!activeSlot) {
-      recordScrollAnchor()
-      return
-    }
-    revealTabStripSlot(strip, activeSlot)
-    stickToEndRef.current = isTabStripScrolledToEnd(strip)
-    requestAnimationFrame(updateTabStripOverflowState)
-    recordScrollAnchor()
-  }, [recordScrollAnchor, updateTabStripOverflowState])
-
-  useLayoutEffect(() => {
-    const strip = tabStripRef.current
-    if (!strip) {
-      return
-    }
-    const focusChanged = previousFocusRef.current !== isFocused
-    previousFocusRef.current = isFocused
-    if (focusChanged && !isFocused) {
-      recordScrollAnchor()
-      return
-    }
-    // Hold the strip through tab presses and closes so it cannot slide under the pointer or chase distant MRU targets.
-    if (isTabStripPointerGestureActive()) {
-      requestAnimationFrame(updateTabStripOverflowState)
-      recordScrollAnchor()
-      let removeReleaseListener = (): void => {}
-      removeReleaseListener = onTabStripPointerGestureRelease(() => {
-        removeReleaseListener()
-        if (isFocusedRef.current) {
-          revealFocusedSlot()
-        }
-      })
-      return removeReleaseListener
-    }
-    if (tabClosedThisCommitRef.current) {
-      requestAnimationFrame(updateTabStripOverflowState)
-      recordScrollAnchor()
-      return
-    }
-    revealFocusedSlot()
-  }, [
+  useRevealFocusedTabStripSlot({
     activeDockSlotId,
     activeVisibleTabId,
     isFocused,
+    tabStripRef,
+    tabClosedThisCommitRef,
+    stickToEndRef,
     recordScrollAnchor,
-    revealFocusedSlot,
     updateTabStripOverflowState
-  ])
+  })
 
   // Dock ownership and drag transitions change sticky layout without scrolling or resizing.
   useLayoutEffect(() => {
