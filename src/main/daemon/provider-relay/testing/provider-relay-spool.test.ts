@@ -135,7 +135,7 @@ describe('provider relay spool', () => {
     await spool.dispose()
   })
 
-  it('keeps lines from keepFrom on for a later attach even when the ack passes them, past the memory cap', async () => {
+  it('keeps a held replay from keepFrom on for a later attach even when the ack passes it, past the memory cap', async () => {
     const path = join(dir, 'r.ndjson')
     const delivered: number[] = []
     const spool = new ProviderRelaySpool({
@@ -148,11 +148,11 @@ describe('provider relay spool', () => {
     for (let i = 0; i < 20; i++) {
       spool.append('x'.repeat(500))
     }
-    spool.ack(20, 5)
+    spool.ack(20, 5, true)
     for (let i = 0; i < 20; i++) {
       spool.append('y'.repeat(500))
     }
-    spool.ack(40, 5)
+    spool.ack(40, 5, true)
     await spool.detach()
     expect(spool.ackedSeq).toBe(4)
     delivered.length = 0
@@ -162,6 +162,33 @@ describe('provider relay spool', () => {
     spool.ack(40)
     await spool.detach()
     expect(existsSync(path)).toBe(false)
+    await spool.dispose()
+  })
+
+  it('a detach while lines are kept can still read the ones the client never acked', async () => {
+    const spool = new ProviderRelaySpool({
+      path: join(dir, 'r.ndjson'),
+      deliver: () => {},
+      onPressureChanged: () => {},
+      memoryCapBytes: 4096
+    })
+    await spool.attach(0)
+    spool.append('a')
+    spool.append('b')
+    spool.ack(2, 1)
+    // Kept: these go to the file as well as to the client, which hasn't acked them yet.
+    spool.append('c')
+    spool.append('d')
+    expect(spool.unacked()?.map((record) => record.line)).toEqual(['c', 'd'])
+    spool.ack(3, 1)
+    expect(spool.unacked()?.map((record) => record.line)).toEqual(['d'])
+    // The replay of a detached span is only in the file: until it is acked, it can't be read.
+    await spool.detach()
+    spool.append('e')
+    await spool.attach(spool.ackedSeq)
+    expect(spool.unacked()).toBeNull()
+    spool.ack(5, 1)
+    expect(spool.unacked()).toEqual([])
     await spool.dispose()
   })
 
@@ -211,35 +238,94 @@ describe('provider relay spool', () => {
     expect([outcome, replayed]).toEqual(['done', ['1:whole']])
   })
 
-  it('names the kept lines it dropped at the file cap, and a later attach replays only what is left', async () => {
-    const delivered: number[] = []
+  it("keeps an attached client's kept span in memory, writing nothing to disk until it outgrows memory", async () => {
+    const path = join(dir, 'r.ndjson')
     const spool = new ProviderRelaySpool({
-      path: join(dir, 'r.ndjson'),
-      deliver: (record) => delivered.push(record.seq),
+      path,
+      deliver: () => {},
       onPressureChanged: () => {},
-      fileCapBytes: 2048
+      memoryCapBytes: 4096
     })
     await spool.attach(0)
     spool.append('{"method":"item/started"}')
     spool.ack(1, 1)
-    for (let i = 0; i < 10; i++) {
-      spool.append('x'.repeat(100))
-    }
-    spool.ack(11, 1)
-    // Under the cap, nothing kept is dropped.
-    expect([spool.ackedSeq, spool.truncatedThrough]).toEqual([0, 0])
     for (let i = 0; i < 20; i++) {
       spool.append('x'.repeat(100))
     }
-    // Once its writes start, the kept span alone holds the agent paused at the cap, so the
-    // client's own acks release it.
-    spool.ack(31, 1)
+    spool.ack(21, 1)
+    await spool.detach()
+    // Kept lines reach the file only on detach.
+    expect(existsSync(path)).toBe(true)
+    await spool.attach(spool.ackedSeq)
+    spool.ack(21)
+    await spool.detach()
+    expect(existsSync(path)).toBe(false)
+    await spool.attach(21)
+    spool.append('{"method":"item/started"}')
+    spool.ack(22, 22)
+    for (let i = 0; i < 20; i++) {
+      spool.append('y'.repeat(100))
+    }
+    spool.ack(42, 22)
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(existsSync(path)).toBe(false)
+    await spool.dispose()
+  })
+
+  it('releases a live keep as a cut at the memory cap, writing nothing to disk', async () => {
+    const path = join(dir, 'r.ndjson')
+    const spool = new ProviderRelaySpool({
+      path,
+      deliver: () => {},
+      onPressureChanged: () => {},
+      memoryCapBytes: 2048
+    })
+    await spool.attach(0)
+    spool.append('{"method":"item/started"}')
+    spool.ack(1, 1)
+    for (let i = 0; i < 30; i++) {
+      spool.append('x'.repeat(100))
+    }
+    expect(spool.ack(31, 1)).toBe(31)
+    expect(spool.truncatedThrough).toBe(31)
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(existsSync(path)).toBe(false)
+    await spool.dispose()
+  })
+
+  it('keeps a held replay past the file cap up to its held cap, then names what it dropped, and a later attach replays only what is left', async () => {
+    const path = join(dir, 'r.ndjson')
+    const delivered: number[] = []
+    const spool = new ProviderRelaySpool({
+      path,
+      deliver: (record) => delivered.push(record.seq),
+      onPressureChanged: () => {},
+      // The kept span outgrows memory first, so it moves to the file, which has the caps.
+      memoryCapBytes: 1024,
+      // A held keep goes to 4 times the file cap.
+      fileCapBytes: 2048
+    })
+    await spool.attach(0)
+    spool.append('{"method":"item/started"}')
+    spool.ack(1, 1, true)
+    for (let i = 0; i < 30; i++) {
+      spool.append('x'.repeat(100))
+    }
+    spool.ack(31, 1, true)
+    await vi.waitFor(() => expect(statSync(path).size).toBeGreaterThan(2048))
+    // Past the file cap but under the held cap: a reopening chat's unsaved lines are all kept.
+    expect([spool.ackedSeq, spool.truncatedThrough]).toEqual([0, 0])
+    for (let i = 0; i < 30; i++) {
+      spool.append('x'.repeat(100))
+    }
+    // Past the held cap, the kept span alone holds the agent paused, so what the client already
+    // took is released, as a cut it can name; the lines after it stay kept.
     await vi.waitFor(() => expect([spool.ackedSeq, spool.truncatedThrough]).toEqual([31, 31]))
     spool.append('after')
     await spool.detach()
     delivered.length = 0
     await spool.attach(0)
-    expect(delivered).toEqual([32])
+    expect(delivered).toEqual(Array.from({ length: 31 }, (_, i) => 32 + i))
     await spool.dispose()
   })
 })

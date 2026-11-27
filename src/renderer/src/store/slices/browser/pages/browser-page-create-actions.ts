@@ -1,3 +1,7 @@
+import {
+  queueKagiPrivateInitialNavigation,
+  discardKagiPrivateInitialNavigation
+} from '@/lib/kagi-private-initial-navigation'
 import { copyBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import type {
   BrowserSlice,
@@ -38,6 +42,9 @@ export function createBrowserPageCreateActions(
         undefined,
         options?.docLocation
       )
+      if (!options?.browserRuntimeEnvironmentId && !options?.docLocation) {
+        queueKagiPrivateInitialNavigation(page.id, url)
+      }
       if (!options?.browserRuntimeEnvironmentId && !options?.docLocation) {
         admitBrowserPageMount(page.id)
       }
@@ -121,6 +128,7 @@ export function createBrowserPageCreateActions(
     },
 
     closeBrowserPage: (pageId) => {
+      discardKagiPrivateInitialNavigation(pageId)
       const closeHere = (): void => {
         let closedWorkspaceIdForLabel: string | null = null
         let docPageIdToRelease: string | null = null
