@@ -113,7 +113,9 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
         card={details}
         obscured={obscured}
         title={controller.worktreeName || t('session.header.terminalTitle', 'Terminal')}
-        detail={controller.worktreePath}
+        detail={[controller.worktreeRepo, controller.worktreeBranch, controller.worktreePath]
+          .filter(Boolean)
+          .join('\n')}
         footer={
           hostName ? (
             <>
