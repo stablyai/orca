@@ -136,7 +136,6 @@
 1 src/main/runtime/orchestration/workers/approvals/worker-approval-report.ts
 1 src/main/runtime/rpc/methods/orchestration/messaging/peer-mail-files.ts
 1 src/main/runtime/rpc/methods/orchestration/messaging/send-params.ts
-1 src/main/runtime/rpc/methods/orchestration/messaging/task-update-params.ts
 1 src/main/runtime/rpc/methods/orchestration/worker/stop/worker-stop-remote-receipt.ts
 5 src/main/runtime/rpc/methods/terminal/stream-schemas.ts
 1 src/main/speech/openai-compatible-speech-provider-store.ts
