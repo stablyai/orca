@@ -37,7 +37,6 @@ const REASONS: Record<string, string> = {
 }
 
 function parseHours(value: string | undefined): { from: string; to: string } {
-  // Why: minutes up to 99 pass the pattern and reach Intl, which throws a RangeError.
   const match = /^(\d{1,2}):([0-5]\d)\s*-\s*(\d{1,2}):([0-5]\d)$/.exec(
     value?.trim() ?? '09:00-17:00'
   )
