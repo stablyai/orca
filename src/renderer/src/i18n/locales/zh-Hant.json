@@ -24897,7 +24897,9 @@
       "chatOtherWindow": "另一個視窗正在進行登入。",
       "chatPageDidntOpen": "頁面沒有開啟？",
       "chatPasteCode": "貼上代碼",
-      "chatPasteCodeLabel": "登入後 Google 顯示的代碼，或該頁面的網址"
+      "chatPasteCodeLabel": "登入後 Google 顯示的代碼，或該頁面的網址",
+      "launchesUse": "新啟動的 agy 將使用此帳號",
+      "loginNow": "agy 目前的登入"
     },
     "claude": {
       "added": "已新增帳戶。選擇它即可將其用於你下次啟動的 Claude。",

@@ -25035,7 +25035,9 @@
       "descriptionWindows": "聊天和终端中的 agy 共用 agy 的 Google 账户。切换只影响这台主机的默认 agy 凭据。聊天也可以改用 Gemini API 密钥或 gcloud 登录。",
       "agentPlatform": "Google Agent Platform",
       "locationGlobal": "global",
-      "signInGoogle": "使用 Google 登录"
+      "signInGoogle": "使用 Google 登录",
+      "launchesUse": "新启动的 agy 将使用此账号",
+      "loginNow": "agy 当前的登录"
     },
     "claude": {
       "added": "已添加账户，选择它即可将其用于您下次启动的 Claude",
