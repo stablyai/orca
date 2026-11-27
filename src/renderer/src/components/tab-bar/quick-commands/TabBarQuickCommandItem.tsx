@@ -1,5 +1,5 @@
 import { useId, type MouseEvent, type PointerEvent } from 'react'
-import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react'
+import { Check, Copy, CopyPlus, Pencil, Play, Trash2 } from 'lucide-react'
 import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand
@@ -21,6 +21,7 @@ type TabBarQuickCommandItemProps = {
   onActiveElementChange?: (element: HTMLDivElement | null) => void
   onRun: () => void
   onEdit: () => void
+  onDuplicate: () => void
   onDelete: () => void
 }
 
@@ -40,6 +41,7 @@ export function TabBarQuickCommandItem({
   onActiveElementChange,
   onRun,
   onEdit,
+  onDuplicate,
   onDelete
 }: TabBarQuickCommandItemProps): React.JSX.Element {
   const t = useTranslate()
@@ -58,6 +60,11 @@ export function TabBarQuickCommandItem({
               value0: command.label
             })
           : t('auto.components.tab.bar.TabBarQuickCommandsButton.69a1441a21', 'Nothing to copy')
+  const duplicateLabel = t(
+    'auto.components.tab.bar.TabBarQuickCommandsButton.9769af5ec8',
+    'Duplicate {{value0}}',
+    { value0: command.label }
+  )
 
   return (
     <div
@@ -145,6 +152,19 @@ export function TabBarQuickCommandItem({
           )}
         >
           <Pencil className="size-3" />
+        </button>
+        <button
+          type="button"
+          onPointerDown={stopRowSelect}
+          onClick={(event) => {
+            stopRowSelect(event)
+            onDuplicate()
+          }}
+          className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          aria-label={duplicateLabel}
+          title={duplicateLabel}
+        >
+          <CopyPlus className="size-3" />
         </button>
         <button
           type="button"

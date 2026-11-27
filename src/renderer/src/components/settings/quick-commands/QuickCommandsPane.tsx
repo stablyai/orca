@@ -4,6 +4,7 @@ import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-
 import { getTerminalQuickCommandScope } from '../../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import {
   createTerminalQuickCommandDraft,
+  createTerminalQuickCommandDuplicate,
   TerminalQuickCommandDialog
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { searchTerminalQuickCommands } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-search'
@@ -375,6 +376,18 @@ export function QuickCommandsPane({
               setEditor({
                 mode: 'edit',
                 command,
+                connectionGeneration: selectedRuntimeConnectionGeneration,
+                hostId: selectedHostId
+              })
+            }
+            onDuplicate={(command) =>
+              setEditor({
+                mode: 'add',
+                command: createTerminalQuickCommandDuplicate(
+                  command,
+                  commands.map((sibling) => sibling.label),
+                  t
+                ),
                 connectionGeneration: selectedRuntimeConnectionGeneration,
                 hostId: selectedHostId
               })

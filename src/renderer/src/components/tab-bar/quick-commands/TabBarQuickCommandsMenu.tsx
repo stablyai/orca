@@ -38,6 +38,7 @@ type TabBarQuickCommandsMenuProps = {
   hostOwnershipPending: boolean
   onAddCommand: (hostId: TerminalQuickCommandHost['hostId']) => void
   onDeleteCommand: (entry: HostedTerminalQuickCommand) => void
+  onDuplicateCommand: (entry: HostedTerminalQuickCommand) => void
   onEditCommand: (entry: HostedTerminalQuickCommand) => void
   onMenuOpen: () => void
   onRunCommand: (entry: HostedTerminalQuickCommand) => void
@@ -53,6 +54,7 @@ export function TabBarQuickCommandsMenu({
   hostOwnershipPending,
   onAddCommand,
   onDeleteCommand,
+  onDuplicateCommand,
   onEditCommand,
   onMenuOpen,
   onRunCommand
@@ -191,6 +193,12 @@ export function TabBarQuickCommandsMenu({
       }
     }
   }, [])
+  const closeMenuThen =
+    (action: (entry: HostedTerminalQuickCommand) => void, entry: HostedTerminalQuickCommand) =>
+    (): void => {
+      closeMenu()
+      action(entry)
+    }
   const renderCommand = (entry: HostedTerminalQuickCommand): React.JSX.Element => (
     <TabBarQuickCommandItem
       key={entry.key}
@@ -202,14 +210,9 @@ export function TabBarQuickCommandsMenu({
       onHighlight={() => setCommandValueOverride(entry.key)}
       onActiveElementChange={attachActiveCommand}
       onRun={() => runAndClose(entry)}
-      onEdit={() => {
-        closeMenu()
-        onEditCommand(entry)
-      }}
-      onDelete={() => {
-        closeMenu()
-        onDeleteCommand(entry)
-      }}
+      onEdit={closeMenuThen(onEditCommand, entry)}
+      onDuplicate={closeMenuThen(onDuplicateCommand, entry)}
+      onDelete={closeMenuThen(onDeleteCommand, entry)}
     />
   )
   const moreCommandsLabel = t(

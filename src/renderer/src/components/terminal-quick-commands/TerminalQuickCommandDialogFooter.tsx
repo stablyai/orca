@@ -40,7 +40,8 @@ export function TerminalQuickCommandDialogFooter({
           'auto.components.terminal.quick.commands.TerminalQuickCommandDialogFooter.2e2b958dfc',
           'Save'
         )}
-        <span className="ml-1 text-[10px] opacity-60">{submitShortcutLabel}</span>
+        {/* Why: the 10px hint centers on its line box, so its smaller x-height reads ~1px high beside the 14px label. */}
+        <span className="ml-1 translate-y-px text-[10px] opacity-60">{submitShortcutLabel}</span>
       </Button>
     </DialogFooter>
   )

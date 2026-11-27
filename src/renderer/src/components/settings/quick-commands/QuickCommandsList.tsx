@@ -1,4 +1,4 @@
-import { Check, Copy, Pencil, TerminalSquare, Trash2 } from 'lucide-react'
+import { Check, Copy, CopyPlus, Pencil, TerminalSquare, Trash2 } from 'lucide-react'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type {
   TerminalQuickCommand,
@@ -47,11 +47,13 @@ function QuickCommandRow({
   command,
   repoById,
   onEdit,
+  onDuplicate,
   onRemove
 }: {
   command: TerminalQuickCommand
   repoById: Map<string, QuickCommandRepo>
   onEdit: (command: TerminalQuickCommand) => void
+  onDuplicate: (command: TerminalQuickCommand) => void
   onRemove: (command: TerminalQuickCommand) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -73,6 +75,11 @@ function QuickCommandRow({
   const editLabel = t('auto.components.settings.QuickCommandsPane.7d90fd5299', 'Edit {{value0}}', {
     value0: commandName
   })
+  const duplicateLabel = t(
+    'auto.components.settings.QuickCommandsList.587c89fbef',
+    'Duplicate {{value0}}',
+    { value0: commandName }
+  )
 
   return (
     <div className="group/qc flex items-center gap-3 rounded-md px-2 py-2.5 transition-colors hover:bg-accent/60 focus-within:bg-accent/60">
@@ -145,6 +152,16 @@ function QuickCommandRow({
           type="button"
           variant="ghost"
           size="icon-sm"
+          aria-label={duplicateLabel}
+          title={duplicateLabel}
+          onClick={() => onDuplicate(command)}
+        >
+          <CopyPlus />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
           aria-label={t(
             'auto.components.settings.QuickCommandsPane.8764c6e9e4',
             'Remove {{value0}}',
@@ -208,6 +225,7 @@ export function QuickCommandsList({
   hasQuery,
   repoById,
   onEdit,
+  onDuplicate,
   onRemove
 }: {
   commands: TerminalQuickCommand[]
@@ -215,6 +233,7 @@ export function QuickCommandsList({
   hasQuery: boolean
   repoById: Map<string, QuickCommandRepo>
   onEdit: (command: TerminalQuickCommand) => void
+  onDuplicate: (command: TerminalQuickCommand) => void
   onRemove: (command: TerminalQuickCommand) => void
 }): React.JSX.Element {
   if (visibleCommands.length === 0) {
@@ -228,6 +247,7 @@ export function QuickCommandsList({
           command={command}
           repoById={repoById}
           onEdit={onEdit}
+          onDuplicate={onDuplicate}
           onRemove={onRemove}
         />
       ))}

@@ -5350,7 +5350,9 @@
               "length_over_limit": "Too long to save.",
               "length_count": "{{value0}} / {{value1}} characters",
               "prompt_over_host_limit": "Too long for this host. Update Orca on the host to save longer prompts.",
-              "size_count": "{{value0}} / {{value1}}"
+              "size_count": "{{value0}} / {{value1}}",
+              "a348b4b458": "{{value0}} (copy)",
+              "bc0050b9cc": "{{value0}} (copy {{value1}})"
             },
             "TerminalQuickCommandDialogFooter": {
               "2e2b958dfc": "Save",
@@ -5842,7 +5844,8 @@
             "53b17a4b1b": "Couldn't copy",
             "a9a564b7e7": "Copy {{value0}}",
             "69a1441a21": "Nothing to copy",
-            "192a4616a5": "Quick command actions"
+            "192a4616a5": "Quick command actions",
+            "9769af5ec8": "Duplicate {{value0}}"
           },
           "shell": {
             "icons": {
@@ -10105,7 +10108,8 @@
           "8bfdd23a88": "Help us figure out what to build next. Orca sends anonymous counts of which features you use and where things break."
         },
         "QuickCommandsList": {
-          "noSearchMatches": "No commands match this search."
+          "noSearchMatches": "No commands match this search.",
+          "587c89fbef": "Duplicate {{value0}}"
         },
         "QuickCommandsToolbar": {
           "searchLabel": "Search commands"

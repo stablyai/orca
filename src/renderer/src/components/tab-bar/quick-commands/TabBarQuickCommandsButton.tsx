@@ -6,6 +6,7 @@ import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal/quick
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   createTerminalQuickCommandDraft,
+  createTerminalQuickCommandDuplicate,
   TerminalQuickCommandDialog
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import {
@@ -122,6 +123,17 @@ export function TabBarQuickCommandsButton({
     })
   }
 
+  const duplicateCommand = (entry: HostedTerminalQuickCommand): void => {
+    const siblingLabels = (hosts.find((host) => host.hostId === entry.hostId)?.commands ?? []).map(
+      (command) => command.label
+    )
+    setEditor({
+      mode: 'add',
+      hostId: entry.hostId,
+      command: createTerminalQuickCommandDuplicate(entry.command, siblingLabels, t)
+    })
+  }
+
   const handleSaveCommand = async (next: TerminalQuickCommand): Promise<boolean> =>
     editor ? await useAppStore.getState().upsertTerminalQuickCommand(editor.hostId, next) : false
 
@@ -220,6 +232,7 @@ export function TabBarQuickCommandsButton({
         onEditCommand={(entry) =>
           setEditor({ mode: 'edit', command: entry.command, hostId: entry.hostId })
         }
+        onDuplicateCommand={duplicateCommand}
         onDeleteCommand={(entry) => void handleDeleteCommand(entry)}
         onRunCommand={handleRun}
       />
