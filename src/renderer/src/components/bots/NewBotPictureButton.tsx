@@ -118,10 +118,11 @@ export function NewBotPictureButton({
           className="flex w-[min(20rem,var(--new-bot-picture-width),var(--radix-popover-content-available-width))] flex-col"
         >
           {/* The whole popover takes a dropped picture, so all of it is outlined while one is dragged. */}
+          {/* 12 px to what shows: the carousel adds 4 px above the picture, the caption 6 px below its text. */}
           <div
             className={cn(
               BOT_PICTURE_DROP_OUTLINE,
-              'scrollbar-sleek min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain p-3'
+              'scrollbar-sleek min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain px-3 pt-2 pb-1.5'
             )}
           >
             <BotPicturePicker

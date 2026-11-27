@@ -45,14 +45,21 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     consumed: { paneKey: string; record: SleepingAgentSessionRecord },
     keepPaneKey?: string
   ): void => {
-    if (consumed.paneKey !== keepPaneKey) {
+    if (
+      consumed.paneKey !== keepPaneKey &&
+      useAppStore.getState().sleepingAgentSessionsByPaneKey[consumed.paneKey] === consumed.record
+    ) {
       state.clearSleepingAgentSession(consumed.paneKey)
     }
-    for (const [paneKey, record] of sleepingAgentRecordIndex.entries(
-      state.sleepingAgentSessionsByPaneKey,
-      consumed.record.worktreeId
-    )) {
+    const records = state.sleepingAgentSessionsByPaneKey
+    // Only a record without provider identity needs the workspace walk; the rest share an index bucket.
+    const aliases = consumed.record.providerSession
+      ? sleepingAgentRecordIndex.providerSessionEntries(records, consumed.record)
+      : sleepingAgentRecordIndex.entries(records, consumed.record.worktreeId)
+    for (const [paneKey, record] of aliases) {
       if (
+        useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey] === record &&
+        record.capturedAt <= consumed.record.capturedAt &&
         paneKey !== consumed.paneKey &&
         paneKey !== keepPaneKey &&
         record.worktreeId === consumed.record.worktreeId &&

@@ -57,7 +57,8 @@ export async function sendBotGroupAutomationRun(
         room,
         threadId,
         groups.runtime.bots.list(),
-        [bot.id]
+        [bot.id],
+        () => run?.messageId
       )
       const stored = groups.store.append(
         {

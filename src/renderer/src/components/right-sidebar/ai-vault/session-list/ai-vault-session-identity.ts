@@ -27,6 +27,7 @@ export function reuseAiVaultListResult(
     sessions === current.sessions &&
     issues === current.issues &&
     current.cancelled === incoming.cancelled &&
+    current.hiddenRowCount === incoming.hiddenRowCount &&
     current.scanId === incoming.scanId
   ) {
     return current

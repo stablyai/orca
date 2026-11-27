@@ -1,5 +1,6 @@
 /** Timed rows on the desktop's transcript slots: each draws after the newest message before it. */
 import { useMemo } from 'react'
+import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import { anchorNativeChatTimedRows } from '../../../../../../shared/native-chat/transcript/native-chat-timed-row-anchors'
 
@@ -30,11 +31,17 @@ export function useNativeChatTimedRows(
   rows: readonly NativeChatTimedRow[] | undefined
 ): NativeChatTimedRowPlacement | null {
   // A string, so the memo below sees a change only when some row's anchor does.
-  const anchors = rows?.length
-    ? anchorNativeChatTimedRows(datedMessages(slots), rows)
-        .map(([key, messageId]) => `${key}${FIELD}${messageId ?? ''}`)
-        .join(ROW)
-    : ''
+  // A streamed text revision dates its messages as its base did, so its anchors are its base's.
+  const laidOut = stageBesideStreamedText(slots)
+  const anchors = useMemo(
+    () =>
+      rows?.length
+        ? anchorNativeChatTimedRows(datedMessages(laidOut), rows)
+            .map(([key, messageId]) => `${key}${FIELD}${messageId ?? ''}`)
+            .join(ROW)
+        : '',
+    [laidOut, rows]
+  )
   return useMemo(() => {
     if (!rows?.length) {
       return null

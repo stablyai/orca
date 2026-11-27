@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { BotItemQuestionShape } from './bot-item-ask'
 import type { BotItemPendingComment } from './bot-item-pending-comments'
-import { botItemPendingAnswersOnly, botItemSentAnswers } from './bot-item-sent-answers'
+import {
+  botItemPendingAnswersOnly,
+  botItemPendingWordsBesideAnswers,
+  botItemSentAnswers
+} from './bot-item-sent-answers'
 
 const several: BotItemQuestionShape = {
   body: '',
@@ -98,5 +102,39 @@ describe('botItemPendingAnswersOnly', () => {
     ).toBe(false)
     expect(botItemPendingAnswersOnly(entry('A? → Yes', intent, true))).toBe(false)
     expect(botItemPendingAnswersOnly(entry('Thanks', undefined))).toBe(false)
+  })
+})
+
+describe('botItemPendingWordsBesideAnswers', () => {
+  it("keeps only the owner's words beside answers on their way", () => {
+    const intent = {
+      askId: 'q',
+      shape: several,
+      answers: ['Yes', 'Yes'],
+      rideAlongText: 'why B'
+    }
+    expect(botItemPendingWordsBesideAnswers(entry('A? → Yes\nB? → Yes\nwhy B', intent))).toBe(
+      'why B'
+    )
+  })
+
+  it('leaves answers alone, one question, and sends an older build stored, whole', () => {
+    expect(
+      botItemPendingWordsBesideAnswers(
+        entry('A? → Yes', { askId: 'q', shape: several, answers: ['Yes', null] })
+      )
+    ).toBe(null)
+    expect(
+      botItemPendingWordsBesideAnswers(
+        entry('Yes', { askId: 'q', shape: one, answers: ['Yes'], rideAlongText: 'Yes' })
+      )
+    ).toBe(null)
+    // Stored before ride-along words were kept apart: no rideAlongText, so its text shows as sent.
+    expect(
+      botItemPendingWordsBesideAnswers(
+        entry('A? → Yes\nwhy', { askId: 'q', shape: several, answers: ['Yes', null] })
+      )
+    ).toBe(null)
+    expect(botItemPendingWordsBesideAnswers(entry('A? → Yes\nwhy', undefined))).toBe(null)
   })
 })

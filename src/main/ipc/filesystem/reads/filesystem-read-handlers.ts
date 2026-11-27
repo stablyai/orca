@@ -1,5 +1,5 @@
 import { classifyFilesystemDirectoryEntries } from '../../../filesystem/local-file-io/filesystem-symlink-directory-entries'
-import { hasSymlinkBelowRoot } from '../../../filesystem/local-file-io/filesystem-symlink-ancestor'
+import { findSymlinkBelowRoot } from '../../../filesystem/local-file-io/filesystem-symlink-ancestor'
 import { markdownDocumentsFromRelativePaths } from '../../../../shared/file-listing/markdown-document-paths'
 import {
   capturePathExistence,
@@ -7,7 +7,8 @@ import {
   type PathExistenceResult
 } from '../../../../shared/file-access/path-existence-batch'
 import { ipcMain } from 'electron'
-import { readdir, stat } from 'node:fs/promises'
+import { readdir } from 'node:fs/promises'
+import { statWithoutArchiveLock } from '../../../filesystem/asar-transparent-fs'
 import type { DirEntry } from '../../../../shared/file-listing/directory-entry'
 import type { MarkdownDocument } from '../../../../shared/file-listing/file-document'
 import { sortDirEntries } from '../../../../shared/file-listing/file-name-sort'
@@ -200,7 +201,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         args.filePath,
         async () => {
           const filePath = await resolveLocalFileRequestPath(args.filePath, args.access, store)
-          const stats = await stat(windowsFsPath(filePath))
+          const stats = await statWithoutArchiveLock(windowsFsPath(filePath))
           return { size: stats.size, isDirectory: stats.isDirectory(), mtime: stats.mtimeMs }
         },
         { wake: args.wakeWslDistro === true }
@@ -209,12 +210,19 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
   )
 
   ipcMain.handle(
-    'fs:hasSymlinkBelowRoot',
-    (_event, args: { rootPath: string; path: string }): Promise<boolean> =>
+    'fs:findSymlinkBelowRoot',
+    (
+      _event,
+      args: { rootPath: string; path: string; which: 'first' | 'deepest' }
+    ): Promise<string | null> =>
       guardWslUncPathAccess(args.rootPath, async () => {
-        // Why the root: the walk stops at the first link, so it never touches anything outside it.
+        // Why the root: the walk only lstats the segments of a path lexically below it, never lists or reads.
         await resolveDesktopAuthorizedPath(args.rootPath, store)
-        return hasSymlinkBelowRoot(args.rootPath, args.path)
+        return findSymlinkBelowRoot(
+          args.rootPath,
+          args.path,
+          args.which === 'first' ? 'first' : 'deepest'
+        )
       })
   )
 
@@ -233,7 +241,9 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
           capturePathExistence(async () => {
             try {
               await guardWslUncPathAccess(filePath, async () =>
-                stat(windowsFsPath(await resolveDesktopAuthorizedPath(filePath, store)))
+                statWithoutArchiveLock(
+                  windowsFsPath(await resolveDesktopAuthorizedPath(filePath, store))
+                )
               )
               return true
             } catch (error) {
@@ -259,7 +269,9 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
           throw new SshHostNotServedError(args.connectionId)
         }
         await guardWslUncPathAccess(args.filePath, async () =>
-          stat(windowsFsPath(await resolveLocalFileRequestPath(args.filePath, args.access, store)))
+          statWithoutArchiveLock(
+            windowsFsPath(await resolveLocalFileRequestPath(args.filePath, args.access, store))
+          )
         )
         return true
       } catch (error) {

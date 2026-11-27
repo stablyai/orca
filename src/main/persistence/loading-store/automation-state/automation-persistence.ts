@@ -53,6 +53,7 @@ import {
 } from '../../scheduling-automations/automation-run-operations'
 import {
   advanceAutomationNextRun as advanceAutomationNextRunOperation,
+  advanceAutomationNextRuns as advanceAutomationNextRunsOperation,
   disableAutomations as disableAutomationsOperation,
   getLatestAutomationOccurrence as getLatestAutomationOccurrenceOperation
 } from '../../scheduling-automations/automation-schedule-operations'
@@ -232,6 +233,19 @@ export class AutomationPersistence {
         this[automationPersistenceContext].flushBarriers.flush()
       },
       id,
+      this[automationPersistenceContext].runtime.storageAuthority,
+      now
+    )
+  }
+
+  advanceAutomationNextRuns(ids: ReadonlySet<string>, now = Date.now()): number {
+    return advanceAutomationNextRunsOperation(
+      this[automationPersistenceContext].runtime.state,
+      () => {
+        markAutomationDefinitionDomain(this)
+        this[automationPersistenceContext].flushBarriers.flush()
+      },
+      ids,
       this[automationPersistenceContext].runtime.storageAuthority,
       now
     )

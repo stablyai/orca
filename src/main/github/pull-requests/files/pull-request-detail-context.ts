@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type {
   GitHubAssignableUser,
   GitHubPRFileViewedState
@@ -41,45 +42,53 @@ function detailContextQuery(includeContext: boolean): string {
 }`
 }
 
-const envelopeSchema = z.object({
-  data: z
-    .object({
-      repository: z
-        .object({
-          pullRequest: z.record(z.string(), z.unknown()).nullish(),
-          viewedPullRequest: z.record(z.string(), z.unknown()).nullish()
-        })
-        .nullish()
-    })
-    .nullish(),
-  errors: z
-    .array(z.object({ path: z.array(z.union([z.string(), z.number()])).optional() }))
-    .optional()
-})
-const participantsSchema = z.object({
-  nodes: z.array(
-    z.object({ login: z.string(), avatarUrl: z.string(), name: z.string().nullish() }).nullable()
-  )
-})
-const metadataSchema = z.object({
-  body: z.string(),
-  headRefOid: z.string().min(1),
-  baseRefOid: z.string().min(1)
-})
-const filesSchema = z.object({
-  id: z.string(),
-  files: z.object({
-    pageInfo: z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullish() }),
+const envelopeSchema = lazyZodSchema(() =>
+  z.object({
+    data: z
+      .object({
+        repository: z
+          .object({
+            pullRequest: z.record(z.string(), z.unknown()).nullish(),
+            viewedPullRequest: z.record(z.string(), z.unknown()).nullish()
+          })
+          .nullish()
+      })
+      .nullish(),
+    errors: z
+      .array(z.object({ path: z.array(z.union([z.string(), z.number()])).optional() }))
+      .optional()
+  })
+)
+const participantsSchema = lazyZodSchema(() =>
+  z.object({
     nodes: z.array(
-      z
-        .object({
-          path: z.string(),
-          viewerViewedState: z.enum(['VIEWED', 'UNVIEWED', 'DISMISSED']).nullable()
-        })
-        .nullable()
+      z.object({ login: z.string(), avatarUrl: z.string(), name: z.string().nullish() }).nullable()
     )
   })
-})
+)
+const metadataSchema = lazyZodSchema(() =>
+  z.object({
+    body: z.string(),
+    headRefOid: z.string().min(1),
+    baseRefOid: z.string().min(1)
+  })
+)
+const filesSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    files: z.object({
+      pageInfo: z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullish() }),
+      nodes: z.array(
+        z
+          .object({
+            path: z.string(),
+            viewerViewedState: z.enum(['VIEWED', 'UNVIEWED', 'DISMISSED']).nullable()
+          })
+          .nullable()
+      )
+    })
+  })
+)
 
 export type PRFileViewedStatesResult = {
   pullRequestId: string

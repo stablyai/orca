@@ -21,7 +21,7 @@ import {
 } from '@/runtime/mcp-servers/mcp-servers-client'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { isMcpFileAgent } from './mcp-server-agents'
-import { mcpAgentLabel, mcpServerTitle } from './mcp-server-words'
+import { mcpAgentLabel, mcpAgentProblemText, mcpServerTitle } from './mcp-server-words'
 import { showMcpServerChangeToast } from './mcp-server-change-toast'
 
 // Each agent's own MCP file, as the consent names it.
@@ -168,7 +168,7 @@ export function McpServerAgentsGroup({
                       problem.kind === 'blocked' ? 'bg-status-warning' : 'bg-muted-foreground/40'
                     )}
                   />
-                  <span className="truncate">{problem.detail}</span>
+                  <span className="truncate">{mcpAgentProblemText(agent, problem, t)}</span>
                 </span>
               ) : null}
             </span>

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 // Cache retention ignores dot-prefixed records.
 export const ORCAD_ARTIFACT_VERIFICATION_RECORD_FILENAME = '.verified-sources.json'
@@ -10,22 +11,26 @@ export const ORCAD_ARTIFACT_VERIFICATION_RECORD_FILENAME = '.verified-sources.js
 // Coarse filesystem clocks can hide rapid edits; recently changed files must be rehashed.
 const SETTLED_AFTER_MS = 2_000n
 
-const SignedFileSchema = z.object({
-  filename: z.string(),
-  signature: z.string().min(1)
-})
+const SignedFileSchema = lazyZodSchema(() =>
+  z.object({
+    filename: z.string(),
+    signature: z.string().min(1)
+  })
+)
 
-const RecordSchema = z.object({
-  version: z.literal(1),
-  contentDigest: z.string().regex(/^[a-f0-9]{12}$/u),
-  sources: z.array(
-    SignedFileSchema.extend({
-      path: z.string(),
-      sha256: z.string().regex(/^[a-f0-9]{64}$/u)
-    })
-  ),
-  slot: z.object({ path: z.string(), files: z.array(SignedFileSchema) }).nullable()
-})
+const RecordSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    contentDigest: z.string().regex(/^[a-f0-9]{12}$/u),
+    sources: z.array(
+      SignedFileSchema.extend({
+        path: z.string(),
+        sha256: z.string().regex(/^[a-f0-9]{64}$/u)
+      })
+    ),
+    slot: z.object({ path: z.string(), files: z.array(SignedFileSchema) }).nullable()
+  })
+)
 
 export type OrcadArtifactVerificationRecord = z.infer<typeof RecordSchema>
 

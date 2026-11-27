@@ -74,7 +74,7 @@ function parseManifest(data: Uint8Array): Record<string, unknown> {
 
 /** Unpacks a verified CRX into a staging folder and reads what the prompt needs. */
 export async function stageWebStoreExtension(crx: VerifiedCrx): Promise<StagedWebStoreExtension> {
-  const entries = readBrowserExtensionArchive(crx.archive)
+  const entries = await readBrowserExtensionArchive(crx.archive)
   const manifestEntry = entries.find((entry) => entry.path === 'manifest.json')
   if (!manifestEntry) {
     throw new Error('Extension package has no manifest')

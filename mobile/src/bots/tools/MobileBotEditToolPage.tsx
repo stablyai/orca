@@ -17,7 +17,6 @@ import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { botAgentLabel } from '../mobile-bot-sheet-copy'
 import {
@@ -28,6 +27,7 @@ import {
 } from './bot-tool-operations'
 import type { ToolsBot } from './bot-tool-words'
 import { MobileBotToolValuePage } from './MobileBotToolValuePage'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 type Loaded = { platform: NodeJS.Platform; saved: BotToolDetails }
 type Sub =
@@ -46,6 +46,7 @@ export function MobileBotEditToolPage(props: {
   onCancel: () => void
   onSaved: (tool: PhoneOwnTool) => Promise<void>
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { client, bot, name } = props
   const [loaded, setLoaded] = useState<Loaded | null>(null)

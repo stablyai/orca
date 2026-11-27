@@ -4,6 +4,7 @@ import type { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { botFailure, botFailureEnglish } from '../../shared/bots/bot-failure-copy'
 import type { BotToolProblem, BotToolServer } from '../../shared/bot-tools'
 import { readMcpServerTomlOwnership } from '../codex/configuration/toml/config-toml-mcp-servers'
@@ -85,15 +86,17 @@ export function codexTakenToolProblems(
   )
 }
 
-const StatusList = z.object({
-  data: z.array(
-    z.looseObject({
-      name: z.string(),
-      runtimeStatus: z.string().optional(),
-      toolsError: z.string().nullish()
-    })
-  )
-})
+const StatusList = lazyZodSchema(() =>
+  z.object({
+    data: z.array(
+      z.looseObject({
+        name: z.string(),
+        runtimeStatus: z.string().optional(),
+        toolsError: z.string().nullish()
+      })
+    )
+  })
+)
 
 /** What app-server's `mcpServerStatus/list` says is wrong with each of `names`. */
 export function codexToolProblems(

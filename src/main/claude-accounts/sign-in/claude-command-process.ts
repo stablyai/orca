@@ -25,6 +25,8 @@ import {
 } from '../../../shared/network/network-proxy'
 
 const MAX_COMMAND_OUTPUT_CHARS = 4_000
+const CLAUDE_CLI_NOT_FOUND_MESSAGE =
+  'Claude Code CLI not found. Install Claude Code and make sure `claude` is on your PATH (restart Orca if you just installed it), then try again.'
 const CLAUDE_AUTH_DENIED_PATTERN =
   /\baccess_denied\b|authorization (?:request )?(?:was )?denied|sign-?in (?:was )?denied|login (?:was )?denied/i
 
@@ -185,11 +187,14 @@ export function runClaudeCommandProcess(
           return
         }
         const trimmedOutput = output.trim()
+        // A bare name means no install was found; the console that said so has already closed.
         rejectPromise(
           new Error(
             trimmedOutput
               ? `Claude command failed: ${trimmedOutput}`
-              : `Claude command exited with code ${code ?? 'unknown'}.`
+              : interactiveLogin && hostClaudeCommand() === 'claude'
+                ? CLAUDE_CLI_NOT_FOUND_MESSAGE
+                : `Claude command exited with code ${code ?? 'unknown'}.`
           )
         )
       })

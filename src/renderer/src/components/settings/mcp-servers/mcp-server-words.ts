@@ -1,7 +1,7 @@
 // What a server's row and page say: its title, its line, its status, and who it's on for.
 import type { Translate } from '@/i18n/use-translate'
 import type { BotToolProblem } from '../../../../../shared/bot-tools'
-import type { McpServer } from '../../../../../shared/mcp-servers/mcp-servers'
+import type { McpAgentProblem, McpServer } from '../../../../../shared/mcp-servers/mcp-servers'
 import { MCP_SERVER_CATALOG } from '../../../../../shared/mcp-servers/mcp-server-catalog'
 import { botToolTitle } from '../../../../../shared/bots/bot-tool-labels'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
@@ -116,6 +116,13 @@ export function mcpWorkspacesSummaryText(summary: McpWorkspacesSummary, t: Trans
         names: summary.names.join(', ')
       })
   }
+}
+
+/** An agent row's problem line: a blocked Claude line in the UI language; anything else in the host's words. */
+export function mcpAgentProblemText(agent: string, problem: McpAgentProblem, t: Translate): string {
+  return problem.kind === 'blocked' && agent === 'claude'
+    ? t('settings.mcpServers.agents.blocked', 'Blocked by your organization’s Claude settings')
+    : problem.detail
 }
 
 /** An agent as the host names it: Orca's label for one it knows, else the host's id. */

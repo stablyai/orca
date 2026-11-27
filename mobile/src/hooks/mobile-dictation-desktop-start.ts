@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import { isCurrentMobileDictationStart } from './mobile-dictation-session-state'
 import { sendAcrossConnectionMove } from './mobile-dictation-audio-chunk'
 import { dictationSessionLostMessage } from '../dictation/mobile-dictation-setup'
@@ -117,7 +118,7 @@ async function startOnHost(options: StartMobileDictationDesktopSessionOptions): 
       )
     ).catch(() => {
       // Only transport failures reject here; host refusals carry their own message through interpret.
-      throw new Error(dictationSessionLostMessage())
+      throw new Error(dictationSessionLostMessage(translate))
     })
     const started = dictationSessionStart.interpret(reply)
     hostDedupesResends =

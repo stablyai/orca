@@ -1,8 +1,9 @@
 import { Pressable } from 'react-native'
 import { Maximize2, Minimize2 } from 'lucide-react-native'
-import { colors } from '../../../theme/mobile-theme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
+import { composerInputStylesSheet as inputStylesSheet } from '../../../components/composer-input/composer-input-styles'
+import { useThemedStyles } from '../../../theme/themed-styles'
 import type { ChatWidthToggle } from './use-chat-bottom-fit'
 
 /** Runs the chat across the iPhone Duo's status column, or keeps it clear of what the column draws. */
@@ -11,6 +12,8 @@ export function MobileNativeChatWidthToggle({
   onToggle
 }: ChatWidthToggle): React.JSX.Element {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
+  const inputStyles = useThemedStyles(inputStylesSheet)
   const Icon = expanded ? Minimize2 : Maximize2
   return (
     <Pressable

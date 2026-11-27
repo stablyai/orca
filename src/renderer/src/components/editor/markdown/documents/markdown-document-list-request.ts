@@ -19,6 +19,23 @@ type InFlightMarkdownDocumentList = {
 
 export const MARKDOWN_DOCUMENT_LIST_JOIN_WINDOW_MS = 30_000
 const inFlightMarkdownDocumentLists = new Map<string, InFlightMarkdownDocumentList>()
+// Share one exact-membership index per listing array so split panes joining a listing do not duplicate it.
+const relativePathsByDocuments = new WeakMap<readonly MarkdownDocument[], ReadonlySet<string>>()
+
+export function getMarkdownDocumentRelativePaths(
+  documents: readonly MarkdownDocument[]
+): ReadonlySet<string> {
+  let relativePaths = relativePathsByDocuments.get(documents)
+  if (!relativePaths) {
+    const next = new Set<string>()
+    for (const document of documents) {
+      next.add(document.relativePath)
+    }
+    relativePathsByDocuments.set(documents, next)
+    relativePaths = next
+  }
+  return relativePaths
+}
 
 export function getMarkdownDocumentListRequestKey(
   context: RuntimeFileOperationArgs,

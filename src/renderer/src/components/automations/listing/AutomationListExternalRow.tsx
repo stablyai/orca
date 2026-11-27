@@ -176,9 +176,9 @@ export function AutomationListExternalRow({
             <DropdownMenuTrigger asChild>
               <Button
                 type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="size-7 text-muted-foreground"
+                variant="ghost-muted"
+                size="icon-toolbar"
+                className="justify-self-end"
                 aria-label={t(
                   'auto.components.automations.AutomationsPage.rowActions',
                   'Automation actions'
