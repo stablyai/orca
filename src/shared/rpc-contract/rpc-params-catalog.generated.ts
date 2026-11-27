@@ -142,6 +142,7 @@ import {
   AutomationRuns,
   AutomationUpdate
 } from './automations/automation-params'
+import { BitbucketConnectParam } from './bitbucket/bitbucket-params'
 import {
   BotAvatarRead,
   BotAvatarUpload,
@@ -1288,6 +1289,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'automation.runs': AutomationRuns,
   'automation.show': AutomationId,
   'automation.update': AutomationUpdate,
+  'bitbucket.connect': BitbucketConnectParam,
+  'bitbucket.disconnect': null,
+  'bitbucket.status': null,
   'bots.access.decide': BotAccessDecide,
   'bots.access.list': null,
   'bots.access.redeem': BotAccessRedeem,

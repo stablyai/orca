@@ -23752,7 +23752,6 @@
           "dialog": {
             "createToken": "En créer un",
             "environmentManagedLine": "Défini par les variables d'environnement ORCA_BITBUCKET_*. Supprimez-les pour en enregistrer un ici.",
-            "savedLocallyOnly": "Enregistré uniquement sur cet ordinateur.",
             "accessTokenNeeds": "Nécessite un accès en lecture aux pull requests.",
             "atlassianEmail": "E-mail Atlassian",
             "requiredScopes": "Portées requises",

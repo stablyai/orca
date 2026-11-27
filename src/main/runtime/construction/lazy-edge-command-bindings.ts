@@ -1,5 +1,6 @@
 import type { RuntimeJiraCommands } from '../integrations/jira/runtime-jira-commands'
 import type { RuntimeEmulatorCommands } from '../emulator/runtime-emulator-commands'
+import type { RuntimeBitbucketCommands } from '../integrations/bitbucket/runtime-bitbucket-commands'
 
 type PublicMethods<T> = Pick<T, keyof T>
 
@@ -29,6 +30,12 @@ export const JIRA_ASYNC_COMMAND_NAMES = [
   'jiraListTransitions',
   'jiraGetProjectStatusOrder'
 ] as const satisfies readonly Exclude<keyof RuntimeJiraCommands, 'jiraCancelGenerateIssueSummary'>[]
+
+export const BITBUCKET_COMMAND_NAMES = [
+  'bitbucketConnect',
+  'bitbucketDisconnect',
+  'bitbucketStatus'
+] as const satisfies readonly (keyof RuntimeBitbucketCommands)[]
 
 export const EMULATOR_COMMAND_NAMES = [
   'emulatorTap',

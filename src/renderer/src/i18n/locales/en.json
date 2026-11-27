@@ -14114,7 +14114,9 @@
               "envManaged": "Configured via environment variables. Unset the ORCA_BITBUCKET_* variables to manage this credential in Orca.",
               "storedAuthFailed": "The saved Bitbucket credential could not authenticate. Edit it, or check that the token still has pull request access.",
               "storedCredential": "Saved in Orca on this machine. ORCA_BITBUCKET_* environment variables take precedence when set.",
+              "storedCredentialRemote": "Saved on the selected remote runtime. ORCA_BITBUCKET_* environment variables on that host take precedence when set.",
               "notConfigured": "Connect a Bitbucket Cloud account with an Atlassian API token or an access token. ORCA_BITBUCKET_* environment variables work too and take precedence.",
+              "notConfiguredRemote": "Connect a Bitbucket Cloud account with an Atlassian API token or an access token. ORCA_BITBUCKET_* environment variables on that host work too and take precedence.",
               "disconnectFailed": "Could not remove the saved Bitbucket credential.",
               "statusLoadFailed": "Could not check for a saved Bitbucket credential.",
               "replaceCredentials": "Manage credentials",
@@ -24138,7 +24140,7 @@
           "dialog": {
             "createToken": "Create one",
             "environmentManagedLine": "Set by ORCA_BITBUCKET_* environment variables. Unset them to save one here.",
-            "savedLocallyOnly": "Saved on this computer only.",
+            "savedOnRemoteRuntime": "Credentials are sent to the selected remote runtime and stored there.",
             "accessTokenNeeds": "Needs read access to pull requests.",
             "atlassianEmail": "Atlassian email",
             "requiredScopes": "Required scopes",

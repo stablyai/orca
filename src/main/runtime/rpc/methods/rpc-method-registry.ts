@@ -13,6 +13,7 @@ import { HOSTED_REVIEW_METHODS } from './source-control/reviews/hosted-review'
 import { LINEAR_METHODS } from './integrations/linear/linear'
 import { LINEAR_AGENT_ACCESS_METHODS } from './integrations/linear/linear-agent-access'
 import { JIRA_METHODS } from './integrations/jira/jira'
+import { BITBUCKET_METHODS } from './integrations/bitbucket/bitbucket'
 import { COMPUTER_METHODS } from './computer/computer'
 import { AUTOMATION_METHODS } from './automations/automations'
 import { AUTOMATIC_WORK_METHODS } from './automations/automatic-work'
@@ -111,6 +112,7 @@ const SERVICE_RPC_METHODS = [
   ...LINEAR_METHODS,
   ...LINEAR_AGENT_ACCESS_METHODS,
   ...JIRA_METHODS,
+  ...BITBUCKET_METHODS,
   ...COMPUTER_METHODS,
   ...AUTOMATIC_WORK_METHODS,
   ...SKILL_METHODS,

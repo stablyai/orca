@@ -23735,7 +23735,6 @@
           "dialog": {
             "createToken": "Token erstellen",
             "environmentManagedLine": "Durch ORCA_BITBUCKET_*-Umgebungsvariablen festgelegt. Entferne sie, um hier eines zu speichern.",
-            "savedLocallyOnly": "Wird nur auf diesem Computer gespeichert.",
             "accessTokenNeeds": "Benötigt Lesezugriff auf Pull-Requests.",
             "atlassianEmail": "Atlassian-E-Mail",
             "requiredScopes": "Erforderliche Bereiche",

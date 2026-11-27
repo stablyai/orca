@@ -23403,7 +23403,6 @@
           "dialog": {
             "createToken": "建立權杖",
             "environmentManagedLine": "已由 ORCA_BITBUCKET_* 環境變數設定。取消設定後才能在此儲存。",
-            "savedLocallyOnly": "僅儲存在這台電腦上。",
             "accessTokenNeeds": "需要提取要求的讀取權限。",
             "atlassianEmail": "Atlassian 電子郵件",
             "requiredScopes": "必要範圍",
