@@ -86,6 +86,8 @@ export function registerMobileHandlers(
       args?: {
         address?: string
         connectionMode?: MobilePairingConnectionMode
+        /** Relay only: false advertises no direct address, so the listener stays on loopback. */
+        localPath?: boolean
         rotate?: boolean
       }
     ) => {
@@ -94,6 +96,7 @@ export function registerMobileHandlers(
         {
           address: args?.address,
           connectionMode: args?.connectionMode,
+          localPath: args?.localPath,
           rotate: args?.rotate,
           offerTtlMs: MOBILE_PAIRING_OFFER_TTL_MS
         },
