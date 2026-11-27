@@ -72,6 +72,47 @@ describe('local base ref refresh toast', () => {
     expect(shownTitles()).toEqual([expected])
   })
 
+  it.each([REFRESH, SHALLOW])(
+    'shows a result that arrives while the closed toast is still leaving',
+    (result) => {
+      act(() => show(result))
+      act(() => vi.advanceTimersByTime(0))
+      act(() => {
+        fireEvent.click(screen.getAllByRole('button', { name: /^Close/ })[0])
+        show(result)
+      })
+      settle()
+      expect(shownTitles()).toHaveLength(1)
+    }
+  )
+
+  it('shows a result that arrives while a swiped-away toast is still leaving', () => {
+    act(() => show(SHALLOW))
+    act(() => vi.advanceTimersByTime(0))
+    const toastElement = document.querySelector<HTMLElement>('[data-sonner-toast]')!
+    toastElement.setPointerCapture = () => {}
+    // Two moves: sonner locks the swipe direction on the first and applies it on the next render.
+    act(() => fireEvent.pointerDown(toastElement, { clientX: 0, clientY: 0, pointerId: 1 }))
+    act(() => fireEvent.pointerMove(toastElement, { clientX: 0, clientY: 100, pointerId: 1 }))
+    act(() => fireEvent.pointerMove(toastElement, { clientX: 0, clientY: 200, pointerId: 1 }))
+    act(() => fireEvent.pointerUp(toastElement, { clientX: 0, clientY: 200, pointerId: 1 }))
+    expect(toastElement.getAttribute('data-removed')).toBe('true')
+    act(() => show(SHALLOW))
+    settle()
+    expect(shownTitles()).toEqual([SHALLOW_TITLE])
+  })
+
+  it('reuses ids once closed toasts are gone, so toast history stays bounded', () => {
+    const before = toast.getHistory().length
+    for (let i = 0; i < 50; i++) {
+      act(() => show(i % 2 ? SHALLOW : REFRESH))
+      act(() => vi.advanceTimersByTime(0))
+      act(() => fireEvent.click(screen.getAllByRole('button', { name: /^Close/ })[0]))
+      settle()
+    }
+    expect(toast.getHistory().length - before).toBeLessThanOrEqual(4)
+  })
+
   it('shows a result that arrives while the closed card is still leaving', () => {
     act(() => show(REFRESH))
     act(() => vi.advanceTimersByTime(0))

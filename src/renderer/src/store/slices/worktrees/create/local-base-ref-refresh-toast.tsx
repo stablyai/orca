@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { getKeepLocalMainUpToDateTitle } from '@/components/settings/source-control/keep-local-main-up-to-date-setting'
 import { translate } from '@/i18n/i18n'
 import { LocalBaseRefNotUpdatedCard } from './local-base-ref-not-updated-card'
+import { claimLocalBaseRefToastId } from './local-base-ref-toast-ids'
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
@@ -216,26 +217,6 @@ function runUnshallowInNewTerminalTab(
   )
 }
 
-const shownLocalBaseRefToasts = new Map<string, { variant: string; id: string }>()
-let localBaseRefToastGeneration = 0
-
-/** Reuses the shown toast for the same variant; otherwise retires it and returns a never-used id. */
-function localBaseRefToastId(key: string, variant: 'shallow' | 'refresh'): string {
-  const shown = shownLocalBaseRefToasts.get(key)
-  const stillShown = shown !== undefined && toast.getToasts().some((entry) => entry.id === shown.id)
-  if (shown && stillShown && shown.variant === variant) {
-    return shown.id
-  }
-  if (shown && stillShown) {
-    toast.dismiss(shown.id)
-  }
-  // Why a fresh id: sonner merges updates into an existing toast and applies dismissals a frame
-  // later, so reusing an id could keep the other variant's content or be closed by a queued dismiss.
-  const id = `${key}:${++localBaseRefToastGeneration}`
-  shownLocalBaseRefToasts.set(key, { variant, id })
-  return id
-}
-
 export function showLocalBaseRefRefreshToast(
   result: LocalBaseRefRefreshResult | undefined,
   createdWorktree: Pick<Worktree, 'id' | 'repoId' | 'displayName' | 'branch' | 'path'> | undefined,
@@ -248,7 +229,7 @@ export function showLocalBaseRefRefreshToast(
 
   const worktreeName = createdWorktree ? resolveWorktreeDisplayName(createdWorktree).trim() : ''
   // Why: one toast per repo and branch because creates toward one target share a run, so its result is one fact, not one per create.
-  const id = localBaseRefToastId(
+  const { id, onDismiss } = claimLocalBaseRefToastId(
     `local-base-ref-refresh-failed:${createdWorktree?.repoId ?? 'unknown'}:${result.localBranch}`,
     result.shallowHistory ? 'shallow' : 'refresh'
   )
@@ -335,7 +316,8 @@ export function showLocalBaseRefRefreshToast(
           className: 'w-[var(--width)]',
           duration: Infinity,
           closeButton: false,
-          dismissible: true
+          dismissible: true,
+          onDismiss
         }
       )
       return
@@ -350,7 +332,8 @@ export function showLocalBaseRefRefreshToast(
         </div>
       ),
       duration: Infinity,
-      dismissible: true
+      dismissible: true,
+      onDismiss
     })
   }
   show()
