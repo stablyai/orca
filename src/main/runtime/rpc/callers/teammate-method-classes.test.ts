@@ -62,6 +62,7 @@ describe('the workspace tier’s method table', () => {
         'nativeChatLaunchDraftResolved',
         'notificationAttentionAcknowledged',
         'peerMailReturned',
+        'relayHostRowsChanged',
         'relayHostsChanged',
         'settingsChanged',
         'sidebarInputsChanged',
