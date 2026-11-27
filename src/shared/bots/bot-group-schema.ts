@@ -114,6 +114,9 @@ export const BotGroupMessageSchema = lazyZodSchema(() =>
     createdAt: z.number(),
     rootRequestId: z.string().optional(),
     rootSequence: z.number().optional(),
+    mailReplyOrder: z
+      .object({ after: z.number().int().nonnegative(), reply: z.number().int().nonnegative() })
+      .optional(),
     /** The member whose explicit peer request this mail turn answers; `told` when it was only status. */
     requester: z
       .object({ id: z.string(), name: z.string(), told: z.literal(true).optional() })
