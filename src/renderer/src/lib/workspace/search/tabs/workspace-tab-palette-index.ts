@@ -63,10 +63,11 @@ function cachedDocument(
   const same =
     cached &&
     shallow(cached.input.secondaryTexts, input.secondaryTexts) &&
+    shallow(cached.input.containerSecondaryTexts, input.containerSecondaryTexts) &&
     shallow(cached.input.typeAliases, input.typeAliases) &&
     shallow(
-      { ...cached.input, secondaryTexts: null, typeAliases: null },
-      { ...input, secondaryTexts: null, typeAliases: null }
+      { ...cached.input, secondaryTexts: null, containerSecondaryTexts: null, typeAliases: null },
+      { ...input, secondaryTexts: null, containerSecondaryTexts: null, typeAliases: null }
     )
   const value = same ? cached : { input, document: buildPaletteTabDocument(input) }
   nextDocuments.set(identity, value)

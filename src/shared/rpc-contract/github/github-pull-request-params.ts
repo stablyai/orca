@@ -1,20 +1,23 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import type { GitHubPRRefreshReason } from '../../github/pull-requests/refresh/pull-request-refresh-types'
 import { OptionalGhAccountExpectation, RepoSelector, SlugRepo } from './github-repo-target-params'
 import { OptionalString, requiredString } from '../rpc-param-primitives'
 
-export const OptionalPRRefreshReason = z
-  .unknown()
-  .optional()
-  .transform((value): GitHubPRRefreshReason | undefined => {
-    return value === 'visible' ||
-      value === 'active' ||
-      value === 'post-push' ||
-      value === 'manual' ||
-      value === 'swr'
-      ? value
-      : undefined
-  })
+export const OptionalPRRefreshReason = lazyZodSchema(() =>
+  z
+    .unknown()
+    .optional()
+    .transform((value): GitHubPRRefreshReason | undefined => {
+      return value === 'visible' ||
+        value === 'active' ||
+        value === 'post-push' ||
+        value === 'manual' ||
+        value === 'swr'
+        ? value
+        : undefined
+    })
+)
 
 export const PrForBranch = RepoSelector.extend({
   branch: requiredString('Missing branch'),
@@ -42,12 +45,14 @@ export const PRCommentReaction = RepoSelector.extend({
   prRepo: SlugRepo.nullable().optional()
 })
 
-export const PullRequestChecks = PullRequest.extend({
-  headSha: OptionalString,
-  userRefresh: z.boolean().optional(),
-  /** `swr`: a client's timer; the host's PR auto-refresh cadence may answer from its last read. */
-  reason: OptionalPRRefreshReason
-})
+export const PullRequestChecks = lazyZodSchema(() =>
+  PullRequest.extend({
+    headSha: OptionalString,
+    userRefresh: z.boolean().optional(),
+    /** `swr`: a client's timer; the host's PR auto-refresh cadence may answer from its last read. */
+    reason: OptionalPRRefreshReason
+  })
+)
 
 export const PullRequestCheckDetails = RepoSelector.extend({
   checkRunId: z.number().int().positive().optional(),
@@ -57,10 +62,12 @@ export const PullRequestCheckDetails = RepoSelector.extend({
   prRepo: SlugRepo.nullable().optional()
 })
 
-export const RerunPullRequestChecks = PullRequest.extend({
-  headSha: OptionalString,
-  failedOnly: z.boolean().optional()
-})
+export const RerunPullRequestChecks = lazyZodSchema(() =>
+  PullRequest.extend({
+    headSha: OptionalString,
+    failedOnly: z.boolean().optional()
+  })
+)
 
 export const PullRequestFileContents = RepoSelector.extend({
   prNumber: z.number().int().positive(),

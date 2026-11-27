@@ -75,6 +75,8 @@ export const DISPATCH_CONTEXT_COLUMNS = [
   'completed_at',
   'created_at',
   'last_heartbeat_at',
+  'progress_note',
+  'progress_updated_at',
   'follow_up_of_dispatch_id',
   'follow_up_mail_at',
   'creator_turn_source',
@@ -241,6 +243,7 @@ export const MESSAGE_COLUMN_LIST = everyColumnOf<MessageRow>()([
   'delivered_at',
   'sender_pane_key',
   'answer_sender_snapshot',
+  'reply_to',
   'pointer_enter_pending',
   'pointer_pty_id',
   'pointer_process_incarnation'

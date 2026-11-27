@@ -1,24 +1,29 @@
 // `orca contacts find`: a person's email by name, from the account's contacts, the people it has
 // emailed ("other contacts") and the company directory, so "email Sam" needs no address.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { ContactSource, ContactsFindView } from '../../shared/google/google-read-types'
 import { GoogleToolError, parseGoogleJson, type GoogleApi } from './google-api-client'
 
 const PEOPLE = 'https://people.googleapis.com/v1'
 const PER_SOURCE = 10
 
-const PersonSchema = z.object({
-  names: z.array(z.object({ displayName: z.string().optional() })).default([]),
-  emailAddresses: z.array(z.object({ value: z.string().optional() })).default([]),
-  organizations: z
-    .array(z.object({ title: z.string().optional(), name: z.string().optional() }))
-    .default([])
-})
+const PersonSchema = lazyZodSchema(() =>
+  z.object({
+    names: z.array(z.object({ displayName: z.string().optional() })).default([]),
+    emailAddresses: z.array(z.object({ value: z.string().optional() })).default([]),
+    organizations: z
+      .array(z.object({ title: z.string().optional(), name: z.string().optional() }))
+      .default([])
+  })
+)
 type Person = z.infer<typeof PersonSchema>
-const SearchSchema = z.object({
-  results: z.array(z.object({ person: PersonSchema })).default([])
-})
-const DirectorySchema = z.object({ people: z.array(PersonSchema).default([]) })
+const SearchSchema = lazyZodSchema(() =>
+  z.object({
+    results: z.array(z.object({ person: PersonSchema })).default([])
+  })
+)
+const DirectorySchema = lazyZodSchema(() => z.object({ people: z.array(PersonSchema).default([]) }))
 
 function searchUrl(path: string, query: string, readMask: string, extra: [string, string][] = []) {
   const url = new URL(`${PEOPLE}/${path}`)

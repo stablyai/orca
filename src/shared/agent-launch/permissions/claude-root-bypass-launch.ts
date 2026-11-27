@@ -10,8 +10,14 @@ import { TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
 import type { TuiAgent } from '../catalog/tui-agent'
 
 const CLAUDE_BYPASS_FLAG = YOLO_TUI_AGENT_ARGS.claude
-// Claude lets bypass run as root inside a declared sandbox; Orca never sets this itself.
-const CLAUDE_ROOT_SANDBOX_ENV = 'IS_SANDBOX'
+// Claude lets bypass run as root inside a declared sandbox; Orca never sets these itself.
+const CLAUDE_ROOT_SANDBOX_ENV = ['IS_SANDBOX', 'CLAUDE_CODE_BUBBLEWRAP'] as const
+
+function declaresSandboxPrefix(token: string): boolean {
+  return CLAUDE_ROOT_SANDBOX_ENV.some(
+    (name) => token.startsWith(`${name}=`) && token.length > name.length + 1
+  )
+}
 
 export const CLAUDE_ROOT_BYPASS_NOTICE =
   `\r\n[orca] Claude won't use Full access while it runs as root, so Orca started it without ${CLAUDE_BYPASS_FLAG}, under Claude's own permission default. ` +
@@ -43,7 +49,10 @@ function asksBypassOtherwise(tokens: readonly string[]): boolean {
     (token, index) =>
       token === '--allow-dangerously-skip-permissions' ||
       token === '--permission-mode=bypassPermissions' ||
-      (token === '--permission-mode' && tokens[index + 1] === 'bypassPermissions')
+      (token === '--permission-mode' && tokens[index + 1] === 'bypassPermissions') ||
+      // Inline settings JSON can set defaultMode; a settings file is not read here.
+      (token.startsWith('--settings=') && token.includes('bypassPermissions')) ||
+      (token === '--settings' && tokens[index + 1]?.includes('bypassPermissions') === true)
   )
 }
 
@@ -80,13 +89,7 @@ export function withoutClaudeRootBypass(
   const start = claudeArgsStart(agent, parsed.tokens, shell)
   if (
     start < 1 ||
-    parsed.tokens
-      .slice(0, start)
-      .some(
-        (token) =>
-          token.startsWith(`${CLAUDE_ROOT_SANDBOX_ENV}=`) &&
-          token.length > CLAUDE_ROOT_SANDBOX_ENV.length + 1
-      ) ||
+    parsed.tokens.slice(0, start).some(declaresSandboxPrefix) ||
     asksBypassOtherwise(parsed.tokens)
   ) {
     return null
@@ -96,7 +99,7 @@ export function withoutClaudeRootBypass(
   const { roles } = analyzeAgentChoiceWords('claude', words)
   const { switches } = permissionOptionInventory('claude')
   let next = command
-  let removed = false
+  const removed = new Set<number>()
   for (let index = parsed.tokens.length - 1; index >= start; index -= 1) {
     if (
       parsed.tokens[index] !== CLAUDE_BYPASS_FLAG ||
@@ -104,21 +107,26 @@ export function withoutClaudeRootBypass(
     ) {
       continue
     }
+    // Look ahead in the rewritten words, so a repeated switch can't hide the word it would expose.
+    let following = index + 1
+    while (removed.has(following)) {
+      following += 1
+    }
     const span = parsed.spans[index]
     const gapStart = parsed.spans[index - 1].end
     if (
       span.divergesFromShell ||
       !/^[ \t]+$/.test(command.slice(gapStart, span.start)) ||
       (index > start &&
-        !(parsed.tokens[index + 1] ?? '-').startsWith('-') &&
+        !(parsed.tokens[following] ?? '-').startsWith('-') &&
         previousTakesNextWord(parsed.tokens[index - 1], roles[index - start - 1], switches))
     ) {
       return null
     }
     next = next.slice(0, gapStart) + next.slice(span.end)
-    removed = true
+    removed.add(index)
   }
-  return removed ? next : null
+  return removed.size > 0 ? next : null
 }
 
 /** The root-host launch plan: a command without the switch and its notice, or null to spawn as asked. */
@@ -129,7 +137,11 @@ export function planClaudeRootLaunch(args: {
   isRoot: boolean
   env: readonly (Readonly<Record<string, string | undefined>> | undefined)[]
 }): { command: string; notice: string } | null {
-  if (!args.command || !args.isRoot || args.env.some((env) => env?.[CLAUDE_ROOT_SANDBOX_ENV])) {
+  if (
+    !args.command ||
+    !args.isRoot ||
+    args.env.some((env) => CLAUDE_ROOT_SANDBOX_ENV.some((name) => env?.[name]))
+  ) {
     return null
   }
   const command = withoutClaudeRootBypass(args.command, args.agent, args.shell)

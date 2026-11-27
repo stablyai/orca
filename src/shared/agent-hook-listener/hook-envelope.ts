@@ -187,6 +187,16 @@ export function parseHookEnvelope(
   ) {
     return null
   }
+  // OpenCode plugins such as oh-my-opencode run ~/.claude hooks, Orca's included, for OpenCode's
+  // own turns; Orca's OpenCode plugin already reports those. Claude session ids are UUIDs (#26189).
+  if (
+    source === 'claude' &&
+    'session_id' in hookPayload &&
+    typeof hookPayload.session_id === 'string' &&
+    hookPayload.session_id.startsWith('ses_')
+  ) {
+    return null
+  }
   warnOnHookEnvOrVersionMismatch(state, {
     version: readEnvelopeString(record, 'version'),
     env: readEnvelopeString(record, 'env'),
