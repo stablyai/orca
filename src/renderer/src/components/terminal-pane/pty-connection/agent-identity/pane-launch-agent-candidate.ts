@@ -16,7 +16,7 @@ export type PaneLaunchAgentPaneSlice = {
   startup?: { command?: string; launchAgent?: string; initialAgentStatus?: { agent?: string } }
 }
 
-/** Share expected-agent precedence across finish confirmation, visible sampling and color-query policy; launch config may precede its identity. */
+/** Share expected-agent precedence across finish confirmation and visible sampling; launch config may precede its identity. */
 export function resolvePaneLaunchAgentCandidate(
   state: PaneLaunchAgentStoreSlice,
   pane: PaneLaunchAgentPaneSlice
@@ -43,11 +43,29 @@ export function resolvePaneLaunchTuiAgent(
   return isTuiAgent(candidate) ? candidate : null
 }
 
+function skipsOscColorQueryReplies(agent: string | null | undefined): boolean {
+  return agent === 'jcode' || agent === 'antigravity'
+}
+
+// This pane's startup or registered agent receives the reply; the tab can name another split (#51192).
+function paneOscColorQueryAgent(
+  state: PaneLaunchAgentStoreSlice,
+  pane: PaneLaunchAgentPaneSlice
+): TuiAgent | null {
+  if (isTuiAgent(pane.startup?.launchAgent)) {
+    return pane.startup.launchAgent
+  }
+  const registered = state.agentLaunchConfigByPaneKey[pane.paneKey]?.identity?.agentType
+  if (isTuiAgent(registered)) {
+    return registered
+  }
+  return resolvePaneLaunchTuiAgent(state, pane)
+}
+
 // jcode and agy paint an early OSC 10/11 reply as composer text (#12112, #51192).
 export function paneShouldAnswerOscColorQueries(
   state: PaneLaunchAgentStoreSlice,
   pane: PaneLaunchAgentPaneSlice
 ): boolean {
-  const agent = resolvePaneLaunchTuiAgent(state, pane)
-  return agent !== 'jcode' && agent !== 'antigravity'
+  return !skipsOscColorQueryReplies(paneOscColorQueryAgent(state, pane))
 }

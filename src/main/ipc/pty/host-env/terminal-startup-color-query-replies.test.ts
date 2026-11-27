@@ -7,5 +7,7 @@ it('suppresses startup OSC color replies for Antigravity', () => {
     true
   )
   expect(agentSkipsStartupOscColorQueryReplies({ command: 'agy' })).toBe(true)
+  expect(agentSkipsStartupOscColorQueryReplies({ command: 'agy.exe' })).toBe(true)
+  expect(agentSkipsStartupOscColorQueryReplies({ command: 'C:\\Tools\\agy.exe' })).toBe(true)
   expect(agentSkipsStartupOscColorQueryReplies({ launchAgent: 'codex' })).toBe(false)
 })
