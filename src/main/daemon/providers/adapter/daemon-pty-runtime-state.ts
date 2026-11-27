@@ -56,7 +56,7 @@ export type HistoryRecoveryContext = {
 }
 
 export type SnapshotCheckpointResult = {
-  checkpoint: HistoryCheckpointResult
+  checkpoint: HistoryCheckpointResult | 'no-snapshot'
   snapshot: NonNullable<TakePendingOutputResult['snapshot']> | null
 }
 
@@ -161,6 +161,9 @@ export abstract class DaemonPtyRuntimeState {
   protected static MAX_CONCURRENT_CHECKPOINTS = 4
   protected static FULL_CHECKPOINT_COOLDOWN_MS = 45_000
   protected lastFullCheckpointAt = new Map<string, number>()
+  // Failed full-checkpoint attempts back off exponentially without polluting the
+  // successful-write timestamp (the #46819 hold): 5s → 10s → 20s → 40s → 60s.
+  protected fullCheckpointBackoff = new Map<string, { failedAt: number; streak: number }>()
 
   protected abstract observeAuditFailure(
     trigger: Exclude<DaemonAuditTrigger, 'inventory_answered'>,
@@ -198,6 +201,7 @@ export abstract class DaemonPtyRuntimeState {
     this.periodicDeadlineWarnedSessionIds.delete(sessionId)
     this.nonFinalAdmissionDeniedSessionIds.delete(sessionId)
     this.lastFullCheckpointAt.delete(sessionId)
+    this.fullCheckpointBackoff.delete(sessionId)
     this.stopCheckpointTimerIfIdle()
     if (this.historyManager && closeHistory) {
       void this.historyManager
