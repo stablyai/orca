@@ -1,6 +1,6 @@
 import type * as ProcessHostModule from '@orca/process-host'
 import type { WorkerThreadChildRequest } from '../worker-thread-child-process/worker-thread-child-process-protocol'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { workerSpawn, mainSpawn } = vi.hoisted(() => ({
   workerSpawn: vi.fn(),
@@ -21,6 +21,10 @@ import { runAgentModelCatalogListing } from '../native-chat/agent-model-catalog/
 import { spawnManagedProviderProcess } from './managed-provider-process'
 import { awaitProviderChildSpawn } from './provider-child'
 import { resolveProviderSpawner } from './provider-worker-child-process'
+import {
+  createWorkerThreadChildProcessTestEntry,
+  createWorkerThreadChildProcessTestHost
+} from '../worker-thread-child-process/worker-thread-child-process-worker.test-fixtures'
 
 let requests: WorkerThreadChildRequest[]
 let child: WorkerThreadChildProcess
@@ -145,7 +149,71 @@ describe('agent launches on the Windows provider worker', () => {
     await vi.waitFor(() =>
       expect(requests).toContainEqual({ type: 'discard-output', id: 3, stream: 'stdout' })
     )
-    expect(requests).toContainEqual({ type: 'output-consumed', id: 3, bytes: 64 * 1024 })
-    expect(requests).toContainEqual({ type: 'output-consumed', id: 3, bytes: 1024 })
+    expect(requests).toContainEqual({
+      type: 'output-consumed',
+      id: 3,
+      stream: 'stdout',
+      bytes: 64 * 1024
+    })
+    expect(requests).toContainEqual({
+      type: 'output-consumed',
+      id: 3,
+      stream: 'stdout',
+      bytes: 1024
+    })
   })
+})
+
+describe('agent output through a real process worker', () => {
+  let entry: Awaited<ReturnType<typeof createWorkerThreadChildProcessTestEntry>>
+  let host: ReturnType<typeof createWorkerThreadChildProcessTestHost>
+  beforeAll(async () => {
+    entry = await createWorkerThreadChildProcessTestEntry()
+    host = createWorkerThreadChildProcessTestHost(entry.entryPath)
+    host.releaseOutput()
+  }, 60_000)
+  afterAll(async () => {
+    await host.dispose()
+    await entry.dispose()
+  })
+  const startAgent = (script: string) => {
+    workerSpawn.mockImplementation((spec) => host.spawn(spec))
+    return resolveProviderSpawner(undefined)!({ program: process.execPath, args: ['-e', script] })
+  }
+
+  it('delivers every chunk, then end, then close, to a reader that pauses after each', async () => {
+    const agent = startAgent(
+      "process.stdout.write('a-'); setTimeout(() => process.stdout.write('b-'), 200); setTimeout(() => process.stdout.write('c'), 400)"
+    )
+    const events: string[] = []
+    let text = ''
+    agent.stdout!.on('data', (chunk: Buffer) => {
+      text += chunk.toString()
+      events.push('data')
+      agent.stdout!.pause()
+    })
+    agent.stdout!.on('end', () => events.push('end'))
+    const closed = new Promise<void>((resolve) => agent.on('close', () => resolve()))
+
+    await closed
+    expect(text).toBe('a-b-c')
+    expect(events.slice(-1)).toEqual(['end'])
+  }, 60_000)
+
+  it('keeps stderr flowing while unread stdout holds its own credit', async () => {
+    const agent = startAgent(
+      "process.stdout.write(Buffer.alloc(256 * 1024, 120), () => process.stderr.write('marker')); setInterval(() => {}, 1000)"
+    )
+    let stderr = ''
+    agent.stderr!.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString()
+    })
+    const closed = new Promise<void>((resolve) => agent.on('close', () => resolve()))
+    try {
+      await vi.waitFor(() => expect(stderr).toBe('marker'), { timeout: 30_000, interval: 50 })
+    } finally {
+      agent.kill()
+      await closed
+    }
+  }, 60_000)
 })

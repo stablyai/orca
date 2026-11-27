@@ -92,9 +92,9 @@ export class WorkerThreadChildProcess extends EventEmitter {
   }
 
   /** Lets the worker read this many more output bytes from the child. */
-  creditOutput(bytes: number): void {
+  creditOutput(stream: 'stdout' | 'stderr', bytes: number): void {
     if (bytes > 0) {
-      this.send({ type: 'output-consumed', id: this.id, bytes })
+      this.send({ type: 'output-consumed', id: this.id, stream, bytes })
     }
   }
 
@@ -131,7 +131,7 @@ export class WorkerThreadChildProcess extends EventEmitter {
           )
         } finally {
           if (!this.manualOutputCredit) {
-            this.creditOutput(event.chunk.byteLength)
+            this.creditOutput(event.type, event.chunk.byteLength)
           }
         }
         return

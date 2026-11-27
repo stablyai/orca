@@ -39,7 +39,7 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     number,
     {
       child: ChildProcessWithoutNullStreams
-      pendingOutputBytes: number
+      pendingOutputBytes: { stdout: number; stderr: number }
       group?: ReturnType<typeof createPosixGroupTermination>
       stopping: boolean
       closed: boolean
@@ -66,7 +66,7 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     }
     const state: NonNullable<ReturnType<typeof children.get>> = {
       child,
-      pendingOutputBytes: 0,
+      pendingOutputBytes: { stdout: 0, stderr: 0 },
       stopping: false,
       closed: false,
       groupTerminated: false,
@@ -86,15 +86,9 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       if (state.discarding?.[type]) {
         return
       }
-      state.pendingOutputBytes += chunk.byteLength
-      if (state.pendingOutputBytes >= OUTPUT_HIGH_WATER_BYTES) {
-        // A discarded stream keeps draining here; pausing it could fill the pipe and stall the child.
-        if (!state.discarding?.stdout) {
-          child.stdout?.pause()
-        }
-        if (!state.discarding?.stderr) {
-          child.stderr?.pause()
-        }
+      state.pendingOutputBytes[type] += chunk.byteLength
+      if (state.pendingOutputBytes[type] >= OUTPUT_HIGH_WATER_BYTES) {
+        child[type]?.pause()
       }
       // Own the pipe chunk before transfer; a pooled Buffer may share its backing allocation.
       const bytes = new Uint8Array(chunk)
@@ -235,20 +229,17 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
           children.delete(request.id)
         }
       } else if (request.type === 'output-consumed') {
-        state.pendingOutputBytes = Math.max(0, state.pendingOutputBytes - request.bytes)
-        if (state.pendingOutputBytes < OUTPUT_HIGH_WATER_BYTES) {
-          child.stdout?.resume()
-          child.stderr?.resume()
+        const pending = Math.max(0, state.pendingOutputBytes[request.stream] - request.bytes)
+        state.pendingOutputBytes[request.stream] = pending
+        if (pending < OUTPUT_HIGH_WATER_BYTES) {
+          child[request.stream]?.resume()
         }
       } else if (request.type === 'discard-output') {
-        if (request.stream) {
-          state.discarding = { ...state.discarding, [request.stream]: true }
-          child[request.stream]?.resume()
-        } else {
-          state.discarding = { stdout: true, stderr: true }
-          state.pendingOutputBytes = 0
-          child.stdout?.resume()
-          child.stderr?.resume()
+        // A discarded stream keeps draining here; a paused one could fill the pipe and stall the child.
+        for (const stream of request.stream ? [request.stream] : (['stdout', 'stderr'] as const)) {
+          state.discarding = { ...state.discarding, [stream]: true }
+          state.pendingOutputBytes[stream] = 0
+          child[stream]?.resume()
         }
       } else if (request.type === 'stdin-write') {
         child.stdin?.write(request.data)

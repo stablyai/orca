@@ -21,7 +21,8 @@ export type WorkerThreadChildRequest =
   | { type: 'spawn-provider-owner'; id: number; spec: WorkerThreadProviderOwnerSpec }
   | { type: 'stdin-write'; id: number; data: string | Uint8Array }
   | { type: 'stdin-end'; id: number }
-  | { type: 'output-consumed'; id: number; bytes: number }
+  // Credit is per stream, so a reader that holds one stream back never pauses the other.
+  | { type: 'output-consumed'; id: number; stream: 'stdout' | 'stderr'; bytes: number }
   | { type: 'stop-owned-group'; id: number }
   // Sent only for a close marked 'retained'.
   | { type: 'release'; id: number }

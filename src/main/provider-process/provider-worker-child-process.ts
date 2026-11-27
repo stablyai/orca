@@ -23,14 +23,22 @@ function outputDrained(stream: PassThrough): Promise<void> {
   if (stream.readableEnded || stream.destroyed) {
     return Promise.resolve()
   }
-  // An unread or paused stream never ends; Node's own child resumes both at exit the same way.
-  if (stream.readableFlowing !== true) {
-    stream.resume()
-  }
-  return new Promise((resolve) => {
+  const ended = new Promise<void>((resolve) => {
     stream.once('end', resolve)
     stream.once('close', resolve)
   })
+  // An unread or paused stream never ends. Read it out until EOF: each read still reaches the
+  // reader's 'data' listeners, even one that pauses after every chunk.
+  if (stream.readableFlowing !== true) {
+    const drain = (): void => {
+      while (stream.read() !== null) {
+        // Each read emits its chunk to the reader's 'data' listeners.
+      }
+    }
+    stream.on('readable', drain)
+    drain()
+  }
+  return ended
 }
 
 /** Node streams over a worker-owned child, so stream readers (readline, JSON-RPC) work unchanged. */
@@ -107,7 +115,7 @@ class ProviderWorkerChildProcess extends EventEmitter {
   private relayOutput(name: 'stdout' | 'stderr', chunk: Buffer): void {
     const stream = this[name]
     if (stream.destroyed) {
-      this.worker.creditOutput(chunk.byteLength)
+      this.worker.creditOutput(name, chunk.byteLength)
       return
     }
     const waitingForDrain = this.heldCredit[name] > 0
@@ -124,7 +132,7 @@ class ProviderWorkerChildProcess extends EventEmitter {
   private releaseCredit(name: 'stdout' | 'stderr'): void {
     const bytes = this.heldCredit[name]
     this.heldCredit[name] = 0
-    this.worker.creditOutput(bytes)
+    this.worker.creditOutput(name, bytes)
   }
 
   private fail(error: Error): void {
@@ -156,7 +164,7 @@ function spawnOnProviderWorker(spec: ProcessSpec): ChildProcess {
     args: [...(spec.args ?? [])],
     ...(spec.cwd ? { cwd: spec.cwd } : {}),
     // A worker's process.env is a copy taken at its start, so main always sends its own.
-    env: spec.env ?? process.env
+    env: { ...(spec.env ?? process.env) }
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: provider consumers read only pid, ready, exitCode, signalCode, killed, kill, the child events and the three Node streams, all provided here; provider-worker-child-process.test.ts drives a real listing through it.
   return new ProviderWorkerChildProcess(worker) as unknown as ChildProcess
