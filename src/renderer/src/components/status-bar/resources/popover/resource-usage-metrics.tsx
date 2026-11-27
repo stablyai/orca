@@ -27,7 +27,11 @@ export function formatMemory(bytes: number): string {
 /** One decimal for GB, whole MB, so the status bar value keeps a steady width. */
 export function formatMemoryCompact(bytes: number): string {
   const mb = Math.round(bytes / (1024 * 1024))
-  return mb < 1024 ? `${mb} MB` : `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+  if (mb < 1024) {
+    return `${mb} MB`
+  }
+  const gb = bytes / (1024 * 1024 * 1024)
+  return gb < 99.95 ? `${gb.toFixed(1)} GB` : `${Math.round(gb)} GB`
 }
 
 export function formatCpu(percent: number): string {

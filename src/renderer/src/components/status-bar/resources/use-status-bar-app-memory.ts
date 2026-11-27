@@ -1,47 +1,63 @@
-import { useEffect, useState } from 'react'
-import { isOrcaWindowForegroundFocused } from '@/attention/orca-window-foreground-focus'
+import { useEffect, useRef, useState } from 'react'
+import { useWindowActive } from '@/lib/window-activity/use-window-active'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 
-const POLL_MS = 30_000
+export const STATUS_BAR_APP_MEMORY_POLL_MS = 30_000
+// Why: lets a tick land on schedule while focus flapping inside one interval reuses the last sample.
 const TICK_SLACK_MS = 2_000
 
-/** Orca app memory for the status bar: sampled only while this window is visible and focused. */
+function usableBytes(total: number | null): number | null {
+  return typeof total === 'number' && Number.isFinite(total) && total > 0 ? total : null
+}
+
+/** Orca app memory for the status bar. The timer exists only while this window is focused,
+ *  shown and not minimized (as main reports it); disabled, nothing subscribes or polls. */
 export function useStatusBarAppMemory(enabled: boolean): number | null {
+  const active = useWindowActive(enabled)
   const [bytes, setBytes] = useState<number | null>(null)
+  // generation is bumped on disable so an answer from before can't repaint a stale value.
+  const samplingRef = useRef({ sampledAt: -Infinity, generation: 0 })
+
+  // Why render-time: clearing in an effect would paint the old value for a frame.
+  if (!enabled && bytes !== null) {
+    setBytes(null)
+  }
   useEffect(() => {
     if (!enabled) {
-      setBytes(null)
       return
     }
-    let disposed = false
-    let sampledAt = -Infinity
-    const sample = (): void => {
-      if (!isOrcaWindowForegroundFocused()) {
+    const sampling = samplingRef.current
+    return () => {
+      sampling.generation++
+      sampling.sampledAt = -Infinity
+    }
+  }, [enabled])
+
+  useEffect(() => {
+    if (!active) {
+      return
+    }
+    const sampling = samplingRef.current
+    const sampleIfStale = (): void => {
+      if (Date.now() - sampling.sampledAt < STATUS_BAR_APP_MEMORY_POLL_MS - TICK_SLACK_MS) {
         return
       }
-      sampledAt = Date.now()
+      sampling.sampledAt = Date.now()
+      const requestGeneration = sampling.generation
       void window.api.memory
         .getAppMemoryTotal()
         .then((total) => {
-          if (!disposed) {
-            setBytes(total)
+          if (sampling.generation === requestGeneration) {
+            setBytes(usableBytes(total))
           }
         })
         .catch(() => {})
     }
-    // Why: slack lets a tick land on schedule while still skipping one that just followed a focus sample.
-    const sampleIfStale = (): void => {
-      if (Date.now() - sampledAt >= POLL_MS - TICK_SLACK_MS) {
-        sample()
-      }
-    }
-    const uninstall = installWindowVisibilityInterval({ run: sampleIfStale, intervalMs: POLL_MS })
-    window.addEventListener('focus', sampleIfStale)
-    return () => {
-      disposed = true
-      uninstall()
-      window.removeEventListener('focus', sampleIfStale)
-    }
-  }, [enabled])
+    return installWindowVisibilityInterval({
+      run: sampleIfStale,
+      intervalMs: STATUS_BAR_APP_MEMORY_POLL_MS
+    })
+  }, [active])
+
   return bytes
 }
