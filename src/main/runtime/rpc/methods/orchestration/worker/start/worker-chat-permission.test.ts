@@ -15,7 +15,8 @@ import '../../../../../orchestration/db/contract-constants'
 import '../../../../../orchestration/db/messages/mailbox-routing-page'
 import '../../../../../orchestration/db/dispatch-row-writer'
 import '../../../../../orchestration/db/attempt-outcome-projection'
-import { createWorkerReleaseFixture } from '../release/worker-release.test-fixture'
+import { planWorkerFollowUp, startWorkerFollowUp } from '../../messaging/worker-follow-up'
+import { createWorkerReleaseFixture, isStartReceipt } from '../release/worker-release.test-fixture'
 import { startWorker } from '../worker-start-method'
 
 const SESSION = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
@@ -33,11 +34,19 @@ type Case = {
   worker?: 'codex' | 'pi'
   terminalCaller?: boolean
   switchAfterStart?: boolean
+  followUp?: boolean
 }
 
 it.each<Case>([
   { name: 'Full access', saved: 'full-access', global: 'ask', expected: 'full-access' },
   { name: 'Ask under global Full access', saved: 'ask', global: 'full-access', expected: 'ask' },
+  {
+    name: 'an Ask follow-up that starts fresh under global Full access',
+    saved: 'ask',
+    global: 'full-access',
+    expected: 'ask',
+    followUp: true
+  },
   {
     name: 'Accept Edits for a worker that lacks it',
     saved: 'accept-edits',
@@ -175,9 +184,31 @@ it.each<Case>([
     if (scenario.switchAfterStart) {
       record.permissionMode = 'ask'
     }
-    expect(await started).toMatchObject({ mode: { mode: 'structured' } })
-    expect(create).toHaveBeenCalledTimes(1)
-    expect(create.mock.calls[0]?.[1].options?.permissionMode).toBe(scenario.expected)
+    const receipt = await started
+    expect(receipt).toMatchObject({ mode: { mode: 'structured' } })
+    if (scenario.followUp) {
+      // The refused create leaves a settled Dispatch without a conversation to reopen.
+      if (!isStartReceipt(receipt)) {
+        throw new Error('Missing the previous worker Dispatch')
+      }
+      const plan = planWorkerFollowUp(db, receipt.dispatchId, 'dispatch')
+      if (plan?.kind !== 'start') {
+        throw new Error('Expected the previous worker Dispatch to admit a follow-up')
+      }
+      const followUp = await startWorkerFollowUp({
+        ctx: { runtime, orchestrationCaller: caller },
+        db,
+        plan,
+        from: ADDRESS,
+        message: { subject: 'Continue the work' }
+      })
+      expect(followUp).toMatchObject({
+        kind: 'started',
+        receipt: { delivery: 'started_fresh', mode: { mode: 'structured' } }
+      })
+    }
+    expect(create).toHaveBeenCalledTimes(scenario.followUp ? 2 : 1)
+    expect(create.mock.lastCall?.[1].options?.permissionMode).toBe(scenario.expected)
   } finally {
     setStructuredAgentSessionHost(null)
     db.close()
