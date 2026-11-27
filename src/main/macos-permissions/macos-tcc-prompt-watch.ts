@@ -86,6 +86,10 @@ else
   read -r _
   kill "$log_pid" 2>/dev/null
 fi
+# A kill landing in log's fork-to-exec window is dropped; re-kill after the window closes.
+# log_pid is unreaped (wait comes after), so it cannot be recycled.
+sleep 0.2
+kill "$log_pid" 2>/dev/null
 wait "$log_pid"
 exit "$?"`
 
