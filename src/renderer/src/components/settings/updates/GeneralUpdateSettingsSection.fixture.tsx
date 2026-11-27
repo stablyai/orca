@@ -376,3 +376,8 @@ export const serversFlow = defineFixture({
   }
 })
 export const serversFlowNarrow = narrow(serversFlow)
+
+export const noServersNarrow = narrow(noServers)
+export const checkingNarrow = narrow(checking)
+export const errorNarrow = narrow(error)
+export const heldReleaseNarrow = narrow(heldRelease)

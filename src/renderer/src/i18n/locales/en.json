@@ -2288,6 +2288,7 @@
       "action": {
         "update": "Update",
         "check": "Check",
+        "skip": "Skip",
         "skipDelay": "Skip delay",
         "checkForUpdates": "Check for updates"
       },
@@ -2301,7 +2302,7 @@
         "checking": "Checking…",
         "upToDate": "Up to date",
         "heldUntil": "{{version}} on hold until {{date}}",
-        "held": "{{version}} on hold",
+        "heldNarrow": "{{version}} on {{date}}",
         "available": "{{version}} available",
         "latestForMac": "Latest for this Mac",
         "notes": "Notes",

@@ -41,10 +41,11 @@ function lineCopy(line: UpdateStatusLine, t: Translate, intlLocale: string): Lin
           version: line.version,
           date: formatUpdateDelayDate(line.availableAt, intlLocale)
         }),
-        narrow: [
-          t('settings.about.status.held', '{{version}} on hold', { version: line.version }),
-          formatUpdateDelayDate(line.availableAt, intlLocale, true)
-        ].join(' · ')
+        // Short enough to sit beside Notes on the 256px card without cutting the date.
+        narrow: t('settings.about.status.heldNarrow', '{{version}} on {{date}}', {
+          version: line.version,
+          date: formatUpdateDelayDate(line.availableAt, intlLocale, true)
+        })
       }
     case 'held-ready':
     case 'available':
@@ -129,7 +130,10 @@ export function UpdateStatusRow({
           aria-hidden
           className="col-start-1 row-start-1 row-end-3 size-7 rounded-md"
         />
-        <div className="col-start-2 row-start-1 flex min-w-0 text-sm font-medium">
+        <div
+          title={version.suffix ? (appVersion ?? undefined) : undefined}
+          className="col-start-2 row-start-1 flex min-w-0 text-sm font-medium"
+        >
           <span className="shrink-0">
             {t('settings.general.about.version', 'Orca {{version}}', { version: version.semver })}
           </span>
@@ -281,9 +285,15 @@ function UpdateStatusAction({
             'settings.updateDelay.skipDelayOnceHint',
             'Check for this release now. Your delay setting stays the same.'
           )}
+          aria-label={t('settings.about.action.skipDelay', 'Skip delay')}
           onClick={() => void window.api.updater.check({ ignoreUpdateDelay: true })}
         >
-          {t('settings.about.action.skipDelay', 'Skip delay')}
+          <span className="@max-xs/about-status:hidden">
+            {t('settings.about.action.skipDelay', 'Skip delay')}
+          </span>
+          <span className="hidden @max-xs/about-status:inline">
+            {t('settings.about.action.skip', 'Skip')}
+          </span>
         </Button>
       )
     case 'download':
