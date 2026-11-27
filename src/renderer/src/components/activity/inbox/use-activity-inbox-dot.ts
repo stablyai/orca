@@ -3,8 +3,8 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { createAgentStatusEpochSelector } from '@/lib/agent-status/evidence/agent-status-epoch-selector'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
-import { readBots, readLiveBotHostIds, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
-import { useAccessRequests } from '@/lib/bot-access-requests'
+import { readBots, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
+import { subscribeBotItemsSeen } from '@/lib/bot-items-seen'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import {
@@ -14,11 +14,18 @@ import {
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { Bot } from '../../../../../shared/bot-types'
 import { isBotWorkspaceId } from './activity-inbox-bot-workspace'
-import {
-  hasActivityInboxAgentAttention,
-  hasActivityInboxBotAttention,
-  isLiveAccessRequest
-} from './activity-inbox'
+import { hasActivityInboxAgentAttention, hasActivityInboxBotAttention } from './activity-inbox'
+import { useLiveAccessRequests } from './use-live-access-requests'
+
+// The bot part reads the bot list (counts and the host's seen marks) and this window's own marks.
+function subscribeToBotsAndSeen(listener: () => void): () => void {
+  const unsubscribeBots = subscribeToBotChanges(listener)
+  const unsubscribeSeen = subscribeBotItemsSeen(listener)
+  return () => {
+    unsubscribeBots()
+    unsubscribeSeen()
+  }
+}
 
 // Same-turn heartbeats keep the epoch, so they never rerun the scan; turn and freshness changes bump it.
 const createAgentAttentionSelector = () =>
@@ -49,7 +56,7 @@ const createAgentAttentionSelector = () =>
 export type ActivityInboxAttention = {
   /** An agent waits on you, or has an outcome you haven't read. */
   agents: boolean
-  /** A bot has tasks needing you, or someone asked for access: the rows above the agent list. */
+  /** A bot's Needs you holds something new to you, or an access request waits on your decision. */
   bots: boolean
 }
 
@@ -83,15 +90,9 @@ export function useActivityInboxAttention(): ActivityInboxAttention {
     )
   )
   // Never useBots(): it would start a bots.list. The snapshot notifies only when its lists change.
-  const botTasks = useSyncExternalStore(subscribeToBotChanges, hasActivityInboxBotAttention)
-  const requests = useAccessRequests()
-  // Whether a request is live reads its host's state and the bot list, so re-check when either changes.
-  const liveHosts = useSyncExternalStore(subscribeToBotChanges, readLiveBotHostIds)
-  const access = useMemo(
-    () => requests.some((request) => isLiveAccessRequest(request)),
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- liveHosts and allBots are what isLiveAccessRequest reads.
-    [requests, liveHosts, allBots]
-  )
+  const botTasks = useSyncExternalStore(subscribeToBotsAndSeen, hasActivityInboxBotAttention)
+  // A request is a to-do: it lights the dot until it is decided or expires.
+  const access = useLiveAccessRequests().length > 0
   return { agents, bots: botTasks || access }
 }
 

@@ -8,6 +8,7 @@ import {
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   botChangeConcerns,
+  readNumbers,
   type BotChangeKind,
   type BotNeedsYouCounts
 } from '../../../shared/bots/bot-change-scope'
@@ -83,6 +84,8 @@ type BotsListAnswer = {
   needsYou?: Record<string, number>
   needsYouAt?: number
   needsYouStaleInMs?: number
+  // Read loosely: a paired host of another version may send anything.
+  needsYouOthersLast?: unknown
   connectorNeedsSignIn?: boolean
   connectorStatus?: BotHostConnectorStatus
 }
@@ -119,6 +122,7 @@ async function readBotHost(hostId: ExecutionHostId, state: HostRefresh): Promise
         needsYou: result.needsYou,
         needsYouAt: result.needsYouAt,
         needsYouStaleInMs: result.needsYouStaleInMs,
+        needsYouOthersLast: readNumbers(result.needsYouOthersLast),
         connectorNeedsSignIn: result.connectorNeedsSignIn,
         connectorStatus: result.connectorStatus
       },

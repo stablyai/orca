@@ -38,6 +38,7 @@ import { SidebarContentViewport } from './SidebarContentViewport'
 import { SidebarSectionDragOverlay } from './SidebarSectionDragOverlay'
 import { PROJECTS_SECTION_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 import { useBotsEnabled } from '@/lib/bot-catalog'
+import { selectActivityInboxEnabled } from '@/lib/bots-enabled'
 import { StartupWorktreeRefreshStatus } from './worktree-list/listing/StartupWorktreeRefreshStatus'
 import { WorktreeCardsIntroNotice } from './workspace-card/template/WorktreeCardsIntroNotice'
 import {
@@ -125,8 +126,8 @@ function Sidebar({
   const settings = useAppStore((s) => s.settings)
   const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
   const showAgentDashboard = settings?.experimentalAgentDashboardPopout === true
-  // With the experimental rail on, Activity is an inbox opened from the rail; it mounts only while open.
-  const activityInbox = settings?.experimentalAppRail === true
+  // With the experimental rail and bots on, Activity is an inbox opened from the rail; it mounts only while open.
+  const activityInbox = useAppStore(selectActivityInboxEnabled)
   const agentDashboardDrawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
   const agentReadFilter = useAppStore((s) => s.agentsReadFilter)

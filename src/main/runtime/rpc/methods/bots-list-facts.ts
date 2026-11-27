@@ -12,6 +12,7 @@ export async function listedBotsFacts(runtime: OrcaRuntimeService) {
       ? {
           needsYou: needsYou.counts,
           needsYouAt: needsYou.at,
+          needsYouOthersLast: needsYou.othersLast,
           ...(needsYou.staleInMs !== undefined ? { needsYouStaleInMs: needsYou.staleInMs } : {})
         }
       : {}),

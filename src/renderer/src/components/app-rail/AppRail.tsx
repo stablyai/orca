@@ -45,9 +45,8 @@ export function AppRail({
   style?: React.CSSProperties
 }): React.JSX.Element {
   const t = useTranslate()
-  const { workspacesActive, activityActive, listShowsWorkspaces } = decodeRailListState(
-    useAppStore(selectRailListState)
-  )
+  const { workspacesActive, activityActive, listShowsWorkspaces, activityInbox } =
+    decodeRailListState(useAppStore(selectRailListState))
   const settingsActive = useAppStore((s) => s.activeView === 'settings')
   const shownDestinationsKey = useAppStore(selectShownRailDestinationsKey)
   const currentDestination = useAppStore(selectCurrentRailDestination)
@@ -96,15 +95,18 @@ export function AppRail({
   )
   // Hidden destinations are left out before partitioning; hidden is never folded.
   const shownDestinations = shownRailDestinationsFromKey(shownDestinationsKey)
-  // Activity is fixed under Workspaces and never folds, so it takes one slot before partitioning.
-  const partition = partitionAppRail(shownDestinations.length, Math.max(0, capacity - 1))
+  // Activity (bots on) is fixed under Workspaces and never folds, so it takes one slot before partitioning.
+  const partition = partitionAppRail(
+    shownDestinations.length,
+    activityInbox ? Math.max(0, capacity - 1) : capacity
+  )
   const railDestinations = shownDestinations.slice(0, partition.shownDestinations)
   const foldedDestinations = shownDestinations.slice(partition.shownDestinations)
   const destinationActive = (id: AppRailDestinationId): boolean => id === currentDestination
 
   const renderedItems: AppRailItemId[] = [
     'workspaces',
-    'activity',
+    ...(activityInbox ? (['activity'] as const) : []),
     ...railDestinations,
     partition.more ? 'more' : 'customize',
     'account'
@@ -318,15 +320,17 @@ export function AppRail({
               }
             />
           </RailItem>
-          <ActivityRailButton
-            active={activityActive}
-            expanded={listShowsWorkspaces ? undefined : listVisible}
-            controls={
-              !listShowsWorkspaces && listRegionPresent ? WORKSPACE_LIST_REGION_ID : undefined
-            }
-            tabStop={tabStopItem === 'activity'}
-            onClick={() => navigateFromRail(() => activateListRailItem(useAppStore, 'activity'))}
-          />
+          {activityInbox ? (
+            <ActivityRailButton
+              active={activityActive}
+              expanded={listShowsWorkspaces ? undefined : listVisible}
+              controls={
+                !listShowsWorkspaces && listRegionPresent ? WORKSPACE_LIST_REGION_ID : undefined
+              }
+              tabStop={tabStopItem === 'activity'}
+              onClick={() => navigateFromRail(() => activateListRailItem(useAppStore, 'activity'))}
+            />
+          ) : null}
           {railDestinations.map((id) => (
             <RailItem key={id} tooltip={destinationLabel(id)}>
               <AppRailButton

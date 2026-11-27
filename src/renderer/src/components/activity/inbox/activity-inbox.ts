@@ -4,8 +4,14 @@ import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { Bot } from '../../../../../shared/bot-types'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../../shared/agent-status/presentation/migration-unsupported-agent-entry'
-import { readBotHostState, readBotItemsNeedingOwner, readBots } from '@/lib/bot-catalog-snapshot'
+import {
+  readBotHostState,
+  readBotItemsNeedingOwner,
+  readBotNeedsYouOthersLast,
+  readBots
+} from '@/lib/bot-catalog-snapshot'
 import type { HostAccessRequest } from '@/lib/bot-access-requests'
+import { readBotItemsSeen } from '@/lib/bot-items-seen'
 import {
   freshActivityLiveAgentState,
   isHistoricalActivityState
@@ -36,6 +42,21 @@ export function activityInboxKind(thread: AgentPaneThread): ActivityInboxKind | 
     return thread.currentAgentState || thread.unread ? 'ask' : null
   }
   return OUTCOME_STATUSES.has(status) ? 'outcome' : null
+}
+
+/**
+ * An agent blocked on you right now (a live question or permission ask, or a pane that must be restarted): a to-do,
+ * like an access request. It stays listed, and lights the dot, until it is answered, read or not; Mark all read
+ * leaves it alone. Only a wait whose agent went quiet is news that leaves once read.
+ */
+export function isActivityInboxToDo(thread: AgentPaneThread): boolean {
+  if (thread.migrationUnsupportedPtyId !== undefined) {
+    return !isChildWorkerThread(thread)
+  }
+  return (
+    activityInboxKind(thread) === 'ask' &&
+    (thread.currentAgentState === 'waiting' || thread.currentAgentState === 'blocked')
+  )
 }
 
 /** A dispatched worker reports to its coordinator, not to you; its coordinator's row speaks for it. */
@@ -71,6 +92,7 @@ function paneAttention(
   }
   const live = freshActivityLiveAgentState(entry, now)
   if (live === 'waiting' || live === 'blocked') {
+    // An agent blocked on you is a to-do: it lights the dot until it is answered, read or not.
     return 'ask'
   }
   // A cancelled or replaced turn shows as Interrupted, which the list never lists.
@@ -153,13 +175,28 @@ export function readActivityInboxBots(): ActivityInboxBot[] {
   return result
 }
 
+/**
+ * Whether the bot's Needs you holds something new to you: an item someone else moved after the bot's seen mark
+ * (the host's, which its Items tab and a paired phone move too). From what the bot list holds; no item read.
+ * An older host can't say what is new, so its items stay to-dos until they're answered.
+ */
+export function botHasNewNeedingYou(bot: Bot): boolean {
+  if (botNeedsYou(bot) === 0) {
+    return false
+  }
+  const othersLast = readBotNeedsYouOthersLast(bot)
+  return othersLast === null || othersLast > readBotItemsSeen(bot)
+}
+
+/** Whether some bot's Needs you holds something new to you. */
 export function hasActivityInboxBotAttention(): boolean {
-  return readBots().some((bot) => botNeedsYou(bot) > 0)
+  return readBots().some(botHasNewNeedingYou)
 }
 
 /**
  * A request you can still answer: its host is live (the store keeps a disconnected host's), its bot is one this
- * window lists (as the request toast requires), and it hasn't expired.
+ * window lists (as the request toast requires), and it hasn't expired. A request is a to-do, not news: it stays
+ * listed, and lights the dot, until it is decided or expires.
  */
 export function isLiveAccessRequest(request: HostAccessRequest, now: number = Date.now()): boolean {
   return (
@@ -167,4 +204,18 @@ export function isLiveAccessRequest(request: HostAccessRequest, now: number = Da
     request.expiresAt > now &&
     readBots().some((bot) => bot.id === request.botId && bot.hostId === request.hostId)
   )
+}
+
+/** When the first of these requests expires, so a reader re-checks then; null for none. */
+export function nextAccessRequestExpiry(
+  requests: readonly HostAccessRequest[],
+  now: number
+): number | null {
+  let next: number | null = null
+  for (const request of requests) {
+    if (request.expiresAt > now && (next === null || request.expiresAt < next)) {
+      next = request.expiresAt
+    }
+  }
+  return next
 }

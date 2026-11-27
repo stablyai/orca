@@ -31502,6 +31502,8 @@
     "accessContext": "Access request · {{source}}",
     "caughtUp": "You’re all caught up",
     "caughtUpDetail": "Agents waiting on you, bots with tasks for you and finished work show up here. Running agents stay on their workspace cards.",
-    "itemNeedsYou": "Needs you"
+    "itemNeedsYou": "Needs you",
+    "accessContextExpires": "Access request · {{source}} · Expires in {{left}}",
+    "toDo": "To do"
   }
 }

@@ -202,7 +202,8 @@ const accessRequest = {
   botId: triageBot.id,
   source: 'slack',
   requester: { name: 'Priya', handle: 'priya' },
-  createdAt: now - 40 * MIN
+  createdAt: now - 40 * MIN,
+  expiresAt: now + 3 * 60 * MIN
 } as unknown as HostAccessRequest
 
 /** The inbox as ActivityInbox builds it: one list, newest first. The Triage bot's finished chat turn is left out. */

@@ -1,5 +1,4 @@
 import React from 'react'
-import { cn } from '@/lib/class-names'
 import { useNow } from '@/lib/window-activity/use-now'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { useIntlLocale } from '@/i18n/use-translate'
@@ -14,20 +13,21 @@ export function ActivityInboxRow({
   title,
   timestamp,
   line,
-  ask,
   contextIcon,
   context,
+  badge,
   selected,
   onOpen
 }: {
   avatar: React.ReactNode
   title: string
   timestamp?: number
+  /** Body text for every row: the whole inbox is what needs you, so no row needs a colour to say so. */
   line: string | null
-  /** Asks read in the question colour; outcomes in body text. */
-  ask: boolean
   contextIcon: React.ReactNode
-  context: string
+  context: React.ReactNode
+  /** A short tag by the time, for a row that stays until you act on it, unlike the read-once rest. */
+  badge?: string
   /** The row you have open: drawn like the selected workspace card. */
   selected: boolean
   onOpen: () => void
@@ -51,15 +51,15 @@ export function ActivityInboxRow({
               <span className="block min-w-0 flex-1 truncate text-[13px] font-semibold leading-5 text-foreground">
                 {title}
               </span>
+              {badge ? (
+                <span className="mt-0.5 shrink-0 rounded-sm border border-border px-1 text-[10px] font-medium leading-4 text-muted-foreground">
+                  {badge}
+                </span>
+              ) : null}
               {timestamp === undefined ? null : <RowTime timestamp={timestamp} />}
             </span>
             {line ? (
-              <span
-                className={cn(
-                  'line-clamp-2 min-w-0 break-words text-[13px] leading-5',
-                  ask ? 'text-agent-question-text' : 'text-foreground/80'
-                )}
-              >
+              <span className="line-clamp-2 min-w-0 break-words text-[13px] leading-5 text-foreground/80">
                 {line}
               </span>
             ) : null}
@@ -72,6 +72,19 @@ export function ActivityInboxRow({
       </button>
     </li>
   )
+}
+
+/** How long until `at`, as compact as row times (`5m`, `3h`, `2d`), on the same 30s clock. */
+export function RowTimeLeft({
+  at,
+  children
+}: {
+  at: number
+  children: (left: string) => React.ReactNode
+}): React.JSX.Element {
+  const now = useNow(30_000)
+  // Under a minute still reads as one: "now" would say it already expired.
+  return <>{children(formatShortTimeAgo(now, Math.max(at, now + 60_000)))}</>
 }
 
 // Plain text, not EventTime's button: the whole row is the button, and buttons can't nest.

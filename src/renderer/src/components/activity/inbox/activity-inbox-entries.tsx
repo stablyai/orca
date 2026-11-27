@@ -10,7 +10,7 @@ import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import { BotAvatar } from '@/components/bots/BotAvatar'
 import { openBotHomePanelFromSidebar } from '@/components/bots/BotRow'
 import { openBotItem } from '@/components/bots/items/bot-item-open'
-import { botItemsLastRead } from '@/components/bots/items/use-bot-items'
+import { botItemLastRead, botItemsLastRead } from '@/components/bots/items/use-bot-items'
 import { botItemForChat } from './activity-inbox-chat-item'
 import { findBotByWorkspace } from '@/components/bots/bot-workspace'
 import type { Bot } from '../../../../../shared/bot-types'
@@ -21,7 +21,7 @@ import {
   threadAgentStateLabel
 } from '../threads/activity-thread-presentation'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
-import { ActivityInboxRow } from './ActivityInboxRow'
+import { ActivityInboxRow, RowTimeLeft } from './ActivityInboxRow'
 
 export type ActivityInboxEntry =
   | {
@@ -30,11 +30,22 @@ export type ActivityInboxEntry =
       at: number
       thread: AgentPaneThread
       ask: boolean
+      /** Blocked on you: it stays until answered, opened or not. */
+      todo?: true
       /** The bot whose workspace the agent runs in: its row is the bot's. */
       bot: Bot | null
       gone?: true
     }
-  | { kind: 'item'; key: string; at: number; bot: Bot; item: BotItem; gone?: true }
+  | {
+      kind: 'item'
+      key: string
+      at: number
+      bot: Bot
+      item: BotItem
+      /** Its host is too old to say what is new to you: it stays until it is answered. */
+      todo?: true
+      gone?: true
+    }
   | {
       kind: 'access'
       key: string
@@ -100,7 +111,7 @@ function AgentEntryRow({
   onOpened,
   onOpenThread
 }: RowProps<'agent'> & { onOpenThread: (thread: AgentPaneThread) => void }): React.JSX.Element {
-  const { thread, ask, bot } = entry
+  const { thread, bot } = entry
   const t = useTranslate()
   const { taskTitle, statusLine, workspaceLabel } = activityThreadRowCopy(thread, t)
   const where = bot ? taskTitle : workspaceLabel
@@ -110,9 +121,9 @@ function AgentEntryRow({
       title={bot ? bot.name : taskTitle}
       timestamp={thread.latestTimestamp}
       line={statusLine === null ? null : plainLine(statusLine)}
-      ask={ask}
       contextIcon={<AgentStateDot state={activityThreadStatusId(thread)} size="sm" />}
       context={`${threadAgentStateLabel(thread, t)} · ${where}`}
+      badge={entry.todo && !entry.gone ? t('activityInbox.toDo', 'To do') : undefined}
       selected={selected}
       onOpen={() => {
         onOpened(entry)
@@ -147,12 +158,16 @@ function ItemEntryRow({ entry, selected, onOpened }: RowProps<'item'>): React.JS
       title={bot.name}
       timestamp={item.lastActivityAt}
       line={item.title}
-      ask
       contextIcon={<CircleHelp className="size-3" aria-hidden />}
       context={`${formatBotItemNumber(item.number)} · ${ask ? plainLine(ask) : t('activityInbox.itemNeedsYou', 'Needs you')}`}
+      badge={entry.todo && !entry.gone ? t('activityInbox.toDo', 'To do') : undefined}
       selected={selected}
       onOpen={() => {
         onOpened(entry)
+        // Answered since it was listed (it shows as you saw it), or removed: open it only while its bot still has it.
+        if (entry.gone && !botItemLastRead(bot, item.uid)) {
+          return
+        }
         openBotHomePanelFromSidebar(bot, () => openBotItem(bot, item.uid))
       }}
     />
@@ -164,17 +179,32 @@ function AccessEntryRow({ entry, selected, onOpened }: RowProps<'access'>): Reac
   const t = useTranslate()
   // The name can be empty; the request toast falls back to the handle the same way.
   const requester = request.requester.name || request.requester.handle
+  const source = request.source === 'slack' ? 'Slack' : 'Linear'
   return (
     <ActivityInboxRow
       avatar={bot ? botAvatar(bot) : <UserPlus className="size-3.5 text-muted-foreground" />}
       title={bot?.name ?? requester}
       timestamp={request.createdAt}
       line={t('activityInbox.accessRequest', '{{name}} asked for access', { name: requester })}
-      ask
       contextIcon={<UserPlus className="size-3" aria-hidden />}
-      context={t('activityInbox.accessContext', 'Access request · {{source}}', {
-        source: request.source === 'slack' ? 'Slack' : 'Linear'
-      })}
+      context={
+        // Kept after it was decided or expired: no time left to count.
+        entry.gone ? (
+          t('activityInbox.accessContext', 'Access request · {{source}}', { source })
+        ) : (
+          <RowTimeLeft at={request.expiresAt}>
+            {(left) =>
+              t(
+                'activityInbox.accessContextExpires',
+                'Access request · {{source}} · Expires in {{left}}',
+                { source, left }
+              )
+            }
+          </RowTimeLeft>
+        )
+      }
+      // A decision, not news: it stays until you decide it or it expires.
+      badge={entry.gone ? undefined : t('activityInbox.toDo', 'To do')}
       selected={selected}
       onOpen={() => {
         onOpened(entry)

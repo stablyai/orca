@@ -20,7 +20,8 @@ export function botOfWorkspace(
     return null
   }
   return (
-    findBotByWorkspace(bots, workspace.id) ??
+    // On its host: a paired server's workspace never names a bot of another host with the same id.
+    findBotByWorkspace(bots, workspace.id, workspace.hostId) ??
     botOfFolders(selectFolderAncestors(state, readRuntimeStatuses(), workspace), bots)
   )
 }
@@ -34,9 +35,9 @@ export function isBotWorkspaceId(
   if (bots.length === 0) {
     return false
   }
-  if (findBotByWorkspace(bots, worktreeId) !== null) {
-    return true
-  }
+  // A known workspace is checked on its host, as the list's row is; only an unknown id falls back to the bare id.
   const worktree = state.getKnownWorktreeById(worktreeId)
-  return worktree !== undefined && botOfWorkspace(state, bots, worktree) !== null
+  return worktree !== undefined
+    ? botOfWorkspace(state, bots, worktree) !== null
+    : findBotByWorkspace(bots, worktreeId) !== null
 }

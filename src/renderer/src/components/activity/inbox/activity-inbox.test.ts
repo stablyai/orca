@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
-import { activityInboxKind, hasActivityInboxAgentAttention } from './activity-inbox'
+import {
+  activityInboxKind,
+  hasActivityInboxAgentAttention,
+  isActivityInboxToDo
+} from './activity-inbox'
 
 const NOW = 1_000_000
 
@@ -132,6 +136,17 @@ describe('hasActivityInboxAgentAttention', () => {
     expect(hasActivityInboxAgentAttention(source({ a: entry() }), NOW, () => false)).toBe(true)
   })
 
+  it('keeps a live question lit until it is answered, read or not', () => {
+    const waiting = entry({ state: 'waiting', stateStartedAt: NOW - 100 })
+    expect(
+      hasActivityInboxAgentAttention(source({ a: waiting }, { acked: { a: NOW - 50 } }), NOW)
+    ).toBe(true)
+    const asksAgain = entry({ state: 'waiting', stateStartedAt: NOW - 10 })
+    expect(
+      hasActivityInboxAgentAttention(source({ a: asksAgain }, { acked: { a: NOW - 50 } }), NOW)
+    ).toBe(true)
+  })
+
   it('ignores panes with no Activity row', () => {
     expect(hasActivityInboxAgentAttention(source({ a: entry() }, { rows: [] }), NOW)).toBe(false)
   })
@@ -190,5 +205,29 @@ describe('activityInboxKind', () => {
 
   it('lists a blocked migration as an ask', () => {
     expect(activityInboxKind(thread({ migrationUnsupportedPtyId: 'pty' }))).toBe('ask')
+  })
+})
+
+describe('isActivityInboxToDo', () => {
+  it('is an agent blocked on you now, read or not', () => {
+    const waiting = {
+      currentAgentState: 'waiting' as const,
+      currentAgentEntry: entry({ state: 'waiting' })
+    }
+    expect(isActivityInboxToDo(thread(waiting))).toBe(true)
+    expect(isActivityInboxToDo(thread({ ...waiting, unread: true }))).toBe(true)
+  })
+
+  it('is news, not a to-do, once its agent went quiet or finished', () => {
+    expect(
+      isActivityInboxToDo(thread({ paneEntry: entry({ state: 'waiting' }), unread: true }))
+    ).toBe(false)
+    expect(isActivityInboxToDo(thread({ paneEntry: entry({ state: 'done' }), unread: true }))).toBe(
+      false
+    )
+  })
+
+  it('keeps a pane that must be restarted until it is', () => {
+    expect(isActivityInboxToDo(thread({ migrationUnsupportedPtyId: 'pty-1' }))).toBe(true)
   })
 })

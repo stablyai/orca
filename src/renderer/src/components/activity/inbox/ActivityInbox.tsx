@@ -18,12 +18,16 @@ import { useAllAgentPaneThreads } from '../threads/use-agent-pane-threads'
 import { useActivityThreadActionBindings } from '../thread-list/use-activity-thread-action-bindings'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
 import type { Bot } from '../../../../../shared/bot-types'
-import { activityInboxKind } from './activity-inbox'
+import type { BotItem } from '../../../../../shared/bots/bot-items'
+import { markBotItemsSeen } from '@/lib/bot-items-seen'
+import { parseBotItemEventId } from '../../../../../shared/bots/bot-items'
+import { activityInboxKind, isActivityInboxToDo } from './activity-inbox'
 import { botOfWorkspace, isBotWorkspaceId } from './activity-inbox-bot-workspace'
 import { activityThreadStatusId } from '../threads/activity-thread-presentation'
 import { withOpenedEntry } from './activity-inbox-opened'
 import {
   ActivityInboxBotItemsReader,
+  isNewToYou,
   useActivityInboxBotSources,
   type BotItemsNeedingYou
 } from './ActivityInboxBotRows'
@@ -32,6 +36,24 @@ import { ActivityInboxEmpty } from './ActivityInboxEmpty'
 import { ActivityInboxMarkAllRead } from './ActivityInboxMarkAllRead'
 
 type AgentEntry = Extract<ActivityInboxEntry, { kind: 'agent' }>
+
+const itemEntryKey = (bot: Bot, item: BotItem): string => `item:${botRefKey(bot)}:${item.uid}`
+
+type ItemEntry = Extract<ActivityInboxEntry, { kind: 'item' }>
+
+const othersLastOf = (item: BotItem): number => parseBotItemEventId(item.othersLastEventId) ?? 0
+
+/** Items you opened or cleared on this visit, at the event you saw: each stays gone until someone moves it again. */
+function withDismissed(
+  previous: ReadonlyMap<string, number>,
+  entries: readonly ItemEntry[]
+): ReadonlyMap<string, number> {
+  const next = new Map(previous)
+  for (const entry of entries) {
+    next.set(entry.key, othersLastOf(entry.item))
+  }
+  return next
+}
 
 function agentEntriesOf(
   threads: readonly AgentPaneThread[],
@@ -43,7 +65,9 @@ function agentEntriesOf(
   const hiddenUnread: AgentPaneThread[] = []
   for (const thread of threads) {
     const kind = activityInboxKind(thread)
-    if (kind === null || (kind === 'outcome' && !thread.unread)) {
+    // Read rows leave; an agent blocked on you is a to-do and stays until it is answered.
+    const todo = kind !== null && isActivityInboxToDo(thread)
+    if (kind === null || (!thread.unread && !todo)) {
       continue
     }
     // A bot's finished turns are its own work, not news to you; what it needs from you, and a failure only you
@@ -62,6 +86,7 @@ function agentEntriesOf(
       at: thread.latestTimestamp,
       thread,
       ask: kind === 'ask',
+      ...(todo ? { todo: true as const } : {}),
       bot: botOfWorkspace(state, bots, thread.worktree)
     })
   }
@@ -81,8 +106,12 @@ export default function ActivityInbox({
   const { storeData, allThreads } = useAllAgentPaneThreads()
   const bots = useSyncExternalStore(subscribeToBotChanges, readBots)
   const sources = useActivityInboxBotSources()
+  // Bot items you opened or cleared here. A bot keeps one seen mark for all its items, so the rows of a bot you
+  // haven't opened stay for this visit; these leave now.
+  const [dismissed, setDismissed] = useState<ReadonlyMap<string, number>>(() => new Map())
   // The row you last opened from this list; kept listed and highlighted until you open another or leave.
   const [opened, setOpened] = useState<ActivityInboxEntry | null>(null)
+  const openedKey = opened?.key ?? null
   const focusedPaneKey = useAppStore((s) =>
     s.activeView === 'terminal' && s.activeWorktreeId
       ? getFocusedAgentPaneKeyForWorktree(s, s.activeWorktreeId)
@@ -126,20 +155,30 @@ export default function ActivityInbox({
   )
   const entries = useMemo(() => {
     const all: ActivityInboxEntry[] = [...agentEntries]
-    for (const [key, { bot, items }] of itemsByBot) {
-      if (!countedBotKeys.has(key)) {
+    for (const [botKey, { bot, items, seen }] of itemsByBot) {
+      if (!countedBotKeys.has(botKey)) {
         continue
       }
+      // An older host keeps no mark the inbox can read: its items are to-dos, listed until answered.
+      const todo = seen === null
       for (const item of items ?? []) {
+        const key = itemEntryKey(bot, item)
+        // Seen items leave, except the one you have open: it stays until you leave Activity.
+        const cleared = !todo && (dismissed.get(key) ?? -1) >= othersLastOf(item)
+        if ((!isNewToYou(item, seen) || cleared) && openedKey !== key) {
+          continue
+        }
         all.push({
           kind: 'item',
-          key: `item:${botRefKey(bot)}:${item.uid}`,
+          key,
           at: item.lastActivityAt,
           bot,
-          item
+          item,
+          ...(todo ? { todo: true as const } : {})
         })
       }
     }
+    // A request is a to-do: listed until it is decided or expires, opened or not.
     for (const request of sources.requests) {
       all.push({
         kind: 'access',
@@ -150,19 +189,73 @@ export default function ActivityInbox({
       })
     }
     return withOpenedEntry(all, opened, allThreads).sort((a, b) => b.at - a.at)
-  }, [agentEntries, itemsByBot, countedBotKeys, sources.requests, bots, opened, allThreads])
+  }, [
+    agentEntries,
+    itemsByBot,
+    countedBotKeys,
+    dismissed,
+    sources.requests,
+    bots,
+    opened,
+    openedKey,
+    allThreads
+  ])
 
   const agentThreads = useMemo(() => agentEntries.map((entry) => entry.thread), [agentEntries])
+  // To-dos are left alone: an agent blocked on you stays unread until you open it or answer it.
   const markAllReadThreads = useMemo(
-    () => [...agentThreads, ...hiddenUnread],
-    [agentThreads, hiddenUnread]
+    () => [
+      ...agentEntries.filter((entry) => !entry.todo).map((entry) => entry.thread),
+      ...hiddenUnread
+    ],
+    [agentEntries, hiddenUnread]
   )
-  const { selectThread, markAllThreadsRead, hasUnreadThreads } = useActivityThreadActionBindings({
-    visibleThreads: agentThreads,
-    markAllReadThreads,
-    acknowledgeAgents: storeData.acknowledgeAgents,
-    unacknowledgeAgents: storeData.unacknowledgeAgents
-  })
+  const { selectThread, markThreadRead, markAllThreadsRead, hasUnreadThreads } =
+    useActivityThreadActionBindings({
+      visibleThreads: agentThreads,
+      markAllReadThreads,
+      acknowledgeAgents: storeData.acknowledgeAgents,
+      unacknowledgeAgents: storeData.unacknowledgeAgents
+    })
+
+  // Opening a row is seeing it: it is marked read (an agent's through its acknowledgement, even when its pane was
+  // already focused or its tab is closed; a bot item's through its bot's seen mark, which the host keeps for every
+  // device) and leaves once you open another or leave Activity. Until then it stays, highlighted. An access
+  // request is a to-do: opening it marks nothing; deciding it takes it away.
+  const openEntry = useCallback(
+    (entry: ActivityInboxEntry) => {
+      setOpened(entry)
+      if (entry.kind === 'agent') {
+        markThreadRead(entry.thread)
+      } else if (entry.kind === 'item' && !entry.gone && !entry.todo) {
+        setDismissed((previous) => withDismissed(previous, [entry]))
+        void markBotItemsSeen(entry.bot)
+      }
+    },
+    [markThreadRead]
+  )
+  // Bot items still new to you here: the one you have open is already read.
+  const unreadItemRows = useMemo(
+    () =>
+      entries.filter(
+        (entry): entry is ItemEntry =>
+          entry.kind === 'item' && !entry.gone && !entry.todo && entry.key !== openedKey
+      ),
+    [entries, openedKey]
+  )
+  const markAllRead = useCallback(() => {
+    markAllThreadsRead()
+    if (unreadItemRows.length === 0) {
+      return
+    }
+    setDismissed((previous) => withDismissed(previous, unreadItemRows))
+    const botsToMark = new Map(unreadItemRows.map((entry) => [botRefKey(entry.bot), entry.bot]))
+    for (const bot of botsToMark.values()) {
+      void markBotItemsSeen(bot)
+    }
+  }, [markAllThreadsRead, unreadItemRows])
+  // To-dos (access requests, an older host's items) are left alone by Mark all read, so they never keep it enabled.
+  const hasUnread = hasUnreadThreads || unreadItemRows.length > 0
 
   // A bot item or access request you opened stays selected until you open another row, wherever focus goes
   // next (opening one focuses the bot's chat). Otherwise an agent row follows the pane you have focused; until
@@ -190,10 +283,7 @@ export default function ActivityInbox({
   const itemsPending = sources.bots.some(({ bot }) => !itemsByBot.get(botRefKey(bot))?.items)
   const actions = actionsTarget
     ? createPortal(
-        <ActivityInboxMarkAllRead
-          disabled={!hasUnreadThreads}
-          onMarkAllRead={markAllThreadsRead}
-        />,
+        <ActivityInboxMarkAllRead disabled={!hasUnread} onMarkAllRead={markAllRead} />,
         actionsTarget
       )
     : null
@@ -211,7 +301,7 @@ export default function ActivityInbox({
               key={entry.key}
               entry={entry}
               selected={entry.key === selectedKey}
-              onOpened={setOpened}
+              onOpened={openEntry}
               onOpenThread={selectThread}
             />
           ))}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { structuredAgentSessionHostTabId } from '../../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
 import { botItemForChat } from './activity-inbox-chat-item'
 
@@ -30,6 +31,15 @@ describe('botItemForChat', () => {
     expect(botItemForChat(chat, [item('done', 'done', 9), item('open', 'planned', 5)])?.uid).toBe(
       'open'
     )
+  })
+
+  it("finds a paired server's chat by its host tab id", () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
+    const remote = { tab: { id: structuredAgentSessionHostTabId('s1') } } as Pick<
+      AgentPaneThread,
+      'tab'
+    >
+    expect(botItemForChat(remote, [item('ask', 'needs_you', 1)])?.uid).toBe('ask')
   })
 
   it('ignores other chats, and a pane that is not a chat', () => {

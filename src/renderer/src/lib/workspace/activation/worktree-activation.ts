@@ -1,3 +1,4 @@
+import { showsWorkspaceList } from './worktree-activation-workspace-list'
 import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal/removal-visibility'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../ownership/worktree-runtime-owner'
 import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
@@ -130,7 +131,7 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
         backendStartupTerminalSpawned: opts?.backendStartupTerminalSpawned
       })
 
-  if (opts?.showWorkspaceList) {
+  if (showsWorkspaceList(state, opts)) {
     state.setSidebarBody('workspaces')
   }
   if (opts?.revealInSidebar !== false) {
@@ -260,7 +261,7 @@ export function activateAndRevealWorktreeWithOutcome(
     useAppStore.getState().queueTabInitialCwd(primaryTabId, opts.initialCwd)
   }
 
-  if (opts?.showWorkspaceList) {
+  if (showsWorkspaceList(state, opts)) {
     state.setSidebarBody('workspaces')
   }
   // No sidebar card to reveal; lifting filters for it would only discard the user's.

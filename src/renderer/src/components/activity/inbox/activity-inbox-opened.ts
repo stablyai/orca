@@ -23,8 +23,10 @@ export function withOpenedEntry(
   if (!thread) {
     return [...entries, { ...opened, gone: true }]
   }
+  // Listed again only once it no longer waits on you, so it is no to-do now.
+  const { todo: _wasToDo, ...rest } = opened
   return [
     ...entries,
-    { ...opened, thread, at: thread.latestTimestamp, ask: activityInboxKind(thread) === 'ask' }
+    { ...rest, thread, at: thread.latestTimestamp, ask: activityInboxKind(thread) === 'ask' }
   ]
 }

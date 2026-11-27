@@ -15,10 +15,7 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import {
-  isOrcaCloudTeamFeatureBlocked,
-  ORCA_CLOUD_TEAM_POLICY_FLAGS
-} from '../../../shared/orca-profiles/orca-cloud-team-policy'
+import { selectBotsEnabled } from './bots-enabled'
 import { activateAndRevealFolderWorkspace } from './workspace/activation/worktree-activation'
 import {
   activateStructuredAgentSessionById,
@@ -199,10 +196,7 @@ export function readBotsEnabled(): boolean {
 }
 
 function botsEnabled(state: AppState): boolean {
-  return (
-    state.settings?.botsEnabled !== false &&
-    !isOrcaCloudTeamFeatureBlocked(state.orcaProfileAuthStatus, ORCA_CLOUD_TEAM_POLICY_FLAGS.bots)
-  )
+  return selectBotsEnabled(state)
 }
 
 /** Makes the bot on `hostId`; it answers stamped with that host, so calls about it go there. */
