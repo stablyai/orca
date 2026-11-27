@@ -102,6 +102,11 @@ export class AcpKeptSession {
     return (this.child.exited ?? this.child.attachResult?.exit ?? null) !== null
   }
 
+  /** Reattached for a launch whose app-bound tools it lacks: the next send acquires afresh. */
+  get freshOwed(): boolean {
+    return this.relayed.freshOwed === true
+  }
+
   /** The earlier app's prompt is still owed, or answered in the held replay. */
   get owesPrompt(): boolean {
     return this.kept.earlierPromptId !== null
