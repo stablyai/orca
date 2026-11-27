@@ -9,7 +9,8 @@ import { CONNECTOR_ASKER_PLACE_KINDS } from '../../../../../../shared/connector-
 // the person, so their ask is never read as the owner's alone.
 const CarriedPerson = lazyZodSchema(() =>
   z.object({
-    source: z.string().min(1).max(64),
+    // A service name, never a delimiter that could merge two people when askers are deduped.
+    source: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/),
     userId: z.string().min(1).max(128),
     name: z.string().min(1).max(200).optional().catch(undefined),
     workspaceId: z.string().min(1).max(128).nullable().catch(null),
