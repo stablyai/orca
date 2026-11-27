@@ -10,6 +10,7 @@ let stopTracking: (() => void) | null = null
 
 function onKeyDown(event: KeyboardEvent): void {
   inputSinceLastFocus = true
+  lastPointerWasTouch = false
   // Shortcuts like Cmd+, are commands, not keyboard navigation.
   if (!event.metaKey && !event.ctrlKey && !event.altKey) {
     modality = 'keyboard'
