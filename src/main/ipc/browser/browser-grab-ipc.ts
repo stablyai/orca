@@ -5,12 +5,11 @@ import {
   captureCleanBrowserPage,
   isCurrentBrowserGrabRequest,
   disposeGrabModeStateForPage,
-  resetGrabModeState as resetSharedGrabModeState
+  resetGrabModeState
 } from '../../browser/element-grab/browser-grab-mode-sequencer'
 import { ipcMain } from 'electron'
 import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
-import { onDocPreviewGrantRevoked } from '../../browser/document-preview/doc-preview-grant-registry'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import { waitForNextTabRegistration } from './browser-tab-registration-wait'
 import type {
@@ -36,25 +35,11 @@ import type {
 } from '../../../shared/browser/element-grab/browser-grab-clean-capture'
 
 const GRAB_REGISTRATION_WAIT_MS = 1_000
-export { disposeGrabModeStateForPage }
-export function resetGrabModeState(): void {
-  disposePreviewGrantSubscription?.()
-  disposePreviewGrantSubscription = null
-  resetSharedGrabModeState()
-}
-
-let disposePreviewGrantSubscription: (() => void) | null = null
-
-function subscribeToPreviewGrantRevocation(): void {
-  disposePreviewGrantSubscription?.()
-  disposePreviewGrantSubscription = onDocPreviewGrantRevoked((grant) => {
-    browserManager.cancelGrabOp(grant.browserPageId, 'evicted')
-    disposeGrabModeStateForPage(grant.browserPageId)
-  })
-}
+// The doc-preview grant-revocation subscription lives in lazy-browser-grab-and-dictation-ipc:
+// runtime grab commands populate the shared grab state before this module ever loads.
+export { disposeGrabModeStateForPage, resetGrabModeState }
 
 export function registerBrowserGrabHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
-  subscribeToPreviewGrantRevocation()
   if (ipc === ipcMain) {
     for (const channel of [
       'browser:setGrabMode',
