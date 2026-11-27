@@ -44,6 +44,27 @@ export class CodexSharedLeaseQueue {
     return this.pending
   }
 
+  /** The first held frame's daemon seq, for a relayed server's ack floor. */
+  firstSeq(): number | null {
+    for (let at = this.head; at < this.frames.length; at += 1) {
+      const seq = this.frames[at]?.frame.seq
+      if (typeof seq === 'number') {
+        return seq
+      }
+    }
+    return null
+  }
+
+  /** Every held frame, in order, for another holder; nothing is refused. */
+  take(): CodexSharedServerFrame[] {
+    const taken = this.frames.slice(this.head).flatMap((slot) => (slot ? [slot.frame] : []))
+    this.owner.backlog(-this.heldBytes)
+    this.frames = []
+    this.head = 0
+    this.heldBytes = 0
+    return taken
+  }
+
   /** Drops every held frame; held requests are refused so Codex doesn't wait on them. */
   drop(): void {
     for (const slot of this.frames.slice(this.head)) {

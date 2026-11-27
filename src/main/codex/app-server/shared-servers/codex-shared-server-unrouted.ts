@@ -42,6 +42,18 @@ export class CodexSharedServerUnrouted {
     this.timer.unref?.()
   }
 
+  /** The first held frame's seq, for a relayed server's ack floor. */
+  floor(): number | null {
+    let floor: number | null = null
+    for (const bucket of this.buckets.values()) {
+      const seq = bucket.frames.find((frame) => typeof frame.seq === 'number')?.seq
+      if (typeof seq === 'number' && (floor === null || seq < floor)) {
+        floor = seq
+      }
+    }
+    return floor
+  }
+
   /** The frames held for a thread a chat just claimed, in arrival order. */
   take(threadId: string): CodexSharedServerFrame[] {
     const bucket = this.buckets.get(threadId)

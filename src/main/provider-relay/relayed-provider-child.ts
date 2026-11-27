@@ -59,7 +59,8 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
       relayRecords: {
         claim: () => this.output.recordTaking.claim(),
         taken: () => this.output.recordTaking.taken(),
-        uncounted: () => this.output.recordTaking.uncounted()
+        uncounted: () => this.output.recordTaking.uncounted(),
+        seq: () => this.output.recordTaking.seq?.() ?? null
       }
     }
   )

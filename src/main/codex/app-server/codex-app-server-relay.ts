@@ -1,5 +1,6 @@
 import {
   registerReattachableProviderRelayAgent,
+  type ProviderRelayLaunch,
   type ProviderRelayWorkMarkers
 } from '../../provider-relay/app-provider-relays'
 import { createCodexRelayAckFloor } from './codex-relay-ack-floor'
@@ -86,19 +87,38 @@ export function keptInitializeResult(
   }
 }
 
+/** How an app-server rides the terminal daemon: a chat's own, or (with its own markers) a shared one. */
+export type CodexAppServerRelayAs = Omit<ProviderRelayLaunch, 'markers' | 'passWhileHeld'> & {
+  /** Set for a shared server; a chat's own uses Codex's. */
+  markers?: ProviderRelayLaunch['markers']
+}
+
+export function codexRelayLaunch(
+  relayAs: CodexAppServerRelayAs,
+  passWhileHeld: (line: string) => boolean
+): ProviderRelayLaunch {
+  return { ...relayAs, markers: relayAs.markers ?? CODEX_RELAY_WORK_MARKERS, passWhileHeld }
+}
+
 /** What a Codex connection exposes of its relayed app-server. */
 export function codexConnectionRelay(
-  child: Pick<RelayedProviderChild, 'releaseOutput' | 'attachResult'>,
-  reattached: boolean,
-  keep?: () => Promise<void>,
+  relayed: {
+    child: Pick<RelayedProviderChild, 'releaseOutput' | 'attachResult'> & {
+      stdout?: Partial<Pick<RelayedProviderChild['stdout'], 'relayRecords'>>
+    }
+    reattached: boolean
+    keep?: () => Promise<void>
+  },
   ownServer = true
 ): NonNullable<CodexAppServerConnection['relay']> {
+  const { child, reattached, keep } = relayed
   return {
     reattached,
     ownServer,
     ...(keep ? { keep } : {}),
     releaseOutput: () => child.releaseOutput(),
     endedWork: () => child.attachResult?.endedWork,
-    openWork: () => child.attachResult?.openWork
+    openWork: () => child.attachResult?.openWork,
+    recordSeq: () => child.stdout?.relayRecords?.seq?.() ?? null
   }
 }

@@ -15,12 +15,42 @@ import {
   CodexSharedServerUncontainedError,
   CodexSharedServerWindowsJob
 } from './codex-shared-server-windows-job'
+import {
+  KeptProviderRelayUnreachableError,
+  onProviderRelayQuit,
+  providerRelayQuitting,
+  providerRelayRouteInstalled,
+  setProviderRelayRunPlacement,
+  takeProviderRelayRunPlacement,
+  type KeptProviderRelay
+} from '../../../provider-relay/app-provider-relays'
+import {
+  forgetListedProviderRelayChat,
+  noteProviderRelayReattachedFromLastRun
+} from '../../../provider-relay/provider-relay-launch-inventory'
+import type { AgentSessionRunPlacementLaunch } from '../../../../shared/agent-session/lifecycle/agent-session-run-placement'
+import { codexSharedRelayChatKey, onCodexSharedRelayChatDropped } from './codex-shared-server-relay'
+import type { CodexRecoveredChat } from './codex-shared-server-recovery'
+import {
+  codexExpectedChats,
+  codexPooledRunGate,
+  codexPooledRunOf,
+  codexSharedRelayServerKey,
+  type CodexPooledRun
+} from './codex-shared-server-kept-runs'
+
+type CodexPooledServerPlacement = Omit<
+  Extract<AgentSessionRunPlacementLaunch, { kind: 'relayed' }>,
+  'kind' | 'workload'
+>
 
 /** A server with no chats waits this long for the next one before it stops. */
 const IDLE_SERVER_STOP_MS = 60_000
 
 export type CodexSharedServerOpenOptions = {
   sessionId: string
+  /** Its run may outlive this app; false for a chat whose tools end with it (a bot's). */
+  keepable?: boolean
   /** skills/extraRoots/set replaces the whole process's list, so the roots are part of the key. */
   skillRoots: readonly string[]
   /** What the launch's `codex --version` reported; part of the drain generation. */
@@ -41,6 +71,10 @@ export class CodexSharedServerPool {
     () => this.allServers(),
     (server) => this.onServerFreed(server)
   )
+  /** Relayed servers by relay, so a chat whose run is on one finds it again. */
+  private readonly byRelay = new Map<string, CodexSharedServer>()
+  /** Where each relayed server runs, for its chats' run placements. */
+  private readonly placements = new WeakMap<CodexSharedServer, CodexPooledServerPlacement>()
 
   constructor(
     private readonly connect?: typeof spawnCodexAppServerConnection,
@@ -48,7 +82,21 @@ export class CodexSharedServerPool {
     /** Windows: each server's job; null when one can't be made. Undefined elsewhere. */
     private readonly createWindowsJob: () => CodexSharedServerWindowsJob | null | undefined = () =>
       process.platform === 'win32' ? CodexSharedServerWindowsJob.create() : undefined
-  ) {}
+  ) {
+    onProviderRelayQuit(() => {
+      for (const server of this.allServers()) {
+        server.keep.settleQuit()
+      }
+    })
+    onCodexSharedRelayChatDropped((chatKey, relay) => {
+      void this.byRelay.get(relay.info.relayId)?.keep.releaseExpected(chatKey)
+    })
+  }
+
+  /** The daemon runs servers where it can (never on Windows, nor for an injected test spawn). */
+  private get relaying(): boolean {
+    return !this.connect && process.platform !== 'win32' && providerRelayRouteInstalled()
+  }
 
   async open(
     launch: CodexAppServerLaunch,
@@ -64,26 +112,108 @@ export class CodexSharedServerPool {
     for (const stale of this.unproven) {
       this.stop(stale)
     }
-    const server = this.liveServer(spec.key) ?? this.startServer(spec)
+    const run = this.relaying ? codexPooledRunOf(options.sessionId) : null
+    const kept = run ? await this.keptServerFor(options.sessionId, run, spec) : null
+    const server = kept?.server ?? this.liveServer(spec.key) ?? this.startServer(spec)
     this.cancelIdleStop(server)
+    if (kept) {
+      // Its own commands keep their tag, and its threads come back with what they held.
+      forgetListedProviderRelayChat(options.sessionId)
+      noteProviderRelayReattachedFromLastRun(options.sessionId)
+    }
     // Reserved before the server is ready, so concurrent opens join the same server.
-    const lease = new CodexSharedServerLease(server, handlers, options.sessionId, spec.chatEnv)
+    const lease = new CodexSharedServerLease(
+      server,
+      handlers,
+      options.sessionId,
+      spec.chatEnv,
+      kept ? { workload: kept.chat.workload, chat: kept.chat } : null,
+      options.keepable !== false
+    )
     server.leases.add(lease)
     try {
       await (this.contained.get(server) ?? server.ready)
       if (server.closed) {
         throw new Error('codex shared app-server exited before the chat joined it')
       }
+      this.placeRun(options.sessionId, server, lease)
       await lease.announce()
       // The server can exit while onSpawned runs; that ends the reserved lease.
       if (lease.closed) {
         throw new Error('codex shared app-server exited before the chat joined it')
       }
     } catch (error) {
-      await server.release(lease).catch(() => {})
+      if (lease.restored) {
+        // A restored chat that couldn't join leaves its run as it was, for its next open.
+        lease.handBack()
+      } else {
+        await server.release(lease).catch(() => {})
+      }
       throw error
     }
     return lease
+  }
+
+  /** The kept server this chat's run is on, attached once for all its chats; null for a new run. */
+  private async keptServerFor(
+    sessionId: string,
+    run: CodexPooledRun,
+    spec: CodexSharedServer['spec']
+  ): Promise<{ server: CodexSharedServer; chat: CodexRecoveredChat } | null> {
+    let server = this.byRelay.get(run.relayId)
+    if (!server || server.exited) {
+      const relay = await codexPooledRunGate(sessionId)
+      if (!relay) {
+        return null
+      }
+      server = this.byRelay.get(run.relayId) ?? this.reattachServer(spec, relay, run)
+    }
+    try {
+      await server.ready
+    } catch {
+      // Still kept by its daemon start, maybe: never a second writer beside it.
+      throw new KeptProviderRelayUnreachableError(sessionId)
+    }
+    await server.keep.retryUnresolved()
+    const chat = server.recovery.expected(sessionId)
+    return chat ? { server, chat } : null
+  }
+
+  private reattachServer(
+    spec: CodexSharedServer['spec'],
+    relay: KeptProviderRelay,
+    run: CodexPooledRun
+  ): CodexSharedServer {
+    const key = codexSharedRelayServerKey(relay.info.chatKey) ?? spec.key
+    const server = this.track(
+      new CodexSharedServer(
+        { ...spec, key },
+        (ended) => this.onServerFreed(ended),
+        undefined,
+        this.sweep,
+        { chatKey: relay.info.chatKey, attach: relay, expected: codexExpectedChats(run.relayId) }
+      )
+    )
+    // Started under an older launch (an updated Codex): it serves the chats it kept, no new ones.
+    server.draining = key !== spec.key
+    this.placements.set(server, { relayId: run.relayId, daemon: run.daemon })
+    return server
+  }
+
+  /** A relayed server's chat runs there too, under its own tag; any other run ends with this app. */
+  private placeRun(sessionId: string, server: CodexSharedServer, lease: CodexSharedServerLease) {
+    let placement = this.placements.get(server)
+    if (!placement && server.relay) {
+      const taken = takeProviderRelayRunPlacement(server.relayed?.chatKey ?? '')
+      placement = taken.kind === 'relayed' ? taken : undefined
+      if (placement) {
+        this.placements.set(server, placement)
+        this.byRelay.set(placement.relayId, server)
+      }
+    }
+    if (placement && server.relay && lease.keepable) {
+      setProviderRelayRunPlacement(sessionId, { ...placement, kind: 'relayed', workload: lease.id })
+    }
   }
 
   private allServers(): CodexSharedServer[] {
@@ -104,9 +234,10 @@ export class CodexSharedServerPool {
       spec,
       (ended) => this.onServerFreed(ended),
       windowsJob ? windowsJob.connect(connect) : connect,
-      this.sweep
+      this.sweep,
+      this.relaying && !windowsJob ? { chatKey: codexSharedRelayChatKey(spec.key) } : undefined
     )
-    server.ready.catch(() => this.remove(server))
+    this.track(server)
     if (windowsJob) {
       // A server its job can't hold couldn't end what chats leave running.
       const held = server.ready.then(() => windowsJob.requireHolds(server.pid, () => server.exited))
@@ -117,9 +248,18 @@ export class CodexSharedServerPool {
       })
       this.contained.set(server, held)
     }
-    const group = this.servers.get(spec.key) ?? []
+    return server
+  }
+
+  private track(server: CodexSharedServer): CodexSharedServer {
+    server.ready.catch(() => this.remove(server))
+    const group = this.servers.get(server.spec.key) ?? []
     group.push(server)
-    this.servers.set(spec.key, group)
+    this.servers.set(server.spec.key, group)
+    const relayId = server.relayed?.attach?.info.relayId
+    if (relayId) {
+      this.byRelay.set(relayId, server)
+    }
     return server
   }
 
@@ -131,7 +271,9 @@ export class CodexSharedServerPool {
       this.unproven.delete(server)
       return
     }
-    if (server.leases.size > 0) {
+    server.keep.settleQuit()
+    // Quit decides it; and a kept chat's threads keep it running until claimed or let go.
+    if (providerRelayQuitting() || server.leases.size > 0 || !server.recovery.empty) {
       return
     }
     if (server.draining) {
@@ -175,6 +317,11 @@ export class CodexSharedServerPool {
 
   private remove(server: CodexSharedServer): void {
     this.cancelIdleStop(server)
+    for (const [relayId, held] of this.byRelay) {
+      if (held === server) {
+        this.byRelay.delete(relayId)
+      }
+    }
     const group = this.servers.get(server.spec.key)
     if (!group) {
       return

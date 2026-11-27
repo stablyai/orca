@@ -54,6 +54,8 @@ export type CodexAppServerConnection = {
     openWork: () => Record<string, string[][]> | undefined
     /** Reattach only: gives the agent back to the daemon, unread output kept, for a later open. */
     keep?: () => Promise<void>
+    /** The daemon seq of the frame being handled now (read inside a handler); null when unknown. */
+    recordSeq?: () => number | null
   }
 }
 import type { ProviderProcessCloseResult } from '../../provider-process/provider-process-close'

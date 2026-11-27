@@ -6,7 +6,7 @@ import {
   codexOpenedThreadId,
   codexTurnId
 } from './codex-shared-server-frames'
-import type { CodexSharedLeaseHost } from './codex-shared-server-lease'
+import type { CodexSharedLeaseHost } from './codex-shared-lease-host'
 
 const OPENS_THREAD = new Set(['thread/start', 'thread/resume', 'thread/fork'])
 const CARRIES_HISTORY = new Set(['thread/resume', 'thread/read', 'thread/turns/list'])

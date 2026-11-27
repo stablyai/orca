@@ -33,3 +33,11 @@ export function noteProviderRelayRunPlacement(
     placements.set(chatKey, { kind: 'relayed', relayId, daemon: { instance, pid, startedAtMs } })
   }
 }
+
+/** A launch whose run placement its caller knows already (a chat joining a shared agent). */
+export function setProviderRelayRunPlacement(
+  chatKey: string,
+  placement: AgentSessionRunPlacementLaunch
+): void {
+  placements.set(chatKey, placement)
+}

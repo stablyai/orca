@@ -19,6 +19,17 @@ export {
   providerRelayRunUnknown
 } from './provider-relay-run-verdicts'
 
+import {
+  providerRelayAgentShared,
+  registerSharedProviderRelayAgent,
+  sharedProviderRelayDropped
+} from './provider-relay-shared-agents'
+export {
+  noteSharedProviderRelayAttached,
+  providerRelayAgentShared,
+  providerRelayAttachedByOther
+} from './provider-relay-shared-agents'
+
 const LIST_TIMEOUT_MS = 3_000
 /** Launch waits this long for the daemon before treating its relays as unknown (not absent). */
 const DAEMON_WAIT_MS = 10_000
@@ -55,7 +66,12 @@ const keepableProviders = new Set<string>()
 
 export function registerReattachableProviderRelayAgent(
   agent: string,
-  options: { opensEnded?: boolean; provider?: string } = {}
+  options: {
+    opensEnded?: boolean
+    provider?: string
+    /** One agent serves many chats; `dropped` hears a chat (deleted) that no longer wants its part. */
+    shared?: { dropped: (chatKey: string, relay: KeptProviderRelay) => void }
+  } = {}
 ): void {
   reattachableAgents.add(agent)
   if (options.provider) {
@@ -63,6 +79,9 @@ export function registerReattachableProviderRelayAgent(
   }
   if (options.opensEnded) {
     opensEndedAgents.add(agent)
+  }
+  if (options.shared) {
+    registerSharedProviderRelayAgent(agent, options.shared.dropped)
   }
 }
 
@@ -123,7 +142,10 @@ export async function placeKeptProviderRelay(
     return
   }
   // The row and its token are published together, so no ask ever sees a row whose token is pending.
-  const token = await sharedTokenRead(chatKey, relay.info)
+  // A shared agent carries the token of whichever chat started it, never this chat's.
+  const token = providerRelayAgentShared(relay.info.agent)
+    ? null
+    : await sharedTokenRead(chatKey, relay.info)
   if (!providerRelayRunAskUnfenced(chatKey, ask) || placed()) {
     return
   }
@@ -346,7 +368,11 @@ export function dropListedProviderRelay(chatKey: string, keepUnread = false): vo
   const relay = keptProviderRelay(chatKey)
   if (relay) {
     forgetKeptProviderRelay(chatKey, relay)
-    if (!keepUnread || !keptProviderRelayUnread(relay.info)) {
+    const shared = sharedProviderRelayDropped(relay.info.agent)
+    if (shared) {
+      // Other chats still ride it: only this chat's part goes.
+      shared(chatKey, relay)
+    } else if (!keepUnread || !keptProviderRelayUnread(relay.info)) {
       void relay.channel.close(relay.info.relayId).catch(() => {})
     }
   }

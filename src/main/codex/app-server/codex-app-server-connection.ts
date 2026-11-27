@@ -24,9 +24,10 @@ import type {
 } from './codex-app-server-connection-types'
 import { launchRelayedProviderProcess } from '../../provider-relay/app-provider-relays'
 import {
-  CODEX_RELAY_WORK_MARKERS,
+  codexRelayLaunch,
   codexConnectionRelay,
-  keptInitializeResult
+  keptInitializeResult,
+  type CodexAppServerRelayAs
 } from './codex-app-server-relay'
 
 // Structured chat needs a persistent transport for approvals and streamed turns.
@@ -40,16 +41,15 @@ async function connectCodexAppServer(
   handlers: CodexAppServerConnectionHandlers = {},
   spawnImpl: ProviderProcessSpawner,
   initialize: boolean,
-  relayChatKey?: string
+  relayAs?: CodexAppServerRelayAs
 ): Promise<CodexAppServerConnection> {
   // Answers to this app's own requests pass a reattach's hold; everything else waits for the chat.
   let requestFloor = Number.POSITIVE_INFINITY
-  const relayed = relayChatKey
-    ? await launchRelayedProviderProcess(launch, {
-        chatKey: relayChatKey,
-        markers: CODEX_RELAY_WORK_MARKERS,
-        passWhileHeld: (line) => isCodexAnswerAbove(line, requestFloor)
-      })
+  const relayed = relayAs
+    ? await launchRelayedProviderProcess(
+        launch,
+        codexRelayLaunch(relayAs, (line) => isCodexAnswerAbove(line, requestFloor))
+      )
     : null
   const managed =
     relayed?.managed ??
@@ -282,7 +282,7 @@ async function connectCodexAppServer(
     pauseReading: recordReader.pause,
     resumeReading: recordReader.resume,
     close,
-    ...(relayed ? { relay: codexConnectionRelay(relayed.child, reattached, relayed.keep) } : {})
+    ...(relayed ? { relay: codexConnectionRelay(relayed, !relayAs?.markers) } : {})
   }
 
   let handshaking = false
@@ -319,12 +319,12 @@ export function spawnCodexAppServerConnection(
   return connectCodexAppServer(launch, handlers, spawnImpl, false)
 }
 
-/** One chat's own app-server, run under the terminal daemon where it can, so it outlives a restart. */
+/** An app-server run under the terminal daemon where it can, so it outlives a restart. */
 export function spawnRelayedCodexAppServerConnection(
-  chatKey: string
+  relayAs: CodexAppServerRelayAs
 ): typeof spawnCodexAppServerConnection {
   return (launch, handlers = {}) =>
-    connectCodexAppServer(launch, handlers, spawnProcess, false, chatKey)
+    connectCodexAppServer(launch, handlers, spawnProcess, false, relayAs)
 }
 
 export function openCodexAppServerConnection(

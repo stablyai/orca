@@ -17,6 +17,7 @@ import {
   providerRelayRunAskAwaitsProof,
   providerRelayRunAskCurrent,
   placeKeptProviderRelay,
+  providerRelayAttachedByOther,
   providerRelayMayKeep
 } from './provider-relay-launch-inventory'
 import { providerRelayRoute } from './provider-relay-route'
@@ -95,7 +96,7 @@ async function decide(
   if (client && listing) {
     const info = listing.get(placement.relayId)
     if (info && keptProviderRelayOutstanding(info)) {
-      if (!info.attached && ask !== null) {
+      if (!providerRelayAttachedByOther(info) && ask !== null) {
         await placeKeptProviderRelay(
           record.sessionId,
           { channel: providerRelayChannel(client), info },
@@ -132,7 +133,7 @@ async function decide(
  * placement's agent means a build that records no placement started a later run: the placement is
  * stale and names nothing.
  */
-function currentPlacement(record: ProviderRelayRunRecord): AgentSessionRunPlacement | null {
+export function currentPlacement(record: ProviderRelayRunRecord): AgentSessionRunPlacement | null {
   const placement = agentSessionRunPlacement(record)
   const owner = record.lease?.ownerProcess ?? record.ownerObservation?.ownerProcess ?? null
   if (

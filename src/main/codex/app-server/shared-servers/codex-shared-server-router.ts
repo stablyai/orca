@@ -9,6 +9,7 @@ import {
 } from './codex-shared-server-frames'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
 import { CodexSharedServerUnrouted } from './codex-shared-server-unrouted'
+import type { CodexSharedServerRecovery } from './codex-shared-server-recovery'
 
 const MAX_RETIRED_THREADS = 4_096
 /** The only server requests Codex sends without a thread; both are per account, and a server
@@ -48,10 +49,17 @@ export class CodexSharedServerRouter {
   private readonly retired = new Set<string>()
   private readonly unrouted: CodexSharedServerUnrouted
 
+  /** Requests a chat was handed and hasn't answered, by id: the ack floor stays at their seq. */
+  private readonly unanswered = new Map<number | string, number>()
+
   constructor(
     private readonly leases: () => Iterable<CodexSharedServerLease>,
     /** Answers a server request no chat can take, so Codex doesn't wait on it. */
-    private readonly refuse: (frame: CodexSharedServerFrame) => void
+    private readonly refuse: (frame: CodexSharedServerFrame) => void,
+    /** Threads a reattached server holds for chats that haven't claimed them yet. */
+    private readonly recovery?: CodexSharedServerRecovery,
+    /** The daemon seq of the frame being read now, on a relayed server. */
+    private readonly seq: () => number | null = () => null
   ) {
     this.unrouted = new CodexSharedServerUnrouted(refuse, () =>
       [...leases()].some((lease) => lease.pendingOpens.size > 0)
@@ -90,6 +98,10 @@ export class CodexSharedServerRouter {
       }
     }
     this.retired.delete(threadId)
+    const recovered = this.recovery?.take(threadId)
+    if (recovered) {
+      this.claimRecovered(recovered, lease)
+    }
     for (const frame of this.unrouted.take(threadId)) {
       lease.liveThreads.add(threadId)
       // A held frame can name helpers of its own; claim them (and replay theirs) before delivery.
@@ -107,6 +119,59 @@ export class CodexSharedServerRouter {
     if (lost && opened) {
       lease.shed()
     }
+  }
+
+  /** A recovered chat's threads and their held frames, in order: the family moves whole. */
+  private claimRecovered(
+    recovered: NonNullable<ReturnType<CodexSharedServerRecovery['take']>>,
+    lease: CodexSharedServerLease
+  ): void {
+    for (const [threadId] of recovered.threads) {
+      this.owners.set(threadId, lease)
+      lease.threads.add(threadId)
+      lease.liveThreads.add(threadId)
+      this.retired.delete(threadId)
+    }
+    lease.recoveryCut ||= recovered.cut
+    for (const frame of recovered.frames) {
+      if (frame.kind === 'notification') {
+        this.discover(frame.method, frame.params)
+      }
+      this.deliverTo(lease, frame)
+    }
+  }
+
+  /** An unresolved root's owner is now known: it moves to that owner (or its held family). */
+  ownerFound(threadId: string, parent: string): void {
+    const owner = this.owners.get(parent)
+    if (owner?.routable) {
+      this.claim(threadId, owner)
+    } else {
+      this.recovery?.join(threadId, parent)
+    }
+  }
+
+  /** The first seq a chat hasn't taken that this router holds (unclaimed, or unanswered). */
+  floor(): number | null {
+    let floor = this.unrouted.floor()
+    for (const seq of [this.recovery?.floor() ?? null, ...this.unanswered.values()]) {
+      if (seq !== null && (floor === null || seq < floor)) {
+        floor = seq
+      }
+    }
+    return floor
+  }
+
+  /** A chat answered (or refused) a request it was handed. */
+  answered(id: number | string): void {
+    this.unanswered.delete(id)
+  }
+
+  private deliverTo(lease: CodexSharedServerLease, frame: CodexSharedServerFrame): void {
+    if (frame.kind === 'request' && typeof frame.seq === 'number') {
+      this.unanswered.set(frame.request.id, frame.seq)
+    }
+    lease.deliver(frame)
   }
 
   /** Drops one thread this chat claimed but no longer wants (a resume its caller gave up on). */
@@ -130,6 +195,23 @@ export class CodexSharedServerRouter {
     return threads
   }
 
+  /** A restored chat gave its threads back unopened: they stop routing to it, retiring nothing. */
+  handBack(lease: CodexSharedServerLease): string[] {
+    const threads = [...lease.threads]
+    for (const threadId of threads) {
+      if (this.owners.get(threadId) === lease) {
+        this.owners.delete(threadId)
+      }
+    }
+    lease.threads.clear()
+    return threads
+  }
+
+  /** Frames held for these threads while no chat owned them. */
+  takeUnrouted(threads: readonly string[]): CodexSharedServerFrame[] {
+    return threads.flatMap((threadId) => this.unrouted.take(threadId))
+  }
+
   retire(threadId: string): void {
     this.retired.add(threadId)
     if (this.retired.size > MAX_RETIRED_THREADS) {
@@ -142,7 +224,7 @@ export class CodexSharedServerRouter {
 
   onNotification(method: string, params: unknown): void {
     this.discover(method, params)
-    this.route({ kind: 'notification', method, params })
+    this.route({ kind: 'notification', method, params, seq: this.seq() })
   }
 
   /** Helper threads this frame hands to its parent's chat. */
@@ -154,17 +236,22 @@ export class CodexSharedServerRouter {
       const owner = parent ? this.owners.get(parent) : undefined
       if (threadId && owner?.routable && this.owners.get(threadId) !== owner) {
         this.claim(threadId, owner)
+      } else if (threadId && parent && !owner) {
+        // Under a held parent (an expected chat's, or an unresolved root) it joins that family.
+        this.recovery?.join(threadId, parent)
       }
     }
   }
 
   onServerRequest(request: CodexAppServerServerRequest): void {
-    this.route({ kind: 'request', request })
+    this.route({ kind: 'request', request, seq: this.seq() })
   }
 
   clear(): void {
     this.unrouted.clear()
     this.owners.clear()
+    this.unanswered.clear()
+    this.recovery?.clear()
   }
 
   /** A parent's item naming a helper hands that helper to the parent's chat. */
@@ -174,6 +261,12 @@ export class CodexSharedServerRouter {
     }
     const parent = codexFrameThreadId(params)
     const owner = parent ? this.owners.get(parent) : undefined
+    if (parent && !owner && this.recovery?.holds(parent)) {
+      for (const child of codexChildThreadIdsInItem(field(params, 'item'))) {
+        this.recovery.join(child, parent)
+      }
+      return
+    }
     if (!owner?.routable) {
       return
     }
@@ -190,10 +283,14 @@ export class CodexSharedServerRouter {
       this.routeServerWide(frame)
       return
     }
+    frame.threadId = threadId
     const owner = this.owners.get(threadId)
     if (owner) {
       owner.liveThreads.add(threadId)
-      owner.deliver(frame)
+      this.deliverTo(owner, frame)
+      return
+    }
+    if (this.recovery?.hold(threadId, frame)) {
       return
     }
     if (this.retired.has(threadId)) {
@@ -206,12 +303,16 @@ export class CodexSharedServerRouter {
   /** A frame no handler could read goes only to the chat that owns the thread it names, in order
    *  behind that chat's queue: raw content never reaches another chat. False when no chat took it. */
   onUnhandledFrame(frameKind: string, payload: unknown): boolean {
-    const frame: CodexSharedServerFrame = { kind: 'unhandled', frameKind, payload }
+    const frame: CodexSharedServerFrame = { kind: 'unhandled', frameKind, payload, seq: this.seq() }
     const threadId = codexFrameThreadId(codexSharedFrameParams(frame))
+    frame.threadId = threadId
     const owner = threadId === null ? undefined : this.owners.get(threadId)
     owner?.liveThreads.add(threadId!)
     owner?.deliver(frame)
-    return owner !== undefined
+    // A held chat's raw frame waits with the rest of its thread's.
+    return (
+      owner !== undefined || (threadId !== null && this.recovery?.hold(threadId, frame) === true)
+    )
   }
 
   /** Account and rate-limit frames: each chat would have had its own copy from its own server. */
@@ -224,7 +325,7 @@ export class CodexSharedServerRouter {
         : []
       const first = open.find((lease) => lease.reading) ?? open[0]
       if (first) {
-        first.deliver(frame)
+        this.deliverTo(first, frame)
       } else {
         this.refuse(frame)
       }

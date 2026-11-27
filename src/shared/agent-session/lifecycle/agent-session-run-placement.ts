@@ -25,12 +25,14 @@ export type AgentSessionRunPlacement =
       daemon: AgentSessionRunDaemon
       /** The run's agent process, kept here because owner release clears the lease's copy. */
       agent: AgentSessionProcessIdentity
+      /** A pooled run's own commands on its shared agent (its lease id), so a later app cleans them. */
+      workload?: string
     }
 
 /** What a launch knows before the process commit adds the fence and the agent's identity. */
 export type AgentSessionRunPlacementLaunch =
   | { kind: 'direct' }
-  | { kind: 'relayed'; relayId: string; daemon: AgentSessionRunDaemon }
+  | { kind: 'relayed'; relayId: string; daemon: AgentSessionRunDaemon; workload?: string }
 
 const positiveInt = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value > 0
@@ -80,7 +82,8 @@ export function agentSessionRunPlacement(record: {
         kind: 'relayed',
         relayId: placement.relayId,
         daemon: placement.daemon,
-        agent: placement.agent
+        agent: placement.agent,
+        ...(shortString(placement.workload) ? { workload: placement.workload } : {})
       }
     : null
 }

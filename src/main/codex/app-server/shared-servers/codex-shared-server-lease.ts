@@ -7,53 +7,20 @@ import type {
 } from '../codex-app-server-connection-types'
 import type { CodexSharedServerFrame } from './codex-shared-server-frames'
 import { CodexSharedLeaseQueue } from './codex-shared-lease-queue'
-import type { CodexSharedServerRouter } from './codex-shared-server-router'
 import { sendCodexLeaseRequest } from './codex-shared-server-lease-requests'
+import {
+  dispatchCodexLeaseFrame,
+  endCodexLeaseQuietly,
+  codexSharedLeaseRelayView,
+  registerCodexSharedLeaseChat,
+  type CodexLeaseRelease,
+  type CodexRestoredLease,
+  type CodexSharedLeaseHost
+} from './codex-shared-lease-host'
 
 /** A paused chat holds its own frames; past this it is dropped instead of stalling the server.
  *  Bytes are bounded per server (codex-shared-server-backlog.ts). */
 export const CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES = 20_000
-
-/** A release's outcome: whether the chat's turns are proven over (else it stays on the server for
- *  a retry), and whether its commands are proven gone. */
-export type CodexLeaseRelease = { writerStopped: boolean; workloadGone: boolean }
-
-/** What a lease needs from the server it rides on. */
-export type CodexSharedLeaseHost = {
-  readonly pid: number | undefined
-  readonly closed: boolean
-  readonly connection: CodexAppServerConnection
-  claim: (
-    threadId: string,
-    lease: CodexSharedServerLease,
-    opened?: boolean,
-    history?: boolean
-  ) => void
-  /** This chat's queue grew or shrank by these bytes, or it may have started waiting (0). */
-  backlog: (lease: CodexSharedServerLease, deltaBytes: number) => void
-  /** Answers a server request no chat will take, so Codex doesn't wait on it. */
-  refuse: (frame: CodexSharedServerFrame) => void
-  /** Whether any of these threads has a turn running. */
-  hasRunningTurn: (threads: Iterable<string>) => boolean
-  /** A thread open or turn start settled, so a wait on them can re-check. */
-  turnsChanged: () => void
-  /** Settles once a retried release could prove more: a turn ended, another chat left, or the
-   *  server exited. */
-  releaseMayProve: (lease: CodexSharedServerLease) => Promise<unknown>
-  readonly router: Pick<CodexSharedServerRouter, 'heldByOther' | 'unclaim' | 'openSettled'>
-  /** A thread that opened after its chat left: nobody will use it, so the server lets it go.
-   *  Resolves whether Codex confirmed it. */
-  abandon: (threadId: string, lease: CodexSharedServerLease) => Promise<boolean>
-  /** Settles once no chat leaving the server is still cleaning up this thread. */
-  threadReleased: (threadId: string) => Promise<void>
-  /** Records a turn/start in flight, so a release that races it still interrupts its turn. */
-  trackTurnStart: (threadId: string, request: Promise<unknown>) => void
-  noteTurnStarted: (threadId: string, turnId: string) => void
-  release: (lease: CodexSharedServerLease) => Promise<CodexLeaseRelease>
-  /** After the server exited: whether its commands were proven gone, once reaped. */
-  workloadVerdict: () => DescendantTreeVerdict
-  afterReap: () => Promise<void>
-}
 
 /** One chat's view of a shared app-server: its threads' frames, its own backpressure and close. */
 export class CodexSharedServerLease implements CodexAppServerConnection {
@@ -61,8 +28,9 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   /** Threads this server has loaded (opened, or sent a frame for); a helper named only in history
    *  never ran here, so a close sends it nothing. */
   readonly liveThreads = new Set<string>()
-  /** Tags every command this chat's threads run (CODEX_SHARED_LEASE_ENV). */
-  readonly id = randomUUID()
+  /** Tags every command this chat's threads run (CODEX_SHARED_LEASE_ENV); a restored lease keeps
+   *  its run's, so Stop after a restart finds commands started before it. */
+  readonly id: string
   /** thread/start, /resume and /fork still awaiting Codex; close waits for them. */
   readonly pendingOpens = new Set<Promise<unknown>>()
   readonly resumedThreads = new Set<string>()
@@ -76,11 +44,18 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   readonly abandoning = new Set<Promise<boolean>>()
   private workload: (() => DescendantTreeVerdict) | null = null
   private state: 'open' | 'closing' | 'ended' = 'open'
+  /** A restored lease's output waits until the chat has read its kept state. */
+  holding: boolean
+  /** Frames were dropped while its threads waited for it: it catches up from history instead. */
+  recoveryCut = false
+  /** Quit handed its part to the daemon (durable already): it dispatches nothing more. */
+  handedOff = false
+  readonly unregister: () => void
   private closing: Promise<boolean> | null = null
   private closeAnnounced = false
   private paused = false
-  private readonly queue = new CodexSharedLeaseQueue({
-    canDispatch: () => !this.paused && this.state !== 'ended',
+  readonly queue = new CodexSharedLeaseQueue({
+    canDispatch: () => !this.paused && !this.holding && !this.handedOff && this.state !== 'ended',
     dispatch: (frame) => this.dispatch(frame),
     backlog: (deltaBytes) => this.host.backlog(this, deltaBytes),
     refuse: (frame) => this.host.refuse(frame)
@@ -95,8 +70,29 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     private readonly handlers: CodexAppServerConnectionHandlers,
     readonly sessionId: string | null,
     /** Set on every thread this chat opens, so its commands keep the chat's identity. */
-    readonly chatEnv: Readonly<Record<string, string>> = {}
-  ) {}
+    readonly chatEnv: Readonly<Record<string, string>> = {},
+    readonly restored: CodexRestoredLease | null = null,
+    /** Its run may outlive this app (false: a bot chat whose grants end with it). */
+    readonly keepable = true
+  ) {
+    this.id = restored?.workload ?? randomUUID()
+    this.holding = restored !== null
+    this.unregister = registerCodexSharedLeaseChat(this, () => this.state !== 'ended')
+  }
+
+  /** What the chat sees of the daemon running its server; absent when its run ends with this app. */
+  get relay(): CodexAppServerConnection['relay'] {
+    return codexSharedLeaseRelayView(this, this.restored !== null && !this.recoveryCut)
+  }
+
+  /** A restored chat's open failed: its threads and the frames it hasn't seen go back to wait. */
+  handBack(): void {
+    if (this.state !== 'ended' && this.restored) {
+      this.state = 'ended'
+      this.workload = () => 'exited'
+      endCodexLeaseQuietly(this)
+    }
+  }
 
   get pid(): number | undefined {
     return this.host.pid
@@ -143,7 +139,9 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   claim = (threadId: string, opened?: boolean, history?: boolean): void =>
     this.host.claim(threadId, this, opened, history)
   heldByOther = (threadId: string): boolean => this.host.router.heldByOther(threadId, this)
-  unclaim = (threadId: string): void => this.host.router.unclaim(threadId, this)
+  /** A restored chat keeps its threads through a failed resume; its hand-back returns them. */
+  unclaim = (threadId: string): void =>
+    void (this.holding || this.host.router.unclaim(threadId, this))
 
   abandon(threadId: string): void {
     void this.host.abandon(threadId, this)
@@ -159,12 +157,14 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   respond(id: number | string, result: unknown): void {
     if (this.state === 'open') {
       this.host.connection.respond(id, result)
+      this.host.answered(id)
     }
   }
 
   respondWithError(id: number | string, code: number, message: string): void {
     if (this.state === 'open') {
       this.host.connection.respondWithError(id, code, message)
+      this.host.answered(id)
     }
   }
 
@@ -180,13 +180,15 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   }
 
   get reading(): boolean {
-    return !this.paused && !this.shedding && this.state !== 'ended'
+    return !this.paused && !this.holding && !this.shedding && this.state !== 'ended'
   }
 
   /** Reading and owed frames: a paused shared reader would stall this chat. */
   get waiting(): boolean {
     return (
       this.releasing ||
+      // A restored chat reading its kept state waits on replies while its frames are held.
+      (this.holding && this.state === 'open' && this.outstanding.size > 0) ||
       (this.state === 'open' &&
         !this.paused &&
         // One still catching up on its own queue waits on itself, not on the others.
@@ -208,7 +210,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     if (this.state === 'ended' || this.shedding) {
       return
     }
-    if (this.paused || this.queue.pending > 0) {
+    if (this.paused || this.holding || this.handedOff || this.queue.pending > 0) {
       if (this.queue.push(frame) > CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES) {
         this.shed()
       }
@@ -219,6 +221,11 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
 
   /** Too far behind: drops its queue and ends it alone; it reopens its thread on its next send. */
   shed(): void {
+    if (this.holding && this.restored) {
+      // Still reading its kept state: its frames go back to wait (bounded there, with a cut).
+      this.handBack()
+      return
+    }
     this.shedding = true
     this.queue.drop()
     this.fail(new Error('codex chat fell too far behind its shared app-server'), true)
@@ -230,22 +237,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
       this.host.refuse(frame)
       return
     }
-    this.guarded(() =>
-      frame.kind === 'request'
-        ? this.handlers.onServerRequest?.(frame.request)
-        : frame.kind === 'unhandled'
-          ? this.handlers.onUnhandledFrame?.(frame.frameKind, frame.payload)
-          : this.handlers.onNotification?.(frame.method, frame.params)
-    )
-  }
-
-  private guarded(handle: () => void): void {
-    try {
-      handle()
-    } catch (error) {
-      // One chat's handler failing must not reach the shared reader and end every chat.
-      this.fail(error instanceof Error ? error : new Error(String(error)), true)
-    }
+    dispatchCodexLeaseFrame(this.handlers, frame, (error) => this.fail(error, true))
   }
 
   /** The server is up and this chat may use it; a rejection from onSpawned ends the lease. */
@@ -257,6 +249,11 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   }
 
   close(): Promise<boolean> {
+    if (this.handedOff || (this.holding && this.restored)) {
+      // Quit's part, or a restored chat whose open never finished: nothing of its run is stopped.
+      this.handBack()
+      return Promise.resolve(true)
+    }
     if (this.state === 'ended') {
       // A lease its server's exit ended reports once that server's tree is judged.
       return this.host.afterReap().then(() => true)
@@ -356,6 +353,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
       return
     }
     this.state = 'ended'
+    this.unregister()
     this.queue.drop()
     this.workload = typeof workload === 'function' ? workload : () => workload
     for (const giveUp of this.outstanding) {

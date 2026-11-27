@@ -21,6 +21,7 @@ import {
   createStructuredAgentSessionOwnerProbes
 } from '../ownership/structured-agent-session-owner-probe'
 import { installProviderRelayDurability } from '../../../provider-relay/app-provider-relays'
+import { installProviderRelayRecords } from '../../../provider-relay/provider-relay-placed-records'
 import type { StructuredAgentAdapterContext } from './structured-agent-runtime-registration-types'
 import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from './structured-agent-runtime-registrations'
 import { createStructuredAgentSessionLifecycleDelivery } from '../lifecycle/structured-agent-session-lifecycle-delivery'
@@ -115,6 +116,8 @@ export async function installOnJournal(
   installProviderRelayDurability((sessionId, force) =>
     force ? host.flushStreamedEvents(sessionId) : host.flushStreamedEvents(sessionId, true)
   )
+  // A kept shared agent reads which chats' runs it still carries.
+  installProviderRelayRecords({ get: store.getRecord, list: store.listRecords })
   if (deps.attentionDelivery) {
     const installed = host
     const delivery = deps.attentionDelivery

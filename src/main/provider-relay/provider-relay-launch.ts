@@ -1,5 +1,6 @@
 import type { ProviderRelayKeepSpec } from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
+import type { KeptProviderRelay } from './provider-relay-launch-inventory'
 
 /** How a chat asks the daemon for its agent: a reattach of the kept one, or a new start. */
 export type ProviderRelayLaunch = {
@@ -13,4 +14,8 @@ export type ProviderRelayLaunch = {
   only?: 'spawn' | 'reattach'
   /** Session state the daemon keeps for the next attach; only a daemon that can keep it relays. */
   keep?: ProviderRelayKeepSpec
+  /** An agent serving several chats: acks wait on all of theirs, not on one chat's journal. */
+  durable?: (force: boolean) => Promise<boolean>
+  /** A shared agent kept from the last run: attached as is, with no chat's run gate (its chats own theirs). */
+  attach?: KeptProviderRelay
 }
