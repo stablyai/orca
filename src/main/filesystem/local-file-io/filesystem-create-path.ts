@@ -44,6 +44,9 @@ export async function createLocalFileFromSource(
   }
 }
 
+// What link() answers on a volume without hard links (EISDIR is Windows' ERROR_INVALID_FUNCTION).
+const NO_HARD_LINKS = new Set(['ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 'EPERM', 'EXDEV', 'EISDIR'])
+
 // A hard link is the one portable create that is atomic and fails on a taken name. A volume
 // without them (exFAT, some network shares) refuses: a check-then-rename could replace a file
 // another program creates in between.
@@ -51,7 +54,8 @@ async function publishNoClobber(tempPath: string, filePath: string): Promise<voi
   try {
     await link(tempPath, filePath)
   } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
+    const code = error instanceof Error && 'code' in error ? String(error.code) : ''
+    if (!NO_HARD_LINKS.has(code)) {
       throw error
     }
     throw new Error(
