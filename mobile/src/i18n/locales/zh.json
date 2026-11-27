@@ -8650,6 +8650,7 @@
     "agentFilesMessage": "Orca 会将你的 MCP 服务器保存在它们的设置文件中。你自己的条目保持不变",
     "allow": "允许",
     "removeTitle": "移除 {{name}}？",
+    "removeMessageSavedData": "使用它的会话可能立即失去访问权限。这可能会删除为它保存的请求头、环境变量或登录信息。如果是这样，你可能需要重新输入这些信息或重新登录才能恢复访问",
     "remove": "移除",
     "moveTitle": "将 {{name}} 移至 Orca？",
     "moveMessage": "Orca 会将它从 {{agents}} 的设置中移除，并保留备份",
