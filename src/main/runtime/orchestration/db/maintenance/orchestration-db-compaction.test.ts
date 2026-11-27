@@ -93,7 +93,7 @@ describe('OrchestrationDbCompaction', () => {
     expect(existsSync(`${file}-compacted`)).toBe(false)
   })
 
-  it('waits longer after each copy that went stale, and never gives up', async () => {
+  it('waits longer after each copy that went stale, and gives up after three', async () => {
     const hour = 60 * 60_000
     const now = Date.UTC(2026, 10, 20)
     vi.spyOn(Date, 'now').mockReturnValue(now)
@@ -112,8 +112,9 @@ describe('OrchestrationDbCompaction', () => {
 
     expect(await copiesAfter(`1 ${now - 0.5 * hour}`)).toBe(false)
     expect(await copiesAfter(`1 ${now - 1.5 * hour}`)).toBe(true)
-    expect(await copiesAfter(`3 ${now - 3 * hour}`)).toBe(false)
-    expect(await copiesAfter(`9 ${now - 25 * hour}`)).toBe(true)
+    expect(await copiesAfter(`2 ${now - 1.5 * hour}`)).toBe(false)
+    expect(await copiesAfter(`2 ${now - 2.5 * hour}`)).toBe(true)
+    expect(await copiesAfter(`3 ${now - 25 * hour}`)).toBe(false)
   })
 
   it('swaps in a copy after a burst left a drained WAL over 8 MiB', async () => {
