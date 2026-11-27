@@ -11,17 +11,22 @@ export function TerminalPaneMobileDriverPortals({
   controller
 }: {
   controller: TerminalPaneController
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const {
     activePane,
     chatLeafId,
     effectiveChatViewMode,
+    isActive,
+    isVisible,
     managedPanes,
     paneTransportsRef,
     restoreAllTerminalFits,
     restorePaneTerminalFit,
     searchOpen
   } = controller
+  if (!isActive && !isVisible) {
+    return null
+  }
   return (
     <>
       {managedPanes.map((pane) => {
