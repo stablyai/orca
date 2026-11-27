@@ -53,15 +53,17 @@ export const OPENS_EVERY_STRUCTURED_CHAT: StructuredChatOpener = () => true
 
 export function projectStructuredAiVaultSessions(
   result: AiVaultListResult,
-  opensChat: StructuredChatOpener
+  opensChat: StructuredChatOpener,
+  // Older clients size Show more by row count alone, so they keep a row per conversation.
+  listsChatOnce = true
 ): AiVaultListResult {
   const owner = historyRowOwnershipLookup()
   const deleted = historyRowOfDeletedChat()
   if (!owner) {
     return result
   }
-  const sessions = oneRowPerChat(
-    result.sessions.flatMap((session): HistoryRowWithOwner<(typeof result.sessions)[number]>[] => {
+  const rows = result.sessions.flatMap(
+    (session): HistoryRowWithOwner<(typeof result.sessions)[number]>[] => {
       const local = session.executionHostId === LOCAL_EXECUTION_HOST_ID
       if (local && deleted?.(session)) {
         return []
@@ -82,8 +84,9 @@ export function projectStructuredAiVaultSessions(
           : null)
       }
       return [{ row, ownership }]
-    })
+    }
   )
+  const sessions = listsChatOnce ? oneRowPerChat(rows) : rows.map(({ row }) => row)
   const hidden = result.sessions.length - sessions.length
   if (hidden === 0 && sessions.every((row, index) => row === result.sessions[index])) {
     return result

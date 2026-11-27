@@ -178,7 +178,7 @@ const TITLE_ONLY_UNAVAILABLE_REASONS = new Set<string>(['disabled', 'no-service'
 
 // A chat's other conversations can rank onto a later page; it stays listed once.
 function appendSearchPage(
-  shown: readonly AiVaultSearchHit[],
+  shown: AiVaultSearchHit[],
   page: readonly AiVaultSearchHit[]
 ): AiVaultSearchHit[] {
   const chatKey = (hit: AiVaultSearchHit) =>
@@ -186,13 +186,12 @@ function appendSearchPage(
       ? `${hit.executionHostId ?? ''}\0${hit.structuredSession.sessionId}`
       : null
   const chats = new Set(shown.map(chatKey))
-  return [
-    ...shown,
-    ...page.filter((hit) => {
-      const key = chatKey(hit)
-      return key === null || !chats.has(key)
-    })
-  ]
+  const added = page.filter((hit) => {
+    const key = chatKey(hit)
+    return key === null || !chats.has(key)
+  })
+  // A page of only already-listed chats leaves the list, and everything derived from it, unchanged.
+  return added.length === 0 ? shown : [...shown, ...added]
 }
 
 // All-host hits name their host; single-host responses belong to the addressed host.
