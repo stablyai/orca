@@ -162,7 +162,12 @@ describe('relayed provider child', () => {
         return {}
       }
     })
-    const child = new RelayedProviderChild({ channel: relay.channel, relayId: 'r', pid: 42, policy })
+    const child = new RelayedProviderChild({
+      channel: relay.channel,
+      relayId: 'r',
+      pid: 42,
+      policy
+    })
     await child.start(0)
     child.releaseOutput()
     relay.sink().disconnected()

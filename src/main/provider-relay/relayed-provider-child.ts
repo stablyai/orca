@@ -7,9 +7,8 @@ import type {
   ProviderRelayDetachPolicy,
   ProviderRelayExit
 } from '../daemon/protocol/daemon-provider-relay-protocol'
-import { RELAY_WRITE_CHUNK_CHARS } from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayChannel } from './provider-relay-channel'
-import { sendRelayedInput, type RelayState } from './relayed-provider-input'
+import { sendRelayedChunks, sendRelayedInput, type RelayState } from './relayed-provider-input'
 import { RelayedProviderOutput, type ProviderRelayAckFloor } from './relayed-provider-output'
 import type { ProviderRelayRecordTaking } from './relayed-provider-consumption'
 import {
@@ -241,15 +240,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
   }
 
   private input(chunks: unknown[], callback: (error?: Error | null) => void): void {
-    const data = chunks
-      .map((chunk) => (Buffer.isBuffer(chunk) ? chunk.toString() : String(chunk)))
-      .join('')
-    // The daemon joins a surrogate pair split between writes, so a plain slice is safe.
-    const sent = this.writing.then(async () => {
-      for (let at = 0; at < data.length; at += RELAY_WRITE_CHUNK_CHARS) {
-        await this.send(data.slice(at, at + RELAY_WRITE_CHUNK_CHARS))
-      }
-    })
+    const sent = sendRelayedChunks(chunks, this.writing, (slice) => this.send(slice))
     this.writing = sent.then(
       () => {},
       () => {}

@@ -1,3 +1,5 @@
+import { RELAY_WRITE_CHUNK_CHARS } from '../daemon/protocol/daemon-provider-relay-protocol'
+
 export type RelayState = 'attaching' | 'attached' | 'reattaching' | 'detached' | 'exited'
 
 /** The daemon's refusal of input past its queue cap. */
@@ -55,4 +57,21 @@ export async function sendRelayedInput(target: RelayedInputTarget, data: string)
       throw error
     }
   }
+}
+
+/** A write's stdin chunks, read now and sent after `after` in the daemon's slices (it joins a
+ *  surrogate pair split between them). */
+export function sendRelayedChunks(
+  chunks: unknown[],
+  after: Promise<void>,
+  send: (slice: string) => Promise<void>
+): Promise<void> {
+  const data = chunks
+    .map((chunk) => (Buffer.isBuffer(chunk) ? chunk.toString() : String(chunk)))
+    .join('')
+  return after.then(async () => {
+    for (let at = 0; at < data.length; at += RELAY_WRITE_CHUNK_CHARS) {
+      await send(data.slice(at, at + RELAY_WRITE_CHUNK_CHARS))
+    }
+  })
 }
