@@ -13798,7 +13798,12 @@
             "rollbackStopIncomplete": "未完成：Orca 無法確認目前的伺服器已結束，因此沒有回復舊版。請先檢查主機上 ~/.orca-remote 中伺服器安裝資料夾內的 orcad.log，再重試。",
             "failed": "Orca 無法在伺服器上完成此操作。請重試。",
             "defaultServer": "未完成：此伺服器是新專案的預設主機。停止前，請先在「新專案開啟位置」選擇其他主機。",
-            "wslMoveRunning": "未完成：有專案正在移至此伺服器。移動完成後，Orca 會更新它。"
+            "wslMoveRunning": "未完成：有專案正在移至此伺服器。移動完成後，Orca 會更新它。",
+            "recoveryRequired": "未完成：中斷的更新或停止作業正佔用此主機。如果 Orca 提供「恢復」或「取消停止」，請使用後再重試。",
+            "snapshotSpace": "未完成：此主機沒有足夠空間存放 Orca 在更新前建立的副本。請釋放主機空間後重試。",
+            "policyRefused": "未完成：Orca 不會在此主機上啟用此建置版本。請檢查主機後再次更新；如果上次執行它的是較新版本的 Orca，請先更新 Orca。",
+            "hostNewer": "未完成：上次執行此主機伺服器的是較新版本的 Orca。請更新 Orca 後重試。",
+            "preflightFailed": "未完成：新的 Orca 伺服器未通過此主機上的啟動檢查，因此 Orca 沒有變更此主機。"
           },
           "reassurance": "在各臺主機上執行，並透過自己的 SSH 連線存取。程式碼與檔案會留在原處，只有 Orca 的專案、分頁與終端機清單會遷移至主機。"
         },

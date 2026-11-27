@@ -13953,7 +13953,12 @@
             "rollbackStopIncomplete": "Nicht abgeschlossen: Orca konnte nicht bestätigen, dass der aktuelle Server beendet wurde, und hat daher nicht zurückgesetzt. Vor einem erneuten Versuch orcad.log im Installationsordner des Servers unter ~/.orca-remote auf dem Host prüfen.",
             "failed": "Orca konnte diesen Vorgang auf dem Server nicht abschließen. Erneut versuchen.",
             "defaultServer": "Nicht abgeschlossen: Dieser Server ist der Standard-Host für neue Projekte. Vor dem Stoppen unter „Neue Projekte öffnen auf“ einen anderen Host auswählen.",
-            "wslMoveRunning": "Nicht abgeschlossen: Ein Projekt wird auf diesen Server verschoben. Orca aktualisiert ihn, sobald der Vorgang abgeschlossen ist."
+            "wslMoveRunning": "Nicht abgeschlossen: Ein Projekt wird auf diesen Server verschoben. Orca aktualisiert ihn, sobald der Vorgang abgeschlossen ist.",
+            "recoveryRequired": "Nicht abgeschlossen: Ein unterbrochenes Update oder ein unterbrochener Stopp blockiert diesen Host. „Wiederherstellen“ oder „Stoppen abbrechen“ verwenden, falls Orca dies anbietet, und dann erneut versuchen.",
+            "snapshotSpace": "Nicht abgeschlossen: Auf diesem Host ist kein Platz für die Kopie, die Orca vor dem Update anlegt. Speicherplatz auf dem Host freigeben und dann erneut versuchen.",
+            "policyRefused": "Nicht abgeschlossen: Orca aktiviert diesen Build auf diesem Host nicht. Den Host prüfen und erneut aktualisieren oder zuerst Orca aktualisieren, falls zuletzt eine neuere Orca-Version ihn ausgeführt hat.",
+            "hostNewer": "Nicht abgeschlossen: Der Server dieses Hosts wurde zuletzt von einer neueren Orca-Version ausgeführt. Orca aktualisieren und dann erneut versuchen.",
+            "preflightFailed": "Nicht abgeschlossen: Der neue Orca-Server hat seine Startprüfung auf diesem Host nicht bestanden. Orca hat den Host daher unverändert gelassen."
           },
           "reassurance": "Läuft auf jedem Host, erreichbar über die eigene SSH-Verbindung. Code und Dateien bleiben an ihrem Ort. Nur die Liste der Projekte, Tabs und Terminals von Orca wird auf den Host verschoben."
         },

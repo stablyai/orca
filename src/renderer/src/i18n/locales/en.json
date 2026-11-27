@@ -14292,7 +14292,12 @@
             "rollbackStopIncomplete": "Not done: Orca couldn’t confirm the current server exited, so it did not roll back. Check orcad.log in the server’s install folder under ~/.orca-remote on the host before trying again.",
             "failed": "Orca couldn’t finish this on the server. Try again.",
             "defaultServer": "Not done: this server is the default host for new projects. Choose another one under New projects open on before stopping it.",
-            "wslMoveRunning": "Not done: a project is moving onto this server. Orca updates it once the move finishes."
+            "wslMoveRunning": "Not done: a project is moving onto this server. Orca updates it once the move finishes.",
+            "recoveryRequired": "Not done: an interrupted update or stop holds this host. Use Recover or Cancel stop if Orca offers it, then try again.",
+            "snapshotSpace": "Not done: this host has no room for the copy Orca takes before updating. Free space on the host, then try again.",
+            "policyRefused": "Not done: Orca won’t activate this build on this host. Check the host and update again, or update Orca first if a newer Orca last ran it.",
+            "hostNewer": "Not done: a newer Orca last ran this host’s server. Update Orca, then try again.",
+            "preflightFailed": "Not done: the new Orca server failed its startup check on this host, so Orca left the host as it was."
           },
           "reassurance": "Runs on each host, reached over your own SSH connection. Your code and files stay where they are. Only Orca’s list of projects, tabs and terminals moves to the host."
         },
