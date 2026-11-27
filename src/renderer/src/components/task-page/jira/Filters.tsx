@@ -87,7 +87,7 @@ export function TaskPageJiraFilters({
           onChange={model.setJiraProjectFilter}
           label={t('components.jiraProjectPicker.label', 'Jira project')}
           emptyLabel={t('components.jiraProjectPicker.all', 'All Jira projects')}
-          triggerClassName="h-7 min-w-0 max-w-52"
+          triggerClassName="h-7 min-w-0 max-w-52 shrink"
           disabled={jiraProjectsLoading || jiraHasWorkspace}
         />
       }

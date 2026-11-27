@@ -113,7 +113,7 @@ export function TaskPageSourceBar({
       {taskSource === 'linear' && linearConnected ? (
         <div className="flex min-w-0 items-center gap-1.5" title={taskSourceContextSummary.title}>
           <LinearScopeSelector
-            className="h-7 min-w-0"
+            className="h-7 min-w-0 shrink"
             workspaces={linearWorkspaces}
             selectedWorkspaceId={selectedLinearWorkspaceId}
             teams={linearTeamOptions}
