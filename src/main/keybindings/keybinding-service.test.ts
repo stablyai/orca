@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getUnavailableKeybindingActionIds } from '../../shared/keybindings/keybinding-feature-gates'
+import { getUnavailableKeybindingActionIds } from './keybinding-feature-gates'
 import { resolveWindowShortcutAction } from '../../shared/keybindings/window-shortcut-policy'
 import { KeybindingService } from './keybinding-service'
 
@@ -35,5 +35,10 @@ describe('KeybindingService dispatch overrides', () => {
     dashboardEnabled = false
     expect(resolveWindowShortcutAction(chord, 'darwin', service.getOverrides())).toBeNull()
     expect(service.getSnapshot().overrides['dashboard.toggle']).toEqual(['Mod+Alt+Shift+J'])
+
+    dashboardEnabled = true
+    expect(resolveWindowShortcutAction(chord, 'darwin', service.getOverrides())).toEqual({
+      type: 'toggleAgentDashboard'
+    })
   })
 })

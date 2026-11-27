@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../settings/global-settings-types'
-import type { KeybindingActionId } from './types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
+import type { KeybindingActionId } from '../../shared/keybindings/types'
 
 const NO_UNAVAILABLE_ACTIONS: readonly KeybindingActionId[] = []
 const AGENT_DASHBOARD_OFF: readonly KeybindingActionId[] = ['dashboard.toggle']

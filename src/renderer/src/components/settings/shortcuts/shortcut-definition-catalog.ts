@@ -14,8 +14,6 @@ import {
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { buildPluginCommandKeybindingDefinitions } from '@/lib/plugins/commands/plugin-command-keybindings'
-import { getUnavailableKeybindingActionIds } from '../../../../../shared/keybindings/keybinding-feature-gates'
-import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { disabledAgentTabActionIds, groupDefinitions, type ShortcutGroup } from './shortcut-groups'
@@ -31,7 +29,6 @@ export type ShortcutDefinitionCatalog = {
 export function buildShortcutDefinitionCatalog(
   options: {
     disabledTuiAgents: readonly TuiAgent[]
-    settings: Pick<GlobalSettings, 'experimentalAgentDashboardPopout'> | null
     pluginCommands: readonly ActivePluginCommand[]
     keybindings: KeybindingOverrides
     platform: NodeJS.Platform
@@ -44,11 +41,7 @@ export function buildShortcutDefinitionCatalog(
   const groups = groupDefinitions(options.disabledTuiAgents, pluginDefinitions)
   const definitions = groups.flatMap((group) => group.items)
   const definitionsByAction = new Map(definitions.map((definition) => [definition.id, definition]))
-  // Switched-off features' chords no longer claim keys, so they must not block reuse either.
-  const ignoredConflictActionIds = [
-    ...disabledAgentTabActionIds(options.disabledTuiAgents),
-    ...getUnavailableKeybindingActionIds(options.settings)
-  ]
+  const ignoredConflictActionIds = disabledAgentTabActionIds(options.disabledTuiAgents)
   const conflictByAction = new Map<KeybindingActionId, string[]>()
   const conflicts = findKeybindingConflictsForDefinitions(
     definitions,

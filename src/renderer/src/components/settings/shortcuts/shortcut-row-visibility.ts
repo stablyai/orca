@@ -46,8 +46,12 @@ export function buildShortcutRowVisibility(
           (options.managedBrowserCreationEnabled ||
             (item.id !== 'tab.newBrowser' && item.id !== 'tab.newBrowserSplitRight')) &&
           (options.mobileEmulatorCreationEnabled || item.id !== 'tab.newSimulator') &&
-          // Binding an experimental action while disabled would silently do nothing.
-          (options.agentDashboardEnabled || item.id !== 'dashboard.toggle')
+          // Binding an experimental action while disabled would silently do nothing; a saved
+          // chord still reserves its keys, so keep that row to let the user clear it.
+          (options.agentDashboardEnabled ||
+            item.id !== 'dashboard.toggle' ||
+            getEffectiveKeybindingsForDefinition(item, options.platform, options.keybindings)
+              .length > 0)
       )
       .map((item) => {
         const effective = getEffectiveKeybindingsForDefinition(
