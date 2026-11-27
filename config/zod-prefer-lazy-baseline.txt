@@ -173,7 +173,6 @@
 7 src/shared/automations/automation-run-message.ts
 8 src/shared/bot-tools.ts
 12 src/shared/bot-types.ts
-11 src/shared/bots/bot-activity-schema.ts
 1 src/shared/bots/bot-agent-setup.ts
 1 src/shared/bots/bot-avatar-color.ts
 1 src/shared/bots/bot-avatar-outfit.ts
@@ -222,7 +221,7 @@
 2 src/shared/connector-review-contract.ts
 3 src/shared/connector-trigger-event-contract.ts
 8 src/shared/connector-webhook-contract.ts
-11 src/shared/connector-webhook-routes.ts
+2 src/shared/connector-webhook-routes.ts
 1 src/shared/connector-work-link-contract.ts
 17 src/shared/connectors/connector-cloud-contract.ts
 1 src/shared/connectors/connector-failure-contract.ts
@@ -240,8 +239,6 @@
 8 src/shared/mobile-web-bundle/manifest-contract.ts
 2 src/shared/orcad-migration/orcad-migration-terminal-restore-hints.ts
 4 src/shared/orchestration/approvals/worker-approval-payload.ts
-15 src/shared/orchestration/dock/worker-dock.ts
-9 src/shared/orchestration/orchestration-crew.ts
 4 src/shared/orchestration/orchestration-removed-work.ts
 4 src/shared/orchestration/remote-owned-wire.ts
 1 src/shared/plugins/approval/plugin-consent-request.ts
@@ -249,7 +246,7 @@
 8 src/shared/plugins/artifacts/plugin-theme-background.ts
 1 src/shared/plugins/capabilities/plugin-capabilities.ts
 1 src/shared/plugins/catalog/plugin-catalog-release.ts
-12 src/shared/plugins/catalog/plugin-detail-fields.ts
+11 src/shared/plugins/catalog/plugin-detail-fields.ts
 17 src/shared/plugins/catalog/plugin-marketplace.ts
 2 src/shared/plugins/contributions/plugin-command-contribution.ts
 1 src/shared/plugins/contributions/plugin-contribution-summary.ts
@@ -311,19 +308,15 @@
 2 src/shared/rpc-contract/browser/browser-extras-params.ts
 1 src/shared/rpc-contract/browser/browser-observation-params.ts
 25 src/shared/rpc-contract/browser/browser-params.ts
-11 src/shared/rpc-contract/browser/browser-screencast-params.ts
 2 src/shared/rpc-contract/client-ui/client-settings-params.ts
 7 src/shared/rpc-contract/client-ui/client-ui-workspace-filter-fields-params.ts
 4 src/shared/rpc-contract/connectors/connector-params.ts
-24 src/shared/rpc-contract/filesystem/files-mutation-params.ts
-41 src/shared/rpc-contract/filesystem/files-params.ts
+2 src/shared/rpc-contract/filesystem/files-params.ts
 1 src/shared/rpc-contract/filesystem/files-staged-save-params.ts
 3 src/shared/rpc-contract/filesystem/files-terminal-artifact-params.ts
 1 src/shared/rpc-contract/github/github-account-binding-params.ts
 7 src/shared/rpc-contract/github/github-issue-params.ts
 3 src/shared/rpc-contract/github/github-project-params.ts
-18 src/shared/rpc-contract/github/github-pull-request-params.ts
-22 src/shared/rpc-contract/github/github-pull-request-update-params.ts
 7 src/shared/rpc-contract/github/github-repo-work-item-params.ts
 1 src/shared/rpc-contract/google-call-params.ts
 1 src/shared/rpc-contract/google-files-params.ts
@@ -365,7 +358,6 @@
 5 src/shared/telemetry/schemas/telemetry-onboarding-foundation-schemas.ts
 4 src/shared/telemetry/schemas/telemetry-onboarding-language-schemas.ts
 2 src/shared/telemetry/schemas/telemetry-plugin-event-schemas.ts
-20 src/shared/telemetry/schemas/telemetry-property-schemas.ts
 3 src/shared/telemetry/schemas/telemetry-repository-event-schemas.ts
 3 src/shared/telemetry/schemas/telemetry-ssh-host-server-event-schemas.ts
 10 src/shared/telemetry/schemas/telemetry-workspace-create-schemas.ts
