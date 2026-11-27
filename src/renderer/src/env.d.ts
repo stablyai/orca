@@ -8,6 +8,8 @@ import type { TerminalWorktreeParkingDebugVerdict } from './components/terminal-
 import type { TerminalPtyPreSpawnE2EBarrier } from './components/terminal-pane/pty-transport/ipc/terminal-pty-pre-spawn-e2e-barrier'
 import type { LocalLayoutStreamE2EEnd } from './runtime/workspace-layout/testing/local-layout-stream-e2e-end'
 
+declare module 'monaco-editor/esm/nls.messages.*.js'
+
 declare module 'monaco-editor/esm/vs/basic-languages/python/python.js' {
   export const conf: languages.LanguageConfiguration
   export const language: languages.IMonarchLanguage
