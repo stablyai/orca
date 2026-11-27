@@ -3,7 +3,7 @@ import Foundation
 
 struct QuitChordSample {
   let keyDown: Bool
-  let commandDown: Bool
+  let modifierFlags: CGEventFlags
   let keyUpCount: UInt32
   let flagsCount: UInt32
   let now: UInt64
@@ -14,10 +14,14 @@ enum QuitChordDecision: String {
 }
 
 struct QuitChordWatch {
+  private static let shortcutModifiers: CGEventFlags = [.maskCommand, .maskShift, .maskControl, .maskAlternate]
   private var first: QuitChordSample?
 
   mutating func observe(_ sample: QuitChordSample) -> QuitChordDecision {
-    guard sample.keyDown, sample.commandDown else { return .released }
+    guard sample.keyDown,
+          sample.modifierFlags.intersection(Self.shortcutModifiers) == .maskCommand else {
+      return .released
+    }
     guard let first else {
       self.first = sample
       return .watching
@@ -37,8 +41,7 @@ func watchQuitChord(keyCode: UInt16) {
     let flags = CGEventSource.counterForEventType(.combinedSessionState, eventType: .flagsChanged)
     let sample = QuitChordSample(
       keyDown: CGEventSource.keyState(.combinedSessionState, key: keyCode),
-      commandDown: CGEventSource.keyState(.combinedSessionState, key: 55)
-        || CGEventSource.keyState(.combinedSessionState, key: 54),
+      modifierFlags: CGEventSource.flagsState(.combinedSessionState),
       keyUpCount: CGEventSource.counterForEventType(.combinedSessionState, eventType: .keyUp),
       flagsCount: CGEventSource.counterForEventType(.combinedSessionState, eventType: .flagsChanged),
       now: DispatchTime.now().uptimeNanoseconds
