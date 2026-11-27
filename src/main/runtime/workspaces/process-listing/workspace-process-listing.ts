@@ -264,7 +264,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
         hostId: LOCAL_EXECUTION_HOST_ID,
         claimKeyId: this.agentSessionClaimSigner.keyId,
         logger,
-        ...this.structuredWorkspaceHostDependencies(),
+        ...this.structuredAgentCatalogDependencies(),
         ...this.botStructuredSessionHostDeps(() => this.requireStore()),
         claudeCliFlags: claudeCliFlagSupport,
         usageLimitAutoContinue: this.usageLimitAutoContinueHostDeps(),

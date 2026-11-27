@@ -155,7 +155,9 @@ export async function executeWorktreeCreation(
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
 
   const windowStartup = windowStartupAfterCreate(creationId, preparedRequest, result)
-  const { backendSpawned, startup: startupOpt } = windowStartup
+  const backendSpawned =
+    result.startupTerminal?.spawned === true || windowStartup.startupDraftDeferred
+  const startupOpt = windowStartup.startup
 
   // Hand off only if still viewing creation/new workspace; preserve later navigation and toast instead (#9944).
   const shouldActivateOnCompletion = isCreatedWorkspaceInView(
@@ -212,7 +214,7 @@ export async function executeWorktreeCreation(
           console.error('worktree create: recovery seed failed', worktree.id, recoveryError)
         }
       }
-      if (!backendSpawned && !result.setup?.rendererOwnsGatedStartup) {
+      if (!backendSpawned) {
         try {
           ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
             startup: startupOpt,
@@ -255,7 +257,7 @@ export async function executeWorktreeCreation(
         console.error('worktree create: background terminal mount failed', worktree.id, error)
       }
     }
-    if (!structuredLaunch && !backendSpawned && !result.setup?.rendererOwnsGatedStartup) {
+    if (!structuredLaunch && !backendSpawned) {
       try {
         ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
           startup: startupOpt,
@@ -313,7 +315,6 @@ export async function executeWorktreeCreation(
     startupAgent: result.worktree.createdWithAgent ?? undefined,
     backendSpawned,
     startupDraftDeferred: windowStartup.startupDraftDeferred,
-    startupDraftReceipt: result.startupDraftReceipt,
     hostPlannedStartup: result.hostPlannedStartup === true,
     focusOnCompletion: shouldActivateOnCompletion
   })

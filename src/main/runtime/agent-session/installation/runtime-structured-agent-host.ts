@@ -65,15 +65,6 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
     }
   }
 
-  protected abstract clearRecoveredStartupDraft(worktreeId: string): void
-
-  protected structuredWorkspaceHostDependencies() {
-    return {
-      ...this.structuredAgentCatalogDependencies(),
-      onProviderStarted: (workspaceId: string) => this.clearRecoveredStartupDraft(workspaceId)
-    }
-  }
-
   async structuredAgentModelCatalog() {
     return (await ensureStructuredAgentModelCatalogOwner(this.structuredAgentCatalogDependencies()))
       .modelCatalog

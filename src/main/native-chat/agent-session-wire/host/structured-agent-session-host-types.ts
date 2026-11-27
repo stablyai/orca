@@ -238,7 +238,6 @@ export type StructuredAgentSessionHostDeps = {
     journal: AgentSessionJournal,
     rows: JournalWriterCommit | undefined
   ) => void
-  onProviderStarted?: (workspaceId: string) => void
   /** replay distinguishes restored/projected state from fresh journal events. */
   onSessionStatusChanged?: (
     summary: AgentSessionStatusSummary,

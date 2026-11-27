@@ -1,6 +1,3 @@
-import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
-
 export type RuntimeRendererGraphFailureReason =
   | 'renderer-frame-unavailable'
   | 'renderer-process-gone'
@@ -77,18 +74,5 @@ export function createRuntimeRendererNotificationSender(args: {
       closed = true
       available = false
     }
-  }
-}
-
-export function forwardRuntimeClientNotice(
-  send: (channel: string, payload: unknown) => boolean,
-  event: RuntimeClientEvent
-): void {
-  if (event.type === 'linearLinkedIssueUpdated') {
-    send('linear:linkedIssueUpdated', event)
-  } else if (ORCA_SIDEBAR_INPUTS_IS_MAIN && event.type === 'sidebarInputsChanged') {
-    send('runtime:sidebarInputsChanged', event)
-  } else if (event.type === 'worktreeStartupDraftsChanged') {
-    send('worktrees:startupDraftsChanged', event.drafts)
   }
 }

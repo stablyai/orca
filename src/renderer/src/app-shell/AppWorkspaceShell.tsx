@@ -14,7 +14,7 @@ import RightSidebar from '../components/right-sidebar/RightSidebar'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/trigger/FloatingTerminalToggleButton'
 import { TerminalWorkbenchContainer } from '../components/terminal/workbench/TerminalWorkbenchContainer'
-import { StartupDraftRecoveryPanel } from '../components/worktree-creation/StartupDraftRecoveryPanel'
+import { BlockedStartupDraftToast } from '../components/worktree-creation/BlockedStartupDraftToast'
 import type { VirtualizedScrollAnchor } from '../lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import { TitlebarLeftControls } from './chrome/TitlebarLeftControls'
 import { AppShellLeftColumn } from './chrome/AppShellLeftColumn'
@@ -153,7 +153,7 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
       <BotShareReceiveMount />
       <BotTemplatesMount />
       <HandToBotMount />
-      <StartupDraftRecoveryPanel visible={layout.terminalWorkbenchVisible} />
+      {layout.terminalWorkbenchVisible ? <BlockedStartupDraftToast /> : null}
       <Suspense fallback={null}>
         <GitHubInstallMount />
       </Suspense>

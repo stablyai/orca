@@ -101,9 +101,6 @@ export function ensureWorktreeHasInitialTerminal(
     sequencedStartup = {
       ...startup,
       command: sequenced.startupCommand,
-      ...(setup.rendererOwnsGatedStartup && startup.launchConfig?.commandProvenance === 'generated'
-        ? { freshAgentLaunch: undefined }
-        : {}),
       ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
     }
     wrappedSetupCommandStr = sequenced.setupCommand
@@ -117,10 +114,7 @@ export function ensureWorktreeHasInitialTerminal(
     opts?.executionHostId
   )
   // Explicit spawn evidence survives new-worktree ownership races; later activations also defer to host-owned terminal creation.
-  if (
-    backendStartupTerminalSpawned ||
-    (hostAuthority === 'live' && !setup?.rendererOwnsGatedStartup)
-  ) {
+  if (backendStartupTerminalSpawned || hostAuthority === 'live') {
     const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
     if (existingTerminalTabId && (setup || issueCommand)) {
       queueSetupAndIssueCommands(

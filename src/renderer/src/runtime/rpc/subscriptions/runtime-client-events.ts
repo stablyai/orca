@@ -1,5 +1,3 @@
-import { applyStartupDraftSnapshot } from '@/lib/workspace/creation/worktree-startup-draft-recovery'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
@@ -99,10 +97,6 @@ function handleRuntimeClientEventResponse(
     } else {
       onError(new Error('Invalid retained SSH connection state'))
     }
-    return
-  }
-  if (message.type === 'worktreeStartupDraftsChanged') {
-    applyStartupDraftSnapshot(toRuntimeExecutionHostId(environmentId), message.drafts)
     return
   }
   if (isRuntimeClientEvent(message)) {

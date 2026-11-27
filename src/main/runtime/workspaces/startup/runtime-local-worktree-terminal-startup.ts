@@ -1,4 +1,3 @@
-import type { StartupDraftReceipt } from '../../../../shared/worktree/creation/startup-draft-receipt'
 import { randomUUID } from 'node:crypto'
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
@@ -29,11 +28,6 @@ import type { WorktreeTerminalProvisioningArgs } from './runtime-worktree-termin
 
 export type RuntimeLocalWorktreeTerminalPorts = {
   canSpawn: boolean
-  prepareStartupDraft?: (
-    worktree: Worktree,
-    setup: CreateWorktreeResult['setup'],
-    text: unknown
-  ) => StartupDraftReceipt | undefined
   provisionInBackground?: () => boolean
   createTerminal: (
     selector: string,
@@ -62,7 +56,6 @@ export type RuntimeLocalWorktreeTerminalPorts = {
 
 export type RuntimeLocalWorktreeTerminalStartupResult = {
   warning?: string
-  startupDraftReceipt?: StartupDraftReceipt
   returnedSetup?: CreateWorktreeResult['setup']
   didSpawnSetup: boolean
   didSpawnStartup: boolean
@@ -91,6 +84,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
 }): Promise<RuntimeLocalWorktreeTerminalStartupResult> {
   const { request, repo, worktree, defaultTabs, startup, ports } = args
   let { setup } = args
+  const shouldActivate = request.activate === true || request.runHooks === true
   let warning = args.warning
   let didSpawnStartup = false
   let didSpawnSetup = false
@@ -99,18 +93,6 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   let startupTerminalTabId: string | null = null
   let startupTerminalPaneKey: string | null = null
   let startupTerminalPtyId: string | null = null
-  let startupDraftReceipt =
-    !startup || startup.launchConfig?.commandProvenance === 'generated'
-      ? ports.prepareStartupDraft?.(
-          worktree,
-          setup,
-          request.startupPromptForRecovery ?? request.startupDraft ?? request.startupPrompt
-        )
-      : undefined
-  const rendererWillLaunch = startupDraftReceipt !== undefined && !startup
-  const canProvision = ports.canSpawn && !rendererWillLaunch
-  const shouldActivate =
-    !rendererWillLaunch && (request.activate === true || request.runHooks === true)
   let sequencedStartup = startup
   let wrappedSetup: WorktreeTerminalProvisioningArgs['wrappedSetup']
   if (startup && setup?.waitForAgentStartup === true) {
@@ -176,7 +158,6 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         ports.sendFollowup(terminal.handle, args.startupFollowup, terminal, awaitSetupGate)
       }
       didSpawnStartup = !terminal.agentProgramBlocked && !terminal.agentResumeRefused
-      startupDraftReceipt = didSpawnStartup ? startupDraftReceipt : undefined
       startupTerminalHandle = terminal.handle
       startupTerminalTabId = terminal.tabId ?? null
       startupTerminalPaneKey = terminal.paneKey ?? null
@@ -244,7 +225,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         ...(args.promisedAgentChat && !startup ? ([true] as const) : [])
       )
     }
-  } else if (canProvision && (setup || defaultTabs || startupTerminalHandle)) {
+  } else if (ports.canSpawn && (setup || defaultTabs || startupTerminalHandle)) {
     const provisioning = ports.provision({
       ...provisionArgs({ ...args, setup }, startupTerminalHandle, startupPaneHeld, wrappedSetup),
       surfaceOwner: false
@@ -260,7 +241,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       }
     }
   } else if (
-    canProvision &&
+    ports.canSpawn &&
     shouldSeedWorktreePrimaryTerminal({
       hasPrimarySurface: startupPaneHeld,
       callerProvidesSurface: callerProvidesInitialSurface(args)
@@ -277,17 +258,14 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     : setup
       ? {
           ...setup,
-          ...(rendererWillLaunch ? { rendererOwnsGatedStartup: true as const } : {}),
           ...(didSpawnStartup && wrappedSetup ? { command: wrappedSetup.command } : {})
         }
       : undefined
   return {
     ...(warning ? { warning } : {}),
-    ...(startupDraftReceipt ? { startupDraftReceipt } : {}),
     ...(returnedSetup ? { returnedSetup } : {}),
     didSpawnSetup,
-    didSpawnStartup:
-      didSpawnStartup && !startupDraftReceipt && !(request.startupDraft && wrappedSetup),
+    didSpawnStartup: didSpawnStartup && !(request.startupDraft && wrappedSetup),
     setupTerminalHandle,
     startupTerminalHandle,
     startupTerminalTabId,

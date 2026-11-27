@@ -207,7 +207,6 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     notifyLineageRepos(this.notifyWorktreesChanged.bind(this), repo.id, lineage?.parentWorktreeId)
     const {
       warning: terminalWarning,
-      startupDraftReceipt,
       returnedSetup,
       didSpawnSetup,
       didSpawnStartup,
@@ -250,7 +249,6 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       },
       ...(lineageInput ? metadataResult : {}),
       ...(returnedSetup ? { setup: returnedSetup } : {}),
-      ...(startupDraftReceipt ? { startupDraftReceipt } : {}),
       ...(args.awaitTerminalProvisioning
         ? {
             setupReceipt: buildRuntimeSetupReceipt(

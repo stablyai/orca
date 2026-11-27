@@ -211,9 +211,7 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     }
     if (gated.blocked) {
       session.withholdStartupDraftPaste()
-      session.startupDraftPrompt = null
-      session.pendingStartupCommand = null
-      session.paneStartup = null
+      session.notifyBlockedStartup('unknown')
       return
     }
     if (!startupDraftReadyScanner || !waitingForDraft) {

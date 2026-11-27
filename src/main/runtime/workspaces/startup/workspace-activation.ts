@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithWorktreeStartupDrafts } from './runtime-worktree-startup-drafts'
+import { OrcaRuntimeWithForegroundInspection } from './workspace-foreground-inspection'
 import {
   type RuntimeNavigationTarget,
   navigationTargetsClients,
@@ -24,7 +24,8 @@ import type { WorktreeLineageResolution } from '../lineage/runtime-worktree-line
 import { recordCreatedWorktreeLineage as recordCreatedWorktreeLineageState } from '../lineage/runtime-worktree-lineage-recording'
 import {
   deliverStartupFollowupPrompt,
-  type StartupFollowupPromptOptions
+  type StartupFollowupPromptOptions,
+  type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { SETUP_AGENT_GATE } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
@@ -37,14 +38,17 @@ import { waitForTerminalComposer } from '../../terminal/wait/terminal-composer-l
 import { pasteStartupDraftInCustody } from './startup-draft-custody'
 import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
 import {
+  readPtyFreshComposerHold,
   waitForFreshComposerOnPty,
-  watchLaunchComposer
+  watchLaunchComposer,
+  type FreshComposerPtyHost
 } from '../../terminal/wait/launch-composer-watch'
 
-export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithWorktreeStartupDrafts {
+export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithForegroundInspection {
   protected abstract toAgentSessionOptions(
     preferences: AgentLaunchPreferences | undefined
   ): Record<string, string> | undefined
+  protected abstract getWorktreeStartupReadinessHost(): WorktreeStartupReadinessHost
   protected abstract getWorktreeTerminalProvisioningHost(
     createdWorktree?: Worktree
   ): WorktreeTerminalProvisioningHost
@@ -267,6 +271,15 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
   /** Hold submits to a fresh launch of `agent` until its composer is up (launch-composer-watch.ts). */
   watchLaunchComposer(ptyId: string, agent: TuiAgent | null): void {
     watchLaunchComposer(this.launchComposerReadyByPtyId, this.freshComposerPtyHost(), ptyId, agent)
+  }
+
+  private freshComposerPtyHost(): FreshComposerPtyHost {
+    return {
+      readiness: this.getWorktreeStartupReadinessHost(),
+      readForeground: (ptyId, agent) => this.readLaunchedAgentForeground(ptyId, agent),
+      readHold: (ptyId) =>
+        readPtyFreshComposerHold(this.ptysById.get(ptyId), this.readLiveTerminalScreenLines(ptyId))
+    }
   }
 
   async deliverStartupFollowup(

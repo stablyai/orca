@@ -45,6 +45,7 @@ export type TerminalCreateOptions = {
   /** Main-internal: whether `startupPrompt` rode the launch command. Called once the plan is built. */
   onStartupPromptCarry?: (carried: boolean) => void
   /** Main-internal: the setup wrapper refused the agent on its post-setup check. */
+  onSetupAgentBlocked?: () => void
   /** Override Settings arguments for this agent (null means none); plan input is not a caller-supplied command and does not take launch ownership. */
   agentArgs?: string | null
   extraAgentArgs?: string

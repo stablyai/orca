@@ -1,4 +1,3 @@
-import type { StartupDraftReceipt } from '../../../shared/worktree/creation/startup-draft-receipt'
 import { readableWslDistroHoldText } from '../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { canCheckoutExistingLocalBranch } from '../../runtime/workspaces/creation/runtime-worktree-create-git'
 /* eslint-disable max-lines */
@@ -154,6 +153,7 @@ import {
   getSetupRunnerCommandPlatformForPath
 } from '../../../shared/agent-launch/startup/setup-runner-command'
 import { createSequencedSetupAgentCommands } from '../../../shared/agent-launch/startup/setup-agent-sequencing'
+import { sendToTrustedUIRenderer } from '../ui'
 import {
   createWorktreeCreateTimingRecorder,
   localWorktreeCreateExecutionHost,
@@ -211,7 +211,6 @@ function worktreePushTargetMaterializeKey(repoPath: string, remoteName: string):
 }
 
 type StagedStartupResult = {
-  refusedBeforeSetup?: boolean
   startupTerminal?: CreateWorktreeResult['startupTerminal']
   activationSetup?: CreateWorktreeResult['setup']
   didSpawnSetup: boolean
@@ -410,7 +409,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   setup: CreateWorktreeResult['setup']
   defaultTabs: CreateWorktreeResult['defaultTabs']
   createdWithAgent: CreateWorktreeArgs['createdWithAgent']
-  startupDraftReceipt?: StartupDraftReceipt
+  onSetupAgentBlocked?: () => void
   /** An automation's create is background work: its terminals never start a stopped WSL distro (E9). */
   automationCreate: boolean
 }): Promise<StagedStartupResult> {
@@ -424,7 +423,6 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   let warning: string | undefined
   let startupTerminalHandle: string | null = null
   let startupTerminal: CreateWorktreeResult['startupTerminal']
-  let refusedBeforeSetup = false
 
   let sequencedStartup = startup
   let wrappedSetupCommandStr: string | undefined
@@ -460,6 +458,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         ...(isTuiAgent(createdWithAgent) ? { launchAgent: createdWithAgent } : {}),
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
+        onSetupAgentBlocked: args.onSetupAgentBlocked,
         telemetry: sequencedStartup.telemetry,
         // Submitting renderer owns activation; background completion must not yank users who moved on (#9944).
         surfaceOwner: false,
@@ -468,12 +467,8 @@ async function spawnLocalStartupAndSetupTerminals(args: {
       worktree
     )
     startupTerminalHandle = terminal.handle
-    refusedBeforeSetup = Boolean(terminal.agentProgramBlocked || terminal.agentResumeRefused)
     startupTerminal = {
-      spawned: !(args.startupDraftReceipt && wrappedSetupCommandStr) || refusedBeforeSetup,
-      ...(!refusedBeforeSetup && args.startupDraftReceipt && wrappedSetupCommandStr
-        ? { handle: terminal.handle, tabId: terminal.tabId }
-        : {}),
+      spawned: true,
       surface: terminal.surface
     }
   } catch (error) {
@@ -522,7 +517,6 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   }
 
   return {
-    refusedBeforeSetup,
     ...(setup && !didSpawnSetup
       ? {
           activationSetup: {
@@ -1883,13 +1877,7 @@ async function performLocalWorktreeCreate(
 
   // Startup resolves the new id before lifecycle notifications invalidate runtime caches.
   runtime?.invalidateWorktreeCatalog?.(repo.id)
-  const startupDraftReceipt = runtime.prepareWorktreeStartupDraft?.(
-    worktree,
-    args.startup && args.startup.launchConfig?.commandProvenance !== 'generated'
-      ? undefined
-      : setup,
-    args.startupPromptForRecovery
-  )
+  const recoveryText = args.startupPromptForRecovery
   const stagedStartup = await timing.time('spawn_startup_terminal', () =>
     spawnLocalStartupAndSetupTerminals({
       runtime,
@@ -1898,7 +1886,23 @@ async function performLocalWorktreeCreate(
       setup,
       defaultTabs,
       createdWithAgent: args.createdWithAgent,
-      startupDraftReceipt,
+      ...(typeof recoveryText === 'string' && recoveryText.trim()
+        ? {
+            onSetupAgentBlocked: () => {
+              // Setup can finish after the window closes or the checkout is replaced.
+              if (
+                !worktree.instanceId ||
+                readWorktreeMetaForRepo(store, repo, worktreeId)?.instanceId !== worktree.instanceId
+              ) {
+                return
+              }
+              store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), {
+                blockedStartupDraft: { text: recoveryText, outcome: 'not-delivered' }
+              })
+              sendToTrustedUIRenderer('worktrees:startupDraftBlocked', worktreeId)
+            }
+          }
+        : {}),
       automationCreate: Boolean(args.automationProvenance)
     })
   )
@@ -1957,7 +1961,6 @@ async function performLocalWorktreeCreate(
       ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
       : {}),
     ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
-    ...(startupDraftReceipt && !stagedStartup.refusedBeforeSetup ? { startupDraftReceipt } : {}),
     ...(baseFallback ? { baseFallback } : {}),
     ...(setupTrustMismatch ? { setupTrustMismatch } : {}),
     ...(createWarning ? { warning: createWarning } : {}),

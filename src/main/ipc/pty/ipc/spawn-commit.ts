@@ -1,4 +1,3 @@
-import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import '../spawn/spawn-outcome'
 import type { PtySpawnOutcome } from '../spawn/spawn-outcome'
 import { provenSpawnResponse } from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-response'
@@ -61,9 +60,6 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       codexLaunchEnv: ctx.baseEnv,
       initiallyHidden: ctx.initiallyHidden,
       hiddenDelivery: 'renderer-scoped',
-      rendererSetupGate:
-        args.launchConfig?.commandProvenance === 'generated' &&
-        Boolean(args.env?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]),
       response
     })
   })

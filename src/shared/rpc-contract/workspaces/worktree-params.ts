@@ -191,14 +191,3 @@ export const WorktreeResolveMrBase = lazyZodSchema(() =>
     wakeWslDistro: OptionalBoolean
   })
 )
-
-export const WorktreeStartupDraft = lazyZodSchema(() =>
-  z.discriminatedUnion('action', [
-    z.object({ action: z.literal('list') }),
-    z.object({
-      action: z.enum(['read', 'dismiss', 'wait', 'release']),
-      id: z.string().uuid(),
-      worktreeId: z.string().min(1)
-    })
-  ])
-)

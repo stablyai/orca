@@ -1,10 +1,12 @@
-import type { AvailableStartupDraft } from '../../../shared/worktree/creation/startup-draft-receipt'
 import { ipcRenderer } from 'electron'
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
 } from '../../../shared/worktree/base-refs/base-ref-drift-types'
-import type { CreateWorktreeProgressEvent } from '../../../shared/worktree/create-types'
+import type {
+  BlockedWorktreeStartupDraft,
+  CreateWorktreeProgressEvent
+} from '../../../shared/worktree/create-types'
 import type {
   GitStatusMetadataChangedEvent,
   WorktreeHeadIdentity
@@ -30,11 +32,31 @@ export const worktreesApi = {
 
   create: (args) => ipcRenderer.invoke('worktrees:create', args),
 
-  onStartupDraftsChanged: (onDrafts) => {
-    const listener = (_event: Electron.IpcRendererEvent, drafts: AvailableStartupDraft[]): void =>
-      onDrafts(drafts)
-    ipcRenderer.on('worktrees:startupDraftsChanged', listener)
-    return () => ipcRenderer.removeListener('worktrees:startupDraftsChanged', listener)
+  watchBlockedStartupDraft: (worktreeId, onDraft) => {
+    let active = true
+    let reported = false
+    const read = (): void => {
+      void ipcRenderer
+        .invoke('worktrees:readBlockedStartupDraft', worktreeId)
+        .then((draft: BlockedWorktreeStartupDraft | null) => {
+          if (active && !reported && draft) {
+            reported = true
+            onDraft(draft)
+          }
+        })
+        .catch(() => console.warn('[worktree-create] could not read the blocked startup draft'))
+    }
+    const listener = (_event: Electron.IpcRendererEvent, id: string): void => {
+      if (id === worktreeId) {
+        read()
+      }
+    }
+    ipcRenderer.on('worktrees:startupDraftBlocked', listener)
+    read()
+    return () => {
+      active = false
+      ipcRenderer.removeListener('worktrees:startupDraftBlocked', listener)
+    }
   },
 
   adoptProvisionedRoot: (args) => ipcRenderer.invoke('worktrees:adoptProvisionedRoot', args),

@@ -154,7 +154,6 @@ export const WorktreeCreate = lazyZodSchema(() =>
       launchSource: LaunchSourceParam.optional(),
       // Task-driven mobile creation uses desktop-equivalent host defaults and linked issue/PR draft URLs.
       startupDraft: OptionalString,
-      startupPromptForRecovery: OptionalString,
       afterPublication: z.number().int().nonnegative().optional(),
       createdWithAgent: z
         .unknown()

@@ -57,5 +57,8 @@ export function mergeWorktreeMetaForWrite(
     ? sourceContext
     : null
   updated.instanceId ||= randomUUID()
+  if (existing?.blockedStartupDraft && existing.instanceId !== updated.instanceId) {
+    delete updated.blockedStartupDraft
+  }
   return updated
 }

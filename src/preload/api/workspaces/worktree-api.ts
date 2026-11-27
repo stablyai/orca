@@ -1,4 +1,3 @@
-import type { AvailableStartupDraft } from '../../../shared/worktree/creation/startup-draft-receipt'
 import type { DiffCommentBaseMutation } from '../../../shared/file-review/diff-comment-mutation'
 import type {
   FolderWorkspaceCreateInput,
@@ -41,6 +40,7 @@ import type {
 } from '../../../shared/worktree/base-refs/base-ref-drift-types'
 import type {
   AdoptProvisionedRootArgs,
+  BlockedWorktreeStartupDraft,
   CreateWorktreeArgs,
   CreateWorktreeProgressEvent,
   CreateWorktreeResult,
@@ -82,7 +82,11 @@ export type WorktreeApi = {
   /** User act: scan a local repo inside its WSL distro's user-act scope, which may start it. */
   scanStartingWslDistro?: (args: { repoId: string }) => Promise<void>
   create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
-  onStartupDraftsChanged?: (onDrafts: (drafts: AvailableStartupDraft[]) => void) => () => void
+  /** Desktop draft custody is scoped to the local workspace. */
+  watchBlockedStartupDraft?: (
+    worktreeId: string,
+    onDraft: (draft: BlockedWorktreeStartupDraft) => void
+  ) => () => void
   adoptProvisionedRoot: (args: AdoptProvisionedRootArgs) => Promise<CreateWorktreeResult>
   /** Absent on clients whose host cannot run an existing worktree's approved setup. */
   runApprovedSetup?: (args: RunApprovedWorktreeSetupArgs) => Promise<RunApprovedWorktreeSetupResult>

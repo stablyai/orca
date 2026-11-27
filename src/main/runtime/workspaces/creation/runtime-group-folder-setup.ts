@@ -97,14 +97,6 @@ export async function prepareGroupFolderCreation(args: {
   }
   if (input.rendererOwnsSetup && input.agentLaunchMode !== 'structured') {
     result.setup = prepared?.setup
-    const startupDraftReceipt = args.ports.prepareStartupDraft?.(
-      folderWorkspaceToWorktree(workspace),
-      result.setup,
-      input.startupPromptForRecovery
-    )
-    if (startupDraftReceipt) {
-      result.startupDraftReceipt = startupDraftReceipt
-    }
     return result
   }
   const request = {
@@ -144,7 +136,6 @@ export async function prepareGroupFolderCreation(args: {
   })
   // Host-owned provisioning is never retried by renderer activation.
   result.setup = undefined
-  result.startupDraftReceipt = started.startupDraftReceipt
   result.warning = started.warning ?? result.warning
   if (prepared) {
     result.setupReceipt = buildRuntimeSetupReceipt(

@@ -152,10 +152,6 @@ function settleReady(
       )
       const sourceChild = current.child
       context.runtimeState.startupAttempts.ready(event.sessionId, child)
-      const workspaceId = context.deps.store.getRecord(event.sessionId)?.location.workspaceId
-      if (workspaceId) {
-        context.deps.onProviderStarted?.(workspaceId)
-      }
       noteStructuredAgentSessionRuntimeOptions(current.child, event.reportedOptions, true)
       context.publishStatus?.(event.sessionId)
       await noteStructuredAgentSessionReportedOptions(

@@ -1,4 +1,3 @@
-import { releaseUnclaimedStartupDraft } from '../worktree-startup-draft-recovery'
 import { pickApprovedSetupHashes } from '../../../../../../shared/worktree/creation/approved-setup-hashes'
 import { agentLaunchRecoveryMessage } from '@/lib/agent-session/launch/failure/agent-launch-failure'
 import { confirmDirectWorkItemSetup, prepareDirectWorkItemSetup } from './direct-work-item-setup'
@@ -9,10 +8,11 @@ import {
   directWorkItemFailureReporter,
   gitLabIssueNumber,
   resolvePrHeadErrorMessage,
-  unavailableAgentErrorMessage
+  unavailableAgentErrorMessage,
+  workspaceActivationErrorMessage
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-messages'
 import type { GitHubPrStartPoint } from '../../../../../../shared/worktree/types'
-import { completeDirectWorkItemLaunch } from './launch-work-item-direct-completion'
+import { buildDirectWorkItemStartupOpts } from '@/lib/workspace/creation/work-item/launch-work-item-direct-agent'
 import {
   getDirectWorkItemIdentity,
   getDirectWorkItemWorkspaceNames
@@ -27,6 +27,7 @@ import {
   captureDirectWorkItemLaunchArgs
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-preflight'
 import type { LaunchWorkItemDirectArgs } from '@/lib/workspace/creation/work-item/launch-work-item-direct-types'
+import * as routing from './launch-work-item-direct-agent-routing'
 import { prepareDirectWorkItemAgentLaunch } from '@/lib/workspace/creation/work-item/launch-work-item-direct-route-preparation'
 import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 
@@ -38,6 +39,7 @@ export async function launchWorkItemDirect(
   const { item, repoId, openModalFallback, baseBranch } = args
   const { telemetrySource, launchSource, agentOverride } = args
   args = captureDirectWorkItemLaunchArgs(args)
+  let agentArgs = args.agentArgs
   let creationAccepted = false
   let failureAgent = agentOverride
   const reportFailure = directWorkItemFailureReporter(args.onFailureNotified, () => failureAgent)
@@ -189,9 +191,6 @@ export async function launchWorkItemDirect(
       prStart?.compareBaseRef,
       {
         executionHostId: context.executionHostId,
-        ...(prospectiveAgent && preflightPlan?.route !== 'structured-native-chat'
-          ? { startupPromptForRecovery: draftContent }
-          : {}),
         ...pickApprovedSetupHashes(confirmedSetup)
       }
     )
@@ -226,9 +225,7 @@ export async function launchWorkItemDirect(
       requestId,
       preflightPlan
     })
-    const { startupDraftReceipt } = result
     if (launchPreparation.unavailable) {
-      releaseUnclaimedStartupDraft(context.executionHostId, startupDraftReceipt)
       activateAndRevealWorktree(worktreeId, {
         sidebarRevealBehavior: 'auto',
         setup: result.setup,
@@ -236,16 +233,74 @@ export async function launchWorkItemDirect(
       })
       return reportFailure(unavailableAgentErrorMessage())
     }
-    return completeDirectWorkItemLaunch({
-      args,
-      result,
-      launchPreparation,
-      launchSource,
+    agentArgs = launchPreparation.agentArgs
+    const { effectiveAgent, startupPlan, draftLaunchedNatively, startupPlanFailed, plan } =
+      launchPreparation
+
+    const activationHolder: { value: ReturnType<typeof activateAndRevealWorktree> } = {
+      value: false
+    }
+    const revealWorkspace = (): boolean => {
+      activationHolder.value = activateAndRevealWorktree(worktreeId, {
+        sidebarRevealBehavior: 'auto',
+        setup: result.setup,
+        defaultTabs: result.defaultTabs,
+        ...(launchPreparation.structuredLaunch
+          ? { providesInitialSurface: true }
+          : buildDirectWorkItemStartupOpts(effectiveAgent, startupPlan, launchSource, {
+              ...launchPreparation.freshLaunchInputs,
+              prompt: draftContent,
+              promptDelivery,
+              legacy: () => ({
+                startupPlan,
+                pasteDraftAfterLaunch: draftLaunchedNatively ? null : draftContent,
+                submitPastedPrompt: promptDelivery !== 'draft'
+              })
+            }))
+      })
+      return activationHolder.value !== false
+    }
+    const structuredResult = routing.beginDirectWorkItemStructuredLaunch({
+      plan,
+      primaryTabId: null,
+      beforeOpen: revealWorkspace,
+      declinedTerminal: {
+        ...(agentArgs !== undefined ? { agentArgs } : {}),
+        sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+        ...(args.launchPlatform ? { launchPlatform: args.launchPlatform } : {}),
+        ...(launchSource ? { launchSource } : {})
+      }
+    })
+    if (!structuredResult.structuredLaunch) {
+      revealWorkspace()
+    }
+    const activation = activationHolder.value
+    if (!activation) {
+      // Report a workspace disappearing between create and activation rather than silently drop its draft.
+      return reportFailure(workspaceActivationErrorMessage())
+    }
+    store.setSidebarOpen(true)
+
+    if (structuredResult.completed) {
+      return true
+    }
+
+    if (context.target.kind === 'environment' && startupPlan && !startupPlanFailed) {
+      // The seeded startup carries the prompt and token until the shared pane delivery owner attaches.
+      return (
+        routing.directWorkItemStartupAccepted(activation, startupPlan, startupPlanFailed) ||
+        reportFailure(workspaceActivationErrorMessage())
+      )
+    }
+    return routing.finishDirectWorkItemPrompt({
+      primaryTabId: activation.primaryTabId,
+      effectiveAgent,
       promptDelivery,
       draftContent,
-      reportFailure,
-      executionHostId: context.executionHostId,
-      runtimeOwned: context.target.kind === 'environment'
+      startupPlan,
+      draftLaunchedNatively,
+      startupPlanFailed,
+      onFailureNotified: () => args.onFailureNotified?.()
     })
   } catch (error) {
     if (!creationAccepted && args.signal?.aborted) {

@@ -1,4 +1,3 @@
-import type { AvailableStartupDraft } from '../../worktree/creation/startup-draft-receipt'
 import type { BotChangeScope } from '../../bots/bot-change-scope'
 import type { NotificationAttentionAcknowledgement } from '../../notifications/notification-settings-types'
 import type { CreateWorktreeResult } from '../../worktree/create-types'
@@ -23,7 +22,6 @@ export type RuntimeClientEvent =
       acknowledgement: NotificationAttentionAcknowledgement
     }
   | { type: 'reposChanged' }
-  | { type: 'worktreeStartupDraftsChanged'; drafts: AvailableStartupDraft[] }
   | { type: 'nativeChatQueueFollowUpsChanged'; queueFollowUps: boolean }
   | { type: 'nativeChatCiResultLinesChanged'; ciResultLines: boolean }
   /** The Workspace options UI state changed; a mirroring phone re-reads it. */

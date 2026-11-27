@@ -8,7 +8,8 @@ import { projectGroupHookTrustKey } from '../../../../../../shared/workspace-set
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
-import { completeFolderWorkspaceStartup } from './folder-workspace-startup-completion'
+import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-workspace'
+import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { buildAgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
 import '@/diagnostics/telemetry/telemetry'
@@ -195,14 +196,6 @@ export async function submitFolderWorkspaceCreate({
   }
   const result = await createFolderWorkspace({
     ...(setupSupported ? setupApproval : {}),
-    ...(setupSupported &&
-    !hostStartsTerminal &&
-    !structuredLaunch &&
-    startupPlan?.launchConfig.commandProvenance === 'generated' &&
-    setupApproval?.setupDecision !== 'skip' &&
-    (launchDraftPrompt ?? note).trim()
-      ? { startupPromptForRecovery: launchDraftPrompt ?? note }
-      : {}),
     ...(setupSupported && structuredLaunch ? { agentLaunchMode: 'structured' as const } : {}),
     ...(hostStartsTerminal
       ? {
@@ -239,6 +232,7 @@ export async function submitFolderWorkspaceCreate({
       : { kind: 'local' }
   )
   const launchFailed = isCancelled()
+
   const startup = buildFolderWorkspaceStartupPayload({
     quickAgent,
     startupPlan,
@@ -281,20 +275,34 @@ export async function submitFolderWorkspaceCreate({
     } else {
       revealWorkspace()
     }
-    completeFolderWorkspaceStartup({
-      activation: activationHolder.value,
-      worktreeId: folderWorkspaceKey(workspace.id),
-      hostStartupTabId: result.startupTerminal?.tabId,
-      hostStartsTerminal,
-      launchFailed,
-      structuredLaunch,
-      quickAgent,
-      launchDraftPrompt,
-      runtimeEnvironmentId,
-      startupPlan,
-      hostId: getRepoExecutionHostId(projectGroup),
-      startupDraftReceipt: result.startupDraftReceipt
-    })
+    const activation = activationHolder.value
+    const draftTabId = hostStartsTerminal
+      ? result.startupTerminal?.tabId
+      : activation !== false
+        ? activation.primaryTabId
+        : undefined
+    if (!launchFailed && !structuredLaunch && quickAgent && launchDraftPrompt && draftTabId) {
+      // TUI prefill needs a separate chat-composer copy to remain visible after switching views.
+      seedNativeChatLaunchDraftForAgentTab({
+        tabId: draftTabId,
+        agent: quickAgent,
+        text: launchDraftPrompt
+      })
+    }
+    if (
+      !launchFailed &&
+      !runtimeEnvironmentId &&
+      !structuredLaunch &&
+      startupPlan &&
+      (startupPlan.followupPrompt || startupPlan.draftPrompt) &&
+      activation !== false
+    ) {
+      void ensureAgentStartupInTerminal({
+        worktreeId: folderWorkspaceKey(workspace.id),
+        primaryTabId: activation.primaryTabId,
+        startup: startupPlan
+      })
+    }
   } catch (error) {
     // Creation succeeded; a transient activation failure must not keep its completed modal open.
     console.error('Failed to activate folder workspace after create:', error)

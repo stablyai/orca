@@ -115,7 +115,6 @@ export type PtySpawnCommitInput = {
   /** TEMPORARY: renderer marks refresh here, host marks after commit; terminal-transport follow-up. */
   hiddenDelivery: 'renderer-scoped' | 'runtime-owned'
   response: PtySpawnOutcome['result']
-  rendererSetupGate?: boolean
 }
 
 /** The one commit for a freshly started process, run inside the prompt-intent wrapper. */
@@ -206,17 +205,6 @@ export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpa
       state.pendingRegistrationClaim
     )
     state.pendingRegistrationPtyId = null
-  }
-  if (runtime && registration.freshSpawn && registration.worktreeId && !state.args.connectionId) {
-    if (input.rendererSetupGate) {
-      void runtime.observeStartupDraftGate?.(
-        result.id,
-        Boolean(result.agentProgramBlocked || result.agentResumeRefused),
-        true
-      )
-    } else if (registration.launchedAgent) {
-      runtime.observeVerifiedReplacementLaunch?.(result.id, registration.launchedAgent)
-    }
   }
   return publishCommittedPtySpawn(input)
 }

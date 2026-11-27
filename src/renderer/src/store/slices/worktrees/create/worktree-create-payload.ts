@@ -27,7 +27,6 @@ export type CreateWorktreeCallOptions = {
   linkedTaskSourceContext?: TaskSourceContext | null
   /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
   startupDraft?: string
-  startupPromptForRecovery?: string
   /** A terminal agent the owning host may plan from its own settings; `startup` stays the fallback. */
   hostAgentLaunch?: HostAgentLaunch
   creationAgentLaunch?: HostAgentLaunch & {
@@ -99,9 +98,6 @@ function sharedCreateFields(
     ...(attempt.branchNameOverride ? { branchNameOverride: attempt.branchNameOverride } : {}),
     ...(request.branchIntent ? { branchIntent: request.branchIntent } : {}),
     setupDecision: request.setupDecision,
-    ...(request.setupDecision !== 'skip' && options?.startupPromptForRecovery?.trim()
-      ? { startupPromptForRecovery: options.startupPromptForRecovery }
-      : {}),
     ...(options ? pickApprovedSetupHashes(options) : {}),
     ...(options?.setupOnly !== undefined ? { setupOnly: options.setupOnly } : {}),
     sparseCheckout: request.sparseCheckout,
@@ -155,10 +151,16 @@ export function buildLocalWorktreeCreateArgs(
   request: WorktreeCreateRequest,
   attempt: WorktreeCreateAttempt
 ): CreateWorktreeArgs {
+  const launch = request.options?.creationAgentLaunch ?? request.options?.hostAgentLaunch
+  const prompt =
+    request.options?.creationAgentLaunch?.draft ?? launch?.prompt ?? request.options?.startupDraft
   return {
     repoId: request.repoId,
     ...sharedCreateFields(request, attempt),
     ...(request.startup ? { startup: request.startup } : {}),
+    ...(request.startup?.launchConfig?.commandProvenance === 'generated' && prompt?.trim()
+      ? { startupPromptForRecovery: prompt }
+      : {}),
     ...(request.creationId ? { creationId: request.creationId } : {})
   }
 }
