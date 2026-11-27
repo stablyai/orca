@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { VIBE_ACP_LAUNCH_SPEC } from './vibe-acp-launch-spec'
 
@@ -34,10 +35,10 @@ describe('VIBE_ACP_LAUNCH_SPEC', () => {
     ).toEqual([])
   })
 
-  it("searches uv's tool bin directory for vibe-acp", () => {
+  it("searches the installers' bin directories for vibe-acp", () => {
     expect(VIBE_ACP_LAUNCH_SPEC.installDirectories({ env: {}, homePath: '/home/u' })).toEqual([
-      '/home/u/.local/bin',
-      '/home/u/.vibe/bin'
+      join('/home/u', '.local', 'bin'),
+      join('/home/u', '.vibe', 'bin')
     ])
   })
 })

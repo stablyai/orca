@@ -27,7 +27,8 @@ export const VIBE_ACP_LAUNCH_SPEC: AcpLaunchSpec = {
   },
   authMethodUnavailableMessage: 'Sign in via Mistral AI Studio or set MISTRAL_API_KEY.',
   account: directoryAccountBinding('VIBE_HOME', (homePath) => join(homePath, '.vibe')),
-  // `uv tool install` puts the binaries in ~/.local/bin; the curl install.sh puts them in ~/.vibe/bin.
+  // The install.sh bootstrap installs via uv into its tool bin (~/.local/bin); ~/.vibe/bin covers
+  // alternative installers.
   installDirectories: ({ homePath }) => [
     join(homePath, '.local', 'bin'),
     join(homePath, '.vibe', 'bin')

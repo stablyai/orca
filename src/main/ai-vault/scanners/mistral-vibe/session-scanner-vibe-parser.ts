@@ -17,7 +17,8 @@ import {
   updateTimeline
 } from '../../parsing/session-scanner-accumulator'
 import { addSessionContent, addSessionText } from '../../parsing/session-scanner-messages'
-import { asRecord } from '../../parsing/session-record-fields'
+import { arrayValue, asRecord } from '../../parsing/session-record-fields'
+import { isMissingTranscriptPathError } from '../../discovery/session-path-absence'
 import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
@@ -32,6 +33,30 @@ function vibeSessionIdFromDirectory(filePath: string): string | null {
   return match?.[1] ?? null
 }
 
+/** Vibe stores assistant tool calls as function entries; decode them as tool_use blocks. */
+function vibeToolCallsAsToolUse(toolCalls: unknown): unknown[] {
+  return arrayValue(toolCalls).flatMap((call) => {
+    const fn = asRecord(asRecord(call)?.function)
+    const name = extractString(fn?.name)
+    if (!name) {
+      return []
+    }
+    const rawArguments = fn?.arguments
+    let input: unknown = {}
+    if (typeof rawArguments === 'string') {
+      try {
+        input = JSON.parse(rawArguments)
+      } catch {
+        // A malformed arguments string keeps the call, with the raw text as its input.
+        input = { arguments: rawArguments }
+      }
+    } else if (rawArguments != null) {
+      input = rawArguments
+    }
+    return [{ type: 'tool_use', id: extractString(asRecord(call)?.id) ?? name, name, input }]
+  })
+}
+
 /** Parses a Vibe session's messages.jsonl, enriched by its meta.json sidecar. */
 export async function parseVibeSessionFile(
   file: FileWithMtime,
@@ -41,7 +66,14 @@ export async function parseVibeSessionFile(
 ): Promise<AiVaultSession | null> {
   const metaContent = await waitForAiVaultScan(
     wslGatedReadFile(join(dirname(file.path), 'meta.json'), 'utf-8', 'scan', signal).catch(
-      () => null
+      (error: unknown) => {
+        // Only a missing sidecar falls back to the directory-derived id; other read failures
+        // propagate so the scan records an issue instead of caching a metadata-free session.
+        if (!isMissingTranscriptPathError(error)) {
+          throw error
+        }
+        return null
+      }
     ),
     signal
   )
@@ -79,7 +111,6 @@ export async function parseVibeSessionFile(
         const text = typeof record.content === 'string' ? record.content : null
         if (text) {
           accumulator.title ??= normalizeTitleText(text)
-          accumulator.firstUserPrompt ??= text
           accumulator.lastUserPrompt = text
         }
         addSessionText(accumulator, {
@@ -88,10 +119,15 @@ export async function parseVibeSessionFile(
           previewScanLimit: VIBE_PREVIEW_SCAN_LIMIT
         })
       } else if (role === 'assistant') {
+        const parts: unknown[] = []
+        if (record.content != null) {
+          parts.push(record.content)
+        }
+        parts.push(...vibeToolCallsAsToolUse(record.tool_calls))
         addSessionContent(
           accumulator,
           'assistant',
-          record.content ?? record.tool_calls,
+          parts.length === 1 ? parts[0] : parts,
           undefined,
           {
             previewScanLimit: VIBE_PREVIEW_SCAN_LIMIT

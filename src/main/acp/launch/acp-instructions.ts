@@ -247,13 +247,16 @@ export const deliverCopilotInstructions = givenEachStart(async ({ text, folder, 
   return { env: { COPILOT_CUSTOM_INSTRUCTIONS_DIRS: inherited ? `${inherited},${dir}` : dir } }
 })
 
-// Vibe builds its system prompt from AGENTS.md files at session/new (walk-up from the cwd plus
-// $VIBE_HOME/AGENTS.md) and keeps it with the session, so a reopened chat keeps the preamble it
-// began with. new_session discards extra kwargs, so sessionMeta cannot carry the text.
-export const deliverVibeInstructions = keptWithSession(async ({ text, cwd }) => {
-  await writeFolderContextFile(cwd, 'AGENTS.md', 'Mistral Vibe', text)
-  return {}
-})
+// Vibe builds its system prompt from AGENTS.md files at session open (walk-up from the cwd plus
+// $VIBE_HOME/AGENTS.md) and keeps it with the session; new_session discards extra kwargs, so
+// sessionMeta cannot carry the text. The write is held only across the open, so two chats
+// starting in one folder cannot read each other's instructions.
+export const deliverVibeInstructions = keptWithSession(async ({ text }) => ({
+  aroundSessionOpen: async (cwd) => {
+    await writeFolderContextFile(cwd, 'AGENTS.md', 'Mistral Vibe', text)
+    return () => removeFolderContextFile(cwd, 'AGENTS.md', 'Mistral Vibe')
+  }
+}))
 
 async function instructionsRoot(dataDirectory: string, sessionId: string): Promise<string> {
   const root = join(dataDirectory, 'acp-instructions')
