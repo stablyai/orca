@@ -64,7 +64,10 @@ export const ConnectorGitHubState = lazyZodSchema(() =>
       })
     ),
     /** The first linked user's default (see `accounts`). */
-    defaultBotId: z.string().nullable()
+    defaultBotId: z.string().nullable(),
+    /** gh's sign-in on the host that answered, which its bots act through; set by the host, never
+     *  by the cloud. Absent from an older host; a value this build doesn't know reads as absent. */
+    gh: z.enum(['signed-in', 'signed-out', 'missing']).optional().catch(undefined)
   })
 )
 export type ConnectorGitHubState = z.infer<typeof ConnectorGitHubState>
@@ -108,6 +111,11 @@ export function gitHubLoginFor(state: ConnectorGitHubState, installationId: stri
     state.account?.login ??
     null
   )
+}
+
+/** gh is signed out on the host that answered, so its bots can't act on GitHub as their owner. */
+export function ghSignedOut(state: ConnectorGitHubState | null): boolean {
+  return state?.gh === 'signed-out'
 }
 
 /** Linked, with an installation: a bot turned on for GitHub answers there. */

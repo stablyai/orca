@@ -7787,7 +7787,11 @@
         "signIn": "Sign in to GitHub",
         "pickSubtitle": "Choose the repositories it can work in"
       },
-      "allRepositoriesShort": "all repositories"
+      "allRepositoriesShort": "all repositories",
+      "ghSignedOut": {
+        "line": "gh is signed out on {{host}}. Run gh auth login there.",
+        "copy": "Copy {{text}}"
+      }
     },
     "connect": {
       "finishOnHost": "Finish connecting {{service}} in Orca on {{host}}.",
