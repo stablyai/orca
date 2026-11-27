@@ -378,6 +378,12 @@
           "browse": "Chrome 应用商店",
           "openFailed": "请打开一个工作区以浏览 Chrome 应用商店"
         },
+        "failure": {
+          "supportDisabled": "请先在“设置 › 浏览器 › 扩展程序”中启用浏览器扩展程序",
+          "invalidWebStoreInput": "请粘贴 Chrome 应用商店链接或 32 位扩展程序 ID",
+          "profileUnavailable": "此浏览器配置文件无法使用扩展程序",
+          "alreadyAdded": "{{name}} 已添加"
+        },
         "enabledToggleLabel": "启用或停用浏览器扩展程序"
       },
       "passwords": {
@@ -1362,6 +1368,9 @@
     },
     "computerUse": {
       "teamDisabled": "你的团队已关闭“计算机控制”"
+    },
+    "browserUse": {
+      "teamDisabled": "你的团队已关闭浏览器使用"
     },
     "artifacts": {
       "teamDisabled": "你的团队已关闭产物分享"
@@ -9540,6 +9549,7 @@
           "localLink": "仅本地链接",
           "localLinkHelp": "此链接仅在运行于此计算机上的浏览器或 Orca 客户端中有效",
           "noExternalAddress": "未找到其他设备的地址，将此计算机连接到 LAN 或 Tailscale，刷新，或选择\"自定义地址\"",
+          "interfaceDisconnected": "{{address}} 已断开连接。请重新连接并刷新，或选择另一个地址来创建链接",
           "customInvalid": "请输入有效的主机、主机:端口、IPv6 地址或 ws(s):// URL",
           "thisComputer": "此电脑",
           "whoOpens": "谁会打开此链接",
@@ -14282,7 +14292,8 @@
             "windows": "时间窗口的已用或剩余百分比",
             "reset": "距重置的时间，例如 3h 15m",
             "resetAt": "重置时刻，例如 20:50",
-            "optional": "其中的占位符为空时省略该组"
+            "optional": "其中的占位符为空时省略该组",
+            "namedUsagePools": "命名用量池，例如 Cursor 套餐池"
           }
         },
         "editorTypography": {
@@ -18339,6 +18350,10 @@
             "devToolsDockBottom": "停靠到底部",
             "devToolsUndock": "在单独窗口中打开",
             "devToolsClose": "关闭 DevTools",
+            "499b31b84e": "全部复制",
+            "e852e20cea": "已复制 — 按 S 进行屏幕截图，或选择另一个元素",
+            "074f0ed10b": "{{value0}} 条注释已准备好，请选择另一个元素或复制所有反馈",
+            "a2164a6e5a": "{{value0}} 条注释已准备好，请选择另一个元素或复制所有反馈",
             "11c5084aa2": "清晰的注释",
             "734e4343ec": "清除浏览器注释"
           },
@@ -21012,6 +21027,7 @@
         },
         "goToAgent": "转到智能体",
         "unnamedRecipient": "一个智能体",
+        "recipientName": "{{name}}",
         "event": {
           "followedUp": "已发送后续消息",
           "update": "更新",
@@ -21991,7 +22007,8 @@
       "htmlPreview": "HTML 预览",
       "htmlView": "HTML 视图",
       "htmlViewCode": "代码",
-      "htmlViewPreview": "预览"
+      "htmlViewPreview": "预览",
+      "htmlViewPreviewWaiting": "此代码块完成后即可预览"
     },
     "tab": {
       "bar": {
@@ -23833,7 +23850,9 @@
         "pageChanged": "导入期间此页面已关闭或更改了配置文件。请重试。"
       },
       "notice": {
-        "failed": "Cookie 导入失败：{{reason}}"
+        "failed": "Cookie 导入失败：{{reason}}",
+        "importedCount_other": "已导入 {{countLabel}} 个 Cookie",
+        "reload": "重新加载"
       },
       "routedPage": {
         "label": "此设备上的浏览器",
@@ -23876,10 +23895,53 @@
       "resetZoom": "重置缩放",
       "resetViewport": "重置视口尺寸",
       "findOnPage": "在页面中查找",
-      "profile": "配置文件"
+      "profile": "配置文件",
+      "annotateModeWithShortcut": "注释、抓取或绘制（{{value0}}）",
+      "annotateMode": "注释、抓取或绘制"
     },
     "loadStall": {
       "waitingForHost": "正在等待 {{host}}…"
+    },
+    "annotatePalette": {
+      "annotateTooltip": "注释：为元素添加评论（A）",
+      "grabTooltip": "抓取：复制元素的上下文（G）",
+      "drawTooltip": "绘制：在截图上标注（D）",
+      "positionLeft": "左",
+      "positionRight": "右",
+      "positionTop": "上",
+      "positionMiddle": "中",
+      "positionBottom": "下",
+      "label": "注释工具",
+      "tools": "工具",
+      "copy": "复制",
+      "copyTitle": "复制所选元素",
+      "copied": "已复制",
+      "screenshot": "截图",
+      "screenshotTitle": "复制所选元素的截图",
+      "done": "完成",
+      "doneTitle": "完成（Esc）",
+      "move": "移动工具栏",
+      "positionValueBothAxes": "{{side}} {{percent}}%，{{vertical}} {{verticalPercent}}%",
+      "annotateTooltipNoKey": "注释：为元素添加评论",
+      "grabTooltipNoKey": "抓取：复制元素的上下文",
+      "drawTooltipNoKey": "绘制：在截图上标注",
+      "moveAnywhereTooltip": "拖动或使用方向键移动 · 双击重置 · 按住 {{key}} 查看下方内容",
+      "copyMarkup": "复制标注",
+      "pickFirst": "请先选择一个元素",
+      "moreDrawTools": "更多绘图工具",
+      "showNotes": "显示注释",
+      "noteCountOne": "1 条注释",
+      "noteCount": "{{count}} 条注释",
+      "drawingDiscarded": "已放弃绘制",
+      "undo": "撤销",
+      "collapseNotes": "折叠注释",
+      "expandNotes": "展开注释",
+      "clearNotes": "清除注释",
+      "waitingForPage": "正在等待页面…",
+      "pageDidNotLoad": "页面未能加载",
+      "discardDrawing": "放弃绘制",
+      "discardDrawingTitle": "放弃绘制（Esc）",
+      "positionCenter": "中"
     },
     "profileCookieClear": {
       "label": "Cookie",
@@ -23899,6 +23961,12 @@
       "failed": "无法清除 {{host}} 上 {{profile}} 中的 Cookie，请重试",
       "failedLocal": "无法清除这台电脑上 {{profile}} 中的 Cookie，请重试",
       "sshHostOption": "{{host}} (SSH)"
+    },
+    "grabToast": {
+      "noScreenshot": "没有可用的截图",
+      "hoverReadFailed": "无法读取悬停的元素",
+      "noHover": "没有悬停的元素",
+      "copyFailed": "无法复制"
     },
     "claimedDownload": {
       "saved": "已保存到 {{place}}"
@@ -27349,6 +27417,7 @@
       "stop": "停止",
       "stopWorker": "停止 {{value0}}",
       "agent": "智能体",
+      "progress": "进度",
       "result": "结果",
       "workspace": "工作区",
       "branch": "分支",
