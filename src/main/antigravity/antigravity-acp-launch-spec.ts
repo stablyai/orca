@@ -128,7 +128,12 @@ const ANTIGRAVITY_AGY_LAUNCH_SPEC = {
   ],
   // agy has no full-access mode, so its launch flag grants it; plan approvals still reach the chat.
   permissionModeConfig: {
-    values: { ask: 'default', 'accept-edits': 'accept-edits', 'full-access': 'default' },
+    values: {
+      ask: 'default',
+      'accept-edits': 'accept-edits',
+      auto: 'auto',
+      'full-access': 'default'
+    },
     fullAccessAtLaunch: true
   },
   instructions: deliverAntigravityInstructions,

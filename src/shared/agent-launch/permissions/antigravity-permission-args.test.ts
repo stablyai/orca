@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { findOptionOccurrence } from '../../cli/command-option-occurrence'
 import { agentRequiredValueOptions } from '../../agent-session/options/launch/agent-session-option-agent-args'
-import { sourceControlActionPermissionModeRoute } from '../../source-control/ai/recipes/source-control-action-options'
 import { agentPickerPermissions } from '../picker/agent-launch-picker-catalog'
 import { resolveAgentLaunchCommand } from '../startup/tui-agent-launch-command'
 import { buildAgentStartupPlan } from '../startup/tui-agent-startup'
-import { newChatPermissionModeForSettings } from './agent-chat-permission-mode'
 import { agentPermissionArgsForLaunch, optionName } from './agent-permission-args'
 import { applyAllAgentsPermission } from './tui-agent-permission-choice'
 import { liftAgentPermissionArgs } from './tui-agent-permission-lift'
@@ -88,12 +86,6 @@ describe('Antigravity Approve-for-Me permission boundary', () => {
     }
   })
 
-  it('keeps new Antigravity chats on ask when saved terminal permission is auto', () => {
-    expect(
-      newChatPermissionModeForSettings('antigravity', { agentPermissionDefault: 'auto' })
-    ).toBe('ask')
-  })
-
   it.each([
     ['posix', 'darwin', "agy '--model' 'pro' '--mode' 'auto'"],
     ['powershell', 'win32', "agy '--model' 'pro' '--mode' 'auto'"],
@@ -115,13 +107,11 @@ describe('Antigravity Approve-for-Me permission boundary', () => {
     }
   )
 
-  it('includes antigravity in global auto permission and excludes auto from chat picker', () => {
+  it('includes antigravity in global auto permission and the terminal picker', () => {
     const applied = applyAllAgentsPermission({}, 'auto')
     expect(applied.agentPermissionDefault).toBe('auto')
     expect(applied.agentPermissionOverrides?.antigravity).toBeUndefined()
 
     expect(agentPickerPermissions('antigravity', 'terminal')).toContain('auto')
-    expect(agentPickerPermissions('antigravity', 'chat')).not.toContain('auto')
-    expect(sourceControlActionPermissionModeRoute('antigravity', 'auto')).toBe('terminals')
   })
 })
