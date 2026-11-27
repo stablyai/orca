@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowRight, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { BrowserBookmarkStar } from '../../bookmarks/BrowserBookmarkStar'
 import {
   BROWSER_CHROME_ADDRESS_SLOT_ATTRIBUTE,
   BROWSER_CHROME_ADDRESS_SLOT_HEIGHT_CLASS
@@ -20,6 +21,7 @@ export type BrowserNavigationControls = {
 /** Share history/tool layout while the identity slot varies between editable URLs and read-only document paths. */
 export function BrowserNavigationControlRow({
   controls,
+  pageId,
   addressSlot,
   reloadControl,
   reloadLabel,
@@ -29,6 +31,7 @@ export function BrowserNavigationControlRow({
   children
 }: {
   controls: BrowserNavigationControls
+  pageId: string
   /** The surface's identity widget: an editable address bar, or a read-only document chip. */
   addressSlot: React.ReactNode
   reloadControl?: React.ReactNode
@@ -87,6 +90,7 @@ export function BrowserNavigationControlRow({
         {addressSlot}
       </div>
 
+      <BrowserBookmarkStar pageId={pageId} />
       {children}
     </div>
   )

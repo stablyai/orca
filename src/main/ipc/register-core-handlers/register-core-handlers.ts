@@ -29,6 +29,7 @@ import { registerNotificationHandlers } from '../notifications/notifications'
 import { registerOnboardingHandlers } from '../onboarding'
 import { registerDashboardPopoutHandlers } from '../dashboard/dashboard-popout'
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser/browser'
+import { registerBrowserBookmarkHandlers } from '../browser/browser-bookmarks-ipc'
 import { setTrustedBrowserRendererWebContentsId } from '../browser/browser-renderer-trust'
 import { registerSessionHandlers } from '../session'
 import { registerSettingsHandlers } from '../settings/settings'
@@ -169,6 +170,7 @@ export async function registerCoreHandlers(
       onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch
     })
     registerBrowserHandlers(store)
+    registerBrowserBookmarkHandlers()
     registerShellHandlers(store)
     registerSessionHandlers(store, runtime)
     registerUIHandlers(store, { isDashboardPopoutRenderer })

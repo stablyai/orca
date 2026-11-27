@@ -1,5 +1,6 @@
 import type { CopyBrowserServerDownload } from '../../../shared/browser/downloads/browser-server-download-copy'
 import type { BrowserGuestMetadata } from '../../../shared/browser/guest-lifecycle/browser-guest-metadata'
+import type { BrowserBookmarksApi } from '../../../shared/browser/bookmarks/browser-bookmarks'
 import type { BrowserSessionCookieApi } from './browser-session-cookie-api'
 import type { BrowserGuestDiscardApi } from '../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools/browser-devtools-dock'
@@ -72,7 +73,10 @@ import type {
   BrowserClientPageRendererRequest
 } from '../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 
+type BrowserGuestIdentity = { browserPageId: string; webContentsId: number }
+
 export type BrowserApi = {
+  bookmarks: BrowserBookmarksApi | null
   /** Absent on clients that host no browser guests, including web clients. */
   readClientHostId?: () => string | null
   onClientPageRendererRequest?: (
@@ -80,10 +84,7 @@ export type BrowserApi = {
       request: BrowserClientPageRendererRequest
     ) => BrowserClientPageRendererOutcome | Promise<BrowserClientPageRendererOutcome>
   ) => () => void
-  getGuestMetadata: (args: {
-    browserPageId: string
-    webContentsId: number
-  }) => Promise<BrowserGuestMetadata | null | undefined>
+  getGuestMetadata: (args: BrowserGuestIdentity) => Promise<BrowserGuestMetadata | null | undefined>
   onGuestMetadata: (callback: (state: BrowserGuestMetadata) => void) => () => void
   registerGuest: (args: {
     browserPageId: string
@@ -92,7 +93,7 @@ export type BrowserApi = {
     sessionProfileId?: string | null
     webContentsId: number
   }) => Promise<boolean>
-  isGuestRegistered: (args: { browserPageId: string; webContentsId: number }) => Promise<boolean>
+  isGuestRegistered: (args: BrowserGuestIdentity) => Promise<boolean>
   repairGuestRegistration: BrowserApi['registerGuest']
   unregisterGuest: (args: {
     browserPageId: string

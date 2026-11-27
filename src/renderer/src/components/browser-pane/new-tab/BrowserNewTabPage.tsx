@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Globe } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
@@ -10,7 +11,10 @@ import {
   rankBrowserTopSites
 } from '@/lib/browser/history/browser-history-match'
 import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
-import type { BrowserHistoryEntry } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import type {
+  BrowserHistoryEntry,
+  BrowserPage
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { WorkspaceLinkedItemRow } from '../../sidebar/workspace-card/review/workspace-hover-attachments'
@@ -18,6 +22,7 @@ import { BrowserNewTabTile } from './browser-new-tab-tile'
 import { useBrowserNewTabLinkedItems } from './use-browser-new-tab-linked-items'
 import { useBrowserNewTabServers, type BrowserNewTabServers } from './use-browser-new-tab-servers'
 import { BrowserNewTabWorkspaceCard } from './browser-new-tab-workspace-card'
+import { BrowserNewTabBookmarks } from '../bookmarks/BrowserNewTabBookmarks'
 import { BrowserImportHintButton } from '../assemble-chrome/profile-routing/BrowserImportHintButton'
 import type { BrowserClientHostedCookieImportPage } from '../assemble-chrome/profile-routing/use-browser-page-cookie-import'
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
@@ -35,13 +40,13 @@ type BrowserNewTabServerContext = {
 }
 
 export function BrowserNewTabPage({
-  worktreeId,
+  page: { id: pageId, worktreeId },
   onOpenUrl,
   serversElsewhere = false,
   importProfileId,
   importClientHostedPage = null
 }: {
-  worktreeId: string
+  page: Pick<BrowserPage, 'id' | 'worktreeId'>
   onOpenUrl: (url: string) => void
   /** This tab's page runs on another machine than the workspace's ports, so they open on theirs. */
   serversElsewhere?: boolean
@@ -64,6 +69,7 @@ export function BrowserNewTabPage({
       : { profileId: importProfileId, worktreeId, clientHostedPage: importClientHostedPage }
   return worktree ? (
     <BrowserNewTabWorktreePage
+      pageId={pageId}
       worktree={worktree}
       repo={repo}
       servers={servers}
@@ -72,6 +78,7 @@ export function BrowserNewTabPage({
     />
   ) : (
     <BrowserNewTabPageLayout
+      pageId={pageId}
       linkedItems={NO_LINKED_ITEMS}
       servers={servers}
       onOpenUrl={onOpenUrl}
@@ -87,12 +94,14 @@ type BrowserNewTabImportTarget = {
 }
 
 function BrowserNewTabWorktreePage({
+  pageId,
   worktree,
   repo,
   servers,
   onOpenUrl,
   importTarget
 }: {
+  pageId: string
   worktree: Worktree
   repo: Repo | undefined
   servers: BrowserNewTabServerContext
@@ -102,6 +111,7 @@ function BrowserNewTabWorktreePage({
   const linkedItems = useBrowserNewTabLinkedItems(worktree, repo)
   return (
     <BrowserNewTabPageLayout
+      pageId={pageId}
       workspaceName={resolveWorktreeDisplayName(worktree)}
       linkedItems={linkedItems}
       servers={servers}
@@ -112,12 +122,14 @@ function BrowserNewTabWorktreePage({
 }
 
 function BrowserNewTabPageLayout({
+  pageId,
   workspaceName,
   linkedItems,
   servers: { servers, runtimeTarget, openInPlace },
   onOpenUrl,
   importTarget
 }: {
+  pageId: string
   workspaceName?: string
   linkedItems: WorkspaceLinkedItemRow[]
   servers: BrowserNewTabServerContext
@@ -125,6 +137,7 @@ function BrowserNewTabPageLayout({
   importTarget?: BrowserNewTabImportTarget
 }): React.JSX.Element {
   const t = useTranslate()
+  const showBookmarks = Boolean(window.api?.browser?.bookmarks)
   const browserUrlHistory = useAppStore((s) => s.browserUrlHistory)
   const removeBrowserHistoryEntry = useAppStore((s) => s.removeBrowserHistoryEntry)
   const restoreBrowserHistory = useAppStore((s) => s.restoreBrowserHistory)
@@ -172,9 +185,9 @@ function BrowserNewTabPageLayout({
       </div>
     )
 
-  if (!hasWorkspaceRows && suggested.length === 0) {
-    return (
-      <BrowserNewTabScroller>
+  return (
+    <BrowserNewTabScroller>
+      {!hasWorkspaceRows && suggested.length === 0 ? (
         <div className="flex flex-col items-center gap-2.5 px-4 pt-16 text-center">
           <div className="mb-1.5 grid size-13 place-items-center rounded-full border border-border text-muted-foreground">
             <Globe className="size-5" />
@@ -189,13 +202,7 @@ function BrowserNewTabPageLayout({
             )}
           </p>
         </div>
-        {importRow}
-      </BrowserNewTabScroller>
-    )
-  }
-
-  return (
-    <BrowserNewTabScroller>
+      ) : null}
       {hasWorkspaceRows ? (
         <BrowserNewTabSection
           label={t('browser.newTab.thisWorkspace', 'This workspace')}
@@ -210,28 +217,39 @@ function BrowserNewTabPageLayout({
           />
         </BrowserNewTabSection>
       ) : null}
-      {suggested.length > 0 ? (
-        <BrowserNewTabSection label={t('browser.newTab.suggested', 'Suggested')}>
-          <BrowserNewTabTileGrid>
-            {suggested.map((entry) => (
-              <BrowserNewTabTile
-                key={entry.normalizedUrl}
-                icon={
-                  <BrowserFavicon
-                    faviconUrl={entry.faviconUrl}
-                    className="size-8"
-                    fallbackClassName="text-muted-foreground"
+      {suggested.length > 0 || showBookmarks ? (
+        <div
+          className={cn('grid gap-8', suggested.length > 0 && showBookmarks && '@xl:grid-cols-2')}
+        >
+          {suggested.length > 0 ? (
+            <BrowserNewTabSection label={t('browser.newTab.suggested', 'Suggested')}>
+              <BrowserNewTabTileGrid>
+                {suggested.map((entry) => (
+                  <BrowserNewTabTile
+                    key={entry.normalizedUrl}
+                    icon={
+                      <BrowserFavicon
+                        faviconUrl={entry.faviconUrl}
+                        className="size-8"
+                        fallbackClassName="text-muted-foreground"
+                      />
+                    }
+                    label={suggestionLabel(entry)}
+                    tooltip={entry.title.trim() ? `${entry.title} · ${entry.url}` : entry.url}
+                    onOpen={() => onOpenUrl(entry.url)}
+                    onRemove={() => removeSuggestion(entry)}
+                    removeLabel={t('browser.newTab.removeSuggestion', 'Remove from history')}
                   />
-                }
-                label={suggestionLabel(entry)}
-                tooltip={entry.title.trim() ? `${entry.title} · ${entry.url}` : entry.url}
-                onOpen={() => onOpenUrl(entry.url)}
-                onRemove={() => removeSuggestion(entry)}
-                removeLabel={t('browser.newTab.removeSuggestion', 'Remove from history')}
-              />
-            ))}
-          </BrowserNewTabTileGrid>
-        </BrowserNewTabSection>
+                ))}
+              </BrowserNewTabTileGrid>
+            </BrowserNewTabSection>
+          ) : null}
+          {showBookmarks ? (
+            <BrowserNewTabSection label={t('browser.bookmarks.heading', 'Bookmarks')}>
+              <BrowserNewTabBookmarks pageId={pageId} onOpenUrl={onOpenUrl} />
+            </BrowserNewTabSection>
+          ) : null}
+        </div>
       ) : null}
       {importRow}
     </BrowserNewTabScroller>
@@ -258,7 +276,7 @@ function BrowserNewTabSection({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-2">
+    <section className="@container flex min-w-0 flex-col gap-2">
       <h2 className="flex min-w-0 gap-1.5 px-2 text-2xs text-muted-foreground">
         <span className="shrink-0 font-semibold tracking-[0.05em] uppercase">{label}</span>
         {detail ? (

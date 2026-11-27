@@ -90,6 +90,7 @@ export function BrowserChromeToolbar({
 
   return (
     <BrowserNavigationControlRow
+      pageId={closeTabOwner.browserPageId}
       rowRef={rowRef}
       controls={controls}
       addressSlot={addressSlot}

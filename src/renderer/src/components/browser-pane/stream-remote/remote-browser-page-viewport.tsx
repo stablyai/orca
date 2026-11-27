@@ -261,7 +261,7 @@ export function RemoteBrowserPageViewport({
         </div>
       )}
       {isBlankBrowserUrl(browserTab.url) ? (
-        <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={onNavigateToUrl} />
+        <BrowserNewTabPage page={browserTab} onOpenUrl={onNavigateToUrl} />
       ) : null}
       {annotateOverlays}
       <RemoteBrowserLinkStatusBubble

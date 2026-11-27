@@ -334,6 +334,22 @@
     }
   },
   "browser": {
+    "bookmarks": {
+      "add": "Add bookmark",
+      "address": "Address",
+      "duplicate": "This address is already bookmarked",
+      "edit": "Edit bookmark",
+      "empty": "Use the star beside a page’s address to bookmark it.",
+      "heading": "Bookmarks",
+      "invalidAddress": "Enter a valid HTTP or HTTPS address",
+      "loadError": "Could not load bookmarks",
+      "remove": "Remove bookmark",
+      "removeNamed": "Remove bookmark for {{title}}",
+      "save": "Save",
+      "saveError": "Could not save bookmark changes",
+      "title": "Title",
+      "toggle": "Bookmark this page"
+    },
     "googleCookieClear": {
       "signInKeyword": "sign-in",
       "unavailable": "Unavailable for this profile on the selected host.",
