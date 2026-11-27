@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Store } from '../../persistence/loading-store/store'
 import {
@@ -19,8 +20,11 @@ import {
 } from './gitlab-repo-access'
 import { guardWslUncPathAccess } from '../../wsl/filesystem/wsl-unc-access-gate'
 
-export function registerGitLabWorkItemHandlers(store: Store): void {
-  ipcMain.handle(
+export function registerGitLabWorkItemHandlers(
+  store: Store,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle(
     'gitlab:listWorkItems',
     async (
       _event,
@@ -48,7 +52,7 @@ export function registerGitLabWorkItemHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gitlab:workItemDetails',
     async (
       _event,
@@ -81,7 +85,7 @@ export function registerGitLabWorkItemHandlers(store: Store): void {
   )
 
   // Pasted URLs can name another project; use the parsed path instead of cwd.
-  ipcMain.handle(
+  ipc.handle(
     'gitlab:workItemByPath',
     async (
       _event,

@@ -13,7 +13,7 @@ import { registerFilesystemHandlers } from '../filesystem/filesystem'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
 import { registerFilesystemWatcherHandlers } from '../filesystem/watchers/filesystem-watcher-handlers'
 import { registerGitHubHandlers } from '../source-control/github'
-import { registerGitLabHandlers } from '../source-control/gitlab'
+import { registerLazyGitLabHandlers } from '../source-control/lazy-gitlab-handlers'
 import { registerHostedReviewHandlers } from '../source-control/hosted-review'
 import { registerLazyLinearHandlers } from '../linear/lazy-linear-handlers'
 import { registerLazyJiraHandlers } from '../jira/lazy-jira-handlers'
@@ -140,7 +140,7 @@ export async function registerCoreHandlers(
     registerLazyAccountAndDiagnosticIpcHandlers(rateLimits)
     registerRateLimitHandlers(rateLimits, codexAccounts, () => store.getSettings())
     registerGitHubHandlers(store, stats, runtime)
-    registerGitLabHandlers(store)
+    registerLazyGitLabHandlers(store)
     registerHostedReviewHandlers(store, stats)
     registerLazyLinearHandlers()
     registerLazyJiraHandlers(store, commitMessageAgentEnv)
