@@ -106,6 +106,10 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
   const credentialSummary = [authModeLabel, baseUrlOverride].filter(Boolean).join(' · ')
 
   const reloadCardState = (): void => {
+    // A completion begun under a previous host must not start or invalidate this host's loads.
+    if (useAppStore.getState().settings !== settings) {
+      return
+    }
     void loadConnection()
     refresh()
   }
