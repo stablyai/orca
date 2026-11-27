@@ -2,6 +2,7 @@ import { UnsealedCredentialNotice } from '../../provider-accounts/UnsealedCreden
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ExternalLink, GitPullRequestArrow, LoaderCircle, Unlink } from 'lucide-react'
 import type { BitbucketConnectionStatus } from '../../../../../shared/bitbucket/bitbucket-credentials'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
@@ -31,6 +32,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
   const mountedRef = useMountedRef()
   const subordinateRowClass = useIntegrationSubordinateRowClass('flex items-center gap-3')
   const [connection, setConnection] = useState<BitbucketConnectionStatus | null>(null)
+  const [connectionSettings, setConnectionSettings] = useState<GlobalSettings | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
   const [disconnectError, setDisconnectError] = useState<string | null>(null)
@@ -49,6 +51,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
         useAppStore.getState().settings === settings
       ) {
         setConnection(next)
+        setConnectionSettings(settings)
         setConnectionLoadFailed(false)
       }
     } catch {
@@ -58,6 +61,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
         generation === connectionLoadGenerationRef.current &&
         useAppStore.getState().settings === settings
       ) {
+        setConnectionSettings(settings)
         setConnectionLoadFailed(true)
       }
     }
@@ -67,7 +71,10 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
     void loadConnection()
   }, [loadConnection])
 
-  const currentConnection = connectionLoadFailed ? null : connection
+  // Metadata loaded for another host describes nobody actionable; keep actions down until a read for
+  // this host lands, so Disconnect can never delete the active host's credential.
+  const connectionIsCurrent = connectionSettings === settings
+  const currentConnection = connectionLoadFailed || !connectionIsCurrent ? null : connection
   const credentialStatusKnown = currentConnection !== null
   // A remote provider runtime owns the credential; the local preflight cannot see it.
   const remoteCardStatus: BitbucketStatus | 'unavailable' = connectionLoadFailed

@@ -10,19 +10,28 @@ import {
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { rowLessSourceTarget } from '../hosts/selection/default-creation-host'
 import type { RowLessSource } from '../hosts/selection/default-creation-host'
-import { assertRuntimeEnvironmentCapability } from '../rpc/compatibility/runtime-capability-proof'
+import { runtimeEnvironmentCapabilityProof } from '../rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 
-// Old servers lack the Bitbucket RPC methods; a capability check turns that into one clear message.
-async function assertRemoteBitbucketCredentials(target: RuntimeClientTarget): Promise<void> {
-  if (target.kind === 'environment') {
-    await assertRuntimeEnvironmentCapability(
-      target.environmentId,
-      BITBUCKET_REMOTE_CREDENTIALS_RUNTIME_CAPABILITY,
-      BITBUCKET_REMOTE_CREDENTIALS_UPDATE_REQUIRED_MESSAGE,
-      15_000
-    )
+type EnvironmentTarget = Extract<RuntimeClientTarget, { kind: 'environment' }>
+
+/**
+ * Old servers lack the Bitbucket RPC methods, so the capability answer doubles as admission: one
+ * clear update-required message instead of unknown-method. The proof pins the runtime and pairing,
+ * so a remove-and-re-pair during the wait cannot receive the credential payload.
+ */
+async function resolveRemoteBitbucketCredentials(
+  target: EnvironmentTarget
+): Promise<{ pairingRevision: number | undefined; runtimeId: string }> {
+  const proof = await runtimeEnvironmentCapabilityProof(
+    target.environmentId,
+    BITBUCKET_REMOTE_CREDENTIALS_RUNTIME_CAPABILITY,
+    15_000
+  )
+  if (!proof.supported) {
+    throw new Error(BITBUCKET_REMOTE_CREDENTIALS_UPDATE_REQUIRED_MESSAGE)
   }
+  return { pairingRevision: proof.pairingRevision, runtimeId: proof.runtimeId }
 }
 
 export async function bitbucketConnectionStatus(
@@ -30,9 +39,11 @@ export async function bitbucketConnectionStatus(
 ): Promise<BitbucketConnectionStatus> {
   const target = rowLessSourceTarget(settings)
   if (target.kind === 'environment') {
-    await assertRemoteBitbucketCredentials(target)
+    const pin = await resolveRemoteBitbucketCredentials(target)
     return callRuntimeRpc<BitbucketConnectionStatus>(target, 'bitbucket.status', undefined, {
-      timeoutMs: 15_000
+      timeoutMs: 15_000,
+      expectedEnvironmentPairingRevision: pin.pairingRevision,
+      expectedEnvironmentRuntimeId: pin.runtimeId
     })
   }
   return window.api.bitbucket.status()
@@ -44,13 +55,15 @@ export async function connectBitbucketCredentials(
 ): Promise<BitbucketConnectResult> {
   const target = rowLessSourceTarget(settings)
   if (target.kind === 'environment') {
-    await assertRemoteBitbucketCredentials(target)
+    const pin = await resolveRemoteBitbucketCredentials(target)
     return callRuntimeRpc<BitbucketConnectResult>(
       target,
       'bitbucket.connect',
       { ...args },
       {
-        timeoutMs: 30_000
+        timeoutMs: 30_000,
+        expectedEnvironmentPairingRevision: pin.pairingRevision,
+        expectedEnvironmentRuntimeId: pin.runtimeId
       }
     )
   }
@@ -60,8 +73,12 @@ export async function connectBitbucketCredentials(
 export async function disconnectBitbucketCredentials(settings: RowLessSource): Promise<void> {
   const target = rowLessSourceTarget(settings)
   if (target.kind === 'environment') {
-    await assertRemoteBitbucketCredentials(target)
-    await callRuntimeRpc(target, 'bitbucket.disconnect', undefined, { timeoutMs: 15_000 })
+    const pin = await resolveRemoteBitbucketCredentials(target)
+    await callRuntimeRpc(target, 'bitbucket.disconnect', undefined, {
+      timeoutMs: 15_000,
+      expectedEnvironmentPairingRevision: pin.pairingRevision,
+      expectedEnvironmentRuntimeId: pin.runtimeId
+    })
     return
   }
   await window.api.bitbucket.disconnect()

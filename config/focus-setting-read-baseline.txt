@@ -226,6 +226,7 @@
 2 src/renderer/src/runtime/hosts/observations/use-integration-provider-status-refresh.ts
 1 src/renderer/src/runtime/hosts/preflight/local-preflight-context.ts
 1 src/renderer/src/runtime/hosts/selection/default-creation-host.ts # the sanctioned reader of the default host
+3 src/renderer/src/runtime/bitbucket/runtime-bitbucket-client.ts # settings-scope routing, like the jira client
 17 src/renderer/src/runtime/jira/runtime-jira-client.ts
 2 src/renderer/src/runtime/jira/runtime-jira-summary-client.ts
 5 src/renderer/src/runtime/jira/runtime-jira-user-fields-client.ts
@@ -265,6 +266,7 @@
 1 src/renderer/src/store/slices/hosted-review/hosted-review-cache-identity.ts
 1 src/renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets.ts
 5 src/renderer/src/store/slices/jira/jira-collection-read-actions.ts
+6 src/renderer/src/store/slices/bitbucket/bitbucket-connection-actions.ts # settings-scope routing, like the jira actions
 32 src/renderer/src/store/slices/jira/jira-connection-actions.ts
 8 src/renderer/src/store/slices/jira/jira-issue-read-actions.ts
 6 src/renderer/src/store/slices/jira/jira-read-coordination.ts
