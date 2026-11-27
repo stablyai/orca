@@ -97,10 +97,6 @@ export function computeLapsedManualUnreadProtections(
   },
   activeSubjectKeys: ReadonlySet<string>
 ): string[] {
-  // A visible tab can lack a subject while its surface loads. That does not prove a switch.
-  if (activeSubjectKeys.size === 0) {
-    return []
-  }
   const { manuallyUnreadTurnStartedAt: marks, chatReadMarksCopiedHere } = records
   const entries = Object.entries(marks)
   if (entries.length === 0) {
