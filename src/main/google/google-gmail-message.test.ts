@@ -192,12 +192,12 @@ it('pairs equivalent mixed plain and HTML siblings without removing independent 
     const exact = textPart('text/plain', exactText)
     const html = textPart('text/html', '<p>Status update</p>')
     for (const representation of [html, { mimeType: 'multipart/related', parts: [html] }]) {
-      expect(
-        bodyText({ mimeType: 'multipart/mixed', parts: [short, representation, exact] })
-      ).toBe(`Status\n${exactText}`)
-      expect(
-        bodyText({ mimeType: 'multipart/mixed', parts: [exact, representation, short] })
-      ).toBe(`${exactText}\nStatus`)
+      expect(bodyText({ mimeType: 'multipart/mixed', parts: [short, representation, exact] })).toBe(
+        `Status\n${exactText}`
+      )
+      expect(bodyText({ mimeType: 'multipart/mixed', parts: [exact, representation, short] })).toBe(
+        `${exactText}\nStatus`
+      )
     }
   }
   const report = 'Nightly report\nAll checks passed. See the chart below.'
