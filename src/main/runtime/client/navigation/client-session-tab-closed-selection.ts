@@ -76,10 +76,14 @@ export function forgetClosedClientSessionSelection(
 export function forgetClosedClientSessionTabsByWorktree(
   statesByClient: ReadonlyMap<string, Map<string, StoredClientSessionTabSelection>>,
   worktreeId: string,
-  tabIds: readonly string[]
+  tabIds: readonly string[],
+  sees: (clientNavigationId: string) => boolean = () => true
 ): boolean {
   let persistedSelectionChanged = false
-  for (const statesByWorktree of statesByClient.values()) {
+  for (const [clientNavigationId, statesByWorktree] of statesByClient) {
+    if (!sees(clientNavigationId)) {
+      continue
+    }
     const state = statesByWorktree.get(worktreeId)
     if (!state) {
       continue

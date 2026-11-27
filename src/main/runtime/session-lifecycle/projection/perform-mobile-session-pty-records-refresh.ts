@@ -1,4 +1,6 @@
 import type { MobileSessionTabActivationOptions } from './mobile-session-tab-activation-options'
+import { isTeammateTabList } from '../../../bots/team-share/teammate-rules'
+import { findAddressedSessionTab } from '../../session-tabs/layout/addressed-session-tab'
 import type { RuntimeWorkspaceSelectors as WorkspaceSelectors } from '../../workspaces/workspace-selectors'
 import type { OrcaRuntimeWithApplyMobileSessionTabNavigation as MobileSessionNavigation } from './apply-mobile-session-tab-navigation'
 import type { OrcaRuntimeWithAgentSessionResumeOwnership as AgentSessionResume } from './agent-session-resume-ownership'
@@ -139,6 +141,10 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
     await this.refreshMobileSessionPtyRecords(worktreeId)
     // Why: the renderer can publish the host's spelling while inventory refresh is pending.
     worktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ?? worktreeId
+    const owner = this.tabOwnerOfClient(opts.clientNavigationId, worktreeId)
+    if (isTeammateTabList(owner)) {
+      return this.activatePersonSessionTab(owner, worktreeId, tabId, opts)
+    }
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     tabId = resolveChatTabActivation(snapshot?.tabs ?? [], tabId)
     const directTab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
@@ -150,13 +156,7 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
             candidate.parentTabId === tabId &&
             candidate.leafId === leafId
         ))
-      : (directTab ??
-        snapshot?.tabs.find(
-          (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tabId
-        ) ??
-        snapshot?.tabs.find(
-          (candidate) => candidate.type === 'browser' && candidate.browserWorkspaceId === tabId
-        ))
+      : findAddressedSessionTab(snapshot?.tabs, tabId)
     if (!tab) {
       throw new Error('tab_not_found')
     }

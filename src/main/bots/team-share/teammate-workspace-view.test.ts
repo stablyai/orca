@@ -219,11 +219,6 @@ async function listed(scope: RpcCallerScope, method: string, field: string, key 
     .map((row) => row[key])
 }
 
-const Tabs = z.looseObject({
-  worktree: z.string(),
-  tabs: z.array(z.looseObject({ id: z.string() })),
-  tabGroups: z.array(z.looseObject({ tabOrder: z.array(z.string()) }))
-})
 const StreamedEvent = z.looseObject({
   type: z.string(),
   subscriptionId: z.string().optional(),
@@ -276,28 +271,6 @@ describe('a workspace teammate on a shared agent', () => {
       HOME,
       WORKER,
       OWNERS
-    ])
-  })
-
-  it('sees only its own tabs in the agent’s home and every tab in its workers’ workspaces', async () => {
-    const listAll = async (scope: RpcCallerScope) => {
-      const answer = z
-        .object({ result: z.object({ snapshots: z.array(Tabs) }) })
-        .parse(await call(scope, 'session.tabs.listAll'))
-      return answer.result.snapshots.map((snapshot) => ({
-        worktree: snapshot.worktree,
-        tabs: snapshot.tabs.map((tab) => tab.id),
-        order: snapshot.tabGroups[0]?.tabOrder
-      }))
-    }
-    expect(await listAll(TEAMMATE)).toEqual([
-      { worktree: HOME, tabs: [ALICES_CHAT], order: [ALICES_CHAT] },
-      { worktree: WORKER, tabs: [OWNERS_WORKSPACE_CHAT], order: [OWNERS_WORKSPACE_CHAT] }
-    ])
-    expect((await listAll(OWNER)).map((snapshot) => snapshot.tabs)).toEqual([
-      [ALICES_CHAT, OWNERS_CHAT],
-      [OWNERS_WORKSPACE_CHAT],
-      []
     ])
   })
 

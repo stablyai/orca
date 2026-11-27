@@ -113,6 +113,10 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     input: StructuredSessionTabPublicationInput
   ): Promise<void> {
     input.workspaceAuthority?.check()
+    // A teammate's chat in their own Home goes to their own list (teammate-rules.ts, rule 4).
+    if (await this.publishCallerPersonChatTab(input)) {
+      return
+    }
     const { tabId, current, eligible } = await admitStructuredSessionTabPublication(input, () =>
       input.workspaceAuthority
         ? this.prepareStructuredAgentSessionStartupRestoration()

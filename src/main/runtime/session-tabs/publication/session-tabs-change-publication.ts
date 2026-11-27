@@ -16,6 +16,7 @@ import { getMobileSessionTabOrderIds } from '../../session-lifecycle/projection/
 import { readCreatedWorkspaceLaunch } from '../../../agent-launch/agent-launch-created-workspace'
 import type { AgentSenderRevision } from '../../../../shared/orchestration/mailbox/agent-sender-associations'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import type { SessionTabListName } from '../../client/navigation/client-session-tab-selection'
 
 export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab {
   protected scheduleMobileSessionTabsChanged(worktreeId: string): void {
@@ -62,16 +63,17 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     }
   }
 
-  protected createMobileSessionTabsDelivery() {
+  /** Delivers frames of one tab list (the host's, or a teammate's own) to that list's listeners only. */
+  protected createMobileSessionTabsDelivery(list: SessionTabListName = 'host') {
     return createMobileSessionTabsDelivery({
       senders: this.agentProjections.senders,
       listeners: (worktree, navigation, candidates) =>
-        this.selectMobileSessionTabsListeners(worktree, navigation, candidates),
+        this.selectMobileSessionTabsListeners(worktree, navigation, candidates, list),
       subscribed: (subscription) => this.mobileSessionTabListeners.has(subscription),
       project: (frame, navigation) => this.projectMobileSessionTabsForClient(frame, navigation),
       deliver: (subscription, frame, sequence, delivery) =>
         this.deliverMobileSessionTabsFrame(subscription, frame, sequence, delivery),
-      source: (worktree) => this.mobileSessionTabsByWorktree.deliverySource(worktree),
+      source: (worktree) => this.sessionTabListDeliverySource(list, worktree),
       epoch: () => this.getAuthoritativeSessionTabsInventoryEpoch(),
       releaseHistory: () => this.releaseAgentSenderHistoryIfUnobserved()
     })
@@ -125,9 +127,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
           return { ...result, agentSenderAssociations: senderScope(snapshot.worktree) }
         })
         return {
-          snapshots: frames.map((frame) =>
-            this.projectMobileSessionTabsForClient(frame, clientNavigationId)
-          ),
+          snapshots: this.projectSessionTabsCensus(frames, clientNavigationId, includeAgentSenders),
           changeSequence: this.mobileSessionTabsChangeSequence
         }
       } finally {
@@ -147,6 +147,14 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     options?: { includeInitialSurfaceLaunch?: true; includeAgentSenders?: boolean }
   ): Promise<RuntimeMobileSessionTabsResult> {
     const consume = (): RuntimeMobileSessionTabsResult => {
+      const own = this.ownSessionTabListFrame(
+        worktreeId,
+        clientNavigationId,
+        options?.includeAgentSenders
+      )
+      if (own) {
+        return this.projectMobileSessionTabsForClient(own, clientNavigationId)
+      }
       const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
       if (!snapshot) {
         // A windowless desktop has no publisher coming, so its hydrated absence is the answer.
@@ -230,7 +238,10 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     projected: RuntimeMobileSessionTabsResult,
     clientNavigationId: string,
     follow = false,
-    deliver = this.createMobileSessionTabsDelivery()
+    // The client's own list in this workspace: a teammate's in their Home, else the host's.
+    deliver = this.createMobileSessionTabsDelivery(
+      this.sessionTabListOf(clientNavigationId, projected.worktree)
+    )
   ): void {
     deliver(
       follow ? { ...projected, navigationIntent: 'follow' } : projected,

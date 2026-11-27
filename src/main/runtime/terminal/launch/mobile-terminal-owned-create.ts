@@ -25,9 +25,9 @@ import {
 const OWNED_MOBILE_DISPATCH_RECIPE_TTL_MS = 15 * 60_000
 
 export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends OrcaRuntimeWithResolveMobileSessionTerminalCommand {
-  protected abstract createMobileSessionTabsDelivery(): ReturnType<
-    SessionTabsPublication['createMobileSessionTabsDelivery']
-  >
+  protected abstract createMobileSessionTabsDelivery(
+    ...args: Parameters<SessionTabsPublication['createMobileSessionTabsDelivery']>
+  ): ReturnType<SessionTabsPublication['createMobileSessionTabsDelivery']>
 
   protected abstract getPtyManualTitle(
     ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>

@@ -6,6 +6,7 @@ import type {
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RuntimeWorkspaceFileTargets } from '../../workspaces/workspace-file-session-targets'
+import type { SessionTabListName } from '../../client/navigation/client-session-tab-selection'
 export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorkspaceFileTargets {
   onMobileSessionTabsChanged(
     listener: MobileSessionTabSubscription['listener'],
@@ -80,10 +81,13 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
     this.clientHostedPageReconciliation.forgetObservation(clientNavigationId, observer)
   }
 
+  /** Listeners of one workspace's tab list: a frame of the host's list never reaches a teammate whose
+   *  own list it is there, nor one of theirs anyone else (`tabOwnerOf`). */
   protected selectMobileSessionTabsListeners(
     worktree?: string,
     clientNavigationId?: string,
-    candidates: Iterable<MobileSessionTabSubscription> = this.mobileSessionTabListeners
+    candidates: Iterable<MobileSessionTabSubscription> = this.mobileSessionTabListeners,
+    list: SessionTabListName = 'host'
   ): MobileSessionTabSubscription[] {
     const selected: MobileSessionTabSubscription[] = []
     for (const subscription of candidates) {
@@ -91,7 +95,9 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
         this.mobileSessionTabListeners.has(subscription) &&
         (clientNavigationId === undefined ||
           subscription.clientNavigationId === clientNavigationId) &&
-        (worktree === undefined || subscription.acceptsWorktree?.(worktree) !== false)
+        (worktree === undefined ||
+          (subscription.acceptsWorktree?.(worktree) !== false &&
+            this.sessionTabListOf(subscription.clientNavigationId, worktree) === list))
       ) {
         selected.push(subscription)
       }

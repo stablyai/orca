@@ -5,7 +5,7 @@
 // keep the share guard every teammate has, so the tier only ever adds to what a teammate may do.
 import type { RpcContext, RpcMethod, RpcStreamingMethod } from '../../runtime/rpc/core'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
-import { teammateMethodClass } from '../../runtime/rpc/callers/teammate-method-classes'
+import { teammateMethodClass, writesHostTabList } from './teammate-rules'
 import {
   admitBotShareCall,
   type BotShareRefusal
@@ -13,6 +13,22 @@ import {
 import { withTeammateLists } from './teammate-workspace-lists'
 
 type Admitted = { method: RpcMethod | RpcStreamingMethod; params: unknown }
+
+/** Rule 4: in their own Home a teammate's list holds their chats, so nothing they call opens, moves or
+ *  reshapes a tab of the host's list there. */
+async function writesHostTabsInOwnHome(
+  context: RpcContext,
+  scope: BotShareCallerScope,
+  methodName: string,
+  params: unknown
+): Promise<boolean> {
+  if (!writesHostTabList(methodName)) {
+    return false
+  }
+  const named =
+    typeof params === 'object' && params !== null && 'worktree' in params ? params.worktree : null
+  return typeof named === 'string' && (await context.runtime.namesTeammateHome(named, scope))
+}
 
 export async function admitTeammateCall<A extends Admitted>(
   context: RpcContext,
@@ -26,7 +42,7 @@ export async function admitTeammateCall<A extends Admitted>(
     return 'refusal' in answer ? answer : { ...admitted, params: answer.params }
   }
   const kind = teammateMethodClass(method.name)
-  if (kind === 'refused') {
+  if (kind === 'refused' || (await writesHostTabsInOwnHome(context, scope, method.name, params))) {
     return { refusal: 'method_not_found' }
   }
   return kind === 'filtered' ? { ...admitted, method: withTeammateLists(method) } : admitted

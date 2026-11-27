@@ -5,7 +5,6 @@
 // `teammate-workspace-view.ts`; `TEAMMATE_HANDLER_FILTERED` names them.
 import type { RpcContext, RpcMethod, RpcStreamingMethod } from '../../runtime/rpc/core'
 import { isStreamingMethod } from '../../runtime/rpc/core'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { teammateWorkspaceLists, type TeammateWorkspaceLists } from './teammate-workspace-view'
 
 type Row = Record<string, unknown>
@@ -71,10 +70,6 @@ function groupsAbove(result: unknown, groupIds: ReadonlySet<string>): unknown {
   return keepRows(result, 'groups', (group) => kept.has(text(group.id) ?? ''))
 }
 
-function isTabs(value: unknown): value is RuntimeMobileSessionTabsResult {
-  return isRow(value) && typeof value.worktree === 'string' && Array.isArray(value.tabs)
-}
-
 const TEAMMATE_LISTS: Readonly<Record<string, ListScope>> = {
   'worktree.list': {
     after: (result, { has }) => keepRows(result, 'worktrees', (row) => has(text(row.id))),
@@ -95,16 +90,8 @@ const TEAMMATE_LISTS: Readonly<Record<string, ListScope>> = {
   'terminal.list': byWorktreeId('terminals', 'terminals'),
   'browser.tabList': byWorktreeId('tabs'),
   'agent.list': byWorktreeId('agents'),
-  'session.tabs.list': {
-    after: (result, { sessionTabs }) => (isTabs(result) ? sessionTabs(result) : result)
-  },
   'session.tabs.listAll': {
-    after: (result, lists) => {
-      const kept = keepRows(result, 'snapshots', (row) => lists.has(text(row.worktree)))
-      return isRow(kept) && Array.isArray(kept.snapshots)
-        ? { ...kept, snapshots: kept.snapshots.filter(isTabs).map(lists.sessionTabs) }
-        : kept
-    }
+    after: (result, { has }) => keepRows(result, 'snapshots', (row) => has(text(row.worktree)))
   }
 }
 
@@ -113,7 +100,6 @@ export const TEAMMATE_HANDLER_FILTERED: ReadonlySet<string> = new Set([
   'repo.list',
   'worktree.ps',
   'runtime.clientEvents.subscribe',
-  'session.tabs.subscribe',
   'session.tabs.subscribeAll',
   'layout.subscribe',
   'agentSession.subscribeStatus',
