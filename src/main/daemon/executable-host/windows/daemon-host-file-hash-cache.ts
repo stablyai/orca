@@ -40,7 +40,7 @@ export async function hashDaemonHostFileAsync(path: string): Promise<string> {
   }
   const hash = createHash('sha256')
   for await (const chunk of createReadStream(path)) {
-    hash.update(chunk as Buffer)
+    hash.update(chunk)
   }
   const sha256 = hash.digest('hex')
   return recordHash(path, before, fileStatSignature(await stat(path, { bigint: true })), sha256)

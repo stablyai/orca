@@ -1,0 +1,135 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { access, readFile } from 'node:fs/promises'
+import { join, win32 as winPath } from 'node:path'
+import {
+  buildDaemonHostManifest,
+  daemonHostProcessPackageDir,
+  daemonHostWindowsRegistryDir,
+  WINDOWS_REGISTRY_REQUIRED,
+  destPath,
+  toPosixRelative,
+  type DaemonHostSources
+} from './daemon-host-manifest'
+
+export type CodeFileSource = { sourcePath: string; destRel: string }
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function isSafeRelativePath(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    !value.includes('\\') &&
+    !value.includes(':') &&
+    value.split('/').every((part) => part !== '' && part !== '.' && part !== '..')
+  )
+}
+
+/** Export targets of the process-host package; null when its manifest is not a valid runtime. */
+function processHostExportPaths(manifestText: string, packageDir: string): string[] | null {
+  const manifest: unknown = JSON.parse(manifestText)
+  if (
+    !isRecord(manifest) ||
+    manifest.name !== '@orca/process-host' ||
+    !isRecord(manifest.exports)
+  ) {
+    return null
+  }
+  const paths: string[] = []
+  for (const entry of Object.values(manifest.exports)) {
+    if (!isRecord(entry) || typeof entry.default !== 'string') {
+      return null
+    }
+    const relative = entry.default.startsWith('./') ? entry.default.slice(2) : entry.default
+    if (!isSafeRelativePath(relative) || !relative.startsWith('dist/')) {
+      return null
+    }
+    paths.push(destPath(packageDir, relative))
+  }
+  return paths.length > 0 ? paths : null
+}
+
+type InventoryPlan = {
+  /** Every path that must exist before the install can host a relocated daemon. */
+  required: string[]
+  processHostManifest: string
+  processHostDir: string
+  roots: CodeFileSource[]
+  /** Roots included only when present. */
+  optional: CodeFileSource[]
+}
+
+function inventoryPlan(sources: DaemonHostSources): InventoryPlan {
+  const processHostDir = daemonHostProcessPackageDir(sources)
+  const packageRel = toPosixRelative(sources.appDir, processHostDir)
+  const registryDir = daemonHostWindowsRegistryDir(sources)
+  const registryRel = toPosixRelative(sources.appDir, registryDir)
+  const chunksDir = join(winPath.dirname(sources.entrySourcePath), 'chunks')
+  const outManifest = join(sources.resourcesPath, 'app.asar.unpacked', 'out', 'package.json')
+  return {
+    required: buildDaemonHostManifest(sources)
+      .filter((op) => !op.optional)
+      .map((op) => op.sourcePath),
+    processHostManifest: join(processHostDir, 'package.json'),
+    processHostDir,
+    roots: [
+      { sourcePath: sources.entrySourcePath, destRel: sources.entryRelPath },
+      { sourcePath: join(processHostDir, 'package.json'), destRel: `${packageRel}/package.json` },
+      { sourcePath: join(processHostDir, 'dist'), destRel: `${packageRel}/dist` },
+      ...WINDOWS_REGISTRY_REQUIRED.map((relative) => ({
+        sourcePath: destPath(registryDir, relative),
+        destRel: `${registryRel}/${relative}`
+      }))
+    ],
+    optional: [chunksDir, outManifest].map((sourcePath) => ({
+      sourcePath,
+      destRel: toPosixRelative(sources.appDir, sourcePath)
+    }))
+  }
+}
+
+/** Code roots the fingerprint covers; null when the install cannot host a relocated daemon. */
+export function inventoryRoots(sources: DaemonHostSources): CodeFileSource[] | null {
+  const plan = inventoryPlan(sources)
+  if (!plan.required.every(existsSync)) {
+    return null
+  }
+  const exportPaths = processHostExportPaths(
+    readFileSync(plan.processHostManifest, 'utf8'),
+    plan.processHostDir
+  )
+  if (!exportPaths?.every(existsSync)) {
+    return null
+  }
+  return [...plan.roots, ...plan.optional.filter((root) => existsSync(root.sourcePath))]
+}
+
+function pathExists(path: string): Promise<boolean> {
+  return access(path).then(
+    () => true,
+    () => false
+  )
+}
+
+async function allExist(paths: readonly string[]): Promise<boolean> {
+  return (await Promise.all(paths.map(pathExists))).every(Boolean)
+}
+
+export async function inventoryRootsAsync(
+  sources: DaemonHostSources
+): Promise<CodeFileSource[] | null> {
+  const plan = inventoryPlan(sources)
+  if (!(await allExist(plan.required))) {
+    return null
+  }
+  const exportPaths = processHostExportPaths(
+    await readFile(plan.processHostManifest, 'utf8'),
+    plan.processHostDir
+  )
+  if (!exportPaths || !(await allExist(exportPaths))) {
+    return null
+  }
+  const present = await Promise.all(plan.optional.map((root) => pathExists(root.sourcePath)))
+  return [...plan.roots, ...plan.optional.filter((_, index) => present[index])]
+}

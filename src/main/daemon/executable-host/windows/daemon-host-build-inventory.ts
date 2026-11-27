@@ -1,12 +1,18 @@
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
-import { join, win32 as winPath } from 'node:path'
+import { join } from 'node:path'
 import { mapWithConcurrencyUntilFailure } from '../../../../shared/concurrency/map-with-concurrency'
 import { hashDaemonHostFile, hashDaemonHostFileAsync } from './daemon-host-file-hash-cache'
 import { listDaemonHostTree } from './daemon-host-tree-walk'
 import {
-  buildDaemonHostManifest,
+  inventoryRoots,
+  inventoryRootsAsync,
+  isRecord,
+  isSafeRelativePath,
+  type CodeFileSource
+} from './daemon-host-inventory-roots'
+import {
   daemonHostExeName,
   daemonHostProcessPackageDir,
   daemonHostWindowsRegistryDir,
@@ -44,8 +50,6 @@ function fingerprintInventory(inventory: Omit<DaemonHostBuildInventory, 'fingerp
 // Bound open handles; Defender scans each opened file.
 const HASH_CONCURRENCY = 8
 
-type CodeFileSource = { sourcePath: string; destRel: string }
-
 function listCodeFiles(sourcePath: string, destRel: string): CodeFileSource[] {
   if (statSync(sourcePath).isFile()) {
     return [{ sourcePath, destRel }]
@@ -53,80 +57,6 @@ function listCodeFiles(sourcePath: string, destRel: string): CodeFileSource[] {
   return readdirSync(sourcePath)
     .sort()
     .flatMap((name) => listCodeFiles(join(sourcePath, name), `${destRel}/${name}`))
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function isSafeRelativePath(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    !value.includes('\\') &&
-    !value.includes(':') &&
-    value.split('/').every((part) => part !== '' && part !== '.' && part !== '..')
-  )
-}
-
-function processHostExportsExist(packageDir: string): boolean {
-  const manifest: unknown = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'))
-  if (
-    !isRecord(manifest) ||
-    manifest.name !== '@orca/process-host' ||
-    !isRecord(manifest.exports)
-  ) {
-    return false
-  }
-  const exports = Object.values(manifest.exports)
-  return (
-    exports.length > 0 &&
-    exports.every((entry) => {
-      if (!isRecord(entry) || typeof entry.default !== 'string') {
-        return false
-      }
-      const relative = entry.default.startsWith('./') ? entry.default.slice(2) : entry.default
-      return (
-        isSafeRelativePath(relative) &&
-        relative.startsWith('dist/') &&
-        existsSync(destPath(packageDir, relative))
-      )
-    })
-  )
-}
-
-/** Code roots the fingerprint covers; null when the install cannot host a relocated daemon. */
-function inventoryRoots(sources: DaemonHostSources): CodeFileSource[] | null {
-  if (buildDaemonHostManifest(sources).some((op) => !op.optional && !existsSync(op.sourcePath))) {
-    return null
-  }
-  const processHostDir = daemonHostProcessPackageDir(sources)
-  if (!processHostExportsExist(processHostDir)) {
-    return null
-  }
-  const roots: CodeFileSource[] = [
-    { sourcePath: sources.entrySourcePath, destRel: sources.entryRelPath }
-  ]
-  const chunksDir = join(winPath.dirname(sources.entrySourcePath), 'chunks')
-  const outManifest = join(sources.resourcesPath, 'app.asar.unpacked', 'out', 'package.json')
-  for (const optional of [chunksDir, outManifest]) {
-    if (existsSync(optional)) {
-      roots.push({ sourcePath: optional, destRel: toPosixRelative(sources.appDir, optional) })
-    }
-  }
-  const packageRel = toPosixRelative(sources.appDir, processHostDir)
-  roots.push(
-    { sourcePath: join(processHostDir, 'package.json'), destRel: `${packageRel}/package.json` },
-    { sourcePath: join(processHostDir, 'dist'), destRel: `${packageRel}/dist` }
-  )
-  const registryDir = daemonHostWindowsRegistryDir(sources)
-  const registryRel = toPosixRelative(sources.appDir, registryDir)
-  for (const relative of WINDOWS_REGISTRY_REQUIRED) {
-    roots.push({
-      sourcePath: destPath(registryDir, relative),
-      destRel: `${registryRel}/${relative}`
-    })
-  }
-  return roots
 }
 
 function inventoryFromFiles(
@@ -166,7 +96,7 @@ export async function collectDaemonHostBuildInventoryAsync(
   sources: DaemonHostSources
 ): Promise<DaemonHostBuildInventory | null> {
   try {
-    const roots = inventoryRoots(sources)
+    const roots = await inventoryRootsAsync(sources)
     if (!roots) {
       return null
     }

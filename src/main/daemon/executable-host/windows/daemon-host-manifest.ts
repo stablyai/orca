@@ -1,6 +1,5 @@
-import { existsSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { access, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { mapWithConcurrencyUntilFailure } from '../../../../shared/concurrency/map-with-concurrency'
 import { listDaemonHostTree } from './daemon-host-tree-walk'
 import { dirname, join, win32 as winPath } from 'node:path'
@@ -210,7 +209,15 @@ export async function executeManifest(
   stagingRoot: string,
   expectedHashes: ReadonlyMap<string, string> = new Map()
 ): Promise<void> {
-  const present = ops.filter((op) => existsSync(op.sourcePath))
+  const exists = await Promise.all(
+    ops.map((op) =>
+      access(op.sourcePath).then(
+        () => true,
+        () => false
+      )
+    )
+  )
+  const present = ops.filter((_, index) => exists[index])
   const missing = ops.find((op) => !op.optional && !present.includes(op))
   if (missing) {
     throw new Error(`daemon-host relocation: missing required input ${missing.sourcePath}`)

@@ -397,9 +397,9 @@
 1 src/main/daemon/executable-host/macos/macos-daemon-bundle.ts
 3 src/main/daemon/executable-host/macos/macos-daemon-launchd.ts
 5 src/main/daemon/executable-host/macos/macos-retired-daemon-recovery.ts
-11 src/main/daemon/executable-host/windows/daemon-host-build-inventory.ts
+4 src/main/daemon/executable-host/windows/daemon-host-build-inventory.ts
 2 src/main/daemon/executable-host/windows/daemon-host-file-hash-cache.ts
-1 src/main/daemon/executable-host/windows/daemon-host-reclaim.ts
+1 src/main/daemon/executable-host/windows/daemon-host-pinned-versions.ts # moved unchanged from daemon-host-relocation.ts, whose row shrank by more; once per daemon provider init
 18 src/main/daemon/executable-host/windows/daemon-host-relocation.ts
 4 src/main/daemon/health/daemon-health.ts
 3 src/main/daemon/health/daemon-liveness-report.ts
