@@ -25,20 +25,20 @@ export const CONNECTOR_REPLY_HTML_PAGE_AS_FILE =
 export const CONNECTOR_REPLY_UNAVAILABLE =
   "Replies aren't available from this host yet; the agent's final message is posted to the thread when the turn ends."
 
-const ReplyText = {
+const createReplyText = () => ({
   replyId: z.string().min(1, 'Missing reply id'),
   text: z.string().min(1, 'Missing text'),
   // Inline notes on the pull request the conversation is on; elsewhere they follow the text.
   review: ConnectorReview.optional(),
   // The caller can send a whole HTML page as a file; only then may Slack text holding one be refused.
   pagesAsFiles: z.literal(true).optional()
-}
+})
 
 /** An agent's reply to its conversation's thread, from the pane or native chat it runs in; one replyId posts at most once. */
 export const ConnectorReply = lazyZodSchema(() =>
   z.union([
-    z.object({ paneKey: z.string().min(1, 'Missing pane key'), ...ReplyText }),
-    z.object({ sessionId: z.string().min(1, 'Missing session id'), ...ReplyText })
+    z.object({ paneKey: z.string().min(1, 'Missing pane key'), ...createReplyText() }),
+    z.object({ sessionId: z.string().min(1, 'Missing session id'), ...createReplyText() })
   ])
 )
 
@@ -73,21 +73,21 @@ export const ConnectorLeaveThread = lazyZodSchema(() =>
   })
 )
 
-const MirrorChat = { sessionId: z.string().min(1, 'Missing session id') }
+const createMirrorChat = () => ({ sessionId: z.string().min(1, 'Missing session id') })
 
 /** A bot's Slack thread chat: post the owner's next messages there too, or keep them in Orca. */
 export const ConnectorSlackMirrorSet = lazyZodSchema(() =>
-  z.object({ ...MirrorChat, on: z.boolean() })
+  z.object({ ...createMirrorChat(), on: z.boolean() })
 )
 
 /** One Orca-typed message's post to the thread: Retry, Dismiss or Delete from Slack. */
 export const ConnectorSlackMirrorPost = lazyZodSchema(() =>
   z.object({
-    ...MirrorChat,
+    ...createMirrorChat(),
     itemId: z.string().min(1, 'Missing item id'),
     action: z.enum(['retry', 'dismiss', 'delete'])
   })
 )
 
 /** What the cloud says of the chat's thread for its menu. */
-export const ConnectorSlackMirrorStatus = lazyZodSchema(() => z.object(MirrorChat))
+export const ConnectorSlackMirrorStatus = lazyZodSchema(() => z.object(createMirrorChat()))

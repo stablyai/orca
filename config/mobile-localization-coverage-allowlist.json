@@ -7,37 +7,79 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/pane-view/MobileBrowserKeyRow.tsx",
-    "kind": "jsx-expression",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPageKeys.tsx",
+    "kind": "object-property:label",
     "text": "Esc",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/pane-view/MobileBrowserPointerModifiers.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPageKeys.tsx",
     "kind": "object-property:label",
-    "text": "Alt",
+    "text": "Tab",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/pane-view/MobileBrowserPointerModifiers.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPageKeys.tsx",
     "kind": "object-property:label",
-    "text": "Cmd",
+    "text": "⇧Tab",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/pane-view/MobileBrowserPointerModifiers.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPageKeys.tsx",
+    "kind": "object-property:label",
+    "text": "⌘",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPageKeys.tsx",
+    "kind": "object-property:label",
+    "text": "⌥",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPageKeys.tsx",
+    "kind": "object-property:label",
+    "text": "⌃",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPageKeys.tsx",
+    "kind": "object-property:label",
+    "text": "⇧",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPageKeys.tsx",
     "kind": "object-property:label",
     "text": "Ctrl",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/pane-view/MobileBrowserPointerModifiers.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPageKeys.tsx",
+    "kind": "object-property:label",
+    "text": "Alt",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPageKeys.tsx",
     "kind": "object-property:label",
     "text": "Shift",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPageKeys.tsx",
+    "kind": "object-property:label",
+    "text": "Cmd",
     "dynamic": false,
     "count": 1
   },
@@ -527,7 +569,7 @@
   {
     "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
-    "text": "Shift+Tab",
+    "text": "⇧Tab",
     "dynamic": false,
     "count": 1
   },

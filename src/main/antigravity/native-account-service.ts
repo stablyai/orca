@@ -37,6 +37,11 @@ function matches(
   return account.credentials === current.contents
 }
 
+export type AntigravityLaunchRestore = {
+  /** True while Orca's own agy sign-in may have put a login it hasn't saved yet in the slot. */
+  signInHoldsLogin: () => boolean
+}
+
 export class AntigravityAccountService {
   private mutation: Promise<unknown> = Promise.resolve()
   private readonly rewrittenLogins = new AntigravityRewrittenLoginIdentity(
@@ -47,8 +52,15 @@ export class AntigravityAccountService {
     private readonly store: AntigravityAccountStore,
     private readonly backend: AntigravityCredentialBackend,
     private readonly now: () => number = Date.now,
-    private readonly lookupIdentity = fetchGoogleIdentity
+    private readonly lookupIdentity = fetchGoogleIdentity,
+    // Only the host's service restores at launch; absent, launches still refuse a moved login.
+    private readonly launchRestore?: AntigravityLaunchRestore
   ) {}
+
+  /** Resolves once every account operation queued before it has finished. */
+  settled(): Promise<void> {
+    return this.serialize(async () => {})
+  }
 
   listAccounts(): Promise<AntigravityAccountState> {
     return this.serialize(async () => this.state(await this.reconcile()))
@@ -95,16 +107,7 @@ export class AntigravityAccountService {
       if (!selected) {
         throw new Error('Antigravity account was not found.')
       }
-      const switching = !current || !this.matches(selected, current)
-      if (switching) {
-        await this.backend.write(selected.credentials, current?.contents ?? null)
-      }
-      const readback = await this.backend.read()
-      if (!readback || !this.matches(selected, readback)) {
-        throw new Error(
-          'Antigravity account switching could not be verified; refresh before retrying.'
-        )
-      }
+      const { readback, switching } = await this.switchNative(selected, current)
       const latest = await this.store.read()
       if (
         !latest.accounts.some((account) => account.id === id && this.matches(account, readback))
@@ -144,16 +147,45 @@ export class AntigravityAccountService {
   prepareForLaunch(): Promise<void> {
     return this.serialize(async () => {
       const { vault, current } = await this.reconcile()
-      if (!vault.selectedAccountId) {
+      const selected = vault.accounts.find((account) => account.id === vault.selectedAccountId)
+      if (!vault.selectedAccountId || (selected && current && this.matches(selected, current))) {
         return
       }
-      const selected = vault.accounts.find((account) => account.id === vault.selectedAccountId)
-      if (!selected || !current || !this.matches(selected, current)) {
+      // Each running agy writes its own login back to the one native slot on every token refresh.
+      // Exactly one saved account holding it (reconcile just saved it) restores the selection, as
+      // best effort as selecting: the native store has no compare-and-swap.
+      const holders = current ? vault.accounts.filter((entry) => this.matches(entry, current)) : []
+      if (!selected || holders.length !== 1 || !this.launchRestore) {
         throw new Error(
           'The native Antigravity account changed. Select the account again in Accounts before launching agy.'
         )
       }
+      if (this.launchRestore.signInHoldsLogin()) {
+        throw new Error('Antigravity sign-in is in progress. Finish it, then launch agy again.')
+      }
+      await this.switchNative(selected, current)
+      // No vault write: both logins are already saved, and another Orca process selecting meanwhile wins.
+      if ((await this.store.read()).selectedAccountId !== selected.id) {
+        throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')
+      }
     })
+  }
+
+  private async switchNative(
+    selected: StoredAntigravityAccount,
+    current: AntigravityNativeCredential | null
+  ) {
+    const switching = !current || !this.matches(selected, current)
+    if (switching) {
+      await this.backend.write(selected.credentials, current?.contents ?? null)
+    }
+    const readback = await this.backend.read()
+    if (!readback || !this.matches(selected, readback)) {
+      throw new Error(
+        'Antigravity account switching could not be verified; refresh before retrying.'
+      )
+    }
+    return { readback, switching }
   }
 
   private matches(
@@ -217,6 +249,7 @@ export class AntigravityAccountService {
       }),
       activeAccountId: active?.id ?? null,
       selectedAccountId: vault.selectedAccountId,
+      ...(this.launchRestore ? { restoresSelectionAtLaunch: true as const } : {}),
       currentAccount: current
         ? {
             email: current.identity ? current.identity.email : (active?.email ?? null),

@@ -1,9 +1,9 @@
 import { lazy, Suspense } from 'react'
 import { View, StyleSheet } from 'react-native'
-import { mobilePrSidebarStyles } from '../source-control/review/pull-request/mobile-pr-sidebar-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { mobilePrSidebarStylesSheet } from '../source-control/review/pull-request/mobile-pr-sidebar-styles'
 import { useMobileDockResize } from './use-mobile-dock-resize'
 import type { SessionDockPanelContentProps } from './SessionDockPanelContent'
+import { useThemedStyles } from '../theme/themed-styles'
 
 type Props = SessionDockPanelContentProps & { availableWidth: number }
 
@@ -23,7 +23,7 @@ export function SessionDockColumn({
   availableWidth,
   onRequestClose
 }: Props) {
-  useMobileColorScheme()
+  const mobilePrSidebarStyles = useThemedStyles(mobilePrSidebarStylesSheet)
   const { dockWidth, panHandlers } = useMobileDockResize(availableWidth)
   return (
     <View style={[mobilePrSidebarStyles.dockColumn, { width: dockWidth }]}>

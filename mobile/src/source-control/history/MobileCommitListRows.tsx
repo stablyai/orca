@@ -1,9 +1,16 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import { SectionHeader } from '../../components/list/ListGroup'
-import { colors, radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import {
+  paletteForScheme,
+  radii,
+  spacing,
+  typography,
+  pressedStyle,
+  type MobileColorScheme
+} from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { MobileCommitsListItem } from './mobile-git-history'
 
@@ -14,7 +21,7 @@ type BaseItem = Extract<MobileCommitsListItem, { kind: 'base' }>
 
 // Zero sides are dropped, like desktop's diff stats.
 export function CommitLineStat({ added, removed }: { added: number; removed: number }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   if (added === 0 && removed === 0) {
     return null
   }
@@ -34,6 +41,8 @@ export function CommitsSectionHeader({
   title: string
   push: LabeledRowAction | null
 }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <SectionHeader
       title={title}
@@ -60,7 +69,8 @@ export function CommitsSectionHeader({
 }
 
 export function BranchBaseRow({ item, update }: { item: BaseItem; update: RowAction | null }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const baseRef = item.baseRefName
   return (
@@ -106,7 +116,13 @@ export function BranchBaseRow({ item, update }: { item: BaseItem; update: RowAct
 }
 
 // A plain element builder, not a component, so the list's renderItem returns the pressable row itself.
-export function renderCommitRow(item: CommitItem, onPress: (id: string) => void) {
+export function renderCommitRow(
+  item: CommitItem,
+  onPress: (id: string) => void,
+  scheme: MobileColorScheme
+) {
+  const styles = stylesSheet.resolve(scheme)
+  const colors = paletteForScheme(scheme)
   const { row } = item
   return (
     <Pressable
@@ -146,7 +162,7 @@ function Timeline({
   lineBelow: boolean
   marker: 'hollow' | 'filled' | 'base'
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.timeline}>
       <View style={[styles.line, !lineAbove && styles.lineHidden]} />
@@ -166,7 +182,7 @@ function Timeline({
 
 const DOT = 10
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'stretch',

@@ -2,16 +2,16 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronRight, Plus } from 'lucide-react-native'
 import { summarizeBotPreview } from '../../../src/shared/bots/bot-collapsed-preview'
 import type { BotsListEndLine, Section } from '../worktree/workspace-list/workspace-list-types'
-import { colors, pressedStyle, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { pressedStyle, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { DisclosureChevron } from '../components/list/DisclosureChevron'
-import { hostScreenStyles } from '../host-screen/host-screen-styles'
+import { hostScreenStylesSheet } from '../host-screen/host-screen-styles'
 import { WORKTREE_ROW_LAYOUT } from '../worktree/row-presentation/worktree-list-row-layout'
 import { AgentSpinner } from '../agents/presentation/AgentSpinner'
 import { useSharedNow } from '../hooks/use-now'
-import { MobileBotNeedsYouCount } from './MobileBotHomeRow'
+import { MobileBotNeedsYouCount } from './MobileBotRowBadges'
 import { mobileBotRowNeedsYou } from './mobile-bot-row-line'
 
 export function MobileBotsSectionHeader({
@@ -27,7 +27,9 @@ export function MobileBotsSectionHeader({
   onToggle: () => void
   onNew: (() => void) | null
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const hostScreenStyles = useThemedStyles(hostScreenStylesSheet)
   const t = useMobileTranslation()
   const now = useSharedNow(30_000)
   const facts = section.botPreview ?? []
@@ -119,7 +121,7 @@ export function MobileBotsListEnd({
   /** Under bot rows, the lines start where their names do; else where the header's title does. */
   underRows: boolean
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={[styles.end, underRows && styles.endUnderRows]}>
       {lines.map((line) => (
@@ -131,7 +133,7 @@ export function MobileBotsListEnd({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   header: { flexDirection: 'row', alignItems: 'center' },
   toggle: { flex: 1, minWidth: 0 },
   togglePressed: { backgroundColor: colors.translucentFill },

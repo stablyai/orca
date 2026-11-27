@@ -1,8 +1,7 @@
 import { projectContentField } from '../../../../src/shared/github/projects/project-content-field'
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
-import { translate } from '../../i18n/mobile-i18n'
 import { View, Text, Pressable, FlatList } from 'react-native'
-import { colors, spacing, type MobileColorScheme, pressedStyle } from '../../theme/mobile-theme'
+import { spacing, type MobileColorScheme, pressedStyle } from '../../theme/mobile-theme'
 import { ChevronDown, Inbox } from 'lucide-react-native'
 import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
 
@@ -12,7 +11,6 @@ import {
   MobileStateView
 } from '../../components/feedback/MobileStateView'
 import { clearMobileTasksSearch } from '../screen/mobile-tasks-search-control'
-import { styles } from '../mobile-tasks-legacy-styles'
 import { projectGroupMeta, projectFieldDisplayLabel } from './mobile-tasks-project-fields'
 import { formatUpdatedAt, projectRowStatusLabel } from '../item-detail/mobile-tasks-item-mapping'
 import { getRepoBadgeColor } from '../repositories/mobile-tasks-repository-presentation'
@@ -58,6 +56,9 @@ export function renderMobileTasksGitHubProjectList(
   bottomBarHeight: number
 ) {
   const {
+    colors,
+    styles,
+    t,
     activeGitHubProject,
     findProjectRowRepo,
     githubProjectError,
@@ -79,13 +80,13 @@ export function renderMobileTasksGitHubProjectList(
   return githubProjectLoading ? (
     <MobileStateView
       loading
-      title={translate('tasks.githubProjectList.loading', 'Loading project…')}
+      title={t('tasks.githubProjectList.loading', 'Loading project…')}
       bottomInset={bottomBarHeight}
     />
   ) : !activeGitHubProject ? (
     <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <Text style={styles.emptyText}>
-        {translate('tasks.githubProjectList.chooseProject', 'Choose a GitHub project')}
+        {t('tasks.githubProjectList.chooseProject', 'Choose a GitHub project')}
       </Text>
       <Pressable
         style={({ pressed }) => [
@@ -102,7 +103,7 @@ export function renderMobileTasksGitHubProjectList(
         }}
       >
         <Text style={styles.targetButtonText}>
-          {translate('tasks.githubProjectList.browseProjects', 'Browse projects')}
+          {t('tasks.githubProjectList.browseProjects', 'Browse projects')}
         </Text>
       </Pressable>
     </View>
@@ -115,19 +116,19 @@ export function renderMobileTasksGitHubProjectList(
   ) : githubProjectTable && !githubProjectRepoSlugReady ? (
     <MobileStateView
       loading
-      title={translate('tasks.githubProjectList.loading', 'Loading project…')}
+      title={t('tasks.githubProjectList.loading', 'Loading project…')}
       bottomInset={bottomBarHeight}
     />
   ) : (!githubProjectTable || visibleGitHubProjectRows.length === 0) && hasSearch ? (
     <MobileNoMatchState
-      message={translate('tasks.githubProjectList.noMatches', 'No project items match.')}
+      message={t('tasks.githubProjectList.noMatches', 'No project items match.')}
       onClear={() => clearMobileTasksSearch(model)}
       bottomInset={bottomBarHeight}
     />
   ) : !githubProjectTable || visibleGitHubProjectRows.length === 0 ? (
     <MobileStateView
       icon={Inbox}
-      title={translate('tasks.githubProjectList.noItems', 'No project items')}
+      title={t('tasks.githubProjectList.noItems', 'No project items')}
       bottomInset={bottomBarHeight}
     />
   ) : (
@@ -165,7 +166,7 @@ export function renderMobileTasksGitHubProjectList(
                 style={entry.collapsed ? styles.projectGroupChevronCollapsed : undefined}
               />
               <Text style={styles.projectGroupTitle} numberOfLines={1}>
-                {entry.group.label || translate('tasks.githubProjectList.items', 'Items')}
+                {entry.group.label || t('tasks.githubProjectList.items', 'Items')}
               </Text>
               <Text style={styles.projectGroupMeta}>{projectGroupMeta(entry.group)}</Text>
             </Pressable>
@@ -201,7 +202,7 @@ export function renderMobileTasksGitHubProjectList(
                 />
                 <Text style={styles.subtitle} numberOfLines={1}>
                   {row.itemType === 'PULL_REQUEST'
-                    ? translate(
+                    ? t(
                         'tasks.githubProjectList.pullRequestSubtitle',
                         'Pull request · {{repository}}{{number}}',
                         {
@@ -210,7 +211,7 @@ export function renderMobileTasksGitHubProjectList(
                         }
                       )
                     : row.itemType === 'ISSUE'
-                      ? translate(
+                      ? t(
                           'tasks.githubProjectList.issueSubtitle',
                           'Issue · {{repository}}{{number}}',
                           {
@@ -218,7 +219,7 @@ export function renderMobileTasksGitHubProjectList(
                             number: row.content.number ? ` #${row.content.number}` : ''
                           }
                         )
-                      : translate(
+                      : t(
                           'tasks.githubProjectList.itemSubtitle',
                           'Project item · {{repository}}{{number}}',
                           {
@@ -233,8 +234,8 @@ export function renderMobileTasksGitHubProjectList(
                   {githubProjectSummaryFields.slice(0, 4).map((field) => {
                     const isEmpty = isProjectFieldEmpty(row, field)
                     const value = isEmpty
-                      ? translate('tasks.githubProjectList.emptyField', 'Empty')
-                      : projectFieldDisplayLabel(row, field)
+                      ? t('tasks.githubProjectList.emptyField', 'Empty')
+                      : projectFieldDisplayLabel(t, row, field)
                     return (
                       <View key={field.id} style={styles.projectFieldPill}>
                         <Text style={styles.projectFieldPillText} numberOfLines={1}>
@@ -250,16 +251,12 @@ export function renderMobileTasksGitHubProjectList(
                     <View style={styles.projectFieldPill}>
                       <Text style={styles.projectFieldPillText}>
                         {count === 1
-                          ? translate(
-                              'tasks.githubProjectList.moreFields_one',
-                              '+{{count}} field',
-                              { count }
-                            )
-                          : translate(
-                              'tasks.githubProjectList.moreFields_other',
-                              '+{{count}} fields',
-                              { count }
-                            )}
+                          ? t('tasks.githubProjectList.moreFields_one', '+{{count}} field', {
+                              count
+                            })
+                          : t('tasks.githubProjectList.moreFields_other', '+{{count}} fields', {
+                              count
+                            })}
                       </Text>
                     </View>
                   ) : null}

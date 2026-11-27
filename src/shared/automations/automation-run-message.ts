@@ -44,7 +44,7 @@ export type AutomationRunMessage = {
   instructionsLength: number
 }
 
-const finite = z.number().finite()
+const finite = lazyZodSchema(() => z.number().finite())
 const optionalText = lazyZodSchema(() => z.string().optional())
 
 const WaitEndingSchema = lazyZodSchema(() =>

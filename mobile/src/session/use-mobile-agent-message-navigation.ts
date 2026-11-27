@@ -1,4 +1,5 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
+import { recomputeOn } from '../hooks/recompute-on'
 import { useFocusEffect } from 'expo-router'
 import type { AgentMessageSource } from '../../../src/shared/agent-session/journal/agent-session-message-source'
 import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
@@ -34,13 +35,17 @@ export function useMobileAgentMessageNavigation(
 ) {
   const scope = useRef<{ active: boolean; attempt?: { key: string } }>({ active: false })
   useFocusEffect(
-    useCallback(() => {
-      const visit = { active: true }
-      scope.current = visit
-      return () => {
-        visit.active = false
-      }
-    }, [client, navigate, sourceKey])
+    useMemo(
+      () =>
+        recomputeOn([client, navigate, sourceKey], () => () => {
+          const visit = { active: true }
+          scope.current = visit
+          return () => {
+            visit.active = false
+          }
+        }),
+      [client, navigate, sourceKey]
+    )
   )
   return useCallback(
     (from: AgentMessageSource, sender: AgentMessageSource['senders'][number]) => {

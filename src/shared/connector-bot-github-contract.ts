@@ -10,10 +10,10 @@ export const GITHUB_BOT_MENTION = '@orca-bots'
 // Exactly the cloud's (connector-contract), so both sides accept the same ids and logins.
 /** GitHub's numeric ids (users, installations), as strings. */
 export const GITHUB_ID_PATTERN = /^[1-9][0-9]{0,19}$/
-const GitHubId = z.string().regex(GITHUB_ID_PATTERN)
+const GitHubId = lazyZodSchema(() => z.string().regex(GITHUB_ID_PATTERN))
 /** A GitHub user or organization name, Enterprise Managed Users' `_shortcode` included. */
 export const GITHUB_LOGIN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,38}$/
-const GitHubLogin = z.string().regex(GITHUB_LOGIN_PATTERN)
+const GitHubLogin = lazyZodSchema(() => z.string().regex(GITHUB_LOGIN_PATTERN))
 
 const GitHubUser = lazyZodSchema(() =>
   z.object({

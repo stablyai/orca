@@ -191,10 +191,13 @@ export function DuoRailJumpOverlay() {
 }
 
 /** In-transcript controls, unless the session host is drawing them in the rail. */
-export function MobileNativeChatJumpControls(props: JumpActions) {
+export function MobileNativeChatJumpControls(props: JumpActions & { canvasFades?: boolean }) {
   const ctx = useContext(DuoRailJumpContext)
   useEffect(() => {
-    ctx?.register(props)
+    ctx?.register({
+      showJumpToTail: props.showJumpToTail,
+      onJumpToTail: props.onJumpToTail
+    })
     return () => ctx?.register(null)
   }, [ctx?.register, props.showJumpToTail, props.onJumpToTail])
   if (ctx?.frames != null) {

@@ -7,12 +7,13 @@ import {
   MobileNativeChatMarkdownRowKeyContext,
   useMobileNativeChatDisclosure
 } from '../../../session/native-chat/transcript/viewport/mobile-native-chat-disclosure-store'
-import { colors, pressedStyle } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../../../theme/mobile-theme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { MobileSyntaxSegments } from '../../code-presentation/MobileSyntaxSegments'
 import { MobileSourceCopyButton } from '../../code-presentation/MobileSourceCopyButton'
-import { scaledMarkdownText, styles } from '../mobile-markdown-styles'
+import { scaledMarkdownText, stylesSheet } from '../mobile-markdown-styles'
 import { MarkdownText } from '../mobile-markdown-text'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 export const MobileMarkdownCodeBlock = memo(function MobileMarkdownCodeBlock({
   code,
@@ -26,7 +27,8 @@ export const MobileMarkdownCodeBlock = memo(function MobileMarkdownCodeBlock({
   /** The fence's line in the message; with the chat row it names this block's wrap choice. */
   sourceLine?: number
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   // In chat the transcript keeps the wrap choice, never persisted; elsewhere it is local.
   const rowKey = useContext(MobileNativeChatMarkdownRowKeyContext)
