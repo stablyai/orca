@@ -7,7 +7,7 @@ import {
   type MobileNativeChatSessionOptionPickersProps
 } from '../../input/session-options/MobileNativeChatSessionOptionPickers'
 import type { useMobileNativeChatPickerPresentation } from '../../input/session-options/use-mobile-native-chat-picker-presentation'
-import { MobileNativeChatComposerPlanChip } from '../commands/MobileNativeChatComposerPlanChip'
+import { findAgentSessionInteractionMode } from '../../../../../../src/shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type { MobileNativeChatContext } from '../commands/MobileNativeChatContextUsage'
 import { mobileNativeChatComposerStylesSheet as stylesSheet } from './mobile-native-chat-composer-styles'
 import { useThemedStyles } from '../../../../theme/themed-styles'
@@ -40,10 +40,10 @@ export function MobileNativeChatComposerModeRow({
   // A tap on the model pill or a chip keeps the field focused, so the box never folds under the finger.
   const keepsFocus = useKeyboardPersistingTaps('handled')
   // A request the sheet can't show (nothing it lists is settable) never opens it, so nothing would clear it.
+  const snapshot = sessionOptions?.controller.snapshot
   const hasControls =
-    sessionOptions?.controller.snapshot.some(
-      (entry) => entry.id !== 'interactionMode' && entry.settable
-    ) === true
+    snapshot?.some((entry) => entry.id !== 'interactionMode' && entry.settable) === true ||
+    (snapshot !== undefined && findAgentSessionInteractionMode(snapshot) !== null)
   return (
     <Animated.View style={[styles.leadingExtras, fade]}>
       <View ref={keepsFocus} style={styles.leadingExtrasRow}>
@@ -56,25 +56,23 @@ export function MobileNativeChatComposerModeRow({
             sendInFlight={sendInFlight}
             presentation={picker}
             // A pick that lands after Done must not reopen the closing sheet.
-            onNavigate={(page) =>
-              setPicker((current) =>
-                page === null && !hasControls
-                  ? null
-                  : current?.page == null
-                    ? current
-                    : { ...current, page }
-              )
+            onNavigate={(page, expected) =>
+              setPicker((current) => {
+                if (current?.page == null || (expected && current !== expected)) {
+                  return current
+                }
+                return page === null && !hasControls ? null : { ...current, page }
+              })
             }
             onDrawerOpen={(page) => setPicker({ page, refocus: focused })}
             onDrawerAfterClose={() => {
-              if (picker?.refocus) {
+              if (picker?.page === null && picker.refocus) {
                 fieldRef.current?.focus()
               }
-              setPicker(null)
+              setPicker((current) => (current === picker ? null : current))
             }}
           />
         ) : null}
-        <MobileNativeChatComposerPlanChip options={sessionOptions} inputRef={fieldRef} />
         {goalChip}
       </View>
     </Animated.View>

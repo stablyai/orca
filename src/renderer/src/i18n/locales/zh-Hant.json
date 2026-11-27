@@ -21095,7 +21095,6 @@
         "agents": "代理程式",
         "recent": "最近",
         "moreControls": "更多聊天控制項",
-        "exitPlanMode": "結束計畫模式",
         "permissionAppliesNextMessage": "{{saved}} 將從下一則訊息生效；目前使用 {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "模型與推理強度",

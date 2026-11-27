@@ -1,5 +1,11 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 
+export function isNativeChatComposerEditorFocused(trigger: HTMLElement | null): boolean {
+  const active = trigger?.ownerDocument.activeElement
+  const editor = active?.closest('[role="textbox"], textarea')
+  return !!editor && trigger?.closest('[data-composer-field]')?.contains(editor) === true
+}
+
 /** After a pick, focus the composer unless an outside click already moved focus elsewhere. */
 export function useNativeChatPickerFocusReturn(
   focusComposer: (() => void) | undefined,

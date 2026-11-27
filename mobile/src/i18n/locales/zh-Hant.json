@@ -1693,7 +1693,6 @@
       },
       "composer": {
         "planMode": "計畫",
-        "exitPlanMode": "結束計畫模式",
         "botChats": "聊天",
         "backToBots": "返回機器人",
         "loadingBotChats": "正在載入 {{name}} 的聊天…",

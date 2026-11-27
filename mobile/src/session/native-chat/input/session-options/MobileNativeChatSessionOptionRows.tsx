@@ -9,12 +9,15 @@ import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { LIST_ROW_PADDING, ListRow } from '../../../../components/list/ListGroup'
 import {
+  isReadOnlySessionOptionValue,
+  sessionOptionDispatchUnconfirmed,
   sessionOptionValueMarker,
   type SessionOptionDescriptor,
   type SessionOptionSelectChoice,
   type SessionOptionValue
 } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
 import {
+  nativeChatModelPillLabel,
   nativeChatSessionChoiceLabel,
   nativeChatSessionOptionActionLabel,
   nativeChatSessionOptionLabel
@@ -26,6 +29,7 @@ import {
 import { mobileNativeChatSessionOptionSay } from './native-chat-session-option-copy'
 import { orderEffortLevels } from '../../../../../../src/shared/agent-session/options/view/effort-level-order'
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
+import { mobileSessionOptionSummaryValue } from './mobile-native-chat-session-option-labels'
 
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
   const styles = useThemedStyles(stylesSheet)
@@ -106,6 +110,49 @@ function TintedValue({ value, color }: { value: string; color: string }): React.
       {value}
     </Text>
   )
+}
+
+/** A home row: a switch in place, or the current value with a chevron to its own list. */
+export function sessionOptionHomeRow(
+  descriptor: SessionOptionDescriptor,
+  locked: (descriptor: SessionOptionDescriptor) => boolean,
+  onSetOption: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void,
+  onNavigate: (page: string) => void,
+  t: Translate
+): React.JSX.Element[] {
+  const say = mobileNativeChatSessionOptionSay(t)
+  const disabled = locked(descriptor) || !descriptor.settable
+  if (showsSessionOptionAsSwitch(descriptor)) {
+    return descriptorRowElements(
+      {
+        descriptor,
+        disabled,
+        onSetOption: (value) => onSetOption(descriptor, value),
+        onInvokeAction: () => onNavigate(descriptor.id)
+      },
+      t
+    )
+  }
+  return [
+    <SessionOptionSummaryRow
+      key={descriptor.id}
+      label={nativeChatSessionOptionLabel(descriptor, say)}
+      value={
+        descriptor.category === 'model'
+          ? nativeChatModelPillLabel(descriptor, say)
+          : mobileSessionOptionSummaryValue(descriptor, t)
+      }
+      subtitle={
+        sessionOptionDispatchUnconfirmed(descriptor)
+          ? t('chat.sessionOptionPickers.dispatchUnconfirmed', 'Sent to the agent — not confirmed')
+          : undefined
+      }
+      disabled={disabled}
+      onPress={
+        isReadOnlySessionOptionValue(descriptor) ? undefined : () => onNavigate(descriptor.id)
+      }
+    />
+  ]
 }
 
 export function SessionOptionSummaryRow({

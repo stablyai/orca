@@ -21346,7 +21346,6 @@
         "agents": "Agenten",
         "recent": "Zuletzt verwendet",
         "moreControls": "Weitere Chat-Steuerelemente",
-        "exitPlanMode": "Planungsmodus verlassen",
         "permissionAppliesNextMessage": "{{saved}} gilt für deine nächste Nachricht; derzeit wird {{active}} verwendet",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "Modell und Denkaufwand",

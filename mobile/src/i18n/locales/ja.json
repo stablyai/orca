@@ -1692,7 +1692,6 @@
       },
       "composer": {
         "planMode": "プラン",
-        "exitPlanMode": "プランモードを終了",
         "botChats": "チャット",
         "backToBots": "ボットに戻る",
         "loadingBotChats": "{{name}} のチャットを読み込み中…",

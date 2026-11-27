@@ -1696,7 +1696,6 @@
       },
       "composer": {
         "planMode": "Planen",
-        "exitPlanMode": "Planungsmodus verlassen",
         "botChats": "Chats",
         "backToBots": "Zurück zu den Bots",
         "loadingBotChats": "Chats von {{name}} werden geladen…",

@@ -1659,8 +1659,10 @@
         "showMoreFiles": "Show {{count}} more"
       },
       "composer": {
+        "interactionMode": "Mode",
+        "buildMode": "Build",
         "planMode": "Plan",
-        "exitPlanMode": "Exit plan mode",
+        "pillAccessibleName": "{{interactionMode}} {{selectedMode}}",
         "pastedTextLabel": "Pasted text",
         "botChats": "Chats",
         "backToBots": "Back to bots",
@@ -3366,6 +3368,7 @@
       "settingsLocked": "Model settings unlock when this turn finishes.",
       "dispatchUnconfirmed": "Sent to the agent — not confirmed",
       "permissions": "Permissions",
+      "modeUpdateFailed": "Could not change mode.",
       "applying": "Applying…",
       "onAttach": "Applies when the chat attaches",
       "heldPickRefused": "{{picked}} isn't available in this chat. Kept {{kept}}.",

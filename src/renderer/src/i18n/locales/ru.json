@@ -22306,7 +22306,6 @@
         "imageUnavailable": "Предпросмотр недоступен",
         "agents": "Агенты",
         "recent": "Недавние",
-        "exitPlanMode": "Выйти из режима планирования",
         "moreControls": "Другие элементы управления чатом",
         "permissionAppliesNextMessage": "{{saved}} применяется со следующего сообщения; сейчас используется: {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",

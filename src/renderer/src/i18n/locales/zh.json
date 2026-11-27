@@ -20561,8 +20561,7 @@
         },
         "sessionAttachmentsFailed": "{{agent}} 聊天无法打开，请在聊天中点击重试，然后重新附加文件",
         "sessionAttachmentsStarting": "{{agent}} 聊天仍在打开中，请等待其打开后再重新附加文件",
-        "moreControls": "更多聊天控件",
-        "exitPlanMode": "退出计划模式"
+        "moreControls": "更多聊天控件"
       },
       "tool": {
         "result": "结果",

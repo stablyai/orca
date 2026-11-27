@@ -22450,7 +22450,6 @@
         "imageUnavailable": "Prévia indisponível",
         "agents": "Agentes",
         "recent": "Recentes",
-        "exitPlanMode": "Sair do modo de planejamento",
         "moreControls": "Mais controles do chat",
         "permissionAppliesNextMessage": "{{saved}} vale para a próxima mensagem; usando {{active}} no momento",
         "modelAndEffortValue": "{{model}} · {{effort}}",

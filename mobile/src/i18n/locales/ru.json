@@ -1830,7 +1830,6 @@
     "native-chat": {
       "composer": {
         "planMode": "План",
-        "exitPlanMode": "Выйти из режима планирования",
         "pastedTextLabel": "Вставленный текст",
         "botChats": "Чаты",
         "retryChats": "Повторить",

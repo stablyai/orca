@@ -1719,7 +1719,6 @@
     "native-chat": {
       "composer": {
         "planMode": "Plano",
-        "exitPlanMode": "Sair do modo de planejamento",
         "botChats": "Chats",
         "backToBots": "Voltar aos bots",
         "loadingBotChats": "Carregando os chats de {{name}}…",

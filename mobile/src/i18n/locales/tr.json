@@ -1726,7 +1726,6 @@
     "native-chat": {
       "composer": {
         "planMode": "Plan",
-        "exitPlanMode": "Plan modundan çık",
         "pastedTextLabel": "Yapıştırılan metin",
         "botChats": "Sohbetler",
         "backToBots": "Botlara dön",

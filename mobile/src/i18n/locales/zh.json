@@ -1783,7 +1783,6 @@
       },
       "composer": {
         "planMode": "计划",
-        "exitPlanMode": "退出计划模式",
         "pastedTextLabel": "粘贴的文本",
         "botChats": "聊天",
         "backToBots": "返回 bots 列表",

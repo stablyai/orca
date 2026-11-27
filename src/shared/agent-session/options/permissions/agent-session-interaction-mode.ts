@@ -9,6 +9,22 @@ export function isAgentSessionInteractionMode(
   return value === 'default' || value === 'plan'
 }
 
+export function findAgentSessionInteractionMode(snapshot: readonly SessionOptionDescriptor[]):
+  | (SessionOptionDescriptor & {
+      kind: Extract<SessionOptionDescriptor['kind'], { type: 'select' }>
+    })
+  | null {
+  const descriptor = snapshot.find((entry) => entry.id === 'interactionMode')
+  if (descriptor?.kind.type !== 'select') {
+    return null
+  }
+  const { kind } = descriptor
+  return kind.choices.some(({ value }) => value === 'default') &&
+    kind.choices.some(({ value }) => value === 'plan')
+    ? { ...descriptor, kind }
+    : null
+}
+
 export function structuredAgentSessionInteractionDescriptor(
   state: StructuredAgentSessionOptionState
 ): SessionOptionDescriptor | null {

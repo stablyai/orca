@@ -1751,7 +1751,6 @@
       },
       "composer": {
         "planMode": "Planificar",
-        "exitPlanMode": "Salir del modo de planificación",
         "botChats": "Chats",
         "backToBots": "Volver a los bots",
         "loadingBotChats": "Cargando los chats de {{name}}…",

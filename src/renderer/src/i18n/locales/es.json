@@ -20783,7 +20783,6 @@
         "sessionAttachmentsFailed": "El chat {{agent}} no se pudo abrir. Utilice Reintentar en el chat y luego adjunte los archivos nuevamente.",
         "sessionAttachmentsStarting": "El chat de {{agent}} aún se está abriendo. Espera a que se abra y vuelve a adjuntar los archivos.",
         "moreControls": "Más controles de chat",
-        "exitPlanMode": "Salir del modo de planificación",
         "permissionAppliesNextMessage": "{{saved}} se aplica a tu próximo mensaje; actualmente se usa {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "Modelo y esfuerzo",
