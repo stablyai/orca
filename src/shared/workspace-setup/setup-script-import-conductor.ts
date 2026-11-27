@@ -39,7 +39,7 @@ function buildSettingsTomlCandidate(
   // The machine-local file overrides the shared one key by key.
   const pickScript = (key: 'setup' | 'archive'): { value: string; fromLocal: boolean } => {
     const local = normalizeSetupScriptImportCommand(localScripts?.[key])
-    if (local) {
+    if (localScripts?.[key] !== undefined) {
       return { value: local, fromLocal: true }
     }
     return { value: normalizeSetupScriptImportCommand(scripts?.[key]), fromLocal: false }
