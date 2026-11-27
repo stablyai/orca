@@ -18,15 +18,14 @@ export type MobileSessionKeyboardScope = Pick<
   | 'connState'
   | 'deviceTokenRef'
   | 'hostId'
-  | 'router'
   | 'setCustomKeys'
-  | 'setShowCustomKeyModal'
   | 'showNativeChatRef'
   | 'subscribeToTerminal'
   | 'terminalFrameRef'
   | 'terminalRefs'
   | 'terminals'
   | 'terminalTextScale'
+  | 'terminalFontStyle'
   | 'unsubscribeTerminal'
   | 'viewportMeasuredRef'
   | 'viewportRef'
@@ -37,12 +36,11 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
   const {
     hostId,
     worktreeId,
-    router,
     connState,
     terminals,
     terminalTextScale,
+    terminalFontStyle,
     setCustomKeys,
-    setShowCustomKeyModal,
     deviceTokenRef,
     clientRef,
     viewportRef,
@@ -74,7 +72,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     deviceTokenRef,
     connState,
     tabStripVisible: terminals.length > 1,
-    textScale: terminalTextScale,
+    fontMetricsKey: `${terminalTextScale}/${terminalFontStyle.font}/${terminalFontStyle.lineHeight}/${terminalFontStyle.weight}`,
     unsubscribeTerminal,
     subscribeToTerminal
   })
@@ -102,18 +100,12 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
       console.warn('[custom-keys] the store would not take this removal', error)
     }
   }, [])
-
-  const handleManageShortcuts = useCallback(() => {
-    setShowCustomKeyModal(false)
-    router.push('/terminal-settings')
-  }, [router])
   return {
     notifyTerminalFrameHeight,
     notifyTerminalFrameWidth,
     notifyKeyboardVisibility,
     notifyTerminalCellBoxChange,
-    handleDeleteCustomKey,
-    handleManageShortcuts
+    handleDeleteCustomKey
   }
 }
 

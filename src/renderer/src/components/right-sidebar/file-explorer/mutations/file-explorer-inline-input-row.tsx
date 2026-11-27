@@ -1,6 +1,6 @@
 import React, { useCallback, useRef } from 'react'
 import { File } from 'lucide-react'
-import { FolderIcon } from '@/components/FileTypeIcon'
+import { FolderIcon } from '@/components/icons/FileTypeIcon'
 import {
   isImeCompositionKeyDown,
   useImeEnterGestureOwnership
@@ -149,7 +149,7 @@ export function InlineInputRow({
         className="flex-1 min-w-0 bg-transparent text-xs text-foreground outline-none border border-ring rounded-sm px-1"
         defaultValue={inlineInput.type === 'rename' ? inlineInput.existingName : ''}
         onKeyDown={(e) => {
-          // IME confirm Enter may redispatch unmarked; preserve gesture ownership and ignore IME Escape.
+          // Leave composing keys, including the IME's Enter and Escape, to the input method.
           if (imeEnter.ownsKeyDown(e) || imeEnter.isComposing() || isImeCompositionKeyDown(e)) {
             return
           }
@@ -162,9 +162,8 @@ export function InlineInputRow({
             onCancel()
           }
         }}
-        onKeyUp={imeEnter.onKeyUp}
         onCompositionStart={() => imeEnter.setComposing(true)}
-        onCompositionEnd={(e) => imeEnter.setComposing(false, e.data)}
+        onCompositionEnd={() => imeEnter.setComposing(false)}
         onFocus={clearBlurTimeout}
         onBlur={(e) => {
           imeEnter.reset()

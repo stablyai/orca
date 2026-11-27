@@ -2,6 +2,7 @@ import type { StoreRuntimeState } from '../store-runtime-state'
 import {
   GITHUB_CACHE_BARRIER_BUSY_TIMEOUT_MS,
   GITHUB_CACHE_ROUTINE_BUSY_TIMEOUT_MS,
+  openGitHubCacheRows,
   writeGitHubCacheDatabase
 } from './github-cache-database'
 import {
@@ -18,6 +19,7 @@ type GitHubCachePersistenceRuntime = Pick<
   | 'githubCachePersistedAt'
   | 'githubCachePersistTimer'
   | 'githubCacheRetryDelayMs'
+  | 'githubCacheRows'
   | 'profileMaintenancePending'
   | 'quitFlushStarted'
   | 'state'
@@ -44,6 +46,10 @@ export function persistGithubCache(
   mode: 'routine' | 'barrier'
 ): void {
   if (!runtime.githubCacheDirty || runtime.githubCachePersistenceDisabled) {
+    // The final flush fences quit without suspending; it must not leave the routine handle open.
+    if (isFenced(runtime)) {
+      closeGithubCacheRows(runtime)
+    }
     return
   }
   if (mode === 'barrier') {
@@ -62,12 +68,25 @@ export function persistGithubCache(
   }
 }
 
+type GitHubCacheSuspension = Pick<StoreRuntimeState, 'githubCachePersistTimer' | 'githubCacheRows'>
+
 /** Maintenance, freeze or quit owns the profile; resume (if any) rearms through persistGithubCache. */
-export function suspendGithubCachePersistence(runtime: GitHubCachePersistenceRuntime): void {
+export function suspendGithubCachePersistence(runtime: GitHubCacheSuspension): void {
+  clearGithubCacheTimer(runtime)
+  closeGithubCacheRows(runtime)
+}
+
+function clearGithubCacheTimer(runtime: GitHubCacheSuspension): void {
   if (runtime.githubCachePersistTimer !== null) {
     clearTimeout(runtime.githubCachePersistTimer)
     runtime.githubCachePersistTimer = null
   }
+}
+
+/** No handle may outlive the profile's ownership: maintenance and quit can move or remove it. */
+function closeGithubCacheRows(runtime: GitHubCacheSuspension): void {
+  runtime.githubCacheRows?.close()
+  runtime.githubCacheRows = null
 }
 
 /** `retry` saves at its own backoff deadline; `interval` re-applies the routine cadence. */
@@ -92,10 +111,12 @@ function isFenced(runtime: GitHubCachePersistenceRuntime): boolean {
 }
 
 function writeGithubCacheNow(runtime: GitHubCachePersistenceRuntime, barrier: boolean): void {
-  suspendGithubCachePersistence(runtime)
+  clearGithubCacheTimer(runtime)
+  // Reopening per save cost 100-170 ms of main-thread SQLite under load; routine saves reuse it.
+  runtime.githubCacheRows ??= openGitHubCacheRows(runtime.dataFile)
   try {
     // Synchronous: no later mutation can interleave, so the cache is clean once this returns.
-    writeGitHubCacheDatabase(runtime.dataFile, runtime.state.githubCache, {
+    writeGitHubCacheDatabase(runtime.githubCacheRows, runtime.state.githubCache, {
       busyTimeoutMs: barrier
         ? GITHUB_CACHE_BARRIER_BUSY_TIMEOUT_MS
         : GITHUB_CACHE_ROUTINE_BUSY_TIMEOUT_MS,
@@ -114,7 +135,14 @@ function writeGithubCacheNow(runtime: GitHubCachePersistenceRuntime, barrier: bo
     runtime.githubCacheRetryDelayMs = delay
     armGithubCacheTimer(runtime, delay, 'retry')
     if (classifyRowCacheFailure(error) !== 'busy') {
+      // A replaced file or I/O error may live in this handle; the retry reopens.
+      closeGithubCacheRows(runtime)
       console.warn('[persistence] Failed to write github cache snapshot:', error)
+    }
+  } finally {
+    // Fenced barriers (maintenance, quit) may move or remove the profile; others keep the handle.
+    if (isFenced(runtime)) {
+      closeGithubCacheRows(runtime)
     }
   }
 }

@@ -5,7 +5,7 @@ import {
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { EphemeralVmWorkspaceLifecycleResult } from '../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { ephemeralVmErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import { ephemeralVmFailureFromError } from '../../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
@@ -78,7 +78,9 @@ export async function resumeEphemeralVmWorkspace(worktreeId: string): Promise<vo
     const runtime = result.runtime
     if (runtime?.runtimeEnvironmentId) {
       store.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
-      await store.getState().refreshRuntimeEnvironmentStatus(runtime.runtimeEnvironmentId)
+      await store
+        .getState()
+        .refreshRuntimeEnvironmentStatus(runtime.runtimeEnvironmentId, undefined, { force: true })
     }
   } catch {
     // The VM is awake; host status polling recovers a failed environment refresh.
@@ -118,7 +120,7 @@ export async function suspendEphemeralVmWorkspace(worktreeId: string): Promise<v
   if (environmentId) {
     await store
       .getState()
-      .refreshRuntimeEnvironmentStatus(environmentId)
+      .refreshRuntimeEnvironmentStatus(environmentId, undefined, { force: true })
       .catch(() => undefined)
   }
 }

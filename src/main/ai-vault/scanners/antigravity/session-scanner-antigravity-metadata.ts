@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { parseJsonObject } from '../../parsing/session-json-object'
 
 export const ANTIGRAVITY_INDEX_MAX_BYTES = 4 * 1024 * 1024
@@ -39,7 +40,7 @@ export function antigravityMetadataWorkspaces(contents: {
   metadata: string | null
   projects: string | null
   lastConversations: string | null
-}): Map<string, string | null> {
+}): { paths: Map<string, string | null>; workspaceUriPathById: Map<string, string | null> } {
   const projectPaths = new Map<string, string | null>()
   for (const [key, value] of entries(parse(contents.projects))) {
     if (typeof value !== 'string') {
@@ -57,6 +58,7 @@ export function antigravityMetadataWorkspaces(contents: {
       unique(paths, id, path)
     }
   }
+  const workspaceUriPathById = new Map<string, string | null>()
   for (const [id, value] of entries(parse(contents.metadata)?.conversations)) {
     const summary = record(record(value)?.summary)
     const projectId = summary?.ProjectID
@@ -64,8 +66,31 @@ export function antigravityMetadataWorkspaces(contents: {
     if (path !== undefined) {
       unique(paths, id, path)
     }
+    // `agy acp` chats keep no history.jsonl and share the CLI's default project, so only this
+    // names their folder.
+    const uriPath = soleWorkspacePath(summary?.WorkspaceURIs)
+    if (uriPath !== undefined) {
+      unique(workspaceUriPathById, id, uriPath)
+    }
   }
-  return paths
+  return { paths, workspaceUriPathById }
+}
+
+function soleWorkspacePath(uris: unknown): string | undefined {
+  if (!Array.isArray(uris) || uris.length !== 1 || typeof uris[0] !== 'string') {
+    return undefined
+  }
+  try {
+    const url = new URL(uris[0])
+    if (url.protocol !== 'file:') {
+      return undefined
+    }
+    // The URI carries the recording host's path style; VS Code-style serializers encode the drive colon.
+    const windows = url.host !== '' || /^\/[A-Za-z](?::|%3[Aa])(?:\/|$)/.test(url.pathname)
+    return fileURLToPath(url, { windows })
+  } catch {
+    return undefined
+  }
 }
 
 export async function readBoundedAntigravityIndex(

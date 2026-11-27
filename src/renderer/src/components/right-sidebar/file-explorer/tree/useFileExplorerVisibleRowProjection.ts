@@ -9,7 +9,7 @@ import {
 import {
   buildIgnoredSet,
   isPathIgnored
-} from '../../../../lib/source-control/paths/git-path-decoration'
+} from '../../../../../../shared/git/status/git-path-decoration'
 import {
   createNameFilteredFileExplorerProjection,
   getFileExplorerNameFilterExpandedPaths,

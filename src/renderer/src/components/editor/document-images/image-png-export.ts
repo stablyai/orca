@@ -3,7 +3,7 @@ import {
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR,
   assertClipboardImageDimensionsWithinLimit
 } from '../../../../../shared/clipboard/clipboard-image'
-import type { PanZoomSize } from '../../../../../shared/pan-zoom-view'
+import type { PanZoomSize } from '../../../../../shared/document-preview/pan-zoom-view'
 import { svgMarkupDataUri } from '../../../../../shared/file-preview/svg-document'
 import { blobToBase64, convertImageBlobToPng } from '../../../lib/clipboard/images/image-blob-png'
 

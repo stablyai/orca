@@ -5,7 +5,7 @@ import '../../../shared/orchestration/workers/worker-terminal-host-scope'
 import 'zod'
 import '../../../shared/agent-session/view/structured-agent-session-projection'
 import '../orchestration/addressing/session-lineage/structured-session-lineage'
-import '../../../shared/execution-host'
+import '../../../shared/execution-host/execution-host'
 import type { RuntimeAgentOrchestrationDependencies } from '../orchestration/crew/runtime-agent-orchestration-projection'
 import type { AgentSenderHandleReads } from './runtime-agent-sender-associations'
 

@@ -1,12 +1,19 @@
 import { useEffect } from 'react'
 import {
+  consumePageFocusLossForTerminalIme,
   isXtermHelperTextarea,
   releaseTerminalFocusForOutsidePointerDown,
   releaseTerminalFocusForWindowBlur,
   resyncTerminalFocusForWindowFocus,
-  setRegularTerminalInputFocusAttribute
+  setRegularTerminalInputFocusAttribute,
+  syncFocusAfterFailedReclaim,
+  trackPageFocusLossForTerminalIme
 } from './regular-terminal-focus-ownership'
-import { refreshTerminalImeInputContext } from '../ime/terminal-ime-input-context-refresh'
+import {
+  isTextEntryElement,
+  refreshTerminalImeInputContext
+} from '../ime/terminal-ime-input-context-refresh'
+import { runSyncWithFinally } from '@/lib/run-with-finally'
 
 export function useRegularTerminalInputFocus({
   containerRef
@@ -18,6 +25,7 @@ export function useRegularTerminalInputFocus({
     if (!container) {
       return
     }
+    trackPageFocusLossForTerminalIme()
     let ownsRegularTerminalFocus = false
     let releasedHelperOnWindowBlur: HTMLElement | null = null
     let refreshingImeInputContext = false
@@ -33,14 +41,25 @@ export function useRegularTerminalInputFocus({
       if (!isXtermHelperTextarea(event.target)) {
         return
       }
+      const target = event.target
       syncFocused(true)
-      if (isXtermHelperTextarea(event.relatedTarget) && event.relatedTarget !== event.target) {
+      // Why: macOS keeps the input context of the field or browser page focus came from (#23864).
+      const pageFocusWasLost = consumePageFocusLossForTerminalIme()
+      if (
+        pageFocusWasLost ||
+        (isTextEntryElement(event.relatedTarget) && event.relatedTarget !== target)
+      ) {
         refreshingImeInputContext = true
-        try {
-          refreshTerminalImeInputContext(event.target, {})
-        } finally {
-          refreshingImeInputContext = false
-        }
+        runSyncWithFinally(
+          () => {
+            refreshTerminalImeInputContext(target, {
+              onRefocusSkipped: (active) => syncFocusAfterFailedReclaim(active, syncFocused)
+            })
+          },
+          () => {
+            refreshingImeInputContext = false
+          }
+        )
       }
     }
     const onFocusOut = (event: FocusEvent): void => {

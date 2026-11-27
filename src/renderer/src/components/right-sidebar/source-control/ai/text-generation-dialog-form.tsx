@@ -14,7 +14,6 @@ import {
 } from '@/components/ui/select'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { commitMessagePickerModel } from '@/components/feature-wall/commit-pr-settings/ai-commit-pr-picker'
 import type { AgentPickerEntry } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 import { planSourceControlTextGeneration } from '@/lib/source-control/ai/source-control-generation-plan'
@@ -39,6 +38,7 @@ import {
 } from './text-generation-params'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export type SourceControlTextGenerationSaveTarget = {
   target: SourceControlAiWriteTarget
@@ -98,7 +98,7 @@ export function SourceControlTextGenerationDialogForm({
   const t = useTranslate()
   const entries = useMemo<AgentPickerEntry[]>(
     () =>
-      listCommitMessageAgentCapabilities().map((capability) => ({
+      listCommitMessageAgentCapabilities(actionId).map((capability) => ({
         agent: capability.id,
         label: agentLabel(capability.id),
         rows: [{ agent: capability.id, kind: 'cli' }],
@@ -109,7 +109,7 @@ export function SourceControlTextGenerationDialogForm({
         catalog: { origin: 'unknown' },
         arguments: ''
       })),
-    []
+    [actionId]
   )
   const pickerModel = useMemo(() => commitMessagePickerModel(entries), [entries])
   const showCustomAgent = Boolean(
@@ -128,9 +128,9 @@ export function SourceControlTextGenerationDialogForm({
   const [saveTargetKey, setSaveTargetKey] = useState(defaultSaveTargetKey)
   const commandTemplateId = `source-control-${actionId}-command-template`
   const selectedSaveTarget =
-    saveTargets.find((saveTarget) => {
-      return sourceControlTextGenerationSaveTargetKey(saveTarget.target) === saveTargetKey
-    }) ?? saveTargets[0]
+    saveTargets.find(
+      (item) => sourceControlTextGenerationSaveTargetKey(item.target) === saveTargetKey
+    ) ?? saveTargets[0]
 
   const buildParams = (settings: SourceControlRenderSettings | null) =>
     buildCommitMessageGenerationParams({
@@ -197,28 +197,30 @@ export function SourceControlTextGenerationDialogForm({
         }
         return false
       }
-      const targetKey = sourceControlTextGenerationSaveTargetKey(saveTarget.target)
-      setSavingTargetKey(targetKey)
-      try {
-        await onSaveDefaults(saveTarget.target, params)
-        if (options.showToast) {
-          toast.success(saveTarget.successMessage)
-        }
-        return true
-      } catch (error) {
-        console.error('Failed to save Source Control AI defaults', error)
-        if (options.showErrors) {
-          setGenerationError(
-            translate(
-              'sourceControl.actionSaveFailed',
-              'Could not save this action. Try saving it again in Settings.'
-            )
-          )
-        }
-        return false
-      } finally {
-        setSavingTargetKey(null)
-      }
+      setSavingTargetKey(sourceControlTextGenerationSaveTargetKey(saveTarget.target))
+      return runWithFinally(
+        async () => {
+          try {
+            await onSaveDefaults(saveTarget.target, params)
+            if (options.showToast) {
+              toast.success(saveTarget.successMessage)
+            }
+            return true
+          } catch (error) {
+            console.error('Failed to save Source Control AI defaults', error)
+            if (options.showErrors) {
+              setGenerationError(
+                translate(
+                  'sourceControl.actionSaveFailed',
+                  'Could not save this action. Try saving it again in Settings.'
+                )
+              )
+            }
+            return false
+          }
+        },
+        () => setSavingTargetKey(null)
+      )
     },
     [onSaveDefaults, params, paramsPlanResult, saving]
   )
@@ -273,22 +275,25 @@ export function SourceControlTextGenerationDialogForm({
               setAgentId(agent)
               setGenerationError(null)
             }}
-          >
-            {showCustomAgent ? (
-              <DropdownMenuItem
-                onSelect={() => {
-                  setAgentId(CUSTOM_AGENT_ID)
-                  setGenerationError(null)
-                }}
-              >
-                <Terminal className="size-3.5 text-muted-foreground" />
-                {t(
-                  'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.914c8f6ac2',
-                  'Custom command'
-                )}
-              </DropdownMenuItem>
-            ) : null}
-          </AgentLaunchPicker>
+            choices={
+              showCustomAgent
+                ? [
+                    {
+                      id: CUSTOM_AGENT_ID,
+                      label: t(
+                        'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.914c8f6ac2',
+                        'Custom command'
+                      ),
+                      icon: <Terminal className="size-3.5 text-muted-foreground" />,
+                      onSelect: () => {
+                        setAgentId(CUSTOM_AGENT_ID)
+                        setGenerationError(null)
+                      }
+                    }
+                  ]
+                : undefined
+            }
+          />
         </div>
 
         <div className="space-y-2">

@@ -1,4 +1,4 @@
-import { normalizeExecutionHostId, type ExecutionHostId } from '../../execution-host'
+import { normalizeExecutionHostId, type ExecutionHostId } from '../../execution-host/execution-host'
 import { normalizeStoredTaskSourceContext } from '../../work-items/task-source-context'
 import { normalizeWorkspaceAttachments } from '../../workspace-attachments/workspace-attachment-normalization'
 import { normalizeWorkspaceLinkedItem } from '../../workspace-attachments/workspace-linked-item'

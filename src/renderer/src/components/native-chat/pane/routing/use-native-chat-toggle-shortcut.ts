@@ -5,7 +5,7 @@ import {
   globalShortcutTargetYields,
   findPluginCommandForKeybinding
 } from '@/lib/plugins/commands/plugin-command-keybindings'
-import { getKeybindingContext } from '../../../terminal-workspace-model'
+import { getKeybindingContext } from '../../../terminal/workbench/terminal-workspace-model'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -13,7 +13,7 @@ import {
 import { useAppStore } from '../../../../store/index'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { resolveNativeChatTabAgentEvidence } from '../../../tab-bar/native-chat-tab-agent-evidence'
+import { resolveNativeChatTabAgentEvidence } from '../../../tab-bar/session-actions/native-chat-tab-agent-evidence'
 import { canToggleNativeChat } from '../../../../../../shared/native-chat/native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '../../../../../../shared/native-chat/transcript/messages/native-chat-transcript-readability'
 import { matchesNativeChatToggleShortcut } from './native-chat-shortcut'

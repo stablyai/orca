@@ -7,7 +7,7 @@ const AccountIdSchema = z.string().min(1)
 const RateLimitWindowSchema = z
   .object({
     usedPercent: z.number().finite().min(0).max(100),
-    // agy reports windows of unknown length as 0.
+    // A window of unknown length arrives as 0; rejecting it would fail the whole snapshot.
     windowMinutes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     resetsAt: TimestampSchema.nullable(),
     resetDescription: z.string().nullable()
@@ -106,6 +106,7 @@ const ClaudeAccountSummarySchema = z
   .object({
     id: AccountIdSchema,
     email: z.string().min(1),
+    displayName: z.string().optional(),
     managedAuthRuntime: z.enum(['host', 'wsl']).optional(),
     wslDistro: z.string().nullable().optional(),
     authMethod: z.enum(['subscription-oauth', 'unknown']).optional(),
@@ -121,6 +122,7 @@ const CodexAccountSummarySchema = z
   .object({
     id: AccountIdSchema,
     email: z.string().min(1),
+    displayName: z.string().optional(),
     managedHomeRuntime: z.enum(['host', 'wsl']).optional(),
     wslDistro: z.string().nullable().optional(),
     providerAccountId: z.string().nullable().optional(),

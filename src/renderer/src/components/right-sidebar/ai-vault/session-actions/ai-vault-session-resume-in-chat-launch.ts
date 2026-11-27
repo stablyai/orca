@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
-import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { agentLabel } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
@@ -18,6 +18,7 @@ import { admitStructuredLaunchOnHost } from '@/lib/agent-session/launch/structur
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { cliConversationExitGuidance } from '@/lib/agent-session/resume/history/cli-conversation-exit-guidance'
 import { structuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
+import { agentSessionWriteFailureText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
 import { workspaceHasSleepingAgentSessions } from '@/lib/workspace/activation/worktree-agent-activation-gate'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -185,6 +186,11 @@ function notifyAiVaultSessionResumeInChatFailure(
         { agent: agentLabel(rowAgent) }
       )
     )
+    return
+  }
+  // The host refuses this before any chat opens, so the toast says where it was saved.
+  if (failure?.code === 'agent_session_identity_required' && failure.details?.otherFolder) {
+    toast.error(agentSessionWriteFailureText(failure, 'read-history'))
     return
   }
   if (

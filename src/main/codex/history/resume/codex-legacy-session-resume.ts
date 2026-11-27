@@ -8,25 +8,52 @@ import {
   type AiVaultPrepareSessionResumeResult,
   isPerAccountManagedCodexHome
 } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
   appendCodexSessionHealAuditRecord,
   createCodexSessionBackfillAuditWriter
 } from '../backfill/codex-session-backfill-audit'
 import {
-  copySessionFileWithoutOverwrite,
-  isAtomicNoReplaceUnsupportedError
-} from '../backfill/codex-session-backfill-copy'
+  AtomicNoReplaceUnsupportedError,
+  copyCodexRolloutWithoutOverwrite
+} from '../rollouts/codex-rollout-copy'
 import { resolveCodexSessionBackfillPaths } from '../backfill/codex-session-backfill'
 import { codexDatedRolloutRelativePath } from './codex-session-resume-home'
+import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
+import {
+  settleLegacySessionCopyName,
+  swapLegacySessionCopy
+} from '../bridges/codex-legacy-session-copy'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
+import { legacyCopyLocks } from '../bridges/codex-legacy-session-copy-lock-holder'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 
 const RETRYABLE_RESUME_ERROR =
   'Orca could not safely move this legacy Codex session into your system Codex home. Retry resume; if it still fails, check that both Codex session folders are readable and writable.'
 
 const materializations = new Map<string, Promise<void>>()
+
+/** A resume must not find a legacy copy's name missing just because a swap is moving it. */
+export async function settleLegacySessionCopyBeforeResume(
+  transcriptPath: string | undefined,
+  managedHome: string
+): Promise<void> {
+  if (!transcriptPath?.trim()) {
+    return
+  }
+  const relativePath = codexDatedRolloutRelativePath(
+    join(managedHome, 'sessions'),
+    resolve(transcriptPath)
+  )
+  if (relativePath) {
+    // A copy left moved aside keeps its bytes; resuming without its name would start a new chat.
+    await settleLegacySessionCopyName({ managedHome, relativePath }).catch((error: unknown) => {
+      throw new Error(RETRYABLE_RESUME_ERROR, { cause: error })
+    })
+  }
+}
 
 export async function prepareLegacySharedCodexSessionResume(
   args: AiVaultPrepareSessionResumeArgs,
@@ -35,6 +62,8 @@ export async function prepareLegacySharedCodexSessionResume(
     getSelectedHostAccountCodexHomePath?: () => string | null
     legacyCodexHomePath?: string
     systemCodexHomePath?: string
+    /** An account restart follows, which swaps only when the account doesn't hold the rollout. */
+    leaveSwapToAccountRestart?: boolean
   }
 ): Promise<AiVaultPrepareSessionResumeResult> {
   const substituteCodexHome = await resolveSelectedAccountCodexHomeForResume(args, options)
@@ -48,15 +77,20 @@ export async function prepareLegacySharedCodexSessionResume(
     args.agent !== 'codex' ||
     args.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
     !args.codexHome ||
-    !sameRuntimePath(args.codexHome, legacyCodexHomePath) ||
-    !options.isHostSystemDefaultRealHomeSelected()
+    !sameRuntimePath(args.codexHome, legacyCodexHomePath)
   ) {
     return { useRealCodexHome: false }
   }
-
   const sourcePath = resolve(args.filePath)
   // Codex canonicalizes CODEX_HOME, so Windows transcripts can carry a \\?\ prefix (#27200).
   const relativePath = codexDatedRolloutRelativePath(managedSessionsRoot, sourcePath)
+  if (relativePath && !options.leaveSwapToAccountRestart) {
+    // Before Codex starts, so this resume can't be writing the copy as it's swapped.
+    await swapLegacySessionCopyBeforeCodex({ managedHome: legacyCodexHomePath, relativePath })
+  }
+  if (!options.isHostSystemDefaultRealHomeSelected()) {
+    return { useRealCodexHome: false }
+  }
   if (!relativePath) {
     throw new Error(RETRYABLE_RESUME_ERROR)
   }
@@ -89,6 +123,18 @@ export async function prepareLegacySharedCodexSessionResume(
   return { useRealCodexHome: true }
 }
 
+// The Codex about to start takes the coordination lock this swap's hold would otherwise keep.
+async function swapLegacySessionCopyBeforeCodex(args: {
+  managedHome: string
+  relativePath: string
+}): Promise<void> {
+  try {
+    await swapLegacySessionCopy(args)
+  } finally {
+    await legacyCopyLocks.releaseIfIdle()
+  }
+}
+
 /** Explicit account restarts must move the verified rollout before changing credentials. */
 export async function prepareCodexAccountRestartResume(args: {
   sourceHome: string
@@ -107,11 +153,19 @@ export async function prepareCodexAccountRestartResume(args: {
     throw new Error(RETRYABLE_RESUME_ERROR)
   }
   const paths = resolveCodexSessionBackfillPaths(args.systemCodexHomePath)
-  await materializeLegacyRollout(
-    args.transcriptPath,
-    join(args.targetHome, 'sessions', relativePath),
-    paths.auditLogPath
-  )
+  const legacyCodexHomePath = dirname(paths.managedSessionsRoot)
+  const targetPath = join(args.targetHome, 'sessions', relativePath)
+  // An account already holding this rollout is compared with the copy as it is, so the swap waits.
+  if (
+    sameRuntimePath(args.sourceHome, legacyCodexHomePath) &&
+    !(await lstat(targetPath).then(
+      () => true,
+      (error: unknown) => !isDefinitiveAbsence(error)
+    ))
+  ) {
+    await swapLegacySessionCopyBeforeCodex({ managedHome: legacyCodexHomePath, relativePath })
+  }
+  await materializeLegacyRollout(args.transcriptPath, targetPath, paths.auditLogPath)
   return args.targetHome
 }
 
@@ -167,28 +221,12 @@ async function materializeLegacyRollout(
   if (!sourceStat.isFile() || sourceStat.isSymbolicLink()) {
     throw new Error('Legacy rollout source is not a regular file.')
   }
-  await mkdir(dirname(targetPath), { recursive: true })
-  try {
-    await link(sourcePath, targetPath)
-  } catch (linkError) {
-    if (isExistsError(linkError)) {
-      await assertMatchingExistingTarget(sourcePath, targetPath)
-    } else {
-      try {
-        await copySessionFileWithoutOverwrite(sourcePath, targetPath)
-      } catch (copyError) {
-        if (isExistsError(copyError)) {
-          await assertMatchingExistingTarget(sourcePath, targetPath)
-        } else {
-          if (isAtomicNoReplaceUnsupportedError(copyError)) {
-            throw new Error('The target filesystem cannot safely install this rollout.', {
-              cause: copyError
-            })
-          }
-          throw copyError
-        }
-      }
-    }
+  // A cleanup deleting every name of this rollout would miss one installed meanwhile.
+  if (
+    (await linkCodexRolloutUnlessHeld(sourcePath, () => installRollout(sourcePath, targetPath))) ===
+    'held'
+  ) {
+    throw new Error('This rollout is being deleted with its workspace.')
   }
 
   const summary = {
@@ -209,6 +247,31 @@ async function materializeLegacyRollout(
     summary,
     { action: 'targeted-resume', source: sourcePath, target: targetPath }
   )
+}
+
+async function installRollout(sourcePath: string, targetPath: string): Promise<void> {
+  await mkdir(dirname(targetPath), { recursive: true })
+  try {
+    await link(sourcePath, targetPath)
+  } catch (linkError) {
+    if (isExistsError(linkError)) {
+      await assertMatchingExistingTarget(sourcePath, targetPath)
+    } else {
+      try {
+        const outcome = await copyCodexRolloutWithoutOverwrite(sourcePath, targetPath)
+        if (outcome === 'existing') {
+          await assertMatchingExistingTarget(sourcePath, targetPath)
+        }
+      } catch (copyError) {
+        if (copyError instanceof AtomicNoReplaceUnsupportedError) {
+          throw new Error('The target filesystem cannot safely install this rollout.', {
+            cause: copyError
+          })
+        }
+        throw copyError
+      }
+    }
+  }
 }
 
 async function assertMatchingExistingTarget(sourcePath: string, targetPath: string): Promise<void> {

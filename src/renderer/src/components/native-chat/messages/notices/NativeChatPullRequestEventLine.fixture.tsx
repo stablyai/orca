@@ -4,6 +4,7 @@ import { NativeChatOpenedPullRequestCard } from '../../tools/pull-requests/Nativ
 
 // Journal keys percent-encode the line's client message id, as the host writes them.
 const MESSAGE_ID = 'orca:pr-event%3Agithub.com%2Fstablyai%2Forca%233%3A8d5f74b3c0e1d2f3%3A1'
+const AT = Date.parse('2026-11-18T18:20:00Z')
 const LONG_MESSAGE_ID =
   'orca:pr-event%3Agithub.com%2Fstablyai%2Fsome-very-long-repository-name%2312345%3Aabc1234def5678%3A1'
 
@@ -32,6 +33,7 @@ export const failingBesideOpenedCard = defineFixture({
       <NativeChatPullRequestEventLine
         block={{ type: 'text', text: 'CI failing on orca#3 at 8d5f74b', tone: 'failure' }}
         messageId={MESSAGE_ID}
+        timestamp={AT}
       />
     </div>
   )
@@ -42,6 +44,7 @@ export const greenHideShown = defineFixture({
     <NativeChatPullRequestEventLine
       block={{ type: 'text', text: 'CI green on orca#3 at 8d5f74b', tone: 'success' }}
       messageId={MESSAGE_ID}
+      timestamp={AT}
     />
   ),
   interact: focusHide
@@ -56,6 +59,7 @@ export const narrowLongHideShown = defineFixture({
         tone: 'failure'
       }}
       messageId={LONG_MESSAGE_ID}
+      timestamp={AT}
     />
   ),
   interact: focusHide

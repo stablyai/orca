@@ -1,5 +1,7 @@
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import type { BrowserScreenshotOptions } from '../../../../shared/rpc-contract/browser/browser-observation-params'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { app, nativeImage, type WebContents } from 'electron'
 import type {
   BrowserScreenshotResult,
@@ -15,7 +17,7 @@ import {
 import { readRasterImageDimensions } from '../../../../shared/file-preview/raster-image-dimensions'
 import { acquireElectronDebugger } from '../../cdp/debugger/electron-debugger-lease'
 import { sendGuestCdpCommand } from '../../cdp/debugger/guest-cdp-command'
-import { AgentBrowserBridgeUtilityCommands } from './agent-browser-bridge-page-commands'
+import { AgentBrowserBridgePageMenuCommands } from './agent-browser-bridge-page-menu-commands'
 import { ORCA_TAB_SESSION_PREFIX } from '../session-lifecycle/agent-browser-session-name'
 import { captureRemoteCliBrowserWorkBound } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import {
@@ -23,7 +25,7 @@ import {
   waitForPromiseWithSignal
 } from '../../../../shared/concurrency/abort-signal-reason'
 
-export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBridgeUtilityCommands {
+export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBridgePageMenuCommands {
   async screenshot(
     options: BrowserScreenshotOptions,
     worktreeId?: string,
@@ -114,7 +116,7 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
                   ? JSON.stringify(result.value)
                   : String(result.value)
                 : (result.description ?? ''),
-            origin: wc.getURL()
+            origin: redactKagiSessionToken(wc.getURL())
           }
         } catch (error) {
           if (error instanceof BrowserError) {
@@ -138,9 +140,11 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
   }
 }
 
-const CssViewportMetrics = z.object({
-  cssVisualViewport: z.object({ clientWidth: z.number(), clientHeight: z.number() })
-})
+const CssViewportMetrics = lazyZodSchema(() =>
+  z.object({
+    cssVisualViewport: z.object({ clientWidth: z.number(), clientHeight: z.number() })
+  })
+)
 
 // Captures come back in device pixels (HiDPI, zoom, emulated DPR); CSS pixels keep x/y equal to page coordinates.
 async function encodeInCssPixels(

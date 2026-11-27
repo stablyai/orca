@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
   providerDiagnostic,
   withProviderDiagnostic
@@ -14,15 +15,21 @@ import {
   type NewSessionRequest
 } from '../generated/acp-protocol.generated'
 
-const newSessionSchema = NewSessionResponseSchema.extend({
-  models: SessionModelStateSchema.optional()
-})
-const loadSessionSchema = LoadSessionResponseSchema.extend({
-  models: SessionModelStateSchema.optional()
-})
-const resumeSessionSchema = ResumeSessionResponseSchema.extend({
-  models: SessionModelStateSchema.optional()
-})
+const newSessionSchema = lazyZodSchema(() =>
+  NewSessionResponseSchema.extend({
+    models: SessionModelStateSchema.optional()
+  })
+)
+const loadSessionSchema = lazyZodSchema(() =>
+  LoadSessionResponseSchema.extend({
+    models: SessionModelStateSchema.optional()
+  })
+)
+const resumeSessionSchema = lazyZodSchema(() =>
+  ResumeSessionResponseSchema.extend({
+    models: SessionModelStateSchema.optional()
+  })
+)
 
 export type AcpSessionStarted =
   | { kind: 'new'; sessionId: string; response: z.infer<typeof newSessionSchema> }
@@ -117,4 +124,31 @@ export async function setupAcpSession(
       throw failure
     }
   }
+}
+
+/**
+ * The session a kept agent already runs, from its kept start answer, so a reattach never reloads
+ * it (a load replays history and may replace the live session). Null when it can't be read or is
+ * another session than the one asked for.
+ */
+export function keptAcpSessionStart(
+  kept: { method: string; result: unknown },
+  sessionId: string | undefined
+): AcpSessionStarted | null {
+  if (kept.method === 'session/new') {
+    const parsed = newSessionSchema.safeParse(kept.result)
+    if (!parsed.success || (sessionId !== undefined && parsed.data.sessionId !== sessionId)) {
+      return null
+    }
+    return sessionId === undefined
+      ? { kind: 'new', sessionId: parsed.data.sessionId, response: parsed.data }
+      : { kind: 'resume', sessionId, response: parsed.data }
+  }
+  if (sessionId === undefined) {
+    return null
+  }
+  const parsed = (
+    kept.method === 'session/load' ? loadSessionSchema : resumeSessionSchema
+  ).safeParse(kept.result)
+  return parsed.success ? { kind: 'resume', sessionId, response: parsed.data } : null
 }

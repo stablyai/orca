@@ -14,12 +14,12 @@ import { applyCodeFontSmoothing } from './lib/editor/appearance/code-font-smooth
 import { I18nProvider } from './i18n/I18nProvider'
 import { useTranslate } from './i18n/use-translate'
 import { useAppStore } from './store/index'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root'
 import { setReactCommitCascadeRendererSurface } from './diagnostics/react-commits/react-commit-cascade-telemetry'
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
-import { useReduceVisualEffects } from './hooks/use-reduce-visual-effects'
+import { useReduceVisualEffects } from './hooks/theme/use-reduce-visual-effects'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
@@ -64,7 +64,10 @@ function PopoutSettingsSync(): null {
 
   useEffect(() => {
     let disposed = false
-    // Preview-terminal copy/paste overrides live in a separate keybinding file.
+    // Shortcut overrides live in a separate keybinding file; main broadcasts edits to every window.
+    const offKeybindingsChanged = window.api.keybindings?.onChanged((snapshot) =>
+      useAppStore.getState().setKeybindingSnapshot(snapshot)
+    )
     void useAppStore.getState().fetchKeybindings()
     const setSettings = (next: GlobalSettings): void => {
       if (!disposed) {
@@ -84,6 +87,7 @@ function PopoutSettingsSync(): null {
     return () => {
       disposed = true
       offChanged()
+      offKeybindingsChanged?.()
     }
   }, [])
 

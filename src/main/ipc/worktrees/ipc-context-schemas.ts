@@ -1,11 +1,12 @@
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { CreateWorktreeArgs } from '../../../shared/worktree/create-types'
 import type {
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance
 } from '../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { NestedWorktreeRemovalApproval } from '../../../shared/worktree/removal/nested-removal'
-import type { ListDetectedWorktreesArgs } from '../../../shared/detected-worktree-provider-contract'
+import type { ListDetectedWorktreesArgs } from '../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-attachments/workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachments/workspace-attachment-schema'
 import { TaskSourceContextSchema } from '../../../shared/work-items/task-source-context-schema'
@@ -32,8 +33,12 @@ export type RemoveWorktreeArgs = {
 
 export type DetectedWorktreeRequestArgs = { repoId: string } | ListDetectedWorktreesArgs
 
-export const NullableWorkspaceLinkedItemSchema = WorkspaceLinkedItemSchema.nullable()
-export const NullableTaskSourceContextSchema = TaskSourceContextSchema.nullable()
+export const NullableWorkspaceLinkedItemSchema = lazyZodSchema(() =>
+  WorkspaceLinkedItemSchema.nullable()
+)
+export const NullableTaskSourceContextSchema = lazyZodSchema(() =>
+  TaskSourceContextSchema.nullable()
+)
 
 export function normalizeLinkedWorkItemFields<
   T extends {

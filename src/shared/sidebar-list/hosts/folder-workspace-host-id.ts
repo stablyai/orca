@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../project/groups/project-group-types'
 import { getFolderWorkspaceExecutionHostIdForRows } from './host-filtering'

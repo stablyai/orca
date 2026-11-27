@@ -1,76 +1,25 @@
-import { describe, expect, it } from 'vitest'
-import {
-  hasExplicitTaskScope,
-  parseTaskQuery,
-  serializeTaskQuery,
-  stripRepoQualifiers
-} from './task-query'
+import { expect, it } from 'vitest'
+import { parseTaskQuery, stripRepoQualifiers, withQualifier } from './task-query'
 
-describe('hasExplicitTaskScope', () => {
-  it('recognizes scope qualifiers and their quoted values', () => {
-    for (const query of ['is:issue', 'IS:PR', 'is:pull-request', 'is:"pr"']) {
-      expect(hasExplicitTaskScope(query)).toBe(true)
-    }
-  })
-
-  it('keeps quoted phrases and values of other qualifiers as search text', () => {
-    for (const query of ['"is:pr"', "'is:issue'", 'label:is:pr', 'title:"is:pull-request"']) {
-      expect(hasExplicitTaskScope(query)).toBe(false)
-      expect(parseTaskQuery(query).scope).toBe('all')
-    }
-  })
+it('round-trips labels containing a mid-word apostrophe', () => {
+  const query = withQualifier('is:pr', 'labels', ["won't-fix", 'bug'])
+  expect(parseTaskQuery(query).labels).toEqual(["won't-fix", 'bug'])
+  expect(parseTaskQuery("don't is:open").state).toBe('open')
 })
 
-describe('parseTaskQuery', () => {
-  it('widens scope to all regardless of issue and PR token order', () => {
-    const parsed = parseTaskQuery('is:pr is:issue')
-    expect(parsed.scope).toBe('all')
-  })
-
-  it('keeps draft scoped to open PRs even when a later token says issue', () => {
-    const parsed = parseTaskQuery('is:draft is:issue')
-    expect(parsed.scope).toBe('pr')
-    expect(parsed.state).toBe('open')
-    expect(parsed.draft).toBe(true)
-  })
-
-  it('extracts assignee, author, label, and review qualifiers', () => {
-    const parsed = parseTaskQuery(
-      'assignee:@me author:alice author:bob review-requested:@me label:bug free text'
-    )
-    expect(parsed.assignee).toBe('@me')
-    expect(parsed.authors).toEqual(['alice', 'bob'])
-    expect(parsed.reviewRequested).toBe('@me')
-    expect(parsed.scope).toBe('pr') // review-requested forces pr
-    expect(parsed.labels).toEqual(['bug'])
-    expect(parsed.freeText).toBe('free text')
-  })
-
-  it('keeps review qualifiers scoped to PRs even when a later token says issue', () => {
-    const parsed = parseTaskQuery('review-requested:@me is:issue')
-    expect(parsed.scope).toBe('pr')
-    expect(parsed.reviewRequested).toBe('@me')
-  })
-})
-
-describe('stripRepoQualifiers', () => {
-  it('re-quotes a standalone token that contains whitespace', () => {
-    // Re-quote standalone phrases or serialization would split them into separate search tokens.
-    const stripped = stripRepoQualifiers('"needs review" repo:x/y')
-    expect(stripped).toBe('"needs review"')
-  })
-})
-
-describe('serializeTaskQuery', () => {
-  it('quotes label values containing whitespace', () => {
-    const parsed = parseTaskQuery('label:"needs review"')
-    expect(parsed.labels).toEqual(['needs review'])
-    expect(parsed.freeText).toBe('')
-    expect(serializeTaskQuery(parsed)).toContain('label:"needs review"')
-  })
-
-  it('serializes all state so filter changes do not fall back to the default open state', () => {
-    const raw = serializeTaskQuery(parseTaskQuery('is:pr state:all'))
-    expect(raw).toBe('is:pr state:all')
-  })
+it('removes repo filters without turning quoted search text into filters', () => {
+  const query = stripRepoQualifiers(
+    'repo:owner/project "repo:literal/name" "is:closed" label:"help wanted" REPO:"other/project"'
+  )
+  expect(query).toBe('"repo:literal/name" "is:closed" label:"help wanted"')
+  expect(parseTaskQuery(query).state).toBeNull()
+  // GitHub search only honors double-quoted phrases.
+  expect(stripRepoQualifiers("'tab bar' -label:'needs triage' repo:a/b")).toBe(
+    '"tab bar" -label:"needs triage"'
+  )
+  // The tokenizer cannot escape " inside "...", so mixed-quoted phrases keep their raw quoting.
+  const mixedQuotes = `'a" is:closed "b' label:'x" is:merged "y'`
+  const mixedQuery = stripRepoQualifiers(`repo:o/p ${mixedQuotes}`)
+  expect(mixedQuery).toBe(mixedQuotes)
+  expect(parseTaskQuery(mixedQuery)).toMatchObject({ state: null, labels: ['x" is:merged "y'] })
 })

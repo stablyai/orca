@@ -2,7 +2,7 @@ import type {
   ClaudeManagedAccountSummary,
   CodexManagedAccountSummary
 } from '../../../../../../shared/agent-accounts/managed-account-types'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { accountRuntimeScope, type NativeAccountBinding } from './ai-vault-account-binding'
 import {

@@ -7,7 +7,7 @@ import { applyDocumentTheme } from '@/app-shell/appearance/document-theme'
 import { resolvePaintedTheme } from '@/app-shell/appearance/terminal-app-theme'
 import { track } from '@/diagnostics/telemetry/telemetry'
 import { buildAgentPickedPayload } from './agent-picked-payload'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { STEPS, stepIndexAfterCompletedStep } from './use-onboarding-flow-types'
@@ -136,6 +136,8 @@ export function useOnboardingFlow(
   const { agentSurface, setAgentSurface, chatAgents, chatDetected, refreshDetectedAgents } =
     useOnboardingAgentSurface({
       settings,
+      // Step 1 saves the surface, so only a flow that finished it has a choice to reflect.
+      surfaceChosen: remappedLastCompletedStep >= 1,
       selectedAgent,
       agentInteractedRef,
       setSelectedAgent

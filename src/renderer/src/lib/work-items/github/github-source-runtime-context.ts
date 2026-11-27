@@ -2,10 +2,13 @@ import {
   getRepoExecutionHostId,
   toRuntimeExecutionHostId,
   parseExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
-import type { ExecutionHostId, ParsedExecutionHost } from '../../../../../shared/execution-host'
+import type {
+  ExecutionHostId,
+  ParsedExecutionHost
+} from '../../../../../shared/execution-host/execution-host'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'

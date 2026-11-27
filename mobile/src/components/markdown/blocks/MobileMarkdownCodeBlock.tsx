@@ -4,7 +4,6 @@ import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { highlightMobileCode } from '../../../files/session-documents/mobile-file-syntax'
 import {
-  MobileNativeChatDisclosureContext,
   MobileNativeChatMarkdownRowKeyContext,
   useMobileNativeChatDisclosure
 } from '../../../session/native-chat/transcript/viewport/mobile-native-chat-disclosure-store'
@@ -29,8 +28,7 @@ export const MobileMarkdownCodeBlock = memo(function MobileMarkdownCodeBlock({
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  // Only chat code offers wrap, as on desktop; the transcript keeps the choice, never persisted.
-  const chat = useContext(MobileNativeChatDisclosureContext) !== null
+  // In chat the transcript keeps the wrap choice, never persisted; elsewhere it is local.
   const rowKey = useContext(MobileNativeChatMarkdownRowKeyContext)
   const [wrapped, setWrapped] = useMobileNativeChatDisclosure(
     rowKey && sourceLine !== undefined ? `code-wrap:${rowKey}:${sourceLine}` : undefined,
@@ -60,10 +58,10 @@ export const MobileMarkdownCodeBlock = memo(function MobileMarkdownCodeBlock({
     <View style={styles.codeBlock}>
       <View style={styles.codeHeader}>
         <Text numberOfLines={1} style={styles.codeLanguage}>
-          {language}
+          {language || t('components.markdownBlocks.codeLabel', 'Code')}
         </Text>
         <View style={styles.codeActions}>
-          {chat && code ? (
+          {code ? (
             <Pressable
               style={({ pressed }) => [
                 styles.codeWrapButton,

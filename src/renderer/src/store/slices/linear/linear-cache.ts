@@ -1,5 +1,5 @@
 import type { LinearIssueData } from './linear-issue-read'
-import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
+import { isIntegrationCredentialDecryptionError } from '../../../../../shared/secure-storage/integration-credential-errors'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   rowLessSourceTarget,

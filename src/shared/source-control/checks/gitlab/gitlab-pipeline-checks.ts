@@ -1,4 +1,4 @@
-import type { GitLabPipeline, GitLabPipelineJob } from '../../../gitlab-types'
+import type { GitLabPipeline, GitLabPipelineJob } from '../../../gitlab/gitlab-types'
 import type { PRCheckDetail } from '../../../github/checks/check-types'
 import type { CheckStatus } from '../../../github/pull-requests/pull-request-types'
 import { checkRunTimes } from '../pr-check-time'
@@ -127,6 +127,11 @@ export function gitLabPipelineJobsToPRChecks(jobs: GitLabPipelineJob[]): PRCheck
     url: job.webUrl || null,
     ...checkRunTimes(job.startedAt, job.finishedAt),
     // Truthiness, not != null: the runtime RPC schema requires a positive int.
-    ...(job.id ? { gitlabJobId: job.id } : {})
+    ...(job.id
+      ? {
+          gitlabJobId: job.id,
+          ...(job.projectRef ? { gitlabJobProjectRef: job.projectRef } : {})
+        }
+      : {})
   }))
 }

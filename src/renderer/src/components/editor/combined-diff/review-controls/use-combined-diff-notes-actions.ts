@@ -4,9 +4,9 @@ import { useOwnedDiffComments } from '@/components/diff-comments/use-diff-commen
 import { withoutMarkdownReviewNotes } from '@/lib/editor/markdown/review-notes/markdown-review-notes-setting'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { formatDiffComments } from '../../../../../../shared/diff-comments-format'
+import { formatDiffComments } from '../../../../../../shared/file-review/diff-comments-format'
 import { translate } from '@/i18n/i18n'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 
 export type CombinedDiffNotesActions = {
   clearNotesCount: number
@@ -19,6 +19,32 @@ export type CombinedDiffNotesActions = {
   previewDiffComments: DiffComment[]
   setClearNotesDialogOpen: React.Dispatch<React.SetStateAction<boolean>>
   setScrollSurfaceMounted: (mounted: boolean) => void
+}
+
+async function runClearDiffNotesAction(
+  run: () => Promise<boolean>,
+  mountedRef: { current: boolean },
+  setIsClearingNotes: (clearing: boolean) => void,
+  setClearNotesDialogOpen: (open: boolean) => void
+): Promise<void> {
+  setIsClearingNotes(true)
+  try {
+    const ok = await run()
+    if (!mountedRef.current) {
+      return
+    }
+    if (ok) {
+      setClearNotesDialogOpen(false)
+    } else {
+      toast.error(
+        translate('auto.components.editor.CombinedDiffViewer.45cf23b418', 'Failed to clear notes.')
+      )
+    }
+  } finally {
+    if (mountedRef.current) {
+      setIsClearingNotes(false)
+    }
+  }
 }
 
 export function useCombinedDiffNotesActions({
@@ -134,29 +160,15 @@ export function useCombinedDiffNotesActions({
     if (!clearTarget || clearNotesCount === 0 || isClearingNotes) {
       return
     }
-    setIsClearingNotes(true)
-    try {
-      const ok = await clearDiffComments(clearTarget.owner, {
-        keepMarkdownNotes: !markdownReviewNotesEnabled
-      })
-      if (!mountedRef.current) {
-        return
-      }
-      if (ok) {
-        setClearNotesDialogOpen(false)
-      } else {
-        toast.error(
-          translate(
-            'auto.components.editor.CombinedDiffViewer.45cf23b418',
-            'Failed to clear notes.'
-          )
-        )
-      }
-    } finally {
-      if (mountedRef.current) {
-        setIsClearingNotes(false)
-      }
-    }
+    await runClearDiffNotesAction(
+      () =>
+        clearDiffComments(clearTarget.owner, {
+          keepMarkdownNotes: !markdownReviewNotesEnabled
+        }),
+      mountedRef,
+      setIsClearingNotes,
+      setClearNotesDialogOpen
+    )
   }, [
     clearDiffComments,
     clearNotesCount,

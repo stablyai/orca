@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserGuestMetadata } from '../../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { BrowserLoadError } from '../../../../shared/browser/workspaces/browser-workspace-types'
-import { installBrowserGuestMetadata, publishBrowserGuestMetadata } from './browser-guest-metadata'
+import { installBrowserGuestMetadata, readBrowserGuestMetadata } from './browser-guest-metadata'
 
 function fixture() {
   let url = 'https://example.test/start'
@@ -55,43 +55,22 @@ function fixture() {
 }
 
 describe('native guest metadata', () => {
-  it('projects same-URL native history and retains it through a failed destination without publishing Chromium internals', () => {
+  it('publishes, caches and retires safe metadata while the native guest keeps its private destination', () => {
     const f = fixture()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies the production publisher native methods.
-    publishBrowserGuestMetadata(f.guest as unknown as Electron.WebContents)
-    f.guest.emit('did-start-navigation', {}, 'https://iframe.test/', false, false)
-    expect(f.reports.at(-1)?.loading).toBe(false)
-    f.setBack()
-    f.guest.emit('did-navigate-in-page', {}, 'https://example.test/start', true)
-    expect(f.reports.at(-1)?.canGoBack).toBe(true)
-    f.guest.emit('did-start-navigation', {}, 'https://broken.test/', false, true)
-    f.navigate('chrome-error://chromewebdata/', 'chrome-error://chromewebdata/')
-    f.guest.emit('page-title-updated', {}, 'chrome-error://chromewebdata/')
-    // Some builds omit did-fail-load: native settlement must still provide the error.
-    f.guest.emit('did-stop-loading')
+    const raw = 'https://kagi.com/redirected?token=test-only&q=one'
+    f.navigate(raw, raw)
+    f.guest.emit('did-navigate', {}, raw)
     expect(f.reports.at(-1)).toMatchObject({
-      url: 'https://example.test/start',
-      title: 'Start',
-      loading: false,
-      canGoBack: true,
-      errorPage: true,
-      loadError: { code: -1, validatedUrl: 'https://broken.test/' }
+      url: 'https://kagi.com/redirected?q=one',
+      title: 'https://kagi.com/redirected?q=one'
     })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies the native methods the production reader uses.
+    expect(readBrowserGuestMetadata(f.guest as unknown as Electron.WebContents)?.url).toBe(
+      'https://kagi.com/redirected?q=one'
+    )
+    expect(f.guest.getURL()).toBe(raw)
     f.dispose()
-  })
-
-  it('delivers unchanged-field commits and the stop after an aborted navigation', () => {
-    const f = fixture()
-    f.guest.emit('did-start-navigation', {}, 'https://example.test/start', false, true)
-    f.guest.emit('did-navigate', {}, 'https://example.test/start')
-    expect(f.reports.at(-1)?.kind).toBe('navigation')
-    f.setBack()
-    f.guest.emit('did-navigate-in-page', {}, 'https://example.test/start', true)
-    f.guest.emit('did-navigate-in-page', {}, 'https://example.test/start', true)
-    expect(f.reports.slice(-2).map((state) => state.navigationRevision)).toEqual([2, 3])
-    f.guest.emit('did-fail-load', {}, -3, 'ERR_ABORTED', 'https://download.test/file.zip', true)
-    f.guest.emit('did-stop-loading')
-    expect(f.reports.at(-1)).toMatchObject({ kind: 'stop', loading: false, loadError: null })
-    f.dispose()
+    expect(f.reports.at(-1)?.kind).toBe('retired')
+    expect(JSON.stringify(f.reports)).not.toContain('test-only')
   })
 })

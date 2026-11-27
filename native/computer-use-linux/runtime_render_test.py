@@ -55,39 +55,5 @@ class PortalFileTest(unittest.TestCase):
         self.assertTrue(link.is_symlink() and self.file.exists())
 
 
-class FakePixbuf:
-    def __init__(self, width, height):
-        self.width, self.height = width, height
-
-    def get_width(self):
-        return self.width
-
-    def get_height(self):
-        return self.height
-
-    def scale_simple(self, width, height, _interp):
-        return FakePixbuf(width, height)
-
-    def save_to_bufferv(self, image_format, keys, values):
-        return True, f"{image_format}:{self.width}x{self.height}:{dict(zip(keys, values))}".encode()
-
-
-class ScreenshotSizingTest(unittest.TestCase):
-    def setUp(self):
-        runtime.GdkPixbuf.InterpType = types.SimpleNamespace(BILINEAR="bilinear")
-
-    def payload(self, **operation):
-        return runtime.bounded_screenshot_payload(FakePixbuf(400, 200), runtime.screenshot_request_of(operation))
-
-    def test_default_request_keeps_the_full_capture_as_png(self):
-        payload = self.payload()
-        self.assertEqual((payload["format"], payload["width"], payload["height"], payload["scale"]), ("png", 400, 200, 1))
-
-    def test_requested_scale_edge_and_jpeg_shrink_and_reencode_the_capture(self):
-        payload = self.payload(screenshotFormat="jpeg", screenshotScale=0.5, screenshotMaxEdge=100)
-        self.assertEqual((payload["format"], payload["width"], payload["height"]), ("jpeg", 100, 50))
-        self.assertEqual(runtime.base64.b64decode(payload["base64"]), b"jpeg:100x50:{'quality': '80'}")
-
-
 if __name__ == "__main__":
     unittest.main()

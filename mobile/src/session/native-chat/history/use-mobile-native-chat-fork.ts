@@ -3,17 +3,17 @@ import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-
 import {
   AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
-} from '../../../../../src/shared/agent-session/agent-session-create-capabilities'
-import { latestAgentSessionContextClearSequence } from '../../../../../src/shared/agent-session/agent-session-context-clear'
+} from '../../../../../src/shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
+import { latestAgentSessionContextClearSequence } from '../../../../../src/shared/agent-session/conversation-context/agent-session-context-clear'
 import { isTuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent'
-import type { StructuredAgentSessionForkSource } from '../../../../../src/shared/agent-session/structured-agent-session-create'
-import type { StructuredAgentSessionHostCapabilityState } from '../../../../../src/shared/agent-session/structured-agent-session-host-capability'
+import type { StructuredAgentSessionForkSource } from '../../../../../src/shared/agent-session/lifecycle/operations/structured-agent-session-create'
+import type { StructuredAgentSessionHostCapabilityState } from '../../../../../src/shared/agent-session/capabilities/structured-agent-session-host-capability'
 import {
   nativeChatForkInventory,
   nativeChatForkSupport,
   nativeChatRowOffersFork
-} from '../../../../../src/shared/native-chat/native-chat-fork-offer'
+} from '../../../../../src/shared/native-chat/transcript/turns/native-chat-fork-offer'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { isRootAgentJournalItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import {
@@ -26,10 +26,17 @@ import { useMobileRegisteredAgent } from '../agent-session/use-mobile-registered
 /** The fork a response offers: none, an empty held slot, drawn disabled, or pressable. */
 export type MobileNativeChatForkOffer = 'hidden' | 'reserved' | 'disabled' | 'available'
 
+/** What `/fork` did: opened a fork, waited on one already opening, or found no response to copy. */
+export type MobileNativeChatForkLatestOutcome = 'started' | 'pending' | 'working' | 'none'
+
 export type MobileNativeChatFork = {
   subscribe: (listener: () => void) => () => void
   offerFor: (message: NativeChatMessage) => MobileNativeChatForkOffer
   fork: (message: NativeChatMessage) => void
+  /** Whether `/fork` is Orca's here: the host and agent confirmed they can fork, as on desktop. */
+  commandOffered: () => boolean
+  /** `/fork`: copies through the newest response that offers a fork, as desktop's command does. */
+  forkLatest: () => MobileNativeChatForkLatestOutcome
 }
 
 /** Fixed by the row's own kind, never by support or turn state, so the meta row never shifts. */
@@ -150,16 +157,31 @@ export function useMobileNativeChatFork(input: {
     },
     [agent, createFork, offerFor, sessionId]
   )
+  const commandOffered = useCallback(
+    () => support.kind === 'known' && !!sessionId && isTuiAgent(agent ?? ''),
+    [agent, sessionId, support]
+  )
+  const forkLatest = useCallback((): MobileNativeChatForkLatestOutcome => {
+    if (inFlight.current) {
+      return 'pending'
+    }
+    const through = messages.findLast((message) => offerFor(message) === 'available')
+    if (!through) {
+      return agentWorking ? 'working' : 'none'
+    }
+    fork(through)
+    return 'started'
+  }, [agentWorking, fork, messages, offerFor])
   // One stable value: each button re-renders only when its own offer changes, not on every
   // streamed revision of the transcript.
-  const latest = useRef({ offerFor, fork })
+  const latest = useRef({ offerFor, fork, commandOffered, forkLatest })
   const listeners = useRef(new Set<() => void>())
   useLayoutEffect(() => {
-    latest.current = { offerFor, fork }
+    latest.current = { offerFor, fork, commandOffered, forkLatest }
     for (const listener of listeners.current) {
       listener()
     }
-  }, [offerFor, fork])
+  }, [offerFor, fork, commandOffered, forkLatest])
   return useMemo(
     () => ({
       subscribe: (listener) => {
@@ -167,7 +189,9 @@ export function useMobileNativeChatFork(input: {
         return () => listeners.current.delete(listener)
       },
       offerFor: (message) => latest.current.offerFor(message),
-      fork: (message) => latest.current.fork(message)
+      fork: (message) => latest.current.fork(message),
+      commandOffered: () => latest.current.commandOffered(),
+      forkLatest: () => latest.current.forkLatest()
     }),
     []
   )

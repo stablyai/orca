@@ -2,7 +2,7 @@ import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
 } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getPtyIpc } from '../pty-host-bindings'
 import type { Store } from '../../../persistence/loading-store/store'
@@ -39,12 +39,24 @@ export type PtyKillIpcDeps = {
 }
 
 export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
-  getPtyIpc().handle('pty:kill', (_event, args: { id: string; keepHistory?: boolean }) =>
-    stopRendererOwnedPty(deps, args)
+  getPtyIpc().handle(
+    'pty:kill',
+    (_event, args: { id: string; keepHistory?: boolean; replaced?: boolean }) =>
+      stopRendererOwnedPty(deps, args)
   )
   getPtyIpc().handle('pty:killFenced', (_event, args: PtyFencedTerminationRequest | undefined) =>
     stopFencedRendererPty(deps, args)
   )
+  // Agent Sleep asks before capturing anything; the kill itself still enforces it.
+  getPtyIpc().handle('pty:sleepAdmitted', (_event, args: { id: string; paneKey: string }) => {
+    const terminalHandle = deps.runtime?.getTerminalHandleForPaneKey(args.paneKey) ?? null
+    try {
+      deps.runtime?.assertAgentSleepAdmitted(args.id)
+      return { admitted: true, terminalHandle }
+    } catch {
+      return { admitted: false, terminalHandle }
+    }
+  })
 }
 
 /** Label successful replacement stops as handoff; failed stops leave no label. */
@@ -55,9 +67,17 @@ export async function stopReplacedPanePty(deps: PtyKillIpcDeps, id: string): Pro
 /** Settle only after shutdown is observed or synthesized. */
 export async function stopRendererOwnedPty(
   deps: PtyKillIpcDeps,
-  args: { id: string; keepHistory?: boolean }
+  args: { id: string; keepHistory?: boolean; replaced?: boolean }
 ): Promise<void> {
+  // A restart whose replacement never spawned still keeps its pane.
+  if (args?.replaced === true) {
+    await stopReplacedPanePty(deps, args.id)
+    return
+  }
   // Hibernation must retain the pane's wake binding.
+  if (args?.keepHistory === true && typeof args.id === 'string') {
+    deps.runtime?.assertAgentSleepAdmitted(args.id)
+  }
   await stopRendererOwnedPtyAs(deps, args, args?.keepHistory === true ? 'reversible' : null)
 }
 

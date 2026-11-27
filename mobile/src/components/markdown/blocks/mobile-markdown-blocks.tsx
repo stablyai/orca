@@ -15,11 +15,16 @@ import {
   type StyleProp,
   type TextStyle
 } from 'react-native'
-import type { NativeChatVisualDirective } from '../../../../../src/shared/native-chat/native-chat-visual-directive'
+import type { NativeChatVisualDirective } from '../../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { mobileMathMeasureText } from '../math/mobile-markdown-math-nodes'
 import { mobileMarkdownTableColumnWidths } from './mobile-markdown-table-columns'
-import { mobileMarkdownVisualPlaceholderIndex } from './mobile-markdown-visual-lines'
+import {
+  mobileMarkdownCardPlaceholderIndex,
+  mobileMarkdownVisualPlaceholderIndex
+} from './mobile-markdown-visual-lines'
+import { MobileMarkdownBotCard } from './MobileMarkdownBotCard'
+import type { NativeChatDirectiveBotCard } from '../../../../../src/shared/native-chat/bot-cards/native-chat-bot-card-kind'
 import {
   openMarkdownHref,
   renderInline,
@@ -45,11 +50,17 @@ const MERMAID_BASE = 13
 export type MarkdownBlockContext = MarkdownInlineContext & {
   /** The text is still arriving: a diagram stays code until it stops. */
   growing: boolean
+  /** Multiplies prose line heights; code keeps its own. */
+  lineSpacing: number
+  /** The prose's face; undefined keeps the system font. */
+  fontFamily?: string
   listText: StyleProp<TextStyle>
   listMarker: StyleProp<TextStyle>
   /** Interactive children own their touches and must forward the row action. */
   rowLongPress?: () => void
   directives: readonly NativeChatVisualDirective[]
+  /** Bot cards the reply's lines name, by their placeholder index. */
+  cards: readonly NativeChatDirectiveBotCard[]
   /** Null or undefined leaves the image a link. */
   renderImage?: (href: string, alt: string, width?: number) => ReactNode
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
@@ -82,13 +93,23 @@ function renderCode(node: Code, key: number, ctx: MarkdownBlockContext): ReactNo
 function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: number): ReactNode {
   const nested = mobileMarkdownNestedBlocks(node, depth)
   const itemText: ParagraphText = { style: ctx.listText, selectable: true }
+  // Numbers end on one edge, in a column as wide as the longest, so every item's text starts together.
+  const lastNumber = (node.start ?? 1) + node.children.length - 1
+  const numbers = node.ordered
+    ? {
+        minWidth:
+          (String(lastNumber).length + 1) * 0.6 * styles.listMarker.fontSize * ctx.textScale,
+        textAlign: 'right' as const,
+        fontVariant: ['tabular-nums' as const]
+      }
+    : null
   return (
     <View key={key} style={styles.list}>
       {node.children.map((item, itemIndex) => (
         <View key={itemIndex} style={styles.listItem}>
           {item.checked == null ? (
-            <NativeText style={ctx.listMarker}>
-              {node.ordered ? `${(node.start ?? 1) + itemIndex}.` : '•'}
+            <NativeText style={[ctx.listMarker, numbers]}>
+              {node.ordered ? `${item.data?.value ?? (node.start ?? 1) + itemIndex}.` : '•'}
             </NativeText>
           ) : (
             // A GitHub task's read-only box, centred on the item's first line.
@@ -99,7 +120,10 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
               role="checkbox"
               aria-checked={Boolean(item.checked)}
               aria-disabled
-              style={[styles.taskMarker, { height: styles.listText.lineHeight * ctx.textScale }]}
+              style={[
+                styles.taskMarker,
+                { height: styles.listText.lineHeight * ctx.textScale * ctx.lineSpacing }
+              ]}
             >
               {item.checked ? (
                 <SquareCheck size={14 * ctx.textScale} color={colors.accentBlue} strokeWidth={2} />
@@ -151,7 +175,8 @@ function renderTable(node: Table, key: number, ctx: MarkdownBlockContext): React
                 style={[
                   styles.tableCell,
                   rowIndex === 0 ? styles.tableHeader : null,
-                  scaledMarkdownText(styles.tableCell, ctx.textScale),
+                  scaledMarkdownText(styles.tableCell, ctx.textScale, ctx.lineSpacing),
+                  ctx.fontFamily ? { fontFamily: ctx.fontFamily } : null,
                   { width, textAlign: node.align?.[cellIndex] ?? 'left' }
                 ]}
               >
@@ -187,6 +212,14 @@ function renderBlock(
         node.children.length === 1 && only?.type === 'text'
           ? mobileMarkdownVisualPlaceholderIndex(only.value, ctx.directives.length)
           : null
+      const cardIndex =
+        node.children.length === 1 && only?.type === 'text'
+          ? mobileMarkdownCardPlaceholderIndex(only.value, ctx.cards.length)
+          : null
+      const card = cardIndex === null ? undefined : ctx.cards[cardIndex]
+      if (card) {
+        return <MobileMarkdownBotCard key={`card:${cardIndex}`} card={card} text={text} />
+      }
       if (visual !== null) {
         const directive = ctx.directives[visual]
         return directive && ctx.renderVisual ? (
@@ -213,7 +246,7 @@ function renderBlock(
             onPress={() => openMarkdownHref(only.url, ctx)}
             onLongPress={ctx.rowLongPress}
           >
-            <NativeText style={styles.link}>
+            <NativeText style={[styles.paragraph, styles.link]}>
               {only.alt || translate('components.markdownBlocks.openImage', 'Open image')}
             </NativeText>
             <NativeText style={styles.imageCaption} numberOfLines={1}>
@@ -242,9 +275,11 @@ function renderBlock(
                 : node.depth === 2
                   ? styles.headingLarge
                   : styles.heading,
-              ctx.textScale
+              ctx.textScale,
+              ctx.lineSpacing
             ),
-            ctx.tone.text
+            ctx.fontFamily ? { fontFamily: ctx.fontFamily } : null,
+            ctx.tone.heading ?? ctx.tone.text
           ]}
         >
           {renderInline(node.children, ctx)}
@@ -264,7 +299,8 @@ function renderBlock(
             {
               style: [
                 styles.quoteText,
-                scaledMarkdownText(styles.quoteText, ctx.textScale),
+                scaledMarkdownText(styles.quoteText, ctx.textScale, ctx.lineSpacing),
+                ctx.fontFamily ? { fontFamily: ctx.fontFamily } : null,
                 ctx.tone.secondary
               ],
               selectable: true

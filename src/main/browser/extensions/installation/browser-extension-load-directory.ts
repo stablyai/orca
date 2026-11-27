@@ -1,16 +1,24 @@
 import { createHash } from 'node:crypto'
 import { statSync } from 'node:fs'
-import { cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { basename, dirname, join, relative, resolve, sep } from 'node:path'
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { basename, dirname, join, posix, relative, resolve, sep } from 'node:path'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
+import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import {
   BROWSER_EXTENSION_CONTENT_SCRIPT_FILE,
+  BROWSER_EXTENSION_LEGACY_WORKER_WRAPPER_FILE,
   BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE,
+  BROWSER_EXTENSION_ORIGINAL_WORKER_FILE,
   BROWSER_EXTENSION_WORKER_SHIM_FILE,
-  BROWSER_EXTENSION_WORKER_WRAPPER_FILE,
   BROWSER_EXTENSION_WORKER_TOKEN_FILE
 } from '../../../../shared/browser/extensions/browser-extension-worker-api'
-import { buildBrowserExtensionBackgroundWrapper } from './browser-extension-background-wrapper'
+import {
+  buildBrowserExtensionWorkerShimInjection,
+  isBrowserExtensionWorkerWrapper,
+  withBrowserExtensionModuleShimImport,
+  type BrowserExtensionWorkerShimInjection
+} from './browser-extension-worker-shim-injection'
 import { withOrcaContentScript } from './browser-extension-content-script-manifest'
 import {
   withPrivateFilesHiddenFromWebAccessibleResources,
@@ -25,8 +33,8 @@ import {
 } from '../api-runtime/browser-extension-worker-shim-source'
 
 /**
- * Orca loads every extension from a folder it owns, so it can add its worker wrapper, API shim and
- * token without touching the original: store installs in place, unpacked folders from a copy.
+ * Orca loads every extension from a folder it owns, so it can add its worker's shim loading, API shim
+ * and token without touching the original: store installs in place, unpacked folders from a copy.
  */
 
 export type BrowserExtensionLoadSource = Pick<InstalledBrowserExtension, 'source' | 'path'>
@@ -66,15 +74,50 @@ function parseManifest(text: string): Record<string, unknown> {
   return Object.fromEntries(Object.entries(parsed))
 }
 
+async function writeAtomically(path: string, content: string | Buffer): Promise<void> {
+  await mkdir(dirname(path), { recursive: true })
+  await writeFile(`${path}.orca-tmp`, content)
+  await renameFileWithWindowsRetryAsync(`${path}.orca-tmp`, path)
+}
+
 // Why compare first: rewriting identical files would churn mtimes under a loaded extension.
 async function writeIfChanged(path: string, content: string): Promise<void> {
   const current = await readFile(path, 'utf8').catch(() => null)
-  if (current === content) {
+  if (current !== content) {
+    await writeAtomically(path, content)
+  }
+}
+
+/**
+ * Runs Orca's shim before the extension's worker, which keeps its declared path. A package missing
+ * its worker file still loads; the worker fails as it would without Orca.
+ */
+async function injectWorkerShim(
+  directory: string,
+  injection: BrowserExtensionWorkerShimInjection
+): Promise<void> {
+  const workerPath = requireInside(directory, injection.workerPath)
+  const source = await readFile(workerPath).catch((error: unknown) => {
+    if (isDefinitiveAbsence(error)) {
+      return null
+    }
+    throw error
+  })
+  if (!source) {
     return
   }
-  await mkdir(dirname(path), { recursive: true })
-  await writeFile(`${path}.orca-tmp`, content)
-  await rename(`${path}.orca-tmp`, path)
+  if (injection.type === 'module') {
+    const injected = withBrowserExtensionModuleShimImport(source)
+    return injected ? writeAtomically(workerPath, injected) : undefined
+  }
+  // Why the header decides: store folders are prepared in place on every run, so once the wrapper
+  // holds the declared path, the moved file is the original and must never be replaced.
+  if (!isBrowserExtensionWorkerWrapper(source)) {
+    await writeAtomically(requireInside(directory, injection.movedWorkerPath), source)
+  }
+  if (!source.equals(Buffer.from(injection.wrapperSource))) {
+    await writeAtomically(workerPath, injection.wrapperSource)
+  }
 }
 
 function requireInside(directory: string, relativePath: string): string {
@@ -134,7 +177,8 @@ const ORCA_ROOT_FILES = [
 ]
 const ORCA_GENERATED_FILE_NAMES = new Set([
   ...ORCA_ROOT_FILES,
-  BROWSER_EXTENSION_WORKER_WRAPPER_FILE
+  BROWSER_EXTENSION_ORIGINAL_WORKER_FILE,
+  BROWSER_EXTENSION_LEGACY_WORKER_WRAPPER_FILE
 ])
 
 /**
@@ -145,8 +189,19 @@ export async function refuseOrcaFileCollisions(
   directory: string,
   manifest: Record<string, unknown>
 ): Promise<void> {
-  const wrapperPath = buildBrowserExtensionBackgroundWrapper(manifest)?.wrapperPath
-  for (const path of wrapperPath ? [...ORCA_ROOT_FILES, wrapperPath] : ORCA_ROOT_FILES) {
+  const injection = buildBrowserExtensionWorkerShimInjection(manifest)
+  // Why the legacy wrapper too: an older build (after a downgrade) would write over that file, and
+  // the wrapper's downgrade guard could not tell a worker by that name from it.
+  const workerFiles = injection
+    ? [
+        posix.join(
+          posix.dirname(injection.workerPath),
+          BROWSER_EXTENSION_LEGACY_WORKER_WRAPPER_FILE
+        ),
+        ...(injection.type === 'classic' ? [injection.movedWorkerPath] : [])
+      ]
+    : []
+  for (const path of [...ORCA_ROOT_FILES, ...workerFiles]) {
     const target = resolveInsideExtensionDirectory(directory, path)
     if (target && (await stat(target).catch(() => null))) {
       throw new Error(`Orca can't load this extension: its file ${path} uses a name Orca reserves`)
@@ -206,15 +261,16 @@ async function prepare(
   const extensionId = chromeExtensionIdFromKey(key)
   const packageFiles = await listPackageFiles(directory)
   const staticResources = withStaticWebAccessibleResources({ ...original, key })
-  const wrapper = buildBrowserExtensionBackgroundWrapper(staticResources)
-  const withContentScript = withOrcaContentScript(wrapper?.manifest ?? staticResources)
+  const injection = buildBrowserExtensionWorkerShimInjection(staticResources)
+  const withContentScript = withOrcaContentScript(injection?.manifest ?? staticResources)
   await writeIfChanged(originalPath, originalText)
   let workerScripts = ''
-  if (wrapper) {
+  if (injection) {
     const shim = readBrowserExtensionWorkerShim()
-    workerScripts = `${shim}\n${wrapper.wrapperSource}`
+    // Why only the classic wrapper: the module import never changes, and the manifest says which.
+    workerScripts = `${shim}\n${injection.type === 'classic' ? injection.wrapperSource : ''}`
     await writeIfChanged(join(directory, BROWSER_EXTENSION_WORKER_SHIM_FILE), shim)
-    await writeIfChanged(requireInside(directory, wrapper.wrapperPath), wrapper.wrapperSource)
+    await injectWorkerShim(directory, injection)
     await writeIfChanged(
       join(directory, BROWSER_EXTENSION_WORKER_TOKEN_FILE),
       JSON.stringify({ token: getBrowserExtensionWorkerToken(extensionId) })
@@ -229,7 +285,7 @@ async function prepare(
   // Why after writing them: privacy is decided by the private files' identity on disk.
   const manifestText = JSON.stringify(
     withPrivateFilesHiddenFromWebAccessibleResources(
-      withContentScript ?? wrapper?.manifest ?? staticResources,
+      withContentScript ?? injection?.manifest ?? staticResources,
       packageFiles,
       isPrivateFileOnDisk(directory)
     ),
@@ -240,7 +296,7 @@ async function prepare(
   return {
     directory,
     extensionId,
-    hasWorker: wrapper !== null,
+    hasWorker: injection !== null,
     workerSignature: unpacked
       ? null
       : createHash('sha256').update(`${manifestText}\n${workerScripts}`).digest('hex')
@@ -248,12 +304,12 @@ async function prepare(
 }
 
 const pending = new Map<string, Promise<PreparedBrowserExtensionDirectory>>()
-const copiedThisRun = new Map<string, PreparedBrowserExtensionDirectory>()
+const preparedThisRun = new Map<string, PreparedBrowserExtensionDirectory>()
 
 /**
- * Store folders are re-checked on every load (an Orca update brings a new shim). An unpacked
- * folder is copied once per run, so a second profile never rewrites a copy another profile runs;
- * `refresh` (Settings › Reload) copies it again.
+ * A folder is prepared once per run (an Orca update, which brings a new shim, is a new run), so a
+ * profile reopening later, or a second profile, reuses it. An unpacked copy is never rewritten
+ * under a profile running it; `refresh` (Settings › Reload) prepares it again.
  */
 export async function prepareBrowserExtensionDirectory(
   extension: BrowserExtensionLoadSource,
@@ -261,24 +317,49 @@ export async function prepareBrowserExtensionDirectory(
 ): Promise<PreparedBrowserExtensionDirectory> {
   const key = resolve(extension.path)
   let running = pending.get(key)
-  const copied = copiedThisRun.get(key)
-  // Why not while a copy runs: a profile starting mid-Reload must load the finished copy.
-  if (copied && !options.refresh && !running) {
-    return copied
+  const prepared = preparedThisRun.get(key)
+  // Why not while a preparation runs: a profile starting mid-Reload must load the finished copy.
+  if (prepared && !options.refresh && !running) {
+    return prepared
   }
   if (!running) {
     running = prepare(extension)
     pending.set(key, running)
   }
   try {
-    const prepared = await running
-    if (extension.source === 'unpacked') {
-      copiedThisRun.set(key, prepared)
+    const result = await running
+    // Forgotten meanwhile (its folder was replaced): this result describes the old contents.
+    if (pending.get(key) === running) {
+      keepPrepared(key, result)
     }
-    return prepared
+    return result
   } finally {
     if (pending.get(key) === running) {
       pending.delete(key)
     }
   }
+}
+
+/** Folders are kept only while installed, so failed installs, updates and removals never pile up. */
+function keepPrepared(key: string, result: PreparedBrowserExtensionDirectory): void {
+  const installed = new Set(
+    getBrowserExtensionInstallStore()
+      .list()
+      .map((extension) => resolve(extension.path))
+  )
+  for (const path of preparedThisRun.keys()) {
+    if (!installed.has(path)) {
+      preparedThisRun.delete(path)
+    }
+  }
+  if (installed.has(key)) {
+    preparedThisRun.set(key, result)
+  }
+}
+
+/** A store version folder is about to be replaced on disk: prepare it afresh next time. */
+export function forgetPreparedBrowserExtensionDirectory(path: string): void {
+  const key = resolve(path)
+  preparedThisRun.delete(key)
+  pending.delete(key)
 }

@@ -3,18 +3,10 @@ import type {
   MobileRichMarkdownEditorMessage
 } from '../mobile-rich-markdown-editor-contract'
 
-// Page supplies message/URL-prompt/keyboard seams: window.ReactNativeWebView is shell bridge and window.prompt returns null in both shells; other seams default to live window reads.
+// Page supplies message/URL-prompt seams: window.ReactNativeWebView is shell bridge and window.prompt returns null in both shells; other seams default to live window reads.
 
 /** Which URL a command is asking the user for. */
 export type RichMarkdownUrlPromptKind = 'link' | 'image'
-
-// Keyboard cover source/listener is null on page: screen measures same viewport and duplicate report would double-lift bar.
-export type RichMarkdownKeyboardInsetReader = {
-  /** The height the keyboard covers right now, in CSS pixels. */
-  measure: () => number
-  /** Calls back when the covered height may have moved, handing back its removal. */
-  observe: (onChange: () => void) => () => void
-}
 
 /** The five things the page can ask a running document to do. */
 export type RichMarkdownEditorApi = {
@@ -36,8 +28,6 @@ export type RichMarkdownEditorHostSeams = {
   postToHost: (message: MobileRichMarkdownEditorMessage) => void
   /** `editor-commands`: the URL the Link and Image commands insert, or null when cancelled. */
   promptForUrl: (kind: RichMarkdownUrlPromptKind) => Promise<string | null>
-  /** `keyboard-inset`: the covered height and its changes, or null when the page measures it. */
-  keyboardInsetSource: () => RichMarkdownKeyboardInsetReader | null
   /** `editor-content`: a displayable source for a workspace image path. */
   loadImageSource: (path: string) => Promise<string>
   /** `editor-content`: cancels the pending input timer. */
@@ -53,7 +43,7 @@ export type RichMarkdownEditorHostSeams = {
 /** What the page hands the document: the host-facing seams always, the window reads if it wants. */
 export type RichMarkdownEditorHost = Pick<
   RichMarkdownEditorHostSeams,
-  'postToHost' | 'promptForUrl' | 'keyboardInsetSource'
+  'postToHost' | 'promptForUrl'
 > &
   Partial<
     Pick<

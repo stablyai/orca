@@ -13,7 +13,7 @@ import {
   CLAUDE_USER_CONFIG_DIR_ENV
 } from '../../../../shared/agent-accounts/claude/claude-profile-routing'
 import { claudeProfileMissing } from './claude-profile-launch-errors'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { ClaudeManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import { probeRecentClaudeCliVersion } from '../../../claude/cli-capabilities/claude-hook-event-versions'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
@@ -306,7 +306,10 @@ export class ClaudeProfileRouter {
       wslDistro: null,
       wslLinuxConfigDir: null,
       envPatch: this.launchEnv(),
-      provenance: home ? `profile:${profile?.accountId}` : 'system'
+      provenance: home ? `profile:${profile?.accountId}` : 'system',
+      ...(home && profile
+        ? { readingAccount: { accountId: profile.accountId, runtime: 'host', wslDistro: null } }
+        : {})
     }
   }
 

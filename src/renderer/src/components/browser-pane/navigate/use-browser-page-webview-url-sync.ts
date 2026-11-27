@@ -4,8 +4,11 @@ import {
 } from '../host-guest/metadata/browser-guest-metadata-cache'
 import { useEffect, useLayoutEffect, type MutableRefObject, type RefObject } from 'react'
 import { useAppStore } from '@/store/index'
-import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser/navigation/browser-url'
-import '../../../../../shared/constants'
+import {
+  normalizeBrowserNavigationUrl,
+  redactKagiSessionToken
+} from '../../../../../shared/browser/navigation/browser-url'
+import '../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { normalizeBrowserGuestSrc } from '../../../../../shared/browser/extensions/browser-extension-url'
 import {
@@ -84,10 +87,10 @@ export function useBrowserPageWebviewUrlSync({
     }
     const liveUrl = cachedBrowserGuestMetadata(webview)?.url ?? null
     const normalizedLiveUrl = liveUrl ? (normalizeBrowserNavigationUrl(liveUrl) ?? liveUrl) : null
-    const declaredSrc = webview.getAttribute('src')
+    const declaredSrc = redactKagiSessionToken(webview.getAttribute('src') ?? '')
     if (
       normalizedLiveUrl !== normalizedUrl &&
-      webview.src !== normalizedUrl &&
+      redactKagiSessionToken(webview.src) !== normalizedUrl &&
       declaredSrc !== normalizedUrl
     ) {
       lastKnownWebviewUrlRef.current = normalizedUrl

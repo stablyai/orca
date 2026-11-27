@@ -1,19 +1,14 @@
 import type { ParsedCron } from './automation-schedule-parsing'
+import { LOCAL_SCHEDULE_CALENDAR, type ScheduleCalendar } from './automation-schedule-calendar'
 
 const CRON_SCAN_DAYS = 9 * 366
 
 export function startOfLocalDay(timestamp: number): number {
-  const date = new Date(timestamp)
-  date.setHours(0, 0, 0, 0)
-  return date.getTime()
+  return LOCAL_SCHEDULE_CALENDAR.startOfDay(timestamp)
 }
 
-// Why: calendar steps, not 24h ones; DST days are not 24 hours long.
 export function addLocalDays(day: number, days: number): number {
-  const date = new Date(day)
-  date.setDate(date.getDate() + days)
-  date.setHours(0, 0, 0, 0)
-  return date.getTime()
+  return LOCAL_SCHEDULE_CALENDAR.addDays(day, days)
 }
 
 // Why: local-field recomposition resolves a repeated fall-back minute to the earlier offset.
@@ -21,22 +16,35 @@ export function floorToMinute(timestamp: number): number {
   return Math.floor(timestamp / 60_000) * 60_000
 }
 
-export function cronMatches(rule: ParsedCron, timestamp: number): boolean {
-  if (!cronDateMatches(rule, timestamp)) {
-    return false
-  }
-  const date = new Date(timestamp)
-  return rule.hours.has(date.getHours()) && rule.minutes.has(date.getMinutes())
+export function cronMatches(
+  rule: ParsedCron,
+  timestamp: number,
+  calendar: ScheduleCalendar = LOCAL_SCHEDULE_CALENDAR
+): boolean {
+  const wall = calendar.fields(timestamp)
+  return (
+    cronWallDateMatches(rule, wall) && rule.hours.has(wall.hour) && rule.minutes.has(wall.minute)
+  )
 }
 
-export function cronDateMatches(rule: ParsedCron, timestamp: number): boolean {
-  const date = new Date(timestamp)
-  if (!rule.months.has(date.getMonth() + 1)) {
+export function cronDateMatches(
+  rule: ParsedCron,
+  timestamp: number,
+  calendar: ScheduleCalendar = LOCAL_SCHEDULE_CALENDAR
+): boolean {
+  return cronWallDateMatches(rule, calendar.fields(timestamp))
+}
+
+function cronWallDateMatches(
+  rule: ParsedCron,
+  wall: { month: number; day: number; weekday: number }
+): boolean {
+  if (!rule.months.has(wall.month)) {
     return false
   }
-  const dayOfMonthMatches = rule.daysOfMonth.has(date.getDate())
-  const dayOfWeekMatches = rule.daysOfWeek.has(date.getDay())
-  // Dialect rule; the flags are lexical (`isCronDayFieldRestricted`), not set sizes.
+  const dayOfMonthMatches = rule.daysOfMonth.has(wall.day)
+  const dayOfWeekMatches = rule.daysOfWeek.has(wall.weekday)
+  // Dialect rule; the flags are lexical (`isCronFieldRestricted`), not set sizes.
   if (rule.dayOfMonthRestricted && rule.dayOfWeekRestricted) {
     return dayOfMonthMatches || dayOfWeekMatches
   }

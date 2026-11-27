@@ -2,7 +2,7 @@ import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getWorktreeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'

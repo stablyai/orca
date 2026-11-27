@@ -2,7 +2,7 @@ import { projectHostSetupProjectionFromRepos } from '../../../../../../shared/pr
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { useAppStore } from '@/store/index'
 import { getRepoHostIdentity } from '../../../../../../shared/repository/repo-host-identity'

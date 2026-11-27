@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { formatDiffComments } from '../../../../../../shared/diff-comments-format'
+import { formatDiffComments } from '../../../../../../shared/file-review/diff-comments-format'
 import { describeClipboardWriteFailure } from '@/lib/clipboard/clipboard-write-failure'
 import { useVisibleWorktreeDiffComments } from '../../../diff-comments/use-visible-worktree-diff-comments'
 import {
@@ -15,6 +15,7 @@ import {
   type PendingDiffCommentsClear
 } from './diff-comments-clear-dialog-state'
 import { useCopyFeedbackState } from './copy-feedback'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function useSourceControlDiffCommentNotes({
   activeWorktreeId,
@@ -116,24 +117,27 @@ export function useSourceControlDiffCommentNotes({
     }
     setIsClearingDiffComments(true)
     const clearOptions = { keepMarkdownNotes: !markdownReviewNotesEnabled }
-    try {
-      const ok =
-        pending.kind === 'all'
-          ? await clearDiffComments(pending.owner, clearOptions)
-          : await clearDiffCommentsForFile(pending.owner, pending.filePath, clearOptions)
-      if (ok) {
-        setPendingDiffCommentsClear(null)
-      } else {
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.SourceControl.eae7a1da5f',
-            'Failed to clear notes.'
+    await runWithFinally(
+      async () => {
+        const ok =
+          pending.kind === 'all'
+            ? await clearDiffComments(pending.owner, clearOptions)
+            : await clearDiffCommentsForFile(pending.owner, pending.filePath, clearOptions)
+        if (ok) {
+          setPendingDiffCommentsClear(null)
+        } else {
+          toast.error(
+            translate(
+              'auto.components.right.sidebar.SourceControl.eae7a1da5f',
+              'Failed to clear notes.'
+            )
           )
-        )
+        }
+      },
+      () => {
+        setIsClearingDiffComments(false)
       }
-    } finally {
-      setIsClearingDiffComments(false)
-    }
+    )
   }, [
     activeWorktreeId,
     clearDiffComments,

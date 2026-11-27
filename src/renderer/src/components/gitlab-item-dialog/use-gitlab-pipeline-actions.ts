@@ -2,8 +2,8 @@ import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { GitLabPipelineJob, GitLabWorkItem } from '../../../../shared/gitlab-types'
-import { showGitLabMutationError } from '../gitlab-item-dialog-parts'
+import type { GitLabPipelineJob, GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
+import { showGitLabMutationError } from './gitlab-item-dialog-parts'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
 import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
@@ -43,7 +43,7 @@ export function useGitLabPipelineActions(
         const result = await gitLabApiFor(repoSelector).jobTrace({
           ...repoSelector,
           jobId: job.id,
-          projectRef: details?.item.projectRef ?? item.projectRef ?? null
+          projectRef: job.projectRef ?? details?.item.projectRef ?? item.projectRef ?? null
         })
         if (!mountedRef.current) {
           return
@@ -89,7 +89,7 @@ export function useGitLabPipelineActions(
         const result = await gitLabApiFor(repoSelector).retryJob({
           ...repoSelector,
           jobId: job.id,
-          projectRef: details?.item.projectRef ?? item.projectRef ?? null
+          projectRef: job.projectRef ?? details?.item.projectRef ?? item.projectRef ?? null
         })
         if (!ownsResult()) {
           return

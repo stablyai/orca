@@ -11,6 +11,7 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { JournalReducerState } from './journal-reducer'
+import { getJournalInputOrder } from '../input-order/journal-input-order-registry'
 
 export function statedOrDerivedTurnScope(
   state: JournalReducerState,
@@ -43,10 +44,11 @@ export function upsertJournalItem(
     state.items.set(itemId, next)
     state.itemFences.set(itemId, fences.ownerFence ?? fences.fence)
     state.tombstones.delete(itemId)
-    return
+  } else {
+    state.items.set(itemId, journalItemRevisionValue(existing, next))
+    state.tombstones.delete(itemId)
   }
-  state.items.set(itemId, journalItemRevisionValue(existing, next))
-  state.tombstones.delete(itemId)
+  getJournalInputOrder(state)?.noteItem(state, itemId)
 }
 
 /** Revisions preserve the current placement, including a handover or rejection's later move. */
@@ -99,4 +101,5 @@ export function removeJournalItem(
   state.items.delete(itemId)
   state.itemFences.delete(itemId)
   state.itemExecutionOwners.delete(itemId)
+  getJournalInputOrder(state)?.noteItem(state, itemId)
 }

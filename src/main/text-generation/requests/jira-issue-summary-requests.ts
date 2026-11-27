@@ -8,7 +8,7 @@ import type {
 import {
   textGenerationFailure,
   textGenerationFailureCodeFields
-} from '../../../shared/text-generation-failure-copy'
+} from '../../../shared/text-generation/text-generation-failure-copy'
 import { getStatus } from '../../jira/client'
 import {
   prepareLocalCommitMessageAgentEnv,
@@ -57,12 +57,6 @@ export async function generateJiraIssueSummaryRequest(
       ...textGenerationFailure('jiraDescriptionRequired')
     }
   }
-  if (!getStatus().sites?.some((site) => site.id === args.siteId)) {
-    return {
-      success: false,
-      ...textGenerationFailure('jiraAccountDisconnected')
-    }
-  }
   if (signal?.aborted) {
     return { success: false, error: 'Generation canceled.', canceled: true }
   }
@@ -89,6 +83,16 @@ export async function generateJiraIssueSummaryRequest(
   const cancel = (): void => cancelJiraIssueSummaryRequest(owner, request)
   signal?.addEventListener('abort', cancel, { once: true })
   try {
+    const initialStatus = await getStatus()
+    if (activeRequest !== request) {
+      return { success: false, error: 'Generation canceled.', canceled: true }
+    }
+    if (!initialStatus.sites?.some((site) => site.id === args.siteId)) {
+      return {
+        success: false,
+        ...textGenerationFailure('jiraAccountDisconnected')
+      }
+    }
     const resolved = resolveTextGenerationParams(
       host.getSettings(),
       LOCAL_COMMIT_MESSAGE_HOST_KEY,
@@ -108,7 +112,11 @@ export async function generateJiraIssueSummaryRequest(
     if (!localEnv.ok) {
       return { success: false, error: localEnv.error }
     }
-    if (!getStatus().sites?.some((site) => site.id === args.siteId)) {
+    const status = await getStatus()
+    if (activeRequest !== request) {
+      return { success: false, error: 'Generation canceled.', canceled: true }
+    }
+    if (!status.sites?.some((site) => site.id === args.siteId)) {
       return {
         success: false,
         ...textGenerationFailure('jiraAccountDisconnected')

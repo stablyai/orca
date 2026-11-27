@@ -10,7 +10,7 @@ import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { paneClaudeTarget } from '../../host-state/terminal-pane-claude-target'
-import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
+import { useModalReturnFocus } from '@/lib/pane-manager/pane-focus/useModalReturnFocus'
 import { OldTerminalDialog } from '../terminal-upgrade/OldTerminalDialog'
 import { openTerminalBesideTab } from '../../context-menu/open-terminal-beside-tab'
 import {

@@ -120,7 +120,9 @@ async function fetchAndStage(
   let fetchedWhole = false
   try {
     // Unavailable reuse is a cache miss, not a download failure.
-    const reusable = await store.openReusableAssets(hostKey).catch(() => undefined)
+    const reusable = await store
+      .openReusableAssets(hostKey, args.opened?.manifest)
+      .catch(() => undefined)
     const fetched = await fetchMobileWebBundle({
       client,
       signal: controller.signal,

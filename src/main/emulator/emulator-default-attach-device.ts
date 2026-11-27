@@ -1,7 +1,7 @@
 import type { EmulatorBridge } from './emulator-bridge'
 import type { EmulatorDevice } from './backends/emulator-backend'
 import { EmulatorError } from './emulator-errors'
-import { emulatorFailureText } from '../../shared/emulator-failure-copy'
+import { emulatorFailureText } from '../../shared/emulator/emulator-failure-copy'
 
 const isIphone = (device: EmulatorDevice): boolean =>
   device.backend === 'ios' && /iPhone/i.test(device.name)

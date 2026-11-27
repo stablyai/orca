@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { hasNativeFileDragTypes } from '../../../../../../shared/file-import/native-file-drop'
-import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
+import {
+  createOsFileDropSequence,
+  useOsFileDropOwner
+} from '@/lib/files/drop/use-os-file-drop-owner'
 import { getNativeFileDropRejectionMessage } from '@/lib/files/drop/native-file-drop-rejection-message'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store/index'
@@ -19,12 +22,32 @@ import { userNamedFileAccess } from '@/lib/files/access/local-file-access'
 import { listWslHostWindowsPathAccess } from '@/lib/files/os-open/windows-path-access'
 import { addOnThisComputerLabel } from '@/lib/workspace/creation/wsl-host-windows-drive-refusal-toast'
 import type { AppState } from '@/store/types'
+import { resolveWslMappedDrivePath } from '../host-selection/wsl-mapped-drive-path'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 function getWslDropHosts(state: Pick<AppState, 'runtimeEnvironments' | 'settings'>) {
   return listWslHostWindowsPathAccess(
     state.runtimeEnvironments,
     state.settings?.experimentalWslHosts === true
   )
+}
+
+/** Routes a drop; a drive mapped to a host's distro share goes to that host, any other as before. */
+export async function routeDroppedPath(path: string): Promise<SidebarProjectDropRoute> {
+  const sharePath =
+    getWslDropHosts(useAppStore.getState()).length > 0
+      ? await resolveWslMappedDrivePath(path)
+      : null
+  // Why: re-read live state; a runtime can be focused while the drop is prepared.
+  const state = useAppStore.getState()
+  const routeArgs = {
+    focusedRuntimeId: getFocusedDropRuntimeId(state.settings),
+    wslHosts: getWslDropHosts(state)
+  }
+  const shareRoute = sharePath ? routeSidebarProjectDrop({ ...routeArgs, path: sharePath }) : null
+  return shareRoute?.kind === 'wsl-host'
+    ? shareRoute
+    : routeSidebarProjectDrop({ ...routeArgs, path })
 }
 
 function refuseSidebarProjectDrop(route: SidebarProjectDropRoute): boolean {
@@ -86,6 +109,7 @@ export function useSidebarProjectDrop(): {
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const [isDragOver, setIsDragOver] = useState(false)
   const [isHandlingDrop, setIsHandlingDrop] = useState(false)
+  const handlingDropRef = useRef(false)
   const dragDepthRef = useRef(0)
   const wslDropHosts = useMemo(
     () => getWslDropHosts({ runtimeEnvironments, settings }),
@@ -124,58 +148,62 @@ export function useSidebarProjectDrop(): {
         )
         return
       }
-      // Why: re-read live state; a runtime can be focused while the drop is prepared.
-      const state = useAppStore.getState()
-      const route = routeSidebarProjectDrop({
-        path: pathResolution.path,
-        focusedRuntimeId: getFocusedDropRuntimeId(state.settings),
-        wslHosts: getWslDropHosts(state)
-      })
-      if (refuseSidebarProjectDrop(route)) {
+      // One drop at a time: the share lookup below can take a moment.
+      if (handlingDropRef.current) {
         return
       }
-
+      handlingDropRef.current = true
       setIsHandlingDrop(true)
-      try {
-        const stat = await window.api.fs.stat({
-          filePath: pathResolution.path,
-          access: userNamedFileAccess()
-        })
-        if (!mountedRef.current) {
-          return
-        }
-        if (!stat.isDirectory) {
-          toast.error(
-            translate(
-              'auto.components.sidebar.useSidebarProjectDrop.451a4638db',
-              'Drop a folder to add it as a project.'
-            )
-          )
-          return
-        }
-        openModal(
-          'add-repo',
-          route.kind === 'wsl-host'
-            ? { droppedHostPath: { hostId: route.hostId, path: route.linuxPath } }
-            : { droppedLocalPath: route.kind === 'local' ? route.path : pathResolution.path }
-        )
-      } catch (error) {
-        if (mountedRef.current) {
-          toast.error(
-            translate(
-              'auto.components.sidebar.useSidebarProjectDrop.f34a286c0d',
-              'Could not add dropped folder.'
-            ),
-            {
-              description: error instanceof Error ? error.message : String(error)
+      await runWithFinally(
+        async () => {
+          try {
+            const route = await routeDroppedPath(pathResolution.path)
+            if (!mountedRef.current || refuseSidebarProjectDrop(route)) {
+              return
             }
-          )
+            const stat = await window.api.fs.stat({
+              filePath: pathResolution.path,
+              access: userNamedFileAccess()
+            })
+            if (!mountedRef.current) {
+              return
+            }
+            if (!stat.isDirectory) {
+              toast.error(
+                translate(
+                  'auto.components.sidebar.useSidebarProjectDrop.451a4638db',
+                  'Drop a folder to add it as a project.'
+                )
+              )
+              return
+            }
+            openModal(
+              'add-repo',
+              route.kind === 'wsl-host'
+                ? { droppedHostPath: { hostId: route.hostId, path: route.linuxPath } }
+                : { droppedLocalPath: route.kind === 'local' ? route.path : pathResolution.path }
+            )
+          } catch (error) {
+            if (mountedRef.current) {
+              toast.error(
+                translate(
+                  'auto.components.sidebar.useSidebarProjectDrop.f34a286c0d',
+                  'Could not add dropped folder.'
+                ),
+                {
+                  description: error instanceof Error ? error.message : String(error)
+                }
+              )
+            }
+          }
+        },
+        () => {
+          handlingDropRef.current = false
+          if (mountedRef.current) {
+            setIsHandlingDrop(false)
+          }
         }
-      } finally {
-        if (mountedRef.current) {
-          setIsHandlingDrop(false)
-        }
-      }
+      )
     },
     [mountedRef, openModal]
   )

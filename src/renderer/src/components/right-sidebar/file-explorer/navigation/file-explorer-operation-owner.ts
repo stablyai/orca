@@ -13,7 +13,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { HostAuthority } from '../../../../../../shared/execution-host/host-authority'
 import { translate } from '@/i18n/i18n'
 import {

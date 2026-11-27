@@ -2,10 +2,7 @@
 // Flush text at event barriers or coalescing windows. Recheck turn settlement on every write,
 // retaining stopped keys until their boundary so trailing deltas cannot escape into thread messages.
 
-import type {
-  AgentJournalRenderItem,
-  AgentJournalProducerLinkage
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalProducerLinkage } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   createAgentSessionDeltaCoalescer,
   type AgentSessionDeltaCoalescerDeps
@@ -23,7 +20,9 @@ import type {
 } from './provider-timeline-event'
 import {
   providerTimelineLiveText,
-  providerTimelineTextBody,
+  providerTimelineHasLiveText,
+  providerTimelineCloseSaves,
+  providerTimelineTextResolution,
   type ProviderTimelineStream
 } from './provider-timeline-text-stream'
 import { splitProviderTimelineTextBlocks } from './provider-timeline-text-blocks'
@@ -55,7 +54,8 @@ export class ProviderTimelineTextStreams {
       emit: (id, text) => this.flushOnWindow(id, text)
     })
     this.releaseLiveText = deps.sink.bindLiveText?.({
-      read: (epoch) => this.liveText(epoch),
+      read: (epoch, readers) => this.liveText(epoch, readers?.takes),
+      has: (epoch) => providerTimelineHasLiveText(this.byId.values(), epoch, this.coalescer.has),
       flush: () => this.flush()
     })
   }
@@ -198,11 +198,11 @@ export class ProviderTimelineTextStreams {
   planClose(plan: ProviderTimelinePlan, stream: ProviderTimelineStream, finalText?: string): void {
     if (finalText === undefined) {
       const owed = this.coalescer.snapshot(stream.id)
-      if (owed && owed.text.length !== stream.queuedLength) {
-        this.planText(plan, stream, owed.text)
+      if (owed && providerTimelineCloseSaves(stream, owed.text.length)) {
+        this.planText(plan, stream, owed.text, false, true)
       }
     } else {
-      this.planText(plan, stream, finalText, true)
+      this.planText(plan, stream, finalText, true, true)
     }
     this.planRelease(plan, (each) => each === stream)
   }
@@ -259,9 +259,9 @@ export class ProviderTimelineTextStreams {
     return admission?.accepted !== false || admission.reason !== 'backpressure'
   }
 
-  private liveText(epoch: string): AgentJournalRenderItem[] {
+  private liveText(epoch: string, takes?: (itemId: string) => boolean) {
     return [...this.byId.values()].flatMap((stream) =>
-      providerTimelineLiveText(stream, epoch, this.coalescer.snapshot(stream.id))
+      providerTimelineLiveText(stream, epoch, () => this.coalescer.snapshot(stream.id), takes)
     )
   }
 
@@ -269,23 +269,22 @@ export class ProviderTimelineTextStreams {
     plan: ProviderTimelinePlan,
     stream: ProviderTimelineStream,
     text: string,
-    providerFinal = false
+    providerFinal = false,
+    final = false
   ): void {
     const empty = providerFinal ? text.length === 0 : text.trim().length === 0
     if (stream.queuedLength === 0 && empty) {
       plan.onAdmitted(() => this.coalescer.markFlushed(stream.id))
       return
     }
-    const body = providerTimelineTextBody(stream, text)
+    const resolution = providerTimelineTextResolution(stream, text, final)
     plan.item(
       {
-        reservedBytes: estimateStructuredAgentSessionItemBytes(stream.row.identity, body),
-        resolution: {
-          kind: 'text-snapshot',
-          identity: stream.row.identity,
-          body,
-          scopeItemIds: stream.scopeItemIds
-        },
+        reservedBytes: estimateStructuredAgentSessionItemBytes(
+          stream.row.identity,
+          resolution.body
+        ),
+        resolution,
         options: { ...stream.producer, turnScope: stream.scope }
       },
       false,

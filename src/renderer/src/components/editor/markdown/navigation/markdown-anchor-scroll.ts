@@ -1,7 +1,7 @@
 import { scrollRichMarkdownElementIntoView } from '../../rich-markdown/viewport/rich-markdown-viewport'
 import { revealMarkdownNavigationDetails } from './markdown-navigation-details'
 import { default as MarkdownHeadingSlugger } from 'github-slugger'
-import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 
 // Match preview suffixes for duplicate headings so anchors resolve to the same heading.
 export function scrollToAnchorInEditor(root: HTMLElement | null, anchor: string): void {

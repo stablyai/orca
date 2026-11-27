@@ -1,29 +1,23 @@
-import { describe, expect, it } from 'vitest'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { openSkillTarGzip, writeSkillTarGzip } from './skill-package-tar'
-import { USTAR_BLOCK_BYTES as SKILL_TAR_BLOCK_BYTES } from '../../archive/ustar-entry-header'
+import { join } from 'node:path'
+import { expect, it } from 'vitest'
+import { writeSkillTarGzip } from './skill-package-tar'
 
-describe('skill tar reader error ownership', () => {
-  it('observes an abort after the pipeline completes before the first reader request', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-tar-abort-'))
-    try {
-      const archivePath = join(root, 'archive.tar.gz')
-      await writeSkillTarGzip(archivePath, [
-        { path: 'SKILL.md', size: 1, executable: false, bytes: Buffer.from('x') }
+it('rejects an output failure while the source is still streaming', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-skill-tar-write-'))
+  try {
+    const source = join(root, 'source.txt')
+    const destination = join(root, 'existing.tar.gz')
+    await writeFile(source, 'x'.repeat(1024 * 1024))
+    await writeFile(destination, 'original')
+    await expect(
+      writeSkillTarGzip(destination, [
+        { path: 'source.txt', size: 1024 * 1024, executable: false, sourcePath: source }
       ])
-      const archive = await openSkillTarGzip(archivePath)
-      await archive.archiveIdentity
-      const failure = Object.assign(new Error('staging directory already exists'), {
-        code: 'EEXIST'
-      })
-      archive.abort(failure)
-      // Observe destruction before lazily attaching the reader's error listener.
-      await new Promise<void>((resolve) => setImmediate(resolve))
-      await expect(archive.reader.readExact(SKILL_TAR_BLOCK_BYTES)).rejects.toBe(failure)
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
-  })
+    ).rejects.toMatchObject({ code: 'EEXIST' })
+    expect(await readFile(destination, 'utf8')).toBe('original')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })

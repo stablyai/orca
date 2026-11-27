@@ -1,70 +1,59 @@
-import { existsSync } from 'node:fs'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import {
-  resetLoginShellEnvironmentCacheForTests,
-  resolveLoginShellEnvironment
-} from './login-shell-environment'
+import { delimiter, join } from 'node:path'
+import { afterEach, expect, it, vi } from 'vitest'
+import type * as hydrateShellPath from './hydrate-shell-path'
+import { withLaunchPath } from './hydrate-shell-path'
+import { captureLoginShellEnvironment } from './login-shell-environment'
 
-const originalHome = process.env.HOME
-const originalZdotdir = process.env.ZDOTDIR
-const SHELL_ONLY_VARIABLE = 'ORCA_TEST_LOGIN_SHELL_ONLY'
-const originalShellOnlyValue = process.env[SHELL_ONLY_VARIABLE]
-let testHome: string | null = null
+vi.mock('./hydrate-shell-path', async (actual) => {
+  const module = await actual<typeof hydrateShellPath>()
+  return { ...module, withLaunchPath: vi.fn(module.withLaunchPath) }
+})
 
-// Choose an installed real shell with its login profile: Linux CI may lack zsh, and login bash reads .bash_profile rather than .bashrc.
-const REAL_SHELL_CANDIDATES = [
-  { path: '/bin/zsh', profileFile: '.zshenv' },
-  { path: '/bin/bash', profileFile: '.bash_profile' }
-] as const
+const launchPath = process.env.PATH
+let dir: string | null = null
 
-const realShell = REAL_SHELL_CANDIDATES.find((candidate) => existsSync(candidate.path)) ?? null
-
-afterEach(async () => {
-  resetLoginShellEnvironmentCacheForTests()
-  if (originalHome === undefined) {
-    delete process.env.HOME
-  } else {
-    process.env.HOME = originalHome
-  }
-  if (originalZdotdir === undefined) {
-    delete process.env.ZDOTDIR
-  } else {
-    process.env.ZDOTDIR = originalZdotdir
-  }
-  if (originalShellOnlyValue === undefined) {
-    delete process.env[SHELL_ONLY_VARIABLE]
-  } else {
-    process.env[SHELL_ONLY_VARIABLE] = originalShellOnlyValue
-  }
-  if (testHome) {
-    await rm(testHome, { recursive: true, force: true })
-    testHome = null
+afterEach(() => {
+  process.env.PATH = launchPath
+  if (dir) {
+    rmSync(dir, { recursive: true, force: true })
+    dir = null
   }
 })
 
-describe('resolveLoginShellEnvironment', () => {
-  it.runIf(realShell !== null)(
-    'captures a profile export missing from the parent process',
-    async () => {
-      const shell = realShell!
-      testHome = await mkdtemp(join(tmpdir(), 'orca-login-shell-env-'))
-      await writeFile(
-        join(testHome, shell.profileFile),
-        `export ${SHELL_ONLY_VARIABLE}=shell-only\n`
-      )
-      process.env.HOME = testHome
-      // zsh reads .zshenv from ZDOTDIR when set; harmless for the bash variant.
-      process.env.ZDOTDIR = testHome
-      delete process.env[SHELL_ONLY_VARIABLE]
+it.skipIf(process.platform === 'win32')(
+  'runs the profile on the launch PATH, so profile entries appear once',
+  async () => {
+    dir = mkdtempSync(join(tmpdir(), 'orca-login-shell-'))
+    const rcBin = join(dir, 'rc-bin')
+    const orcaSeeded = join(dir, 'orca-seeded-bin')
+    const shell = join(dir, 'fake-shell')
+    // Stands in for `zsh -ilc`: the "rc file" prepends rcBin, then the command runs.
+    writeFileSync(shell, `#!/bin/sh\nexport PATH="${rcBin}:$PATH"\nexec /bin/sh -c "$2"\n`)
+    chmodSync(shell, 0o755)
+    // Startup hydration already merged the profile's entries and Orca's seeded dirs into process.env.
+    process.env.PATH = [rcBin, launchPath, orcaSeeded].join(delimiter)
 
-      const environment = await resolveLoginShellEnvironment({
-        shellOverride: shell.path,
-        startedAfter: Date.now()
-      })
-      expect(environment[SHELL_ONLY_VARIABLE]).toBe('shell-only')
-    }
-  )
+    const capture = await captureLoginShellEnvironment({ shellOverride: shell })
+
+    expect(capture.status).toBe('captured')
+    const segments = capture.env.PATH!.split(delimiter)
+    expect(segments.filter((segment) => segment === rcBin)).toHaveLength(1)
+    expect(segments[0]).toBe(rcBin)
+    expect(segments).toContain(orcaSeeded)
+  }
+)
+
+it.skipIf(process.platform === 'win32')('a cached read builds no probe env', async () => {
+  vi.mocked(withLaunchPath).mockClear()
+  const spawner = vi.fn(async () => ({ PATH: '/captured' }))
+  const shellOverride = '/bin/cached-read-shell'
+  expect((await captureLoginShellEnvironment({ shellOverride, spawner })).status).toBe('captured')
+  expect(vi.mocked(withLaunchPath)).toHaveBeenCalledTimes(1)
+
+  await captureLoginShellEnvironment({ shellOverride, spawner })
+  await captureLoginShellEnvironment({ shellOverride, spawner, cachedOnly: true })
+  expect(spawner).toHaveBeenCalledTimes(1)
+  expect(vi.mocked(withLaunchPath)).toHaveBeenCalledTimes(1)
 })

@@ -10,6 +10,10 @@ export type CommandSpec = {
   allowedFlags: string[]
   // Flag repeatability varies by command, even for the same flag name.
   repeatableFlags?: string[]
+  // Per-command overrides of CLI_BOOLEAN_FLAGS, which stays the default: switches here, and flags
+  // that take a value here though they are switches elsewhere (sheets --tab <name>).
+  booleanFlags?: string[]
+  valueFlags?: string[]
   positionalArgs?: string[]
   variadicPositional?: boolean
   examples?: string[]

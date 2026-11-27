@@ -8,11 +8,11 @@ import {
 } from '@/components/editor/model-lifetime/buffer-text/monaco-content-sync'
 import { isMonacoFindWidgetOpen } from '@/components/editor/monaco/monaco-find-widget'
 import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
-import { useEditorTypography } from '@/hooks/use-editor-typography'
+import { useEditorTypography } from '@/lib/editor/appearance/use-editor-typography'
 import '@/lib/editor/monaco/monaco-setup'
 import { cn } from '@/lib/class-names'
 import { buildAutomationPromptEditorOptions } from './automation-editor-prompt-options'
-import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { useMonacoTheme } from '@/lib/editor/appearance/use-monaco-theme'
 
 export const AUTOMATION_PROMPT_EDITOR_SLOT = 'automation-prompt-editor'
 
@@ -138,7 +138,7 @@ export function AutomationEditorPromptEditor({
     <div
       data-slot={AUTOMATION_PROMPT_EDITOR_SLOT}
       className={cn(
-        'code-editor-colors relative min-h-0 w-full flex-1 overflow-hidden rounded-lg border border-border/70 bg-editor-surface',
+        'code-editor-colors relative min-h-0 w-full flex-1 overflow-hidden rounded-lg border border-border/70 bg-editor-surface @max-[35rem]:min-h-[max(12rem,40vh)]',
         'focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50',
         // Tint Monaco’s placeholder token as ghost text rather than typed content.
         '[--vscode-editor-placeholder-foreground:color-mix(in_srgb,var(--muted-foreground)_50%,transparent)]'

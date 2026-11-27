@@ -1,15 +1,18 @@
+import type { AgentJournalTypedBy } from '../../../../shared/agent-session/journal/agent-journal-typed-by'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionQueuedMessageUpdateResult } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   queuedMessageWithEdit,
   type QueuedMessageEdit
-} from '../../../../shared/queued-message-edit'
+} from '../../../../shared/native-chat/input/queued-messages/queued-message-edit'
 import { isUnsettledQueuedMessage, type QueuedMessageRow } from './queued-message-table'
 
 export type QueuedMessageUpdate = QueuedMessageEdit & {
   messageId: string
   expectedBodyFingerprint: string
+  /** Where the edit was typed, from its transport; the changed card keeps no earlier stamp. */
+  typedBy?: AgentJournalTypedBy
 }
 
 /** A user edit: reconcile lost replies before CAS, then durably attribute changed content to the user. */
@@ -43,6 +46,11 @@ export function queuedMessageUpdateDecision(
   if (row.fingerprint !== input.expectedBodyFingerprint) {
     return { status: 'changed', messageId }
   }
-  const { from: _sender, ...body } = edited.body
-  return { status: 'ready', body, previous: row.body, fingerprint }
+  const { from: _sender, typedBy: _typedBefore, ...body } = edited.body
+  return {
+    status: 'ready',
+    body: { ...body, ...(input.typedBy ? { typedBy: input.typedBy } : {}) },
+    previous: row.body,
+    fingerprint
+  }
 }

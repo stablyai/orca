@@ -1,5 +1,8 @@
 import { useCallback, useState } from 'react'
-import { Text, View } from 'react-native'
+import { View } from 'react-native'
+import { CircleAlert } from 'lucide-react-native'
+import { MobileStateView } from '../components/feedback/MobileStateView'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { PageTitle, useCollapsingTitle } from '../components/nav-bar/PageTitle'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -12,6 +15,7 @@ import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostScreenView({ controller }: { controller: HostScreenController }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [bottomBarHeight, setBottomBarHeight] = useState(0)
   const listRef = controller.activeWorktreeScroll.sectionListRef
   const scrollTo = useCallback(
@@ -22,8 +26,12 @@ export function HostScreenView({ controller }: { controller: HostScreenControlle
   const collapsingTitle = useCollapsingTitle(scrollTo)
   if (controller.state.error) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>{controller.state.error}</Text>
+      <View style={styles.container}>
+        <MobileStateView
+          icon={CircleAlert}
+          title={controller.state.error}
+          action={{ label: t('common.back', 'Back'), onPress: controller.actions.leaveHost }}
+        />
       </View>
     )
   }
@@ -40,7 +48,7 @@ export function HostScreenView({ controller }: { controller: HostScreenControlle
           element: (
             <PageTitle
               title={controller.hostDisplay.title}
-              subtitle={<HostConnectionStatus controller={controller} />}
+              subtitle={<HostConnectionStatus controller={controller} withReconnect />}
               onLayout={collapsingTitle.onTitleLayout}
             />
           ),

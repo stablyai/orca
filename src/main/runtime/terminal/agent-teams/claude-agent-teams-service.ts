@@ -5,6 +5,7 @@ import {
 } from '../../../../shared/agent-launch/startup/claude-agent-teams-tmux-compat'
 import { ClaudeAgentTeamsTmuxDispatcher } from './claude-agent-teams-tmux-dispatcher'
 import { resolvePathEnvKey } from '../../../pty/environment/windows-path-segment-merge'
+import { teammateMcpRelayEnv } from '../../../mcp-servers/terminal/agent-teams-teammate-mcp-env'
 import type {
   AgentTeam,
   AgentTeamsLaunchEnv,
@@ -55,6 +56,7 @@ export class ClaudeAgentTeamsService {
     if (args.baseEnv.ORCA_ENVIRONMENT) {
       env.ORCA_ENVIRONMENT = args.baseEnv.ORCA_ENVIRONMENT
     }
+    Object.assign(env, teammateMcpRelayEnv(args.baseEnv))
 
     const leader: TeamPane = { fakePaneId: leaderPane, handle: args.leaderHandle, index: 0 }
     this.teams.set(teamId, {
@@ -67,12 +69,22 @@ export class ClaudeAgentTeamsService {
       tmuxValue,
       baseEnv: env,
       panes: new Map([[leaderPane, leader]]),
+      startingHandles: new Set(),
       paneOrder: [leaderPane],
       nextPaneNumber: 2,
       mainVertical: null,
       previouslyFocusedPane: null
     })
     return { teamId, token, leaderPane, env }
+  }
+
+  /** A lead's spawn gave its terminal the host's MCP servers after its team was made (a plain
+   *  `claude --teammate-mode auto`): its teammates get the relay env they need from it too. */
+  shareLeadMcpRelayEnv(leadEnv: Readonly<Record<string, string | undefined>>): void {
+    const team = this.teams.get(leadEnv.ORCA_AGENT_TEAMS_TEAM_ID ?? '')
+    if (team && team.token === leadEnv.ORCA_AGENT_TEAMS_TOKEN) {
+      Object.assign(team.baseEnv, teammateMcpRelayEnv(leadEnv))
+    }
   }
 
   releaseTeam(teamId: string): void {
@@ -85,6 +97,20 @@ export class ClaudeAgentTeamsService {
         this.teams.delete(teamId)
       }
     }
+  }
+
+  /** Whether a team's lead or one of its teammates runs in this terminal. */
+  holdsHandle(handle: string): boolean {
+    for (const team of this.teams.values()) {
+      if (
+        team.leaderHandle === handle ||
+        team.startingHandles.has(handle) ||
+        [...team.panes.values()].some((pane) => pane.handle === handle)
+      ) {
+        return true
+      }
+    }
+    return false
   }
 
   getActiveTeamCount(): number {

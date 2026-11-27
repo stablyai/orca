@@ -11,7 +11,7 @@ import {
   type TerminalLimitStatus
 } from '../../../shared/terminal/runtime-policy/terminal-limit-policy'
 import { profileStateAccessMachineIdentity } from '../../persistence/profile-state/access/profile-state-access-identity'
-import { isSafeOwnedDirectory } from '../../../shared/owned-private-directory'
+import { isSafeOwnedDirectory } from '../../../shared/secure-storage/owned-private-directory'
 import { awaitDaemonValueWithinCallerDeadline } from '../launch/daemon-request-deadline'
 import { DEFAULT_MAX_HOST_TERMINALS, resolveMaxHostTerminals } from './host-terminal-ledger'
 import { SystemPtyLimit } from './system-pty-limit'

@@ -12,7 +12,7 @@ import { hasRuntimeRpcErrorCode } from '../../../../../../shared/remote-runtime/
 import { cacheStableSurfaceRecoveryFailure } from '../evidence/web-session-terminal-orphan-recovery-cache'
 import { runInTerminalRecoveryRpcLane } from '../scheduling/web-session-terminal-orphan-recovery-rpc-lane'
 import { toRuntimeWorktreeSelector } from '../../../rpc/targets/runtime-worktree-selector'
-import { getSessionTabsRuntimeIdFromResponse } from '../../../web-session-tabs-sync/publisher-identity-fences'
+import { getSessionTabsRuntimeIdFromResponse } from '../../../web-session-tabs-sync/tracking/publisher-identity-fences'
 import {
   hasTerminalHandleRetirementProof,
   isValidReadySurface,

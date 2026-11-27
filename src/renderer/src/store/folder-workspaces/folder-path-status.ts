@@ -6,8 +6,11 @@ import {
 } from '../../../../shared/folder-workspaces/folder-workspace-path-status'
 
 import { getProjectGroupSubtreeIds } from '../../../../shared/project/groups/project-groups'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type {
   FolderWorkspacePathStatusCacheEntry,
   FolderWorkspacePathStatusRouteOptions

@@ -6,9 +6,9 @@ import type {
   AgentSessionHistoryRequest,
   AgentSessionHistoryResult
 } from '../../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionBackgroundTaskState } from '../../../../../shared/agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
-import { structuredChildWorkLegacyTasks } from '../../../../../shared/agent-session/structured-agent-session-child-work-legacy'
+import { structuredChildWorkLegacyTasks } from '../../../../../shared/agent-session/background-tasks/structured-agent-session-child-work-legacy'
 import { structuredRunningChildWork } from '../../../../../shared/agent-status/child-work/agent-child-work-listing'
 import { readStructuredAgentSessionHistoryResult } from '../history/structured-agent-session-history-result'
 import { captureJournalFrame, captureRequestFrame } from './agent-session-subscriber-frame-capture'
@@ -141,16 +141,18 @@ export class StructuredAgentSessionBackgroundTaskChannel {
   /** Child records define the roster even after the provider releases the session. */
   read(sessionId: string): AgentSessionBackgroundTaskState | null {
     const session = this.sessions.get(sessionId)
+    const workerDock = this.deps.readWorkerDockPresence?.(sessionId)
     const views = structuredRunningChildWork((session && this.readChildWork(sessionId)) ?? [])
     // Untracked work still needs a visible Stop.
     const incomplete = this.childWorkIncomplete(sessionId)
-    if (!session || (views.length === 0 && !incomplete)) {
+    if (!session || (views.length === 0 && !incomplete && !workerDock)) {
       return null
     }
     const stops = this.deps.adapter.backgroundTaskStops?.(sessionId)
     const { tasks, settledTasks } = structuredChildWorkLegacyTasks(views, session.params.provider)
     return {
       state: 'monitoring',
+      ...(workerDock ? { workerDock } : {}),
       ...(tasks ? { tasks } : {}),
       ...(settledTasks ? { settledTasks } : {}),
       ...(stops?.supportsTaskStop ? { supportsTaskStop: true } : {}),

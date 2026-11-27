@@ -1,13 +1,14 @@
 import { parseOrcaSessionAddress } from '../../../../../../src/shared/agent-session/identity/orca-session-address'
 import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react'
 import type { MobileSessionTab } from '../../../tabs/mobile-session-tabs'
-import type { AgentMessageSource } from '../../../../../../src/shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../src/shared/agent-session/journal/agent-session-message-source'
 import {
   agentMessageSavedKind,
-  agentMessageSenderLabel,
+  agentMessageSavedName,
+  resolveAgentMessageSenderName,
   agentMessageSenderView,
   type AgentMessageSenderView
-} from '../../../../../../src/shared/agent-session/agent-message-presentation'
+} from '../../../../../../src/shared/agent-session/view/messages/agent-message-presentation'
 import { resolveMobileTerminalTabAgentId } from '../../../tabs/mobile-terminal-tab-agent'
 import { agentDotState } from '../../../../worktree/agent-lineage/agent-row-display'
 
@@ -71,14 +72,14 @@ export function createMobileAgentMessageSource() {
         listeners.delete(notify)
       }
     },
-    name(sender: Sender, fallback: string): string {
+    name(sender: Sender): string | null {
       const tab = indexed.get(senderKey(sender))?.tab
-      return agentMessageSenderLabel({
+      return resolveAgentMessageSenderName({
         localChat: tab?.type === 'agent-session',
+        botName: sender.bot ? agentMessageSavedName(sender) : null,
         customLabel: tab?.title,
         snapshotName: sender.name,
-        tabLabel: tab?.title,
-        fallback
+        tabLabel: tab?.title
       })
     },
     view(sender: Sender | undefined): AgentMessageSenderView {
@@ -128,13 +129,11 @@ export const MobileAgentMessageOpenContext = createContext<
   ((from: AgentMessageSource, sender: Sender) => void) | undefined
 >(undefined)
 const noopSubscribe = () => () => {}
-export function useMobileAgentMessageName(sender: Sender, fallback: string): string {
+export function useMobileAgentMessageName(sender: Sender | undefined): string | null {
   const source = useContext(MobileAgentMessageContext)
   const read = useCallback(
-    () =>
-      source?.name(sender, fallback) ??
-      agentMessageSenderLabel({ localChat: false, snapshotName: sender.name, fallback }),
-    [source, sender, fallback]
+    () => (sender && source ? source.name(sender) : agentMessageSavedName(sender)),
+    [source, sender]
   )
   return useSyncExternalStore(source?.subscribe ?? noopSubscribe, read, read)
 }

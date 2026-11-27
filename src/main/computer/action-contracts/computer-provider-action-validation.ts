@@ -2,7 +2,7 @@ import {
   computerUseClickModifiersValidationMessage,
   computerUseHotkeyValidationMessage,
   computerUsePressKeyValidationMessage
-} from '../../../shared/computer-use-key-spec'
+} from '../../../shared/computer/computer-use-key-spec'
 import { assertComputerKeyComboAllowed } from './computer-blocked-key-combos'
 import { validateComputerClipboardPasteTextWithBoundedYield } from './computer-clipboard-paste-validation'
 import { RuntimeClientError } from '../runtime-client-error'

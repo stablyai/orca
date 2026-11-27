@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { translateExecutionHostDetail } from '../../execution-host-label'
+import { translateExecutionHostDetail } from '../../../../runtime/hosts/display/execution-host-label'
 import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 
 export function getHostHeaderDetail(

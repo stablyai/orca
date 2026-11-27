@@ -1,10 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import {
-  settlePluginInstallTrust,
-  usePluginInstallTrustStore
-} from '@/store/plugins/installation/plugin-install-trust-request'
 import { Button } from '../../ui/button'
 import {
   Dialog,
@@ -111,6 +107,8 @@ export function PluginInstallTrustDialog({
     <Dialog open={prompt !== null} onOpenChange={(open) => !open && onCancel()}>
       <DialogContent
         surface="security"
+        className="z-[120]"
+        overlayClassName="z-[115]"
         data-plugin-install-trust={current?.kind}
         onOpenAutoFocus={(event) => {
           event.preventDefault()
@@ -174,18 +172,5 @@ export function PluginInstallTrustDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-/** Shows whichever install is waiting; leaving Settings declines it so nothing installs unseen. */
-export function PluginInstallTrustDialogHost(): React.JSX.Element {
-  const pending = usePluginInstallTrustStore((state) => state.pending)
-  useEffect(() => () => settlePluginInstallTrust(false), [])
-  return (
-    <PluginInstallTrustDialog
-      prompt={pending?.prompt ?? null}
-      onCancel={() => settlePluginInstallTrust(false)}
-      onConfirm={() => settlePluginInstallTrust(true)}
-    />
   )
 }

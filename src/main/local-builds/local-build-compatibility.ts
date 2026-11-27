@@ -1,4 +1,4 @@
-import { SCHEMA_VERSION } from '../../shared/constants'
+import { SCHEMA_VERSION } from '../../shared/orca-profiles/constants'
 import {
   getLocalBuildCompatibilityError,
   type LocalBuildCompatibility

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Command, CommandInput, CommandList, CommandOption } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { FilePathCursorTooltip } from '@/components/file-path-cursor-tooltip'
+import { FilePathCursorTooltip } from '@/components/file-actions/file-path-cursor-tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
@@ -98,7 +98,7 @@ function SkillInstallWorkspaceChoiceList({
         : (choiceKeys[0] ?? null)
   const activeIndex = activeKey === null ? -1 : (indexByKey.get(activeKey) ?? -1)
 
-  const virtualizer = useWindowedCommandVirtualizer({
+  const { virtualItems, totalSize, scrollToIndex, scrollToOffset } = useWindowedCommandVirtualizer({
     itemKeys: choiceKeys,
     scrollElement: () => listRef.current,
     estimateSize: estimateChoiceOptionSize,
@@ -111,9 +111,9 @@ function SkillInstallWorkspaceChoiceList({
   const [openedOnIndex] = useState(activeIndex)
   useLayoutEffect(() => {
     if (openedOnIndex > 0) {
-      virtualizer.scrollToIndex(openedOnIndex, { align: 'auto' })
+      scrollToIndex(openedOnIndex, { align: 'auto' })
     }
-  }, [openedOnIndex, virtualizer])
+  }, [openedOnIndex, scrollToIndex])
 
   const setInputRef = useCallback(
     (node: HTMLInputElement | null) => {
@@ -129,7 +129,7 @@ function SkillInstallWorkspaceChoiceList({
 
   const handleQueryChange = (nextQuery: string): void => {
     onQueryChange(nextQuery)
-    virtualizer.scrollToOffset(0)
+    scrollToOffset(0)
   }
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
@@ -138,7 +138,7 @@ function SkillInstallWorkspaceChoiceList({
       event.preventDefault()
       if (navigation.targetId !== null) {
         onHighlightChange({ kind: 'choice', key: navigation.targetId })
-        virtualizer.scrollToIndex(indexByKey.get(navigation.targetId) ?? 0, { align: 'auto' })
+        scrollToIndex(indexByKey.get(navigation.targetId) ?? 0, { align: 'auto' })
       }
       return
     }
@@ -171,8 +171,8 @@ function SkillInstallWorkspaceChoiceList({
               )}
             </div>
           ) : (
-            <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
-              {virtualizer.getVirtualItems().map((virtualRow) => {
+            <div className="relative w-full" style={{ height: totalSize }}>
+              {virtualItems.map((virtualRow) => {
                 const choice = filteredChoices[virtualRow.index]
                 if (!choice) {
                   return null

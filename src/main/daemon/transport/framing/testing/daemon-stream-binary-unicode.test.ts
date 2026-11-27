@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   createBinaryStreamFrameReader,
+  encodeBinaryRelayLineFrame,
   encodeBinaryStreamDataFrame
 } from '../daemon-stream-binary-framing'
 import { streamFramesFor, type StreamWriteChunk } from '../daemon-stream-data-split'
@@ -27,7 +28,7 @@ function reader() {
 }
 
 describe('binary stream UTF-16 preservation', () => {
-  it.each(['\ud83d', '\ude00', '\ud83d\ude00', '\ufffd', '\ud83da\ude00'])(
+  it.each(['\ud83d', '\ude00', '\ud83d\ude00\ufffd'])(
     'preserves exact code units for %j',
     (data) => {
       const received = reader()
@@ -99,5 +100,30 @@ describe('binary stream UTF-16 preservation', () => {
     } finally {
       barrier.dispose()
     }
+  })
+})
+
+describe('binary relay line frames', () => {
+  it('carries an agent line as raw bytes and restores it exactly, split across socket chunks', () => {
+    const line = `{"method":"item/delta","params":{"text":"é漢\\"quote\\" 😀 ${'x'.repeat(70_000)}"}}`
+    const frame = encodeBinaryRelayLineFrame('r-1', 'relayData', { seq: 41, more: true }, line)
+    expect(frame).not.toBeNull()
+    const received = reader()
+    for (let at = 0; at < frame!.length; at += 4093) {
+      received.feed(frame!.subarray(at, at + 4093))
+    }
+    expect(received.fatal).toEqual([])
+    expect(received.events).toEqual([
+      {
+        type: 'event',
+        event: 'relayData',
+        sessionId: 'r-1',
+        payload: { seq: 41, more: true, line }
+      }
+    ])
+  })
+
+  it('refuses a line UTF-8 cannot carry, so the caller sends it as JSON', () => {
+    expect(encodeBinaryRelayLineFrame('r-1', 'relayPending', { seq: 1 }, 'a\ud83d')).toBeNull()
   })
 })

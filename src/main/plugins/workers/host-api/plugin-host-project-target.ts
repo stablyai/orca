@@ -1,18 +1,24 @@
 import { z } from 'zod'
-import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../../shared/execution-host'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
+import {
+  getRepoExecutionHostId,
+  normalizeExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { PluginHostCallError } from './plugin-host-call-scope'
 import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
 
-const repoListAnswer = z.object({
-  repos: z.array(
-    z.object({
-      id: z.string(),
-      kind: z.string().optional(),
-      executionHostId: z.string().nullable().optional(),
-      connectionId: z.string().nullable().optional()
-    })
-  )
-})
+const repoListAnswer = lazyZodSchema(() =>
+  z.object({
+    repos: z.array(
+      z.object({
+        id: z.string(),
+        kind: z.string().optional(),
+        executionHostId: z.string().nullable().optional(),
+        connectionId: z.string().nullable().optional()
+      })
+    )
+  })
+)
 
 export type PluginProjectTarget = {
   id: string

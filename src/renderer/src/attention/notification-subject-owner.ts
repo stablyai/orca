@@ -1,13 +1,14 @@
 import {
   getRepoExecutionHostId,
+  isRemoteExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
-import type { NotificationWorkspaceOwner } from '../../../shared/notification-source'
+} from '../../../shared/execution-host/execution-host'
+import type { NotificationWorkspaceOwner } from '../../../shared/notifications/notification-source'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { getPtyExecutionHost } from '../../../shared/terminal/pty/lifecycle/terminal-execution-host'
-import type { Tab } from '../../../shared/tab-types'
+import type { Tab } from '../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '@/store/types'
 import type { PtyTransport } from '@/components/terminal-pane/pty-transport/pty-transport-types'
 import { resolveTerminalTabPtyOwnership } from '@/lib/workspace/tabs/terminal-tab-for-pty-id'
@@ -98,6 +99,17 @@ export type TerminalNotificationBinding = {
   workspaceOwner?: NotificationWorkspaceOwner
 }
 
+// Never names this computer: a local machine mute must not silence work proven to run elsewhere.
+function remoteWorkspaceNotificationOwner(
+  state: SubjectOwnerState,
+  workspaceId: string
+): NotificationWorkspaceOwner | null {
+  const owner = resolveNotificationTabOwner(state, { worktreeId: workspaceId })
+  return owner?.runtimeEnvironmentId || isRemoteExecutionHostId(owner?.executionHostId)
+    ? owner
+    : null
+}
+
 export function resolveTerminalNotificationOwner(
   state: SubjectOwnerState,
   workspaceId: string,
@@ -130,13 +142,20 @@ export function resolveTerminalNotificationOwner(
       workspaceId,
       ptyId
     )
-    if (binding.kind !== 'owned') {
-      // A known tab still owns delayed delivery after its PTY binding disappears.
-      const tab = binding.kind === 'none' ? notificationTab : undefined
-      return tab ? resolveNotificationTabOwner(state, tab) : null
+    // A known tab still owns delayed delivery after its PTY binding disappears.
+    const tabOwner =
+      binding.kind === 'none' && notificationTab
+        ? resolveNotificationTabOwner(state, notificationTab)
+        : null
+    if (tabOwner) {
+      return tabOwner
     }
+    // A null owner bypasses machine mute, so a prefixed id names its machine even when unbound.
     const transportHost = getPtyExecutionHost(ptyId)
     if (transportHost === 'foreign') {
+      return remoteWorkspaceNotificationOwner(state, workspaceId)
+    }
+    if (!transportHost && binding.kind !== 'owned') {
       return null
     }
     // A currently bound, unprefixed PTY belongs to this client's IPC transport.
@@ -154,5 +173,6 @@ export function resolveTerminalNotificationOwner(
       ? workspaceOwner
       : transportOwner
   }
-  return notificationTab ? resolveNotificationTabOwner(state, notificationTab) : null
+  const tabOwner = notificationTab ? resolveNotificationTabOwner(state, notificationTab) : null
+  return tabOwner ?? remoteWorkspaceNotificationOwner(state, workspaceId)
 }

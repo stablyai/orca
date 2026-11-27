@@ -1,6 +1,6 @@
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { RuntimeTerminalAttention } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
   TerminalLayoutSnapshot,

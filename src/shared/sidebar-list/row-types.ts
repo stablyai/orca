@@ -4,7 +4,7 @@ import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-type
 import type { ProjectGroup } from '../project/groups/project-group-types'
 import type { Repo } from '../repository/repo-types'
 import type { DetectedWorktree, WorkspaceStatus, Worktree } from '../worktree/types'
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { PRGroupKey } from '../workspace-view/workspace-pr-groups'
 
 export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'

@@ -1,4 +1,4 @@
-import { sha256 } from '../../../../shared/hashing/sha256'
+import { bytesToHex, hashOrcaHookContent } from '../../../../shared/hashing/orca-hook-content-hash'
 
 export async function hashOrcaHookScript(content: string): Promise<string> {
   const normalized = content.trim()
@@ -14,13 +14,5 @@ export async function hashOrcaHookScript(content: string): Promise<string> {
     const digest = await subtle.digest('SHA-256', bytes)
     return bytesToHex(new Uint8Array(digest))
   }
-  return bytesToHex(sha256(bytes))
-}
-
-function bytesToHex(view: Uint8Array): string {
-  const hex: string[] = []
-  for (let i = 0; i < view.length; i += 1) {
-    hex.push(view[i].toString(16).padStart(2, '0'))
-  }
-  return hex.join('')
+  return hashOrcaHookContent(content)
 }

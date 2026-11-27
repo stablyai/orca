@@ -7,7 +7,7 @@ export type RelayHostReachability =
   | 'connecting'
   | 'signed-out' // the cell named the desktop's own Orca Cloud sign-out as the reason
   | 'host-offline' // 4404: the cell answered, the desktop is not attached to it
-  | 'credential-refused' // 4401 / director 401: this device's relay credential was refused
+  | 'credential-refused' // relay-hello 4401 / director 401: this device's relay credential was refused
   | 'unreachable' // 1006: the phone never reached the cell
 
 // Only the cell's close reason can name a sign-out; a close code never does.
@@ -17,13 +17,14 @@ export type RelayHostReachabilityFromCloseCode = Exclude<RelayHostReachability, 
 const TRANSPORT_CLOSE_CODE = 1006
 
 export function relayHostReachabilityForCloseCode(
-  code: number
+  code: number,
+  credentialRejected: boolean
 ): RelayHostReachabilityFromCloseCode {
   switch (code) {
     case MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE:
       return 'host-offline'
     case MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL:
-      return 'credential-refused'
+      return credentialRejected ? 'credential-refused' : 'connecting'
     case TRANSPORT_CLOSE_CODE:
       return 'unreachable'
     default:

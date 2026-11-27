@@ -3,12 +3,16 @@ import type {
   ArtifactCloudOperation,
   ArtifactListItem
 } from '../../../../shared/artifacts/artifacts'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { persistConfirmationSkipPreference } from '@/components/confirmation-skip-preference'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
+import { persistConfirmationSkipPreference } from '@/components/dismiss/confirmation/confirmation-skip-preference'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
+import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../../shared/orca-profiles/orca-cloud-team-policy'
 import { ArtifactCollection } from './ArtifactCollection'
+import { RailPage } from '@/components/rail-page/RailPage'
+import { RailPageHeader, RailPageRefreshButton } from '@/components/rail-page/RailPageHeader'
 import { ArtifactDetailDrawer } from './ArtifactDetailDrawer'
 import { ArtifactsPageSkeleton } from './ArtifactsPageSkeleton'
 import {
@@ -31,6 +35,9 @@ export default function ArtifactsPage(): React.JSX.Element {
   const updateSettings = useAppStore((state) => state.updateSettings)
   const confirm = useConfirmationDialog()
   // Claim publishing is blocked only after settings load; sharing requires explicit capability opt-in.
+  const publishingBlockedByTeam = useOrcaTeamFeatureBlocked(
+    ORCA_CLOUD_TEAM_POLICY_FLAGS.artifactSharing
+  )
   const publishingBlocked = settings ? settings.artifactSharingEnabled !== true : false
   const [deleting, setDeleting] = useState<{ identity: string; slug: string } | null>(null)
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
@@ -43,6 +50,7 @@ export default function ArtifactsPage(): React.JSX.Element {
   const {
     accountIdentity,
     artifacts,
+    hasLoadedCurrentPage,
     error,
     loading,
     loadingMore,
@@ -167,48 +175,61 @@ export default function ArtifactsPage(): React.JSX.Element {
     }
   }
 
-  return (
-    <main className="relative flex h-full min-h-0 flex-1 flex-col bg-background pt-5 text-foreground md:pt-6">
-      <header
-        className="flex shrink-0 items-center px-3 pb-3 md:px-5"
-        // Why: no stacked center titlebar on this page; keep the title clear of Windows/Linux window controls.
-        style={
-          {
-            paddingRight: 'max(0.75rem, var(--window-controls-width, 0px))'
-          } as React.CSSProperties
-        }
-      >
-        <h1 className="truncate text-base font-semibold leading-8">
-          {t('auto.components.artifacts.ArtifactsPage.title', 'Artifacts')}
-        </h1>
-      </header>
+  // A true total only (D1 R6): every page is loaded, nothing is loading and the last load did not fail.
+  const artifactCount =
+    signedIn && hasLoadedCurrentPage && !loading && !error && !nextCursor ? artifacts.length : null
+  const errorNotice = error ? (
+    <ArtifactsPageErrorBanner
+      error={error}
+      loading={loading}
+      onRetry={() => void loadArtifacts()}
+    />
+  ) : null
 
-      {error ? (
-        <ArtifactsPageErrorBanner
-          error={error}
-          loading={loading}
-          onRetry={() => void loadArtifacts()}
-        />
-      ) : null}
+  return (
+    <RailPage as="main">
+      <RailPageHeader
+        title={t('auto.components.artifacts.ArtifactsPage.title', 'Artifacts')}
+        count={artifactCount}
+        actions={
+          signedIn ? (
+            <RailPageRefreshButton
+              label={t('auto.components.artifacts.ArtifactsPage.refresh', 'Refresh')}
+              busy={loading}
+              onRefresh={() => void loadArtifacts()}
+            />
+          ) : null
+        }
+      />
       {!signedIn ? (
-        <ArtifactsPageAuthState
-          needsReconnect={needsReconnect}
-          configured={authStatus?.configured === true}
-          onOpenAccountSettings={openAccountSettings}
-        />
+        <>
+          {errorNotice}
+          <ArtifactsPageAuthState
+            needsReconnect={needsReconnect}
+            configured={authStatus?.configured === true}
+            onOpenAccountSettings={openAccountSettings}
+          />
+        </>
       ) : loading && artifacts.length === 0 ? (
-        <ArtifactsPageSkeleton />
+        <>
+          {errorNotice}
+          <ArtifactsPageSkeleton />
+        </>
       ) : artifacts.length === 0 ? (
-        <ArtifactsPageEmptyState
-          hasMore={Boolean(nextCursor)}
-          loadingMore={loadingMore}
-          publishingBlocked={publishingBlocked}
-          onLoadMore={() => void loadMoreArtifacts()}
-          onOpenArtifactsSettings={() => {
-            openSettingsTarget({ pane: 'artifacts', repoId: null })
-            openSettingsPage()
-          }}
-        />
+        <>
+          {errorNotice}
+          <ArtifactsPageEmptyState
+            hasMore={Boolean(nextCursor)}
+            loadingMore={loadingMore}
+            publishingBlocked={publishingBlocked}
+            publishingBlockedByTeam={publishingBlockedByTeam}
+            onLoadMore={() => void loadMoreArtifacts()}
+            onOpenArtifactsSettings={() => {
+              openSettingsTarget({ pane: 'artifacts', repoId: null })
+              openSettingsPage()
+            }}
+          />
+        </>
       ) : (
         <ArtifactCollection
           artifacts={artifacts}
@@ -219,8 +240,7 @@ export default function ArtifactsPage(): React.JSX.Element {
           hasMore={Boolean(nextCursor)}
           loadingMore={loadingMore}
           loadMore={() => void loadMoreArtifacts()}
-          onRefresh={() => void loadArtifacts()}
-          isRefreshing={loading}
+          notice={errorNotice}
         />
       )}
 
@@ -230,6 +250,6 @@ export default function ArtifactsPage(): React.JSX.Element {
         onClose={() => setSelectedSlug(null)}
         onDelete={(target) => void deleteArtifact(target)}
       />
-    </main>
+    </RailPage>
   )
 }

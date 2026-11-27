@@ -22,13 +22,14 @@ import { authHeaders, getEnvAuthConfig, hasAuth } from './bitbucket-auth-config'
 import { accountNameFromUser, fetchBitbucketUserResult } from './user-request'
 import {
   getStoredBitbucketCredentialError,
-  getStoredBitbucketMetadata,
   hasStoredBitbucketCredential,
-  loadStoredBitbucketSecret
+  loadStoredBitbucketCredential
 } from './credential-store'
 import { resolveBitbucketAuthConfig, storedAuthConfig } from './resolve-auth'
 
 const REQUEST_TIMEOUT_MS = 5000
+// Bounds polling cost for commits with very many statuses.
+const MAX_BUILD_STATUS_PAGES = 5
 const ALL_PULL_REQUEST_STATES = ['OPEN', 'MERGED', 'DECLINED', 'SUPERSEDED'] as const
 
 export type BitbucketAuthStatus = {
@@ -75,7 +76,7 @@ async function requestJson<T>(
   // A stale linked PR may 404 while the branch still has a review.
   notFoundIsNull = false
 ): Promise<T | null> {
-  const config = resolveBitbucketAuthConfig()
+  const config = await resolveBitbucketAuthConfig()
   // Anonymous private-repo 404s must not be mistaken for an absent PR.
   if (!hasAuth(config)) {
     if (throwOnFailure) {
@@ -132,17 +133,33 @@ async function getBuildStatus(
   if (!headSha) {
     return { status: 'neutral' }
   }
-  const data = await requestJson<{ values?: RawBitbucketBuildStatus[]; next?: string }>(
-    `/repositories/${encodedRepoPath(repo)}/commit/${encodeURIComponent(headSha)}/statuses/build`,
-    { searchParams: { pagelen: '100' } }
-  )
-  const statuses = data?.values ?? []
-  return {
-    status: deriveBitbucketBuildStatus(statuses),
-    ...(data && Array.isArray(data.values) && !data.next
-      ? { checksSummary: summarizeBitbucketBuildStatuses(statuses) }
-      : {})
+  const path = `/repositories/${encodedRepoPath(repo)}/commit/${encodeURIComponent(headSha)}/statuses`
+  const statuses: RawBitbucketBuildStatus[] = []
+  let searchParams: Record<string, string> = { pagelen: '100' }
+  for (let page = 0; page < MAX_BUILD_STATUS_PAGES; page++) {
+    const data = await requestJson<{ values?: RawBitbucketBuildStatus[]; next?: string }>(path, {
+      searchParams
+    })
+    if (!data || !Array.isArray(data.values)) {
+      break
+    }
+    statuses.push(...data.values)
+    if (!data.next) {
+      return {
+        status: deriveBitbucketBuildStatus(statuses),
+        checksSummary: summarizeBitbucketBuildStatuses(statuses)
+      }
+    }
+    // Reuse only the cursor query so credentials never follow a response-supplied host or path.
+    const next = URL.parse(data.next)
+    if (!next) {
+      break
+    }
+    searchParams = Object.fromEntries(next.searchParams)
   }
+  const status = deriveBitbucketBuildStatus(statuses)
+  // Unread pages may contain failing checks, so a successful prefix is not a green build.
+  return { status: status === 'success' ? 'neutral' : status }
 }
 
 async function normalizePullRequest(
@@ -166,12 +183,11 @@ export async function getBitbucketAuthStatus(): Promise<BitbucketAuthStatus> {
       account: result.ok ? accountNameFromUser(result.user) : null
     }
   }
-  const metadata = getStoredBitbucketMetadata()
-  if (metadata && hasStoredBitbucketCredential()) {
+  const { metadata, secret: cached } = await loadStoredBitbucketCredential()
+  if (metadata && (await hasStoredBitbucketCredential())) {
     if (getStoredBitbucketCredentialError()) {
       return { configured: true, authenticated: false, account: metadata.account }
     }
-    const cached = loadStoredBitbucketSecret()
     if (!cached) {
       return { configured: true, authenticated: true, account: metadata.account }
     }

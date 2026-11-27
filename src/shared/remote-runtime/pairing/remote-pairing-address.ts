@@ -1,6 +1,6 @@
 import { parsePairingCode } from './pairing'
 import type { PairingOffer } from './mobile-relay-pairing-offer'
-import { isTailnetIPv4Address } from '../../tailnet-address'
+import { isTailnetIPv4Address } from '../../network/tailnet-address'
 
 export type RemotePairingEndpointKind = 'loopback' | 'tailscale' | 'lan' | 'public' | 'custom'
 

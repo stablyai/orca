@@ -1,4 +1,4 @@
-import { FIRST_PANE_ID } from '../../pane-key'
+import { FIRST_PANE_ID } from '../pane-key'
 import { isTerminalLeafId } from '../stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../terminal-tab-types'
 
@@ -52,6 +52,14 @@ export function collectRuntimePaneLeafIds(
     return [node.leafId]
   }
   return [...collectRuntimePaneLeafIds(node.first), ...collectRuntimePaneLeafIds(node.second)]
+}
+
+/** Ascending live slot ids 1..n, one per leaf, keep mount/replay creation order; closing a pane makes them sparse. */
+export function liveSlotIdsAreDense(liveSlotIds: readonly number[], leafCount: number): boolean {
+  return (
+    liveSlotIds.length === leafCount &&
+    liveSlotIds.every((paneId, index) => paneId === FIRST_PANE_ID + index)
+  )
 }
 
 export function resolveRuntimePaneTitleLeafId(

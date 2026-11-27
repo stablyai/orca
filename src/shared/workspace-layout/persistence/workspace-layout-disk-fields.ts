@@ -3,7 +3,7 @@
 import type { SleepingAgentSessionRecord } from '../../agent-session/lifecycle/agent-session-resume'
 import type { BrowserWorkspace } from '../../browser/workspaces/browser-workspace-types'
 import type { ClosedTerminalTabTombstone } from '../terminal-surfaces/closed-terminal-tab-tombstones'
-import type { Tab, TabGroup } from '../../tab-types'
+import type { Tab, TabGroup } from '../tab-groups/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../terminal-tab-types'
 import type { PersistedOpenFile } from '../../workspace-session/workspace-session-state-types'
 import {
@@ -245,7 +245,8 @@ const SLEEPING = {
   connectionId: resumeRecord('connectionId'),
   launchConfig: resumeRecord('launchConfig'),
   origin: resumeRecord('origin'),
-  restoreOnTabOpenOnly: resumeRecord('restoreOnTabOpenOnly')
+  restoreOnTabOpenOnly: resumeRecord('restoreOnTabOpenOnly'),
+  terminalHandle: resumeRecord('terminalHandle')
 } as const satisfies Record<keyof SleepingAgentSessionRecord, DiskFieldWritten>
 
 const INCARNATION = {

@@ -1,11 +1,14 @@
 import {
   useAppViewExternalStore,
-  useAppStateViewActive,
-  useAppStateValue
+  useAppStateViewActive
 } from '@/store/retained-views/app-state-view'
 import { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
-import type { ProspectiveWorkspace } from '../routing/agent-launch-route-input'
+import {
+  agentLaunchRouteStoreFor,
+  type ProspectiveWorkspace
+} from '../routing/agent-launch-route-input'
+import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import {
   agentsOfferedForLaunch,
   resolveChatProgramContext,
@@ -19,7 +22,7 @@ import {
   firstHostStructuredAgentAvailability
 } from '@/runtime/native-chat/agent-catalogs/host-structured-agent-availability'
 import { onRuntimeEnvironmentsRetired } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AppState } from '@/store/types'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -66,8 +69,10 @@ export function useChatProgramFacts(workspace: ProspectiveWorkspace, active = tr
   const viewActive = useAppStateViewActive()
   useChatProgramFactsVersion()
   // Hidden worktrees' tab bars stay mounted; resolving per store write there is wasted work.
-  const key = useAppStateValue((state) =>
-    active ? resolveChatProgramContext(state, workspace).revision : null
+  const key = useAppStateValueWithHostStatuses((state, statuses) =>
+    active
+      ? resolveChatProgramContext(agentLaunchRouteStoreFor(state, statuses), workspace).revision
+      : null
   )
   useEffect(() => {
     return active && viewActive
@@ -84,8 +89,12 @@ export function useAgentsOfferedForLaunch(
   detected: ReadonlySet<TuiAgent> | null
 ): ReadonlySet<TuiAgent> | null {
   useChatProgramFacts(workspace)
-  const key = useAppStateValue((state) =>
-    detected === null ? null : agentsOfferedForLaunch(state, workspace, [...detected]).join(',')
+  const key = useAppStateValueWithHostStatuses((state, statuses) =>
+    detected === null
+      ? null
+      : agentsOfferedForLaunch(agentLaunchRouteStoreFor(state, statuses), workspace, [
+          ...detected
+        ]).join(',')
   )
   return useMemo(() => (key === null ? null : new Set(key.split(',').filter(isTuiAgent))), [key])
 }

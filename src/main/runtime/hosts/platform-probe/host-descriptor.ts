@@ -1,5 +1,7 @@
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { createHmac, randomUUID } from 'node:crypto'
-import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { renameSync, rmSync, writeFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import {
   RuntimeHostDescriptorSchema,
@@ -11,7 +13,9 @@ import type { RuntimeSourceStamp } from '../../../../shared/remote-runtime/host-
 
 export const HOST_INSTALLATION_FILENAME = 'host-installation.json'
 const MAX_INSTALLATION_FILE_BYTES = 4 * 1024
-const InstallationFileSchema = RuntimeHostDescriptorSchema.pick({ installationId: true })
+const InstallationFileSchema = lazyZodSchema(() =>
+  RuntimeHostDescriptorSchema.pick({ installationId: true })
+)
 
 type InstallationRead =
   | { kind: 'valid'; installationId: string }
@@ -22,10 +26,10 @@ function errorCode(error: unknown): unknown {
   return error instanceof Error && 'code' in error ? error.code : undefined
 }
 
-function readInstallation(filePath: string): InstallationRead {
+async function readInstallation(filePath: string): Promise<InstallationRead> {
   let raw: string
   try {
-    raw = readFileSync(filePath, 'utf8')
+    raw = await readFile(filePath, 'utf8')
   } catch (error) {
     if (errorCode(error) === 'ENOENT') {
       return { kind: 'missing' }
@@ -47,9 +51,11 @@ function readInstallation(filePath: string): InstallationRead {
 }
 
 /** The profile's existing identity, never created or repaired; undefined when absent or unreadable. */
-export function readExistingHostInstallationId(userDataPath: string): string | undefined {
+export async function readExistingHostInstallationId(
+  userDataPath: string
+): Promise<string | undefined> {
   try {
-    const current = readInstallation(join(userDataPath, HOST_INSTALLATION_FILENAME))
+    const current = await readInstallation(join(userDataPath, HOST_INSTALLATION_FILENAME))
     return current.kind === 'valid' ? current.installationId : undefined
   } catch {
     return undefined
@@ -58,13 +64,13 @@ export function readExistingHostInstallationId(userDataPath: string): string | u
 
 export async function loadOrCreateHostInstallationId(userDataPath: string): Promise<string> {
   const filePath = join(userDataPath, HOST_INSTALLATION_FILENAME)
-  const current = readInstallation(filePath)
+  const current = await readInstallation(filePath)
   if (current.kind === 'valid') {
     return current.installationId
   }
   // Decide only after any racing creator/repairer publishes.
   return await withFileTransactionLock(filePath, async () => {
-    const locked = readInstallation(filePath)
+    const locked = await readInstallation(filePath)
     if (locked.kind === 'valid') {
       return locked.installationId
     }
@@ -131,13 +137,13 @@ export function getPublishedHostDescriptor(runtimeId: string): RuntimeHostDescri
 
 /** The installationId a caller's parent ref names; desktops without a paired transport publish no
  * descriptor, so the file is read, never created. */
-export function readCallerStoreInstallationId(
+export async function readCallerStoreInstallationId(
   runtimeId: string,
   userDataPath: string
-): string | undefined {
+): Promise<string | undefined> {
   return (
     getPublishedHostDescriptor(runtimeId)?.installationId ??
-    readExistingHostInstallationId(userDataPath)
+    (await readExistingHostInstallationId(userDataPath))
   )
 }
 

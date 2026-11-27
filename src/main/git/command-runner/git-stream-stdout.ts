@@ -1,11 +1,12 @@
-import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
-import { spawnNativeProcess } from '@orca/process-host/native-process-spawn'
+import type { SpawnOptions } from 'node:child_process'
 import { createPosixGroupTermination } from '@orca/process-host/posix-group-termination'
 import { StringDecoder } from 'node:string_decoder'
 import { withGitSpan } from '../../observability/instrumentation'
-import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
 import { createAbortError } from './process-capture/abort-error'
-import { killSpawnedCommandTree } from './process-capture/spawned-command-tree-kill'
+import {
+  endAbandonedWorkerChild,
+  killSpawnedCommandTree
+} from './process-capture/spawned-command-tree-kill'
 import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import {
@@ -24,8 +25,9 @@ import {
   resolveGitCommandWithoutProbe
 } from './host-routing/git-command-resolution'
 import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
-import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-environment/git-process-env'
-import { gitSpawn } from './git-spawn'
+import { nonInteractiveGitEnv } from './git-environment/git-process-env'
+import { spawnGitStreamChild } from './git-stream-child-spawn'
+import { isAbandonedWorkerChildError } from '../../worker-thread-child-process/worker-thread-child-process'
 import { acquireGitAdmission } from './admission/git-subprocess-admission'
 import {
   GitCommandTimeoutError,
@@ -105,34 +107,7 @@ function streamInSpan(
           wslDistro: options.wslDistro,
           windowsHide: true
         }
-        const ownedPosixGroup = process.platform !== 'win32' && !command.wsl
-        let child: ChildProcess
-        if (ownedPosixGroup) {
-          child = spawnNativeProcess(
-            command.binary,
-            command.args,
-            {
-              cwd: command.cwd,
-              env: untranslatedGitOutputEnv(spawnOptions.env),
-              stdio,
-              windowsHide: true,
-              detached: true
-            },
-            undefined,
-            recordSubprocessSpawn
-          )
-        } else if (command.wslMode === 'direct-git') {
-          const spawnStartedAt = performance.now()
-          child = spawn(command.binary, command.args, {
-            cwd: command.cwd,
-            env: untranslatedGitOutputEnv(spawnOptions.env),
-            stdio: spawnOptions.stdio,
-            windowsHide: true
-          })
-          recordSubprocessSpawn(command.binary, command.args, performance.now() - spawnStartedAt)
-        } else {
-          child = gitSpawn(args, spawnOptions)
-        }
+        const { child, ownedGroupChild } = spawnGitStreamChild(command, args, spawnOptions)
         let stopping = false
         let groupTermination: ReturnType<typeof createPosixGroupTermination> | undefined
         let terminationReported = false
@@ -144,15 +119,19 @@ function streamInSpan(
             terminationReported = true
             resolveTermination()
           }
-          if (ownedPosixGroup) {
-            groupTermination = createPosixGroupTermination(child, reportTermination)
-            child.once('close', groupTermination.close)
+          if (ownedGroupChild) {
+            groupTermination = createPosixGroupTermination(ownedGroupChild, reportTermination)
+            ownedGroupChild.once('close', groupTermination.close)
           } else {
             child.once('close', reportTermination)
           }
-          child.once('error', () => {
+          // Not once: an earlier child error must not hide a later worker abandonment.
+          child.on('error', (error) => {
             if (!child.pid) {
               reportTermination()
+            } else if (isAbandonedWorkerChildError(error)) {
+              // A streamed read holds only admission, which a lost worker returns.
+              endAbandonedWorkerChild(child, undefined, reportTermination, true)
             }
           })
         })
@@ -190,6 +169,9 @@ function streamInSpan(
           }
           child.stdout?.off('data', onStdoutData)
           child.stderr?.off('data', onStderrData)
+          if ('discardOutput' in child) {
+            child.discardOutput()
+          }
           child.off('error', onError)
           child.off('close', onClose)
           options.signal?.removeEventListener('abort', onAbort)

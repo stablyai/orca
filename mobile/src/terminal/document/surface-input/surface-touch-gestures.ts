@@ -7,17 +7,23 @@ import { notify } from '../host-bridge/host-notify'
 import { attachSurfaceMouseClickDragHandler } from './mouse-click-drag'
 import { routeScrollLines, shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
 import {
+  endPageSwipe,
+  forwardSwipe,
+  startTouchSwipe,
+  type TerminalTouchSwipeState
+} from './surface-sidebar-swipe'
+import {
   applyNormalBufferScrollDelta,
   enqueueNormalBufferScrollDelta,
   resetSmoothScrollOffset
 } from '../viewport/normal-buffer-smooth-scroll'
 import { dispatcherShouldBlockSurface } from './tap-dispatch'
+import { applyTextScale } from '../viewport/text-scaling'
 import {
-  applyTextScale,
-  MAX_TEXT_SCALE,
-  MIN_TEXT_SCALE,
-  snapToTextScalePreset
-} from '../viewport/text-scaling'
+  MAX_TERMINAL_TEXT_SCALE,
+  MIN_TERMINAL_TEXT_SCALE,
+  pinchedTerminalTextScale
+} from '../../preferences/terminal-text-scales'
 import { updateTransform } from '../viewport/viewport-transform'
 import { viewportPoint } from '../viewport/viewport-cell'
 import { attachSurfaceWheelHandler } from './wheel-scroll'
@@ -40,7 +46,7 @@ export type TerminalTouchState = {
   pinchScale: number
   pinchSurfX: number
   pinchSurfY: number
-}
+} & TerminalTouchSwipeState
 
 export function updateTouchVelocity(scope: TerminalDocumentScope, deltaY: number, dt: number) {
   if (dt <= 0) {
@@ -99,7 +105,11 @@ export function attachSurfaceEventHandlers(
   targetSurface.addEventListener(
     'touchstart',
     function (e) {
-      if (targetSurface !== scope.surface || dispatcherShouldBlockSurface(scope)) {
+      if (targetSurface !== scope.surface) {
+        return
+      }
+      endPageSwipe(scope, 'cancel')
+      if (dispatcherShouldBlockSurface(scope)) {
         return
       }
       notify(scope, { type: 'terminal-interaction' })
@@ -128,6 +138,7 @@ export function attachSurfaceEventHandlers(
         scope.touchGesture.velY = 0
         scope.touchGesture.accumDelta = 0
       }
+      startTouchSwipe(scope, touches, e.timeStamp)
       scope.touchGesture.active = touches.length > 0
     },
     { capture: true, passive: true }
@@ -146,11 +157,14 @@ export function attachSurfaceEventHandlers(
       // Claim inactive and interrupted moves too, or xterm's own touch scroller moves the buffer.
       e.preventDefault()
       e.stopPropagation()
+      const touches = touchesInRoot(scope.root, e.touches)
+      if (forwardSwipe(scope, touches, e.timeStamp)) {
+        return
+      }
       if (!scope.interactionActive || !scope.touchGesture.active) {
         return
       }
 
-      const touches = touchesInRoot(scope.root, e.touches)
       if (touches.length === 2) {
         scope.touchGesture.isPinching = true
         const dist = getDistance(touches[0], touches[1])
@@ -158,8 +172,8 @@ export function attachSurfaceEventHandlers(
 
         const ratio = dist / scope.touchGesture.pinchDist
         // Clamp apparent text size to presets while userScale adds transient CSS pinch zoom.
-        const loScale = MIN_TEXT_SCALE / scope.currentTextScale
-        const hiScale = MAX_TEXT_SCALE / scope.currentTextScale
+        const loScale = MIN_TERMINAL_TEXT_SCALE / scope.currentTextScale
+        const hiScale = MAX_TERMINAL_TEXT_SCALE / scope.currentTextScale
         scope.userScale = Math.max(
           loScale,
           Math.min(hiScale, scope.touchGesture.pinchScale * ratio)
@@ -216,7 +230,9 @@ export function attachSurfaceEventHandlers(
   targetSurface.addEventListener(
     'touchend',
     function (e) {
-      if (targetSurface !== scope.surface || dispatcherShouldBlockSurface(scope)) {
+      // A swipe handed to the page ends there, with no momentum or tap here.
+      const blocked = targetSurface !== scope.surface || endPageSwipe(scope, 'end')
+      if (blocked || dispatcherShouldBlockSurface(scope)) {
         return
       }
       if (!scope.term || !scope.touchGesture.active) {
@@ -226,8 +242,11 @@ export function attachSurfaceEventHandlers(
       const touches = touchesInRoot(scope.root, e.touches)
       if (scope.touchGesture.isPinching && touches.length < 2) {
         scope.touchGesture.isPinching = false
-        // Commit pinch to a real font preset, reset transient zoom, and let native resize the PTY to the reflowed grid.
-        const target = snapToTextScalePreset(scope.currentTextScale * scope.userScale)
+        // Commit pinch to a whole point size, reset transient zoom, and let native resize the PTY to the reflowed grid.
+        const target = pinchedTerminalTextScale(
+          scope.currentTextScale,
+          scope.currentTextScale * scope.userScale
+        )
         const changed = target !== scope.currentTextScale
         scope.userScale = 1
         scope.panX = 0
@@ -296,6 +315,7 @@ export function attachSurfaceEventHandlers(
       if (targetSurface !== scope.surface) {
         return
       }
+      endPageSwipe(scope, 'cancel')
       stopSurfaceTouchGestures(scope)
       resetSmoothScrollOffset(scope)
     },

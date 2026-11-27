@@ -4,11 +4,11 @@ import type { AppState } from '@/store/types'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
-} from '../../../../../../shared/cross-platform-path'
+} from '../../../../../../shared/file-access/cross-platform-path'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import '@/store/project-groups/project-group-owner-routing'

@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { hideNativeChatCardKind } from './native-chat-card-kind-hidden-toast'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 /** Put on a hideable chat card's outer element so its Hide button reveals on card hover. */
 export const NATIVE_CHAT_HIDEABLE_CARD_CLASS = 'group/chat-card'
@@ -13,18 +13,27 @@ export function NativeChatCardHideButton({
   updates,
   settingSectionId,
   hiddenMessage,
-  ariaLabel
+  ariaLabel,
+  inline = false
 }: {
   updates: Partial<GlobalSettings>
   settingSectionId: string
   hiddenMessage: string
   ariaLabel?: string
+  /** In a status row, which places and reveals it; otherwise it ends a card's header. */
+  inline?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const label = t('components.native-chat.turnDiff.hide', 'Hide')
   return (
     // Keep the header one text line tall, as the transcript row-height estimate assumes.
-    <span className="-my-1 ml-auto flex shrink-0 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/chat-card:pointer-events-auto group-hover/chat-card:opacity-100 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100">
+    <span
+      className={
+        inline
+          ? '-my-1 flex shrink-0'
+          : '-my-1 ml-auto flex shrink-0 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/chat-card:pointer-events-auto group-hover/chat-card:opacity-100 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100'
+      }
+    >
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

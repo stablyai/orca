@@ -44,6 +44,13 @@ orca skills install --skill orca-cli --skill orchestration
 orca skills update --all
 ```
 
+Bots that run on the server reach Slack, GitHub, Linear and webhooks through the server's own sign-in to Orca Cloud, which a sign-in on your laptop does not carry over to. Sign the server in from its shell, where `orca auth login` prints a link and a code to approve in any browser, or from the bot's Connectors tab in the desktop app, where the button reads **Sign in on** and the server's name:
+
+```bash
+orca auth login
+orca auth status
+```
+
 ## Recommended: desktop app + Tailscale
 
 You need:
@@ -61,12 +68,13 @@ On the computer that should keep the sessions running:
 
 1. Open the Orca desktop app.
 1. Open **Settings → Remote Orca Servers**.
-1. Under **Advertise this app as a server**, click **New Link**.
-1. For **Connection address**, select the Tailscale address. It usually looks like `100.x.y.z`.
-1. Click **Generate Access Link**.
-1. Copy the link under **Pair another Orca client**.
+1. Under **This computer**, click **Share** beside **Share this computer**. Once links exist, the button reads **Manage**.
+1. Under **Who will open the link**, choose **Another device**.
+1. For **Address**, select the Tailscale address. It usually looks like `100.x.y.z`.
+1. Click **Create link**.
+1. Copy the **Access link**.
 
-If the Tailscale address is missing, confirm Tailscale is connected and click the refresh button beside **Connection address**.
+If the Tailscale address is missing, confirm Tailscale is connected and click the refresh button beside **Address**.
 
 <Callout title="Keep the access link private">
   The pairing URL grants access to this Orca runtime. Treat it like a password and send it only to
@@ -78,11 +86,13 @@ If the Tailscale address is missing, confirm Tailscale is connected and click th
 On the computer you want to use as the client:
 
 1. Open **Settings → Remote Orca Servers**.
-1. Click **Add Server**.
-1. Enter a recognizable name, such as `Remote Server`.
-1. Paste the access link from the server.
-1. Click **Add Server**.
+1. Click **Add server**.
+1. Paste the access link from the server into **Access link**.
+1. Optionally enter a recognizable **Name**, such as `Remote Server`.
+1. Click **Add server**.
 1. If the saved server shows **Disconnected**, click **Connect**.
+
+You can also add it from the sidebar: in the add-project menu, open the project host picker and choose **Add remote host… → Add remote server**. That dialog requires a **Name in Orca**. Paste the same link into **Access link** and click **Save**.
 
 <ImagePlaceholder
   src="/docs/remote-server-add-client.png"
@@ -94,7 +104,7 @@ On the computer you want to use as the client:
   caption="Share an Orca desktop runtime with another client over a private network."
 />
 
-Adding a server saves it without forcing every new project onto it. Open **Advanced → Default host for new projects** only when you want server-routed projects, terminals, provider checks, and browser or mobile handoff to use that server by default.
+Adding a server saves it without forcing every new project onto it. Change **New projects open on** in **Settings → Remote Orca Servers** only when you want server-routed projects, terminals, provider checks, and browser or mobile handoff to use that server by default.
 
 ## Use the remote server
 
@@ -112,10 +122,10 @@ That means:
 
 ## Access and security
 
-Orca creates a separate, revocable token for each paired client. The server lists these under **Shared Server Access**.
+Orca creates a separate, revocable token for each paired client. On the server, open **Settings → Remote Orca Servers → Share this computer** to see them under **Active links**.
 
-- Click the trash button beside a grant to revoke it. Active clients using that grant are disconnected immediately.
-- Generating another link replaces the previous **unused** link. Clients that already paired keep their own grants until you revoke them.
+- Click **Revoke** beside a link to revoke it. Active clients using that link are disconnected immediately.
+- Creating another link replaces the previous **unused** link. Clients that already paired keep their own grants until you revoke them.
 - Keep Tailscale ACLs or grants as narrow as your setup allows.
 - Do not forward the Orca port directly to the public internet. Prefer Tailscale, WireGuard, a trusted LAN, SSH forwarding, or an authenticated tunnel.
 - Do not select `127.0.0.1` for another computer. That address only works on the server itself.
@@ -281,13 +291,13 @@ ORCA_SERVE_RUNTIME=orcad orca serve --pairing-address 100.64.1.20
 
 ## Desktop app or `orca serve`?
 
-|               | Desktop app on the server           | `orca serve`                                       |
-| ------------- | ----------------------------------- | -------------------------------------------------- |
-| Best for      | An old laptop, Mac mini, or desktop | A headless Linux box, VM, or managed service       |
-| Setup         | Settings and buttons                | Terminal command and service configuration         |
-| Server window | Open                                | None                                               |
-| Access link   | **New Link → Generate Access Link** | Printed in the terminal                            |
-| Lifetime      | While the desktop app is running    | While the foreground process or service is running |
+|               | Desktop app on the server             | `orca serve`                                       |
+| ------------- | ------------------------------------- | -------------------------------------------------- |
+| Best for      | An old laptop, Mac mini, or desktop   | A headless Linux box, VM, or managed service       |
+| Setup         | Settings and buttons                  | Terminal command and service configuration         |
+| Server window | Open                                  | None                                               |
+| Access link   | **Share this computer → Create link** | Printed in the terminal                            |
+| Lifetime      | While the desktop app is running      | While the foreground process or service is running |
 
 ## Remote Orca Server or SSH?
 
@@ -295,13 +305,15 @@ Use [SSH worktrees](/docs/ssh) when Orca on your laptop should own the runtime a
 
 Use a Remote Orca Server when the other machine should own the full Orca runtime and preserve shared sessions for desktop, browser, mobile, or automation clients.
 
+If the other machine is a computer you already use with the Orca desktop app, such as a Windows PC or a Mac mini, a Remote Orca Server is usually the simpler choice. It runs as the user already signed in there, so it needs no SSH server and no extra user account. Both options still need a network path between the two computers, such as Tailscale or the same network.
+
 See [Ways to run Orca](/docs/ways-to-run) for the full comparison.
 
 ## Troubleshooting
 
 ### The Tailscale address is not listed
 
-On the server, confirm Tailscale is connected, then click the refresh button beside **Connection address**. Both computers must be signed in to the same tailnet. A Tailscale IPv4 address usually starts with `100.`.
+On the server, confirm Tailscale is connected, then click the refresh button beside **Address**. Both computers must be signed in to the same tailnet. A Tailscale IPv4 address usually starts with `100.`.
 
 ### The server is disconnected
 
@@ -309,9 +321,19 @@ Confirm the server computer is awake, Orca is still running, and Tailscale shows
 
 Update Orca on both computers if the server row reports an incompatible protocol version.
 
+### A Windows server is not reachable
+
+If the client times out and the server is a Windows PC, Windows Defender Firewall may be blocking incoming connections to Orca. On the server, open **Windows Security → Firewall & network protection → Allow an app through firewall** and check that Orca is allowed for the network type the client connects through.
+
+Only allow Orca on networks you trust, such as your home network or your tailnet. Don't mark a public network, such as café or airport Wi-Fi, as **Private**, and don't allow Orca on **Public** networks just to make pairing work: every device on that network could then try to connect to Orca. When the two computers don't share a network you trust, connect them with Tailscale instead. Microsoft's [Windows Firewall overview](https://learn.microsoft.com/windows/security/operating-system-security/network-security/windows-firewall/) explains network profiles and app rules.
+
+If Orca is already allowed on that network and the client still times out, check for a block rule. A matching block rule overrides an allow rule, and Windows can create one when someone dismisses or cancels the firewall prompt that appears the first time Orca listens for connections. On the server, open **Windows Defender Firewall with Advanced Security → Inbound Rules** and look for an enabled rule whose action is **Block**, whose program is the installed Orca executable, and whose profile includes **Private**. If you find one, ask whoever manages that PC's firewall (you, if you are its administrator) to review that block for the Private profile only. Keep any block that applies to **Public** networks, and leave rules set by your organization unchanged. Don't delete every rule named Orca or turn off the firewall. Microsoft's [Windows Firewall rules](https://learn.microsoft.com/windows/security/operating-system-security/network-security/windows-firewall/rules) explains how block and allow rules interact.
+
+Keep the Orca desktop app open and the PC awake while you use it as a server. `orca serve service` is not available on Windows yet.
+
 ### The access link was shared with the wrong person
 
-On the server, open **Settings → Remote Orca Servers → Shared Server Access** and revoke that grant. Generate a new link for the intended client.
+On the server, open **Settings → Remote Orca Servers → Share this computer** and revoke that link under **Active links**. Create a new link for the intended client.
 
 ### The server cannot find an agent CLI
 

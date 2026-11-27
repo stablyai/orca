@@ -7,7 +7,7 @@ import {
   DropdownMenuShortcut
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { NativeChatProviderSessionIdMenuItem } from './NativeChatProviderSessionIdMenuItem'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'

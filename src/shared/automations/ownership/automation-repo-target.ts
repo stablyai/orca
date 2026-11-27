@@ -5,7 +5,7 @@ import {
   getRepoExecutionHostId,
   isRepoSshOnlyHost,
   parseExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 
 /** A captured target names a row; a legacy bare id must resolve uniquely. */
 export function findAutomationRepo<

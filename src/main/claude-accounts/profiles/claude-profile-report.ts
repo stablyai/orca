@@ -1,3 +1,4 @@
+import { DirectoryLinkError } from '../../filesystem/merged-directory-link'
 /** A setup step or shared resource name, such as `hooks` or `settings.json`. */
 export type ClaudeProfileSurface = string
 
@@ -51,7 +52,10 @@ export function warnClaudeProfile(
 ): void {
   report.warnings.push({
     surface,
-    code: error instanceof ClaudeProfileSurfaceError ? error.code : 'failed',
+    code:
+      error instanceof ClaudeProfileSurfaceError || error instanceof DirectoryLinkError
+        ? error.code
+        : 'failed',
     detail: error instanceof Error ? error.message : String(error)
   })
 }

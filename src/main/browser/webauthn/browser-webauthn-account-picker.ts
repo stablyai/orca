@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { webContents } from 'electron'
-import { abortWhenRendererGone } from '../../ipc/renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../../ipc/renderer-requests/renderer-lifetime-abort'
 
 import type {
   BrowserWebAuthnAccountRequest,

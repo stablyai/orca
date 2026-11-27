@@ -1,4 +1,4 @@
-import type { TextGenerationFailureFields } from '../../shared/text-generation-failure-copy'
+import type { TextGenerationFailureFields } from '../../shared/text-generation/text-generation-failure-copy'
 import type { BranchNameWorkContext } from '../../shared/source-control/ai/naming/branch-name-from-work'
 import type { ConversationNameContext } from '../../shared/source-control/ai/generation/conversation-name-generation'
 import type { CommitMessageDraftContext } from '../../shared/source-control/ai/generation/commit-message-generation'

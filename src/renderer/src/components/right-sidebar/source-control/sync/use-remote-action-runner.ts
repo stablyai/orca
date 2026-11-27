@@ -14,7 +14,9 @@ import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
 import { refreshSourceControlAfterRemoteAction, resolveRemoteActionError } from './remote-refresh'
+import { orcaRebaseMarkerFromResult } from './orca-rebase-marker'
 import type { SourceControlStatusRefresh } from './use-status-refresh'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export type SourceControlRemoteActionKind =
   | 'push'
@@ -113,131 +115,154 @@ export function useSourceControlRemoteActionRunner({
           : []
       )
       const failureBranchName = targetIsActiveWorktree ? branchName || null : null
-      try {
-        if (kind === 'publish') {
-          await pushBranch(
-            target.worktreeId,
-            target.worktreePath,
-            true,
-            target.connectionId,
-            target.pushTarget,
-            { runtimeTarget: target.target }
-          )
-          return { status: 'ok' }
-        }
-        if (kind === 'push') {
-          // Keep Push regular; automatic force escalation would contradict its dropdown tooltip.
-          await pushBranch(
-            target.worktreeId,
-            target.worktreePath,
-            false,
-            target.connectionId,
-            target.pushTarget,
-            { runtimeTarget: target.target }
-          )
-          return { status: 'ok' }
-        }
-        if (kind === 'force_push') {
-          await pushBranch(
-            target.worktreeId,
-            target.worktreePath,
-            false,
-            target.connectionId,
-            target.pushTarget,
-            { forceWithLease: true, runtimeTarget: target.target }
-          )
-          return { status: 'ok' }
-        }
-        if (kind === 'pull') {
-          await pullBranch(
-            target.worktreeId,
-            target.worktreePath,
-            target.connectionId,
-            target.pushTarget,
-            {
-              runtimeTarget: target.target
-            }
-          )
-          return { status: 'ok' }
-        }
-        if (kind === 'fast_forward') {
-          await fastForwardBranch(
-            target.worktreeId,
-            target.worktreePath,
-            target.connectionId,
-            target.pushTarget,
-            { runtimeTarget: target.target }
-          )
-          return { status: 'ok' }
-        }
-        if (kind === 'fetch') {
-          await fetchBranch(
-            target.worktreeId,
-            target.worktreePath,
-            target.connectionId,
-            target.pushTarget,
-            {
-              runtimeTarget: target.target
-            }
-          )
-          return { status: 'ok' }
-        }
-        if (kind === 'rebase') {
-          const baseRef = options?.baseRef ?? effectiveBaseRef
-          if (!baseRef) {
-            return { status: 'skipped' }
-          }
-          await rebaseFromBase(
-            target.worktreeId,
-            target.worktreePath,
-            baseRef,
-            target.connectionId,
-            target.pushTarget,
-            { runtimeTarget: target.target }
-          )
-          return { status: 'ok' }
-        }
-        await syncBranch(
-          target.worktreeId,
-          target.worktreePath,
-          target.connectionId,
-          target.pushTarget,
-          {
-            runtimeTarget: target.target
-          }
-        )
-        if (operationStore.getState().remoteActionSequence === sequence) {
-          operationStore.setState({ remoteActionError: null })
-        }
-        return { status: 'ok' }
-      } catch (error) {
-        // Keep failures inline after dropdowns close; store actions already own the toast.
-        if (operationStore.getState().remoteActionSequence !== sequence) {
-          return { status: 'superseded' }
-        }
-        const actionError: SourceControlActionError = {
-          kind,
-          message: resolveRemoteActionError(kind, error),
-          rawError: error instanceof Error ? error.message : String(error),
-          syncPushStage: kind === 'sync' ? isSyncPushStageError(error) : false,
-          branchName: failureBranchName,
-          worktreePath: target.worktreePath,
-          entriesSnapshot: recoveryEntrySnapshot.entries,
-          entriesSnapshotTotalCount: recoveryEntrySnapshot.totalCount,
-          sequence
-        }
-        operationStore.setState({ remoteActionError: actionError })
-        return { status: 'failed', error: actionError }
-      } finally {
-        if (!options?.target) {
-          refreshSourceControlAfterRemoteAction({
-            worktreeId: target.worktreeId,
-            refreshGitStatus: refreshActiveGitStatusAfterMutation,
-            refreshBranchCompare: refreshBranchCompareRef.current,
-            refreshGitHistory: refreshGitHistoryRef.current
-          })
+      // A push or pull that lands reconciles with the remote, so the post-rebase Pull hiding retires.
+      // A rejected one leaves the divergence the rebase made, so the marker stays.
+      const retireOrcaRebaseMarker = (): void => {
+        if (targetIsActiveWorktree) {
+          operationStore.setState({ orcaRebase: null })
         }
       }
+      return runWithFinally(
+        async () => {
+          try {
+            if (kind === 'publish') {
+              await pushBranch(
+                target.worktreeId,
+                target.worktreePath,
+                true,
+                target.connectionId,
+                target.pushTarget,
+                { runtimeTarget: target.target }
+              )
+              retireOrcaRebaseMarker()
+              return { status: 'ok' }
+            }
+            if (kind === 'push') {
+              // Keep Push regular; automatic force escalation would contradict its dropdown tooltip.
+              await pushBranch(
+                target.worktreeId,
+                target.worktreePath,
+                false,
+                target.connectionId,
+                target.pushTarget,
+                { runtimeTarget: target.target }
+              )
+              retireOrcaRebaseMarker()
+              return { status: 'ok' }
+            }
+            if (kind === 'force_push') {
+              await pushBranch(
+                target.worktreeId,
+                target.worktreePath,
+                false,
+                target.connectionId,
+                target.pushTarget,
+                { forceWithLease: true, runtimeTarget: target.target }
+              )
+              retireOrcaRebaseMarker()
+              return { status: 'ok' }
+            }
+            if (kind === 'pull') {
+              await pullBranch(
+                target.worktreeId,
+                target.worktreePath,
+                target.connectionId,
+                target.pushTarget,
+                { runtimeTarget: target.target }
+              )
+              retireOrcaRebaseMarker()
+              return { status: 'ok' }
+            }
+            if (kind === 'fast_forward') {
+              await fastForwardBranch(
+                target.worktreeId,
+                target.worktreePath,
+                target.connectionId,
+                target.pushTarget,
+                { runtimeTarget: target.target }
+              )
+              retireOrcaRebaseMarker()
+              return { status: 'ok' }
+            }
+            if (kind === 'fetch') {
+              await fetchBranch(
+                target.worktreeId,
+                target.worktreePath,
+                target.connectionId,
+                target.pushTarget,
+                { runtimeTarget: target.target }
+              )
+              return { status: 'ok' }
+            }
+            if (kind === 'rebase') {
+              // A new rebase replaces any earlier marker, whether or not it completes.
+              retireOrcaRebaseMarker()
+              const baseRef = options?.baseRef ?? effectiveBaseRef
+              if (!baseRef) {
+                return { status: 'skipped' }
+              }
+              const result = await rebaseFromBase(
+                target.worktreeId,
+                target.worktreePath,
+                baseRef,
+                target.connectionId,
+                target.pushTarget,
+                { runtimeTarget: target.target }
+              )
+              // Main reports the upstream tip only when this rebase integrated it, so only then hide Pull.
+              // The store is the active worktree's; another target's rebase must not touch its marker.
+              if (targetIsActiveWorktree) {
+                operationStore.setState({
+                  orcaRebase: orcaRebaseMarkerFromResult(branchName, result)
+                })
+              }
+              return { status: 'ok' }
+            }
+            await syncBranch(
+              target.worktreeId,
+              target.worktreePath,
+              target.connectionId,
+              target.pushTarget,
+              {
+                runtimeTarget: target.target
+              }
+            )
+            retireOrcaRebaseMarker()
+            if (operationStore.getState().remoteActionSequence === sequence) {
+              operationStore.setState({ remoteActionError: null })
+            }
+            return { status: 'ok' }
+          } catch (error) {
+            // Keep failures inline after dropdowns close; store actions already own the toast.
+            if (operationStore.getState().remoteActionSequence !== sequence) {
+              return { status: 'superseded' }
+            }
+            const actionError: SourceControlActionError = {
+              kind,
+              message: resolveRemoteActionError(kind, error),
+              rawError: error instanceof Error ? error.message : String(error),
+              syncPushStage: kind === 'sync' ? isSyncPushStageError(error) : false,
+              branchName: failureBranchName,
+              worktreePath: target.worktreePath,
+              entriesSnapshot: recoveryEntrySnapshot.entries,
+              entriesSnapshotTotalCount: recoveryEntrySnapshot.totalCount,
+              sequence
+            }
+            operationStore.setState({ remoteActionError: actionError })
+            return { status: 'failed', error: actionError }
+          }
+        },
+        () => {
+          if (!options?.target) {
+            refreshSourceControlAfterRemoteAction({
+              worktreeId: target.worktreeId,
+              refreshGitStatus: refreshActiveGitStatusAfterMutation,
+              refreshBranchCompare: refreshBranchCompareRef.current,
+              refreshGitHistory: refreshGitHistoryRef.current
+            })
+          }
+        }
+      )
     },
     [
       scope,

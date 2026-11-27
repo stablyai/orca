@@ -6,7 +6,10 @@ import {
   type AiVaultSessionTitleKind
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { buildAiVaultResumeCommand } from '../../../shared/ai-vault/resume/ai-vault-resume-command'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
@@ -159,10 +162,10 @@ export function generatedSessionTitle(agent: AiVaultAgent, sessionId: string): s
   return `${aiVaultAgentLabel(agent)} ${sessionId.slice(0, 8)}`
 }
 
-export function updateTimeline(accumulator: SessionAccumulator, timestamp: unknown): void {
+export function updateTimeline(accumulator: SessionAccumulator, timestamp: unknown): string | null {
   const parsed = timestampMs(timestamp)
   if (!Number.isFinite(parsed)) {
-    return
+    return null
   }
   const iso = new Date(parsed).toISOString()
   if (!accumulator.createdAt || parsed < accumulator.earliestTimestampMs) {
@@ -174,6 +177,7 @@ export function updateTimeline(accumulator: SessionAccumulator, timestamp: unkno
     accumulator.updatedAt = iso
     accumulator.latestTimestampMs = parsed
   }
+  return iso
 }
 
 export function timestampIso(value: unknown): string | null {

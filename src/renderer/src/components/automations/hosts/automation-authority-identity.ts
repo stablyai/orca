@@ -8,7 +8,7 @@ import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,
   parseExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 
 type RepoConnection = Pick<Repo, 'connectionId' | 'executionHostId'>
 

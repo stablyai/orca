@@ -1,8 +1,10 @@
+import { isDeepStrictEqual } from 'node:util'
 import type {
   CodexManagedAccount,
   CodexRateLimitAccountsState,
   CodexSystemDefaultIdentity
 } from '../../../shared/agent-accounts/managed-account-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import type { Store } from '../../persistence/loading-store/store'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
@@ -12,6 +14,10 @@ import type { CodexAuthIdentity as ResolvedCodexIdentity } from '../credentials/
 import { codexAuthIdentityContradictsAccount } from '../credentials/codex-auth-identity'
 import type { CodexAccountServiceLifecycle } from './codex-account-service-types'
 import { toCodexManagedAccountSummary } from './codex-account-service-types'
+import {
+  normalizeManagedAccountDisplayName,
+  withManagedAccountDisplayName
+} from '../../../shared/agent-accounts/managed-account-display-names'
 import {
   getCodexSelectionTargetForAccount,
   getSelectedCodexAccountIdForTarget,
@@ -24,6 +30,7 @@ import {
   normalizeCodexAccountSelectionTarget,
   type CodexAccountSelectionTarget
 } from '../../../shared/agent-accounts/codex/codex-selection-lane'
+import { hostSystemDefaultUsageId } from '../../../shared/agent-accounts/host-system-default-usage'
 
 type CodexAccountSelectionDependencies = {
   store: Store
@@ -31,7 +38,7 @@ type CodexAccountSelectionDependencies = {
   runtimeHome: CodexRuntimeHomeService
   configMirror: CodexConfigMirror
   lifecycle: CodexAccountServiceLifecycle
-  resolveSystemDefault: () => CodexSystemDefaultIdentity
+  resolveSystemDefault: () => Promise<CodexSystemDefaultIdentity>
   /** Host homes only: `list` reads them synchronously, and never a WSL home. */
   readIdentityFromHostHome: (
     managedHomePath: string,
@@ -44,21 +51,23 @@ type CodexAccountSelectionDependencies = {
 export class CodexAccountSelection {
   constructor(private readonly dependencies: CodexAccountSelectionDependencies) {}
 
-  list(): CodexRateLimitAccountsState {
+  async list(): Promise<CodexRateLimitAccountsState> {
     this.normalizeActiveSelection()
     this.adoptManagedHomeIdentities()
     return this.snapshot()
   }
 
-  snapshot(): CodexRateLimitAccountsState {
+  async snapshot(): Promise<CodexRateLimitAccountsState> {
     const settings = this.dependencies.store.getSettings()
     return {
       accounts: settings.codexManagedAccounts
-        .map(toCodexManagedAccountSummary)
+        .map((account) =>
+          toCodexManagedAccountSummary(account, settings.managedAccountDisplayNames)
+        )
         .sort((a, b) => b.updatedAt - a.updatedAt),
       activeAccountId: normalizeCodexRuntimeSelection(settings).host,
       activeAccountIdsByRuntime: normalizeCodexRuntimeSelection(settings),
-      systemDefault: this.dependencies.resolveSystemDefault()
+      systemDefault: await this.dependencies.resolveSystemDefault()
     }
   }
 
@@ -76,19 +85,29 @@ export class CodexAccountSelection {
     const account = this.requireAccount(accountId)
     const settings = this.dependencies.store.getSettings()
     const nextAccounts = settings.codexManagedAccounts.filter((entry) => entry.id !== accountId)
-    const nextSelection = removeCodexAccountIdFromSelection(
-      normalizeCodexRuntimeSelection(settings),
-      accountId
-    )
+    const previousSelection = normalizeCodexRuntimeSelection(settings)
+    const nextSelection = removeCodexAccountIdFromSelection(previousSelection, accountId)
     const nextActiveId =
       settings.activeCodexManagedAccountId === accountId ? null : nextSelection.host
+    const names = withManagedAccountDisplayName(
+      settings.managedAccountDisplayNames,
+      'codex',
+      accountId,
+      null
+    )
 
-    this.dependencies.store.updateSettings({
+    this.saveSettings({
       codexManagedAccounts: nextAccounts,
       activeCodexManagedAccountId: nextActiveId,
-      activeCodexManagedAccountIdsByRuntime: nextSelection
+      activeCodexManagedAccountIdsByRuntime: nextSelection,
+      ...(names ? { managedAccountDisplayNames: names } : {})
     })
     this.dependencies.runtimeHome.syncForCurrentSelection()
+    // Why: refresh blanks active usage bars, so run it only if a lane's selection changed (#24942).
+    const selectionChanged = !isDeepStrictEqual(
+      previousSelection,
+      normalizeCodexRuntimeSelection(this.dependencies.store.getSettings())
+    )
     if (account.managedHomeRuntime === 'host' && nextSelection.host === null) {
       this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
     }
@@ -101,13 +120,33 @@ export class CodexAccountSelection {
       // Removal already succeeded; retain the ledger's safety guards if cleanup fails.
       console.warn('[codex-accounts] Removed account, but credit ledger cleanup failed:', error)
     }
-    const accountTarget = getCodexSelectionTargetForAccount(account)
-    this.startQuotaRefresh(
-      getSelectedCodexAccountIdForTarget(settings, accountTarget) === accountId
-        ? accountId
-        : undefined,
-      accountTarget
+    if (selectionChanged) {
+      const accountTarget = getCodexSelectionTargetForAccount(account)
+      this.startQuotaRefresh(
+        getSelectedCodexAccountIdForTarget(settings, accountTarget) === accountId
+          ? accountId
+          : undefined,
+        accountTarget
+      )
+    }
+    return this.snapshot()
+  }
+
+  /** Names only; the account's record, home and selection stay untouched. */
+  async rename(
+    accountId: string,
+    displayName: string | null
+  ): Promise<CodexRateLimitAccountsState> {
+    this.requireAccount(accountId)
+    const names = withManagedAccountDisplayName(
+      this.dependencies.store.getSettings().managedAccountDisplayNames,
+      'codex',
+      accountId,
+      normalizeManagedAccountDisplayName(displayName)
     )
+    if (names) {
+      this.saveSettings({ managedAccountDisplayNames: names })
+    }
     return this.snapshot()
   }
 
@@ -137,7 +176,7 @@ export class CodexAccountSelection {
       accountId,
       effectiveTarget
     )
-    this.dependencies.store.updateSettings({
+    this.saveSettings({
       activeCodexManagedAccountId:
         effectiveTarget?.runtime === 'wsl' ? nextSelection.host : accountId,
       activeCodexManagedAccountIdsByRuntime: nextSelection
@@ -151,8 +190,17 @@ export class CodexAccountSelection {
       this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
     }
 
-    this.startQuotaRefresh(outgoingAccountId, effectiveTarget)
+    // Keep System default's last reading on its row, as an outgoing saved account's is kept.
+    this.startQuotaRefresh(
+      outgoingAccountId ?? hostSystemDefaultUsageId('codex', effectiveTarget),
+      effectiveTarget
+    )
     return this.snapshot()
+  }
+
+  // Notify every window of changes made by the CLI, paired clients, or other windows.
+  saveSettings(patch: Partial<GlobalSettings>): void {
+    this.dependencies.store.updateSettings(patch, { notifyListeners: true })
   }
 
   // A `codex login` run inside a managed home swaps its account; label the row with what actually runs (#22284).
@@ -198,10 +246,7 @@ export class CodexAccountSelection {
       selection,
       settings.codexManagedAccounts
     )
-    const changed =
-      nextSelection.host !== selection.host ||
-      JSON.stringify(nextSelection.wsl) !== JSON.stringify(selection.wsl)
-    if (!changed) {
+    if (isDeepStrictEqual(selection, nextSelection)) {
       return
     }
     this.dependencies.store.updateSettings({

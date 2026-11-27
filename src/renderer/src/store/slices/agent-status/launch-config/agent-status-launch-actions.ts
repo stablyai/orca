@@ -1,0 +1,116 @@
+import { replaceRecordEntries } from '@/store/record-transitions/keyed-record-transitions'
+import type { AgentStatusSlice } from '../contracts/agent-status-slice-contract'
+import type { AgentStatusRuntime } from '../status-ownership/agent-status-runtime'
+import type { AgentLaunchConfigRegistryEntry } from '../contracts/agent-status-contract'
+import { copyLaunchConfig } from '../../../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
+import { sleepingRecordFromEntry } from '../sleep-recovery/agent-status-sleeping-records'
+import {
+  getLaunchConfigForEntry,
+  launchConfigRegistryEntriesEqual,
+  normalizeLaunchConfigRegistrationMetadata,
+  registryEntryMatchesStatus
+} from './agent-status-launch-config'
+import {
+  findAgentPaneWorktreeId,
+  getTabIdFromPaneKey
+} from '../pane-authority/agent-status-pane-key-tab-binding'
+
+export function createAgentStatusLaunchActions(
+  runtime: AgentStatusRuntime
+): Pick<
+  AgentStatusSlice,
+  'registerAgentLaunchConfig' | 'getAgentLaunchConfigForStatusEntry' | 'clearAgentLaunchConfig'
+> {
+  const { get, set } = runtime
+  return {
+    registerAgentLaunchConfig: (paneKey, launchConfig, metadata) => {
+      set((s) => {
+        const copiedLaunchConfig = copyLaunchConfig(launchConfig)
+        const nextRegistryEntry: AgentLaunchConfigRegistryEntry = {
+          launchConfig: copiedLaunchConfig,
+          registeredAt: Date.now(),
+          identity: normalizeLaunchConfigRegistrationMetadata(paneKey, metadata)
+        }
+        const existingRegistryEntry = s.agentLaunchConfigByPaneKey[paneKey]
+        const registryChanged = !launchConfigRegistryEntriesEqual(
+          existingRegistryEntry,
+          nextRegistryEntry
+        )
+        const existingEntry = s.agentStatusByPaneKey.get(paneKey)
+        const entryMatchesRegistry = registryEntryMatchesStatus({
+          entry: nextRegistryEntry,
+          paneKey,
+          agentType: existingEntry?.agentType,
+          tabId: existingEntry?.tabId ?? getTabIdFromPaneKey(paneKey) ?? undefined,
+          terminalHandle: existingEntry?.terminalHandle,
+          launchToken: metadata?.launchToken,
+          providerSession: existingEntry?.providerSession,
+          existingProviderSession: existingEntry?.providerSession,
+          providerSessionChanged: false
+        })
+        const existingSleepingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
+        let nextSleepingAgentSessions = s.sleepingAgentSessionsByPaneKey
+        if (existingSleepingRecord && entryMatchesRegistry && existingEntry) {
+          const worktreeId =
+            existingEntry.worktreeId ??
+            existingSleepingRecord.worktreeId ??
+            findAgentPaneWorktreeId(s, paneKey)
+          const refreshedRecord = worktreeId
+            ? sleepingRecordFromEntry({
+                state: s,
+                entry: existingEntry,
+                worktreeId,
+                capturedAt: existingSleepingRecord.capturedAt,
+                launchConfig: copiedLaunchConfig,
+                origin: existingSleepingRecord.origin
+              })
+            : null
+          if (refreshedRecord) {
+            nextSleepingAgentSessions = replaceRecordEntries(s.sleepingAgentSessionsByPaneKey, [
+              [
+                paneKey,
+                {
+                  ...refreshedRecord,
+                  capturedAt: existingSleepingRecord.capturedAt,
+                  // The same sleep keeps the handle main named the pane by, so its resume answers to it.
+                  ...(existingSleepingRecord.terminalHandle
+                    ? { terminalHandle: existingSleepingRecord.terminalHandle }
+                    : {})
+                }
+              ]
+            ])
+          }
+        }
+        if (!registryChanged && nextSleepingAgentSessions === s.sleepingAgentSessionsByPaneKey) {
+          return s
+        }
+        return {
+          ...(registryChanged
+            ? {
+                agentLaunchConfigByPaneKey: {
+                  ...s.agentLaunchConfigByPaneKey,
+                  [paneKey]: nextRegistryEntry
+                }
+              }
+            : {}),
+          ...(nextSleepingAgentSessions !== s.sleepingAgentSessionsByPaneKey
+            ? {
+                sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions
+              }
+            : {})
+        }
+      })
+    },
+    getAgentLaunchConfigForStatusEntry: (entry) => getLaunchConfigForEntry(get(), entry),
+    clearAgentLaunchConfig: (paneKey) => {
+      set((s) => {
+        if (!(paneKey in s.agentLaunchConfigByPaneKey)) {
+          return s
+        }
+        const nextLaunchConfigs = { ...s.agentLaunchConfigByPaneKey }
+        delete nextLaunchConfigs[paneKey]
+        return { agentLaunchConfigByPaneKey: nextLaunchConfigs }
+      })
+    }
+  }
+}

@@ -43,6 +43,17 @@ ${getPowerShellAgentWrappers()}
         Set-StrictMode -Off
         $result = ""
 
+        if ($PWD.Provider.Name -eq 'FileSystem') {
+            $cwdPath = $PWD.ProviderPath
+            if ([System.IO.Path]::DirectorySeparatorChar -eq [char]92) {
+                $cwdPath = $cwdPath.Replace([char]92, [char]47)
+                $cwdPath = $cwdPath -replace '^//[?.]/UNC/', '//' -replace '^//[?.]/(?=[A-Za-z]:/)', ''
+            }
+            if ($cwdPath -match '^[A-Za-z]:/') { $cwdPath = '/' + $cwdPath }
+            $cwdPath = ($cwdPath.Split('/') | ForEach-Object { [System.Uri]::EscapeDataString($_) }) -join '/'
+            $result += "$($Global:__OrcaOsc133State.Esc)]7;file://localhost$cwdPath$($Global:__OrcaOsc133State.Bel)"
+        }
+
         # Emit D from prompt, not readline state. Some profile setups bypass
         # PSConsoleHostReadLine; the consumer only needs completion.
         if ($Global:__OrcaOsc133State.HasSeenPrompt) {

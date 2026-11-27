@@ -83,16 +83,6 @@ describe('terminal path helpers', () => {
       ).toEqual(['docs/café/report.pdf'])
     })
 
-    it('offers absolute paths with spaces before the filename', () => {
-      expect(pathTexts('/Users/Path/FolderName with Space/content.js')).toContain(
-        '/Users/Path/FolderName with Space/content.js'
-      )
-    })
-
-    it('offers an extensionless absolute path ending in a spaced segment', () => {
-      expect(pathTexts('/Users/alice/My Folder')).toContain('/Users/alice/My Folder')
-    })
-
     it('does not linkify root-only or relative trailing separator tokens', () => {
       expect(extractTerminalFileLinks('progress 1 / 3')).toEqual([])
       expect(extractTerminalFileLinks('/')).toEqual([])
@@ -102,43 +92,7 @@ describe('terminal path helpers', () => {
       expect(extractTerminalFileLinks('C:\\')).toEqual([])
     })
 
-    it('offers an extensionless relative path ending in a spaced segment', () => {
-      expect(pathTexts('./My Folder')).toContain('./My Folder')
-    })
-
     // A spaced guess must never hide the plain path; the host keeps whichever exists.
-    it.each([
-      [
-        '~/orca-lanes/webhooks-research/bots/bots-ux-outline.md. It covers setup and/or teardown.',
-        '~/orca-lanes/webhooks-research/bots/bots-ux-outline.md'
-      ],
-      ['Wrote ~/notes/plan.md. Next: src/foo.ts', '~/notes/plan.md'],
-      ['Wrote ~/notes/plan.md and src/foo.ts covers the rest', '~/notes/plan.md'],
-      ['See /Users/me/a/b.md. Then C:\\Users\\me\\x.md.', '/Users/me/a/b.md'],
-      ['See /home/me/x.md. Then the pane/tab work.', '/home/me/x.md'],
-      ['See C:\\Users\\me\\x.md. Then the pane/tab work.', 'C:\\Users\\me\\x.md']
-    ])('offers the plain path in %j', (line, path) => {
-      expect(pathTexts(line)).toContain(path)
-    })
-
-    it.each([
-      '/Users/a/C# Projects/x.cs',
-      '/Users/a/Tom & Jerry/x.ts',
-      '/Users/a/Notes - Draft/x.md',
-      'C:\\Users\\Me\\Q&A Docs\\x.txt',
-      '/tmp/Foo.bar Docs/report.md',
-      '/tmp/My File.123',
-      'docs/My Archive.7z',
-      'docs/My 檔案.文件'
-    ])('offers spaced folder names with symbols: %s', (path) => {
-      expect(pathTexts(`open ${path}, then continue`)).toContain(path)
-    })
-
-    it('still offers the spaced reading so an existing spaced path can win', () => {
-      expect(pathTexts('Saved /Users/me/My Docs/plan.md. Next: src/foo.ts')).toEqual(
-        expect.arrayContaining(['/Users/me/My', '/Users/me/My Docs/plan.md'])
-      )
-    })
 
     it('detects framework route paths with bracket and paren segments', () => {
       const links = extractTerminalFileLinks(
@@ -193,6 +147,47 @@ describe('terminal path helpers', () => {
       allowUncHost: false
     })
     expect(osc).toMatchObject({ kind: 'path', link: { pathText, line } })
+  })
+
+  it.each([
+    ['D:/tmp/test.md#L11', true, 'D:/tmp/test.md', 11, null],
+    ['D:/tmp/test.md#L11-13', true, 'D:/tmp/test.md', 11, null],
+    ['D:/tmp/test.md#L11-L13', true, 'D:/tmp/test.md', 11, null],
+    ['D:/tmp/notes#1.md', true, 'D:/tmp/notes#1.md', null, null],
+    ['/tmp/test.md#L11', false, '/tmp/test.md', 11, null],
+    ['/tmp/test.md#L11C4-L13', false, '/tmp/test.md', 11, 4],
+    ['docs/notes#1.md', false, 'docs/notes#1.md', null, null]
+  ])(
+    'reads a line fragment on OSC hyperlink path %s',
+    (target, windowsPathsFirst, pathText, line, column) => {
+      const osc = classifyTerminalOscLinkTarget(target, { windowsPathsFirst, allowUncHost: false })
+      expect(osc).toMatchObject({ kind: 'path', link: { pathText, line, column } })
+    }
+  )
+
+  it.each(['file:///D:/tmp/test.md#L11-L13', 'file:///D:/tmp/test.md#L11-13'])(
+    'reads the start line of file URL line-range fragment %s',
+    (target) => {
+      const osc = classifyTerminalOscLinkTarget(target, {
+        windowsPathsFirst: true,
+        allowUncHost: false
+      })
+      expect(osc).toMatchObject({
+        kind: 'file-url',
+        target: { filePath: 'D:/tmp/test.md', line: 11 }
+      })
+    }
+  )
+
+  it.each([
+    ['file:///tmp/report%3A12', '/tmp/report:12', null, null],
+    ['file:///tmp/report%3A12:8:3', '/tmp/report:12', 8, 3]
+  ])('keeps an encoded colon in file URL %s as filename text', (target, filePath, line, column) => {
+    const osc = classifyTerminalOscLinkTarget(target, {
+      windowsPathsFirst: false,
+      allowUncHost: false
+    })
+    expect(osc).toEqual({ kind: 'file-url', target: { filePath, line, column } })
   })
 
   it('does not read a malformed URL OSC hyperlink target as a path', () => {

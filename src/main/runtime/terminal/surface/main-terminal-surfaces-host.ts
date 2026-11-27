@@ -1,5 +1,5 @@
 import type { PaneStartFactOf } from './pane-start-statuses'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type {
   RuntimeSyncWindowGraph,
   RuntimeMobileSessionTabsSnapshot

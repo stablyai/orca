@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import type { TabGroupLayoutNode } from '../../tab-types'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
+import type { TabGroupLayoutNode } from '../../workspace-layout/tab-groups/tab-types'
 import { OptionalString, requiredString } from '../rpc-param-primitives'
 import { TerminalPaneLayoutNodeSchema } from '../session-tabs/session-tabs-schemas-params'
 import {
@@ -50,58 +51,63 @@ export function parseOrphanGroupLayout(value: unknown): TabGroupLayoutNode | nul
   return value as TabGroupLayoutNode
 }
 
-export const TerminalOrphanGroupLayout = z
-  .unknown()
-  .transform(parseOrphanGroupLayout)
-  .pipe(z.custom<TabGroupLayoutNode>((value) => value !== null, 'Invalid orphan group layout'))
-
-export const TerminalOrphanTopology = z.object({
-  tabs: z
-    .array(
-      z.object({
-        tabId: requiredString('Missing topology tab id').pipe(z.string().max(256)),
-        root: TerminalPaneLayoutNodeSchema,
-        activeLeafId: requiredString('Missing active leaf id').pipe(z.string().max(128)),
-        expandedLeafId: z.string().max(128).nullable()
-      })
-    )
-    .min(1)
-    .max(64),
-  groups: z
-    .array(
-      z.object({
-        id: z.string().min(1).max(256),
-        activeTabId: z.string().min(1).max(256),
-        tabOrder: z.array(z.string().min(1).max(256)).min(1).max(64),
-        recentTabIds: z.array(z.string().min(1).max(256)).max(64).optional()
-      })
-    )
-    .min(1)
-    .max(64),
-  groupLayout: TerminalOrphanGroupLayout.optional()
-})
-
-export const TerminalOrphanIncarnationId = z.custom<PtyIncarnationId>(
-  isPtyIncarnationId,
-  'Invalid PTY incarnation'
+export const TerminalOrphanGroupLayout = lazyZodSchema(() =>
+  z
+    .unknown()
+    .transform(parseOrphanGroupLayout)
+    .pipe(z.custom<TabGroupLayoutNode>((value) => value !== null, 'Invalid orphan group layout'))
 )
 
-export const TerminalAdoptOrphans = z.object({
-  worktree: requiredString('Missing worktree selector').pipe(z.string().max(32_768)),
-  expectedTopologyRevision: z.number().int().nonnegative(),
-  claims: z
-    .array(
-      z.object({
-        terminal: requiredString('Missing terminal handle').pipe(z.string().max(256)),
-        ptyId: requiredString('Missing PTY id').pipe(z.string().max(8_192)),
-        incarnationId: TerminalOrphanIncarnationId,
-        tabId: requiredString('Missing tab id').pipe(z.string().max(256)),
-        leafId: requiredString('Missing leaf id').pipe(z.string().max(128))
-      })
-    )
-    .min(1)
-    .max(64),
-  activeTabId: OptionalString.pipe(z.string().max(256).optional()),
-  activeGroupId: OptionalString.pipe(z.string().max(256).optional()),
-  topology: TerminalOrphanTopology.optional()
-})
+export const TerminalOrphanTopology = lazyZodSchema(() =>
+  z.object({
+    tabs: z
+      .array(
+        z.object({
+          tabId: requiredString('Missing topology tab id').pipe(z.string().max(256)),
+          root: TerminalPaneLayoutNodeSchema,
+          activeLeafId: requiredString('Missing active leaf id').pipe(z.string().max(128)),
+          expandedLeafId: z.string().max(128).nullable()
+        })
+      )
+      .min(1)
+      .max(64),
+    groups: z
+      .array(
+        z.object({
+          id: z.string().min(1).max(256),
+          activeTabId: z.string().min(1).max(256),
+          tabOrder: z.array(z.string().min(1).max(256)).min(1).max(64),
+          recentTabIds: z.array(z.string().min(1).max(256)).max(64).optional()
+        })
+      )
+      .min(1)
+      .max(64),
+    groupLayout: TerminalOrphanGroupLayout.optional()
+  })
+)
+
+export const TerminalOrphanIncarnationId = lazyZodSchema(() =>
+  z.custom<PtyIncarnationId>(isPtyIncarnationId, 'Invalid PTY incarnation')
+)
+
+export const TerminalAdoptOrphans = lazyZodSchema(() =>
+  z.object({
+    worktree: requiredString('Missing worktree selector').pipe(z.string().max(32_768)),
+    expectedTopologyRevision: z.number().int().nonnegative(),
+    claims: z
+      .array(
+        z.object({
+          terminal: requiredString('Missing terminal handle').pipe(z.string().max(256)),
+          ptyId: requiredString('Missing PTY id').pipe(z.string().max(8_192)),
+          incarnationId: TerminalOrphanIncarnationId,
+          tabId: requiredString('Missing tab id').pipe(z.string().max(256)),
+          leafId: requiredString('Missing leaf id').pipe(z.string().max(128))
+        })
+      )
+      .min(1)
+      .max(64),
+    activeTabId: OptionalString.pipe(z.string().max(256).optional()),
+    activeGroupId: OptionalString.pipe(z.string().max(256).optional()),
+    topology: TerminalOrphanTopology.optional()
+  })
+)

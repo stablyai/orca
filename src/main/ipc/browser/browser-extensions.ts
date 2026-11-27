@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { ipcMain } from 'electron'
 import { z } from 'zod'
 import { isChromeExtensionId } from '../../../shared/browser/extensions/browser-extension-url'
@@ -16,10 +17,13 @@ import {
 } from '../../browser/extensions/browser-extension-management'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import { registerBrowserExtensionToolbarHandlers } from './browser-extension-toolbar'
+import { registerBrowserExtensionSidePanelHandlers } from './browser-extension-side-panels'
 import { registerBrowserExtensionWebStoreHandlers } from './browser-extension-webstore'
 
-const profileArgs = z.object({ profileId: z.string().min(1) })
-const extensionArgs = profileArgs.extend({ extensionId: z.string().refine(isChromeExtensionId) })
+const profileArgs = lazyZodSchema(() => z.object({ profileId: z.string().min(1) }))
+const extensionArgs = lazyZodSchema(() =>
+  profileArgs.extend({ extensionId: z.string().refine(isChromeExtensionId) })
+)
 const UNTRUSTED: BrowserExtensionActionResult = { ok: false, error: 'Not allowed' }
 
 const CHANNELS = [
@@ -38,6 +42,7 @@ export function registerBrowserExtensionHandlers(): void {
     ipcMain.removeHandler(channel)
   }
   registerBrowserExtensionToolbarHandlers()
+  registerBrowserExtensionSidePanelHandlers()
   registerBrowserExtensionWebStoreHandlers()
   ipcMain.handle(
     'browserExtensions:list',

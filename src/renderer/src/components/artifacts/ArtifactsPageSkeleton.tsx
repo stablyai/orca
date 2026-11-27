@@ -1,10 +1,8 @@
 import { cn } from '@/lib/class-names'
+import { RailPageToolbar } from '@/components/rail-page/RailPageToolbar'
 import { useTranslate } from '@/i18n/use-translate'
 import { ARTIFACTS_TABLE_GRID_CLASS } from './artifacts-table-layout'
-import {
-  LIST_TABLE_CONTAINER_CLASS,
-  LIST_TABLE_HEADER_CLASS
-} from '@/lib/list-interaction/list-table-layout'
+import { LIST_TABLE_HEADER_CLASS } from '@/lib/list-interaction/list-table-layout'
 
 function SkeletonBar({ className }: { className?: string }): React.JSX.Element {
   return <div className={cn('animate-pulse rounded bg-muted/60', className)} />
@@ -23,17 +21,15 @@ export function ArtifactsPageSkeleton(): React.JSX.Element {
   const t = useTranslate()
   return (
     <div
-      className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-3 pb-4 md:px-5"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
       // Why: aria-label on a roleless div is not exposed to screen readers.
       role="status"
       aria-busy="true"
       aria-label={t('auto.components.artifacts.ArtifactsPageSkeleton.loading', 'Loading artifacts')}
     >
-      <div className="flex shrink-0 items-center gap-2">
-        <SkeletonBar className="h-8 w-56 shrink-0 rounded-md" />
-        <SkeletonBar className="size-8 shrink-0 rounded-md" />
-      </div>
-      <div className={cn('min-h-0 flex-1 overflow-hidden', LIST_TABLE_CONTAINER_CLASS)}>
+      {/* The toolbar band's shape, so the list doesn't jump when the search arrives. */}
+      <RailPageToolbar end={<SkeletonBar className="h-7 w-51 shrink-0 rounded-md" />} />
+      <div className="min-h-0 flex-1 overflow-hidden">
         <div className={cn(ARTIFACTS_TABLE_GRID_CLASS, LIST_TABLE_HEADER_CLASS)}>
           <SkeletonBar className="h-2.5 w-12" />
           <SkeletonBar className="h-2.5 w-10" />
@@ -46,7 +42,10 @@ export function ArtifactsPageSkeleton(): React.JSX.Element {
           {TABLE_ROW_SKELETONS.map((row) => (
             <div
               key={row.id}
-              className={cn(ARTIFACTS_TABLE_GRID_CLASS, 'min-h-11 items-center gap-3 px-3 py-3')}
+              className={cn(
+                ARTIFACTS_TABLE_GRID_CLASS,
+                'min-h-11 items-center gap-3 px-(--rail-page-gutter) py-3'
+              )}
             >
               <SkeletonBar className={cn('h-3.5', row.name)} />
               <SkeletonBar className={cn('h-3.5', row.type)} />

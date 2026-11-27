@@ -46,4 +46,6 @@ export type TaskPageGitHubLandingRefreshModel = Pick<
   | 'retryingSourceKeys'
   | 'setRetryingSourceKeys'
   | 'githubWorkItemMutationQueryKey'
+  | 'unreachableTaskSourceHostIds'
+  | 'recheckUnreachableTaskSourceHosts'
 >

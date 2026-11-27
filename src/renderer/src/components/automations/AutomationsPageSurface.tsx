@@ -1,10 +1,12 @@
+import { useBots } from '@/lib/bot-catalog'
+import { automationTargetLabel } from './authoring/automation-bot-target-label'
 import React, { useMemo, useRef } from 'react'
-import { Plus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { RailPage } from '@/components/rail-page/RailPage'
+import { RailPageHeader, RailPageRefreshButton } from '@/components/rail-page/RailPageHeader'
 import { useAppStore } from '@/store/index'
 import { resolveAutomationRunTarget } from './runs/automation-run-open-target'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { AutomationsPageEditorDialog } from './AutomationsPageEditorDialog'
 import { AutomationsDetailPane } from './details/AutomationsDetailPane'
 import { AutomationsPageSkeleton } from './AutomationsPageSkeleton'
@@ -19,12 +21,9 @@ import { AutomationRunDetailsPage } from './runs/AutomationRunDetailsPage'
 import { AutomationRunNotFound } from './runs/AutomationRunNotFound'
 import { AutomationsPageDeleteDialogs } from './AutomationsPageDeleteDialogs'
 import { AutomationsPageListPanel } from './AutomationsPageListPanel'
-import {
-  AutomationsPageBreadcrumb,
-  AutomationsPageTabs,
-  type AutomationsCrumb
-} from './AutomationsPageBreadcrumb'
+import { AutomationsPageBreadcrumb, type AutomationsCrumb } from './AutomationsPageBreadcrumb'
 import { AutomationsPageFrame, AutomationsPageNoticeContext } from './AutomationsPageFrame'
+import { useAutomationsListChrome } from './use-automations-list-chrome'
 import { useAutomationsPageRouting } from './use-automations-page-routing'
 import { formatAutomationRunLabel } from './runs/automation-run-identity-label'
 import { automationRowHostLabel } from './listing/automation-list-host'
@@ -34,6 +33,7 @@ export function AutomationsPageSurface({
 }: {
   controller: AutomationsPageController
 }): React.JSX.Element {
+  const bots = useBots()
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const mainRef = useRef<HTMLElement>(null)
@@ -131,19 +131,9 @@ export function AutomationsPageSurface({
       items={items.filter((item): item is AutomationsCrumb => item !== null)}
     />
   )
-  const automationCount = isLoading
-    ? null
-    : list.visibleRows.length + list.externalAutomationEntries.length
-  const tabs = (current: 'automations' | 'runs'): React.ReactNode => (
-    <AutomationsPageTabs
-      current={current}
-      automationCount={automationCount}
-      onShowAutomations={navigation.showList}
-      onShowRuns={() => {
-        hostCatalog.selectHost({ kind: 'all' })
-        navigation.showRuns()
-      }}
-    />
+  const { label, count, tabs } = useAutomationsListChrome(controller)
+  const header = (actions?: React.ReactNode): React.ReactNode => (
+    <RailPageHeader title={label} count={count} actions={actions} />
   )
   const selectedHostLabel = selectedRow
     ? automationRowHostLabel(selectedRow, store.repoForRow(selectedRow), presentation.hostLabelById)
@@ -164,15 +154,29 @@ export function AutomationsPageSurface({
       (pageView !== 'automations' || isDetailOpen)
     ) {
       return (
-        <AutomationsPageFrame nav={tabs('automations')} bodyScroll="content">
-          <AutomationsPageSkeleton />
-        </AutomationsPageFrame>
+        <AutomationsPageSkeleton
+          header={header()}
+          tabs={tabs('automations')}
+          notice={ownerNotice}
+        />
       )
     }
     if (pageView === 'runs') {
       return (
-        <AutomationsPageFrame nav={tabs('runs')} bodyScroll="content">
+        <>
+          {header(
+            <RailPageRefreshButton
+              label={t(
+                'auto.components.automations.AutomationRunsDashboard.refresh',
+                'Refresh runs'
+              )}
+              busy={runsDashboard.loading}
+              onRefresh={() => setRunHistoryReloadToken((token) => token + 1)}
+            />
+          )}
           <AutomationRunsDashboardSurface
+            tabs={tabs('runs')}
+            notice={ownerNotice}
             rows={list.visibleRows}
             entries={runsDashboard.entries}
             failures={runsDashboard.failures}
@@ -180,7 +184,6 @@ export function AutomationsPageSurface({
             hasMore={runsDashboard.hasMore}
             onLoadMore={runsDashboard.loadMore}
             now={relativeNow}
-            onRefresh={() => setRunHistoryReloadToken((token) => token + 1)}
             worktreeForRun={(entry) =>
               resolveAutomationRunTarget(
                 useAppStore.getState(),
@@ -193,7 +196,7 @@ export function AutomationsPageSurface({
             setPendingAutomationRunNavigation={setPendingAutomationRunNavigation}
             setIsDetailOpen={setIsDetailOpen}
           />
-        </AutomationsPageFrame>
+        </>
       )
     }
     if (pageView === 'run' && runNotFound) {
@@ -243,8 +246,8 @@ export function AutomationsPageSurface({
           history={local.selectedAutomationRuns}
           relativeNow={relativeNow}
           hostLabel={selectedHostLabel}
-          workspaceDisplay={runPage.selectedAutomationRunPageWorkspaceDisplay}
-          viewState={runPage.selectedAutomationRunPageViewState}
+          workspaceName={runPage.selectedAutomationRunPageWorkspaceName}
+          workspaceActionLabel={runPage.selectedAutomationRunPageWorkspaceActionLabel}
           canRerun={runPage.canRerunSelectedAutomationRunPage}
           isRerunPending={runPage.isSelectedAutomationRunPageRerunPending}
           onRerun={() =>
@@ -263,21 +266,23 @@ export function AutomationsPageSurface({
         />
       )
     }
+    const loadingList = isLoading && !hasListItems
     if (
       pageView === 'run' ||
-      (isLoading && !hasListItems) ||
       (isDetailOpen &&
         local.selectedExternalKey !== null &&
         list.scopedExternal.loading &&
         !selectedExternal)
     ) {
       return (
-        <AutomationsPageFrame nav={tabs('automations')} bodyScroll="content">
-          <AutomationsPageSkeleton />
-        </AutomationsPageFrame>
+        <AutomationsPageSkeleton
+          header={header()}
+          tabs={tabs('automations')}
+          notice={ownerNotice}
+        />
       )
     }
-    if (isDetailOpen && (selected || selectedExternal)) {
+    if (!loadingList && isDetailOpen && (selected || selectedExternal)) {
       const nav = selectedExternal
         ? crumbs(rootCrumb, { key: 'external', label: selectedExternal.job.name })
         : activePaneTab === 'runs'
@@ -303,14 +308,16 @@ export function AutomationsPageSurface({
           relativeNow={relativeNow}
           externalActionKey={externalActionKey}
           selectedRepoDisplayName={
-            (selected &&
-              automationProjectName(
-                selected,
-                presentation.selectedRepo,
-                repoMap,
-                !!selectedRecoveryHost?.servedBy
-              )) ??
-            t('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
+            selected?.bot
+              ? automationTargetLabel(selected, presentation.selectedRepo, bots)
+              : ((selected &&
+                  automationProjectName(
+                    selected,
+                    presentation.selectedRepo,
+                    repoMap,
+                    !!selectedRecoveryHost?.servedBy
+                  )) ??
+                t('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project'))
           }
           selectedRepoDefaultBaseRef={presentation.selectedRepo?.worktreeBaseRef ?? null}
           selectedWorkspaceName={
@@ -344,35 +351,20 @@ export function AutomationsPageSurface({
       )
     }
     return (
-      <AutomationsPageFrame
-        nav={tabs('automations')}
-        bodyScroll="content"
-        actions={() => (
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => editorActions.openCreateDialog()}
-            disabled={!destination.canCreateAutomation}
-            data-contextual-tour-target="automations-create"
-          >
-            <Plus className="size-4" />
-            {t('auto.components.automations.AutomationsPage.newAutomation', 'New Automation')}
-          </Button>
-        )}
-      >
-        <AutomationsPageListPanel
-          controller={controller}
-          onOpenDetail={() => setIsDetailOpen(true)}
-        />
-      </AutomationsPageFrame>
+      <AutomationsPageListPanel
+        loadingList={loadingList}
+        title={label}
+        count={count}
+        tabs={tabs('automations')}
+        notice={ownerNotice}
+        controller={controller}
+        onOpenDetail={() => setIsDetailOpen(true)}
+      />
     )
   }
 
   return (
-    <main
-      ref={mainRef}
-      className="relative flex h-full min-h-0 flex-col bg-background pt-2 text-foreground"
-    >
+    <main ref={mainRef} className="relative flex h-full min-h-0 flex-col text-foreground">
       <AutomationsPageEditorDialog controller={controller} />
       <AutomationsPageDeleteDialogs
         deleteTarget={deleteTarget?.automation ?? null}
@@ -389,7 +381,7 @@ export function AutomationsPageSurface({
         }
       />
       <AutomationsPageNoticeContext.Provider value={ownerNotice}>
-        {renderPage()}
+        <RailPage>{renderPage()}</RailPage>
       </AutomationsPageNoticeContext.Provider>
     </main>
   )

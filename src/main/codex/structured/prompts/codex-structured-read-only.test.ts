@@ -1,0 +1,164 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { disposeCodexServerRequest } from './codex-server-request-disposition'
+import {
+  CODEX_COMMAND_APPROVAL_METHOD,
+  CODEX_MCP_ELICITATION_METHOD,
+  CODEX_FILE_CHANGE_APPROVAL_METHOD,
+  CODEX_USER_INPUT_METHOD,
+  CodexPromptRegistry
+} from './codex-prompt-registry'
+import { codexReadOnlyMcpOff } from './codex-structured-read-only'
+
+const ids = { threadId: 'thread-1', turnId: 'turn-1', itemId: 'item-1' }
+
+function answer(
+  method: string,
+  params: Record<string, unknown>,
+  readOnly: 'look-around' | 'reply-only' | null = 'look-around'
+) {
+  const registry = new CodexPromptRegistry()
+  const connection = { respond: vi.fn(), respondWithError: vi.fn() }
+  const disposition = disposeCodexServerRequest(
+    registry,
+    connection,
+    { id: 7, method, params: { ...ids, ...params } },
+    readOnly
+  )
+  return { disposition, connection }
+}
+
+const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+describe('a read-only Codex session', () => {
+  // A POSIX host unless a case says otherwise: Windows also holds commands to PowerShell's rules.
+  beforeEach(() => Object.defineProperty(process, 'platform', { value: 'linux' }))
+  afterEach(() => hostPlatform && Object.defineProperty(process, 'platform', hostPlatform))
+
+  it('approves a read on the allow-list without asking anyone', () => {
+    const { disposition, connection } = answer(CODEX_COMMAND_APPROVAL_METHOD, {
+      command: `/bin/zsh -lc '"\${ORCA_CLI_COMMAND:-orca}" slack read slack:T1:C1'`
+    })
+    expect(disposition).toEqual({ kind: 'responded', method: CODEX_COMMAND_APPROVAL_METHOD })
+    expect(connection.respond).toHaveBeenCalledWith(7, { decision: 'accept' })
+  })
+
+  it("refuses a tidy-up even a look's allowed read", () => {
+    const { connection } = answer(
+      CODEX_COMMAND_APPROVAL_METHOD,
+      { command: `/bin/zsh -lc 'orca slack read slack:T1:C1'` },
+      'reply-only'
+    )
+    expect(connection.respond).toHaveBeenCalledWith(7, { decision: 'decline' })
+  })
+
+  it('declines a disallowed command in look-around mode', () => {
+    const { connection } = answer(CODEX_COMMAND_APPROVAL_METHOD, {
+      command: "/bin/zsh -lc 'gh pr merge 12'"
+    })
+    expect(connection.respond).toHaveBeenCalledWith(7, { decision: 'decline' })
+  })
+
+  it.each([
+    "{touch,/tmp/pwned};/bin/sh -c 'git status'",
+    "/tmp/evil/bash -c 'git status'",
+    "./sh -c 'git status'"
+  ])('declines %s, whose prefix is no shell path', (command) => {
+    expect(
+      answer(CODEX_COMMAND_APPROVAL_METHOD, { command }).connection.respond
+    ).toHaveBeenCalledWith(7, { decision: 'decline' })
+  })
+
+  describe('on Windows, where the command may run in PowerShell', () => {
+    beforeEach(() => Object.defineProperty(process, 'platform', { value: 'win32' }))
+
+    it.each([
+      'git log x,--output=f',
+      'gh pr view 12,--web',
+      'gh pr view @args',
+      `gh pr view 'x" --web "y'`,
+      "gh pr view 'x\\' 'y'",
+      "gh pr view '' 12"
+    ])('declines %s', (command) => {
+      expect(
+        answer(CODEX_COMMAND_APPROVAL_METHOD, { command }).connection.respond
+      ).toHaveBeenCalledWith(7, { decision: 'decline' })
+    })
+
+    it('still accepts a plain read', () => {
+      expect(
+        answer(CODEX_COMMAND_APPROVAL_METHOD, { command: 'gh pr view 12' }).connection.respond
+      ).toHaveBeenCalledWith(7, { decision: 'accept' })
+    })
+  })
+
+  it('declines an argv array, whose words could hide a flag inside one argument', () => {
+    const { connection } = answer(CODEX_COMMAND_APPROVAL_METHOD, {
+      command: ['git', 'log', 'x --output=/tmp/leak']
+    })
+    expect(connection.respond).toHaveBeenCalledWith(7, { decision: 'decline' })
+  })
+
+  it('refuses file changes, MCP asks and questions instead of making prompts', () => {
+    expect(answer(CODEX_FILE_CHANGE_APPROVAL_METHOD, {}).connection.respond).toHaveBeenCalledWith(
+      7,
+      {
+        decision: 'decline'
+      }
+    )
+    const mcp = answer(CODEX_MCP_ELICITATION_METHOD, {
+      _meta: { codex_approval_kind: 'mcp_tool_call' }
+    })
+    expect(mcp.disposition.kind).toBe('responded')
+    expect(mcp.connection.respond).toHaveBeenCalledWith(7, {
+      action: 'decline',
+      content: null,
+      _meta: null
+    })
+    const question = answer(CODEX_USER_INPUT_METHOD, { questions: [{ id: 'q1' }] })
+    expect(question.disposition.kind).toBe('responded')
+    expect(question.connection.respondWithError).toHaveBeenCalled()
+  })
+
+  it('leaves an ordinary session asking its owner', () => {
+    const { disposition } = answer(
+      CODEX_COMMAND_APPROVAL_METHOD,
+      { command: "/bin/zsh -lc 'gh pr merge 12'" },
+      null
+    )
+    expect(disposition.kind).toBe('prompt')
+  })
+})
+
+/** `config/read` as codex 0.163 answers it, for one server set in `layer`. */
+function configRead(layer: Record<string, unknown>) {
+  const origin = { name: layer, version: 'sha256:x' }
+  return {
+    request: vi.fn(async () => ({
+      config: { mcp_servers: { probe: { command: 'python3', enabled: true } } },
+      origins: {
+        'mcp_servers.probe.command': origin,
+        'mcp_servers.probe.enabled': origin
+      }
+    }))
+  }
+}
+
+describe("a read-only Codex run's MCP servers", () => {
+  it("refuses the run when a managed layer over the thread's config turns a server on", async () => {
+    const connection = configRead({ type: 'legacyManagedConfigTomlFromMdm' })
+    await expect(codexReadOnlyMcpOff(connection, '/bots/scout')).rejects.toThrow(
+      "won't start a read-only run"
+    )
+  })
+
+  it('refuses the run when the config cannot be read', async () => {
+    const connection = {
+      request: vi.fn(async () => {
+        throw new Error('config/read unsupported')
+      })
+    }
+    await expect(codexReadOnlyMcpOff(connection, '/bots/scout')).rejects.toThrow(
+      "won't start a read-only run"
+    )
+  })
+})

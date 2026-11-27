@@ -1,6 +1,6 @@
 import { useRef, useCallback, useState } from 'react'
 import { useAppStore } from '@/store'
-import { useAudioCapture } from '@/hooks/use-audio-capture'
+import { useAudioCapture } from '@/components/dictation/use-audio-capture'
 import { DictationIndicator } from './DictationIndicator'
 import { captureInsertionTarget } from './dictation-insertion-target'
 import { captureDictationContext } from './dictation-context'

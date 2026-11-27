@@ -5,7 +5,7 @@ import {
   type RepoIcon
 } from '../../shared/repository/appearance/repo-icon'
 import type { ExecutionHostFilesystemRoute } from '../providers/execution-host-provider-dispatch'
-import { detectImageFileSignature } from '../../shared/image-file-signature'
+import { detectImageFileSignature } from '../../shared/file-content/image-file-signature'
 import { extractIconHref } from './repo-icon-source-href'
 import { iconHrefCandidates } from './repo-icon-href-candidates'
 import { joinWorktreeRelativePath } from '../runtime/files/paths/runtime-relative-paths'

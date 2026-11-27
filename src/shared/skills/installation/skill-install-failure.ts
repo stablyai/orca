@@ -1,26 +1,31 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
-export const SkillInstallFailureCategorySchema = z.enum([
-  'admission',
-  'transport',
-  'archive',
-  'filesystem',
-  'conflict',
-  'recovery',
-  'provider-placement',
-  'compatibility',
-  'cancelled'
-])
+export const SkillInstallFailureCategorySchema = lazyZodSchema(() =>
+  z.enum([
+    'admission',
+    'transport',
+    'archive',
+    'filesystem',
+    'conflict',
+    'recovery',
+    'provider-placement',
+    'compatibility',
+    'cancelled'
+  ])
+)
 
 export type SkillInstallFailureCategory = z.infer<typeof SkillInstallFailureCategorySchema>
 
-export const SkillInstallFailureSchema = z
-  .object({
-    category: SkillInstallFailureCategorySchema,
-    code: z.string().regex(/^skill-[a-z0-9-]+$/),
-    retryable: z.boolean()
-  })
-  .strict()
+export const SkillInstallFailureSchema = lazyZodSchema(() =>
+  z
+    .object({
+      category: SkillInstallFailureCategorySchema,
+      code: z.string().regex(/^skill-[a-z0-9-]+$/),
+      retryable: z.boolean()
+    })
+    .strict()
+)
 
 export type SkillInstallFailure = z.infer<typeof SkillInstallFailureSchema>
 
@@ -78,8 +83,7 @@ export function classifySkillInstallFailureCode(code: string): SkillInstallFailu
   if (
     code.includes('update-required') ||
     code.includes('unsupported') ||
-    code.includes('remote-download-unavailable') ||
-    code.includes('ssh-relay-unavailable')
+    code.includes('remote-download-unavailable')
   ) {
     return { category: 'compatibility', code, retryable: false }
   }
@@ -89,6 +93,8 @@ export function classifySkillInstallFailureCode(code: string): SkillInstallFailu
     code.includes('environment') ||
     code.includes('home-') ||
     code.includes('ingress') ||
+    // No Orca version installs over plain SSH, so updating can't fix this refusal.
+    code.includes('ssh-relay-unavailable') ||
     code.includes('name-invalid') ||
     code.includes('wsl-unavailable')
   ) {

@@ -3,7 +3,7 @@ import {
   truncateOutlinePreview,
   type AgentSessionConversationOutline,
   type AgentSessionConversationOutlineEntry
-} from '../../../shared/agent-session/agent-session-conversation-outline'
+} from '../../../shared/agent-session/view/messages/agent-session-conversation-outline'
 
 const DEGRADED_PREVIEW_MAX_CHARS = 60
 

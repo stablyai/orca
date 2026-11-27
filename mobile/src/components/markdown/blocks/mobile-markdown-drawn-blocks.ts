@@ -41,6 +41,8 @@ function sameContext(a: MarkdownBlockContext, b: MarkdownBlockContext): boolean 
     a.growing === b.growing &&
     a.chatMath === b.chatMath &&
     a.textScale === b.textScale &&
+    a.lineSpacing === b.lineSpacing &&
+    a.fontFamily === b.fontFamily &&
     a.tone === b.tone &&
     a.onOpenFile === b.onOpenFile &&
     a.onOpenLink === b.onOpenLink &&
@@ -55,7 +57,9 @@ function sameContext(a: MarkdownBlockContext, b: MarkdownBlockContext): boolean 
       (directive, index) =>
         directive.file === b.directives[index]?.file &&
         directive.title === b.directives[index]?.title
-    )
+    ) &&
+    a.cards.length === b.cards.length &&
+    a.cards.every((card, index) => JSON.stringify(card) === JSON.stringify(b.cards[index]))
   )
 }
 

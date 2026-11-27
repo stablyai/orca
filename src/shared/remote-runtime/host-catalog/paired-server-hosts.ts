@@ -1,4 +1,4 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host/execution-host'
 import { buildExecutionHostRegistry } from '../../execution-host/execution-host-registry'
 import type { ExecutionHostHealth } from '../../execution-host/execution-host-health'
 import {

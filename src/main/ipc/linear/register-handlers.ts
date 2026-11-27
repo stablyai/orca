@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import {
   connect,
   disconnect,
@@ -13,8 +14,8 @@ import { registerLinearProjectHandlers } from './project-handlers'
 import { registerLinearCustomViewHandlers } from './custom-view-handlers'
 import { registerLinearTeamHandlers } from './team-handlers'
 
-export function registerLinearHandlers(): void {
-  ipcMain.handle('linear:connect', async (_event, args: { apiKey: string }) => {
+export function registerLinearHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle('linear:connect', async (_event, args: { apiKey: string }) => {
     if (typeof args?.apiKey !== 'string' || !args.apiKey.trim()) {
       return { ok: false, error: 'Invalid API key' }
     }
@@ -25,12 +26,12 @@ export function registerLinearHandlers(): void {
     return result
   })
 
-  ipcMain.handle('linear:disconnect', async (_event, args?: { workspaceId?: string }) => {
-    disconnect(normalizeWorkspaceId(args?.workspaceId))
+  ipc.handle('linear:disconnect', async (_event, args?: { workspaceId?: string }) => {
+    await disconnect(normalizeWorkspaceId(args?.workspaceId))
     _resetPreflightCache()
   })
 
-  ipcMain.handle('linear:selectWorkspace', async (_event, args: { workspaceId: string }) => {
+  ipc.handle('linear:selectWorkspace', async (_event, args: { workspaceId: string }) => {
     const workspaceId = normalizeWorkspaceSelection(args?.workspaceId)
     if (!workspaceId) {
       return getStatus()
@@ -38,16 +39,16 @@ export function registerLinearHandlers(): void {
     return selectWorkspace(workspaceId)
   })
 
-  ipcMain.handle('linear:status', async () => {
+  ipc.handle('linear:status', async () => {
     return getStatus()
   })
 
-  ipcMain.handle('linear:testConnection', async (_event, args?: { workspaceId?: string }) => {
+  ipc.handle('linear:testConnection', async (_event, args?: { workspaceId?: string }) => {
     return testConnection(normalizeWorkspaceId(args?.workspaceId))
   })
 
-  registerLinearIssueHandlers()
-  registerLinearProjectHandlers()
-  registerLinearCustomViewHandlers()
-  registerLinearTeamHandlers()
+  registerLinearIssueHandlers(ipc)
+  registerLinearProjectHandlers(ipc)
+  registerLinearCustomViewHandlers(ipc)
+  registerLinearTeamHandlers(ipc)
 }

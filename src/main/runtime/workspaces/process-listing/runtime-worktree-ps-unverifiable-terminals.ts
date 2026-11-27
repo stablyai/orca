@@ -4,7 +4,7 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../../terminal/records/runtime-terminal-state-records'
 import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { ptyRecordHostId } from './runtime-worktree-ps-activity'
 
 /** A dropped relay loses contact with every host PTY at once; count unverifiable terminals so rows do not falsely report none (ssh-execution-boundary.md). */

@@ -40,7 +40,7 @@ import {
   type PaletteActivityRank,
   type PaletteSearchContext
 } from '../../../../../../shared/palette-match/palette-ranking'
-import type { HiddenProjects } from '../../../../../../shared/hidden-projects'
+import type { HiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 
 export type PaletteMatchedField = 'displayName' | 'branch' | 'repo' | 'host' | PaletteSupportingKind
 

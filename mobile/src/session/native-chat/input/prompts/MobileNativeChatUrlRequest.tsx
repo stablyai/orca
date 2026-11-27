@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { readApprovalUrl } from '../../../../../../src/shared/agent-session/agent-session-approval-subject'
+import { readApprovalUrl } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-subject'
 import type {
   AgentJournalApprovalItem,
   AgentJournalUrlApprovalSubject
@@ -134,7 +134,7 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
+    backgroundColor: colors.chatPanel
   },
   finished: {
     paddingVertical: spacing.sm

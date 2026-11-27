@@ -1,5 +1,9 @@
 import { ipcMain } from 'electron'
-import type { GitLabMRInlineCommentInput, GitLabMRUpdate } from '../../../shared/gitlab-types'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
+import type {
+  GitLabMRInlineCommentInput,
+  GitLabMRUpdate
+} from '../../../shared/gitlab/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Store } from '../../persistence/loading-store/store'
 import {
@@ -23,38 +27,35 @@ import {
   repoConnectionId
 } from './gitlab-repo-access'
 
-export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
-  ipcMain.handle(
-    'gitlab:closeMR',
-    async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
-      const repo = assertRegisteredRepo(args, store)
-      return closeMR(
-        repo.path,
-        args.iid,
-        repo.issueSourcePreference,
-        repoConnectionId(repo),
-        undefined,
-        ...localGitOptionArgs(store, repo)
-      )
-    }
-  )
+export function registerGitLabMergeRequestMutationHandlers(
+  store: Store,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle('gitlab:closeMR', async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
+    const repo = assertRegisteredRepo(args, store)
+    return closeMR(
+      repo.path,
+      args.iid,
+      repo.issueSourcePreference,
+      repoConnectionId(repo),
+      undefined,
+      ...localGitOptionArgs(store, repo)
+    )
+  })
 
-  ipcMain.handle(
-    'gitlab:reopenMR',
-    async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
-      const repo = assertRegisteredRepo(args, store)
-      return reopenMR(
-        repo.path,
-        args.iid,
-        repo.issueSourcePreference,
-        repoConnectionId(repo),
-        undefined,
-        ...localGitOptionArgs(store, repo)
-      )
-    }
-  )
+  ipc.handle('gitlab:reopenMR', async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
+    const repo = assertRegisteredRepo(args, store)
+    return reopenMR(
+      repo.path,
+      args.iid,
+      repo.issueSourcePreference,
+      repoConnectionId(repo),
+      undefined,
+      ...localGitOptionArgs(store, repo)
+    )
+  })
 
-  ipcMain.handle(
+  ipc.handle(
     'gitlab:mergeMR',
     async (
       _event,
@@ -73,7 +74,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gitlab:updateMR',
     async (_event, args: GitLabRepoSelectorArgs & { iid: number; updates: GitLabMRUpdate }) => {
       const repo = assertRegisteredRepo(args, store)
@@ -89,7 +90,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gitlab:updateMRReviewers',
     async (
       _event,
@@ -115,7 +116,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gitlab:addMRComment',
     async (_event, args: GitLabRepoSelectorArgs & { iid: number; body: string }) => {
       const repo = assertRegisteredRepo(args, store)
@@ -131,7 +132,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gitlab:addMRInlineComment',
     async (
       _event,
@@ -157,7 +158,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gitlab:resolveMRDiscussion',
     async (
       _event,

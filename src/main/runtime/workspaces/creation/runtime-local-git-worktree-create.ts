@@ -2,9 +2,9 @@ import type { LocalGitExecOptions } from '../../../git/refs/resolution/repo-defa
 import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { resolveCreatedWorktree } from '../../../ipc/created-worktree-reconciliation'
-import { normalizeSparseDirectories } from '../../../ipc/sparse-checkout-directories'
-import { configureCreatedWorktreePushTarget } from '../../../ipc/worktree-remote'
+import { resolveCreatedWorktree } from '../../../ipc/worktrees/creation/created-worktree-reconciliation'
+import { normalizeSparseDirectories } from '../../../ipc/repos/sparse-checkout-directories'
+import { configureCreatedWorktreePushTarget } from '../../../ipc/worktrees/worktree-remote'
 import { addSparseWorktree } from '../../../git/worktrees/creation/worktree-sparse-add'
 import { addWorktree } from '../../../git/worktrees/creation/worktree-add'
 import type {

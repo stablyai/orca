@@ -1,3 +1,4 @@
+import { rebindKeptStructuredAgentSessionAgent } from '../startup/structured-agent-session-kept-agent'
 import {
   cancelStructuredAgentSessionTurn,
   respondToStructuredAgentSessionPrompt,
@@ -15,6 +16,7 @@ import { readStructuredAgentSessionOptions } from '../options/structured-agent-s
 
 import type { StructuredAgentSessionOptionsReader } from '../options/structured-agent-session-resting-options'
 import { IN_PROCESS_OPTIONS_READER } from '../options/structured-agent-session-option-observation'
+import { approveStructuredAutoReviewDenial } from '../operations/structured-auto-review-approval'
 import { settleStructuredAgentSessionLateDispatch } from '../operations/structured-agent-session-late-dispatch'
 import * as agentStart from '../startup/structured-agent-session-agent-start'
 import { joinClosingStructuredAgentSessionChild } from '../termination/structured-agent-session-child-close'
@@ -31,7 +33,6 @@ import type { wireStructuredAgentSessionQueuedMessages } from '../delivery/struc
 type Inputs = {
   deps: StructuredAgentSessionHostDeps
   sessions: StructuredAgentSessionConversations
-  subscribers: StructuredAgentSessionClientDelivery['subscribers']
   lifetime: StructuredAgentSessionConversationLifetime
   clientDelivery: StructuredAgentSessionClientDelivery
   conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
@@ -51,7 +52,7 @@ export function createStructuredAgentSessionHostMutationContext(
   return {
     deps: input.deps,
     sessions: input.sessions,
-    publish: (sessionId, journal) => input.subscribers.publish(sessionId, journal),
+    publish: (sessionId, journal) => input.clientDelivery.subscribers.publish(sessionId, journal),
     publishConversationName: (sessionId) => {
       const record = input.deps.store.getRecord(sessionId)
       if (input.deps.conversationNaming && record) {
@@ -60,6 +61,8 @@ export function createStructuredAgentSessionHostMutationContext(
         input.clientDelivery.publishConversationName(sessionId)
       }
     },
+    clearPromptSuggestion: (sessionId) =>
+      input.clientDelivery.subscribers.promptSuggestions.publish(sessionId, null),
     conversation: input.lifetime.conversation,
     readChildWork: input.clientDelivery.readChildWork,
     publishChildWork: (sessionId, evidence) =>
@@ -106,6 +109,8 @@ export function structuredAgentSessionMutationDelegates(
       caller: StructuredAgentSessionCaller,
       params: Parameters<typeof respondToStructuredAgentSessionPrompt>[2]
     ) => respondToStructuredAgentSessionPrompt(context(), caller, params),
+    approveAutoReviewDenial: (sessionId: string, itemId: string) =>
+      approveStructuredAutoReviewDenial(context(), sessionId, itemId),
     setOption: (
       caller: StructuredAgentSessionCaller,
       params: Parameters<typeof setStructuredAgentSessionOption>[2]
@@ -116,6 +121,8 @@ export function structuredAgentSessionMutationDelegates(
     ) => changeStructuredAgentSessionThreadGoal(context(), caller, params),
     rewind: (caller: StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
       rewindStructuredAgentSession(context(), attachContext(), caller, params),
+    rebindKeptAgent: (sessionId: string) =>
+      rebindKeptStructuredAgentSessionAgent(context().conversation, attachContext(), sessionId),
     // Only in-process readers omit client identity.
     readOptions: (
       sessionId: string,

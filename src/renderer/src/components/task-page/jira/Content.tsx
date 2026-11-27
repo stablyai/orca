@@ -5,8 +5,8 @@ import { LoaderCircle } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
-import { jiraListGridStyle } from '../../jira-list-columns'
-import { JiraListColumnsMenu } from '../../jira-list-columns-menu'
+import { jiraListGridStyle } from './listing/jira-list-columns'
+import { JiraListColumnsMenu } from './listing/jira-list-columns-menu'
 import { TaskPageJiraSortControls } from './listing/task-page-jira-sort-controls'
 import { TaskPageJiraErrorBanner } from './listing/task-page-jira-error-banner'
 import { TaskPageJiraTextFallbackNotice } from './listing/task-page-jira-text-fallback-notice'
@@ -15,13 +15,14 @@ import { TaskPageJiraBoardView } from '@/components/task-page/jira/boards/task-p
 import { TaskPageJiraViewControls } from '@/components/task-page/jira/task-page-jira-view-controls'
 import { formatRelativeTime } from '../task-page-source-context'
 import { getJiraStatusTone } from '@/components/task-page/jira/listing/task-page-jira-status-tone'
-import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
+import JiraIssueWorkspace from '@/components/task-page/jira/issue-workspace/JiraIssueWorkspace'
 import { TaskPageLinearContent } from '../linear/Content'
 import {
   ipcOrRuntimeTargetForHostId,
   runtimeTargetEnvironmentId
 } from '@/runtime/rpc/targets/runtime-client-target'
-import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import { useEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import { getJiraBoardColumnOrderScopeKey } from './boards/task-page-jira-board-column-order'
 export function TaskPageJiraContent({
   model
 }: {
@@ -56,6 +57,7 @@ export function TaskPageJiraContent({
     toggleJiraColumn,
     displayedJiraIssues,
     displayedJiraStatusOrder,
+    displayedJiraProjectScope,
     sortedJiraIssues,
     setJiraConnectOpen,
     handleUseJiraItem,
@@ -71,9 +73,12 @@ export function TaskPageJiraContent({
   const boardTarget = ipcOrRuntimeTargetForHostId(
     jiraTaskSourceContext?.hostId ?? accountBackedTaskSourceHostId
   )
+  const boardTargetContextKey = useEnvironmentRuntimeContextKey(
+    boardTarget ? runtimeTargetEnvironmentId(boardTarget) : null
+  )
   const boardScopeKey = JSON.stringify([
     jiraTaskSourceScopeKey,
-    boardTarget ? getEnvironmentRuntimeContextKey(runtimeTargetEnvironmentId(boardTarget)) : null
+    boardTarget ? boardTargetContextKey : null
   ])
   return taskSource === 'jira' ? (
     !jiraStatusReady ? (
@@ -207,6 +212,11 @@ export function TaskPageJiraContent({
               sourceContext={jiraTaskSourceContext}
               target={boardTarget}
               scopeKey={boardScopeKey}
+              columnOrderScopeKey={getJiraBoardColumnOrderScopeKey(
+                jiraTaskSourceContext,
+                boardTarget,
+                displayedJiraProjectScope
+              )}
               onOpenIssue={openJiraDetailPage}
               onStartWorkspace={handleUseJiraItem}
               showSiteContext={selectedJiraSiteId === 'all'}

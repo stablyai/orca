@@ -2,7 +2,7 @@ import {
   getRepoExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   annotateManagedOrcadExecutionHosts,
   indexExecutionHostsById,

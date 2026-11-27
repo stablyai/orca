@@ -1,5 +1,5 @@
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store'
 import {
   canLaunchSourceControlSectionAgentInPlace,

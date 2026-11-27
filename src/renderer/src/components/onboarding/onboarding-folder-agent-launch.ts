@@ -1,6 +1,6 @@
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { useAppStore } from '@/store/index'
@@ -107,6 +107,8 @@ export async function revealOnboardingFolderWithAgentLaunch(args: {
     providesInitialSurface = false
   ) =>
     activateAndRevealWorktree(args.worktreeId, {
+      // Why user-open: like a git project add, an empty folder opens on the user's default surface; startup or a provided surface still wins.
+      navigationIntent: 'user-open',
       sidebarRevealBehavior: 'auto',
       ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
       ...(startup ? { startup } : {}),

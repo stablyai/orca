@@ -1,5 +1,4 @@
 import type { FederatedWorkerStartRequest } from './federated-worker-start-request'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
@@ -13,11 +12,12 @@ import {
 import { orchestrationMigrationData } from '../../../../shared/orchestration/orchestration-rpc-contract'
 import { OrchestrationError } from '../orchestration-error'
 import {
-  assertWorkerLaunchPreferencesRuntimeSupported,
   assertWorkerLaunchPreferencesCreateTerminal,
-  createPendingWorkerLaunchReceipt,
+  joinWorkerStartWarnings,
+  resolveFederatedWorkerLaunchPreferences,
   resolveFederatedWorkerLaunchReceipt
 } from '../../rpc/methods/orchestration/worker/start/launch/worker-launch-preferences'
+import { callRemoteStartWithRetryLaunchFallback } from '../../rpc/methods/orchestration/worker/start/worker-retry-launch-defaults'
 import { validateFederatedWorkerStartPlacement } from '../../rpc/methods/orchestration/worker/start/launch/worker-start-validation'
 import { resolveFederatedWorkerStartBudgets } from '../../rpc/methods/orchestration/worker/start/launch/worker-start-budgets'
 import { resolveDispatchCreator } from '../../rpc/methods/orchestration/runs/dispatch-creator'
@@ -34,9 +34,9 @@ import {
 import { releaseRetriedWorkerTerminal } from '../../rpc/methods/orchestration/worker/release/retried-worker-terminal-release'
 import { withWorkerStartNext } from '../../rpc/methods/orchestration/receipt-next'
 import { recordReadyFederatedDispatch } from './federated-worker-ready-record'
-import { resolveFederatedChildParent } from './federated-worker-child-parent'
+import { federatedAttachParent, resolveFederatedChildParent } from './federated-worker-child-parent'
 import { reportFailedWorkerStart } from '../workers/turn-stops/failed-worker-start-report'
-import { prepareWorkerStartCard } from '../workers/launch/worker-start-card'
+import { dispatchWorkerStarted, prepareWorkerStartCard } from '../workers/launch/worker-start-card'
 import {
   recordWorkerLaunchObservation,
   workerLaunchAgent
@@ -64,14 +64,10 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       '--on requires an exact remote worktree selector, new-child or new-top-level.'
     )
   }
-  const createsWorktree = worktree === 'new-top-level' || worktree === 'new-child'
+  const createMode = worktree === 'new-top-level' || worktree === 'new-child' ? worktree : undefined
+  const createsWorktree = createMode !== undefined
   assertWorkerLaunchPreferencesCreateTerminal(params)
   validateFederatedWorkerStartPlacement(params, createsWorktree)
-  const requestedLaunch = createPendingWorkerLaunchReceipt({
-    agent: isTuiAgent(params.agent) ? params.agent : null,
-    model: params.model,
-    effort: params.effort
-  })
   const server = await runtime.resolveOrchestrationWorkerServer(params.on as string)
   const pairingFence = { expectedEnvironmentPairingRevision: server.pairingRevision }
   const budgets = resolveFederatedWorkerStartBudgets(params.timeoutMs)
@@ -96,22 +92,23 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       `Connected server ${server.name} does not support orchestration federation.`
     )
   }
-  assertWorkerLaunchPreferencesRuntimeSupported({
-    model: params.model,
-    effort: params.effort,
+  const launchPlan = resolveFederatedWorkerLaunchPreferences({
+    params,
+    createsWorktree,
     capabilities: status.capabilities,
     serverName: server.name
   })
-  const childParent =
-    worktree === 'new-child'
-      ? await resolveFederatedChildParent({
-          runtime,
-          from: params.from,
-          callerSession: args.callerSession,
-          serverCapabilities: status.capabilities,
-          serverName: server.name
-        })
-      : undefined
+  const { requestedLaunch } = launchPlan
+  const childParent = createMode
+    ? await resolveFederatedChildParent({
+        runtime,
+        worktree: createMode,
+        from: params.from,
+        callerSession: args.callerSession,
+        serverCapabilities: status.capabilities,
+        serverName: server.name
+      })
+    : undefined
   const supportsControlMail = status.capabilities?.includes(
     ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
   )
@@ -124,6 +121,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
         : 1
 
   const setupDecision = createsWorktree ? (params.setup ?? 'inherit') : 'not_applicable'
+  const creationSetupSource = params.setup ? 'explicit_request' : 'orchestration_default'
   const runId = args.bindRunId()
   const started = db.createStartingWorkerDispatch({
     creator: resolveDispatchCreator(runtime, params.from, args.callerSession),
@@ -147,11 +145,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       launch: requestedLaunch,
       timeoutMs: budgets.readinessTimeoutMs,
       setup: setupDecision,
-      setupSource: createsWorktree
-        ? params.setup
-          ? 'explicit_request'
-          : 'orchestration_default'
-        : 'existing_worktree'
+      setupSource: createsWorktree ? creationSetupSource : 'existing_worktree'
     },
     runtimeEpoch: runtime.getRuntimeId(),
     mutationReceipt: orchestrationMutation,
@@ -166,54 +160,64 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
   releaseRetriedWorkerTerminal(runtime, db, { retryOf: params.retryOf })
   const createdTask = started.task
   const taskForRemote = task ?? createdTask
+  // An unknown outcome may yet be a running worker: a bot records it, with no card.
+  const recordStarted = (ready: boolean) => {
+    const agent = workerLaunchAgent(launch) ?? workerLaunchAgent(requestedLaunch)
+    if (!params.terminal) {
+      recordStart(dispatchWorkerStarted(ready, started.dispatch.id, taskForRemote, agent))
+    }
+  }
+
   db.recordWorkerStage({ dispatchId: started.dispatch.id, stage: 'remote_attach_requested' })
+  const notifyArrival = (h: string, t: string) => runtime.notifyMessageArrived(h, t)
+  const childWarning = childParent && 'warning' in childParent ? childParent.warning : undefined
+  let warning = joinWorkerStartWarnings(launchPlan.warning, childWarning)
   let readyResult: unknown
   let launch = requestedLaunch
   try {
-    const remote = parseRemoteFederatedWorkerStartReceipt(
-      await runtime.callOrchestrationWorkerServer(
-        server.environmentId,
-        'orchestration.federationAttachStart',
-        {
-          runId,
-          dispatchId: started.dispatch.id,
-          taskId: taskForRemote.id,
-          taskSpec: taskForRemote.spec,
-          // Carry home dispatch depth so remote workers cannot re-enter as roots when nesting.
-          depth: started.dispatch.depth,
-          protocolVersion: federationProtocolVersion,
-          // A server creates new-child as top-level plus this parent, so older servers parse it too.
-          worktree: createsWorktree ? 'new-top-level' : worktree,
-          ...(childParent && 'crossStoreParent' in childParent
-            ? {
-                crossStoreParent: childParent.crossStoreParent,
-                crossStoreParentInferredFrom: childParent.crossStoreParentInferredFrom
-              }
-            : {}),
-          name: params.name,
-          repo: params.repo,
-          baseBranch: params.baseBranch,
-          displayName: params.displayName,
-          ...(params.displayName !== undefined ? { displayNameKind: 'user' as const } : {}),
-          comment: params.comment,
-          setup: createsWorktree ? params.setup : undefined,
-          setupSource: createsWorktree
-            ? params.setup
-              ? 'explicit_request'
-              : 'orchestration_default'
-            : undefined,
-          terminal: params.terminal,
-          agent: params.agent,
-          model: params.model,
-          effort: params.effort,
-          timeoutMs: budgets.readinessTimeoutMs,
-          devMode: params.devMode
-        },
-        budgets.attachDeadlineMs,
-        { orchestrationRequestId: orchestrationMutation.requestId },
-        { contractVerified: true, ...pairingFence }
-      )
-    )
+    const called = await callRemoteStartWithRetryLaunchFallback({
+      ...launchPlan,
+      inherited: params.inheritedLaunchPreferences,
+      onFallback: (dropped) => {
+        launch = dropped.requestedLaunch
+        warning = joinWorkerStartWarnings(dropped.warning, childWarning)
+      },
+      send: ({ model, effort }) =>
+        runtime.callOrchestrationWorkerServer(
+          server.environmentId,
+          'orchestration.federationAttachStart',
+          {
+            runId,
+            dispatchId: started.dispatch.id,
+            taskId: taskForRemote.id,
+            taskSpec: taskForRemote.spec,
+            // Carry home dispatch depth so remote workers cannot re-enter as roots when nesting.
+            depth: started.dispatch.depth,
+            protocolVersion: federationProtocolVersion,
+            // A server creates new-child as top-level plus this parent, so older servers parse it too.
+            worktree: createsWorktree ? 'new-top-level' : worktree,
+            ...federatedAttachParent(childParent),
+            name: params.name,
+            repo: params.repo,
+            baseBranch: params.baseBranch,
+            displayName: params.displayName,
+            ...(params.displayName !== undefined ? { displayNameKind: 'user' as const } : {}),
+            comment: params.comment,
+            setup: createsWorktree ? params.setup : undefined,
+            setupSource: createsWorktree ? creationSetupSource : undefined,
+            terminal: params.terminal,
+            agent: params.agent,
+            model,
+            effort,
+            timeoutMs: budgets.readinessTimeoutMs,
+            devMode: params.devMode
+          },
+          budgets.attachDeadlineMs,
+          { orchestrationRequestId: orchestrationMutation.requestId },
+          { contractVerified: true, ...pairingFence }
+        )
+    })
+    const remote = parseRemoteFederatedWorkerStartReceipt(called.result)
     if (remote.dispatchId !== started.dispatch.id) {
       throw new OrchestrationError(
         'resource_server_mismatch',
@@ -223,7 +227,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     recordWorkerLaunchObservation(db, started.dispatch.id, remote.launch)
     launch = resolveFederatedWorkerLaunchReceipt(
       remote.launch,
-      requestedLaunch,
+      called.requestedLaunch,
       remote.state === 'ready'
     )
     if (isReadyRemoteFederatedWorkerStartReceipt(remote)) {
@@ -246,14 +250,16 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           timeoutMs: budgets.readinessTimeoutMs,
           effects: remote.effects ?? [],
           residualResources: remote.residualResources ?? [],
-          ...(childParent && 'warning' in childParent ? { warning: childParent.warning } : {})
+          ...(warning ? { warning } : {})
         },
         reportsTurnStops
           ? undefined
           : {
               name: server.name,
               dispatchId: started.dispatch.id,
-              cli: params.from ? runtime.getTerminalOrchestrationCliCommand(params.from) : 'orca'
+              cli: params.from
+                ? runtime.getTerminalOrchestrationCliTarget(params.from).cliCommand
+                : 'orca'
             }
       )
     } else if (remote.state === 'outcome_unknown') {
@@ -262,44 +268,37 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
         remote.failedStage ?? 'remote_attach',
         remote.lastError ?? 'The worker server reported an unknown start outcome.'
       )
-      return federatedUnknownReceipt(worker, taskForRemote.id, server.name, launch)
+      recordStarted(false)
+      return federatedUnknownReceipt(worker, taskForRemote.id, server.name, launch, warning)
     } else {
       const worker = db.failWorkerStart(
         started.dispatch.id,
         remote.failedStage ?? 'remote_attach',
         remote.lastError ?? `The worker server returned ${remote.state}.`
       )
-      reportFailedWorkerStart(db, worker, (handle, type) =>
-        runtime.notifyMessageArrived(handle, type)
-      )
+      reportFailedWorkerStart(db, worker, notifyArrival)
       return federatedFailedReceipt(worker, { runId, taskId: taskForRemote.id }, server, {
         setup: remote.setup,
         launch,
         effects: remote.effects,
-        residualResources: remote.residualResources
+        residualResources: remote.residualResources,
+        warning
       })
     }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
     if (error instanceof OrchestrationError && isKnownRemoteStartFailure(error.code)) {
       const worker = db.failWorkerStart(started.dispatch.id, 'remote_attach', reason)
-      reportFailedWorkerStart(db, worker, (handle, type) =>
-        runtime.notifyMessageArrived(handle, type)
-      )
+      reportFailedWorkerStart(db, worker, notifyArrival)
       return federatedFailedReceipt(worker, { runId, taskId: taskForRemote.id }, server, {
-        launch: requestedLaunch
+        launch,
+        warning
       })
     }
     const worker = db.markWorkerStartUnknown(started.dispatch.id, 'remote_attach', reason)
-    return federatedUnknownReceipt(worker, taskForRemote.id, server.name, requestedLaunch)
+    recordStarted(false)
+    return federatedUnknownReceipt(worker, taskForRemote.id, server.name, launch, warning)
   }
-  if (!params.terminal) {
-    recordStart({
-      dispatchId: started.dispatch.id,
-      workerAddress: `dispatch:${started.dispatch.id}`,
-      task: taskForRemote.spec,
-      agent: workerLaunchAgent(launch) ?? workerLaunchAgent(requestedLaunch)
-    })
-  }
+  recordStarted(true)
   return readyResult
 }

@@ -3,7 +3,7 @@
  * routing, the local session's focus, then the host partition's seed. Each re-reads the profile,
  * so a run after a crash before its ledger entry finds its own earlier write and changes nothing.
  */
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { WslMoveCutover } from '../../../../shared/wsl-move/wsl-move-cutover'
 import type {
   WorkspaceSessionPatch,

@@ -1,12 +1,15 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
-const originalEnvironment = z.object({
-  XDG_DATA_HOME: z.string().nullable(),
-  XDG_STATE_HOME: z.string().nullable(),
-  OPENCODE_AUTH_CONTENT: z.string().nullable(),
-  OPENCODE_DB: z.string().nullable(),
-  inlineAuthReference: z.uuid().optional()
-})
+const originalEnvironment = lazyZodSchema(() =>
+  z.object({
+    XDG_DATA_HOME: z.string().nullable(),
+    XDG_STATE_HOME: z.string().nullable(),
+    OPENCODE_AUTH_CONTENT: z.string().nullable(),
+    OPENCODE_DB: z.string().nullable(),
+    inlineAuthReference: z.uuid().optional()
+  })
+)
 const ORIGINAL_ENV = 'ORCA_DATA_ACCOUNT_ORIGINAL_ENV'
 export const MANAGED_DATA_ACCOUNT_BASELINE_ENV_KEYS = [
   'XDG_DATA_HOME',
@@ -35,7 +38,14 @@ export function restoreManagedDataAccountEnvironment(
 ): void {
   const provider = environment.ORCA_DATA_ACCOUNT_PROVIDER
   const dataHome = environment.ORCA_DATA_ACCOUNT_DATA_HOME
-  if (!dataHome || (provider !== undefined && provider !== 'opencode' && provider !== 'devin')) {
+  if (!dataHome) {
+    // A System-store resume marks only the provider.
+    if (provider === 'opencode') {
+      delete environment.ORCA_DATA_ACCOUNT_PROVIDER
+    }
+    return
+  }
+  if (provider !== undefined && provider !== 'opencode' && provider !== 'devin') {
     return
   }
   let original: z.infer<typeof originalEnvironment> | undefined

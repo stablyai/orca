@@ -9,6 +9,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/class-names'
+import { PRChecksSummaryLineLoading } from '@/components/github/pr-check-tab-loading'
+import { SpinnerFrame } from '@/components/ui/LoadingSpinner'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
@@ -22,6 +24,7 @@ export function buildChecksToolbar(
     canFixBrokenChecks,
     failedChecksCount,
     listLength,
+    holdRerunSlot = false,
     onRefresh,
     onFix,
     onRerun
@@ -34,6 +37,8 @@ export function buildChecksToolbar(
     canFixBrokenChecks: boolean
     failedChecksCount: number
     listLength: number
+    /** Cold read: keep the (disabled) Rerun button in place so the refresh button doesn't move. */
+    holdRerunSlot?: boolean
     onRefresh: () => void
     onFix: () => void
     onRerun: (failedOnly: boolean) => void
@@ -97,7 +102,7 @@ export function buildChecksToolbar(
       </Tooltip>
     ) : null
   const rerunAction =
-    listLength > 0 || rerunning ? (
+    listLength > 0 || rerunning || holdRerunSlot ? (
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button
@@ -156,6 +161,7 @@ export function ChecksCompactHeader({
   counts,
   listLength,
   showSummary = false,
+  summaryLoading = false,
   refreshAction,
   rerunAction,
   secondaryActions
@@ -165,6 +171,8 @@ export function ChecksCompactHeader({
   summaryLabel: string
   counts: { pending: number; failing: number }
   showSummary?: boolean
+  /** Cold read: hold the summary line's slot with a bar so the header keeps its loaded height. */
+  summaryLoading?: boolean
   listLength: number
   refreshAction: React.JSX.Element
   rerunAction: React.JSX.Element | null
@@ -175,27 +183,29 @@ export function ChecksCompactHeader({
     <div className="border-b border-border/50 px-3 py-2">
       <div className="flex min-w-0 items-start gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
-          <SummaryIcon
-            className={cn(
-              'mt-0.5 size-3.5 shrink-0',
-              summaryColor,
-              counts.pending > 0 && counts.failing === 0 && 'animate-spin'
-            )}
-          />
+          {counts.pending > 0 && counts.failing === 0 ? (
+            <SpinnerFrame className="mt-0.5">
+              <SummaryIcon className={cn('block size-3.5', summaryColor)} />
+            </SpinnerFrame>
+          ) : (
+            <SummaryIcon className={cn('mt-0.5 size-3.5 shrink-0', summaryColor)} />
+          )}
           <div className="min-w-0 flex-1">
             <div className="text-[13px] font-medium leading-5 text-foreground">
               {t('auto.components.PullRequestPage.94d95cf1f7', 'Checks')}
             </div>
-            {(listLength > 0 || showSummary) && (
+            {listLength > 0 || showSummary ? (
               <div className="truncate text-[11px] leading-4 text-muted-foreground">
                 {summaryLabel}
               </div>
-            )}
+            ) : summaryLoading ? (
+              <PRChecksSummaryLineLoading />
+            ) : null}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {refreshAction}
-          {listLength > 0 && (
+          {(listLength > 0 || summaryLoading) && (
             <div className="[&_button]:h-7 [&_button]:px-2 [&_button]:text-[11px]">
               {rerunAction}
             </div>

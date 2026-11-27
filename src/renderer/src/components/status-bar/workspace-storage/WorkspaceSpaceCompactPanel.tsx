@@ -8,7 +8,7 @@ import {
   getWorkspaceSpaceScanningFallbackLabel,
   getWorkspaceSpaceScanTimeLabel
 } from './workspace-space-format'
-import { formatBytes } from '../../../../../shared/format-bytes'
+import { formatBytes } from '../../../../../shared/text/format-bytes'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 export function WorkspaceSpaceCompactPanel({

@@ -14,7 +14,7 @@ import {
 import { reconcileReadoptedSshWorktreesByRepo } from './readopted-ssh-worktree-rows'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
 import { fetchProjectHostSetupCompatibility } from '../projects/project-host-routing'

@@ -1,6 +1,6 @@
 // Keep Project request payloads separate from ProjectV2 domain shapes so renderer domain imports do not pull IPC arguments.
 import type { GitHubProjectFieldMutationValue, GitHubProjectOwnerType } from './project-types'
-import type { GitHubIssueUpdate } from '../../issue-mutation-types'
+import type { GitHubIssueUpdate } from '../../work-items/issue-mutation-types'
 
 /** Set by a click: it may start the stopped WSL distro gh lives in (E9). Loads that also run
  * unprompted (mount effects, restore) leave it unset. Local IPC only. */
@@ -123,6 +123,6 @@ export type ListProjectViewsArgs = WakeWslDistroArg & {
 }
 
 export type ListAccessibleProjectsArgs = WakeWslDistroArg & {
-  /** GitHub host (e.g. GHES); absent means github.com. */
+  /** GitHub host (e.g. GHES); absent means gh's own default host. */
   host?: string
 }

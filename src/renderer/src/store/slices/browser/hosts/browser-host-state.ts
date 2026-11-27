@@ -10,7 +10,7 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type {
   BrowserSlice,
   BrowserCookieImportExecutionResult,
@@ -36,7 +36,8 @@ export function buildRestoredRemoteBrowserPageHandles(
         environmentId: page.browserRuntimeEnvironmentId,
         remotePageId: page.remoteBrowserPageId,
         restoredFromSession: true,
-        restoredClientHosted: true
+        restoredClientHosted: true,
+        ...(page.remoteBrowserPagePlacedHere ? { placedHere: true as const } : {})
       }
     }
   }
@@ -63,7 +64,8 @@ export function retainCookieImportExecutionHost(
     executionHostId,
     executionHostLabel,
     executionMachine,
-    executionRemoteEnvironment: parseExecutionHostId(executionHostId)?.kind === 'runtime'
+    // An SSH host's import (from Settings) lands in that host's jar, like its page's import.
+    executionRemoteEnvironment: (parseExecutionHostId(executionHostId)?.kind ?? 'local') !== 'local'
   }
 }
 

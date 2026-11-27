@@ -2,9 +2,11 @@ import type { RuntimeTerminalAgentStatus } from '../../../shared/terminal/runtim
 import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
 import { RuntimeGitHubRepositoryQueryCommands } from '../integrations/github/runtime-github-repository-query-commands'
-import { RuntimeGitLabQueryCommands } from '../integrations/gitlab/runtime-gitlab-query-commands'
+import {
+  LazyRuntimeGitLabMutationCommands,
+  LazyRuntimeGitLabQueryCommands
+} from '../integrations/gitlab/lazy-runtime-gitlab-commands'
 import { recordGitLabProjectRecent } from '../../gitlab/projects/gitlab-project-recents'
-import { RuntimeGitLabMutationCommands } from '../integrations/gitlab/runtime-gitlab-mutation-commands'
 import { RuntimeGitHubReviewQueryCommands } from '../integrations/github/runtime-github-review-query-commands'
 import { RuntimeGitHubReviewMutationCommands } from '../integrations/github/runtime-github-review-mutation-commands'
 import { RuntimeGitHubIssueCommentCommands } from '../integrations/github/runtime-github-issue-comment-commands'
@@ -115,7 +117,7 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
 
-  protected readonly gitLabQueryCommands = new RuntimeGitLabQueryCommands({
+  protected readonly gitLabQueryCommands = new LazyRuntimeGitLabQueryCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo),
     recordProjectRecent: (projectRef) => {
@@ -134,7 +136,7 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
     }
   })
 
-  protected readonly gitLabMutationCommands = new RuntimeGitLabMutationCommands({
+  protected readonly gitLabMutationCommands = new LazyRuntimeGitLabMutationCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
@@ -176,6 +178,7 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
 
   protected readonly clientHostedBrowserRows = new ClientHostedBrowserRowPublisher({
     listClientPages: (worktreeId) => getRuntimeBrowserPageRegistry(this).listPages(worktreeId),
+    getClientPage: (browserPageId) => getRuntimeBrowserPageRegistry(this).getPage(browserPageId),
     hasLivePlacement: (browserPageId) =>
       getBrowserHostLeaseRegistry(this).getPlacement(browserPageId) !== undefined,
     resolveDeviceName: (pairedDeviceId) => this.getPairedDeviceNameFn(pairedDeviceId),

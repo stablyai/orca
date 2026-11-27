@@ -1,4 +1,4 @@
-import { MARINE_CREATURES } from '../../marine-creatures'
+import { MARINE_CREATURES } from './marine-creatures'
 
 /** Never evict retired names: their cwd may retain agent history. Compact complete consecutive pool tiers into exhaustedTiers; retain explicit names above the watermark. */
 export type RetiredNameRegistry = {

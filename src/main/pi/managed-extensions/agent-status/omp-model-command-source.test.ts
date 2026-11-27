@@ -1,34 +1,85 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createAgentStatusExtensionHarness } from './agent-status-extension-test-harness'
 
-const model = { provider: 'openai', id: 'test-model' }
+const discovered = { provider: 'opencode-zen', id: 'grok-4.7' }
 
-function commandContext() {
-  return {
-    modelRegistry: { getAvailable: () => [model] },
-    ui: { notify: vi.fn() }
-  }
-}
-
-describe('OMP model command', () => {
-  it('keeps a queued completion when a model switch arrives before delivery', async () => {
-    let release: (response: Response) => void = () => {}
-    const harness = createAgentStatusExtensionHarness({
-      kind: 'omp',
-      fetchImpl: () =>
-        new Promise<Response>((resolve) => {
-          release = resolve
+describe('OMP /orca-model command', () => {
+  it('selects a model that appears once background discovery settles', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
+    let available: { provider: string; id: string }[] = []
+    const context = {
+      modelRegistry: {
+        getAvailable: () => available,
+        awaitBackgroundRefresh: vi.fn(async () => {
+          available = [discovered]
         })
-    })
-    await harness.callHook('agent_start')
-    await harness.callHook('agent_end', {}, { isIdle: () => true })
-    await harness.commands['orca-model'].handler('openai/test-model', commandContext())
-    release(new Response('', { status: 200 }))
-    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
-    expect(JSON.parse(String(harness.fetchMock.mock.calls[1][1]?.body)).payload).toMatchObject({
-      hook_event_name: 'agent_end',
-      model: 'openai/test-model'
-    })
-    release(new Response('', { status: 200 }))
+      },
+      ui: { notify: vi.fn() }
+    }
+
+    await harness.commands['orca-model'].handler('opencode-zen/grok-4.7', context)
+
+    expect(harness.setModelMock).toHaveBeenCalledWith(discovered)
+    expect(context.ui.notify).toHaveBeenCalledExactlyOnceWith(
+      'Waiting for model discovery...',
+      'info'
+    )
+  })
+
+  it('keeps a newer pick when an earlier one was still waiting for discovery', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
+    const listed = { provider: 'anthropic', id: 'claude-opus' }
+    const refresh = Promise.withResolvers<void>()
+    let available = [listed]
+    const context = {
+      modelRegistry: {
+        getAvailable: () => available,
+        awaitBackgroundRefresh: () => refresh.promise
+      },
+      ui: { notify: vi.fn() }
+    }
+
+    const earlier = harness.commands['orca-model'].handler('opencode-zen/grok-4.7', context)
+    await harness.commands['orca-model'].handler('anthropic/claude-opus', context)
+    available = [listed, discovered]
+    refresh.resolve()
+    await earlier
+
+    expect(harness.setModelMock).toHaveBeenCalledExactlyOnceWith(listed)
+  })
+
+  it('does not wait for discovery when the model is already listed', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
+    const context = {
+      modelRegistry: {
+        getAvailable: () => [discovered],
+        awaitBackgroundRefresh: vi.fn(async () => undefined)
+      },
+      ui: { notify: vi.fn() }
+    }
+
+    await harness.commands['orca-model'].handler('opencode-zen/grok-4.7', context)
+
+    expect(context.modelRegistry.awaitBackgroundRefresh).not.toHaveBeenCalled()
+    expect(harness.setModelMock).toHaveBeenCalledWith(discovered)
+  })
+
+  it('reports a model still missing after discovery settles', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
+    const context = {
+      modelRegistry: {
+        getAvailable: () => [],
+        awaitBackgroundRefresh: vi.fn(async () => undefined)
+      },
+      ui: { notify: vi.fn() }
+    }
+
+    await harness.commands['orca-model'].handler('opencode-zen/grok-4.7', context)
+
+    expect(harness.setModelMock).not.toHaveBeenCalled()
+    expect(context.ui.notify).toHaveBeenCalledWith(
+      expect.stringContaining('no longer available'),
+      'error'
+    )
   })
 })

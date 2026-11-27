@@ -14,6 +14,18 @@ import type {
 } from './mailbox-pointer-state'
 import type { WriteSettlement } from '../../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
+/** How a typed notice's Enter is confirmed; see armMailNoticeSubmitCheck. */
+export type OrchestrationPointerSubmitCheck = {
+  armSubmitCheck: (
+    handle: string,
+    ptyId: string,
+    pointer: string,
+    isCurrent: () => boolean
+  ) => (() => Promise<boolean>) | null
+  /** The notice still waits in the terminal's prompt after its Enters: tell its coordinator. */
+  reportHeldNotice: (terminal: OrchestrationMailboxTerminal, messageIds: readonly string[]) => void
+}
+
 type PointerSubmitDependencies = {
   mailboxOwner: OrchestrationMailboxOwner
   state: OrchestrationMailboxPointerState
@@ -24,7 +36,7 @@ type PointerSubmitDependencies = {
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
-}
+} & OrchestrationPointerSubmitCheck
 
 export type OrchestrationMailboxPointerSubmitTarget = {
   terminal: OrchestrationMailboxTerminal
@@ -37,6 +49,7 @@ export function submitOrchestrationMailboxPointer(
     mailboxHandle: string
     messages: readonly { id: string; type: string }[]
     newestSequence: number
+    pointer: string
     ptyId: string
     flight: OrchestrationMailboxDeliveryFlight
     expectedTarget: OrchestrationMailboxPointerSubmitTarget
@@ -97,6 +110,15 @@ export function submitOrchestrationMailboxPointer(
           // Unread mail lost its claim to an earlier Enter or a release; read mail still gets its Enter.
           return
         }
+        const confirmSubmit = deps.armSubmitCheck(
+          terminal.handle,
+          input.ptyId,
+          input.pointer,
+          () =>
+            deps.state.isCurrentFlight(input.ptyId, input.flight) &&
+            deps.resolveSubmitTarget(input.ptyId)?.processIncarnation ===
+              input.expectedTarget.processIncarnation
+        )
         const enterSettlement = await deps.writePty(input.ptyId, '\r')
         submitted = enterSettlement.outcome === 'accepted'
         if (!deps.state.isCurrentFlight(input.ptyId, input.flight)) {
@@ -106,6 +128,18 @@ export function submitOrchestrationMailboxPointer(
         // Unverifiable Enter stays attempted: neither delivery nor safe resend is proven.
         if (enterSettlement.outcome === 'refused') {
           releaseWithoutRedrive = true
+        }
+        if (submitted && confirmSubmit) {
+          const held = await confirmSubmit()
+          if (!deps.state.isCurrentFlight(input.ptyId, input.flight)) {
+            finalizeReservation = false
+            return
+          }
+          if (held) {
+            // Left in the prompt: no redrive types another notice over it.
+            releaseWithoutRedrive = true
+            deps.reportHeldNotice(terminal, messageIds)
+          }
         }
       }
     })
@@ -131,7 +165,13 @@ export function submitOrchestrationMailboxPointer(
           }
         } else if (submitted || releaseWithoutRedrive) {
           try {
-            deps.getDb()?.settleMailboxPointerEnter(messageIds, reservationTarget, [expectedPhase])
+            // Submitted, or left in the same terminal with no redrive: that terminal took it.
+            deps
+              .getDb()
+              ?.settleMailboxPointerEnter(messageIds, reservationTarget, [expectedPhase], {
+                kind: 'terminal',
+                handle: input.expectedTarget.terminal.handle
+              })
           } catch {
             // A surviving pending row is revalidated against live agent state after restart.
           }

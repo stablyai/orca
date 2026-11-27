@@ -38,7 +38,7 @@ const FLAT: WorkspaceSeed[] = [
         toolInput: 'agent-host-review.ts'
       },
       {
-        agentType: 'gemini',
+        agentType: 'antigravity',
         state: 'done',
         minutesAgo: 50,
         message: 'Checked the reviewer list'
@@ -179,6 +179,58 @@ const NESTED: WorkspaceSeed[] = [
   }
 ]
 
+const UNREAD_DOTS: WorkspaceSeed[] = [
+  {
+    id: 'wt-dots-folded',
+    name: 'experimental-v2-sidebar',
+    agents: [
+      {
+        agentType: 'claude',
+        state: 'done',
+        minutesAgo: 1,
+        unread: true,
+        message: 'Finished the card spacing pass'
+      },
+      { agentType: 'codex', state: 'done', minutesAgo: 9, message: 'Ran the fixture suite' }
+    ]
+  },
+  {
+    id: 'wt-dots-row',
+    name: 'docs-typo-sweep',
+    agents: [
+      {
+        agentType: 'claude',
+        state: 'done',
+        minutesAgo: 6,
+        unread: true,
+        message: 'Fixed 14 typos across docs/ and opened PR #36955'
+      }
+    ]
+  },
+  {
+    // A live agent owns the lane glyph; the unread dot must still ride its corner.
+    id: 'wt-dots-mixed',
+    name: 'terminal-resize-fix',
+    agents: [
+      { agentType: 'codex', state: 'working', minutesAgo: 0, message: 'Running the resize suite' },
+      {
+        agentType: 'claude',
+        state: 'done',
+        minutesAgo: 4,
+        unread: true,
+        message: 'Traced the reflow bug to the scrollback trim'
+      }
+    ]
+  },
+  {
+    id: 'wt-dots-manual',
+    name: 'release-1.4-notes',
+    agents: [{ agentType: 'codex', state: 'done', minutesAgo: 30, message: 'Drafted the notes' }],
+    manualUnread: true,
+    lastActivityMinutesAgo: 27
+  }
+]
+
 const FOLDER_WORKSPACE = folderWorkspaceToWorktree({
   id: 'design-notes',
   projectGroupId: 'notes',
@@ -253,19 +305,18 @@ function worktreesFor(seeds: readonly WorkspaceSeed[], now: number): Map<string,
 }
 
 function seedOpenCards(ids: readonly string[]): void {
-  const none = new Set<string>()
-  ids.forEach((id) =>
-    agentExpansion.seedWorktreeAgentExpansionStateForTests(id, {
-      expandedLineageParents: none,
-      expandedIdleChildGroups: none,
-      compactRootListExpanded: true
-    })
-  )
+  const state = {
+    expandedLineageParents: new Set<string>(),
+    expandedIdleChildGroups: new Set<string>(),
+    compactRootListExpanded: true
+  }
+  ids.forEach((id) => agentExpansion.seedWorktreeAgentExpansionStateForTests(id, state))
 }
 
 const now = Date.now()
 const flatWorktrees = worktreesFor(FLAT, now)
 const nestedWorktrees = worktreesFor(NESTED, now)
+const unreadDotWorktrees = worktreesFor(UNREAD_DOTS, now)
 FOLDER_WORKSPACE.isUnread = false
 FOLDER_WORKSPACE.lastActivityAt = now - 9 * MINUTE
 
@@ -334,13 +385,37 @@ export const agentsExpanded = defineFixture({
   width: SIDEBAR_WIDTH,
   setup: () => {
     seedWorkspaces(FLAT, now)
-    const none = new Set<string>()
-    const state = {
-      expandedLineageParents: none,
-      expandedIdleChildGroups: none,
-      compactRootListExpanded: true
-    }
-    FLAT.forEach((seed) => agentExpansion.seedWorktreeAgentExpansionStateForTests(seed.id, state))
+    seedOpenCards(FLAT.map((seed) => seed.id))
   },
   render: () => <FlatList />
+})
+
+export const unreadDots = defineFixture({
+  width: SIDEBAR_WIDTH,
+  setup: () => seedWorkspaces(UNREAD_DOTS, now),
+  render: () => (
+    <SidebarFrame>
+      {UNREAD_DOTS.map((seed) => (
+        <Card key={seed.id} worktree={unreadDotWorktrees.get(seed.id)!} />
+      ))}
+    </SidebarFrame>
+  )
+})
+
+export const classicUnreadDotsExpanded = defineFixture({
+  ...unreadDots,
+  setup: () => {
+    seedWorkspaces(UNREAD_DOTS, now)
+    seedOpenCards(UNREAD_DOTS.map((seed) => seed.id))
+    useAppStore.setState((state) => ({
+      settings: state.settings
+        ? { ...state.settings, experimentalNewWorktreeCardStyle: false }
+        : state.settings
+    }))
+  }
+})
+
+export const classicUnreadDotsDetailed = defineFixture({
+  ...classicUnreadDotsExpanded,
+  store: { agentActivityDisplayMode: 'full' }
 })

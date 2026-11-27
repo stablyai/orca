@@ -1,8 +1,11 @@
 import type { AppState } from '@/store/types'
 import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../../shared/execution-host'
-import '../../../../../shared/constants'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import '../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../../../shared/browser/browser-session-partition'
 import { getOrcaProfileBrowserDefaultPartition } from '../../../../../shared/orca-profiles/orca-profiles'
 import { resolveNewBrowserTabProfile } from '@/store/slices/browser/profiles/browser-new-tab-profile'

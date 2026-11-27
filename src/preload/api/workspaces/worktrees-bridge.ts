@@ -10,6 +10,7 @@ import type {
 } from '../../../shared/worktree/types'
 import type { PreloadApi } from '../../api-types'
 import type { WorkspaceMetadataSet } from '../../../shared/worktree/metadata/workspace-metadata-set'
+import type { BranchAutoRenameAttemptEvent } from '../../../shared/worktree/branch-auto-rename-attempt'
 
 export const worktreesApi = {
   listRetiredNames: (args) => ipcRenderer.invoke('worktrees:listRetiredNames', args),
@@ -71,6 +72,23 @@ export const worktreesApi = {
 
   getBranchRenameFailureOutput: (args) =>
     ipcRenderer.invoke('worktrees:getBranchRenameFailureOutput', args),
+
+  getBranchAutoRenameRetryAvailability: (args) =>
+    ipcRenderer.invoke('worktrees:getBranchAutoRenameRetryAvailability', args),
+
+  retryBranchAutoRename: (args) => ipcRenderer.invoke('worktrees:retryBranchAutoRename', args),
+
+  dismissBranchAutoRename: (args) => ipcRenderer.invoke('worktrees:dismissBranchAutoRename', args),
+
+  waitBranchAutoRenameAttempt: (args) =>
+    ipcRenderer.invoke('worktrees:waitBranchAutoRenameAttempt', args),
+
+  onBranchAutoRenameAttempt: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: BranchAutoRenameAttemptEvent) =>
+      callback(data)
+    ipcRenderer.on('worktrees:branchAutoRenameAttempt', listener)
+    return () => ipcRenderer.removeListener('worktrees:branchAutoRenameAttempt', listener)
+  },
 
   onChanged: (
     callback: (data: {

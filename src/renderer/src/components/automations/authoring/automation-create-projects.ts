@@ -2,7 +2,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { AutomationHostTarget } from '../hosts/automation-host-client'
 

@@ -13,7 +13,7 @@ import { omitSparsePresetsForRepos } from '../slices/worktrees/create/sparse-pre
 import { repoMatchesHostIdentity } from '../repos/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { translate } from '@/i18n/i18n'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { RepoSlice } from '../repos/repo-state'
 import { ERROR_TOAST_DURATION } from '../repos/repo-state'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
@@ -274,7 +274,8 @@ export function createProjectHostSetupActions(
                     destination: args.destination,
                     folderName: args.folderName
                   },
-                  { timeoutMs: 10 * 60_000 }
+                  // Cloning is the user's act: it may wake an idle-stopped WSL host (#46567).
+                  { timeoutMs: 10 * 60_000, wake: true }
                 )
               ).repo
         return await get().setupProjectExistingFolder({

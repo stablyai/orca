@@ -1,6 +1,8 @@
 export type RemoteBrowserViewportSize = {
   width: number
   height: number
+  /** A viewport preset's device; without one the host fits the page to the pane at this display's scale. */
+  device?: { deviceScaleFactor: number; mobile: boolean }
 }
 
 // Ignore sub-pixel resize jitter so layout settling cannot tear down healthy streams.
@@ -11,7 +13,12 @@ export function areRemoteViewportSizesNear(
   if (!a || !b) {
     return false
   }
-  return Math.abs(a.width - b.width) <= 3 && Math.abs(a.height - b.height) <= 3
+  return (
+    Math.abs(a.width - b.width) <= 3 &&
+    Math.abs(a.height - b.height) <= 3 &&
+    a.device?.deviceScaleFactor === b.device?.deviceScaleFactor &&
+    a.device?.mobile === b.device?.mobile
+  )
 }
 
 export type RemoteBrowserStreamToken = {

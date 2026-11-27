@@ -3,12 +3,10 @@ import { useMemo } from 'react'
 import DOMPurify from 'dompurify'
 import { useTranslation } from 'react-i18next'
 import { useTranslate } from '@/i18n/use-translate'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
+import { INERT_HTML_FRAME_HEAD } from '@/lib/inert-html-frame-head'
 
-// Keep untrusted markup inert with an opaque-origin, script-free frame and no-network CSP; sandboxing blocks link popups.
-const OUTPUT_DOCUMENT_HEAD = `<!doctype html><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'">
-<base target="_blank">
+const OUTPUT_DOCUMENT_HEAD = `${INERT_HTML_FRAME_HEAD}
 <style>
   html, body { margin: 0; background: transparent; }
   body { padding: 4px 12px; font: 13px/1.5 system-ui, sans-serif; overflow-x: auto; }

@@ -1,6 +1,10 @@
 import { z } from 'zod'
-import { toRuntimeExecutionHostId } from '../../execution-host'
-import { adoptEndpointProjectCatalog, adoptEndpointRepo } from '../../endpoint-catalog-adoption'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
+import { toRuntimeExecutionHostId } from '../../execution-host/execution-host'
+import {
+  adoptEndpointProjectCatalog,
+  adoptEndpointRepo
+} from '../../project/catalog/endpoint-catalog-adoption'
 import { ProjectGroupSchema } from './project-section-catalog-schema'
 import type { ProjectGroup } from '../../project/groups/project-group-types'
 import { projectHostSetupProjectionFromRepos } from '../../project/host-setup/project-host-setup-projection'
@@ -16,14 +20,22 @@ function rowWith<T>(...keys: string[]) {
   return z.custom<T>((value) => identity.safeParse(value).success)
 }
 
-const RepoListReplySchema = z.object({
-  repos: salvagingArray(rowWith<Repo>('id', 'path', 'displayName'))
-})
-const ProjectGroupListReplySchema = z.object({ groups: salvagingArray(ProjectGroupSchema) })
-const ProjectListReplySchema = z.object({ projects: salvagingArray(rowWith<Project>('id')) })
-const ProjectHostSetupListReplySchema = z.object({
-  setups: salvagingArray(rowWith<ProjectHostSetup>('id', 'projectId', 'repoId'))
-})
+const RepoListReplySchema = lazyZodSchema(() =>
+  z.object({
+    repos: salvagingArray(rowWith<Repo>('id', 'path', 'displayName'))
+  })
+)
+const ProjectGroupListReplySchema = lazyZodSchema(() =>
+  z.object({ groups: salvagingArray(ProjectGroupSchema) })
+)
+const ProjectListReplySchema = lazyZodSchema(() =>
+  z.object({ projects: salvagingArray(rowWith<Project>('id')) })
+)
+const ProjectHostSetupListReplySchema = lazyZodSchema(() =>
+  z.object({
+    setups: salvagingArray(rowWith<ProjectHostSetup>('id', 'projectId', 'repoId'))
+  })
+)
 
 function answer<Schema extends z.ZodType>(
   response: PromiseSettledResult<RuntimeRpcResponse<unknown>>,

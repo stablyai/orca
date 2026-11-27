@@ -1,3 +1,5 @@
+import { resolveCallerPassthroughPaths } from '../../../browser/agent-browser/protocol/agent-browser-passthrough-paths'
+import { agentBrowserCookieSetArguments } from '../../../browser/agent-browser/protocol/agent-browser-cookie-set-arguments'
 import { agentBrowserSetMediaArguments } from '../../../browser/agent-browser/protocol/agent-browser-set-media-arguments'
 import { agentBrowserWaitArguments } from '../../../browser/agent-browser/protocol/agent-browser-wait-arguments'
 import {
@@ -19,27 +21,6 @@ export function externalChromiumWaitCommand(
     fn: optional('fn'),
     state: optional('state')
   })
-}
-
-function cookieSetArguments(params: Record<string, unknown>): string[] {
-  const args = ['cookies', 'set', String(params.name ?? ''), String(params.value ?? '')]
-  for (const [key, flag] of [
-    ['domain', '--domain'],
-    ['path', '--path'],
-    ['sameSite', '--sameSite'],
-    ['expires', '--expires']
-  ] as const) {
-    if (params[key] != null) {
-      args.push(flag, String(params[key]))
-    }
-  }
-  if (params.secure) {
-    args.push('--secure')
-  }
-  if (params.httpOnly) {
-    args.push('--httpOnly')
-  }
-  return args
 }
 
 export function externalChromiumCommandArguments(
@@ -143,9 +124,12 @@ export function externalChromiumCommandArguments(
     case 'browserCaptureStop':
       return ['network', 'har', 'stop']
     case 'browserExec': {
-      const args = splitAgentBrowserCommandLine(text('command'))
+      const args = splitAgentBrowserCommandLine(text('command'), { keepEmptyWords: true })
       assertAgentBrowserPassthroughStaysOnPage(args)
-      return args
+      return resolveCallerPassthroughPaths(args, {
+        cwd: typeof params.cwd === 'string' ? params.cwd : undefined,
+        wslDistro: typeof params.wslDistro === 'string' ? params.wslDistro : undefined
+      })
     }
     case 'browserSetViewport':
       if (
@@ -156,7 +140,7 @@ export function externalChromiumCommandArguments(
       }
       return ['set', 'viewport', text('width'), text('height')]
     case 'browserCookieSet':
-      return cookieSetArguments(params)
+      return agentBrowserCookieSetArguments(params)
     case 'browserInterceptEnable':
       return ['network', 'route', (params.patterns as string[] | undefined)?.[0] ?? '**/*']
     default:

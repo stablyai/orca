@@ -1,6 +1,8 @@
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
+import { isJsonRpcAnswerAbove as isCodexAnswerAbove } from '../../provider-relay/relayed-json-rpc-lines'
 import { spawnProcess } from '@orca/process-host'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
+import { awaitProviderChildSpawn } from '../../provider-process/provider-child'
 import { createClaudeChildTreeReaper } from '../../claude/child-process/claude-agent-sdk-exit-proof'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import { buildCodexAppServerExitError } from './codex-app-server-exit-error'
@@ -15,10 +17,17 @@ import {
 import { createCodexAppServerRecordDispatcher } from './codex-app-server-record-dispatch'
 import { createProviderRecordReader } from '../../provider-process/provider-record-reader'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
+import { withLostProviderOutcome } from '../../provider-process/provider-process-exit-status'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
 } from './codex-app-server-connection-types'
+import { launchRelayedProviderProcess } from '../../provider-relay/app-provider-relays'
+import {
+  CODEX_RELAY_WORK_MARKERS,
+  codexConnectionRelay,
+  keptInitializeResult
+} from './codex-app-server-relay'
 
 // Structured chat needs a persistent transport for approvals and streamed turns.
 export type CodexAppServerLaunch = ProviderProcessLaunch
@@ -29,21 +38,40 @@ export const DEFAULT_CODEX_REQUEST_TIMEOUT_MS = 30_000
 async function connectCodexAppServer(
   launch: CodexAppServerLaunch,
   handlers: CodexAppServerConnectionHandlers = {},
-  spawnImpl: PipedProcessSpawner,
-  initialize: boolean
+  spawnImpl: ProviderProcessSpawner,
+  initialize: boolean,
+  relayChatKey?: string
 ): Promise<CodexAppServerConnection> {
-  const managed = spawnManagedProviderProcess(launch, {
-    spawnImpl,
-    site: 'codex-app-server-teardown'
-  })
+  // Answers to this app's own requests pass a reattach's hold; everything else waits for the chat.
+  let requestFloor = Number.POSITIVE_INFINITY
+  const relayed = relayChatKey
+    ? await launchRelayedProviderProcess(launch, {
+        chatKey: relayChatKey,
+        markers: CODEX_RELAY_WORK_MARKERS,
+        passWhileHeld: (line) => isCodexAnswerAbove(line, requestFloor)
+      })
+    : null
+  const managed =
+    relayed?.managed ??
+    spawnManagedProviderProcess(launch, {
+      spawnImpl,
+      site: 'codex-app-server-teardown'
+    })
   const { child } = managed
-  const tree = createClaudeChildTreeReaper(child, {
-    site: 'codex-app-server-child-close',
-    exited: () => managed.rootVerdict === 'exited',
-    supervised: managed.supervised
-  })
+  // The daemon reaps a relayed agent's group itself.
+  const tree = relayed
+    ? undefined
+    : createClaudeChildTreeReaper(child, {
+        site: 'codex-app-server-child-close',
+        exited: () => managed.rootVerdict === 'exited',
+        supervised: managed.supervised
+      })
+  const reattached = relayed?.reattached === true
+  const keptInitialize = reattached ? keptInitializeResult(relayed.child) : null
+  requestFloor = relayed?.child.attachResult?.maxClientRequestId ?? 0
 
-  let nextRequestId = 1
+  // A reattached agent already saw the last app's requests; new ids start above them.
+  let nextRequestId = requestFloor + 1
   let closing = false
   let closesInFlight = 0
   let exitReported = false
@@ -52,12 +80,13 @@ async function connectCodexAppServer(
 
   function buildExitError(cause?: Error, protocolFailure = false): Error {
     const error = buildCodexAppServerExitError(managed.stderrTail(), cause, protocolFailure)
-    return withProviderSpawnAbsence(error, managed.spawnAbsence)
+    return withLostProviderOutcome(withProviderSpawnAbsence(error, managed.spawnAbsence), child)
   }
 
   const dispatcher = createCodexAppServerRecordDispatcher({
     handlers,
     writeResponse,
+    previousAppRequestsThrough: requestFloor,
     onProtocolFailure: (error) => {
       handleUnexpectedEnd(error, true)
       void managed.close()
@@ -77,6 +106,7 @@ async function connectCodexAppServer(
         afterProviderOutputDrains(child.stdout, () => dispatcher.failPending(error), child)
       }
     }
+    withLostProviderOutcome(terminalError, child)
     if (managed.rootVerdict === 'exited' && closesInFlight === 0 && !exitReported) {
       exitReported = true
       handlers.onExit?.(terminalError, { expected: closing })
@@ -127,6 +157,10 @@ async function connectCodexAppServer(
     if (managed.rootVerdict === 'exited' || terminalError) {
       return
     }
+    // The kept agent was initialized by the app that started it.
+    if (keptInitialize !== null && method === 'initialized') {
+      return
+    }
     try {
       sendLine(params === undefined ? { method } : { method, params })
     } catch {
@@ -147,6 +181,9 @@ async function connectCodexAppServer(
     }
     if (managed.rootVerdict === 'exited') {
       return Promise.reject(buildExitError())
+    }
+    if (keptInitialize !== null && method === 'initialize') {
+      return Promise.resolve(keptInitialize)
     }
     const id = nextRequestId++
     const timeoutMs =
@@ -222,6 +259,9 @@ async function connectCodexAppServer(
     get pid() {
       return child.pid
     },
+    get watcherPid() {
+      return child.watcherPid
+    },
     get closed() {
       return closing || managed.rootVerdict === 'exited' || terminalError !== null
     },
@@ -241,12 +281,14 @@ async function connectCodexAppServer(
     respondWithError: (id, code, message) => writeResponse({ id, error: { code, message } }),
     pauseReading: recordReader.pause,
     resumeReading: recordReader.resume,
-    close
+    close,
+    ...(relayed ? { relay: codexConnectionRelay(relayed.child, reattached, relayed.keep) } : {})
   }
 
   let handshaking = false
   try {
     // A spawn that failed has no pid; the handshake below reports why.
+    await awaitProviderChildSpawn(child)
     if (child.pid !== undefined) {
       await handlers.onSpawned?.(child.pid)
     }
@@ -272,15 +314,23 @@ async function connectCodexAppServer(
 export function spawnCodexAppServerConnection(
   launch: CodexAppServerLaunch,
   handlers: CodexAppServerConnectionHandlers = {},
-  spawnImpl: PipedProcessSpawner = spawnProcess
+  spawnImpl: ProviderProcessSpawner = spawnProcess
 ): Promise<CodexAppServerConnection> {
   return connectCodexAppServer(launch, handlers, spawnImpl, false)
+}
+
+/** One chat's own app-server, run under the terminal daemon where it can, so it outlives a restart. */
+export function spawnRelayedCodexAppServerConnection(
+  chatKey: string
+): typeof spawnCodexAppServerConnection {
+  return (launch, handlers = {}) =>
+    connectCodexAppServer(launch, handlers, spawnProcess, false, chatKey)
 }
 
 export function openCodexAppServerConnection(
   launch: CodexAppServerLaunch,
   handlers: CodexAppServerConnectionHandlers = {},
-  spawnImpl: PipedProcessSpawner = spawnProcess
+  spawnImpl: ProviderProcessSpawner = spawnProcess
 ): Promise<CodexAppServerConnection> {
   return connectCodexAppServer(launch, handlers, spawnImpl, true)
 }

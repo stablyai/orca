@@ -10,10 +10,6 @@ import type { AgentStatus } from '../../../../shared/agent-status/title/agent-ti
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal/links/terminal-github-pr-link-detector'
 
 export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntimeWithEmitDaemonPtyTransientFact {
-  protected abstract recheckHookAgentPresenceForPty(
-    ptyId: string,
-    exitedSince?: number
-  ): Promise<'live' | 'unverifiable' | 'exited' | null>
   protected abstract applyTrackedPtyTitle(
     ptyId: string,
     rawTitle: string,
@@ -120,7 +116,7 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
             !this.ptyForegroundAgent.hasDelayedSnapshot(ptyId) &&
             (titleStatus === 'working' || titleStatus === 'permission')
           ) {
-            // Normalized Pi/Gemini/Grok frames still renew the replicated status lease.
+            // Normalized Pi/Grok frames still renew the replicated status lease.
             this.mobileSessionTabsAgentStatusHeartbeat.scheduleDecorativeHeartbeat(ptyId)
           }
           // Why: an identity-only cursor title records nothing, but the tracker
@@ -162,13 +158,11 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
           this.applyPtyProgramActivity(ptyId, activity)
         },
         onCommandStarted: () => {
+          this.noteCommandStarted(ptyId)
           this.openCodeRunLifetime.onCommandStarted(ptyId)
         },
         onCommandFinished: (exitCode: number | null) => {
-          void this.recheckHookAgentPresenceForPty(ptyId)
-          this.retirePtyAgentLaunchAuthority(ptyId)
-          this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
-          this.openCodeRunLifetime.onCommandFinished(ptyId, exitCode)
+          this.noteCommandFinished(ptyId, exitCode)
         },
         onBell: () => {
           this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })

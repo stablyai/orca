@@ -1,3 +1,4 @@
+import { agentSessionRecordStoreHostServing } from '../../runtime/agent-session/records/agent-session-record-store-serving'
 import { closeEnvironmentStore } from '../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
 import { worktreeRemovalLifetime } from '../../workspaces/removal/worktree-removal-lifetime'
 import { setRuntimeBrowserCommandsFactory } from '../../runtime/browser/installation/runtime-browser-commands-factory'
@@ -120,7 +121,7 @@ export async function startOrcadAgentSessionRecordStoreOpen(
 ): Promise<{
   open: AgentSessionRecordStoreStartupOpen
   maintenanceAfter: Promise<void>
-  serving: () => void
+  serving: (runtime: Parameters<typeof agentSessionRecordStoreHostServing>[0]) => void
 }> {
   const { startLocalAgentSessionRecordStoreOpen } =
     await import('../../runtime/agent-session/records/local-agent-session-record-store-startup-open')
@@ -130,13 +131,16 @@ export async function startOrcadAgentSessionRecordStoreOpen(
   return {
     open: startLocalAgentSessionRecordStoreOpen(collectIds(profileStore), serving.promise),
     maintenanceAfter: serving.promise,
-    serving: () => serving.resolve()
+    serving: (runtime) => {
+      serving.resolve()
+      agentSessionRecordStoreHostServing(runtime)
+    }
   }
 }
 
 export async function stopOrcadStructuredAgentSessions(): Promise<void> {
   const { stopStructuredAgentSessionRuntime } =
-    await import('../../runtime/agent-session/structured-agent-session-runtime')
+    await import('../../runtime/agent-session/installation/structured-agent-session-runtime')
   await stopStructuredAgentSessionRuntime({ trigger: 'quit' })
 }
 

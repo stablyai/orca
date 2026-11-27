@@ -1,7 +1,11 @@
 import type { PickerOption } from '../../components/sheets/PickerModal'
 import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
 import { colors } from '../../theme/mobile-theme'
-import { getLinkedWorkItemSuggestedName } from '../../new-workspace/creation/mobile-workspace-name'
+import {
+  resolveJiraAutoName,
+  resolveLinearAutoName,
+  resolveWorkItemAutoName
+} from '../../new-workspace/source-selection/composer-linked-work-item'
 import type { GitHubProjectSettings } from '../project-board/github-project-reference'
 import type { TaskProvider } from '../../../../src/shared/work-items/task-providers'
 import type { GitHubProjectSortDirection } from '../../../../src/shared/github/projects/project-types'
@@ -164,8 +168,26 @@ export function taskWorkspaceFallback(item: ActionableTaskItem): string {
   return item.source.identifier.toLowerCase()
 }
 
+// The composer's seed for the same source, so Start work names the workspace as desktop does.
+function taskWorkspaceSeedName(item: ActionableTaskItem): string {
+  switch (item.provider) {
+    case 'github':
+    case 'gitlab':
+      return resolveWorkItemAutoName({
+        type: item.source.type,
+        number: item.source.number,
+        title: item.source.title,
+        provider: item.provider
+      })
+    case 'linear':
+      return resolveLinearAutoName(item.source)
+    case 'jira':
+      return resolveJiraAutoName(item.source)
+  }
+}
+
 export function taskWorkspaceSuggestedName(item: ActionableTaskItem): string {
-  return getLinkedWorkItemSuggestedName(item) || taskWorkspaceFallback(item)
+  return taskWorkspaceSeedName(item) || taskWorkspaceFallback(item)
 }
 
 // Keep provider reaction content unchanged; this legacy emoji map does not match GitHub tokens or GitLab’s absent content.
@@ -220,7 +242,7 @@ export const GITHUB_KIND_OPTIONS = localizedTaskOptions<GitHubMode>([
   },
   {
     value: 'prs',
-    label: () => translate('tasks.options.pullRequests', 'PRs'),
+    label: () => translate('tasks.options.pullRequestsKind', 'Pull requests'),
     subtitle: () => translate('tasks.options.githubPullRequestsDescription', 'GitHub pull requests')
   },
   {
@@ -334,8 +356,6 @@ export const SHOW_MOBILE_DETAIL_LABEL_CHIPS = false
 export const SHOW_MOBILE_DETAIL_METADATA_EDITORS = false
 
 export const SHOW_MOBILE_DETAIL_REVIEW_PANELS = false
-
-export const SHOW_MOBILE_LINEAR_DETAIL_TOOLS = false
 
 export const SHOW_MOBILE_COMMENT_THREAD_TOOLS = false
 

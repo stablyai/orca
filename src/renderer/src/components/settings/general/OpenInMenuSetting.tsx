@@ -1,9 +1,9 @@
 import type React from 'react'
 import { useState } from 'react'
 import { Check, ChevronDown, Pencil, Trash2 } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { OpenInApplication } from '../../../../../shared/ui-chrome-types'
-import { OPEN_IN_APPLICATIONS_MAX } from '../../../../../shared/open-in-applications'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { OpenInApplication } from '../../../../../shared/ui-chrome/ui-chrome-types'
+import { OPEN_IN_APPLICATIONS_MAX } from '../../../../../shared/editor/launch/open-in-applications'
 import { Button } from '../../ui/button'
 import {
   DropdownMenu,

@@ -1,5 +1,5 @@
 // Public artifact URLs require a user-granted capability; main/CLI/Settings share this gate.
-import type { GlobalSettings } from '../global-settings-types'
+import type { GlobalSettings } from '../settings/global-settings-types'
 
 export const ARTIFACT_SHARING_DISABLED_CODE = 'artifact_sharing_disabled'
 

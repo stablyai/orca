@@ -1,5 +1,8 @@
+import { DEFAULT_CODEX_REQUEST_TIMEOUT_MS } from '../../app-server/codex-app-server-connection'
+import { restateKeptCodexBackgroundWork } from '../threads/codex-kept-turn-ordinals'
+import { openKeptCodexState, type KeptCodexSnapshot } from '../threads/codex-kept-snapshot'
 import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
-import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
@@ -21,7 +24,8 @@ import type { CodexJournalTranslator } from '../journal/codex-structured-journal
 import { codexProviderHandleLink } from '../acquisition/codex-structured-owner-identity'
 import { openCodexThread } from '../threads/codex-structured-thread-open'
 import { catchUpCodexThread } from '../threads/codex-structured-thread-catch-up'
-import { withCodexVisualsThreadConfig } from '../launch/codex-structured-visuals'
+import { withCodexSkillRootsThreadConfig } from '../launch/codex-structured-skill-roots'
+import { codexReadOnlyMcpOff } from '../prompts/codex-structured-read-only'
 import { NATIVE_CHAT_SCRATCH_DIR_ENV } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import {
   restoredCodexSessionOptions,
@@ -93,11 +97,20 @@ export async function openCodexStructuredSession(
     openInput.signal
   )
   current()
+  // A read-only thread opens only with every MCP server its config has turned off.
+  const mcpOff = launch.readOnly
+    ? await waitForPromiseWithSignal(codexReadOnlyMcpOff(connection, launch.cwd), openInput.signal)
+    : null
+  current()
   const threadLaunch = await waitForPromiseWithSignal(
-    withCodexVisualsThreadConfig(connection, launch, {
-      sessionId,
-      ...(deps.logger ? { logger: deps.logger } : {})
-    }),
+    withCodexSkillRootsThreadConfig(
+      connection,
+      mcpOff ? { ...launch, threadConfig: { ...launch.threadConfig, ...mcpOff } } : launch,
+      {
+        sessionId,
+        ...(deps.logger ? { logger: deps.logger } : {})
+      }
+    ),
     openInput.signal
   )
   current()
@@ -119,7 +132,10 @@ export async function openCodexStructuredSession(
   start.setPrimaryThreadId(opened.threadId)
   attempt.window.appliedSettings.observe(opened)
   const returnedTurns = Array.isArray(opened.thread?.turns) ? opened.thread.turns : []
+  // A kept app-server's output since the last ack is replayed in order instead of history catch-up.
+  const keptRunning = connection.relay?.reattached === true
   if (
+    !keptRunning &&
     translator &&
     input.events &&
     (returnedTurns.length > 0 || (launch.resumeThreadId !== null && !opened.supersededThreadId))
@@ -147,6 +163,30 @@ export async function openCodexStructuredSession(
     )
     current()
   }
+  // The agent's own state first; the replay released after it only fills in content.
+  const kept: KeptCodexSnapshot =
+    keptRunning && translator
+      ? await waitForPromiseWithSignal(
+          openKeptCodexState({
+            connection,
+            translator,
+            chatKey: sessionId,
+            threadId: opened.threadId,
+            journal: input.events?.journalHistory?.() ?? null,
+            timeoutMs: deps.requestTimeoutMs ?? DEFAULT_CODEX_REQUEST_TIMEOUT_MS,
+            onError: (threadId, error) =>
+              deps.logger?.warn('reading a kept thread at reattach failed', {
+                scope: 'codex-kept-snapshot',
+                sessionId,
+                threadId,
+                error
+              })
+          }),
+          openInput.signal
+        )
+      : { turns: [], spawns: [] }
+  current()
+  const keptTurns = kept.turns
   const configured =
     opened.serviceTier === undefined
       ? await waitForPromiseWithSignal(
@@ -163,6 +203,7 @@ export async function openCodexStructuredSession(
       : (opened.serviceTier ?? CODEX_DEFAULT_SERVICE_TIER)
   const catalogAccess = codexAcquireCatalogAccess(deps, launch, sessionId)
   const session: CodexSession = {
+    ...(launch.readOnly ? { readOnly: launch.readOnly } : {}),
     events: input.events,
     account: start.account,
     codexHome: launch.codexHome,
@@ -177,7 +218,12 @@ export async function openCodexStructuredSession(
       cwd: launch.cwd,
       ...(launch.visuals ? { visualsFolder: launch.visuals.folder } : {})
     },
-    activeTurnIds: new Set(),
+    // A kept turn still running is Stop's to interrupt, as when it started live.
+    activeTurnIds: new Set(
+      keptTurns.flatMap((turn) =>
+        turn.threadId === opened.threadId && turn.status === 'inProgress' ? [turn.turnId] : []
+      )
+    ),
     abortedTurnIds: new Set(),
     prompts: attempt.window.prompts,
     options: restoredCodexSessionOptions(input.options),
@@ -210,6 +256,14 @@ export async function openCodexStructuredSession(
   for (const event of attempt.window.drain()) {
     event()
   }
+  restateKeptCodexBackgroundWork(
+    session.backgroundTasks,
+    keptTurns,
+    connection.relay?.endedWork()?.command,
+    connection.relay?.openWork()?.command,
+    kept.spawns
+  )
+  connection.relay?.releaseOutput()
   current()
   acquisitions.deleteIfCurrent(sessionId, attempt)
   session.skillReport = new CodexSkillReport({

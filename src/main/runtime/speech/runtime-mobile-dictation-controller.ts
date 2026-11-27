@@ -1,4 +1,4 @@
-import { getDefaultVoiceSettings } from '../../../shared/constants'
+import { getDefaultVoiceSettings } from '../../../shared/orca-profiles/constants'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech/speech-params'
 import { speechModelNotReadyError } from '../../../shared/speech/models/speech-model-retirement'
 import { getSpeechModelManager, getSpeechSttService } from '../../speech/speech-runtime-service'

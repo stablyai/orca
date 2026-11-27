@@ -1,4 +1,4 @@
-import { isKnownHarnessInjectedUserTurnText } from '../../../shared/harness-injected-user-turns'
+import { isKnownHarnessInjectedUserTurnText } from '../../../shared/agent-session/journal/harness-injected-user-turns'
 import { getFirstUserPromptCaptureMode } from './session-scanner-first-user-prompt-capture'
 import { stripGrokUserQueryEnvelope } from '../scanners/grok/session-scanner-grok-user-text'
 // Import directly to avoid a cycle through the session-scanner-values re-export.

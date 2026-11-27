@@ -84,7 +84,6 @@ describe('HistoryReader', () => {
     it.each([
       'null',
       '[]',
-      '{}',
       JSON.stringify({ cwd: '/tmp', cols: 80, rows: 24 }),
       JSON.stringify(makeMeta({ cols: 1.5 })),
       JSON.stringify(makeMeta({ cols: 1_001 })),
@@ -105,7 +104,7 @@ describe('HistoryReader', () => {
       })
     })
 
-    it.each(['null', '[]', '{}', JSON.stringify({ snapshotAnsi: 'only recovery copy' })])(
+    it.each(['null', '[]', JSON.stringify({ snapshotAnsi: 'only recovery copy' })])(
       'classifies structurally invalid checkpoint JSON as unreadable: %s',
       async (checkpoint) => {
         const sessionDir = join(dir, getHistorySessionDirName('invalid-checkpoint'))

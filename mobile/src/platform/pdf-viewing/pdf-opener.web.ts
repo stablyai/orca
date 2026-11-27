@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { parseExecutionHostId } from '../../../../src/shared/execution-host'
+import { parseExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import {
   NativeVerbError,
   useNativeVerbs

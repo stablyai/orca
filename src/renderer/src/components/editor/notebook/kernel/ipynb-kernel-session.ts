@@ -7,7 +7,7 @@ import type {
   KernelFrameEvent,
   KernelStartResult,
   PythonEnvironment
-} from '../../../../../../shared/notebook-kernel-types'
+} from '../../../../../../shared/editor/notebooks/notebook-kernel-types'
 import { applyKernelOutput } from './ipynb-kernel-outputs'
 import { fenced, noticeOutput, startRun, stopRuns } from './ipynb-kernel-runs'
 import {

@@ -2,7 +2,7 @@ import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess
 } from '../../../shared/agent-status/process/agent-process-recognition'
-import { getFirstCommandToken } from '../../../shared/command-token-scanner'
+import { getFirstCommandToken } from '../../../shared/shell/command-resolution/command-token-scanner'
 import { resolveOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
 import { selectForegroundProcessCandidate } from '../../../shared/agent-status/process/foreground-process-selection'
 import type {
@@ -77,7 +77,7 @@ type PaneOccupancy = {
 const paneOccupancyByCapture = new WeakMap<readonly ProcessTableRow[], PaneOccupancy>()
 
 /** A live tpgid identifies one controlling terminal; memoize its groups and host-wide group sizes per shared capture. */
-function getPaneOccupancy(rows: readonly ProcessTableRow[]): PaneOccupancy {
+export function getPaneOccupancy(rows: readonly ProcessTableRow[]): PaneOccupancy {
   const cached = paneOccupancyByCapture.get(rows)
   if (cached) {
     return cached

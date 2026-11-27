@@ -51,8 +51,8 @@ export function buildPosixAgentHookPostCommand(
 ): string[] {
   const curlCommand = posixCurlCommand(options.curlCommand ?? 'curl')
   const indent = options.indent ?? '  '
-  // Only Claude's capture sets this; the host checks the attachment itself before trusting it.
-  const tmux = source === 'claude'
+  // Only Claude's and Codex's scripts capture this; the host checks the attachment before trusting it.
+  const tmux = source === 'claude' || source === 'codex'
   // Names the decision format the script prints; absent, Orca never waits on plugins.
   const decision = options.decisionHeaderVar
     ? [`  ${indent}-H "X-Orca-Hook-Decision: \${${options.decisionHeaderVar}:-}" \\`]

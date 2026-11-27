@@ -1,6 +1,6 @@
 import type { RepoProjectHostSetupMethod } from '../../../shared/project/project-types'
 import type { Repo } from '../../../shared/repository/repo-types'
-import { editorFormatterSchema } from '../../../shared/editor-formatter'
+import { editorFormatterSchema } from '../../../shared/editor/formatting/editor-formatter'
 import type { GitRemoteIdentity } from '../../../shared/git/remotes/git-remote-identity'
 import { normalizeRepoBadgeColor } from '../../../shared/repository/appearance/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repository/appearance/repo-icon'

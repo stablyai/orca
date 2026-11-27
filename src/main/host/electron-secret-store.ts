@@ -1,6 +1,6 @@
-import { safeStorage } from 'electron'
+import { app, safeStorage } from 'electron'
 import { guardedSafeStorage, safeStorageWithheldReason } from './safe-storage-availability'
-import type { SecretStore } from '../../shared/secure-storage/secret-store'
+import type { SecretSealing, SecretStore } from '../../shared/secure-storage/secret-store'
 
 export class ElectronSecretStore implements SecretStore {
   isEncryptionAvailable(): boolean {
@@ -17,6 +17,17 @@ export class ElectronSecretStore implements SecretStore {
 
   describeProtectionGap(): string | null {
     return assessSecretProtection().gap
+  }
+
+  mockKeychain(): boolean {
+    // Chromium's own switch table: every form it accepts (-, --, =value) is the one its keychain reads.
+    return app.commandLine.hasSwitch('use-mock-keychain')
+  }
+
+  describeSealing(): SecretSealing {
+    const gap = this.describeProtectionGap()
+    // Withheld, unavailable and basic_text all leave secrets readable without the OS keychain.
+    return gap === null ? { kind: 'os-keychain' } : { kind: 'none', reason: gap }
   }
 }
 

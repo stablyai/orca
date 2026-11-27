@@ -4,6 +4,16 @@ import type { AppState } from '../../../types'
 import type { SparsePreset } from '../../../../../../shared/worktree/create-types'
 import { translate } from '@/i18n/i18n'
 import type { SparsePresetFailure } from '../../../../../../shared/worktree/creation/sparse-preset-failure'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
+import {
+  listRuntimeSparsePresets,
+  removeRuntimeSparsePreset,
+  saveRuntimeSparsePreset
+} from '../../../../runtime/sparse-presets/runtime-sparse-presets-client'
 
 const ERROR_TOAST_DURATION = 60_000
 
@@ -92,6 +102,12 @@ export function omitSparsePresetsForRepos(
   return result
 }
 
+// Same-id twins share one bare-id bucket, so they keep this app's store as before.
+function repoHostId(state: Pick<AppState, 'repos'>, repoId: string): ExecutionHostId {
+  const rows = state.repos.filter((repo) => repo.id === repoId)
+  return rows.length === 1 ? getRepoExecutionHostId(rows[0]) : LOCAL_EXECUTION_HOST_ID
+}
+
 export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePresetsSlice> = (
   set,
   get
@@ -115,7 +131,7 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
       sparsePresetsErrorByRepo: { ...s.sparsePresetsErrorByRepo, [repoId]: undefined }
     }))
     try {
-      const presets = await window.api.sparsePresets.list({ repoId })
+      const presets = await listRuntimeSparsePresets(repoHostId(get(), repoId), repoId)
       set((s) => ({
         sparsePresetsByRepo: { ...s.sparsePresetsByRepo, [repoId]: presets },
         sparsePresetsLoadingByRepo: { ...s.sparsePresetsLoadingByRepo, [repoId]: false },
@@ -155,7 +171,7 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
           return null
         }
       }
-      const saved = await window.api.sparsePresets.save(args)
+      const saved = await saveRuntimeSparsePreset(repoHostId(get(), args.repoId), args)
       if ('errorCode' in saved) {
         throw new Error(sparsePresetFailureMessage(saved))
       }
@@ -207,7 +223,7 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
       }
     }))
     try {
-      await window.api.sparsePresets.remove({ repoId, presetId })
+      await removeRuntimeSparsePreset(repoHostId(get(), repoId), { repoId, presetId })
       toast.success(translate('auto.store.slices.sparse.presets.ee434d7941', 'Preset removed'))
     } catch (err) {
       set((s) => ({

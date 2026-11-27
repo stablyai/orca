@@ -1,4 +1,4 @@
-import { colors, paletteForScheme } from '../../theme/mobile-theme'
+import { colors, paletteForScheme, radii, spacing, typography } from '../../theme/mobile-theme'
 
 // Only native WebViews own document roots; injecting these rules on the page would restyle the app beyond terminal unmount.
 export const TERMINAL_DOCUMENT_ROOT_STYLE = `  * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -11,6 +11,8 @@ export const TERMINAL_DOCUMENT_ROOT_STYLE = `  * { margin: 0; padding: 0; box-si
 
 // The thumb sits on terminal content, themed by the desktop rather than the app scheme.
 const SCROLL_THUMB_COLOR = paletteForScheme('dark').textSecondary
+// The selection menu is app chrome: native sends the current scheme's tokens (set-chrome); dark until then.
+const CHROME = paletteForScheme('dark')
 
 // Keep element rules separate from native script strings so pages can inject only host-scoped styles.
 export const TERMINAL_DOCUMENT_ELEMENT_STYLE = `  #terminal-container {
@@ -95,9 +97,9 @@ export const TERMINAL_DOCUMENT_ELEMENT_STYLE = `  #terminal-container {
     left: 50%; top: 22px;
     transform: translateX(-50%);
     width: 14px; height: 14px;
-    background: #7aa2f7;
+    background: var(--sel-accent, ${CHROME.accentBlue});
     border-radius: 50%;
-    border: 2px solid #c0caf5;
+    border: 2px solid var(--sel-surface, ${CHROME.bgRaised});
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   }
   .sel-handle.start::before { top: 8px; }
@@ -107,7 +109,7 @@ export const TERMINAL_DOCUMENT_ELEMENT_STYLE = `  #terminal-container {
     left: 50%; top: 22px;
     transform: translateX(-50%);
     width: 2px; height: 16px;
-    background: #7aa2f7;
+    background: var(--sel-accent, ${CHROME.accentBlue});
   }
   .sel-handle.end::before { top: 22px; }
   .sel-handle.end::after {
@@ -116,14 +118,15 @@ export const TERMINAL_DOCUMENT_ELEMENT_STYLE = `  #terminal-container {
     left: 50%; top: 6px;
     transform: translateX(-50%);
     width: 2px; height: 16px;
-    background: #7aa2f7;
+    background: var(--sel-accent, ${CHROME.accentBlue});
   }
   #sel-menu {
     position: absolute;
     pointer-events: auto;
-    background: #2a2f4a;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    background: var(--sel-surface, ${CHROME.bgRaised});
+    border: 0.5px solid var(--sel-line, ${CHROME.borderSubtle});
+    border-radius: ${radii.control}px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
     display: flex;
     overflow: hidden;
     transform: translateY(-100%);
@@ -132,15 +135,16 @@ export const TERMINAL_DOCUMENT_ELEMENT_STYLE = `  #terminal-container {
     -webkit-user-select: none;
   }
   #sel-menu button {
+    min-height: 44px;
     background: transparent;
     border: none;
-    color: #c0caf5;
-    font: 600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    padding: 10px 16px;
+    color: var(--sel-text, ${CHROME.textPrimary});
+    font: 500 ${typography.bodySize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    padding: 0 ${spacing.lg}px;
     cursor: pointer;
   }
-  #sel-menu button:active { background: #414868; }
-  #sel-menu button + button { border-left: 1px solid #414868; }`
+  #sel-menu button:active { background: var(--sel-pressed, ${CHROME.translucentFill}); }
+  #sel-menu button + button { border-left: 0.5px solid var(--sel-line, ${CHROME.borderSubtle}); }`
 
 export const TERMINAL_DOCUMENT_STYLE = `${TERMINAL_DOCUMENT_ROOT_STYLE}
 ${TERMINAL_DOCUMENT_ELEMENT_STYLE}`

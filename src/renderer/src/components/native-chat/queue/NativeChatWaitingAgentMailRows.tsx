@@ -1,0 +1,113 @@
+import { memo, useContext, useState } from 'react'
+import { NativeChatAgentMessageCard } from '../messages/rows/NativeChatAgentMessageCard'
+import {
+  agentMessageRowFallback,
+  agentMessageRowLead
+} from '../messages/rows/agent-message-row-lead'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import {
+  agentMessageHeading,
+  agentMessagePrimarySender,
+  agentMessageSavedName
+} from '../../../../../shared/agent-session/view/messages/agent-message-presentation'
+import { NativeChatWaitingAgentMailRowsContext } from './NativeChatWaitingAgentMailActions'
+import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
+import type { OrchestrationSessionWorker } from '../../../../../shared/orchestration-session-workers'
+import { agentMessageSessionWorker } from '../../../../../shared/agent-session/view/messages/agent-message-dispatch'
+import { structuralValuesEqual } from '../../../../../shared/collections/structural-value-equality'
+import { NativeChatWorkersContext, useNativeChatWorkers } from '../native-chat-workers-context'
+import {
+  useNativeChatWaitingRowHeight,
+  useNativeChatWaitingRowShown
+} from './native-chat-waiting-row-visibility'
+
+const NO_REFOLD = (): void => {}
+const NO_WORKERS: readonly OrchestrationSessionWorker[] = []
+
+/** Other agents' waiting mail, after the conversation's live activity: it is not part of the turn.
+ *  Memoized with no props, so a streaming update redraws it only when the mail or its actions change.
+ *  Polite, as the queue it replaces was, and mounted while empty so the first arrival is announced. */
+export const NativeChatWaitingAgentMailRows = memo(
+  function NativeChatWaitingAgentMailRows(): React.JSX.Element | null {
+    const rows = useContext(NativeChatWaitingAgentMailRowsContext)
+    if (!rows) {
+      return null
+    }
+    return (
+      <div aria-live="polite" className="contents">
+        {rows.map((message) => (
+          <NativeChatWaitingAgentMailRow key={message.id} message={message} />
+        ))}
+      </div>
+    )
+  }
+)
+
+/** One waiting row. Far from view it keeps only its height and none of its card, so its sender's
+ *  status, name and worker reach only rows near view. Held, it is still a named stop for Tab and
+ *  screen readers, and drawn while focus is in it. */
+const NativeChatWaitingAgentMailRow = memo(function NativeChatWaitingAgentMailRow({
+  message
+}: {
+  message: NativeChatMessage
+}): React.JSX.Element | null {
+  const [element, setElement] = useState<HTMLDivElement | null>(null)
+  const shown = useNativeChatWaitingRowShown(element)
+  const height = useNativeChatWaitingRowHeight(element, shown)
+  // A row holding keyboard focus stays drawn, so scrolling it away never drops the focused button.
+  const [focused, setFocused] = useState(false)
+  const held = !shown && height !== null && !focused
+  const t = useTranslate()
+  if (!message.from) {
+    return null
+  }
+  return (
+    <div
+      ref={setElement}
+      data-native-chat-message-id={message.id}
+      // A held row is empty, so in a flex column (setup mail block) it would shrink to nothing.
+      className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      style={held ? { height } : undefined}
+      // -1 once drawn: focus that drew the card stays here until Tab moves into its controls.
+      tabIndex={held ? 0 : -1}
+      role={held ? 'group' : undefined}
+      aria-label={held ? heldRowLabel(message, message.from, t) : undefined}
+      onFocus={() => setFocused(true)}
+      onBlur={(event) => setFocused(event.currentTarget.contains(event.relatedTarget))}
+    >
+      {held ? null : <NativeChatWaitingAgentMailCard message={message} />}
+    </div>
+  )
+})
+
+/** The drawn card, handed only its own sender's worker, kept while that worker is unchanged, so
+ *  neither a new arrival nor another worker's change redraws it. */
+const NativeChatWaitingAgentMailCard = memo(function NativeChatWaitingAgentMailCard({
+  message
+}: {
+  message: NativeChatMessage
+}): React.JSX.Element | null {
+  const worker = agentMessageSessionWorker(message, useNativeChatWorkers())
+  const current = worker ? [worker] : NO_WORKERS
+  const [own, setOwn] = useState(current)
+  if (!structuralValuesEqual(own, current)) {
+    setOwn(current)
+  }
+  return message.from ? (
+    <NativeChatWorkersContext.Provider value={own}>
+      <NativeChatAgentMessageCard message={message} from={message.from} onRefolded={NO_REFOLD} />
+    </NativeChatWorkersContext.Provider>
+  ) : null
+})
+
+/** What a held row says: its row's opening words, the sender's saved name, and that it waits. */
+function heldRowLabel(
+  message: NativeChatMessage,
+  from: NonNullable<NativeChatMessage['from']>,
+  t: Translate
+): string {
+  const heading = agentMessageHeading(from, message)
+  const name =
+    agentMessageSavedName(agentMessagePrimarySender(from)) ?? agentMessageRowFallback(heading, t)
+  return `${agentMessageRowLead(heading, t)} ${name}, ${t('components.native-chat.agentMessage.row.notSentYet', 'not sent yet')}`
+}

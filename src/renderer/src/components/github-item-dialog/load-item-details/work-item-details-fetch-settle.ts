@@ -1,3 +1,4 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import {
   GitHubWorkItemTargetError,
@@ -15,7 +16,6 @@ import type {
 } from '../../../../../shared/github/work-items/work-item-types'
 import type { GitHubTaskRecordCache } from '@/store/github/task-records/task-record-cache'
 import type { TaskBinding } from '@/store/github/task-records/task-record-model'
-import { useAppStore } from '@/store'
 import { lookupGitHubWorkItemDetailsForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import {
   type WorkItemDetailsCacheEntry,
@@ -46,7 +46,7 @@ export async function loadCanonicalGitHubTaskDetails(
       expectedGhAccount: target.expectedGhAccount,
       canonical: true,
       accepts: () => accepts() && owned(),
-      rpcOptions: githubTaskRpcOptions(useAppStore.getState, binding.observation.fence)
+      rpcOptions: githubTaskRpcOptions(readRuntimeStatuses, binding.observation.fence)
     }).catch(() => null)
     return loaded.details && accepts() && owned()
       ? { ...target.item, ...loaded.details.item }
@@ -73,7 +73,7 @@ export async function loadOrdinaryWorkItemDetails(
     type: item.type,
     canonical: false,
     ...(binding && {
-      rpcOptions: githubTaskRpcOptions(useAppStore.getState, binding.observation.fence)
+      rpcOptions: githubTaskRpcOptions(readRuntimeStatuses, binding.observation.fence)
     })
   })
   return result && binding

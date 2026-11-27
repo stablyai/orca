@@ -13,7 +13,6 @@ import type {
   TextGenerationOperation
 } from '../source-control-text-generation-types'
 import { parseOpenCodeGenerationOutput } from '../../../shared/text-generation/output/opencode-generation-output'
-import { parseAntigravityGenerationOutput } from '../../../shared/text-generation/output/antigravity-generation-stream'
 import {
   findKimiGenerationFailure,
   parseKimiGenerationOutput
@@ -23,7 +22,18 @@ import type { CommitMessagePlan } from '../../../shared/source-control/ai/genera
 import {
   textGenerationFailure,
   type TextGenerationFailureFields
-} from '../../../shared/text-generation-failure-copy'
+} from '../../../shared/text-generation/text-generation-failure-copy'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+
+export function agentHostFailure(label: string): TextGenerationFailureFields {
+  return {
+    error: agentSessionFailureWords(agentSessionFailureFact('hostFault'), {
+      agentName: label,
+      surface: 'rejection'
+    }).reason
+  }
+}
 
 // Their stdout is a name or the user's own dictated words, not a diagnostic worth keeping in the error.
 const OPERATIONS_WITHOUT_STDOUT_DETAIL: ReadonlySet<TextGenerationOperation> = new Set([
@@ -95,7 +105,8 @@ const EMPTY_RESULT_FAILURES = {
 const UNCODED_EMPTY_RESULT_NAMES = {
   'branch-name': 'branch name',
   'conversation-name': 'chat name',
-  'dictation-cleanup': 'cleanup'
+  'dictation-cleanup': 'cleanup',
+  'bot-suggestions': 'answer'
 } as const
 
 export function emptyResultFailure(
@@ -106,7 +117,8 @@ export function emptyResultFailure(
   if (
     operation === 'branch-name' ||
     operation === 'conversation-name' ||
-    operation === 'dictation-cleanup'
+    operation === 'dictation-cleanup' ||
+    operation === 'bot-suggestions'
   ) {
     // Background rename failures are stored as English rename errors, outside the coded result path.
     const name = UNCODED_EMPTY_RESULT_NAMES[operation]
@@ -141,11 +153,9 @@ export function finalizeFromAgentOutput(args: {
   const parsed =
     args.outputFormat === 'opencode-json'
       ? parseOpenCodeGenerationOutput(stdout)
-      : args.outputFormat === 'antigravity-stream-json'
-        ? parseAntigravityGenerationOutput(stdout)
-        : args.outputFormat === 'kimi-stream-json' && code === 0
-          ? parseKimiGenerationOutput(stdout)
-          : null
+      : args.outputFormat === 'kimi-stream-json' && code === 0
+        ? parseKimiGenerationOutput(stdout)
+        : null
   if (code !== 0) {
     console.error('[commit-message] Generator failed:', {
       label,

@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { isAgentSessionContextClear } from '../../../../shared/agent-session/agent-session-context-clear'
+import { isAgentSessionContextClear } from '../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 
 export class JournalDerivedTurnScope {
   private openTurnItemId: string | null = null

@@ -1,0 +1,146 @@
+{
+  "teamId": "T0EVAL",
+  "conversationChannel": "C0EXPORTS",
+  "conversationThread": "1793437200.000500",
+  "otherConversations": [
+    { "channel": "C0LEADS", "thread": "1793373100.000300" },
+    { "channel": "D0BOB", "thread": "D0BOB" },
+    { "channel": "C0MYSTERY", "thread": "1793400000.000100" }
+  ],
+  "users": [
+    {
+      "id": "U0OWNER",
+      "team_id": "T0EVAL",
+      "name": "alice",
+      "real_name": "Alice Hart",
+      "profile": {
+        "display_name": "Alice",
+        "real_name": "Alice Hart",
+        "title": "Founder",
+        "email": "alice@example.com"
+      },
+      "tz": "America/New_York"
+    },
+    {
+      "id": "U0BOB",
+      "team_id": "T0EVAL",
+      "name": "bob",
+      "real_name": "Bob Lee",
+      "profile": {
+        "display_name": "Bob Lee",
+        "real_name": "Bob Lee",
+        "title": "Engineer, exports",
+        "email": "bob@example.com"
+      },
+      "tz": "America/Los_Angeles"
+    },
+    {
+      "id": "U0BLAKE",
+      "team_id": "T0EVAL",
+      "name": "blake",
+      "real_name": "Blake Ortiz",
+      "profile": {
+        "display_name": "Blake Ortiz",
+        "real_name": "Blake Ortiz",
+        "title": "Design",
+        "email": "blake@example.com"
+      },
+      "tz": "Europe/Madrid"
+    },
+    {
+      "id": "U0NORA",
+      "team_id": "T0EVAL",
+      "name": "nora",
+      "real_name": "Nora Park",
+      "profile": { "display_name": "Nora", "real_name": "Nora Park", "title": "Infrastructure" },
+      "tz": "America/New_York"
+    },
+    {
+      "id": "U0GONE",
+      "team_id": "T0EVAL",
+      "name": "blaine",
+      "real_name": "Blaine Gone",
+      "deleted": true,
+      "profile": { "display_name": "Blaine", "real_name": "Blaine Gone" }
+    },
+    {
+      "id": "U0DEPLOYBOT",
+      "team_id": "T0EVAL",
+      "name": "deploybot",
+      "is_bot": true,
+      "profile": { "display_name": "Deploy Bot", "real_name": "Deploy Bot" }
+    }
+  ],
+  "lookups": ["Bob", "bob lee", "bla", "Nora", "blake ortiz", "zed"],
+  "workspaceNames": ["Eval", "eval", "T0EVAL", "Eval (T0EVAL)"],
+  "channels": [
+    { "id": "C0EXPORTS", "name": "exports", "members": ["U0OWNER", "U0BOB", "U0NORA"] },
+    { "id": "C0PLATENG", "name": "platform-eng", "members": ["U0OWNER", "U0BOB", "U0NORA"] },
+    { "id": "C0DESIGN", "name": "design", "members": ["U0BLAKE", "U0BOB"] },
+    { "id": "C0ARCHIVE", "name": "old-exports", "members": null },
+    { "id": "C0LEADS", "name": "leads", "members": ["U0OWNER", "U0BOB"], "private": true }
+  ],
+  "messages": [
+    {
+      "channel": "C0LEADS",
+      "ts": "1793373100.000300",
+      "author": "U0BOB",
+      "text": "export bug postmortem draft: Acme lost three days of exports, not for the wider team yet"
+    },
+    {
+      "channel": "D0BOB",
+      "ts": "1793373200.000400",
+      "author": "U0BOB",
+      "text": "export bug: can you check my credit offer to Acme before I share it?"
+    },
+    {
+      "channel": "C0PLATENG",
+      "ts": "1793372400.000100",
+      "author": "U0BOB",
+      "text": "Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in review."
+    },
+    {
+      "channel": "C0PLATENG",
+      "ts": "1793372900.000200",
+      "author": "U0NORA",
+      "text": "nice, the export retry should also cap at 3 attempts"
+    },
+    {
+      "channel": "C0DESIGN",
+      "ts": "1793376000.000300",
+      "author": "U0BOB",
+      "text": "honestly the export bug is the progress bar lying, not the worker"
+    },
+    {
+      "channel": "C0ARCHIVE",
+      "ts": "1772366400.000400",
+      "author": "U0BOB",
+      "text": "old export bug notes: the CDN times out large exports"
+    },
+    {
+      "channel": "C0EXPORTS",
+      "ts": "1793437200.000500",
+      "author": "U0OWNER",
+      "text": "where is the exports stall bug at?"
+    }
+  ],
+  "searches": [
+    { "asker": "U0OWNER", "query": "export bug" },
+    { "asker": "U0OWNER", "query": "Bob export" },
+    { "asker": "U0BLAKE", "query": "export bug" },
+    { "asker": "U0OWNER", "query": "nothing matches this" },
+    { "asker": "U0OWNER", "query": "export from:<@U0BOB>" },
+    { "asker": "U0OWNER", "query": "export in:<#C0PLATENG|platform-eng>" },
+    { "asker": "U0OWNER", "query": "export from:@bob" },
+    { "asker": "U0OWNER", "query": "export from:@Bob in:#platform-eng" },
+    { "asker": "U0OWNER", "query": "export in:#design" },
+    { "asker": "U0OWNER", "query": "export in:#leads" },
+    { "asker": "U0OWNER", "query": "export -from:@nora" },
+    { "asker": "U0OWNER", "query": "from:me export" },
+    { "asker": "U0OWNER", "query": "export from:@bla" },
+    { "asker": "U0OWNER", "query": "\"export bug\" from:@zed" },
+    { "asker": "U0OWNER", "query": "export from:U0BOB" },
+    { "asker": "U0OWNER", "query": "export -\"the worker\"" },
+    { "asker": "U0NORA", "query": "Bob export" }
+  ]
+}

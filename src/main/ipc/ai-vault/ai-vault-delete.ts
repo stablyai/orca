@@ -1,9 +1,10 @@
 import { ipcMain, shell } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import {
   configureRemoteAiVaultSessionDelete,
   deleteHostAiVaultSession
 } from '../../ai-vault/deletion/host-session-delete'
-import { parseRoutableExecutionHostId } from '../../../shared/execution-host'
+import { parseRoutableExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
@@ -32,8 +33,11 @@ export function configureRuntimeAiVaultSessionDelete(
 
 const moveToTrash = (removal: { path: string }): Promise<void> => shell.trashItem(removal.path)
 
-export function registerAiVaultDeleteHandler(deps: AiVaultDeleteDeps): void {
-  ipcMain.handle('aiVault:deleteSession', (_event, args?: AiVaultDeleteSessionArgs) =>
+export function registerAiVaultDeleteHandler(
+  deps: AiVaultDeleteDeps,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle('aiVault:deleteSession', (_event, args?: AiVaultDeleteSessionArgs) =>
     deleteAiVaultSession(args, deps)
   )
   // A paired client deleting on this desktop gets the same Trash and cache fencing as a local delete.

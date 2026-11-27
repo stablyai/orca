@@ -1,8 +1,12 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from './lazy-ipc-handle-group'
 import { writeFile } from 'node:fs/promises'
 import { ExportTimeoutError, htmlToPdf } from '../lib/html-to-pdf'
-import { abortWhenRendererGone } from './renderer-lifetime-abort'
-import { pdfExportFailure, type PdfExportResult } from '../../shared/pdf-export-failure-copy'
+import { abortWhenRendererGone } from './renderer-requests/renderer-lifetime-abort'
+import {
+  pdfExportFailure,
+  type PdfExportResult
+} from '../../shared/document-preview/pdf-export-failure-copy'
 
 export type ExportHtmlToPdfArgs = {
   html: string
@@ -11,9 +15,11 @@ export type ExportHtmlToPdfArgs = {
 
 export type ExportHtmlToPdfResult = PdfExportResult
 
-export function registerExportHandlers(): void {
-  ipcMain.removeHandler('export:html-to-pdf')
-  ipcMain.handle(
+export function registerExportHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  if (ipc === ipcMain) {
+    ipcMain.removeHandler('export:html-to-pdf')
+  }
+  ipc.handle(
     'export:html-to-pdf',
     async (event, args: ExportHtmlToPdfArgs): Promise<ExportHtmlToPdfResult> => {
       const { html, title } = args

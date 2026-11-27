@@ -1,6 +1,9 @@
 import type { ITerminalOptions } from '@xterm/xterm'
 import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import {
   buildXtermConptyOptions,
   parseWindowsBuildNumber,

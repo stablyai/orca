@@ -1,16 +1,26 @@
-// Send/wait/read on an unstarted restored pane shares main's starter, then acts on its terminal.
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+// Send/wait/read on an unstarted restored pane shares main's starter, then acts on its terminal; a send wakes a slept agent first.
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { OrcaRuntimeWithGetTerminalInteractiveWait } from '../wait/terminal-interactive-wait'
 import { startedMainTerminalSurfaces } from './main-terminal-surfaces'
 import { MOBILE_TERMINAL_SURFACE_TIMEOUT_MS } from '../view/terminal-surface-deadlines'
 import type { RestoredPane } from '../recovery/restored-pane-start'
 
 export abstract class OrcaRuntimeWithRestoredHandlePaneStart extends OrcaRuntimeWithGetTerminalInteractiveWait {
-  /** Return null synchronously unless main must start this saved pane; use the started terminal's handle until binding/adoption catches up. */
+  /** Resume an Agent-slept pane in place; null when the handle names no slept agent. */
+  abstract wakeSleptAgentHandle(
+    handle: string,
+    bounds: { signal?: AbortSignal; timeoutMs?: number }
+  ): Promise<string> | null
+
+  /** Return null synchronously unless main must start this saved pane or wake its slept agent; use the started terminal's handle until binding/adoption catches up. */
   startRestoredHandlePane(
     handle: string,
     bounds: { signal?: AbortSignal; timeoutMs?: number } = {}
   ): Promise<string> | null {
+    const slept = this.wakeSleptAgentHandle(handle, bounds)
+    if (slept) {
+      return slept
+    }
     const pane = this.restoredPaneToStart(handle)
     if (!pane) {
       return null

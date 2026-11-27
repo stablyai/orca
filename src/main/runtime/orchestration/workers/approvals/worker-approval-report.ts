@@ -1,6 +1,7 @@
 /** Approvals as Orca's own stop reports stored them. Only a row whose id is the report's stable id
  *  for that approval counts: a worker's `send` can carry any payload, but cannot choose a message id. */
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import {
   WorkerApprovalPayloadSchema,
   closedApproval,
@@ -28,7 +29,7 @@ export function approvalReportId(
   return stopReportId(dispatchId, `approval:${approvalId}${kind === 'open' ? '' : `:${kind}`}`)
 }
 
-const Carrier = z.object({ approval: WorkerApprovalPayloadSchema })
+const Carrier = lazyZodSchema(() => z.object({ approval: WorkerApprovalPayloadSchema }))
 
 /** The approval a stored row carries, when Orca's own report wrote it; null for anything else. */
 export function readApprovalReport(row: {

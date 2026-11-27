@@ -7,7 +7,7 @@ import {
   isManagedAgentHookTarget
 } from '../../../shared/agent-hook-listener/configuration/managed-agent-hook-targets'
 import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import {
   isAgentStatusHooksEnabled,
   isAgentStatusHooksEnabledForAgent

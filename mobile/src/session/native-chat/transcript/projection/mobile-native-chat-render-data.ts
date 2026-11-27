@@ -1,10 +1,11 @@
+import { foldAutomationRunCards } from '../../../../../../src/shared/native-chat/transcript/native-chat-transcript-projection'
 import { formatAgentTypeLabel } from '../../../../../../src/shared/agent-status/presentation/agent-type-label'
 import { describeLoadError } from '../../../../components/feedback/load-error-description'
 import type { NativeChatEmptyStateCopy } from '../../../../../../src/shared/native-chat/native-chat-empty-state'
 import { isRootAgentJournalItem } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-producer'
-import { stripNoiseMessages } from '../../../../../../src/shared/native-chat/native-chat-noise'
-import { nativeChatStreamingMessage } from '../../../../../../src/shared/native-chat/native-chat-streaming'
-import { isWordlessProviderFrameMessage } from '../../../../../../src/shared/native-chat/native-chat-provider-frame-summary'
+import { stripNoiseMessages } from '../../../../../../src/shared/native-chat/transcript/messages/native-chat-noise'
+import { nativeChatStreamingMessage } from '../../../../../../src/shared/native-chat/transcript/streaming/native-chat-streaming'
+import { isWordlessProviderFrameMessage } from '../../../../../../src/shared/native-chat/transcript/notices/native-chat-provider-frame-summary'
 import {
   foldToolMessages,
   isUndrawnProviderFrameMessage
@@ -33,9 +34,8 @@ function mobileNativeChatEmptyStateCopy(
           "Can't find this conversation yet"
         ),
         subtitle: translate(
-          'session.nativeChatRenderData.notFoundSubtitle',
-          'Send a message to start one, or open the terminal view to see what {{agent}} is doing.',
-          { agent: agentLabel }
+          'session.nativeChatRenderData.notFoundMessage',
+          'Send a message to start one.'
         )
       }
     case 'empty':
@@ -43,18 +43,15 @@ function mobileNativeChatEmptyStateCopy(
         title: translate('session.nativeChatRenderData.emptyTitle', 'Start a chat with {{agent}}', {
           agent: agentLabel
         }),
-        subtitle: translate(
-          'session.nativeChatRenderData.emptySubtitle',
-          'Ask {{agent}} to inspect code, explain output, or make a change.',
-          { agent: agentLabel }
-        )
+        // The composer is right there; the title is enough.
+        subtitle: ''
       }
     case 'error':
       return {
         title: translate('session.nativeChatRenderData.errorTitle', 'Could not load conversation'),
         subtitle: translate(
-          'session.nativeChatRenderData.errorSubtitle',
-          'The transcript could not be read. Toggle back to the terminal to keep working.'
+          'session.nativeChatRenderData.errorMessage',
+          'The conversation couldn’t be read. The terminal view still works.'
         )
       }
   }
@@ -101,8 +98,10 @@ export function foldMobileNativeChatMessages(
   messages: readonly NativeChatMessage[],
   agent: AgentType
 ): NativeChatMessage[] {
-  return finishMobileNativeChatMessages(
-    foldToolMessages(foldSubagentItems(prepareMobileNativeChatMessages(messages, agent)))
+  return foldAutomationRunCards(
+    finishMobileNativeChatMessages(
+      foldToolMessages(foldSubagentItems(prepareMobileNativeChatMessages(messages, agent)))
+    )
   )
 }
 

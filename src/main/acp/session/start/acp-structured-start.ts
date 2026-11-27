@@ -22,6 +22,7 @@ import {
 } from '../../process/acp-structured-connection'
 import { AcpConnectionClosedError } from '../../transport/acp-errors'
 import { withProviderSpawnAbsence } from '../../../provider-process/provider-executable-missing'
+import { withLostProviderOutcome } from '../../../provider-process/provider-process-exit-status'
 import { acpRefusedStart } from './acp-startup-outcome'
 import type { AcpStructuredSessionAdapterDeps } from '../acp-structured-session-adapter-deps'
 import type { AcpStructuredChildren } from '../children/acp-structured-child-lifecycle'
@@ -60,13 +61,21 @@ export async function startAcpStructuredSession(
       },
       onConnectionLost: (session, error) => children.connectionLost(session, error),
       onSettled: (settlement) => deps.onDispatchSettledLate?.({ sessionId, ...settlement }),
-      forceClose: (id, reason) => children.stopAfterFailure(id, reason)
+      forceClose: (id, reason) => children.stopAfterFailure(id, reason),
+      interrupt: (id, reason) => children.interrupt(id, reason)
     })
     if (attempt.signal.aborted) {
       session.dispose()
       throw new Error('closed while starting')
     }
     children.sessions.set(sessionId, session)
+    // Snapshot: a kept agent that exits later did take what this app sent it.
+    if (session.connection.kept?.agentExited) {
+      session.endedBeforeAcquire = true
+      children.endedBeforeAcquire.set(sessionId, generation)
+    } else {
+      children.endedBeforeAcquire.delete(sessionId)
+    }
     return acquisition
   } catch (error) {
     children.endings.retire(sessionId, generation)
@@ -101,6 +110,7 @@ export async function startAcpStructuredSession(
     // Once the exit is proven, the start's error names a CLI or folder the spawn found missing.
     if (cause instanceof Error && connection?.exited) {
       withProviderSpawnAbsence(cause, connection.spawnAbsence)
+      withLostProviderOutcome(cause, connection.exitStatus)
     }
     if (connection && exitedOnItsOwn && !isAgentSessionPreSpawnError(error)) {
       throw new AgentSessionAcquisitionExitProvenError(

@@ -5,11 +5,14 @@ import { setRuntimeDesktopSurface } from '../runtime/construction/runtime-deskto
 import { installElectronBrowserCommands } from './electron-browser-commands'
 import { electronHttpClient } from './electron-http-client'
 import { setMainHttpClient } from '../network/http-client'
-import { electronSpeechServiceFactories } from './electron-speech-services'
-import { setSpeechServiceFactories } from '../speech/speech-runtime-service'
+import { setSpeechServiceFactoriesLoader } from '../speech/speech-runtime-service'
 import { setWorktreeWatcherRemoval } from '../workspaces/removal/worktree-watcher-removal'
 import { desktopWorktreeWatcherRemoval } from '../ipc/filesystem/watchers/filesystem-watcher'
 import { setDefaultProxySessionResolver } from '../network/electron-default-proxy-session'
+import {
+  installElectronHeavyWorkerHost,
+  installElectronJournalReaderHost
+} from './electron-utility-worker-hosts'
 
 export function installElectronNativeServices(): void {
   // Bind PTY IPC/power at process scope: headless serve has no window yet and must not register no-op handlers.
@@ -23,6 +26,10 @@ export function installElectronNativeServices(): void {
   // Desktop integrations use Chromium networking; Node differs in proxy environment and user agent.
   setMainHttpClient(electronHttpClient)
   // Only Electron supplies streaming speech services; other hosts reject speech calls.
-  setSpeechServiceFactories(electronSpeechServiceFactories)
+  setSpeechServiceFactoriesLoader(() =>
+    import('./electron-speech-services').then((module) => module.electronSpeechServiceFactories)
+  )
   setWorktreeWatcherRemoval(desktopWorktreeWatcherRemoval)
+  installElectronJournalReaderHost()
+  installElectronHeavyWorkerHost()
 }

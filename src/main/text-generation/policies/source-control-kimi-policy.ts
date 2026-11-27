@@ -1,22 +1,36 @@
+import {
+  generationOptionTokens,
+  type GenerationArgument
+} from '../../../shared/source-control/ai/generation/generation-argument'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { z } from 'zod'
-import { findOptionOccurrence } from '../../../shared/command-option-occurrence'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
+import { findOptionOccurrence } from '../../../shared/cli/command-option-occurrence'
 import {
   compactRecipeOptions,
   KIMI_VALUE_OPTIONS
 } from '../../../shared/source-control/ai/generation/commit-message-generation-options'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
-const object = z.record(z.string(), z.unknown())
+const object = lazyZodSchema(() => z.record(z.string(), z.unknown()))
 
 export async function prepareKimiTextTaskPolicy(
-  plan: CommitMessagePlan,
+  plan: CommitMessagePlan<GenerationArgument>,
   readRecipe: (file: string) => Promise<string>
 ) {
-  if (findOptionOccurrence(plan.args, ['--agent'], true, KIMI_VALUE_OPTIONS, 0, 'required')) {
+  if (
+    findOptionOccurrence(
+      generationOptionTokens(plan.args),
+      ['--agent'],
+      true,
+      KIMI_VALUE_OPTIONS,
+      0,
+      'required'
+    )
+  ) {
     throw new Error('Kimi named profiles cannot apply the text task tool policy')
   }
   const file = findOptionOccurrence(
-    plan.args,
+    generationOptionTokens(plan.args),
     ['--agent-file'],
     true,
     KIMI_VALUE_OPTIONS,

@@ -1,4 +1,4 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { createUntitledMarkdownFileWithTemplateSelection } from '../../../lib/editor/file-operations/create-untitled-markdown'
 import { getConnectionId } from '../../../lib/workspace/ownership/connection-context'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'

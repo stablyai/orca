@@ -1,5 +1,5 @@
 import type { Worktree } from '../../../shared/worktree/types'
-import { isValidResolvedWorktreeLineageEdge } from '../../../shared/resolved-worktree-lineage'
+import { isValidResolvedWorktreeLineageEdge } from '../../../shared/worktree/lineage/resolved-worktree-lineage'
 import { normalizeLocalBranchName } from '../../runtime/workspaces/catalog/runtime-worktree-selection'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'

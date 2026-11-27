@@ -142,11 +142,3 @@ export function applyTerminalPaneAttentionToManager(manager: PaneManager, tabId:
     }
   }
 }
-
-export function resetTerminalPaneAttentionSubscriptionsForTests(): void {
-  unsubscribeStore?.()
-  unsubscribeStore = null
-  listenersByTabId.clear()
-  previousUnreadTerminalPanes = null
-  previousAttentionEnabled = false
-}

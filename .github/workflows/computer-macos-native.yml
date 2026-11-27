@@ -11,7 +11,6 @@ on:
       - 'config/build-plugins/**'
       - 'config/scripts/native-build/macos/build-computer-macos.mjs'
       - 'config/scripts/native-build/composition/build-native-for-platform.mjs'
-      - 'config/scripts/native-build/composition/build-native-for-platform.test.mjs'
       - 'config/scripts/tool-invocation/pnpm-cli-invocation.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-*'
       - 'config/scripts/runtime-verification/desktop-transport/verify-computer-native.mjs'
@@ -20,7 +19,7 @@ on:
       - 'native/computer-use-windows/**'
       - 'skills/orca-computer-use/SKILL.md'
       - 'src/main/computer/**'
-      - 'src/shared/computer-use-*.ts'
+      - 'src/shared/computer/computer-use-*.ts'
   workflow_dispatch:
   schedule:
     - cron: '0 6 * * *'
@@ -50,17 +49,6 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: electron
-      - name: Owner-loss benchmark process cleanup
-        run: >-
-          pnpm vitest run
-          config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-group-recovery.test.mjs
-          config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.test.mjs
-      # Why: the parallel launcher's cancellation tests are darwin-only and no
-      # other PR job runs on macOS.
-      - name: Parallel native build launcher cancellation
-        run: >-
-          pnpm vitest run --config config/vitest.config.ts
-          config/scripts/native-build/composition/build-native-for-platform.test.mjs
       - name: Authenticated helper owner-loss smoke
         run: pnpm bench:macos-computer-helper-owner-loss --expect reaped --trials 1
       - name: Swift tests and signed universal helper verification

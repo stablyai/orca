@@ -8,12 +8,14 @@ import { FeatureSetupInlineTerminal } from '../../../onboarding/FeatureSetupInli
 import { buildAgentFeatureSkillInstallCommand } from '@/lib/skills/installation/agent-feature-install-commands'
 import { buildSkillCommandForRuntime } from '../../../../lib/skills/runtime/skill-runtime-command'
 import type { OnboardingFeatureSetupRuntimeContext } from '../../../onboarding/onboarding-feature-setup-runtime'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
+import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../../../../shared/orca-profiles/orca-cloud-team-policy'
 import { AgentCapabilityStatusNote, AgentCapabilityStatusPill } from './AgentCapabilityStatusBadges'
 import {
   bundledSkillInstallNeedsAttention,
@@ -21,6 +23,7 @@ import {
   type BundledSkillInstall
 } from '@/hooks/skills/installation/use-bundled-skill-install'
 import { BundledSkillInstallStatus } from '../../../skills/setup/BundledSkillInstallStatus'
+import { BundledSkillReplaceHint } from '../../../skills/setup/BundledSkillReplaceHint'
 import {
   DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
   hasSelectedOnboardingFeatureSetup,
@@ -61,11 +64,24 @@ function AgentCapabilitiesSetupForRuntime(
   }
 ): React.JSX.Element {
   const { onBrowserUseSkillInstalledChange, onOrchestrationSkillInstalledChange } = props
-  const { readiness, installStatus } = useAgentCapabilitySetupStatus()
+  const computerUseBlocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.computerUse)
+  const browserUseBlocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.browserUse)
+  const { readiness, installStatus } = useAgentCapabilitySetupStatus(
+    computerUseBlocked,
+    browserUseBlocked
+  )
   const featureSetupDefaultsAppliedRef = useRef(false)
   const featureSetupChangedByUserRef = useRef(false)
-  const [featureSetup, setFeatureSetup] = useState<OnboardingFeatureSetupSelection>(
+  const [requestedSetup, setFeatureSetup] = useState<OnboardingFeatureSetupSelection>(
     DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION
+  )
+  const featureSetup = useMemo(
+    () => ({
+      ...requestedSetup,
+      ...(computerUseBlocked ? { computerUse: false } : {}),
+      ...(browserUseBlocked ? { browserUse: false } : {})
+    }),
+    [browserUseBlocked, computerUseBlocked, requestedSetup]
   )
   const [setupBusyLabel, setSetupBusyLabel] = useState<string | null>(null)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
@@ -102,10 +118,17 @@ function AgentCapabilitiesSetupForRuntime(
     featureSetupDefaultsAppliedRef.current = true
     setFeatureSetup(getDefaultAgentCapabilitySetupSelection(readiness))
   }, [readiness])
-  const handleFeatureSetupChange = useCallback((value: OnboardingFeatureSetupSelection): void => {
-    featureSetupChangedByUserRef.current = true
-    setFeatureSetup(value)
-  }, [])
+  const handleFeatureSetupChange = useCallback(
+    (value: OnboardingFeatureSetupSelection): void => {
+      featureSetupChangedByUserRef.current = true
+      setFeatureSetup((previous) => ({
+        ...value,
+        ...(computerUseBlocked ? { computerUse: previous.computerUse } : {}),
+        ...(browserUseBlocked ? { browserUse: previous.browserUse } : {})
+      }))
+    },
+    [browserUseBlocked, computerUseBlocked]
+  )
   const handleStartFeatureSetup = useCallback(async (): Promise<void> => {
     if (setupBusyLabel !== null) {
       return
@@ -204,6 +227,8 @@ function AgentCapabilitiesSetupForRuntime(
           onStartFeatureSetup={() => void handleStartFeatureSetup()}
           allReady={isAgentCapabilityReadinessComplete(readiness)}
           installStatus={installStatus}
+          computerUseBlocked={computerUseBlocked}
+          browserUseBlocked={browserUseBlocked}
         />
       )}
     </div>
@@ -219,6 +244,8 @@ function AgentCapabilitySetupControls(props: {
   onStartFeatureSetup: () => void
   allReady: boolean
   installStatus: Record<OnboardingFeatureSetupId, AgentCapabilityInstallStatus>
+  computerUseBlocked: boolean
+  browserUseBlocked: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const hasSelectedFeatures = hasSelectedOnboardingFeatureSetup(props.featureSetup)
@@ -239,6 +266,8 @@ function AgentCapabilitySetupControls(props: {
         value={props.featureSetup}
         onChange={props.onFeatureSetupChange}
         installStatus={props.installStatus}
+        computerUseBlocked={props.computerUseBlocked}
+        browserUseBlocked={props.browserUseBlocked}
       />
       {showSetupAction && showAllReady ? (
         <p className="mt-6 flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -247,36 +276,41 @@ function AgentCapabilitySetupControls(props: {
         </p>
       ) : showSetupAction ? (
         <div className="mt-6 flex items-center">
-          <Button
-            type="button"
-            variant="default"
-            className="shrink-0"
-            disabled={
-              !hasSelectedFeatures ||
-              Boolean(props.setupBusyLabel) ||
-              !props.skillInstall.ready ||
-              props.installAction?.kind === 'loading'
-            }
-            onClick={props.onStartFeatureSetup}
+          <BundledSkillReplaceHint
+            action={props.installAction}
+            replacing={!props.setupBusyLabel && props.installAction?.kind === 'replace'}
           >
-            {props.setupBusyLabel ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Download className="size-4" />
-            )}
-            {props.setupBusyLabel ??
-              (props.installAction?.kind === 'replace'
-                ? t(
-                    'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
-                    "Replace with Orca's copy"
-                  )
-                : props.installAction?.kind === 'run' && props.installAction.changes
-                  ? bundledSkillSetupActionLabel(props.installAction.changes, t)
-                  : t(
-                      'auto.components.feature.wall.AgentCapabilitiesSetupAction.installSkills',
-                      'Install skills'
-                    ))}
-          </Button>
+            <Button
+              type="button"
+              variant="default"
+              className="shrink-0"
+              disabled={
+                !hasSelectedFeatures ||
+                Boolean(props.setupBusyLabel) ||
+                !props.skillInstall.ready ||
+                props.installAction?.kind === 'loading'
+              }
+              onClick={props.onStartFeatureSetup}
+            >
+              {props.setupBusyLabel ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Download className="size-4" />
+              )}
+              {props.setupBusyLabel ??
+                (props.installAction?.kind === 'replace'
+                  ? t(
+                      'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
+                      'Replace with Orca’s'
+                    )
+                  : props.installAction?.kind === 'run' && props.installAction.changes
+                    ? bundledSkillSetupActionLabel(props.installAction.changes, t)
+                    : t(
+                        'auto.components.feature.wall.AgentCapabilitiesSetupAction.installSkills',
+                        'Install skills'
+                      ))}
+            </Button>
+          </BundledSkillReplaceHint>
         </div>
       ) : null}
       <BundledSkillInstallStatus
@@ -299,12 +333,18 @@ function AgentCapabilitySetupChecklist(props: {
   value: OnboardingFeatureSetupSelection
   onChange: (value: OnboardingFeatureSetupSelection) => void
   installStatus: Record<OnboardingFeatureSetupId, AgentCapabilityInstallStatus>
+  computerUseBlocked: boolean
+  browserUseBlocked: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   return (
     <section className="mt-6">
       <div className="grid gap-3 md:grid-cols-3">
-        {AGENT_CAPABILITY_SETUP_ROWS.map((row) => {
+        {AGENT_CAPABILITY_SETUP_ROWS.filter(
+          (row) =>
+            (!props.computerUseBlocked || row.id !== 'computerUse') &&
+            (!props.browserUseBlocked || row.id !== 'browserUse')
+        ).map((row) => {
           const selected = props.value[row.id]
           const installStatus = props.installStatus[row.id]
           return (

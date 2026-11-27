@@ -6,6 +6,7 @@ import {
 } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { homedir } from 'node:os'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { resolveCliCommand } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
@@ -29,10 +30,12 @@ import { piRpcModelSchema } from './rpc-model-schema'
 
 type PiModelCatalogConnection = PiRpcRequester & { close(): Promise<unknown> }
 
-const discoveryStateSchema = z.object({
-  model: piRpcModelSchema.pick({ provider: true, id: true }).nullish(),
-  thinkingLevel: z.unknown().optional()
-})
+const discoveryStateSchema = lazyZodSchema(() =>
+  z.object({
+    model: piRpcModelSchema.pick({ provider: true, id: true }).nullish(),
+    thinkingLevel: z.unknown().optional()
+  })
+)
 
 export type PiModelCatalogProbeDeps = {
   resolveSavedEnvironment?: () => Promise<NodeJS.ProcessEnv>

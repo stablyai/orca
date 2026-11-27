@@ -4,7 +4,7 @@ import type {
   BrowserWorkspace
 } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { browserPageDocLocationsEqual } from '../../../../../../shared/browser/workspaces/browser-page-doc-location'
-import '../../../../../../shared/constants'
+import '../../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 import { getBrowserDisplayTitle } from '../../../../../../shared/browser/browser-display-title'
 import { redactKagiSessionToken } from '../../../../../../shared/browser/navigation/browser-url'
@@ -27,6 +27,7 @@ export function normalizeBrowserTitle(
   url: string,
   docLocation?: BrowserPageDocLocation | null
 ): string {
+  title = title ? redactKagiSessionToken(title) : title
   if (docLocation) {
     // Document blank URLs cannot supply titles; use file fallback. Reject grant-URL title echoes: persisted/mirrored titles would retain expired read authority.
     if (!title || isDocPreviewUrl(title)) {

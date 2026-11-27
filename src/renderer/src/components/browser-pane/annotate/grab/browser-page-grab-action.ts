@@ -4,9 +4,26 @@ import type {
   BrowserGrabScreenshot,
   GrabIntent
 } from '../../../../../../shared/browser/element-grab/browser-grab-types'
-import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
+import { copyGrabPayloadText } from './grab-text-copy'
 import type { GrabModeHook } from './useGrabMode'
-import type { BrowserPageGrabToastState } from '../../describe-page/browser-page-types'
+import type { ShowGrabToast } from '../../describe-page/browser-page-types'
+import { translate } from '@/i18n/i18n'
+import {
+  hoverReadFailedGrabToastMessage,
+  noHoverGrabToastMessage,
+  noScreenshotGrabToastMessage
+} from './grab-toast-messages'
+
+/** Snapshot of the picker's target at action start; true while the same Grab session on the same page is on. */
+export function grabHoverStillCurrent(
+  sessionRef: MutableRefObject<number>,
+  mountedRef: MutableRefObject<boolean>
+): () => boolean {
+  // The session number moves on every exit, intent change and page change, so leaving and re-entering Grab
+  // while a read is in flight (A→B→A) still counts as stale.
+  const startedSession = sessionRef.current
+  return () => mountedRef.current && sessionRef.current === startedSession
+}
 
 export function runBrowserGrabActionShortcut({
   key,
@@ -16,7 +33,8 @@ export function runBrowserGrabActionShortcut({
   toolTargetIdRef,
   recordFeatureInteraction,
   showGrabToast,
-  copyGrabScreenshot
+  copyGrabScreenshot,
+  isStillCurrent = () => true
 }: {
   key: 'c' | 's'
   grabIntent: GrabIntent
@@ -24,78 +42,110 @@ export function runBrowserGrabActionShortcut({
   grabPayloadRef: MutableRefObject<BrowserGrabPayload | null>
   toolTargetIdRef: MutableRefObject<string>
   recordFeatureInteraction: (feature: 'browser-grab') => void | Promise<void>
-  showGrabToast: (
-    message: string,
-    type: BrowserPageGrabToastState['type'],
-    payload?: BrowserGrabPayload | null
-  ) => void
+  showGrabToast: ShowGrabToast
   copyGrabScreenshot: (dataUrl: string, payload: BrowserGrabPayload) => void
+  /** False once the user left Grab or the page changed; a late hover result is then dropped. */
+  isStillCurrent?: () => boolean
 }): void {
   if (grabIntent === 'annotate') {
     return
   }
+  const operationToken = grab.getOperationToken()
+  const toolTargetId = toolTargetIdRef.current
   const copyFromPayload = (payload: BrowserGrabPayload): void => {
+    if (!grab.isCurrentOperationToken(operationToken)) {
+      return
+    }
     if (key === 'c') {
-      const text = formatGrabPayloadAsText(payload)
-      void window.api.ui.writeClipboardText(text)
+      copyGrabPayloadText(payload, showGrabToast)
       recordFeatureInteraction('browser-grab')
-      showGrabToast('Copied', 'success', payload)
     } else {
       const dataUrl = payload.screenshot?.dataUrl
       if (dataUrl?.startsWith('data:image/png;base64,')) {
         recordFeatureInteraction('browser-grab')
         copyGrabScreenshot(dataUrl, payload)
       } else {
-        showGrabToast('No screenshot available', 'error', payload)
+        showGrabToast(noScreenshotGrabToastMessage(), 'error', payload)
       }
     }
   }
 
   if (grab.state === 'confirming') {
-    // Why: right-click (contextMenu) skips the left-click auto-copy, so C must still work here.
-    if (grab.contextMenu && key === 'c') {
-      const currentPayload = grabPayloadRef.current
-      if (currentPayload) {
-        copyFromPayload(currentPayload)
-      }
-      grab.rearm()
-    } else if (key === 's') {
-      const currentPayload = grabPayloadRef.current
-      if (currentPayload) {
-        copyFromPayload(currentPayload)
-      }
-      grab.rearm()
+    if (!(grab.contextMenu && key === 'c') && key !== 's') {
+      return
     }
+    const payload = grabPayloadRef.current
+    if (!payload) {
+      return
+    }
+    void grab.transport
+      .grabPickedElementPresent({
+        browserPageId: toolTargetId,
+        selectionId: payload.page.selectionId ?? payload.page.capturedAt,
+        interactive: true
+      })
+      .then((present) => {
+        if (!isStillCurrent() || grabPayloadRef.current !== payload) {
+          return
+        }
+        if (present !== true) {
+          if (present === false) {
+            grab.cancel()
+          }
+          if (present === null) {
+            showGrabToast(translate('components.ui.dialog.tryAgain', 'Try again'), 'error', payload)
+          }
+          return
+        }
+        copyFromPayload(payload)
+        grab.rearm()
+      })
+      .catch(() => {
+        if (isStillCurrent()) {
+          showGrabToast(translate('components.ui.dialog.tryAgain', 'Try again'), 'error', payload)
+        }
+      })
   } else {
     // armed/awaiting — extract hovered element via IPC without clicking
     void (async () => {
-      let result: Awaited<ReturnType<typeof window.api.browser.extractHoverPayload>>
+      let result: Awaited<ReturnType<typeof grab.transport.extractHoverPayload>>
       try {
-        result = await window.api.browser.extractHoverPayload({
-          browserPageId: toolTargetIdRef.current
+        result = await grab.transport.extractHoverPayload({
+          browserPageId: toolTargetId
         })
       } catch {
         // Why: the guest can be destroyed or the IPC channel torn down mid-shortcut; surface it like a miss instead of an unhandled rejection.
-        showGrabToast('Could not read the hovered element', 'error')
+        if (isStillCurrent()) {
+          showGrabToast(hoverReadFailedGrabToastMessage(), 'error')
+        }
+        return
+      }
+      if (!isStillCurrent() || !grab.isCurrentOperationToken(operationToken)) {
         return
       }
       if (!result.ok) {
-        showGrabToast('No element hovered', 'error')
+        showGrabToast(noHoverGrabToastMessage(), 'error')
         return
       }
       const payload = result.payload as BrowserGrabPayload
 
-      if (key === 's') {
+      // The screenshot crops the picked element by its private pick ID; without one there is nothing to crop.
+      const selectionId = payload.page.selectionId
+      if (key === 's' && selectionId) {
         try {
-          const ssResult = await window.api.browser.captureSelectionScreenshot({
-            browserPageId: toolTargetIdRef.current,
-            rect: payload.target.rectViewport
+          const ssResult = await grab.transport.captureSelectionScreenshot({
+            browserPageId: toolTargetId,
+            rect: payload.target.rectViewport,
+            selectionId
           })
           if (ssResult.ok) {
             payload.screenshot = ssResult.screenshot as BrowserGrabScreenshot
           }
         } catch {
           // Screenshot failure is non-fatal for the copy flow
+        }
+        if (!isStillCurrent() || !grab.isCurrentOperationToken(operationToken)) {
+          return
         }
       }
 

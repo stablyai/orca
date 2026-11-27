@@ -1,13 +1,13 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
+import { applyManualRepoOrder } from '../../../../shared/repository/manual-repo-order'
 import { retainValidFilterRepoIds } from './repo-filter-selection'
 import { readRuntimeWorktreeVisibilitySnapshot } from '../slices/settings/worktree-visibility-owner-settings'
 import { getRepoHostIdentity } from '../../../../shared/repository/repo-host-identity'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/runtime/repo-hooks/setup-script-prompt'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { isRemovedRuntimeHostId } from '../host-catalog/removed-runtime-host-rows'
 import {
   claimHostCatalogFence,

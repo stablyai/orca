@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { Row } from '../row-types'
 
 /** A project header's copy for one host: that host's registration, count and workspaces. */

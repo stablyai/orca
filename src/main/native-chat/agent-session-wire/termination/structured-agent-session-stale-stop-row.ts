@@ -8,7 +8,7 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session/lifecycle/leases/agent-session-death-evidence'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import type { AgentSessionReplacedRuntime } from '../../../runtime/agent-session/agent-session-replaced-runtime'
+import type { AgentSessionReplacedRuntime } from '../../../runtime/agent-session/ownership/agent-session-replaced-runtime'
 import { orcaStopRowBody } from './structured-agent-session-orca-stop-row'
 
 export type StaleCut = { by: 'death' } | { by: 'replaced'; fence: number } | null
@@ -45,7 +45,8 @@ export function staleStopRow(
     }
   }
   const fences = cuts.flatMap((cut) => (cut?.by === 'replaced' ? [cut.fence] : []))
-  if (!input.replaced || fences.length === 0) {
+  // A kept runtime's agent never stopped, so no quit explains its turn; a real death is said above.
+  if (!input.replaced || input.replaced.kept || fences.length === 0) {
     return null
   }
   const fence = Math.max(...fences)

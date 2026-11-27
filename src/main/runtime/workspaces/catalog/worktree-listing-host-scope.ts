@@ -1,5 +1,8 @@
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { selectHostBalancedPage } from '../../../../shared/execution-host/host-balanced-listing-page'
 import type { RuntimeListingHostScope } from '../../../../shared/execution-host/runtime-listing-host-scope'
 

@@ -11,6 +11,7 @@ export type KeybindingScope =
   | 'composer'
   | 'chat'
   | 'settings'
+  | 'botItem'
 
 export type KeybindingContext = 'app' | 'terminal' | 'browser'
 
@@ -111,6 +112,7 @@ export type KeybindingActionId =
   | 'fileExplorer.copyRelativePath'
   | 'fileExplorer.delete'
   | 'settings.search'
+  | 'page.search'
   | 'terminal.copySelection'
   | 'terminal.selectAll'
   | 'terminal.paste'
@@ -128,6 +130,9 @@ export type KeybindingActionId =
   | 'terminal.splitDown'
   | 'terminal.switchInputSource'
   | 'terminal.toggleNativeChat'
+  | 'botItem.back'
+  | 'botItem.previous'
+  | 'botItem.next'
   | PluginKeybindingActionId
 
 export type KeybindingOverrides = Partial<Record<KeybindingActionId, string[]>>
@@ -173,6 +178,8 @@ export type KeybindingDefinition = {
   allowInTerminal?: boolean
   // Leaving it out means a focused text field keeps every key.
   allowInTextField?: 'non-default-chords'
+  // The chat prompt mirrors the terminal, so it yields even the default chords.
+  runsInChatPrompt?: boolean
   allowBareKeybindings?: boolean
   allowShiftOnlyKeybindings?: boolean
   conflictGroup?: string

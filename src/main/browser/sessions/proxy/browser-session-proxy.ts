@@ -4,7 +4,7 @@ import {
   applyProxySettingsToSession,
   awaitProxySessionApplication
 } from '../../../network/proxy-settings'
-import type { NetworkProxySettings } from '../../../../shared/network-proxy'
+import type { NetworkProxySettings } from '../../../../shared/network/network-proxy'
 import {
   readNetworkProxySettings,
   setNetworkProxySettingsSource

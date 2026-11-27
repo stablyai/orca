@@ -1,4 +1,4 @@
-import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import {
   boundCodexCommandDescription,
   codexChildCommandDescription
@@ -115,6 +115,11 @@ export class CodexBackgroundCommandTracker {
           ? { ...task, description: codexChildCommandDescription(label, task.description) }
           : task
       })
+  }
+
+  /** [threadId, itemId] of every live command, as the relay's work markers key them. */
+  openKeys(): string[][] {
+    return [...this.commands.keys()].map((key): string[] => JSON.parse(key))
   }
 
   get holdsProcess(): boolean {

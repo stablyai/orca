@@ -1,15 +1,19 @@
 import { AiVaultPrepareSessionResumeParams } from '../../../shared/rpc-contract/ai-vault/ai-vault-params'
 import { prepareStructuredChatCliFork } from '../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type {
   AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult,
   AiVaultSessionResumePreparation
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import { isUnresolvedOwnerHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  isUnresolvedOwnerHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { assertLegacyAiVaultResumeAllowed } from '../../ai-vault/structured-sessions/structured-session-ownership'
-import { tryEnsureStructuredAgentSessionHostForResume } from '../../runtime/agent-session/structured-agent-session-host-refusal'
+import { tryEnsureStructuredAgentSessionHostForResume } from '../../runtime/agent-session/installation/structured-agent-session-host-refusal'
 import { copyStructuredChatConversation } from '../../ai-vault/structured-sessions/structured-chat-conversation-copy'
 import { wakeNativeChatTranscriptDistro } from '../../native-chat/transcript-discovery/native-chat-open-wake'
 import { wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
@@ -25,12 +29,14 @@ export type AiVaultResumeHandlerOptions = {
   ) => Promise<AiVaultPrepareSessionResumeResult>
 }
 
-export function registerAiVaultResumeHandler(options: AiVaultResumeHandlerOptions): void {
-  ipcMain.handle(
-    'aiVault:prepareSessionResume',
-    (_event, args: AiVaultPrepareSessionResumeRequest) => prepareAiVaultSessionResume(args, options)
+export function registerAiVaultResumeHandler(
+  options: AiVaultResumeHandlerOptions,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle('aiVault:prepareSessionResume', (_event, args: AiVaultPrepareSessionResumeRequest) =>
+    prepareAiVaultSessionResume(args, options)
   )
-  ipcMain.handle('aiVault:prepareSessionHandoff', (_event, args: AiVaultSessionHandoffArgs) =>
+  ipc.handle('aiVault:prepareSessionHandoff', (_event, args: AiVaultSessionHandoffArgs) =>
     prepareAiVaultSessionHandoff(args)
   )
 }

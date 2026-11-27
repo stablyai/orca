@@ -2,13 +2,12 @@ import { titleShowsNoAgent } from '../../../../../../shared/agent-status/process
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../../shared/agent-status/title/agent-title-owner'
 import { resolveExplicitTerminalTitleAgentType } from '../../../../../../shared/agent-status/title/terminal-title-agent-type'
-import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-authority/pane-foreground-agent'
 
 export const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
   'Claude Code': 'claude',
   OpenClaude: 'openclaude',
   Codex: 'codex',
-  'Gemini CLI': 'gemini',
   'GitHub Copilot': 'copilot',
   Grok: 'grok',
   Devin: 'devin',
@@ -47,6 +46,19 @@ function titleRetiresProcessRead(args: { title: string; defaultTitle?: string })
   return args.title.trim().length === 0 || titleShowsNoAgent(args.title, args.defaultTitle)
 }
 
+/** The agent a live process read names for this pane; launch records and shell/default exit titles give none. */
+export function processReadAgent(
+  foreground: TitleDerivedPaneForeground | undefined,
+  title: string,
+  defaultTitle?: string
+): AgentType | null {
+  // Launch records lack run IDs; exit titles must override stale process reads after reattach.
+  return foreground?.agentEvidence !== 'process-read' ||
+    titleRetiresProcessRead({ title, defaultTitle })
+    ? null
+    : foreground.agent
+}
+
 /** Prefer live process evidence, then title identity, then an active launch fallback; shell/default exit titles retire process evidence. */
 export function resolveTitleDerivedPaneAgent(args: {
   title: string
@@ -56,11 +68,7 @@ export function resolveTitleDerivedPaneAgent(args: {
   launchAgentType: AgentType | null
   foreground: TitleDerivedPaneForeground | undefined
 }): AgentType | null {
-  // Launch records lack run IDs; exit titles must override stale process reads after reattach.
-  const processAgent =
-    args.foreground?.agentEvidence !== 'process-read' || titleRetiresProcessRead(args)
-      ? null
-      : args.foreground.agent
+  const processAgent = processReadAgent(args.foreground, args.title, args.defaultTitle)
   // Why: OMP's nested pi process must not take an OMP-launched pane from its owner.
   const ownedProcessAgent = processAgent
     ? (resolveCompatibleAgentTypeForOwner(processAgent, args.launchAgentType) ?? processAgent)

@@ -106,14 +106,6 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     })
   }
 
-  invalidateAntigravityCredentialState(): void {
-    this.antigravityFetchGeneration += 1
-    this.updateState({
-      ...this.state,
-      antigravity: null
-    })
-  }
-
   invalidateMiniMaxCredentialState(): void {
     this.minimaxFetchGeneration += 1
     // Clear before an old-cookie fetch can return.
@@ -182,7 +174,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
   }): Promise<CodexRateLimitResetResult> {
     const codexTarget = normalizeCodexAccountSelectionTarget(options.target)
     const codexHomePath = options.codexHomePath
-    const scopedStateBeforeReset = this.getState()
+    const scopedStateBeforeReset = await this.getState()
     const missingWslCodexHome = codexHomePath
       ? null
       : this.getMissingWslCodexHomeResult(codexTarget)

@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { latestAgentSessionContextClearSequence } from '../../../../../shared/agent-session/agent-session-context-clear'
+import { latestAgentSessionContextClearSequence } from '../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import type { AgentSessionLatestTurn } from '../../../../../shared/agent-session/agent-session-wire'
 import type {
   AgentJournalRenderItem,
@@ -27,12 +27,24 @@ import {
 } from './native-chat-subagent-scope'
 import {
   nativeChatSubagentEnding,
+  nativeChatSubagentEndingFromKey,
+  nativeChatSubagentEndingKey,
   nativeChatSubagentEndingMessage,
   type NativeChatSubagentAside
 } from './native-chat-subagent-ending'
+import {
+  NativeChatSubagentNeedsYouLine,
+  NativeChatSubagentSheetHeader
+} from './NativeChatSubagentSheetHeader'
 import { NativeChatSubagentViewBar } from './NativeChatSubagentViewBar'
 import { NativeChatSubagentPrompt } from './NativeChatSubagentPrompt'
 import { nativeChatSubagentHandoff } from './native-chat-subagent-handoff'
+import {
+  projectionBesideStreamedText,
+  noteStreamedTextRevisedList,
+  rowsBesideStreamedText,
+  stageBesideStreamedText
+} from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 const NO_MESSAGES: readonly NativeChatMessage[] = []
 const NO_SUBAGENT_ROWS: readonly NativeChatSubagentRow[] = []
@@ -57,6 +69,10 @@ function asideText(aside: NativeChatSubagentAside, t: Translate): string {
 }
 
 /** What a transcript draws: the conversation in its turns, or one subagent's own rows with none. */
+function subagentOwnRows(rows: readonly NativeChatSubagentRow[] | undefined): NativeChatMessage[] {
+  return (rows ?? NO_SUBAGENT_ROWS).map(({ message }) => message)
+}
+
 export function useNativeChatSubagentScope({
   view,
   conversation,
@@ -77,19 +93,24 @@ export function useNativeChatSubagentScope({
   isWorking: boolean
 }) {
   const agentId = view?.agentId ?? null
-  // The conversation names its subagents only for heads, which need rows; a subagent's bar lists them all.
+  // Entries, heads and child rows in order read no reply text, so they hold while a reply or a
+  // child streams; drawn rows still come from the current lists.
+  const savedConversation = projectionBesideStreamedText(conversation)
+  const subagentStructure = stageBesideStreamedText(subagentRows)
+  const savedJournal = journalItems && rowsBesideStreamedText(journalItems)
+  // The conversation names its subagents only for heads, which need rows; a subagent's header lists them all.
   const entries = useMemo(
     () =>
-      agentId === null && subagentRows.size === 0
+      agentId === null && subagentStructure.size === 0
         ? NO_ENTRIES
-        : nativeChatSubagentEntries(conversation, subagentRows, roster),
-    [agentId, conversation, roster, subagentRows]
+        : nativeChatSubagentEntries(savedConversation, subagentStructure, roster),
+    [agentId, savedConversation, roster, subagentStructure]
   )
   const t = useTranslate()
   const entry = agentId === null ? undefined : entries.get(agentId)
   const chain = useMemo(
-    () => (agentId === null ? NO_CHAIN : nativeChatSubagentChain(agentId, subagentRows)),
-    [agentId, subagentRows]
+    () => (agentId === null ? NO_CHAIN : nativeChatSubagentChain(agentId, subagentStructure)),
+    [agentId, subagentStructure]
   )
   const parentId = chain.at(-2) ?? null
   const noteParent = view?.noteParent
@@ -100,8 +121,13 @@ export function useNativeChatSubagentScope({
     () =>
       agentId === null
         ? null
-        : nativeChatSubagentHandoff({ agentId, journalItems, conversation, subagentRows }),
-    [agentId, conversation, journalItems, subagentRows]
+        : nativeChatSubagentHandoff({
+            agentId,
+            journalItems: savedJournal,
+            conversation: savedConversation,
+            subagentRows: subagentStructure
+          }),
+    [agentId, savedConversation, savedJournal, subagentStructure]
   )
   // A subagent's view pages history only while older history still holds its spawn.
   const history = useMemo(
@@ -110,39 +136,82 @@ export function useNativeChatSubagentScope({
         ? 'page'
         : nativeChatSubagentHistoryStep({
             agentId,
-            conversation,
-            subagentRows,
+            conversation: savedConversation,
+            subagentRows: subagentStructure,
             roster,
-            historyFloor: () => latestAgentSessionContextClearSequence(journalItems ?? [])
+            historyFloor: () => latestAgentSessionContextClearSequence(savedJournal ?? [])
           }),
-    [agentId, conversation, journalItems, roster, subagentRows]
+    [agentId, savedConversation, savedJournal, roster, subagentStructure]
   )
-  const messages = useMemo(() => {
+  // A subagent's own rows, and the same rows as last saved. Its ending compares the reply with the
+  // current text; both lists share the one ending row, which holds while the result is the same.
+  // Keyed on the shown subagent's own list, which holds while only other subagents stream.
+  const savedOwnRows = agentId === null ? undefined : subagentStructure.get(agentId)
+  const ownRows = agentId === null ? undefined : subagentRows.get(agentId)
+  const savedOwn = useMemo(
+    () => (agentId === null ? NO_MESSAGES : subagentOwnRows(savedOwnRows)),
+    [agentId, savedOwnRows]
+  )
+  // Its own reply streaming revises only text, so every stage that reads none holds on the saved rows.
+  const own = useMemo(
+    () =>
+      agentId === null
+        ? NO_MESSAGES
+        : ownRows === savedOwnRows
+          ? savedOwn
+          : noteStreamedTextRevisedList(subagentOwnRows(ownRows), savedOwn),
+    [agentId, ownRows, savedOwn, savedOwnRows]
+  )
+  const endingKey = useMemo(
+    () =>
+      nativeChatSubagentEndingKey(
+        agentId === null ? null : nativeChatSubagentEnding({ entry, handoff, rows: own, history })
+      ),
+    [agentId, entry, handoff, history, own]
+  )
+  const endingRow = useMemo(() => {
     if (agentId === null) {
-      return conversation
+      return null
     }
-    const own = (subagentRows.get(agentId) ?? NO_SUBAGENT_ROWS).map(({ message }) => message)
-    const ending = nativeChatSubagentEnding({ entry, handoff, rows: own, history })
+    const ending = nativeChatSubagentEndingFromKey(endingKey)
     return ending === null
-      ? own
-      : [
-          ...own,
-          nativeChatSubagentEndingMessage(
-            agentId,
-            ending,
-            ending.kind === 'aside' ? asideText(ending.aside, t) : '',
-            entry?.settledAt
-          )
-        ]
-  }, [agentId, conversation, entry, handoff, history, subagentRows, t])
+      ? null
+      : nativeChatSubagentEndingMessage(
+          agentId,
+          ending,
+          ending.kind === 'aside' ? asideText(ending.aside, t) : '',
+          entry?.settledAt
+        )
+  }, [agentId, endingKey, entry?.settledAt, t])
+  const savedMessages = useMemo(
+    () =>
+      agentId === null
+        ? savedConversation
+        : endingRow === null
+          ? savedOwn
+          : [...savedOwn, endingRow],
+    [agentId, endingRow, savedConversation, savedOwn]
+  )
+  // Apart from the conversation, so the parent's live text leaves a subagent's view as it was.
+  const ownMessages = useMemo(
+    () =>
+      agentId !== null && own === savedOwn
+        ? savedMessages
+        : noteStreamedTextRevisedList(
+            endingRow === null ? own : [...own, endingRow],
+            savedMessages
+          ),
+    [agentId, endingRow, own, savedMessages, savedOwn]
+  )
+  const messages = agentId === null ? conversation : ownMessages
   const heads = useMemo(
-    () => nativeChatSubagentHeads(messages, subagentRows, entries, agentId),
-    [agentId, entries, messages, subagentRows]
+    () => nativeChatSubagentHeads(savedMessages, subagentStructure, entries, agentId),
+    [agentId, entries, savedMessages, subagentStructure]
   )
   // Child edits and PRs count in the conversation's turns, which a subagent's view does not draw.
   const rowsInOrder = useMemo(
-    () => (agentId === null ? nativeChatSubagentRowsInOrder(subagentRows) : NO_SUBAGENT_ROWS),
-    [agentId, subagentRows]
+    () => (agentId === null ? nativeChatSubagentRowsInOrder(subagentStructure) : NO_SUBAGENT_ROWS),
+    [agentId, subagentStructure]
   )
   const conversationTurns = useNativeChatTurnMembership(
     agentId === null ? messages : NO_MESSAGES,
@@ -150,32 +219,63 @@ export function useNativeChatSubagentScope({
     journalSubmissions,
     latestTurn
   )
-  const turnRows = useMemo<NativeChatTurnRows>(
-    () =>
-      agentId === null
-        ? conversationTurns
-        : { messages, turnKeys: NO_TURN_KEYS, liveTurnKey: undefined },
-    [agentId, conversationTurns, messages]
+  const ownTurns = useMemo<NativeChatTurnRows>(
+    () => ({
+      messages: ownMessages,
+      turnKeys: NO_TURN_KEYS,
+      liveTurnKey: undefined,
+      structureMessages: savedMessages
+    }),
+    [ownMessages, savedMessages]
   )
+  const turnRows = agentId === null ? conversationTurns : ownTurns
   const open = view?.open
+  const sheetWaiting = view?.sheet?.waiting
   return {
     agentId,
     open,
     /** Leads a subagent's transcript: what the main agent asked of it. */
     lead:
-      agentId !== null && handoff?.prompt ? (
-        <NativeChatSubagentPrompt agentId={agentId} prompt={handoff.prompt} />
+      agentId === null ? null : (
+        <>
+          {sheetWaiting !== undefined && sheetWaiting !== agentId && view?.sheet ? (
+            <NativeChatSubagentNeedsYouLine
+              label={
+                sheetWaiting === null
+                  ? null
+                  : (entries.get(sheetWaiting)?.label ??
+                    t('components.native-chat.subagents.unnamed', 'Subagent'))
+              }
+              onShow={() => view.sheet?.showWaiting(sheetWaiting)}
+            />
+          ) : null}
+          {handoff?.prompt ? (
+            <NativeChatSubagentPrompt agentId={agentId} prompt={handoff.prompt} />
+          ) : null}
+        </>
+      ),
+    /** Drawn above a subagent's own transcript in its sheet. */
+    header:
+      agentId !== null && open && view?.sheet ? (
+        <NativeChatSubagentSheetHeader
+          chain={chain}
+          entries={entries}
+          subagentRows={subagentStructure}
+          onOpen={open}
+          controls={view.sheet}
+        />
       ) : null,
-    /** Drawn above a subagent's own transcript. */
+    /** Drawn above a subagent's own transcript where it opens in place (a bot group's turn). */
     bar:
-      agentId !== null && open ? (
+      agentId !== null && open && !view?.sheet ? (
         <NativeChatSubagentViewBar
           chain={chain}
           entries={entries}
-          subagentRows={subagentRows}
+          subagentRows={subagentStructure}
           onOpen={open}
         />
       ) : null,
+    inSheet: view?.sheet !== undefined,
     messages,
     heads,
     rowsInOrder,

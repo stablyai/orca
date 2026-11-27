@@ -5,7 +5,7 @@ import {
   createOsFileDropSequence,
   useOsFileDropOwner,
   type OsFileDropSequence
-} from '@/hooks/use-os-file-drop-owner'
+} from '@/lib/files/drop/use-os-file-drop-owner'
 import {
   hasWorkspaceFileDragType,
   readWorkspaceFileDragPaths,

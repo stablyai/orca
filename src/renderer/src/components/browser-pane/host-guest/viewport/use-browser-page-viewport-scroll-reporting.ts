@@ -1,8 +1,5 @@
 import { useEffect } from 'react'
-import {
-  getBrowserPageViewportScrollState,
-  type BrowserPageViewportScrollState
-} from './browser-page-viewport'
+import { readBrowserPageViewportScrollState } from './browser-page-viewport'
 
 export function useBrowserPageViewportScrollReporting(
   browserPageId: string,
@@ -13,10 +10,11 @@ export function useBrowserPageViewportScrollReporting(
     let reportFrame: number | null = null
     const send = (): void => {
       reportFrame = null
-      const state: BrowserPageViewportScrollState | null =
-        getBrowserPageViewportScrollState(browserPageId)
-      if (state) {
-        window.api.browser.reportViewportScrollState?.({ browserPageId, state })
+      if (scroller) {
+        window.api.browser.reportViewportScrollState?.({
+          browserPageId,
+          state: readBrowserPageViewportScrollState(scroller)
+        })
       }
     }
     const report = (): void => {

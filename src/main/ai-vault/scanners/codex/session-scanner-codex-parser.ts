@@ -10,7 +10,7 @@ import type {
   AiVaultSessionTitleKind
 } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { readCodexSessionIndexTitle } from './session-scanner-codex-title-index'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   accumulatorSessionIdentity,
   cloneSessionAccumulator,

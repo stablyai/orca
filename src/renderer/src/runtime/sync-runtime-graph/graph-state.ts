@@ -1,7 +1,9 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
-import type { MobileProjectSectionCatalog } from '../../../../shared/mobile-project-sections-contract'
+import type { MobileProjectSectionCatalog } from '../../../../shared/sidebar-list/catalog/mobile-project-sections-contract'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import type { AppState } from '@/store/types'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { MobileSessionPublicationSources } from './mobile-session-dirty-workspaces'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
@@ -21,8 +23,6 @@ export const EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE: AppState['activeBrowserTab
 export const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
 export const EMPTY_BROWSER_PAGES_BY_WORKSPACE: AppState['browserPagesByWorkspace'] = {}
 export const EMPTY_LAYOUT_BY_WORKTREE: AppState['layoutByWorktree'] = {}
-export const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] =
-  acceptedAgentStatuses()
 export const EMPTY_NARROWED_BY_KEY: ReadonlyMap<string, never> = new Map<string, never>()
 export const EMPTY_WORKTREE_TERMINAL_TABS: AppState['tabsByWorktree'][string] = []
 export const EMPTY_WORKTREE_BROWSER_WORKSPACES: AppState['browserTabsByWorktree'][string] = []
@@ -33,6 +33,16 @@ export const EMPTY_WORKTREE_OPEN_FILE_IDS: readonly string[] = []
 export const mobilePublicationEpoch = `renderer:${createBrowserUuid()}`
 
 function noPublishedProjectSectionCatalog(): MobileProjectSectionCatalog | null {
+  return null
+}
+
+function noMobileSessionPublicationSources(): MobileSessionPublicationSources | null {
+  return null
+}
+
+type IdSetCache<TSource> = { source: TSource; ids: ReadonlySet<string> }
+
+function noIdSetCache<TSource>(): IdSetCache<TSource> | null {
   return null
 }
 
@@ -48,11 +58,14 @@ export const graphState = {
   mobileSessionSnapshotCacheByWorktree: new Map<
     string,
     {
+      /** Workspace-keyed source references the inputs were built from. */
+      sources: readonly unknown[]
       inputs: MobileSessionWorktreeInputs
       content: MobileSessionContent
       snapshot: RuntimeMobileSessionTabsSnapshot
     }
   >(),
+  mobileSessionPublicationSources: noMobileSessionPublicationSources(),
   publishedMobileSessionSnapshotByWorktree: new Map<string, RuntimeMobileSessionTabsSnapshot>(),
   cachedTabsProjection: null as TabsProjectionCache | null,
   cachedOpenFilesProjection: null as OpenFilesProjectionCache | null,
@@ -61,6 +74,8 @@ export const graphState = {
   cachedOpenFileIndexesSource: null as AppState['openFiles'] | null,
   cachedOpenFileIndexes: null as OpenFileIndexes | null,
   cachedEditorDraftHashes: null as EditorDraftHashCache | null,
+  cachedLiveFolderWorkspaceIds: noIdSetCache<AppState['folderWorkspaces']>(),
+  cachedMobileSessionWorktreeIds: noIdSetCache<readonly unknown[]>(),
   mobileSessionSnapshotVersion: 0,
   /** Last group grid sizes main accepted, so a refit republishes only when one changed. */
   publishedTerminalGroupGridSizesKey: '',
@@ -70,8 +85,62 @@ export const graphState = {
   publishedActiveGroups: NO_PUBLISHED_ACTIVE_GROUPS
 }
 
+export function getLiveFolderWorkspaceIds(state: AppState): ReadonlySet<string> {
+  const folderWorkspaces = selectFolderWorkspaces(state)
+  const cached = graphState.cachedLiveFolderWorkspaceIds
+  if (cached && cached.source === folderWorkspaces) {
+    return cached.ids
+  }
+  const ids = new Set((folderWorkspaces ?? []).map((workspace) => workspace.id))
+  graphState.cachedLiveFolderWorkspaceIds = { source: folderWorkspaces, ids }
+  return ids
+}
+
+/** Every workspace with a mobile-publishable surface; rebuilt only when a source collection changes. */
+export function getMobileSessionWorktreeIds(
+  state: AppState,
+  browserTabsByWorktree: AppState['browserTabsByWorktree']
+): ReadonlySet<string> {
+  const sources = [
+    state.tabsByWorktree,
+    state.groupsByWorktree,
+    state.unifiedTabsByWorktree,
+    browserTabsByWorktree,
+    state.openFiles
+  ]
+  const cached = graphState.cachedMobileSessionWorktreeIds
+  if (cached && cached.source.every((source, index) => source === sources[index])) {
+    return cached.ids
+  }
+  const ids = new Set<string>([
+    ...Object.keys(state.tabsByWorktree),
+    ...Object.keys(state.groupsByWorktree),
+    ...Object.keys(state.unifiedTabsByWorktree),
+    ...Object.keys(browserTabsByWorktree),
+    ...state.openFiles.map((file) => file.worktreeId)
+  ])
+  graphState.cachedMobileSessionWorktreeIds = { source: sources, ids }
+  return ids
+}
+
 /** IDs occurring more than once cannot address the legacy tab-keyed runtime maps safely. */
 export function collectAmbiguousTerminalTabIds(
+  tabsByWorktree: AppState['tabsByWorktree']
+): ReadonlySet<string> {
+  let ambiguous = ambiguousTerminalTabIdsBySource.get(tabsByWorktree)
+  if (!ambiguous) {
+    ambiguous = scanAmbiguousTerminalTabIds(tabsByWorktree)
+    ambiguousTerminalTabIdsBySource.set(tabsByWorktree, ambiguous)
+  }
+  return ambiguous
+}
+
+const ambiguousTerminalTabIdsBySource = new WeakMap<
+  AppState['tabsByWorktree'],
+  ReadonlySet<string>
+>()
+
+function scanAmbiguousTerminalTabIds(
   tabsByWorktree: AppState['tabsByWorktree']
 ): ReadonlySet<string> {
   const seen = new Set<string>()
@@ -86,6 +155,36 @@ export function collectAmbiguousTerminalTabIds(
     }
   }
   return ambiguous
+}
+
+const terminalTabsByWorktreeBySource = new WeakMap<
+  AppState['tabsByWorktree'],
+  ReadonlyMap<string, ReadonlyMap<string, TerminalTab>>
+>()
+
+/** Tabs by id per workspace; a duplicated id in one workspace cannot prove mounted PTY ownership. */
+export function indexTerminalTabsByWorktree(
+  tabsByWorktree: AppState['tabsByWorktree']
+): ReadonlyMap<string, ReadonlyMap<string, TerminalTab>> {
+  const cached = terminalTabsByWorktreeBySource.get(tabsByWorktree)
+  if (cached) {
+    return cached
+  }
+  const terminalTabsByWorktree = new Map<string, Map<string, TerminalTab>>()
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    const tabsById = new Map<string, TerminalTab>()
+    for (const tab of tabs) {
+      // Duplicate persisted tab IDs cannot prove mounted PTY ownership.
+      if (tabsById.has(tab.id)) {
+        tabsById.delete(tab.id)
+        continue
+      }
+      tabsById.set(tab.id, tab)
+    }
+    terminalTabsByWorktree.set(worktreeId, tabsById)
+  }
+  terminalTabsByWorktreeBySource.set(tabsByWorktree, terminalTabsByWorktree)
+  return terminalTabsByWorktree
 }
 
 // Structural equality under JSON-serialization semantics (undefined-valued keys are absent).

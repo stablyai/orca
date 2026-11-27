@@ -29,6 +29,10 @@ export function openUrlInTabBesideBrowserPage(args: {
     ...(sourceUnifiedTab?.executionHostId
       ? { executionHostId: sourceUnifiedTab.executionHostId }
       : {}),
+    // Why: an SSH page is pinned local (null); omitting it would infer the server's streamed pane.
+    ...(sourcePage?.browserRuntimeEnvironmentId !== undefined
+      ? { browserRuntimeEnvironmentId: sourcePage.browserRuntimeEnvironmentId }
+      : {}),
     ...(sourceTab
       ? {
           sessionProfileId: sourceTab.sessionProfileId,

@@ -2,7 +2,7 @@ import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/cont
 import { isFreshNonDoneAgentStatus } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentProcessVerdict } from '../../../../shared/agent-status/process/agent-process-presence'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 export type AgentSwitchRow = Pick<

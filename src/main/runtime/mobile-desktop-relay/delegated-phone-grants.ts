@@ -1,17 +1,22 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
   DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
   DELEGATED_MOBILE_DEVICE_SYNC_MAX_PHONES,
   DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY,
   type DelegatedMobileDeviceSyncParams
-} from '../../../shared/delegated-mobile-device-contract'
+} from '../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 
-const SyncResultSchema = z.object({
-  devices: z.array(z.object({ phoneKey: z.string(), deviceId: z.string(), token: z.string() }))
-})
-const StatusCapabilitiesSchema = z.object({ capabilities: z.array(z.string()).optional() })
+const SyncResultSchema = lazyZodSchema(() =>
+  z.object({
+    devices: z.array(z.object({ phoneKey: z.string(), deviceId: z.string(), token: z.string() }))
+  })
+)
+const StatusCapabilitiesSchema = lazyZodSchema(() =>
+  z.object({ capabilities: z.array(z.string()).optional() })
+)
 
 export type DelegatedPhoneGrant = { deviceId: string; token: string }
 

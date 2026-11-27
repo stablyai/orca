@@ -1,4 +1,4 @@
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   authorityKey,
   type HostAuthority

@@ -16,7 +16,6 @@ import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-run
 import { claimTaskForStart } from '../tasks/task-start-claim'
 import {
   ABANDONED_HERE,
-  ensureRemoteDispatchRecord,
   getRemoteDispatch,
   isRemoteDispatchActive,
   isRemoteDispatchTerminal,
@@ -25,6 +24,8 @@ import {
 import { getOpenRemoteRunLink, type RemoteRunLinkRow } from './remote-run-links'
 import { getLiveRemotePlacement, type RemotePlacementRow } from './remote-placement-hold'
 import { writtenRow } from './written-row'
+import { ensureRemoteDispatchRecord, type RemoteDispatchIdentity } from './remote-dispatch-identity'
+import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 
 export function getRemotePlacement(
   db: OrchestrationDb,
@@ -41,7 +42,9 @@ type TaskCreation = Omit<Parameters<OrchestrationDb['createTask']>[0], 'id' | 'r
 /**
  * Claims the Task for a start on the link's server before the start is sent: the Task is
  * dispatched here and fenced from every other start until the server answers. A same-key retry
- * finds its own reservation. Creates the Task (under its adopted ID) when `create` is given.
+ * finds its own reservation and clears its never-sent mark before it sends. `nothingSent` says no
+ * earlier send under this key can have reached the server. Creates the Task (under its adopted ID)
+ * when `create` is given.
  */
 export function reserveRemotePlacement(
   db: OrchestrationDb,
@@ -51,8 +54,10 @@ export function reserveRemotePlacement(
     requestKey: string
     create?: TaskCreation
     retryOf?: string
+    /** Who is starting it, recorded as a local start records its Dispatch's creator. */
+    creator: DispatchCreator
   }
-): { placement: RemotePlacementRow; task: TaskRow } {
+): { placement: RemotePlacementRow; task: TaskRow; nothingSent: boolean } {
   const transaction = beginLifecycleWriteTransaction(db.db, 'reserve_remote_placement')
   try {
     const link = getOpenRemoteRunLink(db, params.link.conversation_id)
@@ -69,10 +74,14 @@ export function reserveRemotePlacement(
       existing?.request_key === params.requestKey &&
       existing.conversation_id === link.conversation_id
     ) {
+      db.db
+        .prepare('UPDATE remote_placements SET never_sent_at = NULL WHERE task_id = ?')
+        .run(params.taskId)
       commitLifecycleWriteTransaction(db.db, transaction)
       return {
-        placement: existing,
-        task: writtenRow(db.getTask(params.taskId), `Task ${params.taskId}`)
+        placement: { ...existing, never_sent_at: null },
+        task: writtenRow(db.getTask(params.taskId), `Task ${params.taskId}`),
+        nothingSent: existing.never_sent_at !== null
       }
     }
     const task =
@@ -87,17 +96,20 @@ export function reserveRemotePlacement(
       })
     }
     claimTaskForStart(db, task, { retryOf: params.retryOf, onServer: link.environment_id })
+    const creator = recordedCreatorIdentity(params.creator)
     db.db
       .prepare(
         `INSERT INTO remote_placements (
            task_id, run_id, environment_id, conversation_id, state, request_key, prior_task_status,
-           dispatch_id
-         ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, ?)
+           dispatch_id, creator_orca_session_id, creator_pane_key
+         ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, ?, ?, ?)
          ON CONFLICT(task_id) DO UPDATE SET
            run_id = excluded.run_id, environment_id = excluded.environment_id,
            conversation_id = excluded.conversation_id, state = 'reserved',
            request_key = excluded.request_key, prior_task_status = excluded.prior_task_status,
-           dispatch_id = excluded.dispatch_id`
+           dispatch_id = excluded.dispatch_id, never_sent_at = NULL,
+           creator_orca_session_id = excluded.creator_orca_session_id,
+           creator_pane_key = excluded.creator_pane_key`
       )
       .run(
         task.id,
@@ -106,7 +118,9 @@ export function reserveRemotePlacement(
         link.conversation_id,
         params.requestKey,
         task.status,
-        params.retryOf ?? null
+        params.retryOf ?? null,
+        creator.creatorOrcaSessionId,
+        creator.creatorPaneKey
       )
     transitionLifecycleWithDb(db.db, {
       entity: 'task',
@@ -118,7 +132,8 @@ export function reserveRemotePlacement(
     commitLifecycleWriteTransaction(db.db, transaction)
     return {
       placement: writtenRow(getRemotePlacement(db, task.id), `Placement of ${task.id}`),
-      task: writtenRow(db.getTask(task.id), `Task ${task.id}`)
+      task: writtenRow(db.getTask(task.id), `Task ${task.id}`),
+      nothingSent: true
     }
   } catch (error) {
     rollbackLifecycleWriteTransaction(db.db, transaction)
@@ -182,6 +197,8 @@ export function recordRemoteStart(
     requestKey: string
     peerRunId?: string
     agent?: string | null
+    /** The workspace the server's answer says the start created. */
+    worktreeId?: string | null
   }
 ): RemoteDispatchRow | undefined {
   const transaction = beginLifecycleWriteTransaction(db.db, 'record_remote_start')
@@ -191,14 +208,7 @@ export function recordRemoteStart(
     const ours =
       placement?.conversation_id === params.conversationId &&
       (placement.request_key === params.requestKey || placement.dispatch_id === params.dispatchId)
-    const record =
-      link && ours
-        ? adoptRemoteAttempt(db, link, {
-            taskId: params.taskId,
-            dispatchId: params.dispatchId,
-            agent: params.agent
-          })
-        : undefined
+    const record = link && ours ? adoptRemoteAttempt(db, link, params) : undefined
     if (record && params.peerRunId) {
       noteRemoteRunLinkPeerRun(db, params.conversationId, params.peerRunId)
     }
@@ -217,7 +227,7 @@ export function recordRemoteStart(
 export function adoptRemoteAttempt(
   db: OrchestrationDb,
   link: RemoteRunLinkRow,
-  attempt: { taskId: string; dispatchId: string; agent?: string | null }
+  attempt: RemoteDispatchIdentity
 ): RemoteDispatchRow {
   const known = getRemoteDispatch(db, attempt.dispatchId)
   const record = ensureRemoteDispatchRecord(db, link, attempt)

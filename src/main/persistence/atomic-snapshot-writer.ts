@@ -1,6 +1,7 @@
 import { chmodSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
-import { chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { renameFileWithWindowsRetryAsync } from '../../shared/file-write/windows-retry-file-operations'
 import {
   durableWriteTempPath,
   removeStaleDurableWriteTempFiles
@@ -180,15 +181,18 @@ export class AtomicSnapshotWriter {
         encoding: 'utf-8',
         mode: this.options.fileMode
       })
-      if (this.closed || this.lastCommittedGeneration >= generation) {
-        return
-      }
       this.inFlightAsyncTmpFile = tmpFile
       try {
-        await rename(tmpFile, file)
-        renamed = true
-        this.lastCommittedGeneration = Math.max(this.lastCommittedGeneration, generation)
-        this.lastCommittedContent = json
+        // Rechecked before every Windows retry: a backoff can span a quit writeSync or close().
+        renamed = await renameFileWithWindowsRetryAsync(
+          tmpFile,
+          file,
+          () => !this.closed && this.lastCommittedGeneration < generation
+        )
+        if (renamed) {
+          this.lastCommittedGeneration = Math.max(this.lastCommittedGeneration, generation)
+          this.lastCommittedContent = json
+        }
       } catch (err) {
         if (
           (err as NodeJS.ErrnoException).code !== 'ENOENT' ||

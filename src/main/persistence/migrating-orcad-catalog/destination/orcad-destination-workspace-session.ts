@@ -1,6 +1,7 @@
+import { decodeSavedLocalTerminalIds } from '../../restoring-sessions/saved-local-terminal-ids'
 import { serializeOrcadMigrationValue } from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import { isRecord } from '../../../../shared/orcad-migration/orcad-migration-manifest-fields'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { SESSION_FOCUS_FIELDS } from '../../../../shared/workspace-session/workspace-session-host-field-ownership'
 import { mergeWorkspaceSessions } from '../../../orca-profiles/project-transfer/profile-project-session-state'
@@ -41,6 +42,7 @@ export function prepareOrcadMigrationWorkspaceSession(
   if (!incoming) {
     return { incoming: undefined, merged: undefined }
   }
+  incoming = decodeSavedLocalTerminalIds(incoming)
   assertNoSessionRecordConflicts(state.workspaceSession, incoming)
   assertNoSessionEntityConflicts(state.workspaceSession, incoming)
   const merged = mergeWorkspaceSessions(state.workspaceSession, incoming)

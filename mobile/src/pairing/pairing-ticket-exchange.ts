@@ -1,5 +1,5 @@
 import * as ExpoCrypto from 'expo-crypto'
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   EXCHANGE_PAIRING_TICKET_METHOD,
   PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY

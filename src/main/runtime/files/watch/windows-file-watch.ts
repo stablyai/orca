@@ -1,9 +1,10 @@
 import type { FsChangeEvent } from '../../../../shared/file-watch/filesystem-change-event'
-import { PhysicalExitTracker } from '../../../../shared/physical-exit-tracker'
+import { PhysicalExitTracker } from '../../../../shared/process-observation/physical-exit-tracker'
 import { watch as watchFs } from 'node:fs'
 import { WatcherProcessFailure } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import { watchBatchFlushDelayMs } from '../../../../shared/file-watch/filesystem-watch-batch-window'
-import { WATCHER_IGNORE_DIRS } from '../../../ipc/filesystem/watchers/filesystem-watcher-ignore'
+import { watchedDirectoryDeletionCheck } from '../../../../shared/file-watch/windows-deleted-directory-watch'
+import { WATCHER_IGNORE_DIRS } from '../../../../shared/file-watch/watcher-ignore-dirs'
 
 const ignoredWatchDirectories = new Set(WATCHER_IGNORE_DIRS)
 
@@ -52,8 +53,15 @@ export function watchWindowsRuntimeFileExplorer(
     )
   }
 
+  const isRootDeleted = watchedDirectoryDeletionCheck(rootPath)
   // Parcel's Watchman probe can crash Windows serve; use conservative overflow refreshes.
-  const watcher = watchFs(rootPath, { recursive: true }, (_eventType, filename) => {
+  const watcher = watchFs(rootPath, { recursive: true }, (eventType, filename) => {
+    if (isRootDeleted(eventType, filename)) {
+      // Node reports no error here; closing ends libuv's re-arm loop.
+      watcher.close()
+      onError(new Error('File watcher root was deleted'))
+      return
+    }
     if (typeof filename === 'string') {
       const components = filename.split(/[\\/]/)
       // Keep changes to the directory itself visible, but discard churn within excluded trees.

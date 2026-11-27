@@ -10,7 +10,10 @@ import {
 import { acquire, release } from '../execution/github-operation-slots'
 import { classifyGhError } from '../api/gh-error-classification'
 import { ghExecFileAsync } from '../../git/command-runner/hosted-cli/gh-exec-file'
-import { codeHostFailure, classifiedFailure } from '../../../shared/code-host-failure-copy'
+import {
+  codeHostFailure,
+  classifiedFailure
+} from '../../../shared/source-control/code-host-failure-copy'
 
 // An explicit target keeps replies bound to the conversation; otherwise use the selected source.
 export async function addIssueComment(
@@ -72,7 +75,7 @@ export async function addIssueComment(
       author: data.user?.login ?? 'You',
       authorAvatarUrl: data.user?.avatar_url ?? '',
       body: data.body ?? body,
-      bodyImageUrls: githubBodyImageUrls(data.body ?? body, data.body_html),
+      bodyImageUrls: await githubBodyImageUrls(data.body ?? body, data.body_html),
       createdAt: data.created_at ?? new Date().toISOString(),
       url: data.html_url ?? '',
       isBot: data.user?.type === 'Bot'

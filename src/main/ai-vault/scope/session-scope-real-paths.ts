@@ -7,7 +7,7 @@ import type {
 import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
-} from '../../../shared/cross-platform-path'
+} from '../../../shared/file-access/cross-platform-path'
 import { sessionFileExecutionNamespace } from '../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 

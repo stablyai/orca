@@ -1,10 +1,13 @@
 // Available only on Windows desktops or e2e fakes with the internal gate enabled.
 import { ipcRenderer } from 'electron'
 import {
+  WSL_HOST_ADD_PROGRESS_CHANNEL,
   WSL_HOST_CAPABILITY_CHANNEL,
   WSL_HOST_STATUS_CHANNEL,
+  type WslHostAddProgress,
   type WslHostAddResult,
   type WslHostConnectIntent,
+  type WslHostPastUncountedTerminals,
   type WslHostCapability,
   type WslHostDistro,
   type WslHostServerStop,
@@ -18,12 +21,15 @@ export type WslHostsPreloadApi = {
   onCapabilityChanged: (callback: (capability: WslHostCapability) => void) => () => void
   listDistros: () => Promise<WslHostDistro[]>
   add: (args: { distro: string; startIfStopped?: boolean }) => Promise<WslHostAddResult>
+  /** What an in-flight Add waits for; absent in older preloads. */
+  onAddProgress?: (callback: (progress: WslHostAddProgress) => void) => () => void
   remove: (args: { environmentId: string }) => Promise<WslHostServerStop>
   /** Without an intent this is a plain connect, which skips builds a host refused or rolled back.
    *  `withdrawPendingRemoval: false` refuses a host whose Remove is pending instead of keeping it. */
   connect: (args: {
     environmentId: string
     intent?: WslHostConnectIntent
+    pastUncountedTerminals?: WslHostPastUncountedTerminals
     withdrawPendingRemoval?: boolean
   }) => Promise<void>
   getStatuses: () => Promise<WslHostStatus[]>
@@ -44,6 +50,12 @@ const wslHostsApi: WslHostsPreloadApi = {
   },
   listDistros: () => ipcRenderer.invoke('wslHosts:listDistros'),
   add: (args) => ipcRenderer.invoke('wslHosts:add', args),
+  onAddProgress: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, progress: WslHostAddProgress): void =>
+      callback(progress)
+    ipcRenderer.on(WSL_HOST_ADD_PROGRESS_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(WSL_HOST_ADD_PROGRESS_CHANNEL, listener)
+  },
   remove: (args) => ipcRenderer.invoke('wslHosts:remove', args),
   connect: (args) => ipcRenderer.invoke('wslHosts:connect', args),
   getStatuses: () => ipcRenderer.invoke('wslHosts:getStatuses'),

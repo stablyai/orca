@@ -1,7 +1,8 @@
 import { useCallback, useMemo } from 'react'
-import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
 import { bestCmdJPaletteSectionQualityClass } from '@/components/cmd-j/palette-results'
 import {
+  bestPaletteDestination,
   bestPaletteQualityRank,
   shouldExtraSectionLeadPaletteSections,
   shouldIntentSectionLeadPaletteSections,
@@ -38,8 +39,7 @@ type WorktreeJumpPaletteSectionsInput = WorktreeJumpPaletteOpenTabs &
   WorktreeJumpPaletteProjectTargets &
   Pick<WorktreeJumpPaletteQuickActions, 'middleItems'> &
   Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'> &
-  Pick<WorktreeJumpPaletteExtraResults, 'extraSections'> &
-  Pick<
+  Pick<WorktreeJumpPaletteExtraResults, 'extraSections'> & { scoped: boolean } & Pick<
     WorktreeJumpPaletteLocalState,
     | 'createWorktreeName'
     | 'showCreateAction'
@@ -49,6 +49,7 @@ type WorktreeJumpPaletteSectionsInput = WorktreeJumpPaletteOpenTabs &
   >
 
 export function useWorktreeJumpPaletteSections({
+  scoped,
   hasQuery,
   worktreeItems,
   openTabItems,
@@ -72,7 +73,9 @@ export function useWorktreeJumpPaletteSections({
       ),
       bestOpenTabQualityRank: bestPaletteQualityRank(
         openTabItems.map((item) => item.result.qualityClass)
-      )
+      ),
+      bestWorktreeDestination: bestPaletteDestination(worktreeItems.map((item) => item.match.rank)),
+      bestOpenTabDestination: bestPaletteDestination(openTabItems.map((item) => item.result.rank))
     })
   }, [hasQuery, openTabItems, worktreeItems])
 
@@ -203,7 +206,8 @@ export function useWorktreeJumpPaletteSections({
         const expanded = expandedSectionCaps[`extra:${source.id}`] ?? 0
         const capped = capPaletteSection(
           items,
-          (hasQuery ? PALETTE_SECTION_RENDER_CAP : source.emptyQueryCap) + expanded
+          // Showing only bots lists all of them, up to the usual render cap.
+          (hasQuery || scoped ? PALETTE_SECTION_RENDER_CAP : source.emptyQueryCap) + expanded
         )
         return {
           source,
@@ -232,6 +236,7 @@ export function useWorktreeJumpPaletteSections({
     openTabsCap,
     projectTargetItems,
     recentTabItems,
+    scoped,
     retainedOpenTabId,
     retainedWorktreeId,
     typedWorktreeCap,

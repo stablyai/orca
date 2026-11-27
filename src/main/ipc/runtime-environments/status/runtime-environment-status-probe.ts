@@ -21,7 +21,7 @@ export async function getRuntimeEnvironmentStatus(
   userDataPath: string,
   selector: string,
   timeoutMs?: number,
-  options?: { observeOnly?: true; signal?: AbortSignal; reconnect?: true },
+  options?: { observeOnly?: true; signal?: AbortSignal; reconnect?: true; force?: true },
   /** False for a caller pinned to this pairing revision, which a re-pair must fail instead. */
   followRepair = true
 ): Promise<RuntimeRpcResponse<RuntimeStatus>> {

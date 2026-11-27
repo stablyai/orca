@@ -14,9 +14,14 @@ import type { AiVaultConversationCopy } from '../../../shared/ai-vault/resume/ai
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
 import { resolveOmpSessionsDir } from '../../ai-vault/scanners/omp/omp-session-root'
 import { AcpRpcError } from '../transport/acp-errors'
+import { acpReleaseWithChild } from '../launch/acp-structured-launch-preparation'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
+import { acpClientInfo } from '../launch/acp-client-info'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
+import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
+import { AgentCliInstallationError } from '../../native-chat/agent-launch/agent-cli-installation-error'
+import type { AcpStructuredLaunch } from '../launch/acp-structured-launch-resolution'
 
 class AcpCopyAccountMismatchError extends Error {
   constructor() {
@@ -47,6 +52,7 @@ export async function copyAcpConversation(
   let connection: AcpStructuredConnection | null = null
   let result: AiVaultConversationCopy
   let launchEnv: Record<string, string>
+  let release: (() => Promise<void>) | undefined
   try {
     try {
       signal.throwIfAborted()
@@ -54,13 +60,28 @@ export async function copyAcpConversation(
         await waitForPromiseWithSignal(Promise.resolve(deps.resolveLaunchArgs?.() ?? []), signal)
       )
       signal.throwIfAborted()
-      const launch = await waitForPromiseWithSignal(deps.readLaunch(input.identity), signal)
+      const reading = deps.readLaunch(input.identity)
+      // An abort leaves the read running; whatever it then writes is released when it lands.
+      reading.then(
+        (late) => {
+          if (signal.aborted) {
+            void late.release?.().catch(() => undefined)
+          }
+        },
+        () => undefined
+      )
+      const launch = await waitForPromiseWithSignal(reading, signal)
       launchEnv = launch.env
+      release = launch.release
       signal.throwIfAborted()
       deps.spec.assertCopyLaunchArgs?.([], launch.prefixArgs)
+      // The read skips the version check while the source chat's agent is kept, which can change
+      // under it; the copy runs its own agent, so it always checks.
+      await assertCopyCliVersion(deps.spec, launch, signal)
+      signal.throwIfAborted()
       await assertCopyAccountSelected(deps, input.accountHome, launch.env, signal)
       signal.throwIfAborted()
-      connection = deps.connect(
+      connection = acpReleaseWithChild(deps.connect, launch.release)(
         {
           command: launch.command,
           args: launch.args,
@@ -68,7 +89,7 @@ export async function copyAcpConversation(
           env: launch.env,
           envToDelete: launch.envToDelete
         },
-        { clientInfo: { name: 'orca', version: '1' } }
+        { clientInfo: acpClientInfo(launch.spec) }
       )
       options.track(connection)
       const sessionId = await waitForPromiseWithSignal(
@@ -104,7 +125,8 @@ export async function copyAcpConversation(
     } catch (error) {
       if (
         error instanceof AcpCopyAccountMismatchError ||
-        error instanceof OpenCodeCopyServerRouteError
+        error instanceof OpenCodeCopyServerRouteError ||
+        error instanceof AgentCliInstallationError
       ) {
         throw error
       }
@@ -149,7 +171,9 @@ export async function copyAcpConversation(
     }
     return result
   } finally {
-    if (connection && !(await connection.close().catch(() => false))) {
+    if (!connection) {
+      await release?.().catch(() => undefined)
+    } else if (!(await connection.close().catch(() => false))) {
       deps.logger?.warn('ACP conversation copy child exit is unproven; retained for cleanup', {
         scope: 'acp-conversation-copy',
         sessionId: input.identity.sessionId
@@ -186,5 +210,19 @@ async function assertCopyAccountSelected(
     if (!agentSessionAccountHomesEqual(home, selected)) {
       throw new AcpCopyAccountMismatchError()
     }
+  }
+}
+
+/** The copy runs its own agent: a downgraded CLI is named, not left to fail mid-copy. */
+async function assertCopyCliVersion(
+  spec: AcpStructuredSessionAdapterDeps['spec'],
+  launch: Pick<AcpStructuredLaunch, 'command' | 'prefixArgs' | 'cwd' | 'env'>,
+  signal: AbortSignal
+): Promise<void> {
+  const { command, prefixArgs, cwd, env } = launch
+  const checking = checkAcpLaunchVersion(spec, { command, prefixArgs, cwd, env }, false)
+  const version = await waitForPromiseWithSignal(checking, signal)
+  if (version.status === 'tooOld') {
+    throw AgentCliInstallationError.tooOld(spec.agent, version)
   }
 }

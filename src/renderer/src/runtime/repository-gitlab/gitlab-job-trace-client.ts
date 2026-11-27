@@ -3,7 +3,7 @@ import {
   gitLabJobCanHaveTrace,
   gitLabJobTraceToCheckRunDetails
 } from '../../../../shared/source-control/checks/gitlab/gitlab-job-trace-check-details'
-import type { GitLabProjectRef } from '../../../../shared/gitlab-types'
+import type { GitLabProjectRef } from '../../../../shared/gitlab/gitlab-types'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/checks/check-types'
 import { gitLabApiFor, JOB_TRACE_TIMEOUT_MS } from './gitlab-owner-api'
 import { withGitLabIpcTimeout } from './gitlab-ipc-timeout'
@@ -30,7 +30,7 @@ export async function loadGitLabJobLogDetails(args: {
       repoPath: args.repoPath,
       repoId: args.repoId,
       jobId,
-      projectRef: args.projectRef ?? null,
+      projectRef: args.check.gitlabJobProjectRef ?? args.projectRef ?? null,
       logExcerpt: true
     })
   )

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { VirtualizedList } from '@/components/virtualized-list'
+import { VirtualizedList } from '@/components/ui/virtualized-list'
 import { useTranslate } from '@/i18n/use-translate'
 import type { ResourcePtyGroup, ResourcePtyRow as PtyRow } from './resource-pty-view-model'
 import { ResourcePtyRow } from './ResourcePtyRow'

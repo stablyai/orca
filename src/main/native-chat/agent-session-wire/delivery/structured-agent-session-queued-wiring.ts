@@ -18,6 +18,11 @@ import {
   updateQueuedStructuredAgentMessage
 } from './structured-agent-session-queued-edit'
 import { moveQueuedStructuredAgentMessage } from './structured-agent-session-queued-move'
+import {
+  providerRelayMayKeepChat,
+  providerRelayRunLiveness
+} from '../../../provider-relay/app-provider-relays'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 
 /** Read host context lazily during field initialization; session touch renews idle activity. */
 export function wireStructuredAgentSessionQueuedMessages(
@@ -28,10 +33,22 @@ export function wireStructuredAgentSessionQueuedMessages(
 ) {
   const drain = new StructuredAgentSessionQueuedMessageDrain({
     sessions,
+    assertQueuedMessageAllowed: (sessionId, messageId) =>
+      context().deps.assertQueuedMessageAllowed?.(sessionId, messageId),
+    getRecord: (sessionId) => context().deps.store.getRecord(sessionId),
     serialize: (sessionId, task) => context().serialize(sessionId, task),
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(context().deps.store, sessionId),
     wakeDelivery: (sessionId) => context().wakeDelivery(sessionId),
+    keptAgentPending: async (sessionId) => {
+      const record = context().deps.store.getRecord(sessionId)
+      const local = record?.location.executionHostId === LOCAL_EXECUTION_HOST_ID
+      if (!record || !providerRelayMayKeepChat(record.provider, local)) {
+        return false
+      }
+      // Kept or not yet known: either way a queued card waits for the run it may belong to.
+      return (await providerRelayRunLiveness(record)) !== 'gone'
+    },
     captureSelection: async (sessionId, journal) => {
       const ctx = context()
       const stopping = await ctx.readStopping(sessionId)
@@ -61,11 +78,18 @@ export function wireStructuredAgentSessionQueuedMessages(
                   fence: child.fence,
                   acquisitionGeneration: child.generation
                 }) ?? { kind: 'codex-unavailable' })
-              : { kind: 'codex-unavailable' }
+              : { kind: 'codex-unavailable' },
+        // A provider that takes input mid-turn only by cancelling its prompt gets mail after the turn.
+        mailJoinsTurn:
+          !record ||
+          (ctx.deps.adapter.steeringMode?.(sessionId) ??
+            ctx.deps.agents.capabilities(record.provider)?.steering) !== 'queue'
       }
     },
     submissionReceipt: (sessionId) => context().deps.store.submissionReceipt(sessionId),
-    owed: (sessionId, from) => context().deps.queuedAgentMessageOwed?.(sessionId, from) ?? 'owed',
+    queuedAgentMessageOwed: (sessionId, from) =>
+      context().deps.queuedAgentMessageOwed?.(sessionId, from) ?? 'owed',
+    onMessageAdmitted: (message) => context().deps.onMessageAdmitted?.(message),
     logger: deferredStructuredAgentSessionLogger(() => context().deps.logger)
   })
   /** Sessions with a republish waiting in their lane: more wakes before it runs add nothing. */

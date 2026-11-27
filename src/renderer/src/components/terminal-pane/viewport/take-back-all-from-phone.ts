@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { getMobileFitOverridePtyIds } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import { getAllDrivers } from '@/lib/pane-manager/mobile-driver-state'
 import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'

@@ -207,9 +207,3 @@ export const CLIPBOARD_METHODS = [
     }
   })
 ]
-
-export function resetClipboardImageUploadsForTest(): void {
-  for (const uploadId of clipboardImageUploads.keys()) {
-    deleteUpload(uploadId)
-  }
-}

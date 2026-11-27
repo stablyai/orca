@@ -7,7 +7,7 @@ export const MOBILE_MARKDOWN_DOCUMENT_SCALE = 14 / 13
 
 export const styles = themedStyleSheet(() => ({
   root: {
-    gap: spacing.md
+    gap: spacing.lg
   },
   paragraph: {
     fontSize: 13,
@@ -17,7 +17,7 @@ export const styles = themedStyleSheet(() => ({
   heading: {
     fontSize: 14,
     lineHeight: 21,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.textPrimary
   },
   headingLarge: {
@@ -38,17 +38,18 @@ export const styles = themedStyleSheet(() => ({
   strike: {
     textDecorationLine: 'line-through'
   },
+  // In the text's own colour, told apart by a muted underline rather than the accent.
   link: {
-    color: colors.accentBlue,
-    textDecorationLine: 'underline'
+    textDecorationLine: 'underline',
+    textDecorationColor: colors.textMuted
   },
+  // A soft fill without an edge, a step smaller than the text around it; translucent so it reads in
+  // your bubble, quotes and tables too.
   inlineCode: {
     fontFamily: typography.monoFamily,
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textPrimary,
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
+    backgroundColor: colors.translucentFill,
     borderRadius: radii.mark,
     paddingHorizontal: 4
   },
@@ -57,15 +58,22 @@ export const styles = themedStyleSheet(() => ({
   sub: { fontSize: 10, position: 'relative', top: 3 },
   kbd: { borderWidth: 1, borderColor: colors.borderSubtle },
   ins: { textDecorationLine: 'underline' },
+  // Desktop's mention chip: medium weight on a fill that reads on any surface, the user bubble too.
+  mention: {
+    fontWeight: '500',
+    color: colors.textPrimary,
+    backgroundColor: colors.translucentFill,
+    borderRadius: radii.mark
+  },
   inlineCodeLink: {
-    color: colors.accentBlue,
-    textDecorationLine: 'underline'
+    textDecorationLine: 'underline',
+    textDecorationColor: colors.textMuted
   },
   callout: {
     borderLeftWidth: 2,
     borderTopRightRadius: radii.surface,
     borderBottomRightRadius: radii.surface,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm
@@ -77,7 +85,7 @@ export const styles = themedStyleSheet(() => ({
     borderLeftColor: colors.borderSubtle,
     borderTopRightRadius: radii.surface,
     borderBottomRightRadius: radii.surface,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm
@@ -88,7 +96,7 @@ export const styles = themedStyleSheet(() => ({
     color: colors.textSecondary
   },
   codeBlock: {
-    backgroundColor: colors.bgRaised,
+    backgroundColor: colors.editorSurface,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: radii.surface,
@@ -101,19 +109,17 @@ export const styles = themedStyleSheet(() => ({
     gap: spacing.sm,
     minHeight: 32,
     paddingLeft: spacing.md,
-    paddingRight: spacing.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
+    paddingRight: spacing.xs
   },
   codeLanguage: {
     flexShrink: 1,
     fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    textTransform: 'uppercase'
+    color: colors.textMuted
   },
   codeBody: {
     flexDirection: 'row',
-    paddingVertical: spacing.sm
+    paddingTop: spacing.xxs,
+    paddingBottom: spacing.md
   },
   codeLineNumbers: {
     paddingHorizontal: spacing.sm,
@@ -145,8 +151,8 @@ export const styles = themedStyleSheet(() => ({
 
   codeText: {
     fontFamily: typography.monoFamily,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11,
+    lineHeight: 16,
     color: colors.textPrimary
   },
   imageParagraph: {
@@ -192,7 +198,7 @@ export const styles = themedStyleSheet(() => ({
     borderColor: colors.borderSubtle,
     borderRadius: radii.surface,
     overflow: 'hidden',
-    backgroundColor: colors.bgPanel
+    backgroundColor: colors.chatPanel
   },
   tableRow: {
     flexDirection: 'row'
@@ -223,12 +229,12 @@ export const styles = themedStyleSheet(() => ({
     gap: spacing.sm
   },
   listMarker: {
-    // A floor, not a width: "10." would wrap inside a fixed 22.
-    minWidth: 22,
+    // A floor, not a width: "10." would wrap inside a fixed 16.
+    minWidth: 16,
     fontSize: 13,
     lineHeight: 21,
-    color: colors.textSecondary,
-    fontFamily: typography.monoFamily
+    color: colors.textMuted,
+    textAlign: 'center'
   },
   listItemBody: {
     flex: 1,
@@ -245,19 +251,23 @@ export const styles = themedStyleSheet(() => ({
     color: colors.accentBlue
   },
   rule: {
-    marginVertical: spacing.xs,
+    marginVertical: spacing.sm,
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle
   }
 }))
 
-/** A style's size and line height under the reader's zoom; null at 1x, where the sheet holds. */
+/** A style's size and line height under the reader's zoom and line spacing; null at 1x, where the sheet holds. */
 export function scaledMarkdownText(
   style: { fontSize: number; lineHeight: number },
-  textScale: number
+  textScale: number,
+  lineSpacing = 1
 ): { fontSize: number; lineHeight: number } | null {
-  return textScale !== 1
-    ? { fontSize: style.fontSize * textScale, lineHeight: style.lineHeight * textScale }
+  return textScale !== 1 || lineSpacing !== 1
+    ? {
+        fontSize: style.fontSize * textScale,
+        lineHeight: style.lineHeight * textScale * lineSpacing
+      }
     : null
 }
 
@@ -266,11 +276,13 @@ export type MarkdownTone = {
   secondary: TextStyle | null
   link: TextStyle | null
   inlineCode: TextStyle | null
+  /** Headings, where they differ from `text`. */
+  heading?: TextStyle | null
 }
 
 /** Colours and weight over the styles above, for one surface. The default tone overrides nothing. */
 export const MARKDOWN_TONES: Record<
-  'default' | 'userMessage' | 'strong' | 'medium' | 'muted',
+  'default' | 'userMessage' | 'reply' | 'strong' | 'medium' | 'muted',
   MarkdownTone
 > = {
   default: { text: null, secondary: null, link: null, inlineCode: null },
@@ -284,6 +296,14 @@ export const MARKDOWN_TONES: Record<
     secondary: null,
     link: null,
     inlineCode: null
+  })),
+  // An agent's reply in the chat: desktop's softer strong chat foreground, headings at full strength.
+  reply: themedStyles(() => ({
+    text: { color: colors.chatForegroundStrong },
+    secondary: null,
+    link: null,
+    inlineCode: null,
+    heading: { color: colors.textPrimary }
   })),
   // Desktop's user bubble only strengthens the text; links and code keep their chat colors.
   userMessage: themedStyles(() => ({

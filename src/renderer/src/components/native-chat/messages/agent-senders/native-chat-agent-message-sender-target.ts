@@ -4,21 +4,18 @@ import {
   resolveAgentMessageSender,
   type AgentSenderResolution
 } from '@/runtime/native-chat/agent-senders/agent-sender-associations'
-import type { AgentMessageSender } from '../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSender } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { sameAgentIdentity } from '../../../../../../shared/agent-status/title/agent-title-owner'
 import {
   agentMessageSavedKind,
   agentMessageSenderCanOpen
-} from '../../../../../../shared/agent-session/agent-message-presentation'
+} from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 import {
   readAgentMessageSenderRow,
   type SenderLocation
 } from './native-chat-agent-message-sender-source'
-import {
-  agentMessageSenderOwner,
-  unnamedSenderLabel
-} from './native-chat-agent-message-sender-label'
+import { agentMessageSenderOwner } from './native-chat-agent-message-sender-label'
 import { locateLegacyAgentMessageSender } from './native-chat-agent-message-sender-compatibility'
 
 /** Product switch: a terminal sender whose terminal exited or was respawned. 'host-lookup' keeps
@@ -139,13 +136,10 @@ export function agentMessageSenderOpens(
  *  what the user can do. */
 export function agentMessageSenderUnavailableText(
   target: AgentMessageSenderTarget,
-  name: string
+  name: string | undefined
 ): string {
-  // The unnamed label reads mid-sentence; these sentences start with the sender.
   const subject =
-    name === unnamedSenderLabel()
-      ? translate('components.native-chat.agentMessage.unnamedSenderSubject', 'An agent')
-      : name
+    name ?? translate('components.native-chat.agentMessage.unnamedSenderSubject', 'An agent')
   return target.kind === 'replaced'
     ? translate(
         'components.native-chat.agentMessage.senderReplaced',

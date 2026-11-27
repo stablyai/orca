@@ -69,11 +69,11 @@ export const pluginsApi = {
   resolveGitSource: (args) => ipcRenderer.invoke('plugins:resolveGitSource', args),
   install: (source: PluginHostInstallSource): Promise<PluginHostInstallResult> =>
     ipcRenderer.invoke('plugins:install', source),
-  listMarketplaces: () => ipcRenderer.invoke('plugins:listMarketplaces'),
+  listMarketplaces: (args) => ipcRenderer.invoke('plugins:listMarketplaces', args),
   addMarketplace: (source) => ipcRenderer.invoke('plugins:addMarketplace', source),
   removeMarketplace: (args) => ipcRenderer.invoke('plugins:removeMarketplace', args),
   refreshMarketplaces: (args = {}) => ipcRenderer.invoke('plugins:refreshMarketplaces', args),
-  listMarketplacePlugins: () => ipcRenderer.invoke('plugins:listMarketplacePlugins'),
+  listMarketplacePlugins: (args) => ipcRenderer.invoke('plugins:listMarketplacePlugins', args),
   suggestForFileType: (fileType, purpose) =>
     ipcRenderer.invoke('plugins:suggestForFileType', fileType, purpose),
   previewMarketplacePlugin: (args) => ipcRenderer.invoke('plugins:previewMarketplacePlugin', args),
@@ -107,6 +107,7 @@ export const pluginsApi = {
   },
   answerViewRequest: (reply) => ipcRenderer.send(PLUGIN_VIEW_REPLY_CHANNEL, reply),
   getAutoUpdateState: () => ipcRenderer.invoke('plugins:getAutoUpdateState'),
+  takeRequiredPluginFailures: () => ipcRenderer.invoke('plugins:takeRequiredPluginFailures'),
   takeUpdateReviewNotices: () => ipcRenderer.invoke('plugins:takeUpdateReviewNotices'),
   getInstallCounts: () => ipcRenderer.invoke('plugins:getInstallCounts'),
   onInstallCountsChanged: (callback): (() => void) => {

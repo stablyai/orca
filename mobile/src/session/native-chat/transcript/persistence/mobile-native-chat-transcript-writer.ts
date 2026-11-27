@@ -5,7 +5,7 @@ import {
   reduceStructuredAgentSession,
   type StructuredAgentSessionAction,
   type StructuredAgentSessionState
-} from '../../../../../../src/shared/agent-session/structured-agent-session-reducer'
+} from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import {
   MAX_RETAINED_ITEMS,
   MAX_RETAINED_OWN_ITEMS

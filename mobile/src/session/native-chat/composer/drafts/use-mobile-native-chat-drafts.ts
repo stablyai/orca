@@ -8,7 +8,7 @@ import {
   type SetStateAction
 } from 'react'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
-import { appendReturnedDraftText } from '../../../../../../src/shared/returned-draft-text'
+import { appendReturnedDraftText } from '../../../../../../src/shared/native-chat/input/drafts/returned-draft-text'
 import {
   findLandedImagePreviewEchoes,
   mergeSentImagePreviews,
@@ -161,7 +161,8 @@ export function useMobileNativeChatDrafts(args: {
       if (!draftKey) {
         return null
       }
-      const tail = messagesRef.current.at(-1)
+      // Echoes match against image-folded rows, so the boundary must be a row that survives the fold.
+      const tail = normalizeImageTranscriptMessages(messagesRef.current).at(-1)
       return {
         draftKey,
         draftDestination: mobileNativeChatDraftDestination(draftKey),

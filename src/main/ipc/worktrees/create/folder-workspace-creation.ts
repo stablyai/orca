@@ -5,7 +5,7 @@ import type { CreateWorktreeResult } from '../../../../shared/worktree/create-ty
 import type { Store } from '../../../persistence/loading-store/store'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 import { getFolderWorkspaceInstanceId, mergeFolderWorkspace } from '../folder-workspace-model'
-import { resolveWorktreeCreateDisplayNameRequest } from '../../worktree-display-name'
+import { resolveWorktreeCreateDisplayNameRequest } from '../creation/worktree-display-name'
 import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import {
   isPreparedFolderSetup,
@@ -45,6 +45,7 @@ export async function createFolderWorkspace(
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
     ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
     ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
+    ...(args.comment ? { comment: args.comment } : {}),
     ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
     ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
     ...(args.linkedLinearIssue !== undefined ? { linkedLinearIssue: args.linkedLinearIssue } : {}),

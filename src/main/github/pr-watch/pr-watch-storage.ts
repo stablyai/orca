@@ -23,7 +23,7 @@ import {
   deletePRPendingHead
 } from './pr-check-event-tables'
 import { deletePRWatchChats, readPRWatchChatIds, readPRChatActions } from './pr-watch-tables'
-import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
+import { pullRequestKey } from '../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import type { PRVerifiedAction } from './pr-pending-action-types'
 
 export type PRWatchRead =

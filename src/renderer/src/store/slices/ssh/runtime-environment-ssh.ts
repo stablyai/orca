@@ -4,7 +4,7 @@ import type {
   SshConnectionState,
   SshTargetSummary
 } from '../../../../../shared/remote-runtime/ssh/ssh-types'
-import { persistedUIValuesEqual as sshConnectionStatesEqual } from '../../../../../shared/persisted-ui-equality'
+import { persistedUIValuesEqual as sshConnectionStatesEqual } from '../../../../../shared/collections/persisted-ui-equality'
 import {
   collectSshTargetGenerations,
   sshTargetGenerationsEqual,

@@ -105,6 +105,67 @@ public static class OrcaDesktopWin32 {
     public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
 
     [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+
+    [DllImport("user32.dll", EntryPoint = "GetClassNameW", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hwnd, System.Text.StringBuilder className, int maxCount);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowTextW", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowText(IntPtr hwnd, System.Text.StringBuilder text, int maxCount);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowTextLengthW")]
+    private static extern int GetWindowTextLength(IntPtr hwnd);
+
+    private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+
+    // A visible top-level window of the process; tooltips, menus and their shadows are transient popups, not targets.
+    public static bool IsTargetWindow(IntPtr hwnd, int processId) {
+        const uint rootAncestor = 2;
+        if (hwnd == IntPtr.Zero || !IsWindow(hwnd) || !IsWindowVisible(hwnd) || GetAncestor(hwnd, rootAncestor) != hwnd) {
+            return false;
+        }
+        uint ownerProcessId;
+        GetWindowThreadProcessId(hwnd, out ownerProcessId);
+        if (ownerProcessId != (uint)processId) {
+            return false;
+        }
+        var className = new System.Text.StringBuilder(256);
+        GetClassName(hwnd, className, className.Capacity);
+        var name = className.ToString();
+        return name != "tooltips_class32" && name != "#32768" && name != "SysShadow";
+    }
+
+    // Process.MainWindowHandle's rule (first visible unowned window in z-order) without transient popups.
+    public static IntPtr FindMainTargetWindow(int processId) {
+        const uint ownerWindow = 4;
+        var found = IntPtr.Zero;
+        EnumWindows((hwnd, _) => {
+            if (GetWindow(hwnd, ownerWindow) != IntPtr.Zero || !IsTargetWindow(hwnd, processId)) {
+                return true;
+            }
+            found = hwnd;
+            return false;
+        }, IntPtr.Zero);
+        return found;
+    }
+
+    // Reads the caption Windows stores, without sending the target a message, so a hung window cannot block it.
+    public static string GetWindowTitle(IntPtr hwnd) {
+        var title = new System.Text.StringBuilder(GetWindowTextLength(hwnd) + 1);
+        GetWindowText(hwnd, title, title.Capacity);
+        return title.ToString();
+    }
+
+    [DllImport("user32.dll")]
     public static extern bool SetCursorPos(int x, int y);
 
     [DllImport("user32.dll")]
@@ -660,7 +721,8 @@ function Find-OrcaProcess([string]$Query) {
     $needle = ""
     if ($null -ne $Query) { $needle = $Query.Trim() }
     if ([string]::IsNullOrWhiteSpace($needle)) { throw 'appNotFound("")' }
-    if ($needle.StartsWith("pid:", [System.StringComparison]::OrdinalIgnoreCase)) {
+    $byPid = $needle.StartsWith("pid:", [System.StringComparison]::OrdinalIgnoreCase)
+    if ($byPid) {
         $needle = $needle.Substring(4)
     }
 
@@ -673,6 +735,8 @@ function Find-OrcaProcess([string]$Query) {
             return $match
         }
     }
+    # Why: a pid: query names one process; matching its digits against window titles would pick another app.
+    if ($byPid) { throw "appNotFound(`"$Query`")" }
 
     $processNeedle = $needle
     if ($processNeedle.EndsWith(".exe", [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -693,8 +757,8 @@ function Find-OrcaProcess([string]$Query) {
     throw "appNotFound(`"$Query`")"
 }
 
-function Assert-OrcaProcessAllowed($Process) {
-    $values = @($Process.ProcessName, $Process.MainWindowTitle) | ForEach-Object { ([string]$_).ToLowerInvariant() }
+function Assert-OrcaProcessAllowed($Process, [string]$WindowTitle = "") {
+    $values = @($Process.ProcessName, $Process.MainWindowTitle, $WindowTitle) | ForEach-Object { ([string]$_).ToLowerInvariant() }
     foreach ($fragment in $BlockedAppFragments) {
         foreach ($value in $values) {
             if ($value.Contains($fragment)) {
@@ -721,14 +785,31 @@ function Test-OrcaBrowserProcess($Process) {
     $browserProcesses -contains $name
 }
 
-function Get-OrcaRootElement($Process) {
-    if ($Process.MainWindowHandle -eq 0) {
-        throw "No top-level UI Automation window is available for $($Process.ProcessName)."
+# Why: MainWindowHandle is a z-order guess that moves to a tooltip or another window, so the id the agent holds is the window.
+function Resolve-OrcaTargetWindow($Process, $WindowId, $WindowIndex) {
+    if ($null -ne $WindowIndex -and [int]$WindowIndex -ne 0) {
+        throw "windowNotFound(`"$WindowIndex`")"
     }
-    if ([OrcaDesktopWin32]::IsWindowHung([IntPtr]$Process.MainWindowHandle, $WindowResponseTimeoutMilliseconds)) {
+    if ($null -ne $WindowId) {
+        $handle = [IntPtr][int64]$WindowId
+        if (-not [OrcaDesktopWin32]::IsTargetWindow($handle, [int]$Process.Id)) {
+            throw "windowNotFound(`"$WindowId`")"
+        }
+    } else {
+        $handle = [OrcaDesktopWin32]::FindMainTargetWindow([int]$Process.Id)
+        if ($handle -eq [IntPtr]::Zero) {
+            throw "No top-level UI Automation window is available for $($Process.ProcessName)."
+        }
+    }
+    Assert-OrcaProcessAllowed $Process ([OrcaDesktopWin32]::GetWindowTitle($handle))
+    $handle
+}
+
+function Get-OrcaRootElement($Process, [IntPtr]$WindowHandle) {
+    if ([OrcaDesktopWin32]::IsWindowHung($WindowHandle, $WindowResponseTimeoutMilliseconds)) {
         throw "window_not_responding: $(Get-OrcaAppName $Process) is not responding; nothing was read from or sent to it"
     }
-    [Windows.Automation.AutomationElement]::FromHandle([IntPtr]$Process.MainWindowHandle)
+    [Windows.Automation.AutomationElement]::FromHandle($WindowHandle)
 }
 
 function Assert-OrcaInputAllowed($Process) {
@@ -739,9 +820,9 @@ function Assert-OrcaInputAllowed($Process) {
     throw "target_elevated: $(Get-OrcaAppName $Process) runs as administrator, so Windows blocks input to it from Orca; no input was sent"
 }
 
-function Get-OrcaWindowFrame($Process, $RootElement) {
+function Get-OrcaWindowFrame([IntPtr]$WindowHandle, $RootElement) {
     $rect = New-Object OrcaDesktopWin32+RECT
-    if ([OrcaDesktopWin32]::GetWindowRect([IntPtr]$Process.MainWindowHandle, [ref]$rect)) {
+    if ([OrcaDesktopWin32]::GetWindowRect($WindowHandle, [ref]$rect)) {
         return New-OrcaFrame $rect.Left $rect.Top ($rect.Right - $rect.Left) ($rect.Bottom - $rect.Top)
     }
 
@@ -752,10 +833,6 @@ function Get-OrcaWindowFrame($Process, $RootElement) {
         }
     } catch {}
     $null
-}
-
-function Get-OrcaWindowId($Process) {
-    [int64]$Process.MainWindowHandle
 }
 
 function Get-OrcaAppName($Process) {
@@ -774,15 +851,6 @@ function New-OrcaAppRecord($Process) {
     }
 }
 
-function Assert-OrcaWindowTarget($Process, $WindowId, $WindowIndex) {
-    if ($null -ne $WindowIndex -and [int]$WindowIndex -ne 0) {
-        throw "windowNotFound(`"$WindowIndex`")"
-    }
-    if ($null -ne $WindowId -and [int64]$WindowId -ne (Get-OrcaWindowId $Process)) {
-        throw "windowNotFound(`"$WindowId`")"
-    }
-}
-
 function Invoke-OrcaWindowPatternActivation($RootElement) {
     # Why: reapplying the current visual state lets the window's provider activate it when Windows refuses our raise (agent-desktop #651).
     # Only for maximized windows: re-applying Normal restores a snapped window's pre-snap size.
@@ -794,24 +862,22 @@ function Invoke-OrcaWindowPatternActivation($RootElement) {
 }
 
 # Brings only the target window to the front; returns $null once it is the foreground window, otherwise why not.
-function Restore-OrcaWindow($Process, $RootElement) {
-    $handle = [IntPtr]$Process.MainWindowHandle
-    if ($handle -eq [IntPtr]::Zero) { return "it has no top-level window" }
-    if ([OrcaDesktopWin32]::IsWindowCloaked($handle)) {
+function Restore-OrcaWindow([IntPtr]$Handle, $RootElement) {
+    if ([OrcaDesktopWin32]::IsWindowCloaked($Handle)) {
         return "it is on another virtual desktop, and raising it would switch the user's desktop"
     }
     # Why: SW_RESTORE also un-maximizes, which moves the frame the agent targeted.
-    if ([OrcaDesktopWin32]::IsIconic($handle)) {
-        [void][OrcaDesktopWin32]::ShowWindow($handle, 9)
+    if ([OrcaDesktopWin32]::IsIconic($Handle)) {
+        [void][OrcaDesktopWin32]::ShowWindow($Handle, 9)
     }
-    if (Test-OrcaWindowFocused $handle) { return $null }
+    if (Test-OrcaWindowFocused $Handle) { return $null }
     # Why: Windows often refuses a background process's raise; after one refusal try the UIA route, then one more raise.
-    [void][OrcaDesktopWin32]::SetForegroundWindow($handle)
-    if (Wait-OrcaWindowFocused $handle 250) { return $null }
+    [void][OrcaDesktopWin32]::SetForegroundWindow($Handle)
+    if (Wait-OrcaWindowFocused $Handle 250) { return $null }
     Invoke-OrcaWindowPatternActivation $RootElement
-    if (Wait-OrcaWindowFocused $handle 250) { return $null }
-    [void][OrcaDesktopWin32]::SetForegroundWindow($handle)
-    if (Wait-OrcaWindowFocused $handle 250) { return $null }
+    if (Wait-OrcaWindowFocused $Handle 250) { return $null }
+    [void][OrcaDesktopWin32]::SetForegroundWindow($Handle)
+    if (Wait-OrcaWindowFocused $Handle 250) { return $null }
     "Windows refused to bring it to the front"
 }
 
@@ -852,12 +918,12 @@ function Assert-OrcaKeyboardFocus([IntPtr]$WindowHandle, $Operation, $RestoreFai
 }
 
 # Raises the target for real mouse input, then returns its frame read after the raise (restoring moves it).
-function Restore-OrcaPointerWindow($Process, $RootElement) {
-    $failure = Restore-OrcaWindow $Process $RootElement
+function Restore-OrcaPointerWindow($Process, [IntPtr]$WindowHandle, $RootElement) {
+    $failure = Restore-OrcaWindow $WindowHandle $RootElement
     if ($null -ne $failure) {
         throw "window_not_focused: restoreWindow was requested but $(Get-OrcaAppName $Process) did not come to the front ($failure); no pointer input was sent"
     }
-    Get-OrcaWindowFrame $Process $RootElement
+    Get-OrcaWindowFrame $WindowHandle $RootElement
 }
 
 function New-OrcaForegroundRefusal($Process, [string]$Need, [string]$Alternative = "", [string]$Takes = "moves the user's pointer") {
@@ -1109,7 +1175,7 @@ function Test-OrcaTextPatternReadOnly($Element) {
     }
 }
 
-function Invoke-OrcaElementTextInsertion($Element, $Record, $Process, $RootElement, $Operation, [string]$Text) {
+function Invoke-OrcaElementTextInsertion($Element, $Record, $Process, [IntPtr]$WindowHandle, $RootElement, $Operation, [string]$Text) {
     if ($null -eq $Element) {
         throw "stale element: element $($Record.index) is gone; run get-app-state again and use a fresh element index"
     }
@@ -1130,12 +1196,12 @@ function Invoke-OrcaElementTextInsertion($Element, $Record, $Process, $RootEleme
     if (-not [bool]$Operation.restoreWindow) {
         throw (New-OrcaForegroundRefusal $Process "element $index accepts text only as keys, which go only to the window in front" "" "takes the user's keyboard")
     }
-    $failure = Restore-OrcaWindow $Process $RootElement
-    Assert-OrcaKeyboardFocus ([IntPtr]$Process.MainWindowHandle) $Operation $failure $Process
+    $failure = Restore-OrcaWindow $WindowHandle $RootElement
+    Assert-OrcaKeyboardFocus $WindowHandle $Operation $failure $Process
     try { $Element.SetFocus() } catch {
         throw "window_not_focused: element $index did not take keyboard focus; no text was sent"
     }
-    Send-OrcaText ([IntPtr]$Process.MainWindowHandle) $Text
+    Send-OrcaText $WindowHandle $Text
     [pscustomobject]@{ path = "synthetic"; actionName = "typeText"; fallbackReason = "actionUnsupported"; verification = [pscustomobject]@{ state = "unverified"; reason = "synthetic_input" } }
 }
 
@@ -1602,12 +1668,12 @@ function Get-OrcaScreenshot($ScreenshotRequest, $WindowFrame, [IntPtr]$WindowHan
 
 function New-OrcaSnapshot([string]$Query, $ScreenshotRequest, $WindowId = $null, $WindowIndex = $null, [bool]$RestoreWindow = $false, $TreeRoot = $null) {
     $process = Find-OrcaProcess $Query
-    Assert-OrcaWindowTarget $process $WindowId $WindowIndex
+    $handle = Resolve-OrcaTargetWindow $process $WindowId $WindowIndex
     # Root first: its hang probe must run before ShowWindow, which blocks on a hung window.
-    $root = Get-OrcaRootElement $process
+    $root = Get-OrcaRootElement $process $handle
     # Why: observation works behind other windows, so a refused raise still returns the snapshot.
-    if ($RestoreWindow) { [void](Restore-OrcaWindow $process $root) }
-    $windowFrame = Get-OrcaWindowFrame $process $root
+    if ($RestoreWindow) { [void](Restore-OrcaWindow $handle $root) }
+    $windowFrame = Get-OrcaWindowFrame $handle $root
     $walkRoot = $root
     if ($null -ne $TreeRoot) {
         $walkRoot = Find-OrcaElement $root $TreeRoot
@@ -1616,13 +1682,13 @@ function New-OrcaSnapshot([string]$Query, $ScreenshotRequest, $WindowId = $null,
         }
     }
     $tree = Render-OrcaTree $walkRoot $windowFrame (Test-OrcaBrowserProcess $process)
-    $screenshot = Get-OrcaScreenshot $ScreenshotRequest $windowFrame ([IntPtr]$process.MainWindowHandle)
+    $screenshot = Get-OrcaScreenshot $ScreenshotRequest $windowFrame $handle
 
     [pscustomobject]@{
         snapshotId = [guid]::NewGuid().ToString()
         app = New-OrcaAppRecord $process
-        windowTitle = $process.MainWindowTitle
-        windowId = Get-OrcaWindowId $process
+        windowTitle = [OrcaDesktopWin32]::GetWindowTitle($handle)
+        windowId = [int64]$handle
         windowBounds = $windowFrame
         screenshotBase64 = if ($null -ne $screenshot) { $screenshot.base64 } else { $null }
         screenshotFormat = if ($null -ne $screenshot) { $screenshot.format } else { $null }
@@ -1648,8 +1714,9 @@ function Get-OrcaAppList {
 
 function Get-OrcaWindowList([string]$Query) {
     $process = Find-OrcaProcess $Query
-    $root = Get-OrcaRootElement $process
-    $windowFrame = Get-OrcaWindowFrame $process $root
+    $handle = Resolve-OrcaTargetWindow $process $null $null
+    $root = Get-OrcaRootElement $process $handle
+    $windowFrame = Get-OrcaWindowFrame $handle $root
     $x = $null
     $y = $null
     $width = 0
@@ -1666,8 +1733,8 @@ function Get-OrcaWindowList([string]$Query) {
         windows = @([pscustomobject]@{
             index = 0
             app = $app
-            id = Get-OrcaWindowId $process
-            title = $process.MainWindowTitle
+            id = [int64]$handle
+            title = [OrcaDesktopWin32]::GetWindowTitle($handle)
             x = $x
             y = $y
             width = $width
@@ -1675,7 +1742,7 @@ function Get-OrcaWindowList([string]$Query) {
             isMinimized = $false
             isOffscreen = $false
             screenIndex = $null
-            platform = [pscustomobject]@{ backend = "uia"; nativeWindowHandle = Get-OrcaWindowId $process }
+            platform = [pscustomobject]@{ backend = "uia"; nativeWindowHandle = [int64]$handle }
         })
     }
 }
@@ -2480,17 +2547,16 @@ function Invoke-OrcaOperation($Operation) {
 
     $process = Find-OrcaProcess $Operation.app
     Assert-OrcaInputAllowed $process
-    Assert-OrcaWindowTarget $process $Operation.windowId $Operation.windowIndex
-    $root = Get-OrcaRootElement $process
+    $handle = Resolve-OrcaTargetWindow $process $Operation.windowId $Operation.windowIndex
+    $root = Get-OrcaRootElement $process $handle
     $restoreWindow = [bool]$Operation.restoreWindow
-    $windowFrame = if ($null -ne $Operation.windowBounds) { $Operation.windowBounds } else { Get-OrcaWindowFrame $process $root }
+    $windowFrame = if ($null -ne $Operation.windowBounds) { $Operation.windowBounds } else { Get-OrcaWindowFrame $handle $root }
     $element = Find-OrcaElement $root $Operation.element
     $fromElement = Find-OrcaElement $root $Operation.fromElement
     $toElement = Find-OrcaElement $root $Operation.toElement
-    $handle = [IntPtr]$process.MainWindowHandle
     $typesIntoElement = $Operation.tool -eq "type_text" -and $null -ne $Operation.element
     if ($Operation.tool -in @("type_text", "press_key", "hotkey", "paste_text") -and -not $typesIntoElement) {
-        $restoreFailure = if ($restoreWindow) { Restore-OrcaWindow $process $root } else { $null }
+        $restoreFailure = if ($restoreWindow) { Restore-OrcaWindow $handle $root } else { $null }
         Assert-OrcaKeyboardFocus $handle $Operation $restoreFailure $process
     }
     $foregroundBefore = [OrcaDesktopWin32]::GetForegroundWindow()
@@ -2527,7 +2593,7 @@ function Invoke-OrcaOperation($Operation) {
             if (-not $restoreWindow) {
                 throw (New-OrcaForegroundRefusal $process $pointerNeed $alternative)
             }
-            $windowFrame = Restore-OrcaPointerWindow $process $root
+            $windowFrame = Restore-OrcaPointerWindow $process $handle $root
             $point = Get-OrcaPointerPoint $element $Operation.element $Operation.x $Operation.y "x" "y" $windowFrame
             $cursor = Get-OrcaCursorPosition
             try {
@@ -2574,7 +2640,7 @@ function Invoke-OrcaOperation($Operation) {
                 throw (New-OrcaForegroundRefusal $process "nothing under $where scrolls $($Operation.direction) through UI Automation, so this scroll needs the real mouse wheel")
             }
             # Why: the wheel scrolls whatever is under the pointer, so the window must be on top.
-            $windowFrame = Restore-OrcaPointerWindow $process $root
+            $windowFrame = Restore-OrcaPointerWindow $process $handle $root
             $point = Get-OrcaPointerPoint $element $Operation.element $Operation.x $Operation.y "x" "y" $windowFrame
             $cursor = Get-OrcaCursorPosition
             try {
@@ -2596,7 +2662,7 @@ function Invoke-OrcaOperation($Operation) {
             if (-not $restoreWindow) {
                 throw (New-OrcaForegroundRefusal $process "a drag needs the real mouse, because UI Automation has no drag")
             }
-            $windowFrame = Restore-OrcaPointerWindow $process $root
+            $windowFrame = Restore-OrcaPointerWindow $process $handle $root
             $from = Get-OrcaPointerPoint $fromElement $Operation.fromElement $Operation.from_x $Operation.from_y "from_x" "from_y" $windowFrame
             $to = Get-OrcaPointerPoint $toElement $Operation.toElement $Operation.to_x $Operation.to_y "to_x" "to_y" $windowFrame
             $cursor = Get-OrcaCursorPosition
@@ -2610,7 +2676,7 @@ function Invoke-OrcaOperation($Operation) {
         "type_text" {
             $text = Get-OrcaRequiredString $Operation.text "text"
             if ($typesIntoElement) {
-                $action = Invoke-OrcaElementTextInsertion $element $Operation.element $process $root $Operation $text
+                $action = Invoke-OrcaElementTextInsertion $element $Operation.element $process $handle $root $Operation $text
             } else {
                 Send-OrcaText $handle $text
                 $action = [pscustomobject]@{ path = "synthetic"; actionName = "typeText"; fallbackReason = $null; verification = [pscustomobject]@{ state = "unverified"; reason = "synthetic_input" } }
@@ -2647,14 +2713,16 @@ function Invoke-OrcaOperation($Operation) {
 
     try {
         try {
-            $snapshot = New-OrcaSnapshot $Operation.app $screenshotRequest $Operation.windowId $Operation.windowIndex
+            # Why: the observe reads the process and window the input went to, even if the action retitled it.
+            $snapshot = New-OrcaSnapshot "pid:$($process.Id)" $screenshotRequest ([int64]$handle) $null
         } catch {
             if ($_.Exception.Message -like "window_not_responding:*") { throw }
-            if ($null -eq $Operation.windowId -and $null -eq $Operation.windowIndex) { throw }
+            # Why: only a target window the action closed may hand the observe to the app's main window.
+            if ([OrcaDesktopWin32]::IsTargetWindow($handle, [int]$process.Id)) { throw }
             if ($null -eq $action.verification) {
                 $action | Add-Member -NotePropertyName verification -NotePropertyValue ([pscustomobject]@{ state = "unverified"; reason = "window_changed" })
             }
-            $snapshot = New-OrcaSnapshot $Operation.app $screenshotRequest $null $null
+            $snapshot = New-OrcaSnapshot "pid:$($process.Id)" $screenshotRequest $null $null
         }
     } catch {
         # Why: the input was already sent, so the pre-action "nothing was sent" wording would invite a duplicate retry.

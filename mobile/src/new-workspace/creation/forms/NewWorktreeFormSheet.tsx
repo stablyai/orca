@@ -50,6 +50,7 @@ export function NewWorktreeFormSheet(props: {
   setupRunPolicy: SetupRunPolicy
   setupDecisionChoice: Exclude<WorkspaceCreateSetupDecision, 'inherit'> | null
   runSetup: boolean
+  waitForSetup: boolean | null
   error: string
   creating: boolean
   canCreate: boolean
@@ -65,15 +66,14 @@ export function NewWorktreeFormSheet(props: {
   onNoteChange: (note: string) => void
   onSetupDecisionChange: (decision: Exclude<WorkspaceCreateSetupDecision, 'inherit'>) => void
   onRunSetupChange: (run: boolean) => void
+  onWaitForSetupChange: (wait: boolean) => void
   onCreate: () => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const gated = props.sshGate.requiresConnection
-  // Desktop's rule: a git project makes a worktree, a folder project a plain workspace.
-  const title = props.selectedRepoIsGit
-    ? t('components.newWorktreeFormSheet.createWorktree', 'Create worktree')
-    : t('components.newWorktreeFormSheet.createWorkspace', 'Create workspace')
+  // One name with the + that opens it; the project row says whether it makes a worktree.
+  const title = t('components.newWorktreeFormSheet.newWorkspace', 'New workspace')
   const agentLabel = gated
     ? t('components.newWorktreeFormSheet.connectTargetFirst', 'Connect target first')
     : props.selectedAgent.label
@@ -165,17 +165,21 @@ export function NewWorktreeFormSheet(props: {
             setupRunPolicy={props.setupRunPolicy}
             setupDecisionChoice={props.setupDecisionChoice}
             runSetup={props.runSetup}
+            waitForSetup={props.waitForSetup}
             onExpandedChange={props.onShowAdvancedChange}
             onNoteChange={props.onNoteChange}
             onSetupDecisionChange={props.onSetupDecisionChange}
             onRunSetupChange={props.onRunSetupChange}
+            onWaitForSetupChange={props.onWaitForSetupChange}
           />
 
           {props.error ? <Text style={styles.error}>{props.error}</Text> : null}
           <View style={styles.footer}>
             <SheetPrimaryButton
               label={
-                gated ? t('components.newWorktreeFormSheet.connectTarget', 'Connect target') : title
+                gated
+                  ? t('components.newWorktreeFormSheet.connectTarget', 'Connect target')
+                  : t('components.newWorktreeFormSheet.create', 'Create')
               }
               busy={props.creating}
               disabled={!props.canCreate}

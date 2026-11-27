@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
-import type { AgentMessageSender } from '../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSender } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { SenderLocation } from './native-chat-agent-message-sender-source'
 import { findAgentMessageSenderChatTab } from './native-chat-agent-message-sender-label'
 

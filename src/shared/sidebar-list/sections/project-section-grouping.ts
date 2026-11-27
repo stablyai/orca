@@ -1,15 +1,15 @@
 // The desktop sidebar's Project sections; the paired phone calls these same functions.
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import { orderProjectSections, type ActivityItem } from './project-section-order'
-import type { ProjectOrderBy } from '../../ui-chrome-types'
-import { toSshExecutionHostId } from '../../execution-host'
+import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
+import { toSshExecutionHostId } from '../../execution-host/execution-host'
 import type { Project, ProjectHostSetup } from '../../project/project-types'
 import type { Repo } from '../../repository/repo-types'
 import { parseWslUncPath } from '../../file-access/wsl-paths'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison
-} from '../../cross-platform-path'
+} from '../../file-access/cross-platform-path'
 
 /** The project fields grouping reads. */
 export type ProjectSectionProject = Pick<Project, 'id' | 'displayName'>
@@ -156,37 +156,62 @@ export type ProjectHeaderRevealTarget<R extends Pick<ProjectSectionRepo, 'displa
   projectId?: string
 }
 
+const NULL_PROJECT_GROUPING_INDEX_KEY: object = {}
+const projectGroupingForRepoCache = new WeakMap<
+  ReadonlyMap<string, unknown>,
+  WeakMap<object, Map<string, ProjectHeaderRevealTarget<Pick<ProjectSectionRepo, 'displayName'>>>>
+>()
+
 export function getProjectGroupingForRepo<R extends Pick<ProjectSectionRepo, 'displayName'>>(
   repoId: string,
   repoMap: ReadonlyMap<string, R>,
   projectIndex: ProjectGroupingIndex | null
 ): ProjectHeaderRevealTarget<R> {
   const repo = repoMap.get(repoId)
+  const indexKey: object = projectIndex ?? NULL_PROJECT_GROUPING_INDEX_KEY
+  let byIndex = projectGroupingForRepoCache.get(repoMap)
+  let byRepoId = byIndex?.get(indexKey)
+  const cached = byRepoId?.get(repoId)
+  if (cached && cached.repo === repo) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cached under this exact repoMap whose values are R, and cached.repo === repo.
+    return cached as ProjectHeaderRevealTarget<R>
+  }
   const setup = projectIndex?.setupByRepoId.get(repoId)
   const project = setup ? projectIndex?.projectById.get(setup.projectId) : undefined
+  let result: ProjectHeaderRevealTarget<R>
   if (!setup || !project) {
-    return {
+    result = {
       key: `repo:${repoId}`,
       label: repo?.displayName ?? 'Unknown',
       repo
     }
-  }
-  if (projectIndex && isCheckoutScopedProjectSetup(setup, projectIndex)) {
+  } else if (projectIndex && isCheckoutScopedProjectSetup(setup, projectIndex)) {
     // Why: only the ambiguous surface needs checkout-specific headers.
-    return {
+    result = {
       key: `project:${project.id}::setup:${repoId}`,
       label: repo?.displayName ?? setup.displayName,
       repo,
       projectId: project.id
     }
+  } else {
+    // Provisioned copies and unambiguous checkouts share project identity rather than path-scoped setup identity.
+    result = {
+      key: `project:${project.id}`,
+      label: project.displayName,
+      repo,
+      projectId: project.id
+    }
   }
-  // Provisioned copies and unambiguous checkouts share project identity rather than path-scoped setup identity.
-  return {
-    key: `project:${project.id}`,
-    label: project.displayName,
-    repo,
-    projectId: project.id
+  if (!byIndex) {
+    byIndex = new WeakMap()
+    projectGroupingForRepoCache.set(repoMap, byIndex)
   }
+  if (!byRepoId) {
+    byRepoId = new Map()
+    byIndex.set(indexKey, byRepoId)
+  }
+  byRepoId.set(repoId, result)
+  return result
 }
 
 export function getProjectHeaderRevealTarget(

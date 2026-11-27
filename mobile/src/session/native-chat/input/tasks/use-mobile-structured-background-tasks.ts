@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react'
 import type { AgentChildRowContext } from '../../../../../../src/shared/agent-status/presentation/agent-child-row-model'
 import type { AgentSessionCancelResult } from '../../../../../../src/shared/agent-session/agent-session-wire'
 import { agentChildRowContextForSessionStream } from '../../../../../../src/shared/agent-status/presentation/agent-child-row-stream-context'
-import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import {
   structuredSessionBackgroundTasksView,
   type StructuredSessionBackgroundTasksView

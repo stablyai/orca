@@ -1,6 +1,6 @@
 import { createContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
-import { createNativeChatFileLinkHooks } from '../../../../../src/shared/native-chat/native-chat-file-link-hooks'
-import type { NativeChatFileLinkExistence } from '../../../../../src/shared/native-chat/native-chat-file-link-existence'
+import { createNativeChatFileLinkHooks } from '../../../../../src/shared/native-chat/file-access/native-chat-file-link-hooks'
+import type { NativeChatFileLinkExistence } from '../../../../../src/shared/native-chat/file-access/native-chat-file-link-existence'
 import type { GitHubRepoReference } from '../../../../../src/shared/github/markdown/github-reference-links'
 
 /** What a chat knows about its workspace for links in its text; absent outside chat. */

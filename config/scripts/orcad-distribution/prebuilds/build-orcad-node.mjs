@@ -61,6 +61,7 @@ function ensurePrebuildSlot(target, isCurrent) {
     const result = runProcessSync({
       program: process.execPath,
       args: [
+        '--disable-warning=MODULE_TYPELESS_PACKAGE_JSON',
         join(root, 'config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs'),
         `--slot=${target}`
       ],
@@ -85,7 +86,10 @@ async function main() {
   const runtimePath = isCurrent ? await placeRuntime(outputDir, target) : null
   const result = runProcessSync({
     program: process.execPath,
-    args: [join(root, 'config/scripts/orcad-distribution/server-bundle/build-orcad.mjs')],
+    args: [
+      '--disable-warning=MODULE_TYPELESS_PACKAGE_JSON',
+      join(root, 'config/scripts/orcad-distribution/server-bundle/build-orcad.mjs')
+    ],
     cwd: root,
     env: {
       ...process.env,

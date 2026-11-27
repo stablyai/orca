@@ -8,8 +8,12 @@ import {
 import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
-import '../../../../../../shared/constants'
+import '../../../../../../shared/orca-profiles/constants'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../../../../shared/orca-profiles/orca-cloud-team-policy'
+import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
+import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../../search/settings-search'
 import {
@@ -24,21 +28,41 @@ import { BrowserUseCookieImportStep } from './BrowserUseCookieImportStep'
 import { useTranslate } from '@/i18n/use-translate'
 
 type BrowserUseSetupProps = {
+  /** The host the pane's host picker shows; the skill is checked and installed there. */
+  hostId: ExecutionHostId
   onConfigureMoreBrowsers?: () => void
   onOpenComputerUse?: () => void
 }
 
-export function BrowserUseSetup({
+export function BrowserUseSetup(props: BrowserUseSetupProps): React.JSX.Element {
+  const t = useTranslate()
+  const blocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.browserUse)
+  if (blocked) {
+    return (
+      <div id={BROWSER_USE_SETTINGS_TARGET_ID}>
+        <SettingsRow
+          label={t('settings.browserUse.teamDisabled', 'Browser Use is turned off by your team.')}
+          control={null}
+        />
+      </div>
+    )
+  }
+  return <BrowserUseSetupContent {...props} />
+}
+
+function BrowserUseSetupContent({
+  hostId,
   onConfigureMoreBrowsers,
   onOpenComputerUse
-}: BrowserUseSetupProps = {}): React.JSX.Element {
+}: BrowserUseSetupProps): React.JSX.Element {
   const t = useTranslate()
+  const computerUseBlocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.computerUse)
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
   const fetchBrowserSessionProfiles = useAppStore((s) => s.fetchBrowserSessionProfiles)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
 
-  const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const skillRuntime = useActiveProjectSkillRuntime(hostId)
 
   const [browserUseEnabled, setBrowserUseEnabled] = useState<boolean>(() => {
     return localStorage.getItem(BROWSER_USE_ENABLED_STORAGE_KEY) === '1'
@@ -69,7 +93,8 @@ export function BrowserUseSetup({
     refresh: refreshSkill
   } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
     enabled: browserUseEnabled,
-    discoveryTarget: activeSkillRuntime.discoveryTarget,
+    runtimeTarget: skillRuntime.discoveryRuntimeTarget,
+    discoveryTarget: skillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
 
@@ -83,7 +108,7 @@ export function BrowserUseSetup({
   ])
   const steps = [skillDetected, cookiesImported]
   const completedCount = steps.filter(Boolean).length
-  const skillDisabled = Boolean(activeSkillRuntime.installDisabledReason)
+  const skillDisabled = Boolean(skillRuntime.installDisabledReason)
 
   const sourceLabel = defaultProfile?.source
     ? `${BROWSER_FAMILY_LABELS[defaultProfile.source.browserFamily] ?? defaultProfile.source.browserFamily}${defaultProfile.source.profileName ? ` (${defaultProfile.source.profileName})` : ''}`
@@ -145,7 +170,7 @@ export function BrowserUseSetup({
         </div>
       </div>
 
-      {onOpenComputerUse ? (
+      {onOpenComputerUse && !computerUseBlocked ? (
         <BrowserUseComputerUseNotice onOpenComputerUse={onOpenComputerUse} />
       ) : null}
 
@@ -168,8 +193,10 @@ export function BrowserUseSetup({
           <BrowserUseSkillStep
             skillDetected={skillDetected}
             skillLoading={skillLoading}
-            skillError={activeSkillRuntime.installDisabledReason ?? skillError}
+            skillError={skillRuntime.installDisabledReason ?? skillError}
             disabled={skillDisabled}
+            target={skillRuntime.bundledSkillTarget}
+            terminalRuntime={skillRuntime.agentRuntime}
             onBeforeInstall={() => {
               useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
             }}

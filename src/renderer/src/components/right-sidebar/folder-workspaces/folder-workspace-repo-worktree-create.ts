@@ -5,7 +5,7 @@ import { getRepoWorkspaceCreationTargetHint } from '@/lib/workspace/creation/pro
 import { runtimeTargetSupportsCapability } from '@/runtime/rpc/compatibility/runtime-target-capability'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
 import { useAppStore } from '@/store/index'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE } from '../../../../../shared/new-workspace/worktree-create-collision'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'

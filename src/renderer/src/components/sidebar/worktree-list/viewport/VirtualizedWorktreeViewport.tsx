@@ -1,6 +1,7 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import { createProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
 import { useTranslate } from '@/i18n/use-translate'
@@ -36,6 +37,7 @@ import { buildWorktreeVirtualRowContext } from './virtual-row-context'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
+import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 
 const EMPTY_HOST_OPTIONS: NonNullable<VirtualizedWorktreeViewportProps['hostOptions']> = []
 
@@ -69,7 +71,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const settings = useAppStore((s) => s.settings)
   const worktreeVisibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
-  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
+  const lineageParentIdentities = useAppStoreWithHostStatuses(selectSidebarLineageParentIdentities)
   const projectHeaderHostContexts = useProjectHeaderHostContexts({
     rows,
     visibleProjectRepoIdsBySection: props.visibleProjectRepoIdsBySection,
@@ -77,7 +79,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     repoMap,
     projectGrouping: props.projectGrouping
   })
-  const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
+  const newCardStyle = useAppStore(selectDrawsNewWorktreeCards)
   const {
     handleOpenRepoSettings,
     handleOpenWorktreeVisibility,

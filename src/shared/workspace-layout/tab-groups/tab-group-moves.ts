@@ -1,4 +1,4 @@
-import type { TabGroupLayoutNode } from '../../tab-types'
+import type { TabGroupLayoutNode } from './tab-types'
 import { buildSplitNode, replaceLeaf } from './tab-group-layout-tree'
 import type { LayoutGroup } from '../workspace-layout-model'
 

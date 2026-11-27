@@ -18,7 +18,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentSessionMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { JournalTransactionalDatabase } from './database/journal-host-database'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
@@ -73,6 +73,8 @@ export type AgentSessionJournalOptions = {
   now?: () => number
   mintEpoch?: () => string
   recover?: { fence: number }
+  /** The last run's writer is still running (kept by the terminal host), so its live work is too. */
+  keptWriter?: true
   onRecoveryFailure?: (failure: JournalOpenRecoveryResult['failures'][number]) => void
   /** Saves a person's Stop of limited work in the same commit as the rows that reveal it. */
   withdrawStoppedCut?: (cut: UsageLimitContinueIdentity) => JournalOperationReceipt | undefined
@@ -89,7 +91,12 @@ export type ResolveDispatchInput = {
 } &
   /** Null identity means the provider accepted without echoing an item, e.g. an in-place command. */
   (
-    | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity | null }
+    | {
+        state: 'accepted'
+        providerIdentity: AgentJournalItemIdentity | null
+        /** The running turn it joined, which another send opened; absent when it opened its own. */
+        answeredInTurn?: AgentJournalAnsweredTurnIdentity
+      }
     /** Handover scope: live root turn, otherwise thread. */
     | {
         state: 'pending'

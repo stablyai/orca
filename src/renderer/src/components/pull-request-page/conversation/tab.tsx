@@ -6,7 +6,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 
 import { useAppStore } from '@/store/index'
-import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
+import { useRepoAssignees } from '@/lib/work-items/github/useGitHubRepoMetadata'
 import {
   canUseGitHubRepoContext,
   getGitHubRepoRoutingTarget
@@ -18,14 +18,14 @@ import {
   type PRCommentAudienceFilter
 } from '../../../../../shared/source-control/review-comments/pr-comment-audience'
 import { groupPRComments } from '../../../../../shared/source-control/review-comments/pr-comment-groups'
-import { resolveCommentReplyTarget } from '@/components/comment-reply-target-state'
+import { resolveCommentReplyTarget } from '@/components/github/comment-reply-target-state'
 import { runWorkItemBodyUpdate } from '@/components/github/github-work-item-edit-mutations'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import { parseGitHubItemRepository as parseOwnerRepoFromItemUrl } from '../../../../../shared/github/work-items/work-item-target'
 import {
   resolveGitHubBodyDraft,
   shouldSyncGitHubBodyDraft
-} from '@/components/github-body-draft-state'
+} from '@/components/github/github-body-draft-state'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type {
   GitHubAssignableUser,
@@ -49,6 +49,7 @@ import { ChecksTab } from '../checks/tab'
 import { GHCommentComposer } from '../comments/composer'
 import { ConversationDescription } from './description'
 import { ConversationCommentsList } from './comments-list'
+import { CommentComposerLoading } from './conversation-loading'
 import { postConversationReply } from './reply'
 
 export function ConversationTab({
@@ -108,6 +109,8 @@ export function ConversationTab({
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const bodyTextareaFocusFrameRef = useRef<number | null>(null)
   const canUseRepoMutationContext = canUseGitHubRepoContext(repoPath, sourceContext)
+  // Why: cold read only; cached details stay on screen while a refresh runs.
+  const detailsPending = loading && !detailsLoaded
   const ownerTarget = useAppStore(
     useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? repoId ?? null, sourceContext))
   )
@@ -240,6 +243,7 @@ export function ConversationTab({
       <div className="flex h-fit flex-col gap-5 xl:sticky xl:top-4">
         <PRActionsPanel
           item={item}
+          headSha={headSha}
           repoPath={repoPath}
           repoId={item.repoId}
           sourceContext={sourceContext}
@@ -335,10 +339,11 @@ export function ConversationTab({
           onDraftChange={setBodyDraft}
         />
 
-        {detailsLoaded ? (
+        {detailsLoaded || detailsPending ? (
           <ConversationCommentsList
             itemType={item.type}
             comments={comments}
+            loadingSkeleton={detailsPending}
             visibleComments={visibleComments}
             visibleCommentGroups={visibleCommentGroups}
             commentFilter={commentFilter}
@@ -362,6 +367,7 @@ export function ConversationTab({
           />
         ) : null}
 
+        {detailsPending && canUseRepoMutationContext && <CommentComposerLoading className="mt-1" />}
         {detailsLoaded && canUseRepoMutationContext && (
           <GHCommentComposer
             className="mt-1"

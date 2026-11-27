@@ -7,7 +7,7 @@ import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktre
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { useTranslate } from '@/i18n/use-translate'
-import { resolveSshHostRemoval } from '../../../sidebar/ssh-host-remove-resolution'
+import { resolveSshHostRemoval } from '../../../sidebar/host-lifecycle/ssh-host-remove-resolution'
 import { isManagedServerSshHost } from './SshManagedHostRemoveDialog'
 import type { SshBulkRemoveRequest, SshBulkRemoveResult } from './SshTargetDestructiveActions'
 import { planSshBulkRemove, type SshBulkRemovePlan } from './ssh-target-list-model'

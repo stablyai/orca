@@ -15,6 +15,8 @@ description: >-
 
 Use `ORCA linear` when Linear is the source of task context or ticket updates.
 
+`ORCA linear` acts as the Orca user, through their Linear account. A bot running in Orca uses it too, as its owner; it answers the issue that woke it with `ORCA bot reply` instead (`ORCA skills get orca-cli --reference bots`).
+
 `ORCA` is a placeholder for the executable you resolved in the stub; substitute it before running.
 
 `orca-linear` and `linear-tickets` are skill names, not CLI namespaces. Always run
@@ -88,7 +90,7 @@ Use `ORCA linear list-issues` when MCP-compatible filters or cursor pagination a
 - When a cap held results back, `--json` sets `result.truncated` and `result.meta.hasMore`; human output prints `truncated: showing N`. Check `truncated` before reporting a count, then page with `--cursor` until it is false.
 - A `--cursor` is bound to the workspace and the Orca runtime that issued it. `--workspace all` cannot page, and a raw Linear cursor still needs a concrete `--workspace`.
 - `--priority` is `0=none`, `1=urgent`, `2=high`, `3=medium`, `4=low`. Issue JSON carries `priorityLabel` in the CLI setter vocabulary; project JSON keeps Linear's title-case label.
-- `ORCA linear search`, `ORCA linear list`, and `ORCA linear project list` cap at their own `--limit` and set `result.truncated` the same way.
+- `ORCA linear list` and `ORCA linear project list` follow the same `--limit` rules and set `result.truncated` the same way, but cannot page: narrow the filter instead. `ORCA linear search` returns at most 50 matches (20 by default); when it is truncated, `result.meta.total` is Linear's full match count, absent if any workspace could not report one.
 
 Prefer `label add` and `label remove` for incremental edits. `label set` replaces the full label set and should be used only when deliberate cleanup is intended.
 

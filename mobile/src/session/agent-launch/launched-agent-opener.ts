@@ -1,5 +1,5 @@
 import { useNavigation } from 'expo-router'
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { HOST_SESSION_ROUTE } from '../../navigation/host-stack-navigation'
 import { stringifyRouteHref } from '../../navigation/route-href'
 import { useShellSessionHandoff } from '../../navigation/route-handoff'
@@ -109,18 +109,13 @@ function hostStackOf(navigation: StackNavigation | undefined): {
   return { stack: [], current: -1 }
 }
 
-/** Opens the launched agent's pane in its session; null when there is no pane or no clean way back to it. */
-export function useLaunchedAgentOpener(opens: LaunchedAgentOpens | null): (() => void) | null {
+// Planned at the press: the stack and the shell's grants are read, not subscribed to.
+function useLaunchedAgentPlanner() {
   const navigation = useNavigation<StackNavigation>()
   const router = useWorkspaceRouteHandoff()
   const shell = useShellSessionHandoff()
   const executionHost = useWorkspaceExecutionHost()
-  const paneKey = opens?.paneKey
-  if (!opens || !paneKey) {
-    return null
-  }
-  // Planned again at the press: the stack and the shell's grants are read, not subscribed to.
-  const plan = (): LaunchedAgentOpenPlan => {
+  const plan = (opens: LaunchedAgentOpens, paneKey: string): LaunchedAgentOpenPlan => {
     const host = hostStackOf(navigation)
     // This screen's own entry holds the raw host id; useLocalSearchParams would decode it a second time.
     const self = host.stack[host.current]
@@ -134,11 +129,7 @@ export function useLaunchedAgentOpener(opens: LaunchedAgentOpens | null): (() =>
           shellReturns: shell && shell.returns()
         })
   }
-  if (plan().kind === 'none') {
-    return null
-  }
-  return () => {
-    const step = plan()
+  const run = (step: LaunchedAgentOpenPlan, paneKey: string) => {
     switch (step.kind) {
       case 'set-params':
         return router.setParams({ paneKey })
@@ -151,5 +142,30 @@ export function useLaunchedAgentOpener(opens: LaunchedAgentOpens | null): (() =>
       case 'none':
         return undefined
     }
+  }
+  return { plan, run }
+}
+
+/** Opens the launched agent's pane in its session; null when there is no pane or no clean way back to it. */
+export function useLaunchedAgentOpener(opens: LaunchedAgentOpens | null): (() => void) | null {
+  const { plan, run } = useLaunchedAgentPlanner()
+  const paneKey = opens?.paneKey
+  if (!opens || !paneKey || plan(opens, paneKey).kind === 'none') {
+    return null
+  }
+  return () => run(plan(opens, paneKey), paneKey)
+}
+
+/** Opens a pane known only after a launch returns; false when there is no pane or no clean way to it. */
+export function useOpenLaunchedAgent(): (opens: LaunchedAgentOpens) => boolean {
+  const { plan, run } = useLaunchedAgentPlanner()
+  return (opens) => {
+    const { paneKey } = opens
+    const step = paneKey ? plan(opens, paneKey) : null
+    if (!paneKey || !step || step.kind === 'none') {
+      return false
+    }
+    run(step, paneKey)
+    return true
   }
 }

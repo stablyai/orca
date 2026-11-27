@@ -9,7 +9,7 @@ import type {
   GitLabIssueFilter
 } from '@/components/task-page/task-page-localized-options'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
-import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TaskPageRepoCacheRowInput } from './task-page-cache-selectors'
@@ -27,7 +27,7 @@ import {
   getAccountBackedTaskSourceSummary,
   type TaskSourceContextSummary,
   type TaskSourceHostAvailability
-} from '../task-source-context-summary'
+} from './source-selection/task-source-context-summary'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
 import { cn } from '@/lib/class-names'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
@@ -81,6 +81,22 @@ export function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
       getJiraIssueKeyCasingSeedOptions()
     )?.seedName ?? getLinkedWorkItemSuggestedName(issue)
   )
+}
+/** The GitHub fan-out's repo arguments; a repo on a host known unreachable is marked, not dialled. */
+export function getTaskPageGitHubRepoArgs(
+  repos: readonly Repo[],
+  unreachableHostIds: ReadonlySet<TaskSourceContext['hostId']>
+) {
+  return repos.map((repo) => {
+    const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
+    return {
+      repoId: repo.id,
+      path: repo.path,
+      executionHostId: repo.executionHostId,
+      sourceContext,
+      hostUnreachable: Boolean(sourceContext && unreachableHostIds.has(sourceContext.hostId))
+    }
+  })
 }
 export function getTaskSourceHostAvailabilityForHost(
   host: ExecutionHostRegistryEntry | null | undefined,
@@ -148,20 +164,20 @@ export function getTaskPageRepoCacheInput(repo: Repo): TaskPageRepoCacheRowInput
 // Why: opaque sticky headers and a padding-gap cover prevent vertical and horizontal bleed.
 export const GITHUB_TASK_STICKY_ID_HEADER_CLASS = cn(
   // Why: full-height flex keeps the sticky fill from shrinking around its label.
-  'sticky left-3 z-30 flex items-center before:absolute before:-left-3 before:top-0 before:bottom-0 before:w-3 before:bg-inherit',
+  'sticky left-(--rail-page-gutter) z-30 flex items-center before:absolute before:left-[calc(-1*var(--rail-page-gutter))] before:top-0 before:bottom-0 before:w-(--rail-page-gutter) before:bg-inherit',
   GITHUB_TASK_HEADER_SURFACE_CLASS
 )
 export const GITHUB_TASK_STICKY_TITLE_HEADER_CLASS = cn(
-  'sticky left-[92px] z-30 flex items-center border-r border-border/40 before:absolute before:-left-2 before:top-0 before:bottom-0 before:w-2 before:bg-inherit',
+  'sticky left-[calc(var(--rail-page-gutter)+80px)] z-30 flex items-center border-r border-border/40 before:absolute before:-left-2 before:top-0 before:bottom-0 before:w-2 before:bg-inherit',
   GITHUB_TASK_HEADER_SURFACE_CLASS
 )
 export const GITHUB_TASK_STICKY_ID_CELL_CLASS = cn(
-  'sticky left-3 z-20 flex items-center before:absolute before:-left-3 before:top-0 before:bottom-0 before:w-3 before:bg-inherit',
+  'sticky left-(--rail-page-gutter) z-20 flex items-center before:absolute before:left-[calc(-1*var(--rail-page-gutter))] before:top-0 before:bottom-0 before:w-(--rail-page-gutter) before:bg-inherit',
   GITHUB_TASK_ROW_SURFACE_CLASS,
   GITHUB_TASK_ROW_HOVER_SURFACE_CLASS
 )
 export const GITHUB_TASK_STICKY_TITLE_CELL_CLASS = cn(
-  'sticky left-[92px] z-20 flex min-w-0 flex-col justify-center border-r border-border/40 pr-2 before:absolute before:-left-2 before:top-0 before:bottom-0 before:w-2 before:bg-inherit',
+  'sticky left-[calc(var(--rail-page-gutter)+80px)] z-20 flex min-w-0 flex-col justify-center border-r border-border/40 pr-2 before:absolute before:-left-2 before:top-0 before:bottom-0 before:w-2 before:bg-inherit',
   GITHUB_TASK_ROW_SURFACE_CLASS,
   GITHUB_TASK_ROW_HOVER_SURFACE_CLASS
 )

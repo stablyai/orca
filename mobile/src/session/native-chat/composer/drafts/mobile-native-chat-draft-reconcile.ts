@@ -4,7 +4,9 @@ import {
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import {
   hasImagePromptMarker,
+  imageTranscriptUnitPrompt,
   isImageSourceUserTurn,
+  nativeChatImageTranscriptUnits,
   normalizeImageTranscriptMessages,
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
@@ -58,25 +60,21 @@ export function mergeSentImagePreviews(
   return next
 }
 
-function imagePreviewReplacementMessageId(
-  messages: readonly NativeChatMessage[],
-  sourceIndex: number
-): string | null {
-  const source = messages[sourceIndex]
-  if (!source || !isImageSourceUserTurn(source)) {
-    return null
+// Image-source row id -> the prompt row id it folds into.
+function imageSourceFoldTargets(messages: readonly NativeChatMessage[]): Map<string, string> {
+  const targets = new Map<string, string>()
+  for (const unit of nativeChatImageTranscriptUnits(messages)) {
+    const prompt = imageTranscriptUnitPrompt(unit)
+    if (!prompt) {
+      continue
+    }
+    for (const message of unit) {
+      if (message !== prompt) {
+        targets.set(message.id, prompt.id)
+      }
+    }
   }
-  let nextIndex = sourceIndex + 1
-  while (
-    messages[nextIndex]?.source === source.source &&
-    isImageSourceUserTurn(messages[nextIndex]!)
-  ) {
-    nextIndex++
-  }
-  const prompt = messages[nextIndex]
-  return prompt?.role === 'user' && prompt.source === source.source && hasImagePromptMarker(prompt)
-    ? prompt.id
-    : null
+  return targets
 }
 
 // Move local previews when progressive source-only rows fold into a new marker-bearing authoritative id.
@@ -89,14 +87,10 @@ export function migrateImagePreviewMessageIds(
   if (!sessionPreviews) {
     return previous
   }
-  const messageIndexById = new Map(messages.map((message, index) => [message.id, index]))
+  const foldTargets = imageSourceFoldTargets(messages)
   let nextSession: Record<string, string[]> | null = null
   for (const [messageId, images] of Object.entries(sessionPreviews)) {
-    const sourceIndex = messageIndexById.get(messageId)
-    if (sourceIndex === undefined) {
-      continue
-    }
-    const replacementId = imagePreviewReplacementMessageId(messages, sourceIndex)
+    const replacementId = foldTargets.get(messageId)
     if (!replacementId) {
       continue
     }
@@ -109,7 +103,7 @@ export function migrateImagePreviewMessageIds(
 
 // A boundary on an image-source row lives on in the prompt row it folded into.
 function foldedBoundaryIndex(
-  messages: readonly NativeChatMessage[],
+  foldTargets: () => ReadonlyMap<string, string>,
   normalizedIndexById: ReadonlyMap<string, number>,
   boundaryId: string | null | undefined
 ): number | undefined {
@@ -120,8 +114,7 @@ function foldedBoundaryIndex(
   if (direct !== undefined) {
     return direct
   }
-  const rawIndex = messages.findIndex((message) => message.id === boundaryId)
-  const promptId = rawIndex === -1 ? null : imagePreviewReplacementMessageId(messages, rawIndex)
+  const promptId = foldTargets().get(boundaryId)
   return promptId ? normalizedIndexById.get(promptId) : undefined
 }
 
@@ -144,6 +137,8 @@ export function findLandedImagePreviewEchoes(
       )
       .map((message) => message.id)
   )
+  let foldTargets: Map<string, string> | undefined
+  const readFoldTargets = () => (foldTargets ??= imageSourceFoldTargets(messages))
   const claimedMessageIds = new Set<string>()
   const landed: LandedImagePreviewEcho[] = []
 
@@ -169,7 +164,7 @@ export function findLandedImagePreviewEchoes(
       const imageCount = message.blocks.filter(isImageRefBlock).length
       return message.blocks.length === 0 || imageCount >= entry.images!.length
     })
-    const tailIndex = foldedBoundaryIndex(messages, messageIndexById, entry.afterMessageId)
+    const tailIndex = foldedBoundaryIndex(readFoldTargets, messageIndexById, entry.afterMessageId)
     // Same boundary-relative occurrence as the shared pending rule, so older identical rows cannot bind.
     const candidate = candidates.filter(
       (message) => tailIndex === undefined || (messageIndexById.get(message.id) ?? -1) > tailIndex

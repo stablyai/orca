@@ -6,6 +6,11 @@ import {
   getBrowserExtensionProfileIdForSession
 } from '../api-runtime/browser-extension-api-host'
 import { forgetBrowserExtensionActionTab } from '../actions/browser-extension-action-registry'
+import { forgetSidePanelTabOptions } from '../side-panel/browser-extension-side-panel-options'
+import {
+  closeBrowserExtensionSidePanelsForTab,
+  publishBrowserExtensionSidePanels
+} from '../side-panel/browser-extension-side-panel-host'
 import { revokeBrowserExtensionActiveTab } from '../permissions/browser-extension-active-tab'
 import {
   emitDiscardedBrowserTabRemoved,
@@ -14,8 +19,8 @@ import {
 } from './browser-extension-discarded-tabs'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import { whenBrowserExtensionsReadyForPage } from '../profile-sessions/browser-extension-page-start'
+import { canExtensionSeeTabUrl } from '../permissions/browser-extension-tab-url-access'
 import {
-  canExtensionSeeTabUrl,
   describeBrowserExtensionTab,
   replaceActivatedBrowserTabId,
   resolveBrowserExtensionTab
@@ -168,7 +173,11 @@ export function observeBrowserExtensionTabLifecycle(contents: Electron.WebConten
     const profileId = getBrowserExtensionProfileIdForSession(sess)
     if (profileId) {
       forgetBrowserExtensionActionTab(profileId, tabId)
+      if (forgetSidePanelTabOptions(profileId, tabId)) {
+        publishBrowserExtensionSidePanels()
+      }
     }
+    closeBrowserExtensionSidePanelsForTab(tabId)
     unannouncedChanges.delete(tabId)
     const browserPageId = pageIdByTabId.get(tabId)
     pageIdByTabId.delete(tabId)

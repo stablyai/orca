@@ -5,7 +5,7 @@ import {
   type CustomAppIconImportResult
 } from '../../shared/app-lifecycle/identity/app-icon'
 import { translateMain } from '../i18n/main-i18n'
-import { showSingleFlightOpenDialog } from './single-flight-open-dialog'
+import { showSingleFlightOpenDialog } from './dialogs/single-flight-open-dialog'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
 import {
   CUSTOM_APP_ICON_FILE_EXTENSIONS,

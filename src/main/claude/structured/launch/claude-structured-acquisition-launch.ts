@@ -28,7 +28,7 @@ import {
 import {
   claudeCloseReport,
   closeClaudePublishedSessionForDeps
-} from '../claude-structured-session-close'
+} from '../lifecycle/claude-structured-session-close'
 
 export type ClaudeAcquisitionLaunch = ClaudeStructuredLaunch & {
   savedOptions: Omit<ClaudeStructuredSpawnOptions, 'sdkOptions'>

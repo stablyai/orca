@@ -3,7 +3,7 @@ import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 import type { JournalGoalAttachmentSnapshot } from './writing/journal-goal-attachment-inverse'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'

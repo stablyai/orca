@@ -23,7 +23,7 @@ import { seedHeadlessTerminalFromSpawnResult } from './terminal-spawn-restore'
 import { admitProviderReattachLaunchIdentity, reattachLaunchBinding } from './launch-authority'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-relay/wsl-hook-relay-reattach'
 import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-relay/wsl-bridge-pty-presence'
-import '../spawn-outcome'
+import '../spawn/spawn-outcome'
 import { provenSpawnResponse } from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-response'
 import { ptySizes } from '../delivery/visibility-state'
 import {

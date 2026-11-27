@@ -2,7 +2,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../execution-host'
+} from '../../../execution-host/execution-host'
 import {
   parseRemoteRuntimePtyId,
   isRemoteRuntimePtyId
@@ -12,7 +12,8 @@ import { parseAppSshPtyId } from '../../../remote-runtime/ssh/ssh-pty-id'
 /** 'foreign' = the id proves the PTY runs off this host but cannot name where. */
 export type PtyExecutionHost = ExecutionHostId | 'foreign' | null
 
-// PTY IDs carry SSH/paired ownership; only a hostless ID (null result) may fall back to the workspace host.
+// PTY IDs carry SSH/paired ownership; a hostless ID (null) may fall back to the workspace host,
+// while a 'foreign' ID may only take a remote workspace host, for notification attribution.
 export function getPtyExecutionHost(ptyId: string | null | undefined): PtyExecutionHost {
   if (!ptyId) {
     return null

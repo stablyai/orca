@@ -6,7 +6,9 @@ import {
   type NativeChatSessionOptionRecord,
   type TrackedNativeChatSessionOption
 } from './native-chat-session-option-state'
-import { setBoundedScopeCacheEntry } from '../../native-chat-scope-cache'
+import { setBoundedScopeCacheEntry } from '../composer/native-chat-scope-cache'
+import { getAgentSessionOptionCatalog } from '../../../agent-session/options/agent-session-option-catalog'
+import { nativeChatOptionsWithoutModel } from './native-chat-session-option-values-without-model'
 
 const sessionOptionCache = new Map<string, NativeChatSessionOptionRecord>()
 
@@ -35,17 +37,24 @@ export function seedNativeChatAppliedSessionOptions(
   values: Record<string, SessionOptionValue> | null | undefined
 ): void {
   const modelId = typeof values?.model === 'string' ? values.model : null
-  if (!modelId) {
-    return
-  }
-  const record = createNativeChatSessionOptionRecord(agent)
-  record.model = { value: modelId, source: 'applied' }
+  // A launch naming no model applies only its model-independent options.
+  const withoutModel = modelId
+    ? null
+    : nativeChatOptionsWithoutModel(getAgentSessionOptionCatalog(agent))
   const modelValues: Record<string, TrackedNativeChatSessionOption> = {}
   for (const [id, value] of Object.entries(values ?? {})) {
-    if (id !== 'model') {
+    if (id !== 'model' && (!withoutModel || withoutModel.some((option) => option.id === id))) {
       modelValues[id] = { value, source: 'applied' }
     }
   }
-  record.valuesByModel[modelId] = modelValues
+  const record = createNativeChatSessionOptionRecord(agent)
+  if (modelId) {
+    record.model = { value: modelId, source: 'applied' }
+    record.valuesByModel[modelId] = modelValues
+  } else if (Object.keys(modelValues).length > 0) {
+    record.valuesWithoutModel = modelValues
+  } else {
+    return
+  }
   writeNativeChatSessionOptionCache(scopeKey, record)
 }

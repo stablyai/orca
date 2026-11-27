@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Pressable,
   ScrollView,
@@ -19,6 +19,8 @@ export type MobileSegment<Value extends string> = {
   label: string
   /** A longer spoken name where the short label leans on its surroundings. */
   accessibilityLabel?: string
+  /** Drawn after the label, e.g. a count with its dot. */
+  trailing?: ReactNode
 }
 
 type Props<Value extends string> = {
@@ -115,9 +117,21 @@ export function MobileSegmentedControl<Value extends string>(props: Props<Value>
           pressed && !active && styles.segmentPressed
         ]}
       >
-        <Text style={[styles.segmentText, active && styles.segmentTextActive]} numberOfLines={1}>
-          {segment.label}
-        </Text>
+        {segment.trailing ? (
+          <View style={styles.segmentRow}>
+            <Text
+              style={[styles.segmentText, active && styles.segmentTextActive]}
+              numberOfLines={1}
+            >
+              {segment.label}
+            </Text>
+            {segment.trailing}
+          </View>
+        ) : (
+          <Text style={[styles.segmentText, active && styles.segmentTextActive]} numberOfLines={1}>
+            {segment.label}
+          </Text>
+        )}
       </Pressable>
     )
   })
@@ -191,6 +205,7 @@ const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     borderRadius: concentricRadius(radii.control, TRACK_INSET)
   },
+  segmentRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   segmentFill: { flex: 1, alignItems: 'center', paddingHorizontal: spacing.xs },
   segmentCrowdable: { flexGrow: 1, alignItems: 'center', paddingHorizontal: spacing.xs },
   // The inset sits on the content, so segments scroll out under the track's rounded edge.

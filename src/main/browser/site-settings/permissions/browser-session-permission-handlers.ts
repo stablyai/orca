@@ -18,6 +18,7 @@ import {
   isBrowserSitePermissionAllowed
 } from './browser-site-permission-prompt'
 import {
+  registerBrowserSessionSitePermissions,
   savedBrowserSitePermissions,
   sessionBrowserSitePermissions
 } from './browser-site-permission-memory'
@@ -26,9 +27,16 @@ import {
   installBrowserWebAuthnAccessHandlers
 } from '../../webauthn/browser-webauthn-access'
 
-// SSH-driven pages must not read the desktop clipboard.
-function deniesRemoteCliDrivenClipboardRead(permission: string, webContentsId?: number): boolean {
-  return permission === 'clipboard-read' && isRemoteCliDrivenGuest(webContentsId)
+// Pages another machine drives must not read the desktop clipboard.
+function deniesRemoteDrivenClipboardRead(
+  permission: string,
+  webContentsId: number | undefined,
+  options: BrowserSessionPermissionOptions
+): boolean {
+  return (
+    permission === 'clipboard-read' &&
+    (options.clipboardRead === false || isRemoteCliDrivenGuest(webContentsId))
+  )
 }
 
 type RestrictedFileSystemAccessListener = (
@@ -79,6 +87,8 @@ export type BrowserSessionPermissionOptions = {
   fileSystemAccess?: boolean
   /** Session-only answers are not persisted to a browser profile. */
   sitePermissions?: 'saved' | 'session'
+  /** Off where another machine can script every page; a person's own paste still works. */
+  clipboardRead?: boolean
 }
 
 export function installBrowserSessionPermissionHandlers(
@@ -97,6 +107,7 @@ export function installBrowserSessionPermissionHandlers(
     options.sitePermissions === 'session'
       ? sessionBrowserSitePermissions(partition)
       : savedBrowserSitePermissions(profile.id)
+  registerBrowserSessionSitePermissions(sess, siteMemory)
   registerBrowserSessionNotificationGrant(sess, (pageUrl) =>
     isBrowserSitePermissionAllowed({
       source: { pageUrl, frameOrigin: pageUrl },
@@ -125,7 +136,7 @@ export function installBrowserSessionPermissionHandlers(
         permission,
         rawUrl
       })
-    if (deniesRemoteCliDrivenClipboardRead(permission, webContents.id)) {
+    if (deniesRemoteDrivenClipboardRead(permission, webContents.id, options)) {
       notifyDenied()
       callback(false)
       return
@@ -173,7 +184,7 @@ export function installBrowserSessionPermissionHandlers(
     )
   })
   sess.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
-    if (deniesRemoteCliDrivenClipboardRead(permission, webContents?.id)) {
+    if (deniesRemoteDrivenClipboardRead(permission, webContents?.id, options)) {
       return false
     }
     if (allowsBrowserWebAuthnPermission(permission, details)) {

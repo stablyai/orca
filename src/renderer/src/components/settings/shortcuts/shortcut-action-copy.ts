@@ -15,7 +15,8 @@ const GROUP_KEYS: Record<string, string> = {
   Settings: 'settings.shortcuts.groups.settings',
   'Terminal Panes': 'settings.shortcuts.groups.terminalPanes',
   Agents: 'settings.shortcuts.groups.agents',
-  Chat: 'settings.shortcuts.groups.chat'
+  Chat: 'settings.shortcuts.groups.chat',
+  Bots: 'settings.shortcuts.groups.bots'
 }
 
 export function translateShortcutActionTitle(actionId: string, fallback: string): string {

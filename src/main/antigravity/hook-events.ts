@@ -24,13 +24,11 @@ export const ANTIGRAVITY_EVENTS = [
   }
 ] as const
 
-// PreToolUse treats silence as denial; "ask" preserves the user’s permission policy.
-export const ANTIGRAVITY_PRE_TOOL_USE_DECISION = '{"decision":"ask"}'
-
 /** The no-op reply the managed script prints, for paths that skip the script. */
-export function getAntigravityNoOpStdout(eventName: string): string {
+export function getAntigravityNoOpStdout(eventName: string): string | undefined {
+  // Empty PreToolUse output leaves the decision to agy; any JSON, even {}, overrides its reviewer.
   if (eventName === 'PreToolUse') {
-    return ANTIGRAVITY_PRE_TOOL_USE_DECISION
+    return undefined
   }
   return eventName === 'Stop' ? '{"decision":""}' : '{}'
 }

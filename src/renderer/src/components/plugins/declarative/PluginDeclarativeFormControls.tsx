@@ -81,7 +81,9 @@ export function PluginDeclarativeCheckbox({
         onCheckedChange={(checked) => change(checked === true)}
       />
       <div className="flex min-w-0 flex-col gap-0.5">
-        <Label htmlFor={id}>{props.label}</Label>
+        <Label htmlFor={id} variant="control">
+          {props.label}
+        </Label>
         {props.description ? (
           <span id={`${id}-description`} className="text-xs text-muted-foreground">
             {props.description}
@@ -131,7 +133,9 @@ export function PluginDeclarativeRadioGroup({
               className="mt-0.5"
             />
             <div className="flex min-w-0 flex-col gap-0.5">
-              <Label htmlFor={`${id}-${index}`}>{option.label}</Label>
+              <Label htmlFor={`${id}-${index}`} variant="control">
+                {option.label}
+              </Label>
               {option.description ? (
                 <span className="text-xs text-muted-foreground">{option.description}</span>
               ) : null}

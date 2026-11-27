@@ -1,19 +1,23 @@
 import type { TaskPageLinearBoardModel } from '../../linear/issues/use-task-page-linear-board'
 import { useMemo, useCallback } from 'react'
-import { findTaskPageJiraIssue } from '@/components/task-page/jira/listing/task-page-jira-cache-selectors'
+import { resolveTaskPageJiraIssues } from '@/components/task-page/jira/listing/task-page-jira-cache-selectors'
 import {
   getSingleJiraProjectScope,
-  getTaskPageJiraStatusOrderScopeKey,
-  getTaskPageJiraStatusOrderRuntimeScopeKey
+  getTaskPageJiraStatusOrderScopeKey
 } from '@/components/task-page/jira/listing/task-page-jira-status-order'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import {
+  ipcOrRuntimeTargetForHostId,
+  runtimeTargetEnvironmentId
+} from '@/runtime/rpc/targets/runtime-client-target'
+import { useEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import {
   buildJiraIssueWorkspaceAttachmentIndex,
   collectLinkedJiraIssueRefs,
   findJiraIssueWorkspaceAttachmentsInIndex
 } from '@/lib/work-items/jira/jira-issue-workspace-attachment'
 import { filterLinkedJiraIssues } from './task-page-jira-linked-issues'
-import { sortJiraIssues } from '../../../jira-issue-sorter'
+import { sortJiraIssues } from './jira-issue-sorter'
+import { useTaskPageJiraProjectScope } from '../filters/use-task-page-jira-project-scope'
 export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
   const {
     accountBackedTaskSourceHostId,
@@ -31,6 +35,15 @@ export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
     jiraOrderDirection,
     jiraPrioritiesBySite
   } = model
+  const jiraProjectScope = useTaskPageJiraProjectScope(
+    model.repos,
+    model.selectedRepos,
+    model.pageData.preselectedRepoId,
+    accountBackedTaskSourceHostId,
+    selectedJiraSiteId,
+    model.availableJiraProjects,
+    model.jiraProjectsLoading
+  )
   const jiraIssueAttachmentIndex = useMemo(
     () => buildJiraIssueWorkspaceAttachmentIndex(linearAttachmentWorkspaces),
     [linearAttachmentWorkspaces]
@@ -57,17 +70,11 @@ export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
   const linkedJiraIssueRefsSignature = JSON.stringify(linkedJiraIssueRefs)
   const displayedJiraIssues = useMemo(
     () =>
-      (jiraHasWorkspace ? filterLinkedJiraIssues(jiraIssues, appliedJiraSearch) : jiraIssues).map(
-        (issue) =>
-          findTaskPageJiraIssue(
-            jiraCacheSnapshot.issueCache,
-            jiraCacheSnapshot.searchCache,
-            issue.key,
-            {
-              sourceContext: jiraTaskSourceContext,
-              siteId: issue.siteId
-            }
-          ) ?? issue
+      resolveTaskPageJiraIssues(
+        jiraHasWorkspace ? filterLinkedJiraIssues(jiraIssues, appliedJiraSearch) : jiraIssues,
+        jiraCacheSnapshot.issueCache,
+        jiraCacheSnapshot.searchCache,
+        { sourceContext: jiraTaskSourceContext }
       ),
     [
       jiraIssues,
@@ -82,10 +89,16 @@ export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
     () => getSingleJiraProjectScope(displayedJiraIssues),
     [displayedJiraIssues]
   )
-  const statusOrderRuntimeScopeKey = getTaskPageJiraStatusOrderRuntimeScopeKey(
-    jiraTaskSourceScopeKey,
-    ipcOrRuntimeTargetForHostId(jiraTaskSourceContext?.hostId ?? accountBackedTaskSourceHostId)
+  const statusOrderOwner = ipcOrRuntimeTargetForHostId(
+    jiraTaskSourceContext?.hostId ?? accountBackedTaskSourceHostId
   )
+  const statusOrderOwnerContextKey = useEnvironmentRuntimeContextKey(
+    statusOrderOwner ? runtimeTargetEnvironmentId(statusOrderOwner) : null
+  )
+  const statusOrderRuntimeScopeKey = JSON.stringify([
+    jiraTaskSourceScopeKey,
+    statusOrderOwner ? statusOrderOwnerContextKey : null
+  ])
   const displayedJiraStatusOrderScopeKey = displayedJiraProjectScope
     ? getTaskPageJiraStatusOrderScopeKey(statusOrderRuntimeScopeKey, displayedJiraProjectScope)
     : null
@@ -102,6 +115,7 @@ export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
     )
   }, [displayedJiraIssues, jiraOrderBy, jiraOrderDirection, jiraPrioritiesBySite])
   return Object.assign(model, {
+    ...jiraProjectScope,
     displayedJiraIssues,
     displayedJiraProjectScope,
     displayedJiraStatusOrderScopeKey,

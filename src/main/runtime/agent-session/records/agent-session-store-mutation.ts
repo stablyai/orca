@@ -1,4 +1,4 @@
-import { commitAgentSessionRewindCompletion } from '../agent-session-rewind-completion'
+import { commitAgentSessionRewindCompletion } from './agent-session-rewind-completion'
 import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import {

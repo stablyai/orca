@@ -1,4 +1,4 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { CompactAgentRow } from '../../../src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row'

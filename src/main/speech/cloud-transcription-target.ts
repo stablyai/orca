@@ -8,9 +8,9 @@ import {
 import {
   canReadOpenAiCompatibleSpeechProvider,
   hasOpenAiCompatibleSpeechProvider,
-  openAiCompatibleTranscriptionUrl,
   readOpenAiCompatibleSpeechProvider
 } from './openai-compatible-speech-provider-store'
+import { openAiCompatibleTranscriptionUrl } from '../../shared/speech/openai-compatible-endpoint'
 
 export const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions'
 
@@ -27,23 +27,27 @@ export type CloudTranscriptionTarget = {
   label: string
 }
 
-export function hasCloudSpeechCredentials(provider: SpeechModelProvider): boolean {
+export async function hasCloudSpeechCredentials(provider: SpeechModelProvider): Promise<boolean> {
   return provider === 'openai-compatible'
-    ? hasOpenAiCompatibleSpeechProvider()
-    : hasOpenAiSpeechApiKey()
+    ? await hasOpenAiCompatibleSpeechProvider()
+    : await hasOpenAiSpeechApiKey()
 }
 
 /** Headless hosts can't raise keychain prompts, so their readiness verifies decryption. */
-export function canReadCloudSpeechCredentials(provider: SpeechModelProvider): boolean {
+export async function canReadCloudSpeechCredentials(
+  provider: SpeechModelProvider
+): Promise<boolean> {
   return provider === 'openai-compatible'
-    ? canReadOpenAiCompatibleSpeechProvider()
-    : canReadOpenAiSpeechApiKey()
+    ? await canReadOpenAiCompatibleSpeechProvider()
+    : await canReadOpenAiSpeechApiKey()
 }
 
 /** Reads the key (and the compatible provider's URL) only when audio is ready to upload. */
-export function resolveCloudTranscriptionTarget(modelId: string): CloudTranscriptionTarget {
+export async function resolveCloudTranscriptionTarget(
+  modelId: string
+): Promise<CloudTranscriptionTarget> {
   if (getCatalogModel(modelId)?.provider === 'openai-compatible') {
-    const provider = readOpenAiCompatibleSpeechProvider()
+    const provider = await readOpenAiCompatibleSpeechProvider()
     if (!provider) {
       throw new Error('The OpenAI-compatible speech provider is not set up')
     }
@@ -55,5 +59,10 @@ export function resolveCloudTranscriptionTarget(modelId: string): CloudTranscrip
   if (!model) {
     throw new Error(`Unknown OpenAI transcription model: ${modelId}`)
   }
-  return { url: OPENAI_TRANSCRIPTION_URL, model, apiKey: readOpenAiSpeechApiKey(), label: 'OpenAI' }
+  return {
+    url: OPENAI_TRANSCRIPTION_URL,
+    model,
+    apiKey: await readOpenAiSpeechApiKey(),
+    label: 'OpenAI'
+  }
 }

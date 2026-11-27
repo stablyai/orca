@@ -1,6 +1,8 @@
+import type { ObservedAccountPlans } from '@/lib/provider-accounts/observed-account-plans'
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type {
+  ClaudeAccountSelectResult,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../../../shared/agent-accounts/managed-account-types'
@@ -43,6 +45,14 @@ export type RemoveAccountTarget = {
   runtime: ProviderAccountRuntimeView
 }
 
+export type RenameAccountTarget = {
+  provider: 'claude' | 'codex'
+  id: string
+  email: string
+  displayName: string | null
+  runtime: ProviderAccountRuntimeView
+}
+
 export type ProviderAccountVisibilityOptions = {
   remoteOwner: boolean
   ownerPlatform: NodeJS.Platform | null
@@ -51,12 +61,14 @@ export type ProviderAccountVisibilityOptions = {
 export type CodexAccountActionRunner = (
   action: ProviderAccountAction,
   operation: () => Promise<CodexRateLimitAccountsState>,
-  actionRuntime?: ProviderAccountRuntimeView
+  /** Several lanes when one System default clears host and WSL slots together. */
+  actionRuntime?: ProviderAccountRuntimeView | readonly ProviderAccountRuntimeView[]
 ) => Promise<void>
 
 export type ClaudeAccountActionRunner = (
   action: ProviderAccountAction,
-  operation: () => Promise<ClaudeRateLimitAccountsState>,
+  /** A switch on a server also reports what it did with its running sessions. */
+  operation: () => Promise<ClaudeAccountSelectResult>,
   actionRuntime?: ProviderAccountRuntimeView
 ) => Promise<void>
 
@@ -87,6 +99,10 @@ export type AccountsPaneSectionModel = {
   visibleClaudeAccounts: ClaudeRateLimitAccountsState['accounts']
   systemClaudeActive: boolean
   setRemoveClaudeTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
+  setRenameTarget: Dispatch<SetStateAction<RenameAccountTarget | null>>
+  renameAccount: (target: RenameAccountTarget, displayName: string) => Promise<void>
+  /** `provider:id` of accounts with a rename in flight. */
+  renamingAccountKeys: ReadonlySet<string>
   runClaudeAccountAction: ClaudeAccountActionRunner
   codexAccounts: CodexRateLimitAccountsState
   codexAction: ProviderAccountAction
@@ -106,6 +122,9 @@ export type AccountsPaneSectionModel = {
     | null
   codexRateLimits: ProviderRateLimits | null
   codexRateLimitTarget: RateLimitRuntimeTarget
+  /** Plans by the saved account each reading names; see `getObservedAccountPlan`. */
+  claudeAccountPlans: ObservedAccountPlans
+  codexAccountPlans: ObservedAccountPlans
   setRemoveCodexTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
   runCodexAccountAction: CodexAccountActionRunner
   recordOpenCodeSettingEdit: (field: 'cookie' | 'workspaceId' | 'apiKey') => void

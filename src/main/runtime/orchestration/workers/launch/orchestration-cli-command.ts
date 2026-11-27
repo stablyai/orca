@@ -25,7 +25,8 @@ export function resolveTerminalOrchestrationCliCommand(args: {
   connectionId: string | null
   isWsl: boolean | null | undefined
   worktreeId: string
-  projectRuntime?: ProjectExecutionRuntimeResolution
+  /** Read only when nothing cheaper decides: it searches the project catalog. */
+  getProjectRuntime?: () => ProjectExecutionRuntimeResolution | undefined
   runtimeCliCommand?: OrchestrationCliCommand
 }): OrchestrationCliCommand {
   if (args.connectionId) {
@@ -37,7 +38,8 @@ export function resolveTerminalOrchestrationCliCommand(args: {
   if (args.isWsl !== null && args.isWsl !== undefined) {
     return args.isWsl ? 'orca-ide' : 'orca'
   }
-  if (args.projectRuntime?.status === 'resolved' && args.projectRuntime.runtime.kind === 'wsl') {
+  const projectRuntime = args.getProjectRuntime?.()
+  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
     return 'orca-ide'
   }
 
@@ -45,7 +47,17 @@ export function resolveTerminalOrchestrationCliCommand(args: {
   return worktreePath && isWslUncPath(worktreePath) ? 'orca-ide' : 'orca'
 }
 
-export function resolveRuntimeTerminalOrchestrationCliCommand(
+export type OrchestrationCliTarget = {
+  cliCommand: OrchestrationCliCommand
+  runsOnNativeWindows: boolean
+}
+
+const UNRESOLVED_TERMINAL_CLI_TARGET: OrchestrationCliTarget = {
+  cliCommand: 'orca',
+  runsOnNativeWindows: false
+}
+
+export function resolveRuntimeTerminalOrchestrationCliTarget(
   handle: string,
   source: {
     resolvePtyId: (handle: string) => string | null | undefined
@@ -54,26 +66,42 @@ export function resolveRuntimeTerminalOrchestrationCliCommand(
       pty: RuntimePtyWorktreeRecord
     ) => ProjectExecutionRuntimeResolution | undefined
   }
-): OrchestrationCliCommand {
+): OrchestrationCliTarget {
   // A structured session runs in this process: it is told what the structured mail lane types.
   if (isStructuredWorkerHandle(handle) || parseOrcaSessionAddress(handle)) {
-    return localOrchestrationCliCommand()
+    return {
+      cliCommand: localOrchestrationCliCommand(),
+      runsOnNativeWindows: process.platform === 'win32'
+    }
   }
   let pty: RuntimePtyWorktreeRecord | null = null
   try {
     const ptyId = source.resolvePtyId(handle)
     pty = ptyId ? (source.getPty(ptyId) ?? null) : null
   } catch {
-    return 'orca'
+    return UNRESOLVED_TERMINAL_CLI_TARGET
   }
   if (!pty) {
-    return 'orca'
+    return UNRESOLVED_TERMINAL_CLI_TARGET
   }
-  return resolveTerminalOrchestrationCliCommand({
+  const terminal = {
     connectionId: pty.connectionId,
     isWsl: pty.isWsl,
     worktreeId: pty.worktreeId,
-    runtimeCliCommand: runtimeOrchestrationCliCommand(),
-    projectRuntime: source.getProjectRuntime(pty)
+    getProjectRuntime: () => source.getProjectRuntime(pty)
+  }
+  const cliCommand = resolveTerminalOrchestrationCliCommand({
+    ...terminal,
+    runtimeCliCommand: runtimeOrchestrationCliCommand()
   })
+  return {
+    cliCommand,
+    // Native means this host, not SSH or WSL; dev builds name every pane orca-dev, so WSL is resolved without it.
+    runsOnNativeWindows:
+      process.platform === 'win32' &&
+      !pty.connectionId &&
+      (cliCommand === 'orca-dev'
+        ? resolveTerminalOrchestrationCliCommand(terminal)
+        : cliCommand) === 'orca'
+  }
 }

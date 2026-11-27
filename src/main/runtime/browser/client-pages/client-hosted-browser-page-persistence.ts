@@ -1,3 +1,4 @@
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import {
   CLIENT_HOSTED_BROWSER_PAGE_MAX_AGE_MS,
   CLIENT_HOSTED_BROWSER_PAGE_REFRESH_MS,
@@ -98,8 +99,8 @@ export function buildPersistedClientHostedBrowserPages(
             browserPageId: page.browserPageId,
             workspaceId: page.workspaceId,
             browserProfileId: page.browserProfileId,
-            url: page.url,
-            title: page.title,
+            url: redactKagiSessionToken(page.url),
+            title: redactKagiSessionToken(page.title),
             pairedDeviceId: page.pairedDeviceId,
             savedAt
           } satisfies PersistedClientHostedBrowserPage
@@ -143,8 +144,8 @@ export function rehydrateClientHostedBrowserPages(
             executionHostKey: RESTORED_CLIENT_HOSTED_EXECUTION_HOST_KEY,
             placement: RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT,
             pairedDeviceId: row.pairedDeviceId,
-            url: row.url,
-            title: row.title,
+            url: redactKagiSessionToken(row.url),
+            title: redactKagiSessionToken(row.title),
             // No host can finish an inherited load spinner.
             loading: false,
             // The returning host owns focus; do not deactivate its actual selected sibling.

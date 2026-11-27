@@ -3,7 +3,7 @@ import type { RuntimeTerminalCreate } from '../../../../../../../../shared/termi
  * Keep worker lineage/effects and background presentation in factories; caller passes the pre-decided mode.
  * Structured create refusals fail start through the worker error contract instead of silently downgrading. */
 
-import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
 import { executeAgentLaunch } from '../../../../../../../agent-launch/agent-launch-executor'
 import type { AgentLaunchSurfaceFactory } from '../../../../../../../agent-launch/agent-launch-surface-factories'
@@ -21,6 +21,11 @@ import {
 } from './worker-placement-topology'
 import { createWorkerWorktree, type WorkerWorktreeCreationTarget } from './worker-worktree-creation'
 import type { ReopenedWorker, WorkerFollowUp } from '../../follow-up/worker-follow-up-placement'
+import {
+  structuredWorkerLaunchReceipt,
+  type OrchestrationWorkerLaunchReceipt
+} from '../launch/worker-launch-preferences'
+import { recordWorkerLaunchObservation } from '../../../../../../orchestration/workers/launch/worker-launch-observation'
 
 /** Name only the two required fields so untyped worktree accessors cannot introduce any into unions. */
 type PlacedWorktree = { id: string; repoId: string }
@@ -29,6 +34,8 @@ type WorkerStructuredSession = Awaited<ReturnType<typeof createStructuredWorkerS
 export type WorkerAgentPlacement = {
   /** The mode that actually ran; a created worktree can settle it later than the caller could. */
   mode: WorkerStartModeReceipt
+  /** What launched; a chat worker runs the model and effort its session seeded. */
+  launch: OrchestrationWorkerLaunchReceipt
   worktree: PlacedWorktree
   terminalHandle: string
   terminalCreation?: RuntimeTerminalCreate
@@ -50,12 +57,16 @@ type WorkerAgentPlacementArgs = {
   requestedWorktree: string
   /** Present only when this start creates a worktree. */
   creationTarget: WorkerWorktreeCreationTarget | undefined
+  orchestrationRunId: string
   /** The already-resolved placement, present only when this start does not create one. */
   resolvedWorktree: PlacedWorktree | undefined
   /** Decided before the dispatch record; for an existing worktree, already settled on its host. */
   mode: WorkerStartModeReceipt
   agent: TuiAgent | undefined
-  launchPreferences: AgentLaunchPreferences | undefined
+  launch: {
+    preferences: AgentLaunchPreferences | undefined
+    receipt: OrchestrationWorkerLaunchReceipt
+  }
   effects: WorkerEffect[]
   /** Attributes a throw to the step that was running, the way the caller's own stages do. */
   onStage: (stage: string) => void
@@ -86,6 +97,7 @@ export async function placeWorkerAgent(
     })
     return {
       mode: args.mode,
+      launch: args.launch.receipt,
       worktree: existing,
       terminalHandle: args.params.terminal,
       structuredSession: null,
@@ -103,6 +115,7 @@ export async function placeWorkerAgent(
     })
     return {
       mode: args.mode,
+      launch: args.launch.receipt,
       worktree: existing,
       terminalHandle: reopened.handle,
       structuredSession: null,
@@ -161,13 +174,17 @@ async function launchWorkerAgent(
             dispatchId: args.dispatchId,
             requestedWorktree: args.requestedWorktree,
             target: requirePlacement(args.creationTarget),
+            orchestrationContext: {
+              taskId: args.taskId,
+              orchestrationRunId: args.orchestrationRunId
+            },
             params: args.params,
             agent,
             // The executor withholds the startup agent exactly when the worker is to be a session.
             withAgentTerminal: startupAgent !== undefined,
             promisedAgentChat,
             onWorkspaceCreated,
-            ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+            ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
             effects: args.effects
           })
           return {
@@ -200,6 +217,7 @@ async function launchWorkerAgent(
   }
   return {
     mode: launched.receipt,
+    launch: launchedWorkerReceipt(args, structuredSession),
     worktree: existing ?? requirePlacement(created?.worktree),
     terminalHandle: launched.outcome.handle,
     terminalCreation: created?.terminalCreation ?? terminalCreation,
@@ -207,6 +225,18 @@ async function launchWorkerAgent(
     setupReceipt: created?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
     ...(launched.warning ? { warning: launched.warning } : {})
   }
+}
+
+function launchedWorkerReceipt(
+  args: WorkerAgentPlacementArgs,
+  session: WorkerStructuredSession | null
+): OrchestrationWorkerLaunchReceipt {
+  if (!session) {
+    return args.launch.receipt
+  }
+  const receipt = structuredWorkerLaunchReceipt(args.launch.receipt, session.options)
+  recordWorkerLaunchObservation(args.db, args.dispatchId, receipt)
+  return receipt
 }
 
 /** Create worker-specific background chat/redrive/mailbox or worker-task terminal without moving the sidebar. */
@@ -232,7 +262,7 @@ function workerSurfaceFactory(
         worktreeId,
         agent,
         dispatchId: args.dispatchId,
-        ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+        ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
         effects: args.effects
       })
       onStructuredSession(session)
@@ -248,7 +278,7 @@ function workerSurfaceFactory(
         runtime: args.runtime,
         worktreeId,
         agent,
-        ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+        ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
         taskId: args.taskId,
         effects: args.effects
       })

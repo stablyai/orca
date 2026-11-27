@@ -280,7 +280,7 @@ async function serveCli(
   }
   if (!COMMANDS.has(command)) {
     throw new Error(
-      command === 'connector reply' ? CONNECTOR_REPLY_UNAVAILABLE : LEGACY_RELAY_CLI_UNSUPPORTED
+      command === 'bot reply' ? CONNECTOR_REPLY_UNAVAILABLE : LEGACY_RELAY_CLI_UNSUPPORTED
     )
   }
   const retryRequestId = retryRequestFlag(flags)

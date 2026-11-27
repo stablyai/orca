@@ -57,7 +57,7 @@ export function BrowserToolbarZoomRow({
         }
       }}
     >
-      <ZoomIn className="mr-2 size-3.5" />
+      <ZoomIn className="size-3.5" />
       {t('auto.components.browser.pane.BrowserToolbarMenu.zoom', 'Zoom')}
       <span className="ml-auto flex items-center">
         <Button
@@ -119,7 +119,7 @@ export function BrowserToolbarAppearanceSub({
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger disabled={!display?.site}>
-        <SunMoon className="mr-2 size-3.5" />
+        <SunMoon className="size-3.5" />
         {t('auto.components.browser.pane.BrowserToolbarMenu.appearance', 'Appearance')}
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal>

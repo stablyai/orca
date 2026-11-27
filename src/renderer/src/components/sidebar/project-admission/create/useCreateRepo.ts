@@ -17,7 +17,7 @@ import {
   resolveAddRepoRuntimeTarget,
   worktreeRefreshOptions
 } from '../host-selection/add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   readWslHostWindowsDriveRefusal,
   type WslHostWindowsDriveRefusal
@@ -111,7 +111,8 @@ export function useCreateRepo(
                 name,
                 kind: createKind
               },
-              { timeoutMs: 60_000 }
+              // Creating a repo is the user's act: it may wake an idle-stopped WSL host (#46567).
+              { timeoutMs: 60_000, wake: true }
             )
           : await window.api.repos.create({
               parentPath,

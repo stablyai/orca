@@ -10,7 +10,10 @@ import type { LocalGitExecOptions } from '../../repositories/github-repository-i
 import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
 import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import { mapReviewCommentResponse } from './../map/review-comment-response'
-import { codeHostFailure, classifiedFailure } from '../../../../shared/code-host-failure-copy'
+import {
+  codeHostFailure,
+  classifiedFailure
+} from '../../../../shared/source-control/code-host-failure-copy'
 export async function addPRReviewComment(
   args: GitHubPRReviewCommentInput & {
     connectionId?: string | null
@@ -61,7 +64,7 @@ export async function addPRReviewComment(
     }
     return {
       ok: true,
-      comment: mapReviewCommentResponse(data, args.body, args.path, args.line, args.startLine)
+      comment: await mapReviewCommentResponse(data, args.body, args.path, args.line, args.startLine)
     }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
@@ -112,7 +115,7 @@ export async function addPRReviewCommentReply(
     }
     return {
       ok: true,
-      comment: mapReviewCommentResponse(data, body, path, line, undefined, threadId)
+      comment: await mapReviewCommentResponse(data, body, path, line, undefined, threadId)
     }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)

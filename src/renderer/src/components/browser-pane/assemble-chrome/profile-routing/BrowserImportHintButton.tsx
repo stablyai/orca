@@ -3,8 +3,8 @@ import { Import } from 'lucide-react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
 import { Button } from '@/components/ui/button'
-import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportDisclosure'
-import { BrowserCookieImportMachineNotice } from '@/components/BrowserCookieImportMachineNotice'
+import { BrowserCookieImportDisclosure } from '@/components/settings/browser/profiles/BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from '@/components/settings/browser/profiles/BrowserCookieImportMachineNotice'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +21,10 @@ import { useAppStore } from '@/store/index'
 import { isLinuxUserAgent, isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { getBrowserCookieImportSourceLabels } from '../../../../../../shared/browser/cookies/browser-cookie-import-sources'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
+import {
+  useBrowserPageCookieImport,
+  type BrowserClientHostedCookieImportPage
+} from './use-browser-page-cookie-import'
 import { formatBrowserImportSummary } from './browser-detected-browsers-summary'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -28,20 +32,24 @@ import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-co
 
 type BrowserImportHintButtonProps = {
   profileId: string | null
+  worktreeId: string
+  /** Set on a server's page this desktop hosts. */
+  clientHostedPage?: BrowserClientHostedCookieImportPage | null
 }
 
 export function BrowserImportHintButton({
-  profileId
+  profileId,
+  worktreeId,
+  clientHostedPage = null
 }: BrowserImportHintButtonProps): React.JSX.Element | null {
   const t = useTranslate()
+  const { pageRoute, detectedBrowsers, detectedBrowsersLoaded, fetchDetectedBrowsers } =
+    useBrowserPageCookieImport(worktreeId, clientHostedPage)
   const [open, setOpen] = useState(false)
   const [importMenuOpen, setImportMenuOpen] = useState(false)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const browserImportHintHidden = useAppStore((s) => s.browserImportHintHidden)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
-  const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
-  const detectedBrowsersLoaded = useAppStore((s) => s.detectedBrowsersLoaded)
-  const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
   const importCookiesFromBrowser = useAppStore((s) => s.importCookiesFromBrowser)
   const importCookiesToProfile = useAppStore((s) => s.importCookiesToProfile)
   const setBrowserImportHintHidden = useAppStore((s) => s.setBrowserImportHintHidden)
@@ -90,7 +98,8 @@ export function BrowserImportHintButton({
       const result = await importCookiesFromBrowser(
         effectiveProfileId,
         browserFamily,
-        browserProfile
+        browserProfile,
+        pageRoute
       )
       if (result.ok) {
         const browser = detectedBrowsers.find((entry) => entry.family === browserFamily)
@@ -111,13 +120,13 @@ export function BrowserImportHintButton({
       }
       toast.error(browserCookieImportFailureText(result))
     },
-    [detectedBrowsers, effectiveProfileId, importCookiesFromBrowser]
+    [detectedBrowsers, effectiveProfileId, importCookiesFromBrowser, pageRoute]
   )
 
   const handleImportFromFile = useCallback(async (): Promise<void> => {
     setOpen(false)
     setImportMenuOpen(false)
-    const result = await importCookiesToProfile(effectiveProfileId)
+    const result = await importCookiesToProfile(effectiveProfileId, pageRoute)
     if (result.ok) {
       emitBrowserCookieImportToast(
         result.summary,
@@ -133,7 +142,7 @@ export function BrowserImportHintButton({
     if (result.reason !== 'canceled') {
       toast.error(browserCookieImportFailureText(result))
     }
-  }, [effectiveProfileId, importCookiesToProfile])
+  }, [effectiveProfileId, importCookiesToProfile, pageRoute])
 
   const handleOpenBrowserSettings = useCallback((): void => {
     openSettingsTarget({ pane: 'browser', repoId: null })
@@ -210,7 +219,7 @@ export function BrowserImportHintButton({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-52">
-                <BrowserCookieImportMachineNotice />
+                <BrowserCookieImportMachineNotice pageRoute={pageRoute} />
                 {detectedBrowsers.map((browser) =>
                   browser.profiles.length > 1 ? (
                     <DropdownMenuSub key={browser.family}>

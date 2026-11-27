@@ -7,6 +7,7 @@ import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/Wo
 import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
 import { cn } from '@/lib/class-names'
 import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { useBlurSaveOnUnmount } from '@/lib/text-input/focus/use-blur-save-on-unmount'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -213,23 +214,22 @@ export function WorktreeTitleInlineRename({
         setEditingMode(false)
       }
     } catch (err) {
-      if (mountedRef.current) {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : translate(
-                'auto.components.sidebar.WorktreeTitleInlineRename.8df295a78d',
-                'Failed to rename workspace.'
-              )
-        )
-      }
-    } finally {
-      savingRef.current = false
-      if (mountedRef.current) {
-        setSaving(false)
-      }
+      // Toast even when unmounted: a save from useBlurSaveOnUnmount has no field left to show the old name.
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.sidebar.WorktreeTitleInlineRename.8df295a78d',
+              'Failed to rename workspace.'
+            )
+      )
+    }
+    savingRef.current = false
+    if (mountedRef.current) {
+      setSaving(false)
     }
   }, [cancelRename, displayName, onRename, setEditingMode, value])
+  useBlurSaveOnUnmount(() => editing && editingRef.current, commitRename)
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {

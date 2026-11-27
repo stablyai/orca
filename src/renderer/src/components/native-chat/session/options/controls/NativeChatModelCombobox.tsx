@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 import {
   Command,
@@ -10,13 +10,22 @@ import {
 } from '@/components/ui/command'
 import { nativeChatModelDescription } from './native-chat-model-description'
 import { useTranslate } from '@/i18n/use-translate'
-import type { SessionOptionSelectChoice } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
+import type {
+  SessionOptionsCliUpdate,
+  SessionOptionSelectChoice
+} from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { nativeChatSessionChoiceLabel } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
+import {
+  nativeChatModelSearchIndex,
+  nativeChatModelSearchMatcher,
+  nativeChatModelSearchText
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-model-search'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionChoiceBody } from './NativeChatSessionOptionChoiceBody'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
 import { AgentPickerLegacyModelsToggle } from '../../../../agent/AgentPickerLegacyModelsToggle'
 import { useLegacyModelsExpanded } from '../../../../agent/use-legacy-models-expanded'
+import { NativeChatModelNeedsCliUpdateRow } from './NativeChatModelNeedsCliUpdateRow'
 
 type NativeChatModelComboboxProps = {
   choices: readonly SessionOptionSelectChoice[]
@@ -28,13 +37,8 @@ type NativeChatModelComboboxProps = {
   busy: boolean
   /** Called for a model other than the current one; the list stays as it is. */
   onSelect: (value: string) => void
-}
-
-// Why not cmdk's scorer: it matches scattered letters and reorders the host's list.
-function modelChoiceFilter(value: string, search: string, keywords?: string[]): number {
-  const haystack = [value, ...(keywords ?? [])].join(' ').toLowerCase()
-  const terms = search.toLowerCase().split(/\s+/).filter(Boolean)
-  return terms.every((term) => haystack.includes(term)) ? 1 : 0
+  /** The chat host's own CLI, too old for models on Orca's list. */
+  cliUpdate?: SessionOptionsCliUpdate
 }
 
 export function NativeChatModelCombobox({
@@ -43,7 +47,8 @@ export function NativeChatModelCombobox({
   readOnly,
   readOnlyReason,
   busy,
-  onSelect
+  onSelect,
+  cliUpdate
 }: NativeChatModelComboboxProps): React.JSX.Element {
   const t = useTranslate()
   const searchLabel = t('components.native-chat.composer.searchModels', 'Search models…')
@@ -52,7 +57,22 @@ export function NativeChatModelCombobox({
   const [legacyExpanded, toggleLegacy] = useLegacyModelsExpanded(
     choices.some((choice) => choice.value === currentValue && choice.legacy)
   )
-  const searching = Boolean(query.trim())
+  const matcher = useMemo(() => nativeChatModelSearchMatcher(query), [query])
+  // A query of only "/" or "-" filters nothing, so it browses rather than revealing search-only rows.
+  const searching = matcher !== null
+  // Built on a list's first search and reused after; cmdk asks for every row on every keystroke.
+  const searchTexts = searching
+    ? nativeChatModelSearchIndex(choices, (choice) => nativeChatSessionChoiceLabel(choice, say))
+    : null
+  // Why not cmdk's scorer: it matches scattered letters and reorders the host's list.
+  const modelChoiceFilter = (value: string, search: string, keywords?: string[]): number => {
+    const matches = search === query ? matcher : nativeChatModelSearchMatcher(search)
+    if (!matches) {
+      return 1
+    }
+    const text = searchTexts?.get(value) ?? nativeChatModelSearchText([value, ...(keywords ?? [])])
+    return matches(text) ? 1 : 0
+  }
   // Membership ignores the selection, so picking a model never moves rows in the open list.
   const folded = (choice: SessionOptionSelectChoice) => !searching && Boolean(choice.legacy)
   // The current value stays listed even while a pending pick still carries its hidden flag.
@@ -60,6 +80,10 @@ export function NativeChatModelCombobox({
     (choice) => searching || !choice.hidden || choice.value === currentValue
   )
   const legacyChoices = listed.filter(folded)
+  // A model the CLI already lists is pickable, whatever the list says it needs.
+  const needsUpdate = cliUpdate
+    ? cliUpdate.models.filter((model) => !choices.some((choice) => choice.value === model.id))
+    : []
   const renderChoice = (choice: SessionOptionSelectChoice) => {
     const label = nativeChatSessionChoiceLabel(choice, say)
     const current = choice.value === currentValue
@@ -118,6 +142,15 @@ export function NativeChatModelCombobox({
           <CommandGroup>
             {/* One keyed array, so a row moving between sections keeps its highlight. */}
             {[
+              ...(cliUpdate
+                ? needsUpdate.map((model) => (
+                    <NativeChatModelNeedsCliUpdateRow
+                      key={`cli-update:${model.id}`}
+                      model={model}
+                      update={cliUpdate}
+                    />
+                  ))
+                : []),
               ...listed.filter((choice) => !folded(choice)).map(renderChoice),
               ...(legacyExpanded ? legacyChoices.map(renderChoice) : []),
               <AgentPickerLegacyModelsToggle

@@ -4,7 +4,7 @@ import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/t
 import {
   getConnectionExecutionHostId,
   parseExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRuntimeWithResolveKnownWorkspaceFileTarget {

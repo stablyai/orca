@@ -131,6 +131,12 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.agentCommandNotRunnable,
         values
       ),
+    agentCommandFailed: (values) =>
+      translate(
+        'components.native-chat.failureWords.agentCommandFailed',
+        COPY.agentCommandFailed,
+        values
+      ),
     runtimeNotInstalled: (values) =>
       translate(
         'components.native-chat.failureWords.runtimeNotInstalled',

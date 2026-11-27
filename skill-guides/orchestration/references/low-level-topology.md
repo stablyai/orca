@@ -9,5 +9,5 @@ ORCA orchestration dispatch --task <task_id> --to <handle> --inject
 To give a Task to a terminal or chat Orca did not start:
 
 ```text
-ORCA orchestration worker-start --task <task_id> --terminal <handle> --worktree <its_workspace> --json
+ORCA orchestration worker-start --task <task_id> --terminal <handle> --json
 ```

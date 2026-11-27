@@ -1,3 +1,5 @@
+import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
+import { listedAgentVerdict } from '../../agents/agent-list-rows'
 import type { AgentDotState } from './agent-row-display'
 
 // Mirrors desktop worktree-card-idle-child-agents: a lone idle child costs the same row as its group.
@@ -32,6 +34,11 @@ export function collapsedChildrenSignalState(
   children: readonly { dotState: AgentDotState }[]
 ): AgentDotState | undefined {
   return SIGNAL_STATE_ORDER.find((state) => children.some((child) => child.dotState === state))
+}
+
+/** Every collapsed level (summary, child toggle, idle group) rings when an agent it hides is unread on the desktop. */
+export function hidesUnreadAgent(hidden: readonly RuntimeWorktreeAgentRow[]): boolean {
+  return hidden.some((row) => listedAgentVerdict(row)?.unread === true)
 }
 
 // Lists remount as the workspace list scrolls; keep disclosures for the session, bounded like desktop's cache.

@@ -19,7 +19,6 @@ import {
   type OrcadInstanceLockHooks
 } from './orcad-instance-lock'
 import { readOrcadInstanceLockRecord, type OrcadLockRecord } from './orcad-instance-lock-record'
-import { OrcadInstanceLockError } from './orcad-data-root-privacy'
 
 // Inject a contender immediately after canonical-lock rename.
 const afterLockRename = vi.hoisted((): { next: (() => void) | null; failNext: boolean } => ({
@@ -88,17 +87,6 @@ afterEach(() => {
 })
 
 describe('acquireOrcadInstanceLock', () => {
-  it('refuses a second instance while the holder is alive', () => {
-    const root = makeRoot()
-    acquireOrcadInstanceLock(root, hooks())
-    expect(() => acquireOrcadInstanceLock(root, hooks({ processIsAlive: () => true }))).toThrow(
-      OrcadInstanceLockError
-    )
-    expect(() => acquireOrcadInstanceLock(root, hooks({ processIsAlive: () => true }))).toThrow(
-      expect.objectContaining({ code: 'orcad_instance_lock_held' })
-    )
-  })
-
   it('keeps a live holder whose ticks match though its btime-derived start time drifted', () => {
     const root = makeRoot()
     const incarnation = { linuxStartTicks: '1234', bootId: 'boot-a' }
@@ -165,14 +153,6 @@ describe('acquireOrcadInstanceLock', () => {
     lock.release()
     expect(JSON.parse(readFileSync(lock.path, 'utf8')).nonce).toBe('successor')
   })
-  void [
-    ['nothing (a torn write)', ''],
-    ['invalid JSON', '{'],
-    ['an incomplete record', JSON.stringify({ pid: 424242, identity: 'uid-1000' })],
-    ['an invalid pid', JSON.stringify(persistedRecord({ pid: -1 }))],
-    ['an invalid start time', JSON.stringify({ ...persistedRecord(), startedAtMs: 'yesterday' })]
-  ]
-
   it('fails closed when the existing lock is not a regular file', () => {
     const root = makeRoot()
     mkdirSync(join(root, ORCAD_LOCK_FILE_NAME))

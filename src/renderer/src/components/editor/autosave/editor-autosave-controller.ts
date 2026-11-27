@@ -26,7 +26,7 @@ import { hasEditorBytesDraft } from '../save/bytes/editor-bytes-documents'
 import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT
-} from '../../../../../shared/editor-save-events'
+} from '../../../../../shared/editor/saving/editor-save-events'
 
 const NOT_SAVED_MESSAGE = "The file wasn't saved. Try saving again."
 

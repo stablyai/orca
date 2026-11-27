@@ -86,17 +86,19 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
   }
   return (
     <>
-      <NotificationDeliverySection
-        value={delivery}
-        disabled={!enabled || !loaded || saving}
-        onChange={(value) => void change(value)}
-      />
+      {enabled ? (
+        <NotificationDeliverySection
+          value={delivery}
+          disabled={!loaded || saving}
+          onChange={(value) => void change(value)}
+        />
+      ) : null}
       {error ? <SettingsNote error>{error}</SettingsNote> : null}
-      {support.resolved && !support.supported ? (
+      {enabled && support.resolved && !support.supported ? (
         <SettingsNote>
           {t(
             'settings.nativeNotificationDeliverySettings.updateDesktopHint',
-            'Pair an updated desktop to receive notifications on this phone.'
+            'Pair an updated host to receive notifications on this phone.'
           )}
         </SettingsNote>
       ) : null}

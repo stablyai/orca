@@ -25,11 +25,3 @@ export function releaseGitAdmissionAfter(
     grant.release()
   }
 }
-
-export function _resetGitAdmissionForTests(replacement = new GitAdmissionScheduler()): void {
-  scheduler = replacement
-}
-
-export function _gitAdmissionSnapshotForTests(): ReturnType<GitAdmissionScheduler['snapshot']> {
-  return scheduler.snapshot()
-}

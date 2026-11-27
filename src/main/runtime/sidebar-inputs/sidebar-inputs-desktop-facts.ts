@@ -7,7 +7,7 @@ import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-
 import type { DesktopSidebarFacts } from '../../../shared/sidebar-list/feed-facts/desktop-sidebar-facts'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { WORKTREE_METADATA_DOMAINS } from '../../persistence/profile-save-domains'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
 import { readDesktopSidebarFacts } from './catalog/desktop-sidebar-facts'
 
 /** This host's store and connection registries, read the way sidebarInputs.desktopFacts reads them. */

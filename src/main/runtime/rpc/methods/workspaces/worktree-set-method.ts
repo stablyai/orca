@@ -68,7 +68,11 @@ export const WORKTREE_SET_METHOD = defineMethod({
               parentWorktree: params.parentWorktree,
               matchFolderWorkspaces: params.matchFolderWorkspaces === true,
               ...(params.crossStoreParent ? { crossStoreParent: params.crossStoreParent } : {}),
-              noParent: params.noParent === true
+              ...(params.crossStoreParentIsBotHome ? { crossStoreParentIsBotHome: true } : {}),
+              noParent: params.noParent === true,
+              ...(params.ifParentWorkspace !== undefined
+                ? { ifParentWorkspace: params.ifParentWorkspace }
+                : {})
             }
           : undefined
     })

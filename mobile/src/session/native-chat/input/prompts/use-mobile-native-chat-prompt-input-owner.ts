@@ -1,6 +1,6 @@
 import { useEffect, type RefObject } from 'react'
 import type { TextInputInstance } from 'react-native'
-import { isNewerApprovalSubject } from '../../../../../../src/shared/agent-session/agent-session-approval-subject'
+import { isNewerApprovalSubject } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-subject'
 import type { AskPrompt } from '../../../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 

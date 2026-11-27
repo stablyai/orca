@@ -1,10 +1,8 @@
 import { usesModelSpecificAcpEfforts } from './agent-model-catalog-ownership'
 import { discoveredModel } from './structured-agent-session-discovered-model'
 import type { StructuredAgentSessionOptionState } from '../structured-agent-session-options'
-import type {
-  AgentSessionModelCatalogResult,
-  AgentSessionModelOption
-} from '../../agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../agent-session-wire'
+import type { AgentSessionModelOption } from './agent-session-model-option'
 import type { CatalogModel } from '../catalog-providers/agent-session-option-catalog-types'
 
 /** An unobserved menu cannot erase capabilities learned for the same model. */
@@ -22,11 +20,13 @@ export function fillUnknownModelEfforts(
       effortsKnown: _unknown,
       defaultEffort: _default,
       declaredDefaultEffort: _declared,
+      chatEfforts: _unconfirmed,
       ...rest
     } = row
     return {
       ...rest,
       efforts: discovered.efforts,
+      ...(discovered.chatEfforts ? { chatEfforts: discovered.chatEfforts } : {}),
       ...(discovered.defaultEffort !== undefined
         ? { defaultEffort: discovered.defaultEffort }
         : {}),

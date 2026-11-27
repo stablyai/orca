@@ -1,6 +1,9 @@
 import { execFile } from 'node:child_process'
 import type { WebContents } from 'electron'
 import { BrowserError } from '../../browser-error'
+import { assertTeamAllowsBrowserUse } from '../../browser-team-policy'
+import { getActiveRpcCaller } from '../../../runtime/rpc/callers/active-call'
+import { isAgentRpcCaller } from '../../../runtime/rpc/callers/rpc-caller-identity'
 import {
   isCdpProxyRejectedError,
   isTabClosedTransportError,
@@ -16,7 +19,10 @@ import { AgentBrowserBridgeTabs } from '../session-routing/agent-browser-bridge-
 import { assertRemoteCliBrowserAccess } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { assertExpectedPageUrlForStep } from '../../cdp/input/browser-expected-page-url'
 import { ORCA_TAB_SESSION_PREFIX } from '../session-lifecycle/agent-browser-session-name'
-import { canSkipAgentBrowserSessionReset } from '../session-lifecycle/agent-browser-session-reset'
+import {
+  canSkipAgentBrowserSessionReset,
+  waitForAgentBrowserSessionExit
+} from '../session-lifecycle/agent-browser-session-reset'
 import {
   AGENT_BROWSER_CLEANUP_TIMEOUT_MS,
   type AgentBrowserCleanupOptions
@@ -70,6 +76,9 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
   protected assertCommandAdmission(): void {
     if (this.shutdownStarted) {
       throw new BrowserError('browser_owner_unavailable', 'Browser runtime is shutting down')
+    }
+    if (isAgentRpcCaller(getActiveRpcCaller())) {
+      assertTeamAllowsBrowserUse()
     }
   }
 
@@ -184,7 +193,7 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     return new BrowserError('browser_tab_not_found', pageUnavailableMessageForSession(sessionName))
   }
 
-  protected closeStaleAgentBrowserSession(sessionName: string): Promise<void> {
+  protected async closeStaleAgentBrowserSession(sessionName: string): Promise<void> {
     if (
       canSkipAgentBrowserSessionReset({
         ownsSocketDirectory: this.ownsAgentBrowserSocketDirectory,
@@ -192,9 +201,9 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
         sessionName
       })
     ) {
-      return Promise.resolve()
+      return
     }
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       let child: ReturnType<typeof execFile> | null = null
       let settled = false
 
@@ -250,6 +259,11 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
           )
         )
       }
+    })
+    await waitForAgentBrowserSessionExit({
+      ownsSocketDirectory: this.ownsAgentBrowserSocketDirectory,
+      socketDirectory: this.agentBrowserEnv.AGENT_BROWSER_SOCKET_DIR,
+      sessionName
     })
   }
 

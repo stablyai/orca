@@ -1,5 +1,5 @@
 import '../../../../../../shared/remote-runtime/protocol/protocol-version'
-import { readRecordChanges } from '@/store/keyed-record-change-reads'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import {
   isRuntimeHostContactRevoked,
@@ -89,14 +89,4 @@ export function selectPairedRuntimeParkingEnvironmentIds(
   statuses: PairedRuntimeParkingCapabilityStatuses
 ): ReadonlySet<string> {
   return selectParkingEnvironmentIds(statuses)
-}
-
-export function selectPairedRuntimeParkingEnvironmentIdsFromState(state: {
-  runtimeStatusByEnvironmentId: PairedRuntimeParkingCapabilityStatuses
-}): ReadonlySet<string> {
-  return selectPairedRuntimeParkingEnvironmentIds(state.runtimeStatusByEnvironmentId)
-}
-
-export function resetPairedRuntimeParkingEnvironmentIdsCacheForTest(): void {
-  selectParkingEnvironmentIds = createPairedRuntimeParkingEnvironmentIdsSelector()
 }

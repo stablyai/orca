@@ -6,7 +6,7 @@ import {
   KERNEL_OUTPUT_TYPES,
   type KernelFrame,
   type KernelStartResult
-} from '../../shared/notebook-kernel-types'
+} from '../../shared/editor/notebooks/notebook-kernel-types'
 
 const STDERR_TAIL_CHARS = 4000
 const SHUTDOWN_GRACE_MS = 5000

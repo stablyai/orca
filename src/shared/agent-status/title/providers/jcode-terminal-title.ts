@@ -2,13 +2,14 @@ import { CLAUDE_IDLE } from '../agent-title-glyphs'
 
 // jcode updates emoji/session/diff/duration titles about once a second (terminal_title.rs); generated codenames are identity, not conversation names.
 // Captured provenance: docs/reference/jcode-hook-events.md.
-// (?<!\s) starts each separator at its whitespace run so long space runs stay linear.
+// Older WebKit cannot parse lookbehind: (^|\S) restores the boundary that keeps long space runs linear, and
+// the repeat takes adjacent segments whose boundary the previous segment already consumed.
 const JCODE_TITLE_STATUS_RE =
-  /^[\p{Extended_Pictographic}\u{FE0F}\u{200D}]+\s*|(?<!\s)\s+\u00B7\s+(?:\+\d+\s+-\d+|(?:work|last)\s+~\S+|working)(?=\s+\u00B7\s+|$)/gu
+  /^[\p{Extended_Pictographic}\u{FE0F}\u{200D}]+\s*|(^|\S)(?:\s+\u00B7\s+(?:\+\d+\s+-\d+|(?:work|last)\s+~\S+|working)(?=\s+\u00B7\s+|$))+/gu
 
 /** The jcode title with its per-session emoji and live diff/duration segments removed. */
 export function stripJcodeTitleStatus(title: string): string {
-  return title.replace(JCODE_TITLE_STATUS_RE, '').trim()
+  return title.replace(JCODE_TITLE_STATUS_RE, '$1').trim()
 }
 
 // jcode, jcode Puppy and jcode/marsh Puppy (server name) are identity; a bare jcode/<dir> is a shell path.

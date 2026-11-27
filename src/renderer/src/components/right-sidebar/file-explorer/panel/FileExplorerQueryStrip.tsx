@@ -1,7 +1,7 @@
 import React, { useRef } from 'react'
 import { flushSync } from 'react-dom'
 import { FileExplorerViewSwitch } from './FileExplorerViewSwitch'
-import type { RightSidebarExplorerView } from '../../../../../../shared/ui-chrome-types'
+import type { RightSidebarExplorerView } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 
 type FileExplorerQueryStripProps = {
   view: RightSidebarExplorerView

@@ -24,7 +24,8 @@ import { FEEDBACK_PAYLOAD_TOO_LARGE_STATUS } from '../../../../../shared/feedbac
 import { SidebarFeedbackImageAttachments } from './SidebarFeedbackImageAttachments'
 import { useSidebarFeedbackEnvironmentPrefill } from './use-sidebar-feedback-environment-prefill'
 import { useSidebarFeedbackImages } from './use-sidebar-feedback-images'
-import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { openHelpLink } from '../chrome/help-link-open'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 const GITHUB_ISSUES_URL = 'https://github.com/stablyai/orca/issues/'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
@@ -146,66 +147,7 @@ export function SidebarFeedbackDialog({
     }
 
     setIsSubmitting(true)
-    try {
-      const identity = getSubmitIdentity(viewer, submitAnonymously)
-      // Main-process IPC avoids packaged file-renderer CORS restrictions during submission.
-      const result = await window.api.feedback.submit({
-        feedback: trimmed,
-        submitAnonymously,
-        githubLogin: identity.githubLogin,
-        githubEmail: identity.githubEmail,
-        images: images.map((image) => ({
-          contentType: image.contentType,
-          data: image.data
-        }))
-      })
-
-      if (!result.ok) {
-        throw new Error(`Feedback request failed: ${result.error}`)
-      }
-
-      // Clear delivered text even after unmount, but preserve newer drafts; strip regenerated environment footers before comparing.
-      if (
-        stripClientEnvironmentFooter(useAppStore.getState().feedbackDraft.feedback).trim() ===
-        userText
-      ) {
-        clearFeedbackDraft()
-      }
-
-      if (mountedRef.current) {
-        // The dialog closes after delivery; report lost screenshots without implying they remain recoverable here.
-        if (result.imagesFailure) {
-          toast.warning(
-            // Only 413 proves the size limit; other attachment refusals need different explanations.
-            result.imagesFailure.status === FEEDBACK_PAYLOAD_TOO_LARGE_STATUS
-              ? t(
-                  'auto.components.sidebar.SidebarFeedbackDialog.imagesRejected',
-                  'Feedback sent. Your screenshots were too large to upload and were not included.'
-                )
-              : t(
-                  'auto.components.sidebar.SidebarFeedbackDialog.imagesNotIncluded',
-                  'Feedback sent. Your screenshots could not be uploaded and were not included.'
-                )
-          )
-        } else if (result.imagesDelivered === false) {
-          toast.warning(
-            t(
-              'auto.components.sidebar.SidebarFeedbackDialog.imagesNotDelivered',
-              'Feedback sent, but image delivery could not be confirmed.'
-            )
-          )
-        } else {
-          toast.success(
-            t(
-              'auto.components.sidebar.SidebarFeedbackDialog.7a46c228b8',
-              'Thanks for the feedback.'
-            )
-          )
-        }
-        clearImages()
-        onOpenChange(false)
-      }
-    } catch (err) {
+    const reportSubmitError = (err: unknown): void => {
       if (mountedRef.current) {
         toast.error(
           t(
@@ -215,11 +157,73 @@ export function SidebarFeedbackDialog({
         )
       }
       console.error('Failed to submit feedback:', err)
-    } finally {
-      if (mountedRef.current) {
-        setIsSubmitting(false)
-      }
     }
+    await runWithFinally(
+      async () => {
+        try {
+          const identity = getSubmitIdentity(viewer, submitAnonymously)
+          // Main-process IPC avoids packaged file-renderer CORS restrictions during submission.
+          const result = await window.api.feedback.submit({
+            feedback: trimmed,
+            submitAnonymously,
+            githubLogin: identity.githubLogin,
+            githubEmail: identity.githubEmail,
+            images: images.map((image) => ({ contentType: image.contentType, data: image.data }))
+          })
+          if (!result.ok) {
+            reportSubmitError(new Error(`Feedback request failed: ${result.error}`))
+            return
+          }
+          // Clear delivered text even after unmount, but preserve newer drafts; strip regenerated environment footers before comparing.
+          if (
+            stripClientEnvironmentFooter(useAppStore.getState().feedbackDraft.feedback).trim() ===
+            userText
+          ) {
+            clearFeedbackDraft()
+          }
+          if (mountedRef.current) {
+            // The dialog closes after delivery; report lost screenshots without implying they remain recoverable here.
+            if (result.imagesFailure) {
+              toast.warning(
+                // Only 413 proves the size limit; other attachment refusals need different explanations.
+                result.imagesFailure.status === FEEDBACK_PAYLOAD_TOO_LARGE_STATUS
+                  ? t(
+                      'auto.components.sidebar.SidebarFeedbackDialog.imagesRejected',
+                      'Feedback sent. Your screenshots were too large to upload and were not included.'
+                    )
+                  : t(
+                      'auto.components.sidebar.SidebarFeedbackDialog.imagesNotIncluded',
+                      'Feedback sent. Your screenshots could not be uploaded and were not included.'
+                    )
+              )
+            } else if (result.imagesDelivered === false) {
+              toast.warning(
+                t(
+                  'auto.components.sidebar.SidebarFeedbackDialog.imagesNotDelivered',
+                  'Feedback sent, but image delivery could not be confirmed.'
+                )
+              )
+            } else {
+              toast.success(
+                t(
+                  'auto.components.sidebar.SidebarFeedbackDialog.7a46c228b8',
+                  'Thanks for the feedback.'
+                )
+              )
+            }
+            clearImages()
+            onOpenChange(false)
+          }
+        } catch (err) {
+          reportSubmitError(err)
+        }
+      },
+      () => {
+        if (mountedRef.current) {
+          setIsSubmitting(false)
+        }
+      }
+    )
   }
 
   return (
@@ -277,7 +281,7 @@ export function SidebarFeedbackDialog({
               variant="outline"
               size="sm"
               className="h-8 text-xs"
-              onClick={(event) => openAppHttpLink(GITHUB_ISSUES_URL, { event })}
+              onClick={(event) => openHelpLink(GITHUB_ISSUES_URL, { event })}
             >
               <Github className="size-3.5" />
               {t('auto.components.sidebar.SidebarFeedbackDialog.d245c4ef6c', 'GitHub issues')}
@@ -288,7 +292,7 @@ export function SidebarFeedbackDialog({
               variant="outline"
               size="sm"
               className="h-8 text-xs"
-              onClick={(event) => openAppHttpLink(DISCORD_URL, { event })}
+              onClick={(event) => openHelpLink(DISCORD_URL, { event })}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true" className="size-3.5 fill-current">
                 <path d="M20.317 4.369A19.791 19.791 0 0 0 15.885 3c-.191.328-.403.77-.553 1.116a18.27 18.27 0 0 0-5.098 0A12.64 12.64 0 0 0 9.68 3a19.736 19.736 0 0 0-4.433 1.369C2.444 8.479 1.69 12.488 2.067 16.44a19.912 19.912 0 0 0 5.427 2.744c.438-.598.828-1.23 1.164-1.89a12.95 12.95 0 0 1-1.833-.877c.154-.113.305-.231.45-.352a14.294 14.294 0 0 0 12.45 0c.146.12.296.239.45.352-.585.34-1.2.634-1.835.878.337.659.727 1.29 1.165 1.888a19.84 19.84 0 0 0 5.43-2.744c.442-4.579-.755-8.551-3.932-12.07ZM9.955 14.005c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.211 0 2.176 1.095 2.157 2.418 0 1.334-.955 2.419-2.157 2.419Zm4.09 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.211 0 2.176 1.095 2.157 2.418 0 1.334-.946 2.419-2.157 2.419Z" />
@@ -301,7 +305,7 @@ export function SidebarFeedbackDialog({
               variant="outline"
               size="sm"
               className="h-8 text-xs"
-              onClick={(event) => openAppHttpLink(X_URL, { event })}
+              onClick={(event) => openHelpLink(X_URL, { event })}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true" className="size-3.5 fill-current">
                 <path d="M18.901 1.153h3.68l-8.041 9.19L24 22.847h-7.406l-5.8-7.584-6.64 7.584H.474l8.6-9.83L0 1.153h7.594l5.243 6.932 6.064-6.932Zm-1.29 19.493h2.04L6.486 3.24H4.298l13.313 17.406Z" />

@@ -1,12 +1,12 @@
 import type { TerminalLaunchResult } from '../../agent-session/lifecycle/agent-session-resume'
 import type * as AgentSessionResume from '../../agent-session/lifecycle/agent-session-resume'
 import type { StartupCommandDelivery } from '../../agent-launch/startup/codex-startup-delivery'
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { PtyIncarnationId } from '../pty/lifecycle/pty-incarnation'
 import type { PtyLivenessVerdict } from '../pty/lifecycle/pty-liveness-verdict'
 import type { RuntimeListingHostScope } from '../../execution-host/runtime-listing-host-scope'
 import type { RuntimeMobileSessionTabsResult } from '../../remote-runtime/session-graph/runtime-session-contracts'
-import type { TabGroupLayoutNode } from '../../tab-types'
+import type { TabGroupLayoutNode } from '../../workspace-layout/tab-groups/tab-types'
 import type { TerminalExitCause } from '../pty/lifecycle/terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from '../../workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../agent-status/identity/terminal-agent'
@@ -112,6 +112,16 @@ export type RuntimeTerminalListResult = {
   hostScope?: RuntimeTerminalListHostScope
 }
 
+/** A `terminal.list` row asked for with `includePreview: false`: the host leaves `preview` out. */
+export type RuntimeTerminalSummaryWithoutPreview = Omit<RuntimeTerminalSummary, 'preview'>
+
+export type RuntimeTerminalListResultWithoutPreview = Omit<
+  RuntimeTerminalListResult,
+  'terminals'
+> & {
+  terminals: RuntimeTerminalSummaryWithoutPreview[]
+}
+
 export type RuntimeTerminalOrphanAdoptionClaim = {
   terminal: string
   ptyId: string
@@ -202,6 +212,12 @@ export type RuntimeTerminalState = 'running' | 'exited' | 'unknown'
 export type RuntimeTerminalRowMetadata = {
   wrapped: boolean
   trailingSpaces: number
+}
+
+export type RuntimeTerminalProjection = {
+  lines: string[]
+  draft?: string
+  tailRows?: RuntimeTerminalRowMetadata[]
 }
 
 export type RuntimeTerminalRead = {

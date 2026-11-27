@@ -2,8 +2,8 @@ import type { ChildProcess } from 'node:child_process'
 import type { FileHandle } from 'node:fs/promises'
 import type { Store } from '../../persistence/loading-store/store'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
-import type { SenderScopedRequestCancellations } from '../sender-scoped-request-cancellation'
-import { cleanupLocalTransferPath } from './filesystem-download-promotion'
+import type { SenderScopedRequestCancellations } from '../renderer-requests/sender-scoped-request-cancellation'
+import { cleanupLocalTransferPath } from './downloads/filesystem-download-promotion'
 
 export type DownloadSession = {
   destinationPath: string
@@ -47,7 +47,15 @@ export function createFilesystemHandlerContext(
     downloadSessions.delete(transferId)
     session.disposeRendererLifetime()
     clearTimeout(session.cleanupTimer)
-    await session.handle.close().catch(() => {})
+    try {
+      await session.handle.close()
+    } catch (error) {
+      // Why: close can report a lost write (e.g. EIO on network mounts); never promote that file.
+      if (!cleanupTemp) {
+        await cleanupLocalTransferPath(session.tempPath)
+        throw error
+      }
+    }
     if (cleanupTemp) {
       await cleanupLocalTransferPath(session.tempPath)
     }

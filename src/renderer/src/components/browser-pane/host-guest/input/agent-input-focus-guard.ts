@@ -1,4 +1,5 @@
 import { webviewRegistry } from '../webview-registry'
+import { findBrowserClientPageWebview } from '../client-pages/browser-client-page-renderer-installation'
 
 // Main brackets agent guest input; restore the user’s element afterward because guest/CDP focus would otherwise retain their keyboard.
 
@@ -8,7 +9,7 @@ const LATE_FOCUS_RECHECK_MS = 50
 const ABANDONED_GUARD_MS = 30_000
 
 const releasesByToken = new Map<string, () => void>()
-// Refuse agent presses during composition; blurring would commit unfinished text into the terminal shell.
+// Refuse agent presses and guest focus moves during composition; either ends the user's unfinished text.
 let composingElement: EventTarget | null = null
 // Overlapping guards share the first user element; later activeElement values may belong to agent-focused guests.
 let inFlight = 0
@@ -83,7 +84,7 @@ export function beginAgentInputFocusGuard(
 }
 
 function guardUserFocus(browserPageId: string, token: string): void {
-  const webview = webviewRegistry.get(browserPageId)
+  const webview = webviewRegistry.get(browserPageId) ?? findBrowserClientPageWebview(browserPageId)
   if (!webview) {
     return
   }

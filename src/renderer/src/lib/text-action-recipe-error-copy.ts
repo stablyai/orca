@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   TEXT_GENERATION_FAILURE_COPY as EN,
   type TextGenerationFailureCode
-} from '../../../shared/text-generation-failure-copy'
+} from '../../../shared/text-generation/text-generation-failure-copy'
 
 type CopyValues = Record<string, string | number>
 

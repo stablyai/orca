@@ -6,7 +6,7 @@ import type {
   AgentSessionExecutionClaim,
   AgentSessionOwnerBinding,
   AgentSessionSurfaceBinding
-} from '../../agent-session-host-authority'
+} from '../operations/agent-session-host-authority'
 import {
   agentSessionClaimKey,
   agentSessionClaimsEqual,

@@ -7,7 +7,7 @@ const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, s
     webContentsFromIdMock: vi.fn(),
     existsSyncMock: vi.fn(() => false),
     readFileSyncMock: vi.fn(() => Buffer.from('')),
-    stdinWrites: [] as string[]
+    stdinWrites: new Array<string>()
   }))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
@@ -59,12 +59,12 @@ vi.mock('../../cdp/commands/cdp-bridge', async () => {
 })
 
 import { AgentBrowserBridge } from '../agent-browser-bridge'
+
 import {
   mockBrowserManager,
   mockWebContents,
   overrideBridgeWebContentsLookup,
-  resetAgentBrowserBridgeMocks,
-  succeedRecordingAgentBrowserSpawns
+  resetAgentBrowserBridgeMocks
 } from '../testing/agent-browser-bridge-test-harness'
 
 overrideBridgeWebContentsLookup(AgentBrowserBridge.prototype, webContentsFromIdMock)
@@ -84,49 +84,64 @@ describe('AgentBrowserBridge', () => {
     bridge.setActiveTab(100)
   })
 
-  it('frees the page queue when callers leave a never-settling evaluation', async () => {
-    const wc = mockWebContents(100)
-    wc.debugger.sendCommand
-      .mockReturnValueOnce(new Promise(() => {}))
-      .mockResolvedValue({ result: { value: 'example.com' } })
+  it('redacts discovery and navigation replies while delivering the raw private target to its guest', async () => {
+    const raw = 'https://kagi.com/search?q=one&token=test-only'
+    const wc = mockWebContents(100, raw, raw)
     webContentsFromIdMock.mockReturnValue(wc)
-    const hungCaller = new AbortController()
-    const queuedCaller = new AbortController()
-
-    const hung = bridge.evaluate('new Promise(() => {})', undefined, undefined, hungCaller.signal)
-    const queued = bridge.evaluate('sideEffect()', undefined, undefined, queuedCaller.signal)
-    const next = bridge.evaluate('location.host')
-    queuedCaller.abort()
-    hungCaller.abort()
-
-    await expect(hung).rejects.toThrow()
-    await expect(queued).rejects.toThrow()
-    await expect(next).resolves.toMatchObject({ result: 'example.com' })
-    expect(wc.debugger.sendCommand).not.toHaveBeenCalledWith(
-      'Runtime.evaluate',
-      expect.objectContaining({ expression: 'sideEffect()' })
-    )
-  })
-
-  it('deletes the named cookie through the guest debugger instead of clearing the profile', async () => {
-    const spawns = succeedRecordingAgentBrowserSpawns(execFileMock, stdinWrites, { cleared: true })
-    const wc = mockWebContents(100, 'https://www.example.com/app')
-    wc.debugger.sendCommand.mockImplementation(async (method) =>
-      method === 'Network.getAllCookies'
-        ? { cookies: [{ name: 'sid', domain: '.example.com', path: '/' }] }
-        : {}
-    )
-    webContentsFromIdMock.mockReturnValue(wc)
-
-    await expect(bridge.cookieDelete('sid')).resolves.toEqual({ deleted: true })
-
-    expect(wc.debugger.sendCommand).toHaveBeenCalledWith('Network.deleteCookies', {
-      name: 'sid',
-      domain: '.example.com',
-      path: '/'
+    const manager = mockBrowserManager(new Map([['tab-1', 100]]), new Map(), {
+      getBrowserPageLoadError: () => ({
+        code: -20,
+        description: 'ERR_BLOCKED_BY_CLIENT',
+        validatedUrl: raw
+      })
     })
-    expect(spawns.map(({ command }) => command)).not.toContainEqual(
-      expect.arrayContaining(['cookies', 'clear'])
-    )
+    const privateBridge = new AgentBrowserBridge(manager)
+    expect(privateBridge.tabList().tabs[0]).toMatchObject({
+      url: 'https://kagi.com/search?q=one',
+      title: 'https://kagi.com/search?q=one',
+      loadError: { validatedUrl: 'https://kagi.com/search?q=one' }
+    })
+    expect(privateBridge.getPageInfo(undefined, 'tab-1')).toEqual({
+      browserPageId: 'tab-1',
+      url: 'https://kagi.com/search?q=one',
+      title: 'https://kagi.com/search?q=one'
+    })
+    expect(await privateBridge.goto(raw, undefined, 'tab-1', { reportEffects: false })).toEqual({
+      url: 'https://kagi.com/search?q=one',
+      title: 'https://kagi.com/search?q=one'
+    })
+    expect(wc.loadURL).toHaveBeenCalledWith(raw)
+    // Stop is not queued and reads the committed page directly, so it needs its own redaction.
+    const stop = vi.fn()
+    Object.assign(wc, { stop })
+    expect(privateBridge.stop(undefined, 'tab-1')).toEqual({
+      url: 'https://kagi.com/search?q=one',
+      title: 'https://kagi.com/search?q=one'
+    })
+    expect(stop).toHaveBeenCalled()
   })
+
+  it('keeps target-bearing Kagi failures out of replies but retains ordinary failure diagnostics', async () => {
+    const raw = 'https://kagi.com/search?q=one&token=test-only'
+    const wc = mockWebContents(100)
+    webContentsFromIdMock.mockReturnValue(wc)
+    wc.loadURL.mockRejectedValue(new Error(`ERR_BLOCKED_BY_CLIENT (-20) loading '${raw}'`))
+    await expect(bridge.goto(raw, undefined, 'tab-1', { reportEffects: false })).rejects.toThrow(
+      'Private navigation failed.'
+    )
+    wc.loadURL.mockRejectedValue(
+      Object.assign(new Error(`ERR_BLOCKED_BY_CLIENT loading '${raw}'`), { url: raw })
+    )
+    await expect(
+      bridge.goto('https://example.com/start', undefined, 'tab-1', { reportEffects: false })
+    ).rejects.toThrow('Private navigation failed.')
+    wc.loadURL.mockRejectedValue(
+      new Error('ERR_CONNECTION_REFUSED (-102) loading https://example.com/')
+    )
+    await expect(
+      bridge.goto('https://example.com/', undefined, 'tab-1', { reportEffects: false })
+    ).rejects.toThrow('ERR_CONNECTION_REFUSED (-102) loading https://example.com/')
+  })
+
+  // Electron resolves loadURL on the old page's beforeunload replaceState while the request is open.
 })

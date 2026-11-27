@@ -2,7 +2,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { useGitHubTaskProjectTable } from '@/hooks/useGitHubTaskItems'
+import { useGitHubTaskProjectTable } from '@/lib/work-items/github/useGitHubTaskItems'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { projectViewCacheKey, projectViewSourceScope } from '@/store/github/cache/cache-identity'

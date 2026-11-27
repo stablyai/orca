@@ -10,7 +10,7 @@ import {
 } from '../../../../../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
-import { useNow } from '../../../../hooks/use-now'
+import { useNow } from '../../../../lib/window-activity/use-now'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'

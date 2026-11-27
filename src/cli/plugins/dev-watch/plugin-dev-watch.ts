@@ -6,7 +6,7 @@ import { onPluginDevWatchInterrupt, waitUnlessAborted } from './plugin-dev-watch
 import { RuntimeClientError, RuntimeRpcFailureError } from '../../runtime/connection/types'
 import { writeStdoutLine } from '../../output/stdout-line'
 import type { PluginHostListEntry } from '../../../shared/plugins/plugin-list-entry'
-import { CLI_BOOLEAN_FLAGS } from '../../../shared/cli-argument-boundary'
+import { CLI_BOOLEAN_FLAGS } from '../../../shared/cli/cli-argument-boundary'
 import { checkPluginDevFolder } from './plugin-dev-watch-check'
 import { pluginDevWatchConfirmFor } from './plugin-dev-watch-approval'
 import { pluginDevWatchShotPanel, type PluginDevWatchShotHost } from './plugin-dev-watch-shot'

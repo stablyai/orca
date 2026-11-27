@@ -3,7 +3,11 @@ import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/
 import { discoverFiles } from '../../../discovery/session-scanner-discovery'
 import { splitOpenCodeSqliteCandidate } from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import { listOpenCodeSqliteSessionsViaWorker } from '../reader-transport/session-scanner-opencode-sqlite-worker-spawn'
-import type { FileWithMtime, SessionFileDiscovery } from '../../../session-scanner-types'
+import type {
+  AiVaultScanOptions,
+  FileWithMtime,
+  SessionFileDiscovery
+} from '../../../session-scanner-types'
 import { scopeWalksAgentFiles } from '../../../scope/session-scope-cwd'
 
 function sessionIdFromLegacyFilePath(filePath: string): string {
@@ -17,6 +21,7 @@ export async function discoverOpenCodeSessions(args: {
   limitPerAgent: number
   issues: AiVaultScanIssue[]
   scopePaths?: readonly string[]
+  statCache?: AiVaultScanOptions['statCache']
   signal?: AbortSignal
 }): Promise<SessionFileDiscovery> {
   const walksScope = scopeWalksAgentFiles('opencode', args.scopePaths)
@@ -36,6 +41,7 @@ export async function discoverOpenCodeSessions(args: {
       issues: args.issues,
       extensions: ['.json'],
       keepScopeFiles: walksScope,
+      statCache: args.statCache,
       signal: args.signal
     }),
     listSqlite(),

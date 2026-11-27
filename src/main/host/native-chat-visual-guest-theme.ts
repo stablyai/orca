@@ -6,13 +6,12 @@ import {
   nativeChatVisualGuestTheme,
   type NativeChatVisualTheme,
   type NativeChatVisualGuestTheme
-} from '../../shared/native-chat/native-chat-visual-shell'
+} from '../../shared/native-chat/visuals/native-chat-visual-shell'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { nativeChatScratchRootFor } from '../native-chat/conversation-files/native-chat-scratch-folder'
 import { browserSiteDisplayController } from '../browser/site-settings/display/browser-site-display-controller'
 import { isNativeChatVisualGuestLocation } from '../native-chat/conversation-files/native-chat-visual-guest-location'
-import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
-import { localSshBrowserProfileIdForSession } from '../browser/routing/local-host-partitions/local-ssh-browser-partitions'
+import { localBrowserProfileIdForSession } from '../browser/sessions/profiles/browser-session-local-profile'
 
 /** Install before the host loads: an unanswered synchronous preload request blocks its guest. */
 export function installNativeChatVisualGuestTheme(window: BrowserWindow): void {
@@ -67,9 +66,7 @@ export function installNativeChatVisualGuestTheme(window: BrowserWindow): void {
     }
     browserSiteDisplayController.onGuestDocumentStart(guest, {
       url: event.senderFrame.url,
-      profileId:
-        browserSessionRegistry.profileIdForSession(guest.session) ??
-        localSshBrowserProfileIdForSession(guest.session),
+      profileId: localBrowserProfileIdForSession(guest.session),
       colorScheme: theme.colorScheme
     })
     guests.set(guest.id, guest)

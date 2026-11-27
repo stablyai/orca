@@ -10,7 +10,7 @@ import type {
   FolderHostRepo
 } from '../../../src/shared/folder-workspaces/folder-workspace-execution-host'
 import { parseWslUncPath } from '../../../src/shared/file-access/wsl-paths'
-import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
+import { normalizeExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import { getFolderWorkspaceWorktreeHostId } from '../../../src/shared/folder-workspaces/folder-workspace-worktree'
 import { parseWorkspaceKey } from '../../../src/shared/workspace/identity/workspace-scope'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'

@@ -1,4 +1,4 @@
-import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { EphemeralVmRecipeDoctorResult } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import type { EphemeralVmRecipeResultWarning } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-diagnostics'

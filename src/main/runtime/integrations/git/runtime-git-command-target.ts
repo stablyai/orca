@@ -1,5 +1,8 @@
 import type { SourceControlAiSettingsInput } from '../../../../shared/source-control/ai/source-control-ai-operation-resolution'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GitPushTarget, GitWorktreeInfo, Worktree } from '../../../../shared/worktree/types'
 import type { GitRuntimeOptions } from '../../../git/command-runner/git-runtime-options'

@@ -83,6 +83,10 @@ export function createOpenFileAction(
             fileId: scratch.editorItemFileId,
             worktreeId: editorItemWorktreeId,
             viewStateId: shownId,
+            focusedAtOpen:
+              typeof document === 'undefined' || !document.activeElement
+                ? null
+                : new WeakRef(document.activeElement),
             expiresAt: Date.now() + EDITOR_FOCUS_REQUEST_TTL_MS,
             token: takeNextEditorFocusRequestToken()
           }

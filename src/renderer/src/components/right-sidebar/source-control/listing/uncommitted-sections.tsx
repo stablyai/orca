@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
-import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
+import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import {
   getDiscardAllPaths,
   getUnstageAllPaths,

@@ -1,9 +1,9 @@
-import { createLocalPtyStartupPromises } from './local-startup-promises'
+import { createLocalPtyStartupPromises } from './provider/local-startup-promises'
 
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence/loading-store/store'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { LocalPtyProvider } from '../../providers/local-pty/local-pty-provider'
 import type { TerminalStartupCwdMissingDirFallback } from '../../../shared/shell/launch/terminal-startup-cwd'
 import {
@@ -106,6 +106,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:moveLeafToNewTab')
   ipcMain.removeHandler('pty:kill')
   ipcMain.removeHandler('pty:killFenced')
+  ipcMain.removeHandler('pty:sleepAdmitted')
   ipcMain.removeHandler('pty:listSessions')
   ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')

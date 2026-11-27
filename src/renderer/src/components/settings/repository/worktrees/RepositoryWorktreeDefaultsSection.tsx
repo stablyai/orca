@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
@@ -7,7 +7,7 @@ import { BaseRefPicker } from '../../../source-control/BaseRefPicker'
 import { RepoSettingsDraftInput } from '../RepositorySettingsDraftInput'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { useTranslate } from '@/i18n/use-translate'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility

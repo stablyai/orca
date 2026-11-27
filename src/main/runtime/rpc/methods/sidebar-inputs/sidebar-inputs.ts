@@ -4,7 +4,6 @@ import { readRuntimeDesktopSidebarFacts } from '../../../sidebar-inputs/sidebar-
 import { isHostOwnPhone } from '../../callers/host-own-phone'
 import { SidebarInputsReadParams } from '../../../../../shared/sidebar-list/feed/sidebar-inputs-feed-contract'
 import { SidebarSessionBeginParams } from '../../../../../shared/rpc-contract/client-ui/sidebar-session-params'
-import { RepoIconDataUrlsParams } from '../../../../../shared/sidebar-list/catalog/repo-icon-data-urls-contract'
 import { SetCollapsedParams } from '../../../../../shared/rpc-contract/workspaces/workspace-view-collapse-params'
 import { setCollapsedSection } from '../../../client/settings/workspace-view-collapse-writes'
 import { ClientWorkspaceViewParams } from '../../../../../shared/rpc-contract/client-ui/client-workspace-view-params'
@@ -18,12 +17,6 @@ export const SIDEBAR_INPUT_METHODS = [
     params: null,
     handler: async (_params, { runtime }) =>
       requireSwitchedOn(runtime.sidebarFacts).getWorkspaceActivityFacts()
-  }),
-  defineMethod({
-    name: 'sidebarInputs.repoIcons',
-    permission: 'workspace',
-    params: RepoIconDataUrlsParams,
-    handler: async ({ ids }, { runtime }) => requireSwitchedOn(runtime.repoIconDataUrls).read(ids)
   }),
   defineMethod({
     name: 'sidebarInputs.desktopFacts',

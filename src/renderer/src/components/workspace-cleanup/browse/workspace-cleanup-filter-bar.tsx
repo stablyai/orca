@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   useAppliedWorkspaceCleanupFilters,
@@ -15,18 +14,18 @@ import type { WorkspaceCleanupAppliedFilter } from '../../../../../shared/worksp
 import { WorkspaceCleanupGitReviewFacets } from './workspace-cleanup-git-review-facets'
 import { WorkspaceCleanupLifecycleFacets } from './workspace-cleanup-lifecycle-facets'
 import type { WorkspaceCleanupFacetGroupProps } from './workspace-cleanup-facet-panel-model'
+import {
+  WorkspaceCleanupSortSection,
+  type WorkspaceCleanupSizeScanAction
+} from './workspace-cleanup-sort-section'
+import type {
+  WorkspaceCleanupSortField,
+  WorkspaceCleanupSortState
+} from '../../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
 export type WorkspaceCleanupGitEvidenceProgress = {
   pendingCount: number
   totalCount: number
-}
-
-/** Present while sizes are unmeasured or a scan runs; the button is the one way to fill sizes. */
-export type WorkspaceCleanupSizeScanAction = {
-  scanning: boolean
-  scannedCount: number
-  totalCount: number
-  onRun: () => void
 }
 
 export function WorkspaceCleanupFilterBar({
@@ -37,6 +36,8 @@ export function WorkspaceCleanupFilterBar({
   hasActiveFilters,
   gitEvidence,
   sizeScan,
+  sort,
+  onToggleSortField,
   onQueryChange,
   onClearFilters,
   onClearAppliedFilter
@@ -48,6 +49,8 @@ export function WorkspaceCleanupFilterBar({
   hasActiveFilters: boolean
   gitEvidence: WorkspaceCleanupGitEvidenceProgress
   sizeScan: WorkspaceCleanupSizeScanAction | null
+  sort: WorkspaceCleanupSortState
+  onToggleSortField: (field: WorkspaceCleanupSortField) => void
   onQueryChange: (query: string) => void
   onClearFilters: () => void
   onClearAppliedFilter: (filter: WorkspaceCleanupAppliedFilter) => void
@@ -58,7 +61,7 @@ export function WorkspaceCleanupFilterBar({
   const filtersLabel = t('components.workspace.cleanup.browse.filters', 'Filters')
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
-      <div className="relative w-[28rem] min-w-[180px] shrink">
+      <div className="relative min-w-[180px] max-w-md flex-1">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={filters.query}
@@ -93,16 +96,12 @@ export function WorkspaceCleanupFilterBar({
           <PopoverContent
             align="end"
             sideOffset={6}
-            // Portaled content needs the wheel shim for Radix scroll-lock, but not popover-scroll-content’s max-height, which would crush the facet column.
-            className="popover-wheel-scroll flex h-[min(471px,var(--radix-popover-content-available-height))] w-[320px] flex-col p-0"
+            collisionPadding={24}
+            wheelScroll
+            className="flex h-[min(471px,var(--radix-popover-content-available-height))] w-[320px] flex-col"
           >
-            {/* 471px preserves the 420px facet viewport plus the fixed footer at full height. */}
-            <ScrollArea className="min-h-0 flex-1">
-              <WorkspaceCleanupLifecycleFacets {...facetProps} />
-              <WorkspaceCleanupGitReviewFacets {...facetProps} />
-            </ScrollArea>
-            <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
-              <span className="text-[11px] text-muted-foreground">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
+              <span className="text-2xs text-muted-foreground">
                 {t(
                   'components.workspace.cleanup.browse.showingCount',
                   'Showing {{value0}} of {{value1}}',
@@ -119,28 +118,21 @@ export function WorkspaceCleanupFilterBar({
                 {t('components.workspace.cleanup.browse.clearFilters', 'Clear filters')}
               </Button>
             </div>
+            <ScrollArea className="min-h-0 flex-1">
+              <WorkspaceCleanupSortSection
+                sort={sort}
+                sizeScan={sizeScan}
+                onToggleSortField={onToggleSortField}
+              />
+              <WorkspaceCleanupLifecycleFacets {...facetProps} />
+              <WorkspaceCleanupGitReviewFacets {...facetProps} />
+            </ScrollArea>
           </PopoverContent>
         </Popover>
       </div>
 
-      <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-1 text-xs tabular-nums text-muted-foreground">
+      <span className="ml-auto flex shrink-0 items-center pl-1">
         <GitCheckIndicator pendingCount={gitEvidence.pendingCount} />
-        {sizeScan ? (
-          <>
-            <SizeScanButton {...sizeScan} />
-            <span aria-hidden="true">·</span>
-          </>
-        ) : null}
-        {hasActiveFilters
-          ? t(
-              'components.workspace.cleanup.browse.showingCount',
-              'Showing {{value0}} of {{value1}}',
-              { value0: matchedCount, value1: totalCount }
-            )
-          : t('components.workspace.cleanup.browse.workspaceCount', '{{count}} workspaces', {
-              count: totalCount,
-              defaultValue_one: '{{count}} workspace'
-            })}
       </span>
 
       {/* Why out here and not only in the popover: a filter narrowing the list must be
@@ -154,43 +146,6 @@ export function WorkspaceCleanupFilterBar({
 
       <WorkspaceCleanupAppliedFilterChips applied={applied} onClear={onClearAppliedFilter} />
     </div>
-  )
-}
-
-function SizeScanButton({
-  scanning,
-  scannedCount,
-  totalCount,
-  onRun
-}: WorkspaceCleanupSizeScanAction): React.JSX.Element {
-  const t = useTranslate()
-  const idleLabel = t(
-    'components.workspace.cleanup.browse.measureSizesTitle',
-    'Scan workspace sizes'
-  )
-  const label = !scanning
-    ? idleLabel
-    : totalCount > 0
-      ? t(
-          'components.workspace.cleanup.browse.measuringSizesProgress',
-          'Scanning {{value0}}/{{value1}}',
-          { value0: scannedCount, value1: totalCount }
-        )
-      : t('components.workspace.cleanup.browse.measuringSizes', 'Scanning sizes')
-  return (
-    <Button variant="link" size="inline" className="shrink-0" disabled={scanning} onClick={onRun}>
-      {/* Reserved spinner slot keeps the link from shifting when a scan starts. */}
-      <Loader2
-        className={cn('size-3 text-muted-foreground', scanning ? 'animate-spin' : 'invisible')}
-      />
-      {/* Stack the idle label under the live one so the link never changes width. */}
-      <span className="grid text-xs tabular-nums text-muted-foreground underline decoration-muted-foreground/50 underline-offset-4 hover:text-foreground">
-        <span className="invisible col-start-1 row-start-1" aria-hidden="true">
-          {idleLabel}
-        </span>
-        <span className="col-start-1 row-start-1">{label}</span>
-      </span>
-    </Button>
   )
 }
 

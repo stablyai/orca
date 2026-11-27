@@ -1,4 +1,4 @@
-import { isTailnetIPv4Address } from '../../tailnet-address'
+import { isTailnetIPv4Address } from '../../network/tailnet-address'
 
 export type PairingNetworkInterface = {
   name: string

@@ -130,6 +130,15 @@ export function isDrvfsLinuxPath(linuxPath: string): boolean {
   return DRVFS_LINUX_PATH.test(linuxPath)
 }
 
+// Rule D7: a repo on a Windows drive reached through the distro stays a Windows project.
+const WINDOWS_DRIVE_MOUNT = /^\/mnt\/[a-z](\/|$)/i
+
+/** The distro a `\\wsl.localhost` folder could move to a WSL host of; null for a Windows drive. */
+export function wslHostMovableDistroOfPath(path: string): string | null {
+  const parsed = parseWslUncPath(path)
+  return parsed && !WINDOWS_DRIVE_MOUNT.test(parsed.linuxPath) ? parsed.distro : null
+}
+
 /** Drvfs bytes belong to a Windows drive regardless of which distro mounted it. */
 export function toWindowsWslDrivePath(linuxPath: string): string | null {
   // Dot excludes line terminators, preventing stray CR/output lines from becoming drive paths.

@@ -7,7 +7,7 @@ import { isSvgFilePath } from '../../../../../shared/file-preview/svg-document'
 import {
   normalizeMarkdownDefaultViewMode,
   type MarkdownDefaultViewMode
-} from '../../../../../shared/markdown-default-view-mode'
+} from '../../../../../shared/editor/markdown/markdown-default-view-mode'
 
 type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
   language: string

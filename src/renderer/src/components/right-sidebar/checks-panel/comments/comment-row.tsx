@@ -6,7 +6,7 @@ import {
 import React, { useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { reviewCommentMarkdown } from './review-comment-markdown'
 import { CommentReactions } from '@/components/github/CommentReactions'
 import { isBotPRComment } from '../../../../../../shared/source-control/review-comments/pr-comment-audience'

@@ -1,5 +1,6 @@
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   aiVaultHistoryAgents,
   isAiVaultAgent
@@ -11,7 +12,7 @@ import {
   type AiVaultPrepareSessionResumeArgs,
   type AiVaultPrepareSessionResumeResult
 } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { ProviderSession } from '../../../../shared/rpc-contract/terminal/agent-session-params'
 import { codexDatedRolloutRelativePath } from '../../../codex/history/resume/codex-session-resume-home'
 import type { PluginHostMethodContext } from './plugin-host-method-bind'
@@ -21,10 +22,12 @@ import { findPluginPastSession } from './plugin-host-agent-history-bindings'
 import type { PluginHistorySession } from './plugin-agent-history'
 
 // The parts of the host's answer a terminal resume applies; anything else refuses it.
-const preparedAnswer = z.object({
-  useRealCodexHome: z.boolean(),
-  substituteCodexHome: z.string().optional()
-})
+const preparedAnswer = lazyZodSchema(() =>
+  z.object({
+    useRealCodexHome: z.boolean(),
+    substituteCodexHome: z.string().optional()
+  })
+)
 
 /** A transcript the resume launch accepts, else none. */
 export function resumableTranscript(path: string | undefined): string | undefined {

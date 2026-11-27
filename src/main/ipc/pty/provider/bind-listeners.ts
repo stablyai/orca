@@ -12,7 +12,7 @@ import {
 } from './listener-lifecycle'
 import { localProvider } from './registry'
 import { clearProviderPtyState } from './state-cleanup'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { providerSnapshotRequiredPtys, visibleRendererPtys } from '../delivery/visibility-state'
 import { markPtyEscapeBoundaryUnknown } from '../delivery/pty-escape-boundary'
 import { discardPendingPtyDataAcrossGap } from '../delivery/accept'

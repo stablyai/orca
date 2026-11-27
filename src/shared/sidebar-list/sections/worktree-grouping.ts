@@ -1,5 +1,5 @@
 import type { Repo } from '../../repository/repo-types'
-import type { ProjectOrderBy } from '../../ui-chrome-types'
+import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../worktree/types'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import {

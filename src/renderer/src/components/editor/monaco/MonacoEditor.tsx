@@ -5,7 +5,7 @@ import type { MarkdownDocument } from '../../../../../shared/file-listing/file-d
 import { useAppStore } from '@/store/index'
 import '@/lib/editor/monaco/monaco-setup'
 import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
-import { useEditorTypography } from '@/hooks/use-editor-typography'
+import { useEditorTypography } from '@/lib/editor/appearance/use-editor-typography'
 import { useContextualCopySetup } from '../contextual-copy/useContextualCopySetup'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
 import { isLinuxUserAgent } from '../../../app-shell/platform/user-agent-platform'
@@ -26,6 +26,7 @@ import type { MonacoContentSyncMode } from '../model-lifetime/buffer-text/monaco
 import { useMonacoContentSyncBridge } from '../model-lifetime/buffer-text/use-monaco-content-sync-bridge'
 import { useMonacoMarkdownAnnotations } from '../markdown-source-tools/monaco/use-monaco-markdown-annotations'
 import { useMonacoEditorDecorations } from './use-monaco-editor-decorations'
+import { useMonacoGitBlame } from '../blame/use-monaco-git-blame'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from '../markdown-source-tools/monaco/MonacoMarkdownAnnotationOverlay'
@@ -34,8 +35,9 @@ import {
   PLUGIN_SYNTAX_EDITOR_OPTIONS,
   applyModelLanguage
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
-import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { useMonacoTheme } from '@/lib/editor/appearance/use-monaco-theme'
 import { useEditorModelRekeyCarry } from '../model-lifetime/identity/editor-model-rekey-carry'
+import { useNewModelLineEnding } from '../model-lifetime/buffer-text/editor-new-model-line-ending'
 
 type MonacoEditorProps = {
   fileId: string
@@ -93,7 +95,6 @@ export default function MonacoEditor({
   const [autoHeightContentHeight, setAutoHeightContentHeight] = useState<number | null>(null)
   const language = usePluginSyntaxLanguage(filePath, coreLanguage)
   const languageRef = useRef(language)
-  languageRef.current = language
   useEffect(
     () => applyModelLanguage([mountedEditor?.getModel()], language),
     [mountedEditor, language]
@@ -103,12 +104,10 @@ export default function MonacoEditor({
   // Cancel pending throttled writes before snapshotting final scroll on unmount.
   const scrollThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const propsRef = useRef({ relativePath, language, onSave, onContentChange })
-  // Refresh during render so event handlers cannot read one-render-stale props.
-  propsRef.current = { relativePath, language, onSave, onContentChange }
   const readOnlyRef = useRef(readOnly)
-  readOnlyRef.current = readOnly
-  const contentSyncModeRef = useRef<MonacoContentSyncMode>('undoable')
-  contentSyncModeRef.current = readOnly && liveTail ? 'read-only-live-tail' : 'undoable'
+  const contentSyncMode: MonacoContentSyncMode =
+    readOnly && liveTail ? 'read-only-live-tail' : 'undoable'
+  const contentSyncModeRef = useRef<MonacoContentSyncMode>(contentSyncMode)
 
   const settings = useAppStore((s) => s.settings)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
@@ -129,6 +128,7 @@ export default function MonacoEditor({
     [filePath, modelOwnerKey]
   )
   useEditorModelRekeyCarry(fileId, modelUri)
+  useNewModelLineEnding(mountedEditor, modelUri, fileId, language)
   const estimatedAutoHeight = useMemo(() => {
     if (!autoHeight) {
       return null
@@ -142,7 +142,14 @@ export default function MonacoEditor({
     autoHeight && isMonacoAutoHeightCapped(renderedEditorHeight, autoHeightLineHeight)
   // The React wrapper skips first post-remount value sync; reconcile retained models from live contentRef, never the possibly stale lastSyncedContentRef.
   const contentRef = useRef(content)
-  contentRef.current = content
+  // Refresh before this component's later layout effects and paint so sync bridges and event handlers read current props.
+  useLayoutEffect(() => {
+    languageRef.current = language
+    propsRef.current = { relativePath, language, onSave, onContentChange }
+    readOnlyRef.current = readOnly
+    contentSyncModeRef.current = contentSyncMode
+    contentRef.current = content
+  })
   const [gutterMenuOpen, setGutterMenuOpen] = useState(false)
   const [gutterMenuPoint, setGutterMenuPoint] = useState({ x: 0, y: 0 })
   const [gutterMenuLine, setGutterMenuLine] = useState(1)
@@ -198,6 +205,13 @@ export default function MonacoEditor({
       readOnly
     })
   }, [typographyOptions, editorWordWrap, readOnly])
+
+  useMonacoGitBlame({
+    mountedEditor,
+    fileId,
+    passiveMirror,
+    inlineEnabled: settings?.editorInlineBlame === true
+  })
 
   const decorations = useMonacoEditorDecorations({
     editorRef,

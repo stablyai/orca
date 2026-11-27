@@ -28,11 +28,15 @@ type BrowserScreencastSnapshotCaptureDeps = {
   getSeq: () => number
   queueFrame: (frame: PendingScreencastFrame) => void
   applyDeviceMetricsOverride: () => Promise<void>
+  /** One capture at a time per page: clipped CDP captures swap the page's emulation while they run. */
+  runExclusive: (capture: () => Promise<void>) => Promise<void>
 }
 
 export type BrowserScreencastSnapshotCapture = {
   emitSnapshotFrame: (initialOnly: boolean, generation?: number) => Promise<void>
-  scheduleNavigationFrameCapture: () => void
+  /** A capture that a newer live frame makes stale, so it never replaces one. */
+  emitStillFrame: () => Promise<void>
+  scheduleNavigationFrameCapture: (reason?: 'navigation' | 'viewport-recovery') => void
   clearNavigationCaptureTimer: () => void
   bumpGeneration: () => void
 }
@@ -46,24 +50,36 @@ export function createBrowserScreencastSnapshotCapture(
 
   let snapshotGeneration = 0
   let navigationCaptureTimer: ReturnType<typeof setTimeout> | null = null
+  let navigationCaptureGeneration: number | null = null
 
   const clearNavigationCaptureTimer = (): void => {
     if (navigationCaptureTimer) {
       clearTimeout(navigationCaptureTimer)
       navigationCaptureTimer = null
+      navigationCaptureGeneration = null
     }
   }
 
-  const scheduleNavigationFrameCapture = (): void => {
+  const scheduleNavigationFrameCapture = (
+    reason: 'navigation' | 'viewport-recovery' = 'navigation'
+  ): void => {
     if (isClosed() || isStopping()) {
+      return
+    }
+    if (reason === 'viewport-recovery' && navigationCaptureGeneration === snapshotGeneration) {
       return
     }
     clearNavigationCaptureTimer()
     const generation = ++snapshotGeneration
+    navigationCaptureGeneration = generation
     // Static pages may finish navigation without emitting a live frame.
     navigationCaptureTimer = setTimeout(() => {
       navigationCaptureTimer = null
-      void emitSnapshotFrame(false, generation)
+      void emitSnapshotFrame(false, generation).finally(() => {
+        if (navigationCaptureGeneration === generation) {
+          navigationCaptureGeneration = null
+        }
+      })
     }, 250)
   }
 
@@ -73,7 +89,10 @@ export function createBrowserScreencastSnapshotCapture(
     (initialOnly && getSeq() > 0) ||
     (generation !== undefined && generation !== snapshotGeneration)
 
-  const emitSnapshotFrame = async (initialOnly: boolean, generation?: number): Promise<void> => {
+  const emitSnapshotFrame = (initialOnly: boolean, generation?: number): Promise<void> =>
+    deps.runExclusive(() => captureSnapshotFrame(initialOnly, generation))
+
+  const captureSnapshotFrame = async (initialOnly: boolean, generation?: number): Promise<void> => {
     if (isSnapshotStale(initialOnly, generation)) {
       return
     }
@@ -178,6 +197,7 @@ export function createBrowserScreencastSnapshotCapture(
 
   return {
     emitSnapshotFrame,
+    emitStillFrame: () => emitSnapshotFrame(false, ++snapshotGeneration),
     scheduleNavigationFrameCapture,
     clearNavigationCaptureTimer,
     bumpGeneration: () => {

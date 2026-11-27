@@ -17,14 +17,13 @@ import {
   getWorktreeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type { WorktreePtyHostFence } from '../../workspaces/removal/worktree-pty-host-fence'
 import { collectWorktreePtyIds } from './worktree-pty-collection'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { withMainBoundLeaves } from '../surface/main-terminal-surfaces'
 import { mainHoldsTerminal } from '../surface/main-pane-verdict'
 import { summarizeWorktreePtyStopVerdict } from '../../workspaces/removal/worktree-pty-stop-verdict'
-import { describeMobileSessionTabCloseRefusal } from '../../session-lifecycle/close/mobile-session-tab-close-refusal-message'
 import { clearClosedWorktreeResumeRecords } from './worktree-sleep-resume-records'
 import { anySleepKeyNames, hostSleepKey, resolveSleepScope } from './worktree-terminal-sleep-key'
 import type { WorktreeSleepScope } from './worktree-terminal-sleep-key'
@@ -81,18 +80,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
           snapshot.tabs.flatMap((tab) => (tab.type === 'terminal' ? [tab.parentTabId] : []))
         )
       ]
-      let closed = 0
-      for (const parentTabId of parentTabIds) {
-        const result = await this.closeMobileSessionTab(`id:${worktree.id}`, parentTabId, {
-          reason: 'user',
-          force: true,
-          localPtyTeardownOwnedExternally: true
-        })
-        if (result.refused) {
-          throw new Error(describeMobileSessionTabCloseRefusal(result.refusalReason))
-        }
-        closed += 1
-      }
+      const closed = await this.closeWorktreeTabsOwingPtyStops(worktree.id, parentTabIds)
       await this.clearWorktreeTerminalResumeRecords(worktree.id, sessionHostId, parentTabIds)
       const { stopped } = await this.stopTerminalsForWorktree(`id:${worktree.id}`, {
         resolvedWorktreeId: worktree.id,

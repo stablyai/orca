@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
 import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import {
   AcpAgentConnection,
@@ -54,7 +54,7 @@ function nativePromptError(failure: OpenCodePromptFailure, original: AcpAgentErr
 export function createOpenCodeAcpConnection(
   launch: ProviderProcessLaunch,
   options: AcpAgentConnectionOptions = {},
-  spawnImpl: PipedProcessSpawner = spawnProcess,
+  spawnImpl: ProviderProcessSpawner = spawnProcess,
   readFailure: typeof readOpenCodePromptFailure = readOpenCodePromptFailure
 ): AcpAgentConnection {
   return new OpenCodeAcpConnection(launch, options, spawnImpl, readFailure)
@@ -69,7 +69,7 @@ class OpenCodeAcpConnection extends AcpAgentConnection {
   constructor(
     launch: ProviderProcessLaunch,
     options: AcpAgentConnectionOptions,
-    spawnImpl: PipedProcessSpawner,
+    spawnImpl: ProviderProcessSpawner,
     private readonly readFailure: typeof readOpenCodePromptFailure
   ) {
     const env = resolveProviderChildEnv(launch, process.env)
@@ -94,9 +94,23 @@ class OpenCodeAcpConnection extends AcpAgentConnection {
       throw new Error('ACP prompt already in progress')
     }
     this.prompting = true
-    const startedAt = Date.now()
     try {
-      return await super.prompt(prompt, meta)
+      return await this.withNativeFailure(() => super.prompt(prompt, meta))
+    } finally {
+      this.prompting = false
+    }
+  }
+
+  /** A kept agent's earlier prompt, sent before this app started, fails as one sent here would. */
+  earlierPrompt(sentAt?: number) {
+    const { kept } = this
+    return kept ? this.withNativeFailure(() => kept.earlierPrompt(), sentAt) : undefined
+  }
+
+  private async withNativeFailure<T>(answered: () => Promise<T>, sentAt?: number): Promise<T> {
+    const startedAt = sentAt ?? Date.now()
+    try {
+      return await answered()
     } catch (error) {
       if (
         !(error instanceof AcpAgentError) ||
@@ -128,8 +142,6 @@ class OpenCodeAcpConnection extends AcpAgentConnection {
       }
       this.lastRecoveredInput = failure.inputId
       throw nativePromptError(failure, error)
-    } finally {
-      this.prompting = false
     }
   }
 }

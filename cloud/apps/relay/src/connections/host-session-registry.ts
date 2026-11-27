@@ -292,6 +292,7 @@ type ReregistrationEntry = { key: string; generation: number; attempts: number; 
 
 export class HostSessionRegistry {
   private readonly sessions = new Map<string, HostSession>()
+  private readonly pendingConnOwners = new Map<string, HostSession>()
   private readonly activationQueues = new Map<string, Promise<void>>()
   // Outlive 30s orphan grace so phones can explain a signed-out host’s absence minutes later.
   private readonly hostCloseReasons = new HostCloseReasonMemory(() => this.now())
@@ -971,7 +972,7 @@ export class HostSessionRegistry {
     }
     markStage('activity')
     const attachTimer = setTimeout(() => {
-      session.pendingConns.delete(connId)
+      this.deletePendingConn(session, connId)
       capacityReservation?.release()
       this.failReservationBestEffort(reservation)
       if (credentialActivityId) this.releaseActivityBestEffort(identity, credentialActivityId)
@@ -998,6 +999,7 @@ export class HostSessionRegistry {
     }
     capacityReservation?.bind(connId)
     session.pendingConns.set(connId, pending)
+    this.pendingConnOwners.set(connId, session)
     send(session.socket, 'conn-open', {
       connId,
       connTicket,
@@ -1009,7 +1011,7 @@ export class HostSessionRegistry {
       const current = session.pendingConns.get(connId)
       if (current?.client === socket) {
         clearTimeout(current.attachTimer)
-        session.pendingConns.delete(connId)
+        this.deletePendingConn(session, connId)
         current.capacityReservation?.release()
         this.failReservationBestEffort(current.reservation)
         if (current.credentialActivityId) {
@@ -1085,21 +1087,24 @@ export class HostSessionRegistry {
     this.rejectClient(socket, RELAY_CLOSE_CODE.HOST_OFFLINE, this.hostCloseReasons.read(sessionKey))
   }
 
+  private forgetPendingConnOwner(session: HostSession, connId: string): void {
+    if (this.pendingConnOwners.get(connId) === session) {
+      this.pendingConnOwners.delete(connId)
+    }
+  }
+
+  private deletePendingConn(session: HostSession, connId: string): void {
+    session.pendingConns.delete(connId)
+    this.forgetPendingConnOwner(session, connId)
+  }
+
   async acceptHostData(
     socket: WebSocket,
     connId: string,
     connTicket: string,
     generation: number
   ): Promise<boolean> {
-    // First insertion-order owner, and the only scan the attach makes: the
-    // unfenced leg reuses this result instead of repeating the search.
-    let owner: HostSession | undefined
-    for (const candidate of this.sessions.values()) {
-      if (candidate.pendingConns.has(connId)) {
-        owner = candidate
-        break
-      }
-    }
+    const owner = this.pendingConnOwners.get(connId)
     const release = owner ? this.beginIdleWork(owner.relayHostId) : () => {}
     if (!release) {
       socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'idle cutover in progress')
@@ -1134,7 +1139,7 @@ export class HostSessionRegistry {
     this.observer.recordAuth(true)
     const attachedAt = this.now()
     clearTimeout(pending.attachTimer)
-    session.pendingConns.delete(connId)
+    this.deletePendingConn(session, connId)
     session.activeConnIds.add(connId)
     const basisDeadline =
       pending.reservation.credentialKind === 'resume'
@@ -1926,6 +1931,7 @@ export class HostSessionRegistry {
       }
       for (const close of existing.activeSplices.values()) close()
       for (const pending of existing.pendingConns.values()) {
+        this.forgetPendingConnOwner(existing, pending.connId)
         clearTimeout(pending.attachTimer)
         pending.capacityReservation?.release()
         this.failReservationBestEffort(pending.reservation)
@@ -2192,6 +2198,9 @@ export class HostSessionRegistry {
       session.orphanTimer = setTimeout(() => {
         session.state = 'closed'
         for (const close of session.activeSplices.values()) close()
+        for (const connId of session.pendingConns.keys()) {
+          this.forgetPendingConnOwner(session, connId)
+        }
         const key = this.key(session.identity.sub, session.relayHostId)
         if (this.sessions.get(key) === session) this.sessions.delete(key)
         void this.releaseControlActivity(session)
@@ -2417,6 +2426,7 @@ export class HostSessionRegistry {
     }
     const releases: Promise<void>[] = []
     for (const pending of session.pendingConns.values()) {
+      this.forgetPendingConnOwner(session, pending.connId)
       clearTimeout(pending.attachTimer)
       pending.capacityReservation?.release()
       this.failReservationBestEffort(pending.reservation)

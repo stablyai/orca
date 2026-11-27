@@ -1,8 +1,10 @@
 import { screen } from 'electron'
-import type { BrowserTargetUrlChangedEvent } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
+import {
+  LINK_STATUS_POINTER_REFRESH_MS,
+  type BrowserTargetUrlChangedEvent
+} from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import type { ResolveRenderer } from '../browser-guest-renderer-target'
-
-const POINTER_REFRESH_MS = 100
 
 export function setupGuestTargetUrlForwarding(args: {
   browserTabId: string
@@ -34,7 +36,7 @@ export function setupGuestTargetUrlForwarding(args: {
       if (targetUrl) {
         send()
       }
-    }, POINTER_REFRESH_MS)
+    }, LINK_STATUS_POINTER_REFRESH_MS)
   }
 
   const setTarget = (url: string): void => {
@@ -43,7 +45,7 @@ export function setupGuestTargetUrlForwarding(args: {
     } else if (!url && targetUrl) {
       guest.off('before-mouse-event', refreshPointer)
     }
-    targetUrl = url
+    targetUrl = redactKagiSessionToken(url)
     send()
   }
 

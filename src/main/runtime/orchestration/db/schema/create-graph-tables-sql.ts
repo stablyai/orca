@@ -198,6 +198,10 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   creator_pane_key    TEXT,
   -- Same form as assignee_orca_session_id: the id the creator is addressed by (a lineage root's).
   creator_orca_session_id TEXT,
+  -- 'connector' when the creator chat's turn was its connector conversation's, so reports go back there.
+  creator_turn_source TEXT,
+  -- What its creator started it for, opaque here (bot items: bot-item:<uid>); retries inherit it.
+  origin_ref          TEXT,
   host_scope          TEXT,
   status              TEXT NOT NULL DEFAULT 'pending'
     CHECK(status IN ('pending', 'dispatched', 'completed', 'failed', 'circuit_broken')),
@@ -215,6 +219,8 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   completed_at        TEXT,
   created_at          TEXT NOT NULL DEFAULT (datetime('now')),
   last_heartbeat_at   TEXT,
+  progress_note       TEXT,
+  progress_updated_at TEXT,
   -- The settled Dispatch whose worker this one continues (a follow-up sent to it).
   follow_up_of_dispatch_id TEXT,
   -- Set when the worker reported with coordinator mail unread; cleared once that mail continues it.

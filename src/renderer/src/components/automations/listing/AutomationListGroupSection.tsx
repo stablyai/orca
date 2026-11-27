@@ -34,7 +34,7 @@ export function AutomationListGroupSection({
     >
       <div
         id={labelId}
-        className="sticky left-0 w-fit px-3 pb-1 pt-3 text-xs font-semibold text-muted-foreground"
+        className="sticky left-0 w-fit px-(--rail-page-gutter) pb-1 pt-3 text-xs font-semibold text-muted-foreground"
       >
         {t(label.key, label.fallback)}
         <span className="ml-1.5 font-normal tabular-nums">

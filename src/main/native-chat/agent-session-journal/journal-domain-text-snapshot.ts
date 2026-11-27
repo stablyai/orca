@@ -2,8 +2,7 @@ import { isDeepStrictEqual } from 'node:util'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { journalDomainItemWire } from './journal-domain-history-metadata'
-import { journalDomainOutlineSource } from './journal-domain-outline-source'
+import { appendJournalTextTail, writeJournalTextPayload } from './journal-text-tail'
 import { journalItemStatusMetadata } from './journal-item-status-metadata'
 import { isAdmissibleAgentJournalMessageMetadata } from '../../../shared/agent-session/journal/agent-session-journal-schemas'
 import { AgentSessionJournalError } from './writing/journal-write-guards'
@@ -15,7 +14,9 @@ export function writeJournalDomainTextSnapshot(
   stored: SqliteRow | undefined,
   item: AgentJournalRenderItem,
   ownerFence: number,
-  executionOwner: number | null
+  executionOwner: number | null,
+  /** The stream's last save, which folds any tail into the payload. */
+  final = false
 ): boolean {
   if (
     !stored ||
@@ -35,7 +36,7 @@ export function writeJournalDomainTextSnapshot(
   const { revision: _previousRevision, ...previousPlacement } = JSON.parse(
     String(stored.placement_json)
   )
-  const { revision, body: _body, ...placement } = item
+  const { revision: _revision, body: _body, ...placement } = item
   if (!isDeepStrictEqual(previousPlacement, placement)) {
     return false
   }
@@ -45,20 +46,9 @@ export function writeJournalDomainTextSnapshot(
       `journal item for ${target.sessionId} is not readable`
     )
   }
-  const payload = JSON.stringify(item)
-  const { wireVersion, wireBytes, wireJson, detailJson } = journalDomainItemWire(item, payload)
-  db.prepare(`UPDATE journal_items SET payload_json=?,revision=?,wire_version=?,wire_bytes=?,wire_json=?,detail_json=?,outline_source_json=?
-    WHERE session_id=? AND epoch=? AND item_id=?`).run(
-    payload,
-    revision,
-    wireVersion,
-    wireBytes,
-    wireJson,
-    detailJson,
-    journalDomainOutlineSource(item),
-    target.sessionId,
-    target.epoch,
-    item.itemId
-  )
+  if (!final && appendJournalTextTail(db, target, item)) {
+    return true
+  }
+  writeJournalTextPayload(db, target, item)
   return true
 }

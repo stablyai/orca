@@ -2,11 +2,12 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
 import { Button } from '@/components/ui/button'
-import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../../shared/constants'
-import { formatBytes } from '../../../../../shared/format-bytes'
+import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../../shared/editor/markdown/rich-markdown-size-limit'
+import { formatBytes } from '../../../../../shared/text/format-bytes'
 import { MarkdownPreview, RichMarkdownEditor } from '../editor-lazy-views'
 import {
   extractFrontMatter,
+  markdownFrontMatterInner,
   prependFrontMatter
 } from '../markdown/source-scanning/markdown-frontmatter'
 import { exceedsMarkdownRenderOverrideSizeLimit } from '../markdown/render-mode/markdown-rich-size-limit'
@@ -133,7 +134,7 @@ export function EditorMarkdownFileSurface({
               // Place frontmatter below the toolbar to keep formatting controls at the top.
               headerSlot={
                 frontMatter && showMarkdownFrontmatter ? (
-                  <FrontMatterBanner raw={frontMatter.raw} />
+                  <FrontMatterBanner inner={markdownFrontMatterInner(frontMatter)} />
                 ) : null
               }
             />
@@ -174,12 +175,8 @@ export function EditorMarkdownFileSurface({
   return <div className="h-full min-h-0">{monacoEditor}</div>
 }
 
-function FrontMatterBanner({ raw }: { raw: string }): React.JSX.Element {
+function FrontMatterBanner({ inner }: { inner: string }): React.JSX.Element {
   const t = useTranslate()
-  const inner = raw
-    .replace(/^(?:---|\+\+\+)\r?\n/, '')
-    .replace(/\r?\n(?:---|\+\+\+)\r?\n?$/, '')
-    .trim()
 
   return (
     <div className="border-b border-border/60 bg-muted/40 px-3 py-2">

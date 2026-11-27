@@ -45,6 +45,7 @@ export async function verifyWorkerStartCardScenario(input: {
   if (card.body.kind !== 'agent-start') {
     throw new Error('missing start body')
   }
+  expect(card.body.worker.agent).toBe('codex')
   if (federated) {
     expect(card.body.worker.party.address).toBe(`dispatch:${card.body.dispatchId}`)
   }

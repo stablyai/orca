@@ -1,7 +1,10 @@
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import React, { useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useRepoAssigneesBySlug, useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
+import {
+  useRepoAssigneesBySlug,
+  useRepoLabelsBySlug
+} from '@/lib/work-items/github/useGitHubSlugMetadata'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { GitHubProjectRow } from '../../../../../shared/github/projects/project-types'

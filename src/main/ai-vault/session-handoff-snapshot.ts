@@ -1,3 +1,4 @@
+import { captureHermesSqliteSessionViaWorker } from './scanners/hermes/session-scanner-hermes-worker'
 import {
   buildOpenCodeSqliteCandidatePath,
   splitOpenCodeSqliteCandidate
@@ -18,6 +19,31 @@ import { wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { getAiVaultWslScanHomeDirs } from './discovery/ai-vault-scan-roots'
 import { openCodeWslPath } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-client'
 import { configureOpenCodeTranscriptWslReaders } from '../native-chat/transcript-history/opencode/transcript-opencode-database'
+
+type DatabaseRow = { dbPath: string; sessionId: string }
+
+async function readOpenCodeHandoffText(
+  row: DatabaseRow,
+  agent: 'opencode' | 'opencode2' | 'zcode',
+  signal: AbortSignal
+): Promise<string> {
+  const read = await readOpenCodeNativeChatTranscriptFull(
+    row.sessionId,
+    { resolveDbPath: async () => row.dbPath },
+    signal,
+    agent === 'zcode' ? 'zcode' : undefined
+  )
+  return 'error' in read ? '' : read.messages.map(formatWorkerTranscriptMessage).join('\n\n')
+}
+
+async function readHermesHandoffText(row: DatabaseRow, signal: AbortSignal): Promise<string> {
+  const { messages } = await captureHermesSqliteSessionViaWorker({
+    ...row,
+    platform: process.platform,
+    signal
+  })
+  return messages.map((message) => `[${message.role}] ${message.text}`).join('\n\n')
+}
 
 /** Copies one database-backed conversation into its own hand-off snapshot on this host,
  *  so the new agent never gets a path to the account-wide database. */
@@ -46,16 +72,10 @@ export async function writeAiVaultSessionHandoffSnapshot(
       const homes = (await getAiVaultWslScanHomeDirs()).slice(0, 32)
       await configureOpenCodeTranscriptWslReaders([...homes, row.dbPath], signal)
     }
-    const read = await readOpenCodeNativeChatTranscriptFull(
-      row.sessionId,
-      { resolveDbPath: async () => row.dbPath },
-      signal,
-      args.agent === 'zcode' ? 'zcode' : undefined
-    )
-    if ('error' in read) {
-      return {}
-    }
-    const text = read.messages.map(formatWorkerTranscriptMessage).join('\n\n')
+    const text =
+      args.agent === 'hermes'
+        ? await readHermesHandoffText(row, signal)
+        : await readOpenCodeHandoffText(row, args.agent, signal)
     if (!text.trim()) {
       return {}
     }

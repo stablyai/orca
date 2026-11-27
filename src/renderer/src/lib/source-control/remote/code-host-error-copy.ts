@@ -2,11 +2,11 @@ import { translate } from '@/i18n/i18n'
 import {
   CODE_HOST_FAILURE_COPY as EN,
   type CodeHostFailureCode
-} from '../../../../../shared/code-host-failure-copy'
+} from '../../../../../shared/source-control/code-host-failure-copy'
 import {
   REVIEW_START_POINT_FAILURE_COPY as START_EN,
   type ReviewStartPointFailureCode
-} from '../../../../../shared/review-start-point-failure-copy'
+} from '../../../../../shared/worktree/hosted-review/review-start-point-failure-copy'
 
 // null = required detail missing; caller shows the host's English `error`.
 const COPY: Record<CodeHostFailureCode, (detail: string | null) => string | null> = {

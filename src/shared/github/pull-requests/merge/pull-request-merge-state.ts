@@ -138,3 +138,41 @@ export function resolveGitHubPRMergeState(
     autoMergeAction: resolveAutoMergeAction(item)
   }
 }
+
+export type HostedReviewMergeTone = 'neutral' | 'success' | 'warning' | 'danger'
+
+/** A merge state as a chip shows it: failed checks that were only cancelled read as Cancelled. */
+export type GitHubPRMergeChipKind = GitHubPRMergeStateKind | 'checks_cancelled'
+
+const GITHUB_PR_MERGE_CHIP_TONES: Record<GitHubPRMergeChipKind, HostedReviewMergeTone> = {
+  merged: 'neutral',
+  closed: 'danger',
+  draft: 'neutral',
+  review_required: 'warning',
+  changes_requested: 'danger',
+  conflicts: 'danger',
+  merge_queue: 'warning',
+  merge_queue_auto_merge_on: 'warning',
+  merge_status_unavailable: 'neutral',
+  behind: 'warning',
+  blocked: 'danger',
+  mergeable_checks_failed: 'danger',
+  checks_cancelled: 'neutral',
+  mergeable_checks_pending: 'warning',
+  mergeable_checks_passed: 'success',
+  mergeable: 'success',
+  checks_passed: 'success',
+  checking: 'neutral'
+}
+
+export function getGitHubPRMergeChip(
+  kind: GitHubPRMergeStateKind,
+  item: GitHubPRMergeStateInput
+): { kind: GitHubPRMergeChipKind; tone: HostedReviewMergeTone } {
+  const chipKind =
+    kind === 'mergeable_checks_failed' &&
+    getProviderChecksOutcome(item.checksSummary, item.checksStatus) === 'cancelled'
+      ? 'checks_cancelled'
+      : kind
+  return { kind: chipKind, tone: GITHUB_PR_MERGE_CHIP_TONES[chipKind] }
+}
