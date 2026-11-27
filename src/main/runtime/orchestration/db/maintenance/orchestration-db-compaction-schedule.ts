@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { removeStaleDurableWriteTempFiles } from '../../../../filesystem/durable-file-write'
+import { isENOENT } from '../../../../filesystem/local-file-io/filesystem-path-containment'
 import { writeQuietly } from './orchestration-db-compaction-files'
 
 const MIB = 1024 * 1024
@@ -40,9 +41,8 @@ export async function readAttempts(
     text = await readFile(path, 'utf8')
   } catch (error) {
     // Only a missing record means no copies yet; one that can't be read holds copies off this session.
-    const missing = (error as NodeJS.ErrnoException).code === 'ENOENT'
     return {
-      attempts: missing ? 0 : Number.POSITIVE_INFINITY,
+      attempts: isENOENT(error) ? 0 : Number.POSITIVE_INFINITY,
       lastAttemptAt: Number.NEGATIVE_INFINITY
     }
   }
