@@ -9,12 +9,15 @@ import { DaemonToolRelayKeptGrants } from './daemon-tool-relay-kept-grants'
 export const TOOL_RELAY_FRONT_HOLD_MS = 30_000
 export const TOOL_RELAY_FRONT_MAX_HELD = 64
 export const TOOL_RELAY_FRONT_MAX_PIPES = 256
+/** Connections being answered 503 (each lingers briefly for its peer to read the answer). */
+export const TOOL_RELAY_FRONT_MAX_ANSWERING = 64
 /**
- * The front's share of the daemon's file descriptors, beside its terminals: two per pipe, one per
- * held connection and the listener. Its caps must fit (a test checks); sizing it from the daemon's
- * own descriptor limit is a follow-up.
+ * The front's share of the daemon's file descriptors, beside its terminals: the listener, one per
+ * held or answering connection, two per pipe. Sizing it from the daemon's own descriptor limit is a
+ * follow-up.
  */
-export const TOOL_RELAY_FRONT_FD_BUDGET = 640
+export const TOOL_RELAY_FRONT_FD_BUDGET =
+  1 + TOOL_RELAY_FRONT_MAX_HELD + TOOL_RELAY_FRONT_MAX_ANSWERING + 2 * TOOL_RELAY_FRONT_MAX_PIPES
 /** How long an answered connection may stay open for its peer to read the answer. */
 const ANSWER_LINGER_MS = 5_000
 
@@ -54,6 +57,8 @@ export class DaemonToolRelayFront {
   private disposed = false
   private readonly held = new Map<string, Held>()
   private readonly pipes = new Set<Pipe>()
+  /** Connections answered 503 that their peer may still be reading. */
+  private readonly answering = new Set<Socket>()
   /** Control connections whose close already ends their serving. */
   private readonly watchedControls = new WeakSet<Socket>()
   /** The grants of the agents this start keeps, for their relays' life. */
@@ -66,9 +71,9 @@ export class DaemonToolRelayFront {
     private readonly fdBudget = TOOL_RELAY_FRONT_FD_BUDGET
   ) {}
 
-  /** Descriptors the front holds now: the listener, one per held connection, two per pipe. */
+  /** Descriptors the front holds now: the listener, one per held or answering connection, two per pipe. */
   get descriptorCount(): number {
-    return (this.server ? 1 : 0) + this.held.size + 2 * this.pipes.size
+    return (this.server ? 1 : 0) + this.held.size + this.answering.size + 2 * this.pipes.size
   }
 
   /** This start's front port, listening from the first ask until the daemon exits. */
@@ -149,7 +154,7 @@ export class DaemonToolRelayFront {
     // The held socket is already counted; its pipe adds the app's.
     if (this.pipes.size >= TOOL_RELAY_FRONT_MAX_PIPES || this.descriptorCount + 1 > this.fdBudget) {
       app.destroy()
-      answerAndClose(front)
+      this.answerAndClose(front)
       return false
     }
     const pipe: Pipe = { front, app, clientId }
@@ -189,26 +194,30 @@ export class DaemonToolRelayFront {
       closePipe(pipe)
     }
     this.pipes.clear()
+    for (const socket of this.answering) {
+      socket.destroy()
+    }
+    this.answering.clear()
     this.server?.close()
     this.server = null
   }
 
   private accept(socket: Socket): void {
     socket.on('error', () => socket.destroy())
-    // The accepted socket is already open; past the budget it's answered and closed at once.
-    if (
-      this.held.size >= TOOL_RELAY_FRONT_MAX_HELD ||
-      this.descriptorCount + 1 > this.fdBudget ||
-      this.disposed
-    ) {
-      answerAndClose(socket)
+    // The accepted socket is already open: past the budget it closes at once, unanswered.
+    if (this.descriptorCount + 1 > this.fdBudget) {
+      socket.destroy()
+      return
+    }
+    if (this.held.size >= TOOL_RELAY_FRONT_MAX_HELD || this.disposed) {
+      this.answerAndClose(socket)
       return
     }
     const id = randomUUID()
     const timer = setTimeout(() => {
       if (this.held.get(id)?.socket === socket) {
         this.held.delete(id)
-        answerAndClose(socket)
+        this.answerAndClose(socket)
       }
     }, this.holdMs)
     timer.unref?.()
@@ -222,21 +231,36 @@ export class DaemonToolRelayFront {
     })
     this.serving?.announce(id)
   }
+
+  /**
+   * Answers without reading the request; unread bytes are discarded so the close sends no reset.
+   * Past the answering cap the socket is closed with no answer, so refusals never pile up.
+   */
+  private answerAndClose(socket: Socket): void {
+    if (socket.destroyed) {
+      return
+    }
+    if (
+      this.answering.size >= TOOL_RELAY_FRONT_MAX_ANSWERING ||
+      this.descriptorCount + 1 > this.fdBudget ||
+      this.disposed
+    ) {
+      socket.destroy()
+      return
+    }
+    this.answering.add(socket)
+    socket.end(toolRelayRestartingAnswer())
+    socket.resume()
+    const linger = setTimeout(() => socket.destroy(), ANSWER_LINGER_MS)
+    linger.unref?.()
+    socket.once('close', () => {
+      clearTimeout(linger)
+      this.answering.delete(socket)
+    })
+  }
 }
 
 function closePipe({ front, app }: Pipe): void {
   front.destroy()
   app.destroy()
-}
-
-/** Answers without reading the request; unread bytes are discarded so the close sends no reset. */
-function answerAndClose(socket: Socket): void {
-  if (socket.destroyed) {
-    return
-  }
-  socket.end(toolRelayRestartingAnswer())
-  socket.resume()
-  const linger = setTimeout(() => socket.destroy(), ANSWER_LINGER_MS)
-  linger.unref?.()
-  socket.once('close', () => clearTimeout(linger))
 }

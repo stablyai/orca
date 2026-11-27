@@ -5,6 +5,7 @@ import { providerRelayChannel, type ProviderRelayChannel } from './provider-rela
 import { readFile } from 'node:fs/promises'
 import { spawnTokenFromEnvironBlock } from '../runtime/agent-session/ownership/agent-session-spawn-token-readback'
 import { serveKeptToolGrants } from '../bots/tool-relay/kept-tool-grants'
+import { forgetKeptSharedToolChat } from '../runtime/agent-session/environment/shared-tool-process-callers'
 import {
   forgetProviderRelayRunVerdict,
   providerRelayRunAskUnfenced,
@@ -351,6 +352,8 @@ export function dropListedProviderRelay(chatKey: string, keepUnread = false): vo
   }
   const relay = keptProviderRelay(chatKey)
   if (relay) {
+    // Its agent goes, so the shared-tool caller its daemon start kept for it goes too.
+    forgetKeptSharedToolChat(chatKey)
     forgetKeptProviderRelay(chatKey, relay)
     if (!keepUnread || !keptProviderRelayUnread(relay.info)) {
       void relay.channel.close(relay.info.relayId).catch(() => {})

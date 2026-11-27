@@ -49,8 +49,9 @@ export class SessionMcpTools {
     /** Which of `servers` came from the host's list, which the `/mcp` tray shows as Orca's. */
     readonly hostNames: ReadonlySet<string>,
     /**
-     * The daemon start whose tool relay front the servers' address is: its token is kept at rest,
-     * so the agent may outlive this app on that start. Null: the address and token end with the app.
+     * The daemon start whose tool relay front the servers' address is: that start holds its token for
+     * as long as the agent runs, so the agent may outlive this app there. Null: the address and token
+     * end with the app.
      */
     readonly front: string | null
   ) {}
@@ -135,7 +136,7 @@ export class SessionMcpTools {
 
   /**
    * The launch carries a token this run of Orca's tool relay issued (a bot's, or a delivered server
-   * addressed through the relay), which ends with this app; one kept at rest behind a daemon front
+   * addressed through the relay), which ends with this app; one a daemon start holds behind its front
    * doesn't. Read after `beside`: a relayed server the agent's own one replaced reaches the CLI with
    * no token.
    */

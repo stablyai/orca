@@ -96,14 +96,54 @@ export function takeProviderRelayFrontPin(chatKey: string): string | null {
 
 const FRONT_MOVED_DETAIL =
   "Orca's background service restarted while this chat was starting, so nothing ran. Send again."
+const FRONT_UNUSED_DETAIL =
+  "Orca couldn't start this chat under its background service, so nothing ran. Send again."
 
 /** The daemon start changed between the launch's tools and its spawn; the next send starts afresh. */
 export class ProviderRelayFrontMovedError extends Error {
-  readonly providerDiagnostic = providerDiagnostic(FRONT_MOVED_DETAIL, 'person')
+  readonly providerDiagnostic: ReturnType<typeof providerDiagnostic>
 
-  constructor(readonly chatKey: string) {
+  constructor(
+    readonly chatKey: string,
+    detail = FRONT_MOVED_DETAIL
+  ) {
     super('agent_tool_front_moved')
     this.name = 'ProviderRelayFrontMovedError'
+    this.providerDiagnostic = providerDiagnostic(detail, 'person')
+  }
+}
+
+/** Chats whose launch was given a front but couldn't run under its daemon start: app-bound for this run. */
+const frontRefused = new Set<string>()
+
+/** Whether the chat's launches get their tools at the app's own address only, for this run. */
+export function providerRelayFrontRefused(chatKey: string): boolean {
+  return frontRefused.has(chatKey)
+}
+
+/**
+ * A launch given a daemon start's front whose agent didn't start under that start (no relay, or a
+ * fallback after the pin was taken) never runs: its tools would name an address the start's exit
+ * frees. The chat's next send gets the app's own address.
+ */
+export function refuseUnrelayedFront<R>(
+  relay: { chatKey: string; only?: 'spawn' | 'reattach' },
+  front: ProviderRelayFrontPin | null,
+  relayed: R | null
+): R | null {
+  if (relayed !== null || front === null || relay.only === 'reattach') {
+    return relayed
+  }
+  frontRefused.add(relay.chatKey)
+  throw new ProviderRelayFrontMovedError(relay.chatKey, FRONT_UNUSED_DETAIL)
+}
+
+/** A launch that never relays (a pooled thread) refuses a front it was given, as above. */
+export function refuseFrontOutsideRelay(chatKey: string): void {
+  if (pins.has(chatKey)) {
+    pins.delete(chatKey)
+    frontRefused.add(chatKey)
+    throw new ProviderRelayFrontMovedError(chatKey, FRONT_UNUSED_DETAIL)
   }
 }
 

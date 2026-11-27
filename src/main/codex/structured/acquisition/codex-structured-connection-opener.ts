@@ -6,6 +6,7 @@ import { sharedCodexServerPool } from '../../app-server/shared-servers/codex-sha
 import { CodexSharedServerUncontainedError } from '../../app-server/shared-servers/codex-shared-server-windows-job'
 import { codexSkillRoots } from '../launch/codex-structured-skill-roots'
 import { takeProviderRelayHandedBack } from '../../../provider-relay/app-provider-relays'
+import { refuseFrontOutsideRelay } from '../../../provider-relay/provider-relay-front-pins'
 import type {
   CodexStructuredLaunch,
   CodexStructuredSessionAdapterDeps
@@ -54,6 +55,8 @@ export function codexConnectionOpener(
     ...(launch.linkedSkillsRoot ? { linkedSkillsRoot: launch.linkedSkillsRoot } : {})
   })
   const open: CodexConnectionOpen = (connectionLaunch, handlers) => {
+    // A pooled thread isn't kept by a daemon start, so its tools may not name one's front.
+    refuseFrontOutsideRelay(sessionId)
     // A pooled launch retires a hand-back's exemption, as a relayed one does.
     takeProviderRelayHandedBack(sessionId)
     return pool()

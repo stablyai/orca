@@ -24,6 +24,18 @@ export function restoreKeptSharedToolCaller(chatKey: string, kept: ToolRelayFron
   callers.set(hashToken(kept.token), kept.caller)
 }
 
+/**
+ * The chat's kept caller names no one from now on: its agent's relay was closed, or the daemon
+ * start no longer holds it. With `token`, only while the chat's kept caller is still that one.
+ */
+export function forgetKeptSharedToolChat(chatKey: string, token?: string): void {
+  const kept = keptCallers.get(chatKey)
+  if (kept && (token === undefined || kept.token === token)) {
+    keptCallers.delete(chatKey)
+    callers.delete(hashToken(kept.token))
+  }
+}
+
 /** The owner's grant was revoked: its kept chats' callers name no one from now on. */
 export function forgetKeptSharedToolCallers(owner: string): void {
   for (const [chatKey, kept] of keptCallers) {
@@ -45,6 +57,8 @@ export class SharedToolProcessSession {
   private ended = false
   /** The chat whose daemon start keeps this token with its agent. */
   private keptFor: string | null = null
+  /** Handed to the spawn, but the chat's kept caller only once this launch's agent started. */
+  private pendingKeep: { chatKey: string; kept: ToolRelayFrontCaller } | null = null
 
   private constructor(
     private readonly token: string,
@@ -117,9 +131,24 @@ export class SharedToolProcessSession {
     if (this.ended || !kept || !stageProviderRelayFrontCaller(chatKey, kept)) {
       return false
     }
-    keptCallers.set(chatKey, kept)
-    this.keptFor = chatKey
+    // A reattach keeps the chat's kept caller as it is: the agent already holds that token.
+    this.pendingKeep = { chatKey, kept }
     return true
+  }
+
+  /** This launch's own agent started: its token is the chat's kept caller from now on. */
+  started(): void {
+    const pending = this.pendingKeep
+    this.pendingKeep = null
+    if (!pending || this.ended) {
+      return
+    }
+    const earlier = keptCallers.get(pending.chatKey)
+    if (earlier && earlier.token !== pending.kept.token) {
+      callers.delete(hashToken(earlier.token))
+    }
+    keptCallers.set(pending.chatKey, pending.kept)
+    this.keptFor = pending.chatKey
   }
 
   /** Another session took this launch's place (a reattach reuses its kept one): its token goes. */

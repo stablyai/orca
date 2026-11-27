@@ -70,8 +70,23 @@ export class RelayGrants {
       token = randomBytes(32).toString('base64url')
       this.tokens.set(owner, token)
     }
-    this.grants.set(hashToken(token), { owner, folders: resolvedFolders(folders) })
+    const reach = resolvedFolders(folders)
+    // Every token of the owner, kept agents' included, reaches only what its latest launch named.
+    for (const grant of this.grants.values()) {
+      if (grant.owner === owner) {
+        grant.folders = reach
+      }
+    }
+    this.grants.set(hashToken(token), { owner, folders: reach })
     return token
+  }
+
+  /** A kept agent's token no daemon start holds any more; the owner's current one stays. */
+  forget(token: string): void {
+    const grant = this.grants.get(hashToken(token))
+    if (grant && this.tokens.get(grant.owner) !== token) {
+      this.grants.delete(hashToken(token))
+    }
   }
 
   /**

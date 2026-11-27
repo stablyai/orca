@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   DaemonToolRelayFront,
   TOOL_RELAY_FRONT_HOLD_MS,
+  TOOL_RELAY_FRONT_MAX_ANSWERING,
   TOOL_RELAY_FRONT_MAX_HELD,
   TOOL_RELAY_FRONT_MAX_PIPES
 } from './daemon-tool-relay-front'
@@ -64,13 +65,12 @@ describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
     expect(front.descriptorCount).toBe(budget - 2)
     const over = Array.from({ length: 4 }, () => agent(port))
     await vi.waitFor(() => expect(front!.descriptorCount).toBe(budget))
-    // Every connection past the budget is answered 503 at once.
-    const answered: string[] = []
+    // Every connection past the budget is closed at once, so the front never holds more.
+    const closed: string[] = []
     for (const call of over) {
-      void call.answer.then((text) => answered.push(text))
+      void call.answer.then((text) => closed.push(text))
     }
-    await vi.waitFor(() => expect(answered).toHaveLength(2))
-    expect(answered.every((text) => text.includes('503 Service Unavailable'))).toBe(true)
+    await vi.waitFor(() => expect(closed).toHaveLength(2))
     expect(front.descriptorCount).toBe(budget)
     expect(calls).toHaveLength(4)
   })
@@ -104,6 +104,25 @@ describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
     // The app going frees every pipe it answered.
     front.clientGone('app')
     expect(front.pipeCount).toBe(0)
+  })
+
+  it('counts connections it is answering, caps them, and closes them on dispose', async () => {
+    front = new DaemonToolRelayFront('start-1')
+    const port = await front.open()
+    Array.from({ length: TOOL_RELAY_FRONT_MAX_HELD }, () => agent(port))
+    await vi.waitFor(() => expect(front!.heldCount).toBe(TOOL_RELAY_FRONT_MAX_HELD))
+    // Refused peers that never close their side: each is counted, and past the cap closed unanswered.
+    const refused = Array.from({ length: 2 * TOOL_RELAY_FRONT_MAX_ANSWERING }, () => agent(port))
+    await vi.waitFor(() =>
+      expect(refused.filter((call) => call.socket.readableEnded || call.socket.destroyed).length).toBe(
+        refused.length
+      )
+    )
+    expect(front.descriptorCount).toBeLessThanOrEqual(
+      1 + TOOL_RELAY_FRONT_MAX_HELD + TOOL_RELAY_FRONT_MAX_ANSWERING
+    )
+    front.dispose()
+    expect(front.descriptorCount).toBe(0)
   })
 
   it('answers a connection no app takes within the hold, and frees it', async () => {

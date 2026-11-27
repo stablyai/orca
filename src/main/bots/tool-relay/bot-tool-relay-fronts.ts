@@ -13,7 +13,11 @@ import {
 import { openDaemonToolRelayConnection } from '../../daemon/transport/client/daemon-client-tool-relay-connection'
 import { jsonProperty } from '../../../shared/json-stream/json-value-property'
 import { providerRelayRoute } from '../../provider-relay/provider-relay-route'
-import { keptProviderRelay } from '../../provider-relay/provider-relay-launch-inventory'
+import {
+  keptProviderRelay,
+  keptRunningProviderRelayPid
+} from '../../provider-relay/provider-relay-launch-inventory'
+import { providerRelayFrontRefused } from '../../provider-relay/provider-relay-front-pins'
 
 const CONNECT_TIMEOUT_MS = 1_000
 const FRONT_REQUEST_TIMEOUT_MS = 5_000
@@ -34,8 +38,9 @@ type Watched = {
   servedConnection: number | null
   /** Announced connections being opened, so a re-announcement starts no second one. */
   opening: Set<string>
-  /** The wait before a failed serve is asked again. */
+  /** The wait before a failed serve is asked again, and that retry while it waits. */
   retryMs: number
+  retry: ReturnType<typeof setTimeout> | null
 }
 
 export class ToolRelayFronts {
@@ -57,10 +62,11 @@ export class ToolRelayFronts {
    */
   async current(chatKey: string): Promise<ToolRelayFront | null> {
     const route = providerRelayRoute()
-    if (!route || this.closed) {
+    if (!route || this.closed || providerRelayFrontRefused(chatKey)) {
       return null
     }
-    const kept = keptProviderRelay(chatKey)
+    // A kept agent still running is reattached under its start; any other launch spawns on the current one.
+    const kept = keptRunningProviderRelayPid(chatKey) === null ? null : keptProviderRelay(chatKey)
     const client = kept ? kept.channel.client : await route.current().catch(() => null)
     if (!client || !(await connected(client)) || !client.getDaemonIdentity()?.toolRelayFront) {
       return null
@@ -145,9 +151,12 @@ export class ToolRelayFronts {
       servedConnection: null,
       opening: new Set(),
       retryMs: SERVE_RETRY_MIN_MS,
+      retry: null,
       stop: () => {
         stopEvents()
         stopConnected()
+        const retry = this.watched.get(client)?.retry
+        clearTimeout(retry ?? undefined)
       }
     })
   }
@@ -178,6 +187,8 @@ export class ToolRelayFronts {
     served.then(
       () => {
         watched.retryMs = SERVE_RETRY_MIN_MS
+        clearTimeout(watched.retry ?? undefined)
+        watched.retry = null
       },
       () => {
         // A failed serve is asked again by the next launch, and meanwhile on its own (backing off),
@@ -186,8 +197,13 @@ export class ToolRelayFronts {
           return
         }
         watched.servedConnection = null
+        // One retry waits per daemon start, however many launches failed meanwhile.
+        if (watched.retry) {
+          return
+        }
         const connection = watched.connection
-        setTimeout(() => {
+        watched.retry = setTimeout(() => {
+          watched.retry = null
           // A daemon start that's gone stops here; its next hello serves again.
           if (
             this.watched.get(client) === watched &&
@@ -196,7 +212,8 @@ export class ToolRelayFronts {
           ) {
             void this.serveOnce(client).catch(() => {})
           }
-        }, watched.retryMs).unref()
+        }, watched.retryMs)
+        watched.retry.unref()
         watched.retryMs = Math.min(watched.retryMs * 2, SERVE_RETRY_MAX_MS)
       }
     )

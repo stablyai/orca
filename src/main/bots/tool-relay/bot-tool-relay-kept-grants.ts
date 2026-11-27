@@ -10,6 +10,7 @@ import { stageProviderRelayFrontGrant } from '../../provider-relay/provider-rela
 import { providerRelayRoute } from '../../provider-relay/provider-relay-route'
 import {
   forgetKeptSharedToolCallers,
+  forgetKeptSharedToolChat,
   restoreKeptSharedToolCaller
 } from '../../runtime/agent-session/environment/shared-tool-process-callers'
 import { RelayGrants, type RelayFolders, type RelayGrant } from './bot-tool-relay-grants'
@@ -38,6 +39,10 @@ export class KeptRelayGrants {
   private readonly frontCounts = new Map<number, { streams: number; open: number }>()
   /** The first serve of every daemon start: kept agents' tokens are known once it settles. */
   private serving: Promise<void> | null = null
+  /** The kept agents' tokens each daemon start last handed back. */
+  private readonly adopted = new Map<DaemonClient, Set<string>>()
+  /** The kept callers each daemon start last handed back, by chat. */
+  private readonly adoptedCallers = new Map<DaemonClient, Map<string, string>>()
 
   /** `server`: the relay's HTTP server, listening; a front's connection is served as one made to it. */
   constructor(server: () => Promise<Server | null>) {
@@ -97,9 +102,14 @@ export class KeptRelayGrants {
     return this.grants.of(token)
   }
 
-  /** The request's bearer grant, once every daemon start told which tokens its kept agents carry. */
+  /**
+   * The request's bearer grant. One through a front waits until every daemon start told which
+   * tokens its kept agents carry; one to the app's own port never waits.
+   */
   async bearer(req: IncomingMessage): Promise<RelayGrant | null> {
-    await this.serving?.catch(() => {})
+    if (this.frontOf.has(req.socket)) {
+      await this.serving?.catch(() => {})
+    }
     const token = /^Bearer (\S+)$/.exec(req.headers.authorization ?? '')?.[1]
     return (token ? this.grants.of(token) : undefined) ?? null
   }
@@ -174,6 +184,8 @@ export class KeptRelayGrants {
    * the rest reach their folders as the current config names them.
    */
   private adopt(client: DaemonClient, kept: readonly ToolRelayFrontKeptRelay[]): void {
+    const tokens = new Set<string>()
+    const callers = new Map<string, string>()
     for (const relay of kept) {
       for (const grant of relay.grants) {
         const folders = keptGrantOwnerFolders(grant.owner)
@@ -181,11 +193,28 @@ export class KeptRelayGrants {
           void revokeOn(client, grant.owner)
           continue
         }
+        tokens.add(grant.token)
         this.grants.adopt(grant.owner, grant.token, folders ?? grant.folders)
       }
       const caller = relay.caller
       if (caller && keptGrantOwnerFolders(caller.owner) !== null) {
         restoreKeptSharedToolCaller(relay.chatKey, caller)
+        callers.set(relay.chatKey, caller.token)
+      }
+    }
+    for (const [chatKey, token] of this.adoptedCallers.get(client) ?? []) {
+      if (callers.get(chatKey) !== token) {
+        forgetKeptSharedToolChat(chatKey, token)
+      }
+    }
+    this.adoptedCallers.set(client, callers)
+    // A token this start no longer holds (its agents ended) and no other start holds goes.
+    const earlier = this.adopted.get(client) ?? new Set<string>()
+    this.adopted.set(client, tokens)
+    const held = [...this.adopted.values()]
+    for (const token of earlier) {
+      if (!held.some((set) => set.has(token))) {
+        this.grants.forget(token)
       }
     }
   }

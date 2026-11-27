@@ -113,7 +113,8 @@ export class ProviderRelayHost {
     const relayId = `r-${process.pid}-${randomUUID()}`
     // Held before the agent starts, so its first tool call already has its grant.
     this.toolRelayFront?.kept.keep(relayId, chatKey, toolGrants)
-    const managed = spawn(
+    const managed = this.spawnHolding(relayId, () =>
+      spawn(
       { command: spec.command, args: spec.args, cwd: spec.cwd, env: spec.env },
       {
         site: 'daemon-provider-relay',
@@ -122,6 +123,7 @@ export class ProviderRelayHost {
         inheritedEnv: {},
         ownerExecutable: spec.ownerExecutable
       }
+      )
     )
     const failure: { error: (Error & { code?: unknown }) | null } = { error: null }
     managed.child.on('error', (error: Error & { code?: unknown }) => void (failure.error ??= error))
@@ -275,6 +277,16 @@ export class ProviderRelayHost {
     const relays = [...this.relays.values()]
     this.relays.clear()
     await waitAtMost(Promise.all(relays.map((relay) => relay.dispose())), DISPOSE_WAIT_MS)
+  }
+
+  /** A launch that throws before its relay exists leaves no grant behind. */
+  private spawnHolding<T>(relayId: string, start: () => T): T {
+    try {
+      return start()
+    } catch (error) {
+      this.toolRelayFront?.kept.forget(relayId)
+      throw error
+    }
   }
 
   private requireRelay(relayId: unknown): ProviderRelay {

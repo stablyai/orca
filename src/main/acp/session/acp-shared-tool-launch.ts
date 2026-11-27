@@ -50,6 +50,10 @@ export function acpSharedToolLaunch<
           )
         : null
       if (!restored) {
+        // Only an agent this launch spawned holds this launch's token.
+        if (!reattached) {
+          launched?.started()
+        }
         return launched
       }
       launched?.discard()
