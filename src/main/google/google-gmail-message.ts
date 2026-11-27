@@ -165,9 +165,7 @@ function mixedBodyParts(
       break
     }
   })
-  return children
-    .filter((_, index) => !omitted.has(index))
-    .flatMap((child) => child.leaves)
+  return children.filter((_, index) => !omitted.has(index)).flatMap((child) => child.leaves)
 }
 
 function containsCompleteBody(html: string, plain: string): boolean {

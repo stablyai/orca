@@ -213,8 +213,12 @@ it('pairs a related root with its adjacent plain representation while excluding 
     headers: [{ name: 'Content-Type', value: 'multipart/related; start="<body>"' }],
     parts: [textPart('text/plain', 'A resource, not the body'), html, { mimeType: 'image/png' }]
   }
-  expect(bodyText({ mimeType: 'multipart/mixed', parts: [plain, related] })).toBe('Build 42 passed.')
-  expect(bodyText({ mimeType: 'multipart/mixed', parts: [related, plain] })).toBe('Build 42 passed.')
+  expect(bodyText({ mimeType: 'multipart/mixed', parts: [plain, related] })).toBe(
+    'Build 42 passed.'
+  )
+  expect(bodyText({ mimeType: 'multipart/mixed', parts: [related, plain] })).toBe(
+    'Build 42 passed.'
+  )
   expect(bodyText({ mimeType: 'multipart/mixed', parts: [plain, related, plain] })).toBe(
     'Build 42 passed.\nBuild 42 passed.'
   )
