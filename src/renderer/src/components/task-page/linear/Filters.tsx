@@ -178,6 +178,14 @@ export function TaskPageLinearFilters({
                 )
               : t('auto.components.TaskPage.eec0c5c079', 'Search...')
           }
+          aria-label={
+            linearMode === 'in-orca'
+              ? undefined
+              : t(
+                  'auto.components.new.workspace.SmartWorkspaceNameField.searchLinear',
+                  'Search Linear issues'
+                )
+          }
           density="compact"
           surface="background"
           inset="leadingIcon"
