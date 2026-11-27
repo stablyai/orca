@@ -74,7 +74,7 @@ it('compares against the sample from two late-firing ticks ago', async () => {
   })
 })
 
-it('writes one record for a spike and none for another within the hour', async () => {
+it('writes one spike record and its allocations record for a spike, and none for another within the hour', async () => {
   observeMainMemorySample(400, 0)
   observeMainMemorySample(850, 3 * MINUTE)
   observeMainMemorySample(860, 4 * MINUTE)

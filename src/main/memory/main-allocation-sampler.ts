@@ -1,14 +1,10 @@
-import { ipcMain } from 'electron'
+import { ipcMain, webContents } from 'electron'
 import type { HeapProfiler } from 'node:inspector'
 import { Session } from 'node:inspector/promises'
 import { isRecord } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import type { CrashReportDetailValue } from '../../shared/crash-reporting/crash-reporting'
 
-/**
- * Names what main allocates during a memory spike: V8's sampling heap profiler plus a per-channel
- * IPC tally, both only for a bounded window after a spike fires, so main does no work otherwise.
- * Records hold function names, script basenames and channel names; never arguments or paths.
- */
+/** Names what main allocates in a spike, for one bounded window; records hold names only, never arguments or paths. */
 export const MAIN_ALLOCATION_WINDOW_MS = 15_000
 /** Mean bytes between samples; coarse enough that ~250 MB of churn yields ~500 samples. */
 const SAMPLING_INTERVAL_BYTES = 512 * 1024
@@ -58,8 +54,11 @@ export async function sampleMainAllocations(
       ...summarizeAllocationProfile(profile.head),
       ...summarizeIpcTally(channels)
     }
-  } catch {
-    return { allocationSamplingError: true }
+  } catch (error) {
+    // Inspector errors are fixed protocol text (e.g. sampling already started), never user data.
+    return {
+      allocationSamplingError: String(error instanceof Error ? error.message : error).slice(0, 120)
+    }
   } finally {
     stopIpcTally?.()
     try {
@@ -100,7 +99,7 @@ export function summarizeAllocationProfile(head: ProfileNode): Details {
         frames.push(formatFrame(at.callFrame))
       }
       details[`alloc_${index + 1}_kb`] = Math.round(node.selfSize / 1024)
-      details[`alloc_${index + 1}_stack`] = frames.join(' < ').slice(0, STACK_MAX_CHARS)
+      details[`alloc_${index + 1}_stack`] = frames.join(' < ').slice(0, STACK_MAX_CHARS) || '(root)'
     })
   return details
 }
@@ -113,12 +112,19 @@ function formatFrame(frame: ProfileNode['callFrame']): string {
   return safeFile ? `${name} ${safeFile}:${frame.lineNumber + 1}` : name
 }
 
-/** Wraps handlers only for the window; Electron reads its invoke map directly, so values are swapped. */
+/**
+ * Wraps handlers only for the window; Electron reads its invoke map directly, so values are swapped.
+ * Frame-scoped `webContents.ipc` listeners are not counted.
+ */
 function startIpcTally(): () => Map<string, ChannelTally> {
   const tally = new Map<string, ChannelTally>()
-  const count = (channel: unknown, payload: unknown, calls = 1): void => {
+  let stopped = false
+  const count = (channel: unknown, payload: unknown, calls = 1, suffix = ''): void => {
+    if (stopped) {
+      return
+    }
     try {
-      const key = safeChannel(channel)
+      const key = safeChannel(channel) + suffix
       const entry = tally.get(key) ?? { calls: 0, bytes: 0 }
       entry.calls += calls
       entry.bytes += approxBytes(payload)
@@ -154,13 +160,25 @@ function startIpcTally(): () => Map<string, ChannelTally> {
   }
   const originalEmit = ipcMain.emit
   const emitWrapper = function (this: unknown, channel: string | symbol, ...args: unknown[]) {
-    if (typeof channel === 'string') {
+    if (typeof channel === 'string' && channel !== 'newListener' && channel !== 'removeListener') {
       count(channel, args.slice(1))
     }
     return originalEmit.call(this, channel, ...args)
   }
   ipcMain.emit = emitWrapper
-  let stopped = false
+  const contentsProto: { send?: unknown } | null = webContents.getAllWebContents()[0]
+    ? Object.getPrototypeOf(webContents.getAllWebContents()[0])
+    : null
+  const originalSend = contentsProto?.send
+  const sendWrapper = isInvokeHandler(originalSend)
+    ? function (this: unknown, channel: unknown, ...args: unknown[]) {
+        count(channel, args, 1, ' (to renderer)')
+        return originalSend.call(this, channel, ...args)
+      }
+    : null
+  if (contentsProto && sendWrapper) {
+    contentsProto.send = sendWrapper
+  }
   return () => {
     if (!stopped) {
       stopped = true
@@ -172,6 +190,9 @@ function startIpcTally(): () => Map<string, ChannelTally> {
       }
       if (ipcMain.emit === emitWrapper) {
         ipcMain.emit = originalEmit
+      }
+      if (contentsProto && sendWrapper && contentsProto.send === sendWrapper) {
+        contentsProto.send = originalSend
       }
     }
     return tally
@@ -190,6 +211,15 @@ function summarizeIpcTally(tally: Map<string, ChannelTally>): Details {
       details[`ipc_${index + 1}_kb`] = Math.round(entry.bytes / 1024)
     })
   return details
+}
+
+/** Plain data only, so the walk never runs a class getter. */
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (!isRecord(value)) {
+    return false
+  }
+  const proto: unknown = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
 }
 
 function isInvokeHandler(value: unknown): value is InvokeHandler {
@@ -216,14 +246,14 @@ export function approxBytes(value: unknown): number {
     } else if (item instanceof ArrayBuffer) {
       bytes += item.byteLength
     } else if (Array.isArray(item)) {
-      pending.push(...item.slice(0, budget))
-    } else if (isRecord(item)) {
+      pending.push(...item.slice(0, Math.max(0, budget - pending.length)))
+    } else if (isPlainRecord(item)) {
       for (const key in item) {
-        bytes += key.length
-        pending.push(item[key])
-        if (pending.length > budget) {
+        if (pending.length >= budget) {
           break
         }
+        bytes += key.length
+        pending.push(item[key])
       }
     }
   }
