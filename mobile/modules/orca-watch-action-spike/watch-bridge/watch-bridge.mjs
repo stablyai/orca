@@ -4,15 +4,15 @@
 // option's key into that terminal through the version-matched `orca` CLI. Binds to loopback only; expose
 // it with `tailscale funnel`. Every request needs a bearer token: the Watch token in ~/.orca/watch-bridge-token
 // or the Siri token in ~/.orca/siri-bridge-token, each limited to its own endpoints.
-import { createHash, createPrivateKey, randomBytes, sign, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { execFile } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
-import { connect as connectHttp2 } from 'node:http2'
 import { createConnection } from 'node:net'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
+import { loadApnsKey, notifyWatch, registerDevice } from './watch-bridge-push.mjs'
 
 const run = promisify(execFile)
 const PORT = Number(process.env.ORCA_WATCH_BRIDGE_PORT ?? 6790)
@@ -20,10 +20,6 @@ const ORCA_CLI = process.env.ORCA_CLI ?? '/Applications/Orca.app/Contents/Resour
 const RUNTIME_METADATA = join(homedir(), 'Library/Application Support/orca/orca-runtime.json')
 const TOKEN_PATH = join(homedir(), '.orca', 'watch-bridge-token')
 const SIRI_TOKEN_PATH = join(homedir(), '.orca', 'siri-bridge-token')
-const DEVICES_PATH = join(homedir(), '.orca', 'watch-bridge-devices.json')
-const APNS_DIR = join(homedir(), '.orca', 'watch-apns')
-const APNS_TEAM_ID = process.env.ORCA_WATCH_APNS_TEAM_ID ?? '28HX49S37H'
-const APNS_TOPIC = process.env.ORCA_WATCH_APNS_TOPIC ?? 'com.cjna.orca.watch'
 const POLL_MS = 2000
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -33,7 +29,12 @@ function loadToken(path) {
     writeFileSync(path, randomBytes(32).toString('base64url'), { mode: 0o600 })
   }
   chmodSync(path, 0o600)
-  return Buffer.from(readFileSync(path, 'utf8').trim())
+  const token = readFileSync(path, 'utf8').trim()
+  // A blank token would match a request with no Authorization header.
+  if (token.length < 16) {
+    throw new Error(`${path} holds no usable token; delete it so the bridge writes a new one`)
+  }
+  return Buffer.from(token)
 }
 
 // Each client gets only the endpoints it uses: the Watch can't send free text to an idle agent.
@@ -41,18 +42,28 @@ const CLIENTS = [
   {
     name: 'watch',
     token: loadToken(TOKEN_PATH),
-    scopes: new Set(['prompts', 'answer', 'register'])
+    scopes: new Set(['prompts', 'answer', 'register']),
+    // URLSession on the Watch gives up after 20s; a write must not land after the Watch reported failure.
+    writeDeadlineMs: 15000,
+    // The Watch asks for a second tap before a "Yes, and …" option, so it may send any parsed option.
+    allowsModeChangingOptions: true
   },
   {
     name: 'siri',
     token: loadToken(SIRI_TOKEN_PATH),
-    scopes: new Set(['prompts', 'answer', 'agents', 'message'])
+    scopes: new Set(['prompts', 'answer', 'agents', 'message']),
+    // Siri's request gives up after 9s.
+    writeDeadlineMs: 7000,
+    allowsModeChangingOptions: false
   }
 ]
 
 function authorizedClient(req) {
   const header = req.headers.authorization ?? ''
-  const given = Buffer.from(header.startsWith('Bearer ') ? header.slice(7) : '')
+  const given = Buffer.from(header.startsWith('Bearer ') ? header.slice(7).trim() : '')
+  if (given.length === 0) {
+    return null
+  }
   return (
     CLIENTS.find(
       (client) => given.length === client.token.length && timingSafeEqual(given, client.token)
@@ -101,7 +112,13 @@ function runtimeCall(method, params) {
       }
       clearTimeout(timer)
       socket.end()
-      const frame = JSON.parse(buffer.slice(0, end))
+      let frame
+      try {
+        frame = JSON.parse(buffer.slice(0, end))
+      } catch {
+        reject(new Error(`${method} returned a malformed frame`))
+        return
+      }
       if (frame.ok) {
         resolve(frame.result)
       } else {
@@ -195,10 +212,22 @@ async function pendingPrompts() {
       allowsText: true,
       createdAt: status.stateStartedAt,
       spoken: spokenAction(status.toolName, status.toolInput),
+      dialogKey: dialogKey(dialog),
       handle
     })
   }
   return prompts
+}
+
+const dialogKey = (dialog) => JSON.stringify([dialog.question, dialog.options, dialog.context])
+
+// Re-reads only this terminal just before a key is typed, so the window for a changed dialog is one read.
+async function dialogStillShown(prompt) {
+  const screen = await orca('terminal', 'read', '--terminal', prompt.handle, '--screen').catch(
+    () => null
+  )
+  const dialog = screen && parsePermissionDialog(screen.terminal?.tail ?? [])
+  return Boolean(dialog) && dialogKey(dialog) === prompt.dialogKey
 }
 
 async function stillWaiting(handle, since) {
@@ -306,7 +335,27 @@ async function terminalAgents() {
     .sort((a, b) => b.stateStartedAt - a.stateStartedAt)
 }
 
-const withoutHandle = ({ handle: _handle, ...rest }) => rest
+const withoutHandle = ({ handle: _handle, dialogKey: _dialogKey, ...rest }) => rest
+
+// "Yes, and …" options change Claude's mode for the rest of the session; a voice answer may not pick them.
+const isPlainAnswer = (label) => /^yes$/i.test(label.trim()) || /^no\b/i.test(label.trim())
+
+const TOO_LATE = { status: 504, body: { error: 'That took too long, so nothing was sent' } }
+
+// The key already went in, so a failed read-back is "sent, not confirmed", not an error.
+async function confirmWithin(check) {
+  try {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await sleep(400)
+      if (await check()) {
+        return true
+      }
+    }
+  } catch (error) {
+    console.log(`confirm failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  return false
+}
 
 async function typeReply(handle, text, declineFirst) {
   if (declineFirst) {
@@ -327,8 +376,11 @@ function enqueue(task) {
   return next
 }
 
-function messageAgent(body) {
+function messageAgent(body, _client, deadline) {
   return enqueue(async () => {
+    if (Date.now() > deadline) {
+      return TOO_LATE
+    }
     const text = typeof body.text === 'string' ? body.text.trim() : ''
     if (!text) {
       return { status: 400, body: { error: 'Say what to send' } }
@@ -345,15 +397,15 @@ function messageAgent(body) {
     if (agent.agentType !== 'claude' || !(await showsClaudeInput(agent.handle))) {
       return { status: 409, body: { error: `${agent.name} isn't running anymore` } }
     }
-    await typeReply(agent.handle, text, agent.needsApproval)
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      await sleep(400)
-      const now = (await terminalAgents()).find((entry) => entry.id === agent.id)
-      if (!now || now.stateStartedAt !== agent.stateStartedAt) {
-        return { status: 200, body: { ok: true, confirmed: true, name: agent.name } }
-      }
+    if (Date.now() > deadline) {
+      return TOO_LATE
     }
-    return { status: 200, body: { ok: true, confirmed: false, name: agent.name } }
+    await typeReply(agent.handle, text, agent.needsApproval)
+    const confirmed = await confirmWithin(async () => {
+      const now = (await terminalAgents()).find((entry) => entry.id === agent.id)
+      return !now || now.stateStartedAt !== agent.stateStartedAt
+    })
+    return { status: 200, body: { ok: true, confirmed, name: agent.name } }
   })
 }
 
@@ -364,9 +416,11 @@ async function showsClaudeInput(handle) {
   return lines.slice(-8).filter((line) => /^\s*─{10,}/.test(line)).length >= 2
 }
 
-function answerPrompt(body) {
+function answerPrompt(body, client, deadline) {
   return enqueue(async () => {
-    // Re-read right before typing: a key sent to a changed screen would answer something else.
+    if (Date.now() > deadline) {
+      return TOO_LATE
+    }
     const prompt = (await pendingPrompts()).find((entry) => entry.id === body.promptId)
     console.log(
       `answer ${body.decision} option=${body.optionId ?? '-'} prompt=${body.promptId} found=${Boolean(prompt)}`
@@ -374,178 +428,79 @@ function answerPrompt(body) {
     if (!prompt) {
       return { status: 409, body: { error: 'This prompt is no longer waiting' } }
     }
+    const text = typeof body.text === 'string' ? body.text.trim() : ''
     if (body.decision === 'option') {
-      if (!prompt.options.some((option) => option.id === body.optionId)) {
+      const option = prompt.options.find((entry) => entry.id === body.optionId)
+      if (!option) {
         return { status: 400, body: { error: 'Unknown option' } }
       }
-      await orca('terminal', 'send', '--terminal', prompt.handle, '--text', body.optionId)
-    } else if (body.decision === 'text' && typeof body.text === 'string' && body.text.trim()) {
-      await typeReply(prompt.handle, body.text, true)
-    } else {
+      if (!client.allowsModeChangingOptions && !isPlainAnswer(option.label)) {
+        return { status: 403, body: { error: 'Only a plain Yes or No can be sent from here' } }
+      }
+    } else if (body.decision !== 'text' || !text) {
       return { status: 400, body: { error: 'Unsupported answer' } }
     }
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      await sleep(400)
-      if (!(await stillWaiting(prompt.handle, prompt.createdAt))) {
-        return { status: 200, body: { ok: true, confirmed: true } }
-      }
+    // Still a gap: the runtime has no send that is conditional on the dialog, so a change between this
+    // read and the key below can't be ruled out. This keeps that window to one terminal read.
+    if (!(await dialogStillShown(prompt))) {
+      return { status: 409, body: { error: 'This prompt is no longer waiting' } }
     }
-    return { status: 200, body: { ok: true, confirmed: false } }
-  })
-}
-
-// --- Push: one APNs alert per newly waiting prompt, straight to the Watch app's own token. ---
-
-function loadDevices() {
-  try {
-    return JSON.parse(readFileSync(DEVICES_PATH, 'utf8'))
-  } catch {
-    return []
-  }
-}
-
-function saveDevices(devices) {
-  writeFileSync(DEVICES_PATH, JSON.stringify(devices, null, 2), { mode: 0o600 })
-  chmodSync(DEVICES_PATH, 0o600)
-}
-
-function registerDevice(body) {
-  const deviceToken = String(body.deviceToken ?? '')
-  const environment = body.environment === 'production' ? 'production' : 'development'
-  if (!/^[0-9a-f]{64,200}$/.test(deviceToken)) {
-    return { status: 400, body: { error: 'Bad device token' } }
-  }
-  const devices = loadDevices().filter((device) => device.deviceToken !== deviceToken)
-  devices.push({ deviceToken, environment, registeredAt: Date.now() })
-  saveDevices(devices)
-  console.log(`registered Watch push token …${deviceToken.slice(-6)} (${environment})`)
-  return { status: 200, body: { ok: true } }
-}
-
-function loadApnsKey() {
-  const file =
-    existsSync(APNS_DIR) && readdirSync(APNS_DIR).find((name) => /^AuthKey_\w{10}\.p8$/.test(name))
-  if (!file) {
-    return null
-  }
-  return {
-    keyId: file.slice(8, 18),
-    key: createPrivateKey(readFileSync(join(APNS_DIR, file), 'utf8'))
-  }
-}
-
-let apnsJwt = null
-function apnsAuthorization(apnsKey) {
-  // Apple accepts a provider token for up to an hour; refresh well before that.
-  if (apnsJwt && Date.now() - apnsJwt.issuedAt < 40 * 60 * 1000) {
-    return apnsJwt.value
-  }
-  const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url')
-  const issuedAt = Date.now()
-  const unsigned = `${encode({ alg: 'ES256', kid: apnsKey.keyId })}.${encode({ iss: APNS_TEAM_ID, iat: Math.floor(issuedAt / 1000) })}`
-  const signature = sign('sha256', Buffer.from(unsigned), {
-    key: apnsKey.key,
-    dsaEncoding: 'ieee-p1363'
-  })
-  apnsJwt = { issuedAt, value: `bearer ${unsigned}.${signature.toString('base64url')}` }
-  return apnsJwt.value
-}
-
-function sendApns(apnsKey, device, payload, collapseId) {
-  const host =
-    device.environment === 'production' ? 'api.push.apple.com' : 'api.sandbox.push.apple.com'
-  return new Promise((resolve) => {
-    const client = connectHttp2(`https://${host}`)
-    const timer = setTimeout(() => {
-      client.destroy()
-      resolve({ status: 0, reason: 'timeout' })
-    }, 10000)
-    client.on('error', (error) => resolve({ status: 0, reason: error.message }))
-    const request = client.request({
-      ':method': 'POST',
-      ':path': `/3/device/${device.deviceToken}`,
-      authorization: apnsAuthorization(apnsKey),
-      'apns-topic': APNS_TOPIC,
-      'apns-push-type': 'alert',
-      'apns-priority': '10',
-      'apns-expiration': String(Math.floor(Date.now() / 1000) + 600),
-      'apns-collapse-id': collapseId
-    })
-    let status = 0
-    let body = ''
-    request.on('response', (headers) => (status = headers[':status']))
-    request.setEncoding('utf8')
-    request.on('data', (chunk) => (body += chunk))
-    request.on('end', () => {
-      clearTimeout(timer)
-      client.close()
-      resolve({ status, reason: body ? JSON.parse(body).reason : '' })
-    })
-    request.end(JSON.stringify(payload))
-  })
-}
-
-async function notifyWatch(prompt) {
-  const apnsKey = loadApnsKey()
-  const devices = loadDevices()
-  console.log(`prompt waiting: ${prompt.title} (key=${Boolean(apnsKey)} devices=${devices.length})`)
-  if (!apnsKey || devices.length === 0) {
-    return
-  }
-  const no = prompt.options.find((option) => /^No\b/.test(option.label))
-  const payload = {
-    aps: {
-      alert: { title: 'Claude needs approval', subtitle: prompt.source, body: prompt.title },
-      sound: 'default',
-      category: 'orca.prompt'
-    },
-    promptId: prompt.id,
-    yesOptionId: prompt.options[0]?.id,
-    ...(no ? { noOptionId: no.id } : {})
-  }
-  for (const device of devices) {
-    const started = Date.now()
-    const result = await sendApns(apnsKey, device, payload, prompt.id)
-    console.log(
-      `push …${device.deviceToken.slice(-6)} ${result.status} ${result.reason} ${Date.now() - started}ms`
+    if (Date.now() > deadline) {
+      return TOO_LATE
+    }
+    if (body.decision === 'option') {
+      await orca('terminal', 'send', '--terminal', prompt.handle, '--text', body.optionId)
+    } else {
+      await typeReply(prompt.handle, text, true)
+    }
+    const confirmed = await confirmWithin(
+      async () => !(await stillWaiting(prompt.handle, prompt.createdAt))
     )
-    if (
-      result.status === 410 ||
-      result.reason === 'BadDeviceToken' ||
-      result.reason === 'Unregistered'
-    ) {
-      saveDevices(loadDevices().filter((entry) => entry.deviceToken !== device.deviceToken))
-    }
-  }
+    return { status: 200, body: { ok: true, confirmed } }
+  })
 }
 
 // Status flips to waiting slightly before the dialog draws, so a key is retried until its dialog parses.
-const notified = new Set()
-const attempts = new Map()
+// Pushes that failed transiently are retried with backoff while the prompt is still waiting.
+const pushes = new Map()
+const dialogTries = new Map()
+const MAX_PUSH_RETRIES = 5
 async function watchForPrompts() {
   try {
     const waiting = await waitingClaudeTerminals()
     const keys = new Set(
       waiting.map(({ status }) => `${status.terminalHandle}|${status.stateStartedAt}`)
     )
-    for (const key of [...notified, ...attempts.keys()]) {
+    for (const key of [...pushes.keys(), ...dialogTries.keys()]) {
       if (!keys.has(key)) {
-        notified.delete(key)
-        attempts.delete(key)
+        pushes.delete(key)
+        dialogTries.delete(key)
       }
     }
-    const fresh = [...keys].filter((key) => !notified.has(key) && (attempts.get(key) ?? 0) < 10)
-    if (fresh.length > 0) {
+    const now = Date.now()
+    const due = [...keys].filter((key) => {
+      const push = pushes.get(key)
+      if (!push) {
+        return (dialogTries.get(key) ?? 0) < 10
+      }
+      return push.retry && push.failures < MAX_PUSH_RETRIES && now >= push.nextAt
+    })
+    if (due.length > 0) {
       const prompts = await pendingPrompts()
-      for (const key of fresh) {
+      for (const key of due) {
         const prompt = prompts.find((entry) => `${entry.handle}|${entry.createdAt}` === key)
         if (prompt) {
-          notified.add(key)
-          attempts.delete(key)
-          await notifyWatch(prompt)
-        } else {
-          attempts.set(key, (attempts.get(key) ?? 0) + 1)
-          console.log(`waiting terminal ${key} has no dialog yet (try ${attempts.get(key)})`)
+          const push = pushes.get(key) ?? { delivered: new Set(), failures: 0, nextAt: 0 }
+          pushes.set(key, push)
+          dialogTries.delete(key)
+          push.retry = await notifyWatch(prompt, push.delivered)
+          if (push.retry) {
+            push.failures += 1
+            push.nextAt = Date.now() + POLL_MS * 2 ** push.failures
+          }
+        } else if (!pushes.has(key)) {
+          dialogTries.set(key, (dialogTries.get(key) ?? 0) + 1)
+          console.log(`waiting terminal ${key} has no dialog yet (try ${dialogTries.get(key)})`)
         }
       }
     }
@@ -589,7 +544,7 @@ const ROUTES = {
     handle: async () => ({ status: 200, body: { prompts: await listPrompts() } })
   },
   'POST /watch/v1/register': { scope: 'register', handle: (body) => registerDevice(body) },
-  'POST /watch/v1/answer': { scope: 'answer', writes: true, handle: (body) => answerPrompt(body) },
+  'POST /watch/v1/answer': { scope: 'answer', writes: true, handle: answerPrompt },
   // One round trip for Siri: what's waiting plus every agent's state and last words.
   'GET /siri/v1/overview': {
     scope: 'agents',
@@ -598,8 +553,8 @@ const ROUTES = {
       return { status: 200, body: { prompts, agents: agents.map(withoutHandle) } }
     }
   },
-  'POST /siri/v1/answer': { scope: 'answer', writes: true, handle: (body) => answerPrompt(body) },
-  'POST /siri/v1/message': { scope: 'message', writes: true, handle: (body) => messageAgent(body) }
+  'POST /siri/v1/answer': { scope: 'answer', writes: true, handle: answerPrompt },
+  'POST /siri/v1/message': { scope: 'message', writes: true, handle: messageAgent }
 }
 
 const server = createServer(async (req, res) => {
@@ -627,7 +582,7 @@ const server = createServer(async (req, res) => {
       return reply(429, { error: 'Too many answers in the last minute' })
     }
     const body = req.method === 'POST' ? JSON.parse(await readBody(req)) : undefined
-    const result = await route.handle(body)
+    const result = await route.handle(body, client, started + client.writeDeadlineMs)
     return reply(result.status, result.body)
   } catch (error) {
     return reply(500, { error: error instanceof Error ? error.message : String(error) })
