@@ -6,9 +6,9 @@ import {
 import { requestAskersOf } from '../../../../../bots/bot-request-askers-of'
 import type { BotRequestAsker } from '../../../../../../shared/bots/bot-acts-for'
 import { parseBotAddress } from '../../../../../../shared/bot-roster'
-import { parseOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { readActingSender } from './bot-recipient'
+import { mayNameSession } from './session-recipient'
 
 /** Whom the sending turn acts for, as a local send records it, for mail another computer may hand
  *  to one of its bots, so it never reads the request as the owner's alone. A session address may be
@@ -21,7 +21,7 @@ export async function peerMailSendingAskers(
 ): Promise<BotRequestAsker[] | undefined> {
   const mayReachBot =
     parseBotAddress(mail.to) !== null ||
-    parseOrcaSessionAddress(mail.to) !== null ||
+    mayNameSession(mail.to) ||
     mail.chat !== undefined ||
     mail.item !== undefined
   if (!mayReachBot) {

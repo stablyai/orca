@@ -332,7 +332,7 @@ describe('agent mail between paired Orca servers', () => {
     )
   })
 
-  it.each(['bot:Docs', CHAT_ON_B])(
+  it.each(['bot:Docs', CHAT_ON_B, CHAT_ON_B.slice('orca_session_id:'.length)])(
     "holds a teammate's turn on A to the teammate on B, never to the owner alone (to %s)",
     async (to) => {
       const record = await botAsksAcross(DANA_OPENER, to)
@@ -353,7 +353,7 @@ describe('agent mail between paired Orca servers', () => {
     expect(turnActsForOwner({ askers: record.askers })).toBe(true)
   })
 
-  it('drops an asker it cannot read, keeps the ones it can, and ignores fields it does not know', async () => {
+  it('still names a person a newer Orca describes in ways it does not know, and ignores fields it does not know', async () => {
     receivingBotHome()
     const { conversation_id } = a.db.openHomePeerMailConversation({
       environmentId: 'env_b',
@@ -368,14 +368,38 @@ describe('agent mail between paired Orca servers', () => {
       senderLabel: `${CHAT_ON_A} on Laptop`,
       subject: 'Review the sidebar',
       type: 'question',
-      askers: [{ kind: 'team', id: 'T9' }, DANA_ASKER],
+      askers: [
+        // Nobody it can name: left out.
+        { kind: 'team', id: 'T9' },
+        { ...DANA_ASKER, placeKind: 'huddle' },
+        {
+          kind: 'person_v2',
+          source: 'teams',
+          userId: 'U_EVE',
+          name: 'Eve',
+          role: 'member',
+          mood: 1
+        }
+      ],
       // A field from a newer Orca, as an older one reads `askers`.
       fromLaterOrca: { depth: 2 }
     })
     expect(result).toMatchObject({ ok: true })
     const [message] = mailFor(b, CHAT_ON_B)
     const record = JSON.parse(b.db.getBotRequest(message!.id)!.record)
-    expect(record.askers).toEqual([{ kind: 'owner' }, DANA_ASKER])
+    const { placeKind: _, ...dana } = DANA_ASKER
+    expect(record.askers).toEqual([
+      { kind: 'owner' },
+      dana,
+      {
+        kind: 'person',
+        source: 'teams',
+        userId: 'U_EVE',
+        name: 'Eve',
+        workspaceId: null,
+        role: 'member'
+      }
+    ])
     expect(turnActsForOwner({ askers: record.askers })).toBe(false)
   })
 
