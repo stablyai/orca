@@ -2,8 +2,8 @@ import type { BrowserClientProfileMetadata } from '../../../../shared/browser/cl
 const PROXY_PROBE_URL = 'http://browser-route-probe.invalid/'
 const LOOPBACK_PROBE_URL = 'http://127.0.0.1/'
 
-/** Whose computer a client-hosted page browses for: one of this user's own, or a teammate's host. */
-export type BrowserRouteViewer = 'own-computer' | 'teammate'
+export type { BrowserClientHostViewer as BrowserRouteViewer } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
+import type { BrowserClientHostViewer as BrowserRouteViewer } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
 
 /**
  * The one choice of what a client-hosted page sends through its host. Your own computer: everything,

@@ -9,6 +9,17 @@ export type BrowserClientHostPlacementPreference = z.infer<
   typeof BrowserClientHostPlacementPreference
 >
 
+/** Whose computer a client-hosted page browses for: one of this user's own, or a teammate's host. */
+export type BrowserClientHostViewer = 'own-computer' | 'teammate'
+
+/** Main → renderers whenever an environment's client host records or releases its viewer. */
+export const BROWSER_CLIENT_HOST_VIEWER_CHANGED_CHANNEL =
+  'runtimeEnvironments:browserClientHostViewerChanged'
+export type BrowserClientHostViewerChangedEvent = {
+  environmentId: string
+  viewer: BrowserClientHostViewer | null
+}
+
 export const BrowserClientHostPlacementPreparationRequest = lazyZodSchema(() =>
   z.object({
     selector: z.string().min(1),

@@ -471,7 +471,9 @@
       "clientHostedTooltip": "{{value0}} üzerinden geziniliyor",
       "streamedTooltip": "{{value0}} üzerinde geziniliyor",
       "clientHostedDetail": "Sayfa bu cihazda render edilir. Ağ trafiği ve DNS uzak sunucu üzerinden gider.",
-      "streamedDetail": "Sayfa uzak sunucuda çalışır ve bu cihaza akış olarak iletilir."
+      "streamedDetail": "Sayfa uzak sunucuda çalışır ve bu cihaza akış olarak iletilir.",
+      "teammateTooltip": "Localhost {{value0}} üzerinden geziniliyor",
+      "teammateDetail": "Sayfa bu cihazda render edilir. Localhost sayfaları paylaşılan sunucu üzerinden geçer; diğer siteler kendi ağınızdan yüklenir."
     },
     "remote": {
       "findUnavailable": "Bu sayfa uzak sunucudan akışla geldiğinde sayfada bulma kullanılamaz.",
@@ -24320,6 +24322,11 @@
           "body": "{sidebar.projects.toggleCollapse} kısayolunu kullanın, bu düğmeye tıklayın veya {{modifier}} tuşunu basılı tutarak herhangi bir proje başlığına tıklayın.",
           "bodyWithoutShortcut": "Bu düğmeye tıklayın veya {{modifier}} tuşunu basılı tutarak herhangi bir proje başlığına tıklayın.",
           "action": "Anladım"
+        }
+      },
+      "clientHostedBrowser": {
+        "intro": {
+          "teammateBody": "Uzak tarayıcı sekmeleri artık bu cihazda görüntüleniyor. Localhost sayfaları paylaşılan sunucu üzerinden geçiyor; diğer siteler kendi ağınızdan yükleniyor."
         }
       }
     },

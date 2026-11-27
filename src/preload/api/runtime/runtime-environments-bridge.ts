@@ -11,6 +11,10 @@ import type {
   RuntimeEnvironmentRemoval
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
+import {
+  BROWSER_CLIENT_HOST_VIEWER_CHANGED_CHANNEL,
+  type BrowserClientHostViewerChangedEvent
+} from '../../../shared/browser/client-hosting/browser-client-host-placement'
 import { RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL } from '../../../shared/remote-runtime/host-catalog/runtime-environment-diagnostics'
 import { RUNTIME_ENVIRONMENT_CATALOG_CHANGED_CHANNEL } from '../../../shared/remote-runtime/host-catalog/runtime-environment-catalog-channel'
 import {
@@ -114,6 +118,16 @@ export const runtimeEnvironmentsApi = {
   },
   prepareBrowserClientHostPlacement: (args) =>
     ipcRenderer.invoke('runtimeEnvironments:prepareBrowserClientHostPlacement', args),
+  browserClientHostViewer: (environmentId) =>
+    ipcRenderer.invoke('runtimeEnvironments:browserClientHostViewer', environmentId),
+  onBrowserClientHostViewerChanged: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: BrowserClientHostViewerChangedEvent
+    ): void => callback(data)
+    ipcRenderer.on(BROWSER_CLIENT_HOST_VIEWER_CHANGED_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(BROWSER_CLIENT_HOST_VIEWER_CHANGED_CHANNEL, listener)
+  },
   retryConnectionsNow: (): Promise<void> =>
     ipcRenderer.invoke('runtimeEnvironments:retryConnectionsNow'),
   call: (args: {

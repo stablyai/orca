@@ -38,6 +38,13 @@ export const B = 'chat-b-0002',
   C = 'chat-c-0003',
   G = 'chat-gone-0004'
 export let root: string
+// A restore's launch continuation runs on its own and reads the recovery capsule under a lock file in `root`.
+const launchContinuations = new Set<Promise<unknown>>()
+async function launchContinuationsSettled(): Promise<void> {
+  const pending = [...launchContinuations]
+  launchContinuations.clear()
+  await Promise.all(pending)
+}
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-tab-authority-'))
@@ -46,6 +53,7 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   await chatTabCommandsSettled()
+  await launchContinuationsSettled()
   await stopStructuredAgentSessionRuntime()
   await closeTestStores()
   await closeTestJournalHostDatabases()
@@ -61,6 +69,14 @@ export class AuthorityRuntime extends OrcaRuntimeService {
       resolveClaudeCommand: missing,
       resolveCodexCommand: missing
     }
+  }
+
+  protected override continueAfterStartupRestoration(restoration: Promise<void>) {
+    const continuing = super.continueAfterStartupRestoration(restoration)
+    launchContinuations.add(
+      continuing.catch(() => {}).then(() => this.structuredAgentSessionLaunchContinuation.done)
+    )
+    return continuing
   }
 
   protected override async refreshMobileSessionPtyRecords() {
@@ -250,6 +266,7 @@ export async function createC(
 /** `restore: false` leaves the restore to the first call that needs it, as a host's cold start does. */
 export async function physicalReload(rig: AuthorityRig, options: { restore?: false } = {}) {
   await chatTabCommandsSettled()
+  await launchContinuationsSettled()
   await stopStructuredAgentSessionRuntime()
   rig.profile.flushOrThrow()
   await closeTestStores()
