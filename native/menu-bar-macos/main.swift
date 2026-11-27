@@ -118,6 +118,10 @@ private final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
   @objc private func selected(_ item: NSMenuItem) {
     guard item.isEnabled, let action = item.representedObject as? String, actions.contains(action) else { return }
+    // macOS 14 cooperative activation: this click's activation right belongs to the helper; pass it to Orca.
+    if #available(macOS 14.0, *), let parent = NSRunningApplication(processIdentifier: getppid()) {
+      NSApp.yieldActivation(to: parent)
+    }
     sequence += 1
     emit(["type": "action", "sequence": sequence, "action": action])
   }
