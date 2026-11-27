@@ -48,6 +48,8 @@ export type ChoiceOccurrence = {
   lift: boolean
   owned: boolean
   replacement?: string
+  /** The settings JSON this occurrence was read from, so options sharing it can be cut together. */
+  settings?: { name: string; json: Record<string, unknown>; keys: string[] }
 }
 
 export function normalizeAgentModelOptionChoices(

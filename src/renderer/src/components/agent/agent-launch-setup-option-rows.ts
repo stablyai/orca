@@ -84,6 +84,13 @@ function textEffortDefaultChoice(
   }
 }
 
+function ownSettingChoice(t: Translate): SessionOptionSelectChoice {
+  return {
+    value: TEXT_ACTION_DEFAULT_MODEL,
+    label: t('settings.agents.permissionOwnShort', 'Own settings')
+  }
+}
+
 export function agentLaunchSetupOptionRows(
   {
     options,
@@ -159,12 +166,21 @@ export function agentLaunchSetupOptionRows(
                         : []),
                       ...option.kind.choices
                     ]
-                  : option.id !== 'serviceTier' &&
+                  : [
+                      // Unset sends no value, so the agent's own setting applies again.
+                      ...(option.terminalSetting ? [ownSettingChoice(t)] : []),
+                      ...(option.id !== 'serviceTier' &&
                       current &&
                       !option.kind.choices.some((choice) => choice.value === current)
-                    ? [...option.kind.choices, { value: current, label: current }]
-                    : option.kind.choices,
-                currentValue: effortInArguments ? 'arguments' : current
+                        ? [...option.kind.choices, { value: current, label: current }]
+                        : option.kind.choices)
+                    ],
+                currentValue: effortInArguments
+                  ? 'arguments'
+                  : (current ??
+                    (option.terminalSetting && argumentsKnown
+                      ? TEXT_ACTION_DEFAULT_MODEL
+                      : undefined))
               },
         valueSource: valueKnown ? 'default' : 'unknown',
         transport: 'agent-session',
@@ -175,7 +191,7 @@ export function agentLaunchSetupOptionRows(
           (valueKnown ||
             option.kind.type === 'select' ||
             Boolean(currentModel && draft.delegated?.includes(option.id))) &&
-          (!(option.id === 'fastMode' || option.id === 'serviceTier') ||
+          (!(option.id === 'fastMode' || option.id === 'serviceTier' || option.terminalSetting) ||
             !entry.surfaces.includes('terminal') ||
             argumentsKnown)
       }

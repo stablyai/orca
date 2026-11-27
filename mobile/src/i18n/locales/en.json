@@ -3508,6 +3508,9 @@
       "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
       "permissionAppliesNextMessageCompact": "{{saved}} · next message",
       "permissionAppliesNextMessageTiming": "Applies next message · running {{active}}",
+      "renderer": "Renderer",
+      "inline": "Inline",
+      "fullscreen": "Fullscreen",
       "modelsLoading": "Loading models…",
       "signInForModels": "Sign in to see the models you can use."
     },

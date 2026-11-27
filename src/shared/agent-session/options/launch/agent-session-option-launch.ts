@@ -218,7 +218,7 @@ function resolveModelOptionLaunch(
       continue
     }
     // Why: options belong to the picked model and may be invalid for the user's model.
-    if (!option.apply.launchArgs || modelOverridden) {
+    if (!option.apply.launchArgs || (modelOverridden && !option.terminalSetting)) {
       continue
     }
     const settings = option.apply.cli?.find((form) => form.kind === 'settings')
@@ -227,8 +227,16 @@ function resolveModelOptionLaunch(
     if (effective && !readAgentChoiceSettings(effective.value)) {
       continue
     }
-    const compiled = option.apply.launchArgs(value, originalArgs)
-    args.push(...compiled)
+    // Two settings-form options would emit two --settings; Claude keeps only one, so merge the keys.
+    if (settings && agentChoiceSettingsOccurrences(agent, settings.names, args).length > 0) {
+      args.splice(
+        0,
+        args.length,
+        ...rewriteAgentChoiceSettings(agent, settings.names, args, settings.key, value)
+      )
+    } else {
+      args.push(...option.apply.launchArgs(value, originalArgs))
+    }
     appliedValues[option.id] = value
   }
   return { args, appliedValues }

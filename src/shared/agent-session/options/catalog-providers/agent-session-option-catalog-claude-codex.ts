@@ -55,6 +55,29 @@ function claudeEffortWithChoices(choices: typeof EXTENDED_EFFORT_CHOICES): Catal
   }
 }
 
+// Fullscreen runs on the alternate screen (no pane scrollback); unset sends nothing so the user's own `tui` applies.
+const CLAUDE_RENDERER: CatalogOption = {
+  id: 'renderer',
+  label: 'Renderer',
+  description:
+    'Inline keeps the terminal scrollback, scrollbar and search; fullscreen is needed for the diff panel.',
+  // No category: a model-scoped category would hide it until a model is picked.
+  terminalSetting: true,
+  kind: {
+    type: 'select',
+    choices: [
+      { value: 'default', label: 'Inline' },
+      { value: 'fullscreen', label: 'Fullscreen' }
+    ],
+    defaultValue: 'default'
+  },
+  apply: agentChoiceCliApply(
+    'claude',
+    [{ kind: 'settings', names: ['--settings'], key: 'tui', lift: 'merged-json' }],
+    '--settings'
+  )
+}
+
 export function createClaudeCatalogOptions(args: {
   effortLevelIds: readonly string[]
   supportsFastMode?: boolean
@@ -148,7 +171,7 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       detectAgentInteraction: 'claude-model-switch-confirmation'
     }
   },
-  unknownModelOptions: [claudeEffort(true), CLAUDE_FAST_MODE],
+  unknownModelOptions: [claudeEffort(true), CLAUDE_FAST_MODE, CLAUDE_RENDERER],
   listModels: {
     command: `echo '${CLAUDE_MODEL_LIST_STDIN.trim()}' | claude ${CLAUDE_MODEL_LIST_ARGS.join(' ')}`,
     parse: parseClaudeCatalogModels

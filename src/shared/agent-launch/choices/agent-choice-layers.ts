@@ -72,7 +72,8 @@ export function yieldAgentChoicesToArgs<T extends string | boolean>(
       const option =
         options.find((option) => option.id === key) ??
         catalog.unknownModelOptions?.find((option) => option.id === key)
-      return !rawModel && (!option || !owns(option.apply))
+      // A model flag in the arguments owns the model's options, not the model-independent ones.
+      return (!rawModel || option?.terminalSetting === true) && (!option || !owns(option.apply))
     })
   )
 }
