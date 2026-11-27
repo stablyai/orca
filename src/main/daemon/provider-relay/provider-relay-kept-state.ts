@@ -8,8 +8,6 @@ import { readProviderRelayKeepSpec } from './provider-relay-keep-spec'
 
 /** Kept lines share the record's memory budget with held requests; past these one is dropped. */
 const MAX_KEPT_LINE_CHARS = 1024 * 1024
-// Up to MAX_AWAITED_REQUESTS of these stay in memory; a named request's text is small.
-const MAX_AWAITED_REQUEST_CHARS = 64 * 1024
 const MAX_KEPT_CHARS = 2 * 1024 * 1024
 /** Markers name a message kind, which comes before its payload; only a bounded head is scanned. */
 const MARKER_SCAN_CHARS = 64 * 1024
@@ -176,7 +174,7 @@ export class ProviderRelayKeptState {
       keep,
       outstanding,
       since: this.lastAgentSeq,
-      ...(request && line.length <= MAX_AWAITED_REQUEST_CHARS ? { request: line } : {})
+      ...(request && line.length <= MAX_KEPT_LINE_CHARS ? { request: line } : {})
     })
   }
 

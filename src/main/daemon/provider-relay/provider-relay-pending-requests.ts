@@ -114,6 +114,7 @@ export class ProviderRelayPendingRequests {
   clear(): void {
     this.working.clear()
     this.pending.clear()
+    this.writing.clear()
     this.starts.clear()
     this.pendingChars = 0
   }
