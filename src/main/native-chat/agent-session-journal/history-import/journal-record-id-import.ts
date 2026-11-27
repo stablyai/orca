@@ -10,7 +10,8 @@ export type RecordIdImportResult =
   | { ok: false; error: string; cause?: unknown }
 
 /** A transcript's newest words, for an agent whose records carry stable ids: those ids are the
- *  journal's record ids. `observe` sees lines until it returns true; `validate` runs after them. */
+ *  journal's record ids. `observe` sees lines until it returns true; `validate` runs after them,
+ *  and `keep`, once every line is read, drops records the transcript later abandoned. */
 export async function prepareRecordIdTranscriptImport(input: {
   agent: 'antigravity' | 'droid' | 'kimi'
   sessionId: string
@@ -18,6 +19,7 @@ export async function prepareRecordIdTranscriptImport(input: {
   decode: (line: string) => { recordId: string; message: NativeChatMessage } | null
   observe?: (line: string) => boolean
   validate?: () => Promise<void>
+  keep?: () => (recordId: string) => boolean
   signal?: AbortSignal
   limits: JournalPayloadLimits
   retainedBytes: number
@@ -51,7 +53,13 @@ export async function prepareRecordIdTranscriptImport(input: {
       }
     )
     await input.validate?.()
-    return { ok: true, items: retained.items(), sourceEmpty: consumedBytes === 0 || decoded === 0 }
+    const keep = input.keep?.()
+    const items = keep
+      ? retained
+          .items()
+          .filter((item) => item.identity.provider !== 'legacy' || keep(item.identity.recordId))
+      : retained.items()
+    return { ok: true, items, sourceEmpty: consumedBytes === 0 || decoded === 0 }
   } catch (error) {
     return {
       ok: false,

@@ -1,5 +1,6 @@
 import { basename } from 'node:path'
 import { kimiSessionDirFromWirePath } from '../../../ai-vault/scanners/kimi/session-scanner-kimi-paths'
+import { createKimiActiveBranch } from '../../../kimi/kimi-wire-active-branch'
 import { decodeKimiWireLine } from '../../transcript-decoding/transcript-line-decoders-kimi'
 import type { JournalPayloadLimits } from '../item-lifecycle/journal-payload-bounds'
 import {
@@ -25,11 +26,25 @@ export async function prepareKimiImport(
       error: 'The saved conversation does not match the requested provider identity.'
     }
   }
+  const branch = createKimiActiveBranch()
+  const lineOf = new Map<string, number>()
   return prepareRecordIdTranscriptImport({
     agent: 'kimi',
     sessionId,
     filePath: options.filePath,
-    decode: decodeKimiWireLine,
+    decode: (line) => {
+      const lineNumber = branch.number(line)
+      const record = decodeKimiWireLine(line)
+      if (record) {
+        lineOf.set(record.recordId, lineNumber)
+      }
+      return record
+    },
+    // Turns undone with `/undo` stay in the file on an abandoned branch.
+    keep: () => {
+      const onChain = branch.onActiveChain()
+      return (recordId) => onChain(lineOf.get(recordId) ?? 0)
+    },
     signal: options.signal,
     limits,
     retainedBytes
