@@ -220,7 +220,13 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     const facts = this.terminalRunFacts
     const state = this.readWholeScreenModel(ptyId)
     const draft = !!state && this.hasComposerDraft(ptyId, state.emulator.getCursorLineContext())
-    const drivingInputAt = facts.readLastDrivingInputAt(ptyId)
+    const typedAt = facts.readLastDrivingInputAt(ptyId)
+    const heldNoticeAt = facts.readHeldMailNoticeAt(ptyId)
+    // A held mailbox notice is a draft Orca typed: no later notice is typed over it.
+    const drivingInputAt =
+      typedAt === null || heldNoticeAt === null
+        ? (typedAt ?? heldNoticeAt)
+        : Math.max(typedAt, heldNoticeAt)
     const unattributed = drivingInputAt === null && facts.readProcessStartedAt(ptyId) === null
     // Why: main saw every input to a process it started, so with no typing there the draft is Orca's
     // launch text; a process it attached to, as after a restart, may hold one typed before, which a

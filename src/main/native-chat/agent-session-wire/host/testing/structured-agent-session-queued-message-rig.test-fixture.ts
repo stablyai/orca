@@ -56,6 +56,7 @@ export async function createQueuedMessageTestRig(
     usageLimitAutoContinue?: StructuredAgentSessionHostDeps['usageLimitAutoContinue']
     /** Other host hooks a case sets, such as its turn context or queued-message gates. */
     hostDeps?: Partial<StructuredAgentSessionHostDeps>
+    attach?: Parameters<typeof hostTestAttachParams>[1]
   } = {}
 ) {
   const SESSION = options.sessionId ?? DEFAULT_SESSION
@@ -98,13 +99,12 @@ export async function createQueuedMessageTestRig(
           providerHandle: { kind: 'claude', sessionId: THREAD, leafUuid: null },
           accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/private-fixture/claude' }
         } as const)
-      : {})
+      : {}),
+    ...options.attach
   })
   const pinLegacy = options.legacyInputs && seedQueuedRigLegacyJournal(root, SESSION, options.agent)
   expect(await host.attach(QUEUED_RIG_CALLER, firstAttach)).toMatchObject({ ok: true })
-  if (pinLegacy) {
-    pinLegacy(host)
-  }
+  pinLegacy?.(host)
 
   function envelope(
     fields: Record<string, unknown>,

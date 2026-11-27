@@ -128,6 +128,7 @@ const aiVaultListResultEnvelopeSchema = lazyZodSchema(() =>
   z
     .object({
       sessions: z.array(z.unknown()),
+      hiddenRowCount: z.number().int().nonnegative().optional().catch(undefined),
       issues: z.array(z.unknown()),
       scannedAt: z.string(),
       fingerprint: z
@@ -198,6 +199,7 @@ export function parseAiVaultListResult(value: unknown): AiVaultListResult {
   }
   return {
     sessions,
+    ...(envelope.data.hiddenRowCount ? { hiddenRowCount: envelope.data.hiddenRowCount } : {}),
     issues,
     scannedAt: envelope.data.scannedAt,
     ...(envelope.data.fingerprint ? { fingerprint: envelope.data.fingerprint } : {}),

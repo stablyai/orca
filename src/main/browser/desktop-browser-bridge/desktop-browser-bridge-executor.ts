@@ -12,6 +12,7 @@ import {
 import { normalizeBrowserNavigationUrl } from '../../../shared/browser/navigation/browser-url'
 import type { RpcResponse } from '../../runtime/rpc/core'
 import { BrowserError } from '../browser-error'
+import { assertTeamAllowsBrowserUse } from '../browser-team-policy'
 import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { isPasteChord } from '../cdp/input/browser-paste-chord'
 import type { DesktopBrowserBridgeHostChannel } from './desktop-browser-bridge-connection'
@@ -84,6 +85,7 @@ export async function executeDesktopBrowserBridgeRequest(
     urlOrigin: urlOrigin(request.params.url)
   }
   try {
+    assertTeamAllowsBrowserUse()
     const { params, workspaceId, page } = await scopeRequest(request, deps)
     audit.urlOrigin = urlOrigin(params.url)
     audit.workspaceId = workspaceId

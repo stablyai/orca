@@ -10,20 +10,6 @@ export type RemoteRepoRef = {
   path: string
 }
 
-export type ParsedUpstream = { remoteName: string; branchName: string }
-
-export function parseUpstream(name: string | null | undefined): ParsedUpstream | null {
-  const trimmed = name?.trim()
-  if (!trimmed) {
-    return null
-  }
-  const slash = trimmed.indexOf('/')
-  if (slash <= 0 || slash === trimmed.length - 1) {
-    return null
-  }
-  return { remoteName: trimmed.slice(0, slash), branchName: trimmed.slice(slash + 1) }
-}
-
 function decodeSegment(value: string): string {
   try {
     return decodeURIComponent(value)
@@ -68,7 +54,7 @@ function providerForHost(host: string): ManualReviewProvider | null {
   return null
 }
 
-export function normalizeProvider(
+function normalizeProvider(
   provider: HostedReviewProvider | null | undefined
 ): ManualReviewProvider | null {
   return provider && provider !== 'unsupported' ? provider : null
@@ -213,36 +199,4 @@ export function parseRemoteRepo(
   } catch {
     return null
   }
-}
-
-export function branchFromRef(
-  ref: string | null | undefined,
-  remoteName?: string | null
-): string | null {
-  const trimmed = ref?.trim()
-  if (!trimmed) {
-    return null
-  }
-  const prefixes = remoteName
-    ? [`refs/remotes/${remoteName}/`, `remotes/${remoteName}/`, `${remoteName}/`]
-    : ['refs/heads/']
-  for (const prefix of prefixes) {
-    if (trimmed.startsWith(prefix)) {
-      return trimmed.slice(prefix.length) || null
-    }
-  }
-  if (trimmed.startsWith('refs/remotes/')) {
-    const remoteAndBranch = trimmed.slice('refs/remotes/'.length)
-    const slashIndex = remoteAndBranch.indexOf('/')
-    return slashIndex > 0 ? remoteAndBranch.slice(slashIndex + 1) : null
-  }
-  if (trimmed.startsWith('remotes/')) {
-    const remoteAndBranch = trimmed.slice('remotes/'.length)
-    const slashIndex = remoteAndBranch.indexOf('/')
-    return slashIndex > 0 ? remoteAndBranch.slice(slashIndex + 1) : null
-  }
-  if (trimmed.startsWith('refs/heads/')) {
-    return trimmed.slice('refs/heads/'.length) || null
-  }
-  return trimmed
 }

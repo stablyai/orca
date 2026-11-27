@@ -17,4 +17,15 @@ export class DaemonClientListeners<T> {
       visit(listener)
     }
   }
+
+  /** Each listener runs alone: one that throws never stops the rest, or fails its caller. */
+  eachIsolated(visit: (listener: T) => void): void {
+    for (const listener of this.listeners) {
+      try {
+        visit(listener)
+      } catch {
+        // A watcher's failure stays its own.
+      }
+    }
+  }
 }

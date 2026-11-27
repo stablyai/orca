@@ -155,8 +155,10 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
       adapt(entry.paneKey, entry.orchestration, host)
     }
   }
-  for (const entry of Array.from(state.agentStatusByPaneKey?.values() ?? [])) {
-    embedded(entry)
+  if (state.agentStatusByPaneKey) {
+    for (const entry of state.agentStatusByPaneKey.values()) {
+      embedded(entry)
+    }
   }
   const previous = cache?.contexts
   const equal =

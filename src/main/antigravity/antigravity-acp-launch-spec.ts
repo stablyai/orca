@@ -82,7 +82,9 @@ const AGY_SESSION_MODEL_DISCOVERY: AcpSessionModelDiscovery = {
   listingNamesConfiguredModel: false,
   inPrivateFolder: true,
   listsOnDemand: true,
-  discardSession: discardAgyListingSession
+  discardSession: discardAgyListingSession,
+  // Its commands and skills differ per folder (`.agents/skills`), unlike its models.
+  listsCommandsInChatFolder: true
 }
 
 // agy on its own home uses agy's own sign-in and history; Orca neither signs it in nor out there.

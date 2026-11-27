@@ -14404,7 +14404,8 @@
             "741ff8a0d2": "推送并创建 {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "选择一个工作区来浏览文件"
+            "79b1537dd3": "选择一个工作区来浏览文件",
+            "2f4483d6c4": "没有文件匹配此筛选条件"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "新建文件夹",
@@ -14447,6 +14448,7 @@
             "31b4c3195d": "更多文件管理器操作",
             "d95e30fe28": "刷新文件管理器",
             "6026b16950": "全部折叠",
+            "c1f3f3ec70": "搜索文件内容",
             "openInApp": "在 {{app}} 中打开"
           },
           "FileExplorerTreeStatus": {
@@ -14559,6 +14561,17 @@
             "localPortInUse": "端口 {{port}} 已被占用。请选择其他本地端口",
             "localPortRequiresPrivileges": "端口 {{port}} 需要提升权限。请使用本地端口 ≥ 1024"
           },
+          "Search": {
+            "1abfb25a66": "输入要在文件中搜索的内容",
+            "d56d140747": "按 Enter 进行搜索",
+            "98c8435e36": "选择要搜索的工作区",
+            "dcc294f28d": "(结果被截断)",
+            "resultsInFiles": "{{files}}中共 {{results}}",
+            "resultCount_one": "{{count}} 个结果",
+            "resultCount_other": "{{count}} 个结果",
+            "fileCount_one": "{{count}} 个文件",
+            "fileCount_other": "{{count}} 个文件"
+          },
           "SearchFilters": {
             "01e4671ccf": "例如 *.min.js、dist/**",
             "0a6412a895": "要排除的文件",
@@ -14568,9 +14581,11 @@
           "SearchHeader": {
             "6234a5ef85": "使用正则表达式",
             "4567e6e0b6": "匹配整个单词",
-            "464ae3974f": "区分大小写"
+            "464ae3974f": "区分大小写",
+            "693cbeadd0": "搜索"
           },
           "SearchQueryRow": {
+            "queryLabel": "搜索文件",
             "clearLabel": "清除搜索"
           },
           "SearchResultItems": {
@@ -14744,7 +14759,6 @@
             "c8e4a1f902": "筛选器：{{value0}}",
             "b3c8f1a902": "按文件名筛选",
             "d4f8c2a901": "清除并关闭筛选器",
-            "4b4a7de138": "在浏览器中打开审查页面",
             "createPrIntentCommitBlockedSummary": "提交被阻止：{{value0}} 修复问题后重试创建 PR",
             "pushRecovery": {
               "4b37ae99b0": "启动默认 AI 代理修复此推送失败",
@@ -15697,6 +15711,16 @@
             "remoteDescription": "“{{value0}}”将从 {{value2}} 删除。删除后，也无法再从 {{value1}} 自己的命令行恢复",
             "confirm": "删除"
           },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "查找文件",
+            "4d5a6b2a49": "清除文件筛选器",
+            "7a9fb1e6aa": "内容"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "名称",
+            "b3c8f1a902": "按名称筛选文件",
+            "f8a2c4d1e0": "资源管理器搜索模式"
+          },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "此提交没有文件更改"
           },
@@ -16338,34 +16362,11 @@
             "0bb39f8fe6": "发送",
             "69334b4b10": "语音输入",
             "29f2d13839": "输入命令…",
-            "817090af40": "Ctrl+C",
-            "53ff909568": "选项卡",
-            "4930eaaae7": "Esc键",
             "fa22927f13": "Paste",
             "985373052e": "切换到手机模式",
-            "58a9ee6003": "工具调用格式，接下来要我补上 diff 吗？",
-            "aa64b519c6": "终端界面，采用 Tokyonight 配色和 Menlo 字体，并还原 Claude 的",
-            "e75112c834": "我已将配对扫码页换成高保真",
-            "3ce3e8c892": "14 项通过，1 项跳过（1.8 秒）",
-            "4b3666f9a9": "src/cache/worktree-cache.test.ts",
-            "1d448b69f7": "经过",
-            "d39445686a": "src/transport/host-store.test.ts",
-            "a6e7cdc688": "pnpm 测试 -- 搜索手机设备",
-            "21b67dfc92": "Bash",
-            "d6d1041a1c": "⎿ 已将配对扫码页替换为终端会话",
-            "336c0e070e": "手机/orca-mobile-sidebar-mock-v3.html",
-            "6d4ebd5833": "编辑",
-            "fc83e0d5ef": "⎿ 读取了 2103 行",
-            "80cc356591": "读取",
-            "2c10d43745": "claude",
-            "e0f98be657": "Orca/壮举-手机页面",
-            "2defc05141": "开发@mac",
-            "da121ba48d": "计划.md",
-            "e4befee569": "Shell",
             "606aa93192": "文件",
             "94febb0976": "源代码管理",
             "8d6516312d": "2 个终端 · Claude 活跃",
-            "8432787c4e": "壮举/手机页面",
             "8fd998acd3": "返回"
           },
           "WorktreeListSlide": {
@@ -18267,8 +18268,6 @@
             "fa6ea61de3": "取消",
             "c2ef0359b9": "复制内容",
             "f2d0c22d67": "删除注释 {{value0}}",
-            "11c5084aa2": "清晰的注释",
-            "734e4343ec": "清除浏览器注释",
             "95af781091": "向代理发送反馈",
             "ac39b9366b": "发送",
             "366bf5d62c": "新标签",
@@ -18301,21 +18300,14 @@
             "143204e423": "改变",
             "d51ef37351": "复制",
             "6f4ab3592b": "已复制",
-            "499b31b84e": "全部复制",
             "168350ae6a": "单击或悬停一个元素，然后按 C 进行复制或按 S 进行屏幕截图",
-            "e852e20cea": "已复制 — 按 S 进行屏幕截图，或选择另一个元素",
             "777b5bc4ec": "单击一个元素可为代理添加反馈",
             "b733a91bd9": "为所选元素添加反馈",
             "4328a0a062": "抓取失败：{{value0}}",
             "759f32af29": "正在下载",
             "4300f38145": "从 {{value0}}{{value1}} 下载",
-            "cc4a071d3a": "注释页面元素 ({{value0}})",
             "572046436a": "远程浏览器",
             "b313a7275b": "打开远程浏览器",
-            "ea6af700da": "{{value0}} 条注释",
-            "c13693fe27": "{{value0}} 条注释",
-            "074f0ed10b": "{{value0}} 条注释已准备好，请选择另一个元素或复制所有反馈",
-            "a2164a6e5a": "{{value0}} 条注释已准备好，请选择另一个元素或复制所有反馈",
             "9f6f2e8c19": "下载文件路径不可用",
             "0c79b7634d": "无法打开下载的文件，它可能已被移动或删除",
             "397d9dc923": "无法显示下载的文件，它可能已被移动或删除",
@@ -18346,7 +18338,9 @@
             "devToolsDockRight": "停靠到右侧",
             "devToolsDockBottom": "停靠到底部",
             "devToolsUndock": "在单独窗口中打开",
-            "devToolsClose": "关闭 DevTools"
+            "devToolsClose": "关闭 DevTools",
+            "11c5084aa2": "清晰的注释",
+            "734e4343ec": "清除浏览器注释"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "取消",
@@ -18432,8 +18426,6 @@
                     "c16f932cb3": "保存",
                     "024467ceac": "取消",
                     "449d2c2629": "注释意图",
-                    "38d320108c": "折叠注释",
-                    "9f209891a7": "展开注释",
                     "includePageDetails": "包含页面详情",
                     "copyFeedback": "复制反馈",
                     "copyFeedbackWithPageDetails": "复制反馈及页面详情"
@@ -20701,7 +20693,6 @@
         "expand": "展开"
       },
       "question": {
-        "step": "步骤 {{value0}}",
         "otherPlaceholder": "输入你的回答",
         "cancel": "取消",
         "send": "提交",
@@ -20713,12 +20704,11 @@
         "recommended": "推荐",
         "stepOf": "第 {{value0}} 个，共 {{value1}} 个",
         "answered": "已回答",
-        "title": "问题",
         "previous": "上一个问题",
         "nextQuestion": "下一个问题",
         "back": "返回",
         "skipAndSubmit": "跳过并提交",
-        "stepLabel": "{{value0}}，第 {{value1}} 个，共 {{value2}} 个：{{value3}}"
+        "questionStepLabel": "{{value0}}，第 {{value1}} 个，共 {{value2}} 个"
       },
       "approval": {
         "needsNewerOrca": "此请求需要更新版本的 Orca",
@@ -20996,7 +20986,7 @@
         "unreported": "此会话无法提供上下文用量"
       },
       "agentMessage": {
-        "unnamedSender": "一个代理",
+        "unnamedSender": "一个智能体",
         "senderReplaced": "{{name}} 已不在其终端中运行；现在有另一个智能体在该终端中运行。如有需要，请从侧边栏打开该终端。",
         "senderAmbiguous": "Orca 无法确定 {{name}} 在哪个终端中运行。请从侧边栏打开终端。",
         "senderNotRunning": "{{name}} 已停止运行。请从侧边栏启动新智能体以继续其工作。",
@@ -21020,7 +21010,14 @@
           "handedOff": "已移交",
           "task": "任务"
         },
-        "goToAgent": "转到智能体"
+        "goToAgent": "转到智能体",
+        "unnamedRecipient": "一个智能体",
+        "event": {
+          "followedUp": "已发送后续消息",
+          "update": "更新",
+          "message": "消息",
+          "handedOff": "已移交"
+        }
       },
       "goal": {
         "placeholder": "描述您的目标，定义可衡量的结果以获得最佳结果",
@@ -24884,10 +24881,13 @@
       "label": "文件浏览器根目录",
       "full": "仓库根目录",
       "back": "返回 {{path}}",
+      "searchScope": "搜索范围：工作区文件",
       "retry": "重试",
       "sparseStatus": "稀疏检出",
       "scopeDetails": "关于稀疏检出范围",
       "scopeExplanation": "文件夹选择器只改变显示范围，不会改变检出的文件，仓库根目录视图也会显示根目录和上级文件夹中已检出的文件",
+      "searchExplanation": "“名称”筛选当前查看的文件夹，“内容”搜索整个工作区，稀疏检出排除的文件不会被搜索",
+      "findInFolder": "在 {{path}} 中查找",
       "folderLoadError": "无法加载此文件夹：",
       "emptyFolder": "此文件夹中没有文件"
     },
@@ -25292,7 +25292,8 @@
     "filters": {
       "toggle": "切换搜索详情",
       "active": "{{count}} 个已启用"
-    }
+    },
+    "noResults": "没有结果。请尝试其他搜索或调整筛选条件"
   },
   "csv": {
     "detectingDelimiter": "正在检测分隔符…",

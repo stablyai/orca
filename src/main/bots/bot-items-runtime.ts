@@ -6,51 +6,22 @@ import type { Bot } from '../../shared/bot-types'
 import { botItemEventId, type BotItem, type BotItemEvent } from '../../shared/bots/bot-items'
 import { botItemsNeedingOwnerByBot } from '../../shared/bots/bot-item-groups'
 import { botItemQuestionView } from '../../shared/bots/bot-item-ask'
-import {
-  botItemsChangeScope,
-  type BotChangeScope,
-  type BotNeedsYouCounts
-} from '../../shared/bots/bot-change-scope'
+import { botItemsChangeScope, type BotNeedsYouCounts } from '../../shared/bots/bot-change-scope'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { access } from 'node:fs/promises'
 import { BotItemWorkerLinks } from './bot-item-worker-links'
 import { trackDispatchLinks, type TrackedBotItems } from './bot-item-dispatch-link-refs'
 import { dispatchStarter, dispatchStarterBotId } from './bot-item-dispatch-facts'
 import { botItemsStoreFile } from './bot-items-input'
-import {
-  BotItemLinkJoin,
-  type BotItemAutomations,
-  type BotItemGitHubCache
-} from './bot-items-link-join'
+import { BotItemLinkJoin } from './bot-items-link-join'
 import type { BotItemsRemote } from './bot-items-ops'
 import { botItemListScope, botItemsOfPeople } from './bot-item-access'
 import { eventViewOf } from './bot-items-rows'
-import type { BotItemMail, BotItemRecord, BotItemSource } from './bot-items-schema'
-import type { BotWorkRuntime } from './bot-work-runtime'
-import type { BotsDbWorkerClient } from './db-worker/bots-db-worker-client'
+import type { BotItemRecord, BotItemSource } from './bot-items-schema'
 import { BotItemUsageLimitWaits } from './bot-item-usage-limit-wait'
 
-export type BotItemsHostDeps = {
-  workRuntime: BotWorkRuntime
-  /** The bots DB worker the store's SQL runs in. */
-  db: Pick<BotsDbWorkerClient, 'items' | 'dispose'>
-  bots: () => readonly Bot[]
-  /** The host's GitHub PR and issue caches: the desktop's, read on use, never a GitHub call. */
-  githubCache: BotItemGitHubCache
-  automations: BotItemAutomations
-  chatTitle: (chatId: string) => string | null
-  /** False only when the chat records were read and this chat's is gone; unread is not gone. */
-  chatExists: (chatId: string) => boolean
-  /** A chat's lineage root: the id `bot chats` lists, which a /clear keeps. */
-  chatRoot: (sessionId: string) => string
-  /** Connector threads' chats, by the session each link names. */
-  threadChats: () => readonly { sessionId: string; title: string | null }[]
-  /** Automation runs' chats. */
-  automationRunChats: () => readonly string[]
-  notify: (scope: BotChangeScope) => void
-  /** Stores a write's mail for its items' chat; true once nothing is owed. */
-  sendMail: (mail: BotItemMail) => Promise<boolean>
-}
+export type { BotItemsHostDeps } from './bot-items-host-deps'
+import type { BotItemsHostDeps } from './bot-items-host-deps'
 
 export class BotItemsHost {
   private readonly stores = new Map<string, TrackedBotItems>()
@@ -275,6 +246,24 @@ export class BotItemsHost {
       withWaitingAsks,
       viewer
     )
+    return this.viewsFromRows(items, rows, summary)
+  }
+
+  async showView(
+    item: BotItemRecord,
+    afterId: number,
+    limit: number
+  ): Promise<{ item: BotItem; events: BotItemEvent[] }> {
+    const { rows, events } = await this.store().showRows(item.uid, afterId, limit)
+    const [view] = await this.viewsFromRows([item], rows, false)
+    return { item: view!, events: events.map(eventViewOf) }
+  }
+
+  private async viewsFromRows(
+    items: readonly BotItemRecord[],
+    rows: Awaited<ReturnType<BotItemsRemote['viewRows']>>,
+    summary: boolean
+  ): Promise<BotItem[]> {
     const refs = Object.values(rows.links)
       .flat()
       .flatMap((link) => (link.kind === 'dispatch' ? [link.ref] : []))

@@ -1,11 +1,14 @@
 import * as z from 'zod'
 import type { CodexRateLimitResetOutcome } from '../../agent-usage/rate-limits/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from './codex-reset-credit-scope'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
-const CodexResetCreditTargetSchema = z.discriminatedUnion('runtime', [
-  z.object({ runtime: z.literal('host'), wslDistro: z.null() }).strict(),
-  z.object({ runtime: z.literal('wsl'), wslDistro: z.string().trim().min(1).max(255) }).strict()
-])
+const CodexResetCreditTargetSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('runtime', [
+    z.object({ runtime: z.literal('host'), wslDistro: z.null() }).strict(),
+    z.object({ runtime: z.literal('wsl'), wslDistro: z.string().trim().min(1).max(255) }).strict()
+  ])
+)
 
 const CodexResetCreditExpectedScopeSchema = z
   .object({
@@ -16,23 +19,25 @@ const CodexResetCreditExpectedScopeSchema = z
   })
   .strict()
 
-const DurableCodexResetCreditAttemptSchema = z.discriminatedUnion('state', [
-  z
-    .object({
-      idempotencyKey: z.uuid(),
-      expectedScope: CodexResetCreditExpectedScopeSchema,
-      state: z.literal('providerPending')
-    })
-    .strict(),
-  z
-    .object({
-      idempotencyKey: z.uuid(),
-      expectedScope: CodexResetCreditExpectedScopeSchema,
-      state: z.literal('settled'),
-      outcome: z.enum(['reset', 'nothingToReset', 'noCredit', 'alreadyRedeemed'])
-    })
-    .strict()
-])
+const DurableCodexResetCreditAttemptSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('state', [
+    z
+      .object({
+        idempotencyKey: z.uuid(),
+        expectedScope: CodexResetCreditExpectedScopeSchema,
+        state: z.literal('providerPending')
+      })
+      .strict(),
+    z
+      .object({
+        idempotencyKey: z.uuid(),
+        expectedScope: CodexResetCreditExpectedScopeSchema,
+        state: z.literal('settled'),
+        outcome: z.enum(['reset', 'nothingToReset', 'noCredit', 'alreadyRedeemed'])
+      })
+      .strict()
+  ])
+)
 
 const CodexResetCreditAttemptLedgerSchema = z
   .object({
