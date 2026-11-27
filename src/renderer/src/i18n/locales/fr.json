@@ -14503,7 +14503,6 @@
             "c8e4a1f902": "Filtre : {{value0}}",
             "b3c8f1a902": "Filtrer les fichiers par nom",
             "d4f8c2a901": "Effacer et fermer le filtre",
-            "4b4a7de138": "Ouvrir la page de revue dans le navigateur",
             "createPrIntentCommitBlockedSummary": "Commit bloqué : {{value0}} Corrigez le problème, puis réessayez Créer une PR.",
             "pushRecovery": {
               "4b37ae99b0": "Démarrer l'agent IA par défaut pour corriger cet échec de push",
