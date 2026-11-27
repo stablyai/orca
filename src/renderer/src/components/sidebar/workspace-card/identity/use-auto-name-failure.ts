@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { branchAutoRenameFailureReason } from '../../../../../../shared/worktree/branch-auto-rename-failure-reason'
@@ -84,20 +84,20 @@ export function useAutoNameFailure({
       .catch(() => update(failure, { dismissing: false }))
   }, [failure, dismissing, retrying, update, worktreeId, executionHostId])
 
+  if (!error || dismissed) {
+    return null
+  }
   // A finished retry that didn't fail (e.g. deferred) says so; otherwise the stored error does.
-  const reason = error
-    ? (branchAutoRenameReasonText(retry.lastOutcome, t) ??
-      autoNameFailureReasonText(branchAutoRenameFailureReason(error), t))
-    : ''
-  const canRetry = retry.availability === 'available'
-  const { canDismiss } = current
-  const visible = Boolean(error) && !dismissed
-  // Stable while nothing changes, so the row's memoized context menu doesn't re-render with it.
-  return useMemo(
-    () =>
-      visible
-        ? { retrying, canRetry, canDismiss, dismissing, reason, tryAgain: retry.tryAgain, dismiss }
-        : null,
-    [visible, retrying, canRetry, canDismiss, dismissing, reason, retry.tryAgain, dismiss]
-  )
+  const reason =
+    branchAutoRenameReasonText(retry.lastOutcome, t) ??
+    autoNameFailureReasonText(branchAutoRenameFailureReason(error), t)
+  return {
+    retrying,
+    canRetry: retry.availability === 'available',
+    canDismiss: current.canDismiss,
+    dismissing,
+    reason,
+    tryAgain: retry.tryAgain,
+    dismiss
+  }
 }

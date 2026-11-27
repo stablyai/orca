@@ -152,7 +152,6 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       onContextMenuSelect={handleContextMenuSelect}
       onAssignWorkspaceStatus={onAssignWorkspaceStatus}
       onOpenChange={card.detailsHoverControl.setContextMenuOpen}
-      autoNameFailure={card.autoNameFailure}
     >
       {cardBody}
     </WorktreeContextMenu>
