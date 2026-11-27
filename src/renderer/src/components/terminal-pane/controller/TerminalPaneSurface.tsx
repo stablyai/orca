@@ -2,25 +2,15 @@ import { useState } from 'react'
 import { TerminalRestoringPlaceholder } from '../mounting/TerminalRestoringPlaceholder'
 import { TerminalCrewPortals } from '../../orchestration-crew/TerminalCrewPortals'
 import { terminalPaneMenuAgentIdProps } from '../context-menu/terminal-pane-menu-agent-session-actions'
-import { createPortal } from 'react-dom'
 import { TerminalPaneFileDropOwners } from '../input/file-drop/TerminalPaneFileDropOwner'
-import TerminalSearch from '@/components/terminal-pane/search/TerminalSearch'
 import { DaemonActionDialog } from '@/components/shared/useDaemonActions'
-import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { hasWorkspaceFileDragType } from '@/lib/files/drop/workspace-file-drag'
 import CloseTerminalDialog from '../layout/close/CloseTerminalDialog'
 import TerminalContextMenu from '../context-menu/TerminalContextMenu'
 import TerminalPaneHeaderOverlay from '../titles/TerminalPaneHeaderOverlay'
-import { isPaneOwnerRecoveryError } from '../errors/terminal-error-display'
-import { TerminalErrorToast } from '../errors/TerminalErrorToast'
-import { openTerminalBesideTab } from '../context-menu/open-terminal-beside-tab'
 import { AgentLaunchPaneNoticePortal } from '../launch-outcome/AgentLaunchPaneNotice'
-import { TerminalSessionStateSaveFailureDialog } from '../layout/persistence/TerminalSessionStateSaveFailureDialog'
-import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
-import { TerminalAgentSessionForkDialog } from '../session-fork/TerminalAgentSessionForkDialog'
 import { SessionRestoredBannerPortals } from '../session-restore/SessionRestoredBannerPortals'
 import { handleInternalTerminalFileDrop } from '../input/file-drop/terminal-drop-handler'
-import { TerminalQuickCommandEditorDialog } from '../quick-commands/TerminalQuickCommandEditorDialog'
 import { TerminalPaneNativeChatPortal } from '../chat/TerminalPaneNativeChatPortal'
 import { TerminalPaneSleepingPortals } from '../session-restore/spawn-deferral/TerminalPaneSleepingPortals'
 import { TerminalPaneCodexRestartPortals } from './TerminalPaneCodexRestartPortals'
@@ -28,6 +18,7 @@ import { TerminalPaneMobileDriverPortals } from '../mobile-driver/TerminalPaneMo
 import { TerminalPaneProcessExitPortals } from '../process-exit/TerminalPaneProcessExitPortals'
 import { TerminalPaneSshReconnectPortals } from '../pty-transport/recovery/ssh/TerminalPaneSshReconnectPortals'
 import { TerminalPaneRecoveryPortals } from '../pty-transport/remote-runtime/recovery/TerminalPaneRecoveryPortals'
+import { TerminalPaneLazyOverlays } from './TerminalPaneLazyOverlays'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 // oxfmt-ignore
 import { canCloseTerminalPane, terminalPaneCloseLabel } from '../layout/close/terminal-pane-close-affordance'
@@ -52,18 +43,14 @@ export function TerminalPaneSurface({
     activePaneCanResumeInChat,
     activePaneIsChatLeaf,
     activatePaneTitleInteraction,
-    agentSessionContinuation,
-    agentSessionFork,
     beginPaneDragFromHeader,
     chatPane,
-    closeTerminalLinkActions,
     contextMenu,
     contextMenuCanContinueInNewSession,
     contextMenuCanToggleChat,
     contextMenuIsChatView,
     cwd,
     daemonActions,
-    dismissTerminalError,
     expectedLayoutLeafIdsAttr,
     expandedPaneId,
     effectiveChatViewMode,
@@ -88,7 +75,6 @@ export function TerminalPaneSurface({
     managerRef,
     menuAgentIds,
     menuPaneHasCustomTitle,
-    openDiskSpaceAnalyzer,
     openQuickCommandEditor,
     paneCount,
     paneTitleBackground,
@@ -96,9 +82,6 @@ export function TerminalPaneSurface({
     paneTitles,
     paneTransportsRef,
     pendingCloseConfirmation,
-    quickCommandDraft,
-    quickCommandEditorHostId,
-    quickCommandEditorOpen,
     quickCommandHostLoadFailed,
     quickCommandHostOwnershipPending,
     quickCommandRepoId,
@@ -106,32 +89,20 @@ export function TerminalPaneSurface({
     renameInputRef,
     renameValue,
     renamingPaneId,
-    saveQuickCommand,
     searchOpen,
-    searchStateRef,
-    searchInputRef,
     sessionRestoredBannerPaneIds,
-    sessionStateSaveFailureMessage,
-    setAgentSessionContinuation,
-    setAgentSessionFork,
     setContainerRef,
-    setQuickCommandEditorOpen,
     setRenameValue,
-    setSearchOpen,
-    setSessionStateSaveFailureMessage,
     showSplitButton,
-    showSshReconnectOverlay,
     splitTerminalPaneFromHeader,
     tabId,
     terminalMountPhase,
     terminalManager,
     terminalContainerStyle,
     terminalContentVisible,
-    terminalLinkActionRequest,
     titleUsesLightSurface,
     visibleQuickCommandHosts,
     visibleLaunchRefusal,
-    visibleTerminalError,
     worktreeId
   } = controller
   // Why: an SSH, runtime, or not-yet-known host must not be described with this client's OS/shell.
@@ -207,58 +178,15 @@ export function TerminalPaneSurface({
         pane={activePane}
         tabId={tabId}
       />
-      {/* Let SSH recovery and a stopped WSL distro's Start own the pane instead of the raw error toast. */}
-      {visibleTerminalError &&
-      isActive &&
-      !showSshReconnectOverlay &&
-      !errorReplacedByStartCard &&
-      activePane
-        ? createPortal(
-            <TerminalErrorToast
-              error={visibleTerminalError.error}
-              agentId={activeAgentId}
-              paneOnClient={paneOnClient}
-              onDismiss={dismissTerminalError}
-              onRestartDaemon={() => daemonActions.setPending('restart')}
-              onRestoreTerminalFocus={() => activePane.terminal.focus()}
-              onRetry={
-                isPaneOwnerRecoveryError(visibleTerminalError.error)
-                  ? () =>
-                      Promise.resolve(
-                        paneTransportsRef.current.get(activePane.id)?.retryRecovery?.() ?? false
-                      )
-                  : undefined
-              }
-              onOpenNewTerminal={() => void openTerminalBesideTab(tabId)}
-              onClosePane={() => handleRequestClosePane(activePane.id)}
-            />,
-            activePane.container,
-            `terminal-error-${activePane.id}`
-          )
-        : null}
       <TerminalPaneProcessExitPortals controller={controller} />
       <TerminalPaneSshReconnectPortals controller={controller} />
       {daemonActions.pending && <DaemonActionDialog api={daemonActions} />}
-      {isActive && sessionStateSaveFailureMessage !== null && (
-        <TerminalSessionStateSaveFailureDialog
-          open
-          failureMessage={sessionStateSaveFailureMessage}
-          onDismiss={() => setSessionStateSaveFailureMessage(null)}
-          onOpenSpaceAnalyzer={openDiskSpaceAnalyzer}
-        />
-      )}
-      {activePane?.container &&
-        (searchOpen || hasOpenedSearch) &&
-        createPortal(
-          <TerminalSearch
-            isOpen={searchOpen}
-            onClose={() => setSearchOpen(false)}
-            searchAddon={activePane.searchAddon ?? null}
-            searchStateRef={searchStateRef}
-            inputRef={searchInputRef}
-          />,
-          activePane.container
-        )}
+      <TerminalPaneLazyOverlays
+        controller={controller}
+        paneOnClient={paneOnClient}
+        errorReplacedByStartCard={errorReplacedByStartCard}
+        hasOpenedSearch={hasOpenedSearch}
+      />
       <SessionRestoredBannerPortals panes={managedPanes} paneIds={sessionRestoredBannerPaneIds} />
       <TerminalPaneNativeChatPortal controller={controller} />
       {Boolean(terminalManager) && (isActive || contextMenu.open) ? (
@@ -320,31 +248,6 @@ export function TerminalPaneSurface({
           {...terminalPaneMenuAgentIdProps(contextMenu, menuAgentIds)}
         />
       ) : null}
-      {terminalManager && terminalLinkActionRequest && (
-        <LinkActionPopover request={terminalLinkActionRequest} onClose={closeTerminalLinkActions} />
-      )}
-      {quickCommandEditorOpen && (
-        <TerminalQuickCommandEditorDialog
-          command={quickCommandDraft}
-          hostId={quickCommandEditorHostId}
-          onOpenChange={setQuickCommandEditorOpen}
-          onSave={saveQuickCommand}
-        />
-      )}
-      {agentSessionFork && (
-        <TerminalAgentSessionForkDialog
-          open
-          fork={agentSessionFork}
-          onOpenChange={(open) => !open && setAgentSessionFork(null)}
-        />
-      )}
-      {agentSessionContinuation && (
-        <AgentSessionContinuationDialog
-          open
-          request={agentSessionContinuation}
-          onOpenChange={(open) => !open && setAgentSessionContinuation(null)}
-        />
-      )}
       {(isActive || isVisible) && (
         <TerminalPaneHeaderOverlay
           tabId={tabId}
