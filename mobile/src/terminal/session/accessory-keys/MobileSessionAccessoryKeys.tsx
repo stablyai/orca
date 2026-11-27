@@ -8,6 +8,7 @@ import {
   Smartphone
 } from 'lucide-react-native'
 import { triggerMediumImpact } from '../../../platform/haptics/haptics'
+import { hostOs } from '../../../platform/host-os'
 import { createTerminalLiveAccessoryInput } from '../../live-input/terminal-live-accessory-input'
 import { TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from '../../key-input/terminal-accessory-repeat'
 import { getVisibleTerminalAccessoryKeys } from '../../key-input/terminal-accessory-layout'
@@ -148,8 +149,8 @@ export function MobileSessionAccessoryKeys({
   )
   return (
     <View ref={keepsKeyboard} style={styles.keyRow} {...touch.rowTouchHandlers}>
-      {/* Why: fixed keyboard escape hatch; outside the ScrollView so it can't scroll away (#5106). */}
-      {keyboardLift > 0 && (
+      {/* Why: fixed keyboard escape hatch on iOS, outside the ScrollView so it can't scroll away; Android provides its own system IME hide control (#5106, #38164). */}
+      {hostOs() !== 'android' && keyboardLift > 0 && (
         <Pressable
           style={({ pressed }) => [styles.key, pressed && styles.keyPressed]}
           onPress={dismissSoftwareKeyboard}
