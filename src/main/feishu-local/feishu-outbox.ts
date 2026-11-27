@@ -151,7 +151,8 @@ export async function drainFeishuOutbox(
             ]
               .filter(Boolean)
               .join('\n\n'),
-            failed: fill.outcome === 'failed'
+            failed: fill.outcome === 'failed',
+            cancelled: fill.outcome === 'cancelled'
           }
         )
         if (!id || !(await cards.publish(id))) {

@@ -244,6 +244,10 @@ export class FeishuResponseStore {
               : 'done'
           data.text = change.value.failed ? '处理失败' : '已完成'
         }
+        if (change.value.cancelled) {
+          response.phase = 'stopped'
+          data.text = '已停止'
+        }
         break
       case 'begin':
         break
@@ -252,7 +256,7 @@ export class FeishuResponseStore {
         break
       case 'workers':
         response.workersRunning = change.running
-        if (response.phase !== 'failed') {
+        if (response.phase !== 'failed' && response.phase !== 'stopped') {
           response.phase = change.running || response.final === undefined ? 'working' : 'done'
           data.text = change.running
             ? '等待子任务完成'
@@ -276,8 +280,15 @@ export class FeishuResponseStore {
         break
       case 'final':
         response.final = change.text
-        response.phase = change.failed ? 'failed' : response.workersRunning ? 'working' : 'done'
-        data.text = change.failed ? '处理失败' : '已完成'
+        const cancelled = change.cancelled || response.native?.cancelled
+        response.phase = cancelled
+          ? 'stopped'
+          : change.failed
+            ? 'failed'
+            : response.workersRunning
+              ? 'working'
+              : 'done'
+        data.text = cancelled ? '已停止' : change.failed ? '处理失败' : '已完成'
         break
     }
     this.cards.put(account, id, external, card?.original ?? original!, chat, data)

@@ -118,7 +118,9 @@ export class FeishuNativeProjection {
     if (resumed?.length) {
       native.resumed = true
     }
-    if (latest.turn.outcome && latest.turn.outcome !== 'success') {
+    if (latest.turn.outcome === 'cancellation') {
+      native.cancelled = true
+    } else if (latest.turn.outcome && latest.turn.outcome !== 'success') {
       native.failed = true
     }
     const continuations: string[] = (resumed?.slice(1) ?? []).map((stamp) => stamp.deliveryId)

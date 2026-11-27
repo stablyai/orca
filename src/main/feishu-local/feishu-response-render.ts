@@ -55,7 +55,8 @@ export function feishuResponseText(data: FeishuCardData): string {
 }
 export function feishuResponseCard(data: FeishuCardData, botName: string, streaming = false) {
   const response = data.response!
-  const complete = response.final !== undefined && !response.workersRunning
+  const cancelled = response.phase === 'stopped'
+  const complete = cancelled || (response.final !== undefined && !response.workersRunning)
   const superseded = Boolean(response.supersededBy)
   const waiting = Boolean(response.question?.pending) && !superseded
   const stopped = complete || superseded || waiting
@@ -158,10 +159,10 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
       ? response.question?.resume
         ? '等待恢复'
         : '等待你的选择'
-      : response.workersRunning
+      : response.workersRunning && !cancelled
         ? '等待子任务完成'
         : complete
-          ? `${data.text}${elapsed === undefined ? '' : ` · ${formatElapsed(elapsed)}`}`
+          ? `${cancelled ? '已停止' : data.text}${elapsed === undefined ? '' : ` · ${formatElapsed(elapsed)}`}`
           : tools.some((t) => t.status === 'running')
             ? '正在执行工具'
             : text
@@ -186,15 +187,16 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
     },
     header: {
       title: { tag: 'plain_text', content: `${botName} · ${status}` },
-      template: superseded
-        ? 'grey'
-        : waiting
-          ? 'blue'
-          : response.phase === 'failed'
-            ? 'red'
-            : complete
-              ? 'green'
-              : 'blue',
+      template:
+        superseded || cancelled
+          ? 'grey'
+          : waiting
+            ? 'blue'
+            : response.phase === 'failed'
+              ? 'red'
+              : complete
+                ? 'green'
+                : 'blue',
       icon: { tag: 'standard_icon', token: 'ai-common_colorful' }
     },
     body: { direction: 'vertical', padding: '12px', vertical_spacing: '8px', elements }

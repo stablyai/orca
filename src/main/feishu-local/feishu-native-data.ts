@@ -20,6 +20,7 @@ export const nativeResponse = lazyZodSchema(() =>
     report: z.literal(true).optional(),
     resumed: z.literal(true).optional(),
     failed: z.literal(true).optional(),
+    cancelled: z.literal(true).optional(),
     messages: z.array(z.object({ id: z.string(), text: z.string() })),
     tools: z.array(nativeStep)
   })

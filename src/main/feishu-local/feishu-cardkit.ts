@@ -58,6 +58,7 @@ export class FeishuCardKit {
     }
     const sequence = () => this.store.cardSequence(this.b.account, card.id)
     const complete =
+      data.response?.phase === 'stopped' ||
       (data.response?.final !== undefined && !data.response.workersRunning) ||
       Boolean(data.response?.supersededBy) ||
       Boolean(data.response?.question?.pending)

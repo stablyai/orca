@@ -18,7 +18,7 @@ export const cardData = lazyZodSchema(() =>
     response: z
       .object({
         turn: z.number().optional(),
-        phase: z.enum(['working', 'done', 'failed']),
+        phase: z.enum(['working', 'done', 'failed', 'stopped']),
         progress: z.array(z.object({ id: z.string(), text: z.string() })),
         trace: z.array(z.string()),
         final: z.string().optional(),
@@ -55,4 +55,4 @@ export type FeishuResponseChange =
   | { kind: 'status'; text: string; turn?: number | null }
   | { kind: 'trace'; text: string; turn: number }
   | { kind: 'progress'; id: string; text: string }
-  | { kind: 'final'; text: string; failed?: boolean; turnItemId?: string }
+  | { kind: 'final'; text: string; failed?: boolean; cancelled?: boolean; turnItemId?: string }

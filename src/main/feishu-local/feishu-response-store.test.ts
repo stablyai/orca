@@ -163,3 +163,31 @@ it('merges bounded native snapshots across restart without reopening completed t
     await rm(dir, { recursive: true, force: true })
   }
 })
+
+it('persists cancellation across late worker snapshots without losing the original response', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'feishu-stopped-'))
+  const path = join(dir, 'db.sqlite')
+  let store = new FeishuInbox(path)
+  try {
+    const b = store.add('scope', 'bot', { name: 'profile', appId: 'cli_app', brand: 'feishu' })
+    const update = (change: Parameters<FeishuInbox['updateResponse']>[4]) =>
+      store.updateResponse(b.account, 'lane', 'om_one', 'oc_chat', change)
+    const id = update({ kind: 'begin' })!
+    store.postedCard(b.account, id, 1, 'om_response')
+    update({ kind: 'final', text: 'Stopped on Orca.', cancelled: true })
+    store.close()
+    store = new FeishuInbox(path)
+    update({ kind: 'workers', running: true })
+    update({ kind: 'workers', running: false })
+    update({ kind: 'status', text: '已完成' })
+    const card = store.getCard(b.account, id)!
+    expect(card.message).toBe('om_response')
+    expect(cardData.parse(JSON.parse(card.body)).response).toMatchObject({
+      phase: 'stopped',
+      final: 'Stopped on Orca.'
+    })
+  } finally {
+    store.close()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
