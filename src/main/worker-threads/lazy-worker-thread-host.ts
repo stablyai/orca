@@ -87,6 +87,9 @@ export class LazyWorkerThreadHost<TResponse> {
     this.cleanupListeners?.()
     this.cleanupListeners = null
     worker.removeAllListeners()
+    // Termination is asynchronous: a worker error already posted must not become uncaught
+    // after its request owner has detached, or be routed to a replacement worker's requests.
+    worker.on('error', () => {})
     if (!this.options.awaitRetirement) {
       void worker.terminate().catch(() => {})
       return
