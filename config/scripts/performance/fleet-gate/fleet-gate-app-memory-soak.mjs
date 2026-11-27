@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { idleLiveChatCount, liveChatCount } from './fleet-gate-chat-memory.mjs'
-import { copyProfile } from './fleet-gate-copies.mjs'
+import { copyProfile, readDaemonPids } from './fleet-gate-copies.mjs'
 import {
   createChatBurst,
   pointClaudeAtStub,
@@ -18,7 +18,7 @@ const SOAK_HIGH = 200
 // The flat bar: the end may exceed the 10-chat baseline by at most 10% or 100 MB, whichever is larger.
 const MAX_GROWTH_SHARE = 0.1
 const MIN_GROWTH_BOUND_MB = 100
-// One chat is shown and given a long turn per tick, so 1 h visits all 200 chats about twice.
+// One chat is shown and given a long turn per tick, so 1 h of load visits all 200 chats about 1.8 times.
 const TURN_EVERY_MS = 10_000
 const CHECKPOINT_EVERY_MS = 15 * 60_000
 const RELEASE_WAIT_MS = 60_000
@@ -32,26 +32,64 @@ const SOAK_PROMPT = 'fleet gate soak turn, long-reply'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
-/** Per-process MB: proportional set size plus its swapped share on Linux; elsewhere what Electron reports. */
-function processMb(metric) {
-  if (process.platform === 'linux') {
-    try {
-      const rollup = fs.readFileSync(`/proc/${String(metric.pid)}/smaps_rollup`, 'utf8')
-      const kb = (field) => Number(new RegExp(`^${field}:\\s+(\\d+)`, 'm').exec(rollup)?.[1] ?? 0)
-      return (kb('Pss') + kb('SwapPss')) / 1024
-    } catch {
-      // The process exited between the listing and the read.
-      return 0
-    }
+/** Proportional set size plus swapped share, or null when the process can't be read (gone or not ours to read). */
+function linuxProcessMb(pid) {
+  try {
+    const rollup = fs.readFileSync(`/proc/${String(pid)}/smaps_rollup`, 'utf8')
+    const kb = (field) =>
+      Number(new RegExp(`^${field}:\\s+(\\d+)`, 'm').exec(rollup)?.[1] ?? Number.NaN)
+    const mb = (kb('Pss') + (kb('SwapPss') || 0)) / 1024
+    return Number.isFinite(mb) ? mb : null
+  } catch {
+    return null
   }
-  return (metric.privateKb ?? metric.workingSetKb) / 1024
 }
 
 /**
- * Every Orca process (main, renderers, GPU, utility) after a GC and a memory-pressure signal, as the lowest
- * total of 12 samples over a minute, with that sample's split by process type.
+ * Orca's Node children Electron doesn't list (the terminal daemon that hosts chat relays, the plugin host, the
+ * session scanner): descendants of main or the copy's daemon running the same Electron binary, so agents,
+ * shells and git are left out.
  */
-async function sampleAppMb(electronApp, page) {
+function linuxNodeChildren(mainPid, daemonPids, listed) {
+  const exe = (pid) => {
+    try {
+      return fs.readlinkSync(`/proc/${String(pid)}/exe`)
+    } catch {
+      return null
+    }
+  }
+  const electronExe = exe(mainPid)
+  const children = new Map()
+  for (const entry of fs.readdirSync('/proc')) {
+    if (!/^\d+$/.test(entry)) {
+      continue
+    }
+    try {
+      // The command name can hold spaces and parens, so the parent pid is read after its closing paren.
+      const stat = fs.readFileSync(`/proc/${entry}/stat`, 'utf8')
+      const ppid = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1])
+      children.set(ppid, [...(children.get(ppid) ?? []), Number(entry)])
+    } catch {}
+  }
+  const found = new Set(daemonPids)
+  const queue = [mainPid, ...daemonPids]
+  while (queue.length > 0) {
+    for (const child of children.get(queue.shift()) ?? []) {
+      if (!found.has(child) && exe(child) === electronExe) {
+        found.add(child)
+        queue.push(child)
+      }
+    }
+  }
+  return [...found].filter((pid) => !listed.has(pid))
+}
+
+/**
+ * Every Orca process (main, renderers, GPU, utility, and on Linux its Node children) after a GC and a
+ * memory-pressure signal, as the lowest total of 12 samples over a minute, with that sample's split by type.
+ * A sample with an unreadable process is dropped rather than counted low.
+ */
+async function sampleAppMb(electronApp, page, userDataDir) {
   const cdp = await page.context().newCDPSession(page)
   try {
     await cdp.send('HeapProfiler.collectGarbage')
@@ -61,27 +99,44 @@ async function sampleAppMb(electronApp, page) {
   }
   await sleep(RELEASE_WAIT_MS)
   let lowest = null
+  let dropped = 0
   const deadline = Date.now() + SAMPLE_WINDOW_MS
   while (Date.now() < deadline) {
-    const metrics = await electronApp.evaluate(({ app }) =>
-      app.getAppMetrics().map((metric) => ({
+    const { mainPid, metrics } = await electronApp.evaluate(({ app }) => ({
+      mainPid: process.pid,
+      metrics: app.getAppMetrics().map((metric) => ({
         pid: metric.pid,
         type: metric.type,
-        privateKb: metric.memory.privateBytes ?? null,
         workingSetKb: metric.memory.workingSetSize
       }))
-    )
+    }))
+    const processes = metrics.map(({ pid, type, workingSetKb }) => ({ pid, type, workingSetKb }))
+    if (process.platform === 'linux') {
+      const listed = new Set(processes.map(({ pid }) => pid))
+      for (const pid of linuxNodeChildren(mainPid, readDaemonPids(userDataDir), listed)) {
+        processes.push({ pid, type: 'Node' })
+      }
+    }
     const byType = {}
     let total = 0
-    for (const metric of metrics) {
-      const mb = processMb(metric)
-      byType[metric.type] = (byType[metric.type] ?? 0) + mb
+    let unreadable = false
+    for (const entry of processes) {
+      const mb =
+        process.platform === 'linux' ? linuxProcessMb(entry.pid) : entry.workingSetKb / 1024
+      if (mb === null) {
+        unreadable = true
+        break
+      }
+      byType[entry.type] = (byType[entry.type] ?? 0) + mb
       total += mb
     }
-    if (lowest === null || total < lowest.totalMb) {
+    if (unreadable) {
+      dropped += 1
+    } else if (lowest === null || total < lowest.totalMb) {
       lowest = {
         totalMb: Math.round(total),
-        processes: metrics.length,
+        processes: processes.length,
+        mainPid,
         byType: Object.fromEntries(
           Object.entries(byType).map(([type, mb]) => [type, Math.round(mb)])
         )
@@ -89,7 +144,7 @@ async function sampleAppMb(electronApp, page) {
     }
     await sleep(SAMPLE_EVERY_MS)
   }
-  return lowest
+  return lowest === null ? null : { ...lowest, droppedSamples: dropped }
 }
 
 /** Shows the chat's workspace and its tab, as a click in the sidebar and tab strip does. */
@@ -183,7 +238,14 @@ export async function appMemorySoakOnce({
   copyProfile(seedDir, userDataDir)
   const stub = writeClaudeStub(path.join(runDir, 'stub'), repoRoot)
   const label = `soak-${arm}-${sha.slice(0, 11)}`
-  const result = { arm, sha, soakHours: options.soakHours, checkpoints: [], incomplete: [] }
+  const result = {
+    arm,
+    sha,
+    platform: process.platform,
+    soakHours: options.soakHours,
+    checkpoints: [],
+    incomplete: []
+  }
   const copy = await launchCopy({
     buildDir,
     runDir,
@@ -240,11 +302,21 @@ export async function appMemorySoakOnce({
       }
       return true
     }
+    // A renderer reload or a main restart resets memory, so a reading across one would hide growth.
+    const pageOrigin = () => copy.page.evaluate(() => performance.timeOrigin)
     const checkpoint = async (name) => {
       await sleep(options.chatSettleMs)
-      const reading = await sampleAppMb(copy.app, copy.page)
-      result.checkpoints.push({ name, at: Date.now(), ...reading })
+      const reading = await sampleAppMb(copy.app, copy.page, userDataDir)
+      const origin = await pageOrigin()
+      result.checkpoints.push({ name, at: Date.now(), origin, ...reading })
       console.log(`[fleet-gate] ${label} ${name}: ${JSON.stringify(reading)}`)
+      if (reading === null) {
+        result.incomplete.push(`soak: no readable memory sample at ${name}`)
+      } else if (result.baseline && reading.mainPid !== result.baseline.mainPid) {
+        result.incomplete.push(`soak: main restarted before ${name}`)
+      } else if (result.baselineOrigin !== undefined && origin !== result.baselineOrigin) {
+        result.incomplete.push(`soak: the window reloaded before ${name}`)
+      }
       return reading
     }
 
@@ -256,11 +328,16 @@ export async function appMemorySoakOnce({
       await sleep(2_000)
     }
     result.baseline = await checkpoint('10 chats')
+    result.baselineOrigin = await pageOrigin()
+    if (result.baseline === null) {
+      return result
+    }
     if (!(await start(SOAK_HIGH - SOAK_LOW, SOAK_LOW))) {
       return result
     }
     const soakStart = Date.now()
-    const soakEnd = soakStart + options.soakHours * 3_600_000
+    // Checkpoints pause the turns, so their time is added back: --soak-hours is hours of load.
+    let soakEnd = soakStart + options.soakHours * 3_600_000
     let nextCheckpoint = Date.now() + CHECKPOINT_EVERY_MS
     const counts = { turns: 0, sendMissed: 0, showMissed: 0 }
     while (Date.now() < soakEnd) {
@@ -270,7 +347,9 @@ export async function appMemorySoakOnce({
       counts.sendMissed += (await sendTurn(copy.page, session.sessionId, SOAK_PROMPT)) ? 0 : 1
       counts.turns += 1
       if (Date.now() >= nextCheckpoint && Date.now() < soakEnd) {
+        const paused = Date.now()
         await checkpoint(`${String(Math.round((Date.now() - soakStart) / 60_000))} min`)
+        soakEnd += Date.now() - paused
         nextCheckpoint = Date.now() + CHECKPOINT_EVERY_MS
       }
       await sleep(Math.max(0, tickStart + TURN_EVERY_MS - Date.now()))
@@ -287,7 +366,27 @@ export async function appMemorySoakOnce({
     if (!(await waitIdle(SOAK_HIGH))) {
       return result
     }
+    // Accepted sends prove nothing on their own: count the soak turns the agents actually received.
+    const inputs = stub.launchLog.replace(/\.jsonl$/, '-inputs.jsonl')
+    const received = fs.existsSync(inputs)
+      ? fs
+          .readFileSync(inputs, 'utf8')
+          .split('\n')
+          .filter((line) => line.includes(SOAK_PROMPT)).length
+      : 0
+    result.received = received
+    const expected = SOAK_HIGH + counts.turns
+    if (received < expected * (1 - MAX_MISSED_SHARE)) {
+      result.incomplete.push(
+        `soak: agents received ${String(received)} of ${String(expected)} turns`
+      )
+    }
     result.end = await checkpoint('end')
+    const bound = Math.max(result.baseline.totalMb * MAX_GROWTH_SHARE, MIN_GROWTH_BOUND_MB)
+    // Memory falling past the bound means a reading was wrong, not that the app shrank.
+    if (result.end !== null && result.end.totalMb - result.baseline.totalMb < -bound) {
+      result.incomplete.push('soak: memory fell below the baseline, so a reading was wrong')
+    }
     const live = liveChatCount(stub.launchLog)
     if (live < SOAK_HIGH) {
       result.incomplete.push(`soak: ${String(live)} of ${String(SOAK_HIGH)} chats alive at the end`)
@@ -300,6 +399,15 @@ export async function appMemorySoakOnce({
   return result
 }
 
+/** One soak; a failed step reports INCOMPLETE instead of losing what the gate measured before it. */
+export function appMemorySoakSafe(args) {
+  return appMemorySoakOnce(args).catch((error) => ({
+    arm: args.arm,
+    soakHours: args.options.soakHours,
+    incomplete: [`soak: ${String(error?.message ?? error)}`]
+  }))
+}
+
 export function appMemorySoakRows(results) {
   const run = results.find((entry) => entry.arm === 'new')
   if (!run) {
@@ -308,11 +416,9 @@ export function appMemorySoakRows(results) {
   const baseline = run.baseline?.totalMb
   const end = run.end?.totalMb
   const growth = typeof baseline === 'number' && typeof end === 'number' ? end - baseline : null
-  const bound =
-    typeof baseline === 'number'
-      ? Math.max(baseline * MAX_GROWTH_SHARE, MIN_GROWTH_BOUND_MB)
-      : MIN_GROWTH_BOUND_MB
-  const judged = growth !== null && run.incomplete.length === 0
+  const bound = Math.max((baseline ?? 0) * MAX_GROWTH_SHARE, MIN_GROWTH_BOUND_MB)
+  // Off Linux the reading is resident memory without Orca's Node children, so it is shown but not judged.
+  const judged = growth !== null && run.incomplete.length === 0 && run.platform === 'linux'
   return [
     {
       scenario: 'soak',

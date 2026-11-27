@@ -26,7 +26,7 @@ import { hotPathChanges, isHotPath } from './fleet-gate-hot-paths.mjs'
 import { installMainProbeIn, resetMainProbe, snapshotMainProbe } from './fleet-gate-main-probe.mjs'
 import { installRendererProbe } from './fleet-gate-renderer-probe.mjs'
 import { burstRows, compareRuns, formatTable, windowMetrics } from './fleet-gate-report.mjs'
-import { appMemorySoakOnce, appMemorySoakRows } from './fleet-gate-app-memory-soak.mjs'
+import { appMemorySoakRows, appMemorySoakSafe } from './fleet-gate-app-memory-soak.mjs'
 import { chatMemoryOnce, chatMemoryRows } from './fleet-gate-chat-memory.mjs'
 import {
   BURST_CHATS,
@@ -546,7 +546,7 @@ async function main() {
   const soak = []
   if (options.scenarios.includes('app-memory-soak')) {
     soak.push(
-      await appMemorySoakOnce({
+      await appMemorySoakSafe({
         launchCopy,
         arm: 'new',
         sha: shas.new,
@@ -556,10 +556,7 @@ async function main() {
         repoRoot,
         options,
         runDir: path.join(runsRoot, 'soak-new')
-      }).catch((error) => ({
-        arm: 'new',
-        incomplete: [`soak: ${String(error?.message ?? error)}`]
-      }))
+      })
     )
   }
   const census = runs.find((entry) => entry.census)?.census
