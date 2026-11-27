@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
-import { Session } from 'node:inspector'
+import type { HeapProfiler } from 'node:inspector'
+import { Session } from 'node:inspector/promises'
 import type { CrashReportDetailValue } from '../../shared/crash-reporting/crash-reporting'
 
 /**
@@ -19,8 +20,7 @@ const SIZE_WALK_BUDGET = 2_000
 const MB = 2 ** 20
 
 type Details = Record<string, CrashReportDetailValue>
-type CallFrame = { functionName: string; url: string; lineNumber: number }
-type ProfileNode = { id: number; selfSize: number; callFrame: CallFrame; children: ProfileNode[] }
+type ProfileNode = HeapProfiler.SamplingHeapProfileNode
 type ChannelTally = { calls: number; bytes: number }
 type InvokeHandler = (...args: unknown[]) => unknown
 
@@ -38,24 +38,22 @@ export async function sampleMainAllocations(
   let stopIpcTally: (() => Map<string, ChannelTally>) | null = null
   try {
     session.connect()
-    await post(session, 'HeapProfiler.enable')
-    await post(session, 'HeapProfiler.startSampling', {
+    await session.post('HeapProfiler.enable')
+    const sampling = {
       samplingInterval: SAMPLING_INTERVAL_BYTES,
       // Bursts that are freed again (stringify, journal reads) matter as much as retained ones.
       includeObjectsCollectedByMajorGC: true,
       includeObjectsCollectedByMinorGC: true
-    })
+    }
+    await session.post('HeapProfiler.startSampling', sampling)
     stopIpcTally = startIpcTally()
     await new Promise((resolve) => setTimeout(resolve, windowMs).unref())
     const channels = stopIpcTally()
     stopIpcTally = null
-    const { profile } = (await post(session, 'HeapProfiler.stopSampling')) as {
-      profile: { head: ProfileNode; samples: unknown[] }
-    }
+    const { profile } = await session.post('HeapProfiler.stopSampling')
     return {
       allocationWindowMs: windowMs,
       allocationWindowHeapGrowthMB: Math.round(process.memoryUsage().heapUsed / MB - heapBeforeMB),
-      allocationSamples: profile.samples.length,
       ...summarizeAllocationProfile(profile.head),
       ...summarizeIpcTally(channels)
     }
@@ -72,14 +70,8 @@ export async function sampleMainAllocations(
   }
 }
 
-function post(session: Session, method: string, params?: object): Promise<unknown> {
-  return new Promise((resolve, reject) =>
-    session.post(method, params, (error, result) => (error ? reject(error) : resolve(result)))
-  )
-}
-
 export function summarizeAllocationProfile(head: ProfileNode): Details {
-  const parents = new Map<number, ProfileNode>()
+  const parents = new Map<ProfileNode, ProfileNode>()
   const nodes: ProfileNode[] = []
   const pending = [head]
   let totalBytes = 0
@@ -88,7 +80,7 @@ export function summarizeAllocationProfile(head: ProfileNode): Details {
     nodes.push(node)
     totalBytes += node.selfSize
     for (const child of node.children) {
-      parents.set(child.id, node)
+      parents.set(child, node)
       pending.push(child)
     }
   }
@@ -102,7 +94,7 @@ export function summarizeAllocationProfile(head: ProfileNode): Details {
       for (
         let at: ProfileNode | undefined = node;
         at && at !== head && frames.length < STACK_FRAMES;
-        at = parents.get(at.id)
+        at = parents.get(at)
       ) {
         frames.push(formatFrame(at.callFrame))
       }
@@ -113,7 +105,7 @@ export function summarizeAllocationProfile(head: ProfileNode): Details {
 }
 
 /** Basename only: install paths can hold the user's home directory. */
-function formatFrame(frame: CallFrame): string {
+function formatFrame(frame: ProfileNode['callFrame']): string {
   const file = frame.url.split(/[?#]/)[0].split(/[/\\]/).pop() ?? ''
   const safeFile = /^[\w.-]{1,60}$/.test(file) ? file : file ? '?' : ''
   const name = (frame.functionName || '(anonymous)').slice(0, 60)
@@ -123,44 +115,45 @@ function formatFrame(frame: CallFrame): string {
 /** Wraps handlers only for the window; Electron reads its invoke map directly, so values are swapped. */
 function startIpcTally(): () => Map<string, ChannelTally> {
   const tally = new Map<string, ChannelTally>()
-  const count = (channel: unknown, payload: unknown): void => {
+  const count = (channel: unknown, payload: unknown, calls = 1): void => {
     const key = safeChannel(channel)
     const entry = tally.get(key) ?? { calls: 0, bytes: 0 }
-    entry.calls += 1
+    entry.calls += calls
     entry.bytes += approxBytes(payload)
     tally.set(key, entry)
   }
-  const target = ipcMain as unknown as {
-    _invokeHandlers?: Map<string, InvokeHandler>
-    emit: (channel: string | symbol, ...args: unknown[]) => boolean
-  }
-  const handlers = target._invokeHandlers instanceof Map ? target._invokeHandlers : null
-  const wrapped = new Map<string, { original: InvokeHandler; wrapper: InvokeHandler }>()
+  const invokeHandlers: unknown = Reflect.get(ipcMain, '_invokeHandlers')
+  const handlers: Map<unknown, unknown> | null =
+    invokeHandlers instanceof Map ? invokeHandlers : null
+  const wrapped = new Map<unknown, { original: unknown; wrapper: InvokeHandler }>()
   for (const [channel, original] of handlers ?? []) {
+    if (typeof original !== 'function') {
+      continue
+    }
     const wrapper: InvokeHandler = (event, ...args) => {
       count(channel, args)
-      const result = original(event, ...args)
+      const result: unknown = Reflect.apply(original, undefined, [event, ...args])
       if (result instanceof Promise) {
         void result.then(
-          (value) => count(channel, value),
+          (value) => count(channel, value, 0),
           () => {}
         )
       } else {
-        count(channel, result)
+        count(channel, result, 0)
       }
       return result
     }
     handlers!.set(channel, wrapper)
     wrapped.set(channel, { original, wrapper })
   }
-  const originalEmit = target.emit
+  const originalEmit = ipcMain.emit
   const emitWrapper = function (this: unknown, channel: string | symbol, ...args: unknown[]) {
     if (typeof channel === 'string') {
       count(channel, args.slice(1))
     }
     return originalEmit.call(this, channel, ...args)
   }
-  target.emit = emitWrapper
+  ipcMain.emit = emitWrapper
   let stopped = false
   return () => {
     if (!stopped) {
@@ -171,15 +164,15 @@ function startIpcTally(): () => Map<string, ChannelTally> {
           handlers!.set(channel, original)
         }
       }
-      if (target.emit === emitWrapper) {
-        target.emit = originalEmit
+      if (ipcMain.emit === emitWrapper) {
+        ipcMain.emit = originalEmit
       }
     }
     return tally
   }
 }
 
-/** Calls are counted per channel; a result counts as one more entry, so bytes cover both directions. */
+/** Bytes cover both a call's arguments and an invoke's result. */
 function summarizeIpcTally(tally: Map<string, ChannelTally>): Details {
   const details: Details = { ipcChannels: tally.size }
   ;[...tally]
@@ -187,7 +180,7 @@ function summarizeIpcTally(tally: Map<string, ChannelTally>): Details {
     .slice(0, TOP_CHANNELS)
     .forEach(([channel, entry], index) => {
       details[`ipc_${index + 1}_channel`] = channel
-      details[`ipc_${index + 1}_events`] = entry.calls
+      details[`ipc_${index + 1}_calls`] = entry.calls
       details[`ipc_${index + 1}_kb`] = Math.round(entry.bytes / 1024)
     })
   return details
@@ -217,7 +210,7 @@ export function approxBytes(value: unknown): number {
     } else if (item && typeof item === 'object') {
       for (const key in item) {
         bytes += key.length
-        pending.push((item as Record<string, unknown>)[key])
+        pending.push(Reflect.get(item, key))
         if (pending.length > budget) {
           break
         }

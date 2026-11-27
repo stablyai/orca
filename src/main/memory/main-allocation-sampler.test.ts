@@ -1,11 +1,16 @@
+import type { HeapProfiler } from 'node:inspector'
 import { expect, it } from 'vitest'
 import { summarizeAllocationProfile } from './main-allocation-sampler'
 
 it('keeps only function names and script basenames in allocation stacks', () => {
-  const frame = (id: number, functionName: string, url: string, children: unknown[] = []) => ({
-    id,
-    selfSize: id * 1024 * 1024,
-    callFrame: { functionName, url, lineNumber: 9 },
+  const frame = (
+    mb: number,
+    functionName: string,
+    url: string,
+    children: HeapProfiler.SamplingHeapProfileNode[] = []
+  ): HeapProfiler.SamplingHeapProfileNode => ({
+    selfSize: mb * 1024 * 1024,
+    callFrame: { functionName, url, scriptId: '1', lineNumber: 9, columnNumber: 0 },
     children
   })
   const head = frame(0, '(root)', '', [
@@ -14,7 +19,7 @@ it('keeps only function names and script basenames in allocation stacks', () => 
       frame(3, '', '/home/alice/notes/alice plan.js')
     ])
   ])
-  const details = summarizeAllocationProfile(head as never)
+  const details = summarizeAllocationProfile(head)
   expect(details).toEqual({
     allocationSampledMB: 6,
     alloc_1_kb: 3072,
