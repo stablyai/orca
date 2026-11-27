@@ -1,6 +1,6 @@
 import type { HeapProfiler } from 'node:inspector'
 import { expect, it } from 'vitest'
-import { summarizeAllocationProfile } from './main-allocation-sampler'
+import { approxBytes, summarizeAllocationProfile } from './main-allocation-sampler'
 
 it('keeps only function names and script basenames in allocation stacks', () => {
   const frame = (
@@ -30,4 +30,12 @@ it('keeps only function names and script basenames in allocation stacks', () => 
     alloc_3_stack: 'saveSession index.js:10'
   })
   expect(JSON.stringify(details)).not.toContain('alice')
+})
+
+it('sizes arrays without running their getters', () => {
+  let reads = 0
+  const payload = ['abcd']
+  Object.defineProperty(payload, 1, { enumerable: true, get: () => ++reads })
+  expect(approxBytes(payload)).toBe(4)
+  expect(reads).toBe(0)
 })

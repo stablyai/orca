@@ -238,7 +238,14 @@ export function approxBytes(value: unknown): number {
     } else if (item instanceof ArrayBuffer) {
       bytes += item.byteLength
     } else if (Array.isArray(item)) {
-      pending.push(...item.slice(0, Math.max(0, budget - pending.length)))
+      const end = Math.min(item.length, Math.max(0, budget - pending.length))
+      for (let index = 0; index < end; index += 1) {
+        // A caller-owned array (a send or invoke result) may have getters; reading one could change what is sent.
+        const slot = Object.getOwnPropertyDescriptor(item, index)
+        if (slot && 'value' in slot) {
+          pending.push(slot.value)
+        }
+      }
     }
   }
   return bytes
