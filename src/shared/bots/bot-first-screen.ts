@@ -19,6 +19,30 @@ export type NativeChatFirstScreen = {
   refused: BotSetupRefusal | null
 }
 
+// Each row's answer, kept per row object: while the kickoff turn streams, only the row whose text
+// moved is read again.
+const firstScreenFacts = new WeakMap<NativeChatMessage, { spoke: boolean; imported: boolean }>()
+
+function firstScreenFactsOf(message: NativeChatMessage): { spoke: boolean; imported: boolean } {
+  let facts = firstScreenFacts.get(message)
+  if (!facts) {
+    facts = {
+      spoke:
+        message.role === 'assistant' &&
+        message.blocks.some((block) => block.type === 'text' && block.text.trim() !== ''),
+      imported: message.blocks.some(
+        (block) =>
+          block.type === 'text' &&
+          nativeChatBotCardsOf(block).some(
+            (card) => card.kind === 'importPlan' || card.kind === 'importDone'
+          )
+      )
+    }
+    firstScreenFacts.set(message, facts)
+  }
+  return facts
+}
+
 /** Orca's kickoff turn until the bot speaks, or the owner writes; null for any other chat. */
 export function nativeChatFirstScreen(
   messages: readonly NativeChatMessage[],
@@ -31,21 +55,9 @@ export function nativeChatFirstScreen(
   if (notice === -1 || turn.some((message) => message.role === 'user')) {
     return null
   }
-  const spoke = turn.some(
-    (message) =>
-      message.role === 'assistant' &&
-      message.blocks.some((block) => block.type === 'text' && block.text.trim() !== '')
-  )
+  const spoke = turn.some((message) => firstScreenFactsOf(message).spoke)
   // An import's plan is the bot's answer, and waits on the owner: the screen gives way to it at once.
-  const imported = turn.some((message) =>
-    message.blocks.some(
-      (block) =>
-        block.type === 'text' &&
-        nativeChatBotCardsOf(block).some(
-          (card) => card.kind === 'importPlan' || card.kind === 'importDone'
-        )
-    )
-  )
+  const imported = turn.some((message) => firstScreenFactsOf(message).imported)
   if (imported) {
     return null
   }

@@ -1,3 +1,4 @@
+import type { WatchWorktreeResult } from '../../../shared/file-watch/watch-worktree-result'
 import type { PathExistenceResult } from '../../../shared/file-access/path-existence-batch'
 import { ipcRenderer, webUtils } from 'electron'
 import type {
@@ -192,8 +193,11 @@ export const fsApi = {
     wakeWslDistro?: boolean
   }): Promise<{ size: number; isDirectory: boolean; mtime: number }> =>
     ipcRenderer.invoke('fs:stat', args),
-  hasSymlinkBelowRoot: (args: { rootPath: string; path: string }): Promise<boolean> =>
-    ipcRenderer.invoke('fs:hasSymlinkBelowRoot', args),
+  findSymlinkBelowRoot: (args: {
+    rootPath: string
+    path: string
+    which: 'first' | 'deepest'
+  }): Promise<string | null> => ipcRenderer.invoke('fs:findSymlinkBelowRoot', args),
   pathsExist: (args: {
     filePaths: string[]
     connectionId?: string
@@ -261,8 +265,10 @@ export const fsApi = {
     args: AgentSessionAttachmentUploadTarget & { paths: string[] }
   ): Promise<AgentSessionAttachmentPathUploadResult> =>
     ipcRenderer.invoke('fs:uploadPathsToAgentSessionAttachments', args),
-  watchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
-    ipcRenderer.invoke('fs:watchWorktree', args),
+  watchWorktree: (args: {
+    worktreePath: string
+    connectionId?: string
+  }): Promise<WatchWorktreeResult | undefined> => ipcRenderer.invoke('fs:watchWorktree', args),
   unwatchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
     ipcRenderer.invoke('fs:unwatchWorktree', args),
   onFsChanged: (callback: (payload: FsChangedPayload) => void): (() => void) => {

@@ -4,6 +4,7 @@
 
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import { restartActivityWaitsOnPerson } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
 import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
@@ -20,11 +21,13 @@ const DISMISSED_LIMIT = 500
 /** Bounds the file below its read limit; an unreadable ledger would stop every automatic continuation. */
 const PASSED_LIMIT = 1000
 
-const ledgerSchema = z.object({
-  taken: z.record(z.string(), z.array(z.object({ at: z.number(), work: z.string() }))),
-  passed: z.array(z.string()),
-  dismissed: z.array(z.string()).default([])
-})
+const ledgerSchema = lazyZodSchema(() =>
+  z.object({
+    taken: z.record(z.string(), z.array(z.object({ at: z.number(), work: z.string() }))),
+    passed: z.array(z.string()),
+    dismissed: z.array(z.string()).default([])
+  })
+)
 
 export type AutomaticRestartLedger = z.infer<typeof ledgerSchema>
 

@@ -9,9 +9,11 @@ import { Pressable, Text, View, type HostInstance, type TextInputInstance } from
 import { WifiOff, X } from 'lucide-react-native'
 import type { BotItem, BotItemCommentSkill } from '../../../../src/shared/bots/bot-items'
 import type { BotItemWaitingLine } from '../../../../src/shared/bots/bot-item-question-answers'
+import type { BotItemReplyMarkState } from '../../../../src/shared/bots/bot-item-reply-target'
 import { folderWorkspaceKey } from '../../../../src/shared/workspace/identity/workspace-scope'
 import { SkillRefLimitError } from '../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { sentBotItemCommentSkills } from '../../../../src/shared/bots/bot-item-comment-skills'
+import type { BotItemHeldAnswersLimit } from '../../../../src/shared/bots/bot-item-held-answers'
 import { MAX_SKILL_REFS } from '../../../../src/shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../../src/shared/skills/capabilities/skill-install-capability'
 import { MobileNativeChatComposerSuggestions } from '../../session/native-chat/composer/menus/MobileNativeChatComposerMenu'
@@ -62,6 +64,7 @@ export function MobileBotItemCommentBox({
   online,
   hostName,
   question = null,
+  replyMark,
   attachTo,
   onSend,
   showToast,
@@ -77,16 +80,18 @@ export function MobileBotItemCommentBox({
   /** The item's chat, which photos upload to; null when its comments take none. */
   attachTo: string | null
   /** Sends the comment, with the waiting line "Replying to" names (null once hidden): it shows in
-   *  Activity until the host's read does. */
+   *  Activity until the host's read does. A limit the held answers would pass with it refuses it. */
   onSend: (
     text: string,
     paths: readonly string[],
     replyingTo: string | null,
     skills: readonly BotItemCommentSkill[]
-  ) => void
+  ) => BotItemHeldAnswersLimit | null
   showToast: (message: string) => void
   /** The agent's question waiting on the owner (what is sent is the reply). */
   question?: BotItemWaitingQuestion | null
+  /** Its "Replying to" closed (×) on that question, kept with the draft as on the desktop. */
+  replyMark: BotItemReplyMarkState
   /** The field, which the page focuses for a quote. */
   fieldRef: RefObject<TextInputInstance | null>
 }) {
@@ -95,9 +100,7 @@ export function MobileBotItemCommentBox({
   const mic = useContext(BotItemCommentMicContext)
   const key = botItemCommentDraftKey(hostId, item.uid)
   const [text, setTextState] = useState(() => drafts.get(key) ?? '')
-  // The question whose "Replying to" the owner closed.
-  const [unmarked, setUnmarked] = useState<string | null>(null)
-  const quote = question && unmarked !== question.id ? question : null
+  const quote = question && !replyMark.hidden ? question : null
   const [error, setError] = useState<string | null>(null)
   const cancelRef = useRef<HostInstance>(null)
   const { uid } = item
@@ -205,12 +208,29 @@ export function MobileBotItemCommentBox({
         )
         return
       }
-      onSend(
+      const limit = onSend(
         text.trim(),
         photos.images.map((image) => image.path),
         quote?.id ?? null,
         skills
       )
+      // Refused, the comment stays in the box, saying why.
+      if (limit) {
+        setError(
+          limit.kind === 'images'
+            ? t(
+                'bots.items.ask.heldImagesLimit',
+                'Your answers go as one comment, which takes up to {{max}} photos. Remove some and try again.',
+                { max: limit.max }
+              )
+            : t(
+                'bots.items.ask.heldSkillsLimit',
+                'Your answers go as one comment, which takes up to {{max}} skills. Remove some and try again.',
+                { max: limit.max }
+              )
+        )
+        return
+      }
       pickedSkills.delete(key)
       setText('')
       photos.clearSent(photos.images.map((image) => image.id))
@@ -241,7 +261,7 @@ export function MobileBotItemCommentBox({
             accessibilityRole="button"
             accessibilityLabel={t('bots.items.comment.hideReplyingTo', 'Hide')}
             hitSlop={10}
-            onPress={() => setUnmarked(quote.id)}
+            onPress={replyMark.hide}
             style={({ pressed }) => pressed && pressedStyle}
           >
             <X size={13} color={colors.textMuted} />

@@ -132,8 +132,16 @@ function DropdownMenuItem({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
   inset?: boolean
   /** `launch`: rows in the shared agent menu; at least 36px tall in either density.
-   *  `sortable`: compact drag-handle rows that lift while `data-dragging` is set. */
-  variant?: 'default' | 'destructive' | 'launch' | 'sortable' | 'create'
+   *  `sortable`: compact drag-handle rows that lift while `data-dragging` is set.
+   *  `account-row` / `account-row-action`: an account row and its inline action; the row's wrapper draws one fill for both. */
+  variant?:
+    | 'default'
+    | 'destructive'
+    | 'launch'
+    | 'sortable'
+    | 'create'
+    | 'account-row'
+    | 'account-row-action'
   density?: MenuDensity
 }) {
   const rowDensity = useMenuDensity(density)
@@ -145,6 +153,8 @@ function DropdownMenuItem({
       className={cn(
         menuItemVariants({ density: rowDensity, menu: 'dropdown' }),
         'data-[variant=create]:rounded-[7px] data-[variant=create]:px-2 data-[variant=create]:py-1.5 data-[variant=create]:text-[12px] data-[variant=create]:leading-5 data-[variant=create]:font-medium',
+        'data-[variant=account-row]:min-h-9 data-[variant=account-row]:rounded-[8px] data-[variant=account-row]:focus:bg-transparent data-[variant=account-row]:data-[current=true]:bg-transparent dark:data-[variant=account-row]:focus:bg-transparent',
+        'data-[variant=account-row-action]:gap-1 data-[variant=account-row-action]:px-2.5 data-[variant=account-row-action]:text-xs data-[variant=account-row-action]:font-medium data-[variant=account-row-action]:focus:bg-transparent dark:data-[variant=account-row-action]:focus:bg-transparent',
         className
       )}
       onPointerMove={keepFocusWhileMenuCloses(onPointerMove)}

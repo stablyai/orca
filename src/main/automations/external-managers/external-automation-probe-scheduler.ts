@@ -12,7 +12,7 @@ export function isExternalAutomationProbeCancelled(error: unknown): boolean {
 }
 
 export type ExternalAutomationProbeJob<T> = {
-  /** Concurrent requests with the same owner/provider key share one probe. */
+  /** Concurrent requests with the same key share one probe. */
   key: string
   scopeKey: string
   run: (signal: AbortSignal) => Promise<T>
@@ -54,6 +54,11 @@ export class ExternalAutomationProbeScheduler {
     }
     const controller = new AbortController()
     let settled!: Promise<T>
+    const releaseShared = (): void => {
+      if (this.shared.get(job.key) === settled) {
+        this.shared.delete(job.key)
+      }
+    }
     const promise = new Promise<T>((resolve, reject) => {
       const entry: QueuedProbe = {
         key: job.key,
@@ -65,7 +70,10 @@ export class ExternalAutomationProbeScheduler {
           // Reject on abort even if the provider ignores the signal.
           controller.signal.addEventListener(
             'abort',
-            () => reject(new ExternalAutomationProbeCancelledError()),
+            () => {
+              releaseShared()
+              reject(new ExternalAutomationProbeCancelledError())
+            },
             { once: true }
           )
           void job
@@ -73,9 +81,7 @@ export class ExternalAutomationProbeScheduler {
             .then(resolve, reject)
             .finally(() => {
               this.active.delete(entry)
-              if (this.shared.get(entry.key) === settled) {
-                this.shared.delete(entry.key)
-              }
+              releaseShared()
               this.pump()
             })
         }

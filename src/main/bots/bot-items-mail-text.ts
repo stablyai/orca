@@ -1,6 +1,7 @@
 // What item mail tells the bot (Orca's voice, workflow only). The owner's and other chats' words are
 // fenced, so a comment can't pose as Orca's instructions; each mail names its event for `show --after`.
 import { fenceQuotedText, inlineUntrusted } from '../../shared/quoted-text-fence'
+import { agentSessionAttachmentUploadIdOfPath } from '../../shared/agent-session/agent-session-attachments'
 import { BOT_QUIET_MARKER } from '../../shared/bot-quiet-result'
 import {
   botItemCommentImages,
@@ -10,7 +11,10 @@ import {
   type BotItemCommentSkill,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
-import { offsetSentImagePromptMarkers } from '../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
+import {
+  offsetSentImagePromptMarkers,
+  remapSentImagePromptMarkers
+} from '../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { statusOf } from './bot-items-rows'
 import type { BotItemEventRecord, BotItemRecord } from './bot-items-schema'
 
@@ -48,15 +52,24 @@ type Change = { event: BotItemEventRecord; item: BotItemRecord }
 export function botItemChangeMail(
   changes: readonly Change[]
 ): { subject: string; body: string } | null {
-  const actor = changes[0]?.event.actor
+  const lead =
+    changes.find(({ event }) => event.actor.kind === 'owner') ??
+    changes.find(
+      ({ event, item }) => event.actor.kind === 'bot' && event.actor.botId !== item.ownerBotId
+    ) ??
+    changes.find(({ event }) => event.actor.kind === 'bot') ??
+    changes[0]
+  const actor = lead?.event.actor
   const who =
     actor?.kind === 'owner'
       ? 'Your owner'
       : actor?.kind === 'bot'
-        ? actor.botId === changes[0]?.item.ownerBotId
+        ? actor.botId === lead?.item.ownerBotId
           ? 'Your other chat'
           : 'Another agent'
-        : null
+        : actor?.kind === 'orca'
+          ? 'Orca'
+          : null
   const lines = changes.flatMap((change) => {
     const what = changeWords(change.event)
     return what ? [{ ...change, what }] : []
@@ -84,7 +97,7 @@ export function botItemChangeMail(
   const answeredOn = commentedOn(true)
   // The owner's answer or other comment on a Needs you item moves it to In progress with it.
   const movedWith = (on: Set<string>, event: BotItemEventRecord, item: BotItemRecord) =>
-    actor?.kind === 'owner' &&
+    event.actor.kind === 'owner' &&
     on.has(item.uid) &&
     event.kind === 'status' &&
     statusOf(event.data.from) === 'needs_you' &&
@@ -129,7 +142,7 @@ export function botItemChangeMail(
 function commentWords(event: BotItemEventRecord, imagesBefore: number): string {
   const images = botItemCommentImages(event.data)
   const text = offsetSentImagePromptMarkers(str(event.data.text) ?? '', images.length, imagesBefore)
-  const said = text.trim() || images.length === 0 ? `:\n${fenceQuotedText(text)}` : ''
+  const said = text.trim() ? `:\n${fenceQuotedText(text)}` : ''
   return `${said}${skippedNote(event.data.skipped)}${imagesNote(images, imagesBefore)}${skillsNote(botItemCommentSkills(event.data))}`
 }
 
@@ -185,6 +198,31 @@ export function botItemMailImages(changes: readonly { event: BotItemEventRecord 
   return changes.flatMap(({ event }) =>
     event.kind === 'commented' ? botItemCommentImages(event.data).map(({ path }) => path) : []
   )
+}
+
+export function botItemMailWithoutExpiredImages(
+  changes: readonly Change[],
+  expired: ReadonlySet<string>
+): Change[] {
+  return changes.map(({ event, item }) => {
+    if (event.kind !== 'commented') {
+      return { event, item }
+    }
+    const kept: BotItemCommentImage[] = []
+    const positions = botItemCommentImages(event.data).map((image) => {
+      const uploadId = agentSessionAttachmentUploadIdOfPath(image.path)
+      if (uploadId && expired.has(uploadId)) {
+        return null
+      }
+      kept.push(image)
+      return kept.length
+    })
+    if (kept.length === positions.length) {
+      return { event, item }
+    }
+    const text = remapSentImagePromptMarkers(str(event.data.text) ?? '', positions)
+    return { event: { ...event, data: { ...event.data, text, images: kept } }, item }
+  })
 }
 
 function changeWords(event: BotItemEventRecord): string | null {

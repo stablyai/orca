@@ -18,7 +18,11 @@ import {
 } from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { acpListingDependsOnRelease, acpModelListingForRelease } from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
-import { createAcpAgentConnection } from '../process/acp-agent-connection'
+import {
+  createAcpAgentConnection,
+  type AcpAgentConnectionOptions
+} from '../process/acp-agent-connection'
+import { acpClientInfo } from '../launch/acp-client-info'
 import { acpRunFolder } from '../launch/acp-private-temp'
 import { supportsAcpStructuredLocation } from '../session/acp-structured-location-support'
 import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
@@ -36,7 +40,10 @@ import {
 export type AcpAtRestCommandDeps = AcpLaunchInvocationDeps & {
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   probeVersion?: AgentCliVersionReader
-  connect?: (launch: ProviderProcessLaunch) => AcpDiscoveryConnection
+  connect?: (
+    launch: ProviderProcessLaunch,
+    options: AcpAgentConnectionOptions
+  ) => AcpDiscoveryConnection
   resolveVisualsSkill?: typeof resolveNativeChatVisualsSkillLocation
   logger?: StructuredAgentSessionLogger
   isWindowsProcessStartTimeAvailable?: () => boolean
@@ -178,16 +185,19 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               folderArgs = listing.sessionFolderArgs(folder.path)
               check()
             }
-            const connection = (deps.connect ?? createAcpAgentConnection)({
-              ...launch,
-              env: { ...launch.env, ...skill?.env },
-              args: [
-                ...invocation.prefixArgs,
-                ...spec.args({ fullAccess: false, pluginDirs: skill?.pluginDirs ?? [] }),
-                ...(skill?.args ?? []),
-                ...folderArgs
-              ]
-            })
+            const connection = (deps.connect ?? createAcpAgentConnection)(
+              {
+                ...launch,
+                env: { ...launch.env, ...skill?.env },
+                args: [
+                  ...invocation.prefixArgs,
+                  ...spec.args({ fullAccess: false, pluginDirs: skill?.pluginDirs ?? [] }),
+                  ...(skill?.args ?? []),
+                  ...folderArgs
+                ]
+              },
+              { clientInfo: acpClientInfo(spec) }
+            )
             owned = connection
             unclosed.add(connection)
             const discovery = runAcpSessionDiscovery(connection, signal, (checkSession) =>

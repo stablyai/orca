@@ -24,6 +24,12 @@ export const LOOK_AROUND_REFUSAL =
  *  (a tidy-up, whose inputs are all in its prompt) gets no tools, hooks or Orca commands at all. */
 export type ReadOnlySessionMode = 'look-around' | 'reply-only'
 
+/** A reply-only run needs no tools at all, so every agent runs it tool-free: launches that can't
+ *  turn tools off refuse every request and are stopped at their first tool call. */
+export function toolFreeSession(mode: ReadOnlySessionMode | null): boolean {
+  return mode === 'reply-only'
+}
+
 export const REPLY_ONLY_REFUSAL = 'A tidy-up only replies: everything it needs is in its prompt.'
 
 /** Read-only commands, by program then subcommand words; the subcommand must come first. */

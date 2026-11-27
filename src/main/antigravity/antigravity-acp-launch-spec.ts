@@ -10,9 +10,7 @@ import {
   antigravityChatRunsOnAgyHome,
   onAntigravityAgyOrcaHomeChanged
 } from './antigravity-chat-route'
-import { ORCA_ACP_CLIENT_INFO } from '../acp/launch/acp-client-info'
 import { windowsLocalAppDataBinDirectories } from '../acp/launch/acp-windows-install-directories'
-import type { Implementation } from '../acp/generated/acp-protocol.generated'
 import {
   ANTIGRAVITY_ACP_DIALECT,
   ANTIGRAVITY_AGY_ORCA_HOME_DIALECT
@@ -33,13 +31,10 @@ import {
 import { ANTIGRAVITY_TRANSCRIPT_IMPORT } from './antigravity-transcript-import'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { deliverAntigravityInstructions } from '../acp/launch/acp-instructions'
-import {
-  compareAppVersions,
-  isValidAppVersion
-} from '../../shared/app-lifecycle/identity/app-version'
 import { scrubAgyOrcaHomeEnvironment } from './antigravity-agy-orca-home-environment'
 import { ANTIGRAVITY_LAUNCH_GATE } from './antigravity-chat-account'
 import { discardAgyListingSession } from './agy-listing-session-discard'
+import { AGY_ACP_CLIENT_INFO } from './antigravity-acp-runtime-probe'
 import {
   AGY_SKIP_PERMISSIONS_FLAG,
   ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION,
@@ -58,16 +53,6 @@ const ANTIGRAVITY_SESSION_HISTORY: StructuredAgentSessionHistory = {
       targetless: [],
       markers: ['--conversation', '-conversation']
     })
-}
-
-const ZED_CLIENT_INFO: Implementation = { name: 'zed', version: '0.0.0' }
-
-// agy 1.5.1 and later offer every model to any client. Orca requires a newer agy, so `zed` is only
-// the fallback when agy's version is unknown.
-function agyClientInfo(version: string | null): Implementation {
-  return version && isValidAppVersion(version) && compareAppVersions(version, '1.5.1') >= 0
-    ? ORCA_ACP_CLIENT_INFO
-    : ZED_CLIENT_INFO
 }
 
 // An alternate-case updater flag on Windows would shadow the configured uppercase entry. A
@@ -89,11 +74,14 @@ function scrubAgyHostEnvironment(
   return removed
 }
 
-// A session lists what a chat is offered; `agy models` can return a shorter fallback list.
+// A session lists what a chat is offered; `agy models` can return a shorter fallback list. Its
+// session request reads agy's login (a locked Linux keyring raises an unlock prompt), so only an
+// Antigravity picker starts it, never startup or settings warm-up.
 const AGY_SESSION_MODEL_DISCOVERY: AcpSessionModelDiscovery = {
   kind: 'session',
   listingNamesConfiguredModel: false,
   inPrivateFolder: true,
+  listsOnDemand: true,
   discardSession: discardAgyListingSession
 }
 
@@ -106,7 +94,7 @@ const ANTIGRAVITY_AGY_LAUNCH_SPEC = {
   // without one they get launch's cliMissing refusal.
   managedCopyAllowed: (settings) => settings.antigravityManagedAgyEnabled !== false,
   args: ({ fullAccess }) => ['acp', ...(fullAccess ? [AGY_SKIP_PERMISSIONS_FLAG] : [])],
-  clientInfo: agyClientInfo,
+  clientInfo: AGY_ACP_CLIENT_INFO,
   // Match terminal and quota launches: a background updater steals focus on Windows (#27390)
   // and can replace agy mid-probe.
   env: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },

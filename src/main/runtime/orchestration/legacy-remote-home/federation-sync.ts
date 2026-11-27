@@ -140,6 +140,7 @@ async function syncFederatedDispatchPages(
         type: message.type,
         priority: message.priority,
         threadId: message.threadId ?? undefined,
+        replyTo: message.replyTo,
         payload: bindCoordinatorMutationPayload(message.type, message.payload, dispatchId)
       },
       lifecycle: parseFederatedLifecycle(message, item.message_id, dispatchId, dispatch.task_id)
