@@ -9,6 +9,7 @@ import {
   resolveVisibleTaskProvider
 } from '../../../../../shared/work-items/task-providers'
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { ItsaplanIcon } from '@/components/icons/ItsaplanIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
@@ -92,6 +93,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  itsaplan: {
+    get label() {
+      return translate('auto.components.settings.TasksPane.itsaplanLabel', "It's a Plan")
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.itsaplanDescription',
+        "Connect a self-hosted It's a Plan and show it in Tasks."
+      )
+    },
+    Icon: ({ className }) => <ItsaplanIcon className={className} />
   }
 }
 

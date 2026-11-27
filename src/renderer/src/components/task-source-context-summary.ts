@@ -62,13 +62,14 @@ export function getTaskSourceContextSummary(
   args:
     | ({ provider: Extract<TaskProvider, 'github' | 'gitlab'> } & RepoBackedTaskSourceSummaryArgs)
     | {
-        provider: Extract<TaskProvider, 'linear' | 'jira'>
+        provider: Extract<TaskProvider, 'linear' | 'jira' | 'itsaplan'>
         providerLabel: string
         hostAvailability?: readonly TaskSourceHostAvailability[]
         hostLabelById?: HostLabelLookup
         accountHostId?: ExecutionHostScope | null
         linearWorkspaceName?: string | null
         jiraSiteName?: string | null
+        itsaplanInstanceName?: string | null
       },
   t?: Translate
 ): TaskSourceContextSummary {
@@ -92,6 +93,17 @@ export function getTaskSourceContextSummary(
         args.providerLabel,
         {
           accountLabel: args.jiraSiteName,
+          accountHostId: args.accountHostId,
+          hostLabelById: args.hostLabelById,
+          hostAvailability: args.hostAvailability
+        },
+        t
+      )
+    case 'itsaplan':
+      return getAccountBackedTaskSourceSummary(
+        args.providerLabel,
+        {
+          accountLabel: args.itsaplanInstanceName,
           accountHostId: args.accountHostId,
           hostLabelById: args.hostLabelById,
           hostAvailability: args.hostAvailability
@@ -239,6 +251,8 @@ function getProviderIdentityLabel(
       return identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
       return identity.siteUrl ?? identity.siteId ?? null
+    case 'itsaplan':
+      return identity.projectRef ?? identity.instanceId ?? null
   }
 }
 

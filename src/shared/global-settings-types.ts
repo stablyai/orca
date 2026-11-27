@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: GlobalSettings is the single settings shape; one migration flag per provider cannot move elsewhere. */
 import type { AgentLaunchChoices } from './agent-launch/choices/agent-launch-choices'
 import type { TelemetrySettings } from './telemetry-settings-types'
 import type { BrowserProfileScope } from './browser/profiles/browser-profile-scope'
@@ -357,6 +358,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   visibleTaskProviders: TaskProvider[]
   /** Why: one-shot guard to make Jira visible for existing profiles once, without re-adding after a later opt-out. */
   visibleTaskProvidersDefaultedForJira: boolean
+  /** Why: one-shot guard to make It's a Plan visible for existing profiles once, without re-adding after a later opt-out. */
+  visibleTaskProvidersDefaultedForItsaplan: boolean
   /** Repo selection: null includes all present/future repos; arrays freeze a subset, dropping ineligible ids on load and treating empty as null. */
   defaultRepoSelection: string[] | null
   /** Linear team selection: null includes all; arrays freeze selected team IDs, matching defaultRepoSelection. */
