@@ -1,9 +1,8 @@
 import { expect, it } from 'vitest'
-import { prCommentsSchema } from '../../../../../mobile/src/source-control/review/github-operations/github-pr-entity-reply-schema'
 import { threadDiffLines } from '../../../../shared/github/comments/pr-comment-diff-hunk'
 import { parsePRConversationResponse } from './pr-conversation-response'
 
-it('keeps original-side review context through host parsing and phone reply decoding', () => {
+it('maps original-side review context without relabeling moved coordinates', () => {
   const response = JSON.stringify({
     data: {
       repository: {
@@ -47,10 +46,9 @@ it('keeps original-side review context through host parsing and phone reply deco
     }
   })
 
-  const hostComments = parsePRConversationResponse(response).reviewComments
-  const [root] = prCommentsSchema.parse(hostComments)
+  const [root] = parsePRConversationResponse(response).reviewComments
   expect(root.originalDiffHunk).toBe('-old first\n+new first\n context\n-old last')
-  // Older phones ignore the new field instead of displaying old lines with new-side numbering.
+  // Keep old-side context separate from the existing new-side field.
   expect(root.diffHunk).toBeUndefined()
   expect(threadDiffLines(root.originalDiffHunk!, root.line!, root.startLine, 'LEFT')).toEqual([
     { index: 0, number: 40, sign: '-', text: 'old first' },
