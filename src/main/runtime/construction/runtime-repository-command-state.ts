@@ -7,10 +7,12 @@ import {
   LazyRuntimeGitLabQueryCommands
 } from '../integrations/gitlab/lazy-runtime-gitlab-commands'
 import { recordGitLabProjectRecent } from '../../gitlab/projects/gitlab-project-recents'
-import { RuntimeGitHubReviewQueryCommands } from '../integrations/github/runtime-github-review-query-commands'
-import { RuntimeGitHubReviewMutationCommands } from '../integrations/github/runtime-github-review-mutation-commands'
-import { RuntimeGitHubIssueCommentCommands } from '../integrations/github/runtime-github-issue-comment-commands'
-import { RuntimeGitHubProjectCommands } from '../integrations/github/runtime-github-project-commands'
+import {
+  LazyRuntimeGitHubIssueCommentCommands,
+  LazyRuntimeGitHubProjectCommands,
+  LazyRuntimeGitHubReviewMutationCommands,
+  LazyRuntimeGitHubReviewQueryCommands
+} from '../integrations/github/lazy-runtime-github-review-commands'
 import { RuntimeRepositoryHooksCommands } from '../repositories/runtime-repository-hooks-commands'
 import { RuntimeRepositoryIssueCommand } from '../repositories/runtime-repository-issue-command'
 import { ClientHostedBrowserRowPublisher } from '../browser/client-pages/client-hosted-browser-row-publication'
@@ -141,23 +143,23 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
 
-  protected readonly gitHubReviewQueries = new RuntimeGitHubReviewQueryCommands({
+  protected readonly gitHubReviewQueries = new LazyRuntimeGitHubReviewQueryCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
 
-  protected readonly gitHubReviewMutations = new RuntimeGitHubReviewMutationCommands({
+  protected readonly gitHubReviewMutations = new LazyRuntimeGitHubReviewMutationCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
 
-  protected readonly gitHubIssueComments = new RuntimeGitHubIssueCommentCommands({
+  protected readonly gitHubIssueComments = new LazyRuntimeGitHubIssueCommentCommands({
     resolveTarget: (args) => this.resolveHostedReviewTarget(args),
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
 
-  protected readonly gitHubProjectCommands = new RuntimeGitHubProjectCommands()
+  protected readonly gitHubProjectCommands = new LazyRuntimeGitHubProjectCommands()
 
   protected readonly repositoryHooks = new RuntimeRepositoryHooksCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
