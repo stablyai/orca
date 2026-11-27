@@ -1,12 +1,13 @@
 // An ask of several questions, all on one card: a quick reply, or the box's Enter on the line its
-// "Replying to" names, picks the line's answer and sends nothing; Send posts the picks as one
+// "Replying to" names, picks the line's answer and sends nothing (a picked line reopened is open to
+// it too, its Enter replacing the pick); Send posts the picks as one
 // comment, so the agent wakes once. Picks are held on this device
 // (the comment box's draft store, so a reload keeps them) until the host has the comment: one the host
 // refused for a newer question stays to recover. A held answer keeps the files and skills it was
 // sent with (src/shared/bots/bot-item-held-answers). Box words with no line named post at once and
 // take the picks along. What each send answers is kept on its pending entry
 // (`intent`), so its lines show as sent and can't be sent twice, whatever its words.
-import { useCallback, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { Bot } from '../../../../../shared/bot-types'
 import type {
@@ -62,10 +63,14 @@ export type BotItemQuestionSteps = {
   picks: readonly (BotItemHeldAnswer | null)[]
   /** The lines still open to a pick: no comment answered them, and no send of them is on its way. */
   lines: readonly number[]
-  /** A quick reply: picks it, swaps it for the line's other pick, or clears it when picked. */
+  /** A quick reply: picks it, or swaps it for the line's other pick; picked again, it stays. */
   pick: (index: number, words: string) => void
   /** Editing a line in the comment box takes it over: its pick goes, and the box answers it. */
   bind: (index: number) => void
+  /** The picked line shown open to change: the box answers it, its pick kept until a new answer. */
+  reopened: number | null
+  /** Reopen a picked line; its pick again, or the box's Enter, folds it back. */
+  reopen: (index: number) => void
   /** Send: the picks post as one comment. `empty`: none picked; `none`: no line is open. */
   send: () => 'sent' | 'empty' | 'none'
   /** No line open, and a send of them on its way (not failed): Send reads as sending until the read. */
@@ -163,7 +168,10 @@ export function useBotItemQuestionSteps(
   )
   // A line another client answered meanwhile keeps that answer; its pick is dropped.
   const picks = shape.decisions.map((_, at) => (lines.includes(at) ? (held[at] ?? null) : null))
-  const eligible = (index: number): boolean => lines.includes(index) && !picks[index]
+  const [reopenedAt, setReopenedAt] = useState<{ askId: string; index: number } | null>(null)
+  const reopened = reopenedAt?.askId === askId && picks[reopenedAt.index] ? reopenedAt.index : null
+  const eligible = (index: number): boolean =>
+    lines.includes(index) && (!picks[index] || index === reopened)
   // The line the box's draft answers, taken when its first words arrived (typed, pasted, dictated or
   // restored alike: the box's draft store says). A one-question ask's line goes once its answer is
   // on its way.
@@ -194,15 +202,18 @@ export function useBotItemQuestionSteps(
     send(text, paths, askId, undefined, skills, skipped, { askId, shape, answers, rideAlongText })
   const pick = useLatestHandler((index: number, words: string) => {
     if (lines.includes(index)) {
-      hold(
-        stored(
-          index,
-          botItemHeldAnswerIsReply(held[index], words) ? null : botItemHeldAnswer(words)
-        )
-      )
+      setReopenedAt(null)
+      if (!botItemHeldAnswerIsReply(held[index], words)) {
+        hold(stored(index, botItemHeldAnswer(words)))
+      }
     }
   })
+  const reopen = useLatestHandler((index: number) => {
+    setReopenedAt({ askId, index })
+    target.bind(`${askId}:${index}`)
+  })
   const bind = useLatestHandler((index: number) => {
+    setReopenedAt(null)
     target.bind(`${askId}:${index}`)
     if (held[index]) {
       hold(stored(index, null))
@@ -262,6 +273,7 @@ export function useBotItemQuestionSteps(
         // Words, files and skills alike wait like a pick: the line folds to them, the box names the
         // next open line, and Send posts them with the rest.
         hold(stored(line, answer))
+        setReopenedAt(null)
       } else if (picks.some(Boolean)) {
         // The picks name their lines; the words ride along answering none.
         post(botItemHeldAnswersComment(shape, picks, answer))
@@ -287,6 +299,8 @@ export function useBotItemQuestionSteps(
         lines,
         pick,
         bind,
+        reopened,
+        reopen,
         send: sendPicks,
         sending:
           lines.length === 0 &&

@@ -137,18 +137,37 @@ it('posts nothing on a pick, the last one too; Send posts every pick as one comm
   expect(posted[0]!.intent?.answers).toEqual(['Yes', 'No'])
 })
 
-it('swaps a pick for another, and clears it when picked again', () => {
-  const { hook } = steps('swap')
+it('swaps a pick for another, and keeps it when picked again', () => {
+  const { hook, posted } = steps('swap')
   act(() => hook.result.current.steps!.pick(0, 'Yes'))
   act(() => hook.result.current.steps!.pick(0, 'No'))
   expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual(['No', null])
+  act(() => hook.result.current.steps!.reopen(0))
   act(() => hook.result.current.steps!.pick(0, 'No'))
-  expect(hook.result.current.steps!.picks).toEqual([null, null])
-  let outcome = ''
-  act(() => {
-    outcome = hook.result.current.steps!.send()
-  })
-  expect(outcome).toBe('empty')
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual(['No', null])
+  expect(hook.result.current.steps!.reopened).toBeNull()
+  act(() => hook.result.current.steps!.send())
+  expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → No`])
+})
+
+it('answers a reopened line from the box: Enter replaces its pick, and Send posts once', () => {
+  const uid = 'reopen-typed'
+  const { hook, posted } = steps(uid)
+  act(() => hook.result.current.steps!.pick(0, 'Yes'))
+  act(() => hook.result.current.steps!.pick(1, 'No'))
+  act(() => hook.result.current.steps!.reopen(0))
+  expect(hook.result.current.waitingLine?.line).toBe(HOSTS)
+  const words = 'only the internal ones'
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: words }, 'immediate')
+  )
+  expect(hook.result.current.waitingLine?.line).toBe(HOSTS)
+  act(() => hook.result.current.fromBox(words, [], hook.result.current.waitingLine!.id))
+  expect(posted).toEqual([])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([words, 'No'])
+  expect(hook.result.current.steps!.reopened).toBeNull()
+  act(() => hook.result.current.steps!.send())
+  expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → ${words}\n${GO} → No`])
 })
 
 it("holds a typed answer as its line's pick, and names the next open line", () => {
@@ -196,16 +215,16 @@ it('holds an answer with images, files and skills like a pick; Send posts them a
   expect(posted[0]!.skills).toEqual([skill])
 })
 
-it('replaces an image answer whose words match a quick reply with the reply alone, never clearing it', () => {
+it('replaces an image answer whose words match a quick reply with the reply alone', () => {
   const { hook } = steps('replace-image')
   act(() => hook.result.current.fromBox('Yes [Image #1]', ['/tmp/a.png'], `e2:0`))
   act(() => hook.result.current.fromBox('Yes', ['/tmp/b.png'], `e2:1`))
   // Line 1 holds "Yes" with an image: picking the Yes reply replaces it, as for typed words.
   act(() => hook.result.current.steps!.pick(1, 'Yes'))
   expect(hook.result.current.steps!.picks[1]).toEqual(botItemHeldAnswer('Yes'))
-  // The reply alone, picked again, clears.
+  // The reply alone, picked again, stays.
   act(() => hook.result.current.steps!.pick(1, 'Yes'))
-  expect(hook.result.current.steps!.picks[1]).toBeNull()
+  expect(hook.result.current.steps!.picks[1]).toEqual(botItemHeldAnswer('Yes'))
 })
 
 it('keeps in the box an answer whose images the held ones would take past one comment', () => {
