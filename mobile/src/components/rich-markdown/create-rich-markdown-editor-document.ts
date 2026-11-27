@@ -10,7 +10,7 @@ import { startEditorSurface } from './editing/editor-surface'
 import { startHostBridge } from './document/host-bridge'
 import { dismissKeyboard } from './editing/keyboard-dismiss'
 import { runCommand } from './editing/editor-commands'
-import { startKeyboardInset, stopKeyboardInset } from './editing/keyboard-inset'
+import { startFormatState, stopFormatState } from './editing/editor-format-state'
 import type { RichMarkdownEditorScope } from './document/document-scope'
 import type {
   RichMarkdownEditorDocument,
@@ -49,7 +49,7 @@ export function startRichMarkdownEditorDocument(scope: RichMarkdownEditorScope) 
   try {
     startEditorSurface(scope)
     startEditorListeners(scope)
-    startKeyboardInset(scope)
+    startFormatState(scope)
     startHostBridge(scope)
   } catch (error) {
     stopRichMarkdownEditorDocument(scope)
@@ -60,7 +60,7 @@ export function startRichMarkdownEditorDocument(scope: RichMarkdownEditorScope) 
 // Stop in reverse dependency order; cancel timer last, after listeners that could schedule it.
 export function stopRichMarkdownEditorDocument(scope: RichMarkdownEditorScope) {
   scope.stopped = true
-  stopKeyboardInset(scope)
+  stopFormatState(scope)
   stopEditorListeners(scope)
   stopEditorContent(scope)
 }

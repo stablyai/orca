@@ -29,6 +29,10 @@ export type RuntimeEnvironmentSubscribeArgs = {
   expectedEnvironmentPairingRevision?: number
   expectedEnvironmentRuntimeId?: string | null
   setupResult?: 'crew'
+  /** An abortable call that is a poll: no use of an idle host, never a wake (#46567). */
+  background?: boolean
+  /** The user asked for it: it may wake a WSL host Orca stopped idle. */
+  wake?: boolean
 }
 
 export function assertCrewSubscriptionInputs(

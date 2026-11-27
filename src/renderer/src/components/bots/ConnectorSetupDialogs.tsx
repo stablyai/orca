@@ -1,15 +1,13 @@
-import React, { useState } from 'react'
+import React, { Suspense, useState } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { botTarget } from '@/lib/bot-hosts'
 import { toast } from 'sonner'
 import { readBotGitHub } from '@/lib/bot-github-state'
-import { openGitHubInstall } from '@/lib/bot-github-install-record'
+import { addGitHubAccess, openGitHubInstall } from '@/lib/bot-github-install-record'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import type { BotConnectorId } from './AddConnectorDialog'
 import { openGitHubInstallPage } from './github/github-install-page'
-import { BotLinearSetupDialog } from './linear/BotLinearSetupDialog'
-import { BotSlackSetupDialog } from './slack/BotSlackSetupDialog'
-import { useTurnOnBotGoogle } from './google/use-turn-on-bot-google'
 import { refreshGoogle } from './google/google-connect-client'
-import { GoogleHostChoiceDialog } from './google/GoogleHostChoiceDialog'
 import {
   answerGoogleSetup,
   startGoogleSetupInChat
@@ -19,14 +17,35 @@ import { handOffConnectorSetup } from './connector-setup-handoff'
 import type { Bot } from '../../../../shared/bot-types'
 import { googleBotConnectState } from '../../../../shared/google/google-bot-connect-state'
 
-/** Each account connector's own setup, as Add connector opens it; `start` opens one. */
+const BotLinearSetupDialog = lazy(() =>
+  import('./linear/BotLinearSetupDialog').then((module) => ({
+    default: module.BotLinearSetupDialog
+  }))
+)
+const BotSlackSetupDialog = lazy(() =>
+  import('./slack/BotSlackSetupDialog').then((module) => ({
+    default: module.BotSlackSetupDialog
+  }))
+)
+const GoogleAccountsDialog = lazy(() =>
+  import('./google/GoogleAccountsChoice').then((module) => ({
+    default: module.GoogleAccountsDialog
+  }))
+)
+const GoogleHostChoiceDialog = lazy(() =>
+  import('./google/GoogleHostChoiceDialog').then((module) => ({
+    default: module.GoogleHostChoiceDialog
+  }))
+)
+
+/** Each account connector's own setup, as Add connector opens it; `start` opens one. `workspace`:
+ *  the org or workspace asked for, e.g. by a chat card. */
 export function useConnectorSetup(bot: Bot): {
-  start: (connector: BotConnectorId) => void
+  start: (connector: BotConnectorId, options?: { workspace?: string }) => void
   dialogs: React.JSX.Element
 } {
-  const [setupOpen, setSetupOpen] = useState<BotConnectorId | null>(null)
-  const turnOnGoogle = useTurnOnBotGoogle()
-  const start = (connector: BotConnectorId): void => {
+  const [setupOpen, setSetupOpen] = useState<BotConnectorId | 'google-accounts' | null>(null)
+  const start = (connector: BotConnectorId, options: { workspace?: string } = {}): void => {
     if (handOffConnectorSetup(bot, connector)) {
       return
     }
@@ -41,7 +60,7 @@ export function useConnectorSetup(bot: Bot): {
               }).host
             : 'no-app'
         if (host === 'connected') {
-          void turnOnGoogle(bot)
+          setSetupOpen('google-accounts')
         } else if (host === 'no-app') {
           setSetupOpen('google')
         } else {
@@ -54,9 +73,15 @@ export function useConnectorSetup(bot: Bot): {
       return
     }
     const github = readBotGitHub(bot.hostId)
-    // Another org: GitHub's install page, where the owner picks it; its row shows once installed.
+    // Another org: a GitHub sign-in reads what the login picked reaches, and GitHub's install page
+    // opens only for an org it can't. A paired web client can't start a sign-in: the page alone.
     if (connector === 'github' && bot.github && github.status === 'ready') {
-      openGitHubInstallPage(bot, github.github.installUrl)
+      const installPage = () => void openGitHubInstallPage(bot, github.github.installUrl)
+      if (isPairedWebClientWindow()) {
+        installPage()
+      } else {
+        addGitHubAccess(bot, options.workspace, installPage)
+      }
       return
     }
     // Its own always-mounted dialog: minimized to the pill, it outlives this bot's page.
@@ -67,23 +92,36 @@ export function useConnectorSetup(bot: Bot): {
     setSetupOpen(connector)
   }
   const dialogs = (
-    <>
-      <BotSlackSetupDialog
-        bot={bot}
-        open={setupOpen === 'slack'}
-        onOpenChange={(next) => setSetupOpen(next ? 'slack' : null)}
-      />
-      <BotLinearSetupDialog
-        bot={bot}
-        open={setupOpen === 'linear'}
-        onOpenChange={(next) => setSetupOpen(next ? 'linear' : null)}
-      />
-      <GoogleHostChoiceDialog
-        bot={bot}
-        open={setupOpen === 'google'}
-        onOpenChange={(next) => setSetupOpen(next ? 'google' : null)}
-      />
-    </>
+    <Suspense fallback={null}>
+      {setupOpen === 'slack' ? (
+        <BotSlackSetupDialog
+          bot={bot}
+          open
+          onOpenChange={(next) => setSetupOpen(next ? 'slack' : null)}
+        />
+      ) : null}
+      {setupOpen === 'linear' ? (
+        <BotLinearSetupDialog
+          bot={bot}
+          open
+          onOpenChange={(next) => setSetupOpen(next ? 'linear' : null)}
+        />
+      ) : null}
+      {setupOpen === 'google-accounts' ? (
+        <GoogleAccountsDialog
+          bot={bot}
+          open
+          onOpenChange={(next) => setSetupOpen(next ? 'google-accounts' : null)}
+        />
+      ) : null}
+      {setupOpen === 'google' ? (
+        <GoogleHostChoiceDialog
+          bot={bot}
+          open
+          onOpenChange={(next) => setSetupOpen(next ? 'google' : null)}
+        />
+      ) : null}
+    </Suspense>
   )
   return { start, dialogs }
 }

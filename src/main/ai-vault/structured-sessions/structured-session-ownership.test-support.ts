@@ -26,9 +26,10 @@ export function installOwnership(
     handle?: AgentSessionProviderHandle
     accountHome?: AgentSessionRecord['accountHome']
     acquiredAccount?: AgentSessionRecord['acquiredAccount']
+    lastTurn?: AgentSessionRecord['lastTurn']
   } = {}
 ): void {
-  const { handle, accountHome, acquiredAccount, ...ownershipOverrides } = overrides
+  const { handle, accountHome, acquiredAccount, lastTurn, ...ownershipOverrides } = overrides
   const ownership: Omit<StructuredProviderSessionOwnership, 'role' | 'key'> = {
     sessionId: 'session-alpha',
     workspaceId: 'workspace-1',
@@ -62,7 +63,8 @@ export function installOwnership(
       }
     ],
     ...(ownership.conversationName ? { conversationName: ownership.conversationName } : {}),
-    ...(acquiredAccount === undefined ? {} : { acquiredAccount })
+    ...(acquiredAccount === undefined ? {} : { acquiredAccount }),
+    ...(lastTurn ? { lastTurn } : {})
   }
   const view = {
     ...agentSessionConversationView(record),
@@ -139,9 +141,12 @@ export function installChats(records: AgentSessionRecord[]) {
   const store = {
     hostId: 'local',
     getRecord: vi.fn((sessionId: string) => byId.get(sessionId) ?? null),
-    listConversations: vi.fn(() => records.map(agentSessionConversationView))
+    listConversations: vi.fn(() => records.map(agentSessionConversationView)),
+    conversationsKeyedBy: vi.fn((keys: AgentSessionConversationKeys, key: string) =>
+      records.map(agentSessionConversationView).filter((view) => keys(view).includes(key))
+    )
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`, `getRecord` and `hostId`; the rest of the host is never reached.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`, `conversationsKeyedBy`, `getRecord` and `hostId`; the rest of the host is never reached.
   setStructuredAgentSessionHost({ deps: { store } } as never)
   return store
 }

@@ -19,6 +19,7 @@ import { useBrowserNewTabLinkedItems } from './use-browser-new-tab-linked-items'
 import { useBrowserNewTabServers, type BrowserNewTabServers } from './use-browser-new-tab-servers'
 import { BrowserNewTabWorkspaceCard } from './browser-new-tab-workspace-card'
 import { BrowserImportHintButton } from '../assemble-chrome/profile-routing/BrowserImportHintButton'
+import type { BrowserClientHostedCookieImportPage } from '../assemble-chrome/profile-routing/use-browser-page-cookie-import'
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -37,14 +38,17 @@ export function BrowserNewTabPage({
   worktreeId,
   onOpenUrl,
   serversElsewhere = false,
-  importProfileId
+  importProfileId,
+  importClientHostedPage = null
 }: {
   worktreeId: string
   onOpenUrl: (url: string) => void
   /** This tab's page runs on another machine than the workspace's ports, so they open on theirs. */
   serversElsewhere?: boolean
-  /** Local session profile to import logins into; omitted where the session isn't local. */
+  /** Session profile to import logins into; omitted where the page has no import. */
   importProfileId?: string | null
+  /** Set on a server's page this desktop hosts, whose own jar the import fills. */
+  importClientHostedPage?: BrowserClientHostedCookieImportPage | null
 }): React.JSX.Element {
   const worktree = useWorktreeById(worktreeId)
   const repo = useRepoById(worktree?.repoId ?? null) ?? undefined
@@ -55,7 +59,9 @@ export function BrowserNewTabPage({
     openInPlace: !serversElsewhere
   }
   const importTarget =
-    importProfileId === undefined ? undefined : { profileId: importProfileId, worktreeId }
+    importProfileId === undefined
+      ? undefined
+      : { profileId: importProfileId, worktreeId, clientHostedPage: importClientHostedPage }
   return worktree ? (
     <BrowserNewTabWorktreePage
       worktree={worktree}
@@ -74,7 +80,11 @@ export function BrowserNewTabPage({
   )
 }
 
-type BrowserNewTabImportTarget = { profileId: string | null; worktreeId: string }
+type BrowserNewTabImportTarget = {
+  profileId: string | null
+  worktreeId: string
+  clientHostedPage: BrowserClientHostedCookieImportPage | null
+}
 
 function BrowserNewTabWorktreePage({
   worktree,
@@ -157,6 +167,7 @@ function BrowserNewTabPageLayout({
         <BrowserImportHintButton
           profileId={importTarget.profileId}
           worktreeId={importTarget.worktreeId}
+          clientHostedPage={importTarget.clientHostedPage}
         />
       </div>
     )

@@ -7,6 +7,7 @@ import { handleSourceControlCommitShortcut } from '../commit/commit-shortcut'
 import type { SourceControlFileListing } from '../listing/use-file-listing'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlConflictAbort } from '../sync/use-conflict-abort'
+import type { SourceControlRebaseContinue } from '../sync/use-rebase-continue'
 import type { SourceControlRemoteActionRunner } from '../sync/use-remote-action-runner'
 import type { SourceControlActionModel } from './use-action-model'
 import type { SourceControlHostedReviewCreation } from './use-hosted-review-creation'
@@ -17,6 +18,7 @@ export function useSourceControlActionDispatch({
   handleAbortMerge,
   handleAbortRebase,
   handleCommit,
+  handleContinueRebase,
   handleCreatePullRequest,
   handleStageAllPrimary,
   isCreatePrIntentInFlight,
@@ -32,6 +34,7 @@ export function useSourceControlActionDispatch({
   createPrHeaderAction: SourceControlActionModel['createPrHeaderAction']
   handleAbortMerge: SourceControlConflictAbort['handleAbortMerge']
   handleAbortRebase: SourceControlConflictAbort['handleAbortRebase']
+  handleContinueRebase: SourceControlRebaseContinue['handleContinueRebase']
   handleCommit: SourceControlCommitAction['handleCommit']
   handleCreatePullRequest: SourceControlHostedReviewCreation['handleCreatePullRequest']
   handleStageAllPrimary: SourceControlFileListing['handleStageAllPrimary']
@@ -66,6 +69,9 @@ export function useSourceControlActionDispatch({
         case 'abort_rebase':
           void handleAbortRebase()
           return
+        case 'continue_rebase':
+          void handleContinueRebase()
+          return
         case 'create_pr':
           void handleCreatePullRequest()
           return
@@ -88,6 +94,7 @@ export function useSourceControlActionDispatch({
       handleCreatePullRequest,
       handleAbortMerge,
       handleAbortRebase,
+      handleContinueRebase,
       isCreatingPr,
       isCreatePrIntentInFlight,
       prGenerating,

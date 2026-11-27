@@ -18,6 +18,7 @@ import {
   resolveHostGitHubCli
 } from './github-cli-host-fallback'
 import { execFileCaptureToTermination } from '../process-capture/exec-file-capture'
+import { withConfiguredProxyEnv } from '../../../network/configured-proxy-child-env'
 import { logHostedCliDeadlineKill } from './hosted-cli-deadline-log'
 import type { GitExecOptions } from '../git-exec-options'
 import { argsLookIdempotent } from './gh-idempotency'
@@ -199,7 +200,8 @@ export async function ghExecFileWithScopeAsync(
           encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
           maxBuffer: options.maxBuffer,
           timeout: timeoutMs,
-          env: nonInteractiveGhEnv(boundEnv ?? options.env),
+          // WSLENV is not extended, so wsl.exe-routed gh keeps the distro's proxy like WSL terminals.
+          env: nonInteractiveGhEnv(withConfiguredProxyEnv(boundEnv ?? options.env)),
           signal: options.signal,
           stdin: options.stdin,
           onChildTerminated: reportChildEnded,

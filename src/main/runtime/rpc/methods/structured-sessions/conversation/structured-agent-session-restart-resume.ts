@@ -18,6 +18,11 @@ import '../../../../../../shared/rpc-contract/structured-agent-session/structure
 import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
 import { structuredAgentsReadBy } from '../structured-agent-session-policy'
 import { restartRowsFor } from '../../../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-set'
+import {
+  continueRestartOffers,
+  dismissRestartOffers,
+  listRestartOffers
+} from './terminal-worker-restart-offer-rows'
 
 export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
   defineMethod({
@@ -29,7 +34,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
       const host = requireStructuredHost(ctx)
       const audience = structuredAgentsReadBy(ctx, host.knownAgentIds())
       return {
-        sessions: await host.restartResume.list(audience),
+        sessions: await listRestartOffers(ctx.runtime, host, audience),
         // Acted-on offers whose agent did not carry on. Optional on the wire; older clients ignore it.
         failed: await host.restartResume.listFailures(audience)
       }
@@ -45,14 +50,14 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
       const host = requireStructuredHost(ctx)
       // Offers this client was never shown stay for a client that can show them.
       const audience = structuredAgentsReadBy(ctx, host.knownAgentIds())
-      const dismissed = await host.restartResume.dismiss(params.sessionIds, audience)
+      const dismissed = await dismissRestartOffers(ctx.runtime, host, params.sessionIds, audience)
       if (params.sessionIds === undefined) {
         // Dismissal already removed everything this client sees; another read adds only a post-success failure point.
         return { dismissed, sessions: [], failed: [] }
       }
       return {
         dismissed,
-        sessions: await host.restartResume.list(audience),
+        sessions: await listRestartOffers(ctx.runtime, host, audience),
         failed: await host.restartResume.listFailures(audience)
       }
     }
@@ -65,7 +70,9 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     handler: async (params, ctx) => {
       await ensureStructuredHostInstalled(ctx)
       const host = requireStructuredHost(ctx)
-      return host.restartResume.continueAfterRestart(
+      return continueRestartOffers(
+        ctx.runtime,
+        host,
         params.sessionIds,
         structuredCallerFor(ctx).callerKey,
         structuredAgentsReadBy(ctx, host.knownAgentIds())
@@ -103,7 +110,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
         continuedSessionIds: [...continued],
         continued: answer.continued,
         ...(answer.skipped ? { skipped: answer.skipped } : {}),
-        sessions: await host.restartResume.list(audience),
+        sessions: await listRestartOffers(ctx.runtime, host, audience),
         failed: await host.restartResume.listFailures(audience)
       }
     }

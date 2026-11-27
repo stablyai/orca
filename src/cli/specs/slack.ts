@@ -52,7 +52,7 @@ export const SLACK_COMMAND_SPECS: CommandSpec[] = [
       AS_BOT,
       PLACE,
       '--limit is 1 to 100 (default 20). When older messages remain, the output ends with the --before ref that reads them.',
-      'A message lists its files by id; `read <message> --download <id>` saves one (up to 640 KB) to --out, or under its own name here.'
+      'A message lists its files by id; `read <message> --download <id>` saves one (up to 640 KB) to --out, or under its own name here (numbered when taken); open the path it prints.'
     ]
   },
   {
@@ -96,7 +96,7 @@ export const SLACK_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       AS_BOT,
       PLACE,
-      'The emoji is a common one (👀 ✅ 👍) or its :shortcode:. Reacting twice, or removing one that is gone, is not an error. On the message that woke you, `orca bot reply --react` needs no ref.'
+      'The emoji is a common one (👍 🎉) or its :shortcode:. Reacting twice, or removing one that is gone, is not an error. In the Slack thread that woke you, `orca bot reply --react` needs no ref; Orca manages 👀 and ✅ there, and a reaction that is your whole response ends with a final message of only NO_REPLY.'
     ]
   },
   {

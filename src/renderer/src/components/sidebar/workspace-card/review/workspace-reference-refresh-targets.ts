@@ -151,10 +151,15 @@ function referenceRefreshTargets(
         cadenceHost,
         intervalMs: reviewRefreshIntervalMs(intervalInput, cadence),
         foregroundIntervalMs: reviewRefreshIntervalMs(intervalInput, 'default'),
-        refresh: (_force, signal) =>
+        refresh: (_force, signal, intent) =>
           withTimeout(
             readWorkspaceReferenceDetails(
-              { ...request, admissionTier: selected ? 'interactive' : 'background' },
+              {
+                ...request,
+                admissionTier: selected ? 'interactive' : 'background',
+                // A timer's reread is a poll: no use of an idle WSL host (#46567).
+                background: intent === 'timer' || intent === 'retry' || undefined
+              },
               signal
             ).then(
               (data) =>

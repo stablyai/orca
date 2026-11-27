@@ -47,7 +47,8 @@ import {
 import { onOrcaCloudSessionInvalidated } from '../../orca-profiles/cloud-session/profile-cloud-session-invalidation'
 import {
   broadcastOrcaProfileAuthStatusChanged,
-  broadcastOrcaProfileSignInProgressChanged
+  broadcastOrcaProfileSignInProgressChanged,
+  broadcastTeamPolicyChanges
 } from './orca-profile-auth-status-broadcast'
 import {
   cancelOrcaCloudSignIn,
@@ -158,6 +159,7 @@ export function registerOrcaProfileHandlers(
 
   // Push background invalidation; re-entering onAuthMutation would loop into the relay coordinator that just failed.
   onOrcaCloudSessionInvalidated(broadcastOrcaProfileAuthStatusChanged)
+  broadcastTeamPolicyChanges()
   onOrcaCloudSignInProgressChanged(broadcastOrcaProfileSignInProgressChanged)
 
   ipcMain.handle(

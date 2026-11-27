@@ -59,7 +59,7 @@ import {
   type TerminalSpawnCommit
 } from '../terminal/lifecycle/terminal-run-facts'
 import type { TuiIdleEvidenceSource } from '../terminal/wait/tui-idle-evidence-source'
-import { hasTerminalCommandPainted } from '../terminal/input/terminal-command-paint'
+import { hasTerminalCommandPainted } from '../terminal/input/terminal-command-paint-record'
 import {
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
   TUI_IDLE_POLL_INTERVAL_MS,

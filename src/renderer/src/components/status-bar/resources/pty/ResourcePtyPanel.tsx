@@ -57,10 +57,10 @@ export function ResourcePtyPanel({
   const groups = useMemo(() => groupResourcePtyRows(rows), [rows])
   const selectableRows = useMemo(
     () =>
-      inventory.sessionsError
+      inventory.sessionsError || inventory.rereading
         ? EMPTY_PTY_ROWS
         : rows.filter((row) => canEndResourcePty(row) && !actions.ending.has(row.identity)),
-    [rows, inventory.sessionsError, actions.ending]
+    [rows, inventory.sessionsError, inventory.rereading, actions.ending]
   )
   const selection = useListMultiSelection({ items: selectableRows, getKey: ptyRowKey, getScope })
   const allSelected =
@@ -193,7 +193,7 @@ export function ResourcePtyPanel({
           groups={groups}
           scrollElement={scrollElement}
           observedAt={inventory.observedAt}
-          unverifiable={inventory.sessionsError}
+          unverifiable={inventory.sessionsError || inventory.rereading}
           ending={actions.ending}
           errors={actions.errors}
           selected={selection.selectedKeys}

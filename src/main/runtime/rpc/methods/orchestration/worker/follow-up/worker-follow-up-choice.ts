@@ -8,6 +8,7 @@ import { isStructuredWorkerHandle } from '../../../../../../../shared/orchestrat
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import {
+  assertWorkerFollowUpUnclaimed,
   readWorkerResumeSession,
   type WorkerResumeSession
 } from '../../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
@@ -15,11 +16,16 @@ import { OrchestrationError } from '../../../../../orchestration/orchestration-e
 import type { DispatchContextRow } from '../../../../../orchestration/db/orchestration-records'
 import type { WorkerTerminalResourceRow } from '../../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { getStructuredAgentSessionHost } from '../../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { resolveStructuredWorkerIdentity } from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import {
+  resolveStructuredWorkerIdentity,
+  structuredWorkerSession
+} from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import { refuseUnsettledWorkerTerminalRelease } from '../../../../../orchestration/db/worker-terminal/worker-terminal-transfer'
 import { earlierWork, parseStartOptions } from './worker-earlier-work'
 import {
   reopenWorkerChat,
   reopenWorkerTerminal,
+  workerChatTabVisible,
   type WorkerFollowUp
 } from './worker-follow-up-placement'
 import { inspectWorkerTerminal } from '../observation/worker-observation'
@@ -42,6 +48,7 @@ export type WorkerFollowUpPlacement = {
   /** Earlier task and report, for a fresh agent that cannot reopen the conversation. */
   earlierWork?: string
   reopen?: WorkerFollowUp['reopen']
+  retainedChat?: WorkerFollowUp['retainedChat']
 }
 
 export async function chooseWorkerFollowUpPlacement(
@@ -56,6 +63,13 @@ export async function chooseWorkerFollowUpPlacement(
   if (!worker || !worktreeId) {
     throw notRestartable(latest.id)
   }
+  const structured = !!found && isStructuredWorkerHandle(found.terminal_handle)
+  if (structured && !getStructuredAgentSessionHost()) {
+    await runtime.ensureStructuredAgentSessionHost()
+  }
+  assertWorkerFollowUpUnclaimed(db, latest.id)
+  // A tab that appears during lookup may belong to the user; only a previously open tab can be reused.
+  const wasOpen = structured && !released(found) && chatTabOpen(db, found)
   const workspace = await runtime.showManagedTerminalWorkspace(`id:${worktreeId}`).catch(() => null)
   if (!workspace) {
     throw new OrchestrationError(
@@ -65,17 +79,28 @@ export async function chooseWorkerFollowUpPlacement(
     )
   }
   const options = parseStartOptions(worker.start_options)
-  const resource = found && (await settledRelease(db, found))
-  if (resource && isStructuredWorkerHandle(resource.terminal_handle)) {
+  const resource = found && (releaseInProgress(found) ? await settledRelease(db, found) : found)
+  assertWorkerFollowUpUnclaimed(db, latest.id)
+  if (resource && structured) {
+    refuseUnsettledWorkerTerminalRelease(resource)
     const handle = resource.terminal_handle
-    return chatTabOpen(db, resource)
-      ? { delivery: 'follow_up', worktreeId, terminal: handle }
-      : {
-          delivery: 'reopened',
-          worktreeId,
-          ...(options.agent ? { agent: options.agent } : {}),
-          reopen: () => reopenWorkerChat(runtime, db, handle)
-        }
+    const retainedChat = { resourceId: found.id, ownerDispatchId: found.owner_dispatch_id, handle }
+    if (!released(resource) && wasOpen && chatTabOpen(db, resource)) {
+      return {
+        delivery: 'follow_up',
+        worktreeId,
+        terminal: handle,
+        ...(resource.ownership_state === 'owned' ? { retainedChat } : {})
+      }
+    }
+    return {
+      delivery: 'reopened',
+      worktreeId,
+      ...(options.agent ? { agent: options.agent } : {}),
+      ...(released(resource) || resource.ownership_state !== 'owned'
+        ? { reopen: () => reopenWorkerChat(runtime, db, handle, !released(resource)) }
+        : { retainedChat })
+    }
   }
   const open =
     resource && !released(resource)
@@ -157,7 +182,13 @@ async function releaseLeftoverShell(
   const requested = db.requestWorkerTerminalRelease(dispatchId)
   if (requested.disposition === 'requested') {
     release.requested(dispatchId)
-    await completeWorkerTerminalRelease({ runtime, db, dispatchId, resource: requested.resource })
+    await completeWorkerTerminalRelease({
+      runtime,
+      db,
+      dispatchId,
+      resource: requested.resource,
+      keepBound: true
+    })
   }
 }
 
@@ -168,11 +199,15 @@ async function settledRelease(
 ): Promise<WorkerTerminalResourceRow> {
   const deadline = Date.now() + RELEASE_SETTLE_WAIT_MS
   let current = resource
-  while (['requested', 'releasing'].includes(current.release_state) && Date.now() < deadline) {
+  while (releaseInProgress(current) && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 250))
     current = db.getWorkerTerminalResource(resource.id) ?? current
   }
   return current
+}
+
+function releaseInProgress(resource: WorkerTerminalResourceRow): boolean {
+  return resource.release_state === 'requested' || resource.release_state === 'releasing'
 }
 
 function released(resource: WorkerTerminalResourceRow): boolean {
@@ -182,7 +217,8 @@ function released(resource: WorkerTerminalResourceRow): boolean {
 function chatTabOpen(db: OrchestrationDb, resource: WorkerTerminalResourceRow): boolean {
   const identity = resolveStructuredWorkerIdentity(resource.terminal_handle, db)
   const host = getStructuredAgentSessionHost()
-  return !released(resource) && !!identity && !!host?.isSessionTabVisible(identity.sessionId)
+  const running = identity && structuredWorkerSession(identity)
+  return running?.kind === 'here' && !!host && workerChatTabVisible(host, running)
 }
 
 /** The user resumed the conversation in a tab of their own: the follow-up goes there and the tab stays theirs. */
@@ -210,7 +246,7 @@ export async function userTabHoldingSession(
 function unverifiable(dispatchId: string, reason: string): OrchestrationError {
   return new OrchestrationError(
     'worker_unverifiable',
-    `Orca cannot tell whether Dispatch ${dispatchId}'s worker still runs (${reason}), so it starts no second one. Send again once worker-show reads it. No effects were applied.`,
+    `Orca cannot tell whether Dispatch ${dispatchId}'s worker still runs (${reason}), so it starts no second one. Send again once worker-show reads it, or start a new worker if it stays unreadable. No effects were applied.`,
     { effectsApplied: false }
   )
 }

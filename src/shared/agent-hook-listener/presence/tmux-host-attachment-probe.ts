@@ -55,10 +55,12 @@ async function readRows(
 ): Promise<ProcessTableRow[]> {
   const args = [...selector, '-o', PS_ARGS[1]]
   const env = { ...process.env, LC_ALL: 'C', LANG: 'C', TZ: 'UTC0' }
+  // Why: /bin/ps is guaranteed on macOS, but non-FHS Linux distros (e.g. NixOS) expose ps only via PATH.
+  const psProgram = process.platform === 'darwin' ? '/bin/ps' : 'ps'
   const result = await gate(
     async () =>
       (await runPsInProcess(args, { env, timeoutMs: 1000, maxOutputBytes: 65536 })) ??
-      (await runProcess({ program: '/bin/ps', args, env, timeoutMs: 1000, maxOutputBytes: 65536 }))
+      (await runProcess({ program: psProgram, args, env, timeoutMs: 1000, maxOutputBytes: 65536 }))
   )
   if (result.timedOut || result.code !== 0 || result.stdout.length >= 65536) {
     throw new Error('tmux_process_capture_unverifiable')

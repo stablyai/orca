@@ -5,7 +5,11 @@ import { useAppStore } from '../../../store/index'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch } from '../search/settings-search'
-import { getExperimentalSearchEntry } from './experimental-search'
+import {
+  getExperimentalSearchEntry,
+  sharedCodexServersSettingAvailable,
+  type OptInOnlyExperimentVisibility
+} from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 import { NumberField, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
@@ -28,25 +32,32 @@ type ExperimentalPaneProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
   /** Unlocked by Option-clicking the Experimental title. */
   hiddenExperimentalUnlocked?: boolean
+  /** From useOptInOnlyExperimentRows, held by the Settings page for the whole visit. */
+  optInOnlyExperimentRows: OptInOnlyExperimentVisibility
 }
 
 export function ExperimentalPane({
   settings,
   updateSettings,
-  hiddenExperimentalUnlocked = false
+  hiddenExperimentalUnlocked = false,
+  optInOnlyExperimentRows
 }: ExperimentalPaneProps): React.JSX.Element {
   const t = useTranslate()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const showPet = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().pet])
-  const showAgentDashboard = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry().agentDashboard
-  ])
-  const showTerminalAttention = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry().terminalAttention
-  ])
+  const showAgentDashboard =
+    optInOnlyExperimentRows.agentDashboard &&
+    matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().agentDashboard])
+  const showTerminalAttention =
+    optInOnlyExperimentRows.terminalAttention &&
+    matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().terminalAttention])
   const showAgentHibernation = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentHibernation
   ])
+  const showSharedCodexServers =
+    sharedCodexServersSettingAvailable() &&
+    matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().sharedCodexServers])
+  const sharedCodexServersEnabled = settings.experimentalSharedCodexServers === true
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
@@ -204,6 +215,51 @@ export function ExperimentalPane({
                 />
               </div>
             ) : null}
+          </SearchableSetting>
+        ) : null}
+
+        {showSharedCodexServers ? (
+          <SearchableSetting
+            title={t(
+              'auto.components.settings.ExperimentalPane.sharedCodexServers.title',
+              'Shared Codex servers'
+            )}
+            description={t(
+              'auto.components.settings.ExperimentalPane.sharedCodexServers.description',
+              'Codex chats with the same setup share one background process instead of starting one per chat.'
+            )}
+            keywords={getExperimentalSearchEntry().sharedCodexServers.keywords}
+            className="space-y-3 py-3"
+            id="experimental-shared-codex-servers"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 shrink space-y-0.5">
+                <Label>
+                  {t(
+                    'auto.components.settings.ExperimentalPane.sharedCodexServers.title',
+                    'Shared Codex servers'
+                  )}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'auto.components.settings.ExperimentalPane.sharedCodexServers.copy',
+                    'Uses less memory and starts new chats faster. If a shared process crashes, all of its chats reconnect. Applies to chats on this computer started after you change it; remote and WSL hosts keep one process per chat.'
+                  )}
+                </p>
+              </div>
+              <Switch
+                checked={sharedCodexServersEnabled}
+                aria-label={t(
+                  'auto.components.settings.ExperimentalPane.sharedCodexServers.toggleLabel',
+                  'Toggle shared Codex servers'
+                )}
+                onCheckedChange={() =>
+                  updateSettings({
+                    experimentalSharedCodexServers: !sharedCodexServersEnabled
+                  })
+                }
+              />
+            </div>
           </SearchableSetting>
         ) : null}
 

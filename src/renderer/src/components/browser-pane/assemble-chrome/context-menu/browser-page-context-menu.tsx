@@ -13,6 +13,7 @@ import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyb
 import { issueBrowserGuestNavigation } from '../../host-guest/metadata/browser-guest-metadata-cache'
 import { openLinkInNewBrowserTab } from '@/lib/browser/palette/open-client-hosted-link-beside-page'
 import { normalizeExternalBrowserUrl } from '../../../../../../shared/browser/navigation/browser-url'
+import { getRemoteRoutedOpenableExternalUrl } from '../../describe-page/browser-page-url-display'
 import {
   BrowserPageContextMenuItems,
   type BrowserPageContextMenuActions
@@ -24,7 +25,10 @@ export function BrowserPageContextMenu({
   canGoBack,
   canGoForward,
   webviewRef,
-  onReload
+  onReload,
+  remoteRoutedNetwork = false,
+  externalUrl,
+  openExternal
 }: {
   browserPageId: string
   worktreeId: string
@@ -32,6 +36,12 @@ export function BrowserPageContextMenu({
   canGoForward: boolean
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   onReload: () => void
+  /** The page browses through a remote host, whose loopback this desktop's browser cannot reach. */
+  remoteRoutedNetwork?: boolean
+  /** Overrides what the system browser opens, e.g. an SSH host's localhost through its port forward. */
+  externalUrl?: (url: string) => string | null
+  /** Opens what externalUrl returned, e.g. through the forward it names. */
+  openExternal?: (url: string) => void
 }): React.JSX.Element | null {
   const [contextMenu, setContextMenu] = useState<BrowserPageContextMenuState | null>(null)
   const contextMenuRef = useRef<HTMLDivElement>(null)
@@ -184,7 +194,10 @@ export function BrowserPageContextMenu({
       void window.api.browser.addWordToDictionary({ browserPageId, word }),
     openInNewTab: (url, activate) =>
       openLinkInNewBrowserTab({ sourcePageId: browserPageId, worktreeId, url, activate }),
-    externalUrl: normalizeExternalBrowserUrl,
+    externalUrl:
+      externalUrl ??
+      (remoteRoutedNetwork ? getRemoteRoutedOpenableExternalUrl : normalizeExternalBrowserUrl),
+    openExternal,
     // Use guest download rules for local Downloads or the client-hosted remote workspace.
     saveImage: (url) => webviewRef.current?.downloadURL(url),
     copyImage: () => void window.api.browser.copyImageAt({ browserPageId, point: pagePoint }),

@@ -7,6 +7,7 @@ export class ProfileStateWriterReopenPolicy {
   private lastLogMs: number | undefined
   private failure: { error: unknown; failures: number; retryAtMs: number } | undefined
   private bypassOnce = false
+  private interrupted: unknown
 
   constructor(private readonly now: () => number = Date.now) {}
 
@@ -41,8 +42,18 @@ export class ProfileStateWriterReopenPolicy {
     console.info(`[persistence] Reopened the idle profile writer (${this.reopens} reopens so far)`)
   }
 
+  /** The interrupted write a reopen recovers from; a refused reopen reports it, not its revision conflict. */
+  recoverFrom(error: unknown): void {
+    this.interrupted = error
+  }
+
+  terminalFailure(error: unknown): unknown {
+    return this.interrupted ?? error
+  }
+
   recordSuccess(): void {
     this.failure = undefined
+    this.interrupted = undefined
     // A bypass granted during a backoff must not carry over to a later, unrelated one.
     this.bypassOnce = false
   }

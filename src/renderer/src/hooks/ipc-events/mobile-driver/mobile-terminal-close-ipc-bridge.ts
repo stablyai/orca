@@ -1,3 +1,7 @@
+import {
+  forgetMailWakeLaunchToken,
+  rememberMailWakeLaunchToken
+} from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
 import { createRuntimeFilePositionQueue } from './runtime-file-position'
 import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/layout/close/closed-terminal-leaf-notice'
 import { closeTerminalTab } from '@/components/terminal/tab-lifecycle/terminal-tab-actions'
@@ -80,7 +84,11 @@ function showOnceWorkspaceDraws({ worktreeId }: RuntimeEditorTabReveal, show: ()
 
 export function registerMobileAndTerminalCloseIpcBridge(
   unsubs: (() => void)[],
-  requestSleepingAgentWake: (worktreeId: string) => void
+  requestSleepingAgentWake: (
+    worktreeId: string,
+    paneKey?: string,
+    prepareOnly?: boolean
+  ) => void | Promise<boolean>
 ): void {
   const positionFile = createRuntimeFilePositionQueue(unsubs)
   unsubs.push(
@@ -220,9 +228,25 @@ export function registerMobileAndTerminalCloseIpcBridge(
   }
 
   unsubs.push(
-    window.api.ui.onResumeSleepingAgents(({ worktreeId }) => {
-      // Phone opens wake sleeping agents without changing the desktop’s workspace, tab or view.
-      requestSleepingAgentWake(worktreeId)
-    })
+    window.api.ui.onResumeSleepingAgents(
+      ({ worktreeId, paneKey, prepareOnly, requestId, launchToken }) => {
+        if (paneKey && !prepareOnly) {
+          rememberMailWakeLaunchToken(paneKey, launchToken)
+        }
+        // Phone opens wake sleeping agents without changing the desktop’s workspace, tab or view.
+        const result = requestSleepingAgentWake(worktreeId, paneKey, prepareOnly)
+        void Promise.resolve(result)
+          .catch(() => false)
+          .then((woke) => {
+            // A wake that never reached the pane's startup must not lend its id to a later launch.
+            if (paneKey && launchToken && woke !== true) {
+              forgetMailWakeLaunchToken(paneKey, launchToken)
+            }
+            if (requestId) {
+              window.api.ui.replySleepingAgentWake({ requestId, woke: woke === true })
+            }
+          })
+      }
+    )
   )
 }

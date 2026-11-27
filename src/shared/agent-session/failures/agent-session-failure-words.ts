@@ -26,6 +26,7 @@ import { joinSentences } from '../../text/sentence-joining'
 import { modelUnavailableSentence } from './agent-session-model-failure-words'
 import { quotingPersonDetail } from './agent-session-failure-quoted-detail'
 import { requestTimeoutSeconds } from './agent-session-request-timeout'
+import { namingAgent, SETUP_REFUSAL_SENTENCES } from './agent-session-setup-refusal-words'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_CODEX_QUEUE_FULL,
@@ -74,16 +75,12 @@ export type AgentSessionFailureWordsContext = {
   usageLimitReset?: AgentSessionUsageLimitResetWords
 }
 
-type Sentence = (
+export type Sentence = (
   context: AgentSessionFailureWordsContext,
   fact: AgentSessionFailureFact,
   surface: AgentSessionFailureSurface,
   say: AgentSessionFailureSay
 ) => string
-
-function namingAgent(id: AgentSessionFailureCopyId): Sentence {
-  return (context, _fact, _surface, say) => say(id, agent(say, context))
-}
 
 function quotingForAgent(
   lead: AgentSessionFailureCopyId,
@@ -163,6 +160,7 @@ function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
 }
 
 const FAILURE_SENTENCES = {
+  ...SETUP_REFUSAL_SENTENCES,
   providerStartFailed: (context, _fact, _surface, say) =>
     joinSentences([say('providerStartFailed', agent(say, context)), ...startRetry(say, context)]),
   savedConversationMissing: (context, _fact, _surface, say) =>
@@ -172,23 +170,13 @@ const FAILURE_SENTENCES = {
   cliMissing: (context, _fact, _surface, say) => cliMissingSentence(context, say),
   historyTooLarge: (_context, _fact, _surface, say) =>
     joinSentences([say('historyTooLarge'), say('startNewChat')]),
-  managedAccountEnvOverride: (_context, _fact, _surface, say) => say('managedAccountEnvOverride'),
-  accountSwitchInProgress: namingAgent('accountSwitchInProgress'),
-  launchFolderMissing: (_context, _fact, _surface, say) => say('launchFolderMissing'),
-  historyInOtherAccount: (_context, _fact, _surface, say) => say('historyInOtherAccount'),
-  claudeAccountFolderMissing: (_context, _fact, _surface, say) => say('claudeAccountFolderMissing'),
-  claudeAccountSetupFailed: (_context, _fact, _surface, say) => say('claudeAccountSetupFailed'),
   // A Command that failed names the program it ran and what it said.
   agentCommandNotRunnable: quotingForAgent('agentCommandNotRunnable', 'agentCommandFailed'),
-  runtimeNotInstalled: namingAgent('runtimeNotInstalled'),
-  fullAccessAsRoot: namingAgent('fullAccessAsRoot'),
   launchPreparationFailed: (context, _fact, _surface, say) =>
     joinSentences([
       say('launchPreparationFailed', agent(say, context)),
       ...startRetry(say, context)
     ]),
-  conversationOpenInTerminal: namingAgent('conversationOpenInTerminal'),
-  conversationOpenElsewhere: (_context, _fact, _surface, say) => say('conversationOpenElsewhere'),
   managedAccountUnsupported: (context, _fact, _surface, say) =>
     joinSentences([
       say('managedAccountUnsupported'),

@@ -295,7 +295,7 @@ export function useMobileTasksGithubReplyMergeActions<
         finish()
       }
     },
-    [claimPublication, client, captureTaskListRefresh, tryBeginMutation, taskUiReady]
+    [client, captureTaskListRefresh, tryBeginMutation, taskUiReady]
   )
   return Object.assign(model, {
     replySendNotice: commentSendNotice,

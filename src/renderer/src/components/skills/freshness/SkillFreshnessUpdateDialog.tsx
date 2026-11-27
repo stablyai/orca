@@ -36,6 +36,7 @@ import {
   subscribeSkillFreshnessUpdateDialog
 } from './skill-freshness-update-dialog'
 import { useReviewedSkillPlan } from './use-reviewed-skill-plan'
+import { skillBackupLocation, useSkillBackupHost } from './skill-backup-location'
 
 function RunHeadline({ run }: { run: SkillUpdateRun }): React.JSX.Element | null {
   const t = useTranslate()
@@ -233,6 +234,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
 
   const [shownPlan, releaseHeldPlan] = useHeldSkillPlan(reviewed.plan, targetKey)
   const shownSummary = shownPlan ? summarizeBundledSkillPlan(shownPlan) : null
+  const backupHost = useSkillBackupHost(target)
   const [showLocations, setShowLocations] = useState(false)
   const phase = skillRowPhase(run)
   const isRunning = phase === 'pending'
@@ -317,7 +319,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
 
         <DialogHeadline run={run} unsupported={state.unsupported} error={error} plan={livePlan} />
 
-        {shownSummary && shownSummary.skills.length > 0 ? (
+        {shownPlan && shownSummary && shownSummary.skills.length > 0 ? (
           <SkillUpdateRows
             skills={shownSummary.skills}
             unforcedPlan={state.plan}
@@ -327,6 +329,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
             replace={replace}
             showLocations={showLocations}
             onToggleLocations={() => setShowLocations((previous) => !previous)}
+            backup={skillBackupLocation(shownPlan.homeDirectory, backupHost)}
           />
         ) : null}
 

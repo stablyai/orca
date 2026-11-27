@@ -14,6 +14,8 @@ export type DerivedQueuePause = {
   /** Clear holds exact IDs; other pauses use the cursor boundary. */
   since: AgentJournalCursor | null
   messageIds?: readonly string[]
+  /** A failure other than a usage limit lets other agents' mail run as the next turn. */
+  mailRuns?: true
 }
 
 type QueueCard = {
@@ -72,6 +74,8 @@ export type QueuePauseFacts = {
   latestAcceptedTurnSequence: number
   latestPersonAcceptedTurnSequence?: number
   failedAt?: number
+  /** Whether the failed turn stopped at a usage limit; only then does it hold other agents' mail. */
+  failedAtUsageLimit?: boolean
   reopenFloor: AgentJournalCursor | null
 }
 export type QueuePauseContext = QueuePauseFacts & {
@@ -95,7 +99,11 @@ export function createQueuePauseContext(
   }
   const failed = failedQueueTurnSequence(input.failedAt ?? 0, marks.resumedSequence)
   if (failed) {
-    pauses.push({ reason: 'failed', since: { epoch, sequence: failed } })
+    pauses.push({
+      reason: 'failed',
+      since: { epoch, sequence: failed },
+      ...(input.failedAtUsageLimit === false ? { mailRuns: true as const } : {})
+    })
   }
   const cleared = marks.cleared
   if (cleared && !cleared.lifted) {
@@ -171,7 +179,7 @@ function heldSince(
 const pauseMembership = new WeakMap<DerivedQueuePause, ReadonlySet<string>>()
 
 function queuedBefore(pause: DerivedQueuePause, card: QueueCard): boolean {
-  if (pause.reason === 'stopped' && orchestrationMailNotice(card.body?.from)) {
+  if ((pause.reason === 'stopped' || pause.mailRuns) && orchestrationMailNotice(card.body?.from)) {
     return false
   }
   if (pause.messageIds) {
@@ -197,6 +205,11 @@ function queuedBefore(pause: DerivedQueuePause, card: QueueCard): boolean {
     card.queuedAt.epoch !== since.epoch ||
     card.queuedAt.sequence < since.sequence
   )
+}
+
+/** A failed-turn pause that keeps other agents' mail waiting: only a usage limit does. */
+export function failureHoldsMail(pause: DerivedQueuePause): boolean {
+  return pause.reason === 'failed' && !pause.mailRuns
 }
 
 /** Share pause selection across drain, consume and publication; an empty Stop cannot hide a restart. */

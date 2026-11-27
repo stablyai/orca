@@ -2,6 +2,7 @@ import type React from 'react'
 import { Check, Copy, Loader2 } from 'lucide-react'
 import { Trans } from 'react-i18next'
 import type { OrcaUninstallPlan } from '../../../../../../shared/uninstall/orca-uninstall-types'
+import { joinSentences } from '../../../../../../shared/text/sentence-joining'
 import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
 import { getShowInFileManagerLabel } from '@/lib/files/os-open/local-file-manager-label'
 import { cn } from '@/lib/class-names'
@@ -167,14 +168,20 @@ export function OrcaUninstallFooter({
   const running = phase === 'running'
   let hint = t('settings.uninstall.keeps', 'Projects, worktrees and Orca settings stay.')
   if (plan?.terminalDaemon) {
-    hint = `${hint} ${t('settings.uninstall.closesTerminals', 'Open terminals will close.')}`
+    hint = joinSentences([
+      hint,
+      t('settings.uninstall.closesTerminals', 'Open terminals will close.')
+    ])
   }
   if (plan?.otherOrcaBuildName) {
-    hint = `${hint} ${t(
-      'settings.uninstall.keepsShared',
-      '{{name}} is also installed, so hooks it shares stay too.',
-      { name: plan.otherOrcaBuildName }
-    )}`
+    hint = joinSentences([
+      hint,
+      t(
+        'settings.uninstall.keepsShared',
+        '{{name}} is also installed, so hooks it shares stay too.',
+        { name: plan.otherOrcaBuildName }
+      )
+    ])
   }
   return (
     <div className="flex items-center justify-between gap-3 pt-3 pb-3.5">

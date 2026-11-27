@@ -1,4 +1,5 @@
 /// <reference types="chrome" />
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import { webContents } from 'electron'
 // oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
@@ -18,6 +19,7 @@ import {
   getBrowserExtensionSessionForProfile
 } from '../profile-sessions/browser-extension-session-loader'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
+import { browserExtensionTabTarget } from './browser-extension-tab-target'
 import { whenBrowserMainWindowReady } from '../../guest-lifecycle/browser-main-window-readiness'
 // oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { findDiscardedBrowserTabForPage } from './browser-extension-discarded-tabs'
@@ -207,10 +209,6 @@ export function requireCallerWindow(
   return entry
 }
 
-function tabStatus(contents: Electron.WebContents): 'loading' | 'complete' {
-  return contents.isLoading() ? 'loading' : 'complete'
-}
-
 /** The fields Orca owns; url/title come from Electron's native result or describeBrowserExtensionTab. */
 function orcaTabFields(entry: BrowserExtensionTabEntry): chrome.tabs.Tab {
   const { contents } = entry
@@ -226,7 +224,7 @@ function orcaTabFields(entry: BrowserExtensionTabEntry): chrome.tabs.Tab {
     autoDiscardable: true,
     incognito: false,
     groupId: -1,
-    status: tabStatus(contents),
+    status: contents.isLoading() ? 'loading' : 'complete',
     audible: contents.isCurrentlyAudible(),
     mutedInfo: { muted: contents.isAudioMuted() }
   }
@@ -240,7 +238,10 @@ export function describeBrowserExtensionTab(
   return {
     ...orcaTabFields(entry),
     ...(canExtensionSeeTabUrl(extension, entry.contents.session, url, entry.contents.id)
-      ? { url, title: entry.contents.getTitle() }
+      ? {
+          url: redactKagiSessionToken(url),
+          title: redactKagiSessionToken(entry.contents.getTitle())
+        }
       : {})
   }
 }
@@ -251,16 +252,15 @@ export function mergeNativeTab(
   entry: BrowserExtensionTabEntry
 ): chrome.tabs.Tab {
   const native: Partial<chrome.tabs.Tab> = {}
-  for (const key of [
-    'url',
-    'title',
-    'favIconUrl',
-    'lastAccessed',
-    'audible',
-    'mutedInfo'
-  ] as const) {
+  const keys = ['url', 'title', 'favIconUrl', 'lastAccessed', 'audible', 'mutedInfo'] as const
+  for (const key of keys) {
     if (nativeTab[key] !== undefined) {
-      Object.assign(native, { [key]: nativeTab[key] })
+      const value = nativeTab[key]
+      const safeValue =
+        ['url', 'title', 'favIconUrl'].includes(key) && typeof value === 'string'
+          ? redactKagiSessionToken(value)
+          : value
+      Object.assign(native, { [key]: safeValue })
     }
   }
   return { ...orcaTabFields(entry), ...native }
@@ -301,15 +301,16 @@ export async function openBrowserExtensionTab(
   if (!mainWindow || !profile) {
     throw new BrowserExtensionApiError('Orca has no window to open a tab in')
   }
+  const target = browserExtensionTabTarget(profile, placement, recentWorktreeIdForBrowserProfile)
   const { browserPageId } = await createBrowserTabInRenderer(
     { getAuthoritativeWindowId: () => mainWindow.id },
     url,
-    placement.worktreeId,
-    profile.id,
-    profile.partition,
+    target.worktreeId,
+    target.profileId,
+    target.partition,
     placement.active,
     undefined,
-    recentWorktreeIdForBrowserProfile(profile.id)
+    target.fallbackWorktreeId
   )
   await waitForTabRegistration(browserPageId)
   const tabId = browserManager.getGuestWebContentsId(browserPageId)

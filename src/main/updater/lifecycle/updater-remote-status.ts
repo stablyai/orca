@@ -89,6 +89,9 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
       throw new Error('remote_update_not_downloaded')
     }
     const targetVersion = this.currentStatus.version
+    if (this.holdUpdateForTeamPolicy(targetVersion)) {
+      throw new Error('remote_update_not_available')
+    }
     const result: RemoteServerUpdateInstallResult = {
       accepted: true,
       fromVersion: app.getVersion(),

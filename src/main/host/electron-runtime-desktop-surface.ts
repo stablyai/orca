@@ -8,6 +8,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { encodeRepoIconPng } from './electron-repo-icon-png'
 import { fetchWithElectronManualRedirects } from './electron-manual-redirect-fetch'
 import { electronBrowserTabFaviconFetch } from './electron-browser-tab-favicon-fetch'
+import { holdPowerSaveBlocker } from '../power/power-save-blocker-hold'
 
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   translateNotification: translateMain,
@@ -32,6 +33,16 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
     }
   },
   ...electronRendererWindows,
+  holdDisplayAwake: () => holdPowerSaveBlocker('prevent-display-sleep'),
+  readScreenState: () => {
+    // The shortest display-sleep setting is a minute, so a shorter idle can't mean a sleeping display.
+    const state = powerMonitor.getSystemIdleState(60)
+    return state === 'locked' || state === 'idle' ? state : 'active'
+  },
+  onScreenLocked: (listener) => {
+    powerMonitor.on('lock-screen', listener)
+    return () => powerMonitor.off('lock-screen', listener)
+  },
   isResourceViewVisible: (rendererId) => {
     const renderer = webContents.fromId(rendererId)
     return isResourceWindowVisible(renderer ? BrowserWindow.fromWebContents(renderer) : null)

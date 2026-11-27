@@ -2,7 +2,10 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { resolveQualifiedFolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
-import { resolveWorkspaceAgentDetectionHost } from '../../../../preflight/workspace-agent-detection'
+import {
+  resolveConfiguredWindowsAgentDetectionHost,
+  resolveWorkspaceAgentDetectionHost
+} from '../../../../preflight/workspace-agent-detection'
 import { resolveWorktreeHostRouting } from '../../../workspaces/catalog/worktree-launch-host-repo'
 
 export async function resolveQualifiedAgentDetectionHost(
@@ -10,10 +13,18 @@ export async function resolveQualifiedAgentDetectionHost(
     OrcaRuntimeService,
     'requireStore' | 'resolveAgentDetectionHost' | 'showManagedWorktree'
   >,
-  params: { worktreeId?: string; worktreeHostId?: ExecutionHostId; repoId?: string },
+  params: {
+    worktreeId?: string
+    worktreeHostId?: ExecutionHostId
+    repoId?: string
+    configuredWindowsRuntime?: true
+  },
   selectedWorktree?: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>,
   selectedFolder?: NonNullable<ReturnType<OrcaRuntimeService['resolveManagedFolderWorkspace']>>
 ) {
+  if (params.configuredWindowsRuntime) {
+    return resolveConfiguredWindowsAgentDetectionHost(runtime.requireStore())
+  }
   const hostId = params.worktreeHostId
   if (!hostId || !params.worktreeId) {
     return runtime.resolveAgentDetectionHost(params.worktreeId, params.repoId)

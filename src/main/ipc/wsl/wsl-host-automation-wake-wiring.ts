@@ -24,7 +24,12 @@ export function createWslHostAutomationWake(
         userDataPath(),
         environmentId,
         'automation.list',
-        undefined
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        // Bookkeeping, not use: it must neither hold an idle host up nor wake one (#46567).
+        { background: true }
       )
       if (!response.ok) {
         throw new Error(response.error.message)

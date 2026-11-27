@@ -4,7 +4,9 @@ import { useAppStore } from '@/store'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import { botRefKey, botTarget } from '@/lib/bot-hosts'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { findFolderWorkspaceRecord } from '@/store/folder-workspaces/folder-workspace-record-index'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import {
   AUTOMATIONS_CHANGED_EVENT,
   automationsChangedWindowDetail
@@ -13,7 +15,12 @@ import type { Bot } from '../../../../shared/bot-types'
 import type { BotChangeKind, BotChangeScope } from '../../../../shared/bots/bot-change-scope'
 import type { BotHostRead } from './bot-host-read-store'
 
-export { createBotHostRead, type BotHostRead, type BotHostReadState } from './bot-host-read-store'
+export {
+  createBotHostRead,
+  type BotHostRead,
+  type BotHostReadState,
+  type BotReadSettled
+} from './bot-host-read-store'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 
@@ -21,9 +28,32 @@ const NO_SUBSCRIPTION = (): (() => void) => () => {}
 /** The changes the store sees first: a read of none of them (items) re-reads on its host's notices only. */
 const CHAT_KINDS: readonly BotChangeKind[] = ['chats', 'status', 'threads']
 
+const externalConversationsKeys = new WeakMap<
+  NonNullable<FolderWorkspace['externalConversations']>,
+  string
+>()
+
+function externalConversationsKey(links: FolderWorkspace['externalConversations']): string {
+  if (!links || links.length === 0) {
+    return ''
+  }
+  const cached = externalConversationsKeys.get(links)
+  if (cached !== undefined) {
+    return cached
+  }
+  const key = links.map((link) => link.sessionId ?? link.paneKey).join('|')
+  externalConversationsKeys.set(links, key)
+  return key
+}
+
 /** The read's latest value for the bot, re-read whenever its chats, threads, Home chat or work change;
- *  null until the first read lands, or with no bot. */
-export function useBotHostRead<T>(read: BotHostRead<T>, bot: Bot | null): T | null {
+ *  null until the first read lands, or with no bot. `select` (stable) picks what the caller observes,
+ *  so a change outside it renders nothing. */
+export function useBotHostRead<T, S = T>(
+  read: BotHostRead<T>,
+  bot: Bot | null,
+  select?: (value: T) => S
+): S | null {
   const botId = bot?.id ?? null
   const hostId = bot?.hostId ?? null
   const key = bot ? botRefKey(bot) : null
@@ -42,14 +72,13 @@ export function useBotHostRead<T>(read: BotHostRead<T>, bot: Bot | null): T | nu
           .join('|')
       : ''
   )
+  const folderWorkspaceId = bot?.folderWorkspaceId ?? null
   const threadsKey = useAppStore((s) =>
-    followsChats && bot
-      ? (
-          selectFolderWorkspaces(s).find((workspace) => workspace.id === bot.folderWorkspaceId)
-            ?.externalConversations ?? []
+    followsChats && folderWorkspaceId
+      ? externalConversationsKey(
+          findFolderWorkspaceRecord(selectFolderWorkspaces(s), folderWorkspaceId)
+            ?.externalConversations
         )
-          .map((link) => link.sessionId ?? link.paneKey)
-          .join('|')
       : ''
   )
   const chatState = useAppStore((s) =>
@@ -60,7 +89,14 @@ export function useBotHostRead<T>(read: BotHostRead<T>, bot: Bot | null): T | nu
       botId && hostId ? read.subscribe({ hostId, id: botId }, listener) : NO_SUBSCRIPTION(),
     [read, botId, hostId]
   )
-  const getSnapshot = useCallback(() => (key ? read.snapshot(key) : null), [read, key])
+  const getSnapshot = useCallback((): S | null => {
+    const value = key ? read.snapshot(key) : null
+    if (value === null) {
+      return null
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: with no `select`, S is T.
+    return select ? select(value) : (value as unknown as S)
+  }, [read, key, select])
   const value = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   useEffect(() => {

@@ -97,14 +97,10 @@ export abstract class CodexRuntimeHomeState {
     target: CodexAccountSelectionTarget,
     options?: { probeHome?: boolean }
   ): string | null
-  protected abstract finishWslLaunchPreparation(
-    target: CodexAccountSelectionTarget,
-    homePath: string | null
-  ): void
   protected abstract syncWslConfigAndGlobalInstructionsForLaunch(
     target: CodexAccountSelectionTarget,
     runtimeHomePath: string | null
-  ): void
+  ): Promise<void>
   /** `pinnedWslDistro`: the distro a background poll gated, read as launch reads its named target. */
   abstract prepareForRateLimitFetch(
     target?: CodexAccountSelectionTarget,
@@ -199,14 +195,19 @@ export abstract class CodexRuntimeHomeState {
   protected abstract isWindowsReadableLink(targetPath: string): boolean
   protected abstract migrateLegacyManagedStateIfNeeded(): void
   protected abstract getLegacyManagedHomes(): string[]
-  protected abstract migrateLegacyHistory(managedHomePath: string): void
   protected abstract migrateLegacySessions(managedHomePath: string, accountId: string): void
   protected abstract listFilesRecursively(rootPath: string): string[]
   protected abstract appendListedFiles(target: string[], source: readonly string[]): void
   protected abstract getPreservedLegacySessionPath(
     runtimeFilePath: string,
-    accountId: string
+    accountId: string,
+    attempt: number
   ): string
+  protected abstract copyLegacyFileWithoutOverwrite(
+    legacyFilePath: string,
+    targetPath: string,
+    readLegacy: () => Buffer
+  ): 'copied' | 'identical' | 'conflict'
   protected abstract appendMigrationDiagnostic(record: Record<string, string>): void
 
   protected abstract captureSystemDefaultSnapshot(options: { force: boolean }): void

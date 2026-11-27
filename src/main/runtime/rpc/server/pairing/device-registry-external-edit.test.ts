@@ -46,6 +46,16 @@ function pairedRegistry() {
 }
 
 describe('device registry saves over an externally edited file', () => {
+  it('announces an external runtime grant when a fresh list adopts it', () => {
+    const registry = new DeviceRegistry(dir)
+    const notify = vi.fn()
+    registry.setOnPairedDevicesChanged(notify)
+    new DeviceRegistry(dir).addDevice('Remote Orca', 'runtime')
+
+    expect(registry.listDevices({ fresh: true }).map(({ name }) => name)).toEqual(['Remote Orca'])
+    expect(notify).toHaveBeenCalled()
+  })
+
   it('keeps a device removed on disk removed through a pending lastSeen flush', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const { registry, desktop, phone } = pairedRegistry()

@@ -2,6 +2,7 @@ import type { WithAgentStatusObservation } from '../../agent-status/contracts/ag
 import type { AgentHookEventPayload } from '../listener-event'
 import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import { foldMainAgentWithRowChildWork } from './agent-hook-row-child-work-fold'
+import { PI_SUBAGENT_START_EVENT } from '../providers/pi-family/pi-subagent-start-event'
 
 const INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS = 15_000
 const TOOL_PROGRESS_HOOK_EVENTS = new Set([
@@ -137,7 +138,9 @@ export function resolveCancelVerdictLatch(
     incoming.payload.state === 'working' &&
     (incoming.isReplay === true ||
       isToolProgressWorkingAfterInterrupt(incoming) ||
-      (incoming.hasExplicitPrompt !== true && withinWindow))
+      (incoming.hasExplicitPrompt !== true &&
+        incoming.hookEventName !== PI_SUBAGENT_START_EVENT &&
+        withinWindow))
   ) {
     return HOLD
   }

@@ -92,13 +92,24 @@ export function readOwnerAccounts(environmentId: string): OwnerAccountsState | n
   return streams.get(environmentId)?.state ?? null
 }
 
-/** A direct read of the host (forced refresh) lands where every reader sees it. */
+/** One host's live stream; a forced refresh compares it to tell whether it outlived that stream. */
+export type OwnerAccountsStreamToken = Stream
+
+export function currentOwnerAccountsStream(environmentId: string): OwnerAccountsStreamToken | null {
+  return streams.get(environmentId) ?? null
+}
+
+/**
+ * A direct read of the host (forced refresh) lands where every reader sees it.
+ * Why the token: once that stream closed (e.g. A→B→A), the read belongs to an earlier observation.
+ */
 export function applyOwnerAccountsSnapshot(
   environmentId: string,
-  snapshot: ProviderAccountsSnapshot
+  snapshot: ProviderAccountsSnapshot,
+  startedOn: OwnerAccountsStreamToken | null
 ): void {
   const stream = streams.get(environmentId)
-  if (stream) {
+  if (stream && stream === startedOn) {
     publish(stream, snapshotState(snapshot))
   }
 }

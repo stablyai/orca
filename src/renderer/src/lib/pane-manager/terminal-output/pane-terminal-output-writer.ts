@@ -215,7 +215,13 @@ export function writeTerminalOutputImpl(
           followupViewportRefresh: options.followupForegroundRefresh === true,
           shouldRefreshViewportSynchronously:
             options.shouldRefreshForegroundSynchronously ?? ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY,
-          onParsed: composeParsedCallback(terminal, options.onParsed, ackCreditsParsed, undefined),
+          onParsed: composeParsedCallback(
+            terminal,
+            options.onParsed,
+            ackCreditsParsed,
+            undefined,
+            data
+          ),
           onWriteFailure: composeWriteFailureCallback(terminal, ackCreditsParsed)
         }
       )

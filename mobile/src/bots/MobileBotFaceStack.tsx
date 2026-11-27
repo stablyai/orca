@@ -4,17 +4,16 @@ import {
   BOT_GROUP_FACE_SLOT,
   botGroupFaces
 } from '../../../src/shared/bots/bot-group-face-layout'
-import { colors } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { MobileBotAvatar } from './MobileBotAvatar'
 
-/** A group's members as overlapping circles in a bot avatar's square, laid out as on desktop. */
+/** A group's members as overlapping circles filling a bot avatar's square. */
 export function MobileBotFaceStack({
   faces,
   slot = 32,
-  ringColor = colors.bgBase
+  ringColor
 }: {
   faces: readonly { id: string; avatar: MobileBotAvatarSource }[]
   /** Side of the square, in pt; the row's avatar size by default. */
@@ -22,7 +21,9 @@ export function MobileBotFaceStack({
   /** The surface behind it, which the gap between faces shows. */
   ringColor?: string
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const surface = ringColor ?? colors.bgBase
   const scale = slot / BOT_GROUP_FACE_SLOT
   const gap = BOT_GROUP_FACE_GAP * scale
   return (
@@ -31,7 +32,7 @@ export function MobileBotFaceStack({
       accessibilityElementsHidden
       importantForAccessibility="no"
     >
-      {botGroupFaces(faces, (face) => face.id).map((face, index) => {
+      {botGroupFaces(faces, (face) => face.id, 1, true).map((face, index) => {
         const size = face.size * scale
         // Later circles sit on earlier ones; a ring in the row's colour keeps them apart.
         const ring = index > 0 ? gap : 0
@@ -41,7 +42,7 @@ export function MobileBotFaceStack({
             style={[
               styles.ring,
               {
-                borderColor: ringColor,
+                borderColor: surface,
                 left: face.x * scale - ring,
                 top: face.y * scale - ring,
                 borderWidth: ring,
@@ -65,7 +66,7 @@ export function MobileBotFaceStack({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   ring: { position: 'absolute' },
   more: {
     alignItems: 'center',

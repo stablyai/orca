@@ -10,6 +10,7 @@ import {
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import {
   getConnectedWorktreeLineageIds,
   projectResolvedWorktreeLineage
@@ -25,11 +26,45 @@ import {
   type RepoWorktreeRowsScan
 } from './repo-worktree-row-resolution'
 
+type OwnerRead = {
+  scan: RepoWorktreeRowsScan | null
+  metaById: Record<string, WorktreeMeta>
+  stamped: Map<string, WorktreeMeta>
+}
+
+/** Owner repos already scanned and stamped by one batch of id lookups, so each repo's rows are read
+ *  once per batch instead of once per id. Lives only as long as its batch. */
+export type ScopedWorktreeReads = Map<string, Promise<OwnerRead>>
+
+export function createScopedWorktreeReads(): ScopedWorktreeReads {
+  return new Map()
+}
+
+async function readOwner(
+  deps: RepoWorktreeRowDeps,
+  repo: Repo,
+  ownerCount: number
+): Promise<OwnerRead> {
+  const { store } = deps
+  const scan = isFolderRepo(repo)
+    ? null
+    : await scanRepoWorktreeRows(
+        deps,
+        repo,
+        resolveLocalProjectRuntimesForRepos(store, [repo]),
+        ownerCount
+      )
+  // Stamp the whole scan as a full join would; only the projection below is narrowed.
+  const metaById = store.getAllWorktreeMeta() ?? {}
+  return { scan, metaById, stamped: stampRepoWorktreeRows(deps, repo, scan, metaById, ownerCount) }
+}
+
 /** Resolve one id through its host owner and lineage repos; ambiguous ownership returns null for fleet fallback. */
 export async function resolveScopedWorktreeIdRow(
   deps: RepoWorktreeRowDeps,
   worktreeId: string,
-  requiredHostId?: ExecutionHostId
+  requiredHostId?: ExecutionHostId,
+  reads?: ScopedWorktreeReads
 ): Promise<RepoWorktreeRow | null> {
   const { store } = deps
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
@@ -50,17 +85,13 @@ export async function resolveScopedWorktreeIdRow(
   }
   const repo = owners[0]
   const ownerCount = repoOwners.rowsFor(repo.id).length
-  const ownerScan = isFolderRepo(repo)
-    ? null
-    : await scanRepoWorktreeRows(
-        deps,
-        repo,
-        resolveLocalProjectRuntimesForRepos(store, [repo]),
-        ownerCount
-      )
-  // Stamp the whole scan as a full join would; only the projection below is narrowed.
-  const metaById = store.getAllWorktreeMeta() ?? {}
-  const ownerStamped = stampRepoWorktreeRows(deps, repo, ownerScan, metaById, ownerCount)
+  const readKey = `${getRepoExecutionHostId(repo)}\0${repo.id}`
+  let ownerRead = reads?.get(readKey)
+  if (!ownerRead) {
+    ownerRead = readOwner(deps, repo, ownerCount)
+    reads?.set(readKey, ownerRead)
+  }
+  const { scan: ownerScan, metaById, stamped: ownerStamped } = await ownerRead
   // Accept one normalized equivalent id; multiple path matches remain ambiguous (#16243).
   const comparisonKey = worktreeIdentityKey(worktreeId)
   const equivalentIds = new Set(

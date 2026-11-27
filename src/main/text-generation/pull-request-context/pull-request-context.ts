@@ -214,8 +214,17 @@ export async function getPullRequestDraftContext(
       '--max-count=50',
       range
     ]),
-    safeExec(execGit, ['diff', '--name-status', range]),
-    safeExec(execGit, ['diff', '--patch', '--minimal', '--no-color', '--no-ext-diff', range])
+    safeExec(execGit, ['-c', 'core.quotePath=false', 'diff', '--name-status', range]),
+    safeExec(execGit, [
+      '-c',
+      'core.quotePath=false',
+      'diff',
+      '--patch',
+      '--minimal',
+      '--no-color',
+      '--no-ext-diff',
+      range
+    ])
   ])
 
   if (!commitSummary && !changeSummary && !patch) {

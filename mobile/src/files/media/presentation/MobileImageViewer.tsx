@@ -10,14 +10,15 @@ import {
 } from 'react-native'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react-native'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
-import { colors, feedback, radii, spacing } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { PanZoomSize } from '../../../../../src/shared/document-preview/pan-zoom-view'
 import { MobilePanZoomImage } from './MobilePanZoomImage'
 import { REDUCED_MOTION_FADE_MS, SHEET_CURVE } from '../../../components/motion/sheet-motion-values'
 import { useReducedMotionEnabled } from '../../../platform/accessibility/use-reduced-motion'
+import { useBackClaim } from '../../../navigation/use-back-claim'
 
 const VIEWER_EASING = Easing.bezier(...SHEET_CURVE)
 const VIEWER_OPEN_MS = 250
@@ -55,10 +56,16 @@ export function MobileImageViewer({
   onNext?: (() => void) | null
   onClose: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const insets = useWindowSafeAreaInsets()
   const { style, stageStyle, close } = useViewerPresence(onClose)
+  // In the web shell, system Back reaches the shell's claim stack, not this Modal: without a claim it closes the sheet underneath.
+  useBackClaim(() => {
+    close()
+    return true
+  })
   return (
     <Modal visible transparent animationType="none" onRequestClose={close}>
       <Animated.View style={[styles.backdrop, style]}>
@@ -125,6 +132,8 @@ function StepButton({
   onPress: (() => void) | null
   style: ViewStyle
 }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Pressable
       style={({ pressed }) => [
@@ -183,7 +192,7 @@ function useViewerPresence(onClose: () => void) {
   return { style: { opacity: shown }, stageStyle: { transform: [{ scale }] }, close }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   backdrop: {
     flex: 1,
     backgroundColor: colors.bgBase

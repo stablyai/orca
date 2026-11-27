@@ -109,4 +109,9 @@ export function parseMobilePushRegistration(value: unknown): MobilePushRegistrat
 
 export type MobilePushTestResult =
   | { accepted: true }
-  | { accepted: false; reason: 'not_registered' | 'unavailable' | 'rate_limited' | 'rejected' }
+  | {
+      accepted: false
+      reason: 'not_registered' | 'unavailable' | 'rate_limited' | 'rejected'
+      /** Push sign-in was refused because this host's clock is this far ahead (negative: behind). Older phones ignore it. */
+      clockSkewSeconds?: number
+    }

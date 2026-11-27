@@ -13,7 +13,7 @@ import { PushDispatcher, type PushCoverageRequest } from './push-dispatcher'
 import { PushBadgeSync } from './push-badge-sync'
 import type { ExecutionHostPushCoverage } from './push-burst-slots'
 import { mobilePushTokenDigest } from './push-token-digest'
-import { pushTestResult } from './push-test-result'
+import { pushTestResult, unregisteredTestResult } from './push-test-result'
 import { PushGatewayClient } from './push-gateway-client'
 import { PushRegisterThrottle } from './push-register-throttle'
 import {
@@ -131,7 +131,8 @@ export class DesktopPushService {
     const device = this.registry.getDevice(deviceId)
     const registration = device?.pushRegistration
     if (device?.scope !== 'mobile' || !registration || registration.expiresAt <= Date.now()) {
-      return { accepted: false, reason: 'not_registered' }
+      const live = !this.stopped && this.deliveryMode !== 'disabled'
+      return unregisteredTestResult(live ? await this.client.currentClockSkewMs() : null)
     }
     if (this.stopped || this.deliveryMode === 'disabled') {
       return { accepted: false, reason: 'unavailable' }

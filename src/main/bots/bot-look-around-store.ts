@@ -4,6 +4,7 @@ import { BotTidyUpSummarySchema } from '../../shared/bots/bot-tidy-up'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import { SUGGESTION_SOURCES } from '../../shared/bots/bot-look-around'
 import { backgroundRunSessionIds, EMPTY_BOT_LOOK, type BotLookState } from './bot-look-around-state'
@@ -14,58 +15,65 @@ export function lookAroundStoreFile(userDataPath: string): string {
   return join(userDataPath, 'bot-look-around.json')
 }
 
-const SuggestionSchema = z.object({
-  id: z.string().min(1),
-  title: z.string(),
-  why: z.string(),
-  ask: z.string(),
-  link: z.string().optional(),
-  source: z.enum(SUGGESTION_SOURCES).optional().catch(undefined),
-  createdAt: z.number(),
-  runSessionId: z.string(),
-  status: z.enum(['open', 'started', 'dismissed', 'replaced']),
-  resolvedAt: z.number().optional()
-})
+const SuggestionSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string().min(1),
+    title: z.string(),
+    why: z.string(),
+    ask: z.string(),
+    link: z.string().optional(),
+    source: z.enum(SUGGESTION_SOURCES).optional().catch(undefined),
+    createdAt: z.number(),
+    runSessionId: z.string(),
+    status: z.enum(['open', 'started', 'dismissed', 'replaced']),
+    resolvedAt: z.number().optional()
+  })
+)
 
-const RunSchema = z.object({
-  sessionId: z.string(),
-  startedAt: z.number(),
-  endedAt: z.number().optional(),
-  error: z.string().optional(),
-  alerted: z.literal(true).optional(),
-  asleep: z.literal(true).optional(),
-  usageLimited: z.object({ resetsAt: z.number().optional() }).optional()
-})
+const RunSchema = lazyZodSchema(() =>
+  z.object({
+    sessionId: z.string(),
+    startedAt: z.number(),
+    endedAt: z.number().optional(),
+    error: z.string().optional(),
+    alerted: z.literal(true).optional(),
+    asleep: z.literal(true).optional(),
+    usageLimited: z.object({ resetsAt: z.number().optional() }).optional()
+  })
+)
 
-const BotLookSchema = z.object({
-  armedAt: z.number().optional(),
-  runs: z.array(RunSchema),
-  pastSessionIds: z.array(z.string()).optional(),
-  suggestions: z.array(SuggestionSchema),
-  // Absent in a record written before dismissals were kept apart.
-  dismissals: z
-    .array(
-      z.object({
-        title: z.string(),
-        key: z.string().optional(),
-        at: z.number()
+const BotLookSchema = lazyZodSchema(() =>
+  z.object({
+    armedAt: z.number().optional(),
+    runs: z.array(RunSchema),
+    pastSessionIds: z.array(z.string()).optional(),
+    suggestions: z.array(SuggestionSchema),
+    // Absent in a record written before dismissals were kept apart.
+    dismissals: z
+      .array(
+        z.object({
+          title: z.string(),
+          key: z.string().optional(),
+          at: z.number()
+        })
+      )
+      .default([]),
+    seenAt: z.number().optional(),
+    tidyUp: z
+      .object({
+        runs: z.array(RunSchema),
+        pastSessionIds: z.array(z.string()).optional(),
+        through: z.number().optional(),
+        firstFrom: z.number().optional(),
+        checkedAt: z.number().optional(),
+        last: BotTidyUpSummarySchema.optional().catch(undefined),
+        offeredAt: z.number().optional()
       })
-    )
-    .default([]),
-  seenAt: z.number().optional(),
-  tidyUp: z
-    .object({
-      runs: z.array(RunSchema),
-      pastSessionIds: z.array(z.string()).optional(),
-      through: z.number().optional(),
-      firstFrom: z.number().optional(),
-      checkedAt: z.number().optional(),
-      last: BotTidyUpSummarySchema.optional().catch(undefined)
-    })
-    .optional()
-})
+      .optional()
+  })
+)
 
-const FileSchema = z.object({ bots: z.record(z.string(), BotLookSchema) })
+const FileSchema = lazyZodSchema(() => z.object({ bots: z.record(z.string(), BotLookSchema) }))
 
 export type LookAroundStoreIo = {
   read: () => string | null

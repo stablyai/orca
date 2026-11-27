@@ -6,7 +6,11 @@ import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/ho
 import { useTranslate } from '@/i18n/use-translate'
 import { openAgentMessageSender } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
-import { NATIVE_CHAT_INLINE_CHIP, NATIVE_CHAT_INLINE_NAME } from '../events/native-chat-inline-chip'
+import {
+  NATIVE_CHAT_INLINE_CHIP,
+  NATIVE_CHAT_INLINE_NAME,
+  NATIVE_CHAT_READABLE_SHARE
+} from '../events/native-chat-inline-chip'
 import { agentMessageSendersShown } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type {
   AgentMessageSender,
@@ -14,7 +18,7 @@ import type {
 } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   unnamedSenderLabel,
-  useAgentMessageSenderLabel
+  useAgentMessageSenderName
 } from './native-chat-agent-message-sender-label'
 import { useAgentMessageSenderOpens } from './native-chat-agent-message-sender-view'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -95,7 +99,8 @@ function SenderName({
   compact: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target, dispatchId)
+  const name = useAgentMessageSenderName(sender, chatWorktreeId, target, dispatchId)
+  const label = name ?? unnamedSenderLabel(t)
   const opens = useAgentMessageSenderOpens(sender, chatWorktreeId, target, dispatchId)
   if (!opens || !chatWorktreeId) {
     return (
@@ -119,7 +124,7 @@ function SenderName({
           : t('components.native-chat.agentMessage.goToAgent', 'Go to agent')
       }
       onClick={() =>
-        void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, label)
+        void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, name)
       }
     >
       <span className="min-w-0 truncate">{label}</span>
@@ -138,7 +143,10 @@ export function NativeChatAgentMessageSenderNames({
   chatWorktreeId,
   target,
   dispatchId,
-  spoken
+  spoken,
+  name,
+  label,
+  title
 }: {
   from: AgentMessageSource
   shown: readonly AgentMessageSender[]
@@ -147,8 +155,11 @@ export function NativeChatAgentMessageSenderNames({
   target?: RuntimeClientTarget
   dispatchId?: string
   spoken: boolean
+  name: string | null
+  label: string
+  /** The name where it stands alone on hover; a recipient's reads "an Eule" in German. */
+  title: string
 }): React.JSX.Element {
-  const t = useTranslate()
   // The message's Dispatch is its one sender's; mail from several opens its first by its own address.
   const senderDispatchId = shown.length > 1 ? undefined : dispatchId
   // One line has room for one name: the rest count as +N.
@@ -157,8 +168,8 @@ export function NativeChatAgentMessageSenderNames({
   return (
     <>
       {shown.length === 0 ? (
-        <span aria-hidden={!spoken || undefined} className="min-w-0 truncate">
-          {unnamedSenderLabel(t)}
+        <span aria-hidden={!spoken || undefined} className={NATIVE_CHAT_READABLE_SHARE}>
+          {label}
         </span>
       ) : null}
       {first ? (
@@ -170,6 +181,9 @@ export function NativeChatAgentMessageSenderNames({
             target={target}
             dispatchId={senderDispatchId}
             spoken={spoken}
+            name={name}
+            label={label}
+            title={title}
           />
           {first.host ? (
             <WorktreeHostContextBadge label={first.host} className="inline-flex shrink-0" />
@@ -191,7 +205,10 @@ function RowSenderName({
   chatWorktreeId,
   target,
   dispatchId,
-  spoken
+  spoken,
+  name,
+  label,
+  title
 }: {
   from: AgentMessageSource
   sender: AgentMessageSender
@@ -199,13 +216,16 @@ function RowSenderName({
   target?: RuntimeClientTarget
   dispatchId?: string
   spoken: boolean
+  name: string | null
+  label: string
+  /** The name where it stands alone on hover; a recipient's reads "an Eule" in German. */
+  title: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target, dispatchId)
   const opens = useAgentMessageSenderOpens(sender, chatWorktreeId, target, dispatchId)
   if (!opens || !chatWorktreeId) {
     return (
-      <span aria-hidden={!spoken || undefined} className="min-w-0 truncate" title={label}>
+      <span aria-hidden={!spoken || undefined} className={NATIVE_CHAT_READABLE_SHARE} title={title}>
         {label}
       </span>
     )
@@ -213,11 +233,13 @@ function RowSenderName({
   return (
     <button
       type="button"
-      aria-label={t('components.native-chat.agentMessage.open', 'Open {{name}}', { name: label })}
-      title={label}
-      className="min-w-0 truncate rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      aria-label={t('components.native-chat.agentMessage.open', 'Open {{name}}', {
+        name: name ?? unnamedSenderLabel(t)
+      })}
+      title={title}
+      className={`${NATIVE_CHAT_READABLE_SHARE} rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
       onClick={() =>
-        void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, label)
+        void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, name)
       }
     >
       {label}
@@ -240,7 +262,8 @@ export function SenderChip({
   dispatchId?: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target, dispatchId)
+  const name = useAgentMessageSenderName(sender, chatWorktreeId, target, dispatchId)
+  const label = name ?? unnamedSenderLabel(t)
   const opens = useAgentMessageSenderOpens(sender, chatWorktreeId, target, dispatchId)
   if (!opens || !chatWorktreeId) {
     return (
@@ -256,7 +279,7 @@ export function SenderChip({
         aria-label={t('components.native-chat.agentMessage.open', 'Open {{name}}', { name: label })}
         className={NATIVE_CHAT_INLINE_CHIP}
         onClick={() =>
-          void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, label)
+          void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, name)
         }
       >
         <span className="min-w-0 truncate">{label}</span>

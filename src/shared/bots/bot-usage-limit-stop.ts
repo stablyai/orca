@@ -1,6 +1,9 @@
 // A bot chat, worker or run stopped on its agent's usage limit, as its host's status feed says it.
 import type { AgentSessionStatusSummary } from '../agent-session/agent-session-wire'
 import type { AgentSessionStatusSnapshot } from '../agent-session/view/agent-session-status-snapshot-fold'
+import { formatUsageLimitResetClock } from '../agent-session/failures/agent-session-usage-limit'
+import type { BotChatTranslate as Translate } from './bot-chat-tree'
+import type { BotRowLine } from './bot-row-line'
 
 /** `at`: when Orca continues it (`auto`), else when the limit resets. */
 export type UsageLimitStop = { at: number; auto: boolean }
@@ -51,4 +54,42 @@ export function usageLimitStops(
     }
   }
   return stops.sort((a, b) => a.at - b.at || a.sessionId.localeCompare(b.sessionId))
+}
+
+/** "Continues at 9:50 PM", or "Hit limit · resets 9:50 PM" when Orca won't continue it. */
+export function usageLimitStopText(t: Translate, stop: UsageLimitStop): string {
+  const time = formatUsageLimitResetClock(stop.at)
+  return stop.auto
+    ? t('bots.usageLimit.continuesAt', 'Continues at {{time}}', { time })
+    : t('bots.usageLimit.hitLimit', 'Hit limit · resets {{time}}', { time })
+}
+
+/** A chat, worker or run stopped on its usage limit, said while nothing of the bot's works or
+ *  waits on the owner; those still speak first. */
+export type BotRowLimit = { place: string | null; stop: NamedUsageLimitStop }
+
+/** Lines about live work or the owner, which a stop never covers; a past activity or a wait can be. */
+const LIVE_LINES: ReadonlySet<BotRowLine['kind']> = new Set([
+  'paused',
+  'reading',
+  'replying',
+  'needYouElsewhere',
+  'workingElsewhere'
+])
+
+/** The row's stop in place of its line, named by where it stopped; none while the bot is busy. */
+export function botRowLimit(
+  stop: NamedUsageLimitStop | null | undefined,
+  line: BotRowLine | null,
+  busy: boolean,
+  chatSessionId: string | null | undefined,
+  t: Translate
+): BotRowLimit | null {
+  if (!stop || busy || (line && LIVE_LINES.has(line.kind))) {
+    return null
+  }
+  return {
+    place: stop.sessionId === chatSessionId ? t('bots.chats.home', 'Home Chat') : stop.name,
+    stop
+  }
 }

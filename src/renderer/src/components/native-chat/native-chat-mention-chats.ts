@@ -53,21 +53,6 @@ export type NativeChatBotChatPicker = {
   title: (botId: string, chatId: string) => ReactNode
 }
 
-/** Chats whose title or second line holds every word typed, in list order; spaces separate words. */
-export function filterNativeChatMentionChats(
-  chats: readonly NativeChatMentionChat[],
-  filter: string
-): readonly NativeChatMentionChat[] {
-  const words = filter.toLowerCase().split(/\s+/).filter(Boolean)
-  if (words.length === 0) {
-    return chats
-  }
-  return chats.filter((chat) => {
-    const text = chat.search.toLowerCase()
-    return words.every((word) => text.includes(word))
-  })
-}
-
 /** The draft's chat pills, kept checked: the first one Send can't carry, and which pill's chat list
  *  is open. Nothing is sent in a picked chat's place, so any doubt holds Send. */
 export function useBotChatPillChecks(draft: string, picker: NativeChatBotChatPicker | undefined) {

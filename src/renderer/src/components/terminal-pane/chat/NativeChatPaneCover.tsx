@@ -1,8 +1,9 @@
-import { useRef, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { useCoveredTerminalFocusHandoff } from './use-covered-terminal-focus-handoff'
 import { requestNativeChatCoverPaste } from '../input/paste/native-chat-cover-paste'
+import { restoreWebglAfterChatCover } from '@/lib/pane-manager/terminal-rendering/pane-webgl-reattach'
 
 /** The cover owns focus and paste for its pane until a chat input can take them. */
 export function NativeChatPaneCover({
@@ -14,6 +15,8 @@ export function NativeChatPaneCover({
 }): React.JSX.Element {
   const coverRef = useRef<HTMLDivElement>(null)
   useCoveredTerminalFocusHandoff(coverRef, pane.terminal)
+  // An atlas rebuild leaves covered panes detached; reattach once the terminal shows again.
+  useLayoutEffect(() => () => restoreWebglAfterChatCover(pane.terminal), [pane.terminal])
   return (
     <div
       ref={coverRef}

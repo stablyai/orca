@@ -9,10 +9,8 @@ import {
   NATIVE_CHAT_TEXT_SIZE_MIN,
   type NativeChatLineSpacing
 } from '../session/native-chat/preferences/native-chat-text-settings'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 // Shared by Chat UI settings and the session's Text size sheet, so both edit the same way.
 
 export function nativeChatLineSpacingSegments(
@@ -41,7 +39,7 @@ export function StackedRow({
   value?: string
   children: ReactNode
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.stacked}>
       <View style={styles.stackedHeader}>
@@ -63,7 +61,7 @@ export function NativeChatTextSizeSlider({
   onValueChange: (size: number) => void
   onSlidingComplete?: (size: number) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <View style={styles.sliderLine}>
@@ -91,7 +89,7 @@ export function NativeChatTextSizeSlider({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   stacked: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,

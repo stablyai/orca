@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'r
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
-import { useLocalStructuredChatsInUse } from '../../../runtime/native-chat/local-sessions/local-structured-chats'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { structuredChatShownName } from '@/runtime/native-chat/naming/structured-chat-shown-name'
 import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from '../../settings/chat/native-chat-resume-setting-target'
 import {
   localNativeChatRestartStore,
+  useLocalRestartOffersEnabled,
   useNativeChatRestartOffer,
   useNativeChatRestartRun
 } from '../offers/native-chat-resume-on-restart-store'
@@ -15,12 +15,12 @@ import type { NativeChatRestartStore } from '../offers/native-chat-restart-runti
 import { useNativeChatRestartRuntimes } from '../offers/native-chat-restart-runtimes'
 import type { ResumeFailureAction } from '../failures/native-chat-resume-failure-guidance'
 import { resumeRunFailures } from '../runs/native-chat-resume-run-view'
-import { resumeToastView } from './native-chat-resume-toast-view'
+import { resumeToastShowsDetails, resumeToastView } from './native-chat-resume-toast-view'
 import { NativeChatResumeToast } from './NativeChatResumeToast'
 import { useResumeToastAutoDismiss } from './use-resume-toast-auto-dismiss'
 
 export function NativeChatResumeToasts(): React.JSX.Element {
-  const enabled = useLocalStructuredChatsInUse()
+  const enabled = useLocalRestartOffersEnabled()
   const runtimes = useNativeChatRestartRuntimes()
   return (
     <>
@@ -64,14 +64,13 @@ function NativeChatResumeToastHost({
         snoozeResumeToast(store)
       }
     }
-    // Anything needing the person stays until closed; the report shortens this once all resumed.
+    // The report owns its timer so window visibility recovery can resume it.
     toast.custom(() => <ConnectedResumeToast store={store} toastId={id} />, {
       id,
       duration: Infinity,
       closeButton: false,
       unstyled: true,
-      onDismiss: snooze,
-      onAutoClose: snooze
+      onDismiss: snooze
     })
     return () => {
       owned = false
@@ -88,18 +87,13 @@ function snoozeResumeToast(store: NativeChatRestartStore): void {
 }
 
 /** The toaster measures a toast only when it is issued; re-issuing in place keeps its state. */
-function reissueResumeToast(
-  store: NativeChatRestartStore,
-  toastId: string,
-  options: { duration?: number } = {}
-): void {
+function reissueResumeToast(store: NativeChatRestartStore, toastId: string): void {
   // Issuing a closed id would bring it back; a report that already left stays gone.
   if (!toast.getToasts().some((entry) => entry.id === toastId)) {
     return
   }
   toast.custom(() => <ConnectedResumeToast store={store} toastId={toastId} />, {
-    id: toastId,
-    ...options
+    id: toastId
   })
 }
 
@@ -154,14 +148,11 @@ function ConnectedResumeToast({
     observer.observe(node)
     return () => observer.disconnect()
   }, [store, toastId])
-  // Only an all-resumed report leaves on its own.
-  const setDuration = useCallback(
-    (duration: number) => reissueResumeToast(store, toastId, { duration }),
-    [store, toastId]
-  )
-  const { onDetailsOpened, interactionHandlers } = useResumeToastAutoDismiss(
+  const { onDetailsOpened } = useResumeToastAutoDismiss(
     view.phase === 'finished' && view.counts.needsYou === 0,
-    setDuration
+    close,
+    root,
+    resumeToastShowsDetails(view)
   )
 
   const feed = getStructuredAgentSessionStatusFeed(store.target)
@@ -198,7 +189,6 @@ function ConnectedResumeToast({
       ref={root}
       // Unstyled toasts aren't given the toaster's width; fill it rather than shrink to the text.
       className="w-[var(--width,100%)] max-w-full"
-      {...interactionHandlers}
     >
       {view.rows.length > 0 && (
         <NativeChatResumeToast

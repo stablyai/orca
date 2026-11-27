@@ -100,8 +100,8 @@ export type BotPaneFacts = {
   botOfWorkspace: (worktreeId: string) => string | null
   /** The bot whose chat, worker or run a pane is. */
   botOfPane: (paneKey: string) => string | null
-  /** Whether the pane is a member's in a bot group room. */
-  inGroupRoom: (sessionId: string) => boolean
+  /** The bot group room whose member the pane is, by group id; null when it is none's. */
+  groupRoomOf: (sessionId: string) => string | null
   /** A Dispatch's worker pane. */
   workerPane: (paneKey: string) => boolean
   /** Reads the chats of bots never read yet; false when one can't be read, so a worker pane may be an
@@ -137,8 +137,9 @@ export function botPhaseChangeScopes(
   }
   const tabId = parsePaneKey(change.paneKey)?.tabId
   const sessionId = tabId ? structuredAgentSessionIdOfTab(tabId) : null
-  if (sessionId && facts.inGroupRoom(sessionId)) {
-    scopes.push({ kinds: ['groups'] })
+  const groupId = sessionId ? facts.groupRoomOf(sessionId) : null
+  if (groupId) {
+    scopes.push({ kinds: ['groups'], groupIds: [groupId] })
   }
   return scopes
 }

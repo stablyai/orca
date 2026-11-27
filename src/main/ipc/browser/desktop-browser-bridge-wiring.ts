@@ -1,15 +1,19 @@
 /** Route eligible SSH hosts through their paired orcad connection to this desktop's browser bridge. */
-import { randomUUID } from 'node:crypto'
-import { webContents, type BrowserWindow } from 'electron'
+import { createHash, randomUUID } from 'node:crypto'
+import path from 'node:path'
+import { app, webContents, type BrowserWindow } from 'electron'
 import {
   DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_PAGE_TOOLS_CAPABILITY,
+  DESKTOP_BROWSER_BRIDGE_TAB_CREATE_FOCUS_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY,
   isDesktopBrowserBridgeMethod,
   isHostReachableDocument
 } from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
+import { DESKTOP_BROWSER_BRIDGE_FILE_TRANSFER_CAPABILITY } from '../../../shared/browser/client-hosting/desktop-browser-bridge-file-transfer-protocol'
+import { DesktopBrowserBridgeHostFiles } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-host-files'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { subscribeRemoteRuntimeTransport } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
@@ -47,12 +51,34 @@ import {
 import { markRemoteCliDrivenWorkspace } from '../../browser/desktop-browser-bridge/remote-cli-driven-workspaces'
 import { persistedStore } from '../ssh/ssh-ipc-context'
 import { localSshBrowserTargetIdForSession } from '../../browser/routing/local-host-partitions/local-ssh-browser-partitions'
+import { isTeamBrowserUseBlocked } from '../../browser/browser-team-policy'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../shared/orca-profiles/orca-cloud-team-policy'
+import { onTeamFeatureBlockChanged } from '../../orca-profiles/cloud-auth/active-team-capabilities'
 
 const ATTACH_TIMEOUT_MS = 15_000
 const BRIDGE_CLIENT_ID = randomUUID()
 
 let manager: DesktopBrowserBridgeManager | null = null
+// One per host: creating one sweeps its staging, which live transfers still use.
+const hostFilesByEnvironmentId = new Map<string, DesktopBrowserBridgeHostFiles>()
+const hostLabelByEnvironmentId = new Map<string, string>()
+
+function hostFilesFor(candidate: DesktopBrowserBridgeCandidate): DesktopBrowserBridgeHostFiles {
+  const { environmentId } = candidate
+  hostLabelByEnvironmentId.set(environmentId, candidate.hostLabel)
+  let files = hostFilesByEnvironmentId.get(candidate.environmentId)
+  if (!files) {
+    const scope = createHash('sha256').update(candidate.environmentId).digest('hex').slice(0, 16)
+    files = new DesktopBrowserBridgeHostFiles({
+      stagingRoot: path.join(app.getPath('temp'), 'orca-desktop-browser-bridge-files', scope),
+      hostLabel: () => hostLabelByEnvironmentId.get(environmentId) ?? candidate.hostLabel
+    })
+    hostFilesByEnvironmentId.set(candidate.environmentId, files)
+  }
+  return files
+}
 let stopWatchingRoutingSettings: (() => void) | null = null
+let stopWatchingTeamPolicy: (() => void) | null = null
 
 function log(message: string): void {
   console.info(`[desktop-browser-bridge] ${message}`)
@@ -62,6 +88,9 @@ export async function listDesktopBrowserBridgeCandidates(
   userDataPath: string,
   connections: Pick<SshConnectionManager, 'getState'> | null
 ): Promise<DesktopBrowserBridgeCandidate[]> {
+  if (isTeamBrowserUseBlocked()) {
+    return []
+  }
   const candidates: DesktopBrowserBridgeCandidate[] = []
   // Why: a managed host's eligibility follows its orcad claim, not whether it is listed in SSH
   // settings; environment recipes connect runtime-owned targets that are claimed the same way.
@@ -155,12 +184,14 @@ export function installDesktopBrowserBridge(options: {
             DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
             DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY,
             DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY,
-            DESKTOP_BROWSER_BRIDGE_PAGE_TOOLS_CAPABILITY
+            DESKTOP_BROWSER_BRIDGE_PAGE_TOOLS_CAPABILITY,
+            DESKTOP_BROWSER_BRIDGE_TAB_CREATE_FOCUS_CAPABILITY,
+            DESKTOP_BROWSER_BRIDGE_FILE_TRANSFER_CAPABILITY
           ]
         }
       )
     },
-    execute: (candidate, request, signal, hostRevoked) =>
+    execute: (candidate, request, signal, hostRevoked, host) =>
       executeDesktopBrowserBridgeRequest(
         request,
         {
@@ -196,10 +227,12 @@ export function installDesktopBrowserBridge(options: {
               { id: randomUUID(), authToken: '', method, params },
               { caller: { kind: 'local-cli' } }
             ),
+          hostFiles: hostFilesFor(candidate),
           audit: (entry) => log(`audit ${JSON.stringify(entry)}`)
         },
         signal,
-        hostRevoked
+        hostRevoked,
+        host
       ),
     log
   })
@@ -214,6 +247,10 @@ export function installDesktopBrowserBridge(options: {
         manager?.reconcile()
       }
     }) ?? null
+  stopWatchingTeamPolicy?.()
+  stopWatchingTeamPolicy = onTeamFeatureBlockChanged(ORCA_CLOUD_TEAM_POLICY_FLAGS.browserUse, () =>
+    manager?.reconcile()
+  )
   setDesktopBrowserBridgeControl({
     reconcile: () => manager?.reconcile(),
     resetEnvironment: (environmentId) => manager?.resetEnvironment(environmentId)
@@ -232,6 +269,8 @@ function isSshTargetBrowsingRouted(targetId: string): boolean {
 export function disposeDesktopBrowserBridge(): void {
   stopWatchingRoutingSettings?.()
   stopWatchingRoutingSettings = null
+  stopWatchingTeamPolicy?.()
+  stopWatchingTeamPolicy = null
   setDesktopBrowserBridgeControl(null)
   manager?.dispose()
   manager = null

@@ -6,6 +6,18 @@ import {
 } from '../../../../../../shared/agent-session/failures/agent-session-failure-copy'
 
 export const START_FAILURE_PIECES = {
+  botToolsNeedStatusHooks: (values) =>
+    translate(
+      'components.native-chat.failureWords.botToolsNeedStatusHooks',
+      COPY.botToolsNeedStatusHooks,
+      values
+    ),
+  botToolsGatewayOutdated: (values) =>
+    translate(
+      'components.native-chat.failureWords.botToolsGatewayOutdated',
+      COPY.botToolsGatewayOutdated,
+      values
+    ),
   savedConversationMissing: (values) =>
     translate(
       'components.native-chat.failureWords.savedConversationMissing',

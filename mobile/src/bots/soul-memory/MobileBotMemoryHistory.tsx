@@ -26,12 +26,12 @@ import {
   ListRow,
   SectionHeader
 } from '../../components/list/ListGroup'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import { SettingsNote } from '../../settings/settings-screen-frame'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import { botMemoryHistory, botMemoryUndo } from './bot-memory-operations'
@@ -47,7 +47,12 @@ const ICONS: Record<BotMemoryHistoryKind, LucideIcon> = {
   add: Plus
 }
 
-function dayLabel(t: ReturnType<typeof useMobileTranslation>, at: number, now: Date): string {
+function dayLabel(
+  t: ReturnType<typeof useMobileTranslation>,
+  intlLocale: string,
+  at: number,
+  now: Date
+): string {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   if (at >= today) {
     return t('settings.bots.memoryHistory.today', 'Today')
@@ -55,7 +60,7 @@ function dayLabel(t: ReturnType<typeof useMobileTranslation>, at: number, now: D
   if (at >= today - DAY_MS) {
     return t('settings.bots.memoryHistory.yesterday', 'Yesterday')
   }
-  return new Intl.DateTimeFormat(getUiIntlLocale(), { month: 'short', day: 'numeric' }).format(at)
+  return new Intl.DateTimeFormat(intlLocale, { month: 'short', day: 'numeric' }).format(at)
 }
 
 function HistoryRow(props: {
@@ -65,14 +70,22 @@ function HistoryRow(props: {
   onToggle: () => void
   onUndo: () => void
 }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { row } = props
   const Icon = ICONS[botMemoryHistoryKind(row)]
-  const time = new Intl.DateTimeFormat(getUiIntlLocale(), {
+  const time = new Intl.DateTimeFormat(intlLocale, {
     hour: 'numeric',
     minute: '2-digit'
   }).format(row.at)
   const Chevron = props.open ? ChevronUp : ChevronDown
+  // The desktop's tidy-up line explains Undo; on a phone row the name is enough.
+  const author =
+    row.by.kind === 'tidy-up' && row.undoable
+      ? t('bots.memoryHistory.tidyUp', 'Tidy-up')
+      : botMemoryHistoryAuthor(t, row)
   return (
     <View>
       <ListRow
@@ -83,8 +96,8 @@ function HistoryRow(props: {
         }
         title={botMemoryHistorySummary(t, row)}
         wrapTitle
-        subtitle={`${botMemoryHistoryAuthor(t, row)} · ${time}`}
-        subtitleLines={3}
+        subtitle={`${author} · ${time}`}
+        subtitleLines={2}
         accessory={<Chevron size={16} color={colors.textMuted} strokeWidth={2.2} />}
         onPress={props.onToggle}
       />
@@ -106,6 +119,7 @@ function HistoryRow(props: {
             <View style={styles.undo}>
               <MobileBotTextButton
                 label={t('settings.bots.memoryHistory.undoAction', 'Undo')}
+                accent
                 disabled={props.disabled}
                 onPress={props.onUndo}
               />
@@ -125,8 +139,8 @@ export function MobileBotMemoryHistory(props: {
   disabled: boolean
   actions: MemoryActions
 }) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { client, botId, version } = props
   // Days are named as of the load.
   const [loaded, setLoaded] = useState<{ rows: BotMemoryHistoryView[]; now: Date } | null>(null)
@@ -179,7 +193,7 @@ export function MobileBotMemoryHistory(props: {
   }
   const groups: { day: string; rows: BotMemoryHistoryView[] }[] = []
   for (const row of loaded.rows) {
-    const day = dayLabel(t, row.at, loaded.now)
+    const day = dayLabel(t, intlLocale, row.at, loaded.now)
     const last = groups.at(-1)
     if (last && last.day === day) {
       last.rows.push(row)
@@ -210,7 +224,7 @@ export function MobileBotMemoryHistory(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   mark: {
     width: 20,
     height: 20,
@@ -236,5 +250,6 @@ const styles = themedStyleSheet(() => ({
   },
   removed: { backgroundColor: colors.diffDeletedBg },
   added: { backgroundColor: colors.diffAddedBg },
-  undo: { flexDirection: 'row' }
+  // The text button's own inset, so Undo lines up with the lines above it.
+  undo: { flexDirection: 'row', marginLeft: -spacing.xs }
 }))

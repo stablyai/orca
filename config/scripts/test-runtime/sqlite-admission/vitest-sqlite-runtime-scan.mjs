@@ -18,6 +18,7 @@ const SQLITE_HARNESSES = new Set([
   'persistence-test-harness',
   'agent-session-record-store-test-harness',
   'structured-agent-session-rest-test-rig',
+  'structured-agent-session-queued-message-rig.test-fixture',
   'journal-host-database-test-support',
   'terminal-topology-profile-fixture',
   'acknowledged-terminal-tab-retirement-fixture',

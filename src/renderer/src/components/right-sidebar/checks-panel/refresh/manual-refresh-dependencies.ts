@@ -28,6 +28,7 @@ export type ChecksPanelManualRefreshInput = Pick<
   | 'refreshRequestKeyRef'
   | 'repo'
   | 'setChecks'
+  | 'setChecksError'
   | 'setChecksLoading'
   | 'setComments'
   | 'setCommentsLoading'

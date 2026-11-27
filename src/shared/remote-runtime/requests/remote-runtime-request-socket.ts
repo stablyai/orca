@@ -77,6 +77,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       let settled = false
       let ws: WebSocket | null = null
       let router: RemoteRuntimeRequestResponseRouter<TResult>
+      // Only the requested frame can put its keyed mutation in flight, not the status preflight.
+      let keyedRequestUnsent = Boolean(envelope?.orchestrationRequestId)
 
       const cleanupSocketListeners = (): void => {
         signal?.removeEventListener('abort', onAbort)
@@ -102,7 +104,10 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
           new RemoteRuntimeClientError(
             'runtime_timeout',
             'Timed out waiting for the remote Orca runtime to respond.',
-            { pairingStage: router.pairingStage }
+            {
+              pairingStage: router.pairingStage,
+              data: keyedRequestUnsent ? { requestSent: false } : undefined
+            }
           )
         )
       }
@@ -164,9 +169,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         }
         preparingSend = true
         startResponseWait()
-        void sendPreparedRpc(status).catch((error: unknown) =>
-          finishError(error instanceof Error ? error : new Error(String(error)))
-        )
+        void sendPreparedRpc(status)
       }
 
       async function sendPreparedRpc(status?: unknown): Promise<void> {
@@ -192,6 +195,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
               }
               const frame = handshake.channel.sealText(request)
               requestSelection?.onDispatch?.()
+              keyedRequestUnsent = false
               ws?.send(frame)
             }
           })

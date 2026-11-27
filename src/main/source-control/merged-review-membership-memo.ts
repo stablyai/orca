@@ -11,6 +11,15 @@ type RetentionPolicy<T> = {
   ttl: (value: T) => number
 }
 
+/** A completed review's commit ids never change, so keep them long, weighted by size. */
+export const COMMIT_ID_SET_RETENTION: RetentionPolicy<ReadonlySet<string>> = {
+  weight: (ids) => 1024 + 256 * ids.size,
+  maxWeight: 16 * 1024 * 1024,
+  failureWeight: 1024,
+  lru: true,
+  ttl: () => 6 * 60 * 60_000
+}
+
 export class MergedReviewMembershipUnavailableError extends Error {
   constructor() {
     super('Could not verify merged review commit membership')

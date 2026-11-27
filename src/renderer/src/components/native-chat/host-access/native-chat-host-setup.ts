@@ -14,10 +14,7 @@ import {
   agentSessionSignInEnv
 } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  agentSessionUnresolvedFailureRows,
-  isAgentSessionSetupFailureKind
-} from '../../../../../shared/agent-session/failures/agent-session-visible-failures'
+import { isAgentSessionSetupFailureKind } from '../../../../../shared/agent-session/failures/agent-session-visible-failures'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/failures/agent-session-availability'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -29,6 +26,8 @@ import {
 import type { AgentCliUpdateView } from '@/components/agent-cli-update/use-agent-cli-update'
 import { useNativeChatCliUpdate } from './native-chat-cli-update'
 import { openAgentSettingsAction } from '@/components/settings/navigation/open-agent-settings'
+import { useNativeChatAgySignIn } from './native-chat-agy-sign-in'
+import { useNativeChatUnresolvedFailureRows } from './use-native-chat-unresolved-failure-rows'
 
 const SIGN_IN_FAILURE_KINDS: ReadonlySet<string> = new Set([
   'notSignedIn',
@@ -217,6 +216,8 @@ function useNativeChatSignIn(
       }) ?? (platform === 'win32' ? null : 'posix')
     )
   })
+  // agy signs in from Orca, so its terminal command (`system`) never runs from here.
+  const antigravity = useNativeChatAgySignIn(input.agent, input.account, input.target)
   const command = agentSessionSignInCommand(input.agent, {
     account: input.account,
     remote: input.target.kind !== 'local',
@@ -235,7 +236,7 @@ function useNativeChatSignIn(
     [agent, command, terminal]
   )
   // A managed account owns sign-in: a terminal login after it succeeds would sign in another account.
-  return accountId ? managed : viaTerminal
+  return accountId ? managed : (antigravity ?? viaTerminal)
 }
 
 function useNativeChatInstall(
@@ -313,14 +314,8 @@ export function useNativeChatHostSetup(input: NativeChatHostSetupInput): NativeC
   const signIn = useNativeChatSignIn(input, terminal)
   const install = useNativeChatInstall(input, terminal)
   const update = useNativeChatCliUpdate(input.target, input.agent, input.onRechecked)
-  const { target, journalItems } = input
-  // Keyed by its ids so a streamed reply leaves the set, and the rows reading it, alone.
-  const unresolvedKey = useMemo(
-    // Sent messages too: a refused one's line can offer the fix.
-    () => agentSessionUnresolvedFailureRows(journalItems, { sentMessages: true }).join('\n'),
-    [journalItems]
-  )
-  const unresolvedFailureRows = useMemo(() => new Set(unresolvedKey.split('\n')), [unresolvedKey])
+  const { target } = input
+  const unresolvedFailureRows = useNativeChatUnresolvedFailureRows(input.journalItems)
   return useMemo(
     () => ({
       signIn,

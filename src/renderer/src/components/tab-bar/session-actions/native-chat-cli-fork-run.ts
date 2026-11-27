@@ -99,10 +99,7 @@ export async function reopenNativeChatCliForkOrigin(
   forkOrigins.delete(key)
   const opened = await openDesktopStructuredSession(
     { kind: 'history', structuredSession: origin, agent: terminal.agent },
-    target,
-    undefined,
-    undefined,
-    quietOpenFeedback
+    { target, feedback: quietOpenFeedback }
   )
   if (opened.kind !== 'opened') {
     return false

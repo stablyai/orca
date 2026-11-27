@@ -1,29 +1,19 @@
-import { useCallback, useState, type ReactNode } from 'react'
-import {
-  View,
-  Text,
-  Pressable,
-  ScrollView,
-  ActivityIndicator,
-  type HostInstance
-} from 'react-native'
+import type { ReactNode } from 'react'
+import { View, ScrollView, ActivityIndicator, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import {
-  ChevronDown,
-  ChevronUp,
-  Activity,
-  CheckCircle2,
-  ScrollText,
-  XCircle,
-  AlertTriangle
-} from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { CheckCircle2, RefreshCw, XCircle, AlertTriangle } from 'lucide-react-native'
+import { spacing } from '../theme/mobile-theme'
+import { useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { troubleshootCommonIssues } from './troubleshoot-common-issues'
-import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
+import { troubleshootScreenStylesSheet } from './troubleshoot-screen-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { SettingsNavBar, settingsScreenStyles } from '../settings/settings-screen-frame'
-import { LIST_LEADING_INSET, ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
+import {
+  SettingsNavBar,
+  SettingsSection,
+  settingsScreenStylesSheet
+} from '../settings/settings-screen-frame'
+import { LIST_LEADING_INSET, ListRow } from '../components/list/ListGroup'
 export type DiagnosticStatus = 'idle' | 'running' | 'done'
 
 export type CheckResult = {
@@ -33,14 +23,14 @@ export type CheckResult = {
 }
 
 function StatusIcon({ status }: { status: CheckResult['status'] }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   switch (status) {
     case 'pass':
-      return <CheckCircle2 size={14} color={colors.statusGreen} />
+      return <CheckCircle2 size={18} color={colors.statusGreen} />
     case 'fail':
-      return <XCircle size={14} color={colors.statusRed} />
+      return <XCircle size={18} color={colors.statusRed} />
     case 'warn':
-      return <AlertTriangle size={14} color={colors.textMuted} />
+      return <AlertTriangle size={18} color={colors.textMuted} />
   }
 }
 
@@ -52,6 +42,7 @@ export function TroubleshootView({
   runDiagnostics,
   onBack,
   onConnectionLog,
+  onIssue,
   developerRow
 }: {
   rootRef?: (node: HostInstance | null) => void
@@ -61,17 +52,28 @@ export function TroubleshootView({
   runDiagnostics: () => void
   onBack: () => void
   onConnectionLog: () => void
+  /** Opens a common issue's own page of steps. */
+  onIssue: (id: string) => void
   /** Developer and shell rows the route fills in. */
   developerRow?: ReactNode
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(troubleshootScreenStylesSheet)
+  const settingsScreenStyles = useThemedStyles(settingsScreenStylesSheet)
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const toggleSection = useCallback(
-    (id: string) => setExpandedId((prev) => (prev === id ? null : id)),
-    []
-  )
+  const problems = checks.filter((check) => check.status === 'fail').length
+  const summary =
+    diagnosticStatus !== 'done'
+      ? undefined
+      : problems === 0
+        ? t('diagnostics.troubleshootView.allGood', 'All good')
+        : problems === 1
+          ? t('diagnostics.troubleshootView.problems_one', '{{count}} problem', { count: problems })
+          : t('diagnostics.troubleshootView.problems_other', '{{count}} problems', {
+              count: problems
+            })
+  const running = diagnosticStatus === 'running'
   return (
     <View ref={rootRef} style={[settingsScreenStyles.container, { paddingTop: insets.top }]}>
       <SettingsNavBar
@@ -87,97 +89,55 @@ export function TroubleshootView({
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Pressable
-          style={({ pressed }) => [
-            styles.diagnosticButton,
-            pressed && styles.diagnosticButtonPressed,
-            diagnosticStatus === 'running' && styles.diagnosticButtonDisabled
-          ]}
-          testID="diagnostics-run"
-          onPress={runDiagnostics}
-          disabled={diagnosticStatus === 'running'}
-        >
-          {diagnosticStatus === 'running' ? (
-            <ActivityIndicator size="small" color={colors.textPrimary} />
-          ) : (
-            <Activity size={16} color={colors.textPrimary} />
-          )}
-          <Text style={styles.diagnosticButtonLabel}>
-            {diagnosticStatus === 'running'
-              ? t('diagnostics.troubleshootView.running', 'Running…')
-              : diagnosticStatus === 'done'
-                ? t('diagnostics.troubleshootView.runAgain', 'Run again')
-                : t('diagnostics.troubleshootView.runDiagnostics', 'Run diagnostics')}
-          </Text>
-        </Pressable>
+        <SettingsSection first title={summary} separatorInset={LIST_LEADING_INSET}>
+          {checks.map((check) => (
+            <ListRow
+              key={check.label}
+              title={check.label}
+              subtitle={check.detail}
+              subtitleColor={check.status === 'fail' ? colors.statusRed : undefined}
+              leading={<StatusIcon status={check.status} />}
+            />
+          ))}
+          <ListRow
+            key="run"
+            title={
+              diagnosticStatus === 'idle'
+                ? t('diagnostics.troubleshootView.runCheck', 'Run check')
+                : t('diagnostics.troubleshootView.checkAgain', 'Check again')
+            }
+            accent
+            busy={running}
+            testID="diagnostics-run"
+            leading={<RefreshCw size={18} color={colors.accentBlue} strokeWidth={2.2} />}
+            accessory={
+              running ? <ActivityIndicator size="small" color={colors.textSecondary} /> : undefined
+            }
+            onPress={runDiagnostics}
+          />
+        </SettingsSection>
 
-        <Pressable
-          style={({ pressed }) => [
-            styles.diagnosticButton,
-            pressed && styles.diagnosticButtonPressed
-          ]}
-          onPress={onConnectionLog}
-        >
-          <ScrollText size={16} color={colors.textPrimary} />
-          <Text style={styles.diagnosticButtonLabel}>
-            {t('diagnostics.troubleshootView.viewNetworkDiagnostics', 'View network diagnostics')}
-          </Text>
-        </Pressable>
+        <SettingsSection>
+          <ListRow
+            key="log"
+            title={t('diagnostics.troubleshootView.connectionLog', 'Connection log')}
+            navigates
+            onPress={onConnectionLog}
+          />
+        </SettingsSection>
 
         {developerRow}
 
-        {checks.length > 0 && (
-          <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
-            {checks.map((check) => (
-              <ListRow
-                key={check.label}
-                title={check.label}
-                leading={<StatusIcon status={check.status} />}
-                detail={
-                  <Text
-                    style={[styles.checkDetail, check.status === 'fail' && styles.checkDetailFail]}
-                  >
-                    {check.detail}
-                  </Text>
-                }
-              />
-            ))}
-          </ListGroup>
-        )}
-
-        <SectionHeader
-          title={t('diagnostics.troubleshootView.commonIssues', 'Common issues')}
-          first
-        />
-
-        <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
-          {troubleshootCommonIssues(t, hostEndpoints).map((section) => (
-            <View key={section.id}>
-              <ListRow
-                title={section.title}
-                leading={<section.icon size={16} color={colors.textSecondary} />}
-                accessory={
-                  expandedId === section.id ? (
-                    <ChevronUp size={16} color={colors.textMuted} />
-                  ) : (
-                    <ChevronDown size={16} color={colors.textMuted} />
-                  )
-                }
-                onPress={() => toggleSection(section.id)}
-              />
-              {expandedId === section.id && (
-                <View style={styles.accordionBody}>
-                  {section.steps.map((step, j) => (
-                    <View key={j} style={styles.stepRow}>
-                      <Text style={styles.bullet}>•</Text>
-                      <Text style={styles.stepText}>{step}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
+        <SettingsSection title={t('diagnostics.troubleshootView.commonIssues', 'Common issues')}>
+          {troubleshootCommonIssues(t, hostEndpoints).map((issue) => (
+            <ListRow
+              key={issue.id}
+              title={issue.title}
+              navigates
+              onPress={() => onIssue(issue.id)}
+            />
           ))}
-        </ListGroup>
+        </SettingsSection>
       </ScrollView>
     </View>
   )

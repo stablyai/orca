@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { z } from 'zod'
 import { ConnectorErrorResponse } from '../../shared/connectors/connector-cloud-contract'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
@@ -6,15 +7,17 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 15_000
 
 // A refusal may carry words for the owner, e.g. why `host_key_limit` refused this machine; control
 // and bidi characters become spaces so they can't reshape where it is shown.
-const ConnectorRefusal = ConnectorErrorResponse.extend({
-  reason: z.string().max(64).optional().catch(undefined),
-  message: z
-    .string()
-    .max(500)
-    .transform((text) => text.replace(/[\p{Cc}\p{Cf}\u2028\u2029\s]+/gu, ' ').trim() || undefined)
-    .optional()
-    .catch(undefined)
-})
+const ConnectorRefusal = lazyZodSchema(() =>
+  ConnectorErrorResponse.extend({
+    reason: z.string().max(64).optional().catch(undefined),
+    message: z
+      .string()
+      .max(500)
+      .transform((text) => text.replace(/[\p{Cc}\p{Cf}\u2028\u2029\s]+/gu, ' ').trim() || undefined)
+      .optional()
+      .catch(undefined)
+  })
+)
 
 export type ConnectorFailure = {
   ok: false

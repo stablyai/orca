@@ -31,7 +31,7 @@ const STATUS_LABEL_CLASS: Record<ServerRowStatusTone, string> = {
 
 export function ServerRowChip({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
-    <span className="shrink-0 rounded border border-border bg-accent px-1.5 py-px text-3xs leading-4 text-muted-foreground">
+    <span className="max-w-full shrink-0 truncate rounded border border-border bg-accent px-1.5 py-px text-3xs leading-4 text-muted-foreground">
       {children}
     </span>
   )
@@ -39,9 +39,9 @@ export function ServerRowChip({ children }: { children: React.ReactNode }): Reac
 
 export function ServerRowStatusLabel({ status }: { status: ServerRowStatus }): React.JSX.Element {
   return (
-    <span className="flex min-w-0 items-center gap-2 text-xs">
+    <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
       {status.busy ? (
-        <LoadingSpinner className="size-3 shrink-0 text-muted-foreground" />
+        <LoadingSpinner className="size-3 shrink-0" />
       ) : (
         <span className={cn('size-2 shrink-0 rounded-full', STATUS_DOT_CLASS[status.tone])} />
       )}
@@ -60,6 +60,7 @@ type ServerListRowProps = {
   meta?: React.ReactNode
   status: ServerRowStatus | null
   primaryAction?: React.ReactNode
+  stackPrimaryActionOnNarrow?: boolean
   /** DropdownMenu items; null keeps the slot so columns stay aligned. */
   menuItems?: React.ReactNode
   menuDisabled?: boolean
@@ -75,36 +76,56 @@ export function ServerListRow({
   meta,
   status,
   primaryAction,
+  stackPrimaryActionOnNarrow = false,
   menuItems,
   menuDisabled = false,
   footer
 }: ServerListRowProps): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div data-settings-section={sectionId} className="scroll-mt-8">
-      <div className="flex min-h-14 items-center gap-3 px-4 py-2.5">
+    <div data-settings-section={sectionId} className="@container/server-row scroll-mt-8">
+      <div className="grid min-h-14 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-1 px-4 py-2.5 @lg/server-row:grid-cols-[auto_minmax(0,1fr)_8rem_minmax(6rem,max-content)_1.5rem]">
         <span className="shrink-0 text-muted-foreground">
           {icon ?? <Server className="size-4" />}
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-sm font-medium">{name}</span>
-            {chips}
-            {descriptor ? (
-              <span className="truncate text-xs text-muted-foreground">{descriptor}</span>
-            ) : null}
+        <div className="contents @lg/server-row:block">
+          <div className="contents @lg/server-row:flex @lg/server-row:min-w-0 @lg/server-row:items-center @lg/server-row:gap-2">
+            <div
+              className={cn(
+                'col-start-2 row-start-1 flex min-w-0 items-center gap-2 @lg/server-row:contents',
+                stackPrimaryActionOnNarrow && '@max-xs/server-row:col-end-4'
+              )}
+            >
+              <span className="max-w-full truncate text-sm font-medium @max-lg/server-row:shrink-0">
+                {name}
+              </span>
+              {descriptor ? (
+                <span className="truncate text-xs text-muted-foreground">{descriptor}</span>
+              ) : null}
+            </div>
+            <div className="col-span-3 col-start-2 flex min-w-0 flex-wrap gap-1 empty:hidden @lg/server-row:shrink-0 @lg/server-row:flex-nowrap">
+              {chips}
+            </div>
           </div>
           {meta ? (
-            <div className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+            <div className="col-span-3 col-start-2 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
               {meta}
             </div>
           ) : null}
         </div>
-        <div className="w-32 shrink-0">
+        <div className="col-span-3 col-start-2 empty:hidden @lg/server-row:col-span-1 @lg/server-row:col-start-3 @lg/server-row:row-start-1">
           {status ? <ServerRowStatusLabel status={status} /> : null}
         </div>
-        <div className="flex w-24 shrink-0 justify-end">{primaryAction}</div>
-        <div className="flex w-6 shrink-0 justify-end">
+        <div
+          className={cn(
+            'col-start-3 row-start-1 flex justify-end @lg/server-row:col-start-4',
+            stackPrimaryActionOnNarrow &&
+              '@max-xs/server-row:col-span-4 @max-xs/server-row:col-start-1 @max-xs/server-row:row-start-auto'
+          )}
+        >
+          {primaryAction}
+        </div>
+        <div className="col-start-4 row-start-1 flex justify-end @lg/server-row:col-start-5">
           {menuItems ? (
             <DropdownMenu modal={false}>
               <Tooltip>

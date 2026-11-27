@@ -43,12 +43,13 @@ export function foldConnectorReview(written: ConnectorReplyBody): ConnectorReply
 }
 
 /** Retries an unreachable or busy cloud with the same idempotency key, which never posts twice, and
- *  the usual backoff. */
+ *  the usual backoff; `proceed` is asked before each retry, which stops once it says no. */
 export async function postWithRetries<TSchema extends z.ZodType>(
   transport: ConnectorTransport,
   call: { path: string; body: unknown; schema: TSchema },
   signal: AbortSignal,
-  random: () => number
+  random: () => number,
+  proceed?: () => boolean
 ): Promise<ConnectorResult<z.infer<TSchema>>> {
   for (let failures = 0; ; failures++) {
     const sent = await transport.call(call.path, call.body, call.schema, { signal })
@@ -62,6 +63,9 @@ export async function postWithRetries<TSchema extends z.ZodType>(
       return sent
     }
     await delayUnlessAborted(waitMs, signal)
+    if (proceed && !proceed()) {
+      return sent
+    }
   }
 }
 
@@ -69,7 +73,8 @@ export function postConnectorReply(
   transport: ConnectorTransport,
   body: ConnectorReplyBody,
   signal: AbortSignal,
-  random: () => number
+  random: () => number,
+  proceed?: () => boolean
 ): Promise<ConnectorResult<ConnectorReplyResponse>> {
   return postWithRetries(
     transport,
@@ -79,7 +84,8 @@ export function postConnectorReply(
       schema: ConnectorReplyResponse
     },
     signal,
-    random
+    random,
+    proceed
   )
 }
 

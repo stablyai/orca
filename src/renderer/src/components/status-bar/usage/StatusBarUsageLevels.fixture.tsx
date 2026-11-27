@@ -5,6 +5,7 @@ import type {
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import { ProviderSegment } from './StatusBarProviderSegment'
+import { UsageUnitLabel } from './usage-unit-label'
 
 const NOW = Date.now()
 const HOUR = 60 * 60_000
@@ -63,6 +64,7 @@ function levelsFixture(mode: StatusBarUsageMode) {
               className="flex items-center gap-3 whitespace-nowrap rounded border border-border px-2 py-1"
             >
               <span className="w-32 shrink-0 text-muted-foreground">{`${row.label} · ${compact ? 'narrow' : 'normal'}`}</span>
+              {mode === 'compact' ? <UsageUnitLabel display="used" compact /> : null}
               {row.providers.map((p) => (
                 <ProviderSegment
                   key={p.provider}

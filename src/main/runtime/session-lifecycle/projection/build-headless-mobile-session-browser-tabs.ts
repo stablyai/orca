@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../shared/browser/browser-metadata-redaction'
 import { buildRuntimeClientBrowserTabs } from './build-runtime-client-browser-tabs'
 import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/restoration/mobile-session-publication-preservation'
@@ -33,6 +34,16 @@ import { closeLeafOrTab } from '../../../persistence/terminal-topology/terminal-
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'
 
 export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithPersistTerminalSurfaceRetirements {
+  protected abstract terminalCloseLeafIds(
+    worktreeId: string,
+    target: TerminalSurfaceCloseTarget
+  ): string[]
+  protected abstract retireClosedCoordinatorPanes(
+    worktreeId: string,
+    tabId: string,
+    leafIds: readonly string[]
+  ): void
+
   protected abstract getRendererOwnedBrowserPageIds(
     ...args: Parameters<BrowserOwnership['getRendererOwnedBrowserPageIds']>
   ): ReturnType<BrowserOwnership['getRendererOwnedBrowserPageIds']>
@@ -46,9 +57,10 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     const serverTabs =
       backend && this.agentBrowserBridge?.tabList
         ? [
-            ...this.agentBrowserBridge
-              .tabList(worktreeId)
-              .tabs.filter((tab) => backend.ownsTab(tab.browserPageId)),
+            ...this.agentBrowserBridge.tabList(worktreeId).tabs.filter((tab) =>
+              // A sign-in popup a server page opened is streamed like a tab, as a desktop shows it in a window.
+              backend.ownsTab(tab.openerBrowserPageId ?? tab.browserPageId)
+            ),
             ...this.serveBrowserTabs.listUnstarted(worktreeId)
           ].filter((tab) => !rendererPageIds.has(tab.browserPageId))
         : []
@@ -73,8 +85,8 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         faviconUrl: this.agentBrowserBridge?.getRemoteTabFaviconUrl(tab.browserPageId) ?? null,
         loadError: tab.loadError ?? undefined,
         certificateFailure: tab.certificateFailure ?? undefined,
-        ...(persistedProps ? { color: persistedProps.color } : {}),
-        ...(persistedProps ? { isPinned: persistedProps.isPinned === true } : {}),
+        ...this.agentBrowserBridge?.getPageRowFields(tab.browserPageId),
+        ...(persistedProps && { ...persistedProps, isPinned: persistedProps.isPinned === true }),
         isActive: tab.active === true
       }
     })
@@ -82,17 +94,15 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
       getRuntimeBrowserPageRegistry(this).listPages(worktreeId),
       getBrowserHostLeaseRegistry(this)
     )
-    return [...publishedServerTabs, ...publishedClientTabs]
+    return [...publishedServerTabs, ...publishedClientTabs].map(redactBrowserMetadata)
   }
 
   protected getPersistedUnifiedSessionTabProps(
     worktreeId: string,
     tabId: string
   ): Pick<Tab, 'color' | 'isPinned'> | null {
-    const tab =
-      this.getWorkspaceSessionForWorktree(worktreeId)?.unifiedTabs?.[worktreeId]?.find(
-        (candidate) => candidate.id === tabId || candidate.entityId === tabId
-      ) ?? null
+    const tabs = this.getWorkspaceSessionForWorktree(worktreeId)?.unifiedTabs?.[worktreeId]
+    const tab = tabs?.find((candidate) => candidate.id === tabId || candidate.entityId === tabId)
     return tab ? { color: tab.color, isPinned: tab.isPinned } : null
   }
 
@@ -131,6 +141,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         : null
     let ptyIdsToKill: string[] = []
     let refusal: Error | undefined
+    const closingLeafIds = this.terminalCloseLeafIds(worktreeId, target)
     const hostIds = () => this.getWorkspaceSessionHostIdsForTab(worktreeId, target.tabId)
     const fenced = acknowledgeTabRetirement !== null
     try {
@@ -161,6 +172,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     if (refusal) {
       throw refusal
     }
+    this.retireClosedCoordinatorPanes(worktreeId, target.tabId, closingLeafIds)
     return ptyIdsToKill
   }
 

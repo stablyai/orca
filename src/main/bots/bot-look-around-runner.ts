@@ -1,6 +1,7 @@
 // Starts each bot's looks: on its Look around hours, and on Look now (Settings, or a bot's onboarding).
 // A look is a new conversation in the bot's home whose session the store records before it starts,
 // which is how its launch, its tool calls and Orca's own commands know it may only read.
+import { botFailure, botFailureEnglishTable } from '../../shared/bots/bot-failure-copy'
 import { OWNER_ACTS_FOR } from '../../shared/bots/bot-acts-for'
 import { randomUUID } from 'node:crypto'
 import type { Bot } from '../../shared/bot-types'
@@ -41,13 +42,15 @@ export const LOOK_RUN_LIMIT_MS = 10 * 60 * 1000
 /** How long a stopped look's turn gets to end before its Stop is asked again. */
 export const LOOK_STOP_GRACE_MS = BACKGROUND_RUN_STOP_GRACE_MS
 
-export const LOOK_FAILURES = {
-  unfinished: "The last look didn't finish.",
-  timedOut: `The last look was stopped after ${LOOK_RUN_LIMIT_MS / 60_000} min.`,
-  interrupted: 'Orca stopped during the last look.',
-  couldNotStart: "The last look couldn't start.",
-  asleep: 'The last look was missed because this computer was asleep.'
-} as const
+export const LOOK_FAILURE_CODES = {
+  unfinished: botFailure('lookUnfinished'),
+  timedOut: botFailure('lookTimedOut', { minutes: LOOK_RUN_LIMIT_MS / 60_000 }),
+  interrupted: botFailure('lookInterrupted'),
+  couldNotStart: botFailure('lookCouldNotStart'),
+  asleep: botFailure('lookAsleep')
+}
+
+export const LOOK_FAILURES = botFailureEnglishTable(LOOK_FAILURE_CODES)
 
 export type LookNowRefusal = 'not_found' | 'unsupported' | 'off' | 'paused' | 'running'
 export type LookNowOutcome = { started: true } | { refused: LookNowRefusal }

@@ -1,6 +1,6 @@
 import { gitOptionalLocksDisabledEnv } from '../../command-runner/git-environment/git-process-env'
 import { gitStreamStdout } from '../../command-runner/git-stream-stdout'
-import { readStampedGitConfig } from '../input-stamps/stamped-git-config'
+import { readStampedGitConfig, type StampedGitConfigKey } from '../input-stamps/stamped-git-config'
 import type { GetStatusOptions } from './get-status-options'
 import { bulkPathspecCommands } from '../git-pathspec'
 
@@ -31,7 +31,7 @@ export async function readUntrackedScan(
 }
 
 /** Git's default `keep` only reuses a cache someone already built, so count only an explicit opt-in. */
-function isUntrackedCacheEnabled(values: ReadonlyMap<string, string>): boolean {
+function isUntrackedCacheEnabled(values: ReadonlyMap<StampedGitConfigKey, string>): boolean {
   const cache = values.get('core.untrackedcache')?.trim().toLowerCase()
   if (cache !== undefined && cache !== 'keep') {
     return isGitTrue(cache)

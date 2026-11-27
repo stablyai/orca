@@ -3,10 +3,10 @@
 import { Check, ChevronLeft, RotateCcw } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import {
-  filterNativeChatMentionChats,
-  type NativeChatBotChatPicker,
-  type NativeChatMentionChat
+import { botMentionChatsMatching } from '../../../../../../shared/bots/bot-mention-context'
+import type {
+  NativeChatBotChatPicker,
+  NativeChatMentionChat
 } from '../../native-chat-mention-chats'
 import { PickerOptionButton, PickerStatus } from './NativeChatPickerParts'
 
@@ -15,9 +15,7 @@ export function nativeChatMentionChatOptions(
   shown: NonNullable<NativeChatBotChatPicker['shown']>,
   filter: string
 ): readonly NativeChatMentionChat[] {
-  return shown.chats.status === 'ready'
-    ? filterNativeChatMentionChats(shown.chats.chats, filter)
-    : []
+  return shown.chats.status === 'ready' ? botMentionChatsMatching(shown.chats.chats, filter) : []
 }
 
 export function NativeChatMentionChatList({

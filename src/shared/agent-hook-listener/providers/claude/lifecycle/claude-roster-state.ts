@@ -102,12 +102,12 @@ export function getOrCreateClaudeSubagentRoster(
 export function updateClaudeRunningNonAgentTask(
   state: HookListenerState,
   paneKey: string,
-  hasRunningNonAgentTask: boolean
+  inventory: { hasRunningNonAgentTask: boolean; runningNonAgentTaskCommands: readonly string[] }
 ): void {
-  if (hasRunningNonAgentTask) {
-    state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+  if (inventory.hasRunningNonAgentTask) {
+    state.claudeRunningNonAgentTasksByPaneKey.set(paneKey, inventory.runningNonAgentTaskCommands)
   } else {
-    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    state.claudeRunningNonAgentTasksByPaneKey.delete(paneKey)
   }
 }
 

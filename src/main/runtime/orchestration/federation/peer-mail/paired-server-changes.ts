@@ -9,8 +9,10 @@ import {
   remoteServerPin
 } from '../../db/remote-owned/remote-run-links'
 import { tellUnpairedPeerQuestions } from './peer-questions-out'
+import { retirePairedServerRoute } from '../paired-server-asks/paired-server-ask-removal'
 
-/** Its Runs' Tasks here fail with why, and the askers still waiting on it are told. */
+/** Its Runs' Tasks here fail with why, the askers still waiting on it are told, and its agents'
+ *  cards and allowances here go. */
 export function settleRemovedPairedServer(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
@@ -22,6 +24,7 @@ export function settleRemovedPairedServer(
     runtime.notifyMessageArrived(handle, type)
   )
   tellUnpairedPeerQuestions(runtime, db, { environmentId, serverName, reason })
+  retirePairedServerRoute(runtime, environmentId)
 }
 
 /** Work and questions sent under an older pairing are lost with it. */

@@ -22,6 +22,7 @@ export function classifyWorkspaceCreateError(error: unknown): WorkspaceCreateErr
   }
   // Specific Git anchors exclude SSH connectivity and sparse-validation failures, which remain unknown.
   if (
+    text.includes('could not look up the default base branch') ||
     text.includes('fatal:') ||
     text.includes('git worktree') ||
     text.includes('created but not found in listing')

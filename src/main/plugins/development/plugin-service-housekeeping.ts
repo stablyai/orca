@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import { PLUGIN_WORKER_REAP_INTERVAL_MS } from '../../../shared/plugins/workers/plugin-host-protocol'
 import { PluginDevWatcher } from './plugin-dev-watcher'
+import { teamAllowsMemberPluginSource } from '../installation/plugin-team-install-policy'
 
 type DevRootWatch = {
   watcher: PluginDevWatcher
@@ -31,7 +32,8 @@ export class PluginServiceHousekeeping {
       }, PLUGIN_WORKER_REAP_INTERVAL_MS)
       this.reapTimer.unref?.()
     }
-    const roots = new Set(options.devPaths.map((path) => resolve(path)))
+    const devPaths = teamAllowsMemberPluginSource() ? options.devPaths : []
+    const roots = new Set(devPaths.map((path) => resolve(path)))
     for (const [root, watch] of this.devWatchers) {
       if (!roots.has(root)) {
         watch.watcher.dispose()

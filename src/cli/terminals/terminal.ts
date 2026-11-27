@@ -231,6 +231,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       title: getOptionalStringFlag(flags, 'title'),
       focus,
       ...(focus ? { presentation: 'focused' } : {}),
+      ...(flags.has('keep-open') ? { keepOpen: true } : {}),
       // Compat: hosts before v1.4.211 (#22384) need renderer startup replies; remove once unsupported.
       ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
     })
@@ -275,7 +276,8 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       terminal: await getTerminalHandle(flags, cwd, client),
       direction: directionFlag,
       command: getOptionalStringFlag(flags, 'command'),
-      ...(retrySplit !== undefined ? { retrySplit } : {})
+      ...(retrySplit !== undefined ? { retrySplit } : {}),
+      ...(flags.has('keep-open') ? { keepOpen: true } : {})
     })
     printResult(result, json, formatTerminalSplit)
   }

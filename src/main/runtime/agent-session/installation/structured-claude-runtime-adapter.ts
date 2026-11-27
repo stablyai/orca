@@ -13,7 +13,12 @@ import {
 } from '../../../claude/command-catalog/claude-at-rest-commands'
 import type { ClaudeCommandCatalogProbe } from '../../../claude/command-catalog/claude-command-catalog-probe'
 import { openClaudeStreamJsonConnection } from '../../../claude/claude-stream-json-connection'
-import type { ClaudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
+import {
+  CLAUDE_MCP_CONFIG_FLAG,
+  claudeManagedSettingsRefuse,
+  type ClaudeCliFlagSupport
+} from '../../../claude/cli-capabilities/claude-cli-flag-support'
+import { noteClaudeMcpConfigRefused } from '../../../mcp-servers/mcp-agent-problems'
 import { prewarmClaudeCliFlags } from '../../../claude/cli-capabilities/claude-cli-flag-prewarm'
 
 export type StructuredClaudeRuntimeAdapterDeps = {
@@ -171,6 +176,9 @@ export function openClaudeConnectionOf(
               },
               args[0]
             )
+            if (claudeManagedSettingsRefuse(args[0], CLAUDE_MCP_CONFIG_FLAG.option)) {
+              noteClaudeMcpConfigRefused(true)
+            }
             handlers.onExit?.(...args)
           }
         },
