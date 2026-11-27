@@ -66,9 +66,12 @@ export function ensureJournalConnectorRepliesSchema(db: {
       db.exec(`ALTER TABLE journal_connector_replies ADD COLUMN ${name} ${type}`)
     }
   }
-  // A Stop finds the rows of the messages it took back; an older build ignores these indexes.
+  // A Stop finds the rows of the messages it took back, and outbox scans only read unsent rows;
+  // an older build ignores these indexes.
   db.exec(`CREATE INDEX IF NOT EXISTS journal_connector_replies_message
     ON journal_connector_replies(session_id, epoch, message_id) WHERE outcome IS NULL;
   CREATE INDEX IF NOT EXISTS journal_connector_replies_claim
-    ON journal_connector_replies(claim_message_id) WHERE claim_message_id IS NOT NULL`)
+    ON journal_connector_replies(claim_message_id) WHERE claim_message_id IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS journal_connector_replies_unsent
+    ON journal_connector_replies(account, delivery_id) WHERE sent_at IS NULL`)
 }
