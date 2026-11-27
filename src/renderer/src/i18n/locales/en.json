@@ -20909,6 +20909,9 @@
           "featuredDetail": "most installed, one per category",
           "newlyAdded": "Newly added",
           "newlyAddedDetail": "across your catalogs"
+        },
+        "PluginsPage": {
+          "close": "Close plugins"
         }
       },
       "agent-workspace-trust-decision": {
