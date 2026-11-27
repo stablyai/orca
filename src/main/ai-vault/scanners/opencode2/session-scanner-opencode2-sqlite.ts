@@ -204,8 +204,9 @@ function* readCaptureRows(db: SyncDatabase, sessionId: string): Generator<Previe
     throw new Error('OpenCode 2 transcript schema is unreadable')
   }
   const rows = db
-    .prepare(`SELECT id, type, data, time_created FROM session_message
-    WHERE session_id = ? AND type IN ('user','assistant','tool') ORDER BY time_created, seq`)
+    .prepare(`SELECT id, type, time_created,
+    CASE WHEN length(CAST(data AS BLOB)) <= ${OPENCODE_TRANSCRIPT_MAX_ROW_BYTES} THEN data ELSE NULL END AS data
+    FROM session_message WHERE session_id = ? AND type IN ('user','assistant','tool') ORDER BY time_created, seq`)
     .iterate(sessionId)
   let count = 0
   let batch: PreviewRow[] = []
@@ -213,7 +214,10 @@ function* readCaptureRows(db: SyncDatabase, sessionId: string): Generator<Previe
     if (++count > OPENCODE_CAPTURE_RECORD_LIMIT) {
       throw new Error('OpenCode 2 transcript exceeds capture limits; no partial read was published')
     }
-    batch.push(parseOpenCode2MessageRow(value))
+    // An oversized 2.3 message (parts inline) is left out, as one whose session_part rows outgrow the cap.
+    if (asRecord(value)?.data !== null) {
+      batch.push(parseOpenCode2MessageRow(value))
+    }
     if (batch.length === CAPTURE_PART_BATCH) {
       yield* withCappedSessionParts(db, sessionId, batch)
       batch = []
@@ -222,7 +226,7 @@ function* readCaptureRows(db: SyncDatabase, sessionId: string): Generator<Previe
   yield* withCappedSessionParts(db, sessionId, batch)
 }
 
-// Same per-message cap as transcript pages, so one batch can't load unbounded part data before the capture budget counts it.
+// Same per-message cap as transcript pages, so one batch can't load unbounded data before the capture budget counts it.
 function withCappedSessionParts(
   db: SyncDatabase,
   sessionId: string,
