@@ -64,10 +64,6 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     super.checkForUpdatesFromMenu(options)
   }
 
-  downloadUpdate(automatic = false): void {
-    super.downloadUpdate(automatic)
-  }
-
   applyAutomaticUpdatesSetting(): void {
     if (this.currentStatus.state === 'downloaded' && !this.currentStatus.installing) {
       this.publishDownloadStatus(this.currentStatus)
@@ -77,7 +73,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
   }
 
   override quitAndInstall(
-    trigger: UpdateInstallTrigger = 'manual',
+    trigger: UpdateInstallTrigger = 'restart-click',
     isCurrentTeamRestart?: () => boolean
   ): void {
     super.quitAndInstall(trigger, isCurrentTeamRestart)
@@ -262,7 +258,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
         this.markUpdateAvailableEventPending(attemptId),
       markMissingManifestPrereleaseFallbackChecking: () =>
         this.markMissingManifestPrereleaseFallbackChecking(),
-      performQuitAndInstall: () => this.performRecordedInstall('manual'),
+      performQuitAndInstall: () => this.performRecordedInstall(this.deferredInstallTrigger),
       commitStagedMacInstall: () => this.commitStagedMacInstall(),
       finishMacStaging: () => this.finishMacStaging(),
       failMacStaging: (error) => {

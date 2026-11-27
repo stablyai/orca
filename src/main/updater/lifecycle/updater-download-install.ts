@@ -16,13 +16,13 @@ import {
 } from './updater-state'
 import { UpdaterRequiredRestart } from './updater-required-restart'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'
-import type { UpdateInstallTrigger } from './updater-state'
+import type { DownloadCompletion, UpdateInstallTrigger } from './updater-state'
 
 export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
   private macStagingTimer: ReturnType<typeof setTimeout> | null = null
 
   protected quitAndInstall(
-    trigger: UpdateInstallTrigger = 'manual',
+    trigger: UpdateInstallTrigger = 'restart-click',
     isCurrentTeamRestart?: () => boolean
   ): void {
     if (
@@ -55,6 +55,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
         (status) => this.sendStatus(status)
       )
     ) {
+      this.deferredInstallTrigger = trigger
       return
     }
 
@@ -135,7 +136,11 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
       this.sendStatus({ ...status, ...this.requiredUpdateStatusFields() })
       return
     }
+    const installWhenDownloaded =
+      status.state === 'downloaded' && status.version === this.installWhenDownloadedVersion
     if (status.state === 'downloaded') {
+      // The card's request belongs to this download alone, even when team policy takes it over.
+      this.installWhenDownloadedVersion = null
       this.finishMacStaging()
       if (this.holdUpdateForTeamPolicy(status.version)) {
         return
@@ -145,17 +150,24 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
         return
       }
     }
-    if (status.state !== 'downloaded' || status.version !== this.automaticDownloadVersion) {
+    if (
+      status.state !== 'downloaded' ||
+      (status.version !== this.automaticDownloadVersion && !installWhenDownloaded)
+    ) {
       this.sendStatus(status)
       return
     }
     if (this.pendingQuitAndInstallTimer || this.quitAndInstallInProgress) {
       return
     }
-    const automatic = this.getAutomaticUpdates?.() === true
-    this.sendStatus(automatic ? { ...status, installing: true } : status, { force: true })
-    if (automatic) {
-      this.quitAndInstall('automatic')
+    const trigger: UpdateInstallTrigger | null = installWhenDownloaded
+      ? 'card-download'
+      : this.getAutomaticUpdates?.() === true
+        ? 'automatic'
+        : null
+    this.sendStatus(trigger ? { ...status, installing: true } : status, { force: true })
+    if (trigger) {
+      this.quitAndInstall(trigger)
     }
   }
 
@@ -165,7 +177,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
       this.currentStatus.state === 'available' &&
       this.canDownloadAutomatically(this.currentStatus.version)
     ) {
-      this.downloadUpdate(true)
+      this.downloadUpdate('automatic')
     }
   }
 
@@ -180,7 +192,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
     )
   }
 
-  protected downloadUpdate(automatic = false): void {
+  downloadUpdate(completion: DownloadCompletion = 'wait-for-restart'): void {
     if (
       this.localBuildSelectionInProgress ||
       this.pinnedBuildSelectionInProgress ||
@@ -224,7 +236,8 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
       return
     }
     this.finishMacStaging()
-    this.automaticDownloadVersion = automatic ? version : null
+    this.automaticDownloadVersion = completion === 'automatic' ? version : null
+    this.installWhenDownloadedVersion = completion === 'install' ? version : null
     this.downloadInFlight = true
     const localBuildDownload = this.activeUpdateSource === 'local'
     beginMacUpdateDownload()

@@ -3,7 +3,8 @@ import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import { join } from 'node:path'
 import type {
   ReleaseBuildListResult,
-  UpdateCheckOptions
+  UpdateCheckOptions,
+  UpdateDownloadOptions
 } from '../../../shared/updater/update-status-types'
 import { RELEASE_CHANNELS, type ReleaseChannel } from '../../../shared/updater/release-channel'
 import { getTrustedUIRendererWindow, isTrustedUIRenderer } from '../../ipc/ui'
@@ -232,7 +233,9 @@ export function registerUpdaterHandlers(): void {
     ensureAutoUpdaterConfigured()
     return checkForUpdatesFromMenu(options)
   })
-  ipcMain.handle('updater:download', () => downloadUpdate())
+  ipcMain.handle('updater:download', (_event, options?: UpdateDownloadOptions) =>
+    downloadUpdate(options)
+  )
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())
   ipcMain.handle('updater:dismissAvailableUpdate', () => dismissAvailableUpdate())

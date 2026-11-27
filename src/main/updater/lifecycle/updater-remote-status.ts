@@ -9,7 +9,7 @@ import type {
 import { hasServeUpdateSupervisor } from '../serve-update-handoff'
 import { getLinuxPackageType } from '../linux-package/linux-update-package-type'
 import { UpdaterNudge } from '../nudges/updater-nudge'
-import type { UpdateInstallMode } from './updater-state'
+import type { UpdateInstallMode, UpdateInstallTrigger } from './updater-state'
 
 export abstract class UpdaterRemoteStatus extends UpdaterNudge {
   protected getUpdateStatus(): UpdateStatus {
@@ -98,7 +98,7 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
       targetVersion,
       runtimeId
     }
-    this.quitAndInstall()
+    this.quitAndInstall('remote')
     return result
   }
 
@@ -126,5 +126,5 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
   }
 
   protected abstract downloadUpdate(): void
-  protected abstract quitAndInstall(): void
+  protected abstract quitAndInstall(trigger?: UpdateInstallTrigger): void
 }

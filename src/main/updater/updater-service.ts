@@ -2,6 +2,7 @@ import type { BrowserWindow } from 'electron'
 import type {
   LinuxPackageInstallInstructions,
   UpdateCheckOptions,
+  UpdateDownloadOptions,
   UpdateStatus
 } from '../../shared/updater/update-status-types'
 import type {
@@ -63,8 +64,8 @@ export function applyAutomaticUpdatesSetting(enabled: boolean | undefined): void
   }
 }
 
-export function downloadUpdate(): void {
-  updater.downloadUpdate()
+export function downloadUpdate(options?: UpdateDownloadOptions): void {
+  updater.downloadUpdate(options?.installWhenDownloaded === true ? 'install' : undefined)
 }
 
 export function quitAndInstall(): void {

@@ -17,6 +17,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
     this.availableReleaseUrl = null
     this.automaticDownloadOfferVersion = null
     this.automaticDownloadVersion = null
+    this.installWhenDownloadedVersion = null
   }
 
   protected closeLocalBuildFeed(): void {
