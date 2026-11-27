@@ -25,7 +25,6 @@ import {
 import { readAcpLiveOptions } from '../options/acp-live-options'
 import {
   acpPermissionWritesSettled,
-  acpModeRequiresAcquisition,
   acpRunningPermission,
   applyAcpLivePermissionMode
 } from '../options/acp-live-permission-mode'
@@ -214,7 +213,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   > = (sessionId, mode) => {
     const session = this.children.sessions.get(sessionId)
     return childState.isAcpReadySession(session)
-      ? acpModeRequiresAcquisition(session, mode)
+      ? acpRunningPermission(session) !== mode
       : undefined
   }
 

@@ -36,7 +36,7 @@ export function acpRunningPermission(
   return isAgentChatPermissionMode(reported) ? reported : null
 }
 
-/** A kept agent switches to `mode` live, as written at reattach or before a send, never by a restart. */
+/** A kept agent the transition can switch to `mode` live (a write before the send), not by a restart. */
 export function acpKeptModeTakesLive(
   session: LivePermissionSession,
   mode: AgentChatPermissionChoice
@@ -54,22 +54,6 @@ export function acpKeptModeTakesLive(
   return session.spec.permissionModeConfig
     ? session.permissionModes?.[mode] !== undefined
     : !session.launchArgsGrantFullAccess
-}
-
-// Mode writes asked and not yet answered or given up, per chat.
-const writesInFlight = new WeakMap<LivePermissionSession, number>()
-
-/** Only a fresh agent, or a live write first, runs `mode`. A kept agent that takes it live with
- *  no write on its way goes through the transition, which writes it before the send; with one on
- *  its way, the send waits for it (`acpPermissionWritesSettled`). */
-export function acpModeRequiresAcquisition(
-  session: LivePermissionSession,
-  mode: AgentChatPermissionChoice
-): boolean {
-  if (acpRunningPermission(session) === mode) {
-    return false
-  }
-  return !acpKeptModeTakesLive(session, mode) || (writesInFlight.get(session) ?? 0) === 0
 }
 
 /** Settles once every mode write already asked of this chat has been answered or given up. */
@@ -91,10 +75,9 @@ export function applyAcpLivePermissionMode(
     }
     return Promise.resolve()
   }
-  writesInFlight.set(session, (writesInFlight.get(session) ?? 0) + 1)
-  const written = (modeWrites.get(session) ?? Promise.resolve())
-    .then(() => writeAcpSessionMode(session, mode, bound.timeoutMs))
-    .finally(() => writesInFlight.set(session, (writesInFlight.get(session) ?? 1) - 1))
+  const written = (modeWrites.get(session) ?? Promise.resolve()).then(() =>
+    writeAcpSessionMode(session, mode, bound.timeoutMs)
+  )
   modeWrites.set(
     session,
     written.catch(() => undefined)
