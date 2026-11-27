@@ -66,7 +66,8 @@ export function useJiraSourceConnection(args: {
   const connectionRevision = useAppStore((state) =>
     revisionKey ? (state.jiraConnectionRevisions[revisionKey] ?? 0) : 0
   )
-  const loadKey = contextKey ? `${contextKey}::${connectionRevision}` : null
+  // Revisions count per runtime session, so the session key keeps equal counts from aliasing across a reconnect.
+  const loadKey = contextKey ? `${contextKey}::${revisionKey}::${connectionRevision}` : null
   const sourceContextRef = useRef(args.sourceContext)
   // Commit the context before passive reads; discarded/replayed renders must not leak ref values.
   useLayoutEffect(() => {
