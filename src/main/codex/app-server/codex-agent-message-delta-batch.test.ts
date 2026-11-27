@@ -7,7 +7,7 @@ const delta = (itemId: string, text: string) => ({
 })
 
 describe('createCodexAgentMessageDeltaBatch', () => {
-  it('merges same-task deltas per item without reordering, losing any, or passing a pause', async () => {
+  it('merges same-task deltas without reordering, loss, or passing a pause', async () => {
     const out: unknown[] = []
     let paused = false
     const batch = createCodexAgentMessageDeltaBatch({
