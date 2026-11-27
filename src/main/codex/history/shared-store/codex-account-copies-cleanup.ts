@@ -1,0 +1,291 @@
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../../../worker-threads/worker-thread-spawn'
+import {
+  currentWorkerEntryLayout,
+  resolveWorkerThreadEntryPath
+} from '../../../worker-threads/worker-thread-entry-path'
+import { join } from 'node:path'
+import { findOpenFiles } from '../../../filesystem/open-file-check'
+import { findFilesWithAcl } from '../../../filesystem/macos-file-acl'
+import { distinctFolders } from '../bridges/codex-legacy-session-copy-writer-locks'
+import { holdThreadLockFolders, WRITER_LOCKS } from './codex-thread-writer-locks'
+import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
+import { addTally, emptyTally, type CopiesTally } from './codex-account-copies-tally'
+import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-move-telemetry'
+import type {
+  CodexAccountCopiesRequest,
+  CodexAccountCopiesResponse
+} from './codex-account-copies-worker-protocol'
+
+const WORKER_FILENAME = 'codex-account-copies-worker-entry.js'
+// One launch reads at most this much of the copies and their originals; the rest
+// waits for later launches, so a heavy history costs a few idle minutes spread over runs.
+const MAX_BYTES_PER_LAUNCH = 4 * 1024 ** 3
+const MAX_MS_PER_LAUNCH = 3 * 60_000
+// Each home's moves get their own time after its comparisons, so a long check still moves.
+const MOVE_MS_PER_HOME = 60_000
+const GAP_BETWEEN_HOMES_MS = 1_000
+const STOP_WAIT_MS = 10_000
+// Codex gives up waiting on lock coordination after 30 s; a batch's renames take milliseconds.
+const LOCK_HOLD_MS = 10_000
+// One lock hold and one `lsof` per batch: Codex waits on coordination for well under a second,
+// and no process starts per file.
+const OPEN_CHECK_BATCH = 128
+
+export type CodexAccountCopiesWorker = {
+  call(request: CodexAccountCopiesRequest): Promise<CodexAccountCopiesResponse>
+  /** Ends the worker, waiting a bounded time: for when nothing it does can still matter. */
+  stop(): Promise<void>
+}
+
+export function startCodexAccountCopiesWorker(): CodexAccountCopiesWorker {
+  const worker: Worker = spawnWorkerThread(
+    resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), WORKER_FILENAME),
+    { name: 'orca-codex-account-copies' }
+  )
+  let failure: Error | null = null
+  let pending: ((response: CodexAccountCopiesResponse) => void) | null = null
+  const fail = (error: Error): void => {
+    failure ??= error
+    pending?.({ ok: false, message: failure.message })
+    pending = null
+  }
+  worker.on('message', (response: CodexAccountCopiesResponse) => {
+    pending?.(response)
+    pending = null
+  })
+  worker.on('error', (error) => fail(error instanceof Error ? error : new Error(String(error))))
+  worker.on('exit', (code) => fail(new Error(`Codex account copies worker exited (${code})`)))
+  return {
+    call: (request) =>
+      failure
+        ? Promise.resolve({ ok: false, message: failure.message })
+        : new Promise((resolve) => {
+            pending = resolve
+            worker.postMessage(request)
+          }),
+    stop: async () => {
+      fail(new Error('Codex account copies cleanup stopped'))
+      // A worker stuck in a read on a hung mount never exits; a pass must not wait on it.
+      await withTimeoutResult(worker.terminate(), STOP_WAIT_MS)
+    }
+  }
+}
+
+/**
+ * In homes whose history moved into ~/.codex: deletes trashed copies that waited out their grace
+ * period and still pass every check, then moves each rollout copy the move left behind whose bytes
+ * ~/.codex holds and that no process has open into the home's trash; everything else stays for a
+ * later launch. Null when nothing ran: this platform can't tell open files (Linux), or it stopped.
+ */
+export async function cleanUpCodexAccountCopies(args: {
+  homes: string[]
+  storeHome: string
+  /**
+   * The home's move outcome this run, asked before each step; null once it is no longer shared or
+   * a pass is due. Stuck homes (busy, refused, incomplete, failed) keep every file.
+   */
+  moveOutcome: (accountHome: string) => CodexHistoryMoveOutcome | null
+  shouldStop: () => boolean
+  worker: CodexAccountCopiesWorker
+  findOpen?: typeof findOpenFiles
+  /** Holds Codex's lock coordination in these folders; null when it can't be taken. */
+  holdLocks?: typeof holdThreadLockFolders
+  findAcl?: typeof findFilesWithAcl
+  /** The longest Codex's lock coordination is held for one batch, whatever the disk does. */
+  lockHoldMs?: number
+  /** Called after any batch deleted a copy, so a stop midway still refreshes disk usage. */
+  onDeleted?: () => void
+  platform?: NodeJS.Platform
+  /** This Orca's version; each home settled under it is skipped. */
+  version: string
+  /** Where Orca keeps account homes: the worker confirms each home is one of them. */
+  managedAccountsRoot: string
+}): Promise<(CopiesTally & { homes: number }) | null> {
+  const platform = args.platform ?? process.platform
+  if (platform !== 'darwin' && platform !== 'win32') {
+    return null
+  }
+  const moved = (home: string): boolean => args.moveOutcome(home) === 'moved'
+  const findOpen = args.findOpen ?? findOpenFiles
+  const holdLocks = args.holdLocks ?? holdThreadLockFolders
+  const findAcl = async (paths: string[]): Promise<Set<string> | null> =>
+    platform === 'darwin' ? (args.findAcl ?? findFilesWithAcl)(paths) : new Set()
+  const lockHoldMs = args.lockHoldMs ?? LOCK_HOLD_MS
+  const total = { ...emptyTally(), homes: 0 }
+  const deadline = Date.now() + MAX_MS_PER_LAUNCH
+  let bytesLeft = MAX_BYTES_PER_LAUNCH
+  const warn = (answer: CodexAccountCopiesResponse, what: string): void => {
+    console.warn(
+      `[codex-account-history] Old copies were not ${what}:`,
+      answer.ok ? answer.op : answer.message
+    )
+    total.error += 1
+  }
+  for (const accountHome of args.homes) {
+    if (args.shouldStop()) {
+      return null
+    }
+    if (!moved(accountHome)) {
+      continue
+    }
+    if (bytesLeft === 0 || Date.now() > deadline) {
+      // Later homes wait for a later launch.
+      total.deferred += 1
+      break
+    }
+    // Trash past its grace period first, with no lock held: nothing Codex waits on.
+    const rechecked = await args.worker.call({
+      op: 'recheck-trash',
+      accountHome,
+      storeHome: args.storeHome,
+      managedAccountsRoot: args.managedAccountsRoot,
+      maxBytes: bytesLeft,
+      deadline
+    })
+    if (args.shouldStop()) {
+      return null
+    }
+    if (!rechecked.ok || rechecked.op !== 'recheck-trash') {
+      warn(rechecked, 'rechecked')
+      continue
+    }
+    bytesLeft = Math.max(0, bytesLeft - rechecked.bytesRead)
+    addTally(total, rechecked.tally)
+    for (let start = 0; start < rechecked.ready.length; start += OPEN_CHECK_BATCH) {
+      const batch = rechecked.ready.slice(start, start + OPEN_CHECK_BATCH)
+      const paths = batch.map((copy) => copy.copy)
+      const open = await findOpen(paths, { shouldStop: args.shouldStop })
+      const withAcl = open ? await findAcl(paths) : null
+      if (args.shouldStop()) {
+        return null
+      }
+      const closed =
+        open && withAcl && moved(accountHome)
+          ? batch.filter((copy) => !open.has(copy.copy) && !withAcl.has(copy.copy))
+          : []
+      total.open += batch.length - closed.length
+      if (closed.length === 0) {
+        continue
+      }
+      const deleted = await args.worker.call({ op: 'delete-trashed', accountHome, copies: closed })
+      if (args.shouldStop()) {
+        return null
+      }
+      if (!deleted.ok || deleted.op !== 'delete-trashed') {
+        warn(deleted, 'deleted')
+        continue
+      }
+      addTally(total, deleted.tally)
+      if (deleted.tally.deleted > 0) {
+        args.onDeleted?.()
+      }
+    }
+    const checked = await args.worker.call({
+      op: 'verify',
+      accountHome,
+      storeHome: args.storeHome,
+      budget: { maxBytes: bytesLeft, deadline },
+      version: args.version,
+      managedAccountsRoot: args.managedAccountsRoot
+    })
+    if (args.shouldStop()) {
+      return null
+    }
+    if (!checked.ok || checked.op !== 'verify') {
+      warn(checked, 'checked')
+      continue
+    }
+    total.homes += 1
+    bytesLeft = Math.max(0, bytesLeft - checked.bytesRead)
+    addTally(total, checked.tally)
+    // The account's lock folder is linked to the store's once its history moved: one folder.
+    const moveDeadline = Date.now() + MOVE_MS_PER_HOME
+    let trashedHere = 0
+    const lockFolders = await distinctFolders([
+      join(args.storeHome, WRITER_LOCKS),
+      join(accountHome, WRITER_LOCKS)
+    ])
+    for (let start = 0; start < checked.verified.length; start += OPEN_CHECK_BATCH) {
+      if (args.shouldStop()) {
+        return null
+      }
+      const batch = checked.verified.slice(start, start + OPEN_CHECK_BATCH)
+      if (!moved(accountHome) || Date.now() > moveDeadline) {
+        total.deferred += batch.length
+        continue
+      }
+      // macOS: an ACL can let another user write without any mode bit, and lsof can't see them.
+      // Checked before the hold, so Codex never waits on it; the trash's recheck looks again.
+      const withAcl = await findAcl(batch.map((copy) => copy.copy))
+      const aclKept = withAcl ? batch.filter((copy) => withAcl.has(copy.copy)) : []
+      if (aclKept.length > 0) {
+        await args.worker.call({ op: 'remember-acl', accountHome, copies: aclKept })
+      }
+      const candidates = withAcl ? batch.filter((copy) => !withAcl.has(copy.copy)) : []
+      total.open += batch.length - candidates.length
+      if (candidates.length === 0) {
+        continue
+      }
+      // While coordination is held no Codex can take a thread lock, so the open check and the
+      // moves that follow see every writer that matters: none can start meanwhile.
+      const hold = await holdLocks(lockFolders)
+      if (!hold) {
+        total.busy += candidates.length
+        continue
+      }
+      const releaseBy = Date.now() + lockHoldMs
+      let stuck = false
+      try {
+        const open = await findOpen(
+          candidates.map((copy) => copy.copy),
+          { shouldStop: args.shouldStop }
+        )
+        if (args.shouldStop()) {
+          return null
+        }
+        const closed =
+          open && hold.stillHeld() && moved(accountHome)
+            ? candidates.filter((copy) => !open.has(copy.copy))
+            : []
+        total.open += candidates.length - closed.length
+        const timeLeft = releaseBy - Date.now()
+        if (closed.length === 0) {
+          continue
+        }
+        if (timeLeft <= 0) {
+          total.deferred += closed.length
+          continue
+        }
+        const answer = await withTimeoutResult(
+          args.worker.call({ op: 'trash', accountHome, copies: closed, lockFolders }),
+          timeLeft
+        )
+        if (!answer.ok) {
+          // A move stuck on a hung disk: the locks go now, so Codex never waits on it. A move
+          // that still lands later loses nothing, and the trash is checked again before deleting.
+          stuck = true
+          return null
+        }
+        const trashed = answer.value
+        if (!trashed.ok || trashed.op !== 'trash') {
+          warn(trashed, 'moved')
+          continue
+        }
+        addTally(total, trashed.tally)
+        trashedHere += trashed.tally.trashed
+      } finally {
+        await hold.release()
+        if (stuck) {
+          await args.worker.stop()
+        }
+      }
+    }
+    // Once per home and outside the locks: empty folders only, so Codex never waits on the walk.
+    if (trashedHere > 0 && !args.shouldStop()) {
+      await args.worker.call({ op: 'prune', accountHome, storeHome: args.storeHome })
+    }
+    await new Promise((resolve) => setTimeout(resolve, GAP_BETWEEN_HOMES_MS).unref?.())
+  }
+  return total
+}

@@ -13,6 +13,8 @@ import { readEntries, regularFiles } from './codex-account-history-folder-listin
 export const HISTORY_CLEANUP_MANIFEST = '.orca-history-cleanup.json'
 /** One form of a rollout whose other form the store holds, kept out so it holds one. */
 export const SET_ASIDE_ROLLOUTS_DIR = '.orca-set-aside-rollouts'
+/** Verified history copies moved aside, deleted after a grace period once checked again. */
+export const COPIES_TRASH_DIR = '.orca-copies-trash'
 /** The account's own databases from before sharing stopped; kept, never read again. */
 export const PRE_SHARE_DATABASES_DIR = '.orca-pre-share-db'
 export const CODEX_DATABASE_FILE = /\.sqlite(?:-wal|-shm)?$/
