@@ -45,6 +45,11 @@ export class MobileSessionSnapshotsByWorktree extends ReverseIndexedMap<
     this.deliveryMarks.set(worktreeId, ++this.deliveryMarkSequence)
   }
 
+  /** A change no listener reads: owe the bump but keep the mark, or a queued frame would drop unreplaced. */
+  oweUnpublishedVersion(worktreeId: string): void {
+    this.owedVersions.add(worktreeId)
+  }
+
   /** Runs pay only when a bump is owed; paying only catches the version up, so it keeps the delivery mark. */
   payOwedVersion<T>(worktreeId: string, pay: () => T): T | undefined {
     if (!this.owedVersions.delete(worktreeId)) {

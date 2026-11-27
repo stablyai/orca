@@ -30,7 +30,7 @@ export abstract class OrcaRuntimeWithAdmitWindowPublisher extends OrcaRuntimeWit
         continue
       }
       if (!listened) {
-        this.mobileSessionTabsByWorktree.oweVersion(worktreeId)
+        this.mobileSessionTabsByWorktree.oweUnpublishedVersion(worktreeId)
         continue
       }
       // Status changes invalidate only this phone frame; graph hydration and activity stay idle.

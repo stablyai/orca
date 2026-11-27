@@ -72,12 +72,14 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     this.mobileSessionTabsAgentStatusHeartbeat.observeWorktreeRefresh(worktreeId)
     if (!options.immediate && snapshot.worktree === worktreeId) {
       // Status bursts bump once per client frame, and only build one when someone listens.
-      this.mobileSessionTabsByWorktree.oweVersion(worktreeId)
       const listened = options.statusPaneKeys
         ? options.statusPaneKeys.some((paneKey) => this.hasPaneStatusListeners(paneKey))
         : this.mobileSessionTabListeners.size > 0
       if (listened) {
+        this.mobileSessionTabsByWorktree.oweVersion(worktreeId)
         this.scheduleMobileSessionTabsChanged(worktreeId)
+      } else {
+        this.mobileSessionTabsByWorktree.oweUnpublishedVersion(worktreeId)
       }
       return
     }
