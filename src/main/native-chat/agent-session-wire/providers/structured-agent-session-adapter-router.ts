@@ -151,6 +151,9 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   confirmIdle = (id: string) => this.liveOwnerOrNull(id)?.confirmIdle?.(id)
 
+  relayOpenWork = (id: string, rootTurnRunning: boolean) =>
+    this.liveOwnerOrNull(id)?.relayOpenWork?.(id, rootTurnRunning) ?? null
+
   liveTurnId = (sessionId: string): string | null | undefined =>
     this.liveOwnerOrNull(sessionId)?.liveTurnId?.(sessionId)
 
@@ -174,6 +177,9 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     this.adapters()
       .map((adapter) => adapter.startupEnding?.(sessionId, acquisitionGeneration))
       .find((ending) => ending !== undefined)
+
+  endedBeforeAcquire = (sessionId: string, generation: string): boolean =>
+    this.adapters().some((each) => each.endedBeforeAcquire?.(sessionId, generation))
 
   retireStartup = (sessionId: string, acquisitionGeneration: string): void =>
     this.adapters().forEach((adapter) => adapter.retireStartup?.(sessionId, acquisitionGeneration))

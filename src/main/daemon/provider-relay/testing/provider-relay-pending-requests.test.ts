@@ -5,6 +5,7 @@ import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedProviderProcess } from '../../../provider-process/managed-provider-process'
 import { ProviderRelay } from '../provider-relay'
+import { ProviderRelayPendingRequests } from '../provider-relay-pending-requests'
 
 function fakeManaged(): {
   managed: ManagedProviderProcess
@@ -78,6 +79,118 @@ describe('provider relay pending requests', () => {
       '{"type":"control_response","response":{"subtype":"success","request_id":"perm-1"}}\n'
     )
     await vi.waitFor(() => expect(relay.info().pendingCount).toBe(0))
+    await relay.dispose()
+  })
+
+  it('tells the next attach its replay starts inside a cut item only when an ack gave one up', async () => {
+    const { managed, stdout } = fakeManaged()
+    const relay = new ProviderRelay({
+      relayId: 'r-cut',
+      chatKey: 'chat',
+      managed,
+      spoolPath: join(dir, 'r-cut.ndjson'),
+      onSettled: () => {},
+      onDetached: () => {}
+    })
+    const stream = { socket: new PassThrough() }
+    await relay.attach('app-1', stream, 0)
+    stdout.write('a\nb\nc\n')
+    await tick()
+    relay.ack(3, 2)
+    await relay.detach()
+    expect((await relay.attach('app-2', stream, relay.info().ackedSeq)).truncatedThrough).toBe(
+      undefined
+    )
+    // The client gives up its kept span (the daemon's ask at the file cap): the cursor moves past it.
+    relay.ack(3, undefined, { cut: true })
+    await relay.detach()
+    expect(relay.info().ackedSeq).toBe(3)
+    expect((await relay.attach('app-3', stream, 3)).truncatedThrough).toBe(3)
+    // A floor that rose past an open item's start on purpose: the cut is just before what it keeps.
+    stdout.write('d\ne\nf\n')
+    await tick()
+    relay.ack(6, 5, { cut: true })
+    await relay.detach()
+    expect((await relay.attach('app-4', stream, relay.info().ackedSeq)).truncatedThrough).toBe(4)
+    await relay.dispose()
+  })
+
+  it("asks a paused relay's client again until it acks, so one short answer never stalls the agent", async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const { managed, stdout } = fakeManaged()
+      const relay = new ProviderRelay({
+        relayId: 'r-nudge',
+        chatKey: 'chat',
+        managed,
+        spoolPath: join(dir, 'r-nudge.ndjson'),
+        onSettled: () => {},
+        onDetached: () => {}
+      })
+      const socket = new PassThrough()
+      let asks = 0
+      socket.on('data', (chunk: Buffer) => {
+        asks += chunk.toString().split('"relayAckWanted"').length - 1
+      })
+      await relay.attach('app-1', { socket }, 0)
+      const line = `${'x'.repeat(64 * 1024)}\n`
+      for (let i = 0; i < 20; i++) {
+        stdout.write(line)
+      }
+      await vi.waitFor(() => expect(stdout.isPaused()).toBe(true))
+      expect(asks).toBe(1)
+      // The answer falls short: half the cap is still held, so the spool alone would not ask again.
+      relay.ack(2)
+      vi.advanceTimersByTime(2_000)
+      expect(asks).toBe(2)
+      relay.ack(relay.info().nextSeq - 1)
+      await vi.waitFor(() => expect(stdout.isPaused()).toBe(false))
+      const resumed = asks
+      vi.advanceTimersByTime(60_000)
+      expect(asks).toBe(resumed)
+      await relay.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('never replays a request the client already answered, while an unanswered one is still asked', async () => {
+    const { managed, stdout } = fakeManaged()
+    const relay = new ProviderRelay({
+      relayId: 'r-5',
+      chatKey: 'chat',
+      managed,
+      spoolPath: join(dir, 'r-5.ndjson'),
+      onSettled: () => {},
+      onDetached: () => {}
+    })
+    await relay.attach('app-1', { socket: new PassThrough() }, 0)
+    stdout.write(
+      '{"id":0,"method":"item/commandExecution/requestApproval","params":{"n":"answered-rpc"}}\n'
+    )
+    stdout.write(
+      '{"type":"control_request","request_id":"p1","request":{"n":"answered-control"}}\n'
+    )
+    stdout.write('{"id":1,"method":"session/request_permission","params":{"n":"still-owed"}}\n')
+    stdout.write('{"method":"item/agentMessage/delta","params":{"n":"plain-line"}}\n')
+    await tick()
+    relay.write('{"id":0,"result":{"decision":"accept"}}\n')
+    relay.write('{"type":"control_response","response":{"subtype":"success","request_id":"p1"}}\n')
+    await vi.waitFor(() => expect(relay.info().pendingCount).toBe(1))
+    // Quit before any ack: the whole spool replays to the next app.
+    await relay.detach()
+
+    const socket = new PassThrough()
+    const sent: Buffer[] = []
+    socket.on('data', (chunk: Buffer) => sent.push(chunk))
+    const reattached = await relay.attach('app-2', { socket }, 0)
+    await tick()
+    const replay = Buffer.concat(sent).toString()
+    expect(reattached.pending).toEqual([3])
+    expect(replay).not.toContain('answered-rpc')
+    expect(replay).not.toContain('answered-control')
+    expect(replay).toContain('still-owed')
+    expect(replay).toContain('plain-line')
     await relay.dispose()
   })
 
@@ -221,5 +334,29 @@ describe('provider relay pending requests', () => {
       })
     expect(dataSeqs).toEqual([2])
     await relay.dispose()
+  })
+})
+
+describe('a request asking to start an item', () => {
+  it('marks only a whole-item approval as not started, until it is answered', () => {
+    const pending = new ProviderRelayPendingRequests()
+    const ask = (id: number, params: Record<string, unknown>) =>
+      pending.observeAgentLine({
+        seq: id,
+        line: JSON.stringify({ method: 'item/commandExecution/requestApproval', id, params })
+      })
+    ask(1, { itemId: 'cmd-new' })
+    expect(pending.awaitingStart('cmd-new')).toBe(false)
+    // A policy naming the start method later reclassifies the request already held.
+    pending.setStartMethods(['item/commandExecution/requestApproval'])
+    // Writing to a command that already runs names it too, with its own approval id.
+    ask(2, { itemId: 'cmd-running', approvalId: 'stdin-1' })
+    expect(pending.awaitingStart('cmd-new')).toBe(true)
+    expect(pending.awaitingStart('cmd-running')).toBe(false)
+    pending.observeAgentLine({
+      seq: 3,
+      line: JSON.stringify({ method: 'serverRequest/resolved', params: { requestId: 1 } })
+    })
+    expect(pending.awaitingStart('cmd-new')).toBe(false)
   })
 })

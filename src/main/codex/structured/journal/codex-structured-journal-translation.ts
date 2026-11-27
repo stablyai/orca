@@ -1,3 +1,5 @@
+import { CODEX_RELAY_CONTINUATION_RETIRED } from '../../app-server/codex-relay-item-continuation'
+import { retireCodexRelayContinuation } from './codex-relay-continuation-retire'
 import { createCodexProviderActivityReader } from '../../../native-chat/agent-session-wire/providers/provider-frame-activity'
 import { recordCodexContextUsage } from './codex-context-usage'
 import { CODEX_TOKEN_USAGE_METHOD } from '../background-work/codex-subagent-activity'
@@ -103,6 +105,13 @@ function createCodexTranslation(
   }
 
   return {
+    seedTurnOrdinals: (threadId, turnId, ids) =>
+      ids.forEach((id) => items.ordinals.ordinalFor(threadId, turnId, id)),
+    seedRunningItems: (threadId, turnId, running) =>
+      running.map((item) => items.seedRunning(threadId, turnId, item)),
+    seedRunningOutput: (threadId, itemId, output) =>
+      items.streams.seedText(threadId, itemId, output),
+    seedKeptTurns: (threadId, turns) => turnBoundaries.seedKept(threadId, turns),
     restoreThread: (threadId, thread) => {
       if (threadId === (deps.primaryThreadId?.() ?? null)) {
         readActivity = createCodexProviderActivityReader()
@@ -208,6 +217,9 @@ function createCodexTranslation(
       }
       if (event.type !== 'notification') {
         return CODEX_JOURNAL_ADMITTED
+      }
+      if (event.method === CODEX_RELAY_CONTINUATION_RETIRED) {
+        return retireCodexRelayContinuation(items, deps.sink, event.threadId, event.params)
       }
       if (event.method === 'turn/started' || event.method === 'turn/completed') {
         if (event.method === 'turn/started') {

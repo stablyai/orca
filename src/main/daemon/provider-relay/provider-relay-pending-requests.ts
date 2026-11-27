@@ -1,4 +1,5 @@
 import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-protocol'
+import { ProviderRelayAnsweredRequests } from './provider-relay-answered-requests'
 import {
   leadingJsonEnvelope,
   type LeadingProperty
@@ -50,7 +51,7 @@ const MAX_CLIENT_LINE_CHARS = 256 * 1024 * 1024
 /** JSON may spell a key or method with escapes (`"m\u0065thod"`, `\u002f`); such lines take the slow path. */
 const ESCAPED_LETTER = /\\u00[2-7][0-9a-fA-F]/
 
-function mayHideKey(line: string): boolean {
+export function mayHideKey(line: string): boolean {
   return line.includes('\\u00') && ESCAPED_LETTER.test(line)
 }
 
@@ -62,9 +63,8 @@ function mayCarryKey(line: string): boolean {
 /** A held request and the record it was when its answer was seen. */
 type AnsweredRequest = { key: string; record: ProviderRelayRecord }
 
-function controlId(value: unknown): string | null {
-  return typeof value === 'string' ? `c:${value}` : null
-}
+const controlId = (value: unknown): string | null =>
+  typeof value === 'string' ? `c:${value}` : null
 
 /**
  * Agent→client requests still unanswered (JSON-RPC server requests, Claude `control_request`s),
@@ -79,9 +79,52 @@ export class ProviderRelayPendingRequests {
   private skippingClientLine = false
   maxClientRequestId: number | null = null
   initializeResult: string | null = null
+  /** Client request methods that are work until answered (a root turn no agent line opens). */
+  workMethods: ReadonlySet<string> = new Set()
+  /** Those requests still unanswered, by id. */
+  readonly working = new Set<string>()
+
+  /** Spooled requests already answered, resolved or replaced, so a replay never asks again. */
+  readonly answered: ProviderRelayAnsweredRequests
+
+  constructor(ackedSeq: () => number = () => 0) {
+    this.answered = new ProviderRelayAnsweredRequests(ackedSeq)
+  }
 
   get size(): number {
     return this.pending.size
+  }
+
+  /** Of the waiting requests, those asking to start an item: the item each would start, by key. */
+  private readonly starting = new Map<string, string>()
+  private readonly startingCounts = new Map<string, number>()
+  /** Request methods that ask to start an item (from the detach policy). */
+  private startMethods: ReadonlySet<string> = new Set()
+
+  /** A policy naming other start methods reclassifies the requests already held (a rare change). */
+  setStartMethods(methods: readonly string[]): void {
+    const next = new Set(methods)
+    if (next.size === this.startMethods.size && methods.every((m) => this.startMethods.has(m))) {
+      return
+    }
+    this.startMethods = next
+    this.starting.clear()
+    this.startingCounts.clear()
+    for (const [key, { line }] of this.pending) {
+      const message = parseObject(line)
+      const item =
+        message && typeof message.method === 'string'
+          ? this.startsItem(message.method, message.params)
+          : null
+      if (item !== null) {
+        this.countStart(key, item)
+      }
+    }
+  }
+
+  /** True while a waiting request asks to start this item: it hasn't started running. */
+  awaitingStart(itemId: string): boolean {
+    return this.startingCounts.has(itemId)
   }
 
   /** Insertion order is seq order: a re-sent id is removed before it is added again. */
@@ -90,14 +133,33 @@ export class ProviderRelayPendingRequests {
   }
 
   clear(): void {
+    this.working.clear()
     this.pending.clear()
+    this.starting.clear()
+    this.startingCounts.clear()
     this.pendingChars = 0
   }
 
-  private hold(key: string, record: ProviderRelayRecord): void {
+  private hold(key: string, record: ProviderRelayRecord, startsItem: string | null = null): void {
     this.release(key)
     this.pending.set(key, record)
     this.pendingChars += record.line.length
+    if (startsItem !== null) {
+      this.countStart(key, startsItem)
+    }
+  }
+
+  private countStart(key: string, item: string): void {
+    this.starting.set(key, item)
+    this.startingCounts.set(item, (this.startingCounts.get(item) ?? 0) + 1)
+  }
+
+  /** A whole-item start approval names the item; one with an `approvalId` targets a running one. */
+  private startsItem(method: string, params: unknown): string | null {
+    if (!this.startMethods.has(method) || !isObject(params) || params.approvalId !== undefined) {
+      return null
+    }
+    return typeof params.itemId === 'string' ? params.itemId : null
   }
 
   /** The agent is owed this many answers that it should wait for before saying more. */
@@ -110,6 +172,17 @@ export class ProviderRelayPendingRequests {
     if (held) {
       this.pending.delete(key)
       this.pendingChars -= held.line.length
+      this.answered.add(held.seq)
+    }
+    const item = this.starting.get(key)
+    if (item !== undefined) {
+      this.starting.delete(key)
+      const count = (this.startingCounts.get(item) ?? 1) - 1
+      if (count > 0) {
+        this.startingCounts.set(item, count)
+      } else {
+        this.startingCounts.delete(item)
+      }
     }
   }
 
@@ -135,7 +208,7 @@ export class ProviderRelayPendingRequests {
     } else if (typeof method === 'string') {
       const key = rpcId(message.id)
       if (key) {
-        this.hold(key, record)
+        this.hold(key, record, this.startsItem(method, message.params))
       }
     } else if (type === 'control_request' || type === 'control_cancel_request') {
       const key = controlId(message.request_id)
@@ -144,9 +217,20 @@ export class ProviderRelayPendingRequests {
       } else if (key) {
         this.release(key)
       }
-    } else if (this.awaitingInitialize && this.responseKey(message) === this.initializeKey) {
-      this.initializeResult = record.line
+    } else {
+      const key = this.responseKey(message)
+      if (this.awaitingInitialize && key === this.initializeKey) {
+        this.initializeResult = record.line
+      }
+      if (key) {
+        this.working.delete(key)
+      }
     }
+  }
+
+  /** An answer this table waits for: the first initialize's, or a work request's. */
+  private get awaitingAnswer(): boolean {
+    return this.awaitingInitialize || this.working.size > 0
   }
 
   private get awaitingInitialize(): boolean {
@@ -181,7 +265,7 @@ export class ProviderRelayPendingRequests {
     if (typeof method === 'string') {
       return method === RESOLVED_METHOD || field('id') !== undefined
     }
-    if (this.awaitingInitialize && (field('result') || field('error'))) {
+    if (this.awaitingAnswer && (field('result') || field('error'))) {
       return true
     }
     return (
@@ -198,7 +282,7 @@ export class ProviderRelayPendingRequests {
         line.includes(RESOLVED_METHOD) ||
         line.includes(RESOLVED_METHOD_ESCAPED))
     const maybeAnswer =
-      this.awaitingInitialize && (line.includes('"result"') || line.includes('"error"'))
+      this.awaitingAnswer && (line.includes('"result"') || line.includes('"error"'))
     return maybeRequest || maybeAnswer || line.includes('control_') || mayHideKey(line)
   }
 
@@ -253,6 +337,10 @@ export class ProviderRelayPendingRequests {
     if (typeof message.method === 'string') {
       if (typeof message.id === 'number' && Number.isSafeInteger(message.id)) {
         this.maxClientRequestId = Math.max(this.maxClientRequestId ?? message.id, message.id)
+      }
+      const id = rpcId(message.id)
+      if (id && this.workMethods.has(message.method) && this.working.size < MAX_PENDING_REQUESTS) {
+        this.working.add(id)
       }
       if (message.method === 'initialize' && this.initializeKey === null) {
         this.initializeKey = rpcId(message.id)
