@@ -1,6 +1,4 @@
 import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import type { McpServer } from '../generated/acp-protocol.generated'
-import { mcpServerSetKey } from '../../mcp-servers/mcp-server-set-key'
 import { readProcessCommandLine } from '../../daemon/endpoint/identity/daemon-process-inspection'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import { acpLaunchPermission } from '../launch/acp-launch-permission-modes'
@@ -13,19 +11,16 @@ const ASK_NOTE = 'ask'
 const TOOLS_KEY = ' tools='
 
 /** What the spawning app tells the daemon about its launch, read back at a reattach: its access,
- *  and a hashed key of the MCP servers Orca gave it. */
-export const acpLaunchNote = (fullAccess: boolean, servers: readonly McpServer[] = []): string =>
-  `${fullAccess ? FULL_ACCESS_NOTE : ASK_NOTE}${TOOLS_KEY}${mcpServerSetKey(servers)}`
+ *  and the key of the MCP servers Orca gave it (`AcpStructuredLaunch.toolsKey`). */
+export const acpLaunchNote = (fullAccess: boolean, toolsKey = ''): string =>
+  `${fullAccess ? FULL_ACCESS_NOTE : ASK_NOTE}${TOOLS_KEY}${toolsKey}`
 
 /** The kept agent was launched with other MCP servers than this launch's (or by a build that
  *  didn't say), so only a fresh agent has this launch's tools. */
-export function acpKeptToolsDiffer(
-  note: string | undefined,
-  servers: readonly McpServer[] = []
-): boolean {
+export function acpKeptToolsDiffer(note: string | undefined, toolsKey = ''): boolean {
   const at = note?.indexOf(TOOLS_KEY) ?? -1
   const kept = note !== undefined && at !== -1 ? note.slice(at + TOOLS_KEY.length) : null
-  return kept !== mcpServerSetKey(servers)
+  return kept !== toolsKey
 }
 
 /** Whether the kept process's own arguments grant full access; null when arguments can't carry it.

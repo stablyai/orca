@@ -7,7 +7,7 @@ import type { McpServer } from '../generated/acp-protocol.generated'
 import { botToolsOffInstruction } from '../../bots/bot-launch-tools'
 import { withSessionMcpToolsEnv } from '../../mcp-servers/session-mcp-tools'
 import { deliverHostMcpServersBesideConfig } from '../../mcp-servers/session-host-mcp-delivery'
-import { acpBotMcpServers } from '../../bots/bot-tools-acp'
+import { acpLaunchMcpServers } from '../../bots/bot-tools-acp'
 import { overlayEnvironmentVariables } from '../../../shared/shell/launch/environment-overlay'
 
 import {
@@ -83,6 +83,8 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   mcpServers?: McpServer[]
   /** Carries grants that end with this app (a bot's tool-relay token), so it can't outlive it. */
   appBoundGrants?: true
+  /** `mcpServerSetKey` of the servers Orca delivered, not the agent's own (its config's). */
+  toolsKey?: string
   /** The saved model the launch line carries. */
   launchModel?: string
   /** The launched program's version, when its check or managed release names it. */
@@ -270,12 +272,8 @@ export function acpStructuredLaunchPart(
     const instructions = delivered.launch
     const visualsLoaded = skillLoaded ?? (delivered.visuals ? visuals : null)
     const fullAccess = basis.permissionMode === 'full-access'
-    const botServers = toolsOff ? [] : acpBotMcpServers(tools)
-    // On a shared name the bot's server wins; the host list's never shares one (above).
-    const mcpServers = [
-      ...botServers,
-      ...ownServers.filter((own) => !botServers.some((bot) => bot.name === own.name))
-    ]
+    // The host list's never shares a name with the agent's own (above).
+    const { mcpServers, toolsKey } = acpLaunchMcpServers(tools, ownServers, toolsOff)
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     // A load restores the conversation's own model, and a stale role there would stop the agent
     // before it opens; resumed chats apply their model through the session instead.
@@ -306,6 +304,7 @@ export function acpStructuredLaunchPart(
           : {}),
         ...(instructions?.release ? { release: instructions.release } : {}),
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
+        toolsKey,
         // A token this app's tool relay issued for this run ends with it, so the agent does too.
         ...(tools.appBound ? { appBoundGrants: true as const } : {}),
         ...(model ? { launchModel: model } : {}),

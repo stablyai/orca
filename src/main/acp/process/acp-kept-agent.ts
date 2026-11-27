@@ -227,7 +227,7 @@ export async function launchRelayedAcpAgent(
   /** `resume`: the session the chat reopens; a kept agent running another one can't carry on. */
   launch: Pick<
     AcpStructuredLaunch,
-    'resume' | 'release' | 'appBoundGrants' | 'fullAccess' | 'toolFree' | 'mcpServers'
+    'resume' | 'release' | 'appBoundGrants' | 'fullAccess' | 'toolFree' | 'toolsKey'
   >,
   processLaunch: ProviderProcessLaunch
 ): Promise<AcpRelayedProcess | null> {
@@ -253,7 +253,7 @@ export async function launchRelayedAcpAgent(
     markers: { ...acpRelayWorkMarkers(spec.agent), ackFloor, continuation },
     keep: {
       ...acpRelayKeep(spec.dialect),
-      note: acpLaunchNote(launch.fullAccess, launch.mcpServers)
+      note: acpLaunchNote(launch.fullAccess, launch.toolsKey)
     },
     passWhileHeld: (line) => isJsonRpcAnswerAbove(line, floor),
     ...(appBound ? { only: 'reattach' as const } : {})
@@ -293,10 +293,10 @@ export async function launchRelayedAcpAgent(
   if (relayed && input.abandoned()) {
     void relayed.managed.close().catch(() => undefined)
   }
-  // One launched with other MCP servers (one the user turned off since) lacks this launch's tools.
+  // One launched with other MCP servers from Orca (one turned off since) lacks this launch's tools.
   const stale =
     appBound ||
     (relayed?.reattached === true &&
-      acpKeptToolsDiffer(relayed.child.attachResult?.launchNote, launch.mcpServers))
+      acpKeptToolsDiffer(relayed.child.attachResult?.launchNote, launch.toolsKey))
   return relayed && { ...relayed, turns, ...(stale ? { freshOwed: true as const } : {}) }
 }
