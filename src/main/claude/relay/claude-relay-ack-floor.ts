@@ -152,10 +152,18 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor & {
           keepAfter(seq)
         }
       } else if (frame.type === 'system' && frame.subtype === 'task_notification') {
-        // A subagent's end closes what it left open under its launching tool call.
-        backgroundLaunches.delete(String(frame.tool_use_id ?? ''))
-        launchOf.delete(String(frame.task_id ?? ''))
-        closeScope(`${String(frame.session_id ?? '')}/${String(frame.tool_use_id ?? '')}`)
+        // A subagent's end closes what it left open under its launching tool call; one naming no
+        // call is found by its task, and otherwise closes nothing (never the root's stream).
+        const task = typeof frame.task_id === 'string' ? frame.task_id : ''
+        const launch =
+          typeof frame.tool_use_id === 'string' && frame.tool_use_id !== ''
+            ? frame.tool_use_id
+            : launchOf.get(task)
+        launchOf.delete(task)
+        if (launch) {
+          backgroundLaunches.delete(launch)
+          closeScope(`${String(frame.session_id ?? '')}/${launch}`)
+        }
       } else if (frame.type === 'system' && frame.subtype === 'task_started') {
         if (typeof frame.task_id === 'string' && typeof frame.tool_use_id === 'string') {
           launchOf.set(frame.task_id, frame.tool_use_id)
