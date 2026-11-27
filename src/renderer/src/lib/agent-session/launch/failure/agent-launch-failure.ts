@@ -1,8 +1,8 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
-import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { StructuredChatAgent } from '../../../../../../shared/agent-launch/custom-acp/custom-acp-agents'
 import type { ExecutionHostPlatformFact } from '../../../../runtime/hosts/platform/execution-host-platform-fact'
+import { structuredAgentLabel } from '../structured-agent-session-launch-label'
 
 type Recovery = Extract<ExecutionHostPlatformFact, { kind: 'withheld' }>['recovery']
 
@@ -43,12 +43,12 @@ export function agentLaunchCheckSettingsMessage(): string {
   )
 }
 
-export function notifyAgentLaunchFailure(agent: TuiAgent, description?: string): void {
+export function notifyAgentLaunchFailure(agent: StructuredChatAgent, description?: string): void {
   toast.error(
     translate(
       'components.agentSessionContinuation.launchFailed',
       'Could not start a new {{agent}} session.',
-      { agent: getAgentLabel(agent) }
+      { agent: structuredAgentLabel(agent) }
     ),
     { description: description ?? agentLaunchCheckSettingsMessage() }
   )

@@ -4,7 +4,7 @@ import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/
 import { useAppStore } from '@/store/index'
 import { publishStructuredAgentSessionSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import { agentSessionWriteFailureText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
-import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { structuredAgentLabel } from './structured-agent-session-launch-label'
 import { removeStructuredLaunchSlot } from './structured-agent-session-launch-slot'
 import {
   materializeStructuredLaunchSurface,
@@ -123,7 +123,7 @@ export function trackLaunchSettlement(
       }
       if (receipt.configurationFailure) {
         publishStructuredAgentSessionSends(receipt.sessionId, {
-          notice: `${getAgentLabel(state.intent.agent)}: ${agentSessionWriteFailureText(receipt.configurationFailure, 'option')}`
+          notice: `${structuredAgentLabel(state.intent.agent)}: ${agentSessionWriteFailureText(receipt.configurationFailure, 'option')}`
         })
       }
       settleStructuredLaunchCallers(state.callers, 'published')

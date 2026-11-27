@@ -11,6 +11,7 @@ import {
 } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { ensureLocalRuntimeCapabilities } from '../../hosts/capabilities/local-runtime-capabilities'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
+import { nameCustomAcpAgents } from '../../../../../shared/agent-launch/custom-acp/custom-acp-agent-names'
 
 /** One registered-agent cache per execution host/runtime. Query only capable hosts; unknown/unsupported hosts offer built-ins. Runtime changes invalidate learned lists until that instance answers. */
 
@@ -119,6 +120,7 @@ export function loadHostStructuredAgents(
         throw new Error('Invalid registered-agent response')
       }
       failed.delete(key)
+      nameCustomAcpAgents(agents)
       entries.set(executionHostId, { runtimeId, agents })
       publish()
     })

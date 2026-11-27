@@ -25,7 +25,7 @@ import type { StructuredAgentSessionCreateGate } from '@/lib/agent-session/launc
 import './structured-agent-session-launch-abandon'
 import './structured-agent-session-launch-create-call'
 import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { StructuredChatAgent } from '../../../../../shared/agent-launch/custom-acp/custom-acp-agents'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
@@ -35,7 +35,7 @@ export type StructuredAgentSessionLaunchIntent = {
   /** Fix/persist execution host when launch begins; same workspace IDs on other hosts must never alter ownership. */
   executionHostId: ExecutionHostId
   target: RuntimeClientTarget
-  agent: TuiAgent
+  agent: StructuredChatAgent
   params: StructuredAgentSessionCreateParams
   sendSelectionSupport?: boolean
   /** Client-only admission requirement; reacquired from the child after reload. */
@@ -58,7 +58,7 @@ type LaunchSeed = Readonly<Record<string, string>> | undefined
 function launchSeedOptions(
   state: ReturnType<typeof useAppStore.getState>,
   owner: Pick<StructuredAgentSessionLaunchIntent, 'target'>,
-  agent: TuiAgent,
+  agent: StructuredChatAgent,
   hostSeedOptions: LaunchSeed,
   resumeFrom?: StructuredAgentSessionResumeSource
 ): { seedOptions?: Readonly<Record<string, string>> } {
@@ -88,7 +88,7 @@ function structuredAgentSessionOwnerTarget(
 /** Use routed executionHostId or require exactly one catalog owner; never choose a launch host by fallback. */
 export function createStructuredAgentSessionLaunchIntent(
   worktreeId: string,
-  agent: TuiAgent,
+  agent: StructuredChatAgent,
   executionHostId?: ExecutionHostId,
   resumeFrom?: StructuredAgentSessionResumeSource,
   hostSeedOptions?: LaunchSeed,
@@ -125,7 +125,7 @@ export function createStructuredAgentSessionLaunchIntent(
 function buildStructuredAgentSessionLaunchIntent(
   worktreeId: string,
   owner: Pick<StructuredAgentSessionLaunchIntent, 'executionHostId' | 'target'>,
-  agent: TuiAgent,
+  agent: StructuredChatAgent,
   sessionId: string,
   resumeFrom: StructuredAgentSessionResumeSource | undefined,
   hostSeedOptions: LaunchSeed,
@@ -192,7 +192,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   worktreeId: string
   executionHostId: ExecutionHostId
   sessionId: string
-  agent: TuiAgent
+  agent: StructuredChatAgent
   clientOperationId: string
   payloadFingerprint: string
   expectedRuntimeFence: number | null

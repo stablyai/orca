@@ -2,6 +2,10 @@ import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
+  isCustomAcpAgentId,
+  type CustomAcpAgentId
+} from '../../../../../shared/agent-launch/custom-acp/custom-acp-agents'
+import {
   hostStructuredAgentsVersion,
   readHostStructuredAgents,
   subscribeHostStructuredAgents,
@@ -22,6 +26,16 @@ export function chatProviderAgents(
       ...registered.map((row) => row.agent).filter((agent) => isTuiAgent(agent))
     ])
   ]
+}
+
+/** The host's own ACP agents, which open only as chats. */
+export function customChatAgents(
+  executionHostId: string,
+  statuses: HostStructuredAgentsStatuses
+): { agent: CustomAcpAgentId; name: string }[] {
+  return (readHostStructuredAgents(executionHostId, statuses) ?? []).flatMap(({ agent, name }) =>
+    isCustomAcpAgentId(agent) ? [{ agent, name: name ?? agent }] : []
+  )
 }
 
 /** The chat agents whose chat runs a program Orca downloads on that host, apart from their CLI. */

@@ -2,7 +2,7 @@
 
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
-import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { StructuredChatAgent } from '../../../../../../shared/agent-launch/custom-acp/custom-acp-agents'
 import { defaultAgentChatLabel } from '../../../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import { useAppStore } from '@/store/index'
 import { openContentTabThroughLayoutOwner } from '@/runtime/workspace-layout/intents/layout-owner-content-tab-open'
@@ -15,7 +15,7 @@ export type AgentSessionTabOpen = {
   sessionId: string
   /** The chat tab's id, as the launch records it. */
   tabId: string
-  agent: TuiAgent
+  agent: StructuredChatAgent
   targetGroupId?: string
   afterTabId?: string
   activate: boolean

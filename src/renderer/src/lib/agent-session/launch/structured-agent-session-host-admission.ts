@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { StructuredChatAgent } from '../../../../../shared/agent-launch/custom-acp/custom-acp-agents'
 import {
   isAgentSessionCreateAdmissionRefusal,
   isDefinitiveAgentSessionCreateRefusal
@@ -72,7 +72,7 @@ export type HostCreateSupport =
 export async function askHostCreateSupport(
   target: RuntimeClientTarget,
   worktree: string,
-  agent: TuiAgent,
+  agent: StructuredChatAgent,
   resumeFrom?: StructuredLaunchResumeAdmission
 ): Promise<HostCreateSupport> {
   // An older host's strict params reject the field, and one whose capabilities could not be read
@@ -140,7 +140,7 @@ export const LOCAL_ADMISSION_WAIT_MS = 3_000
 export async function admitStructuredLaunchOnHost(
   target: RuntimeClientTarget,
   worktree: string,
-  agent: TuiAgent,
+  agent: StructuredChatAgent,
   resumeFrom?: StructuredLaunchResumeAdmission
 ): Promise<StructuredLaunchAdmission> {
   const asked = askHostCreateSupport(target, worktree, agent, resumeFrom).then(

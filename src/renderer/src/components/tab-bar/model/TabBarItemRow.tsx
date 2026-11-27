@@ -40,6 +40,9 @@ import { botGroupRenameErrorMessage } from '../../bots/bot-presentation'
 import { toast } from 'sonner'
 import { terminalTabHasUnreadActivity } from '../terminal-tabs/terminal-tab-activity-status'
 import { useTranslate } from '@/i18n/use-translate'
+import { isCustomAcpAgentId } from '../../../../../shared/agent-launch/custom-acp/custom-acp-agents'
+import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
+import { AgentLetterIcon } from '@/components/agent/icons/agent-icon-glyphs'
 
 // Why only values and `actions`: anything a tab draws must be a compared prop, or a skipped render shows it stale.
 type TabBarItemRowProps = {
@@ -196,6 +199,9 @@ function TabBarItemRow({
             )
         }
       : undefined
+    // A custom ACP agent has no icon of its own and no CLI to continue in.
+    const customAgent =
+      nativeChat.agent && isCustomAcpAgentId(nativeChat.agent) ? nativeChat.agent : null
     return (
       <SortableTab
         {...sortableTabProps}
@@ -220,9 +226,13 @@ function TabBarItemRow({
         sizing={isBotChat ? 'content' : 'terminal'}
         canPin={!(homeRule && isBotSideChatTab(item.data, bot))}
         isBotHome={ruledHome}
-        canContinueInTerminal={bot === null}
+        canContinueInTerminal={bot === null && !customAgent}
         identityIcon={
-          bot ? <BotAvatar bot={bot} className="size-3 rounded-[3px] text-3xs" /> : undefined
+          bot ? (
+            <BotAvatar bot={bot} className="size-3 rounded-[3px] text-3xs" />
+          ) : customAgent ? (
+            <AgentLetterIcon letter={formatAgentTypeLabel(customAgent).charAt(0)} size={12} />
+          ) : undefined
         }
         identityDetail={
           isBotChat

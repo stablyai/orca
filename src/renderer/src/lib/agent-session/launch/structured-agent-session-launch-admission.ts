@@ -1,5 +1,5 @@
 import { terminalLaunchOpened } from './new-tab/launch-agent-in-new-tab-host-agents'
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { StructuredChatAgent } from '../../../../../shared/agent-launch/custom-acp/custom-acp-agents'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
@@ -31,6 +31,7 @@ import { notifyHostPermissionRefused } from '@/lib/agent-session/launch/structur
 import { readAgentInventoryForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
 import { structuredLaunchTerminalFromOutcome } from './structured-launch-terminal-outcome'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 
 export type AgentTerminalLaunchCompletion = {
   outcome: WebRuntimeTerminalCreateOutcome
@@ -88,6 +89,11 @@ export async function openDeclinedStructuredLaunchTerminal(args: {
   targetGroupId?: string
   terminal?: DeclinedStructuredLaunchTerminalOptions
 }): Promise<StructuredLaunchTerminal> {
+  const { agent } = args.plan
+  // A custom ACP agent has no CLI to fall back to.
+  if (!isTuiAgent(agent)) {
+    return { opened: false }
+  }
   // Loaded late: the new-tab launcher begins these launches.
   const { launchAgentInNewTabWithOutcome } = await import('./new-tab/launch-agent-in-new-tab')
   return structuredLaunchTerminalFromOutcome(
@@ -95,7 +101,7 @@ export async function openDeclinedStructuredLaunchTerminal(args: {
       ...args.terminal,
       // A terminal opened behind the visible chat leaves its refusal to that chat's notice.
       ...(args.terminal?.activate === false ? { presentsRefusal: true as const } : {}),
-      agent: args.plan.agent,
+      agent,
       worktreeId: args.worktreeId,
       // The saved choice the chat would have seeded applies to its terminal as flags.
       ...(args.plan.launchOptions ? { sessionOptions: args.plan.launchOptions } : {}),
@@ -109,7 +115,7 @@ export async function openDeclinedStructuredLaunchTerminal(args: {
       agentSessionLaunchPlan: adoptAgentSessionLaunchVerdict({
         route: 'terminal-tui',
         requestId: args.plan.requestId,
-        agent: args.plan.agent,
+        agent,
         worktreeId: args.worktreeId
       })
     })
@@ -118,13 +124,16 @@ export async function openDeclinedStructuredLaunchTerminal(args: {
 
 /** A declined chat falls back to its agent's terminal only where that CLI may be installed. */
 export function declinedTerminalCanOpen(
-  agent: TuiAgent,
+  agent: StructuredChatAgent,
   worktreeId: string,
   host: ExecutionHostId,
   opensCallerSurface?: true
 ): boolean {
   if (opensCallerSurface) {
     return true
+  }
+  if (!isTuiAgent(agent)) {
+    return false
   }
   const parsed = parseExecutionHostId(host)
   const inventory = readAgentInventoryForTarget(
@@ -140,7 +149,7 @@ export function declinedTerminalCanOpen(
 
 /** Ask the executing host before creating tabs/records/prompts/focus intent. Admission opens chat; refusal uses caller terminal (resume without equivalent fails); unreachable server opens nothing. Local unable-to-answer/unresolvable opens chat for its own create to report. */
 export function beginHostAdmittedStructuredLaunch(args: {
-  plan: AgentSessionLaunchPlan & { agent: TuiAgent }
+  plan: AgentSessionLaunchPlan & { agent: StructuredChatAgent }
   hooks: StructuredAgentLaunchHooks
   worktreeId: string
   executionHostId: ExecutionHostId

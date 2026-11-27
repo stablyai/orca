@@ -6,6 +6,7 @@ import {
 import { GENERIC_ACP_DIALECT } from '../acp-dialects/acp-dialect'
 import { directoryAccountBinding } from './acp-account-binding'
 import type { AcpLaunchSpec } from './acp-launch-contract'
+import { nameCustomAcpAgents } from '../../../shared/agent-launch/custom-acp/custom-acp-agent-names'
 
 /** A user's own ACP agent: their command line and environment, the protocol as the agent speaks it. */
 export function customAcpLaunchSpec(agent: CustomAcpAgent): AcpLaunchSpec {
@@ -41,7 +42,9 @@ let customSpecs: readonly AcpLaunchSpec[] = []
 
 /** Read from the host's settings once, before the chat runtime installs its agents. */
 export function adoptCustomAcpAgents(saved: unknown): void {
-  customSpecs = readCustomAcpAgents(saved).map(customAcpLaunchSpec)
+  const agents = readCustomAcpAgents(saved)
+  nameCustomAcpAgents(agents.map((agent) => ({ agent: customAcpAgentId(agent), name: agent.name })))
+  customSpecs = agents.map(customAcpLaunchSpec)
 }
 
 export function customAcpLaunchSpecs(): readonly AcpLaunchSpec[] {

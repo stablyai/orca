@@ -6,7 +6,7 @@ import {
   isAgentChatPermissionMode,
   newChatPermissionModeForSettings
 } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { StructuredChatAgent } from '../../../../../shared/agent-launch/custom-acp/custom-acp-agents'
 import { nativeChatPermissionModeLabel } from '@/components/native-chat/session/options/controls/native-chat-permission-mode-labels'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 
@@ -36,7 +36,10 @@ export function hostPermissionRefusedText(
       )
 }
 
-export function notifyHostPermissionRefused(agent: TuiAgent, kind: 'refused' | 'unverified'): void {
+export function notifyHostPermissionRefused(
+  agent: StructuredChatAgent,
+  kind: 'refused' | 'unverified'
+): void {
   const agentLabel = structuredAgentLabel(agent)
   toast.error(
     translate(

@@ -35,7 +35,7 @@ import type {
   StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource
 } from '../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
-import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { StructuredChatAgent } from '../../../../../../shared/agent-launch/custom-acp/custom-acp-agents'
 import type { NativeChatLaunchPromptDelivery } from '../prompt/native-chat-launch-prompt-delivery'
 import type { StructuredAgentLaunchOptions } from '../structured-agent-session-launch-callers'
 
@@ -63,7 +63,7 @@ export type AgentSessionLaunchVerdict = Pick<
   route: AgentLaunchRoute
   requestedSurface?: AgentLaunchSurface
   requestId: string
-  agent: TuiAgent
+  agent: StructuredChatAgent
   worktreeId?: string
   executionHostId?: ExecutionHostId
   prompt?: string

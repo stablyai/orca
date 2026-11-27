@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { lazyZodSchema } from '../../schema/lazy-zod-schema'
+import type { TuiAgent } from '../catalog/tui-agent'
 
 /** A chat agent the user runs over ACP with their own command, such as `ssh host my-agent acp`. */
 export type CustomAcpAgent = {
@@ -12,6 +13,9 @@ export type CustomAcpAgent = {
 }
 
 export type CustomAcpAgentId = `custom-${string}`
+
+/** An agent a native chat can run: a built-in one, or one of the host's custom ACP agents. */
+export type StructuredChatAgent = TuiAgent | CustomAcpAgentId
 
 export type CustomAcpAgentSettings = {
   /** The host's own ACP agents, offered as chats beside the built-in ones; read when Orca starts. */

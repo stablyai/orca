@@ -3,6 +3,7 @@ import type { AgentType } from '../../../../../shared/agent-status/contracts/age
 import { AgentIcon } from './AgentIcon'
 import { AgentLetterIcon } from './agent-icon-glyphs'
 import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
+import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
 
 /** Status-row icon: known agents get their brand icon, any other OSC 7501 program its first letter. */
 export function AgentTypeIcon({
@@ -22,7 +23,14 @@ export function AgentTypeIcon({
   if (!agentType || agentType === 'unknown') {
     return <AgentIcon agent={null} size={size} className={className} />
   }
-  return <AgentLetterIcon letter={programLetter(agentType)} size={size} className={className} />
+  // A custom ACP agent's letter comes from the name its host gave it.
+  return (
+    <AgentLetterIcon
+      letter={programLetter(formatAgentTypeLabel(agentType))}
+      size={size}
+      className={className}
+    />
+  )
 }
 
 /** OSC 7501 app ids may lead with `_.+-`; the first letter or digit is the readable one. */

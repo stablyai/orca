@@ -1,4 +1,5 @@
 import type { AgentType } from '../contracts/agent-status-types'
+import { customAcpAgentName } from '../../agent-launch/custom-acp/custom-acp-agent-names'
 
 // Share agent names across desktop and mobile.
 const WELL_KNOWN_LABELS: Record<string, string> = {
@@ -42,6 +43,6 @@ export function formatAgentTypeLabel(agentType: AgentType | null | undefined): s
   if (!agentType || agentType === 'unknown') {
     return 'Agent'
   }
-  // Capitalize well-known names nicely; pass through custom names as-is
-  return WELL_KNOWN_LABELS[agentType] ?? agentType
+  // Capitalize well-known names nicely; a custom ACP agent has the name its host gave it.
+  return WELL_KNOWN_LABELS[agentType] ?? customAcpAgentName(agentType) ?? agentType
 }

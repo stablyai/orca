@@ -1,6 +1,8 @@
 import React from 'react'
 import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { ProjectedAgentMenuItems } from '../../agent/launch-menu/AgentMenuItems'
+import { CustomAgentChatMenuItems } from '../../agent/launch-menu/CustomAgentChatMenuItems'
+import { requestNativeChatComposerFocus } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { OpenAgentSettingsMenuItem } from '../../agent/launch-menu/OpenAgentSettingsMenuItem'
 import { TabBarAgentPickerEntry } from '../create-entry/TabBarAgentPickerEntry'
 import type { TabBarProps } from '../tab-bar-props'
@@ -145,13 +147,25 @@ export function TabBarNewTabMenuContent({
           {bot ? (
             <OpenAgentSettingsMenuItem variant="create" />
           ) : (
-            <ProjectedAgentMenuItems
-              model={agentMenu}
-              pickerInventory={agentPickerInventory}
-              onSelectPickerAgent={selectPickerAgent}
-              hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
-              runLaunch={launchAgentRow}
-            />
+            <>
+              <ProjectedAgentMenuItems
+                model={agentMenu}
+                pickerInventory={agentPickerInventory}
+                onSelectPickerAgent={selectPickerAgent}
+                hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
+                runLaunch={launchAgentRow}
+              />
+              {terminalOnly ? null : (
+                <CustomAgentChatMenuItems
+                  model={agentMenu}
+                  worktreeId={worktreeId}
+                  groupId={resolvedGroupId}
+                  onFocusChat={(tabId) =>
+                    queueFocusAfterNewTabMenuClose(() => requestNativeChatComposerFocus(tabId))
+                  }
+                />
+              )}
+            </>
           )}
         </>
       ) : null}

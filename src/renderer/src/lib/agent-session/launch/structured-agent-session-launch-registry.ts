@@ -1,7 +1,7 @@
 import { launchStateLifecycle } from './structured-agent-session-launch-lifecycle'
 import { forgetStructuredSessionSelection } from '../options/structured-agent-session-selection-controller'
 import { useSyncExternalStore } from 'react'
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { StructuredChatAgent } from '../../../../../shared/agent-launch/custom-acp/custom-acp-agents'
 import type { StructuredLaunchFailure } from './structured-agent-session-launch-failure'
 import type {
   StructuredAgentSessionForkSource,
@@ -49,7 +49,7 @@ export function resetStructuredAgentLaunchRegistryForTests(): void {
 // Key by agent for concurrent Claude/Codex starts, and conversation so resumes never join unrelated blank launches.
 export function structuredLaunchIdentity(
   worktreeId: string,
-  agent: TuiAgent,
+  agent: StructuredChatAgent,
   scope: {
     resumeFrom?: StructuredAgentSessionResumeSource
     forkFrom?: StructuredAgentSessionForkSource
