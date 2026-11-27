@@ -3,6 +3,7 @@ import { nativeChatTextAttachmentParts } from '../../../../../shared/native-chat
 import {
   currentFiles,
   inputPaths,
+  namedNativeChatStagedPaths,
   nativeChatStagedFileHeld,
   nativeChatStagedFileOwners,
   pruneFiles,
@@ -10,6 +11,8 @@ import {
   type NativeChatStagedInput,
   type StagedFiles
 } from './native-chat-draft-attachment-staging'
+import { nativeChatBrowserFileRefusal } from '../attachments/native-chat-browser-file-refusal'
+import { agentSessionWriteNoticeText } from '../messages/notices/agent-session-write-notice-text'
 
 type UploadSession = { sessionId: string; runtimeEnvironmentId: string | null }
 
@@ -24,18 +27,53 @@ function uploadHolder(
   )
 }
 
-/** Upload the staged originals `input` names, and map them to their host paths. */
+/**
+ * This send lost custody of staged originals it names (another draft adopted them): it is refused
+ * whole, and its message says so (see `nativeChatBrowserFileRefusal`).
+ */
+export class NativeChatStagedCustodyLostError extends Error {
+  constructor(
+    readonly references: readonly string[],
+    sessionId: string
+  ) {
+    const parts = nativeChatBrowserFileRefusal(references, sessionId)
+    super(parts ? agentSessionWriteNoticeText(parts) : '')
+    this.name = 'NativeChatStagedCustodyLostError'
+  }
+}
+
+/** What a send's grant still covers: the original is in its lease and its staging still owns it. */
+type StagedCustody = { lost: (paths: readonly string[]) => string[] }
+
+/**
+ * Upload the staged originals `input` names, and map them to their host paths. Custody is checked
+ * before any upload starts and again once every upload settled: an original another draft adopted
+ * meanwhile is neither uploaded nor delivered by this send.
+ */
 async function uploadStagedInput<T extends NativeChatStagedInput>(
   files: StagedFiles | undefined,
   input: T,
-  session: UploadSession
-): Promise<T> {
-  if (!files || !session.runtimeEnvironmentId) {
+  session: UploadSession,
+  granted: ReadonlySet<string>,
+  custody: StagedCustody
+): Promise<T & { custodyLost?: () => readonly string[] }> {
+  if (!files) {
     return input
   }
-  const paths = inputPaths(currentFiles(files), input)
+  const paths = namedNativeChatStagedPaths(granted, input)
   if (!paths.length) {
     return input
+  }
+  const custodyLost = (): readonly string[] => custody.lost(paths)
+  const requireCustody = (): void => {
+    const lost = custodyLost()
+    if (lost.length) {
+      throw new NativeChatStagedCustodyLostError(lost, session.sessionId)
+    }
+  }
+  requireCustody()
+  if (!session.runtimeEnvironmentId) {
+    return { ...input, custodyLost }
   }
   const { prepareNativeChatSessionAttachmentUpload, uploadNativeChatSessionAttachmentPaths } =
     await import('../attachments/uploads/native-chat-session-attachment-upload')
@@ -52,6 +90,8 @@ async function uploadStagedInput<T extends NativeChatStagedInput>(
   if (!prepared.ok) {
     throw new Error(prepared.notice)
   }
+  // The awaits above can outlast an adoption: no upload starts for an original this send lost.
+  requireCustody()
   const ownerFiles = currentFiles(files)
   const key = JSON.stringify(prepared.target)
   const uploads = ownerFiles.uploads.get(key) ?? new Map<string, Promise<string>>()
@@ -86,6 +126,8 @@ async function uploadStagedInput<T extends NativeChatStagedInput>(
   const uploaded = new Map(
     await Promise.all(paths.map(async (path) => [path, await uploads.get(path)!] as const))
   )
+  // An upload that finished after an adoption is the adopter's now: this send may not deliver it.
+  requireCustody()
   const text = nativeChatTextAttachmentParts(input.text, true, (path) => uploaded.has(path))
     .map((part) =>
       part.path ? formatNativeChatFileReference(uploaded.get(part.path)!) : part.text
@@ -97,7 +139,8 @@ async function uploadStagedInput<T extends NativeChatStagedInput>(
     attachments: input.attachments?.map((image) => ({
       ...image,
       path: uploaded.get(image.path) ?? image.path
-    }))
+    })),
+    custodyLost
   }
 }
 
@@ -110,6 +153,15 @@ export function captureNativeChatStagedInput(scope: string, input?: NativeChatSt
       (held) => paths.length === held.size && paths.every((path) => held.has(path))
     ) ?? new Set(paths)
   files?.leases.add(lease)
+  // The send's grant: the originals captured now. Adoption removes one from every lease of its old
+  // staging, so a path still in this lease, and still in its staging, is still this send's to deliver.
+  const granted: ReadonlySet<string> = new Set(paths)
+  const custody: StagedCustody = {
+    lost: (named) => {
+      const owner = files && currentFiles(files)
+      return named.filter((path) => !lease.has(path) || !owner?.paths.has(path))
+    }
+  }
   const release = (input?: NativeChatStagedInput): void => {
     if (files) {
       const owner = currentFiles(files)
@@ -138,10 +190,16 @@ export function captureNativeChatStagedInput(scope: string, input?: NativeChatSt
       }
     },
     /**
-     * Staged originals this draft owns become their host uploads; nothing else changes. A reference
-     * left unmapped (an original this draft no longer owns) is refused whole where the message leaves.
+     * Staged originals this capture covers become their host uploads; nothing else changes. One whose
+     * custody this send lost is refused whole (here, or at the issue through `custodyLost`); any other
+     * unmapped reference is refused whole where the message leaves.
      */
-    prepare: <T extends NativeChatStagedInput>(input: T, session: UploadSession): Promise<T> =>
-      uploadStagedInput(files, input, session)
+    prepare: <T extends NativeChatStagedInput>(
+      input: T,
+      session: UploadSession
+    ): Promise<T & { custodyLost?: () => readonly string[] }> =>
+      uploadStagedInput(files, input, session, granted, custody),
+    /** The staged originals this capture covers: what its preparation may map to host uploads. */
+    paths: [...granted]
   }
 }

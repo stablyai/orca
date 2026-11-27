@@ -10,8 +10,7 @@ import { agentSessionSendBodyFingerprint } from '../../../../../../shared/agent-
 import {
   queuedCardOnScreen,
   queuedEditChangedNotice,
-  queuedMessageEditableText,
-  queuedMessageWithEdit
+  queuedMessageEditableText
 } from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit'
 import { queuedEditNotice } from './queued-message-edit-notices'
 import {
@@ -19,8 +18,7 @@ import {
   discardNativeChatQueuedEdit,
   handBackNativeChatQueuedEdit,
   nativeChatQueuedEditDirty,
-  nativeChatQueuedEditHeld,
-  nativeChatQueuedEditInput
+  nativeChatQueuedEditAdmission
 } from './native-chat-queued-edit-draft'
 import { nativeChatQueuedEditValueKey } from './native-chat-queued-edit-value'
 import { settleNativeChatQueuedEdit } from './native-chat-queued-edit-outcome'
@@ -231,11 +229,23 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
       close(edit)
       return
     }
-    const input = nativeChatQueuedEditInput(edit, imagesCapable, transport.skillsCapable === true)
-    const edited = queuedMessageWithEdit(edit.body, input)
-    if (!edited.ok || nativeChatQueuedEditHeld(edit, imagesCapable)) {
+    const admission = nativeChatQueuedEditAdmission(
+      edit,
+      imagesCapable,
+      transport.skillsCapable === true,
+      sessionId
+    )
+    if (!admission) {
       return
     }
+    if ('refused' in admission) {
+      // Refused before any write: the card stays as it was and the edit stays open.
+      if (admission.refused) {
+        toast.error(admission.refused)
+      }
+      return
+    }
+    const { input, edited } = admission
     const attempt = {
       phase: 'pending' as const,
       expected: edit.baseFingerprint,

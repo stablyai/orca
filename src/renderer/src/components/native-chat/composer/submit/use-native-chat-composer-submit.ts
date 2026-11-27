@@ -35,6 +35,9 @@ import {
   admitNativeChatPastedText,
   resolveNativeChatPastedText
 } from '../../paste/native-chat-composer-pasted-text-references'
+import { nativeChatBrowserFileReferences } from '../../attachments/native-chat-browser-file-references'
+import { nativeChatBrowserFileRefusal } from '../../attachments/native-chat-browser-file-refusal'
+import { agentSessionWriteNoticeText } from '../../messages/notices/agent-session-write-notice-text'
 
 export type NativeChatComposerGoalMode = {
   /** True while the draft is an objective rather than a message. */
@@ -162,6 +165,14 @@ export function useNativeChatComposerSubmit(args: {
             setEntered(false)
           }
         })
+        return
+      }
+      // A host goal is a content-bearing write like a send: one naming a browser file the host can
+      // never read is refused here, before any write, and the draft keeps it as it was.
+      const browserFiles = nativeChatBrowserFileReferences(objective)
+      if (browserFiles.length > 0) {
+        const parts = nativeChatBrowserFileRefusal(browserFiles, structuredTransport.sessionId)
+        structuredTransport.onError(parts ? agentSessionWriteNoticeText(parts) : null)
         return
       }
       structuredTransport.onSubmitted?.()

@@ -103,7 +103,11 @@ export async function attemptStructuredAgentSessionSend(args: {
   beforeIssue: () => void
   abandoned: () => boolean
   reconcile: (uncertain: boolean) => void
-}): Promise<StructuredAgentSessionSendAttempt | null> {
+  /** Browser originals whose custody this send lost since preparation: such a send is never issued. */
+  custodyLost?: () => readonly string[]
+}): Promise<
+  StructuredAgentSessionSendAttempt | { kind: 'custody-lost'; references: string[] } | null
+> {
   const { entry, target } = args
   // Measured as the host measures it, so a message it would refuse comes back saying why.
   if (structuredAgentSessionBlocksTooLarge(entry.body.blocks)) {
@@ -134,6 +138,10 @@ export async function attemptStructuredAgentSessionSend(args: {
   }
   if (fence === null) {
     return { kind: 'not-sent', parts: NOT_SENT }
+  }
+  const lost = args.custodyLost?.() ?? []
+  if (lost.length) {
+    return { kind: 'custody-lost', references: [...lost] }
   }
   args.beforeIssue()
   const params = structuredAgentSessionMessageSendMutation({

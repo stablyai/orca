@@ -88,8 +88,8 @@ const { agentSessionWriteNotDoneParts } =
 const { agentSessionWriteNoticeText } =
   await import('../messages/notices/agent-session-write-notice-text')
 
-const { nativeChatBrowserFileRefusalParts } =
-  await import('../attachments/native-chat-browser-file-references')
+const { readNativeChatHeldElsewhere } =
+  await import('../composer/controls/native-chat-held-elsewhere-notice')
 const { imageReferenceToken } =
   await import('../../../../../shared/native-chat/attachments/native-chat-image-reference')
 
@@ -97,6 +97,18 @@ beforeEach(() => {
   uploadedSources.length = 0
   attempted.length = 0
 })
+
+/**
+ * The outcome if it settled within a few ticks, else 'pending'. The stand-in request never answers, so
+ * a send that wrongly reached it reads as pending and fails an exact assertion instead of a timeout.
+ */
+const settledSoon = async <T>(outcome: Promise<T>): Promise<T | 'pending'> => {
+  let ticks = Promise.resolve<'pending'>('pending')
+  for (let tick = 0; tick < 10; tick += 1) {
+    ticks = ticks.then((value) => value)
+  }
+  return Promise.race([outcome, ticks])
+}
 
 /** Send `input` from `sessionId` the way every message leaves: reserved, prepared, then sent. */
 const sendThroughGate = async (
@@ -195,13 +207,17 @@ it('refuses a Retry naming an adopted browser file whole, before any request', a
     ...session,
     sessionId: retrySession
   })
-  const outcome = await sendThroughGate(retrySession, outgoing)
+  const outcome = await settledSoon(sendThroughGate(retrySession, outgoing))
 
   expect(outcome).toBe('returned')
-  expect(attempted).toEqual([])
-  expect(getStructuredAgentSessionSendNotice(retrySession)).toBe(
-    agentSessionWriteNoticeText(nativeChatBrowserFileRefusalParts([sent.image, sent.text]))
-  )
+  expect(attempted).toHaveLength(0)
+  // Both files are intact in the old chat's draft: the Retry chat's persistent notice says where, and
+  // no text calls them expired.
+  expect(readNativeChatHeldElsewhere(retrySession)).toEqual({
+    count: 2,
+    ownerSessionId: sent.sessionId
+  })
+  expect(getStructuredAgentSessionSendNotice(retrySession)).toBeNull()
   const backInRetry = readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(retrySession))
   const chips = backInRetry.images.map(({ id }) => id)
   expect(backInRetry.images.map(({ path }) => path)).toEqual([sent.image, hostOf(sent.sibling, -1)])
@@ -341,10 +357,10 @@ const lateRefusal = (sent: FirstSend) =>
     expiredOf(sent)
   )
 // The late interval: the Retry is planned and captured while the source still owns its files, then the
-// old send's late refusal adopts them into the old chat, then the Retry is prepared and sent. Nothing
-// reaches the host, with a healthy sibling (uploaded, yet the message is still refused whole) and
-// without one: a message of one numbered image that went elsewhere is refused, not sent empty and not
-// left as an empty launch.
+// old send's late refusal adopts them into the old chat, then the Retry is prepared. Custody moved with
+// the originals, so preparation refuses the whole message before any upload starts, with a healthy
+// sibling (not uploaded either) and without one: nothing reaches the host, nothing is sent empty, and
+// the old chat keeps the originals in its draft.
 it('refuses a Retry whose browser file was adopted after the plan, with or without a sibling', async () => {
   const sent = await firstSendFromPendingSource('late')
   const retry = worktreeCreationFirstSend(sent.request, sent.pending)
@@ -358,18 +374,15 @@ it('refuses a Retry whose browser file was adopted after the plan, with or witho
   lateRefusal(sent)
 
   const bothSession = `${sent.sessionId}-retry`
-  const both = await withSibling.prepare(retry, { ...session, sessionId: bothSession })
-  expect(uploadedSources).toEqual([sent.sibling])
-  expect(await sendThroughGate(bothSession, both)).toBe('returned')
-
+  await expect(
+    withSibling.prepare(retry, { ...session, sessionId: bothSession })
+  ).rejects.toMatchObject({ references: [sent.image, sent.text] })
   const aloneSession = `${sent.sessionId}-alone`
-  const one = await withoutSibling.prepare(alone, { ...session, sessionId: aloneSession })
-  expect(one).toEqual(alone)
-  expect(await sendThroughGate(aloneSession, one)).toBe('returned')
-  expect(getStructuredAgentSessionSendNotice(aloneSession)).toBe(
-    agentSessionWriteNoticeText(nativeChatBrowserFileRefusalParts([sent.image]))
-  )
+  await expect(
+    withoutSibling.prepare(alone, { ...session, sessionId: aloneSession })
+  ).rejects.toMatchObject({ references: [sent.image] })
 
+  expect(uploadedSources).toEqual([])
   expect(attempted).toEqual([])
   expect(readNativeChatComposerDraft(sent.recipient).images.map(({ path }) => path)).toContain(
     sent.image
@@ -387,23 +400,36 @@ it('sends a message whose browser files all became host uploads, whole', async (
     sessionId: retrySession
   })
 
-  void sendThroughGate(retrySession, outgoing)
+  expect(await settledSoon(sendThroughGate(retrySession, outgoing))).toBe('pending')
 
   expect(attempted).toHaveLength(1)
-  expect(JSON.stringify(attempted[0])).not.toContain('orca-browser-file:')
-  expect(JSON.stringify(attempted[0])).toContain('see [Image #1] and [Image #2], notes ')
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stand-in records entry bodies.
+  const body = attempted[0] as AgentJournalMessageItem
+  // The exact ordered image paths, each the host upload of the chip in that position.
+  expect(body.blocks.flatMap((block) => (block.type === 'image-ref' ? [block.path] : []))).toEqual([
+    hostOf(sent.image, -1),
+    hostOf(sent.sibling, -1)
+  ])
+  expect(body.blocks[0]).toEqual({
+    type: 'text',
+    text: `see [Image #1] and [Image #2], notes ${formatNativeChatFileReference(hostOf(sent.text, -1))}`
+  })
+  expect(JSON.stringify(body)).not.toContain('orca-browser-file:')
 })
 
 // Preparation never empties a message, but no empty body reaches the host whatever produced it.
 it('sends no request for a message with no content', async () => {
   const sessionId = 'restore-empty-body'
-  expect(await sendThroughGate(sessionId, { text: '', attachments: [] })).toBe('dropped')
-  expect(attempted).toEqual([])
+  expect(await settledSoon(sendThroughGate(sessionId, { text: '', attachments: [] }))).toBe(
+    'dropped'
+  )
+  expect(attempted).toHaveLength(0)
 })
 
 // An upload still in flight when its original is adopted settles with the staging that holds it then:
-// its record lands in the recipient, and a failure removes the recipient's cached promise, so the
-// recipient's next Send uploads afresh instead of reusing a failed upload.
+// its record lands in the recipient (and the send that started it may not deliver it), and a failure
+// removes the recipient's cached promise, so the recipient's next Send uploads afresh instead of
+// reusing a failed upload.
 it('settles an upload in flight at adoption with the staging that holds it', async () => {
   const done = await firstSendFromPendingSource('in-flight-done')
   const otherDone = { ...session, sessionId: `${done.sessionId}-other` }
@@ -414,7 +440,8 @@ it('settles an upload in flight at adoption with the staging that holds it', asy
   lateRefusal(done)
   settleHeldUpload!(true)
   settleHeldUpload = undefined
-  const host = (await preparing).attachments![0].path
+  await expect(preparing).rejects.toMatchObject({ references: [done.image] })
+  const host = hostOf(done.image, -1)
   expect(stagedNativeChatFiles(done.recipient)?.uploaded.get(host)).toMatchObject({
     source: done.image,
     sessionId: otherDone.sessionId

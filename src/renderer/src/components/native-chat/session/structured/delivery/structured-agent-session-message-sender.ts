@@ -2,9 +2,7 @@ import { settleStructuredLaunchFirstMessageFromJournal } from '@/lib/agent-sessi
 import type { AgentJournalCursor } from '../../../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { structuredAgentSessionSendBody } from '../../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionFirstMessage } from '../../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import { agentSessionWriteNotDoneParts } from '../../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
-import type { AgentSessionWriteFailure } from '../../../../../../../shared/agent-session/failures/agent-session-write-failure'
 import {
   structuredAgentSessionReadCoversSend,
   structuredAgentSessionSettledSends
@@ -33,17 +31,26 @@ import {
   beginSend,
   finish,
   forgetStructuredAgentSessionSendRecorded,
+  grantStructuredAgentSessionSendCustody,
   handBack,
   handBackRefused,
+  observeStructuredAgentSessionHandBack,
   retainUnconfirmed,
+  revokeStructuredAgentSessionSendCustody,
   runtimes,
   settleRecorded,
   structuredAgentSessionSendRecorded,
   STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS,
+  type StructuredAgentSessionHandBackCustody,
   type StructuredAgentSessionSendOutcome,
   type StructuredAgentSessionSent
 } from './structured-agent-session-send-runtime'
 // Bound live sends independently of ordinary in-memory input; only exact host facts reconcile it.
+import type { StructuredAgentSessionReservedSend } from './structured-agent-session-reserved-send'
+export type {
+  StructuredAgentSessionCreateSend,
+  StructuredAgentSessionReservedSend
+} from './structured-agent-session-reserved-send'
 
 const reservations = new Map<string, { stop: () => void; drop: () => void }>()
 
@@ -59,8 +66,8 @@ export function sendStructuredAgentSessionMessage(
     input.onCreated?.(reservation.clientMessageId)
     reservation.legacy()
     void input.prepareAttachments(input, reservation.active).then(
-      (prepared) => {
-        if (reservation.prepare({ ...prepared, skills: input.skills })) {
+      ({ custodyLost, ...prepared }) => {
+        if (reservation.prepare({ ...prepared, skills: input.skills }, custodyLost)) {
           reservation.send(input.target)
         }
       },
@@ -72,38 +79,11 @@ export function sendStructuredAgentSessionMessage(
   if (!entry) {
     return null
   }
+  if (input.custodyLost) {
+    grantStructuredAgentSessionSendCustody(entry.clientMessageId, input.custodyLost)
+  }
   input.onCreated?.(entry.clientMessageId)
   return dispatchStructuredAgentSessionSend(entry, input.target)
-}
-
-export type StructuredAgentSessionReservedSend = {
-  clientMessageId: string
-  fail: (notice: string) => void
-  outcome: Promise<StructuredAgentSessionSendOutcome>
-  /** Resolves once the host records this send, even after an `unconfirmed` outcome. */
-  recorded: Promise<void>
-  /** Older creates wait for acquisition; their send budget still begins at send. */
-  legacy: () => void
-  active: () => boolean
-  prepare: (
-    input: Pick<StructuredAgentSessionSendInput, 'text' | 'attachments' | 'skills'>
-  ) => boolean
-  /** Sends it once the chat exists; null when the reservation was released or dropped meanwhile. */
-  send: (target: RuntimeClientTarget) => StructuredAgentSessionSent | null
-  /** The same message, owned by create instead of a later send request. */
-  create: (target: RuntimeClientTarget) => StructuredAgentSessionCreateSend | null
-  release: () => void
-}
-
-export type StructuredAgentSessionCreateSend = StructuredAgentSessionSent & {
-  message: StructuredAgentSessionFirstMessage
-  issue: () => boolean
-  settle: (
-    result:
-      | { kind: 'recorded'; submission: AgentJournalSubmission; cursor?: AgentJournalCursor }
-      | { kind: 'refused'; failure?: AgentSessionWriteFailure }
-      | { kind: 'unconfirmed' }
-  ) => void
 }
 
 /** Reserve the launch prompt at click time so later typing cannot overtake it before chat creation. */
@@ -119,8 +99,15 @@ export function reserveStructuredAgentSessionSend(
   let settleReservation = (_outcome: StructuredAgentSessionSendOutcome): void => {}
   // Made with the reservation, so whoever holds it hears of a recording however the send reports it.
   const recorded = structuredAgentSessionSendRecorded(entry.clientMessageId)
+  // Heard before the outcome settles, so a reader of a `returned` outcome knows what came back.
+  let handedBack: StructuredAgentSessionHandBackCustody | undefined
+  const stopObserving = observeStructuredAgentSessionHandBack(entry.clientMessageId, (custody) => {
+    handedBack = custody
+  })
   const outcome = new Promise<StructuredAgentSessionSendOutcome>((resolve) => {
     settleReservation = (outcome) => {
+      stopObserving()
+      revokeStructuredAgentSessionSendCustody(entry.clientMessageId)
       reservations.delete(entry.clientMessageId)
       if (outcome === 'returned' || outcome === 'dropped') {
         forgetStructuredAgentSessionSendRecorded(entry.clientMessageId)
@@ -162,7 +149,8 @@ export function reserveStructuredAgentSessionSend(
       if (current) {
         clearTimeout(deadline)
         handBack(current, null)
-        publishStructuredAgentSessionSends(entry.sessionId, { notice })
+        // Empty when another notice already says why (a file held in another chat's draft).
+        publishStructuredAgentSessionSends(entry.sessionId, { notice: notice || null })
         settleReservation('returned')
       }
     },
@@ -170,10 +158,14 @@ export function reserveStructuredAgentSessionSend(
     recorded,
     active: () => held() !== undefined,
     legacy: () => clearTimeout(deadline),
-    prepare: (input) => {
+    handedBack: () => handedBack,
+    prepare: (input, custodyLost) => {
       const current = held()
       if (!current) {
         return false
+      }
+      if (custodyLost) {
+        grantStructuredAgentSessionSendCustody(current.clientMessageId, custodyLost)
       }
       updateStructuredAgentSessionPendingSend(current.sessionId, current.clientMessageId, {
         body: structuredAgentSessionSendBody(input.text, input.attachments ?? [], input.skills),

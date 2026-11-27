@@ -16,7 +16,15 @@ import {
 export type StructuredAgentSessionAttachmentPreparation = (
   input: { text: string; attachments?: readonly StructuredAgentSessionAttachment[] },
   isCurrent: () => boolean
-) => Promise<{ text: string; attachments?: readonly StructuredAgentSessionAttachment[] }>
+) => Promise<{
+  text: string
+  attachments?: readonly StructuredAgentSessionAttachment[]
+  /**
+   * The attempt-scoped grant: the browser originals this send has lost custody of since preparation.
+   * Checked at the send's issue, so an upload made before an adoption is never delivered after it.
+   */
+  custodyLost?: () => readonly string[]
+}>
 
 export type StructuredAgentSessionSendInput = {
   sessionId: string
@@ -36,6 +44,8 @@ export type StructuredAgentSessionSendInput = {
   /** Made while the chat read Stopping: drawn after that turn until the host records it. */
   sentWhileStopping?: true
   onCreated?: (clientMessageId: string) => void
+  /** A prepared send's custody grant, checked at its issue (see `grantStructuredAgentSessionSendCustody`). */
+  custodyLost?: () => readonly string[]
   now?: number
 }
 

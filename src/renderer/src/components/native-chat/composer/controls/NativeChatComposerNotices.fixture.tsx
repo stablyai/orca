@@ -2,6 +2,7 @@ import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { NativeChatComposerNotices } from './NativeChatComposerNotices'
 import { structuredSessionNotices } from '../../messages/notices/native-chat-structured-session-notices'
 import { structuredAgentSessionReadFailureNotice } from '../../messages/notices/structured-agent-session-read-failure-notice'
+import { nativeChatHeldElsewhereNotice } from './use-native-chat-held-elsewhere-notice'
 
 // Captured retained-opening read refusal: history is absent while creation still owns Retry.
 const refusal = {
@@ -176,3 +177,28 @@ export const codexTooOldUpdate = codexTooOld('idle')
 export const codexTooOldUpdating = codexTooOld('running')
 export const codexTooOldUpdateFailed = codexTooOld('failed')
 export const codexTooOldOnServer = codexTooOld('idle', 'Build server')
+
+// Seeded, synthetic: a Retry refused because its two images are still in another chat's draft.
+const heldElsewhere = nativeChatHeldElsewhereNotice(
+  { count: 2, ownerSessionId: 'fixture-owner' },
+  { label: 'Fix login redirect', open: () => {} },
+  () => {}
+)
+
+export const heldInOtherChat = defineFixture({
+  width: 720,
+  render: () => (
+    <div className="native-chat-appearance p-4">
+      <NativeChatComposerNotices notices={[heldElsewhere]} />
+    </div>
+  )
+})
+
+export const heldInOtherChatNarrow = defineFixture({
+  width: 360,
+  render: () => (
+    <div className="native-chat-appearance p-4">
+      <NativeChatComposerNotices notices={[heldElsewhere]} />
+    </div>
+  )
+})

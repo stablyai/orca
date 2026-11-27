@@ -13,7 +13,9 @@ type ComposerErrorLine = NativeChatComposerNoticeContent &
 /** The composer's own paste and attachment notice, after the chat's notices and the input hold. */
 export function useNativeChatComposerNotice(
   chatNotices?: readonly NativeChatComposerNotice[],
-  holdNotice?: NativeChatComposerNotice | null
+  holdNotice?: NativeChatComposerNotice | null,
+  /** A chat's persistent account of its last refused message (files held in another chat). */
+  heldNotice?: NativeChatComposerNotice | null
 ): {
   notices: readonly NativeChatComposerNotice[]
   setNotice: (text: string | null, errorText?: string) => void
@@ -27,6 +29,7 @@ export function useNativeChatComposerNotice(
   const notices = useMemo(
     () => [
       ...(chatNotices ?? []),
+      ...(heldNotice ? [heldNotice] : []),
       ...(holdNotice ? [holdNotice] : []),
       ...(notice
         ? [
@@ -39,7 +42,7 @@ export function useNativeChatComposerNotice(
           ]
         : [])
     ],
-    [chatNotices, holdNotice, notice, setNotice]
+    [chatNotices, heldNotice, holdNotice, notice, setNotice]
   )
   return { notices, setNotice }
 }

@@ -7,8 +7,12 @@ import {
 import {
   queuedEditKeptImages,
   queuedMessageEditableText,
+  queuedMessageWithEdit,
   type QueuedMessageEdit
 } from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit'
+import { nativeChatUnsendableMessageBody } from '../../attachments/native-chat-browser-file-references'
+import { nativeChatBrowserFileRefusal } from '../../attachments/native-chat-browser-file-refusal'
+import { agentSessionWriteNoticeText } from '../../messages/notices/agent-session-write-notice-text'
 import { pickedSkillsInText } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { promptSkillRefs } from '../../composer/editor/native-chat-prompt-document'
@@ -107,6 +111,34 @@ export function nativeChatQueuedEditInput(
       ? { skills: pickedSkillsInText(text, promptSkillRefs(draft.document), ['$', '/']) }
       : {})
   }
+}
+
+/**
+ * What Save may write: the update and the card it makes, or a refusal (worded, or null when another
+ * notice says why), or null while the edit can't be saved yet. An update rewrites a hosted card the
+ * agent will read, so it meets the outbound policy every send does: a card naming a browser file is
+ * refused whole before any write.
+ */
+export function nativeChatQueuedEditAdmission(
+  edit: NativeChatQueuedEditDraft,
+  imagesCapable: boolean,
+  skillsCapable: boolean,
+  sessionId: string
+):
+  | { input: QueuedMessageEdit; edited: { ok: true; body: AgentJournalMessageItem } }
+  | { refused: string | null }
+  | null {
+  const input = nativeChatQueuedEditInput(edit, imagesCapable, skillsCapable)
+  const edited = queuedMessageWithEdit(edit.body, input)
+  if (!edited.ok || nativeChatQueuedEditHeld(edit, imagesCapable)) {
+    return null
+  }
+  const unsendable = nativeChatUnsendableMessageBody(edited.body)
+  if (unsendable?.kind === 'browser-files') {
+    const parts = nativeChatBrowserFileRefusal(unsendable.references, sessionId)
+    return { refused: parts ? agentSessionWriteNoticeText(parts) : null }
+  }
+  return { input, edited }
 }
 
 export function nativeChatQueuedEditDirty(edit: NativeChatQueuedEditDraft): boolean {

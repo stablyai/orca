@@ -1,5 +1,6 @@
 import { useNativeChatComposerEditSession } from '../queue/editing/use-native-chat-composer-edit-session'
 import { useNativeChatComposerNotice } from './controls/use-native-chat-composer-notice'
+import { useNativeChatHeldElsewhereNotice } from './controls/use-native-chat-held-elsewhere-notice'
 import { useNativeChatMobileHoldNotice } from '../host-access/use-native-chat-mobile-hold-notice'
 import { forwardRef, useCallback, useState, useRef } from 'react'
 import { useNativeChatComposerInterrupt } from './submit/use-native-chat-composer-interrupt'
@@ -89,7 +90,9 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       structuredTransport ? null : targetPtyId,
       canSend
     )
-    const { notices, setNotice } = useNativeChatComposerNotice(chatNotices, holdNotice)
+    // A message refused for files another chat's draft holds says so here until dismissed or resent.
+    const heldNotice = useNativeChatHeldElsewhereNotice(structuredTransport?.sessionId)
+    const { notices, setNotice } = useNativeChatComposerNotice(chatNotices, holdNotice, heldNotice)
     const { textareaRef } = useNativeChatComposerAppMenuSelection(imeEnterGesture.isComposing)
     const recall = useNativeChatComposerRecall({
       draft,

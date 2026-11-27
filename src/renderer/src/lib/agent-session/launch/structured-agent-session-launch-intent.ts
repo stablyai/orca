@@ -7,6 +7,7 @@ import type {
   StructuredAgentSessionResumeSource
 } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import { createStructuredAgentSessionOperationId } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
+import { retainedOpeningCreateParams } from './structured-agent-session-launch-first-message-policy'
 import { structuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { useAppStore } from '@/store/index'
@@ -163,13 +164,11 @@ export function retryStructuredAgentSessionLaunchIntent(
     const { beforeCreate: _beforeCreate, createAfter: _createAfter, ...retained } = intent
     return {
       ...retained,
-      params: {
-        ...intent.params,
-        envelope: {
-          ...intent.params.envelope,
-          clientOperationId: createStructuredAgentSessionOperationId(createNonSecureContextUuid)
-        }
-      }
+      params: retainedOpeningCreateParams(
+        intent.sessionId,
+        intent.params,
+        createStructuredAgentSessionOperationId(createNonSecureContextUuid)
+      )
     }
   }
   return {

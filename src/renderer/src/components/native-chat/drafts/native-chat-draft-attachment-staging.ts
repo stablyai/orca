@@ -91,6 +91,19 @@ export function adoptNativeChatStagedFile(from: StagedFiles, path: string, toSco
   }
 }
 
+/** The draft scopes whose staging holds this original now, after any move or adoption. */
+export function nativeChatStagedFileHolderScopes(path: string): string[] {
+  return [...staged].flatMap(([scope, files]) =>
+    currentFiles(files).paths.has(path) ? [scope] : []
+  )
+}
+
+/** The staged originals of this scope that `input` names: what its preparation may upload. */
+export function nativeChatStagedInputPaths(scope: string, input: NativeChatStagedInput): string[] {
+  const files = staged.get(scope)
+  return files ? inputPaths(currentFiles(files), input) : []
+}
+
 export function nativeChatStagedScopes(): string[] {
   return [...staged.keys()]
 }
@@ -100,12 +113,20 @@ export function currentFiles(files: StagedFiles): StagedFiles {
 }
 
 export function inputPaths(files: StagedFiles, input: NativeChatStagedInput): string[] {
+  return namedNativeChatStagedPaths(files.paths, input)
+}
+
+/** Which of `paths` the input names, as an attached image or a text reference. */
+export function namedNativeChatStagedPaths(
+  paths: ReadonlySet<string>,
+  input: NativeChatStagedInput
+): string[] {
   const referenced = new Set(
-    nativeChatTextAttachmentParts(input.text, true, (path) => files.paths.has(path)).flatMap(
-      (part) => (part.path ? [part.path] : [])
+    nativeChatTextAttachmentParts(input.text, true, (path) => paths.has(path)).flatMap((part) =>
+      part.path ? [part.path] : []
     )
   )
-  return [...files.paths].filter(
+  return [...paths].filter(
     (path) => input.attachments?.some((image) => image.path === path) || referenced.has(path)
   )
 }

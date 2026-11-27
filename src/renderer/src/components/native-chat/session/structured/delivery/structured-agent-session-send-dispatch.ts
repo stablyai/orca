@@ -5,10 +5,8 @@ import {
   updateStructuredAgentSessionPendingSend,
   type StructuredAgentSessionPendingSend
 } from './structured-agent-session-pending-sends'
-import {
-  nativeChatBrowserFileReferences,
-  nativeChatBrowserFileRefusalParts
-} from '../../../attachments/native-chat-browser-file-references'
+import { nativeChatUnsendableMessageBody } from '../../../attachments/native-chat-browser-file-references'
+import { nativeChatBrowserFileRefusal } from '../../../attachments/native-chat-browser-file-refusal'
 import {
   beginSend,
   finish,
@@ -17,6 +15,7 @@ import {
   retainUnconfirmed,
   runtimes,
   settleRecorded,
+  structuredAgentSessionSendCustodyLost,
   type StructuredAgentSessionSent
 } from './structured-agent-session-send-runtime'
 
@@ -35,13 +34,18 @@ async function attempt(entry: StructuredAgentSessionPendingSend): Promise<void> 
         issued: true
       })
     },
-    abandoned: () => runtime.abort.signal.aborted || runtimes.get(entry.clientMessageId) !== runtime
+    abandoned: () =>
+      runtime.abort.signal.aborted || runtimes.get(entry.clientMessageId) !== runtime,
+    // Checked after the attempt's own awaits, right before the request: custody can move meanwhile.
+    custodyLost: () => structuredAgentSessionSendCustodyLost(entry.clientMessageId)
   })
   const current = findStructuredAgentSessionPendingSend(entry.sessionId, entry.clientMessageId)
   if (!outcome || !current) {
     return
   }
-  if (outcome.kind === 'not-sent') {
+  if (outcome.kind === 'custody-lost') {
+    handBack(current, nativeChatBrowserFileRefusal(outcome.references, current.sessionId))
+  } else if (outcome.kind === 'not-sent') {
     handBack(current, outcome.parts)
   } else if (outcome.evidence.kind === 'recorded') {
     settleRecorded(current, outcome.submission, 'reply', outcome.cursor)
@@ -54,22 +58,20 @@ async function attempt(entry: StructuredAgentSessionPendingSend): Promise<void> 
 
 /**
  * Why a message body may not leave the renderer: it has no content, or it still names a renderer-only
- * browser file (one its preparation did not turn into a host upload). The body is never edited here:
- * it goes out whole or not at all, so its image numbering always matches its images.
+ * browser file (one its preparation did not turn into a host upload, or whose custody this send lost
+ * since). The body is never edited here: it goes out whole or not at all, so its image numbering always
+ * matches its images.
  */
 export function structuredAgentSessionUnsendableBody(
-  body: StructuredAgentSessionPendingSend['body']
+  body: StructuredAgentSessionPendingSend['body'],
+  clientMessageId?: string
 ): { kind: 'empty' } | { kind: 'browser-files'; references: string[] } | null {
-  if (body.blocks.length === 0) {
-    return { kind: 'empty' }
+  const unsendable = nativeChatUnsendableMessageBody(body)
+  if (unsendable || clientMessageId === undefined) {
+    return unsendable
   }
-  const references = nativeChatBrowserFileReferences(
-    body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n'),
-    body.blocks.flatMap((block) =>
-      block.type === 'image-ref' && block.path ? [{ path: block.path }] : []
-    )
-  )
-  return references.length ? { kind: 'browser-files', references } : null
+  const lost = structuredAgentSessionSendCustodyLost(clientMessageId)
+  return lost.length ? { kind: 'browser-files', references: [...lost] } : null
 }
 
 /**
@@ -82,11 +84,11 @@ export function dispatchStructuredAgentSessionSend(
   target: RuntimeClientTarget
 ): StructuredAgentSessionSent {
   const sent = beginSend(entry, target)
-  const unsendable = structuredAgentSessionUnsendableBody(entry.body)
+  const unsendable = structuredAgentSessionUnsendableBody(entry.body, entry.clientMessageId)
   if (unsendable?.kind === 'empty') {
     finish(entry, 'dropped')
   } else if (unsendable) {
-    handBack(entry, nativeChatBrowserFileRefusalParts(unsendable.references))
+    handBack(entry, nativeChatBrowserFileRefusal(unsendable.references, entry.sessionId))
   } else {
     void attempt(entry)
   }

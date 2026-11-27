@@ -47,7 +47,10 @@ export type StructuredLaunchPromptOptions = {
   onPromptDelivered?: () => void
   promptAttachments?: StructuredAgentSessionSendInput['attachments']
   promptSkills?: StructuredAgentSessionSendInput['skills']
-  preparePrompt?: (sessionId: string, target: RuntimeClientTarget) => Promise<LaunchMessage>
+  preparePrompt?: (
+    sessionId: string,
+    target: RuntimeClientTarget
+  ) => Promise<LaunchMessage & { custodyLost?: () => readonly string[] }>
 }
 
 /** Share one staged-text send across launch callers; reserve the chat send slot at click so typed messages cannot overtake it before create. */
@@ -57,6 +60,8 @@ export type StagedStructuredLaunchPrompt = {
   attachments?: LaunchMessage['attachments']
   skills?: LaunchMessage['skills']
   prepare?: StructuredLaunchPromptOptions['preparePrompt']
+  /** The prepared message's custody grant, checked at its issue. */
+  custodyLost?: () => readonly string[]
   slot: StructuredAgentSessionReservedSend | null
   /** Its sender keeps the text if it comes back (notes), instead of the chat's composer. */
   callerKeepsText?: true
@@ -139,9 +144,23 @@ export function stagedDeliveryFromSlotOutcome(
 ): StagedDelivery {
   return {
     delivered: outcome === 'recorded',
-    inComposer: !prompt.callerKeepsText && outcome === 'returned',
+    inComposer: stagedPromptReturnedDurably(prompt, outcome),
     ...unconfirmedStructuredLaunchDelivery(outcome, prompt.slot?.recorded)
   }
+}
+
+/**
+ * `inComposer` claims the recipient's draft durably holds the returned input, so a caller may retire
+ * its own copy. A `returned` outcome only says the send ended: its hand-back may have thrown, or put
+ * the input in a draft that isn't saved yet. Only a durable hand-back makes the claim.
+ */
+function stagedPromptReturnedDurably(
+  prompt: StagedStructuredLaunchPrompt,
+  outcome: StructuredAgentSessionSendOutcome
+): boolean {
+  return (
+    !prompt.callerKeepsText && outcome === 'returned' && prompt.slot?.handedBack() === 'durable'
+  )
 }
 
 /**
@@ -270,7 +289,7 @@ export function prepareStructuredLaunchPromptForCreate(
       unstageStructuredLaunchPrompt(prompt)
       return {
         delivered: outcome === 'recorded',
-        inComposer: !prompt.callerKeepsText && outcome === 'returned',
+        inComposer: stagedPromptReturnedDurably(prompt, outcome),
         ...unconfirmedStructuredLaunchDelivery(outcome, sent.recorded)
       }
     })

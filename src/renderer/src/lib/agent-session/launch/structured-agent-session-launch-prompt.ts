@@ -40,7 +40,8 @@ function sendStagedPrompt(
         prompt.text = input.text
         prompt.attachments = input.attachments
         prompt.skills = input.skills
-        if (prompt.slot && !prompt.slot.prepare(input)) {
+        prompt.custodyLost = input.custodyLost
+        if (prompt.slot && !prompt.slot.prepare(input, input.custodyLost)) {
           // The reservation already ended: its own outcome is the result.
           unstageStructuredLaunchPrompt(prompt)
           return stagedDeliveryFromSlotOutcome(prompt, await prompt.slot.outcome)
@@ -57,7 +58,8 @@ function sendStagedPrompt(
         // the terminal hand-back is published before the reservation is released.
         const result = await finishStagedLaunchPromptWithHandBack(prompt, { failureNotified: true })
         publishStructuredAgentSessionSends(prompt.sessionId, {
-          notice: error instanceof Error ? error.message : String(error)
+          // Empty when another notice already says why (a file held in another chat's draft).
+          notice: (error instanceof Error ? error.message : String(error)) || null
         })
         return result
       }
@@ -69,7 +71,8 @@ function sendStagedPrompt(
           target,
           text: prompt.text,
           attachments: prompt.attachments,
-          skills: prompt.skills
+          skills: prompt.skills,
+          ...(prompt.custodyLost ? { custodyLost: prompt.custodyLost } : {})
         })
     if (!sent) {
       // Another send of the chat holds its slot: the launch text waits in the composer instead.

@@ -73,16 +73,66 @@ export function finish(
     runtimes.delete(entry.clientMessageId)
     runtime.resolve(outcome)
   }
+  sendCustody.delete(entry.clientMessageId)
   updateStructuredAgentSessionPendingSend(entry.sessionId, entry.clientMessageId, keep ?? null)
+}
+
+/**
+ * The attempt-scoped delivery authority a send's preparation granted: what it returns are the browser
+ * originals this send has since lost custody of (adopted by another draft). A send with any is issued
+ * nowhere: custody moves with the original, and so does the right to deliver its upload.
+ */
+const sendCustody = new Map<string, () => readonly string[]>()
+
+export function grantStructuredAgentSessionSendCustody(
+  clientMessageId: string,
+  lost: () => readonly string[]
+): void {
+  sendCustody.set(clientMessageId, lost)
+}
+
+export function revokeStructuredAgentSessionSendCustody(clientMessageId: string): void {
+  sendCustody.delete(clientMessageId)
+}
+
+/** The originals this send may no longer deliver; empty while its grant holds (or it needs none). */
+export function structuredAgentSessionSendCustodyLost(clientMessageId: string): readonly string[] {
+  return sendCustody.get(clientMessageId)?.() ?? []
+}
+
+/**
+ * What a hand-back left of the returned input. `durable`: installed in its draft and journaled, so it
+ * survives a reload. `installed`: in the draft, but only the pending storage write can make it durable
+ * (a refused write shows the draft's own not-saved mark). `lost`: putting it back threw. `caller`: the
+ * caller kept the text. Ending the send never depends on it; whoever retires another copy does.
+ */
+export type StructuredAgentSessionHandBackCustody = 'durable' | 'installed' | 'lost' | 'caller'
+
+const handBackObservers = new Map<
+  string,
+  (custody: StructuredAgentSessionHandBackCustody) => void
+>()
+
+/** Hear this send's hand-back, before its outcome settles; one observer per send. */
+export function observeStructuredAgentSessionHandBack(
+  clientMessageId: string,
+  observer: (custody: StructuredAgentSessionHandBackCustody) => void
+): () => void {
+  handBackObservers.set(clientMessageId, observer)
+  return () => {
+    if (handBackObservers.get(clientMessageId) === observer) {
+      handBackObservers.delete(clientMessageId)
+    }
+  }
 }
 
 function returnToComposer(
   entry: StructuredAgentSessionPendingSend,
   expiredUploadIds?: ReadonlySet<string>,
   restoredUploadIds?: Set<string>
-): boolean {
+): Exclude<StructuredAgentSessionHandBackCustody, 'caller'> {
   try {
-    handBackStructuredAgentSessionMessage(
+    return handBackStructuredAgentSessionMessage(
       entry.sessionId,
       entry.clientMessageId,
       entry.body,
@@ -90,10 +140,11 @@ function returnToComposer(
       expiredUploadIds,
       restoredUploadIds
     )
-    return true
+      ? 'durable'
+      : 'installed'
   } catch (error) {
     console.error('[native-chat-send] a message could not be put back in the composer', error)
-    return false
+    return 'lost'
   }
 }
 
@@ -108,22 +159,29 @@ export function handBack(
   notice: HandBackNotice,
   expiredUploadIds?: ReadonlySet<string>
 ): void {
+  let custody: StructuredAgentSessionHandBackCustody = 'caller'
   try {
     if (entry.callerKeepsText) {
       return
     }
     const restored = new Set<string>()
-    const returned = returnToComposer(entry, expiredUploadIds, restored)
+    custody = returnToComposer(entry, expiredUploadIds, restored)
     const words = typeof notice === 'function' ? notice(restored) : notice
-    const parts: readonly AgentSessionWriteNoticePart[] | null = returned
-      ? words
-      : [...(words ?? []), 'messageNotSaved']
+    const parts: readonly AgentSessionWriteNoticePart[] | null =
+      custody === 'lost' ? [...(words ?? []), 'messageNotSaved'] : words
     if (parts?.length) {
       publishStructuredAgentSessionSends(entry.sessionId, {
         notice: agentSessionWriteNoticeText(parts)
       })
     }
   } finally {
+    const observer = handBackObservers.get(entry.clientMessageId)
+    handBackObservers.delete(entry.clientMessageId)
+    try {
+      observer?.(custody)
+    } catch (error) {
+      console.error('[native-chat-send] a hand-back observer failed', error)
+    }
     // Bookkeeping never holds the chat: whatever the hand-back met, the send ends.
     finish(entry, 'returned')
   }

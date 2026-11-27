@@ -21668,7 +21668,13 @@
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "Model and effort",
         "modelsLoading": "Loading models…",
-        "signInForModels": "Sign in to see the models you can use."
+        "signInForModels": "Sign in to see the models you can use.",
+        "browserFilesNotHere": "Can't send {{names}} from this chat.",
+        "heldInOtherChat_one": "Not sent — {{count}} attachment is still in your draft in {{chat}}",
+        "heldInOtherChat_other": "Not sent — {{count}} attachments are still in your draft in {{chat}}",
+        "heldInAnotherChat_one": "Not sent — {{count}} attachment is still in another chat's draft",
+        "heldInAnotherChat_other": "Not sent — {{count}} attachments are still in another chat's draft",
+        "openOwningChat": "Open chat"
       },
       "tool": {
         "exitCode": "exit {{value0}}",

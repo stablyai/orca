@@ -84,6 +84,62 @@ type DraftLoadResult = {
   position?: NativeChatDraftPosition
 }
 
+/**
+ * The placement a loaded draft starts with. Replay may move a placement but never create or revive
+ * one. A draft this run never placed opens at its start, as on a cold start. Otherwise the live
+ * placement's lineage decides: one already applied (or given up) is never armed again, and a pending
+ * one stands where replay moved it or, when the read already held every move (all committed, or a
+ * committed prefix with only image steps left), where it is live, rebased onto the loaded text.
+ */
+function loadedDraftPosition(
+  draft: StoredNativeChatComposerDraft,
+  changed: boolean,
+  replayed: NativeChatDraftPosition | undefined,
+  live: StoredNativeChatComposerDraft | undefined
+): NativeChatDraftPosition | undefined {
+  const livePosition = live && nativeChatDraftPositions.get(live)
+  if (!livePosition) {
+    // Nothing placed here this run: a load with no missing step opens at the start, as a cold start
+    // does; a replayed one gets none, since no live placement is pending for it to move.
+    return changed ? undefined : { at: 'start', pending: true }
+  }
+  if (!livePosition.pending) {
+    return undefined
+  }
+  if (replayed) {
+    return { ...replayed, pending: true }
+  }
+  return live ? rebasedLivePosition(livePosition, live.text, draft.text) : undefined
+}
+
+/**
+ * The live placement in the loaded text, which already holds every live step: the same text, the live
+ * text with more after it (coordinates unchanged), or the live text after a stored prefix (shifted past
+ * it). Any other loaded text has no place the live coordinates name, so there is none.
+ */
+function rebasedLivePosition(
+  position: NativeChatDraftPosition,
+  liveText: string,
+  loadedText: string
+): NativeChatDraftPosition | undefined {
+  if (loadedText.startsWith(liveText)) {
+    return { ...position }
+  }
+  if (!loadedText.endsWith(liveText)) {
+    return undefined
+  }
+  const offset = loadedText.length - liveText.length
+  const kept = {
+    ...(position.target === undefined ? {} : { target: position.target }),
+    pending: true
+  }
+  if (position.at === 'end') {
+    return { at: 'end', ...kept }
+  }
+  const [from, to] = position.at === 'selection' ? [position.from, position.to] : [0, 0]
+  return { at: 'selection', from: from + offset, to: to + offset, ...kept }
+}
+
 function applyLoaded(
   loaded: ReadonlyMap<string, unknown>,
   readAtSequence: number,
@@ -115,18 +171,11 @@ function applyLoaded(
     }
     const { draft, changed, position } = withAppends(scopeKey, stored, readAtSequence)
     reconcileRestoredImageChecks(scopeKey, draft.images, records.get(scopeKey)?.images ?? [])
-    // Replay may move a placement but never create or revive one: the replayed placement stands only
-    // while the live one it replays is still pending (an applied caret is not armed again).
     const live = records.get(scopeKey)
-    const livePosition = live && nativeChatDraftPositions.get(live)
     installNativeChatDraftRecord(
       scopeKey,
       draft,
-      changed
-        ? position && livePosition?.pending
-          ? { ...position, pending: true }
-          : undefined
-        : { at: 'start', pending: true }
+      loadedDraftPosition(draft, changed, changed ? position : undefined, live)
     )
     if (changed) {
       dirtyScopes.add(scopeKey)

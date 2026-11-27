@@ -19,6 +19,7 @@ import {
   structuredAgentSessionHostSupports,
   supportsStructuredAgentSessionCreateMessage
 } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
+import { structuredLaunchFirstMessageUnsendable } from './structured-agent-session-launch-first-message-policy'
 import { withFrameDrawnChatTabPlacement } from '../../../store/workspace-layout/frames/frame-drawn-chat-tab-placement'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import { askHostCreateSupport } from './structured-agent-session-host-admission'
@@ -195,6 +196,22 @@ export async function launchStructuredAgentSession(
     )
   }
   delete intent.beforeCreate
+  // The final envelope meets the same outbound policy as every send: a first message naming a browser
+  // file never leaves. With an earlier attempt's outcome unknown, the host may hold this very create,
+  // so nothing different is issued under its id: recovery correlates it. Otherwise nothing is created.
+  if (structuredLaunchFirstMessageUnsendable(params)) {
+    if (priorCreateOutcomeUnknown) {
+      throw new StructuredAgentSessionCreateUnknownOutcomeError(
+        'The first message names a file this window cannot send.',
+        'structured_agent_session_first_message_unsendable'
+      )
+    }
+    abandonStructuredAgentSessionLaunchIntent(intent)
+    throw new StructuredAgentSessionCreateRefusalError(
+      'The first message names a file this window cannot send.',
+      'structured_agent_session_first_message_unsendable'
+    )
+  }
   if (isAgentCliUpdateAgent(params.agent)) {
     // A chat start is when the host's own CLI matters; the check never holds up or fails the start.
     const { target } = intent
