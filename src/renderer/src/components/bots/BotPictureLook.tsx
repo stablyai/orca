@@ -266,8 +266,14 @@ export function BotOutfitBadge({
           aria-expanded={open}
           aria-controls={controls}
           onClick={() => onOpenChange(!open)}
+          // ←/→ would move the carousel, which can drop this badge while it holds focus.
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+              event.stopPropagation()
+            }
+          }}
           className={cn(
-            'flex size-6 cursor-pointer items-center justify-center rounded-full border border-border bg-popover text-muted-foreground shadow-[0_0_0_2px_var(--popover)] outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
+            'flex size-6 cursor-pointer items-center justify-center rounded-full border border-border bg-popover text-muted-foreground shadow-[0_0_0_2px_var(--floating-surface)] outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
             open && 'border-foreground bg-foreground text-popover hover:text-popover'
           )}
         >
