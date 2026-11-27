@@ -20,14 +20,14 @@ import { styles } from './terminal-shortcut-settings-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import '../../key-input/terminal-accessory-keys'
-import type { TerminalAccessoryKey } from '../../key-input/terminal-accessory-keys'
-import { TERMINAL_ACCESSORY_KEY_DEFINITIONS as TERMINAL_ACCESSORY_KEYS } from '../../key-input/terminal-key-definitions'
 import {
   getDefaultTerminalAccessoryLayout,
+  getTerminalKeyRowItems,
   loadTerminalAccessoryLayout,
   reorderTerminalAccessoryBuiltInIds,
   saveTerminalAccessoryLayout,
-  setTerminalAccessoryBuiltInVisible
+  setTerminalAccessoryBuiltInVisible,
+  type TerminalKeyRowItem
 } from '../../key-input/terminal-accessory-layout'
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
 import { SmartRailRow } from '../../../components/list/SmartRailRow'
@@ -40,7 +40,7 @@ function ShortcutBarRow({
   visible,
   onToggle
 }: {
-  shortcutKey: TerminalAccessoryKey
+  shortcutKey: TerminalKeyRowItem
   visible: boolean
   onToggle: (visible: boolean) => void
 }): React.JSX.Element {
@@ -179,13 +179,10 @@ export function TerminalShortcutSettings({
     [persistCustomKeys]
   )
 
-  const orderedAccessoryKeys = useMemo(() => {
-    const byId = new Map(TERMINAL_ACCESSORY_KEYS.map((key) => [key.id, key]))
-    return shortcutLayout.orderedBuiltInIds.flatMap((id) => {
-      const key = byId.get(id)
-      return key ? [key] : []
-    })
-  }, [shortcutLayout.orderedBuiltInIds])
+  const orderedRowItems = useMemo(
+    () => getTerminalKeyRowItems(shortcutLayout.orderedBuiltInIds),
+    [shortcutLayout.orderedBuiltInIds]
+  )
 
   return (
     <>
@@ -234,13 +231,13 @@ export function TerminalShortcutSettings({
       <SettingsSection
         title={t('components.terminalShortcutSettings.moreKeys', 'MORE KEYS')}
         footer={t(
-          'components.terminalShortcutSettings.moreKeysDescription',
-          'These keys sit under ⋯ on the terminal key row. Toggle keys to show or hide them, and hold the grip to drag a key into the order you want. A key already on the row, like Esc or the arrows, is left out of ⋯.'
+          'components.terminalShortcutSettings.keyRowDescription',
+          'These keys and buttons sit on the terminal key row. Toggle one to show or hide it, and hold the grip to drag it into the order you want. When the keys move to the side rail, the keys it leaves out sit under ⋯.'
         )}
       >
         <DragReorderList
           key="builtIn"
-          items={orderedAccessoryKeys}
+          items={orderedRowItems}
           itemKey={(shortcutKey) => shortcutKey.id}
           rowHeight={REORDER_ROW_HEIGHT}
           scrollRef={scrollRef}

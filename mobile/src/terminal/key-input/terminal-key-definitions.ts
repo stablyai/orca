@@ -1,5 +1,9 @@
 import { translate } from '../../i18n/mobile-i18n'
-import type { TerminalAccessoryKey, TerminalShortcutSpecialKey } from './terminal-accessory-keys'
+import type {
+  TerminalAccessoryKey,
+  TerminalShortcutModifier,
+  TerminalShortcutSpecialKey
+} from './terminal-accessory-keys'
 
 export const SPECIAL_KEY_LABELS: Record<string, string> = {
   escape: 'Esc',
@@ -106,6 +110,57 @@ export const TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS: TerminalShortcutSpecialK
     return SPECIAL_KEY_ACCESSIBILITY_LABELS[id]!
   }
 }))
+
+type TerminalKeyRowControlId = 'displayMode' | 'paste' | TerminalShortcutModifier
+
+/** Buttons on the key row that act on the session instead of sending bytes; ordered with the keys. */
+export type TerminalKeyRowControl = {
+  id: TerminalKeyRowControlId
+  label: string
+  accessibilityLabel: string
+}
+
+export const TERMINAL_KEY_ROW_CONTROLS: TerminalKeyRowControl[] = [
+  {
+    id: 'displayMode',
+    get label() {
+      return translate('terminal.keyDefinitions.displayModeLabel', 'Phone/Desktop')
+    },
+    get accessibilityLabel() {
+      return translate('terminal.keyDefinitions.displayMode', 'Switch phone or desktop width')
+    }
+  },
+  {
+    id: 'paste',
+    get label() {
+      return translate('session.accessoryKeys.paste', 'Paste')
+    },
+    get accessibilityLabel() {
+      return translate('session.accessoryKeys.pasteFromClipboard', 'Paste from clipboard')
+    }
+  },
+  {
+    id: 'shift',
+    label: 'Shift',
+    get accessibilityLabel() {
+      return translate('session.accessoryKeys.shift', 'Shift')
+    }
+  },
+  {
+    id: 'ctrl',
+    label: 'Ctrl',
+    get accessibilityLabel() {
+      return translate('session.accessoryKeys.control', 'Control')
+    }
+  },
+  {
+    id: 'alt',
+    label: 'Alt',
+    get accessibilityLabel() {
+      return translate('session.accessoryKeys.alt', 'Alt')
+    }
+  }
+]
 
 export const TERMINAL_ACCESSORY_KEY_DEFINITIONS: TerminalAccessoryKey[] = [
   { id: 'escape', label: 'Esc', bytes: '\x1b', accessibilityLabel: 'Escape' },
