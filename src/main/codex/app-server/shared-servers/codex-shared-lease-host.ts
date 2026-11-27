@@ -48,8 +48,6 @@ export type CodexSharedLeaseHost = {
   /** After the server exited: whether its commands were proven gone, once reaped. */
   workloadVerdict: () => DescendantTreeVerdict
   afterReap: () => Promise<void>
-  /** The chat answered a request it was handed. */
-  answered: (id: number | string) => void
   /** Present when the daemon runs the server, so it can outlive this app. */
   readonly relay?: CodexSharedLeaseRelay
 }

@@ -30,12 +30,10 @@ export function codexSharedRelayChatKey(serverKey: string): string {
 
 /** The parts of a shared server its relay's acks wait on. */
 export type CodexSharedRelayAcks = {
-  /** The first seq any chat on it hasn't taken (queued, held for a claim, or unanswered). */
+  /** The first seq no chat on it has taken (queued, or held for a claim). */
   floor: () => number | null
   /** Every chat on it has saved what it was handed. */
   durable: (force: boolean) => Promise<boolean>
-  /** Given once a way to ask for an ack, for when the floor rises without a new line. */
-  wake: (ack: () => void) => void
 }
 
 /** Codex's open-item floor, held lower still by what the server's chats haven't taken. */
@@ -48,8 +46,7 @@ function sharedAckFloor(acks: CodexSharedRelayAcks): ProviderRelayAckFloor {
       // A floor the daemon already let go of keeps nothing.
       const usable = floors.filter((seq): seq is number => seq !== null && seq > released)
       return usable.length > 0 ? Math.min(...usable) : null
-    },
-    wake: acks.wake
+    }
   }
 }
 

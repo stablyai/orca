@@ -49,9 +49,6 @@ export class CodexSharedServerRouter {
   private readonly retired = new Set<string>()
   private readonly unrouted: CodexSharedServerUnrouted
 
-  /** Requests a chat was handed and hasn't answered, by id: the ack floor stays at their seq. */
-  private readonly unanswered = new Map<number | string, number>()
-
   constructor(
     private readonly leases: () => Iterable<CodexSharedServerLease>,
     /** Answers a server request no chat can take, so Codex doesn't wait on it. */
@@ -137,7 +134,7 @@ export class CodexSharedServerRouter {
       if (frame.kind === 'notification') {
         this.discover(frame.method, frame.params)
       }
-      this.deliverTo(lease, frame)
+      lease.deliver(frame)
     }
   }
 
@@ -151,27 +148,12 @@ export class CodexSharedServerRouter {
     }
   }
 
-  /** The first seq a chat hasn't taken that this router holds (unclaimed, or unanswered). */
+  /** The first seq no chat has taken that this router holds (unclaimed, or held for a claim).
+   *  Unanswered requests aren't held here: the daemon re-sends every one at each attach. */
   floor(): number | null {
-    let floor = this.unrouted.floor()
-    for (const seq of [this.recovery?.floor() ?? null, ...this.unanswered.values()]) {
-      if (seq !== null && (floor === null || seq < floor)) {
-        floor = seq
-      }
-    }
-    return floor
-  }
-
-  /** A chat answered (or refused) a request it was handed. */
-  answered(id: number | string): void {
-    this.unanswered.delete(id)
-  }
-
-  private deliverTo(lease: CodexSharedServerLease, frame: CodexSharedServerFrame): void {
-    if (frame.kind === 'request' && typeof frame.seq === 'number') {
-      this.unanswered.set(frame.request.id, frame.seq)
-    }
-    lease.deliver(frame)
+    const floors = [this.unrouted.floor(), this.recovery?.floor() ?? null]
+    const held = floors.filter((seq): seq is number => seq !== null)
+    return held.length > 0 ? Math.min(...held) : null
   }
 
   /** Drops one thread this chat claimed but no longer wants (a resume its caller gave up on). */
@@ -250,7 +232,6 @@ export class CodexSharedServerRouter {
   clear(): void {
     this.unrouted.clear()
     this.owners.clear()
-    this.unanswered.clear()
     this.recovery?.clear()
   }
 
@@ -287,7 +268,7 @@ export class CodexSharedServerRouter {
     const owner = this.owners.get(threadId)
     if (owner) {
       owner.liveThreads.add(threadId)
-      this.deliverTo(owner, frame)
+      owner.deliver(frame)
       return
     }
     if (this.recovery?.hold(threadId, frame)) {
@@ -325,7 +306,7 @@ export class CodexSharedServerRouter {
         : []
       const first = open.find((lease) => lease.reading) ?? open[0]
       if (first) {
-        this.deliverTo(first, frame)
+        first.deliver(frame)
       } else {
         this.refuse(frame)
       }

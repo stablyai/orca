@@ -157,14 +157,12 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   respond(id: number | string, result: unknown): void {
     if (this.state === 'open') {
       this.host.connection.respond(id, result)
-      this.host.answered(id)
     }
   }
 
   respondWithError(id: number | string, code: number, message: string): void {
     if (this.state === 'open') {
       this.host.connection.respondWithError(id, code, message)
-      this.host.answered(id)
     }
   }
 

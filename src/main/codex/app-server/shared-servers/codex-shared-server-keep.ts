@@ -60,7 +60,6 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
   /** Open work of the chats quit handed off; null once one couldn't say (never idle-stopped). */
   private quitOpen: Work | null | undefined
   private handedOff = false
-  private ack: (() => void) | null = null
 
   constructor(private readonly server: CodexKeptServer) {}
 
@@ -71,15 +70,6 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
   openWork = () => this.relay?.openWork()
   endedWork = () => this.relay?.endedWork()
   recordSeq = () => this.relay?.recordSeq?.() ?? null
-
-  wake = (ack: () => void): void => {
-    this.ack = ack
-  }
-
-  /** The floor may have risen (a chat took, claimed or answered): ask for an ack. */
-  floorMoved(): void {
-    this.ack?.()
-  }
 
   floor = (): number | null => {
     let floor = this.server.router.floor()

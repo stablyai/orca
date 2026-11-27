@@ -83,7 +83,6 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   }
 
   ended = (): void => this.onEnded(this)
-  answered = (id: number | string): void => void (this.router.answered(id), this.keep.floorMoved())
 
   get pid(): number | undefined {
     return this.physicalConnection?.pid
@@ -320,9 +319,6 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   }
 
   refuse(frame: CodexSharedServerFrame): void {
-    if (frame.kind === 'request') {
-      this.router.answered(frame.request.id)
-    }
     if (frame.kind === 'request' && !this.closed) {
       this.physicalConnection?.respondWithError(
         frame.request.id,
