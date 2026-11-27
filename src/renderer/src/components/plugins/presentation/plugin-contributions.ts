@@ -95,6 +95,7 @@ export function nameFromContributionPath(path: string): string {
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : path
 }
 
+/** What an installed plugin's manifest contributes, in the shape of Orca's live registrations. */
 export function manifestContributionSource(manifest: PluginManifest): PluginContributionSource {
   const { contributes } = manifest
   // Why label: the source shares the shape of Orca's live registrations, which name it so.

@@ -100,6 +100,7 @@ export function projectPluginPanelIcon(
   return iconPath ? { iconPath } : {}
 }
 
+/** Each discovered plugin as clients list it, with its consent, enabled state and catalog. */
 export async function buildPluginList(
   service: PluginService,
   lock: PluginLockfile,

@@ -62,6 +62,7 @@ function rejectDuplicateValues(
   }
 }
 
+/** Flags duplicate ids, names and keys in contribution points, and entries missing a requirement. */
 export function validatePluginManifestContributions(
   manifest: ContributionValidationManifest,
   ctx: RefinementCtx

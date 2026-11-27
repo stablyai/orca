@@ -16,6 +16,7 @@ export type PluginCommandWorkspaceResolver = (
 
 type PluginCommand = ValidDiscoveredPlugin['manifest']['contributes']['commands'][number]
 
+/** The declared command `commandId`; throws if it is missing or a built-in action alias. */
 export function assertPluginWorkerCommand(
   plugin: ValidDiscoveredPlugin,
   commandId: string

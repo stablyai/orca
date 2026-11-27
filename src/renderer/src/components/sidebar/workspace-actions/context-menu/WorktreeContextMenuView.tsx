@@ -41,6 +41,7 @@ import {
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { WorktreeHandToBotMenuItem } from '@/components/bots/hand-to-bot/WorktreeHandToBotMenuItem'
 
+/** Renders the workspace context menu from the model its container builds. */
 export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
   const {
     children,

@@ -277,6 +277,7 @@ export class PluginService {
     return this.hostCall(...args)
   }
 
+  /** Runs an approved plugin's worker command, starting its worker if needed. */
   invokeCommand(pluginKey: string, commandId: string, args?: unknown, startBy?: number) {
     const run = { plugin: this.findApprovedPlugin(pluginKey), workers: this.workerController }
     return invokePluginWorkerCommand(pluginKey, run, commandId, args, startBy, this.runtimeDelegate)

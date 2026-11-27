@@ -13,6 +13,7 @@ export function shownPluginCapabilities<T extends { kind: string }>(
     : reachablePluginCapabilities(capabilities, 'sandboxed-ui')
 }
 
+/** What a capability lets the plugin do, in consent-dialog wording; unknown kinds use `fallback`. */
 export function pluginCapabilityDescription(
   kind: string,
   fallback: string,

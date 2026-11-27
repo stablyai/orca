@@ -41,6 +41,7 @@ function declaredFile(label: string, path: string | undefined, maxBytes: number)
   return path === undefined ? [] : [{ label, path, kind: 'file' as const, maxBytes }]
 }
 
+/** Every file the manifest points at, labelled for errors and capped at its kind's size limit. */
 function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
   const c = manifest.contributes
   return [

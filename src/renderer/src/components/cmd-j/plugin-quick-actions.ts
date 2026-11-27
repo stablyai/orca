@@ -39,6 +39,7 @@ export function buildPluginNewFileQuickActions(
   }))
 }
 
+/** Cmd+J actions for active plugin commands; workspace commands need an active workspace. */
 export function buildPluginQuickActions(
   commands: readonly ActivePluginCommand[],
   t: Translate = translate
