@@ -282,7 +282,7 @@ export function useNativeChatComposerPaste({
         }
         return
       }
-      const hasImage = await clipboardPasteHasImage(read, probeBesideText, (error) => {
+      const hasImage = await clipboardPasteHasImage(read, (error) => {
         if (canPaste()) {
           setNativeChatPasteFailure(setNotice, error)
         }

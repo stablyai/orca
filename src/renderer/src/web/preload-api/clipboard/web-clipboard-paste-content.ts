@@ -24,27 +24,18 @@ export async function readWebClipboardPasteContent(
   const text = await readWebClipboardText(options)
   const filePaths: string[] = []
   // Each browser clipboard read can prompt, so probe only when the caller needs the answer.
-  if (
-    !shouldProbeClipboardPasteImage(
-      options?.imageProbe,
-      text,
-      filePaths,
-      false,
-      getBrowserPlatform()
-    )
-  ) {
-    return { text, filePaths, filesOnly: false, linkHtml: '', hasImage: false }
+  if (!shouldProbeClipboardPasteImage(options?.imageProbe, text, filePaths, getBrowserPlatform())) {
+    return { text, filePaths, linkHtml: '', hasImage: null }
   }
   try {
     return {
       text,
       filePaths,
-      filesOnly: false,
       linkHtml: '',
       hasImage: (await clipboardHasImage()) === true
     }
   } catch (error) {
     const imageProbeError = error instanceof Error ? error.message : String(error)
-    return { text, filePaths, filesOnly: false, linkHtml: '', hasImage: false, imageProbeError }
+    return { text, filePaths, linkHtml: '', hasImage: false, imageProbeError }
   }
 }

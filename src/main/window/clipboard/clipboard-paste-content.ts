@@ -6,7 +6,6 @@ import { readClipboardImageSource } from './clipboard-image-source'
 import { clipboardHtmlMayHaveLinks } from '../../../shared/clipboard/clipboard-link-html'
 import { assertClipboardTextWithinLimitWithYield } from '../../../shared/clipboard/clipboard-text'
 import {
-  clipboardCopiesOnlyFiles,
   shouldProbeClipboardPasteImage,
   type ClipboardPasteContent,
   type ReadClipboardPasteContentOptions
@@ -24,32 +23,23 @@ export async function readClipboardPasteContent(
     options
   )
   if (textOnly) {
-    return { text, filePaths: [], filesOnly: false, linkHtml: '', hasImage: false }
+    return { text, filePaths: [], linkHtml: '', hasImage: null }
   }
   const filePaths = options.skipFilePaths ? [] : await readClipboardCopiedFilePaths(reader)
-  const filesOnly = clipboardCopiesOnlyFiles(text, filePaths)
   const linkHtml = options.linkHtml
     ? await reader
         .readHtml()
         .then((html) => (clipboardHtmlMayHaveLinks(html) ? html : ''))
         .catch(() => '')
     : ''
-  if (
-    !shouldProbeClipboardPasteImage(
-      options.imageProbe,
-      text,
-      filePaths,
-      filesOnly,
-      process.platform
-    )
-  ) {
-    return { text, filePaths, filesOnly, linkHtml, hasImage: false }
+  if (!shouldProbeClipboardPasteImage(options.imageProbe, text, filePaths, process.platform)) {
+    return { text, filePaths, linkHtml, hasImage: null }
   }
   try {
     const hasImage = (await readClipboardImageSource(reader)) !== null
-    return { text, filePaths, filesOnly, linkHtml, hasImage }
+    return { text, filePaths, linkHtml, hasImage }
   } catch (error) {
     const imageProbeError = error instanceof Error ? error.message : String(error)
-    return { text, filePaths, filesOnly, linkHtml, hasImage: false, imageProbeError }
+    return { text, filePaths, linkHtml, hasImage: false, imageProbeError }
   }
 }

@@ -1,10 +1,15 @@
 import { isMacPlatform } from '../pane/routing/native-chat-shortcut'
-import { clipboardEventPromptText } from '../../../../../shared/native-chat/input/composer/native-chat-clipboard-event'
-import { withPastedLinks } from './native-chat-pasted-links'
 import {
-  clipboardCopiesOnlyFiles,
-  type ClipboardPasteImageProbe
-} from '../../../../../shared/clipboard/clipboard-paste-content'
+  clipboardEventPromptText,
+  textOnlyLabelsCopiedFiles
+} from '../../../../../shared/native-chat/input/composer/native-chat-clipboard-event'
+import { withPastedLinks } from './native-chat-pasted-links'
+import type { ClipboardPasteImageProbe } from '../../../../../shared/clipboard/clipboard-paste-content'
+
+/** Copied files whose text, if any, only names them: they attach as files, not prompt text. */
+function copiesOnlyFiles(text: string, filePaths: readonly string[]): boolean {
+  return filePaths.length > 0 && (text === '' || textOnlyLabelsCopiedFiles(text, filePaths))
+}
 
 /** Accept native pane clipboard events and React synthetic events. */
 export type ClipboardEventLike = {
@@ -39,9 +44,7 @@ export function clipboardEventCopiedFilePaths(event: ClipboardEventLike): string
     }
     paths.push(path)
   }
-  return clipboardCopiesOnlyFiles(event.clipboardData?.getData('text/plain') ?? '', paths)
-    ? paths
-    : []
+  return copiesOnlyFiles(event.clipboardData?.getData('text/plain') ?? '', paths) ? paths : []
 }
 
 /** The event's prompt text, with any rich-text links kept as Markdown. */
@@ -59,24 +62,24 @@ export function clipboardEventPastedText(
 type ClipboardPasteRead = {
   text: string
   copiedFilePaths: string[]
-  hasImage: boolean
+  /** Null when the read skipped the image check. */
+  hasImage: boolean | null
   imageProbeError?: string
 }
 
 /** Image presence after a menu paste: the read's own check when it ran, else one more check. */
 export async function clipboardPasteHasImage(
   read: ClipboardPasteRead | null,
-  probedBesideText: boolean,
   onError: (error: unknown) => void
 ): Promise<boolean> {
   if (read?.imageProbeError) {
     onError(new Error(read.imageProbeError))
     return false
   }
-  if (read && (probedBesideText || read.text === '')) {
+  if (read && read.hasImage !== null) {
     return read.hasImage
   }
-  // A failed read (e.g. text too large) or an unprobed web read can still carry a picture.
+  // A failed read (e.g. text too large) or a skipped check (web, or files beside prompt text) can still carry a picture.
   return window.api.ui.clipboardHasImage().then(
     (hasImage) => hasImage === true,
     (error) => {
@@ -104,8 +107,7 @@ export async function readClipboardPasteText(
   })
   const { text, hasImage, imageProbeError } = read
   const filePaths = eventFilePaths ?? read.filePaths
-  const filesOnly = eventFilePaths ? clipboardCopiesOnlyFiles(text, eventFilePaths) : read.filesOnly
-  if (!filesOnly) {
+  if (!copiesOnlyFiles(text, filePaths)) {
     return {
       text: withPastedLinks(text, read.linkHtml),
       copiedFilePaths: [],
@@ -114,6 +116,6 @@ export async function readClipboardPasteText(
     }
   }
   // macOS lists a screenshot tool's saved file beside its picture; only Finder also names files.
-  const picture = text === '' && isMacPlatform() && hasImage
+  const picture = text === '' && isMacPlatform() && hasImage === true
   return { text, copiedFilePaths: picture ? [] : filePaths, hasImage, imageProbeError }
 }

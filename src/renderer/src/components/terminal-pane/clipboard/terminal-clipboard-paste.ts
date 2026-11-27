@@ -64,9 +64,8 @@ export async function pasteTerminalClipboard({
   let content: ClipboardPasteContent = {
     text: '',
     filePaths: [],
-    filesOnly: false,
     linkHtml: '',
-    hasImage: false
+    hasImage: null
   }
   try {
     content = await readClipboardContent({
@@ -81,17 +80,12 @@ export async function pasteTerminalClipboard({
     // Image-only clipboards can reject text reads; still try the screenshot path.
   }
   const { text } = content
-  const mainFiles = content.filePaths.length > 0
-  const copiedFilePaths = mainFiles ? content.filePaths : eventCopiedFilePaths
+  const copiedFilePaths = content.filePaths.length > 0 ? content.filePaths : eventCopiedFilePaths
   // Unlabelled files beside a picture (screenshot tools, Windows image files) keep the image path.
   if (
     copiedFiles &&
     copiedFilePaths.length > 0 &&
-    (text
-      ? mainFiles
-        ? content.filesOnly
-        : textOnlyLabelsCopiedFiles(text, copiedFilePaths)
-      : !content.hasImage)
+    (text ? textOnlyLabelsCopiedFiles(text, copiedFilePaths) : !content.hasImage)
   ) {
     await copiedFiles.paste(copiedFilePaths)
     return { status: 'pasted', kind: 'file-paths' }
