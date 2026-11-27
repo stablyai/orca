@@ -87,6 +87,10 @@ function buildMacDaemonLaunchJob(
     // Associate plist-launched jobs with Orca for Local Network access.
     AssociatedBundleIdentifiers: [LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId],
     ProcessType: 'Interactive',
+    // Opt out of launchd's low-priority disk I/O and timer coalescing for interactive shells.
+    LowPriorityIO: false,
+    LowPriorityBackgroundIO: false,
+    LegacyTimers: true,
     // launchd disables cloud-file downloads for jobs unless asked; shells need them like Terminal.app.
     MaterializeDatalessFiles: true,
     StandardOutPath: '/dev/null',

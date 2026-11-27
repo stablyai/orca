@@ -222,7 +222,9 @@ function buildMacTerminalHostInfo({ appInfo, usageDescriptions, minimumOs }) {
     CFBundleVersion: '0',
     CFBundleShortVersionString: appInfo.CFBundleShortVersionString,
     LSMinimumSystemVersion: minimumOs,
-    LSUIElement: true
+    LSUIElement: true,
+    // Prevent macOS App Nap from clamping the terminal host and its PTY children to PRI 4 / E-cores.
+    NSAppSleepDisabled: true
   }
 }
 
@@ -252,6 +254,9 @@ function findMacTerminalHostInfoProblems(info, { appId, usageDescriptions, minim
   }
   if (info.LSMinimumSystemVersion !== minimumOs) {
     problems.push(`LSMinimumSystemVersion is ${info.LSMinimumSystemVersion}, expected ${minimumOs}`)
+  }
+  if (info.NSAppSleepDisabled !== true) {
+    problems.push(`NSAppSleepDisabled is ${info.NSAppSleepDisabled}, expected true`)
   }
   return problems
 }
