@@ -1,4 +1,4 @@
-import { colors, radii, spacing } from '../../../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { LIST_ROW_PADDING } from '../../../components/list/ListGroup'
 
@@ -131,6 +131,42 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
   },
   setupSource: {
     fontSize: 13,
+    lineHeight: 19,
+    fontFamily: typography.monoFamily,
     color: colors.textMuted
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: spacing.sm
+  },
+  createButton: {
+    backgroundColor: colors.textPrimary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.control,
+    minWidth: 160,
+    alignItems: 'center'
+  },
+  createButtonDisabled: {
+    opacity: 0.4
+  },
+  createText: {
+    color: colors.bgBase,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
+  },
+  addProjectButton: {
+    marginTop: spacing.md,
+    backgroundColor: colors.textPrimary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.control,
+    alignItems: 'center'
+  },
+  addProjectButtonText: {
+    color: colors.bgBase,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
   }
 }))

@@ -41,6 +41,14 @@ export function NewWorkspacePageScreen() {
           )
         )
       }
+      onOpenWorktree={(worktreeId, name, executionHost) =>
+        router.replace(
+          workspaceRouteHref(
+            `/h/${encodeURIComponent(hostId ?? '')}/session/${encodeURIComponent(worktreeId)}?name=${encodeURIComponent(name)}`,
+            executionHost
+          )
+        )
+      }
       onClose={() => router.back()}
     />
   )
