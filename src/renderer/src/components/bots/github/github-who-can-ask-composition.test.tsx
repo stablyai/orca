@@ -17,10 +17,8 @@ import { ROSTER_WAIT_MS, gitHubWhoCanAskSession } from './github-who-can-ask-ses
 import type * as Found from './github-who-can-ask-found'
 
 // Every completed composition, by query; `after` runs once, right after the next one completes.
-const composer = vi.hoisted(() => ({
-  queries: [] as string[],
-  after: null as ((query: string) => void) | null
-}))
+type Composer = { queries: string[]; after: ((query: string) => void) | null }
+const composer: Composer = vi.hoisted((): Composer => ({ queries: [], after: null }))
 vi.mock('./github-who-can-ask-found', async (importOriginal) => {
   const actual = await importOriginal<typeof Found>()
   return {
