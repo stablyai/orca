@@ -12,11 +12,6 @@ function useFailureMessage(): (failure: AvatarGenerationFailure, agent: string) 
   const t = useTranslate()
   return (failure, agent) => {
     switch (failure) {
-      case 'real-person':
-        return t(
-          'bots.avatar.generate.realPerson',
-          "Avatars can't show real people. Describe a character instead."
-        )
       case 'signed-out':
         return t(
           'bots.avatar.generate.signedOut',

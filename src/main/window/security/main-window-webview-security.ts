@@ -165,7 +165,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     let isSidePanelAttach = false
     if (isBrowserExtensionSidePanelAttachMarker(src)) {
       if (
-        !profileId ||
+        !extensionProfileId ||
         !isBrowserExtensionSupportEnabled() ||
         !admitBrowserExtensionSidePanelAttach(src, mainWindow.webContents.id, partition)
       ) {

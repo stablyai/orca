@@ -3,6 +3,7 @@ import type { MarkdownDocState } from '../../files/session-documents/session-doc
 import type { MobileSessionTab } from './mobile-session-tabs'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { selectBulkCloseTabs } from './mobile-tab-close-selection'
+import { countMobileSessionDesktopTabs } from './mobile-session-tab-rows'
 import { closeTabsAfterConfirmation } from '../../../../src/shared/workspace-layout/tab-groups/bulk-tab-close-confirmation'
 import { translate } from '../../i18n/mobile-i18n'
 
@@ -12,7 +13,7 @@ type BulkCloseSheetDeps = {
   activeSessionTabIdRef: { readonly current: string | null }
   switchSessionTab: (tab: MobileSessionTab) => void
   closeSessionTab: (tab: MobileSessionTab) => Promise<void>
-  confirmBulkClose: () => Promise<boolean>
+  confirmBulkClose: (count: number) => Promise<boolean>
 }
 
 // Pass tab ids so long-press sheets share bulk-close orchestration without retaining full tabs.
@@ -54,7 +55,7 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
     return [
       {
         id: 'closeOtherTabs',
-        label: translate('session.bulkCloseSheetActions.closeOtherTabs', 'Close Other Tabs'),
+        label: translate('session.bulkCloseSheetActions.closeOtherTabs', 'Close other tabs'),
         icon: CopyX,
         destructive: true,
         // Why: the confirm is its own native Modal; wait for this sheet to unmount (#10331).
@@ -62,7 +63,11 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
         onPress: () => {
           void closeTabsAfterConfirmation(
             () => selectClosable(anchor.id).map((candidate) => candidate.id),
-            deps.confirmBulkClose,
+            // A split counts once, as the bar and the sheet count it.
+            () =>
+              deps.confirmBulkClose(
+                countMobileSessionDesktopTabs(selectClosable(anchor.id).map((tab) => ({ tab })))
+              ),
             (tabIds) => void bulkClose(anchor, tabIds)
           )
         }
@@ -78,7 +83,7 @@ export function createCloseWithBulkActions(
   return (target: MobileSessionTab | null, dismiss: () => void): ActionSheetAction[] => [
     {
       id: 'close',
-      label: translate('session.tabMenu.closeTab', 'Close Tab'),
+      label: translate('session.tabMenu.closeTab', 'Close tab'),
       icon: X,
       destructive: true,
       onPress: () => {

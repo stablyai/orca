@@ -28,6 +28,8 @@ import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+
+const RESOLVED_WRITE_QUEUE = Promise.resolve()
 import { SOURCE_CONTROL_AI_SETTINGS_SECTION_ID } from './source-control-ai-settings-targets'
 import { SourceControlAiActionRecipeDefaults } from './SourceControlAiActionRecipeDefaults'
 import { matchesSettingsSearch } from '../search/settings-search'
@@ -97,8 +99,7 @@ export function CommitMessageAiPane({
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const config = readSettings(settings)
   const ownership = getSettingOwnershipSummary('sourceControlAiDefaults', t)
-  const settingsWriteQueueRef = useRef<Promise<void>>(undefined!)
-  settingsWriteQueueRef.current ??= Promise.resolve()
+  const settingsWriteQueueRef = useRef<Promise<void>>(RESOLVED_WRITE_QUEUE)
 
   const localWriteConfig = (patch: SourceControlAiSettingsPatch): Promise<void> => {
     const next = settingsWriteQueueRef.current
@@ -217,7 +218,6 @@ export function CommitMessageAiPane({
     <SourceControlAiActionRecipeDefaults
       key="action-recipes"
       config={config}
-      defaultTuiAgent={settings.defaultTuiAgent}
       customPromptDiscardSignal={customPromptDiscardSignal}
       onCustomPromptDirtyChange={onCustomPromptDirtyChange}
       searchQuery={searchQuery}

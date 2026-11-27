@@ -80,7 +80,7 @@ export type MobileWebShellSessionState =
       // The document's own window, judged against every new connection's status.
       readonly compat: MobileWebBundleCompatManifest
     }
-  // Neither app can be blamed when the path is unknown locally or its manifest pattern is unreadable.
+  // Neither app alone can be blamed when the path is unknown locally or its manifest pattern is unreadable.
   | { readonly kind: 'route-unavailable' }
   | { readonly kind: 'wall'; readonly verdict: MobileWebShellBlockedVerdict }
   | {
@@ -178,7 +178,7 @@ export type MobileWebShellSessionEvent =
 // Keep retry/remount latches outside state because they must survive checking/ready replacements.
 export type MobileWebShellSession = {
   readonly routePathname: string
-  // Unknown catch-all routes cannot prove the desktop is outdated.
+  // Unknown catch-all routes cannot prove the desktop is outdated; a listed route this shell cannot grant still proves the app is.
   readonly appNamesRoute: boolean
   // Wide serving requires canOwnHostArea; the owning host route combines served routes’ grants.
   readonly wide: boolean

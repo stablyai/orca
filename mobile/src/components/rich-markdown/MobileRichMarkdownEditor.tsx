@@ -1,19 +1,7 @@
-import {
-  forwardRef,
-  memo,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ForwardedRef
-} from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { View, type HostInstance } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { MobileRichMarkdownToolbar } from './MobileRichMarkdownToolbar'
@@ -31,7 +19,8 @@ import {
 } from './document/document-host-seams'
 import type {
   MobileRichMarkdownEditorMessage,
-  MobileRichMarkdownEditorProps
+  MobileRichMarkdownEditorProps,
+  MobileRichMarkdownFormatState
 } from './mobile-rich-markdown-editor-contract'
 
 export type MobileRichMarkdownEditorComponentProps = Omit<
@@ -41,27 +30,28 @@ export type MobileRichMarkdownEditorComponentProps = Omit<
   onOpenLink?: (url: string) => void
   /** Loads a workspace-relative image path; without it those images stay unloaded. */
   loadImageSource?: (path: string) => Promise<string>
+  /** What sits under the format row while editing: the keyboard, or the home indicator when it is down. */
+  formatRowBottom: number
+  /** True while the note has the caret and takes edits. */
+  onEditingChange?: (editing: boolean) => void
 }
 
-export type MobileRichMarkdownEditorHandle = {
-  dismissKeyboard: () => void
-}
+const IDLE_FORMAT_STATE: MobileRichMarkdownFormatState = { focused: false, active: [] }
 
 // Mount rich-markdown document directly with shared controller/toolbar; call handleMessage, never shell’s window.ReactNativeWebView bridge.
 // Link/Image ask TextInputModal because both native shells’ window.prompt returns null (no dialog delegate).
-// Accept but never call onKeyboardInsetChange: page visualViewport and keyboard-occlusion already measure same cover, so callback would double-lift toolbar.
-function MobileRichMarkdownEditorWebInner(
-  {
-    content,
-    editable,
-    onChange,
-    onOpenLink,
-    loadImageSource
-  }: MobileRichMarkdownEditorComponentProps,
-  ref: ForwardedRef<MobileRichMarkdownEditorHandle>
-) {
+function MobileRichMarkdownEditorWebInner({
+  content,
+  editable,
+  onChange,
+  onOpenLink,
+  loadImageSource,
+  formatRowBottom,
+  onEditingChange
+}: MobileRichMarkdownEditorComponentProps) {
   const t = useMobileTranslation()
   const colorScheme = useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const hostRef = useRef<HostInstance>(null)
   const documentRef = useRef<RichMarkdownWebDocument | null>(null)
   // Document reports ready synchronously during mount before documentRef exists; queue controller content/editable calls until handle arrives or editor stays empty.
@@ -73,6 +63,8 @@ function MobileRichMarkdownEditorWebInner(
   const pendingUrlRef = useRef<((url: string | null) => void) | null>(null)
   // Hold typed URL until drawer loses focus; WebKit execCommand otherwise lacks document selection and inserts nothing.
   const answeredUrlRef = useRef<string | null>(null)
+  const [formatState, setFormatState] = useState<MobileRichMarkdownFormatState>(IDLE_FORMAT_STATE)
+  const editing = formatState.focused && editable
 
   const send = useCallback((call: (api: RichMarkdownEditorApi) => void) => {
     const mounted = documentRef.current
@@ -116,21 +108,16 @@ function MobileRichMarkdownEditorWebInner(
     content,
     editable,
     onChange,
+    onFormatStateChange: setFormatState,
     onOpenLink: openLink,
     transport
   })
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      dismissKeyboard: () => {
-        send((api) => {
-          api.dismissKeyboard()
-        })
-      }
-    }),
-    [send]
-  )
+  const dismissKeyboard = useCallback(() => {
+    send((api) => {
+      api.dismissKeyboard()
+    })
+  }, [send])
 
   // Update sink in effect before mount effect: callback outlives renders, which React may replay/discard.
   useEffect(() => {
@@ -203,10 +190,23 @@ function MobileRichMarkdownEditorWebInner(
     }
   }, [colorScheme])
 
+  useEffect(() => {
+    onEditingChange?.(editing)
+  }, [editing, onEditingChange])
+
   return (
-    <View style={styles.container}>
-      <MobileRichMarkdownToolbar editable={editable} onCommand={runCommand} />
-      <View ref={hostRef} style={styles.host} />
+    <View style={[styles.container, editing && { paddingBottom: formatRowBottom }]}>
+      {/* The document's sheet gives its host min-height: 100%, so the host gets a box of its own beside the row. */}
+      <View style={styles.hostFrame}>
+        <View ref={hostRef} style={styles.host} />
+      </View>
+      {editing ? (
+        <MobileRichMarkdownToolbar
+          active={formatState.active}
+          onCommand={runCommand}
+          onDismissKeyboard={dismissKeyboard}
+        />
+      ) : null}
       <TextInputModal
         visible={urlPromptKind !== null}
         title={
@@ -227,9 +227,10 @@ function MobileRichMarkdownEditorWebInner(
   )
 }
 
-export const MobileRichMarkdownEditor = memo(forwardRef(MobileRichMarkdownEditorWebInner))
+export const MobileRichMarkdownEditor = memo(MobileRichMarkdownEditorWebInner)
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   container: { flex: 1, minHeight: 0, backgroundColor: colors.bgBase },
+  hostFrame: { flex: 1, minHeight: 0 },
   host: { flex: 1, minHeight: 0, backgroundColor: colors.bgBase }
 }))

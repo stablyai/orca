@@ -1,6 +1,9 @@
 // Follows a bot's Dispatches from the chats that started them through the workers they started in turn.
-import type { BotChatTreeDispatch } from '../../shared/bots/bot-chat-tree-model'
-import type { DispatchCreatorLink } from '../runtime/orchestration/db/dispatch-context/dispatch-context-store'
+import {
+  botChatTreeDispatchIds,
+  type BotChatTreeDispatch
+} from '../../shared/bots/bot-chat-tree-model'
+import type { DispatchCreatorLink } from '../runtime/orchestration/db/dispatch-context/dispatch-links-by-id'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 
 /** How deep a worker's own workers are followed back to the chat that started the first. */
@@ -137,11 +140,12 @@ export class BotDispatchPlacement {
 }
 
 function dispatchOf(link: DispatchCreatorLink, chatId: string | null): BotChatTreeDispatch {
+  const settled =
+    link.status === 'completed' || link.status === 'failed' || link.status === 'circuit_broken'
   return {
     id: link.id,
     chatId,
-    settled:
-      link.status === 'completed' || link.status === 'failed' || link.status === 'circuit_broken',
+    settled,
     // A stop or an abandon is the user's call, not a failure.
     failed:
       (link.status === 'failed' &&
@@ -149,8 +153,11 @@ function dispatchOf(link: DispatchCreatorLink, chatId: string | null): BotChatTr
         link.lastFailure !== 'abandoned') ||
       link.status === 'circuit_broken',
     at: link.at,
+    ...(settled && !link.completedAtKnown ? { undated: true as const } : {}),
     worktreeId: link.worktreeId,
-    ...(link.title ? { title: link.title } : {})
+    ...(link.title ? { title: link.title } : {}),
+    ...(link.serverEnvironmentId ? { serverEnvironmentId: link.serverEnvironmentId } : {}),
+    ...(link.serverAgent ? { agent: link.serverAgent } : {})
   }
 }
 
@@ -162,4 +169,15 @@ export function botDispatches(
   creators: Creators
 ): BotChatTreeDispatch[] {
   return new BotDispatchPlacement(chatOfSession, chatOfPaneKey, creators).walk(db).dispatches()
+}
+
+/** The Dispatches whose worker records a tree read needs. A paired server's own Dispatch has none
+ *  here (its row is its Dispatch's), so asking would defeat the settled-worker cache every read. */
+export function workerRecordDispatchIds(
+  ...args: Parameters<typeof botChatTreeDispatchIds>
+): string[] {
+  const serverOwned = new Set(
+    args[1].flatMap((entry) => (entry.dispatch.serverEnvironmentId ? [entry.dispatch.id] : []))
+  )
+  return botChatTreeDispatchIds(...args).filter((id) => !serverOwned.has(id))
 }

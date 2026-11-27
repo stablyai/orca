@@ -15,7 +15,28 @@ import { useReusedArrayIdentity } from '../../sidebar/worktree-list/listing/use-
 import { usePairedRuntimeParkingEnvironmentIds } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { createTerminalWorktreeTopologyProjection } from '../../terminal-pane/parking/retention/terminal-hidden-worktree-retention'
 import { isMainTerminalSideEffectAuthorityForPty } from '../../terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
-import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-worktree-selection'
+import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
+import type { AppState } from '../../../store/types'
+
+/** Activation admits detected rows the sidebar hides; without a surface the active workspace renders blank. */
+function selectUnlistedActiveWorktreePath(state: AppState): string | null {
+  const worktreeId = state.activeWorktreeId
+  if (
+    !worktreeId ||
+    getIndexedWorktreeMap(selectWorktreesByRepo(state)).has(worktreeId) ||
+    isFloatingWorkspaceId(worktreeId) ||
+    parseWorkspaceKey(worktreeId)?.type === 'folder'
+  ) {
+    return null
+  }
+  return selectKnownWorktreeById(state, worktreeId)?.path ?? null
+}
 
 export function useTerminalWorkspaceFoundation() {
   const terminalTopologyProjectionRef = useRef<WorktreeTabBucketProjection<
@@ -44,6 +65,9 @@ export function useTerminalWorkspaceFoundation() {
   // Without a resolved host, active workspace cannot affect projection; omit it to avoid rebuilding every surface on switches.
   const activeFolderSurfaceId = activeFolderSurfaceHostId ? renderedActiveWorktreeId : null
   const wslMovedSurfacesKey = useAppStore(selectWslMovedSurfacesKey)
+  const unlistedActivePath = useAppStore(selectUnlistedActiveWorktreePath)
+  // Null while a listed workspace is active, so ordinary switches keep the projection.
+  const unlistedActiveId = unlistedActivePath ? renderedActiveWorktreeId : null
   const workspaceSurfaces = useMemo(() => {
     const surfaces = projectWorkspaceSurfaces({
       worktreesById,
@@ -51,15 +75,24 @@ export function useTerminalWorkspaceFoundation() {
       activeWorkspaceId: activeFolderSurfaceId,
       activeWorkspaceResolvedHostId: activeFolderSurfaceHostId
     })
-    // A WSL-moved project's chats mount beside the catalog; it lists none of its workspaces.
-    const moved = parseWslMovedSurfacesKey(wslMovedSurfacesKey)
-    return moved.length > 0 ? [...surfaces, ...moved] : surfaces
+    // WSL-moved chats and a hidden active worktree mount beside the catalog, which lists neither.
+    const unlisted = parseWslMovedSurfacesKey(wslMovedSurfacesKey)
+    if (
+      unlistedActiveId &&
+      unlistedActivePath &&
+      !unlisted.some((surface) => surface.id === unlistedActiveId)
+    ) {
+      unlisted.push({ id: unlistedActiveId, path: unlistedActivePath })
+    }
+    return unlisted.length > 0 ? [...surfaces, ...unlisted] : surfaces
   }, [
     worktreesById,
     folderWorkspaces,
     activeFolderSurfaceId,
     activeFolderSurfaceHostId,
-    wslMovedSurfacesKey
+    wslMovedSurfacesKey,
+    unlistedActiveId,
+    unlistedActivePath
   ])
   // Reuse equal ID arrays across worktree row replacements to avoid restarting mount/park effects and rebuilding their Sets.
   const workspaceSurfaceIds = useReusedArrayIdentity(

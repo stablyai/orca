@@ -4,7 +4,7 @@
 // Select there starts multi-select, where taps check rows and a floating bar moves them all at once.
 import { useMemo, useState, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { Inbox, X } from 'lucide-react-native'
+import { Inbox } from 'lucide-react-native'
 import {
   BOT_ITEM_GROUP_IDS,
   BOT_ITEM_GROUP_ROWS,
@@ -25,7 +25,6 @@ import {
   MobileOfflineState,
   MobileStateView
 } from '../../components/feedback/MobileStateView'
-import { FilterChip } from '../../components/nav-bar/FilterChip'
 import {
   ListGroup,
   ListRow,
@@ -33,12 +32,9 @@ import {
   LIST_LEADING_INSET
 } from '../../components/list/ListGroup'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { MobileBotTextButton } from '../MobileBotTextButton'
-import { MobileBotAvatar } from '../MobileBotAvatar'
-import { mobileBotAvatarSource } from '../host-bot-row-facts'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotItemsAllClear } from './MobileBotItemsAllClear'
 import { MobileBotItemRow } from './MobileBotItemRow'
@@ -52,7 +48,6 @@ export function MobileBotItemsTab({
   bot,
   items,
   filter,
-  filterLabel,
   onClearFilter,
   staleDays,
   seenEventId,
@@ -72,8 +67,6 @@ export function MobileBotItemsTab({
   bot: PhoneBot
   items: PhoneBotItems
   filter: BotItemFilter
-  /** The filter's chip text; null while nothing is filtered. */
-  filterLabel: string | null
   onClearFilter: () => void
   staleDays: number | null
   /** The seen mark as the panel opened: rows changed since keep their dot while it stays open. */
@@ -84,10 +77,10 @@ export function MobileBotItemsTab({
   /** Checked rows; empty when not selecting. */
   selected: ReadonlySet<string>
   onSelected: (next: ReadonlySet<string>) => void
-  /** `walk`: the list as it shows now, which the item page steps through. */
-  onOpen: (item: BotItem, walk: BotItemWalk) => void
+  /** `walk`: the item's section as it shows now, which the item page steps through. */
+  onOpen: (item: BotItem, walk: BotItemWalk | null) => void
   setSheet: (sheet: BotItemSheet) => void
-  /** Automations and Up next, below the groups as on the desktop. */
+  /** Automations and Up next, below the groups as on the desktop; hidden while filtered. */
   after: ReactNode
   /** Orca's asks the phone reads; they lead Needs you whatever the items say. */
   asks: readonly PhoneAsk[]
@@ -95,7 +88,7 @@ export function MobileBotItemsTab({
   client: RpcClient | null
   showToast: (message: string) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { read } = items
   const botName = bot.name
@@ -106,24 +99,14 @@ export function MobileBotItemsTab({
     () => groupBotItems(shown, staleDays, now, seenEventId),
     [shown, staleDays, now, seenEventId]
   )
-  const chip = filterLabel ? (
-    <View style={styles.chipRow}>
-      <FilterChip
-        label={filterLabel}
-        icon={X}
-        active
-        onPress={onClearFilter}
-        accessibilityLabel={t('bots.items.filter.remove', 'Remove filter {{name}}', {
-          name: filterLabel
-        })}
-      />
-    </View>
-  ) : null
+  const filtered = filter.needsYou
+  const below = filtered ? null : after
   const asksOnly = (
     <MobileBotNeedsYouGroup
       botName={botName}
       asks={asks}
       items={[]}
+      now={now}
       disabled={!online}
       renderItem={() => null}
       onOpenAsk={(ask) => openPhoneAsk(ask, askOpeners)}
@@ -134,7 +117,6 @@ export function MobileBotItemsTab({
   if (!read) {
     return (
       <>
-        {chip}
         {asksOnly}
         {!online ? (
           <MobileOfflineState hostName={hostName} />
@@ -147,11 +129,10 @@ export function MobileBotItemsTab({
         ) : (
           <MobileStateView loading title={t('bots.items.loading', 'Loading items…')} />
         )}
-        {after}
+        {below}
       </>
     )
   }
-  const filtered = filterLabel !== null
   const selecting = selected.size > 0
   const closedTotal = filter.needsYou
     ? groups.closed.length
@@ -208,7 +189,7 @@ export function MobileBotItemsTab({
         now={now}
         disabled={disabled}
         onPress={() =>
-          selecting ? toggle(item) : onOpen(item, botItemWalkOf(groups, closedTotal))
+          selecting ? toggle(item) : onOpen(item, botItemWalkOf(groups, closedTotal, item.uid))
         }
         onLongPress={() => (selecting ? toggle(item) : setSheet({ kind: 'row', item }))}
       />
@@ -227,6 +208,7 @@ export function MobileBotItemsTab({
           botName={botName}
           asks={asks}
           items={groups.needs_you}
+          now={now}
           disabled={disabled}
           renderItem={(item) => row(item, id)}
           onOpenAsk={(ask) => openPhoneAsk(ask, askOpeners)}
@@ -252,27 +234,23 @@ export function MobileBotItemsTab({
     )
     body = (
       <>
-        {allClear ? (
-          <MobileBotItemsAllClear
-            picture={<MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={40} />}
-          />
-        ) : null}
+        {allClear ? <MobileBotItemsAllClear /> : null}
         {list}
       </>
     )
   }
   return (
     <>
-      {chip}
       {failed ? <ReadFailed onRetry={items.retry} /> : null}
       <View style={failed ? styles.dimmed : undefined}>{body}</View>
-      {after}
+      {below}
     </>
   )
 }
 
 /** A re-read that failed, over the last good list it keeps up. */
 export function ReadFailed({ onRetry }: { onRetry: () => void }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <ListGroup style={styles.failed}>
@@ -304,6 +282,7 @@ export function ItemGroup({
   renderItem: (item: BotItem) => ReactNode
   onCancelAll: (() => void) | null
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [folded, setFolded] = useState(BOT_ITEM_GROUPS_FOLDED_BY_DEFAULT.has(id))
   const [shown, setShown] = useState(BOT_ITEM_GROUP_ROWS)
@@ -365,8 +344,7 @@ export function ItemGroup({
   )
 }
 
-const styles = themedStyleSheet(() => ({
-  chipRow: { flexDirection: 'row', paddingHorizontal: spacing.xs, marginBottom: spacing.xs },
+const stylesSheet = themedStyleSheet((colors) => ({
   unseen: {
     width: 6,
     height: 6,

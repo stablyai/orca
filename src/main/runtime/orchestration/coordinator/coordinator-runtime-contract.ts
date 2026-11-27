@@ -1,5 +1,6 @@
 import type { WorkerTerminalHostScope } from '../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import type { DispatchPreambleSendOptions } from '../workers/launch/worker-dispatch-preamble'
+import type { OrchestrationCliTarget } from '../workers/launch/orchestration-cli-command'
 
 export type WorktreeDrift = {
   base: string
@@ -42,5 +43,5 @@ export type CoordinatorRuntime = {
     hostScope?: WorkerTerminalHostScope
   } | null
   // The worker's native/WSL pane determines its packaged CLI name.
-  getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-dev' | 'orca-ide'
+  getTerminalOrchestrationCliTarget?(handle: string): OrchestrationCliTarget
 }

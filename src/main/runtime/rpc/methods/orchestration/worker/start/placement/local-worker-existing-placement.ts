@@ -4,12 +4,18 @@ import { parseWorkspaceKey } from '../../../../../../../../shared/workspace/iden
 import { assertManagedWorktreeMatchesTarget } from '../../../../../../../bots/bot-work-target-refusals'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { OrchestrationEntryCaller } from '../../../../../../orchestration/addressing/orchestration-caller-identity'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
+import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
+import { runtimeRepoSelectorText } from '../../../../../../workspaces/catalog/runtime-repo-selector'
+import { preflightWorkerAgentOnHost } from '../launch/worker-agent-host-preflight'
 import { resolveDispatchCallerWorktreeId } from '../../../orchestration-caller-workspace'
-import { resolveWorkerConfiguredAgentParams } from '../launch/worker-configured-agent-preflight'
-import { probeWorkerOpenCodeModelLaunchSupport } from '../launch/worker-opencode-model-preflight'
-import { prepareLocalWorkerStart } from '../launch/worker-start-validation'
+import { resolveLocalWorkerStartLaunch } from '../launch/worker-opencode-model-preflight'
 import type { WorkerStartInput } from '../worker-start-input'
-import { assertOrchestrationWorktreeCreationSupported } from './folder-worktree-placement'
+import {
+  refuseUnmatchedWorkerSelector,
+  workerStartTargetLabel
+} from '../worker-start-selector-refusal'
+import { resolveExistingWorkerWorkspace } from './folder-worktree-placement'
 import {
   resolveWorkerWorktreeCreationTarget,
   type WorkerWorktreeCreationTarget
@@ -19,26 +25,36 @@ import {
 export async function prepareLocalWorkerPlacementAndLaunch(args: {
   runtime: OrcaRuntimeService
   params: WorkerStartInput
+  rawParams: WorkerStartInput
   callerSession?: OrchestrationEntryCaller
   requestedWorktree: string
   createsWorktree: boolean
   workTarget?: ResolvedBotWorkTargetPlacement
 }): Promise<{
-  agent: ReturnType<typeof prepareLocalWorkerStart>['agent']
-  launch: ReturnType<typeof prepareLocalWorkerStart>['launch']
+  agent: Awaited<ReturnType<typeof resolveLocalWorkerStartLaunch>>['agent']
+  launch: Awaited<ReturnType<typeof resolveLocalWorkerStartLaunch>>['launch']
+  retryLaunchWarning?: string
   creationTarget?: WorkerWorktreeCreationTarget
   managed?: Awaited<ReturnType<OrcaRuntimeService['showManagedTerminalWorkspace']>>
   selector?: string
   resolvedFolder?: FolderWorkspace
 }> {
-  const { runtime, params, callerSession, requestedWorktree, createsWorktree, workTarget } = args
-  const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
+  const {
     runtime,
-    params.from,
-    callerSession
+    params,
+    rawParams,
+    callerSession,
+    requestedWorktree,
+    createsWorktree,
+    workTarget
+  } = args
+  const coordinatorWorktreeId = await refuseUnmatchedWorkerSelector(
+    { flag: '--from', value: params.from },
+    () => resolveDispatchCallerWorktreeId(runtime, params.from, callerSession)
   )
   const existingWorktree =
     requestedWorktree === 'current' ? `id:${coordinatorWorktreeId}` : requestedWorktree
+  const targetLabel = workerStartTargetLabel({ ...rawParams, createsWorktree, requestedWorktree })
   const resolveCreation = () =>
     resolveWorkerWorktreeCreationTarget({
       runtime,
@@ -49,35 +65,35 @@ export async function prepareLocalWorkerPlacementAndLaunch(args: {
       ...(workTarget?.targetHostId ? { targetHostId: workTarget.targetHostId } : {}),
       ...(workTarget?.mode === 'new-top-level' ? { suppressBotHomeParent: true as const } : {})
     })
-  const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () =>
-    createsWorktree
-      ? { repo: (await resolveCreation()).repoSelector }
-      : { worktree: existingWorktree }
-  )
-  const openCodeModelLaunchSupported =
-    !createsWorktree && launchParams.agent === 'opencode' && launchParams.model
-      ? await probeWorkerOpenCodeModelLaunchSupport(runtime, launchParams, {
-          worktree: existingWorktree
-        })
-      : false
-  const { agent, launch } = prepareLocalWorkerStart({
-    params: launchParams,
+  const {
+    agent,
+    launch,
+    warning: retryLaunchWarning
+  } = await resolveLocalWorkerStartLaunch({
+    params,
     createsWorktree,
+    existingWorktree,
+    targetLabel,
     runtime,
-    openCodeModelLaunchSupported
+    resolveTarget: async () =>
+      createsWorktree
+        ? { repo: (await resolveCreation()).repoSelector }
+        : { worktree: existingWorktree }
   })
   if (createsWorktree) {
     const creationTarget = await resolveCreation()
-    await assertOrchestrationWorktreeCreationSupported({
-      runtime,
-      repoSelector: creationTarget.repoSelector,
-      existingPlacement: 'current or an exact existing folder workspace'
-    })
-    return { agent, launch, creationTarget }
+    await refuseUnmatchedWorkerSelector(targetLabel, () =>
+      resolveExistingWorkerWorkspace(runtime, creationTarget, existingWorktree)
+    )
+    return {
+      agent,
+      launch,
+      ...(retryLaunchWarning ? { retryLaunchWarning } : {}),
+      creationTarget
+    }
   }
-  const managed = await runtime.showManagedTerminalWorkspace(
-    existingWorktree,
-    workTarget?.targetHostId
+  const managed = await refuseUnmatchedWorkerSelector(targetLabel, () =>
+    runtime.showManagedTerminalWorkspace(existingWorktree, workTarget?.targetHostId)
   )
   if (workTarget) {
     assertManagedWorktreeMatchesTarget(managed, workTarget)
@@ -88,5 +104,38 @@ export async function prepareLocalWorkerPlacementAndLaunch(args: {
       ? runtime.resolveManagedFolderWorkspace?.(existingWorktree, workTarget.targetHostId)
           ?.workspace
       : undefined
-  return { agent, launch, managed, selector, ...(resolvedFolder ? { resolvedFolder } : {}) }
+  return {
+    agent,
+    launch,
+    ...(retryLaunchWarning ? { retryLaunchWarning } : {}),
+    managed,
+    selector,
+    ...(resolvedFolder ? { resolvedFolder } : {})
+  }
+}
+
+/** Preflight launch mode and agent availability using the resolved worktree selector or creation repo. */
+export function preflightLocalWorkerMode(
+  runtime: OrcaRuntimeService,
+  mode: WorkerStartModeReceipt,
+  prepared: {
+    agent: TuiAgent | undefined
+    managed?: { id: string; repoId: string }
+    selector?: string
+    creationTarget?: WorkerWorktreeCreationTarget
+  },
+  terminal?: string
+): Promise<WorkerStartModeReceipt> {
+  return preflightWorkerAgentOnHost({
+    runtime,
+    mode,
+    agent: prepared.agent,
+    resolvedWorktree: prepared.managed
+      ? { id: prepared.selector ?? prepared.managed.id, repoId: prepared.managed.repoId }
+      : undefined,
+    creationTarget: prepared.creationTarget
+      ? { repoSelector: runtimeRepoSelectorText(prepared.creationTarget.repoSelector) }
+      : undefined,
+    terminal
+  })
 }

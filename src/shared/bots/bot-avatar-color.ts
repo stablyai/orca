@@ -1,5 +1,6 @@
 // A mascot's tile color: one of the picker's swatches, or any color the owner picks.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 /** The mascots' own sky blue, shown when a bot has no color. */
 export const DEFAULT_BOT_AVATAR_COLOR = '#b3dbf4'
@@ -19,7 +20,7 @@ export const BOT_AVATAR_COLORS = [
   '#1f2126'
 ] as const
 
-export const BotAvatarColorSchema = z.string().regex(/^#[0-9a-f]{6}$/)
+export const BotAvatarColorSchema = lazyZodSchema(() => z.string().regex(/^#[0-9a-f]{6}$/))
 
 function channel(hex: string): number {
   const c = Number.parseInt(hex, 16) / 255

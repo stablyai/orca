@@ -18,13 +18,18 @@ import {
   flattenNativeChatSessionOptionRecord,
   getTrackedSessionOption as getTrackedOption,
   isFlipOnlyMidSession,
-  type NativeChatSessionOptionRecord
+  type NativeChatSessionOptionRecord,
+  type TrackedNativeChatSessionOption
 } from './native-chat-session-option-state'
 import type {
   NativeChatSessionOptionDispatchCommand,
   NativeChatSessionOptionDispatchResult
 } from './native-chat-session-option-dispatch'
 import { SessionOptionApplyError } from './native-chat-session-option-apply-failure'
+import {
+  carryNativeChatValuesWithoutModel,
+  nativeChatOptionsWithoutModel
+} from './native-chat-session-option-values-without-model'
 import {
   resolveEffectiveNativeChatModelId,
   type NativeChatSessionOptionMode
@@ -72,14 +77,29 @@ function currentApply(
   if (optionId === 'model') {
     return { apply: ctx.catalog.modelApply, modelId }
   }
-  const model = modelId ? findCatalogModel({ ...ctx.catalog, models }, modelId) : undefined
-  const option = findCatalogOption(model, optionId)
+  const option = modelId
+    ? findCatalogOption(findCatalogModel({ ...ctx.catalog, models }, modelId), optionId)
+    : nativeChatOptionsWithoutModel(ctx.catalog).find((candidate) => candidate.id === optionId)
   return option ? { apply: option.apply, modelId } : null
 }
 
 /** Guard record changes only; discovery moving a default row must not discard accepted values. */
 function trackedModelId(record: NativeChatSessionOptionRecord): string | null {
   return typeof record.model?.value === 'string' ? record.model.value : null
+}
+
+/** The first model report adopting the untouched launch value only names the model the CLI already ran. */
+function supersededDuringDispatch(
+  record: NativeChatSessionOptionRecord,
+  modelBefore: string | null,
+  optionId: string,
+  before: TrackedNativeChatSessionOption | undefined
+): boolean {
+  const modelWasUnknownWithBaseline = modelBefore === null && before !== undefined
+  return (
+    (trackedModelId(record) !== modelBefore && !modelWasUnknownWithBaseline) ||
+    getTrackedOption(record, optionId) !== before
+  )
 }
 
 function finish(
@@ -187,9 +207,7 @@ async function applySetOption(
   }
 
   const liveFlipOnly = ctx.mode === 'live' && isFlipOnlyMidSession(apply.midSession)
-  const trackedToggle = liveFlipOnly
-    ? getTrackedOption(ctx.getRecord(), previousModelId, id)
-    : undefined
+  const trackedToggle = liveFlipOnly ? getTrackedOption(ctx.getRecord(), id) : undefined
   if (liveFlipOnly && !trackedToggle) {
     // An unknown baseline cannot honor an absolute flip target.
     throw new SessionOptionApplyError('toggleBaselineUnknown')
@@ -206,9 +224,7 @@ async function applySetOption(
   const destinationBeforeDispatch =
     id === 'model' && typeof value === 'string' ? ctx.getRecord().valuesByModel[value] : undefined
   const trackedBeforeDispatch =
-    ctx.mode === 'live' && id !== 'model'
-      ? getTrackedOption(ctx.getRecord(), previousModelId, id)
-      : undefined
+    ctx.mode === 'live' && id !== 'model' ? getTrackedOption(ctx.getRecord(), id) : undefined
 
   let dispatchResult: NativeChatSessionOptionDispatchResult | void = undefined
   if (ctx.mode === 'live') {
@@ -240,10 +256,7 @@ async function applySetOption(
 
   if (liveFlipOnly) {
     // Mid-dispatch reports, typed flips or model changes supersede this target’s baseline.
-    if (trackedModelId(record) !== trackedModelBeforeDispatch) {
-      return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
-    }
-    if (getTrackedOption(record, previousModelId, id) !== trackedToggle) {
+    if (supersededDuringDispatch(record, trackedModelBeforeDispatch, id, trackedToggle)) {
       return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
     }
     // Keep unconfirmed flip-only state out of durable defaults.
@@ -253,14 +266,14 @@ async function applySetOption(
 
   if (ctx.mode === 'live' && id !== 'model') {
     // Newer model/option records supersede this dispatch; never persist its value under the new model.
-    if (
-      trackedModelId(record) !== trackedModelBeforeDispatch ||
-      getTrackedOption(record, previousModelId, id) !== trackedBeforeDispatch
-    ) {
+    if (supersededDuringDispatch(record, trackedModelBeforeDispatch, id, trackedBeforeDispatch)) {
       return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
     }
   }
 
+  if (id === 'model' && previousModelId === value && typeof value === 'string') {
+    carryNativeChatValuesWithoutModel(record, value)
+  }
   const modelId = ctx.setTrackedValue(id, value, source)
   return finish(ctx, { modelId: modelId ?? previousModelId, optionId: id, value })
 }
@@ -273,7 +286,7 @@ async function applyInvokeAction(
   if (!resolved) {
     throw new SessionOptionApplyError('unknownOption', id)
   }
-  const { apply, modelId } = resolved
+  const { apply } = resolved
   if (apply.midSession?.kind === 'agent-picker') {
     if (ctx.mode !== 'live') {
       throw new SessionOptionApplyError('afterStartOnly')
@@ -286,7 +299,7 @@ async function applyInvokeAction(
   if (ctx.mode !== 'live') {
     throw new SessionOptionApplyError('afterStartOnly')
   }
-  if (getTrackedOption(ctx.getRecord(), modelId, id)) {
+  if (getTrackedOption(ctx.getRecord(), id)) {
     throw new SessionOptionApplyError('toggleValueKnown')
   }
   // Inverting an unknown baseline still leaves an unknown absolute value.

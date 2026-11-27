@@ -47,7 +47,7 @@ export const GOOGLE_FILES_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       AS_OWNER,
       'Docs come as Markdown, Sheets as a table per tab, Slides as text, PDFs as their text. Long files come in pages of about 20,000 characters; the last line gives the --offset for the next.',
-      '--download <file> saves it (up to 2.9 MB; Google files as .docx, .xlsx or .pptx) to --out, or under its own name here.',
+      '--download <file> saves it (up to 2.9 MB; Google files as .docx, .xlsx or .pptx) to --out, or under its own name here (numbered when taken); open the path it prints.',
       CONTENT
     ],
     examples: ['orca drive read 1AbC…xyz', 'orca drive read --download 1AbC…xyz --out report.pdf']

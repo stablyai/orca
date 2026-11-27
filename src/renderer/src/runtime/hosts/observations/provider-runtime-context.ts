@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 export function getProviderRuntimeContextKey(
@@ -28,12 +29,45 @@ export function hasRemoteProviderRuntime(
 }
 
 let providerRuntimeSessionGeneration = 0
+const providerRuntimeSessionGenerationListeners = new Set<() => void>()
+
+function notifyProviderRuntimeSessionGeneration(): void {
+  for (const listener of providerRuntimeSessionGenerationListeners) {
+    listener()
+  }
+}
+
+export function subscribeProviderRuntimeSessionGeneration(listener: () => void): () => void {
+  providerRuntimeSessionGenerationListeners.add(listener)
+  return () => {
+    providerRuntimeSessionGenerationListeners.delete(listener)
+  }
+}
+
+export function getProviderRuntimeSessionGeneration(): number {
+  return providerRuntimeSessionGeneration
+}
+
+export function useProviderRuntimeSessionGeneration(): number {
+  return useSyncExternalStore(
+    subscribeProviderRuntimeSessionGeneration,
+    getProviderRuntimeSessionGeneration,
+    getProviderRuntimeSessionGeneration
+  )
+}
+
+export function useEnvironmentRuntimeContextKey(environmentId: string | null): string {
+  const generation = useProviderRuntimeSessionGeneration()
+  return `${getEnvironmentRuntimeIdentityKey(environmentId)}#${generation}`
+}
 
 export function bumpProviderRuntimeSessionGeneration(): number {
   providerRuntimeSessionGeneration += 1
+  notifyProviderRuntimeSessionGeneration()
   return providerRuntimeSessionGeneration
 }
 
 export function resetProviderRuntimeSessionGenerationForTests(): void {
   providerRuntimeSessionGeneration = 0
+  notifyProviderRuntimeSessionGeneration()
 }

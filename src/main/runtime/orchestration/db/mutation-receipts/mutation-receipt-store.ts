@@ -4,6 +4,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import { ensureMutationReceiptCapacity } from './mutation-receipt-capacity'
 import type { OrchestrationDb } from '../orchestration-db'
 import { MUTATION_RECEIPT_COLUMN_LIST } from '../row-column-lists'
+import { retryNotReplayable } from './replay-only-request'
 
 export function getOrCreateLocalMutationCallerFingerprint(this: OrchestrationDb): string {
   if (this.localMutationCallerFingerprint) {
@@ -40,7 +41,9 @@ export function beginMutationReceipt(
     requestId: string
     method: string
     payloadHash: string
-  }
+  },
+  /** The caller may already have committed this key; never admit it as new work. */
+  { requireExisting = false }: { requireExisting?: boolean } = {}
 ):
   | { disposition: 'started'; row: MutationReceiptRow }
   | { disposition: 'pending'; row: MutationReceiptRow }
@@ -57,6 +60,9 @@ export function beginMutationReceipt(
       }
       this.db.exec('COMMIT')
       return { disposition: existing.state, row: existing }
+    }
+    if (requireExisting) {
+      throw retryNotReplayable(params.requestId, 'receipt_absent')
     }
     ensureMutationReceiptCapacity(this.db)
     this.db

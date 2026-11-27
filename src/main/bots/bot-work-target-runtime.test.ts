@@ -460,7 +460,7 @@ describe('runtime launch boundaries, real worktree creation, host twins, and pai
     const supportSpy = vi
       .spyOn(runtime, 'getStructuredAgentSessionCreateSupport')
       .mockImplementation(async (selector) =>
-        selector.includes('ssh%3Abox-build')
+        typeof selector === 'string' && selector.includes('ssh%3Abox-build')
           ? { supported: false, reason: 'remote' }
           : { supported: false, reason: 'agent' }
       )

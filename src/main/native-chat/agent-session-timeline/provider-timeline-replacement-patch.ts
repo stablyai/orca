@@ -1,10 +1,5 @@
 // Plain -/+ replacement of the given lines, starting after skippedLines, with no diff run.
-export function replacementPatch(
-  path: string,
-  oldText: string,
-  newText: string,
-  skippedLines = 0
-): string {
+export function replacementHunk(oldText: string, newText: string, skippedLines = 0): string {
   const lines = (text: string, prefix: string): { count: number; text: string } => {
     if (!text) {
       return { count: 0, text: '' }
@@ -22,5 +17,14 @@ export function replacementPatch(
   }
   const oldLines = lines(oldText, '-')
   const newLines = lines(newText, '+')
-  return `--- ${path}\n+++ ${path}\n@@ -${(oldLines.count ? 1 : 0) + skippedLines},${oldLines.count} +${(newLines.count ? 1 : 0) + skippedLines},${newLines.count} @@\n${oldLines.text}${newLines.text}`
+  return `@@ -${(oldLines.count ? 1 : 0) + skippedLines},${oldLines.count} +${(newLines.count ? 1 : 0) + skippedLines},${newLines.count} @@\n${oldLines.text}${newLines.text}`
+}
+
+export function replacementPatch(
+  path: string,
+  oldText: string,
+  newText: string,
+  skippedLines = 0
+): string {
+  return `--- ${path}\n+++ ${path}\n${replacementHunk(oldText, newText, skippedLines)}`
 }

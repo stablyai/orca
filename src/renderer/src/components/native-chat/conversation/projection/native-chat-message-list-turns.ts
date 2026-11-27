@@ -4,6 +4,7 @@ import type { NativeChatTurnJournal } from '../../../../../../shared/native-chat
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { compareAgentJournalItems } from '../../../../../../shared/agent-session/journal/agent-session-journal-position'
 import { readAgentJournalTurn } from '../../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { positionsRevisedFrom } from '../../../../../../shared/agent-session/view/revised-in-place-lists'
 
 // Subagent rows are grouped by the parent turn they belong to; these checks prove that grouping still holds.
 
@@ -36,7 +37,9 @@ export function appendedTurnNeutralItems(
   ) {
     return null
   }
-  for (const [index, item] of before.items.entries()) {
+  // A revision in place names its rows; anything else is compared row by row.
+  for (const index of positionsRevisedFrom(after.items, before.items) ?? before.items.keys()) {
+    const item = before.items[index]!
     const next = after.items[index]!
     if (
       item !== next &&

@@ -11,10 +11,15 @@ import {
   type BotChatResetParams,
   type BotUpdateParams
 } from '../../../../shared/rpc-contract/bots-params'
+import {
+  BotSlackIconUpload,
+  BotSlackIconWanted
+} from '../../../../shared/rpc-contract/bot-avatar-params'
 import { googleSetupRuns } from '../../../google/google-setup-runs'
 import { readSharedBotActivity } from '../../../bots/bot-activity-host'
 import { runtimeBotChats, startBotSession, botOnAgent } from '../../../bots/bot-chat-session'
 import { readPairedBotRosters, withPairedBotRosters } from '../../../bots/paired-bot-rosters'
+import { connectedClientRosters } from '../../orchestration/federation/client-asks/client-ask-listeners'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { openEmptyBotChat, runtimeBotChatTreeHost } from '../../../bots/bot-chat-tree-host'
 import { forgetDeletedBotTools } from './bots-tools'
@@ -36,6 +41,7 @@ import { botOwnSkillsView, linkBotOwnSkills } from '../../../bots/bot-own-skills
 import { botHomeFolder } from '../../../bots/bot-home'
 import { listedBotsFacts } from './bots-list-facts'
 import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-view'
+import { OWNER_ACTS_FOR } from '../../../../shared/bots/bot-acts-for'
 import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
 import { refuseUnsavedFolderDrafts } from '../../repositories/folder-workspace-deletion'
 
@@ -49,7 +55,8 @@ async function updateBot(params: BotUpdateParams, context: RpcContext) {
   }
   const bot = await context.runtime.bots.update(params.botId, params.updates)
   if (params.updates.skillProjects !== undefined) {
-    relinkBotSkills(bot, context.runtime.listRepos())
+    // Replies after the links and caches change, so a `/` menu opened next lists them.
+    await relinkBotSkills(bot, context.runtime.listRepos())
   }
   if (params.updates.agent !== undefined) {
     void linkBotOwnSkills(botHomeFolder(bot)).catch(() => {})
@@ -167,7 +174,11 @@ export const BOT_METHODS = [
           return entry.id === caller?.id ? { ...entry, self: true as const } : entry
         })
       )
-      return paired ? withPairedBotRosters(own, await paired) : { bots: own }
+      const listed = paired ? withPairedBotRosters(own, await paired) : { bots: own }
+      // Computers paired to this one, connected now, and the bots each lets this Orca's agents ask:
+      // only for this host's own callers, so a paired computer reading it never lists itself.
+      const clients = paired ? connectedClientRosters(runtime) : []
+      return clients.length > 0 ? { ...listed, clients } : listed
     }
   }),
   BOT_CREATE_METHOD,
@@ -201,15 +212,39 @@ export const BOT_METHODS = [
     permission: 'workspace',
     params: BotAvatarUpload,
     handler: async (params, { runtime }) => ({
-      bot: await runtime.bots.setAvatarImage(params.botId, Buffer.from(params.png, 'base64'))
+      bot: await runtime.bots.setAvatarImage(
+        params.botId,
+        Buffer.from(params.png, 'base64'),
+        params.expectedAvatarRevision,
+        params.expectedAvatarEpoch
+      )
     })
   }),
   defineMethod({
     name: 'bots.avatar.read',
     permission: 'workspace',
     params: BotAvatarRead,
+    handler: async (params, { runtime }) =>
+      params.catalogRevision === undefined
+        ? { png: (await runtime.bots.readAvatarImage(params.botId))?.toString('base64') ?? null }
+        : runtime.bots.generationRevision(params.botId, params.catalogRevision, params.catalogEpoch)
+  }),
+  defineMethod({
+    name: 'bots.avatar.slackIcon.wanted',
+    permission: 'workspace',
+    params: BotSlackIconWanted,
+    handler: (params, { runtime }) => runtime.bots.slackIcons.wanted(params.botId, params.look)
+  }),
+  defineMethod({
+    name: 'bots.avatar.slackIcon.upload',
+    permission: 'workspace',
+    params: BotSlackIconUpload,
     handler: async (params, { runtime }) => ({
-      png: (await runtime.bots.readAvatarImage(params.botId))?.toString('base64') ?? null
+      stored: await runtime.bots.slackIcons.store(
+        params.botId,
+        params.look,
+        Buffer.from(params.png, 'base64')
+      )
     })
   }),
   defineMethod({
@@ -269,7 +304,9 @@ export const BOT_METHODS = [
           return null
         }
       )
-      return { sessionId: empty ?? (await startBotSession(runtime, onAgent)) }
+      // The owner's own chat, as Home Chat is: recorded so a /clear never leaves it unattributed.
+      const actsFor = { actsFor: [...OWNER_ACTS_FOR] }
+      return { sessionId: empty ?? (await startBotSession(runtime, onAgent, { actsFor })) }
     }
   })
 ]

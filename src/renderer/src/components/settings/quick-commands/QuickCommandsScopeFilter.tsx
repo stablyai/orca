@@ -139,6 +139,7 @@ export function QuickCommandsScopeFilter({
                     <RepoBadgeLabel
                       name={getQuickCommandRepoLabel(repo)}
                       color={repo.badgeColor}
+                      repo={repo}
                       className="max-w-full"
                     />
                   </CommandItem>

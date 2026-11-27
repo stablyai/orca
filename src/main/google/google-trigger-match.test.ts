@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { AutomationGoogleTrigger } from '../../shared/automation-google-triggers'
 import type { NewMail } from './google-gmail-changes'
-import { gmailRuleMatches, googleRuleTargets } from './google-trigger-match'
+import {
+  accountlessRulesPausedBy,
+  gmailRuleMatches,
+  googleRuleTargets
+} from './google-trigger-match'
 
 type GmailRule = Extract<AutomationGoogleTrigger, { source: 'gmail' }>
 
@@ -103,12 +107,9 @@ describe('a rule without an account listens on the default', () => {
     connected: string[],
     defaultAccount: string | null
   ) =>
-    googleRuleTargets(
-      [automation(account)],
-      [{ id: 'b1', google: true }],
-      connected,
-      defaultAccount
-    ).map((target) => target.account)
+    googleRuleTargets([automation(account)], [{ id: 'b1', google: true }], connected, {
+      email: defaultAccount
+    }).map((target) => target.account)
 
   it('uses the default among several, and a named account over it', () => {
     expect(listens(undefined, ['a@x.com', 'b@x.com'], 'b@x.com')).toEqual(['b@x.com'])
@@ -117,5 +118,31 @@ describe('a rule without an account listens on the default', () => {
 
   it('listens nowhere while the default is signed out, rather than on another account', () => {
     expect(listens(undefined, ['a@x.com'], 'b@x.com')).toEqual([])
+  })
+
+  it('listens only on accounts chosen for the bot, its default first chosen', () => {
+    const limited = (account: string | undefined) =>
+      googleRuleTargets(
+        [automation(account)],
+        [{ id: 'b1', google: true, googleAccounts: ['a@x.com'] }],
+        ['a@x.com', 'b@x.com'],
+        { email: 'b@x.com' }
+      ).map((target) => target.account)
+    expect(limited('b@x.com')).toEqual([])
+    expect(limited(undefined)).toEqual(['a@x.com'])
+  })
+
+  it('pauses accountless rules exactly where no default is picked for the bot', () => {
+    const unreadable = { unreadable: 'Keychain denied.', accounts: ['a@x.com', 'b@x.com'] }
+    const run = (googleAccounts: string[]) => {
+      const bots = [{ id: 'b1', google: true, googleAccounts }]
+      const targets = googleRuleTargets([automation()], bots, ['a@x.com', 'b@x.com'], unreadable)
+      return {
+        listens: targets.length > 0,
+        paused: accountlessRulesPausedBy(unreadable, [automation()], bots)
+      }
+    }
+    expect(run(['a@x.com', 'b@x.com'])).toEqual({ listens: false, paused: 'Keychain denied.' })
+    expect(run(['a@x.com'])).toEqual({ listens: true, paused: null })
   })
 })

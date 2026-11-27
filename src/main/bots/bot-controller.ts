@@ -1,13 +1,13 @@
+import {
+  type BotStore,
+  persistBotStore,
+  requireBotStore,
+  requireStoredBot
+} from './bot-controller-store'
 // The bots on this computer, each homed in a folder workspace of the hidden Bots project group.
 import { BOT_IMPORT_REPLY_FILE } from '../../shared/bots/bot-import'
-import { createHash } from 'node:crypto'
 import { join } from 'node:path'
-import {
-  BOT_AVATAR_FILE,
-  isBotAvatarImage,
-  isUploadAvatar,
-  uploadAvatar
-} from '../../shared/bot-avatar'
+import { BOT_AVATAR_FILE, type BotPictureRevision, isUploadAvatar } from '../../shared/bot-avatar'
 import { type Bot, botFolderName } from '../../shared/bot-types'
 import { assertBotNameFree, freeBotName } from './bot-free-name'
 import { areHostBotsEnabled, assertHostBotsEnabled } from './bot-team-policy'
@@ -24,46 +24,21 @@ import { botTemplate } from '../../shared/bots/bot-templates'
 import { templateBotFolderName } from '../../shared/bots/bot-template-view'
 import { botOfferCreation } from './bot-offer-creation'
 import { assertBotOwnsHome, type BotHomeFilesystem, botHomeFolder, writeBotHome } from './bot-home'
+import { type BotSlackIcons, botSlackIconsOf } from './bot-slack-icon-store'
 import { type BotMemoryRecord, hostBotMemoryRecord } from './bot-memory-record'
 import { stampBotLinkOwners } from '../../shared/bot-link-owners'
+import {
+  botForManualPicture,
+  knownBotPicture,
+  readBotHomePicture,
+  writeBotAvatarImage
+} from './bot-avatar-revision'
 import { makeBotsHome } from './bot-home-workspace'
 import { newBotRecord } from './bot-new-record'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 
 /** Where a new bot came from, kept on its record. */
 export type BotOrigin = Partial<Pick<Bot, 'sharedFrom' | 'templateId'>>
-
-type BotStore = Required<
-  Pick<
-    RuntimeStore,
-    | 'getBots'
-    | 'saveBot'
-    | 'removeBot'
-    | 'getProjectGroups'
-    | 'createProjectGroup'
-    | 'getFolderWorkspaces'
-    | 'updateFolderWorkspace'
-  >
-> &
-  Pick<RuntimeStore, 'flushPendingOrThrowAsync'>
-
-// Its home folder is already made or gone on disk, so the record must not wait out the save debounce: a
-// quit or crash inside it would bring back a deleted bot, or lose a new one's record beside its folder.
-async function persistNow(store: BotStore): Promise<void> {
-  await store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
-}
-
-function isBotStore(store: RuntimeStore | null): store is RuntimeStore & BotStore {
-  return Boolean(
-    store?.getBots &&
-    store.saveBot &&
-    store.removeBot &&
-    store.getProjectGroups &&
-    store.createProjectGroup &&
-    store.getFolderWorkspaces &&
-    store.updateFolderWorkspace
-  )
-}
 
 export type BotControllerDependencies = {
   getStore: () => RuntimeStore | null
@@ -86,6 +61,8 @@ export type BotControllerDependencies = {
   /** Takes the bot out of every group room, as removing it from each would. */
   leaveBotGroups?: (botId: string) => Promise<void>
   botsRoot: () => string
+  /** App-owned folder for the bots' drawn Slack icons, outside their homes. */
+  slackIconsRoot: () => string
   filesystem: BotHomeFilesystem
   /** The Orca account signed in now, recorded on the links a bot gets. */
   accountUserId?: () => string | null
@@ -99,9 +76,12 @@ export class BotController {
 
   /** Each bot's MEMORY.md as Orca last recorded it: turn ends restore against it, Forget edits it. */
   readonly memory: BotMemoryRecord
+  /** The drawn Slack icons of colored or dressed mascots, kept in Orca's app data. */
+  readonly slackIcons: BotSlackIcons
 
   constructor(private readonly deps: BotControllerDependencies) {
     this.memory = hostBotMemoryRecord(deps.filesystem)
+    this.slackIcons = botSlackIconsOf(this, deps, (work) => this.serialize(work))
   }
 
   /** Off, bots take no conversations or runs, and nothing creates or opens one; their homes stay. */
@@ -115,6 +95,34 @@ export class BotController {
 
   list(): Bot[] {
     return this.deps.getStore()?.getBots?.() ?? []
+  }
+
+  /** A fresh Generate can recover a lost profile save. A concurrent catalog change keeps its original guard. */
+  async generationRevision(
+    botId: string,
+    seen: number,
+    epoch?: string
+  ): Promise<BotPictureRevision> {
+    const store = requireBotStore(this.deps.getStore())
+    const listed = requireStoredBot(store, botId)
+    const home = await readBotHomePicture(this.deps, listed)
+    return this.serialize(async () => {
+      const currentStore = requireBotStore(this.deps.getStore())
+      const current = requireStoredBot(currentStore, botId)
+      if (
+        current !== listed ||
+        (listed.avatarRevision ?? 0) !== seen ||
+        listed.avatarRevisionEpoch !== epoch
+      ) {
+        return { revision: seen, epoch }
+      }
+      const bot = knownBotPicture(home)
+      if (listed !== bot) {
+        currentStore.saveBot(bot)
+        this.deps.notifyBotsWritten(false)
+      }
+      return { revision: bot.avatarRevision ?? 0, epoch: bot.avatarRevisionEpoch }
+    })
   }
 
   /** The list with what a client needs to draw it as this host's own sidebar does. */
@@ -142,10 +150,10 @@ export class BotController {
    *  first-run rules like any new bot's. */
   create(input: BotCreateParams, origin?: BotOrigin): Promise<Bot> {
     return this.serialize(async () => {
-      const store = this.requireStore()
+      const store = requireBotStore(this.deps.getStore())
       const bot = await this.makeBot(store, input, origin)
       store.saveBot(bot)
-      await persistNow(store)
+      await persistBotStore(store)
       this.deps.notifyBotsWritten(true)
       return bot
     })
@@ -153,10 +161,10 @@ export class BotController {
 
   /** One bot per offer card, with any `install` (a template's package) in the same step; see bot-offer-creation. */
   readonly createFromOffer = botOfferCreation<BotStore, BotOrigin>({
-    queue: (work) => this.serialize(() => work(this.requireStore())),
+    queue: (work) => this.serialize(() => work(requireBotStore(this.deps.getStore()))),
     makeBot: (store, input, origin) => this.makeBot(store, input, origin),
     saved: async (store) => {
-      await persistNow(store)
+      await persistBotStore(store)
       this.deps.notifyBotsWritten(true)
     }
   })
@@ -199,22 +207,46 @@ export class BotController {
   /** A hidden home for a bot group, made as a bot's is: `<bots root>/group-<slug>` in Bots. */
   createGroupHome(name: string, agent: Bot['agent']) {
     return this.serialize(() =>
-      makeBotsHome(this.deps, this.requireStore(), `group-${botFolderName(name)}`, name, agent)
+      makeBotsHome(
+        this.deps,
+        requireBotStore(this.deps.getStore()),
+        `group-${botFolderName(name)}`,
+        name,
+        agent
+      )
     )
   }
 
   /** A function reads the bot as saved, inside the queue, so a concurrent edit is not lost. */
   update(botId: string, edit: BotHostUpdates | ((bot: Bot) => BotHostUpdates)): Promise<Bot> {
     return this.serialize(async () => {
-      const store = this.requireStore()
-      const bot = this.requireBot(store, botId)
-      const updates = typeof edit === 'function' ? edit(bot) : edit
+      const store = requireBotStore(this.deps.getStore())
+      const home = await readBotHomePicture(this.deps, requireStoredBot(store, botId))
+      const updates = typeof edit === 'function' ? edit(home.bot) : edit
+      const pictureChoice = [updates.avatar, updates.avatarColor, updates.avatarOutfit].some(
+        (value) => value !== undefined
+      )
+      const bot =
+        updates.avatar !== undefined
+          ? botForManualPicture(this.deps, home, () => store.getFolderWorkspaces())
+          : pictureChoice
+            ? knownBotPicture(home)
+            : home.bot
       if (updates.name !== undefined) {
         assertBotNameFree(store.getBots(), updates.name, botId)
       }
       const updated: Bot = { ...applyBotUpdates(bot, updates), updatedAt: Date.now() }
+      // Any picture, color or outfit choice counts, even one that sets the same value again. Every other edit
+      // keeps the highest revision seen, so rewriting bot.json from a record that lost it can't lower it.
+      const revision = bot.avatarRevision ?? 0
+      if (pictureChoice) {
+        delete updated.generatedOverMascot
+        updated.avatarRevision = revision + 1
+      }
       const next = stampBotLinkOwners(bot, updated, () => this.deps.accountUserId?.() ?? null)
-      await writeBotHome(this.deps.filesystem, botHomeFolder(next, this.deps.botsRoot()), next)
+      if (home.known || pictureChoice) {
+        await writeBotHome(this.deps.filesystem, botHomeFolder(next, this.deps.botsRoot()), next)
+      }
       if (next.name !== bot.name) {
         store.updateFolderWorkspace(bot.folderWorkspaceId, { name: next.name })
       }
@@ -227,20 +259,26 @@ export class BotController {
     })
   }
 
-  /** A square PNG of at least Slack's 512 px becomes the bot's picture, kept in its home. */
-  setAvatarImage(botId: string, png: Uint8Array): Promise<Bot> {
+  /** A square PNG of at least Slack's 512 px becomes the bot's picture, kept in its home. With
+   *  `expectedAvatarRevision`, refused (bot_avatar_changed, nothing written) once any other picture,
+   *  color or outfit write has landed since that revision. */
+  setAvatarImage(
+    botId: string,
+    png: Uint8Array,
+    expectedAvatarRevision?: number,
+    expectedAvatarEpoch?: string
+  ): Promise<Bot> {
     return this.serialize(async () => {
-      const store = this.requireStore()
-      const bot = this.requireBot(store, botId)
-      if (!isBotAvatarImage(png)) {
-        throw new Error('bot_avatar_invalid')
-      }
-      const folderPath = botHomeFolder(bot, this.deps.botsRoot())
-      await assertBotOwnsHome(this.deps.filesystem, folderPath, botId)
-      const version = createHash('sha256').update(png).digest('hex').slice(0, 16)
-      const next: Bot = { ...bot, avatar: uploadAvatar(version), updatedAt: Date.now() }
-      await this.deps.filesystem.writeBytes(join(folderPath, BOT_AVATAR_FILE), png)
-      await writeBotHome(this.deps.filesystem, folderPath, next)
+      const store = requireBotStore(this.deps.getStore())
+      const bot = requireStoredBot(store, botId)
+      const next = await writeBotAvatarImage(
+        this.deps,
+        bot,
+        png,
+        () => store.getFolderWorkspaces(),
+        expectedAvatarRevision,
+        expectedAvatarEpoch
+      )
       store.saveBot(next)
       this.deps.notifyBotsWritten(false)
       return next
@@ -249,7 +287,7 @@ export class BotController {
 
   /** The uploaded picture's PNG; null when the bot shows a mascot, an emoji or its initial. */
   async readAvatarImage(botId: string): Promise<Buffer | null> {
-    const bot = this.requireBot(this.requireStore(), botId)
+    const bot = requireStoredBot(requireBotStore(this.deps.getStore()), botId)
     if (!isUploadAvatar(bot.avatar)) {
       return null
     }
@@ -261,8 +299,8 @@ export class BotController {
   /** Not a user edit: the Chat module names which session is the bot's Chat. */
   setChatSession(botId: string, chatSessionId: string): Promise<Bot> {
     return this.serialize(async () => {
-      const store = this.requireStore()
-      const bot = this.requireBot(store, botId)
+      const store = requireBotStore(this.deps.getStore())
+      const bot = requireStoredBot(store, botId)
       const next: Bot = { ...bot, chatSessionId, updatedAt: Date.now() }
       store.saveBot(next)
       this.deps.notifyBotsWritten(false)
@@ -273,7 +311,7 @@ export class BotController {
   /** Its owner's first turn in its Chat is handled, so first-run rules end; a no-op for a bot not in them. */
   endFirstRun(botId: string): Promise<void> {
     return this.serialize(async () => {
-      const store = this.requireStore()
+      const store = requireBotStore(this.deps.getStore())
       const bot = store.getBots().find((entry) => entry.id === botId)
       if (bot?.firstRun) {
         const { firstRun: _done, ...rest } = bot
@@ -285,8 +323,8 @@ export class BotController {
 
   delete({ botId, deleteFolder }: BotDeleteParams): Promise<{ deleted: boolean }> {
     return this.serialize(async () => {
-      const store = this.requireStore()
-      const bot = this.requireBot(store, botId)
+      const store = requireBotStore(this.deps.getStore())
+      const bot = requireStoredBot(store, botId)
       const folderPath = botHomeFolder(bot, this.deps.botsRoot())
       if (deleteFolder) {
         await assertBotOwnsHome(this.deps.filesystem, folderPath, botId)
@@ -305,7 +343,7 @@ export class BotController {
         await this.deps.filesystem.removeTree(folderPath)
       }
       store.removeBot(bot)
-      await persistNow(store)
+      await persistBotStore(store)
       this.deps.forgetBot?.(bot.id)
       this.deps.notifyBotsWritten(true)
       return { deleted: true }
@@ -316,21 +354,5 @@ export class BotController {
     const run = this.tail.then(work, work)
     this.tail = run.catch(() => undefined)
     return run
-  }
-
-  private requireStore(): BotStore {
-    const store = this.deps.getStore()
-    if (!isBotStore(store)) {
-      throw new Error('runtime_unavailable')
-    }
-    return store
-  }
-
-  private requireBot(store: BotStore, botId: string): Bot {
-    const bot = store.getBots().find((entry) => entry.id === botId)
-    if (!bot) {
-      throw new Error('bot_not_found')
-    }
-    return bot
   }
 }

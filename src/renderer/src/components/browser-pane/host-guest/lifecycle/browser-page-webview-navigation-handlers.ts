@@ -33,7 +33,7 @@ export type BrowserPageWebviewNavigationHandlersArgs = {
   webview: Electron.WebviewTag
   browserTabId: string
   browserTabUrl: string
-  invalidateBrowserAnnotationDocumentRef: MutableRefObject<() => void>
+  invalidateBrowserAnnotationDocumentRef: MutableRefObject<(newDocument?: boolean) => void>
   recoveryNavigationValidationRef: MutableRefObject<BrowserPageRecoveryNavigationValidation | null>
   activeLoadFailureRef: MutableRefObject<BrowserLoadError | null>
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
@@ -105,7 +105,7 @@ export function createBrowserPageWebviewNavigationHandlers({
       return
     }
     // Same-URL reloads replace the document too; in-place updates are judged once they commit.
-    invalidateBrowserAnnotationDocumentRef.current()
+    invalidateBrowserAnnotationDocumentRef.current(true)
     setBrowserOverlayViewport(INITIAL_BROWSER_OVERLAY_VIEWPORT)
     const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
     const browserStartedUrl = redactKagiSessionToken(event.url)

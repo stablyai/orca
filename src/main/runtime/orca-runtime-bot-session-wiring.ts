@@ -17,6 +17,7 @@ import {
 import type { KnownPairedBotRoster } from '../bots/paired-bot-rosters'
 import type { AdmittedMessage } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { runtimeBotItems } from '../bots/runtime-bot-items'
 import type { RuntimeStore } from './construction/runtime-store-contract'
 
 export type RuntimeBotSessionHostOwner = {
@@ -54,6 +55,7 @@ export type RuntimeBotSessionProtectedHooks = {
   isBotHome: (workspaceId: string) => boolean
   clientName: (installationId: string) => string | null
   scrubBotToolSecrets: (bot: WiredBot) => Promise<void>
+  owedItemAttachmentUploads: ReturnType<typeof runtimeBotItems>['owedCommentAttachmentUploads']
   assertQueuedMessageAllowed: (sessionId: string, messageId: string) => void
 }
 
@@ -74,6 +76,7 @@ export function buildRuntimeBotStructuredSessionHostDeps(
     callOrchestrationWorkerServer: (...args) => owner.callOrchestrationWorkerServer(...args)
   })
   return {
+    owedItemAttachmentUploads: hooks.owedItemAttachmentUploads,
     ...botStructuredSessionWiring({
       store,
       botsAtInstall: hooks.botsAtInstall,

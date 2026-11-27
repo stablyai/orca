@@ -2,9 +2,9 @@ import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { WorkspaceSshGate } from '../workspace-ssh-gate'
 import { workspaceSshStatusLabel } from '../workspace-ssh-gate'
-import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { newWorktreeFormStylesSheet } from './new-worktree-form-styles'
 import { pressedStyle } from '../../../theme/mobile-theme'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 export function NewWorkspaceSshConnectionField({
   repoName,
@@ -15,7 +15,7 @@ export function NewWorkspaceSshConnectionField({
   sshGate: WorkspaceSshGate
   onConnect: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(newWorktreeFormStylesSheet)
   const t = useMobileTranslation()
   return (
     <View style={styles.field}>
@@ -38,7 +38,7 @@ export function NewWorkspaceSshConnectionField({
             <Text style={styles.sshTitle} numberOfLines={1}>
               {repoName}
             </Text>
-            <Text style={styles.sshSubtitle}>{workspaceSshStatusLabel(sshGate.status)}</Text>
+            <Text style={styles.sshSubtitle}>{workspaceSshStatusLabel(sshGate.status, t)}</Text>
           </View>
           {sshGate.status === 'connected' ? null : (
             <Pressable

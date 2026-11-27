@@ -1,55 +1,66 @@
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 // Share envelopes across CLI/desktop/non-Electron clients without client-to-client imports.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import type { OrchestrationCompatibilityEvidence } from '../../orchestration/orchestration-compatibility-evidence'
 import type { RemoteOwnedPeerRun } from '../../orchestration/remote-owned-wire'
 import type { ResolvedBotWorkTargetPlacement } from '../../agent-session/work-target/agent-session-work-target'
 
 // Independently updated peers may add envelope fields; strip unknown fields while validating known ones.
-const MetaSuccess = z
-  .object({
-    runtimeId: z.string()
-  })
-  .strip()
+const MetaSuccess = lazyZodSchema(() =>
+  z
+    .object({
+      runtimeId: z.string()
+    })
+    .strip()
+)
 
-const MetaFailure = z
-  .object({
-    runtimeId: z.union([z.string(), z.null()])
-  })
-  .strip()
-  .optional()
+const MetaFailure = lazyZodSchema(() =>
+  z
+    .object({
+      runtimeId: z.union([z.string(), z.null()])
+    })
+    .strip()
+    .optional()
+)
 
-const Success = z
-  .object({
-    id: z.string(),
-    ok: z.literal(true),
-    result: z.unknown(),
-    _meta: MetaSuccess
-  })
-  .strip()
+const Success = lazyZodSchema(() =>
+  z
+    .object({
+      id: z.string(),
+      ok: z.literal(true),
+      result: z.unknown(),
+      _meta: MetaSuccess
+    })
+    .strip()
+)
 
-const Failure = z
-  .object({
-    id: z.string(),
-    ok: z.literal(false),
-    error: z
-      .object({
-        code: z.string(),
-        message: z.string(),
-        data: z.unknown().optional()
-      })
-      .strip(),
-    _meta: MetaFailure
-  })
-  .strip()
+const Failure = lazyZodSchema(() =>
+  z
+    .object({
+      id: z.string(),
+      ok: z.literal(false),
+      error: z
+        .object({
+          code: z.string(),
+          message: z.string(),
+          data: z.unknown().optional()
+        })
+        .strip(),
+      _meta: MetaFailure
+    })
+    .strip()
+)
 
-const Keepalive = z
-  .object({
-    _keepalive: z.literal(true)
-  })
-  .strip()
+const Keepalive = lazyZodSchema(() =>
+  z
+    .object({
+      _keepalive: z.literal(true)
+    })
+    .strip()
+)
 
-export const RuntimeRpcEnvelopeSchema = z.union([Success, Failure, Keepalive])
+export const RuntimeRpcEnvelopeSchema = lazyZodSchema(() => z.union([Success, Failure, Keepalive]))
 
 export type RuntimeRpcSuccess<TResult> = {
   id: string
@@ -88,10 +99,12 @@ export type RuntimeOrchestrationEnvelope = {
 }
 
 /** Which runtime a request is meant for; a host that is not that runtime refuses it before any handler. */
-export const ExpectedRuntimeSourceSchema = z.object({
-  sourceId: z.string().min(1).max(4_096),
-  runtimeId: z.string().min(1).max(4_096)
-})
+export const ExpectedRuntimeSourceSchema = lazyZodSchema(() =>
+  z.object({
+    sourceId: z.string().min(1).max(4_096),
+    runtimeId: z.string().min(1).max(4_096)
+  })
+)
 
 export type ExpectedRuntimeSource = {
   /** The launching profile's installation id. */

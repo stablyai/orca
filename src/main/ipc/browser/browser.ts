@@ -17,13 +17,13 @@ import {
   syncBrowserMemorySaverPolicy,
   type BrowserMemorySaverSettingsSource
 } from '../../browser/guest-lifecycle/browser-page-idle-discard'
-import { registerBrowserDictationHandlers } from './browser-dictation-ipc'
-import { registerBrowserGrabHandlers } from './browser-grab-ipc'
 import {
-  disposeGrabModeStateForPage,
-  resetGrabModeState
-} from '../../browser/element-grab/browser-grab-mode-sequencer'
-import { registerBrowserSessionProfileHandlers } from './browser-session-profile-ipc'
+  disposeLazyGrabModeStateForPage,
+  registerLazyBrowserDictationHandlers,
+  registerLazyBrowserGrabHandlers,
+  resetLazyGrabModeState
+} from './lazy-browser-grab-and-dictation-ipc'
+import { registerLazyBrowserSessionProfileHandlers } from './lazy-browser-session-profile-ipc'
 import type { BrowserCertificateProceedResult } from '../../../shared/browser/workspaces/browser-workspace-types'
 import {
   cancelBrowserWebAuthnAccountRequests,
@@ -38,8 +38,7 @@ import { respondToBrowserPagePrompt } from '../../browser/guest-lifecycle/prompt
 import { openStreamedBrowserExternalAppLink } from '../../browser/guest-lifecycle/prompts/browser-external-app-launch'
 import { recordActiveBrowserPage } from '../../browser/extensions/tabs-and-windows/browser-extension-tab-model'
 import { announceRegisteredBrowserExtensionTab } from '../../browser/extensions/tabs-and-windows/browser-extension-tab-lifecycle'
-import { registerBrowserExtensionHandlers } from './browser-extensions'
-import { registerBrowserExtensionContextMenuHandlers } from './browser-extension-context-menu'
+import { registerLazyBrowserExtensionIpcHandlers } from './lazy-browser-extension-ipc'
 import {
   registerBrowserPasswordsHandlers,
   type BrowserPasswordsSettingsSource
@@ -62,7 +61,7 @@ export function setAgentBrowserBridgeRef(bridge: AgentBrowserBridge | null): voi
 export function registerBrowserHandlers(
   store: BrowserPasswordsSettingsSource & BrowserMemorySaverSettingsSource
 ): void {
-  resetGrabModeState()
+  resetLazyGrabModeState()
   ipcMain.removeHandler('browser:registerGuest')
   ipcMain.removeHandler('browser:isGuestRegistered')
   ipcMain.removeHandler('browser:getGuestMetadata')
@@ -242,7 +241,7 @@ export function registerBrowserHandlers(
         args.browserPageId,
         args.replacement ? 'guest-destroyed' : 'page-closed'
       )
-      disposeGrabModeStateForPage(args.browserPageId)
+      disposeLazyGrabModeStateForPage(args.browserPageId)
       return true
     }
   )
@@ -316,13 +315,12 @@ export function registerBrowserHandlers(
   registerBrowserGuestViewHandlers()
   registerBrowserGuestDiscardHandlers()
   syncBrowserMemorySaverPolicy(store)
-  registerBrowserDictationHandlers()
+  registerLazyBrowserDictationHandlers()
 
-  registerBrowserGrabHandlers()
+  registerLazyBrowserGrabHandlers()
 
-  registerBrowserSessionProfileHandlers()
+  registerLazyBrowserSessionProfileHandlers()
 
-  registerBrowserExtensionHandlers()
-  registerBrowserExtensionContextMenuHandlers()
+  registerLazyBrowserExtensionIpcHandlers()
   registerBrowserPasswordsHandlers(store)
 }

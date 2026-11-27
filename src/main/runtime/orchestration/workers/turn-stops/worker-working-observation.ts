@@ -1,6 +1,9 @@
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
+  formatWorkingTurnFence,
   nextWorkerPresence,
+  readMaxMessageSequence,
+  readMaxRelaySequence,
   readWorkerPresence,
   writeWorkerPresence
 } from '../../db/worker-presence/worker-presence-store'
@@ -15,7 +18,15 @@ export function observeWorkerWorking(
 ): void {
   const dispatchId = workerTurnStopDispatchId(target)
   const current = readWorkerPresence(db, dispatchId)
-  const fence = newTurn ? `turn:${(current?.generation ?? 0) + 1}` : null
+  const fence =
+    current?.presence === 'working' && !newTurn
+      ? current.fence
+      : formatWorkingTurnFence(
+          (current?.generation ?? 0) + 1,
+          target.kind === 'local'
+            ? readMaxMessageSequence(db)
+            : readMaxRelaySequence(db, dispatchId)
+        )
   const next = nextWorkerPresence(current, { presence: 'working', fence, report: null })
   if (next.changed) {
     writeWorkerPresence(db, dispatchId, next)

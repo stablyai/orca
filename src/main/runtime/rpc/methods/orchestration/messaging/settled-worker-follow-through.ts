@@ -37,6 +37,7 @@ import {
   noticeUnreadMailNotContinued,
   passHeldWorkerMail as passHeldWorkerMailWithContinue
 } from './held-worker-mail-pass'
+import { failedWorkerChatAttachment } from '../../../../orchestration/db/worker-dispatch/restart-cut-worker-start'
 
 /** After a report settles (or replays): save the worker's conversation, then continue mail it never read. */
 export function followThroughWorkerReport(
@@ -103,9 +104,9 @@ export async function continueUnreadWorkerMailNow(
     return
   }
   if (
-    worker?.state === 'starting' &&
-    worker.runtime_epoch &&
-    worker.runtime_epoch !== runtime.getRuntimeId()
+    worker?.runtime_epoch &&
+    worker.runtime_epoch !== runtime.getRuntimeId() &&
+    (worker.state === 'starting' || failedWorkerChatAttachment(worker))
   ) {
     if (worker.agent_terminal_handle) {
       noticeUnreadMailNotContinued(

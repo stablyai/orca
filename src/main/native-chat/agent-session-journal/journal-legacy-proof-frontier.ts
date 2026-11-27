@@ -27,6 +27,8 @@ export type LegacyProofFrontier = {
   copiesOnly: boolean
   /** Chats unconverted when this page was first read: a retry reads them back as converted. */
   unconverted: Set<string>
+  /** The original carries a shape earlier builds refuse; its progress is saved under layout 2. */
+  historical?: boolean
 }
 
 export function createLegacyProofFrontier(
@@ -96,6 +98,9 @@ export async function completeJournalLegacyProof(
       await rest(started)
     }
     const page = frontier.page
+    if (page.historical) {
+      frontier.historical = true
+    }
     if (page.retained) {
       // A refusal is read again on the next attempt: what it waited on may have settled since.
       frontier.page = undefined

@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Animated, Easing, StyleSheet, Text, View } from 'react-native'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-
-export const SHELL_OPENING_LABEL = 'Opening workspace'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 // Ease in to hold opacity while the compositor catches up with the reported renderer paint; linear fade exposed two bare-surface frames.
 export const SHELL_PAGE_COVER_FADE_MS = 100
@@ -19,7 +18,8 @@ export function ShellWaitingFrame({
   indicator?: ReactNode
   caption?: string
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <>
       <View style={styles.indicatorSlot}>
@@ -34,8 +34,9 @@ export function ShellWaitingFrame({
 }
 
 // Cover the mounted view until first paint, not ready; keep it noninteractive so a missing report cannot block an otherwise usable page.
-export function ShellPageCover({ label, visible }: { label: string; visible: boolean }) {
-  useMobileColorScheme()
+export function ShellPageCover({ visible }: { visible: boolean }) {
+  const t = useMobileTranslation()
+  const styles = useThemedStyles(stylesSheet)
   const opacity = useRef(new Animated.Value(1)).current
   const [mounted, setMounted] = useState(visible)
 
@@ -71,12 +72,14 @@ export function ShellPageCover({ label, visible }: { label: string; visible: boo
       testID="mobile-web-shell-cover"
       pointerEvents="none"
     >
-      <ShellWaitingFrame label={label} />
+      <ShellWaitingFrame
+        label={t('webShell.shellStateScreen.openingWorkspace', 'Opening workspace')}
+      />
     </Animated.View>
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   cover: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',

@@ -47,6 +47,7 @@ import {
   trackCodexAsyncQuestions
 } from './codex-async-questions'
 import { reviewerEvidenceDeferred } from './codex-rollout-prefetch-scope'
+import { retireCodexPaneTranscripts } from './codex-pane-transcript-retirement'
 
 export function buildCodexStatusPayload(
   state: HookListenerState,
@@ -211,8 +212,7 @@ export function normalizeCodexEvent(
   const transcriptPath = readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
   if (eventName === 'SessionStart' && !agentId) {
     // New processes must not retain children whose Stop hooks were lost.
-    state.codexSubagentRosterByPaneKey.delete(paneKey)
-    state.codexSubagentTranscriptByPaneKey.delete(paneKey)
+    retireCodexPaneTranscripts(state, paneKey)
   }
   if (agentId && transcriptPath && eventName === 'PermissionRequest') {
     const transcriptState = getOrCreateCodexSubagentTranscriptState(state, paneKey)

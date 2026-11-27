@@ -35,6 +35,9 @@ import {
   scheduleHistoryGc,
   type HistoryGcOwners
 } from './terminal-history-gc'
+import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'
+import { hashWorktreeId } from './terminal-history-id'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/workspace/identity/floating-workspace-id'
 
 const GC_MIN_AGE_MS = 5 * 60 * 1000
 const PENDING_DELETE_DIR_NAME = '.pending-delete'
@@ -113,6 +116,23 @@ function survivingDirs(): Set<string> {
   )
 }
 
+function knownOwners(
+  otherProfileIds: string[]
+): ReturnType<typeof getKnownWorktreeIdsForHistoryGc> {
+  return getKnownWorktreeIdsForHistoryGc(
+    {
+      getAllWorktreeMeta: () => ({}),
+      getFolderWorkspaces: () => [],
+      getRepos: () => [],
+      getWorkspaceSession: () => {
+        throw new Error('no saved sessions')
+      },
+      getWorkspaceSessionHostIds: () => []
+    },
+    () => ({ ids: new Set(otherProfileIds), repoIds: new Set(), unreadableProfiles: 0 })
+  )
+}
+
 beforeEach(() => {
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-history-gc-'))
   historyRoot = join(userDataDir, 'terminal-history')
@@ -168,6 +188,29 @@ describe('history GC prune decisions', () => {
     expect(after.has('orphan-no-createdat')).toBe(false)
     expect(after.has('orphan-unparseable-createdat')).toBe(false)
     expect(existsSync(join(historyRoot, 'stray-file'))).toBe(true)
+  })
+})
+
+describe('history GC live owners', () => {
+  it('keeps the floating terminal history while a real workspace is known', async () => {
+    seedDir('floating', { 'meta.json': meta(FLOATING_TERMINAL_WORKTREE_ID, OLD), zsh_history: 'f' })
+    seedDir('orphan', { 'meta.json': meta(DEAD_WORKTREE_ID, OLD) })
+    const fishDir = join(userDataDir, 'fish')
+    mkdirSync(fishDir)
+    const fishFile = join(fishDir, `orca_${hashWorktreeId(FLOATING_TERMINAL_WORKTREE_ID)}_history`)
+    writeFileSync(fishFile, 'f')
+    const old = new Date(Date.now() - OLD)
+    utimesSync(fishFile, old, old)
+
+    const { liveWorktreeIds } = knownOwners([LIVE_WORKTREE_ID])
+    await runHistoryGc(liveWorktreeIds)
+
+    expect([...survivingDirs()]).toEqual(['floating'])
+    expect(existsSync(fishFile)).toBe(true)
+  })
+
+  it('keeps an empty live set empty so GC still prunes nothing', () => {
+    expect(knownOwners([]).liveWorktreeIds.size).toBe(0)
   })
 })
 

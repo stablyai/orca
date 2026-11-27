@@ -13,6 +13,7 @@ import type {
   BridgeTerminalKeyRail
 } from '../../../mobile-web-shell/bridge/native-capabilities/bridge-terminal-key'
 import { usePageBridgeClient } from '../../../transport/connection/client-context.web'
+import { recomputeOn } from '../../../hooks/recompute-on'
 
 let nextInputOwner = 0
 
@@ -43,7 +44,10 @@ export function useShellTerminalKeyRail(
     }, [])
   )
   const claiming = shown && focused
-  const inputOwner = useMemo(() => `rail-${++nextInputOwner}`, [focusedTerminal, claiming])
+  const inputOwner = useMemo(
+    () => recomputeOn([focusedTerminal, claiming], () => `rail-${++nextInputOwner}`),
+    [focusedTerminal, claiming]
+  )
   const ownerRef = useRef(inputOwner)
   const onKeyRef = useRef(onKey)
   const toolbarRef = useRef(toolbar)

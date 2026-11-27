@@ -1,20 +1,25 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { spec, WORKER_ONLY } from './plugin-host-method-spec'
 
 /** First release with the appearance methods (v1.4.251), the floor for `appearance:write`. */
 export const PLUGIN_APPEARANCE_SINCE = '1.4.251'
-const revision = z.string().regex(/^[a-f0-9]{64}$/)
-const artifact = z
-  .string()
-  .min(1)
-  .max(16 * 1024)
+const revision = lazyZodSchema(() => z.string().regex(/^[a-f0-9]{64}$/))
+const artifact = lazyZodSchema(() =>
+  z
+    .string()
+    .min(1)
+    .max(16 * 1024)
+)
 
 /** Conditional-update params: the read revision must still be current at apply time. */
-export const pluginAppearanceApplyParams = z.strictObject({
-  expectedRevision: revision,
-  app: artifact,
-  terminal: artifact
-})
+export const pluginAppearanceApplyParams = lazyZodSchema(() =>
+  z.strictObject({
+    expectedRevision: revision,
+    app: artifact,
+    terminal: artifact
+  })
+)
 
 /** Worker-only appearance methods; spread into the host API table. */
 export const PLUGIN_APPEARANCE_API = {

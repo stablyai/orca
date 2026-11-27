@@ -24,6 +24,16 @@ export abstract class RuntimeBotConstructionHooks extends RuntimeConstructionSer
   // Live work-target provenance verification for whole-mail chat push delivery.
   protected structuredMailVerifyMessage?: StructuredMailMessageVerifier
 
+  protected readonly verifyStructuredMailMessage: StructuredMailMessageVerifier = (
+    db,
+    mailboxHandle,
+    target,
+    message
+  ) =>
+    this.structuredMailVerifyMessage
+      ? this.structuredMailVerifyMessage(db, mailboxHandle, target, message)
+      : Promise.resolve({ ok: true, reverifySync: () => true })
+
   // The chat's bound conversation and whether its answer to this mail lands there; null if unbound.
   protected chatConversationPlace?(
     sessionId: string,

@@ -28,9 +28,10 @@ import {
   REMOTE_OWNED_READ_TIMEOUT_MS
 } from './remote-owned-forward'
 import { remoteForwardKey } from './remote-forward-caller'
-import { inServerTerms, serverNeverAnswered } from './remote-owned-answers'
+import { answeredWorktreeId, inServerTerms, serverNeverAnswered } from './remote-owned-answers'
 import { remoteWorkerShow } from './remote-owned-reads'
 import { OrchestrationError } from '../../orchestration-error'
+import { refuseReplayOnly } from '../../db/mutation-receipts/replay-only-request'
 import { latestRunLink, repairedListError } from './re-paired-run-list'
 import { serverOwnsPlacedWorkers, startRemoteOwnedWorker } from './remote-owned-start'
 import { settleUnansweredAbandon, stopRemoteWorker } from './remote-owned-stop'
@@ -90,6 +91,8 @@ export async function routeRemoteOwnedCall(
       : routeServerCall(runtime, request, access, target.values, ctx, on, target.workTarget)
   }
   checkDeclaredOrchestrationAccess(access, params, ctx)
+  // The forward carries the ordinary contract, so the server would run a missing receipt anew.
+  refuseReplayOnly(request)
   const record = subject.dispatchId ? getRemoteDispatch(db, subject.dispatchId) : undefined
   if (request.method === 'orchestration.workerShow' && record) {
     // A status read is this Orca's record, never a call there: instant whatever the server is doing.
@@ -113,7 +116,7 @@ export async function routeRemoteOwnedCall(
         handled: true,
         result: await forwardToRemoteOwnedLink(runtime, subject, request.method, access, values, {
           forward,
-          onAnswer: (answer) => seedNamedRemoteDispatches(db, subject.link, answer)
+          onAnswer: (answer) => seedNamedRemoteDispatches(db, subject, answer)
         })
       }
     } catch (error) {
@@ -126,7 +129,7 @@ export async function routeRemoteOwnedCall(
       }
     }
   }
-  const onAnswer = (answer: unknown) => seedNamedRemoteDispatches(db, subject.link, answer)
+  const onAnswer = (answer: unknown) => seedNamedRemoteDispatches(db, subject, answer)
   const targeted = await forwardRemoteOwnedWithWorkTarget({
     runtime,
     db,
@@ -162,8 +165,12 @@ async function routeServerCall(
   on: string,
   workTarget?: ResolvedBotWorkTargetPlacement
 ): Promise<Routed> {
-  // A chat named by its session ID is refused by the ordinary start before any server is asked.
-  if (!SERVER_CALLS.has(request.method) || isSessionAddress(values.terminal)) {
+  // A chat named by its session ID, or a bot item's start, is refused by the ordinary start before any server is asked.
+  if (
+    !SERVER_CALLS.has(request.method) ||
+    isSessionAddress(values.terminal) ||
+    stringField(values, 'origin') !== undefined
+  ) {
     return LOCAL
   }
   checkDeclaredOrchestrationAccess(access, values, ctx)
@@ -177,6 +184,7 @@ async function routeServerCall(
     ) {
       return LOCAL
     }
+    refuseReplayOnly(request)
     const parsed = WorkerStartParams.parse(values)
     const result = await startRemoteOwnedWorker(
       runtime,
@@ -207,7 +215,7 @@ async function routeServerCall(
         handled: true,
         result: link
           ? await forwardToRemoteOwnedLink(runtime, { link }, request.method, access, values, {
-              onAnswer: (answer) => seedNamedRemoteDispatches(db, link, answer)
+              onAnswer: (answer) => seedNamedRemoteDispatches(db, { link }, answer)
             })
           : await runtime.callOrchestrationWorkerServer(
               server.environmentId,
@@ -284,21 +292,25 @@ const holdsLocalReceipt = (db: OrchestrationDb, ctx: RpcContext, requestId: stri
     requestId
   ) !== undefined
 
+/** A Dispatch the server's answer names (a follow-up it started for the subject) is its; record it
+ *  so commands about it route there and it lists under the subject's chat. One the queue recorded
+ *  first (an older server's, or a background-wait follow-up) gets what it is missing. */
 function seedNamedRemoteDispatches(
   db: OrchestrationDb,
-  link: RemoteRunLinkRow,
+  subject: RemoteSubject,
   answer: unknown
 ): void {
   const named: Values = answer && typeof answer === 'object' ? { ...answer } : {}
   const dispatchId = stringField(named, 'dispatchId')
   const taskId = stringField(named, 'taskId')
-  if (!dispatchId || !taskId || getRemoteDispatch(db, dispatchId)) {
+  if (!dispatchId || !taskId) {
     return
   }
+  const seen = { taskId, dispatchId, worktreeId: answeredWorktreeId(answer) }
   runLifecycleWriteTransaction(db.db, 'seed_remote_dispatch', () => {
-    const open = getOpenRemoteRunLink(db, link.conversation_id)
+    const open = getOpenRemoteRunLink(db, subject.link.conversation_id)
     if (open) {
-      adoptRemoteAttempt(db, open, { taskId, dispatchId })
+      adoptRemoteAttempt(db, open, { ...seen, earlierDispatchId: subject.dispatchId })
     }
   })
 }

@@ -1,5 +1,6 @@
 // A place is the bot home a connector start runs in; its id names the bot with no lookup.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import {
   CONNECTOR_CLIENT_LIMITS,
   type ConnectorBot,
@@ -20,7 +21,7 @@ import { GITHUB_ID_PATTERN } from '../../shared/connector-bot-github-contract'
 import type { ExternalConversationBot } from '../../shared/connectors/external-conversation-link'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 
-const Place = z.tuple([z.enum(['bot', 'bot-chat']), z.string().min(1)])
+const Place = lazyZodSchema(() => z.tuple([z.enum(['bot', 'bot-chat']), z.string().min(1)]))
 type Place = z.infer<typeof Place>
 
 export type ConnectorPlacesStore = Pick<RuntimeStore, 'getBots'>

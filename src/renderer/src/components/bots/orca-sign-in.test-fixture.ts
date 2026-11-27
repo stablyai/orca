@@ -30,6 +30,7 @@ export function chatTakingSends(
     send,
     sendBlockedReason: () => undefined,
     bot: null,
+    sessionId: 'chat-1',
     firstScreen: null,
     firstKickoffId: null
   }

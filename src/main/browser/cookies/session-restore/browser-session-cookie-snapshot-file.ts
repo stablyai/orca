@@ -50,7 +50,11 @@ function isCdpCookie(value: unknown): value is CdpCookie {
   return isRecord(value) && typeof value.name === 'string' && typeof value.value === 'string'
 }
 
-/** A missing file reads as no saved cookies; null means a file is there but could not be read. */
+/**
+ * A missing file reads as no saved cookies, and so does one that isn't JSON: no key or later Orca
+ * can read those bytes, so live cookies may replace them. null means a file that might read on a
+ * later launch (an I/O error, a newer format, a refused decrypt): it must be kept.
+ */
 export async function readSessionCookieSnapshot(filePath: string): Promise<CdpCookie[] | null> {
   let raw: string
   try {
@@ -58,8 +62,13 @@ export async function readSessionCookieSnapshot(filePath: string): Promise<CdpCo
   } catch (error) {
     return isRecord(error) && error.code === 'ENOENT' ? [] : null
   }
+  let persisted: unknown
   try {
-    const persisted: unknown = JSON.parse(raw)
+    persisted = JSON.parse(raw)
+  } catch {
+    return []
+  }
+  try {
     if (
       !isRecord(persisted) ||
       persisted.format !== SNAPSHOT_FORMAT ||
@@ -76,14 +85,23 @@ export async function readSessionCookieSnapshot(filePath: string): Promise<CdpCo
   }
 }
 
+export function canSealSessionCookies(): boolean {
+  return hasSecretStore() && getSecretStore().isEncryptionAvailable()
+}
+
+/** An empty set removes the file. */
 export async function writeSessionCookieSnapshot(
   filePath: string,
   cookies: readonly CdpCookie[]
 ): Promise<void> {
-  // Why remove when unsealable: session cookies never sit on disk in the clear, and a stale file would undo sign-outs.
-  if (cookies.length === 0 || !hasSecretStore() || !getSecretStore().isEncryptionAvailable()) {
+  if (cookies.length === 0) {
     await removeSessionCookieSnapshot(filePath)
     return
+  }
+  // Session cookies never sit on disk in the clear. Why fail rather than remove the file: it may
+  // hold other sites' sign-ins, which an unrelated write must not drop.
+  if (!canSealSessionCookies()) {
+    throw new Error('browser_session_cookies_unsealable')
   }
   const persisted: PersistedSnapshot = {
     format: SNAPSHOT_FORMAT,

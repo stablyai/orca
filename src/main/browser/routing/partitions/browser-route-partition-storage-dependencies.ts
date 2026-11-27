@@ -11,7 +11,10 @@ import {
 } from './browser-route-partition-binding-runtime'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { retireBrowserExtensionRouteProfile } from '../../extensions/profile-sessions/browser-extension-route-profiles'
-import { forgetBrowserRoutePartitionSessionCookies } from '../../cookies/session-restore/browser-session-cookie-restore'
+import {
+  forgetBrowserRoutePartitionSessionCookies,
+  releaseRetiredRoutePartitions
+} from '../../cookies/session-restore/browser-session-cookie-route-restore'
 import {
   browserRoutePartitionPendingDeletesPath,
   queueBrowserRoutePartitionDirectoryDelete
@@ -42,6 +45,7 @@ export function browserRoutePartitionStorageDependencies(
         browserSessionRegistry.clearRoutePartitionPolicies(partition)
       }
     },
+    releaseRetiredPartitions: releaseRetiredRoutePartitions,
     removePartitionDirectory: async (directory) => {
       if (mode === 'live') {
         queueBrowserRoutePartitionDirectoryDelete(

@@ -17,7 +17,7 @@ import {
 } from '../../../shared/execution-host/execution-host'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
 import { getRepoName } from '../../git/repositories/repository-name'
-import { isGitRepoAsync } from '../../git/repositories/discovery/repo-detection'
+import { inspectGitRepoAccessAsync } from '../../git/repositories/discovery/repo-detection'
 import { scanNestedRepos } from '../../project-groups/nested-repo-discovery'
 import {
   createNestedProjectGroupResolver,
@@ -93,7 +93,12 @@ export class RuntimeNestedRepoImport {
     for (const repoPath of selection.selectedPaths) {
       try {
         await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
-        if (!(await isGitRepoAsync(repoPath))) {
+        const gitAccess = await inspectGitRepoAccessAsync(repoPath)
+        if (gitAccess.ownershipError) {
+          results.push({ path: repoPath, status: 'failed', error: gitAccess.ownershipError })
+          continue
+        }
+        if (!gitAccess.isRepo) {
           results.push({
             path: repoPath,
             status: 'failed',

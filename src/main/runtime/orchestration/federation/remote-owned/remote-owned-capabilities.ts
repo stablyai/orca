@@ -15,18 +15,20 @@ import { getOrchestrationPeerCapabilityCache } from '../orchestration-peer-capab
 
 type StartParams = z.infer<typeof WorkerStartParams>
 
+export async function serverSupports(
+  runtime: OrcaRuntimeService,
+  server: OrchestrationWorkerServer,
+  capability: string
+): Promise<boolean> {
+  return (await serverCapabilityDecision(runtime, server, capability)).supported
+}
+
 /** Whether the server runs the workers placed on it as its own; an older one keeps today's remote attachments. */
 export async function serverOwnsPlacedWorkers(
   runtime: OrcaRuntimeService,
   server: OrchestrationWorkerServer
 ): Promise<boolean> {
-  return (
-    await serverCapabilityDecision(
-      runtime,
-      server,
-      ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY
-    )
-  ).supported
+  return serverSupports(runtime, server, ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY)
 }
 
 /** Resolve work-target follow-up support together with the exact server runtime instance that proved it. */

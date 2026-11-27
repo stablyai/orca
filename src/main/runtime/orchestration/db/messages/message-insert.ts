@@ -33,6 +33,8 @@ export type MessageInsert = {
   senderPaneKey?: string
   runId?: string
   answerSenderSnapshot?: string
+  /** The message this answers: what settles that ask, whatever thread or mailbox the reply lands in. */
+  replyTo?: string
   deliveryContract?: MessageDeliveryContract
   /** The Dispatch whose worker sent this, as the sender's own check found it; names it on every card. */
   senderDispatchId?: string
@@ -79,9 +81,10 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
     const stmt = this.db.prepare(`
       INSERT INTO messages (
         id, run_id, delivery_contract, from_handle, to_handle, subject, body,
-        type, priority, thread_id, payload, sender_pane_key, answer_sender_snapshot, read, delivered_at
+        type, priority, thread_id, payload, sender_pane_key, answer_sender_snapshot, reply_to, read,
+        delivered_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 1 THEN datetime('now') END)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 1 THEN datetime('now') END)
     `)
     stmt.run(
       id,
@@ -97,6 +100,7 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
       payload ?? null,
       msg.senderPaneKey ?? null,
       msg.answerSenderSnapshot ?? null,
+      msg.replyTo ?? null,
       handled,
       handled
     )

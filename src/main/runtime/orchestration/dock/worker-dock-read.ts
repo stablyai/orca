@@ -4,6 +4,7 @@ export { acknowledgeWorkerDock } from './worker-dock-acknowledgment'
 import { readWorkerDockSnapshot } from './worker-dock-read-snapshot'
 import { workerLaunchModel } from '../workers/launch/worker-launch-observation'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import {
   type WorkerDockRead,
@@ -26,19 +27,21 @@ import { readWorkerDockActivity, workerDockActivityRevision } from './worker-doc
 
 const stateSql = `CASE f.state
   WHEN 'ready' THEN 'unavailable' WHEN 'succeeded' THEN CASE WHEN f.result_lost_at IS NOT NULL THEN 'unavailable' ELSE 'saving' END
-  WHEN 'stopped' THEN 'unexpected' WHEN 'abandoned' THEN 'unexpected'
+  WHEN 'abandoned' THEN 'unexpected'
   WHEN 'start_unknown' THEN 'unavailable' WHEN 'stop_unknown' THEN 'unavailable'
   ELSE f.state END`
 const identitySql = `json_array(f.home, f.source, 'worker', f.dispatch_id)`
-const Metadata = z.object({
-  id: z.string(),
-  dispatchId: z.string(),
-  state: WorkerDockEntry.shape.state,
-  changedAt: z.number().nullable(),
-  ownerActionsAvailable: z.coerce.boolean(),
-  hasModel: z.coerce.boolean(),
-  settlement: z.string().nullable()
-})
+const Metadata = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    dispatchId: z.string(),
+    state: WorkerDockEntry.shape.state,
+    changedAt: z.number().nullable(),
+    ownerActionsAvailable: z.coerce.boolean(),
+    hasModel: z.coerce.boolean(),
+    settlement: z.string().nullable()
+  })
+)
 
 function epoch(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -50,11 +53,13 @@ function epoch(value: unknown): number | null {
   const ms = Date.parse(exposeUtcTimestamp(value) ?? '')
   return Number.isFinite(ms) ? ms : null
 }
-const Launch = z.object({
-  name: z.string().optional(),
-  launch: z.unknown().optional(),
-  agent: z.string().optional()
-})
+const Launch = lazyZodSchema(() =>
+  z.object({
+    name: z.string().optional(),
+    launch: z.unknown().optional(),
+    agent: z.string().optional()
+  })
+)
 function launchOptions(value: unknown): z.infer<typeof Launch> {
   try {
     return Launch.parse(JSON.parse(typeof value === 'string' ? value : '{}'))
@@ -112,8 +117,11 @@ export function readWorkerDock(
         const ready = row.lifecycleState === 'ready'
         const live = ready ? activity?.get(identity.dispatchId) : undefined
         if (current) {
+          // An exited worker's dispatch is still open, so it ages out like an unverifiable one.
           const unverified =
-            ready && activity !== undefined && (!live || live.state === 'unavailable')
+            ready &&
+            activity !== undefined &&
+            (!live || live.state === 'unavailable' || live.state === 'unexpected')
           const window = unverified
             ? WORKER_DOCK_UNVERIFIED_READY_MS
             : row.lifecycleState === 'start_unknown' || row.lifecycleState === 'stop_unknown'
@@ -153,7 +161,7 @@ export function readWorkerDock(
         ? db.db
             .prepare(`SELECT f.dispatch_id, f.source, f.changed_at, f.report_id, f.reason,
       w.start_options, w.created_at, w.last_error, w.state,
-      EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS remote, d.last_failure, COALESCE(t.task_title, t.spec) AS title, t.display_name
+      EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS remote, d.last_failure, d.progress_note, COALESCE(t.task_title, t.spec) AS title, t.display_name
       FROM json_each(?) selected CROSS JOIN worker_dock_facts f ON f.dispatch_id = selected.value
       CROSS JOIN worker_dispatches w ON w.dispatch_id = f.dispatch_id
       CROSS JOIN dispatch_contexts d ON d.id = f.dispatch_id CROSS JOIN tasks t ON t.id = d.task_id`)
@@ -167,6 +175,7 @@ export function readWorkerDock(
         throw new Error('Worker dock snapshot changed inside its read transaction.')
       }
       const launch = launchOptions(row.start_options)
+      const active = row.state === 'starting' || row.state === 'ready'
       return WorkerDockEntry.parse({
         ...identity,
         source,
@@ -176,6 +185,9 @@ export function readWorkerDock(
         changedAt: identity.changedAt,
         startedAt: epoch(row.created_at),
         reason: row.reason ?? null,
+        ...(active && typeof row.progress_note === 'string' && row.progress_note
+          ? { progressNote: row.progress_note }
+          : {}),
         resultId: row.report_id ?? null,
         stoppable: row.state === 'ready' || row.state === 'start_unknown',
         ownerActionsAvailable: row.remote !== 1
@@ -226,14 +238,14 @@ export function readWorkerDockResult(
   const row = db.db
     .prepare(`SELECT f.dispatch_id, f.report_id, f.settlement, f.changed_at, f.state, w.last_error, d.last_failure,
     NOT EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS owner_actions_available,
-    COALESCE(t.task_title, t.spec) AS title, t.display_name, w.start_options, m.body, m.payload, accepted.payload AS accepted_payload, s.receipt,
+    COALESCE(t.task_title, t.spec) AS title, t.display_name,
+    COALESCE(w.worktree_id, (SELECT r.worktree_id FROM worker_terminal_resources r WHERE r.owner_dispatch_id = f.dispatch_id LIMIT 1)) AS workspace_id, w.start_options, m.body, m.payload, accepted.payload AS accepted_payload,
     EXISTS(SELECT 1 FROM worker_dock_acknowledgments a WHERE a.source = f.source
       AND a.dispatch_id = f.dispatch_id AND a.settlement = f.settlement) AS acknowledged
     FROM worker_dock_facts f JOIN dispatch_contexts d ON d.id = f.dispatch_id
     JOIN tasks t ON t.id = d.task_id JOIN worker_dispatches w ON w.dispatch_id = f.dispatch_id
     LEFT JOIN messages m ON m.id = f.report_id
     LEFT JOIN attempt_observation_facts accepted ON accepted.id = 'worker_report:' || f.report_id
-    LEFT JOIN worker_dock_owner_stops s ON s.dispatch_id = f.dispatch_id AND s.confirmed = 1 AND s.settlement = f.settlement
     WHERE f.source = ? AND f.dispatch_id = ?`)
     .get(workerDockSession(party), dispatchId)
   if (!row) {
@@ -248,22 +260,21 @@ export function readWorkerDockResult(
       : typeof row.last_failure === 'string'
         ? row.last_failure
         : null
-  const failure = row.state === 'failed' || row.state === 'stopped' || row.state === 'abandoned'
-  if (typeof row.body !== 'string' && !row.receipt && !(failure && failureReason)) {
+  // Only a requested stop reaches 'stopped'; a crash or lost terminal settles failed or abandoned.
+  const stopped = row.state === 'stopped'
+  const failure = row.state === 'failed' || row.state === 'abandoned'
+  if (typeof row.body !== 'string' && !stopped && !(failure && failureReason)) {
     return null
   }
-  const outcome = row.receipt
-    ? 'stopped'
-    : (reportOutcome(row.accepted_payload) ??
-      reportOutcome(row.payload) ??
-      (failure ? (row.state === 'failed' ? 'failed' : 'unexpected') : null))
+  const outcome =
+    reportOutcome(row.accepted_payload) ??
+    reportOutcome(row.payload) ??
+    (stopped ? 'stopped' : failure ? (row.state === 'failed' ? 'failed' : 'unexpected') : null)
   if (!outcome) {
     return null
   }
   return WorkerDockResult.parse({
-    id:
-      row.report_id ??
-      (row.receipt ? `owner_stop:${dispatchId}` : `settlement:${String(row.settlement)}`),
+    id: row.report_id ?? `settlement:${String(row.settlement)}`,
     dispatchId,
     name:
       row.display_name ??
@@ -272,11 +283,13 @@ export function readWorkerDockResult(
       'Worker',
     title: row.title,
     outcome,
-    body: row.body ?? (row.receipt ? 'Stopped by you.' : failureReason),
+    body: row.body ?? (stopped ? '' : failureReason),
+    report: typeof row.body === 'string',
     at: epoch(row.changed_at),
     settlement: row.settlement ?? `worker_report:${String(row.report_id)}`,
     acknowledged: row.acknowledged === 1,
-    ownerActionsAvailable: row.owner_actions_available === 1
+    ownerActionsAvailable: row.owner_actions_available === 1,
+    ...(typeof row.workspace_id === 'string' ? { workspaceId: row.workspace_id } : {})
   })
 }
 function reportOutcome(payload: unknown): 'succeeded' | 'failed' | null {

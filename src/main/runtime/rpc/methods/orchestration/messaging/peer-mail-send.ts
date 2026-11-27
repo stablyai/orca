@@ -15,6 +15,7 @@ import type { RpcContext } from '../../../core'
 import { parseBotAddress } from '../../../../../../shared/bot-roster'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import { peerMailLocalCaller } from './peer-mail-local-caller'
+import { peerMailSendingAskers } from './peer-mail-sending-askers'
 import { sendClientAsk } from './client-ask-send'
 import type { SendParams } from './send-params'
 import type { SendRecipientWarning } from './recipient-routing'
@@ -104,6 +105,10 @@ export async function sendPeerMail(args: {
     )
   }
   const server = await requirePeerMailServer(runtime, params.on, toBot, type)
+  const askers = await peerMailSendingAskers(runtime, args.orchestrationCaller, caller, {
+    ...params,
+    to
+  })
   const conversation = runtime.getOrchestrationDb().openHomePeerMailConversation({
     environmentId: server.environmentId,
     peerFingerprint: peerMailPairing(server),
@@ -150,7 +155,8 @@ export async function sendPeerMail(args: {
       chat: params.chat,
       item: params.item,
       attachments,
-      sender: peerMailSender(runtime, caller.address)
+      sender: peerMailSender(runtime, caller.address),
+      ...(askers ? { askers } : {})
     })
     warnings.push(...held)
   } catch (error) {

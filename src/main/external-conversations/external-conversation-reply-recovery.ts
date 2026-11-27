@@ -18,6 +18,7 @@ import type {
 } from '../connector-cloud/connector-reply-outbox'
 import type { ConversationReplyFill } from './external-conversation-reply-fill'
 import { fillRecoveredTurn } from './external-conversation-reply-turn-fill'
+import { heldHeads } from './external-conversation-reply-empty-retry'
 import {
   claimCut,
   expectOf,
@@ -74,6 +75,8 @@ export class ConnectorReplyRecovery {
       usageLimitDisposition?: (sessionId: string, turnItemId: string) => Promise<string | undefined>
       /** Settles once this start continued what the last run cut, or left it to a person. */
       continuationsSettled?: Promise<unknown>
+      /** Rows held for an empty turn's retry still being sent: its send settles them. */
+      retrySending?: (row: Unfilled) => boolean
     }
   ) {
     this.continuationsSettled = deps.continuationsSettled === undefined
@@ -158,7 +161,8 @@ export class ConnectorReplyRecovery {
     if (!journal || !chat) {
       return
     }
-    const unfilled = (await journal.read(sessionId)).filter((row) => !row.fill)
+    const sending = this.deps.retrySending ?? (() => false)
+    const unfilled = (await journal.read(sessionId)).filter((row) => !row.fill && !sending(row))
     if (unfilled.length === 0) {
       this.unwatch(sessionId)
       this.deps.filled()
@@ -193,7 +197,7 @@ export class ConnectorReplyRecovery {
       ...turns.filter((turn) => turnVerdictOf(turn) !== null).map((turn) => turn.sequence)
     )
     const settled = this.continuationsSettled
-    const left = (await journal.read(sessionId)).filter((row) => !row.fill)
+    const left = (await journal.read(sessionId)).filter((row) => !row.fill && !sending(row))
     const endedCuts = new Set<string>()
     const paused = left.flatMap((row) =>
       row.cut?.kind === 'usage_limit' && row.claimMessageId === undefined ? [row.cut.turnId] : []
@@ -221,14 +225,21 @@ export class ConnectorReplyRecovery {
       const verdict = evidence(row)
       return verdict ? [{ row, verdict }] : []
     })
+    const heads = heldHeads(
+      fills.flatMap(({ row, verdict }) =>
+        verdict.outcome === 'no_answer' || verdict.prose ? [row] : []
+      ),
+      snapshot.items
+    )
     await journal.fillOutcomes(
       fills.map(({ row, verdict }) => ({
         account: row.account,
         deliveryId: row.deliveryId,
         outcome: verdict.outcome,
-        answerDeliveryId: row.deliveryId,
+        answerDeliveryId: heads.get(row) ?? row.deliveryId,
         ...expectOf(row),
-        ...(verdict.failure ? { failure: verdict.failure } : {})
+        ...(verdict.failure ? { failure: verdict.failure } : {}),
+        ...(verdict.prose ? { prose: verdict.prose } : {})
       }))
     )
     const owed = (await journal.read(sessionId)).filter((row) => !row.fill)

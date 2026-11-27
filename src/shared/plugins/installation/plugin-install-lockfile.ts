@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { isQualifiedPluginKey } from '../manifest/plugin-manifest'
 import { isPluginRepositoryPath } from './plugin-path-safety'
 
@@ -10,51 +11,53 @@ export const PLUGIN_CONTENT_HASH_PATTERN = /^(?:[0-9a-f]{32}|[0-9a-f]{64})$/
 /** Git object id, SHA-1 or SHA-256. */
 export const PLUGIN_COMMIT_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
 
-export const pluginInstallSourceSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('local-path'),
-    path: z
-      .string()
-      .min(1)
-      .max(32 * 1024)
-  }),
-  z.object({
-    kind: z.literal('git'),
-    url: z
-      .string()
-      .min(1)
-      .max(32 * 1024)
-      .refine(isAllowedPluginGitUrl, 'git URL must use HTTPS or SSH'),
-    /** Requested ref (`#ref` suffix); empty means the remote default branch. */
-    ref: z.string().max(4096).default('')
-  }),
-  z.object({
-    kind: z.literal('marketplace'),
-    marketplace: z.object({
-      url: z
+export const pluginInstallSourceSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('local-path'),
+      path: z
         .string()
         .min(1)
         .max(32 * 1024)
-        .refine(isAllowedPluginGitUrl, 'marketplace Git URL must use HTTPS or SSH'),
-      ref: z.string().min(1).max(4096),
-      resolvedCommit: z.string().regex(PLUGIN_COMMIT_PATTERN)
     }),
-    plugin: z.object({
+    z.object({
+      kind: z.literal('git'),
       url: z
         .string()
         .min(1)
         .max(32 * 1024)
-        .refine(isAllowedPluginGitUrl, 'plugin Git URL must use HTTPS or SSH'),
-      ref: z.string().min(1).max(4096),
-      /** Plugin directory inside the repository; absent means the repository root. */
-      path: z.string().max(1024).refine(isPluginRepositoryPath).optional()
+        .refine(isAllowedPluginGitUrl, 'git URL must use HTTPS or SSH'),
+      /** Requested ref (`#ref` suffix); empty means the remote default branch. */
+      ref: z.string().max(4096).default('')
+    }),
+    z.object({
+      kind: z.literal('marketplace'),
+      marketplace: z.object({
+        url: z
+          .string()
+          .min(1)
+          .max(32 * 1024)
+          .refine(isAllowedPluginGitUrl, 'marketplace Git URL must use HTTPS or SSH'),
+        ref: z.string().min(1).max(4096),
+        resolvedCommit: z.string().regex(PLUGIN_COMMIT_PATTERN)
+      }),
+      plugin: z.object({
+        url: z
+          .string()
+          .min(1)
+          .max(32 * 1024)
+          .refine(isAllowedPluginGitUrl, 'plugin Git URL must use HTTPS or SSH'),
+        ref: z.string().min(1).max(4096),
+        /** Plugin directory inside the repository; absent means the repository root. */
+        path: z.string().max(1024).refine(isPluginRepositoryPath).optional()
+      })
+    }),
+    z.object({
+      kind: z.literal('bundled'),
+      bundleId: z.string().refine(isQualifiedPluginKey, 'invalid bundled plugin identity')
     })
-  }),
-  z.object({
-    kind: z.literal('bundled'),
-    bundleId: z.string().refine(isQualifiedPluginKey, 'invalid bundled plugin identity')
-  })
-])
+  ])
+)
 
 export type PluginInstallSource = z.infer<typeof pluginInstallSourceSchema>
 
@@ -88,50 +91,54 @@ function isSafeGitAuthority(user: string, host: string): boolean {
   return !user.startsWith('-') && !host.startsWith('-') && !host.includes('..')
 }
 
-export const pluginLockEntrySchema = z
-  .object({
-    /** Qualified `<publisher>.<id>` key. */
-    pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key'),
-    version: z.string().min(1).max(128),
-    source: pluginInstallSourceSchema,
-    /** Commit the git source resolved to at install time; null for local. */
-    resolvedCommit: z.string().regex(PLUGIN_COMMIT_PATTERN).nullable(),
-    /** Deterministic hash of the installed file tree (also the install dir name). */
-    contentHash: z.string().regex(PLUGIN_CONTENT_HASH_PATTERN),
-    /** New descriptive name, accepted for forward compatibility. */
-    consentFingerprint: z.string().min(1).max(256).optional(),
-    /** v1 on-disk name retained so existing Orca builds can read new lockfiles. */
-    capabilityHash: z.string().min(1).max(256).optional(),
-    /** The catalog's repository claim for this release; not verified authorship. */
-    authorRepository: z.string().max(2048).optional().catch(undefined),
-    installedAt: z.number().finite().nonnegative()
-  })
-  .refine((entry) => entry.consentFingerprint || entry.capabilityHash, {
-    message: 'consent fingerprint is required'
-  })
-  .transform(({ capabilityHash, consentFingerprint, ...entry }) => ({
-    ...entry,
-    consentFingerprint: consentFingerprint ?? capabilityHash!
-  }))
+export const pluginLockEntrySchema = lazyZodSchema(() =>
+  z
+    .object({
+      /** Qualified `<publisher>.<id>` key. */
+      pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key'),
+      version: z.string().min(1).max(128),
+      source: pluginInstallSourceSchema,
+      /** Commit the git source resolved to at install time; null for local. */
+      resolvedCommit: z.string().regex(PLUGIN_COMMIT_PATTERN).nullable(),
+      /** Deterministic hash of the installed file tree (also the install dir name). */
+      contentHash: z.string().regex(PLUGIN_CONTENT_HASH_PATTERN),
+      /** New descriptive name, accepted for forward compatibility. */
+      consentFingerprint: z.string().min(1).max(256).optional(),
+      /** v1 on-disk name retained so existing Orca builds can read new lockfiles. */
+      capabilityHash: z.string().min(1).max(256).optional(),
+      /** The catalog's repository claim for this release; not verified authorship. */
+      authorRepository: z.string().max(2048).optional().catch(undefined),
+      installedAt: z.number().finite().nonnegative()
+    })
+    .refine((entry) => entry.consentFingerprint || entry.capabilityHash, {
+      message: 'consent fingerprint is required'
+    })
+    .transform(({ capabilityHash, consentFingerprint, ...entry }) => ({
+      ...entry,
+      consentFingerprint: consentFingerprint ?? capabilityHash!
+    }))
+)
 
 export type PluginLockEntry = z.infer<typeof pluginLockEntrySchema>
 
-export const pluginLockfileSchema = z
-  .object({
-    version: z.literal(1),
-    plugins: z.record(z.string(), pluginLockEntrySchema)
-  })
-  .superRefine((lock, ctx) => {
-    for (const [key, entry] of Object.entries(lock.plugins)) {
-      if (!isQualifiedPluginKey(key) || entry.pluginKey !== key) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['plugins', key],
-          message: 'lockfile key must match its qualified plugin identity'
-        })
+export const pluginLockfileSchema = lazyZodSchema(() =>
+  z
+    .object({
+      version: z.literal(1),
+      plugins: z.record(z.string(), pluginLockEntrySchema)
+    })
+    .superRefine((lock, ctx) => {
+      for (const [key, entry] of Object.entries(lock.plugins)) {
+        if (!isQualifiedPluginKey(key) || entry.pluginKey !== key) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['plugins', key],
+            message: 'lockfile key must match its qualified plugin identity'
+          })
+        }
       }
-    }
-  })
+    })
+)
 
 export type PluginLockfile = z.infer<typeof pluginLockfileSchema>
 

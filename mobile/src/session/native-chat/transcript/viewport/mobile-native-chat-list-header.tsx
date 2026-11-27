@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
 import { ActivityIndicator, Animated, Easing, Platform, Pressable, Text, View } from 'react-native'
-import { colors } from '../../../../theme/mobile-theme'
-import { styles } from '../../mobile-native-chat-view-styles'
+import type { stylesSheet } from '../../mobile-native-chat-view-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import type { OlderPagePhase } from '../ingestion/use-mobile-older-page-loader'
 
 const LOAD_EARLIER_FAILED = "Couldn't load earlier messages"
@@ -28,11 +28,19 @@ function FadeIn({ delay, children }: { delay: number; children: ReactNode }): Re
   return <Animated.View style={{ opacity }}>{children}</Animated.View>
 }
 
+function LoadingEarlierSpinner(): ReactElement {
+  const colors = useMobileColors()
+  return (
+    <ActivityIndicator size="small" color={colors.textMuted} accessibilityLabel={LOADING_EARLIER} />
+  )
+}
+
 // Delay fast-page spinners and require explicit retry after failure; near-top scrolling must not loop retries.
 export function mobileNativeChatListHeader(
   hasMore: boolean | undefined,
   olderPages: OlderPagePhase | undefined,
-  loadEarlier: () => void
+  loadEarlier: () => void,
+  styles: ReturnType<typeof stylesSheet.resolve>
 ): ReactElement | null {
   if (olderPages === 'unavailable') {
     return (
@@ -69,11 +77,7 @@ export function mobileNativeChatListHeader(
   return (
     <View style={styles.loadEarlier}>
       <FadeIn key="loading" delay={SPINNER_DELAY_MS}>
-        <ActivityIndicator
-          size="small"
-          color={colors.textMuted}
-          accessibilityLabel={LOADING_EARLIER}
-        />
+        <LoadingEarlierSpinner />
       </FadeIn>
     </View>
   )

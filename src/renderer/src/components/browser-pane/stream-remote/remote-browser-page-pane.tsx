@@ -281,7 +281,8 @@ export function RemoteBrowserPagePane({
     enqueueRemoteInput,
     scheduleRemoteTabInfoRefresh,
     isActive,
-    mountedRef
+    mountedRef,
+    getPageUrl: () => browserTab.url
   })
 
   const attachFileDrop = useRemoteBrowserPageFileDrop({

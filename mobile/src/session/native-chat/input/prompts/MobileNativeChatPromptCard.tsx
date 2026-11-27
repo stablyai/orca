@@ -14,9 +14,8 @@ import {
   SHEET_HEIGHT_DURATION_MS
 } from '../../../../components/motion/sheet-motion-values'
 import { useReducedMotionEnabled } from '../../../../platform/accessibility/use-reduced-motion'
-import { colors, pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type {
   AskAnswerSelection,
@@ -27,7 +26,6 @@ import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
-import { MobileNativeChatStructuredAsk } from './MobileNativeChatStructuredAsk'
 import type { MobileNativeChatCollapsedPrompt } from './MobileNativeChatPromptStrip'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 import {
@@ -54,7 +52,8 @@ export function MobileNativeChatPromptCard({
   permission,
   onRespondPermission,
   question,
-  onAnswerQuestion
+  onAnswerQuestion,
+  notice
 }: {
   ask?: AskPrompt | null
   askSendSource?: NativeChatAnswerSource
@@ -79,8 +78,10 @@ export function MobileNativeChatPromptCard({
   onRespondPermission?: (send: string) => Promise<boolean>
   question?: MobileChatQuestion | null
   onAnswerQuestion?: (text: string, prompt?: MobileChatQuestion['prompt']) => Promise<boolean>
+  /** Why the last answer didn't go, shown on the card that sent it. */
+  notice?: string | null
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const card =
     ask && requiresTerminal ? (
@@ -123,6 +124,7 @@ export function MobileNativeChatPromptCard({
           return accepted
         }}
         onCollapse={onCollapseAsk}
+        notice={notice}
       />
     ) : permission ? (
       <MobileNativeChatPermission
@@ -133,22 +135,16 @@ export function MobileNativeChatPromptCard({
         onCancel={onCancelPrompt}
         onCollapse={onCollapsePrompt}
         onAnswerInTerminal={onAnswerInTerminal}
-      />
-    ) : question?.questions ? (
-      <MobileNativeChatStructuredAsk
-        key={mobileChatQuestionKey(question)}
-        questions={question.questions}
-        onAnswer={async (answers) => (await onAnswerQuestion?.(answers, question.prompt)) ?? false}
-        onCancel={onCancelPrompt && (() => onCancelPrompt(question.prompt))}
-        onCollapse={onCollapsePrompt}
+        notice={notice}
       />
     ) : question ? (
       <MobileNativeChatQuestion
         key={mobileChatQuestionKey(question)}
         question={question}
-        onAnswer={async (text) => (await onAnswerQuestion?.(text)) ?? false}
+        onAnswer={async (text, prompt) => (await onAnswerQuestion?.(text, prompt)) ?? false}
         onCancel={onCancelPrompt}
         onCollapse={onCollapsePrompt}
+        notice={notice}
       />
     ) : null
   const arrival = usePromptCardArrival(card !== null)
@@ -178,6 +174,7 @@ function PromptCardSlot({
   onLayout: (event: LayoutChangeEvent) => void
   children: ReactNode
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const lower = useMobileNativeChatLowerRegion()
   const { allocationHeight } = useMobileNativeChatLowerGeometry()
   return (
@@ -249,7 +246,7 @@ function usePromptCardArrival(hasCard: boolean) {
   return { arriving: travel !== 0, onLayout, style }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   collapsed: { display: 'none' },
   // Clips the rising card to its own slot so it never draws over the composer.
   arriving: { overflow: 'hidden' },
@@ -259,7 +256,7 @@ const styles = themedStyleSheet(() => ({
   shown: { flexShrink: 1, minHeight: 0, maxHeight: '60%' },
   answering: { maxHeight: '100%' },
   terminalCard: {
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle,
     padding: spacing.md,

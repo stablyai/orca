@@ -44,7 +44,8 @@ export const SESSION_TAB_METHODS = [
             includeAgentSenders: clientKind !== 'mobile'
           }),
           clientKind,
-          clientCapabilities
+          clientCapabilities,
+          runtime
         ),
         clientKind
       )
@@ -142,7 +143,7 @@ export const SESSION_TAB_METHODS = [
       ) =>
         projectSessionTabUnreadForClient(
           runtime,
-          projectSessionTabsForClient(snapshot, clientKind, capabilities),
+          projectSessionTabsForClient(snapshot, clientKind, capabilities, runtime),
           clientKind
         )
       let sentUnreadMarks = ''

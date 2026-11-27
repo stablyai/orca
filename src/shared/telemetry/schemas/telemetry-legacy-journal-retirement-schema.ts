@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 // Why: whether the old chat journal is deleted for users after an update, whether the chat store
 // holds every chat first, and if not, which check keeps the file. Fixed enums and buckets only:
@@ -52,6 +53,10 @@ export const LEGACY_JOURNAL_RETIREMENT_ERRORS = [
 
 export const LEGACY_JOURNAL_RETIREMENT_DEFERS = [
   'none',
+  // This process does not hold the profile lock, so it cannot check the store.
+  'not_owner',
+  // Without a running version, retirement cannot establish that Orca was updated.
+  'no_version',
   // This version copied the chats, or is older: deletion waits for an update.
   'same_version',
   // An older Orca wrote the file since; the next launch takes that in first.
@@ -104,35 +109,37 @@ export const LEGACY_JOURNAL_RETIREMENT_DURATION_BUCKETS = [
   'gte_1h'
 ] as const
 
-const count = z.enum(COUNT_BUCKETS)
+const count = lazyZodSchema(() => z.enum(COUNT_BUCKETS))
 export { COUNT_BUCKETS as LEGACY_JOURNAL_RETIREMENT_COUNT_BUCKETS }
 
 /** Counts are what this run's walk saw; a resumed walk counts only the pages it read. */
-export const legacyJournalRetirementSchema = z
-  .object({
-    outcome: z.enum(LEGACY_JOURNAL_RETIREMENT_OUTCOMES),
-    reason: z.enum([...LEGACY_JOURNAL_RETIREMENT_REASONS, 'none']),
-    defer: z.enum(LEGACY_JOURNAL_RETIREMENT_DEFERS),
-    artifact: z.enum(LEGACY_JOURNAL_RETIREMENT_ARTIFACTS),
-    error: z.enum(LEGACY_JOURNAL_RETIREMENT_ERRORS),
-    // Whether this build deletes a proven file; fixed per build.
-    deletes: z.boolean(),
-    inventory_revision: z.number().int().min(0).max(1000),
-    completeness: z.enum(['unknown', 'partial', 'complete']),
-    resumed: z.boolean(),
-    chats_bucket: count,
-    // Converted before the proof reached them, and converted by the proof (store growth).
-    already_converted_bucket: count,
-    newly_converted_bucket: count,
-    // Deleted here (the original's version kept), and drafts (a record, no history).
-    deleted_here_bucket: count,
-    drafts_bucket: count,
-    originals_bucket: count,
-    copies_bucket: count,
-    source_bytes_bucket: z.enum(LEGACY_JOURNAL_RETIREMENT_BYTES_BUCKETS),
-    // The check's own reading and comparing, without conversions or pauses for activity.
-    active_ms_bucket: z.enum(LEGACY_JOURNAL_RETIREMENT_DURATION_BUCKETS),
-    // From this launch's first attempt to this outcome, pauses for activity included.
-    elapsed_ms_bucket: z.enum(LEGACY_JOURNAL_RETIREMENT_DURATION_BUCKETS)
-  })
-  .strict()
+export const legacyJournalRetirementSchema = lazyZodSchema(() =>
+  z
+    .object({
+      outcome: z.enum(LEGACY_JOURNAL_RETIREMENT_OUTCOMES),
+      reason: z.enum([...LEGACY_JOURNAL_RETIREMENT_REASONS, 'none']),
+      defer: z.enum(LEGACY_JOURNAL_RETIREMENT_DEFERS),
+      artifact: z.enum(LEGACY_JOURNAL_RETIREMENT_ARTIFACTS),
+      error: z.enum(LEGACY_JOURNAL_RETIREMENT_ERRORS),
+      // Whether this build deletes a proven file; fixed per build.
+      deletes: z.boolean(),
+      inventory_revision: z.number().int().min(0).max(1000),
+      completeness: z.enum(['unknown', 'partial', 'complete']),
+      resumed: z.boolean(),
+      chats_bucket: count,
+      // Converted before the proof reached them, and converted by the proof (store growth).
+      already_converted_bucket: count,
+      newly_converted_bucket: count,
+      // Deleted here (the original's version kept), and drafts (a record, no history).
+      deleted_here_bucket: count,
+      drafts_bucket: count,
+      originals_bucket: count,
+      copies_bucket: count,
+      source_bytes_bucket: z.enum(LEGACY_JOURNAL_RETIREMENT_BYTES_BUCKETS),
+      // The check's own reading and comparing, without conversions or pauses for activity.
+      active_ms_bucket: z.enum(LEGACY_JOURNAL_RETIREMENT_DURATION_BUCKETS),
+      // From this launch's first attempt to this outcome, pauses for activity included.
+      elapsed_ms_bucket: z.enum(LEGACY_JOURNAL_RETIREMENT_DURATION_BUCKETS)
+    })
+    .strict()
+)

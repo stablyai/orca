@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { Store } from '../../persistence/loading-store/store'
 import type { PluginHostCallOutcome } from '../../../shared/plugins/frames/plugin-protocol'
 import { getUserPluginsDir, getPluginsDataDir } from '../../plugins/discovery/plugin-discovery'
@@ -34,58 +35,68 @@ import {
   PLUGIN_COMMIT_PATTERN
 } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import { resolvePluginGitSource } from '../../plugins/installation/plugin-git-ref-resolution'
-import {
-  registerPluginMarketplaceHandlers,
-  type PluginMarketplaceHandlerServices
-} from './plugin-marketplaces'
+import type { PluginMarketplaceHandlerServices } from './plugin-marketplaces'
+import { registerLazyPluginMarketplaceHandlers } from './lazy-plugin-marketplaces-ipc'
 
 export function parsePluginConsentArgs(args: unknown): z.infer<typeof pluginConsentRequestSchema> {
   return pluginConsentRequestSchema.parse(args)
 }
 
-const setEnabledArgsSchema = z.object({
-  pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key'),
-  enabled: z.boolean()
-})
-
-const readNewFileTemplateArgsSchema = z.object({
-  pluginKey: z.string().min(1),
-  newFileId: z.string().min(1)
-})
-
-const invokeCommandArgsSchema = z.object({
-  pluginKey: z.string().min(1),
-  commandId: z.string().min(1),
-  args: z.unknown().optional(),
-  /** Run only if the worker can start it within this many ms (a replacement's fallback). */
-  timeoutMs: z.number().int().positive().max(60_000).optional()
-})
-
-const installArgsSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('local-path'), path: z.string().min(1) }),
+const setEnabledArgsSchema = lazyZodSchema(() =>
   z.object({
-    kind: z.literal('git'),
-    url: z.string().trim().min(1).refine(isAllowedPluginGitUrl, 'git URL must use HTTPS or SSH'),
-    // Why: installs must stay reproducible even when callers bypass renderer validation.
-    ref: z.string().trim().min(1),
-    /** The commit the dialog showed; install fails if the ref moved since. */
-    expectedCommit: z.string().regex(PLUGIN_COMMIT_PATTERN).optional()
+    pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key'),
+    enabled: z.boolean()
   })
-])
+)
 
-const resolveGitSourceArgsSchema = z.object({
-  url: z.string().trim().min(1).refine(isAllowedPluginGitUrl, 'git URL must use HTTPS or SSH'),
-  ref: z.string().trim().max(4096)
-})
+const readNewFileTemplateArgsSchema = lazyZodSchema(() =>
+  z.object({
+    pluginKey: z.string().min(1),
+    newFileId: z.string().min(1)
+  })
+)
+
+const invokeCommandArgsSchema = lazyZodSchema(() =>
+  z.object({
+    pluginKey: z.string().min(1),
+    commandId: z.string().min(1),
+    args: z.unknown().optional(),
+    /** Run only if the worker can start it within this many ms (a replacement's fallback). */
+    timeoutMs: z.number().int().positive().max(60_000).optional()
+  })
+)
+
+const installArgsSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('local-path'), path: z.string().min(1) }),
+    z.object({
+      kind: z.literal('git'),
+      url: z.string().trim().min(1).refine(isAllowedPluginGitUrl, 'git URL must use HTTPS or SSH'),
+      // Why: installs must stay reproducible even when callers bypass renderer validation.
+      ref: z.string().trim().min(1),
+      /** The commit the dialog showed; install fails if the ref moved since. */
+      expectedCommit: z.string().regex(PLUGIN_COMMIT_PATTERN).optional()
+    })
+  ])
+)
+
+const resolveGitSourceArgsSchema = lazyZodSchema(() =>
+  z.object({
+    url: z.string().trim().min(1).refine(isAllowedPluginGitUrl, 'git URL must use HTTPS or SSH'),
+    ref: z.string().trim().max(4096)
+  })
+)
 
 export function parsePluginInstallArgs(args: unknown): z.infer<typeof installArgsSchema> {
   return installArgsSchema.parse(args)
 }
 
-const removeArgsSchema = z.object({
-  pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
-})
-const logsArgsSchema = z.object({ pluginKey: z.string().min(1) })
+const removeArgsSchema = lazyZodSchema(() =>
+  z.object({
+    pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
+  })
+)
+const logsArgsSchema = lazyZodSchema(() => z.object({ pluginKey: z.string().min(1) }))
 
 // Preserve import compatibility; runtime RPC uses the Electron-free client-list module.
 import {
@@ -269,7 +280,7 @@ export function registerPluginHandlers(
     return listPluginsForClients(pluginService)
   })
   if (marketplaceServices) {
-    registerPluginMarketplaceHandlers(
+    registerLazyPluginMarketplaceHandlers(
       pluginService,
       marketplaceServices,
       () => store.getSettings(),

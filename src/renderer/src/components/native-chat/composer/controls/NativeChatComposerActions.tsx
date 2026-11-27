@@ -166,6 +166,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   ) : (
     <NativeChatComposerPrimaryButton
       data-native-chat-critical-action={stops ? 'stop' : undefined}
+      focusComposer={focusComposer}
       aria-label={
         stops
           ? isStopping

@@ -8,7 +8,8 @@ import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { cn } from '@/lib/class-names'
 import { useBotUsageLimitStopIndex } from './use-bot-usage-limit-stops'
-import { UsageLimitStopMark, usageLimitStopText } from './BotUsageLimitMark'
+import { UsageLimitStopMark } from './BotUsageLimitMark'
+import { usageLimitStopText } from '../../../../shared/bots/bot-usage-limit-stop'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   CHAT_TREE_CAPS,
