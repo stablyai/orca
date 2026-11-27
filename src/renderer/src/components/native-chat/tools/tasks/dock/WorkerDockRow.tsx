@@ -116,8 +116,8 @@ export const WorkerDockRow = memo(function WorkerDockRow({
   const command = row?.kind === 'command'
   const label = [
     mixed && row ? workerDockKindLabel(t, row.kind) : '',
-    row?.kind === 'worker' ? workerDockAgentLabel(row.agent) : '',
     row ? workerDockSpokenTitle(row.kind, title) : title,
+    row?.kind === 'worker' ? workerDockAgentLabel(row.agent) : '',
     state,
     progress,
     remote
