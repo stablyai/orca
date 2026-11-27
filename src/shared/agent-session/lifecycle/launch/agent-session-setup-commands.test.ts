@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { encodePowerShellCommand } from '../../../shell/launch/powershell-command-encoding'
 import { agentSessionInstallCommand } from './agent-session-setup-commands'
+
+const VIBE_WINDOWS_INSTALL =
+  "irm https://astral.sh/uv/install.ps1 | iex; & '$env:USERPROFILE/.local/bin/uv.exe' tool install --python 3.12 mistral-vibe"
 
 describe('agentSessionInstallCommand', () => {
   it('wraps a windowsInstallScript URL with irm | iex on win32', () => {
@@ -8,9 +12,9 @@ describe('agentSessionInstallCommand', () => {
     )
   })
 
-  it('runs a windowsInstallCommand directly on win32', () => {
+  it('encodes a windowsInstallCommand so any Windows shell can run it', () => {
     expect(agentSessionInstallCommand('mistral-vibe', 'win32')).toBe(
-      'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex; & \'$env:USERPROFILE/.local/bin/uv.exe\' tool install --python 3.12 mistral-vibe"'
+      `powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodePowerShellCommand(VIBE_WINDOWS_INSTALL)}`
     )
   })
 

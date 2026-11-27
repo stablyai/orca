@@ -4,6 +4,7 @@ import {
   quoteStartupArg,
   type AgentStartupShell
 } from '../../../agent-launch/startup/tui-agent-startup-shell'
+import { encodePowerShellCommand } from '../../../shell/launch/powershell-command-encoding'
 
 /** How a chat host installs and signs in each agent. `installCommand` is a POSIX shell line; `windowsInstallScript` is the official PowerShell installer URL; `windowsInstallCommand` is a direct PowerShell command line for installers that publish no .ps1. */
 export const AGENT_SESSION_SETUP_COMMANDS = [
@@ -222,7 +223,9 @@ export function agentSessionInstallCommand(
       return `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm ${entry.windowsInstallScript} | iex"`
     }
     if ('windowsInstallCommand' in entry) {
-      return `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "${entry.windowsInstallCommand}"`
+      // EncodedCommand keeps the script intact whatever Windows shell types it in; cmd.exe does
+      // not expand $env: inside a -Command argument.
+      return `powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodePowerShellCommand(entry.windowsInstallCommand)}`
     }
     return null
   }
