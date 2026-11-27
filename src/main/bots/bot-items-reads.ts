@@ -237,4 +237,21 @@ export class BotItemsReads extends BotItemsTables {
     }
     return { items, links, questions, waits, othersLast, waitingAsks }
   }
+
+  showRows(
+    uid: string,
+    afterId: number,
+    limit: number
+  ): {
+    rows: ReturnType<BotItemsReads['viewRows']>
+    events: BotItemEventRecord[]
+  } {
+    // A version must describe the history the caller could have read.
+    this.db.exec('BEGIN')
+    try {
+      return { rows: this.viewRows([uid]), events: this.events(uid, afterId, limit) }
+    } finally {
+      this.db.exec('ROLLBACK')
+    }
+  }
 }

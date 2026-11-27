@@ -287,7 +287,10 @@ export function matchPaletteDocument(args: {
         : resolvePaletteResultQualityClass({
             worstQuality,
             usesSupportingEvidence,
-            isContainerOnly: assignmentsAreContainerOnly(args.document, assignments)
+            // Whole-field equality on a destination field names the row itself, e.g. a pasted absolute path.
+            isContainerOnly:
+              winnerRank.destination !== 1 &&
+              assignmentsAreContainerOnly(args.document, assignments)
           }),
     rank: winnerRank,
     assignments,

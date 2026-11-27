@@ -12,6 +12,7 @@ export type StructuredAgentSessionChildExit = {
   startupUnanswered?: true
   /** Orca stopped the agent after its own failure; the exit stays unexpected for the turn. */
   closedByOrca?: true
+  endedBeforeAcquire?: true
 }
 
 export function structuredAgentSessionEndedEventExit(
@@ -24,6 +25,7 @@ export function structuredAgentSessionEndedEventExit(
     ...(event.failure ? { failure: event.failure } : {}),
     ...(event.observedAt === undefined ? {} : { observedAt: event.observedAt }),
     ...(event.startupUnanswered ? { startupUnanswered: event.startupUnanswered } : {}),
-    ...(event.closedByOrca ? { closedByOrca: true as const } : {})
+    ...(event.closedByOrca ? { closedByOrca: true as const } : {}),
+    ...(event.endedBeforeAcquire ? { endedBeforeAcquire: true as const } : {})
   }
 }

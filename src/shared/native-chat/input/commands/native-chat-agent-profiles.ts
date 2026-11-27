@@ -70,7 +70,7 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
     readsSkillFoldersOf: ['claude', 'codex', 'grok']
   },
   opencode2: OPENCODE_PROFILE,
-  // ACP reports built-in commands but no skills; the server never reads Gemini CLI's ~/.gemini/skills.
+  // agy reports its skills as commands; installed skills stay listed as skills beside them.
   antigravity: {
     skillPrefix: '/',
     skillSourceOwner: 'antigravity',
@@ -104,8 +104,12 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   hermes: null,
   // Both report their user and project skills as `skill:<name>`, at rest too.
   kimi: null,
-  // Kiro's ACP pushes its own slash commands for each session.
-  kiro: null,
+  // Kiro loads `.kiro/skills` only (never `.agents/skills`) and reports skills once a session starts.
+  kiro: {
+    skillPrefix: '/',
+    skillSourceOwner: 'kiro',
+    skipsSharedSkillFolders: true
+  },
   // Goose reports its skills as commands, at rest too.
   goose: null,
   // Orca knows no skill folders of theirs; their sessions report what they load as commands.

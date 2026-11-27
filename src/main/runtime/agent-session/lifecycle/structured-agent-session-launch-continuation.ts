@@ -7,6 +7,13 @@ import { previousAgentSessionRuntimeStartedAt } from '../records/agent-session-r
 import { agentSessionRuntimeIncarnation } from '../records/agent-session-runtime-attribution'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import {
+  listProviderRelaysAtLaunch,
+  providerRelayChatsIdleStoppedThisRun,
+  providerRelayRunLiveness
+} from '../../../provider-relay/app-provider-relays'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
+import type { KeptAgentRebind } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-kept-agent'
 
 export const STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER =
   'trusted-local:launch-continuation'
@@ -27,6 +34,8 @@ export type StructuredAgentSessionLaunchContinuation = {
   /** Whether this start continued on its own. Off, every cut waits for the person, and only a
    *  dismissal tells a coordinator. */
   automatic: boolean
+  /** Kept chats whose agent ended before its reattach, cut once every reattach settled. */
+  goneCut?: Promise<ReadonlySet<string>>
 }
 
 export type StructuredAgentSessionLaunchContinuationDeps = {
@@ -40,15 +49,76 @@ export type StructuredAgentSessionLaunchContinuationDeps = {
   /** When the run that just ended started; unknown when no earlier run left a record. */
   previousRunStartedAt: () => Promise<number | undefined>
   resumeWorkOnRestart: () => boolean
+  /** Chats whose agent the terminal host kept running; they were never cut and reattach live. */
+  keptRunning?: () => Promise<ReadonlySet<string>>
+  /** Chats whose detached agent the terminal host idle-stopped after its work ended: not cut. */
+  finishedWhileDetached?: () => ReadonlySet<string>
+  rebindKeptAgent?: (sessionId: string) => Promise<KeptAgentRebind>
 }
+
+/** Reattaches are cheap (no agent starts), but a burst of them still shares the startup. */
+const KEPT_REBIND_CONCURRENCY = 4
 
 export async function continueStructuredAgentSessionsAtLaunch(
   deps: StructuredAgentSessionLaunchContinuationDeps,
   onReserved: (rows: StructuredAgentSessionResumeCandidate[]) => void = () => {}
 ): Promise<StructuredAgentSessionLaunchContinuation> {
+  const listedKept = (await deps.keptRunning?.().catch(() => null)) ?? new Set<string>()
+  // Kept chats reattach beside the offers below, which never wait on them; one whose agent ended
+  // meanwhile was cut after all and takes the ordinary crash cut once its reattach settles.
+  const gone = new Set<string>()
+  const rebinds = mapWithConcurrency(
+    [...listedKept],
+    KEPT_REBIND_CONCURRENCY,
+    async (sessionId) => {
+      const rebound = await (
+        deps.rebindKeptAgent?.(sessionId) ?? Promise.resolve('unresolved')
+      ).catch((error: unknown) => {
+        console.warn('[agent-session] reattaching a kept chat agent failed', error)
+        return 'unresolved' as const
+      })
+      if (rebound === 'gone') {
+        gone.add(sessionId)
+      }
+    }
+  )
+  const continued = continueColdChats(deps, listedKept, onReserved)
+  // A kept agent that ended before its reattach takes the ordinary crash cut, after the offers.
+  const goneCut: Promise<ReadonlySet<string>> = Promise.all([rebinds, continued.catch(() => null)])
+    .then(async () => {
+      const held = new Set(gone.size > 0 ? deps.store.listHeldSessionIds() : [])
+      const cuts = [...gone].flatMap((sessionId) => {
+        const replaced = deps.store.replacedRuntime(sessionId)
+        return held.has(sessionId) && replaced?.runtime
+          ? [{ sessionId, crashedRuntime: replaced.runtime }]
+          : []
+      })
+      if (cuts.length > 0) {
+        await deps.restartResume.adoptCrashCuts(cuts, deps.startedAt)
+      }
+      return new Set(cuts.map(({ sessionId }) => sessionId))
+    })
+    .catch((error: unknown) => {
+      console.warn('[agent-session] cutting kept chats whose agent ended failed', error)
+      return new Set<string>()
+    })
+  return continued.then((result) => ({ ...result, goneCut }))
+}
+
+async function continueColdChats(
+  deps: StructuredAgentSessionLaunchContinuationDeps,
+  kept: ReadonlySet<string>,
+  onReserved: (rows: StructuredAgentSessionResumeCandidate[]) => void
+): Promise<StructuredAgentSessionLaunchContinuation> {
+  const finished = deps.finishedWhileDetached?.() ?? new Set<string>()
   const heldByLastRun = deps.store
     .listHeldSessionIds()
-    .filter((sessionId) => deps.store.replacedRuntime(sessionId)?.runtime !== undefined)
+    .filter(
+      (sessionId) =>
+        !kept.has(sessionId) &&
+        !finished.has(sessionId) &&
+        deps.store.replacedRuntime(sessionId)?.runtime !== undefined
+    )
   const offers = async () => [
     ...(await deps.restartResume.list()),
     ...(await deps.restartResume.listFailures())
@@ -130,7 +200,21 @@ export function structuredAgentSessionLaunchContinuationDeps(
             host.deps.journalDatabase.stateDirectory,
             agentSessionRuntimeIncarnation()
           ),
-        resumeWorkOnRestart
+        resumeWorkOnRestart,
+        keptRunning: async () => {
+          await listProviderRelaysAtLaunch()
+          // Held chats whose run may still be going; each relayed run asks only its daemon start.
+          const held = host.deps.store.listHeldSessionIds()
+          const verdicts = await Promise.all(
+            held.map(async (sessionId) => {
+              const record = host.deps.store.getRecord(sessionId)
+              return record ? providerRelayRunLiveness(record) : 'gone'
+            })
+          )
+          return new Set(held.filter((_, index) => verdicts[index] !== 'gone'))
+        },
+        finishedWhileDetached: providerRelayChatsIdleStoppedThisRun,
+        rebindKeptAgent: host.mutations.rebindKeptAgent
       }
     : undefined
 }

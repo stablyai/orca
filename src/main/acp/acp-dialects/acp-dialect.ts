@@ -163,6 +163,8 @@ export type AcpListedChatModel = {
 
 /** Hooks interpret extensions; lifecycle and row identity stay shared. */
 export type AcpDialect = {
+  /** The session steering extension can join a prompt without cancelling it. */
+  sessionSteering?: (initialized: InitializeResponse) => boolean
   /** Effort replaces part of the native composite model selection. */
   effortChangesModel?: true
   subagentStop?: {
@@ -239,6 +241,8 @@ export type AcpDialect = {
   hookBlock?(meta: unknown): AcpHookBlock | undefined
   failedTurnText?(stopReason: string): string
   compactionReply?(text: string): AcpCompactionReply | undefined
+  /** Context tokens left after a compaction, as its reply states them. */
+  compactedContextTokens?(reply: string): number | undefined
   /** The agent's own compaction report, read as the standard `compaction_update`. */
   compactionUpdate?(update: SessionUpdate): CompactionUpdate | undefined
   /** The agent's own command for /compact. */

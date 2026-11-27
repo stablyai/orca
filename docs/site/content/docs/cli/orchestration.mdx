@@ -177,6 +177,8 @@ orca orchestration gate-create \
 orca orchestration gate-resolve --id <gateId> --resolution "yes"
 ```
 
+The first resolution is kept. Repeating it succeeds; a different resolution fails with `answer_conflict`.
+
 ## Recovery
 
 ```bash

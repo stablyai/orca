@@ -4,6 +4,7 @@ export { acknowledgeWorkerDock } from './worker-dock-acknowledgment'
 import { readWorkerDockSnapshot } from './worker-dock-read-snapshot'
 import { workerLaunchModel } from '../workers/launch/worker-launch-observation'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import {
   type WorkerDockRead,
@@ -30,15 +31,17 @@ const stateSql = `CASE f.state
   WHEN 'start_unknown' THEN 'unavailable' WHEN 'stop_unknown' THEN 'unavailable'
   ELSE f.state END`
 const identitySql = `json_array(f.home, f.source, 'worker', f.dispatch_id)`
-const Metadata = z.object({
-  id: z.string(),
-  dispatchId: z.string(),
-  state: WorkerDockEntry.shape.state,
-  changedAt: z.number().nullable(),
-  ownerActionsAvailable: z.coerce.boolean(),
-  hasModel: z.coerce.boolean(),
-  settlement: z.string().nullable()
-})
+const Metadata = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    dispatchId: z.string(),
+    state: WorkerDockEntry.shape.state,
+    changedAt: z.number().nullable(),
+    ownerActionsAvailable: z.coerce.boolean(),
+    hasModel: z.coerce.boolean(),
+    settlement: z.string().nullable()
+  })
+)
 
 function epoch(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -50,11 +53,13 @@ function epoch(value: unknown): number | null {
   const ms = Date.parse(exposeUtcTimestamp(value) ?? '')
   return Number.isFinite(ms) ? ms : null
 }
-const Launch = z.object({
-  name: z.string().optional(),
-  launch: z.unknown().optional(),
-  agent: z.string().optional()
-})
+const Launch = lazyZodSchema(() =>
+  z.object({
+    name: z.string().optional(),
+    launch: z.unknown().optional(),
+    agent: z.string().optional()
+  })
+)
 function launchOptions(value: unknown): z.infer<typeof Launch> {
   try {
     return Launch.parse(JSON.parse(typeof value === 'string' ? value : '{}'))
@@ -156,7 +161,7 @@ export function readWorkerDock(
         ? db.db
             .prepare(`SELECT f.dispatch_id, f.source, f.changed_at, f.report_id, f.reason,
       w.start_options, w.created_at, w.last_error, w.state,
-      EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS remote, d.last_failure, COALESCE(t.task_title, t.spec) AS title, t.display_name
+      EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS remote, d.last_failure, d.progress_note, COALESCE(t.task_title, t.spec) AS title, t.display_name
       FROM json_each(?) selected CROSS JOIN worker_dock_facts f ON f.dispatch_id = selected.value
       CROSS JOIN worker_dispatches w ON w.dispatch_id = f.dispatch_id
       CROSS JOIN dispatch_contexts d ON d.id = f.dispatch_id CROSS JOIN tasks t ON t.id = d.task_id`)
@@ -170,6 +175,7 @@ export function readWorkerDock(
         throw new Error('Worker dock snapshot changed inside its read transaction.')
       }
       const launch = launchOptions(row.start_options)
+      const active = row.state === 'starting' || row.state === 'ready'
       return WorkerDockEntry.parse({
         ...identity,
         source,
@@ -179,6 +185,9 @@ export function readWorkerDock(
         changedAt: identity.changedAt,
         startedAt: epoch(row.created_at),
         reason: row.reason ?? null,
+        ...(active && typeof row.progress_note === 'string' && row.progress_note
+          ? { progressNote: row.progress_note }
+          : {}),
         resultId: row.report_id ?? null,
         stoppable: row.state === 'ready' || row.state === 'start_unknown',
         ownerActionsAvailable: row.remote !== 1

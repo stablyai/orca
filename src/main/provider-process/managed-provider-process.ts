@@ -44,6 +44,8 @@ type ManagedProviderProcessOptions = {
   spawnImpl?: ProviderProcessSpawner
   /** False keeps the launch in this app even where the agent host is available. */
   allowHost?: boolean
+  /** Native owner path for a host without the app's resources (the terminal daemon). */
+  ownerExecutable?: string
   platform?: NodeJS.Platform
   inheritedEnv?: NodeJS.ProcessEnv
   /** Defaults to accepting root exit or delivered writer termination without descendant proof. */
@@ -106,7 +108,8 @@ export function spawnManagedProviderProcess(
       closeRequest: closePolicy(true).signalSupervisorOnClose
         ? 'stdin-end-and-sigterm'
         : 'stdin-end',
-      ...(options.lifetime ? { lifetime: options.lifetime } : {})
+      ...(options.lifetime ? { lifetime: options.lifetime } : {}),
+      ...(options.ownerExecutable ? { ownerExecutable: options.ownerExecutable } : {})
     }
   )
   const policy = closePolicy(spec.supervised)

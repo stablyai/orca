@@ -40,31 +40,37 @@ export function forgetPeerQuestionOut(db: OrchestrationDb, messageId: string): v
   db.db.prepare('DELETE FROM peer_questions_out WHERE message_id = ?').run(messageId)
 }
 
-/** A reply came back on this conversation: the question it answers, or is a notice for, is settled.
- *  An older paired Orca names no request, so its reply settles the questions of its thread. Runs
- *  before the reply is stored: a crash between leaves it unacknowledged, so it is pulled again. */
+/** A reply came back on this conversation: the question it names, by its answer, notice or reply,
+ *  is settled, and no other. An older paired Orca names none, so its reply settles the oldest
+ *  question still open in its thread. Call it once per stored reply, so a replay settles nothing. */
 export function settlePeerQuestionsOut(
   db: OrchestrationDb,
   conversationId: string,
-  reply: Pick<z.infer<typeof PeerMailRelayPayload>, 'botAnswer' | 'notice' | 'threadId'>
+  reply: Pick<z.infer<typeof PeerMailRelayPayload>, 'botAnswer' | 'notice' | 'replyTo' | 'threadId'>
 ): void {
-  const requestId = reply.botAnswer?.requestId ?? reply.notice?.requestId
-  if (requestId) {
+  const named = reply.botAnswer?.requestId ?? reply.notice?.requestId ?? reply.replyTo
+  if (named) {
     db.db
       .prepare(
         `UPDATE peer_questions_out SET awaiting = NULL
          WHERE conversation_id = ? AND message_id = ? AND awaiting = 1`
       )
-      .run(conversationId, requestId)
+      .run(conversationId, named)
   } else if (reply.threadId) {
-    db.db
-      .prepare(
-        `UPDATE peer_questions_out SET awaiting = NULL
-         WHERE conversation_id = ?1 AND awaiting = 1 AND (message_id = ?2 OR thread_id = ?2)`
-      )
-      .run(conversationId, reply.threadId)
+    db.db.prepare(SETTLE_OLDEST_IN_THREAD_SQL).run(conversationId, reply.threadId)
   }
 }
+
+// awaiting: 1 while open, NULL once settled, 0 once a reply that named no question settled it.
+// idx_peer_questions_out_thread keys (conversation_id, thread key, awaiting), so both read one seek.
+const SETTLE_OLDEST_IN_THREAD_SQL = `UPDATE peer_questions_out SET awaiting = 0
+  WHERE rowid = (
+    SELECT rowid FROM peer_questions_out
+    WHERE conversation_id = ?1 AND COALESCE(thread_id, message_id) = ?2 AND awaiting = 1
+    ORDER BY rowid LIMIT 1
+  )`
+const THREAD_SETTLED_UNNAMED_SQL = `SELECT 1 FROM peer_questions_out
+  WHERE conversation_id = ?1 AND COALESCE(thread_id, message_id) = ?2 AND awaiting = 0 LIMIT 1`
 
 /** Tells each asker still waiting on that computer that no answer will come: it was removed (no
  *  `server`), or re-paired, so questions sent under an older pairing are lost with it. */
@@ -95,6 +101,7 @@ export function tellUnpairedPeerQuestions(
   let anyTold = false
   for (const row of waiting) {
     const id = String(row.message_id)
+    const threadKey = typeof row.thread_id === 'string' ? row.thread_id : id
     const conversation = db.getPeerMailConversation(String(row.conversation_id))
     const handle = conversation ? peerMailLocalRecipient(runtime, conversation) : String(row.asker)
     const recipient = resolveBareOrchestrationRecipient({ runtime, db, handle })
@@ -111,8 +118,10 @@ export function tellUnpairedPeerQuestions(
         from: serverName,
         to: recipient.ok ? recipient.to : handle,
         subject: 'Re: Question',
-        body: `${reason} Your question ${id} there will not be answered. Decide without it, or ask again.`,
-        threadId: typeof row.thread_id === 'string' ? row.thread_id : id,
+        body: maybeAnswered(db, String(row.conversation_id), threadKey)
+          ? `${reason} Your question ${id} there may already be answered. Check the replies in this thread, or ask again.`
+          : `${reason} Your question ${id} there will not be answered. Decide without it, or ask again.`,
+        threadId: threadKey,
         runId: recipient.ok ? recipient.runId : undefined
       })
     })
@@ -125,4 +134,10 @@ export function tellUnpairedPeerQuestions(
     // The asking chats' cards settle too, on a host with nothing else to announce it.
     runtime.notifyPeerMailReturned()
   }
+}
+
+/** A reply that named no question settled the oldest open one in this thread, so it may have
+ *  answered this one instead. */
+function maybeAnswered(db: OrchestrationDb, conversationId: string, threadKey: string): boolean {
+  return db.db.prepare(THREAD_SETTLED_UNNAMED_SQL).get(conversationId, threadKey) !== undefined
 }
