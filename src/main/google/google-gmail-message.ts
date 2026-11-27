@@ -94,7 +94,7 @@ function normalizeMimeHeader(value: string): string {
     }
   }
   if (commentDepth > 0) {
-    throw new SyntaxError('Unterminated MIME header comment')
+    return ''
   }
   return tokens
     .join('')
@@ -106,6 +106,17 @@ function normalizeMimeHeader(value: string): string {
       const after = source[offset + token.length]
       return before === '=' || after === '=' || before === '/' || after === '/' ? '' : ' '
     })
+}
+
+function isAttachment(node: Part): boolean {
+  return Boolean(
+    node.filename ||
+      node.headers?.some(
+        (entry) =>
+          entry.name.toLowerCase() === 'content-disposition' &&
+          /^\s*attachment(?=[\s;(]|$)/i.test(entry.value)
+      )
+  )
 }
 
 function mixedBodyParts(
@@ -155,15 +166,7 @@ export function bodyText(part: Part | undefined): string {
     return text
   }
   const select = (node: Part, relatedRoot = false): Part[] => {
-    if (
-      !relatedRoot &&
-      (node.filename ||
-        node.headers?.some(
-          (entry) =>
-            entry.name.toLowerCase() === 'content-disposition' &&
-            /^\s*attachment(?=[\s;(]|$)/i.test(entry.value)
-        ))
-    ) {
+    if (!relatedRoot && isAttachment(node)) {
       return []
     }
     if (node.mimeType === 'text/plain' || node.mimeType === 'text/html') {
@@ -181,24 +184,33 @@ export function bodyText(part: Part | undefined): string {
       } catch {
         // A missing or malformed header retains the implicit first-part root.
       }
-      const root = contentId
+      const selectedRoot = contentId
         ? node.parts?.find((child) =>
             child.headers?.some(
               (entry) =>
-                entry.name.toLowerCase() === 'content-id' && entry.value.trim() === contentId
+                entry.name.toLowerCase() === 'content-id' &&
+                normalizeMimeHeader(entry.value).trim() === contentId
             )
           )
-        : node.parts?.[0]
+        : undefined
+      // Recover a missing or malformed root reference without treating related resources as bodies.
+      const root = selectedRoot ?? node.parts?.[0]
       return root ? select(root, true) : []
     }
     const children = (node.parts ?? [])
+      .filter((child) => !isAttachment(child))
       .map((child) => ({ mimeType: child.mimeType, leaves: select(child) }))
-      .filter((child) => child.leaves.length > 0)
+      .filter((child) => child.leaves.length > 0 || child.mimeType?.startsWith('multipart/'))
     if (node.mimeType === 'multipart/alternative') {
+      const readable = children.filter(
+        (child) =>
+          child.leaves.length > 0 &&
+          child.leaves.every((leaf) => leaf.body?.data !== undefined || !leaf.body?.attachmentId)
+      )
       return (
-        children.findLast((child) => child.leaves.some((leaf) => leaf.mimeType === 'text/plain'))
+        readable.findLast((child) => child.leaves.some((leaf) => leaf.mimeType === 'text/plain'))
           ?.leaves ??
-        children.at(-1)?.leaves ??
+        readable.at(-1)?.leaves ??
         []
       )
     }

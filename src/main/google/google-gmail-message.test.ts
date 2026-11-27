@@ -181,3 +181,87 @@ it('keeps the order of equal direct sections separated by another visible body',
     })
   ).toBe('Notice\nIntervening section\nNotice')
 })
+
+it('matches commented related content IDs without changing their case or throwing on malformed comments', () => {
+  const first = textPart('text/plain', 'Implicit root')
+  const root = {
+    ...textPart('text/html', '<p>Selected root</p>'),
+    headers: [{ name: 'Content-ID', value: '(before) <Body@example.test> (outer (nested\\) note))' }]
+  }
+  const malformed = {
+    ...textPart('text/plain', 'Malformed resource'),
+    headers: [{ name: 'Content-ID', value: '<Body@example.test> (unterminated' }]
+  }
+  const related: Part = {
+    mimeType: 'multipart/related',
+    headers: [{ name: 'Content-Type', value: 'multipart/related; start="<Body@example.test>"' }],
+    parts: [first, malformed, root]
+  }
+  expect(bodyText(related)).toBe('Selected root')
+  expect(
+    bodyText({
+      ...related,
+      headers: [{ name: 'Content-Type', value: 'multipart/related; start="<body@example.test>"' }]
+    })
+  ).toBe('Implicit root')
+  expect(bodyText({ ...related, parts: [first, malformed] })).toBe('Implicit root')
+})
+
+it('keeps empty multipart boundaries between equal mixed sections while ignoring attached groups', () => {
+  for (const mimeType of ['multipart/related', 'multipart/alternative', 'multipart/mixed']) {
+    const boundary: Part = { mimeType, parts: [{ mimeType: 'image/png' }] }
+    const html = textPart('text/html', '<p>Notice</p>')
+    const plain = textPart('text/plain', 'Notice')
+    const mixed: Part = {
+      mimeType: 'multipart/mixed',
+      parts: [html, boundary, plain]
+    }
+    expect(bodyText(mixed)).toBe('Notice\nNotice')
+    expect(
+      bodyText({
+        ...mixed,
+        parts: [
+          html,
+          { ...boundary, headers: [{ name: 'Content-Disposition', value: 'attachment' }] },
+          plain
+        ]
+      })
+    ).toBe('Notice')
+  }
+})
+
+it('prefers readable alternatives when a later body is only available as an attachment ID', () => {
+  const unavailable: Part = { mimeType: 'text/plain', body: { attachmentId: 'remote-body' } }
+  const available = textPart('text/plain', 'Readable plain body')
+  const alternative = (parts: Part[]): Part => ({ mimeType: 'multipart/alternative', parts })
+  expect(bodyText(alternative([available, unavailable]))).toBe('Readable plain body')
+  expect(
+    bodyText(alternative([textPart('text/html', '<p>Readable HTML body</p>'), unavailable]))
+  ).toBe('Readable HTML body')
+  expect(
+    bodyText(
+      alternative([
+        available,
+        { mimeType: 'multipart/mixed', parts: [textPart('text/plain', 'Partial'), unavailable] }
+      ])
+    )
+  ).toBe('Readable plain body')
+  expect(bodyText(alternative([available, { mimeType: 'multipart/mixed', parts: [] }]))).toBe(
+    'Readable plain body'
+  )
+  expect(bodyText(alternative([available, textPart('text/plain', '')]))).toBe('')
+  expect(
+    bodyText(
+      alternative([
+        available,
+        {
+          mimeType: 'text/plain',
+          body: {
+            data: Buffer.from('Last readable plain body').toString('base64url'),
+            attachmentId: 'also-present'
+          }
+        }
+      ])
+    )
+  ).toBe('Last readable plain body')
+})
