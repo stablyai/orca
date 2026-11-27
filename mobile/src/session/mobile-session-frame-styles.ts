@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native'
 
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const mobileSessionFrameStyles = themedStyleSheet(() => ({
