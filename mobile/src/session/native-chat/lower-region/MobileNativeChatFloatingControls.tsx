@@ -13,6 +13,7 @@ import {
 import { MobileEdgeFade } from '../../../components/list/MobileEdgeFade'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useThemedStyles } from '../../../theme/themed-styles'
+import type { MobileNativeChatTailFollow } from '../transcript/viewport/use-mobile-native-chat-tail-follow'
 
 const JUMP_EASING = Easing.bezier(...SHEET_CURVE)
 const FAB_LIFT = NATIVE_CHAT_FAB_SIZE + NATIVE_CHAT_FAB_GAP
@@ -148,5 +149,24 @@ export function MobileNativeChatFloatingControls({
         />
       </View>
     </>
+  )
+}
+
+export function MobileNativeChatCanvasJumps({
+  tail
+}: {
+  tail: Pick<
+    MobileNativeChatTailFollow,
+    'showJumpToTail' | 'showPreviousMessage' | 'jumpToTail' | 'jumpToPreviousMessage'
+  >
+}): React.JSX.Element {
+  return (
+    <MobileNativeChatFloatingControls
+      canvasFades
+      showJumpToTail={tail.showJumpToTail}
+      onJumpToTail={tail.jumpToTail}
+      showPreviousMessage={tail.showPreviousMessage}
+      onJumpToPrevious={tail.jumpToPreviousMessage}
+    />
   )
 }

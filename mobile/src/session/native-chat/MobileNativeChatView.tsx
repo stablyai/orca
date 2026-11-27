@@ -35,7 +35,7 @@ import { useMobileNativeChatTurnDisclosure } from './transcript/turn-state/use-m
 import { mobileNativeChatComposerPlaceholder } from './composer/field/use-mobile-native-chat-input-lease'
 import { MobileNativeChatLiveLine } from './transcript/messages/MobileNativeChatLiveLine'
 import { MobileNativeChatAwaitingInputRow } from './transcript/messages/MobileNativeChatAwaitingInputRow'
-import { MobileNativeChatFloatingControls } from './lower-region/MobileNativeChatFloatingControls'
+import { MobileNativeChatCanvasJumps } from './lower-region/MobileNativeChatFloatingControls'
 import { MobileNativeChatDraftComposer } from './composer/MobileNativeChatDraftComposer'
 import { MobileNativeChatPromptCard } from './input/prompts/MobileNativeChatPromptCard'
 import { useMobileNativeChatWorkerApprovalSlot } from './input/prompts/MobileNativeChatWorkerApproval'
@@ -162,7 +162,7 @@ export function MobileNativeChatView({
     sendSurfaceId
   )
   const tail = useMobileNativeChatTailFollow({ hasItems: data.length > 0, scopeKey: sendSurfaceId })
-  const { jumpToTail, recordScrollMetrics, scrollMayLoadEarlier, jumpToPreviousMessage } = tail
+  const { jumpToTail, recordScrollMetrics, scrollMayLoadEarlier } = tail
 
   // Lock only terminal-backed Send: it can answer an agent prompt, while drafting is harmless and structured sends queue.
   const promptShown = !collapsedPrompt && (ask ?? permission ?? question) != null
@@ -409,13 +409,7 @@ export function MobileNativeChatView({
                 </MobileMarkdownBotCardContext.Provider>
               </MobileBotCardSendContext.Provider>
             </MobileNativeChatDisclosureContext.Provider>
-            <MobileNativeChatFloatingControls
-              canvasFades
-              showJumpToTail={tail.showJumpToTail}
-              onJumpToTail={jumpToTail}
-              showPreviousMessage={tail.showPreviousMessage}
-              onJumpToPrevious={jumpToPreviousMessage}
-            />
+            <MobileNativeChatCanvasJumps tail={tail} />
           </GestureHandlerRootView>
         )}
         <MobileNativeChatLowerRegion scopeKey={sendSurfaceId} composerPresent={!promptOwnsInput}>
