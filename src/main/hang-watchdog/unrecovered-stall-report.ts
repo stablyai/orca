@@ -2,16 +2,25 @@ import os from 'node:os'
 import { app } from 'electron'
 import type { CrashReportStore } from '../crash-reporting/reports/crash-report-store'
 import { hangObservationUnresponsiveMs, type HangObservation } from './hang-observation-schema'
+import { listNativeHangCaptures, nativeHangCaptureDirectory } from './native-hang-capture-store'
+import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
+
+// Same window Help > Report Crash reopens reports in; an older freeze is history, not news.
+const MAX_STALL_AGE_MS = 24 * 60 * 60 * 1000
 
 /** Files a freeze report when the previous run ended during a stall; without it Help → Report Crash has nothing from that exit. */
 export async function importUnrecoveredStallReport(
   store: CrashReportStore,
-  record: HangObservation
+  record: HangObservation,
+  captureDirectory = nativeHangCaptureDirectory(getCanonicalUserDataPath())
 ): Promise<void> {
-  // Pre-stamp records cannot be attributed; a completed sample is filed by the native importer instead.
-  const native = record.native
-  const sampled = native?.state === 'completed' && native.exitCode === 0 && !native.timedOut
-  if (!record.appVersion || (sampled && native?.reportTruncated === false)) {
+  // Pre-stamp records cannot be attributed.
+  if (!record.appVersion || Date.now() - record.detectedAt > MAX_STALL_AGE_MS) {
+    return
+  }
+  // A saved sample (keyed by the stall's detectedAt) is filed by the native importer; the file, not the marker, decides.
+  const captures = await listNativeHangCaptures(captureDirectory)
+  if (captures.some((file) => file.detectedAt === record.detectedAt)) {
     return
   }
   const sameBuild = record.appVersion === app.getVersion()

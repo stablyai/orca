@@ -13,6 +13,7 @@ import { armUpdateInstallExitWatchdog } from '../update-install-exit-watchdog'
 import { getLinuxPackageType } from '../linux-package/linux-update-package-type'
 import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
+import { installTriggerLabel } from './updater-install-source'
 import { requestServeUpdateHandoff, failServeUpdateHandoff } from '../serve-update-handoff'
 import { UpdaterMacInstallPreflight } from '../mac-install/updater-mac-install-preflight'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'
@@ -101,12 +102,11 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
       await withUpdaterSpan({ stage: 'install' }, async (span) => {
         span.setAttribute('updater.version', pendingVersion || 'unknown')
         span.setAttribute('updater.platform', process.platform)
-        span.setAttribute('updater.trigger', trigger)
         const macInstallerReady = process.platform === 'darwin' ? isMacInstallerReady() : true
         span.setAttribute('updater.macosInstallerReady', macInstallerReady)
         recordUpdaterLifecycle('quit_and_install_started', {
           version: pendingVersion || null,
-          trigger,
+          trigger: installTriggerLabel(trigger),
           macInstallerReady
         })
         span.addEvent('pre_quit_cleanup_start')

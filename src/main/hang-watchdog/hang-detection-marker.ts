@@ -58,7 +58,9 @@ export function writeHangDetectionMarker(markerPath: string, marker: StoredHangM
 /** The watchdog's write: a stalled disk must not block the loop that escalates and spawns sample. */
 export async function writeHangDetectionMarkerAsync(
   markerPath: string,
-  marker: StoredHangMarker
+  marker: StoredHangMarker,
+  // Checked right before the rename, so a newer sync write is never replaced by this older state.
+  stillCurrent: () => boolean = () => true
 ): Promise<void> {
   const text = serializeHangDetectionMarker(marker)
   const temporaryPath = `${markerPath}.async.tmp`
@@ -69,7 +71,9 @@ export async function writeHangDetectionMarkerAsync(
   } finally {
     await file.close()
   }
-  await rename(temporaryPath, markerPath)
+  if (stillCurrent()) {
+    await rename(temporaryPath, markerPath)
+  }
 }
 
 export function readAvailableHangDetectionMarker(
@@ -119,11 +123,12 @@ export function createHangMarkerWriter(
   writeSync: (path: string, marker: StoredHangMarker) => void
 ): {
   write: (marker: StoredHangMarker) => void
-  /** Shutdown only: main answered, so a sync write is safe and lands before exit. */
-  writeNow: (marker: StoredHangMarker) => void
+  /** Shutdown only: if the file may lag the newest state, write it synchronously (main answered, so this is safe). */
+  flushPending: (marker: StoredHangMarker) => void
 } {
   let latest: StoredHangMarker | null = null
   let writing = false
+  let generation = 0
   const run = (): void => {
     const marker = latest
     if (!marker) {
@@ -131,7 +136,8 @@ export function createHangMarkerWriter(
     }
     latest = null
     writing = true
-    void writeHangDetectionMarkerAsync(markerPath, marker)
+    const mine = ++generation
+    void writeHangDetectionMarkerAsync(markerPath, marker, () => mine === generation)
       .catch(() => {})
       .finally(() => {
         writing = false
@@ -145,9 +151,13 @@ export function createHangMarkerWriter(
         run()
       }
     },
-    writeNow: (marker) => {
-      // An in-flight async rename may land after this; queueing the same state makes the chain end on it.
-      latest = writing ? marker : null
+    flushPending: (marker) => {
+      if (!writing && latest === null) {
+        return
+      }
+      // Bumping the generation stops any in-flight async write from renaming over this one.
+      generation++
+      latest = null
       try {
         writeSync(markerPath, marker)
       } catch {

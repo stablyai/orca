@@ -293,8 +293,9 @@ export function runWatchdog(
       if (activeStallId) {
         update(activeStallId, { selfRecovered: true, resolution: captureHangSnapshot() })
         activeStallId = null
-        writer?.writeNow(observations)
       }
+      // A recovery queued behind an async write would otherwise be lost at exit.
+      writer?.flushPending(observations)
       stopped = true
       clearTimeout(preload)
       receiptWindow = null
