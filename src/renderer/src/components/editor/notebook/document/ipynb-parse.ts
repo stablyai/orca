@@ -52,12 +52,12 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-export function concatIpynbMultilineString(value: unknown): string {
+export function concatIpynbMultilineString(value: unknown, separator: '' | '\n' = ''): string {
   if (Array.isArray(value)) {
     let result = ''
     for (let i = 0; i < value.length; i += 1) {
       const item = String(value[i] ?? '')
-      result += i < value.length - 1 && !item.endsWith('\n') ? `${item}\n` : item
+      result += i < value.length - 1 && !item.endsWith('\n') ? `${item}${separator}` : item
     }
     return result.replace(/\r\n/g, '\n')
   }
@@ -122,7 +122,7 @@ export function parseIpynbOutput(rawOutput: unknown): IpynbOutput | null {
       kind: 'error',
       name: typeof rawOutput.ename === 'string' ? rawOutput.ename : '',
       message: typeof rawOutput.evalue === 'string' ? rawOutput.evalue : '',
-      traceback: concatIpynbMultilineString(rawOutput.traceback)
+      traceback: concatIpynbMultilineString(rawOutput.traceback, '\n')
     }
   }
 
