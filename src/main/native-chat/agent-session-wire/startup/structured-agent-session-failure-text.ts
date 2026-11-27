@@ -47,6 +47,7 @@ const TYPED_START_REFUSALS = [
   'claudeAccountSetupFailed',
   'agentCommandNotRunnable',
   'runtimeNotInstalled',
+  'autoPermissionUnavailable',
   'fullAccessAsRoot',
   'botToolsNeedStatusHooks',
   'botToolsGatewayOutdated',

@@ -120,6 +120,7 @@ const REASON_WORDS = {
     claudeAccountSetupFailed: { fact: 'claudeAccountSetupFailed', action: 'retry' },
     agentCommandNotRunnable: { fact: 'agentCommandNotRunnable', action: 'actFirst' },
     runtimeNotInstalled: { fact: 'runtimeNotInstalled', action: 'actFirst' },
+    autoPermissionUnavailable: { fact: 'autoPermissionUnavailable', action: 'actFirst' },
     fullAccessAsRoot: { fact: 'fullAccessAsRoot', action: 'actFirst' },
     botToolsNeedStatusHooks: { fact: 'botToolsNeedStatusHooks', action: 'actFirst' },
     botToolsGatewayOutdated: { fact: 'botToolsGatewayOutdated', action: 'actFirst' },

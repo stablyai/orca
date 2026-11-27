@@ -90,6 +90,8 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'agentCommandNotRunnable',
     /** The runtime Orca installs for the agent is not installed on this host. */
     'runtimeNotInstalled',
+    /** AGY's permission list for this host or account omits the requested Auto mode. */
+    'autoPermissionUnavailable',
     /** The agent refuses Full access while it runs as root. */
     'fullAccessAsRoot',
     /** A bot's tools would run without its limits: Orca's plugin for the agent is off. */

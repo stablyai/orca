@@ -43,6 +43,8 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'claudeAccountSetupFailed',
   'agentCommandNotRunnable',
   'runtimeNotInstalled',
+  /** AGY lists its available permission modes and omits Auto on this host or account. */
+  'autoPermissionUnavailable',
   /** The agent refuses Full access while it runs as root. */
   'fullAccessAsRoot',
   /** A bot's tools would run without its limits: Orca's plugin for the agent is off. */

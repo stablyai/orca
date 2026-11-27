@@ -225,6 +225,12 @@ export function startFailureCopy(t: Translate) {
         "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
         values
       ),
+    autoPermissionUnavailable: (values) =>
+      t(
+        'session.failure.autoPermissionUnavailable',
+        AGENT_SESSION_FAILURE_COPY.autoPermissionUnavailable,
+        values
+      ),
     fullAccessAsRoot: (values) =>
       t(
         'session.failure.fullAccessAsRoot',

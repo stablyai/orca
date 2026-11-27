@@ -98,6 +98,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
     "{{agent}}'s Command in Settings → Agents didn't start {{agent}}: {{detail}}. Change it or reset it.",
   runtimeNotInstalled:
     "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
+  autoPermissionUnavailable:
+    "{{agent}} doesn't offer Approve for me on this computer or account. Choose another permission, then retry your message.",
   fullAccessAsRoot:
     "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
   botToolsNeedStatusHooks:
