@@ -21,6 +21,7 @@ import {
   readInventory,
   type InventorySlot
 } from './agent-command-inventory'
+import { retireInventorySlot } from './agent-command-inventory-scan-state'
 import { isOrcaAgentRuntimePath } from '../managed-agent-cli/managed-agent-cli-path'
 import type { AgentPathMatch } from '../ipc/command-path/command-path-batch'
 import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
@@ -53,10 +54,14 @@ export function getLocalInventory(shellOverride?: string): InventorySlot {
     process.platform === 'win32' ? undefined : readDefaultShell?.()?.trim() || undefined
   if (!local || key !== profile || local.shellPath !== defaultShell) {
     if (local) {
+      retireInventorySlot(local)
       invalidateExactLoginShellEnvironments()
     }
     local = { stockCommands: localStockCommands, shellPath: defaultShell }
     profile = key
+    for (const slot of alternateShells.values()) {
+      retireInventorySlot(slot)
+    }
     alternateShells.clear()
   }
   if (process.platform === 'win32' || !shellOverride || shellOverride === defaultShell) {
@@ -67,9 +72,11 @@ export function getLocalInventory(shellOverride?: string): InventorySlot {
     return existing
   }
   if (alternateShells.size >= 8) {
-    const oldest = alternateShells.keys().next().value
-    if (oldest !== undefined) {
-      alternateShells.delete(oldest)
+    const oldest = alternateShells.entries().next().value
+    if (oldest) {
+      const [shell, slot] = oldest
+      retireInventorySlot(slot)
+      alternateShells.delete(shell)
     }
   }
   const slot = { stockCommands: localStockCommands, shellPath: shellOverride }

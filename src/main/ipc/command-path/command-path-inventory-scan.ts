@@ -21,27 +21,25 @@ export type DirectoryCandidate = {
 function trackPathCommand(
   directoryCount: number,
   presenceOnly: boolean,
-  publish: (match: AgentPathMatch) => void,
-  complete: (uncertain: boolean, verified: boolean) => void
+  publish: (match: AgentPathMatch, unresolvedHit: boolean) => void,
+  complete: (uncertain: boolean, pathHit: boolean) => void
 ): (index: number, dir: PathDirectory, outcome: DirectoryCandidate) => void {
   const settled = new Map<number, { dir: PathDirectory; outcome: DirectoryCandidate }>()
   const match: AgentPathMatch = {}
   let next = 0
   let uncertain = false
-  let earliestUser: { index: number; hit: string } | undefined
+  let sawUserHit = false
   return (index, dir, outcome) => {
     if (presenceOnly && dir.user && outcome.hit) {
-      publish({ user: outcome.hit })
+      publish({ user: outcome.hit }, false)
       complete(outcome.uncertain, true)
       return
     }
-    const previousUser = earliestUser
+    const hadUserHit = sawUserHit
     const { first, unquoted } = match
-    if (dir.user && outcome.hit && (!earliestUser || index < earliestUser.index)) {
-      earliestUser = { index, hit: outcome.hit }
-    }
+    sawUserHit ||= Boolean(dir.user && outcome.hit)
     settled.set(index, { dir, outcome })
-    let verified = false
+    let pathHit = false
     for (let entry = settled.get(next); entry; entry = settled.get(next)) {
       settled.delete(next++)
       const { hit, uncertain: entryUncertain, byName, shadow } = entry.outcome
@@ -54,22 +52,19 @@ function trackPathCommand(
         match.unquoted = winner
       }
       if (entry.dir.user && hit) {
-        verified = true
+        pathHit = true
+        if (!uncertain) {
+          match.user = hit
+        }
         break
       }
     }
-    const done = verified || next === directoryCount
-    if (
-      done ||
-      previousUser !== earliestUser ||
-      first !== match.first ||
-      unquoted !== match.unquoted
-    ) {
-      // Only the settled prefix can prove by-name lookup safe.
-      publish({ ...match, user: earliestUser?.hit })
+    const done = pathHit || next === directoryCount
+    if (done || hadUserHit !== sawUserHit || first !== match.first || unquoted !== match.unquoted) {
+      publish({ ...match, user: match.user }, sawUserHit && !match.user)
     }
     if (done) {
-      complete(uncertain, verified)
+      complete(uncertain, pathHit)
     }
   }
 }
@@ -82,11 +77,10 @@ export async function scanInventoryPathCommands<Listing>(
   scan: (
     command: string,
     dir: PathDirectory,
-    listing: Listing | null,
-    canProbe: boolean
+    listing: Listing | null
   ) => Promise<DirectoryCandidate>,
-  publish: (command: string, match: AgentPathMatch) => void,
-  complete: (command: string, uncertain: boolean, verified: boolean) => void,
+  publish: (command: string, match: AgentPathMatch, unresolvedHit: boolean) => void,
+  complete: (command: string, uncertain: boolean, pathHit: boolean) => void,
   { presenceOnly = false, signal }: { presenceOnly?: boolean; signal?: AbortSignal }
 ): Promise<void> {
   const pending = new Map<
@@ -104,11 +98,11 @@ export async function scanInventoryPathCommands<Listing>(
       record: trackPathCommand(
         directories.length,
         presenceOnly,
-        (match) => publish(command, match),
-        (uncertain, verified) => {
-          hasMiss ||= !verified
+        (match, unresolvedHit) => publish(command, match, unresolvedHit),
+        (uncertain, pathHit) => {
+          hasMiss ||= !pathHit
           pending.delete(command)
-          complete(command, uncertain, verified)
+          complete(command, uncertain, pathHit)
           // An installer fallback must wait for any outstanding PATH walks.
           if (pending.size === 0 && !hasMiss) {
             allCommandsFound.resolve()
@@ -135,8 +129,7 @@ export async function scanInventoryPathCommands<Listing>(
         if (state.firstHit !== undefined && index > state.firstHit) {
           return
         }
-        // A late listing can prove absence without issuing any new candidate probes.
-        const outcome = await scan(command, dir, names, state.firstHit === undefined)
+        const outcome = await scan(command, dir, names)
         if (!signal?.aborted && pending.has(command)) {
           if (dir.user && outcome.hit) {
             if (state.firstHit === undefined) {

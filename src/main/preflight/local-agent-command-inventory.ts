@@ -25,7 +25,10 @@ import {
   type InventoryPublication
 } from './agent-command-inventory-publication'
 
-type LocalInventoryProgress = Omit<CommandInventory, 'probed'> & { probed: Set<string> }
+type LocalInventoryProgress = Omit<CommandInventory, 'probed'> & {
+  probed: Set<string>
+  unresolvedPathHits: Set<string>
+}
 export type LocalInventoryScan = {
   controller: AbortController
   loginPathCaptured?: true
@@ -88,7 +91,13 @@ export function partialLocalAgentCommandInventory(
     probed: new Set([...progress.probed, ...progress.found]),
     incomplete: true
   }
-  return mergeInventory(snapshot, previous, snapshot.probed, true)
+  // A fresh PATH hit with unresolved precedence also invalidates the cached match.
+  return mergeInventory(
+    snapshot,
+    previous,
+    new Set([...snapshot.probed, ...progress.unresolvedPathHits]),
+    true
+  )
 }
 
 export async function scanLocalAgentCommandInventory(
@@ -98,7 +107,7 @@ export async function scanLocalAgentCommandInventory(
   freshCapture: boolean,
   scan: LocalInventoryScan
 ): Promise<CommandInventory> {
-  const { matches, found, probed } = scan.progress
+  const { matches, found, probed, unresolvedPathHits } = scan.progress
   const signal = scan.controller.signal
   const onChange = () => notifyScanChange(scan)
   const captured =
@@ -165,18 +174,19 @@ export async function scanLocalAgentCommandInventory(
         isRuntimePath: isOrcaAgentRuntimePath,
         isRuntimeTarget: createAgentRuntimeTargetCheck(probes),
         pinPathMatches: captureFailed,
-        matches
+        matches,
+        unresolvedHits: unresolvedPathHits
       },
       found,
       probes,
       signal: pathSignal,
       inventoryCommandCount: commands.size,
       onMatch: onChange,
-      onCommandComplete: (command, uncertain, verified) => {
-        if (!verified && !hasPathSeparatorToken(command)) {
+      onCommandComplete: (command, uncertain, pathHit) => {
+        if (!pathHit && !hasPathSeparatorToken(command)) {
           pathMisses.push(command)
         } else {
-          resolveCommand(command, uncertain && !verified)
+          resolveCommand(command, uncertain)
         }
       },
       unverified: unverifiedPath

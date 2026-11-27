@@ -39,16 +39,21 @@ export function readInventoryScan(
     waitForCompletion,
     qualifiesEarly,
     wsl,
+    isRetired,
     readPublished
   }: {
     requested: readonly string[]
     waitForCompletion: boolean
     qualifiesEarly?: (match: AgentPathMatch | undefined) => boolean
     wsl: boolean
+    isRetired: () => boolean
     readPublished: () => InventoryPublication | undefined
   }
 ): InventoryRead {
   const snapshot = (inventory?: CommandInventory): InventoryPublication | null => {
+    if (isRetired()) {
+      return null
+    }
     const published = readPublished()
     if (wsl) {
       return published ?? null
@@ -64,7 +69,8 @@ export function readInventoryScan(
   return {
     wait: async (signal) => {
       if (!waitForCompletion) {
-        return waitForPromiseWithSignal(scan.publication.promise, signal)
+        const publication = await waitForPromiseWithSignal(scan.publication.promise, signal)
+        return isRetired() ? null : publication
       }
       for (;;) {
         if (qualifiesEarly) {
@@ -80,6 +86,9 @@ export function readInventoryScan(
           }
         }
         const publication = await waitForPromiseWithSignal(scan.complete.promise, signal)
+        if (isRetired()) {
+          return null
+        }
         const successor = scan.successor
         if (!successor || !requested.every((command) => successor.commands.has(command))) {
           return publication

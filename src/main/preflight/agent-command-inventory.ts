@@ -16,6 +16,7 @@ import {
   type InventoryRead,
   type InventoryReadOptions
 } from './agent-command-inventory-scan-read'
+import { createInventoryScan, finishInventoryScan } from './agent-command-inventory-scan-state'
 import {
   notifyScanChange,
   partialLocalAgentCommandInventory,
@@ -46,6 +47,7 @@ export type InventorySlot = InventoryPublications & {
   stockCommands: readonly string[]
   distro?: string
   shellPath?: string
+  retired?: true
   pending?: PendingInventory
   retry?: { after: number; generation: number | undefined }
   missRetry?: { after: number; generation: number | undefined }
@@ -64,6 +66,9 @@ export function currentInventoryPublication(
   slot: InventorySlot,
   kind: 'latest' | 'complete' = 'latest'
 ): InventoryPublication | undefined {
+  if (slot.retired) {
+    return undefined
+  }
   const publication = kind === 'latest' ? slot.published : slot.completed
   return publication?.generation === inventoryGeneration(slot) ? publication : undefined
 }
@@ -101,26 +106,6 @@ async function scanInventory(
   )
 }
 
-function createScan(
-  commands: Iterable<string>,
-  mode: InventoryMode,
-  targeted: boolean,
-  generation: number | undefined
-): InventoryScan {
-  return {
-    publication: Promise.withResolvers(),
-    complete: Promise.withResolvers(),
-    controller: new AbortController(),
-    progress: { found: new Set(), matches: new Map(), probed: new Set() },
-    changed: Promise.withResolvers(),
-    started: false,
-    commands: new Set(commands),
-    mode,
-    targeted,
-    generation
-  }
-}
-
 function addScanRequest(
   scan: InventoryScan,
   commands: readonly string[],
@@ -137,12 +122,15 @@ function addScanRequest(
 }
 
 async function runInventoryScans(slot: InventorySlot, pending: PendingInventory): Promise<void> {
-  for (;;) {
+  while (slot.pending === pending) {
     const scan = pending.active
     scan.started = true
     const timer = slot.distro
       ? undefined
       : setTimeout(() => {
+          if (slot.pending !== pending) {
+            return
+          }
           const previous = currentInventoryPublication(slot)?.inventory
           scan.partial = publishInventory(
             slot,
@@ -158,6 +146,9 @@ async function runInventoryScans(slot: InventorySlot, pending: PendingInventory)
         }, INVENTORY_WAIT_MS)
     const result = await scanInventory(slot, scan).catch(() => null)
     clearTimeout(timer)
+    if (slot.pending !== pending) {
+      return
+    }
     if (scan.generation !== inventoryGeneration(slot)) {
       continue
     }
@@ -187,10 +178,7 @@ async function runInventoryScans(slot: InventorySlot, pending: PendingInventory)
         }
       }
     }
-    scan.publication.resolve(publication)
-    scan.complete.resolve(publication)
-    scan.finished = true
-    notifyScanChange(scan)
+    finishInventoryScan(scan, publication)
     if (pending.queued) {
       pending.active = pending.queued
       delete pending.queued
@@ -215,6 +203,9 @@ export function readInventory(
     waitForCompletion = false
   }: InventoryReadOptions = {}
 ): InventoryRead {
+  if (slot.retired) {
+    return readInventoryPublication(undefined)
+  }
   const generation = inventoryGeneration(slot)
   const published = currentInventoryPublication(slot, slot.distro ? 'complete' : 'latest')
   const current = published?.inventory
@@ -251,6 +242,7 @@ export function readInventory(
       qualifiesEarly,
       waitForCompletion,
       wsl: slot.distro !== undefined,
+      isRetired: () => slot.retired === true,
       readPublished: () => currentInventoryPublication(slot)
     })
   mode = revalidateMiss && !slot.distro ? 'revalidate' : mode
@@ -273,7 +265,7 @@ export function readInventory(
       scanPriority[mode] > scanPriority[active.mode] ||
       !commands.every((cmd) => active.commands.has(cmd))
     ) {
-      pending.queued ??= createScan(commands, mode, targeted, generation)
+      pending.queued ??= createInventoryScan(commands, mode, targeted, generation)
       addScanRequest(pending.queued, commands, mode, targeted)
       pending.queued.revalidatesMiss ??= revalidateMiss ? requested : undefined
       if (active.partial) {
@@ -298,7 +290,7 @@ export function readInventory(
     return readInventoryPublication(published)
   }
 
-  const active = createScan(commands, mode, targeted, generation)
+  const active = createInventoryScan(commands, mode, targeted, generation)
   active.revalidatesMiss = revalidateMiss ? requested : undefined
   const batch = { active }
   slot.pending = batch

@@ -42,6 +42,7 @@ type AgentPathInventory = {
   isRuntimeTarget?: (entry: string) => Promise<boolean | typeof UNVERIFIED_FS_PROBE>
   pinPathMatches?: boolean
   matches: Map<string, AgentPathMatch>
+  unresolvedHits?: Set<string>
 }
 
 function getDetectionDirectories(
@@ -108,7 +109,7 @@ export async function findCommandsOnLocalPath(
     inventoryCommandCount?: number
     presenceOnly?: boolean
     onMatch?: () => void
-    onCommandComplete?: (command: string, uncertain: boolean, verified: boolean) => void
+    onCommandComplete?: (command: string, uncertain: boolean, pathHit: boolean) => void
   } = {}
 ): Promise<Set<string>> {
   const found = options.found ?? new Set<string>()
@@ -176,8 +177,7 @@ export async function findCommandsOnLocalPath(
   const probeCommand = async (
     command: string,
     dir: PathDirectory,
-    listing: Listing,
-    canProbe: boolean
+    listing: Listing
   ): Promise<DirectoryCandidate> => {
     const names = listing === UNVERIFIED_FS_PROBE ? null : listing
     const checked = new Set<string>()
@@ -193,9 +193,6 @@ export async function findCommandsOnLocalPath(
       const key = isWin ? candidate.toLowerCase() : candidate
       if (checked.has(key)) {
         continue
-      }
-      if (!canProbe) {
-        return { uncertain: true }
       }
       checked.add(key)
       const outcome = await checkExecutableFile(candidate, isWin, probes)
@@ -231,19 +228,24 @@ export async function findCommandsOnLocalPath(
     concurrency,
     readListing,
     probeCommand,
-    (command, match) => {
+    (command, match, unresolvedHit) => {
       inventory?.matches.set(command, inventory.pinPathMatches ? { user: match.user } : match)
+      if (unresolvedHit) {
+        inventory?.unresolvedHits?.add(command)
+      } else {
+        inventory?.unresolvedHits?.delete(command)
+      }
       if (match.user) {
         found.add(command)
         options.matches?.set(command, match.user)
         options.onMatch?.()
       }
     },
-    (command, uncertain, verified) => {
+    (command, uncertain, pathHit) => {
       if (uncertain) {
         options.unverified?.add(command)
       }
-      options.onCommandComplete?.(command, uncertain, verified)
+      options.onCommandComplete?.(command, uncertain, pathHit)
     },
     { presenceOnly: options.presenceOnly, signal }
   )
