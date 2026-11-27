@@ -140,8 +140,6 @@ export function installActivePanePtyBinding(session: ConnectPanePtySession): voi
       session.pendingStartupCommand = null
       session.withholdStartupDraftPaste()
       session.notifyBlockedStartup(blocked)
-    } else {
-      session.paneStartup?.setupGateObserver?.bind(ptyId)
     }
     // Spend queued startup only after this pane owns a concrete PTY.
     try {

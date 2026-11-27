@@ -6,7 +6,7 @@ import { createDraftPasteReadyScanner } from '../../../../../../shared/agent-lau
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import {
   createSetupWaitGate,
-  SETUP_WAIT_WRAPPER_MAX_MS
+  SETUP_WAIT_GATE_MAX_MS
 } from '../../../../../../shared/agent-launch/startup/setup-wait-output-gate'
 import { sendAgentDraftPasteContent } from '@/lib/agent-session/messaging/paste/agent-draft-paste-content'
 import { writeTerminalPastePtyInput } from '../../input/paste/terminal-pty-paste-writer'
@@ -69,7 +69,6 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     clearStartupDraftPasteTimers()
   }
   session.notifyBlockedStartup = (reason: AgentProgramBlockReason): void => {
-    session.paneStartup?.setupGateObserver?.settle(true)
     notifyBlockedAgentStartup(
       reason,
       session.startupDraftPrompt ??
@@ -197,7 +196,7 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     }
     startupDraftReadinessArmed = true
     if (awaitSetupGate) {
-      return armStartupDraftHardTimer(SETUP_WAIT_WRAPPER_MAX_MS, abandonStartupDraft)
+      return armStartupDraftHardTimer(SETUP_WAIT_GATE_MAX_MS, abandonStartupDraft)
     }
     armStartupDraftHardTimer()
   }
@@ -209,12 +208,11 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     const gated = setupWaitGate.observe(data)
     if (gated.phase === 'started' || gated.phase === 'failed') {
       watchingSetup = false
-      if (gated.blocked) {
-        session.withholdStartupDraftPaste()
-        session.notifyBlockedStartup('unknown')
-        return
-      }
-      session.paneStartup?.setupGateObserver?.settle(false)
+    }
+    if (gated.blocked) {
+      session.withholdStartupDraftPaste()
+      session.notifyBlockedStartup('unknown')
+      return
     }
     if (!startupDraftReadyScanner || !waitingForDraft) {
       return
@@ -228,8 +226,8 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
         return abandonStartupDraft()
       }
       if (gated.phase === 'waiting') {
-        // Allow the wrapper to finish verification before the draft deadline.
-        return armStartupDraftHardTimer(SETUP_WAIT_WRAPPER_MAX_MS, abandonStartupDraft)
+        // Past the wrapper's own Setup limit no agent can start.
+        return armStartupDraftHardTimer(SETUP_WAIT_GATE_MAX_MS, abandonStartupDraft)
       }
       armStartupDraftHardTimer()
     }

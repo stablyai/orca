@@ -8,7 +8,6 @@ import {
 } from '@/lib/workspace/creation/pending-worktree-creation'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 
 function statusLabel(entry: PendingWorktreeCreation, t: Translate = translate): string {
   if (entry.status === 'error') {
@@ -64,13 +63,8 @@ export function PendingWorktreeRow({
     >
       <button
         type="button"
+        // No real worktree exists yet; pending-creation activation owns the content loader.
         onClick={() => {
-          if (entry.status === 'waiting-for-setup' && entry.worktreeId) {
-            activateAndRevealWorktree(entry.worktreeId, {
-              executionHostId: entry.request.executionHostId
-            })
-            return
-          }
           const store = useAppStore.getState()
           store.setActivePendingWorktreeCreation(creationId)
           store.updatePendingWorktreeCreation(creationId, { loaderVisible: true })

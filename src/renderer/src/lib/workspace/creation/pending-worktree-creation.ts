@@ -156,7 +156,7 @@ export type PendingWorktreeCreation = {
   /** Resolved before checkout publication so passive activation can defer its initial surface. */
   worktreeId?: string
   phase: WorktreeCreationPhase
-  status: 'creating' | 'waiting-for-setup' | 'error'
+  status: 'creating' | 'error'
   startedAt: number
   // Remote/runtime targets without phase events need one indeterminate spinner, never a checklist stuck at step one.
   indeterminate: boolean
@@ -261,7 +261,6 @@ export function findPendingLinkedWorkItemCreationId(
   const match = Object.values(pendingCreations).find((entry) => {
     const pending = entry.request
     return (
-      !entry.startupDraftDeferred &&
       pending.repoId === request.repoId &&
       pending.linkedIssue === request.linkedIssue &&
       pending.linkedPR === request.linkedPR &&
@@ -304,7 +303,7 @@ export function getCreationProgressLabel(
       ? t('auto.lib.pendingWorktreeCreation.checkingVmEnvironment', 'Checking VM environment…')
       : t('auto.lib.pendingWorktreeCreation.provisioningVm', 'Provisioning VM…')
   }
-  if (entry.indeterminate || entry.status === 'waiting-for-setup') {
+  if (entry.indeterminate) {
     return t('auto.lib.pendingWorktreeCreation.settingUpWorkspace', 'Setting up your workspace…')
   }
   if (entry.phase === 'preparing') {

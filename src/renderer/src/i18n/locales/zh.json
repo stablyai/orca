@@ -25237,6 +25237,7 @@
     "failed": "无法打开文件"
   },
   "terminal": {
+    "startupPromptNotDelivered": "启动提示词未送达。",
     "recentImages": {
       "pasted": "粘贴的图片",
       "open": "打开预览",

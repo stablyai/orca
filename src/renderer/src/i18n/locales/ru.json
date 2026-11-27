@@ -26175,6 +26175,7 @@
     "delete": "Удалить"
   },
   "terminal": {
+    "startupPromptNotDelivered": "Стартовый запрос не был доставлен.",
     "recentImages": {
       "pasted": "Вставленное изображение",
       "open": "Открыть предпросмотр",

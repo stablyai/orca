@@ -21,7 +21,16 @@ export function notifyBlockedAgentStartup(
           'terminal.agentStartup.unknown',
           'The host could not verify the agent installation.'
         ),
-    request ? copyDroppedTextAction(request) : undefined
+    request
+      ? {
+          ...copyDroppedTextAction(request),
+          description: translate(
+            'terminal.startupPromptNotDelivered',
+            "The startup prompt wasn't delivered."
+          ),
+          duration: Infinity
+        }
+      : undefined
   )
 }
 

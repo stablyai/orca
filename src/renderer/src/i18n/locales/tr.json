@@ -25368,6 +25368,7 @@
     "copy": "Kopyala"
   },
   "terminal": {
+    "startupPromptNotDelivered": "Başlangıç istemi iletilmedi.",
     "sessionSaveFailure": {
       "title": "Terminal oturumu kaydedilemedi",
       "capacity": "Bu terminali kaydeden cihaz, depolama alanının dolduğunu veya depolama kotasının aşıldığını bildirdi. O cihazda alan boşaltıp tekrar deneyin.",

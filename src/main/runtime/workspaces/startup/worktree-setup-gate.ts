@@ -1,6 +1,6 @@
 import {
   createSetupWaitGate,
-  SETUP_WAIT_OBSERVER_MAX_MS
+  SETUP_WAIT_GATE_MAX_MS
 } from '../../../../shared/agent-launch/startup/setup-wait-output-gate'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import type { SetupAgentGateOutcome } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
@@ -25,7 +25,8 @@ export function waitForWorktreeSetupGate(
       resolve(outcome)
     }
     const abort = (): void => finish(undefined)
-    const timer = setTimeout(abort, SETUP_WAIT_OBSERVER_MAX_MS)
+    // Setup can settle on the last poll, then the wrapper still needs to recheck the executable.
+    const timer = setTimeout(abort, SETUP_WAIT_GATE_MAX_MS + 15_000)
     const observe = (data: string): void => {
       const { phase, blocked } = gate.observe(data)
       if (phase === 'started' || phase === 'failed') {

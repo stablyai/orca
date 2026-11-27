@@ -25368,6 +25368,7 @@
     "delete": "Delete"
   },
   "terminal": {
+    "startupPromptNotDelivered": "The startup prompt wasn't delivered.",
     "agentStartup": {
       "setupBlocked": "Setup finished. Orca couldn't verify {{agent}} for this launch. Start it from the agent menu.",
       "unavailable": "The agent could not be found on this host.",

@@ -25701,6 +25701,7 @@
     "failed": "Não foi possível abrir o arquivo."
   },
   "terminal": {
+    "startupPromptNotDelivered": "O prompt de inicialização não foi entregue.",
     "recentImages": {
       "pasted": "Imagem colada",
       "open": "Abrir prévia",

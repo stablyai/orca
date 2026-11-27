@@ -4,7 +4,7 @@ import { canCheckoutExistingLocalBranch } from '../../runtime/workspaces/creatio
 
 import { worktreeCreateGit } from '../../git/worktrees/creation/worktree-create-git-executor'
 import { getStoredRepoExecutionHostId } from '../../workspaces/execution-host/repo-execution-host'
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, WebContents } from 'electron'
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../../persistence/loading-store/store'
@@ -76,6 +76,7 @@ import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-confi
 import { runWorktreeChangeInvalidators } from './listing/worktree-change-invalidators'
 
 type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
+  startupGateProgressTarget?: WebContents
   automationProvenance?: AutomationWorkspaceProvenance
   cliProvenance?: CliWorkspaceProvenance
 }
@@ -153,10 +154,7 @@ import {
   getSetupRunnerCommandPlatformForPath
 } from '../../../shared/agent-launch/startup/setup-runner-command'
 import { createSequencedSetupAgentCommands } from '../../../shared/agent-launch/startup/setup-agent-sequencing'
-import {
-  SETUP_AGENT_GATE,
-  type SetupAgentGateOutcome
-} from '../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import { SETUP_AGENT_GATE } from '../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import {
   createWorktreeCreateTimingRecorder,
   localWorktreeCreateExecutionHost,
@@ -215,7 +213,6 @@ function worktreePushTargetMaterializeKey(repoPath: string, remoteName: string):
 
 type StagedStartupResult = {
   startupTerminal?: CreateWorktreeResult['startupTerminal']
-  startupGateOutcome?: Promise<SetupAgentGateOutcome | undefined>
   activationSetup?: CreateWorktreeResult['setup']
   didSpawnSetup: boolean
   warning?: string
@@ -413,10 +410,13 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   setup: CreateWorktreeResult['setup']
   defaultTabs: CreateWorktreeResult['defaultTabs']
   createdWithAgent: CreateWorktreeArgs['createdWithAgent']
+  creationId?: string
+  startupGateProgressTarget?: WebContents
   /** An automation's create is background work: its terminals never start a stopped WSL distro (E9). */
   automationCreate: boolean
 }): Promise<StagedStartupResult> {
   const { runtime, worktree, startup, defaultTabs, createdWithAgent } = args
+  const { creationId, startupGateProgressTarget } = args
   const userAct = args.automationCreate ? {} : { wslUserAct: true as const }
   let { setup } = args
   if (!startup || defaultTabs?.tabs.length) {
@@ -426,7 +426,6 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   let warning: string | undefined
   let startupTerminalHandle: string | null = null
   let startupTerminal: CreateWorktreeResult['startupTerminal']
-  let startupGateOutcome: StagedStartupResult['startupGateOutcome']
 
   let sequencedStartup = startup
   let wrappedSetupCommandStr: string | undefined
@@ -470,10 +469,25 @@ async function spawnLocalStartupAndSetupTerminals(args: {
       worktree
     )
     startupTerminalHandle = terminal.handle
-    startupGateOutcome = terminal[SETUP_AGENT_GATE]?.outcome
     startupTerminal = {
       spawned: true,
       surface: terminal.surface
+    }
+    const outcome = terminal[SETUP_AGENT_GATE]?.outcome
+    if (creationId && outcome && startupGateProgressTarget) {
+      startupTerminal.reportsSetupGateOutcome = true
+      void outcome
+        .catch(() => undefined)
+        .then((settled) => {
+          if (!startupGateProgressTarget.isDestroyed()) {
+            startupGateProgressTarget.send('createWorktree:progress', {
+              creationId,
+              phase: 'startup-gate-settled',
+              blocked: settled === 'blocked'
+            } satisfies CreateWorktreeProgressEvent)
+          }
+        })
+        .catch(console.warn)
     }
   } catch (error) {
     const message = readableWslDistroHoldText(
@@ -532,7 +546,6 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         }
       : {}),
     ...(startupTerminal ? { startupTerminal } : {}),
-    ...(startupGateOutcome ? { startupGateOutcome } : {}),
     didSpawnSetup,
     ...(warning ? { warning } : {})
   }
@@ -993,10 +1006,7 @@ export function emitCreateWorktreeProgress(
   mainWindow: BrowserWindow,
   phase: 'fetching' | 'creating',
   creationId?: string,
-  detail?: Pick<
-    Extract<CreateWorktreeProgressEvent, { phase: 'fetching' | 'creating' }>,
-    'checkout' | 'worktreeId'
-  >
+  detail?: Pick<CreateWorktreeProgressEvent, 'checkout' | 'worktreeId'>
 ): void {
   if (!mainWindow.isDestroyed()) {
     const event: CreateWorktreeProgressEvent = { creationId, phase, ...detail }
@@ -1893,26 +1903,11 @@ async function performLocalWorktreeCreate(
       setup,
       defaultTabs,
       createdWithAgent: args.createdWithAgent,
+      creationId,
+      startupGateProgressTarget: args.startupGateProgressTarget,
       automationCreate: Boolean(args.automationProvenance)
     })
   )
-  const { startupGateOutcome, startupTerminal } = stagedStartup
-  if (creationId && args.reportSetupGateOutcome === true && startupGateOutcome && startupTerminal) {
-    startupTerminal.reportsSetupGateOutcome = true
-    // The existing gate observes the wrapper even when its pane never mounts in the window.
-    void startupGateOutcome
-      .then((outcome) => {
-        if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
-          const event: CreateWorktreeProgressEvent = {
-            creationId,
-            phase: 'startup-gate-settled',
-            blocked: outcome === 'blocked'
-          }
-          mainWindow.webContents.send('createWorktree:progress', event)
-        }
-      })
-      .catch(console.warn)
-  }
 
   // Automation terminals are host-provisioned, so return none for renderer launch.
   const provisionedByHost = Boolean(args.automationProvenance)

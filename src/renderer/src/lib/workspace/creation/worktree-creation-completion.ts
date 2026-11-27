@@ -1,4 +1,5 @@
-import type { CreatedWorktreeResult } from '@/store/slices/worktrees/create/worktree-create-payload'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { translate } from '@/i18n/i18n'
 import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useAppStore } from '@/store/index'
@@ -7,10 +8,6 @@ import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace/activatio
 import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/workspace/creation/worktree-creation-agent-seeds'
 import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
-import {
-  deferredWorktreeCreationDraft,
-  keepWorktreeCreationUntilSetupSettles
-} from './worktree-creation-setup-draft'
 
 export async function completeWorktreeCreation(args: {
   creationId: string
@@ -19,29 +16,26 @@ export async function completeWorktreeCreation(args: {
   structuredLaunchAccepted: boolean
   activation: ActivateAndRevealResult | false
   primaryTabId: string | null
-  result?: CreatedWorktreeResult
+  startupTerminalTabId?: string
+  startupAgent?: TuiAgent
   backendSpawned: boolean
   startupDraftDeferred?: boolean
-  setupGateBlocked?: Promise<boolean>
   /** The host was asked to plan the agent launch, so the desktop's plan never runs. */
   hostPlannedStartup: boolean
   focusOnCompletion: boolean
 }): Promise<void> {
   const { request } = args
   if (args.startupDraftDeferred) {
-    useAppStore
-      .getState()
-      .updatePendingWorktreeCreation(
-        args.creationId,
-        deferredWorktreeCreationDraft(args.worktreeId, request, args.result?.worktree.hostId)
-      )
-  } else if (args.setupGateBlocked && args.result) {
-    keepWorktreeCreationUntilSetupSettles(
-      args.creationId,
-      request,
-      args.result.worktree,
-      args.setupGateBlocked
-    )
+    useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
+      worktreeId: args.worktreeId,
+      status: 'error',
+      startupDraftDeferred: true,
+      error: translate(
+        'worktree.creation.startupDraftDeferred',
+        'Your worktree is ready. The agent draft is still available here.'
+      ),
+      request
+    })
   } else {
     // Why: clearing synchronously after activation lets React commit the panel-to-terminal swap in one frame.
     useAppStore.getState().removePendingWorktreeCreation(args.creationId, { cleanupVm: false })
@@ -53,8 +47,8 @@ export async function completeWorktreeCreation(args: {
       request,
       worktreeId: args.worktreeId,
       primaryTabId: args.primaryTabId,
-      startupTerminalTabId: args.result?.startupTerminal?.tabId,
-      startupAgent: args.result?.worktree.createdWithAgent ?? undefined,
+      startupTerminalTabId: args.startupTerminalTabId,
+      startupAgent: args.startupAgent,
       backendSpawned: args.backendSpawned
     })
   }

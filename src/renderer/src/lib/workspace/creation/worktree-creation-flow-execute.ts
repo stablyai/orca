@@ -311,10 +311,10 @@ export async function executeWorktreeCreation(
     structuredLaunchAccepted,
     activation,
     primaryTabId,
-    result,
+    startupTerminalTabId: result.startupTerminal?.tabId,
+    startupAgent: result.worktree.createdWithAgent ?? undefined,
     backendSpawned,
     startupDraftDeferred: windowStartup.startupDraftDeferred,
-    setupGateBlocked: windowStartup.setupGateBlocked,
     hostPlannedStartup: result.hostPlannedStartup === true,
     focusOnCompletion: shouldActivateOnCompletion
   })

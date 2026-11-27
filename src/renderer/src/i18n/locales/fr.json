@@ -25578,6 +25578,7 @@
     "failed": "Échec de l'ouverture du fichier."
   },
   "terminal": {
+    "startupPromptNotDelivered": "Le message de démarrage n’a pas été transmis.",
     "recentImages": {
       "pasted": "Image collée",
       "open": "Ouvrir l'aperçu",

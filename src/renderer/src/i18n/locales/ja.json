@@ -24825,6 +24825,7 @@
     "failed": "ファイルを開けませんでした。"
   },
   "terminal": {
+    "startupPromptNotDelivered": "起動時のプロンプトは送信されませんでした。",
     "recentImages": {
       "pasted": "貼り付けた画像",
       "open": "プレビューを開く",

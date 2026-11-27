@@ -24951,6 +24951,7 @@
     "delete": "Löschen"
   },
   "terminal": {
+    "startupPromptNotDelivered": "Die Startnachricht wurde nicht zugestellt.",
     "recentImages": {
       "pasted": "Eingefügtes Bild",
       "open": "Vorschau öffnen",

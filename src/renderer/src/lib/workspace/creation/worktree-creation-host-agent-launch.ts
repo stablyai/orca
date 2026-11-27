@@ -1,13 +1,10 @@
 import { useAppStore } from '@/store'
-import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { resolveBackendDraftStartup } from '@/lib/workspace/creation/worktree-draft-startup-view-mode'
 import { toast } from 'sonner'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { WorktreeStartupPayload } from '@/lib/workspace/creation/worktree-startup-payload'
 import { buildWorktreeCreationStartupOpt } from '@/lib/workspace/creation/worktree-creation-flow-startup'
-import { observeRendererSetupGate } from './worktree-creation-setup-draft'
 import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/launch-outcome/agent-launch-pane-notice-text'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { InitialTerminalOptions } from '@/lib/workspace/activation/worktree-activation-store-contract'
@@ -54,26 +51,11 @@ export function windowStartupAfterCreate(
   agent: TuiAgent | null
   terminalOptions: CreationTerminalOptions
   startupDraftDeferred: boolean
-  setupGateBlocked?: Promise<boolean>
 } {
   const backendSpawned = Boolean(result.startupTerminal?.spawned || result.startupTerminal?.handle)
   const plan = planWindowStartup(request, result, backendSpawned)
-  const hostId =
-    result.worktree.hostId ?? request.workspaceRunContext?.hostId ?? request.executionHostId
-  const rendererGate =
-    plan.startup?.launchConfig?.commandProvenance === 'generated' &&
-    request.launchDraftPrompt &&
-    result.setup?.waitForAgentStartup &&
-    (hostId ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID &&
-    !isWebClientLocation()
-      ? observeRendererSetupGate()
-      : undefined
   return {
     ...plan,
-    ...(plan.startup && rendererGate
-      ? { startup: { ...plan.startup, setupGateObserver: rendererGate.observer } }
-      : {}),
-    setupGateBlocked: result.setupGateBlocked ?? rendererGate?.promise,
     startupDraftDeferred: Boolean(
       request.launchDraftPrompt &&
       result.startupTerminal?.handle &&

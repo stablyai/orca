@@ -150,8 +150,6 @@ export type CreateWorktreeArgs = {
   startup?: WorktreeStartupLaunch
   /** Correlate concurrent background creates with renderer progress; synchronous callers may omit it. */
   creationId?: string
-  /** The desktop has a draft to retain if the startup wrapper reports a blocked agent. */
-  reportSetupGateOutcome?: true
 }
 
 export type WorktreeCheckoutProgress = {
@@ -160,18 +158,15 @@ export type WorktreeCheckoutProgress = {
   total: number
 }
 
-type WorktreeCheckoutProgressEvent = {
+/** Progress payload: checkout accompanies creating; null means Git finished writing files. */
+export type CreateWorktreeProgressEvent = {
   creationId?: string
-  phase: 'fetching' | 'creating'
-  /** Null means Git finished writing files. */
+  phase: 'fetching' | 'creating' | 'startup-gate-settled'
+  blocked?: boolean
   checkout?: WorktreeCheckoutProgress | null
   /** Local creates name the checkout before Git publishes it. */
   worktreeId?: string
 }
-
-export type CreateWorktreeProgressEvent =
-  | WorktreeCheckoutProgressEvent
-  | { creationId: string; phase: 'startup-gate-settled'; blocked: boolean }
 
 export type AdoptProvisionedRootArgs = CreateWorktreeArgs & {
   runtimeId: string

@@ -63,14 +63,12 @@ export function selectWorktreeCreationSurfaceShown(
   state: Pick<AppState, 'activeView' | 'activePendingCreationId' | 'pendingWorktreeCreations'>
 ): boolean {
   const { activeView, activePendingCreationId } = state
-  const entry = activePendingCreationId
-    ? state.pendingWorktreeCreations[activePendingCreationId]
-    : undefined
   return shouldShowWorktreeCreationSurface({
     activeView,
     activePendingCreationId,
     hasActivePendingCreation:
-      entry?.status !== 'waiting-for-setup' && pendingWorktreeCreationIsVisible(entry)
+      activePendingCreationId !== null &&
+      pendingWorktreeCreationIsVisible(state.pendingWorktreeCreations[activePendingCreationId])
   })
 }
 

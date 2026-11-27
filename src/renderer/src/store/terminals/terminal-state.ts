@@ -1,8 +1,5 @@
 import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
-import type {
-  FreshWorkspaceAgentLaunch,
-  WorktreeSetupGateObserver
-} from '@/lib/workspace/creation/worktree-startup-payload'
+import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import type {
   TerminalLayoutSnapshot,
@@ -87,7 +84,6 @@ export type TerminalState = {
       freshAgentLaunch?: FreshWorkspaceAgentLaunch
       agentArgsOverride?: string | null
       draftPrompt?: string
-      setupGateObserver?: WorktreeSetupGateObserver
       sessionOptions?: Record<string, SessionOptionValue>
       initialAgentStatus?: {
         agent: TuiAgent
