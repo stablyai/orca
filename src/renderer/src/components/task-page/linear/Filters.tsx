@@ -176,7 +176,7 @@ export function TaskPageLinearFilters({
                   'auto.components.TaskPage.linearHasWorktreeSearchPlaceholder',
                   'Filter issues linked to an Orca workspace...'
                 )
-              : t('auto.components.TaskPage.eec0c5c079', 'Search Linear issues...')
+              : t('auto.components.TaskPage.eec0c5c079', 'Search...')
           }
           density="compact"
           surface="background"
