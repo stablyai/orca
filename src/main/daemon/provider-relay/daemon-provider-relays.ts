@@ -33,7 +33,8 @@ export function createDaemonProviderRelays(options: DaemonProviderRelayOptions):
     log: (event, details) => options.log.log(event, details)
   })
   const identity: Partial<Record<ProviderRelayCapability, true>> = {}
-  for (const capability of relays.supported ? providerRelayCapabilities(options.protocolVersion) : []) {
+  const advertised = relays.supported ? providerRelayCapabilities(options.protocolVersion) : []
+  for (const capability of advertised) {
     identity[capability] = true
   }
   return { relays, identity }
