@@ -12,8 +12,9 @@ export const NATIVE_CHAT_IMAGE_LABEL_ENGLISH: NativeChatImageLabelCopy = {
   imageCount: (count) => `${count} images`
 }
 
+// Older terminal pastes used only a millisecond timestamp and could still appear in chat history.
 const PASTED_IMAGE_NAME = new RegExp(
-  `^orca-paste-\\d+-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}${AGENT_SESSION_PASTED_IMAGE_SUFFIX_SOURCE}$`,
+  `^orca-paste-(?:\\d+-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}${AGENT_SESSION_PASTED_IMAGE_SUFFIX_SOURCE}|\\d{13}\\.png)$`,
   'i'
 )
 
