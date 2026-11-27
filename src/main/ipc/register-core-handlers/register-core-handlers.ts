@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { registerAppHandlers } from '../app'
-import { registerWslMoveWiring } from '../wsl/wsl-move-driver-wiring'
-import { registerWslDriveProjectHandlers } from '../wsl/wsl-drive-project-handlers'
+import { canCreateWslHostService } from '../wsl/wsl-host-service-availability'
+import { registerNonWindowsWslIpcStubs } from '../wsl/non-windows-wsl-ipc-stubs'
 import { installProjectRuntimeGitRouter } from '../../workspaces/execution-host/project-runtime-git-router'
 import { registerCliHandlers } from '../cli'
 import { registerOrcaUninstallHandlers } from '../orca-uninstall'
@@ -16,9 +16,8 @@ import { registerFilesystemWatcherHandlers } from '../filesystem/watchers/filesy
 import { registerGitHubHandlers } from '../source-control/github'
 import { registerGitLabHandlers } from '../source-control/gitlab'
 import { registerHostedReviewHandlers } from '../source-control/hosted-review'
-import { registerLinearHandlers } from '../linear/register-handlers'
-import { registerJiraHandlers } from '../jira/register-handlers'
-import { registerJiraIssueSummaryGenerationHandlers } from '../jira/issue-summary-generation'
+import { registerLazyLinearHandlers } from '../linear/lazy-linear-handlers'
+import { registerLazyJiraHandlers } from '../jira/lazy-jira-handlers'
 import { registerBitbucketHandlers } from '../source-control/bitbucket'
 import { registerFeedbackHandlers } from '../feedback/feedback'
 import { registerCrashReportingHandlers } from '../crash-reporting/crash-reporting'
@@ -59,11 +58,8 @@ import { registerShellHandlers } from '../shell/shell'
 import { registerPetHandlers } from '../pets/pet'
 import { registerPluginHandlers } from '../plugins/plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
-import { registerEmulatorFrameStreamHandlers } from '../emulator/emulator-frame-stream'
-import { registerEmulatorVideoStreamHandlers } from '../emulator/emulator-video-stream'
-import { registerEmulatorScrcpyTouchHandler } from '../emulator/emulator-scrcpy-touch'
-import { registerEmulatorScrcpyKeyboardHandler } from '../emulator/emulator-scrcpy-keyboard'
-import { registerSpeechHandlers } from '../speech'
+import { registerLazyEmulatorHandlers } from '../emulator/lazy-emulator-handlers'
+import { registerLazySpeechHandlers } from '../lazy-speech-handlers'
 import { registerTerminalRenderDesyncEvidenceHandler } from '../terminal-views/terminal-render-desync-evidence'
 import { registerOrcaProfileHandlers } from '../profiles/orca-profiles'
 import { registerCodexAccountHandlers } from '../accounts/codex-accounts'
@@ -163,9 +159,8 @@ export async function registerCoreHandlers(
     registerGitHubHandlers(store, stats, runtime)
     registerGitLabHandlers(store)
     registerHostedReviewHandlers(store, stats)
-    registerLinearHandlers()
-    registerJiraHandlers()
-    registerJiraIssueSummaryGenerationHandlers(store, commitMessageAgentEnv)
+    registerLazyLinearHandlers()
+    registerLazyJiraHandlers(store, commitMessageAgentEnv)
     registerBitbucketHandlers()
     registerFeedbackHandlers()
     if (crashReports) {
@@ -212,12 +207,7 @@ export async function registerCoreHandlers(
     registerPetHandlers()
     registerSessionHandlers(store, runtime)
     registerUIHandlers(store, { isDashboardPopoutRenderer })
-    registerEmulatorFrameStreamHandlers()
-    registerEmulatorVideoStreamHandlers((id) =>
-      runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id)
-    )
-    registerEmulatorScrcpyTouchHandler()
-    registerEmulatorScrcpyKeyboardHandler()
+    registerLazyEmulatorHandlers((id) => runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id))
     registerWorkspaceSpaceHandlers(store)
     registerWorkspacePortHandlers(store)
     registerLinkPreviewHandlers()
@@ -226,8 +216,16 @@ export async function registerCoreHandlers(
     registerFilesystemWatcherHandlers()
     registerRuntimeHandlers(runtime)
     const hostsReady = registerRuntimeHostHandlers(store, lifecycleOptions.hostInitialization)
-    registerWslMoveWiring(store, runtime)
-    registerWslDriveProjectHandlers(store, runtime)
+    if (process.platform === 'win32' || canCreateWslHostService()) {
+      const [{ registerWslMoveWiring }, { registerWslDriveProjectHandlers }] = await Promise.all([
+        import('../wsl/wsl-move-driver-wiring'),
+        import('../wsl/wsl-drive-project-handlers')
+      ])
+      registerWslMoveWiring(store, runtime)
+      registerWslDriveProjectHandlers(store, runtime)
+    } else {
+      registerNonWindowsWslIpcStubs()
+    }
     installProjectRuntimeGitRouter(store)
     registerEphemeralVmHandlers(store, pluginService)
     // Session history and terminal resume are not chats; skip booting an empty chat journal host.
@@ -281,7 +279,7 @@ export async function registerCoreHandlers(
       }
     })
     registerUpdaterHandlers()
-    registerSpeechHandlers(store, commitMessageAgentEnv)
+    registerLazySpeechHandlers(store, commitMessageAgentEnv)
     void hostsReady.catch((error: unknown) =>
       console.warn('[startup] Host initialization failed:', error)
     )

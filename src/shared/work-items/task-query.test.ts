@@ -17,4 +17,9 @@ it('removes repo filters without turning quoted search text into filters', () =>
   expect(stripRepoQualifiers("'tab bar' -label:'needs triage' repo:a/b")).toBe(
     '"tab bar" -label:"needs triage"'
   )
+  // The tokenizer cannot escape " inside "...", so mixed-quoted phrases keep their raw quoting.
+  const mixedQuotes = `'a" is:closed "b' label:'x" is:merged "y'`
+  const mixedQuery = stripRepoQualifiers(`repo:o/p ${mixedQuotes}`)
+  expect(mixedQuery).toBe(mixedQuotes)
+  expect(parseTaskQuery(mixedQuery)).toMatchObject({ state: null, labels: ['x" is:merged "y'] })
 })

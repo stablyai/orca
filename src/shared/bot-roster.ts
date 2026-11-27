@@ -158,6 +158,35 @@ export const BOT_ROSTER_COMMANDS = [
   'A bot on another computer: put its `--on <server>` before `--to`, as its "On:" line shows.'
 ].join('\n')
 
+/** A computer paired to this Orca and connected now, as a server's `bot list` names it: what
+ *  `--on-client` takes (its installation id), and its bots its owner always lets this Orca's agents
+ *  ask; `moreBots` when it allows more than it named. Its other bots stay private to it. */
+export type BotRosterClient = {
+  name: string
+  onClient: string
+  bots: { id: string; name: string }[]
+  moreBots?: true
+}
+
+/** A connected paired computer's lines in a server's `bot list`: how to ask the bots it lets this
+ *  Orca ask, and how its owner makes another one askable. Its name and its bots' names are its own
+ *  words, quoted as data. */
+export function formatPairedClient(client: BotRosterClient): string {
+  const on = `--on-client ${botServerArgument({ name: client.name, on: client.onClient })}`
+  const listed = client.bots
+    .map((bot) => `${JSON.stringify(bot.name)} (${BOT_ADDRESS_PREFIX}${bot.id})`)
+    .join(', ')
+  const more = client.moreBots ? ' (it allows more)' : ''
+  return [
+    `${JSON.stringify(client.name)} (paired computer, connected; the name is its own): ${on}`,
+    client.bots.length > 0
+      ? `  Bots it lets you ask${more}: ${listed}`
+      : `  No bots listed${more}.`,
+    `  Ask: orca orchestration send ${on} --to bot:<id> --type question|handoff --subject … --body-file …`,
+    '  Other bots there may decline; ask your owner to @-mention one in your chat from that computer.'
+  ].join('\n')
+}
+
 /** A paired server whose bots couldn't be read, as `bot list` says so. */
 export function formatUnreachableBotServer(name: string): string {
   return `${JSON.stringify(name)}: not reachable now, so its bots aren't listed.`

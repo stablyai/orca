@@ -1,6 +1,7 @@
 import type { MobileProjectSectionCatalog } from '../../../../shared/sidebar-list/catalog/mobile-project-sections-contract'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import type { AppState } from '@/store/types'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { MobileSessionPublicationSources } from './mobile-session-dirty-workspaces'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
@@ -39,6 +40,12 @@ function noMobileSessionPublicationSources(): MobileSessionPublicationSources | 
   return null
 }
 
+type IdSetCache<TSource> = { source: TSource; ids: ReadonlySet<string> }
+
+function noIdSetCache<TSource>(): IdSetCache<TSource> | null {
+  return null
+}
+
 const NO_PUBLISHED_ACTIVE_GROUPS: Readonly<Record<string, string>> = {}
 
 export const graphState = {
@@ -67,6 +74,8 @@ export const graphState = {
   cachedOpenFileIndexesSource: null as AppState['openFiles'] | null,
   cachedOpenFileIndexes: null as OpenFileIndexes | null,
   cachedEditorDraftHashes: null as EditorDraftHashCache | null,
+  cachedLiveFolderWorkspaceIds: noIdSetCache<AppState['folderWorkspaces']>(),
+  cachedMobileSessionWorktreeIds: noIdSetCache<readonly unknown[]>(),
   mobileSessionSnapshotVersion: 0,
   /** Last group grid sizes main accepted, so a refit republishes only when one changed. */
   publishedTerminalGroupGridSizesKey: '',
@@ -74,6 +83,44 @@ export const graphState = {
   publishedProjectSectionCatalog: noPublishedProjectSectionCatalog(),
   /** Each workspace's active group as main last accepted it (layout-owner builds). */
   publishedActiveGroups: NO_PUBLISHED_ACTIVE_GROUPS
+}
+
+export function getLiveFolderWorkspaceIds(state: AppState): ReadonlySet<string> {
+  const folderWorkspaces = selectFolderWorkspaces(state)
+  const cached = graphState.cachedLiveFolderWorkspaceIds
+  if (cached && cached.source === folderWorkspaces) {
+    return cached.ids
+  }
+  const ids = new Set((folderWorkspaces ?? []).map((workspace) => workspace.id))
+  graphState.cachedLiveFolderWorkspaceIds = { source: folderWorkspaces, ids }
+  return ids
+}
+
+/** Every workspace with a mobile-publishable surface; rebuilt only when a source collection changes. */
+export function getMobileSessionWorktreeIds(
+  state: AppState,
+  browserTabsByWorktree: AppState['browserTabsByWorktree']
+): ReadonlySet<string> {
+  const sources = [
+    state.tabsByWorktree,
+    state.groupsByWorktree,
+    state.unifiedTabsByWorktree,
+    browserTabsByWorktree,
+    state.openFiles
+  ]
+  const cached = graphState.cachedMobileSessionWorktreeIds
+  if (cached && cached.source.every((source, index) => source === sources[index])) {
+    return cached.ids
+  }
+  const ids = new Set<string>([
+    ...Object.keys(state.tabsByWorktree),
+    ...Object.keys(state.groupsByWorktree),
+    ...Object.keys(state.unifiedTabsByWorktree),
+    ...Object.keys(browserTabsByWorktree),
+    ...state.openFiles.map((file) => file.worktreeId)
+  ])
+  graphState.cachedMobileSessionWorktreeIds = { source: sources, ids }
+  return ids
 }
 
 /** IDs occurring more than once cannot address the legacy tab-keyed runtime maps safely. */

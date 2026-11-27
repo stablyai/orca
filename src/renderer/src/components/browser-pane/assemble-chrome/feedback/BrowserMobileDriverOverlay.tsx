@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import type { RuntimeTerminalDriverState } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { useTranslate } from '@/i18n/use-translate'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 type Props = {
   driver: RuntimeTerminalDriverState
@@ -41,18 +42,23 @@ export function BrowserMobileDriverOverlay({
     }
     setPending(true)
     setTakeBackFailed(false)
-    try {
-      await takeBack()
-    } catch {
-      // Show reclaim failure and permit retry when the runtime is gone or the phone still holds the lock.
-      if (mountedRef.current) {
-        setTakeBackFailed(true)
+    await runWithFinally(
+      async () => {
+        try {
+          await takeBack()
+        } catch {
+          // Show reclaim failure and permit retry when the runtime is gone or the phone still holds the lock.
+          if (mountedRef.current) {
+            setTakeBackFailed(true)
+          }
+        }
+      },
+      () => {
+        if (mountedRef.current) {
+          setPending(false)
+        }
       }
-    } finally {
-      if (mountedRef.current) {
-        setPending(false)
-      }
-    }
+    )
   }
 
   return (
