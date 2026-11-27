@@ -48,15 +48,21 @@ function normalizeClientSessionTabSelection(
 }
 
 function normalizePersonSurface(raw: unknown): PersistedPersonSurface[] {
-  const surface = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
-  const text = (key: string) => (typeof surface[key] === 'string' ? surface[key] : null)
+  if (typeof raw !== 'object' || raw === null) {
+    return []
+  }
+  const text = (key: string): string | null => {
+    const value: unknown = Reflect.get(raw, key)
+    return typeof value === 'string' ? value : null
+  }
+  const kind = text('kind')
   const parentTabId = text('parentTabId')
   const leafId = text('leafId')
   const browserPageId = text('browserPageId')
-  if (surface.kind === 'terminal' && parentTabId && leafId) {
+  if (kind === 'terminal' && parentTabId && leafId) {
     return [{ kind: 'terminal', parentTabId, leafId, ptyId: text('ptyId') }]
   }
-  return surface.kind === 'browser' && browserPageId ? [{ kind: 'browser', browserPageId }] : []
+  return kind === 'browser' && browserPageId ? [{ kind: 'browser', browserPageId }] : []
 }
 
 // Malformed disk/remote payloads must degrade to no selection without throwing.

@@ -798,17 +798,15 @@ const openBrowser = async (r: Awaited<ReturnType<typeof rig>>, deviceId: string)
 const tabIds = (tabs: Tabs) => tabs.tabs.map((tab) => tab.id)
 /** The owner's tab lists in the Home: their devices' and the host's own, with what each has picked. */
 const ownerTabs = async (r: Awaited<ReturnType<typeof rig>>) => {
-  const host = await r.runtime.listMobileSessionTabs(r.workspace)
-  return Object.fromEntries(
-    [
-      ['owner-desk', await r.list('owner-desk')],
-      ['owner-phone', await r.list('owner-phone')],
-      ['host', host]
-    ].map(([name, tabs]) => [
-      name,
-      { tabs: tabIds(tabs as Tabs), active: (tabs as Tabs).activeTabId }
-    ])
-  )
+  const read = (tabs: { tabs: { id: string }[]; activeTabId: string | null }) => ({
+    tabs: tabs.tabs.map((tab) => tab.id),
+    active: tabs.activeTabId
+  })
+  return {
+    desk: read(await r.list('owner-desk')),
+    phone: read(await r.list('owner-phone')),
+    host: read(await r.runtime.listMobileSessionTabs(r.workspace))
+  }
 }
 
 it('opens a teammate’s terminal and browser tab in the agent’s Home in their own list alone', async () => {
