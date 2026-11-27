@@ -13,7 +13,10 @@ import type { OrcadServerRepository } from './orcad-server-repositories'
 /** Include groups because they can supply a folder's host. */
 export type OrcadServerFolderCatalog = Omit<FolderHostCatalog, 'repos'>
 
-const HostFields = { connectionId: z.string().nullish(), executionHostId: z.string().nullish() }
+const hostFields = () => ({
+  connectionId: z.string().nullish(),
+  executionHostId: z.string().nullish()
+})
 
 const ServerFolderWorkspacesSchema = lazyZodSchema(() =>
   z.object({
@@ -22,7 +25,7 @@ const ServerFolderWorkspacesSchema = lazyZodSchema(() =>
         id: z.string().min(1),
         folderPath: z.string().min(1),
         projectGroupId: z.string().min(1),
-        ...HostFields
+        ...hostFields()
       })
     )
   })
@@ -34,7 +37,7 @@ const ServerProjectGroupsSchema = lazyZodSchema(() =>
       z.object({
         id: z.string().min(1),
         parentGroupId: z.string().nullish(),
-        ...HostFields
+        ...hostFields()
       })
     )
   })
