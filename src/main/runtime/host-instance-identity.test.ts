@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { cpSync, mkdtempSync, readdirSync } from 'node:fs'
+import { cpSync, mkdtempSync, readFileSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadOrCreateE2EEKeypair, writeNewE2EEKeypair } from './rpc/server/pairing/e2ee-keypair'
 import { DeviceRegistry } from './rpc/server/pairing/device-registry'
 import {
@@ -18,6 +18,11 @@ import {
   type HostIdentityWrite
 } from './host-instance-identity'
 import { DEVICE_REGISTRY_FILENAME } from './rpc/server/pairing/mobile-pairing-files'
+
+const { readMachineIdentity } = vi.hoisted(() => ({ readMachineIdentity: vi.fn() }))
+vi.mock('../persistence/profile-state/access/profile-state-access-identity', () => ({
+  profileStateAccessMachineIdentity: readMachineIdentity
+}))
 
 const vmA = hostInstanceIdFromEnv({ ORCA_INSTANCE_ID: 'vm-a' })
 const vmB = hostInstanceIdFromEnv({ ORCA_INSTANCE_ID: 'vm-b' })
@@ -51,7 +56,95 @@ describe('ensureHostInstanceIdentity', () => {
   let dir: string
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'orca-host-instance-'))
+    readMachineIdentity.mockReturnValue('machine-a')
+    vi.stubEnv('ORCA_INSTANCE_ID', '')
   })
+
+  afterEach(() => vi.unstubAllEnvs())
+
+  it.skipIf(process.platform !== 'darwin')(
+    'gives a migrated Mac profile its own identity without an instance environment variable',
+    async () => {
+      const source = await pairedHost(dir)
+      ensureHostInstanceIdentity(dir)
+      expect((await identity(dir)).registry.validateToken(source.token)).not.toBeNull()
+      expect((await identity(dir)).publicKeyB64).toBe(source.publicKeyB64)
+
+      const clone = mkdtempSync(join(tmpdir(), 'orca-host-instance-clone-'))
+      cpSync(dir, clone, { recursive: true })
+      readMachineIdentity.mockReturnValue(null)
+      ensureHostInstanceIdentity(clone)
+      expect((await identity(clone)).registry.validateToken(source.token)).not.toBeNull()
+
+      readMachineIdentity.mockReturnValue('machine-b')
+      ensureHostInstanceIdentity(clone)
+      const rotated = await identity(clone)
+      expect(rotated.publicKeyB64).not.toBe(source.publicKeyB64)
+      expect(rotated.installationId).not.toBe(source.installationId)
+      expect(rotated.registry.validateToken(source.token)).toBeNull()
+
+      const { token } = rotated.registry.addDevice('Phone on migrated Mac')
+      rotated.registry.flushPendingLastSeen()
+      ensureHostInstanceIdentity(clone)
+      expect((await identity(clone)).publicKeyB64).toBe(rotated.publicKeyB64)
+      expect((await identity(clone)).registry.validateToken(token)).not.toBeNull()
+
+      readMachineIdentity.mockReturnValue('machine-a')
+      ensureHostInstanceIdentity(dir)
+      expect((await identity(dir)).publicKeyB64).toBe(source.publicKeyB64)
+      expect((await identity(dir)).registry.validateToken(source.token)).not.toBeNull()
+    }
+  )
+
+  it.skipIf(process.platform !== 'darwin')(
+    'keeps pairings when an instance variable is adopted or unset, but detects a later Mac move',
+    async () => {
+      const source = await pairedHost(dir)
+      ensureHostInstanceIdentity(dir)
+      vi.stubEnv('ORCA_INSTANCE_ID', 'vm-a')
+      ensureHostInstanceIdentity(dir)
+      expect((await identity(dir)).registry.validateToken(source.token)).not.toBeNull()
+      vi.stubEnv('ORCA_INSTANCE_ID', '')
+      ensureHostInstanceIdentity(dir)
+      expect((await identity(dir)).publicKeyB64).toBe(source.publicKeyB64)
+      expect((await identity(dir)).registry.validateToken(source.token)).not.toBeNull()
+
+      readMachineIdentity.mockReturnValue('machine-b')
+      ensureHostInstanceIdentity(dir)
+      expect((await identity(dir)).publicKeyB64).not.toBe(source.publicKeyB64)
+      expect((await identity(dir)).registry.validateToken(source.token)).toBeNull()
+    }
+  )
+
+  it.skipIf(process.platform !== 'darwin')(
+    'does not share an interrupted rotation with a copy recovered on another Mac',
+    async () => {
+      ensureHostInstanceIdentity(dir, vmA)
+      await pairedHost(dir)
+      writeNewE2EEKeypair(dir, (path, value) => writeDurableSecureJsonFile(`${path}.next`, value))
+      writeDurableSecureJsonFile(join(dir, `${DEVICE_REGISTRY_FILENAME}.next`), [])
+      writeDurableSecureJsonFile(join(dir, `${HOST_INSTALLATION_FILENAME}.next`), {
+        installationId: randomUUID()
+      })
+      const markerPath = join(dir, HOST_INSTANCE_FILENAME)
+      writeDurableSecureJsonFile(markerPath, {
+        ...JSON.parse(readFileSync(markerPath, 'utf8')),
+        rotating: true
+      })
+      const clone = mkdtempSync(join(tmpdir(), 'orca-host-instance-clone-'))
+      cpSync(dir, clone, { recursive: true })
+
+      ensureHostInstanceIdentity(dir)
+      const recoveredSource = await identity(dir)
+      readMachineIdentity.mockReturnValue('machine-b')
+      ensureHostInstanceIdentity(clone)
+      const recoveredClone = await identity(clone)
+      expect(recoveredClone.publicKeyB64).not.toBe(recoveredSource.publicKeyB64)
+      expect(recoveredClone.installationId).not.toBe(recoveredSource.installationId)
+      ensureHostInstanceIdentity(clone)
+      expect((await identity(clone)).publicKeyB64).toBe(recoveredClone.publicKeyB64)
+    }
+  )
 
   it('rotates the identity and clears pairings when ORCA_INSTANCE_ID changes', async () => {
     ensureHostInstanceIdentity(dir, vmA)

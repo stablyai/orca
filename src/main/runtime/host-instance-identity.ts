@@ -1,4 +1,4 @@
-// Copies of one machine image share the pairing identity files; ORCA_INSTANCE_ID tells the copies apart.
+// Copied profiles share pairing files; a Mac's hardware identity or ORCA_INSTANCE_ID tells copies apart.
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs'
 import { basename, join } from 'node:path'
@@ -11,6 +11,7 @@ import { E2EE_KEYPAIR_FILENAME } from '../../shared/remote-runtime/host-store/ru
 import { writeNewE2EEKeypair } from './rpc/server/pairing/e2ee-keypair'
 import { DEVICE_REGISTRY_FILENAME } from './rpc/server/pairing/mobile-pairing-files'
 import { HOST_INSTALLATION_FILENAME } from './hosts/platform-probe/host-descriptor'
+import { profileStateAccessMachineIdentity } from '../persistence/profile-state/access/profile-state-access-identity'
 
 export const HOST_INSTANCE_FILENAME = 'orca-host-instance.json'
 export const ORCA_INSTANCE_ID_ENV = 'ORCA_INSTANCE_ID'
@@ -31,6 +32,7 @@ const BACKUP_NAME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-[0-9a-f]{6}$
 const HostInstanceMarkerSchema = z.object({
   v: z.literal(1),
   instanceId: z.string().min(1).optional(),
+  machineId: z.string().min(1).optional(),
   rotating: z.literal(true).optional(),
   /** Backup folder for the files a `rotating` publish replaces; stable across an interrupted publish. */
   backup: z.string().optional()
@@ -40,7 +42,7 @@ type HostInstanceMarker = z.infer<typeof HostInstanceMarkerSchema>
 export type HostIdentityOutcome =
   | { kind: 'unchanged' }
   | { kind: 'recorded' }
-  | { kind: 'rotated'; reason: 'instance_changed' | 'interrupted_rotation' }
+  | { kind: 'rotated'; reason: 'instance_changed' | 'machine_changed' | 'interrupted_rotation' }
   /** Nothing was changed on disk, so the existing identity is still whole and safe to serve. */
   | { kind: 'kept'; error: unknown }
 
@@ -60,6 +62,16 @@ export class HostIdentityRotationNotStartedError extends Error {
 export function hostInstanceIdFromEnv(env: NodeJS.ProcessEnv = process.env): string | null {
   const raw = env[ORCA_INSTANCE_ID_ENV]?.trim()
   return raw ? createHash('sha256').update(`orca-host-instance\0${raw}`).digest('hex') : null
+}
+
+function hostMacMachineId(): string | null {
+  if (process.platform !== 'darwin') {
+    return null
+  }
+  const machineId = profileStateAccessMachineIdentity()
+  return machineId
+    ? createHash('sha256').update(`orca-host-machine\0${machineId}`).digest('hex')
+    : null
 }
 
 function isMissing(error: unknown): boolean {
@@ -96,8 +108,11 @@ function readMarker(markerPath: string): HostInstanceMarker | null {
   return readMarkerFile(markerPath).marker
 }
 
-function markerFor(instanceId: string | undefined): HostInstanceMarker {
-  return { v: 1, ...(instanceId ? { instanceId } : {}) }
+function markerFor(
+  instanceId: string | undefined,
+  machineId: string | undefined
+): HostInstanceMarker {
+  return { v: 1, ...(instanceId ? { instanceId } : {}), ...(machineId ? { machineId } : {}) }
 }
 
 function newBackupName(now: Date): string {
@@ -166,7 +181,7 @@ function pruneIdentityBackups(userDataPath: string, current: string | undefined)
  * moved by an earlier, interrupted publish. */
 function publishStagedIdentity(
   userDataPath: string,
-  marker: { instanceId?: string; backup?: string },
+  marker: Pick<HostInstanceMarker, 'instanceId' | 'machineId' | 'backup'>,
   write: HostIdentityWrite
 ): void {
   const backupDir =
@@ -187,7 +202,7 @@ function publishStagedIdentity(
     }
   }
   bestEffortFsyncDirectorySync(userDataPath)
-  write(join(userDataPath, HOST_INSTANCE_FILENAME), markerFor(marker.instanceId))
+  write(join(userDataPath, HOST_INSTANCE_FILENAME), markerFor(marker.instanceId, marker.machineId))
   pruneIdentityBackups(userDataPath, marker.backup)
 }
 
@@ -224,7 +239,7 @@ export function rotateHostIdentity(
     }
   }
   const marker: HostInstanceMarker = {
-    ...markerFor(instanceId ?? stored?.instanceId),
+    ...markerFor(instanceId ?? stored?.instanceId, hostMacMachineId() ?? stored?.machineId),
     rotating: true,
     backup: newBackupName(now())
   }
@@ -254,8 +269,8 @@ export function rotateHostIdentity(
 }
 
 /**
- * Rotates only when ORCA_INSTANCE_ID is set and differs from the id recorded with this identity.
- * Unset never rotates; the first id seen is recorded so adopting the variable keeps pairings.
+ * Rotates when a known Mac hardware identity or explicit ORCA_INSTANCE_ID changes.
+ * First observations only record their hashes; unavailable identities retain the previous observation.
  * Throws only when a started rotation cannot be finished, so old and new files may be mixed.
  */
 export function ensureHostInstanceIdentity(
@@ -265,13 +280,11 @@ export function ensureHostInstanceIdentity(
 ): HostIdentityOutcome {
   const markerPath = join(userDataPath, HOST_INSTANCE_FILENAME)
   const { marker: stored, malformed } = readMarkerFile(markerPath)
+  const machineId = hostMacMachineId()
+  const recoveredRotation = !!stored?.rotating
   if (stored?.rotating) {
-    publishStagedIdentity(
-      userDataPath,
-      { instanceId: instanceId ?? stored.instanceId, backup: stored.backup },
-      write
-    )
-    return { kind: 'rotated', reason: 'interrupted_rotation' }
+    // A copied transaction must finish under its original identity before detecting this Mac.
+    publishStagedIdentity(userDataPath, stored, write)
   }
   // Without `rotating`, staged files are from a rotation that crashed before its marker; drop
   // them so a secret key does not sit beside the live one until the next rotation. An unreadable
@@ -279,16 +292,25 @@ export function ensureHostInstanceIdentity(
   if (!malformed) {
     discardStagedIdentity(userDataPath)
   }
-  if (!instanceId || stored?.instanceId === instanceId) {
-    return { kind: 'unchanged' }
+  const instanceChanged = !!instanceId && !!stored?.instanceId && stored.instanceId !== instanceId
+  const machineChanged = !!machineId && !!stored?.machineId && stored.machineId !== machineId
+  if (
+    (!instanceId || stored?.instanceId === instanceId) &&
+    (!machineId || stored?.machineId === machineId)
+  ) {
+    return recoveredRotation
+      ? { kind: 'rotated', reason: 'interrupted_rotation' }
+      : { kind: 'unchanged' }
   }
-  if (!stored?.instanceId) {
+  if (!instanceChanged && !machineChanged) {
     try {
-      write(markerPath, markerFor(instanceId))
+      write(markerPath, markerFor(instanceId ?? stored?.instanceId, machineId ?? stored?.machineId))
     } catch (error) {
       return { kind: 'kept', error }
     }
-    return { kind: 'recorded' }
+    return recoveredRotation
+      ? { kind: 'rotated', reason: 'interrupted_rotation' }
+      : { kind: 'recorded' }
   }
   try {
     rotateHostIdentity(userDataPath, instanceId, write)
@@ -298,5 +320,5 @@ export function ensureHostInstanceIdentity(
     }
     throw error
   }
-  return { kind: 'rotated', reason: 'instance_changed' }
+  return { kind: 'rotated', reason: machineChanged ? 'machine_changed' : 'instance_changed' }
 }
