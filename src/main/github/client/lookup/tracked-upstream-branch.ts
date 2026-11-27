@@ -17,12 +17,15 @@ import {
   parseTrackedUpstreamBranch,
   getCacheableTrackedUpstreamSnapshot,
   doesTrackedUpstreamCacheConfigSignatureMatch,
+  parseRawTrackedUpstreamBranches,
   resolveTrackedUpstreamBranchCacheKey,
   type TrackedUpstreamBranch,
   type TrackedUpstreamSnapshotProbeResult
 } from './tracked-upstream-cache'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
+const EMPTY_UPSTREAMS_MAP = new Map<string, TrackedUpstreamBranch | null>()
+
 export async function getTrackedUpstreamBranch(
   repoPath: string,
   branchName: string,
@@ -35,6 +38,10 @@ export async function getTrackedUpstreamBranch(
     connectionId,
     localGitOptions
   )
+  if (snapshot.rawUpstreamsByBranchName) {
+    const raw = snapshot.rawUpstreamsByBranchName.get(branchName)
+    return raw ? parseTrackedUpstreamRef(raw) : null
+  }
   return snapshot.upstreamsByBranchName.get(branchName) ?? null
 }
 
@@ -77,10 +84,14 @@ async function getTrackedUpstreamSnapshot(
   const serves = (
     value: Pick<
       TrackedUpstreamSnapshotProbeResult,
-      'upstreamsByBranchName' | 'reviewSources' | 'reviewSourceResolver'
+      | 'upstreamsByBranchName'
+      | 'rawUpstreamsByBranchName'
+      | 'reviewSources'
+      | 'reviewSourceResolver'
     >
   ): boolean =>
-    value.upstreamsByBranchName.has(branchName) &&
+    (value.rawUpstreamsByBranchName?.has(branchName) === true ||
+      value.upstreamsByBranchName.has(branchName)) &&
     (!includeReviewSources ||
       value.reviewSourceResolver !== undefined ||
       value.reviewSources?.has(branchName) === true)
@@ -132,6 +143,9 @@ async function getTrackedUpstreamSnapshot(
           ? { gitConfigSignature: result.gitConfigSignature, gitConfigSignatureRepoPath: repoPath }
           : {}),
         upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
+        ...(result.rawUpstreamsByBranchName
+          ? { rawUpstreamsByBranchName: result.rawUpstreamsByBranchName }
+          : {}),
         ...(result.reviewSources ? { reviewSources: result.reviewSources } : {}),
         ...(result.reviewSourceResolver
           ? { reviewSourceResolver: result.reviewSourceResolver }
@@ -166,7 +180,7 @@ export async function probeTrackedUpstreamSnapshot(
     connectionId: connectionId ?? null,
     ...localGitOptions
   })
-  let { probeFailed, upstreamsByBranchName } = await probeTrackedUpstreamBranches(
+  let { probeFailed, rawUpstreamsByBranchName } = await probeRawTrackedUpstreamBranches(
     repoPath,
     connectionId,
     localGitOptions
@@ -175,8 +189,8 @@ export async function probeTrackedUpstreamSnapshot(
   if (reviewBranchName && !probeFailed) {
     try {
       requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
-      if (!upstreamsByBranchName.has(reviewBranchName)) {
-        upstreamsByBranchName.set(reviewBranchName, null)
+      if (!rawUpstreamsByBranchName.has(reviewBranchName)) {
+        rawUpstreamsByBranchName.set(reviewBranchName, '')
       }
       reviewSourceResolver = await createGitReviewBranchSourceResolver((args) =>
         gitExecFileAsync(args, { cwd: repoPath, ...localGitOptions })
@@ -200,18 +214,19 @@ export async function probeTrackedUpstreamSnapshot(
     cacheable: !configSignatureChanged && !probeFailed,
     probeFailed,
     ...(gitConfigSignature ? { gitConfigSignature } : {}),
-    upstreamsByBranchName,
+    upstreamsByBranchName: EMPTY_UPSTREAMS_MAP,
+    rawUpstreamsByBranchName,
     ...(reviewSourceResolver ? { reviewSourceResolver } : {})
   }
 }
 
-export async function probeTrackedUpstreamBranches(
+async function probeRawTrackedUpstreamBranches(
   repoPath: string,
   connectionId?: string | null,
   localGitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {}
 ): Promise<{
   probeFailed: boolean
-  upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+  rawUpstreamsByBranchName: Map<string, string>
 }> {
   const args = ['for-each-ref', '--format=%(refname)%00%(upstream)', 'refs/heads']
   requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
@@ -223,11 +238,34 @@ export async function probeTrackedUpstreamBranches(
     })
     return {
       probeFailed: false,
-      upstreamsByBranchName: parseTrackedUpstreamBranches(result.stdout)
+      rawUpstreamsByBranchName: parseRawTrackedUpstreamBranches(result.stdout)
     }
   } catch {
+    return { probeFailed: true, rawUpstreamsByBranchName: new Map() }
+  }
+}
+
+export async function probeTrackedUpstreamBranches(
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {}
+): Promise<{
+  probeFailed: boolean
+  upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+}> {
+  const { probeFailed, rawUpstreamsByBranchName } = await probeRawTrackedUpstreamBranches(
+    repoPath,
+    connectionId,
+    localGitOptions
+  )
+  if (probeFailed) {
     return { probeFailed: true, upstreamsByBranchName: new Map() }
   }
+  const upstreamsByBranchName = new Map<string, TrackedUpstreamBranch | null>()
+  for (const [branch, raw] of rawUpstreamsByBranchName) {
+    upstreamsByBranchName.set(branch, parseTrackedUpstreamRef(raw))
+  }
+  return { probeFailed: false, upstreamsByBranchName }
 }
 
 export function parseTrackedUpstreamBranches(
