@@ -28946,7 +28946,7 @@
       "reports": "Relata",
       "takesOver": "Assume",
       "agentsKeepRunning": "Os agentes deles continuam em execução.",
-      "uploadDropOrPaste": "<upload>Enviar</upload>, arraste ou cole uma imagem",
+      "uploadOrPaste": "<upload>Enviar</upload> ou colar",
       "purposeLabel": "Identidade",
       "purposePlaceholder": "Quem é e o que faz",
       "uploadPasteOrDrop": "ou envie, cole ou arraste a sua",

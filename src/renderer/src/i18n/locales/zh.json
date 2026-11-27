@@ -27996,7 +27996,7 @@
       "reports": "汇报",
       "takesOver": "接管",
       "agentsKeepRunning": "其中的智能体会继续运行",
-      "uploadDropOrPaste": "<upload>上传</upload>、拖放或粘贴图片",
+      "uploadOrPaste": "<upload>上传</upload>或粘贴",
       "purposeLabel": "身份",
       "purposePlaceholder": "它是谁，负责做什么",
       "uploadPasteOrDrop": "或上传、粘贴、拖放你自己的图片",

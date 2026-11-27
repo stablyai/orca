@@ -28170,7 +28170,7 @@
       "reports": "Raporlar",
       "takesOver": "Devralır",
       "agentsKeepRunning": "Ajanları çalışmaya devam eder.",
-      "uploadDropOrPaste": "Bir görseli <upload>yükleyin</upload>, sürükleyip bırakın veya yapıştırın",
+      "uploadOrPaste": "<upload>Yükleyin</upload> veya yapıştırın",
       "purposeLabel": "Kimlik",
       "purposePlaceholder": "Botun kimliği ve görevi",
       "uploadPasteOrDrop": "veya kendi görselinizi yükleyin, yapıştırın ya da sürükleyip bırakın",
