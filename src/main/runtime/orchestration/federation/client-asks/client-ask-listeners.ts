@@ -17,6 +17,8 @@ export type ClientAskListener = {
   session: string
   /** Its agents it said a person always lets this Orca's agents ask, as of its latest pull. */
   bots: { id: string; name: string }[]
+  /** It allows more than it could name. */
+  moreBots?: true
 }
 
 export type ClientAskPull = { key: string; session: string }
@@ -87,7 +89,8 @@ export function clientAskPullStarted(
     name: pull.name,
     fingerprint: caller.fingerprint,
     session: pull.session,
-    bots: pull.bots ?? []
+    bots: pull.bots ?? [],
+    ...(pull.moreBots ? { moreBots: true as const } : {})
   })
   return { key, session: pull.session }
 }
@@ -117,15 +120,29 @@ export function listeningClients(
   )
 }
 
+// The id `--on-client` and a mention token take: a generated UUID, so anything else a computer
+// claims is never printed where a server's agent reads it as text or a command.
+const INSTALLATION_ID = /^[\w-]{1,100}$/
+
 /** Every computer listening now, as this Orca's own `orca bot list` names it: by its installation id,
- *  which `--on-client` takes and two copies sharing a name never confuse, with the agents there it
- *  said this Orca's agents may ask without a card. Names came from that computer, so stay one line. */
+ *  which `--on-client` takes, with the agents there it said this Orca's agents may ask without a card.
+ *  One claiming an id of another shape is left out; names came from that computer, so stay one line. */
 export function connectedClientRosters(owner: ClientAskListenerOwner): BotRosterClient[] {
-  return [...listenersOf(owner).values()].map((listener) => ({
-    name: toSafeDisplayLine(listener.name) || listener.installationId,
-    onClient: listener.installationId,
-    bots: listener.bots.map((bot) => ({ id: bot.id, name: toSafeDisplayLine(bot.name) || bot.id }))
-  }))
+  return [...listenersOf(owner).values()].flatMap((listener) =>
+    INSTALLATION_ID.test(listener.installationId)
+      ? [
+          {
+            name: toSafeDisplayLine(listener.name) || listener.installationId,
+            onClient: listener.installationId,
+            bots: listener.bots.map((bot) => ({
+              id: bot.id,
+              name: toSafeDisplayLine(bot.name) || bot.id
+            })),
+            ...(listener.moreBots ? { moreBots: true as const } : {})
+          }
+        ]
+      : []
+  )
 }
 
 /** The name a computer last pulled with since this Orca started; null for one it hasn't seen. */

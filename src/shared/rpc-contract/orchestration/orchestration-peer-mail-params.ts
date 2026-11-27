@@ -64,6 +64,8 @@ export const PeerMailClientAsksPull = lazyZodSchema(() =>
       .max(PAIRED_CLIENT_BOTS_MAX)
       .optional()
       .catch(undefined),
+    /** It allows more agents than `bots` could name. */
+    moreBots: z.boolean().optional().catch(undefined),
     /** Ends the session now; the pull answers at once. */
     leave: z.boolean().optional()
   })
