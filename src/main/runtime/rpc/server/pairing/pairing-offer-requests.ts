@@ -1,5 +1,6 @@
 /** Pairing offers requested by this host's owner: the desktop's Settings and `orca pair` mint the same offers. */
 import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import type {
   PairingCreateOfferParams,
   PairingCreateOfferResult
@@ -11,6 +12,7 @@ import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from './network/network-exposure-gui
 import { resolveAdvertisedPairingHostname } from './network/pairing-endpoint'
 import {
   getDefaultPairingAddress,
+  pinnedListenerAddress,
   type DefaultRouteInterfaceLookup
 } from './network/pairing-network-interfaces'
 import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
@@ -39,6 +41,18 @@ export type PairingOfferServer = Pick<
 
 const NO_PAIRING_ADDRESS_GUIDANCE =
   'No reachable network address is available for pairing. Connect to Wi‑Fi or Tailscale, or pick an address manually.'
+
+const LOOPBACK_PINNED_GUIDANCE =
+  'This Orca listens only on loopback, so nothing can dial it directly. Pair a phone through Orca Relay (--mobile --relay), or pass --address for a tunnel or SSH port-forward to it.'
+
+function noPairingAddress(server: PairingOfferServer): PairingOfferUnavailable {
+  return pairingUnavailable(
+    'invalid_advertised_endpoint',
+    pinnedListenerAddress(server.getNetworkExposureBindHost()) === null
+      ? LOOPBACK_PINNED_GUIDANCE
+      : NO_PAIRING_ADDRESS_GUIDANCE
+  )
+}
 
 // Only explicit this-computer intent plus a loopback address avoids widening; custom tunnel endpoints still need remote reach.
 function servesThisComputerOnly(reach: RuntimePairingReach | undefined, address: string): boolean {
@@ -76,7 +90,7 @@ export async function requestMobilePairingOffer(
   const ip = await pairingAddress(server, args.address, lookup)
   // Relay works without a direct candidate; LAN-only must refuse when none is usable.
   if (!ip && args.connectionMode === 'local-only') {
-    return pairingUnavailable('invalid_advertised_endpoint', NO_PAIRING_ADDRESS_GUIDANCE)
+    return noPairingAddress(server)
   }
   // Reuse never-scanned tokens until explicit rotation; authenticated entries remain independent.
   const offer = await server.createMobilePairingOffer({
@@ -108,7 +122,7 @@ export async function requestRuntimePairingOffer(
 ): Promise<ReturnType<PairingOfferServer['createPairingOffer']>> {
   const ip = await pairingAddress(server, args.address, lookup)
   if (!ip) {
-    return pairingUnavailable('invalid_advertised_endpoint', NO_PAIRING_ADDRESS_GUIDANCE)
+    return noPairingAddress(server)
   }
   // Widen before advertising remote reach; this-computer intent must not trigger the irreversible widening (STA-2370).
   const thisComputerOnly = servesThisComputerOnly(args.reach, ip)
@@ -137,6 +151,20 @@ export async function requestRuntimePairingOffer(
   })
 }
 
+// The terminal has no Relay notice; name the one fix for refusals a retry can't clear.
+function ownerRelayGuidance(failure: MobileRelayMintFailure | undefined): string | null {
+  if (failure?.stage === 'provider_missing') {
+    return 'Orca Relay isn’t available on this host.'
+  }
+  if (failure?.code === 'relay_signed_out') {
+    return 'Orca Relay needs this host signed in to Orca. Run `orca auth login` here, then retry.'
+  }
+  if (failure?.code === 'relay_not_entitled') {
+    return 'Orca Relay isn’t included with the Orca account this host is signed in to.'
+  }
+  return null
+}
+
 export async function createOwnerPairingOffer(
   server: PairingOfferServer,
   params: PairingCreateOfferParams,
@@ -156,7 +184,11 @@ export async function createOwnerPairingOffer(
       lookup
     )
     if (!offer.available) {
-      return { available: false, reason: offer.reason, guidance: offer.guidance }
+      return {
+        available: false,
+        reason: offer.reason,
+        guidance: ownerRelayGuidance(offer.relayFailure) ?? offer.guidance
+      }
     }
     return {
       available: true,

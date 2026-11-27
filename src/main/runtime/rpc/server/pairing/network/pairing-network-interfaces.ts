@@ -6,6 +6,8 @@ import {
 } from '../../../../../../shared/remote-runtime/pairing/pairing-address-auto-selection'
 import { isLinkLocalAddress } from '../../../../../../shared/network/link-local-address'
 import { isTailnetIPv4Address } from '../../../../../../shared/network/tailnet-address'
+import { isPairingWildcardHostname } from '../../../../../../shared/network/pairing-url'
+import { classifyRemotePairingHostname } from '../../../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import { getWindowsDefaultRouteInterfaceNames } from './windows-default-route-interfaces'
 
 export type NetworkInterface = {
@@ -82,10 +84,23 @@ function rankInterface({ name, address, hasDefaultRoute }: NetworkInterface): nu
   return (address.includes(':') ? 2 : 1) + bridgePenalty - defaultRouteBonus
 }
 
+/** A pinned listener answers only on its own address, and on none a client can dial when it is loopback; undefined for a wildcard listener. */
+export function pinnedListenerAddress(listenerHost: string): string | null | undefined {
+  const host = listenerHost.replace(/^\[|\]$/g, '')
+  if (isPairingWildcardHostname(host)) {
+    return undefined
+  }
+  return classifyRemotePairingHostname(host) === 'loopback' ? null : host
+}
+
 export async function getDefaultPairingAddress(
   listenerHost: string,
   getDefaultRouteInterfaceNames: DefaultRouteInterfaceLookup = getWindowsDefaultRouteInterfaceNames
 ): Promise<string | null> {
+  const pinned = pinnedListenerAddress(listenerHost)
+  if (pinned !== undefined) {
+    return pinned
+  }
   return (
     selectAutoAdvertisedPairingAddress(
       await getPairingNetworkInterfaces(listenerHost, getDefaultRouteInterfaceNames)
