@@ -41,6 +41,11 @@ export function GeneralConfirmationsSection({
         updateSettings({ skipDeleteWorktreeConfirm: !settings.skipDeleteWorktreeConfirm })
     },
     {
+      ...entries.newWorkspace,
+      checked: !settings.skipNewWorkspaceDialog,
+      onChange: () => updateSettings({ skipNewWorkspaceDialog: !settings.skipNewWorkspaceDialog })
+    },
+    {
       ...entries.automation,
       checked: !settings.skipDeleteAutomationConfirm,
       onChange: () =>

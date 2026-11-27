@@ -48,6 +48,7 @@ import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-r
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { useComposerAutoCreate } from './use-composer-auto-create'
 
 export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
   const visible = useAppStore((s) => s.activeModal === 'new-workspace-composer')
@@ -83,12 +84,17 @@ function ComposerModalBody({
     onClose()
   }, [onClose])
   const isSubmissionCancelled = useCallback(() => submitCancelledRef.current, [])
+  // Auto-create keeps the dialog hidden; it appears only when the create needs a choice.
+  const [revealed, setRevealed] = useState(modalData.autoCreate !== true)
+  const reveal = useCallback(() => setRevealed(true), [])
 
   return (
     <Dialog open onOpenChange={(open) => !open && handleDismiss()}>
       <DialogContent
         ref={dialogRef}
-        className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-lg"
+        className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden data-[auto-creating]:invisible sm:max-w-lg"
+        data-auto-creating={revealed ? undefined : ''}
+        overlayClassName={revealed ? undefined : 'invisible'}
         onEscapeKeyDown={(event) => {
           if (dialogRef.current?.querySelector('[data-sparse-preset-editor]')) {
             event.preventDefault()
@@ -106,6 +112,7 @@ function ComposerModalBody({
           onClose={onClose}
           isSubmissionCancelled={isSubmissionCancelled}
           active
+          onAutoCreateBlocked={revealed ? undefined : reveal}
         />
       </DialogContent>
     </Dialog>
@@ -116,12 +123,15 @@ function QuickTabBody({
   modalData,
   onClose,
   isSubmissionCancelled,
-  active
+  active,
+  onAutoCreateBlocked
 }: {
   modalData: ComposerModalData
   onClose: () => void
   isSubmissionCancelled: () => boolean
   active: boolean
+  /** Present while auto-creating behind a hidden dialog. */
+  onAutoCreateBlocked?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
@@ -242,6 +252,8 @@ function QuickTabBody({
         }
         const snapshot = {
           ...modalData,
+          // Reopen is for fixing the failed create, so show the dialog instead of auto-submitting.
+          autoCreate: false,
           prefilledName: cardProps.name,
           initialRepoId: cardProps.repoId,
           initialBaseBranch: cardProps.baseBranch,
@@ -284,6 +296,8 @@ function QuickTabBody({
     modalData,
     cardProps
   ])
+  const autoCreateReady = !createDisabled && observation.model.state === 'settled'
+  useComposerAutoCreate(onAutoCreateBlocked, autoCreateReady, handleCreate)
   const {
     addProjectOpen,
     addProjectMounted,

@@ -22,7 +22,9 @@ export function openWorkspaceCreationComposerWithTourHandoff(): void {
     telemetrySource: 'sidebar',
     ...(shouldHandoffFromAgentSessionsTour
       ? { contextualTourSource: 'workspace_creation_modal' }
-      : {})
+      : state.settings?.skipNewWorkspaceDialog
+        ? { autoCreate: true }
+        : {})
   })
 
   if (!shouldHandoffFromAgentSessionsTour) {
