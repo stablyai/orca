@@ -8,7 +8,11 @@ export class JsonStringifyByteLimitError extends Error {
   }
 }
 
-function jsonStringBytes(value: string): number {
+function jsonStringBytes(value: string, remainingBytes: number): number {
+  // Every UTF-16 unit needs at least one JSON UTF-8 byte; reject huge strings before scanning them.
+  if (value.length + 2 > remainingBytes) {
+    return value.length + 2
+  }
   let bytes = 2
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
@@ -57,12 +61,12 @@ function normalizedJsonValue(value: unknown, container: unknown): unknown {
   return value
 }
 
-function primitiveJsonBytes(value: unknown): number | null {
+function primitiveJsonBytes(value: unknown, remainingBytes: number): number | null {
   if (value === null) {
     return 4
   }
   if (typeof value === 'string') {
-    return jsonStringBytes(value)
+    return jsonStringBytes(value, remainingBytes)
   }
   if (typeof value === 'boolean') {
     return value ? 4 : 5
@@ -135,12 +139,13 @@ export function stringifyJsonWithinByteLimit(
           addBytes(1)
         }
         if (!Array.isArray(this)) {
-          addBytes(jsonStringBytes(key) + 1 + (indentBytes > 0 ? 1 : 0))
+          addBytes(jsonStringBytes(key, maxBytes - bytes) + 1 + (indentBytes > 0 ? 1 : 0))
         }
         emittedProperties.set(this, emitted + 1)
       }
 
-      const encodedBytes = rawJsonBytes(normalized) ?? primitiveJsonBytes(normalized)
+      const encodedBytes =
+        rawJsonBytes(normalized) ?? primitiveJsonBytes(normalized, maxBytes - bytes)
       if (encodedBytes !== null) {
         addBytes(encodedBytes)
       } else if (normalized !== null && typeof normalized === 'object') {
