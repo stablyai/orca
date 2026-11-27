@@ -18,30 +18,30 @@ export function manualTitleAdmission(
 // Long enough for the window to apply and save a rename; a rename that never lands stops blocking after it.
 const WINDOW_RENAME_LANDING_MS = 5000
 
-/** Renames sent to the window but not yet seen in its saved tab, by handle. The window saves them asynchronously. */
+/** Renames sent to the window but not yet seen in its saved tab, by the name's owner (the tab, not the handle). The window saves them asynchronously. */
 export class UnlandedWindowRenames {
   private readonly sent = new Map<string, { before: string; sentAt: number }>()
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  record(handle: string, before: string, title: string | null): void {
+  record(owner: string, before: string, title: string | null): void {
     for (const [key, entry] of this.sent) {
       if (this.now() - entry.sentAt >= WINDOW_RENAME_LANDING_MS) {
         this.sent.delete(key)
       }
     }
     if ((title?.trim() || '') !== before) {
-      this.sent.set(handle, { before, sentAt: this.now() })
+      this.sent.set(owner, { before, sentAt: this.now() })
     }
   }
 
-  /** True while the saved name still reads as it did before the last rename sent for this handle. */
-  inFlight(handle: string, saved: string): boolean {
-    const entry = this.sent.get(handle)
+  /** True while the saved name still reads as it did before the last rename sent for this owner. */
+  inFlight(owner: string, saved: string): boolean {
+    const entry = this.sent.get(owner)
     if (entry && saved === entry.before && this.now() - entry.sentAt < WINDOW_RENAME_LANDING_MS) {
       return true
     }
-    this.sent.delete(handle)
+    this.sent.delete(owner)
     return false
   }
 }

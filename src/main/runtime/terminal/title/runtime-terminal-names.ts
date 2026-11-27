@@ -7,7 +7,7 @@ import { RuntimeWorkspaceArchive } from '../../workspaces/archive/runtime-worksp
 import { UnlandedWindowRenames } from './manual-title-admission'
 
 export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
-  protected abstract getTerminalManualTitle(handle: string): string | null
+  protected abstract getTerminalManualTitle(handle: string): { title: string | null; owner: string }
   private readonly unlandedWindowRenames = new UnlandedWindowRenames()
 
   async renameTerminal(
@@ -26,15 +26,17 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
       return { ...mainRename, ...conditional }
     }
     // The window saves a sent rename later, so one still in flight counts as a changed name.
-    const saved = this.getTerminalManualTitle(handle) ?? ''
+    // Keyed by the name's owner (the tab), so a rename sent through another handle of the tab still blocks.
+    const manual = this.getTerminalManualTitle(handle)
+    const saved = manual.title ?? ''
     if (
       ifManualTitle !== undefined &&
-      (saved !== ifManualTitle.trim() || this.unlandedWindowRenames.inFlight(handle, saved))
+      (saved !== ifManualTitle.trim() || this.unlandedWindowRenames.inFlight(manual.owner, saved))
     ) {
       throw new Error('terminal_title_changed')
     }
     if (this.notifier?.renameTerminal) {
-      this.unlandedWindowRenames.record(handle, saved, title)
+      this.unlandedWindowRenames.record(manual.owner, saved, title)
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
