@@ -3136,7 +3136,7 @@
       "collapse": "접기"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "새 CLI에서 재개"
+      "continueInTerminal": "터미널에서 계속"
     },
     "nativeChatFloatingControls": {
       "scrollToLatest": "최신 내용으로 스크롤"
@@ -3690,6 +3690,18 @@
       "terminalTitle": "터미널 텍스트",
       "pointsAndColumns": "{{points}} · {{count}}열",
       "moreTerminal": "터미널 설정 더 보기"
+    },
+    "terminalChatContinuation": {
+      "busy": "다른 채팅이나 터미널을 여는 중입니다. 잠시 후 다시 시도하세요.",
+      "continueInChat": "채팅에서 계속",
+      "failed": "채팅에서 계속할 수 없습니다. {{detail}}",
+      "failedAfterClose": "채팅에서 계속할 수 없습니다. {{detail}} 대화는 에이전트 기록에 있습니다.",
+      "otherJob": "이 터미널에서 {{process}}이(가) 실행 중입니다. 종료한 뒤 채팅에서 계속하세요.",
+      "terminalChanged": "Orca가 확인하는 동안 이 터미널이 바뀌었습니다. 다시 시도하세요.",
+      "tryAgain": "다시 시도하세요.",
+      "unavailable": "이 컴퓨터에서는 {{agent}} 채팅을 사용할 수 없습니다.",
+      "uncheckable": "Orca가 이 터미널에서 실행 중인 항목을 확인하지 못했습니다. 다시 시도하세요.",
+      "unconfirmed": "Orca가 채팅이 열렸는지 확인하지 못했습니다. 다시 시도하기 전에 탭을 확인하세요."
     }
   },
   "settings": {

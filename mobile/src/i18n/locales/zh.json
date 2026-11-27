@@ -3257,7 +3257,7 @@
       "collapse": "收起"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "在新 CLI 中恢复"
+      "continueInTerminal": "在终端中继续"
     },
     "nativeChatFloatingControls": {
       "scrollToLatest": "滚动到最新消息"
@@ -3849,6 +3849,18 @@
       "needsYou": "需要你处理",
       "files": "文件",
       "otherWorkspaces": "其他工作区"
+    },
+    "terminalChatContinuation": {
+      "busy": "另一个聊天或终端正在打开。请稍候再试。",
+      "continueInChat": "在聊天中继续",
+      "failed": "无法在聊天中继续。{{detail}}",
+      "failedAfterClose": "无法在聊天中继续。{{detail}} 对话在智能体历史记录中。",
+      "otherJob": "此终端中正在运行 {{process}}。请先退出它，然后在聊天中继续。",
+      "terminalChanged": "Orca 检查时此终端已更改。请重试。",
+      "tryAgain": "请重试。",
+      "unavailable": "此电脑上无法使用 {{agent}} 聊天。",
+      "uncheckable": "Orca 无法检查此终端中正在运行的内容。请重试。",
+      "unconfirmed": "Orca 无法确认聊天已打开。重试前请检查你的标签页。"
     }
   },
   "settings": {
