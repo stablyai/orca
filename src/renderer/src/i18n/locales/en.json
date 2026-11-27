@@ -319,6 +319,11 @@
       "detailsRow": "Details row",
       "workspaceUnread": "Unread in this workspace",
       "unreadTab": "Unread tab"
+    },
+    "workspaceChats": {
+      "openFailed": "Could not reopen this chat. Try again.",
+      "archive": "Archive chat",
+      "saved": "Saved chats"
     }
   },
   "app": {
