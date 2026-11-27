@@ -4,13 +4,14 @@ import { getPublishedHostDescriptor } from '../../../hosts/platform-probe/host-d
 import { StatusGetParams } from '../../../../../shared/rpc-contract/host-management/status-params'
 import { readHostMachineWithin } from '../../../hosts/platform-probe/runtime-host-machine'
 import { MACHINE_NAME_PUBLISH_WAIT_MS } from '../../../hosts/platform-probe/runtime-machine-name'
+import { sessionTabsHideAllAgentSessions } from '../session-tabs/session-tab-agent-status-projection'
 
 export const STATUS_METHODS = [
   defineMethod({
     name: 'status.get',
     permission: 'workspace',
     params: StatusGetParams,
-    handler: async (params, { runtime, pairedDeviceId }) => {
+    handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
       // Why: a liveness probe needs only an answer; the full status is ~12 KB on every idle probe.
       if (params.probe === true) {
         return { runtimeId: runtime.getRuntimeId() }
@@ -28,6 +29,10 @@ export const STATUS_METHODS = [
         ...(hostDescriptor ? { hostDescriptor } : {}),
         ...(hostMachine ? { hostMachine } : {}),
         ...(pairedDeviceId ? { pairedDeviceId } : {}),
+        // A phone holding a desktop pairing link sees no chats; this tells it why.
+        ...(sessionTabsHideAllAgentSessions(clientKind, clientCapabilities)
+          ? { agentSessionsHidden: true }
+          : {}),
         appVersion: snapshot.appVersion,
         remoteUpdateSupport: snapshot.support
       }

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, type ReactElement } from 'react'
 import { Animated, Platform, RefreshControl, View } from 'react-native'
 import { isBotsListRow, useMobileBotsListParts } from '../../bots/use-mobile-bots-list-parts'
 import { AuthFailedBanner } from '../../components/host-connection/AuthFailedBanner'
+import { DesktopLinkPairingBanner } from '../../components/host-connection/DesktopLinkPairingBanner'
+import { useOptionalHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import { Presence } from '../../components/motion/AutoHeight'
 import { HostDiagnosticsLink } from '../../components/host-connection/HostDiagnosticsLink'
 import {
@@ -77,6 +79,7 @@ export function HostWorkspaceList({
     state
   } = controller
   const { rawSections, sections, repoById } = sectionsResult
+  const chatsHidden = useOptionalHostProtocolGates()?.agentSessionsHidden === true
   const bots = useMobileBotsListParts(controller)
   const { pending } = settings.pendingViewChanges
   // A collapse the desktop has not answered within SLOW_PENDING_MS spins on its header.
@@ -233,6 +236,10 @@ export function HostWorkspaceList({
           />
         )}
       </Presence>
+      {/* A per-connection fact, not a transient notice: it mounts only when shown, with no animation owners. */}
+      {chatsHidden && connState === 'connected' ? (
+        <DesktopLinkPairingBanner onRepair={() => router.push('/pair-scan')} />
+      ) : null}
 
       {connState !== 'connected' &&
       !relayRecovery.pairingRejected &&

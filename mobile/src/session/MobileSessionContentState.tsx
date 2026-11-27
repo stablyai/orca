@@ -6,6 +6,9 @@ import { formatOfflineAsOfTime } from '../components/host-connection/offline-as-
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import { useLastSessionTabsAt } from './tabs/mobile-session-last-tabs'
+import { useRouteHandoff } from '../navigation/route-handoff'
+import { useDesktopLinkPairingCopy } from '../components/host-connection/desktop-link-pairing-copy'
+import { useOptionalHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 
 // Tab hydration retries on its own; past this a person needs to know it stalled and how to nudge it.
 const TABS_STALL_MS = 12_000
@@ -34,6 +37,10 @@ export function MobileSessionContentState({
   onCreateTab: () => void
 }) {
   const t = useMobileTranslation()
+  const router = useRouteHandoff()
+  // A phone paired with a desktop link is shown no chats, so an empty workspace may still hold some.
+  const chatsHidden = useOptionalHostProtocolGates()?.agentSessionsHidden === true
+  const chatsHiddenCopy = useDesktopLinkPairingCopy()
   const [stalled, setStalled] = useState(false)
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
@@ -86,13 +93,27 @@ export function MobileSessionContentState({
     return <MobileStateView loading title={t('session.activeContent.creatingTab', 'Creating...')} />
   }
   const createFailure = createError ? describeLoadError(createError, t) : null
-  return (
+  const createTab = {
+    label: t('session.activeContent.createTab', 'Create Tab'),
+    onPress: onCreateTab
+  }
+  // Terminals still work over a desktop link, so Create Tab stays beside Pair again.
+  return chatsHidden ? (
+    <MobileStateView
+      icon={CircleAlert}
+      title={chatsHiddenCopy.title}
+      message={createFailure?.message ?? chatsHiddenCopy.message}
+      details={createFailure?.details}
+      action={createTab}
+      secondaryAction={{ label: chatsHiddenCopy.repair, onPress: () => router.push('/pair-scan') }}
+    />
+  ) : (
     <MobileStateView
       icon={SquareTerminal}
       title={t('session.activeContent.noTabs', 'No tabs in this session')}
       message={createFailure?.message}
       details={createFailure?.details}
-      action={{ label: t('session.activeContent.createTab', 'Create Tab'), onPress: onCreateTab }}
+      action={createTab}
     />
   )
 }

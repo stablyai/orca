@@ -69,6 +69,8 @@ export type RuntimeStatus = {
   runtimeId: string
   /** Authenticated requester identity. Missing for in-process callers and older hosts. */
   pairedDeviceId?: string
+  /** The requester's tab snapshots omit every chat: a phone paired with a desktop link. Missing from older hosts. */
+  agentSessionsHidden?: true
   rendererGraphEpoch: number
   graphStatus: RuntimeGraphStatus
   authoritativeWindowId: number | null
