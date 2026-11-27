@@ -1,6 +1,9 @@
 import { dirname } from 'node:path'
 import type { DaemonFileLog } from '../observability/daemon-file-log'
-import { PROVIDER_RELAY_PROTOCOL_VERSION } from '../protocol/daemon-provider-relay-protocol'
+import {
+  providerRelayCapabilities,
+  type ProviderRelayCapability
+} from '../protocol/daemon-provider-relay-protocol'
 import { ProviderRelayHost } from './provider-relay-host'
 
 type DaemonProviderRelayOptions = {
@@ -18,7 +21,7 @@ type DaemonProviderRelayOptions = {
 /** The daemon's chat-agent host and the hello capability that tells an app it may use it. */
 export function createDaemonProviderRelays(options: DaemonProviderRelayOptions): {
   relays: ProviderRelayHost
-  identity: { providerRelay?: true; providerRelayKeep?: true; providerRelayAcks?: true }
+  identity: Partial<Record<ProviderRelayCapability, true>>
 } {
   const relays = new ProviderRelayHost({
     runtimeDir: dirname(options.tokenPath),
@@ -29,11 +32,9 @@ export function createDaemonProviderRelays(options: DaemonProviderRelayOptions):
     onLiveCountChanged: options.onLiveCountChanged,
     log: (event, details) => options.log.log(event, details)
   })
-  const advertised = relays.supported && options.protocolVersion >= PROVIDER_RELAY_PROTOCOL_VERSION
-  return {
-    relays,
-    identity: advertised
-      ? { providerRelay: true, providerRelayKeep: true, providerRelayAcks: true }
-      : {}
+  const identity: Partial<Record<ProviderRelayCapability, true>> = {}
+  for (const capability of relays.supported ? providerRelayCapabilities(options.protocolVersion) : []) {
+    identity[capability] = true
   }
+  return { relays, identity }
 }

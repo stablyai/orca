@@ -50,6 +50,10 @@ import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { providerRelayChannel, type ProviderRelayChannel } from './provider-relay-channel'
 import { RelayedProviderChild } from './relayed-provider-child'
 import { daemonReadsFolder, providerRelaySpawnSpec } from './provider-relay-spawn-request'
+import {
+  missingProviderRelayCapability,
+  traceProviderRelayCapabilityFallback
+} from './provider-relay-capability-fallback'
 import { ProviderRelayCarriedWork } from './provider-relay-carried-work'
 import { relayedManagedProcess } from './relayed-managed-process'
 
@@ -264,10 +268,18 @@ export async function launchRelayedProviderProcess(
     return kept
   }
   const client = await connected(await installed.current().catch(() => null))
-  const spec = client ? providerRelaySpawnSpec(launch, client, installed.appVersion, relay) : null
+  if (!client) {
+    return null
+  }
   // Without kept state a reattach would have nothing to restore, so such a launch goes as today.
-  const keeps = !relay.keep || client?.getDaemonIdentity()?.providerRelayKeep === true
-  if (!client || !spec || !keeps || !(await daemonReadsFolder(client, spec.cwd))) {
+  const identity = client.getDaemonIdentity()
+  const missing = missingProviderRelayCapability(identity, relay.keep !== undefined)
+  if (missing) {
+    traceProviderRelayCapabilityFallback(identity, missing)
+    return null
+  }
+  const spec = providerRelaySpawnSpec(launch, client, installed.appVersion, relay)
+  if (!spec || !(await daemonReadsFolder(client, spec.cwd))) {
     return null
   }
   const channel = providerRelayChannel(client)
