@@ -104,6 +104,11 @@ function connectorRow(
   name: string
 ): { text: string; Icon: React.ElementType } {
   switch (connector) {
+    case 'feishu-local':
+      return {
+        text: t('bots.access.reachFeishu', BOT_ACCESS_COPY.reachFeishu, { name }),
+        Icon: MessageSquare
+      }
     case 'slack':
       return {
         text: t('bots.access.reachSlack', BOT_ACCESS_COPY.reachSlack, { name }),

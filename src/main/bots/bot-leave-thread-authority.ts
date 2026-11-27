@@ -38,7 +38,7 @@ function eligible(
     return false
   }
   return (
-    askedInThread(body.asker, conversation.externalId) &&
+    askedInThread(body.asker, conversation.externalId, conversation.source) &&
     body.connectorConversation?.source === conversation.source &&
     body.connectorConversation.externalId === conversation.externalId &&
     // Every message of its batch was such a person's too, as Orca found when it delivered it.

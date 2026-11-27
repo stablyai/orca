@@ -13,6 +13,7 @@ export const CONNECTOR_POST_METHOD_NAMES = [
   'connector.reply',
   'connector.react',
   'connector.leaveThread',
+  'bots.feishuLocal.stageFile',
   'connector.wakeReplyPlace'
 ] as const
 

@@ -19,14 +19,17 @@ export function askedInThread(
     via?: unknown
     messageRef?: string
   },
-  externalId: string
+  externalId: string,
+  source = 'slack'
 ): boolean {
   const [team, channel, thread] = externalId.split(':')
   return (
     (asker.role === 'owner' || asker.role === 'member') &&
     !asker.app &&
     !asker.via &&
-    slackThreadOfRef(asker.messageRef) === `${team}:${channel}:${thread}`
+    (source === 'feishu-local'
+      ? asker.messageRef?.startsWith(`feishu-local:${externalId}:`) === true
+      : source === 'slack' && slackThreadOfRef(asker.messageRef) === `${team}:${channel}:${thread}`)
   )
 }
 
@@ -39,8 +42,10 @@ export function leaveEligibleBatch(
 ): { leaveEligible?: true } {
   const askers = [head, ...later.map((each) => each.asker)]
   return link.bot &&
-    link.source === 'slack' &&
-    askers.every((asker) => asker !== undefined && askedInThread(asker, link.externalId))
+    ['slack', 'feishu-local'].includes(link.source) &&
+    askers.every(
+      (asker) => asker !== undefined && askedInThread(asker, link.externalId, link.source)
+    )
     ? { leaveEligible: true }
     : {}
 }

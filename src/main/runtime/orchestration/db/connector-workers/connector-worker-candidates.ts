@@ -1,3 +1,4 @@
+import { readRemoteConnectorWorkers, type RemoteConnectorWorker } from './remote-connector-workers'
 // The durable half of "are a connector conversation's workers still running": every read it needs, for many
 // chats in one pass, with no runtime state, so the orchestration reader thread can run it.
 import { ORCHESTRATION_SESSION_WORKERS_LIMIT } from '../../../../../shared/orchestration-session-workers'
@@ -20,6 +21,7 @@ const LISTING_CHUNK = 500
 
 /** The workers that may still run, and the paired-host rows of those started on one. */
 export type ConnectorWorkerCandidates = {
+  remote: RemoteConnectorWorker[]
   candidates: ConnectorWorkerCandidate[]
   federated: FederatedDispatchRow[]
   /** For each chat a candidate is assigned to, the two rows that name its party. */
@@ -54,7 +56,12 @@ export function readConnectorWorkerCandidates(
   sessionIds: readonly string[],
   now: number
 ): ConnectorWorkerCandidates {
-  const none = { candidates: [], federated: [], chatParties: [] }
+  const none = {
+    candidates: [],
+    federated: [],
+    chatParties: [],
+    remote: readRemoteConnectorWorkers(connection, sessionIds)
+  }
   if (sessionIds.length === 0) {
     return none
   }
@@ -92,6 +99,7 @@ export function readConnectorWorkerCandidates(
     return [{ sessionId, row, attention: input }]
   })
   return {
+    remote: none.remote,
     candidates,
     federated: listFederatedDispatchesByIds.call(
       connection,

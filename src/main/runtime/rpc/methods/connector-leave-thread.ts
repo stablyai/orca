@@ -2,7 +2,7 @@
 // answers, until someone @mentions it. Orca decides which bot, which thread and whether this turn
 // may, from its own records; the agent names nothing. The thread is then owed Orca's own
 // confirmation, saved with the mute, which the turn's end posts.
-import type { ConnectorConversation } from '../../../../shared/connectors/connector-cloud-contract'
+import type { ConversationKey as ConnectorConversation } from '../../../external-conversations/external-conversation-types'
 import { ConnectorLeaveThread } from '../../../../shared/rpc-contract/connectors/connector-params'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { sameSession } from '../../../bots/bot-turn-for'
@@ -57,12 +57,25 @@ export const CONNECTOR_LEAVE_THREAD_METHOD = defineMethod({
     }
     const seam = runtime.getExternalConversationSeam()
     const target = seam?.replyTarget(chatPaneKey(sessionId)) ?? null
-    const key = target?.key
-    if (!seam || !key || key.source !== 'slack' || !slackThreadBotUser(key.externalId)) {
+    const feishu =
+      target?.key.source === 'feishu-local' &&
+      (await runtime.feishuLocal?.isGroupThread(bot.id, target.key.externalId))
+    if (
+      !seam ||
+      !target ||
+      (!feishu && (target.key.source !== 'slack' || !slackThreadBotUser(target.key.externalId)))
+    ) {
       throw new ConnectorActError('not_a_thread', NOT_A_THREAD)
     }
+    const key: ConnectorConversation = {
+      source: target.key.source,
+      externalId: target.key.externalId
+    }
     // Only an @mention brings it back: never leave where the cloud can't say there was one.
-    if (!runtime.getConnectorCloud()?.cloudFeatures()?.has(CONNECTOR_CLOUD_MENTIONED_FEATURE)) {
+    if (
+      !feishu &&
+      !runtime.getConnectorCloud()?.cloudFeatures()?.has(CONNECTOR_CLOUD_MENTIONED_FEATURE)
+    ) {
       throw new ConnectorActError('leave_unavailable', LEAVE_THREAD_REFUSALS.leave_unavailable)
     }
     const store = runtime.requireStore()

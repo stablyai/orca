@@ -1,7 +1,7 @@
 // What `orca bot reply --leave-thread` tells the agent when Orca refuses it; nothing changed in each.
 export const LEAVE_THREAD_REFUSALS = {
   not_a_thread:
-    "Nothing changed: this chat doesn't answer a Slack thread you follow (a DM, GitHub or Linear can't be left this way).",
+    "Nothing changed: this chat doesn't answer a supported group thread you follow (a DM, GitHub or Linear can't be left this way).",
   leave_refused_stale:
     "Nothing changed: no request is running in this thread's chat now, so there's nothing to leave from.",
   leave_refused_mixed:

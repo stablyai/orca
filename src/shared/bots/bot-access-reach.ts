@@ -65,7 +65,7 @@ export function botPermissionNotes(
   return notes
 }
 
-export type BotAccessConnector = 'linear' | 'slack' | 'github'
+export type BotAccessConnector = 'linear' | 'slack' | 'github' | 'feishu-local'
 
 export type BotReachLine =
   | { kind: 'computer' }
@@ -184,6 +184,7 @@ export function botReachLineText(
 export const CONNECTOR_REACH_COPY: Record<BotAccessConnector, BotAccessCopyId> = {
   linear: 'reachLinear',
   slack: 'reachSlack',
+  'feishu-local': 'reachFeishu',
   github: 'reachGitHub'
 }
 

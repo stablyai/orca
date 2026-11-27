@@ -6,7 +6,7 @@ import {
   writeLinkFact
 } from '../external-conversations/external-conversation-link-writes'
 import type { ExternalConversationLinkStore } from '../external-conversations/external-conversation-links'
-import type { ConnectorConversation } from '../../shared/connectors/connector-cloud-contract'
+import type { ConversationKey as ConnectorConversation } from '../external-conversations/external-conversation-types'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import { profileStateWriterFailureOutcome } from '../persistence/profile-state/writer/profile-state-writer-errors'
 

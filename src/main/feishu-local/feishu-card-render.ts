@@ -1,0 +1,64 @@
+import type { ConnectorPrompt } from '../../shared/connectors/connector-cloud-contract'
+import type { FeishuCardData } from './feishu-card-data'
+
+export function feishuControlCard(data: FeishuCardData, botName: string, open: boolean) {
+  const options = open ? data.options : []
+  const status =
+    data.kind === 'status'
+      ? '工作状态'
+      : data.note?.startsWith('已选择：')
+        ? '已选择'
+        : data.note
+          ? '已处理'
+          : '等待你的选择'
+  return {
+    schema: '2.0',
+    config: {
+      update_multi: true,
+      width_mode: 'default',
+      summary: { content: (data.note ?? data.text).slice(0, 160) }
+    },
+    header: {
+      title: { tag: 'plain_text', content: `${botName} · ${status}` },
+      template: data.note?.startsWith('已选择：') ? 'green' : data.note ? 'grey' : 'default',
+      icon: { tag: 'standard_icon', token: 'ai-common_colorful' }
+    },
+    body: {
+      direction: 'vertical',
+      padding: '12px',
+      vertical_spacing: '8px',
+      elements: [
+        // Plain text keeps tool commands and untrusted labels from introducing mentions or images.
+        { tag: 'div', text: { tag: 'plain_text', content: data.text } },
+        ...(data.note ? [{ tag: 'div', text: { tag: 'plain_text', content: data.note } }] : []),
+        ...options.map((option, i) => ({
+          tag: 'button',
+          text: { tag: 'plain_text', content: [...option.label].slice(0, 100).join('') },
+          type: i === 0 ? 'primary_filled' : 'default',
+          width: options.length === 1 ? 'fill' : 'default',
+          behaviors: [{ type: 'callback', value: { orca: 'answer', option: option.id } }]
+        }))
+      ]
+    }
+  }
+}
+
+export function feishuPromptData(
+  prompt: Exclude<ConnectorPrompt, { kind: 'unsupported' }>
+): FeishuCardData {
+  const text =
+    prompt.kind === 'approval' ? `${prompt.tool}\n${prompt.summary ?? ''}` : prompt.question
+  return {
+    kind: 'prompt',
+    inline: true,
+    ownerOnly: prompt.raisedBy !== 'conversation',
+    promptId: prompt.promptId,
+    text: [
+      text,
+      ...prompt.options.flatMap((option) =>
+        option.description ? [`${option.label}: ${option.description}`] : []
+      )
+    ].join('\n'),
+    options: prompt.options.map((o) => ({ id: o.id, label: o.label }))
+  }
+}

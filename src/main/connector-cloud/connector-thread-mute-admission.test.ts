@@ -24,7 +24,7 @@ vi.mock('../bots/bot-chat-session', () => ({
   })
 }))
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
-import type { ConnectorConversation } from '../../shared/connectors/connector-cloud-contract'
+import type { ConversationKey as ConnectorConversation } from '../external-conversations/external-conversation-types'
 import { DeliveryReceipts } from '../external-conversations/external-conversation-delivery-receipts'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import { findLink, writeLink } from '../external-conversations/external-conversation-links'

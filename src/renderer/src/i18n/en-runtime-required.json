@@ -1554,6 +1554,7 @@
       "place": "{{connector}} ({{workspace}})",
       "reachComputer": "Your files, commands and accounts on {{computer}}",
       "reachComputerDetail": "As you, as far as the permission below allows.",
+      "reachFeishu": "Post in Feishu as {{name}}",
       "reachGitHub": "Comment, review and push on GitHub as you",
       "reachGoogleCalendar": "Use your calendar",
       "reachGoogleDocs": "Read and edit your Docs",

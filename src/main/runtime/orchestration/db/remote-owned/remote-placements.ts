@@ -1,3 +1,4 @@
+import { rememberRemoteWorkerCreator, bindRemoteWorkerCreator } from './remote-worker-lineage'
 import type { TaskRow } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
 import { OrchestrationError } from '../../orchestration-error'
@@ -22,20 +23,16 @@ import {
   type RemoteDispatchRow
 } from './remote-dispatch-records'
 import { getOpenRemoteRunLink, type RemoteRunLinkRow } from './remote-run-links'
-import { getLiveRemotePlacement, type RemotePlacementRow } from './remote-placement-hold'
+import {
+  getRemotePlacement,
+  getLiveRemotePlacement,
+  type RemotePlacementRow
+} from './remote-placement-hold'
 import { writtenRow } from './written-row'
 import { ensureRemoteDispatchRecord, type RemoteDispatchIdentity } from './remote-dispatch-identity'
 import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 
-export function getRemotePlacement(
-  db: OrchestrationDb,
-  taskId: string
-): RemotePlacementRow | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
-  return db.db.prepare('SELECT * FROM remote_placements WHERE task_id = ?').get(taskId) as
-    | RemotePlacementRow
-    | undefined
-}
+export { getRemotePlacement } from './remote-placement-hold'
 
 type TaskCreation = Omit<Parameters<OrchestrationDb['createTask']>[0], 'id' | 'runId'>
 
@@ -122,6 +119,9 @@ export function reserveRemotePlacement(
         creator.creatorOrcaSessionId,
         creator.creatorPaneKey
       )
+    if (params.creator) {
+      rememberRemoteWorkerCreator(db, link.run_id, params.requestKey, params.creator)
+    }
     transitionLifecycleWithDb(db.db, {
       entity: 'task',
       id: task.id,
@@ -242,6 +242,7 @@ export function adoptRemoteAttempt(
     // A Dispatch this Orca already knew predates the placement's attempt or reservation; only a new one is its answer.
     return record
   }
+  bindRemoteWorkerCreator(db, placement.request_key, record.dispatch_id)
   db.db
     .prepare(`UPDATE remote_placements SET state = 'accepted', dispatch_id = ? WHERE task_id = ?`)
     .run(record.dispatch_id, attempt.taskId)

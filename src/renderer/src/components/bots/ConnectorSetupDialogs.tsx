@@ -22,6 +22,9 @@ const BotLinearSetupDialog = lazy(() =>
     default: module.BotLinearSetupDialog
   }))
 )
+const BotFeishuSetup = lazy(() =>
+  import('./feishu/BotFeishuSetup').then((m) => ({ default: m.BotFeishuSetup }))
+)
 const BotSlackSetupDialog = lazy(() =>
   import('./slack/BotSlackSetupDialog').then((module) => ({
     default: module.BotSlackSetupDialog
@@ -93,6 +96,10 @@ export function useConnectorSetup(bot: Bot): {
   }
   const dialogs = (
     <Suspense fallback={null}>
+      {setupOpen === 'feishu-local' ? (
+        <BotFeishuSetup key={bot.id} bot={bot} onClose={() => setSetupOpen(null)} />
+      ) : null}
+
       {setupOpen === 'slack' ? (
         <BotSlackSetupDialog
           bot={bot}

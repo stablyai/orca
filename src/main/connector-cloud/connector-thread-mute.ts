@@ -2,21 +2,26 @@
 // has left the thread (`orca bot reply --leave-thread`), later replies stop reaching it until someone
 // @mentions it. The bot's own posts (a background run's result, an automation) still go out.
 import type {
-  ConnectorConversation,
   ConnectorDelivery,
   ConnectorDeliveryResult
 } from '../../shared/connectors/connector-cloud-contract'
 import type { SendDelivery } from './connector-deliveries'
 import { ThreadMuteUnconfirmedError } from './connector-thread-mute-saves'
-import { refused, type Delivery } from '../external-conversations/external-conversation-types'
+import {
+  refused,
+  type Delivery,
+  type ConversationKey as ConnectorConversation
+} from '../external-conversations/external-conversation-types'
 
 /** What a send to a bot's thread does: a muted thread silences any send that doesn't mention the
  *  bot; a mention unmutes and goes on. */
 export type ThreadMuteStep = 'silence' | 'unmute_and_send' | 'send'
 
-type MuteFacts = Pick<SendDelivery, 'bareMention' | 'mentioned' | 'resume'> & {
+type MuteFacts = Pick<SendDelivery, 'bareMention' | 'mentioned'> & {
+  resume?: SendDelivery['resume'] | true
   asker?: { app?: true; via?: unknown }
 }
+type MuteDelivery = MuteFacts & { conversation: ConnectorConversation }
 
 /** Whether a person wrote it: another Slack app's message, or an Orca bot's on someone's behalf,
  *  never unmutes a bot, so no agent relaying a mention moves it. */
@@ -81,6 +86,7 @@ export type ThreadMuteDeps = {
   /** Whether the cloud marks a reply that @mentions the bot. Without it nothing could bring the bot
    *  back, so a muted thread's replies go on as if it weren't. */
   mentionsKnown?: () => boolean
+  supportsConversation?: (key: ConnectorConversation) => boolean
 }
 
 const ACCEPTED = { outcome: 'accepted' } as const
@@ -97,14 +103,14 @@ export type ThreadMuteOutcome = { decided: Promise<ConnectorDeliveryResult | 'se
 /** The send's outcome when this step holds it; null when it goes on to the agent now. */
 export function handleThreadMute(
   deps: ThreadMuteDeps,
-  delivery: SendDelivery,
+  delivery: MuteDelivery,
   record: RecordHandled,
   // A later send of a held batch: whether an earlier send of it carried this one into its turn.
   carriedBefore?: Promise<boolean>
 ): ThreadMuteOutcome | null {
   const key = delivery.conversation
   const userId = key.source === 'slack' ? slackThreadBotUser(key.externalId) : null
-  if (!userId) {
+  if (!userId && !deps.supportsConversation?.(key)) {
     return null
   }
   const id = JSON.stringify([key.source, key.externalId])
@@ -138,7 +144,7 @@ export function handleThreadMute(
  *  while a mention's unmute saves refuses the mention, and the thread stays unmuted. */
 function inPlace(
   deps: ThreadMuteDeps,
-  delivery: SendDelivery,
+  delivery: MuteDelivery,
   record: RecordHandled,
   before: () => Promise<boolean>
 ): Promise<Decided> {
@@ -163,7 +169,7 @@ function inPlace(
 
 async function decideNow(
   deps: ThreadMuteDeps,
-  delivery: SendDelivery,
+  delivery: MuteDelivery,
   record: RecordHandled
 ): Promise<Decided> {
   const linked = deps.read(delivery.conversation)
@@ -178,7 +184,7 @@ async function decideNow(
 
 // A cloud known not to mark mentions lets every reply through; a bare @mention it still names
 // brings the bot back for good, so the mute isn't restored once the cloud marks mentions again.
-const mutes = (deps: ThreadMuteDeps, delivery: SendDelivery): boolean =>
+const mutes = (deps: ThreadMuteDeps, delivery: MuteDelivery): boolean =>
   deps.mentionsKnown?.() !== false || threadMuteStep(true, delivery) === 'unmute_and_send'
 
 /** Keeps the thread's newest deciding reply until it settles, for the replies behind it. */
@@ -200,7 +206,7 @@ function hold<Decided>(
 
 function applyStep(
   deps: ThreadMuteDeps,
-  delivery: SendDelivery,
+  delivery: MuteDelivery,
   record: RecordHandled,
   // Already in its place in the thread's queue, so an unmute saves there and queues nothing more.
   place?: 'in_place'

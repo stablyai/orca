@@ -26119,6 +26119,9 @@
       }
     }
   },
+  "tabStrip": {
+    "overflow": {}
+  },
   "updates": {
     "installOnQuit": {
       "title": "Update ready to install",
@@ -27725,6 +27728,57 @@
     "terminalUnverifiable": "Orca couldn't check whether the WSL distro {{distro}} is running, so it didn't start this terminal. Start the distro, then try again."
   },
   "bots": {
+    "feishu": {
+      "verificationFailed": "Could not verify the original DM. Check the app’s permission to read private messages, then send the code again.",
+      "name": "Feishu",
+      "chat": "Feishu DM",
+      "choose": "Choose a Feishu CLI profile on the computer that runs this bot.",
+      "connecting": "Starting the Feishu listener…",
+      "create": "To create a PersonalAgent, run this command on the bot’s computer. Finish the CLI’s browser setup, then refresh profiles.",
+      "disconnect": "Disconnect Feishu",
+      "error": "Check the selected setup method and confirm this app is available for this bot.",
+      "expired": "Pairing expired. Disconnect and pair again.",
+      "hostError": "Could not read the bot’s host.",
+      "line": "Private messages with your Feishu bot",
+      "listening": "Listening for messages, images and files in your verified Feishu DM.",
+      "loading": "Checking the host…",
+      "noProfiles": "No Feishu profile available",
+      "pair": "Pair my DM",
+      "pairing": "Send this code from your own Feishu account in a direct message to the app. It expires in five minutes.",
+      "paused": "This bot is paused or disabled.",
+      "profile": "Feishu CLI profile",
+      "refresh": "Refresh profiles",
+      "retrying": "Retrying. Check the connection settings, app permissions and long-connection subscription.",
+      "review": "A delivery could not be confirmed. Check the original DM and the native chat before resending.",
+      "scopes": "Enable long connections and the Receive message event. Publish app permissions to read DMs, reply as the bot and upload IM files.",
+      "settings": "Connection settings",
+      "title": "Feishu on this host",
+      "cliMissing": "Install lark-cli on the computer running this bot, then refresh profiles.",
+      "installReconnect": "Install lark-cli on the computer running this bot. Orca will retry the connection automatically.",
+      "permission": "Grant the app permission to receive private messages and publish the updated app version. Orca will retry.",
+      "subscription": "Subscribe to Receive message (im.message.receive_v1) using a long connection and publish the updated app version. Orca will retry.",
+      "profileChanged": "The selected CLI profile no longer resolves to the paired app. Restore it or disconnect to choose another profile.",
+      "selectProfile": "Choose a profile",
+      "copyCommand": "Copy setup command",
+      "copyCode": "Copy code",
+      "openDm": "Open Feishu DM",
+      "method": "Connection method",
+      "appId": "App ID",
+      "appSecret": "App secret",
+      "credentials": "App credentials",
+      "cliMethod": "Local CLI",
+      "sdkHelp": "Use the credentials from your Feishu app’s developer console. Orca stores the secret on the bot’s host.",
+      "credentialsRequired": "The host could not open the stored app secret. Disconnect and enter the credentials again.",
+      "uploadPermission": "Enable IM file upload under App identity (tenant), then publish the permission. A user-only grant cannot authorize bot uploads.",
+      "disconnectFailed": "The listener has stopped. Disconnect again to release this app.",
+      "peopleError": "Couldn’t read Feishu group members. Check the connection and the bot’s group-member permission.",
+      "peopleSearch": "Search by name or Feishu ID",
+      "peopleHeading": "People in the bot’s Feishu groups",
+      "peopleNoMatch": "No matching person: {{query}}",
+      "peopleHint": "Add the person and the bot to a group, then reopen this picker. Only people the bot can read are listed.",
+      "peopleOthers": "Only you and the people listed here can ask in Feishu private chats and group threads. Others’ messages do not start work. Each person answers their own conversation’s buttons.",
+      "peoplePairFirst": "Connect and pair this Feishu app before adding people."
+    },
     "row": {
       "deleteTitle": "Delete {{name}}?",
       "deleteDescription": "Its folder stays at {{path}}, with its soul and memory.",
@@ -28590,7 +28644,8 @@
       "thisServer": "this server",
       "there": "there",
       "executionComputer": "the computer this agent runs on",
-      "yourComputer": "your computer"
+      "yourComputer": "your computer",
+      "reachFeishu": "Post in Feishu as {{name}}"
     },
     "accessRequest": {
       "toast": "{{person}} asked for access to {{name}}",

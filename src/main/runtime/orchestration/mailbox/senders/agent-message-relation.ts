@@ -1,3 +1,4 @@
+import { remoteWorkerCreator } from '../../db/remote-owned/remote-worker-lineage'
 import type { AgentMessageSender } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import { readWorkerTerminalHostScope } from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import type { OrchestrationDb } from '../../db/orchestration-db'
@@ -23,7 +24,7 @@ function localDispatch(dispatch: DispatchContextRow): boolean {
 /** How a sender relates to its recipient, and, for a worker, the Dispatch that proves it. */
 export type Lineage = {
   relation: AgentMessageSender['relation']
-  workerDispatch?: DispatchContextRow
+  workerDispatch?: Pick<DispatchContextRow, 'creator_turn_source'>
 }
 
 const UNKNOWN: Lineage = { relation: undefined }
@@ -42,6 +43,16 @@ function dispatchWorkerLineage(
   recipient: Party
 ): Lineage {
   const { runId } = args
+  const remote = remoteWorkerCreator(db, dispatchId)
+  if (remote) {
+    return remote.run_id === runId &&
+      sameParty(
+        { terminalHandle: remote.creator_handle, orcaSessionId: remote.creator_orca_session_id },
+        recipient
+      )
+      ? { relation: 'worker', workerDispatch: remote }
+      : UNKNOWN
+  }
   const dispatch = db.getDispatchContextById(dispatchId)
   const known =
     dispatch &&

@@ -4,6 +4,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   isStructuredAgentSessionAsyncQuestionRow,
+  isStructuredAgentSessionQuestionSteer,
   newestOpenStructuredAgentSessionAsyncQuestion
 } from '../../../shared/agent-session/view/structured-agent-session-async-questions'
 import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
@@ -24,6 +25,7 @@ export function readJournalSqlOpenAsyncQuestion(
   let before: JournalStatusPosition | undefined
   for (const candidate of state.select({ kind: 'async-question-candidates', floor })) {
     const after = candidate.position
+    const question = state.displayed(candidate.item.itemId)
     // Oldest first: a question is usually answered right after it, ahead of any agent traffic.
     const segment: AgentJournalRenderItem[] = []
     for (const { item } of state.select({
@@ -34,7 +36,11 @@ export function readJournalSqlOpenAsyncQuestion(
       before
     })) {
       const displayed = state.displayed(item.itemId)
-      if (!displayed || !isStructuredAgentSessionAsyncQuestionRow(displayed)) {
+      if (
+        !displayed ||
+        !isStructuredAgentSessionAsyncQuestionRow(displayed) ||
+        (question && isStructuredAgentSessionQuestionSteer(displayed, question))
+      ) {
         continue
       }
       const submission = state.inputForItem(displayed.itemId)
@@ -53,7 +59,6 @@ export function readJournalSqlOpenAsyncQuestion(
     }
     later = [...segment, ...later]
     before = after
-    const question = state.displayed(candidate.item.itemId)
     const open =
       question && newestOpenStructuredAgentSessionAsyncQuestion([question, ...later], submissions)
     if (open) {

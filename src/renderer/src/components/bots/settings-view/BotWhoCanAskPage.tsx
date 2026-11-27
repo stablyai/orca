@@ -1,4 +1,5 @@
 // Who can ask the bot, every connector at once: each Slack workspace, Linear workspace and GitHub org's own whole list.
+import { useFeishuWhoCanAsk } from '../feishu/use-feishu-who-can-ask'
 import type { Bot, BotLinear } from '../../../../../shared/bot-types'
 import type { ConnectorGitHubInstallation } from '../../../../../shared/connector-bot-github-contract'
 import { BotNoConnectors } from '../../settings/bots/BotConnectorsSection'
@@ -13,7 +14,10 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/ex
 import { BotPairedServersWhoCanAsk } from './BotPairedServersWhoCanAsk'
 import { pairedServerAsksOn } from '../paired-server-asks-on'
 
-type PeopleEntry = Extract<BotConnectorEntry, { kind: 'slack' | 'linear' | 'github' }>
+type PeopleEntry = Extract<
+  BotConnectorEntry,
+  { kind: 'slack' | 'linear' | 'github' | 'feishu-local' }
+>
 
 function ConnectorPeople({
   bot,
@@ -74,9 +78,21 @@ function GitHubPeople({
   )
 }
 
+function FeishuPeople({
+  bot,
+  entry
+}: {
+  bot: Bot
+  entry: PeopleEntry & { kind: 'feishu-local' }
+}): React.JSX.Element {
+  return <ConnectorPeople bot={bot} entry={entry} people={useFeishuWhoCanAsk(bot, entry.state)} />
+}
+
 export function BotWhoCanAskPage({ bot }: { bot: Bot }): React.JSX.Element {
-  const entries = useBotConnectorEntries(bot).filter(
-    (entry): entry is PeopleEntry =>
+  const all = useBotConnectorEntries(bot)
+  const feishu = all.find((entry) => entry.kind === 'feishu-local')
+  const entries = all.filter(
+    (entry): entry is Exclude<PeopleEntry, { kind: 'feishu-local' }> =>
       entry.kind === 'slack' || entry.kind === 'linear' || entry.kind === 'github'
   )
   // Paired servers ask agents on this computer once it takes their asks: listed even with no connector.
@@ -84,7 +100,7 @@ export function BotWhoCanAskPage({ bot }: { bot: Bot }): React.JSX.Element {
     bot.hostId === LOCAL_EXECUTION_HOST_ID && pairedServerAsksOn() ? (
       <BotPairedServersWhoCanAsk bot={bot} />
     ) : null
-  if (entries.length === 0) {
+  if (entries.length === 0 && !feishu) {
     return (
       <>
         <BotNoConnectors bot={bot} />
@@ -94,6 +110,7 @@ export function BotWhoCanAskPage({ bot }: { bot: Bot }): React.JSX.Element {
   }
   return (
     <>
+      {feishu ? <FeishuPeople bot={bot} entry={feishu} /> : null}
       {entries.map((entry) => {
         switch (entry.kind) {
           case 'slack':

@@ -51,6 +51,20 @@ CREATE TABLE IF NOT EXISTS remote_placements (
 CREATE INDEX IF NOT EXISTS idx_remote_placements_conversation ON remote_placements(conversation_id);
 
 -- What the server last said about one of its Dispatches here, and any stop this Orca owes it.
+CREATE TABLE IF NOT EXISTS remote_worker_lineage (
+  request_key TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+  dispatch_id TEXT UNIQUE,
+  creator_handle TEXT,
+  creator_orca_session_id TEXT,
+  creator_turn_source TEXT CHECK(creator_turn_source IS NULL OR creator_turn_source = 'connector')
+);
+
+CREATE INDEX IF NOT EXISTS idx_remote_worker_lineage_creator_session
+  ON remote_worker_lineage(creator_orca_session_id);
+CREATE INDEX IF NOT EXISTS idx_remote_placements_request
+  ON remote_placements(request_key);
+
 CREATE TABLE IF NOT EXISTS remote_dispatches (
   dispatch_id        TEXT PRIMARY KEY,
   conversation_id    TEXT NOT NULL,

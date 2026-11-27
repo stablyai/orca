@@ -1,3 +1,5 @@
+import { structuredMailSource } from '../../mailbox/structured-mail/structured-mail-source'
+import { isConversationReport } from '../../../../external-conversations/external-conversation-turn-opener'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
 import { createRootDispatch } from '../root-dispatch-test-fixture'
@@ -38,7 +40,7 @@ describe('worker_done from a worker on a paired server', () => {
       taskId: TASK,
       requestKey: KEY,
       create: { spec: 'work' },
-      creator: { kind: 'system' }
+      creator: { kind: 'terminal', handle: 'term_coord', turnSource: 'connector' }
     })
     peerRunId = server.admitPeerRun({
       peerFingerprint: 'fp_home',
@@ -105,6 +107,48 @@ describe('worker_done from a worker on a paired server', () => {
     const { result, message } = deliverWorkerDone(dispatchId, { taskId: TASK, dispatchId })
     expect(result).toEqual({ action: 'ignored' })
     expect(message).toMatchObject({ type: 'worker_done', subject: 'done', body: 'report' })
+  })
+
+  it('routes only attested remote reports to the conversation that started their worker', () => {
+    const dispatchId = startOnServer(TASK, 'term_worker')
+    // Import may precede the start receipt: the durable reservation still proves its creator.
+    const { message } = deliverWorkerDone(dispatchId, { taskId: TASK, dispatchId })
+    const source = (mail = message, mailboxHandle = `run:${link.run_id}`) =>
+      structuredMailSource({
+        db: home,
+        mailboxHandle,
+        dispatchId: null,
+        batch: [mail],
+        senderSnapshot: () => ({ name: 'worker', agent: null })
+      })
+    const report = (from: ReturnType<typeof source>) =>
+      isConversationReport({
+        kind: 'message',
+        role: 'user',
+        blocks: [],
+        from
+      })
+    expect(source().senders).toMatchObject([
+      {
+        party: { address: `dispatch:${dispatchId}` },
+        relation: 'worker',
+        toConversation: true
+      }
+    ])
+    expect(report(source())).toBe(true)
+    expect(report(source(message, 'term_other'))).toBe(false)
+    // A payload naming the same Dispatch carries no import-time attestation.
+    const forged = home.insertMessage({
+      runId: link.run_id,
+      from: 'term_worker',
+      to: `run:${link.run_id}`,
+      type: 'worker_done',
+      subject: 'forged',
+      payload: message.payload ?? undefined
+    })
+    expect(report(source(forged))).toBe(false)
+    home.db.prepare('UPDATE remote_worker_lineage SET creator_turn_source = NULL').run()
+    expect(report(source())).toBe(false)
   })
 
   it("delivers a follow-up's report although its Task exists only on the server", () => {
