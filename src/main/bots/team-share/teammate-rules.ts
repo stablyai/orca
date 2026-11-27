@@ -4,7 +4,8 @@
 //
 //  1. Methods. A teammate calls only what teammate-method-classes.json admits: the workspace tier by
 //     its class (`scoped` | `filtered` | `own`; unlisted is `refused`), a chats-only teammate by each
-//     method's `share` rule. `teammateMethodClass`.
+//     method's `share` rule. `teammateMethodClass`. A teammate reaches every chat of the shared
+//     agent, whoever it is for (`botShareReachesSession`); whose a chat is decides only how it lists.
 //  2. Workspaces. Every list and stream a teammate reads is kept to the shared agent's workspaces (its
 //     Home and its workers' worktrees): `filtered` methods, through `withTeammateLists` or their
 //     handlers (`TEAMMATE_HANDLER_FILTERED`, teammate-workspace-view.ts).
@@ -21,9 +22,14 @@
 //     a teammate's own in their agent's Home, the host's everywhere else, so the owner's list only
 //     ever takes owner writes. A teammate's Home list holds chats; `homeTabs.hostList` methods are
 //     refused at admission when they name the teammate's Home. Reads and streams use the device's
-//     list (`tabOwnerOf`). The census test checks every write's person source.
+//     list (`tabOwnerOf`), or the list a read names (`viewedTabListOf`): anyone may watch anyone's
+//     list in the Home; watching writes nothing, and closing a tab there names that list's person.
+//     The census test checks every write's person source.
 //  5. Name and asker. A teammate is named by their share row's `name`, and every chat or turn they start
 //     acts for them (`botShareAsker`).
+//  6. Read marks. The host's read marks (a chat's unread, notification attention, a workspace's unread,
+//     a thread's "new") are the owner's: a teammate's open or read never writes them, and none is read
+//     out to them as theirs (`ownsHostReadMarks`).
 import classes from '../../runtime/rpc/callers/teammate-method-classes.json'
 import { z } from 'zod'
 import {
@@ -147,6 +153,12 @@ export function teammateTabListKey(teammate: TabTeammate): TeammateTabListKey {
   return `teammate:${encodeURIComponent(teammate.botId)}:${encodeURIComponent(teammate.accountId)}`
 }
 
+/** The teammate a list key names (`teammateTabListKey`'s inverse). */
+export function tabListTeammate(key: TeammateTabListKey): TabTeammate {
+  const [, botId = '', accountId = ''] = key.split(':')
+  return { botId: decodeURIComponent(botId), accountId: decodeURIComponent(accountId) }
+}
+
 export function isTeammateTabList(owner: string): owner is TeammateTabListKey {
   return owner.startsWith('teammate:')
 }
@@ -203,4 +215,27 @@ const HOME_TAB_HOST_LIST: ReadonlySet<string> = new Set(classes.homeTabs.hostLis
 /** Rule 4: a call that writes the host's tab list of a workspace, refused in a teammate's own Home. */
 export function writesHostTabList(methodName: string): boolean {
   return HOME_TAB_HOST_LIST.has(methodName)
+}
+
+/** A tab list read names: `'owner'` or a teammate by account. Absent, the caller's own (`tabOwnerOf`). */
+export type TabListPerson = 'owner' | { accountId: string }
+
+/** The list a read of `person`'s tabs names in a workspace: a teammate's own in the agent's Home, the
+ *  host's for the owner and everywhere else (one shared list). */
+export function viewedTabListOf(
+  worktreeId: string,
+  person: TabListPerson,
+  bots: readonly Pick<Bot, 'id' | 'folderWorkspaceId'>[]
+): 'host' | TeammateTabListKey {
+  const home = bots.find((bot) => folderWorkspaceKey(bot.folderWorkspaceId) === worktreeId)
+  return home && person !== 'owner'
+    ? teammateTabListKey({ botId: home.id, accountId: person.accountId })
+    : 'host'
+}
+
+// ── 6. Read marks ───────────────────────────────────────────────────────────────────────────────
+
+/** Whether a caller's reads write, and read, the host's read marks: the owner's devices only. */
+export function ownsHostReadMarks(scope: RpcCallerScope | undefined): boolean {
+  return scope?.kind !== 'bot-share'
 }

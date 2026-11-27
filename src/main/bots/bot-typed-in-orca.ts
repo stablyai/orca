@@ -6,6 +6,10 @@ import type {
   AgentJournalSubmission
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalTypedBy } from '../../shared/agent-session/journal/agent-journal-typed-by'
+import type { Bot } from '../../shared/bot-types'
+import type { BotRequestPerson } from '../../shared/bots/bot-acts-for'
+import { botHomeOpenable, botShareAskerOf } from '../../shared/bots/bot-home-of'
 
 /** Whether a person sent a journal item, by Orca's record of the send. Made for one read of a chat's
  *  journal and dropped with it, so it never answers from submissions another read holds. */
@@ -84,4 +88,20 @@ export function typedOnAnotherDevice(item: Pick<AgentJournalRenderItem, 'body'>)
     (typedBy?.by === 'device' || (typedBy?.by === 'agent' && typedBy.deviceId !== undefined)) &&
     typedBy.own !== true
   )
+}
+
+/** Who typed a message in a shared bot's chat, as the host stamped it: the owner at the host's own
+ *  window, or a teammate the bot is shared with (their share device's account); null for anyone else
+ *  and for messages from before stamps. The one reading of a message's typist for whom it asks as. */
+export function botMessageTypist(
+  bot: Pick<Bot, 'shares'> | null,
+  typedBy: AgentJournalTypedBy | undefined
+): 'owner' | BotRequestPerson | null {
+  if (typedBy?.by === 'host') {
+    return 'owner'
+  }
+  const accountId = typedBy?.by === 'device' && typedBy.own !== true ? typedBy.accountId : undefined
+  return bot && accountId && botHomeOpenable(bot, { accountId })
+    ? botShareAskerOf(bot, accountId)
+    : null
 }

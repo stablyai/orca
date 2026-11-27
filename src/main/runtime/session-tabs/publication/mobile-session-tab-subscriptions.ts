@@ -12,7 +12,7 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
     listener: MobileSessionTabSubscription['listener'],
     clientNavigationId?: string,
     clientKind?: 'mobile' | 'runtime',
-    options?: Pick<MobileSessionTabSubscription, 'observation' | 'acceptsWorktree'>
+    options?: Pick<MobileSessionTabSubscription, 'observation' | 'acceptsWorktree' | 'list'>
   ): () => void {
     // Drain coalesced notifications before subscribing: the initial snapshot already includes them.
     this.mobileSessionTabsNotifyCoalescer.flushAll()
@@ -21,7 +21,8 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
       clientNavigationId,
       clientKind,
       observation: options?.observation,
-      acceptsWorktree: options?.acceptsWorktree
+      acceptsWorktree: options?.acceptsWorktree,
+      list: options?.list
     }
     this.mobileSessionTabListeners.add(subscription)
     return () => {
@@ -81,8 +82,8 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
     this.clientHostedPageReconciliation.forgetObservation(clientNavigationId, observer)
   }
 
-  /** Listeners of one workspace's tab list: a frame of the host's list never reaches a teammate whose
-   *  own list it is there, nor one of theirs anyone else (`tabOwnerOf`). */
+  /** Listeners of one workspace's tab list: a device's own list (`tabOwnerOf`), or the list a watcher
+   *  named. A frame of the host's list never reaches a teammate's device whose own list is there. */
   protected selectMobileSessionTabsListeners(
     worktree?: string,
     clientNavigationId?: string,
@@ -97,7 +98,8 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
           subscription.clientNavigationId === clientNavigationId) &&
         (worktree === undefined ||
           (subscription.acceptsWorktree?.(worktree) !== false &&
-            this.sessionTabListOf(subscription.clientNavigationId, worktree) === list))
+            (subscription.list ??
+              this.sessionTabListOf(subscription.clientNavigationId, worktree)) === list))
       ) {
         selected.push(subscription)
       }

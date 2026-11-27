@@ -1,3 +1,4 @@
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 // The live work a bot's owner turn hears of: items waiting on the owner, workers still running,
 // items in progress or waiting on something else, and finished work whose PR is still open. Built
 // from Items and the work record each time and never stored, so a closed item or a merged PR drops
@@ -48,8 +49,12 @@ const IDLE_MEMO_MAX = 500
 /** A note for a turn, and what to record once the turn has it. */
 export type BotTurnNote = { text: string; given: () => void }
 
-/** A chat's notes for the turn starting now. */
-export type BotTurnNoteRead = (sessionId: string, botId: string) => Promise<BotTurnNote | null>
+/** A chat's notes for the turn starting now; `message` the person's message that opens it, if any. */
+export type BotTurnNoteRead = (
+  sessionId: string,
+  botId: string,
+  message?: AgentJournalMessageItem
+) => Promise<BotTurnNote | null>
 
 /** `given`, recording `note` as had too. */
 export function withNoteGiven<A extends unknown[]>(

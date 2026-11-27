@@ -15,6 +15,7 @@ import '../../../../../../shared/rpc-contract/structured-agent-session/structure
 import { structuredAgentSessionTurnCompletionSubscriptionId } from './structured-agent-session-subscription-id'
 import { bindStructuredAgentSessionStream } from './structured-agent-session-status-stream'
 import { clientReadsStructuredSessionAgent } from '../structured-agent-session-policy'
+import { ownsHostReadMarks } from '../../../../../bots/team-share/teammate-rules'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
@@ -26,6 +27,10 @@ export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
     params: AcknowledgeAttentionParams,
     handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
+      // Attention is the owner's to clear: a teammate reading the chat leaves it (rule 6).
+      if (!ownsHostReadMarks(ctx.callerScope)) {
+        return { acknowledged: true }
+      }
       const host = getStructuredAgentSessionHost()
       const scope = host
         ? host.attentionReads.sessionLocation(params.sessionId)

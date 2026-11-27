@@ -332,7 +332,8 @@ export async function readBotTurn(
     automationPlace: (run?: AutomationRunMessage) =>
       automationPlace(runtime, sessionId, run, conversation),
     conversationWorkspaceId: workspaceId,
-    personName
+    personName,
+    bot
   }
   const turn = opening
     ? readBotActingTurn([openingItem(opening)], lookups, [])

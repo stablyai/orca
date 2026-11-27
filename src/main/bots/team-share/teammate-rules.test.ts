@@ -162,10 +162,11 @@ describe('a teammate’s own Home tab list (rule 4)', () => {
     // The Home tab write API: each takes the person (`person`, `personOf` or `people`) as a required field.
     const writes =
       /\b(publishStructuredAgentSessionTab|activateMobileSessionTab|closeMobileSessionTab|refuseUnattributedMobileSessionTabClose|closeChatTabs|commitStructuredAgentSessionCreate)\(/g
-    // Sources: the caller's scope at a handler, a chat's stamp, the host's own state; or the field
-    // of a function that took one of those (its own callers are in this census too).
+    // Sources: the caller's scope at a handler, a chat's stamp, the host's own state, the person whose
+    // list a viewer's close names (`closeTarget`); or the field of a function that took one of those
+    // (its own callers are in this census too).
     const source =
-      /^(callerTabPerson\(\w+\.callerScope\)|callerTabPerson\(callerScope\)|\(?\w*\)? => callerTabPerson\(ctx\.callerScope\)|(\w+\.)?runtime\.chatTab(Person|People)\(|(\(\w+\) => )?args\.runtime\.chatTabPerson\(|HOST_STATE_PERSON|args\.personOf\(|input\.person|options\.person|opts\.person|caller\.person)/
+      /^(callerTabPerson\(\w+\.callerScope\)|target\.person|callerTabPerson\(callerScope\)|\(?\w*\)? => callerTabPerson\(ctx\.callerScope\)|(\w+\.)?runtime\.chatTab(Person|People)\(|(\(\w+\) => )?args\.runtime\.chatTabPerson\(|HOST_STATE_PERSON|args\.personOf\(|input\.person|options\.person|opts\.person|caller\.person)/
     const calls = files.flatMap(({ file, text }) =>
       [...text.matchAll(writes)].flatMap((match) => {
         const at = match.index + match[0].length

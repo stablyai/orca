@@ -11,12 +11,16 @@ import { folderWorkspaceKey } from '../../../../shared/workspace/identity/worksp
 import type { BotShareDevices } from '../../../bots/team-share/bot-share-access'
 import {
   isTeammateTabList,
+  tabListTeammate,
   tabOwnerOf,
   teammateTabListKey,
+  viewedTabListOf,
+  type TabListPerson,
   type TabOwner,
   type TabTeammate,
   type TeammateTabListKey
 } from '../../../bots/team-share/teammate-rules'
+import type { BotHomeOf } from '../../../../shared/bots/bot-home-of'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   sessionTabListName,
@@ -67,6 +71,11 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
     Projection['getMobileSessionProjectionHost']
   >
   abstract getExplicitSessionWorktreeIdSelector(selector: string | undefined): string | null
+  abstract listMobileSessionTabs(
+    worktreeSelector: string,
+    clientNavigationId?: string,
+    options?: { includeInitialSurfaceLaunch?: true; includeAgentSenders?: boolean }
+  ): Promise<RuntimeMobileSessionTabsResult>
   abstract currentLocalStructuredSessionPresentation(
     sessionId: string
   ): { worktreeId: string; tabId: string } | null
@@ -128,18 +137,22 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
         ? { agent: record.provider, title: defaultAgentChatLabel(record.provider) }
         : null
     })
-    const result = this.titledSessionTabsResult(snapshot)
+    const result = this.titledSessionTabsResult(snapshot, undefined, {
+      accountId: tabListTeammate(person).accountId
+    })
     return includeAgentSenders ? this.withMobileSessionTabSenders(result) : result
   }
 
-  /** Chat tabs titled and the agent's Home pinned: the host's list, or a teammate's own (no saved tabs). */
+  /** Chat tabs titled and the list's person's Home pinned: the host's list (the owner's Home), or a
+   *  teammate's own (theirs; no saved tabs). */
   protected titledSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot,
-    savedTabs: SavedTabs = () => undefined
+    savedTabs: SavedTabs = () => undefined,
+    of: BotHomeOf = 'owner'
   ): RuntimeMobileSessionTabsResult {
     const namer = structuredConversationTabNamer(snapshot.worktree, savedTabs)
     const titled = titleStructuredConversationTabs(snapshot, namer, structuredConversationForked)
-    return projectTabsWithBotHomePins(this.store, titled, this.getMobileSessionProjectionHost())
+    return projectTabsWithBotHomePins(this.store, titled, this.getMobileSessionProjectionHost(), of)
   }
 
   /** A teammate's own list in this workspace, unprojected; null when the client reads the host's. */
@@ -196,6 +209,25 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
         includeAgentSenders: false
       }))
     )
+  }
+
+  /** The list a read of `person`'s tabs names (`viewedTabListOf`), as it is: no device's pick laid
+   *  over it, so a watcher reads no one's focus and changes nothing by reading. */
+  async listViewedSessionTabs(
+    worktreeSelector: string,
+    person: TabListPerson,
+    options?: { includeAgentSenders?: boolean }
+  ): Promise<{ list: SessionTabListName; frame: RuntimeMobileSessionTabsResult }> {
+    const worktreeId =
+      this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ??
+      (await this.resolveWorkspaceSelector(worktreeSelector)).id
+    const list = viewedTabListOf(worktreeId, person, this.store?.getBots?.() ?? [])
+    return {
+      list,
+      frame: isTeammateTabList(list)
+        ? this.personSessionTabsFrame(list, worktreeId, options?.includeAgentSenders)
+        : await this.listMobileSessionTabs(worktreeSelector, undefined, options)
+    }
   }
 
   /** Whether a workspace a teammate's call names is their own Home; an unknown one is not. */

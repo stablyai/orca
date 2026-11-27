@@ -1,6 +1,7 @@
 import { BotLinkOpenTargetSchema } from '../../bots/bot-link-open-target'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../schema/lazy-zod-schema'
+import { SessionTabListPerson } from './session-tab-list-person-params'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
 import { TAB_ACTIVATION_INTENTS } from '../../workspace-layout/tab-groups/tab-activation-intent'
 import { OptionalBoolean } from '../rpc-param-primitives'
@@ -20,6 +21,10 @@ export const WorktreeTabSelector = lazyZodSchema(() =>
       .transform((v) => (typeof v === 'string' ? v : ''))
       .pipe(z.string().min(1, 'Missing worktree selector'))
   })
+)
+
+export const SessionTabListRead = lazyZodSchema(() =>
+  WorktreeTabSelector.extend({ person: SessionTabListPerson.optional() })
 )
 
 export const SessionTabsUnsubscribe = lazyZodSchema(() =>
@@ -54,7 +59,9 @@ export const CloseTab = lazyZodSchema(() =>
     // Send replay only with SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY after reconnect.
     reason: z.enum(['user', 'replay']).optional(),
     // Confirmed pinned-tab close; gate on SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY because old hosts strip and refuse.
-    force: z.literal(true).optional()
+    force: z.literal(true).optional(),
+    // Closes the tab in the list a viewer watches (another person's); absent, the caller's own.
+    person: SessionTabListPerson.optional()
   })
 )
 

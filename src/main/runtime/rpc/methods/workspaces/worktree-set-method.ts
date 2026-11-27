@@ -2,15 +2,18 @@ import { WorktreeSet } from '../../../../../shared/rpc-contract/workspaces/workt
 import { displayNameUpdatePinsLabel } from '../../../../../shared/worktree/metadata/display-name-provenance'
 import { getWorkspaceStatusWarning } from '../../../../../shared/workspace/status/workspace-status-warning'
 import { defineMethod } from '../../core'
+import { ownsHostReadMarks } from '../../../../bots/team-share/teammate-rules'
 
 export const WORKTREE_SET_METHOD = defineMethod({
   name: 'worktree.set',
   permission: 'workspace',
   share: 'not-shared',
   params: WorktreeSet,
-  handler: async (params, { runtime }) => {
+  handler: async (params, { runtime, callerScope }) => {
+    // A workspace's unread and attention are the owner's: a teammate's read never writes them (rule 6).
+    const readMarks = ownsHostReadMarks(callerScope)
     const acknowledgement =
-      params.acknowledgeAttention === true && params.isUnread === false
+      readMarks && params.acknowledgeAttention === true && params.isUnread === false
         ? await runtime
             .prepareWorkspaceAttentionAcknowledgement(params.worktree)
             .catch((error: unknown) => {
@@ -46,7 +49,7 @@ export const WORKTREE_SET_METHOD = defineMethod({
       linkedTaskSourceContext: params.linkedTaskSourceContext,
       comment: params.comment,
       isArchived: params.isArchived,
-      isUnread: params.isUnread,
+      isUnread: readMarks ? params.isUnread : undefined,
       isPinned: params.isPinned,
       sortOrder: params.sortOrder,
       manualOrder: params.manualOrder,

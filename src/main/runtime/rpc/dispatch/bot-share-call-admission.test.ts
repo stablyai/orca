@@ -501,7 +501,8 @@ describe('the share guard', () => {
     expect(listed!.bots[0]!.shares).toBeUndefined()
   })
 
-  it('admits reads and actions only in the teammate’s own chats on the shared bot', async () => {
+  // A trusted teammate reaches every chat of the shared bot, whoever it is for; never another bot's.
+  it('admits reads and actions in every chat of the shared bot, and none of another bot', async () => {
     const history = (sessionId: string) =>
       call('agentSession.history', { sessionId, direction: 'tail' })
     const approve = (sessionId: string) =>
@@ -511,28 +512,27 @@ describe('the share guard', () => {
         expectedRevision: 1,
         optionId: 'allow'
       })
-    for (const theirs of [ids.alicesChat, ids.alicesSlackChat]) {
-      expect(errorCode(await history(theirs))).toBeNull()
-      expect(errorCode(await approve(theirs))).toBeNull()
-    }
-    for (const refused of [
+    for (const reached of [
+      ids.alicesChat,
+      ids.alicesSlackChat,
       ids.alicesGitHubThread,
       ids.ownersChat,
       ids.mixedChat,
       ids.bobsChat,
-      ids.unrecordedChat,
-      ids.alicesOtherBotChat
+      ids.unrecordedChat
     ]) {
-      expect(errorCode(await history(refused))).toBe('not_found')
-      expect(errorCode(await approve(refused))).toBe('not_found')
+      expect(errorCode(await history(reached))).toBeNull()
+      expect(errorCode(await approve(reached))).toBeNull()
     }
+    expect(errorCode(await history(ids.alicesOtherBotChat))).toBe('not_found')
+    expect(errorCode(await approve(ids.alicesOtherBotChat))).toBe('not_found')
   })
 
-  it('reads and sets the model only on the teammate’s own chat, never the host’s catalog without one', async () => {
+  it('reads and sets the model only on a chat of the shared bot, never the host’s catalog without one', async () => {
     expect(errorCode(await call('agentSession.modelCatalog', { agent: 'claude' }))).toBe(
       'not_found'
     )
-    for (const refused of [ids.ownersChat, ids.bobsChat]) {
+    for (const refused of [ids.alicesOtherBotChat]) {
       expect(
         errorCode(await call('agentSession.modelCatalog', { agent: 'claude', sessionId: refused }))
       ).toBe('not_found')
@@ -629,22 +629,24 @@ describe('the share guard', () => {
     )
   })
 
-  it('stages an upload only for the teammate’s own chat, so it can’t probe other chats', async () => {
+  it('stages an upload for any chat of the shared bot, so it can’t probe another bot’s', async () => {
     const upload = (sessionId: string) =>
       call('agentSessionAttachment.uploadStart', { sessionId, name: 'a.txt', byteLength: 1 })
     expect(errorCode(await upload(ids.alicesChat))).toBeNull()
-    expect(errorCode(await upload(ids.ownersChat))).toBe('not_found')
+    expect(errorCode(await upload(ids.ownersChat))).toBeNull()
     expect(errorCode(await upload(ids.alicesOtherBotChat))).toBe('not_found')
   })
 
   // A stored file's upload id is claimed by the chats whose messages carry it (the journal's claims).
-  it('previews a stored attachment only when one of the teammate’s own chats claims it, right after a restart too', async () => {
+  it('previews a stored attachment only when a chat of the shared bot claims it, right after a restart too', async () => {
     const root = join(directory, 'attachments')
     const theirs = join(root, '11111111-1111-4111-8111-111111111111', 'a.png')
     const owners = join(root, '22222222-2222-4222-8222-222222222222', 'b.png')
+    const otherBots = join(root, '33333333-3333-4333-8333-333333333333', 'c.png')
     const claims = new Map([
       ['11111111-1111-4111-8111-111111111111', [ids.alicesChat]],
-      ['22222222-2222-4222-8222-222222222222', [ids.ownersChat]]
+      ['22222222-2222-4222-8222-222222222222', [ids.ownersChat]],
+      ['33333333-3333-4333-8333-333333333333', [ids.alicesOtherBotChat]]
     ])
     // As on a cold start: the store comes with the chat host, which the first call opens.
     vi.mocked(runtime.ensureStructuredAgentSessionHost).mockImplementation(async () => {
@@ -659,12 +661,13 @@ describe('the share guard', () => {
     })
     const read = (path: string) => call('agentSessionAttachment.read', { path })
     expect(errorCode(await read(theirs))).toBeNull()
-    expect(errorCode(await read(owners))).toBe('not_found')
+    expect(errorCode(await read(owners))).toBeNull()
+    expect(errorCode(await read(otherBots))).toBe('not_found')
     expect(errorCode(await read(join(directory, 'elsewhere.png')))).toBe('not_found')
   })
 
   // A composer chip's thumbnail reads the file back before any message claims it.
-  it('previews an unsent upload to the teammate’s own chat it was made for, and no one else’s', async () => {
+  it('previews an unsent upload to a chat of the shared bot, and none to another bot’s', async () => {
     const store = new AgentSessionAttachmentStore(join(directory, 'attachments'), {
       hasSession: () => true,
       claimingSessions: async () => []
@@ -683,8 +686,8 @@ describe('the share guard', () => {
     }
     const read = (path: string) => call('agentSessionAttachment.read', { path })
     expect(errorCode(await read(await stored(ids.alicesChat)))).toBeNull()
-    expect(errorCode(await read(await stored(ids.ownersChat)))).toBe('not_found')
-    expect(errorCode(await read(await stored(ids.bobsChat)))).toBe('not_found')
+    expect(errorCode(await read(await stored(ids.bobsChat)))).toBeNull()
+    expect(errorCode(await read(await stored(ids.alicesOtherBotChat)))).toBe('not_found')
   })
 
   it('lets New chat reopen only an empty chat of the asker’s own', () => {
@@ -703,8 +706,8 @@ describe('the share guard', () => {
     expect(errorCode(await call('bots.chats.seen', undefined))).toBe('forbidden')
   })
 
-  it('streams a teammate the status of their own chats on the shared bot alone', async () => {
-    const theirs = [ids.alicesChat, ids.alicesSlackChat]
+  it('streams a teammate the status of every chat of the shared bot alone', async () => {
+    const theirs = SESSIONS.filter((session) => session.bot === SHARED).map((session) => session.id)
     expect(await streamStatus()).toEqual([
       ...theirs.map((id) => `snapshot:${id}`),
       ...theirs.map((id) => `name:${id}`),
@@ -794,6 +797,7 @@ describe('the share guard', () => {
         'bots.chatTree',
         'bots.chats',
         'bots.chats.own',
+        'bots.chats.search',
         'bots.items.owner.comment',
         'bots.items.owner.list',
         'bots.items.owner.opened',

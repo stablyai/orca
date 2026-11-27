@@ -66,7 +66,8 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
     recentChats: (botId, sessionId) => readBotRecentChats(runtime, botId, sessionId),
     activeWork: (botId, scope) => readBotActiveWork(runtime, botId, scope),
     endedTurns: async (sessionId) =>
-      (await (await requireStructuredHost(runtime)).journalReads(sessionId)).endedTurnCount()
+      (await (await requireStructuredHost(runtime)).journalReads(sessionId)).endedTurnCount(),
+    bot: (botId) => runtime.bots.list().find((bot) => bot.id === botId) ?? null
   })
   return {
     turnEnded: (sessionId, turnId, ended) => botTurnEnded(runtime, sessionId, turnId, ended),

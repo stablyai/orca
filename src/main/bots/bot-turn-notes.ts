@@ -12,7 +12,9 @@ import {
 import type { BotActiveWorkScope } from './bot-active-work-read'
 import { type BotItemAccess, botItemPeopleOfAudience, botItemsOfPeople } from './bot-item-access'
 import type { BotRecentChatsSection } from './bot-recent-chats'
-import { type BotTurnAudience, botTurnScope } from './bot-turn-audience'
+import { type BotTurnAudience, botTurnAskerLine, botTurnScope } from './bot-turn-audience'
+import { botMessageTypist } from './bot-typed-in-orca'
+import type { Bot } from '../../shared/bot-types'
 import { BOT_WORK_NOTE_TIMEOUT_MS } from './bot-work-record'
 import {
   botNeedsYouInChatNote,
@@ -25,6 +27,8 @@ export type BotTurnNoteSources = {
   activeWork: (botId: string, scope: BotActiveWorkScope) => Promise<BotActiveWorkSection>
   /** How many of the chat's turns have ended; rejects when the journal can't say. */
   endedTurns: (sessionId: string) => Promise<number>
+  /** The bot, for who typed a turn's message (`botMessageTypist`). */
+  bot: (botId: string) => Pick<Bot, 'shares'> | null
 }
 
 export type BotTurnNotes = {
@@ -76,7 +80,7 @@ export function createBotTurnNotes(sources: BotTurnNoteSources): BotTurnNotes {
       )
     },
     // Like the recent chats: a failed or stalled read means no note this turn, never a held message.
-    turnNote: async (sessionId, botId) => {
+    turnNote: async (sessionId, botId, message) => {
       const audience = sources.audience(sessionId)
       const scope = botTurnScope(audience)
       const [unanswered, work] = await Promise.all([
@@ -94,9 +98,12 @@ export function createBotTurnNotes(sources: BotTurnNoteSources): BotTurnNotes {
         work?.needsYou && scope.ownerAsks
           ? botNeedsYouInChatNote(needsYouSaid, sessionId, work.needsYou)
           : null
-      const text = [unanswered, needsYou?.text, idle?.text, scope.asker]
-        .filter(Boolean)
-        .join('\n\n')
+      // Who asks: this message's typist when that isn't whom the chat is for, else the chat's person.
+      const asker = botTurnAskerLine(
+        audience,
+        botMessageTypist(sources.bot(botId), message?.typedBy)
+      )
+      const text = [unanswered, needsYou?.text, idle?.text, asker].filter(Boolean).join('\n\n')
       return text
         ? {
             text,

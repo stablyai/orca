@@ -1,6 +1,7 @@
 // A workspace teammate's layout.subscribe: frames for the agent's workspaces alone, judged in order
 // after any re-read of the set they wait on (so a new worker's first layout arrives, and a shown one's
-// removal too), with the agent's home shown per person: only their own chats' tabs.
+// removal too), with the agent's home shown per person: the host's tabs there are the owner's, so none
+// goes to a teammate, whose own tabs come from their own list (session.tabs, teammate-rules.ts rule 4).
 import type { RpcContext } from '../../runtime/rpc/core'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type {
@@ -12,7 +13,6 @@ import {
   type WorkspaceLayoutRecordChange
 } from '../../../shared/workspace-layout/published-layout/workspace-layout-records'
 import { openTracker } from './agent-workspace-tracker'
-import { botShareOwnsSession } from './bot-share-chats'
 
 export async function openTeammateLayoutStream(
   context: Pick<RpcContext, 'callerScope' | 'runtime' | 'signal'>
@@ -21,15 +21,10 @@ export async function openTeammateLayoutStream(
   if (!tracker) {
     return null
   }
-  const { runtime } = context
   const home = tracker.current().homeKey
   const shown = new Set<string>()
   // The home's whole layout, so each of its changes goes out as the teammate's own layout.
   let homeLayout: PublishedWorkspaceLayout | undefined
-  const personal = (layout: PublishedWorkspaceLayout) =>
-    personalHomeLayout(layout, (sessionId) =>
-      botShareOwnsSession(runtime, tracker.scope, sessionId)
-    )
   const listed = (key: string) => tracker.has(key) || shown.has(key)
   const entry = (key: string, layout: PublishedWorkspaceLayout) => {
     shown.add(key)
@@ -37,7 +32,7 @@ export async function openTeammateLayoutStream(
       return layout
     }
     homeLayout = layout
-    return personal(layout)
+    return personalHomeLayout(layout)
   }
   const change = (next: WorkspaceLayoutRecordChange): WorkspaceLayoutRecordChange | null => {
     if (!listed(next.key)) {
@@ -81,20 +76,12 @@ export async function openTeammateLayoutStream(
   }
 }
 
-/** The home as one person sees it: their own chats' tabs only. */
-export function personalHomeLayout(
-  layout: PublishedWorkspaceLayout,
-  owns: (sessionId: string) => boolean
-): PublishedWorkspaceLayout {
-  const tabs = layout.tabs.filter((tab) => tab.kind === 'agent-session' && owns(tab.entityId))
-  const kept = new Set(tabs.map((tab) => tab.id))
+/** The home's layout without the owner's tabs: a teammate's Home tabs are their own list's. */
+function personalHomeLayout(layout: PublishedWorkspaceLayout): PublishedWorkspaceLayout {
   return {
     ...layout,
-    tabs,
-    groups: layout.groups.map((group) => ({
-      ...group,
-      tabIds: group.tabIds.filter((id) => kept.has(id))
-    })),
+    tabs: [],
+    groups: layout.groups.map((group) => ({ ...group, tabIds: [] })),
     editorFiles: [],
     browserTabs: []
   }

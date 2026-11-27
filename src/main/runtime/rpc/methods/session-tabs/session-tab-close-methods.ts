@@ -1,5 +1,5 @@
 import { withSpan } from '../../../../observability/tracer'
-import { callerTabPerson } from '../../../../bots/team-share/teammate-rules'
+import { callerTabPerson, type TabPerson } from '../../../../bots/team-share/teammate-rules'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { defineMethod } from '../../core'
@@ -18,12 +18,25 @@ export const SESSION_TAB_CLOSE_METHODS = [
     share: 'not-shared',
     params: CloseTab,
     handler: async (params, context) => {
+      // A close in a list a viewer watches (another person's) is that list's person's, and moves no
+      // device of the closer's; absent, the caller's own list on their device.
+      const viewed = params.person
+        ? await context.runtime.listViewedSessionTabs(params.worktree, params.person, {
+            includeAgentSenders: false
+          })
+        : null
+      const target: { person: TabPerson; clientNavigationId?: string } = viewed
+        ? { person: viewed.list === 'host' ? 'owner' : viewed.list }
+        : {
+            person: callerTabPerson(context.callerScope),
+            ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
+          }
       if (context.clientKind) {
-        const raw = await context.runtime.listMobileSessionTabs(
-          params.worktree,
-          context.pairedDeviceId,
-          { includeAgentSenders: false }
-        )
+        const raw =
+          viewed?.frame ??
+          (await context.runtime.listMobileSessionTabs(params.worktree, context.pairedDeviceId, {
+            includeAgentSenders: false
+          }))
         const visible = projectSessionTabsForClient(
           raw,
           context.clientKind,
@@ -51,10 +64,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
             const result = await context.runtime.refuseUnattributedMobileSessionTabClose(
               params.worktree,
               params.tabId,
-              {
-                person: callerTabPerson(context.callerScope),
-                clientNavigationId: context.pairedDeviceId
-              }
+              { person: target.person, clientNavigationId: target.clientNavigationId }
             )
             span.setAttribute('decision', `refused-${result.refusalReason ?? 'missing-intent'}`)
             return result
@@ -63,11 +73,13 @@ export const SESSION_TAB_CLOSE_METHODS = [
             params.worktree,
             params.tabId,
             {
-              person: callerTabPerson(context.callerScope),
+              person: target.person,
               reason: 'user',
               // Only explicit reasons prove confirmation; legacy reasonless closes do not.
               ...(params.force && params.reason !== undefined ? { force: true } : {}),
-              ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
+              ...(target.clientNavigationId
+                ? { clientNavigationId: target.clientNavigationId }
+                : {})
             }
           )
           span.setAttribute(

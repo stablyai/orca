@@ -40,10 +40,36 @@ export function botTurnScope(audience: BotTurnAudience): BotTurnScope {
 }
 
 function teammatesLine(people: readonly BotTurnTeammate[]): string {
-  const who = people.map(({ name }) => JSON.stringify(inlineUntrusted(name, NAME_CHARS))).join(', ')
+  const who = quotedNames(people)
   return people.length === 1
     ? `[Orca: this chat is ${who}'s, a teammate your owner shared you with. Messages here are from ${who}, not your owner.]`
     : `[Orca: this chat is for ${who}, teammates your owner shared you with. Messages here are from them, not your owner.]`
+}
+
+/** The line naming who asks this turn's message: its typist when that isn't whom the chat is for
+ *  (a teammate in the owner's chat or another's, the owner in a teammate's), else the chat's. */
+export function botTurnAskerLine(
+  audience: BotTurnAudience,
+  typist: 'owner' | BotRequestAsker | null
+): string | null {
+  const chatLine = botTurnScope(audience).asker
+  if (typist === 'owner') {
+    return audience.kind === 'teammates'
+      ? `[Orca: this message is from your owner, in ${quotedNames(audience.people)}'s chat.]`
+      : chatLine
+  }
+  const teammate = typist ? teammateOf(typist) : null
+  const chatIsTheirs =
+    audience.kind === 'teammates' &&
+    audience.people.length === 1 &&
+    audience.people[0]!.accountId === teammate?.accountId
+  return teammate && !chatIsTheirs
+    ? `[Orca: this message is from ${quotedNames([teammate])}, a teammate your owner shared you with, not your owner.]`
+    : chatLine
+}
+
+function quotedNames(people: readonly BotTurnTeammate[]): string {
+  return people.map(({ name }) => JSON.stringify(inlineUntrusted(name, NAME_CHARS))).join(', ')
 }
 
 /** The teammate an asker is, by Orca account: in Orca, or through a Slack login linked to it (as

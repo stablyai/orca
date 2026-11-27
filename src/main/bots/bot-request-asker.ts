@@ -16,7 +16,13 @@ import {
 } from '../../shared/bots/bot-acts-for'
 import { originOf, requestsOriginPlace } from './bot-request-origin-place'
 import { carriedAskersOf, stampedPerson } from './bot-stamped-askers'
-import { personSendsOf, typedInOrcaByOwner, typedOnAnotherDevice } from './bot-typed-in-orca'
+import {
+  botMessageTypist,
+  personSendsOf,
+  typedInOrcaByOwner,
+  typedOnAnotherDevice
+} from './bot-typed-in-orca'
+import type { Bot } from '../../shared/bot-types'
 import { isRootTurnRecord, isRootUserMessage, turnMessages } from './bot-turn-messages'
 import { requestTextOf } from './bot-request-text'
 import { requestTurnAskedBy } from './bot-request-askers-of'
@@ -84,6 +90,8 @@ export type BotActingTurnLookups = {
   conversationWorkspaceId: string | null
   /** A teammate's name by account id, for a run made for them; trust reads only the id. */
   personName?: (accountId: string) => string | null
+  /** The bot whose chat this is, for who typed a message (`botMessageTypist`). */
+  bot?: Pick<Bot, 'shares'> | null
 }
 
 const noName = (): null => null
@@ -142,6 +150,11 @@ function readItem(body: AgentJournalItemBody, lookups: BotActingTurnLookups): It
   // an event no one asked through acts for its conversation, like an automation's prompt.
   if (body.origin === 'connector' && !body.memorySource) {
     return { kind: 'asker', asker: { kind: 'unknown' }, ...(wokenAt ? { wokenAt } : {}) }
+  }
+  // A teammate typing in any chat of the bot (the owner's included) asks as themself.
+  const typist = body.memorySource ? null : botMessageTypist(lookups.bot ?? null, body.typedBy)
+  if (typist && typist !== 'owner') {
+    return { kind: 'asker', asker: typist }
   }
   return {
     kind: 'conversation',
