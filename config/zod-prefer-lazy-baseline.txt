@@ -69,14 +69,11 @@
 1 src/main/jsonl-rpc/peer.ts
 1 src/main/kiro/kiro-model-listing.ts
 1 src/main/managed-data-accounts/service.ts
-5 src/main/managed-server/activation/orcad-activation-transaction-schema.ts
 2 src/main/managed-server/migration/linking/orcad-server-folder-workspaces.ts
 1 src/main/mcp-servers/mcp-host-list-file-reads.ts
 1 src/main/mcp-servers/mcp-host-list.ts
 1 src/main/mcp-servers/mcp-plugin-server-mark.ts
-14 src/main/native-chat/agent-session-journal/durable-rows/journal-storage-row-schema.ts
 2 src/main/native-chat/agent-session-journal/journal-legacy-retirement-state.ts
-14 src/main/native-chat/agent-session-journal/journal-storage-bot-schema.ts
 29 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format-1.ts
 2 src/main/native-chat/agent-session-journal/outcomes/journal-state-schema.ts
 1 src/main/notifications/execution-host-push-coverage.ts
@@ -152,7 +149,6 @@
 4 src/shared/agent-session/conversation-context/agent-session-context-usage-schema.ts
 1 src/shared/agent-session/failures/agent-session-failure-fact-schema.ts
 1 src/shared/agent-session/journal/agent-session-journal-approval-subject-schema.ts
-5 src/shared/agent-session/journal/agent-session-journal-bot-item-schemas.ts
 2 src/shared/agent-session/journal/agent-session-journal-bounded-payload-schema.ts
 30 src/shared/agent-session/journal/agent-session-journal-schemas.ts
 1 src/shared/agent-session/journal/agent-session-journal-subagent-schema.ts
@@ -183,7 +179,6 @@
 3 src/shared/bots/bot-memory-history.ts
 1 src/shared/bots/bot-memory-updated-note.ts
 2 src/shared/bots/bot-offer-answers.ts
-5 src/shared/bots/bot-package.ts
 2 src/shared/bots/bot-proposal.ts
 1 src/shared/bots/bot-request-card.ts
 2 src/shared/bots/bot-share-picks.ts
@@ -194,9 +189,7 @@
 3 src/shared/bots/bot-tidy-up.ts
 2 src/shared/browser/client-hosting/browser-client-host-request-protocol.ts
 1 src/shared/browser/client-hosting/browser-expected-url.ts
-5 src/shared/browser/extensions/browser-extensions-banner.ts
 2 src/shared/composio/composio-setup-card.ts
-5 src/shared/connector-action-contract.ts
 3 src/shared/connector-asker-contract.ts
 2 src/shared/connector-bot-access-contract.ts
 2 src/shared/connector-bot-github-contract.ts
@@ -219,7 +212,6 @@
 1 src/shared/google/google-setup-card.ts
 3 src/shared/google/google-setup-run.ts
 2 src/shared/mcp-servers/mcp-servers.ts
-5 src/shared/mobile-web-bundle/bundle-rpc-contract.ts
 2 src/shared/mobile-web-bundle/locale-catalog-contract.ts
 2 src/shared/orcad-migration/orcad-migration-terminal-restore-hints.ts
 4 src/shared/orchestration/orchestration-removed-work.ts
@@ -257,7 +249,6 @@
 4 src/shared/plugins/manifest/plugin-manifest-fields.ts
 14 src/shared/plugins/manifest/plugin-manifest.ts
 3 src/shared/plugins/view/plugin-editor-shot-acts.ts
-13 src/shared/plugins/view/plugin-shot-acts.ts
 3 src/shared/plugins/workers/plugin-host-api-appearance.ts
 1 src/shared/plugins/workers/plugin-host-api-editor-typography.ts
 1 src/shared/plugins/workers/plugin-host-api-major.ts
@@ -319,7 +310,6 @@
 3 src/shared/telemetry/schemas/telemetry-agent-dashboard-event-schemas.ts
 2 src/shared/telemetry/schemas/telemetry-codex-history-move-event-schemas.ts
 1 src/shared/telemetry/schemas/telemetry-codex-legacy-history-event-schemas.ts
-5 src/shared/telemetry/schemas/telemetry-onboarding-foundation-schemas.ts
 4 src/shared/telemetry/schemas/telemetry-onboarding-language-schemas.ts
 2 src/shared/telemetry/schemas/telemetry-plugin-event-schemas.ts
 3 src/shared/telemetry/schemas/telemetry-repository-event-schemas.ts
