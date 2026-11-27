@@ -282,7 +282,10 @@ export function useBotItemQuestionSteps(
         // Words, files and skills alike wait like a pick: the line folds to them, the box names the
         // next open line, and Send posts them with the rest.
         hold(stored(line, answer))
-        setReopenedAt(null)
+        // Only the line it answered folds: another line reopened stays open.
+        if (line === reopened) {
+          setReopenedAt(null)
+        }
       } else if (picks.some(Boolean)) {
         // The picks name their lines; the words ride along answering none.
         post(botItemHeldAnswersComment(shape, picks, answer))

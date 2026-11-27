@@ -109,7 +109,12 @@ export function BotItemQuestionStep({
       return
     }
     moveFocus.current = false
-    focusInView(rows.current?.querySelector('button, input') ?? sendButton.current)
+    // A reopened line's own pick first, so Enter keeps it; else its first control.
+    focusInView(
+      rows.current?.querySelector<HTMLElement>('[aria-pressed="true"]') ??
+        rows.current?.querySelector<HTMLElement>('button, input') ??
+        sendButton.current
+    )
   })
   const setDraft = (index: number, words: string): void =>
     setDrafts((previous) => ({ ...previous, [index]: words }))
@@ -154,7 +159,8 @@ export function BotItemQuestionStep({
     }
     holdDraft()
     if (!reply) {
-      setDraft(index, pick.words)
+      // Words already being revised there stay; else the held words, to change.
+      setDraft(index, drafts[index]?.trim() ? drafts[index]! : pick.words)
     }
     steps.reopen(index)
     moveFocus.current = true
