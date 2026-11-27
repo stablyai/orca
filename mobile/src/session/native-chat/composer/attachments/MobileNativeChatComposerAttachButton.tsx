@@ -204,7 +204,7 @@ function AddToMessageSheet({
           />
         </ListGroup>
       ) : null}
-      {plan || onGoal ? (
+      {sheet && (plan || onGoal) ? (
         <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.group}>
           {plan ? (
             <ListRow
