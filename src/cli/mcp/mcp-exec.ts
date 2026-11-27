@@ -14,6 +14,7 @@ import {
 import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { RuntimeClientError } from '../runtime/connection/types'
+import { mcpCallerWorkspace } from './mcp-caller-workspace'
 
 type CommandServer = { command: string; args: string[]; env: Record<string, string> }
 
@@ -82,10 +83,19 @@ function runAsWrapper(server: CommandServer, env: NodeJS.ProcessEnv, cwd: string
 }
 
 /** The command server `flags` name, as this Orca starts it for that agent and workspace. */
-async function commandServer({ flags, client }: HandlerContext): Promise<CommandServer> {
+async function commandServer({ flags, client, cwd }: HandlerContext): Promise<CommandServer> {
   const id = getRequiredStringFlag(flags, 'id')
   const agent = getRequiredStringFlag(flags, 'agent')
-  const workspaceId = getOptionalStringFlag(flags, 'workspace') ?? null
+  const workspaceId = await mcpCallerWorkspace(client, cwd, {
+    workspace: getOptionalStringFlag(flags, 'workspace'),
+    outside: flags.get('outside-workspace') === true
+  })
+  if (workspaceId === undefined) {
+    throw new RuntimeClientError(
+      'mcp_server_off',
+      'This folder is in more than one workspace, so Orca can’t tell whether the server is on here.'
+    )
+  }
   const botToken = readInjectedBotToken()
   const callerSessionId = readInjectedAgentSessionId()
   const { result } = await client.call<McpServerConnection>('mcpServers.connect', {

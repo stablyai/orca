@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import { noteBrowserExtensionNeedsCleanStart } from '../profile-sessions/browser-extension-idle-kept-state'
 import {
@@ -14,9 +15,11 @@ import {
  */
 const STORAGE_RELAY_NAMESPACE = 'orcaStorageRelay'
 
-const changesSchema = z.record(
-  z.string(),
-  z.object({ oldValue: z.unknown().optional(), newValue: z.unknown().optional() }).strict()
+const changesSchema = lazyZodSchema(() =>
+  z.record(
+    z.string(),
+    z.object({ oldValue: z.unknown().optional(), newValue: z.unknown().optional() }).strict()
+  )
 )
 
 export function registerStorageRelayNamespace(): void {

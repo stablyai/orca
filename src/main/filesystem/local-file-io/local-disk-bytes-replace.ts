@@ -10,7 +10,7 @@ import {
 import { renameFileWithWindowsRetryAsync } from '../../../shared/file-write/windows-retry-file-operations'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { isENOENT } from './filesystem-path-containment'
-import { runLocalEditorWrite } from './local-disk-write-precondition'
+import { followLocalFileSymlinks, runLocalEditorWrite } from './local-disk-write-precondition'
 import { assertLocalWriteTargetIsRegularFile } from './local-regular-file-read'
 
 async function sha256OfFile(filePath: string): Promise<string | null> {
@@ -28,6 +28,21 @@ async function sha256OfFile(filePath: string): Promise<string | null> {
   return hash.digest('hex')
 }
 
+/** A dangling link's target when its folder exists; otherwise the requested path. */
+async function missingFileWriteTarget(filePath: string): Promise<string | null> {
+  const target = await followLocalFileSymlinks(filePath)
+  if (target === null) {
+    return null
+  }
+  const targetFolderExists =
+    !target.endsWith('/') &&
+    (await stat(dirname(target)).then(
+      (stats) => stats.isDirectory(),
+      () => false
+    ))
+  return targetFolderExists ? target : filePath
+}
+
 /**
  * Replaces a file's bytes atomically (sibling temp file, then rename) unless it no longer holds
  * the bytes the editor loaded. A symlink is followed, so its target is replaced, not the link.
@@ -41,10 +56,13 @@ export async function replaceLocalFileBytesIfUnchanged(
   return runLocalEditorWrite(filePath, async () => {
     const target = await realpath(filePath).catch((error: unknown) => {
       if (isENOENT(error)) {
-        return filePath
+        return missingFileWriteTarget(filePath)
       }
       throw error
     })
+    if (target === null) {
+      return { ok: false, diskConflict: 'changed' }
+    }
     if (precondition.expectedSha256 !== undefined) {
       const current = await sha256OfFile(target)
       if (current === null && precondition.allowMissing !== true) {

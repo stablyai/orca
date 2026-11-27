@@ -18,6 +18,10 @@ type HostRead = {
   queued: boolean
   /** The connection that answered method_not_found; a host only gains the method by restarting. */
   unsupportedAt: number | null
+  /** Last revision applied from this host on `revisionAt`'s connection; reset on reconnect or store clear. */
+  revision: number | null
+  revisionAt: number | null
+  hadContexts: boolean
   retryTimer: ReturnType<typeof setTimeout> | null
 }
 
@@ -46,7 +50,15 @@ export function noteRemoteAgentOrchestrationChanged(environmentId: string): void
 export function refreshRemoteAgentOrchestration(environmentId: string): void {
   let read = reads.get(environmentId)
   if (!read) {
-    read = { reading: false, queued: false, unsupportedAt: null, retryTimer: null }
+    read = {
+      reading: false,
+      queued: false,
+      unsupportedAt: null,
+      revision: null,
+      revisionAt: null,
+      hadContexts: false,
+      retryTimer: null
+    }
     reads.set(environmentId, read)
   }
   if (read.unsupportedAt !== null) {
@@ -102,6 +114,17 @@ export function parseRemoteAgentOrchestration(
   return contexts
 }
 
+function parseRevision(result: unknown): number | null {
+  if (!isRecord(result)) {
+    return null
+  }
+  return typeof result.revision === 'number' &&
+    Number.isInteger(result.revision) &&
+    result.revision >= 0
+    ? result.revision
+    : null
+}
+
 async function readHost(environmentId: string, read: HostRead, attempt: number): Promise<void> {
   if (hostRemoved(environmentId)) {
     reads.delete(environmentId)
@@ -109,22 +132,40 @@ async function readHost(environmentId: string, read: HostRead, attempt: number):
   }
   read.reading = true
   let failed = false
+  const hostId = toRuntimeExecutionHostId(environmentId)
+  const connectionGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
+  const hasCachedContexts =
+    useAppStore.getState().remoteAgentOrchestrationByHost[hostId] !== undefined
+  const sinceRevision =
+    read.revision !== null &&
+    read.revisionAt === connectionGeneration &&
+    (!read.hadContexts || hasCachedContexts)
+      ? read.revision
+      : undefined
   try {
     const result = await callRuntimeRpc<unknown>(
       { kind: 'environment', environmentId },
       AGENT_ACTIVITY_ORCHESTRATION_METHOD,
-      undefined,
+      sinceRevision !== undefined ? { sinceRevision } : undefined,
       // Event-driven bookkeeping: never wake an idle host or count as user activity.
       { suppressFeatureInteraction: true, background: true }
     )
     // A host removed mid-read must not leave its lineage behind.
     if (!hostRemoved(environmentId)) {
-      useAppStore
-        .getState()
-        .setRuntimeAgentOrchestrationByPaneKey(
-          parseRemoteAgentOrchestration(result),
-          toRuntimeExecutionHostId(environmentId)
-        )
+      const revision = parseRevision(result)
+      const unchanged = isRecord(result) && result.unchanged === true
+      if (unchanged && sinceRevision !== undefined) {
+        if (revision !== null) {
+          read.revision = revision
+          read.revisionAt = connectionGeneration
+        }
+      } else {
+        const contexts = parseRemoteAgentOrchestration(result)
+        useAppStore.getState().setRuntimeAgentOrchestrationByPaneKey(contexts, hostId)
+        read.revision = revision
+        read.revisionAt = revision !== null ? connectionGeneration : null
+        read.hadContexts = Object.keys(contexts).length > 0
+      }
     }
   } catch (error) {
     // An older host has no such method; its rows stay flat as before rather than being asked again.

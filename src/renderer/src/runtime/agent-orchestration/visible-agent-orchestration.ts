@@ -10,7 +10,7 @@ import {
   orchestrationRowWorkForTest,
   rowIdentities
 } from './orchestration-row-identities'
-import { remoteRowContexts } from './remote-row-orchestration'
+import { remoteRowContexts, remoteRowContextsFor, rowOnHost } from './remote-row-orchestration'
 import { terminalProvenance, terminalProvenanceVisits } from './terminal-provenance'
 
 type Contexts = Record<string, AgentStatusOrchestrationContext>
@@ -38,7 +38,10 @@ function storedContext(
   const remote =
     row?.host && row.host !== LOCAL_EXECUTION_HOST_ID
       ? state.remoteAgentOrchestrationByHost?.[row.host]?.[key]
-      : undefined
+      : // A terminal a host runs here reads that host's context by this window's (mirrored) key.
+        !row
+        ? remoteRowContextsFor(state)[paneKey]
+        : undefined
   return remote ?? state.runtimeAgentOrchestrationByPaneKey?.[key]
 }
 const producerByContext = new WeakMap<AgentStatusOrchestrationContext, string>()
@@ -85,10 +88,15 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
       alias ?? (canonical.has(key) && canonical.get(key)?.host !== host ? aliasKey(host, key) : key)
     )
   }
+  // A remote host names a parent by its own key; its mirrored row here is the parent shown.
+  const parentKey = (key: string, host: string | null) =>
+    (host && host !== LOCAL_EXECUTION_HOST_ID
+      ? rowOnHost(host, key, rows, terminals)
+      : undefined) ?? visibleKey(key, host)
   const adapt = (key: string, context: AgentStatusOrchestrationContext, host: string | null) => {
     visits++
     const actual = visibleKey(key, host)
-    const parent = context.parentPaneKey ? visibleKey(context.parentPaneKey, host) : undefined
+    const parent = context.parentPaneKey ? parentKey(context.parentPaneKey, host) : undefined
     const next = parent === context.parentPaneKey ? context : { ...context, parentPaneKey: parent }
     const previous = cache?.contexts[actual]
     contexts[actual] =
@@ -142,13 +150,15 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
           : null
     if (
       entry.orchestration.parentPaneKey &&
-      visibleKey(entry.orchestration.parentPaneKey, host) !== entry.orchestration.parentPaneKey
+      parentKey(entry.orchestration.parentPaneKey, host) !== entry.orchestration.parentPaneKey
     ) {
       adapt(entry.paneKey, entry.orchestration, host)
     }
   }
-  for (const entry of Array.from(state.agentStatusByPaneKey?.values() ?? [])) {
-    embedded(entry)
+  if (state.agentStatusByPaneKey) {
+    for (const entry of state.agentStatusByPaneKey.values()) {
+      embedded(entry)
+    }
   }
   const previous = cache?.contexts
   const equal =

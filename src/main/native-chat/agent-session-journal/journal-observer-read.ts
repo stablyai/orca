@@ -104,7 +104,7 @@ export function copyJournalCurrentWorkAuthority(
             }
           },
     ended: ended && { fence: ended.fence, rootGone: ended.rootGone, cause: ended.cause },
-    replaced: replaced && { fence: replaced.fence },
+    replaced: replaced && { fence: replaced.fence, ...(replaced.kept ? { kept: true } : {}) },
     child:
       child === null || child === undefined
         ? child

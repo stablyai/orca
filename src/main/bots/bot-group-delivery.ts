@@ -7,6 +7,7 @@ import {
   type BotGroupTurn
 } from '../../shared/bots/bot-group'
 import { botGroupAudience } from '../../shared/bots/bot-group-mentions'
+import { BOT_GROUP_THREAD_TITLE_MAX_LENGTH } from '../../shared/bots/bot-group-schema'
 import { stripSentImagePromptMarkers } from '../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import { sendAgentTurn } from '../runtime/orchestration/turn-delivery/send-agent-turn'
@@ -131,13 +132,13 @@ export async function sendBotGroupMessage(
   return message
 }
 
-/** A thread is named by its first post, cut to one line. */
+/** A thread is named by its first post, cut to one line, unless its owner named it first. */
 function titleThread(groups: BotGroupRuntime, threadId: string, message: BotGroupMessage): void {
   const group = groups.store.get(message.groupId)
   if (group.threads?.find((thread) => thread.id === threadId)?.title) {
     return
   }
-  const title = botGroupMessageSummary(message).slice(0, 80)
+  const title = botGroupMessageSummary(message).slice(0, BOT_GROUP_THREAD_TITLE_MAX_LENGTH)
   const titled = {
     ...group,
     threads: group.threads?.map((thread) =>

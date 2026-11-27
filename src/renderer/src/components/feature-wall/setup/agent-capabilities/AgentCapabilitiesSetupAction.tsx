@@ -65,15 +65,23 @@ function AgentCapabilitiesSetupForRuntime(
 ): React.JSX.Element {
   const { onBrowserUseSkillInstalledChange, onOrchestrationSkillInstalledChange } = props
   const computerUseBlocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.computerUse)
-  const { readiness, installStatus } = useAgentCapabilitySetupStatus(computerUseBlocked)
+  const browserUseBlocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.browserUse)
+  const { readiness, installStatus } = useAgentCapabilitySetupStatus(
+    computerUseBlocked,
+    browserUseBlocked
+  )
   const featureSetupDefaultsAppliedRef = useRef(false)
   const featureSetupChangedByUserRef = useRef(false)
   const [requestedSetup, setFeatureSetup] = useState<OnboardingFeatureSetupSelection>(
     DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION
   )
   const featureSetup = useMemo(
-    () => (computerUseBlocked ? { ...requestedSetup, computerUse: false } : requestedSetup),
-    [computerUseBlocked, requestedSetup]
+    () => ({
+      ...requestedSetup,
+      ...(computerUseBlocked ? { computerUse: false } : {}),
+      ...(browserUseBlocked ? { browserUse: false } : {})
+    }),
+    [browserUseBlocked, computerUseBlocked, requestedSetup]
   )
   const [setupBusyLabel, setSetupBusyLabel] = useState<string | null>(null)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
@@ -113,11 +121,13 @@ function AgentCapabilitiesSetupForRuntime(
   const handleFeatureSetupChange = useCallback(
     (value: OnboardingFeatureSetupSelection): void => {
       featureSetupChangedByUserRef.current = true
-      setFeatureSetup((previous) =>
-        computerUseBlocked ? { ...value, computerUse: previous.computerUse } : value
-      )
+      setFeatureSetup((previous) => ({
+        ...value,
+        ...(computerUseBlocked ? { computerUse: previous.computerUse } : {}),
+        ...(browserUseBlocked ? { browserUse: previous.browserUse } : {})
+      }))
     },
-    [computerUseBlocked]
+    [browserUseBlocked, computerUseBlocked]
   )
   const handleStartFeatureSetup = useCallback(async (): Promise<void> => {
     if (setupBusyLabel !== null) {
@@ -218,6 +228,7 @@ function AgentCapabilitiesSetupForRuntime(
           allReady={isAgentCapabilityReadinessComplete(readiness)}
           installStatus={installStatus}
           computerUseBlocked={computerUseBlocked}
+          browserUseBlocked={browserUseBlocked}
         />
       )}
     </div>
@@ -234,6 +245,7 @@ function AgentCapabilitySetupControls(props: {
   allReady: boolean
   installStatus: Record<OnboardingFeatureSetupId, AgentCapabilityInstallStatus>
   computerUseBlocked: boolean
+  browserUseBlocked: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const hasSelectedFeatures = hasSelectedOnboardingFeatureSetup(props.featureSetup)
@@ -255,6 +267,7 @@ function AgentCapabilitySetupControls(props: {
         onChange={props.onFeatureSetupChange}
         installStatus={props.installStatus}
         computerUseBlocked={props.computerUseBlocked}
+        browserUseBlocked={props.browserUseBlocked}
       />
       {showSetupAction && showAllReady ? (
         <p className="mt-6 flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -321,13 +334,16 @@ function AgentCapabilitySetupChecklist(props: {
   onChange: (value: OnboardingFeatureSetupSelection) => void
   installStatus: Record<OnboardingFeatureSetupId, AgentCapabilityInstallStatus>
   computerUseBlocked: boolean
+  browserUseBlocked: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   return (
     <section className="mt-6">
       <div className="grid gap-3 md:grid-cols-3">
         {AGENT_CAPABILITY_SETUP_ROWS.filter(
-          (row) => !props.computerUseBlocked || row.id !== 'computerUse'
+          (row) =>
+            (!props.computerUseBlocked || row.id !== 'computerUse') &&
+            (!props.browserUseBlocked || row.id !== 'browserUse')
         ).map((row) => {
           const selected = props.value[row.id]
           const installStatus = props.installStatus[row.id]

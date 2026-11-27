@@ -14,6 +14,7 @@ export type BotWorkWorker = {
   state: OrchestrationSessionWorkerState
   /** Its Dispatch is open but its agent waits, on its coordinator or an answer. */
   idle?: boolean
+  progressNote?: string | null
   /** Its durable record says it was stopped or abandoned. */
   stopped: boolean
   /** Its start failed before any agent ran, as a lost or unknown start can turn out. */

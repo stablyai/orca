@@ -39,7 +39,15 @@ export function codexTomlString(value: string, shell: AgentStartupShell): string
 
 const TOML_BARE_KEY = /^[A-Za-z0-9_-]+$/
 
-function serverOverrides(server: BotToolServer, shell: AgentStartupShell): string[] | null {
+/** Variables of Codex's own env each named server is given (`env_vars`): Codex starts a stdio
+ *  server with only a fixed list of its own. */
+export type CodexForwardedEnv = { names: ReadonlySet<string>; vars: readonly string[] }
+
+function serverOverrides(
+  server: BotToolServer,
+  shell: AgentStartupShell,
+  forward: CodexForwardedEnv | undefined
+): string[] | null {
   const key = `mcp_servers.${server.name}`
   const str = (value: string): string | null => codexTomlString(value, shell)
   if ('url' in server) {
@@ -67,9 +75,14 @@ function serverOverrides(server: BotToolServer, shell: AgentStartupShell): strin
   ) {
     return null
   }
+  const forwarded = forward?.names.has(server.name) ? forward.vars.map(str) : []
+  if (forwarded.some((name) => name === null)) {
+    return null
+  }
   return [
     `${key}.command=${command}`,
     `${key}.args=[${args.join(',')}]`,
+    ...(forwarded.length > 0 ? [`${key}.env_vars=[${forwarded.join(',')}]`] : []),
     ...(env.length > 0
       ? [`${key}.env={${env.map(([name, value]) => `${name}=${value}`).join(',')}}`]
       : [])
@@ -79,12 +92,13 @@ function serverOverrides(server: BotToolServer, shell: AgentStartupShell): strin
 /** The `-c` args for `servers`, and the names of any whose values `shell` can't carry intact. */
 export function codexTerminalMcpArgs(
   servers: readonly BotToolServer[],
-  shell: AgentStartupShell
+  shell: AgentStartupShell,
+  forward?: CodexForwardedEnv
 ): { args: string[]; skipped: string[] } {
   const args: string[] = []
   const skipped: string[] = []
   for (const server of servers) {
-    const overrides = serverOverrides(server, shell)
+    const overrides = serverOverrides(server, shell, forward)
     if (!overrides) {
       skipped.push(server.name)
       continue

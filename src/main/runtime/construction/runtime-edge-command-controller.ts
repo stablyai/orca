@@ -6,7 +6,7 @@ import type { RuntimeBrowserCommands } from '../browser/commands/browser-command
 import { RuntimeEmulatorCommands } from '../emulator/runtime-emulator-commands'
 import { RuntimeBrowserScreencastController } from '../browser/screencast/runtime-browser-screencast-controller'
 import { createRuntimeBrowserCommands } from '../browser/installation/runtime-browser-commands-factory'
-import { RuntimeJiraCommands } from '../integrations/jira/runtime-jira-commands'
+import type { RuntimeJiraCommands } from '../integrations/jira/runtime-jira-commands'
 import type { RpcBinarySender } from '../rpc/transports/rpc-binary-sender'
 
 type PublicMethods<T> = Pick<T, keyof T>
@@ -109,6 +109,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserGrabSetMode',
   'browserGrabAwait',
   'browserGrabCancel',
+  'browserGrabPickedPresent',
   'browserGrabCaptureSelection',
   'browserGrabExtractHover',
   'browserGrabViewportBridge',
@@ -166,8 +167,54 @@ function bindBrowserMethods<T extends object>(
   ) as Partial<PublicMethods<T>>
 }
 
+const JIRA_ASYNC_COMMAND_NAMES = [
+  'jiraGenerateIssueSummary',
+  'jiraConnect',
+  'jiraDisconnect',
+  'jiraSelectSite',
+  'jiraStatus',
+  'jiraReadStatus',
+  'jiraTestConnection',
+  'jiraSearchIssues',
+  'jiraListIssues',
+  'jiraCreateIssue',
+  'jiraGetIssue',
+  'jiraLookupIssueSummary',
+  'jiraUpdateIssue',
+  'jiraAddIssueComment',
+  'jiraIssueComments',
+  'jiraListProjects',
+  'jiraListFavouriteFilters',
+  'jiraListIssueTypes',
+  'jiraListCreateFields',
+  'jiraListPriorities',
+  'jiraListAssignableUsers',
+  'jiraSearchUsers',
+  'jiraListTransitions',
+  'jiraGetProjectStatusOrder'
+] as const satisfies readonly Exclude<keyof RuntimeJiraCommands, 'jiraCancelGenerateIssueSummary'>[]
+
+function bindLazyAsyncMethods<T extends object>(
+  load: () => Promise<T>,
+  names: readonly (keyof T)[]
+): Partial<PublicMethods<T>> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fromEntries loses the key type of the names it was built from.
+  return Object.fromEntries(
+    names.map((name) => [
+      name,
+      async (...args: unknown[]) => {
+        const instance = await load()
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every name in names is checked against T, whose members are all methods.
+        return (instance[name] as (...callArgs: unknown[]) => unknown)(...args)
+      }
+    ])
+  ) as Partial<PublicMethods<T>>
+}
+
 export class RuntimeEdgeCommandController {
-  private readonly jira: RuntimeJiraCommands
+  private jiraInstance: RuntimeJiraCommands | null = null
+  private jiraPromise: Promise<RuntimeJiraCommands> | null = null
+  private readonly jiraHost: ConstructorParameters<typeof RuntimeJiraCommands>[0]
   private readonly browser: RuntimeBrowserCommands
   private readonly screencasts: RuntimeBrowserScreencastController
   private readonly emulator: RuntimeEmulatorCommands
@@ -180,7 +227,7 @@ export class RuntimeEdgeCommandController {
     emulatorHost: EmulatorHost
     getBrowserCommands?: () => RuntimeBrowserCommands
   }) {
-    this.jira = new RuntimeJiraCommands(args.jiraHost)
+    this.jiraHost = args.jiraHost
     this.browser = createRuntimeBrowserCommands(args.browserHost)
     this.screencasts = new RuntimeBrowserScreencastController({
       ...args.screencast,
@@ -189,11 +236,33 @@ export class RuntimeEdgeCommandController {
     this.emulator = new RuntimeEmulatorCommands(args.emulatorHost)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bound name lists are checked against the classes above; spreading loses their key types.
     this.surface = {
-      ...bindPrefixedMethods(this.jira, 'jira'),
+      ...bindLazyAsyncMethods(() => this.loadJira(), JIRA_ASYNC_COMMAND_NAMES),
+      jiraCancelGenerateIssueSummary: (cancelArgs, owner) =>
+        this.jiraInstance
+          ? this.jiraInstance.jiraCancelGenerateIssueSummary(cancelArgs, owner)
+          : { ok: true },
       ...bindBrowserMethods(this.browser, BROWSER_COMMAND_NAMES),
       ...bindPrefixedMethods(this.emulator, 'emulator'),
       browserScreencast: (params, options) => this.screencasts.start(params, options)
     } as RuntimeEdgeCommandSurface
+  }
+
+  private loadJira(): Promise<RuntimeJiraCommands> {
+    if (this.jiraInstance) {
+      return Promise.resolve(this.jiraInstance)
+    }
+    if (!this.jiraPromise) {
+      this.jiraPromise = import('../integrations/jira/runtime-jira-commands')
+        .then(({ RuntimeJiraCommands }) => {
+          this.jiraInstance = new RuntimeJiraCommands(this.jiraHost)
+          return this.jiraInstance
+        })
+        .catch((error: unknown) => {
+          this.jiraPromise = null
+          throw error
+        })
+    }
+    return this.jiraPromise
   }
 
   cancelScreencast(browserPageId: string): void {

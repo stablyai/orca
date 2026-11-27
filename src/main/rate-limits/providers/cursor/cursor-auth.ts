@@ -3,8 +3,9 @@ import { readFile, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import { readKeychainPassword } from '../../../macos-keychain/generic-password'
-import { unprotectWindowsDpapiCurrentUser } from '../../../windows-dpapi/current-user-unprotect'
+import { createLatestBlobDpapiUnprotect } from '../../../windows-dpapi/current-user-unprotect'
 import { readCursorLinuxKeyringSecret, type CursorLinuxKeyringRead } from './cursor-linux-keyring'
+import { decodeCursorIdeToken } from './cursor-windows-safe-storage'
 import {
   getCursorCliAuthPath,
   getCursorCliConfigPath,
@@ -146,11 +147,8 @@ async function readLinuxKeyringToken(
   return linuxKeyringRead.result
 }
 
-type WindowsDpapiRead = { blob: string; result: Promise<TokenReadResult> }
-
-// cursor-agent re-encrypts on every write, so the blob versions the token: one PowerShell run per login
-// change, shared by concurrent reads. A run that never finished is not cached, so the next poll retries.
-let windowsDpapiRead: WindowsDpapiRead | null = null
+// cursor-agent re-encrypts on every write, so the blob versions the token: one PowerShell run per login change.
+const unprotectCliAuthBlob = createLatestBlobDpapiUnprotect()
 
 async function readWindowsDpapiToken(
   authPath: string,
@@ -171,25 +169,15 @@ async function readWindowsDpapiToken(
   } catch {
     return { status: 'missing' }
   }
-  if (windowsDpapiRead?.blob !== blob) {
-    const read: WindowsDpapiRead = {
-      blob,
-      result: unprotectWindowsDpapiCurrentUser(blob).then(
-        (plaintext): TokenReadResult =>
-          plaintext
-            ? tokenFromSecret(plaintext.toString('utf8'))
-            : { status: 'error', error: DPAPI_ERROR },
-        (): TokenReadResult => {
-          if (windowsDpapiRead === read) {
-            windowsDpapiRead = null
-          }
-          return { status: 'error', error: DPAPI_ERROR }
-        }
-      )
-    }
-    windowsDpapiRead = read
+  let plaintext: Buffer | null
+  try {
+    plaintext = await unprotectCliAuthBlob(blob)
+  } catch {
+    return { status: 'error', error: DPAPI_ERROR }
   }
-  return windowsDpapiRead.result
+  return plaintext
+    ? tokenFromSecret(plaintext.toString('utf8'))
+    : { status: 'error', error: DPAPI_ERROR }
 }
 
 async function readKeychainToken(): Promise<TokenReadResult> {
@@ -305,9 +293,16 @@ export async function readCursorAuthSession(
   // Busy IDE databases are transient; reporting their lock would leave unrelated IDE users with a permanent alert.
   const desktopRead = await readCursorDesktopProfile(desktopDbPath)
   if (desktopRead.status === 'ok' && desktopRead.profile.accessToken) {
-    const session = takeLive(
-      sessionFrom(desktopRead.profile.accessToken, 'desktop', desktopIdentity(desktopRead.profile))
-    )
+    const stored = desktopRead.profile.accessToken
+    // A failed key read may hide a live IDE sign-in, so it outranks expired-login guidance.
+    const ideToken = await decodeCursorIdeToken(stored, desktopDbPath)
+    if (ideToken.status === 'error') {
+      return { status: 'error', error: ideToken.error }
+    }
+    const session =
+      ideToken.status === 'ok'
+        ? takeLive(sessionFrom(ideToken.token, 'desktop', desktopIdentity(desktopRead.profile)))
+        : null
     if (session) {
       return { status: 'ok', session }
     }

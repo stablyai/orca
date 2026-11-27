@@ -7,7 +7,11 @@ import { mcpServerWorkspaceKeyOf } from '../../../shared/mcp-servers/mcp-servers
 import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { thisAppOrcaCliLauncher } from '../../cli/launchers/this-app-orca-cli-launcher'
 import { cmdShimArgument } from '../../bots/bot-tools-claude'
-import { mcpServerEntriesForLaunch, type McpLaunchEntry } from '../mcp-host-list-launch'
+import {
+  mcpServerEntriesForLaunch,
+  type McpHostListRead,
+  type McpLaunchEntry
+} from '../mcp-host-list-launch'
 import { mcpHostListFolder } from '../mcp-host-list-folder'
 import {
   settleWslMountRoot,
@@ -56,7 +60,7 @@ function throughOrcaExec(
     entry.id,
     '--agent',
     launch.agent,
-    ...(launch.workspaceId ? ['--workspace', launch.workspaceId] : [])
+    ...(launch.workspaceId ? ['--workspace', launch.workspaceId] : ['--outside-workspace'])
   ]
   // A dev build's Windows launcher is a .cmd, which Node-based agents can only start through cmd.
   const viaCmd = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cli.launcher)
@@ -79,7 +83,7 @@ export async function terminalServers(
   agent: string,
   workspaceId: string | null,
   wsl: WslLaunch,
-  deps: { hostFolder?: string }
+  deps: { hostFolder?: string; hostListRead?: McpHostListRead }
 ): Promise<{
   folder: string
   servers: BotToolServer[]
@@ -88,7 +92,12 @@ export async function terminalServers(
 }> {
   const folder = deps.hostFolder ?? mcpHostListFolder()
   const key = workspaceId ? mcpServerWorkspaceKeyOf(workspaceId) : null
-  const { entries, sharedProcesses } = await mcpServerEntriesForLaunch(agent, { key }, folder)
+  const { entries, sharedProcesses } = await mcpServerEntriesForLaunch(
+    agent,
+    { key },
+    folder,
+    deps.hostListRead
+  )
   const shared = (server: BotToolServer): boolean => sharedProcesses.has(server.name)
   const savedEnv = (server: BotToolServer): boolean =>
     !('url' in server) && !shared(server) && Object.keys(server.env ?? {}).length > 0

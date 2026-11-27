@@ -53,6 +53,8 @@ export function PortsStatusSegment(): React.JSX.Element {
   )
   const workspacePortCount = workspaceGroups.reduce((count, group) => count + group.ports.length, 0)
   const totalCount = workspacePortCount + externalPorts.length
+  const scanPlatform = scan?.platform
+  const scanUnavailableReason = scan?.unavailableReason
   const unavailableNotices = useMemo<PortScanUnavailableNotice[]>(() => {
     if (unavailableHosts.length > 0) {
       return unavailableHosts.map((entry) => ({
@@ -62,10 +64,10 @@ export function PortsStatusSegment(): React.JSX.Element {
       }))
     }
     // Why: a projection published without per-host scans has no host to name.
-    return scan?.unavailableReason
-      ? [{ id: 'projection', host: scan.platform, reason: scan.unavailableReason }]
+    return scanUnavailableReason && scanPlatform !== undefined
+      ? [{ id: 'projection', host: scanPlatform, reason: scanUnavailableReason }]
       : []
-  }, [hostLabel, scan?.platform, scan?.unavailableReason, unavailableHosts])
+  }, [hostLabel, scanPlatform, scanUnavailableReason, unavailableHosts])
   // Only replace an empty list with failure copy; retained last-good ports must remain visible beside their counts.
   const noticeReplacesList = Boolean(scan?.unavailableReason) && totalCount === 0
   const handleOpenChange = useCallback(

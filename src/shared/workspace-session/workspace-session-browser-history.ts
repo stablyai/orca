@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../browser/browser-metadata-redaction'
 import type { BrowserHistoryEntry } from '../browser/workspaces/browser-workspace-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { redactKagiSessionToken } from '../browser/navigation/browser-url'
@@ -27,7 +28,8 @@ export function normalizeBrowserHistoryEntries(
   // Persisted history may be unordered; normalize only until the retained cap is filled.
   const candidates = [...entries].sort((a, b) => b.lastVisitedAt - a.lastVisitedAt)
 
-  for (const entry of candidates) {
+  for (const candidate of candidates) {
+    const entry = redactBrowserMetadata(candidate)
     const safeUrl = redactKagiSessionToken(entry.url)
     const key = normalizeBrowserHistoryUrl(safeUrl)
     if (seen.has(key)) {

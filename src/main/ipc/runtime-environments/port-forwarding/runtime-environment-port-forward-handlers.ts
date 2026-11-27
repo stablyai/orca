@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
@@ -33,16 +34,18 @@ import {
 } from '../connectivity/runtime-environment-manual-disconnect'
 import { onRuntimeEnvironmentTransportGenerationRetired } from '../connections/runtime-environment-transport-generation'
 
-const Port = z.number().int().min(1).max(65_535)
-const EnvironmentId = z.string().trim().min(1).max(256)
-const Label = z.string().max(256).optional()
-const ForwardSpec = z.object({
-  environmentId: EnvironmentId,
-  localPort: Port,
-  remoteHost: z.string().max(256),
-  remotePort: Port,
-  label: Label
-})
+const Port = lazyZodSchema(() => z.number().int().min(1).max(65_535))
+const EnvironmentId = lazyZodSchema(() => z.string().trim().min(1).max(256))
+const Label = lazyZodSchema(() => z.string().max(256).optional())
+const ForwardSpec = lazyZodSchema(() =>
+  z.object({
+    environmentId: EnvironmentId,
+    localPort: Port,
+    remoteHost: z.string().max(256),
+    remotePort: Port,
+    label: Label
+  })
+)
 
 // A person's disconnect stops the server's forwards; a transport swap only redials them.
 onRuntimeEnvironmentTransportGenerationRetired((environmentId) => {

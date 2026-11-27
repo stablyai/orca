@@ -1,8 +1,6 @@
 // How each terminal agent's CLI takes servers for one run without Orca editing its own config: a
 // config file passed by path, `-c` overrides, an inline config variable, or a Pi extension.
 // Nothing here puts a saved value or the relay token on the command line.
-import { mkdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   findAgentExecutableIndex,
@@ -10,15 +8,8 @@ import {
 } from '../../../shared/agent-launch/startup/agent-executable-args'
 import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { MCP_TOKEN_ENV } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
-import { piMcpServersConfig, piMcpServersExtensionSource } from '../../bots/bot-tools-pi'
 import { readOpenCodeInlineConfig } from '../../opencode/opencode-inline-config'
 import { withOpenCodeStandaloneServer } from '../../opencode/opencode-private-server'
-import {
-  getDefaultPiAgentDir,
-  ORCA_MANAGED_EXTENSION_MARKER,
-  withOrcaManagedExtensionMarker
-} from '../../pi/managed-extensions/titlebar-extension-service'
-import { writePluginFileAtomically } from '../../plugins/installation/plugin-atomic-file-write'
 import { codexTerminalMcpArgs } from './codex-terminal-mcp-args'
 import {
   cliRefusal,
@@ -33,7 +24,9 @@ import {
   type TerminalMcpAdapter,
   type TerminalMcpLaunch
 } from './terminal-mcp-delivery'
+import { WSL_INTEROP_ENV } from './terminal-mcp-wsl-servers'
 import { claude, claudeAgentTeams } from './terminal-mcp-claude-adapters'
+import { pi } from './terminal-mcp-pi-adapter'
 
 export type {
   TerminalMcpAdapter,
@@ -44,7 +37,7 @@ export type {
 const copilot: TerminalMcpAdapter = {
   agent: 'copilot',
   executables: ['copilot'],
-  wsl: false,
+  wsl: true,
   async deliver(launch, executable) {
     const refused = await cliRefusal(
       launch,
@@ -83,7 +76,7 @@ const copilot: TerminalMcpAdapter = {
 const amp: TerminalMcpAdapter = {
   agent: 'amp',
   executables: ['amp'],
-  wsl: false,
+  wsl: true,
   async deliver(launch, executable) {
     const refused = await cliRefusal(
       launch,
@@ -118,6 +111,34 @@ const amp: TerminalMcpAdapter = {
 
 // `bearer_token_env_var` on a server, first in Codex's MCP client.
 const CODEX_BEARER_ENV_VERSION = '0.60.0'
+// `env_vars` on a stdio server (openai/codex#5246): Codex starts one with only a fixed list of its
+// own variables plus these, so without it a WSL guest's `orca` never gets the interop socket.
+const CODEX_ENV_VARS_VERSION = '0.47.0'
+
+/** The WSL servers Codex can start through the guest's `orca`, and the note for an older Codex. */
+async function codexWslInterop(
+  launch: TerminalMcpLaunch,
+  executable: string
+): Promise<{ forward: ReadonlySet<string>; dropped: string[]; problem?: string }> {
+  const interop = launch.wsl?.interop ?? new Set<string>()
+  if (interop.size === 0) {
+    return { forward: interop, dropped: [] }
+  }
+  const tooOld = await cliRefusal(
+    launch,
+    executable,
+    { version: CODEX_ENV_VARS_VERSION },
+    `Update Codex in WSL to ${CODEX_ENV_VARS_VERSION} or later to use Orca’s signed-in and saved-value servers there`
+  )
+  if (!tooOld) {
+    return { forward: interop, dropped: [] }
+  }
+  // Unchecked in time: they still go, and the guest launcher finds the interop socket itself.
+  if (tooOld.delivered || !tooOld.agentWide) {
+    return { forward: new Set(), dropped: [] }
+  }
+  return { forward: new Set(), dropped: [...interop], problem: tooOld.reason }
+}
 
 const codex: TerminalMcpAdapter = {
   agent: 'codex',
@@ -136,17 +157,24 @@ const codex: TerminalMcpAdapter = {
     if (refused) {
       return refused
     }
-    const { args, skipped } = codexTerminalMcpArgs(launch.servers, launch.shell)
-    if (skipped.length > 0) {
+    const { forward, dropped, problem } = await codexWslInterop(launch, executable)
+    const { args, skipped } = codexTerminalMcpArgs(
+      launch.servers.filter((server) => !dropped.includes(server.name)),
+      launch.shell,
+      { names: forward, vars: WSL_INTEROP_ENV }
+    )
+    if (skipped.length + dropped.length > 0) {
       console.warn(
-        `[mcp-servers] ${skipped.join(', ')} can’t be passed to Codex through this terminal’s shell; its session starts without them`
+        `[mcp-servers] ${[...dropped, ...skipped].join(', ')} can’t be passed to Codex in this terminal; its session starts without them`
       )
     }
     if (args.length === 0) {
-      return skip('none of its servers can be passed through this shell')
+      return skip(problem ?? 'none of its servers can be passed through this shell', !!problem)
     }
     const command = withArgs(launch, this.executables, args)
-    return command ? { delivered: true, command, tokenInEnv: relayed } : skip(NOT_PLAIN)
+    return command
+      ? { delivered: true, command, tokenInEnv: relayed, ...(problem ? { problem } : {}) }
+      : skip(NOT_PLAIN)
   }
 }
 
@@ -211,60 +239,6 @@ const opencode: TerminalMcpAdapter = {
       command,
       env: {
         OPENCODE_CONFIG_CONTENT: JSON.stringify({ ...config, mcp: { ...ownServers, ...mcp } })
-      },
-      tokenInEnv: true
-    }
-  }
-}
-
-export const PI_TERMINAL_MCP_SERVERS_ENV = 'ORCA_PI_MCP_SERVERS'
-const PI_TERMINAL_MCP_EXTENSION_FILE = 'orca-mcp-servers.ts'
-
-/** Writes Orca's marked extension into the Pi agent dir; a user's own file of that name stays. */
-async function installPiMcpExtension(agentDir: string): Promise<boolean> {
-  const dir = join(agentDir, 'extensions')
-  const path = join(dir, PI_TERMINAL_MCP_EXTENSION_FILE)
-  const source = withOrcaManagedExtensionMarker(
-    piMcpServersExtensionSource(PI_TERMINAL_MCP_SERVERS_ENV)
-  )
-  try {
-    const installed = await readFile(path, 'utf8').catch(() => undefined)
-    if (installed === source) {
-      return true
-    }
-    if (installed !== undefined && !installed.includes(ORCA_MANAGED_EXTENSION_MARKER)) {
-      return false
-    }
-    await mkdir(dir, { recursive: true })
-    await writePluginFileAtomically(path, source)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/** Pi loads Orca's marked extension from its agent dir; it adds the servers only for a run that sets its variable. */
-const pi: TerminalMcpAdapter = {
-  agent: 'pi',
-  executables: ['pi'],
-  wsl: false,
-  async deliver(launch) {
-    const agentDir =
-      launch.env.ORCA_PI_SOURCE_AGENT_DIR ??
-      launch.env.PI_CODING_AGENT_DIR ??
-      process.env.PI_CODING_AGENT_DIR ??
-      getDefaultPiAgentDir('pi', undefined)
-    const installed = await installPiMcpExtension(agentDir)
-    if (!installed) {
-      return skip('its extension couldn’t be written to the Pi agent folder')
-    }
-    const platform = platformOf(launch)
-    return {
-      delivered: true,
-      env: {
-        [PI_TERMINAL_MCP_SERVERS_ENV]: piMcpServersConfig(
-          launch.servers.map((server) => shimmed(server, platform))
-        )
       },
       tokenInEnv: true
     }

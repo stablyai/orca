@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { Pressable, type HostInstance } from 'react-native'
 import { ArrowDownToLine, Copy, MoreHorizontal, Plus } from 'lucide-react-native'
 import type { BotToolProblem } from '../../../src/shared/bot-tools'
+import { mcpMoveRemovesFrom } from '../../../src/shared/mcp-servers/mcp-servers'
 import { LIST_LEADING_INSET, ListRow } from '../components/list/ListGroup'
 import { MobileStateButton } from '../components/feedback/MobileStateView'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
@@ -200,13 +201,18 @@ function DiscoveredRow(props: {
               onClose={() => setOpen(false)}
               groups={[
                 [
-                  {
-                    id: 'move',
-                    label: t('mcpServers.moveToOrca', 'Move to Orca'),
-                    icon: ArrowDownToLine,
-                    closeBeforePress: true,
-                    onPress: props.onMove
-                  },
+                  // Orca's list reaches none of its agents: Move would take nothing out.
+                  ...(mcpMoveRemovesFrom(entry).length > 0
+                    ? [
+                        {
+                          id: 'move',
+                          label: t('mcpServers.moveToOrca', 'Move to Orca'),
+                          icon: ArrowDownToLine,
+                          closeBeforePress: true,
+                          onPress: props.onMove
+                        }
+                      ]
+                    : []),
                   {
                     id: 'copy',
                     label: t('mcpServers.copyToOrca', 'Copy to Orca'),

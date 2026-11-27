@@ -750,6 +750,14 @@
         "task": "任务来自",
         "update": "更新来自",
         "message": "消息来自"
+      },
+      "unnamedRecipient": "一个智能体",
+      "event": {
+        "followedUp": "已发送后续消息",
+        "update": "更新",
+        "message": "消息",
+        "handedOff": "已移交",
+        "task": "任务"
       }
     },
     "hostOutage": {
@@ -4496,9 +4504,6 @@
       "agentCouldNotStart": "无法启动 {{label}}。请在设置中检查智能体命令后重试",
       "agentFailedToStart": "{{label}} 启动失败。请在设置中检查智能体命令后重试",
       "agentReportedError": "{{label}} 报告了错误",
-      "antigravityInvalidEvents": "Antigravity 返回了无效的 JSON 事件",
-      "antigravityInvalidResult": "Antigravity 返回了无效的结果",
-      "antigravityNoFinalResult": "Antigravity 未返回最终结果",
       "chatNameAgentUnsupported": "请在设置 -> 聊天 -> 聊天名称中为此操作选择支持的聊天命名智能体。支持的智能体：{{agents}}，或选择“自定义命令”",
       "chatNameCustomCommandEmpty": "自定义命令为空。请在设置 -> 聊天 -> 聊天名称中添加",
       "cliFailed": "{{label}} CLI 命令执行失败，退出码为 {{exitCode}}",
@@ -5305,6 +5310,9 @@
     }
   },
   "webShell": {
+    "downloadProgress": {
+      "megabytes": "{{received}} / {{total}} MB"
+    },
     "shellStateScreen": {
       "checkingHost": "正在检查主机",
       "connectToDownload": "连接到此主机以下载最新版本的应用",
@@ -5317,7 +5325,9 @@
       "openingWorkspace": "正在打开工作区",
       "renderProcessGone": "工作区已停止响应",
       "statusUnreadable": "无法读取此主机的状态。请返回后重新打开",
-      "tryAgain": "重试"
+      "tryAgain": "重试",
+      "downloadingLatestApp": "正在下载最新版本的应用",
+      "downloadProgressFromHost": "来自 {{host}} · {{progress}}"
     }
   },
   "workspace": {
@@ -5612,7 +5622,7 @@
       "letBotReactHelp": "每个结果都会开启一个新回合，让 {{name}} 据此采取行动",
       "time": "时间",
       "minute": "分钟",
-      "runs": "运行"
+      "runs": "运行设置"
     },
     "botEvents": {
       "label": "事件",
@@ -5712,6 +5722,12 @@
               "waiting": {
                 "label": "运行 Claude 时更新",
                 "message": "Claude 用量将在下次运行 Claude 时更新"
+              }
+            },
+            "codex": {
+              "waiting": {
+                "label": "运行 Codex 时更新",
+                "message": "Codex 用量将在下次运行 Codex 时更新"
               }
             },
             "1804cd8c3f": "正在刷新登录",
@@ -6773,7 +6789,9 @@
         "replaced": "智能体提出了新问题。请先阅读，再回复",
         "replacedByNewer": "已由较新的问题取代",
         "skipped": "已跳过",
-        "notNow": "暂不"
+        "notNow": "暂不",
+        "heldImagesLimit": "你的回答会作为一条评论发送，一条评论最多包含 {{max}} 张照片。请移除一些后重试。",
+        "heldSkillsLimit": "你的回答会作为一条评论发送，一条评论最多包含 {{max}} 个技能。请移除一些后重试。"
       },
       "write": {
         "unknown": "发送时连接中断，内容可能已经送达。重新连接后请先查看“活动”，再决定是否重新发送",
@@ -7164,7 +7182,7 @@
       "outfitTie": "领带",
       "outfitDetective": "侦探",
       "outfitHardHat": "安全帽",
-      "outfitReviewer": "审阅者",
+      "outfitReviewer": "评审人",
       "outfitNightShift": "夜班",
       "outfitArtist": "艺术家",
       "outfitScientist": "科学家",
@@ -7437,7 +7455,7 @@
         "stopped": "Slack 已不再接受 {{host}} 使用的令牌。"
       },
       "problem": {
-        "code": "代码",
+        "code": "错误代码",
         "computer": "电脑",
         "workspace": "工作区"
       }
@@ -7492,7 +7510,7 @@
         "connectTitle": "连接 Composio",
         "once": "只需连接一次，即可用于你的所有 bots",
         "browseAll": "浏览 Composio 应用",
-        "keyOnHost": "保存在 {{host}}；机器人永远看不到。"
+        "keyOnHost": "保存在 {{host}} 上；bots 永远看不到"
       },
       "close": "关闭",
       "couldNotSignIn": "无法登录 {{app}}",
@@ -8078,7 +8096,7 @@
         "apiOff": "已在 Google Cloud 中停用",
         "adminBlocked": "已被你公司的 Google 管理员阻止",
         "error": "无法检查",
-        "notAllowed": "你没有允许"
+        "notAllowed": "你未授权"
       },
       "headline": {
         "connected": "Google 已连接",
@@ -8103,9 +8121,9 @@
         "revoke": "移除并在 Google 撤销授权"
       },
       "reconnect": "重新连接",
-      "addAccount": "添加另一个账号",
+      "addAccount": "添加另一个账户",
       "signIn": "登录 Google",
-      "handoff": "选择你的账号，然后选择“允许”。"
+      "handoff": "选择你的账户，然后点击“允许”"
     },
     "saveFailed": "无法保存",
     "sheet": {
@@ -8318,5 +8336,8 @@
     "cardSlot": {
       "working": "工作中"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "已被你所在组织的 Claude 设置阻止"
   }
 }
