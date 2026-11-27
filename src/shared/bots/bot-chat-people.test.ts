@@ -100,14 +100,11 @@ describe("the Items tab's person pick", () => {
     expect(botItemsWhoseOfPick({ kind: 'everyone' }, OWNERS_COPY)).toBe('default')
   })
 
-  it("opens a teammate's copy on their own items: 'you' is the teammate, then the owner and the rest", () => {
-    const entries = botPeoplePicker(ALICES_COPY, null)
-    expect(names(entries)).toEqual(['person:Alice Park', 'owner:Jinwoo', 'person:Bo Chen'])
-    const pick = botItemsPersonPick(entries, null)
-    // Her own is her default list: one read, not a second of the same rows.
+  it("lists a teammate's copy only their own items: no person pick, whatever was picked", () => {
+    expect(botPeoplePicker(ALICES_COPY, null)).toBeNull()
+    const pick = botItemsPersonPick(botPeoplePicker(ALICES_COPY, null), { kind: 'owner' })
     expect(botItemsWhoseOfPick(pick, ALICES_COPY)).toBe('default')
-    expect(botItemsWhoseOfPick({ kind: 'everyone' }, ALICES_COPY)).toBe('everyone')
-    expect(botItemsWhoseOfPick({ kind: 'owner' }, ALICES_COPY)).toBe('owner')
+    expect(botItemsWhoseOfPick({ kind: 'owner' }, ALICES_COPY)).toBe('default')
   })
 
   it('reads an agent shared with no one as its default list, with no pick', () => {
@@ -116,43 +113,39 @@ describe("the Items tab's person pick", () => {
     expect(botItemsWhoseOfPick({ kind: 'everyone' }, {})).toBe('default')
   })
 
-  it("keeps a picked person while they share it, then falls back to the viewer's own", () => {
-    const entries = botPeoplePicker(ALICES_COPY, null)
+  it("keeps a picked person while they share it, then falls back to the owner's own", () => {
+    const entries = botPeoplePicker(OWNERS_COPY, 'Jinwoo')
     const bo = { kind: 'person', person: { accountId: 'acct-b', name: 'Bo Chen' } } as const
     expect(botItemsPersonPick(entries, bo)).toEqual(bo)
     const gone = { kind: 'person', person: { accountId: 'acct-z', name: 'Zed' } } as const
-    expect(botItemsWhoseOfPick(botItemsPersonPick(entries, gone), ALICES_COPY)).toBe('default')
+    expect(botItemsWhoseOfPick(botItemsPersonPick(entries, gone), OWNERS_COPY)).toBe('owner')
   })
 })
 
-describe('whom an Items empty list and row names, as each viewer sees it', () => {
+describe('whom an Items empty list and row names, on the owner’s copy', () => {
   const alice = { accountId: 'acct-a', name: 'Alice Park' }
   const bo = { accountId: 'acct-b', name: 'Bo Chen' }
-  const VIEWER = { accountId: 'acct-a', ownerName: 'Jinwoo', teammates: [alice, bo] }
-  const label = (
-    entries: ReturnType<typeof botPeoplePicker>,
-    pick: Parameters<typeof botPickedOther>[0]
-  ) => botPickedOther(pick, entries)?.name ?? null
-
-  it("names a picked person other than the viewer, never the viewer's own", () => {
-    const teammates = botPeoplePicker({ shareViewer: VIEWER }, null)
-    expect(label(teammates, { kind: 'person', person: alice })).toBeNull()
-    expect(label(teammates, { kind: 'owner' })).toBe('Jinwoo')
-    expect(label(teammates, { kind: 'person', person: bo })).toBe('Bo Chen')
-    expect(label(teammates, { kind: 'everyone' })).toBeNull()
-    const owners = botPeoplePicker({ shares: [] }, 'Jinwoo')
-    expect(owners).toBeNull()
+  const share = (person: typeof alice) => ({
+    kind: 'account' as const,
+    shareId: `s-${person.accountId}`,
+    accountId: person.accountId,
+    name: person.name,
+    email: `${person.accountId}@example.com`,
+    addedAt: 1,
+    acceptedAt: 2
   })
 
-  it("marks Everyone's rows with anyone's but the viewer's own", () => {
-    const ownersItem = {}
-    const alicesItem = { people: [alice] }
-    const shared = { people: [alice, bo] }
-    expect(botItemPersonMark(ownersItem, undefined, 'Owner')).toBeNull()
-    expect(botItemPersonMark(alicesItem, undefined, 'Owner')).toBe('Alice Park')
-    expect(botItemPersonMark(ownersItem, VIEWER, 'Owner')).toBe('Jinwoo')
-    expect(botItemPersonMark(ownersItem, { ...VIEWER, ownerName: null }, 'Owner')).toBe('Owner')
-    expect(botItemPersonMark(alicesItem, VIEWER, 'Owner')).toBeNull()
-    expect(botItemPersonMark(shared, VIEWER, 'Owner')).toBe('Bo Chen')
+  it("names a picked teammate, never the owner's own", () => {
+    const entries = botPeoplePicker({ shares: [share(alice), share(bo)] }, 'Jinwoo')
+    expect(botPickedOther({ kind: 'owner' }, entries)).toBeNull()
+    expect(botPickedOther({ kind: 'person', person: bo }, entries)?.name).toBe('Bo Chen')
+    expect(botPickedOther({ kind: 'everyone' }, entries)).toBeNull()
+    expect(botPeoplePicker({ shares: [] }, 'Jinwoo')).toBeNull()
+  })
+
+  it("marks Everyone's rows with the teammates', not the owner's own", () => {
+    expect(botItemPersonMark({})).toBeNull()
+    expect(botItemPersonMark({ people: [alice] })).toBe('Alice Park')
+    expect(botItemPersonMark({ people: [alice, bo] })).toBe('Alice Park, Bo Chen')
   })
 })

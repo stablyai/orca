@@ -6,7 +6,6 @@ import { useBotHostOffline } from '@/lib/bot-host-views'
 import { useNow } from '@/lib/window-activity/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../shared/bot-types'
-import type { BotItem } from '../../../../shared/bots/bot-items'
 import { ChatWorkersActivity } from './ChatWorkersActivity'
 import { BotUpNextSection } from './BotUpNextSection'
 import { NO_ACTIVITY, useBotActivityAuthorityRead } from './use-bot-activity'
@@ -180,14 +179,7 @@ function BotActivityTab({
   const shownRead = botItemsShownReadState(shown, items)
   const seenAtOpen = useBotItemsSeenAtOpen(bot, shown.read, shownRead.landed)
   const list = useBotItemsShownGroups(bot, shown, filter, clock, seenAtOpen ?? '')
-  const ownerFallback = t('bots.items.filter.owner', 'Owner')
-  const personMark = useMemo(
-    () =>
-      entries && pick.kind === 'everyone'
-        ? (item: BotItem) => botItemPersonMark(item, bot.shareViewer, ownerFallback)
-        : null,
-    [entries, pick.kind, bot.shareViewer, ownerFallback]
-  )
+  const personMark = entries && pick.kind === 'everyone' ? botItemPersonMark : null
   const walk = useBotItemWalk(list, botRefKey(bot))
   const openItem = (uid: string): void => {
     setReturnTo(null)

@@ -52,7 +52,11 @@ import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { BotItemsStore } from '../../../bots/bot-items-store'
 import type { BotItemRecord } from '../../../bots/bot-items-schema'
 import { BOT_ITEMS_OWNER_METHODS } from '../methods/bots-items-owner-methods'
-import { botPeoplePicker } from '../../../../shared/bots/bot-chat-people'
+import {
+  botItemsPersonPick,
+  botItemsWhoseOfPick,
+  botPeoplePicker
+} from '../../../../shared/bots/bot-chat-people'
 
 const SHARED = { id: 'bot-shared', folderWorkspaceId: 'home-shared' }
 const OTHER = { id: 'bot-other', folderWorkspaceId: 'home-other' }
@@ -378,7 +382,12 @@ describe('the share guard', () => {
   it('lists a teammate their own items by default and everyone’s when they ask, on the shared bot only', async () => {
     const store = BotItemsStore.open(':memory:')
     try {
-      const add = (botId: string, title: string, actsForAccounts: string[] | null): string =>
+      const add = (
+        botId: string,
+        title: string,
+        actsForAccounts: string[] | null,
+        status: 'working' | 'needs_you' | 'done' = 'working'
+      ): string =>
         store.add(
           {
             ownerBotId: botId,
@@ -386,7 +395,7 @@ describe('the share guard', () => {
             source: { kind: 'home', title: null },
             actsForAccounts,
             title,
-            status: 'working',
+            status,
             links: []
           },
           { kind: 'bot', botId, chatId: ids.alicesChat }
@@ -394,6 +403,9 @@ describe('the share guard', () => {
       add(SHARED.id, 'Alice’s', ['acct-alice'])
       const ownersUid = add(SHARED.id, 'The owner’s', null)
       add(SHARED.id, 'Bob’s', ['acct-bob'])
+      add(SHARED.id, 'Alice’s done', ['acct-alice'], 'done')
+      add(SHARED.id, 'The owner’s done', null, 'done')
+      add(SHARED.id, 'The owner’s ask', null, 'needs_you')
       const otherBotsUid = add(OTHER.id, 'Another bot’s', ['acct-alice'])
       vi.spyOn(runtime.bots, 'assertEnabled').mockReturnValue(undefined)
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list and show handlers read only these two
@@ -417,11 +429,19 @@ describe('the share guard', () => {
         } | null
         return result?.items.map((item) => item.title).sort() ?? null
       }
-      expect(await titles({ botId: SHARED.id })).toEqual(['Alice’s'])
+      // Her list, its Closed page and counts hold her own items only.
+      expect(await titles({ botId: SHARED.id })).toEqual(['Alice’s', 'Alice’s done'])
+      const listed = await call('bots.items.owner.list', { botId: SHARED.id })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list's answer
+      const counts = (listed.ok ? listed.result : null) as { counts: Record<string, number> } | null
+      expect(counts?.counts).toEqual({ working: 1, done: 1 })
       expect(await titles({ botId: SHARED.id, everyone: true })).toEqual([
         'Alice’s',
+        'Alice’s done',
         'Bob’s',
-        'The owner’s'
+        'The owner’s',
+        'The owner’s ask',
+        'The owner’s done'
       ])
       expect(await titles({ botId: SHARED.id, person: 'acct-bob' })).toEqual(['Bob’s'])
       expect(errorCode(await call('bots.items.owner.list', { botId: OTHER.id }))).toBe('not_found')
@@ -472,7 +492,7 @@ describe('the share guard', () => {
     }
   })
 
-  it('lists her the shared agent’s people, with her as the one looking, for the Items filter', async () => {
+  it('lists her copy with no Items person pick, so her list reads only her own', async () => {
     const share = (accountId: string, name: string) => ({
       kind: 'account' as const,
       shareId: `s-${accountId}`,
@@ -492,12 +512,13 @@ describe('the share guard', () => {
     const response = await call('bots.list', undefined)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list's answer
     const listed = (response.ok ? response.result : null) as { bots: Bot[] } | null
-    const entries = botPeoplePicker(listed!.bots[0]!, null)
-    expect(entries?.map((entry) => `${entry.pick.kind}:${entry.name}`)).toEqual([
-      'person:Alice',
-      'owner:null',
-      'person:Bob'
-    ])
+    const copy = listed!.bots[0]!
+    const entries = botPeoplePicker(copy, null)
+    expect(entries).toBeNull()
+    // Her list read is the host's default for her: her own items (the share guard test above).
+    expect(botItemsWhoseOfPick(botItemsPersonPick(entries, { kind: 'owner' }), copy)).toBe(
+      'default'
+    )
     expect(listed!.bots[0]!.shares).toBeUndefined()
   })
 

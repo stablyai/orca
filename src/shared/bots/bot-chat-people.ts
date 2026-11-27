@@ -38,30 +38,14 @@ export function botChatPickHas(pick: BotChatPersonPick, chat: BotChatTreeChat): 
 /** One person the pick offers, the viewer ("you") first; `name` null when the host doesn't know it. */
 export type BotPeopleEntry = { pick: BotChatPersonPick; name: string | null }
 
-/** Whom an agent's Items filter offers, as its viewer sees them: the viewer first, then the owner (on
- *  a teammate's copy) and the teammates; null for an agent shared with no one. The owner's own copy
- *  reads its share list; a teammate's, the people its host named (`shareViewer`). */
+/** Whom an agent's Items filter offers on the owner's copy: the owner first, then the teammates; null
+ *  for an agent shared with no one and on a teammate's copy, which lists only the host's default for
+ *  it (their own items, `botItemAccessOfCaller`). */
 export function botPeoplePicker(
   bot: Pick<Bot, 'shares' | 'shareViewer'>,
   ownerName: string | null
 ): BotPeopleEntry[] | null {
-  const viewer = bot.shareViewer
-  if (viewer) {
-    const self = viewer.teammates.find((person) => person.accountId === viewer.accountId)
-    return [
-      {
-        pick: { kind: 'person', person: self ?? { accountId: viewer.accountId, name: '' } },
-        name: self?.name ?? null
-      },
-      { pick: { kind: 'owner' }, name: viewer.ownerName },
-      ...viewer.teammates.flatMap((person) =>
-        person.accountId === viewer.accountId
-          ? []
-          : [{ pick: { kind: 'person' as const, person }, name: person.name }]
-      )
-    ]
-  }
-  const people = botChatPeople(bot)
+  const people = bot.shareViewer ? [] : botChatPeople(bot)
   return people.length === 0
     ? null
     : [
@@ -99,18 +83,13 @@ export function botItemsPersonPick(
  *  or one teammate's. */
 export type BotItemsWhose = 'default' | 'everyone' | 'owner' | `person:${string}`
 
-/** A pick's read. The pick the host's default already lists reads as `default`, the bot's one whole
- *  read with no second read of the same rows: everyone's on the owner's copy (and on an agent shared
- *  with no one), the viewer's own on a teammate's copy (`shareViewer`). */
+/** A pick's read. A teammate's copy always reads its default (their own items); the owner's reads
+ *  Everyone as its default, the bot's one whole read with no second read of the same rows. */
 export function botItemsWhoseOfPick(
   pick: BotChatPersonPick,
-  bot: Pick<Bot, 'shares' | 'shareViewer'>
+  bot: Pick<Bot, 'shareViewer'>
 ): BotItemsWhose {
-  const viewer = bot.shareViewer
-  const asDefault = viewer
-    ? pick.kind === 'person' && pick.person.accountId === viewer.accountId
-    : pick.kind === 'everyone'
-  if (asDefault) {
+  if (bot.shareViewer || pick.kind === 'everyone') {
     return 'default'
   }
   return pick.kind === 'person' ? `person:${pick.person.accountId}` : pick.kind
@@ -143,19 +122,8 @@ export function botPickedOther<E extends { pick: BotChatPersonPick }>(
   return entries.find((entry) => sameBotPersonPick(entry.pick, pick)) ?? null
 }
 
-/** Whose an item is, as an Everyone row names it before its age: anyone's but the viewer's own (null).
- *  `viewer`: a teammate's copy's `shareViewer`, whose owner's name the owner's rows show (else
- *  `ownerFallback`); absent, the owner looks. */
-export function botItemPersonMark(
-  item: Pick<BotItem, 'people'>,
-  viewer: Bot['shareViewer'],
-  ownerFallback: string
-): string | null {
-  if (!item.people) {
-    return viewer ? (viewer.ownerName ?? ownerFallback) : null
-  }
-  const others = viewer
-    ? item.people.filter((person) => person.accountId !== viewer.accountId)
-    : item.people
-  return others.map((person) => person.name).join(', ') || null
+/** Whose an item is, as the owner's Everyone row names it before its age: a teammate's, by name; null
+ *  for the owner's own. */
+export function botItemPersonMark(item: Pick<BotItem, 'people'>): string | null {
+  return item.people?.map((person) => person.name).join(', ') || null
 }

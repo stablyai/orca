@@ -35,8 +35,8 @@ export function botPersonPickName(
     : (entries.find((entry) => sameBotPersonPick(entry.pick, pick))?.label ?? null)
 }
 
-/** The Items filter's people as its viewer sees them, labelled: "<name> (you)" first. Null for an
- *  agent shared with no one. */
+/** The owner's Items filter people, labelled: "<name> (you)" first. Null for an agent shared with no
+ *  one and on a teammate's copy, which lists only their own items. */
 export function useBotItemsPeople(bot: Bot): BotPersonPickLabelled[] | null {
   const t = useTranslate()
   const ownerLabel = useBotOwnPersonLabel(bot)
@@ -46,14 +46,7 @@ export function useBotItemsPeople(bot: Bot): BotPersonPickLabelled[] | null {
   }
   return entries.map((entry, index) => ({
     pick: entry.pick,
-    label:
-      index === 0
-        ? bot.shareViewer
-          ? entry.name
-            ? t('bots.teamShare.you', '{{name}} (you)', { name: entry.name })
-            : t('bots.chats.filter.you', 'You')
-          : ownerLabel
-        : (entry.name ?? t('bots.items.filter.owner', 'Owner'))
+    label: index === 0 ? ownerLabel : (entry.name ?? t('bots.items.filter.owner', 'Owner'))
   }))
 }
 
