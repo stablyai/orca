@@ -1,5 +1,6 @@
 import { isIP } from 'node:net'
 import type { ItsaplanResult } from '../../shared/itsaplan/itsaplan-types'
+import { getMainHttpClient } from '../network/http-client'
 
 const PROBE_TIMEOUT_MS = 5_000
 
@@ -54,7 +55,8 @@ async function probeMeEndpoint(apiUrl: string, fetchImpl: typeof fetch): Promise
 
 export async function detectItsaplanApiUrl(
   appUrlInput: string,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = ((url, init) =>
+    getMainHttpClient().fetch(String(url), init)) as typeof fetch
 ): Promise<ItsaplanResult<{ appUrl: string; apiUrl: string }>> {
   const appUrl = normalizeItsaplanAppUrl(appUrlInput)
   if (!appUrl) {
