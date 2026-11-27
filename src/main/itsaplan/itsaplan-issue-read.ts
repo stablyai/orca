@@ -23,8 +23,8 @@ const MAX_FEED_PAGES = 10
 type RawIssueHit = ItsaplanRawIssue & { archived?: boolean }
 type RawIssueDetail = ItsaplanRawIssue & { projectId: number }
 
-export function requireItsaplanAppUrl(): string {
-  const instance = readItsaplanInstance()
+export async function requireItsaplanAppUrl(): Promise<string> {
+  const instance = await readItsaplanInstance()
   if (!instance) {
     throw new ItsaplanApiError('notConnected')
   }
@@ -44,7 +44,7 @@ function stateColumnIds(metadata: ItsaplanProjectMetadata, query: ItsaplanIssueL
 }
 
 export async function itsaplanListIssues(query: ItsaplanIssueListQuery): Promise<ItsaplanIssue[]> {
-  const appUrl = requireItsaplanAppUrl()
+  const appUrl = await requireItsaplanAppUrl()
   const metadata = await itsaplanGetProjectMetadata({ projectRef: query.projectRef })
   const { filters } = query
   const limit = Math.min(query.limit ?? DEFAULT_LIST_LIMIT, ITSAPLAN_LIST_LIMIT_MAX)
@@ -114,7 +114,7 @@ async function readAllComments(issueId: number): Promise<ItsaplanComment[]> {
 export async function itsaplanGetIssue(args: {
   issueId: number
 }): Promise<ItsaplanIssueDetail | null> {
-  const appUrl = requireItsaplanAppUrl()
+  const appUrl = await requireItsaplanAppUrl()
   let raw: RawIssueDetail
   try {
     raw = await itsaplanRequest<RawIssueDetail>(`/issues/${args.issueId}`)

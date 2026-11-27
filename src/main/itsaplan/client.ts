@@ -125,14 +125,14 @@ function mainFetch(url: string, init?: RequestInit): Promise<Response> {
   return getMainHttpClient().fetch(url, init)
 }
 
-function requireConnection(): { instance: ItsaplanInstance; apiKey: string } {
-  const instance = readItsaplanInstance()
+async function requireConnection(): Promise<{ instance: ItsaplanInstance; apiKey: string }> {
+  const instance = await readItsaplanInstance()
   if (!instance) {
     throw new ItsaplanApiError('notConnected')
   }
   let apiKey: string | null
   try {
-    apiKey = readItsaplanApiKey(instance.id)
+    apiKey = await readItsaplanApiKey(instance.id)
   } catch {
     apiKey = null
   }
@@ -143,7 +143,7 @@ function requireConnection(): { instance: ItsaplanInstance; apiKey: string } {
 }
 
 export async function itsaplanRequest<T>(path: string, init?: ItsaplanRequestInit): Promise<T> {
-  const { instance, apiKey } = requireConnection()
+  const { instance, apiKey } = await requireConnection()
   const url = buildUrl(instance.apiUrl, path, init?.query)
   await acquire()
   try {

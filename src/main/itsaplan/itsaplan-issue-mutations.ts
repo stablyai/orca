@@ -43,7 +43,7 @@ export async function itsaplanCreateIssue(
   args: ItsaplanCreateIssueArgs
 ): Promise<ItsaplanResult<{ issue: ItsaplanIssue }>> {
   try {
-    const appUrl = requireItsaplanAppUrl()
+    const appUrl = await requireItsaplanAppUrl()
     const metadata = await itsaplanGetProjectMetadata({ projectRef: args.projectRef })
     const raw = await itsaplanRequest<RawCreatedIssue>(
       `/projects/${encodeURIComponent(args.projectRef)}/issues`,
@@ -71,7 +71,7 @@ export async function itsaplanUpdateIssue(args: {
   updates: ItsaplanIssueUpdate
 }): Promise<ItsaplanResult<{ issue: ItsaplanIssue }>> {
   try {
-    const appUrl = requireItsaplanAppUrl()
+    const appUrl = await requireItsaplanAppUrl()
     const raw = await itsaplanRequest<RawCreatedIssue>(`/issues/${args.issueId}`, {
       method: 'PATCH',
       body: args.updates

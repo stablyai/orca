@@ -270,7 +270,6 @@
 1 src/main/ipc/ssh/ssh-connect-flow.ts
 1 src/main/ipc/worktrees/floating-workspace-directory.ts
 2 src/main/ipc/worktrees/worktree-remote.ts
-6 src/main/itsaplan/instance-credential-store.ts
 7 src/main/jcode/hook-service.ts
 7 src/main/keybindings/keybinding-file-parser.ts
 1 src/main/keybindings/keybinding-file.ts

@@ -66,13 +66,13 @@ export async function itsaplanDisconnect(): Promise<void> {
 export async function itsaplanTestConnection(): Promise<
   ItsaplanResult<{ viewer: ItsaplanViewer }>
 > {
-  const instance = readItsaplanInstance()
+  const instance = await readItsaplanInstance()
   if (!instance) {
     return { ok: false, error: 'notConnected', message: 'It’s a Plan is not connected.' }
   }
   let apiKey: string | null = null
   try {
-    apiKey = readItsaplanApiKey(instance.id)
+    apiKey = await readItsaplanApiKey(instance.id)
   } catch {}
   if (!apiKey) {
     return { ok: false, error: 'invalidApiKey', message: 'API key invalid, reconnect.' }
@@ -85,7 +85,7 @@ export async function itsaplanTestConnection(): Promise<
 }
 
 async function resolveViewer(): Promise<ItsaplanResult<{ viewer: ItsaplanViewer }>> {
-  const instance = readItsaplanInstance()
+  const instance = await readItsaplanInstance()
   if (instance && cachedViewer?.instanceId === instance.id) {
     return { ok: true, viewer: cachedViewer.viewer }
   }
@@ -107,8 +107,8 @@ export async function itsaplanRequireViewerId(): Promise<string> {
 }
 
 export async function itsaplanStatus(): Promise<ItsaplanConnectionStatus> {
-  const instance = readItsaplanInstance()
-  const credentialError = getItsaplanCredentialError()
+  const instance = await readItsaplanInstance()
+  const credentialError = await getItsaplanCredentialError()
   if (!instance) {
     return {
       connected: false,
@@ -122,6 +122,6 @@ export async function itsaplanStatus(): Promise<ItsaplanConnectionStatus> {
     viewer: await itsaplanGetViewer(),
     instance,
     ...(credentialError ? { credentialError } : {}),
-    credentialProtection: getItsaplanCredentialProtection()
+    credentialProtection: await getItsaplanCredentialProtection()
   }
 }
