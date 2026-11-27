@@ -8,7 +8,13 @@ import { createMacMenuBarImage, stampMacDevBadge } from './mac-menu-bar-image'
 import { MacMenuBarTray, waitForMacMenuBarRetirement, type TrayMenuItem } from './mac-menu-bar-tray'
 
 import type { MenuBarQACommand } from './mac-menu-bar-protocol'
-import { launchMacMenuBarHost, reportMenuBarHost } from './mac-menu-bar-host'
+import {
+  awaitMacIconShown,
+  launchMacMenuBarHost,
+  markMacIconShown,
+  markMacMenuBarHelperUnavailable,
+  reportMenuBarHost
+} from './mac-menu-bar-host'
 
 export type SystemTray = Tray | MacMenuBarTray
 
@@ -158,11 +164,10 @@ export function createSystemTray(opts: SystemTrayOptions): SystemTray | null {
   if (process.platform !== 'win32' && process.platform !== 'darwin') {
     return null
   }
+  if (process.platform === 'darwin') {
+    awaitMacIconShown(opts.onCreated)
+  }
   if (tray && !tray.isDestroyed()) {
-    // A settings toggle can create the in-process icon before the deferred startup call; keep its milestone.
-    if (process.platform === 'darwin' && !(tray instanceof MacMenuBarTray)) {
-      opts.onCreated?.()
-    }
     return tray
   }
 
@@ -186,7 +191,7 @@ export function createSystemTray(opts: SystemTrayOptions): SystemTray | null {
   // The helper owns NSStatusItem so AppKit scene deadlocks cannot freeze main.
   if (process.platform === 'darwin' && launchMacMenuBarHost(opts.installId) === 'helper') {
     const helperTray: MacMenuBarTray = new MacMenuBarTray(baseTrayImage, {
-      onCreated: opts.onCreated,
+      onCreated: () => markMacIconShown(true),
       onOwnerChange: (owned) => reportMenuBarHost(owned ? 'helper' : null),
       onUnavailable: () => deferAppKitSceneMutation(() => fallBackToInProcessTray(helperTray))
     })
@@ -215,7 +220,7 @@ function createNativeTray(image: NativeImage, opts: SystemTrayOptions): Tray {
     )
   } else {
     reportMenuBarHost('in-process')
-    opts.onCreated?.()
+    markMacIconShown(true)
   }
   return nativeTray
 }
@@ -225,6 +230,7 @@ function fallBackToInProcessTray(failed: MacMenuBarTray): void {
   if (tray !== failed || !trayOptions || !baseTrayImage) {
     return
   }
+  markMacMenuBarHelperUnavailable()
   void failed.destroy()
   tray = createNativeTray(baseTrayImage, trayOptions)
   setTrayMenu(trayOptions)
@@ -329,6 +335,7 @@ export function destroySystemTray(): Promise<void> {
   stopWatchingMacAppearance()
   if (tray) {
     reportMenuBarHost(null)
+    markMacIconShown(false)
   }
   if (tray && !tray.isDestroyed()) {
     void tray.destroy()

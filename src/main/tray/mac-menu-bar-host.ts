@@ -34,3 +34,29 @@ export function launchMacMenuBarHost(installId: string | null): MenuBarHost {
     : 'in-process'
   return launchHost
 }
+
+/** After the helper failed this launch, later hide/show cycles use the in-process icon at once. */
+export function markMacMenuBarHelperUnavailable(): void {
+  launchHost = 'in-process'
+}
+
+// The startup `tray-created` milestone fires once, whichever caller created the icon first.
+let iconShown = false
+let pendingOnCreated: (() => void) | undefined
+
+export function awaitMacIconShown(onCreated: (() => void) | undefined): void {
+  if (onCreated && iconShown) {
+    onCreated()
+  } else if (onCreated) {
+    pendingOnCreated = onCreated
+  }
+}
+
+export function markMacIconShown(shown: boolean): void {
+  iconShown = shown
+  if (shown) {
+    const callback = pendingOnCreated
+    pendingOnCreated = undefined
+    callback?.()
+  }
+}
