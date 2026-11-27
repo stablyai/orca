@@ -8,7 +8,7 @@ import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import {
   cleanupLocalTransferPath,
   decodeDownloadedFileContent,
-  DownloadDestinationCollisionError,
+  DownloadPromotionError,
   DOWNLOAD_SESSION_TTL_MS,
   inspectDownloadDestination,
   promoteDownloadedFile,
@@ -74,7 +74,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
         await promoteDownloadedFile(tempPath, destinationPath, existed)
         return { canceled: false, destinationPath }
       } catch (error) {
-        if (!(error instanceof DownloadDestinationCollisionError)) {
+        if (!(error instanceof DownloadPromotionError)) {
           await cleanupLocalTransferPath(tempPath)
         }
         throw error
@@ -191,7 +191,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
         )
         return { canceled: false, destinationPath: session.destinationPath }
       } catch (error) {
-        if (!(error instanceof DownloadDestinationCollisionError)) {
+        if (!(error instanceof DownloadPromotionError)) {
           await cleanupLocalTransferPath(session.tempPath)
         }
         throw error

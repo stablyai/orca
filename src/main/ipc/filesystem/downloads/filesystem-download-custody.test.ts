@@ -16,7 +16,9 @@ const boundary = vi.hoisted(() => ({
   inspected: 0,
   inspectedBoth: Promise.resolve(),
   releaseInspections: () => {},
-  failWrite: false
+  failWrite: false,
+  failCopy: false,
+  replaceCopyDestination: false
 }))
 
 vi.mock('electron', () => ({
@@ -35,6 +37,30 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const fs = await importOriginal<typeof FileSystemPromises>()
   return {
     ...fs,
+    link: async (...args: Parameters<typeof fs.link>) => {
+      if (boundary.failCopy) {
+        throw Object.assign(new Error('hard links unavailable'), { code: 'ENOTSUP' })
+      }
+      return fs.link(...args)
+    },
+    open: async (...args: Parameters<typeof fs.open>) => {
+      const handle = await fs.open(...args)
+      if (!boundary.failCopy || args[0] !== boundary.destination || args[1] !== 'wx') {
+        return handle
+      }
+      const write = handle.write.bind(handle)
+      return Object.assign(handle, {
+        write: async (buffer: Uint8Array) => {
+          await write(buffer, 0, 3)
+          if (boundary.replaceCopyDestination) {
+            const replacement = `${boundary.destination}.other`
+            await fs.writeFile(replacement, 'another application')
+            await fs.rename(replacement, boundary.destination)
+          }
+          throw Object.assign(new Error('disk full during copy'), { code: 'ENOSPC' })
+        }
+      })
+    },
     stat: async (...args: Parameters<typeof fs.stat>) => {
       try {
         return await fs.stat(...args)
@@ -97,6 +123,8 @@ beforeEach(async () => {
   boundary.inspectedBoth = Promise.resolve()
   boundary.releaseInspections = () => {}
   boundary.failWrite = false
+  boundary.failCopy = false
+  boundary.replaceCopyDestination = false
   context = createFilesystemHandlerContext(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only download handlers are registered; none access the store.
     {} as Parameters<typeof createFilesystemHandlerContext>[0],
@@ -181,4 +209,47 @@ it('preserves a completed losing stream through finish failure and the renderer 
   })
   await invoke('fs:cancelDownloadedFile', canceled)
   expect((await readdir(directory)).sort()).toEqual([...retained, 'saved.txt'].sort())
+})
+
+it('keeps the complete one-shot download when the fallback copy runs out of space', async () => {
+  boundary.failCopy = true
+  const saved = invoke('fs:saveDownloadedFile', {
+    suggestedName: 'saved.txt',
+    content: 'complete direct download'
+  })
+  await expect(saved).rejects.toThrow('disk full during copy')
+  const retained = (await readdir(directory)).filter((name) => name.endsWith('.download'))
+  expect(retained).toHaveLength(1)
+  const retainedPath = join(directory, retained[0])
+  expect(await readFile(retainedPath, 'utf8')).toBe('complete direct download')
+  expect(await readFile(boundary.destination, 'utf8')).toBe('com')
+  await expect(saved).rejects.toMatchObject({
+    message: expect.stringContaining(retainedPath),
+    cause: {
+      message: expect.stringContaining('An incomplete file may be left there.'),
+      cause: { code: 'ENOSPC', message: 'disk full during copy' }
+    }
+  })
+})
+
+it('keeps the completed stream and another application save after a failed copy and cancellation', async () => {
+  boundary.failCopy = true
+  boundary.replaceCopyDestination = true
+  const transfer = await startDownload('saved.txt')
+  await invoke('fs:appendDownloadedFileChunk', {
+    transferId: transfer.transferId,
+    contentBase64: Buffer.from('complete streamed download').toString('base64')
+  })
+  const finished = invoke('fs:finishDownloadedFile', transfer)
+  await expect(finished).rejects.toThrow('disk full during copy')
+  await invoke('fs:cancelDownloadedFile', transfer)
+  const retained = (await readdir(directory)).filter((name) => name.endsWith('.download'))
+  expect(retained).toHaveLength(1)
+  const retainedPath = join(directory, retained[0])
+  expect(await readFile(retainedPath, 'utf8')).toBe('complete streamed download')
+  expect(await readFile(boundary.destination, 'utf8')).toBe('another application')
+  await expect(finished).rejects.toMatchObject({
+    message: expect.stringContaining(retainedPath),
+    cause: { cause: { code: 'ENOSPC', message: 'disk full during copy' } }
+  })
 })

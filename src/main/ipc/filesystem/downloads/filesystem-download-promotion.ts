@@ -37,9 +37,10 @@ export async function inspectDownloadDestination(
   }
 }
 
-export class DownloadDestinationCollisionError extends Error {
-  constructor(tempPath: string) {
-    super(`Destination file appeared before download completed. Download preserved at ${tempPath}.`)
+export class DownloadPromotionError extends Error {
+  constructor(tempPath: string, cause: unknown) {
+    const reason = cause instanceof Error ? cause.message : String(cause)
+    super(`${reason}\nDownload preserved at ${tempPath}.`, { cause })
   }
 }
 
@@ -49,9 +50,13 @@ export async function promoteDownloadedFile(
   destinationExisted: boolean
 ): Promise<void> {
   if (!destinationExisted) {
-    await promoteDownloadedFileWithoutOverwrite(tempPath, destinationPath, () =>
-      Promise.reject(new DownloadDestinationCollisionError(tempPath))
-    )
+    try {
+      await promoteDownloadedFileWithoutOverwrite(tempPath, destinationPath, () =>
+        Promise.reject(new Error('Destination file appeared before download completed'))
+      )
+    } catch (error) {
+      throw new DownloadPromotionError(tempPath, error)
+    }
     return
   }
 
