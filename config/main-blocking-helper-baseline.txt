@@ -663,7 +663,7 @@
 1 src/main/ipc/runtime-environments/mobile-relay/runtime-environment-mobile-relay-hosts.ts
 1 src/main/ipc/runtime-environments/runtime-environments.ts
 2 src/main/ipc/session.ts
-3 src/main/ipc/settings/settings.ts
+2 src/main/ipc/settings/settings.ts
 3 src/main/ipc/shell/shell.ts
 5 src/main/ipc/source-control/hosted-review.ts
 3 src/main/ipc/ssh/plain-ssh-terminal-handlers.ts
