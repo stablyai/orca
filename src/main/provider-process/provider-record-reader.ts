@@ -117,11 +117,11 @@ export function createProviderRecordReader<Held = never>(input: {
     shouldPause: () => paused,
     ...(merging
       ? {
+          // Always ahead of a line while paused: a flush in any callback may have paused reading.
           beforeLine: (text: string, start: number) => {
-            if (!run || merging.continues(run.held, text, start)) {
-              return false
+            if (run && !merging.continues(run.held, text, start)) {
+              flush()
             }
-            flush()
             return paused
           }
         }

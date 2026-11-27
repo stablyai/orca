@@ -48,4 +48,32 @@ describe('createProviderRecordReader with Codex delta merging', () => {
     ])
     expect(taken).toBe(4)
   })
+
+  it('keeps a pause applied after a malformed continuation of a run', async () => {
+    const stdout = new PassThrough()
+    const order: string[] = []
+    const reader = createProviderRecordReader({
+      stdout,
+      merging: CODEX_AGENT_MESSAGE_DELTA_MERGING,
+      onRecord: (record) => {
+        order.push(JSON.stringify(record).includes('requestUserInput') ? 'request' : 'delta')
+        if (order.length === 1) {
+          reader.pause()
+        }
+      },
+      onRejected: () => void order.push('rejected'),
+      onFatal: (error) => {
+        throw error
+      }
+    })
+    const broken = `${delta('a', 'x').slice(0, -2)},}`
+    const request = JSON.stringify({ id: 9, method: 'item/tool/requestUserInput', params: {} })
+    stdout.write([delta('a', 'He'), broken, request].join('\n') + '\n')
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(order).toEqual(['delta'])
+
+    reader.resume()
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(order).toEqual(['delta', 'rejected', 'request'])
+  })
 })
