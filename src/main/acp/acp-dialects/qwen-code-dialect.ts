@@ -1,21 +1,28 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect, AcpRequestSettlement } from './acp-dialect'
 import { qwenCodeQuestionRequest } from './qwen-code-questions'
 
 // Since 0.24 a shell result is a `shell_result` record; earlier releases send only the output.
-const qwenShellResultSchema = z.looseObject({
-  type: z.literal('shell_result'),
-  output: z.string(),
-  exitCode: z.number().int().nullable(),
-  error: z.string().nullish()
-})
+const qwenShellResultSchema = lazyZodSchema(() =>
+  z.looseObject({
+    type: z.literal('shell_result'),
+    output: z.string(),
+    exitCode: z.number().int().nullable(),
+    error: z.string().nullish()
+  })
+)
 
-const toolMetaSchema = z.looseObject({ _meta: z.looseObject({ toolName: z.string().min(1) }) })
+const toolMetaSchema = lazyZodSchema(() =>
+  z.looseObject({ _meta: z.looseObject({ toolName: z.string().min(1) }) })
+)
 
-const preparingCallSchema = z.looseObject({
-  _meta: z.looseObject({ phase: z.literal('preparing') })
-})
+const preparingCallSchema = lazyZodSchema(() =>
+  z.looseObject({
+    _meta: z.looseObject({ phase: z.literal('preparing') })
+  })
+)
 
 function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   // A call announced while its arguments still stream carries `{}` until it runs.

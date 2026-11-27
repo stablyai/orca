@@ -8,7 +8,11 @@ import { useLinearProviderConnected } from '@/lib/work-items/linear/useLinearPro
 import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/skills/installation/agent-feature-skill-names'
 import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
-import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import {
+  getProviderRuntimeContextKey,
+  useProviderRuntimeSessionGeneration
+} from '@/runtime/hosts/observations/provider-runtime-context'
+import { recomputeOn } from '@/lib/recompute-on'
 import { useAppStore } from '@/store/index'
 import type { TaskProvider } from '../../../../../shared/work-items/task-providers'
 import type { TaskProviderReadiness } from './task-source-setup-state'
@@ -31,7 +35,10 @@ export function useTaskSourceProviderReadiness(
   const linearConnected = useLinearProviderConnected()
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
-  const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
+  const providerRuntimeSessionGeneration = useProviderRuntimeSessionGeneration()
+  const providerRuntimeContextKey = recomputeOn([providerRuntimeSessionGeneration], () =>
+    getProviderRuntimeContextKey(settings)
+  )
   const activeSkillRuntime = useActiveProjectSkillRuntime()
 
   const {

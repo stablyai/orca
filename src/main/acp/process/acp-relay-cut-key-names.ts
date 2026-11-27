@@ -26,18 +26,21 @@ export function acpCutKeyNames(
   const perSession = new Map<string | undefined, number>()
   let overflow = false
   for (const [id, item] of named) {
+    const key = JSON.stringify([item.session, id.replace(CONTINUED_ID, '')])
+    if (keys.has(key)) {
+      continue
+    }
     const count = perSession.get(item.session) ?? 0
-    if (count >= perSessionCap || keys.size >= RELAY_CUT_KEYS_MAX - 1) {
+    if (
+      count >= perSessionCap ||
+      keys.size >= RELAY_CUT_KEYS_MAX - 1 ||
+      key.length > RELAY_CUT_KEY_MAX_CHARS
+    ) {
       overflow = true
       continue
     }
-    const key = JSON.stringify([item.session, id.replace(CONTINUED_ID, '')])
-    if (key.length > RELAY_CUT_KEY_MAX_CHARS) {
-      overflow = true
-    } else if (!keys.has(key)) {
-      perSession.set(item.session, count + 1)
-      keys.add(key)
-    }
+    perSession.set(item.session, count + 1)
+    keys.add(key)
   }
   return overflow || carriedOverflow ? [...keys, RELAY_CUT_KEYS_OVERFLOW] : [...keys]
 }

@@ -1,6 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
-import { unzipSync } from 'fflate'
 
 /** Unpacks a verified CRX's zip archive without letting any entry land outside the target folder. */
 
@@ -22,7 +21,10 @@ export function isSafeArchiveEntryName(name: string): boolean {
 }
 
 /** Files in the archive, after rejecting any unsafe name or an archive too large to unpack. */
-export function readBrowserExtensionArchive(archive: Uint8Array): BrowserExtensionArchiveEntry[] {
+export async function readBrowserExtensionArchive(
+  archive: Uint8Array
+): Promise<BrowserExtensionArchiveEntry[]> {
+  const { unzipSync } = await import('fflate')
   let declaredBytes = 0
   const seen = new Set<string>()
   // Why throw inside the filter: it runs before each entry inflates, so a bomb never expands.

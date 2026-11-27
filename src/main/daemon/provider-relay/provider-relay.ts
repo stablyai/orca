@@ -318,6 +318,8 @@ export class ProviderRelay {
     this.attachment?.release()
     this.attachment = null
     this.pending.answerHeld()
+    // Answered held requests may free the table that paused stdout.
+    this.updateReading()
   }
 
   private deliver(record: ProviderRelayRecord): void {

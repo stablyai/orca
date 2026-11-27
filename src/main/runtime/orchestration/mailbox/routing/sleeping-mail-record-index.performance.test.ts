@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { SleepingMailRecordIndex } from './sleeping-mail-record-index'
 
@@ -111,5 +111,38 @@ it.each([100, 1_000])(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the per-host input cache is the retention under test.
     const cached = (index as unknown as { inputs: ReadonlyMap<string, unknown> }).inputs
     expect(cached.size).toBe(0)
+  }
+)
+
+it.each([100, 1_000])(
+  'a checkpoint write changing one of %i sleep records re-indexes only that record',
+  (count) => {
+    const index = new SleepingMailRecordIndex()
+    const records: Record<string, SleepingAgentSessionRecord> = {}
+    for (let entry = 0; entry < count; entry++) {
+      const paneKey = `tab:${String(entry).padStart(8, '0')}-1111-4111-8111-111111111111`
+      records[paneKey] = {
+        paneKey,
+        worktreeId: `wt-${entry}`,
+        agent: 'claude',
+        origin: 'worktree-sleep',
+        state: 'done',
+        prompt: '',
+        providerSession: { key: 'session_id', id: `slept-${entry}` },
+        capturedAt: 1,
+        updatedAt: 1
+      }
+    }
+    index.refresh('local', records, () => {})
+    const [firstPane] = Object.keys(records)
+    const rewrites = vi.spyOn(index.records, 'set')
+    const changed: string[] = []
+    index.refresh(
+      'local',
+      { ...records, [firstPane]: { ...records[firstPane], capturedAt: 2 } },
+      (pane) => changed.push(pane)
+    )
+    expect(rewrites).toHaveBeenCalledTimes(1)
+    expect(changed).toEqual([firstPane])
   }
 )

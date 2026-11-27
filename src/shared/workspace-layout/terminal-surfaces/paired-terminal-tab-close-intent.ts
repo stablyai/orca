@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 /** Persist paired tab closes until the host receives session.tabs.close; otherwise reload/snapshots resurrect tabs (STA-6224).
  * Replay the existing RPC without adding wire state. */
@@ -20,16 +21,17 @@ export const MAX_PAIRED_TERMINAL_TAB_CLOSE_INTENTS = 256
 /** Past this the host has had a month of reconnects to hear the close. */
 export const PAIRED_TERMINAL_TAB_CLOSE_INTENT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
-export const pairedTerminalTabCloseIntentSchema: z.ZodType<PairedTerminalTabCloseIntent> = z.object(
-  {
-    // Why 4096: a mirrored editor tab is named by its file path, and paths outrun any short cap.
-    hostTabIds: z.array(z.string().min(1).max(4096)).min(1).max(8),
-    worktreeId: z.string().min(1).max(1024),
-    closedAt: z.number().int().nonnegative(),
-    pairingRevision: z.number().int().nonnegative().optional(),
-    force: z.literal(true).optional()
-  }
-)
+export const pairedTerminalTabCloseIntentSchema: z.ZodType<PairedTerminalTabCloseIntent> =
+  lazyZodSchema(() =>
+    z.object({
+      // Why 4096: a mirrored editor tab is named by its file path, and paths outrun any short cap.
+      hostTabIds: z.array(z.string().min(1).max(4096)).min(1).max(8),
+      worktreeId: z.string().min(1).max(1024),
+      closedAt: z.number().int().nonnegative(),
+      pairingRevision: z.number().int().nonnegative().optional(),
+      force: z.literal(true).optional()
+    })
+  )
 
 /** One intent per tab and pairing, so a repeat close of the same tab is not queued twice. */
 export function pairedTerminalTabCloseIntentKey(intent: PairedTerminalTabCloseIntent): string {

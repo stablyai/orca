@@ -610,7 +610,9 @@
       "ultracode": "Ultracode",
       "permissionAppliesNextMessage": "{{saved}} применится к следующему сообщению; сейчас действует {{active}}",
       "permissionAppliesNextMessageCompact": "{{saved}} · следующее сообщение",
-      "permissionAppliesNextMessageTiming": "Применится к следующему сообщению · сейчас действует {{active}}"
+      "permissionAppliesNextMessageTiming": "Применится к следующему сообщению · сейчас действует {{active}}",
+      "modelsLoading": "Загрузка моделей…",
+      "signInForModels": "Войдите, чтобы увидеть доступные вам модели."
     },
     "sessionOptionPickers": {
       "agentWorking": "Агент работает",
@@ -981,7 +983,8 @@
         "needsAuth_few": "{{count}} требуют входа",
         "needsAuth_many": "{{count}} требуют входа"
       },
-      "pasteHint": "Когда браузер откроет страницу, которая не загрузится, скопируйте её адрес и вставьте здесь."
+      "pasteHint": "Когда браузер откроет страницу, которая не загрузится, скопируйте её адрес и вставьте здесь.",
+      "manage": "Управлять серверами MCP"
     },
     "restartNote": {
       "continued": "Orca попросила этого агента продолжить после перезапуска. Ваш собственный запрос повторно не отправлялся.",
@@ -994,8 +997,8 @@
       "row": {
         "started": "Запущен",
         "reopened": "Открыт заново",
-        "followedUp": "Отправлено уточнение для",
-        "handedOff": "Передано",
+        "followedUp": "Дослано получателю:",
+        "handedOff": "Передано получателю:",
         "task": "Задача от",
         "update": "Обновление от",
         "message": "Сообщение от",
@@ -1006,8 +1009,16 @@
         "started": "Запущен",
         "reopened": "Открыт заново",
         "task": "Задача",
-        "followedUp": "Уточнение",
-        "handedOff": "Передано"
+        "followedUp": "Дослано получателю:",
+        "handedOff": "Передано получателю:"
+      },
+      "unnamedRecipient": "агент",
+      "event": {
+        "followedUp": "Дополнение отправлено",
+        "update": "Обновление",
+        "message": "Сообщение",
+        "handedOff": "Работа передана",
+        "task": "Задача"
       }
     },
     "urlRequest": {
@@ -2612,7 +2623,8 @@
       "tasks": "Задачи",
       "automations": "Автоматизации",
       "moreActions": "Дополнительные действия",
-      "sharedLinks": "Общие ссылки"
+      "sharedLinks": "Общие ссылки",
+      "mcpServers": "Серверы MCP"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Удалить «{{name}}» ({{branch}})?",
@@ -2763,7 +2775,8 @@
       "tasks": "Задачи",
       "terminal": "Терминал",
       "workspace": "Рабочее пространство",
-      "automations": "Автоматизации"
+      "automations": "Автоматизации",
+      "mcpServers": "Серверы MCP"
     }
   },
   "newWorkspace": {
@@ -4877,9 +4890,6 @@
       "agentCouldNotStart": "Не удалось запустить {{label}}. Проверьте команду агента в разделе «Настройки» и повторите попытку.",
       "agentFailedToStart": "Запуск {{label}} завершился ошибкой. Проверьте команду агента в разделе «Настройки» и повторите попытку.",
       "agentReportedError": "{{label}} сообщил об ошибке.",
-      "antigravityInvalidEvents": "Antigravity вернул некорректные события JSON.",
-      "antigravityInvalidResult": "Antigravity вернул некорректный результат.",
-      "antigravityNoFinalResult": "Antigravity не вернул итоговый результат.",
       "chatNameAgentUnsupported": "Выберите поддерживаемого агента для названий чатов в разделе «Настройки -> Чат -> Названия чатов». Поддерживаемые агенты: {{agents}} или «Своя команда».",
       "chatNameCustomCommandEmpty": "Своя команда не задана. Добавьте её в разделе «Настройки -> Чат -> Названия чатов».",
       "cliFailed": "Команда CLI {{label}} завершилась с ошибкой и кодом {{exitCode}}.",
@@ -5746,7 +5756,9 @@
       "statusUnreadable": "Не удалось прочитать статус этого сервера. Вернитесь назад и откройте его снова.",
       "tryAgain": "Повторить попытку",
       "isolationUnavailableAndroid": "Для Orca нужен Android System WebView или Chrome версии 101 или новее. Обновите его в Play Маркете или выберите более новый в «Параметры разработчика > Реализация WebView».",
-      "webViewInUse": "На этом устройстве установлен {{name}} {{version}}."
+      "webViewInUse": "На этом устройстве установлен {{name}} {{version}}.",
+      "downloadingLatestApp": "Скачивание последней версии",
+      "downloadProgressFromHost": "с {{host}} · {{progress}}"
     },
     "pageRouteUnavailable": {
       "updateTitle": "Обновите Orca",
@@ -5754,6 +5766,9 @@
       "updateMessageNoHost": "Для этого экрана нужна более новая версия Orca.",
       "serverTitle": "Не удаётся подключиться к этому серверу",
       "serverMessage": "Телефон не может подключиться к серверу этого рабочего пространства через {{host}}."
+    },
+    "downloadProgress": {
+      "megabytes": "{{received}} из {{total}} МБ"
     }
   },
   "workspace": {
@@ -5824,6 +5839,9 @@
       "right": "Крестовина вправо",
       "down": "Крестовина вниз",
       "hint": "Отправляет клавишу со стрелкой. Удерживайте для повтора."
+    },
+    "terminalKeyRail": {
+      "ctrlC": "Ctrl+C"
     }
   },
   "automations": {
@@ -8897,6 +8915,95 @@
     }
   },
   "mcpServers": {
-    "agentBlocked": "Заблокировано настройками Claude вашей организации"
+    "category": {
+      "coding": "Разработка",
+      "chat": "Чат",
+      "monitoring": "Мониторинг",
+      "docs": "Документы и проекты",
+      "more": "Другое"
+    },
+    "searchApps": "Поиск приложений",
+    "filterActive": "Фильтр: {{filter}}",
+    "filter": "Фильтр",
+    "allApps": "Все приложения",
+    "added": "Добавлено",
+    "addTitle": "Добавить сервер MCP",
+    "customServer": "Свой сервер",
+    "customServerLine": "URL, команда или вставленная конфигурация",
+    "noMatch": "Нет приложений по запросу «{{query}}».",
+    "apps": "Приложения",
+    "header": "Заголовок",
+    "headerName": "Имя",
+    "headerValue": "Значение",
+    "removeHeader": "Удалить заголовок",
+    "headers": "Заголовки",
+    "headerEmpty": "Пусто",
+    "addHeader": "Добавить заголовок",
+    "addButton": "Добавить",
+    "sourceLabel": "URL сервера или команда запуска",
+    "sourcePlaceholder": "https://… или npx …",
+    "sourceNote": "Вставьте URL сервера, команду запуска или конфигурацию mcpServers.",
+    "details": "Подробности",
+    "trust": "Добавляйте только программы, которым доверяете.",
+    "serverType": "Тип сервера",
+    "urlMode": "Подключиться по URL",
+    "commandMode": "Выполнить команду",
+    "serverName": "Имя сервера",
+    "headersNone": "Нет",
+    "yours": "Ваши",
+    "addServer": "Добавить сервер",
+    "fromPlugins": "Из плагинов",
+    "inYourAgents": "В настройках агентов",
+    "needsSignIn": "Требуется вход",
+    "wontStart": "Не запускается",
+    "signIn": "Войти",
+    "projectsOnly": "Только {{projects}}",
+    "moreFor": "Другие действия: {{name}}",
+    "moveToOrca": "Перенести в Orca",
+    "copyToOrca": "Скопировать в Orca",
+    "signInAgain": "Войти снова",
+    "signOut": "Выйти",
+    "workspaces": "Рабочие пространства",
+    "account": "Учётная запись",
+    "signedIn": "Вход выполнен",
+    "agents": "Агенты",
+    "turnAllOn": "Включить все",
+    "agentsUnread": "Не удалось получить список агентов на этом компьютере.",
+    "agentBlocked": "Заблокировано настройками Claude вашей организации",
+    "advanced": "Дополнительно",
+    "sharedProcess": "Один процесс для всех агентов",
+    "sharedProcessNote": "Расходует меньше памяти. Работает вне папки рабочего пространства.",
+    "removeServer": "Удалить сервер",
+    "url": "URL",
+    "command": "Команда",
+    "arguments": "Аргументы",
+    "title": "Серверы MCP",
+    "reading": "Чтение серверов MCP…",
+    "unavailable": "Серверы MCP недоступны на {{host}}",
+    "signedInTo": "Вход в {{app}} выполнен",
+    "allWorkspaces": "Все рабочие пространства",
+    "includingLater": "Включая добавленные позже",
+    "appliesToNewNote": "Изменения применятся к новым сессиям.",
+    "allAgents": "Все агенты",
+    "agentsOf": "{{on}} из {{total}}",
+    "workspacesAll": "Все",
+    "workspacesAllBut": "Все, кроме {{names}}",
+    "workspacesNone": "Нет",
+    "appliesToNew": "Для новых сессий",
+    "restartSessions": "Перезапустить сессии ({{count}})",
+    "restarted": "Перезапущено сессий: {{count}}",
+    "agentFileTitle": "Включить {{server}} для {{agent}}?",
+    "agentFileMessage": "Orca будет хранить ваши серверы MCP в файле настроек {{agent}} ({{file}}). Ваши собственные записи останутся без изменений.",
+    "agentFilesMessage": "Orca будет хранить ваши серверы MCP в файлах настроек агентов. Ваши собственные записи останутся без изменений.",
+    "allow": "Разрешить",
+    "removeTitle": "Удалить {{name}}?",
+    "remove": "Удалить",
+    "moveTitle": "Перенести {{name}} в Orca?",
+    "moveMessage": "Orca удалит его из настроек {{agents}} и сохранит резервную копию.",
+    "move": "Перенести",
+    "workspacesCount": "Рабочих пространств: {{count}}",
+    "workspacesAllButCount": "Все, кроме {{count}}",
+    "headerMissing": "Заполните заголовок {{header}}, чтобы добавить этот сервер.",
+    "servers": "Серверы"
   }
 }

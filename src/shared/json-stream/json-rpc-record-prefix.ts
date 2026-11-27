@@ -5,7 +5,12 @@ export type JsonRpcPrefix =
   | { kind: 'response-unknown' }
   | { kind: 'unknown' }
 
-export type LeadingProperty = { key: string; value?: string | number }
+export type LeadingProperty = {
+  key: string
+  value?: string | number
+  /** A number cut off by the prefix or malformed, unlike a valueless literal or container. */
+  unreadableNumber?: true
+}
 
 function readJsonStringEnd(value: string, start: number): number | null {
   if (value[start] !== '"') {
@@ -172,13 +177,19 @@ export function leadingJsonEnvelope(
       }
       continue
     }
-    // The whole JSON number, so `1e3` or `1.5` is never read as a different id than it is.
-    const match = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(prefix.slice(cursor))
-    if (!match) {
+    // The whole JSON number, ended by a delimiter, so `1e3` or a `12` cut from `123` is never read
+    // as another id.
+    const rest = prefix.slice(cursor)
+    const match = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(rest)
+    const numberEnd = cursor + (match?.[0].length ?? 0)
+    if (!match || !/[\s,}]/.test(prefix[numberEnd] ?? '')) {
+      if (match || /^-?$/.test(rest)) {
+        properties.push({ key: String(key), unreadableNumber: true })
+      }
       break
     }
     properties.push({ key: String(key), value: Number(match[0]) })
-    cursor += match[0].length
+    cursor = numberEnd
     if (!next()) {
       break
     }
@@ -190,18 +201,20 @@ export function classifyJsonRpcPrefix(prefix: string): JsonRpcPrefix {
   // Inspect complete top-level fields only; nested result/params must not impersonate JSON-RPC envelope keys.
   const properties = leadingJsonProperties(prefix)
   const method = properties.find((property) => property.key === 'method')?.value
-  const id = properties.find((property) => property.key === 'id')?.value
+  const idProperty = properties.find((property) => property.key === 'id')
+  const id = idProperty?.value
   if (typeof method === 'string' && (typeof id === 'number' || typeof id === 'string')) {
     return { kind: 'server-request', id, method }
   }
   if (
     typeof id === 'number' &&
-    properties.some((property) => property.key === 'id') &&
     properties.some((property) => property.key === 'result' || property.key === 'error')
   ) {
     return { kind: 'response', id }
   }
-  if (typeof id === 'number') {
+  // A numeric id cut off by the prefix could belong to any pending call; a cut server request lands
+  // here too, since answering a guessed id could cancel another live request.
+  if (typeof id === 'number' || idProperty?.unreadableNumber) {
     return { kind: 'response-unknown' }
   }
   if (typeof method === 'string' && properties.some((property) => property.key === 'params')) {

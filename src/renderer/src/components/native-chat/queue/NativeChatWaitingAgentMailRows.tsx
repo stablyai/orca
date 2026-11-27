@@ -1,11 +1,14 @@
 import { memo, useContext, useState } from 'react'
 import { NativeChatAgentMessageCard } from '../messages/rows/NativeChatAgentMessageCard'
-import { agentMessageRowLead } from '../messages/rows/agent-message-row-lead'
-import { unnamedSenderLabel } from '../messages/agent-senders/native-chat-agent-message-sender-label'
+import {
+  agentMessageRowFallback,
+  agentMessageRowLead
+} from '../messages/rows/agent-message-row-lead'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
+  agentMessageHeading,
   agentMessagePrimarySender,
-  agentMessageSenderLabel
+  agentMessageSavedName
 } from '../../../../../shared/agent-session/view/messages/agent-message-presentation'
 import { NativeChatWaitingAgentMailRowsContext } from './NativeChatWaitingAgentMailActions'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
@@ -103,10 +106,8 @@ function heldRowLabel(
   from: NonNullable<NativeChatMessage['from']>,
   t: Translate
 ): string {
-  const sender = agentMessagePrimarySender(from)
-  const fallback = unnamedSenderLabel(t)
-  const name = sender
-    ? agentMessageSenderLabel({ localChat: false, snapshotName: sender.name, fallback })
-    : fallback
-  return `${agentMessageRowLead(from, message, t)} ${name}, ${t('components.native-chat.agentMessage.row.notSentYet', 'not sent yet')}`
+  const heading = agentMessageHeading(from, message)
+  const name =
+    agentMessageSavedName(agentMessagePrimarySender(from)) ?? agentMessageRowFallback(heading, t)
+  return `${agentMessageRowLead(heading, t)} ${name}, ${t('components.native-chat.agentMessage.row.notSentYet', 'not sent yet')}`
 }

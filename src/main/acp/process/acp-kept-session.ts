@@ -1,5 +1,6 @@
 import type { z } from 'zod'
 import type { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 
 export type { AcpRelayedProcess }
 import { settleAcpSessionCall } from '../protocol/acp-session-call'
@@ -17,6 +18,9 @@ import {
 } from './acp-kept-agent'
 
 const SESSION_STARTS = new Set(['session/new', 'session/load', 'session/resume'])
+/** How long a send waits for a finished replay's ack before going to the kept agent as it is. */
+const REPLAY_SETTLE_WAIT_MS = 3_000
+const REPLAY_SETTLE_RETRY_MS = 50
 
 /**
  * An ACP agent kept running under the terminal daemon from before this app started. It is
@@ -100,6 +104,38 @@ export class AcpKeptSession {
   /** The agent ended while no app was attached: only its output is left, so nothing is written to it. */
   get agentExited(): boolean {
     return (this.child.exited ?? this.child.attachResult?.exit ?? null) !== null
+  }
+
+  /** Reattached for a launch whose app-bound tools it lacks: the next send acquires afresh. */
+  get freshOwed(): boolean {
+    return this.relayed.freshOwed === true
+  }
+
+  /** Acks everything the chat was handed once its reader took it, as a hand-off does, within a
+   *  bound: a stalled stdin write or reader leaves the replay unacked rather than holding a send. */
+  async replaySettled(): Promise<void> {
+    // The replay reaches the reader in slices: ack each part handed on until the attach's whole
+    // replay is acked, or the bound runs out.
+    const until = Date.now() + REPLAY_SETTLE_WAIT_MS
+    while (!this.child.replayAcked() && Date.now() < until) {
+      const left = until - Date.now()
+      await withTimeout(
+        this.child.settle(true, left).catch(() => undefined),
+        left,
+        undefined
+      )
+      if (!this.child.replayAcked()) {
+        await new Promise((resolve) => setTimeout(resolve, REPLAY_SETTLE_RETRY_MS))
+      }
+    }
+  }
+
+  /** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`: false until the replay is acked. */
+  get launchOutgrown(): boolean | undefined {
+    if (!this.child.replayAcked()) {
+      return false
+    }
+    return this.freshOwed || undefined
   }
 
   /** The earlier app's prompt is still owed, or answered in the held replay. */

@@ -146,6 +146,7 @@ export function answerQuestion(
       answerSenderSnapshot: params.captureSender?.(),
       body: params.body,
       threadId: question.message_id,
+      replyTo: question.message_id,
       runId: params.runId
     })
     // The answer is the worker's mail; a federated worker's copy lives on its execution host.

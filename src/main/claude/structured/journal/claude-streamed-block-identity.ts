@@ -1,5 +1,6 @@
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
 
 // Stream and final frames have different UUIDs; reconcile by message.id and block order to avoid duplicate rows.
 
@@ -23,14 +24,17 @@ export type StreamedBlock = {
 /** On a stream line, the relay continuation a cut replay moved its message to. */
 export const CLAUDE_RELAY_CONTINUATION_KEY = 'orca_relay_continuation'
 
+/** `blank` holds the tail of a text block's whitespace until visible text shows. */
+type OpenBlock = StreamedBlock & { awaited: boolean; blank: string }
+
 type StreamedMessage = {
   messageId: string | null
   /** The message's start was cut from a replay: it streams under a continuation id. */
   continuation: boolean
   stopped: boolean
-  blocks: Map<number, StreamedBlock>
+  blocks: Map<number, OpenBlock>
   /** Await final frames in block order for both text and thinking. */
-  awaitingFinal: StreamedBlock[]
+  awaitingFinal: OpenBlock[]
 }
 
 export type ClaudeStreamedBlockRegistry = {
@@ -57,6 +61,9 @@ export type ClaudeStreamedBlockRegistry = {
 export function claudeSourceBlockId(messageId: string, index: number): string {
   return `block:${messageId}:${index}`
 }
+
+// Only the whitespace just before the text can indent it, so a short tail is enough.
+const HELD_BLANK_LIMIT = 256
 
 function scopeKey(sessionId: string, parentToolUseId: string | null): string {
   return `${sessionId}/${parentToolUseId ?? ''}`
@@ -93,16 +100,33 @@ export function createClaudeStreamedBlockRegistry(
     index: number,
     uuid: string,
     startedAt: number
-  ): StreamedBlock => {
+  ): OpenBlock => {
     const identity: AgentJournalItemIdentity = {
       provider: 'claude',
       sessionId,
       uuid: streamed.messageId ? claudeSourceBlockId(streamed.messageId, index) : uuid
     }
-    const block = { identity, startedAt, index }
+    const block = { identity, startedAt, index, awaited: false, blank: '' }
     streamed.blocks.set(index, block)
-    streamed.awaitingFinal.push(block)
     return block
+  }
+
+  // Claude Code sends no final frame for a blank text block, so it gets no row until text shows.
+  const shownText = (streamed: StreamedMessage, block: OpenBlock, text: string): string | null => {
+    if (block.awaited) {
+      return text
+    }
+    if (blockType === 'text' && !/\S/.test(text)) {
+      block.blank = ownRetainedString(
+        (block.blank + text.slice(-HELD_BLANK_LIMIT)).slice(-HELD_BLANK_LIMIT)
+      )
+      return null
+    }
+    block.awaited = true
+    streamed.awaitingFinal.push(block)
+    const shown = block.blank + text
+    block.blank = ''
+    return shown
   }
 
   return {
@@ -141,9 +165,12 @@ export function createClaudeStreamedBlockRegistry(
         if (block?.type !== blockType) {
           return null
         }
-        const started = mint(messageFor(scope, frame), sessionId, index, uuid, observedAt)
-        const text = claudeText(block[blockType])
-        return text ? { ...started, text, parentToolUseId } : null
+        const streamed = messageFor(scope, frame)
+        const started = mint(streamed, sessionId, index, uuid, observedAt)
+        const text = shownText(streamed, started, claudeText(block[blockType]) ?? '')
+        return text
+          ? { identity: started.identity, startedAt: started.startedAt, text, parentToolUseId }
+          : null
       }
       if (event.type !== 'content_block_delta') {
         return null
@@ -156,7 +183,10 @@ export function createClaudeStreamedBlockRegistry(
       const streamed = messageFor(scope, frame)
       const started =
         streamed.blocks.get(index) ?? mint(streamed, sessionId, index, uuid, observedAt)
-      return { ...started, text, parentToolUseId }
+      const shown = shownText(streamed, started, text)
+      return shown
+        ? { identity: started.identity, startedAt: started.startedAt, text: shown, parentToolUseId }
+        : null
     },
     reconcile: (frame) => {
       const scope = scopeKey(frame.sessionId, frame.parentToolUseId)

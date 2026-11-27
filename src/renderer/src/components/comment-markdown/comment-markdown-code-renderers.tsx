@@ -1,6 +1,11 @@
 import React, { createContext, useContext } from 'react'
+import type { Element } from 'hast'
 import { isMermaidFence, isMermaidPre, renderMermaidFence } from './comment-mermaid-fence'
 import type { DocumentCodeBlockRenderer } from './comment-markdown-element-renderers'
+import {
+  CommentMarkdownClosingFenceContext,
+  MARKDOWN_CLOSING_FENCE
+} from './comment-markdown-code-fence'
 
 import {
   CommentMarkdownMermaidContext,
@@ -35,16 +40,16 @@ export function CommentMarkdownDocumentCode({
 export function CommentMarkdownDocumentPre({
   children,
   renderCodeBlock,
-  blockLine
+  node
 }: {
   children?: React.ReactNode
   renderCodeBlock?: DocumentCodeBlockRenderer
-  /** The line the fence starts on in its top-level block's source, from 1. */
-  blockLine?: number
+  node?: Element
 }): React.JSX.Element {
   const renderMermaid = useContext(CommentMarkdownMermaidContext)
   const keepSource = useContext(CommentMarkdownMermaidSourceContext)
   const blockStartLine = useContext(CommentMarkdownBlockLineContext)
+  const isConfirmed = useContext(CommentMarkdownClosingFenceContext)
   if (renderMermaid && !keepSource && isMermaidPre(children)) {
     return <>{children}</>
   }
@@ -52,12 +57,20 @@ export function CommentMarkdownDocumentPre({
   const language = React.isValidElement<{ className?: string; children?: React.ReactNode }>(child)
     ? child.props.className?.match(/(?:^|\s)language-([^\s]+)/)?.[1]
     : undefined
+  const blockLine = node?.position?.start.line
+  const parsedCode = node?.children[0]
+  const fenceClosed =
+    isConfirmed !== null &&
+    parsedCode?.type === 'element' &&
+    parsedCode.properties[MARKDOWN_CLOSING_FENCE] === 'true' &&
+    isConfirmed(node?.position)
   // Render as a component so its hooks cannot join this early-returning component’s hook order.
   const CodeBlock = renderCodeBlock
   const code = CodeBlock ? (
     <CodeBlock
       language={language}
       sourceLine={blockLine === undefined ? undefined : blockStartLine + blockLine - 1}
+      fenceClosed={fenceClosed}
     >
       {children}
     </CodeBlock>

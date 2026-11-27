@@ -3,6 +3,7 @@ import {
   cancelBrowserServerDownloadCopy,
   copyBrowserServerDownloadHere
 } from '../../browser/downloads/browser-server-download-copy'
+import type { BrowserServerDownloadCopyResult } from '../../../shared/browser/downloads/browser-server-download-copy'
 import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
@@ -27,7 +28,7 @@ export function registerBrowserServerDownloadCopyHandlers(): void {
         filename?: unknown
         expectedEnvironmentPairingRevision?: unknown
       }
-    ): Promise<{ destinationPath: string }> => {
+    ): Promise<BrowserServerDownloadCopyResult> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         throw new Error('Not allowed.')
       }

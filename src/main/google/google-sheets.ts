@@ -149,7 +149,7 @@ export async function readSheet(
     origin: { row: where.row, column: where.column },
     ...(kept < rows.length
       ? {
-          nextRange: `${columnLetters(where.column)}${nextRow}:${end?.[1] || columnLetters(where.column + Math.max(...rows.map((row) => row.length)) - 1)}${end?.[2] ?? ''}`
+          nextRange: `${columnLetters(where.column)}${nextRow}:${end?.[1] || columnLetters(where.column + rows.reduce((max, row) => Math.max(max, row.length), 0) - 1)}${end?.[2] ?? ''}`
         }
       : {})
   }

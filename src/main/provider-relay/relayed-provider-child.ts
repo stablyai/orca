@@ -7,9 +7,13 @@ import type {
   ProviderRelayDetachPolicy,
   ProviderRelayExit
 } from '../daemon/protocol/daemon-provider-relay-protocol'
-import { RELAY_WRITE_CHUNK_CHARS } from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayChannel } from './provider-relay-channel'
-import { sendRelayedInput, type RelayState } from './relayed-provider-input'
+import {
+  letGoOfExitedRelay,
+  sendRelayedChunks,
+  sendRelayedInput,
+  type RelayState
+} from './relayed-provider-input'
 import { RelayedProviderOutput, type ProviderRelayAckFloor } from './relayed-provider-output'
 import type { ProviderRelayRecordTaking } from './relayed-provider-consumption'
 import {
@@ -102,10 +106,8 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
           new RelayedProviderContinuation(options.continuation, options.relayId, through, through)
         )
     })
-    this.ready = new Promise((resolve, reject) => {
-      this.resolveReady = resolve
-      this.rejectReady = reject
-    })
+    const ready = Promise.withResolvers<void>()
+    ;({ promise: this.ready, resolve: this.resolveReady, reject: this.rejectReady } = ready)
     // A failed attach is reported through `exit`; `ready` only says the launch settled.
     this.ready.catch(() => {})
     this.stdin = new Writable({
@@ -177,8 +179,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
       if (this.output.holding) {
         // A reattach that never opened lets go of the relay: its output stays the daemon's, unacked.
         this.output.stop()
-        this.unbind?.()
-        this.unbind = null
+        this.unbindRelay()
         // One the daemon finished after this app gave up is handed back under its policy (sent
         // before any later attach on this connection, so it never detaches that one).
         void this.options.channel.detach(this.relayId, this.options.policy()).catch(() => {})
@@ -228,6 +229,11 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     await (handingOff ? this.output.flush(waitMs) : this.output.settle())
   }
 
+  /** The attach's replay is in the journal and acked, so ending the agent loses none of it (false
+   *  before any attach). */
+  replayAcked = (): boolean =>
+    this.output.ackedThrough(this.attachResult?.replayThroughSeq ?? Infinity)
+
   /** After a hand-back: output held for a chat that never opened goes (the daemon keeps it). */
   dropHeldOutput(): void {
     this.output.restartAt()
@@ -240,8 +246,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     }
     this.handingOff = true
     // Nothing more is read first: a line read during the last ack would be saved but not acked.
-    this.unbind?.()
-    this.unbind = null
+    this.unbindRelay()
     await this.settle(true, waitMs)
     this.state = 'detached'
     this.output.stop()
@@ -250,15 +255,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
   }
 
   private input(chunks: unknown[], callback: (error?: Error | null) => void): void {
-    const data = chunks
-      .map((chunk) => (Buffer.isBuffer(chunk) ? chunk.toString() : String(chunk)))
-      .join('')
-    // The daemon joins a surrogate pair split between writes, so a plain slice is safe.
-    const sent = this.writing.then(async () => {
-      for (let at = 0; at < data.length; at += RELAY_WRITE_CHUNK_CHARS) {
-        await this.send(data.slice(at, at + RELAY_WRITE_CHUNK_CHARS))
-      }
-    })
+    const sent = sendRelayedChunks(chunks, this.writing, (slice) => this.send(slice))
     this.writing = sent.catch(() => {})
     sent.then(
       () => callback(),
@@ -286,8 +283,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     if (this.options.quitting?.()) {
       this.state = 'detached'
       this.output.stop()
-      this.unbind?.()
-      this.unbind = null
+      this.unbindRelay()
       this.emit(RELAYED_CHILD_HANDED_OFF)
       return
     }
@@ -312,6 +308,11 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     } finally {
       done.resolve()
     }
+  }
+
+  private readonly unbindRelay = (): void => {
+    this.unbind?.()
+    this.unbind = null
   }
 
   private onExit(exit: ProviderRelayExit): void {
@@ -343,14 +344,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     // The chat hears of the exit only after its reader took the last output (a paused reader
     // would otherwise end the turn before its last lines), and then a turn later still.
     const taken = this.output.allTaken(EXIT_AFTER_OUTPUT_WAIT_MS)
-    // The final output is acked so the daemon can drop the ended relay.
-    void taken
-      .then(() => this.output.settle())
-      .finally(() => {
-        this.output.stop()
-        this.unbind?.()
-        this.unbind = null
-      })
+    void taken.then(() => letGoOfExitedRelay(this.output, this.unbindRelay))
     void taken.then(() =>
       setImmediate(() => {
         notifyProviderChild(this, 'exit', exit.code, this.signalCode)

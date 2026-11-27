@@ -1,5 +1,5 @@
 import { useTranslate } from '@/i18n/use-translate'
-import { workerDockStateLabel } from './worker-dock-labels'
+import { workerDockSpokenTitle, workerDockStateLabel } from './worker-dock-labels'
 import { useContext, useRef, useState } from 'react'
 import { Square, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -90,13 +90,13 @@ export function WorkerDockRowAction({
                         'Stop {{name}} · {{title}} unavailable · {{reason}}',
                         {
                           name: row.name,
-                          title: row.title,
+                          title: workerDockSpokenTitle(row.kind, row.title),
                           reason: workerDockStateLabel(t, 'stopping')
                         }
                       )
                     : t('components.native-chat.workerDock.stopName', 'Stop {{name}} · {{title}}', {
                         name: row.name,
-                        title: row.title
+                        title: workerDockSpokenTitle(row.kind, row.title)
                       })
               }
               aria-disabled={action === 'stop' ? unavailable : pending}

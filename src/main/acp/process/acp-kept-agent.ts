@@ -1,6 +1,6 @@
 import { takeAcpKeptVersionSkip } from '../launch/acp-launch-version'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
-import { acpLaunchNote } from './acp-kept-launch-permission'
+import { acpKeptToolsDiffer, acpLaunchNote } from './acp-kept-launch-permission'
 import type { ProviderRelayKeepSpec } from '../../daemon/protocol/daemon-provider-relay-protocol'
 import {
   launchRelayedProviderProcess,
@@ -206,7 +206,11 @@ export function restorableAcpSession(
 }
 
 /** A relayed ACP agent with the prompt turns its ack floor reads. */
-export type AcpRelayedProcess = RelayedProviderProcess & { turns: AcpRelayTurns }
+export type AcpRelayedProcess = RelayedProviderProcess & {
+  turns: AcpRelayTurns
+  /** Reattached for a launch whose app-bound tools it lacks: the next send goes to a fresh agent. */
+  freshOwed?: true
+}
 
 /**
  * Starts a chat's agent under the terminal daemon, or reattaches the one it kept running, so it
@@ -221,15 +225,21 @@ export async function launchRelayedAcpAgent(
     abandoned: () => boolean
   },
   /** `resume`: the session the chat reopens; a kept agent running another one can't carry on. */
-  launch: Pick<AcpStructuredLaunch, 'resume' | 'release' | 'appBoundGrants' | 'fullAccess'>,
+  launch: Pick<
+    AcpStructuredLaunch,
+    'resume' | 'release' | 'appBoundGrants' | 'fullAccess' | 'toolFree' | 'toolsKey'
+  >,
   processLaunch: ProviderProcessLaunch
 ): Promise<AcpRelayedProcess | null> {
   const { spec } = input.deps
   const versionSkipped = takeAcpKeptVersionSkip(input.acquire.identity.sessionId)
-  // A bot's tool grants live only in this app, so a kept bot would lose its tools.
-  if (!acpSpecRelays(spec) || launch.appBoundGrants) {
+  if (!acpSpecRelays(spec)) {
     return null
   }
+  // A bot's tool grants live only in this app and a tool-free run's folder goes with its launch, so
+  // neither starts a kept agent; the chat's kept one is still reattached, never a second beside it,
+  // and owes a fresh agent at its next send.
+  const appBound = launch.appBoundGrants === true || launch.toolFree !== undefined
   const refuse = async (refused: unknown): Promise<never> => {
     // Nothing of this launch ran, so its files go.
     await launch.release?.().catch(() => undefined)
@@ -241,8 +251,12 @@ export async function launchRelayedAcpAgent(
   const relay: ProviderRelayLaunch = {
     chatKey: input.acquire.identity.sessionId,
     markers: { ...acpRelayWorkMarkers(spec.agent), ackFloor, continuation },
-    keep: { ...acpRelayKeep(spec.dialect), note: acpLaunchNote(launch.fullAccess) },
-    passWhileHeld: (line) => isJsonRpcAnswerAbove(line, floor)
+    keep: {
+      ...acpRelayKeep(spec.dialect),
+      note: acpLaunchNote(launch.fullAccess, launch.toolsKey)
+    },
+    passWhileHeld: (line) => isJsonRpcAnswerAbove(line, floor),
+    ...(appBound ? { only: 'reattach' as const } : {})
   }
   const relayed = await launchRelayedProviderProcess(processLaunch, relay).catch(refuse)
   floor = relayed?.child.attachResult?.maxClientRequestId ?? 0
@@ -279,5 +293,10 @@ export async function launchRelayedAcpAgent(
   if (relayed && input.abandoned()) {
     void relayed.managed.close().catch(() => undefined)
   }
-  return relayed && { ...relayed, turns }
+  // One launched with other MCP servers from Orca (one turned off since) lacks this launch's tools.
+  const stale =
+    appBound ||
+    (relayed?.reattached === true &&
+      acpKeptToolsDiffer(relayed.child.attachResult?.launchNote, launch.toolsKey))
+  return relayed && { ...relayed, turns, ...(stale ? { freshOwed: true as const } : {}) }
 }

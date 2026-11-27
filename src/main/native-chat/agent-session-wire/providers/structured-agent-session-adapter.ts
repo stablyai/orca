@@ -277,8 +277,16 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   confirmIdle?(sessionId: string): Promise<AgentSessionIdleConfirmation> | undefined
   /** Open work, keyed as the provider's relay work markers key it, for a detached idle stop. */
   relayOpenWork?(sessionId: string, rootTurnRunning: boolean): Record<string, string[][]> | null
+  /** A kept agent the chat reattached: true when it lacks the tools its launch has and ending it
+   *  loses no replayed output (the next new turn starts a child that has them); false when no tools
+   *  refresh may end it (its replay isn't durable yet, or its work can't be seen); undefined with
+   *  nothing to protect. It
+   *  may first wait for a replay's last ack, so the send that follows reaches the fresh agent. */
+  keptLaunchOutgrown?(sessionId: string): boolean | undefined | Promise<boolean | undefined>
   /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
   liveTurnId?(sessionId: string): string | null | undefined
+  /** Narrow declared steering to the live acquisition's negotiated support. */
+  steeringMode?(sessionId: string): 'inject' | 'queue' | undefined
   /** The live child opened in another approval mode than requested and this input picks another model. */
   requiresModelTransitionRestart?(input: {
     sessionId: string

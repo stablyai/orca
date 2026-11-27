@@ -19,6 +19,7 @@ import {
   type BotItemStatus,
   type BotItemWorkerState
 } from './bot-items'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 const WORKER_STATES = hostUnionArms<BotItemWorkerState>({
   working: true,
@@ -53,7 +54,7 @@ const PR_STATES = hostUnionArms<Extract<BotItemPullRequest, { shown: true }>['st
   closed: true
 })
 
-const statusSchema = z.enum(BOT_ITEM_STATUSES)
+const statusSchema = lazyZodSchema(() => z.enum(BOT_ITEM_STATUSES))
 
 const prSchema: z.ZodType<BotItemPullRequest, unknown> = z.union([
   z.looseObject({

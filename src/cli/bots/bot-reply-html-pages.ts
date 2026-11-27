@@ -1,8 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { CONNECTOR_REPLY_MAX_FILES } from '../../shared/connector-action-contract'
-import { splitHtmlDocumentFences } from '../../shared/markdown/html-document-fences'
+import { splitSlackHtmlReply } from '../../shared/connectors/slack-html-reply'
 import type { LocalFile } from '../slack/slack-action-files'
 
 // Names Windows reserves for devices, whatever the extension.
@@ -25,16 +24,15 @@ function htmlFileName(document: string, taken: Set<string>): string {
   return name
 }
 
-/** Each whole HTML page in the text goes as an .html file (written to a temporary folder, removed
- *  after) with the words left around them as one post. Null when the pages can't go as files (too
- *  many, unwritable, or not staged): nothing has posted then, so the caller sends the words inline. */
+/** Return null for ineligible or unstaged pages so the caller can send the original reply inline.
+ *  Once posting starts, its result or error goes back to the caller. */
 export async function replyWithHtmlPages<T>(
   text: string,
   stage: (files: LocalFile[]) => Promise<string[]>,
   post: (staged: string[], rest: string | undefined) => Promise<T>
 ): Promise<{ files: number; sent: T } | null> {
-  const split = splitHtmlDocumentFences(text)
-  if (split.documents.length > CONNECTOR_REPLY_MAX_FILES) {
+  const split = splitSlackHtmlReply(text)
+  if (!split) {
     return null
   }
   const staged = await stagePages(split.documents, stage).catch(() => null)

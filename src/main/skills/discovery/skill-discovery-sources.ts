@@ -123,6 +123,8 @@ export function buildSkillDiscoverySources(
     includeCwd?: boolean
     pathApi?: SkillDiscoveryPathApi
     providerRootOverrides?: SkillProviderRootOverrides
+    /** A bot home's linked-project skills folder, which every chat of that bot loads. */
+    linkedSkillsFolder?: string
   } = {}
 ): SkillScanRoot[] {
   const pathApi = args.pathApi ?? { basename, join }
@@ -289,6 +291,35 @@ export function buildSkillDiscoverySources(
       )
     )
   }
+  if (args.linkedSkillsFolder) {
+    roots.push(...linkedSkillsFolderSources(args.linkedSkillsFolder, pathApi))
+  }
 
   return roots
+}
+
+// Same links in both: Claude loads .claude/skills as an added directory, every other agent skills/.
+function linkedSkillsFolderSources(
+  folder: string,
+  pathApi: SkillDiscoveryPathApi
+): SkillScanRoot[] {
+  const id = stablePathId(folder)
+  return [
+    source(
+      `linked-claude-${id}`,
+      'Linked projects',
+      pathApi.join(folder, '.claude', 'skills'),
+      'repo',
+      ['claude'],
+      'claude'
+    ),
+    source(
+      `linked-agents-${id}`,
+      'Linked projects',
+      pathApi.join(folder, 'skills'),
+      'repo',
+      ['codex', 'agent-skills'],
+      null
+    )
+  ]
 }

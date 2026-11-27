@@ -47,6 +47,8 @@ export type RuntimeClientEvent =
   | { type: 'relayHostsChanged' }
   /** An update of the user's own agent CLI on this host finished; clients check again. */
   | { type: 'agentCliUpdateFinished'; agent: string }
+  /** A relayed server's agent rows changed (coalesced); phones re-read mobileRelay.hosts.worktrees. */
+  | { type: 'relayHostRowsChanged'; hostId: `runtime:${string}` }
   /** A desktop PR refresh found this checkout's PR (or its absence) changed; phones re-read it. */
   | { type: 'pullRequestChanged'; worktreeId: string; repoId: string; branch: string }
   | ({ type: 'nativeChatLaunchDraftResolved' } & RuntimeNativeChatLaunchDraftResolution)
