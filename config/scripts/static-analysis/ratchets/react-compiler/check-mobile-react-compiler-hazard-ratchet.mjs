@@ -33,6 +33,13 @@ const HOOK_SOURCES = new Set([
   'mobile/src/theme/use-mobile-color-scheme.ts',
   'mobile/src/theme/themed-styles.ts'
 ])
+const MOBILE_REACTIVE_HOOKS = new Set([
+  'useMobileColorScheme',
+  'useMobileColors',
+  'useMobileTranslation',
+  'useMobileUiLocale',
+  'useThemedStyles'
+])
 
 export function isScannedMobilePath(rel) {
   return (
@@ -120,9 +127,10 @@ function liveCalls(node, names) {
   return calls
 }
 
-// A plain module function that calls a live reader synchronously returns live state too.
-function readsSynchronously(call, fn) {
-  for (let current = call.parent; current && current !== fn; current = current.parent) {
+// A plain module function that calls a live reader synchronously (directly, via a local helper,
+// or via a module-level lookup table of thunks) returns live state too.
+function readsSynchronously(node, fn) {
+  for (let current = node.parent; current && current !== fn; current = current.parent) {
     if (
       ts.isFunctionDeclaration(current) ||
       ts.isFunctionExpression(current) ||
@@ -137,16 +145,113 @@ function readsSynchronously(call, fn) {
   return true
 }
 
+function liveModuleContainers(sf, names) {
+  const containers = new Set()
+  for (const statement of sf.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      let init = declaration.initializer
+      while (
+        init &&
+        (ts.isParenthesizedExpression(init) ||
+          ts.isAsExpression(init) ||
+          ts.isSatisfiesExpression(init))
+      ) {
+        init = init.expression
+      }
+      if (
+        ts.isIdentifier(declaration.name) &&
+        init &&
+        (ts.isObjectLiteralExpression(init) || ts.isArrayLiteralExpression(init)) &&
+        liveCalls(init, names).length > 0
+      ) {
+        containers.add(declaration.name.text)
+      }
+    }
+  }
+  return containers
+}
+
+function readsContainerSynchronously(fn, containers) {
+  if (containers.size === 0) {
+    return false
+  }
+  let found = false
+  const visit = (child) => {
+    if (found) {
+      return
+    }
+    if (
+      ts.isCallExpression(child) &&
+      (ts.isElementAccessExpression(child.expression) ||
+        ts.isPropertyAccessExpression(child.expression)) &&
+      ts.isIdentifier(child.expression.expression) &&
+      containers.has(child.expression.expression.text) &&
+      !isShadowed(child.expression.expression, child.expression.expression.text) &&
+      readsSynchronously(child, fn)
+    ) {
+      found = true
+      return
+    }
+    ts.forEachChild(child, visit)
+  }
+  visit(fn)
+  return found
+}
+
+function functionReadsLiveSynchronously(fn, names, containers) {
+  const localFns = new Map()
+  const collectLocals = (child) => {
+    if (child !== fn) {
+      if (ts.isFunctionDeclaration(child) && child.name && child.body) {
+        localFns.set(child.name.text, child)
+      } else if (
+        ts.isVariableDeclaration(child) &&
+        ts.isIdentifier(child.name) &&
+        child.initializer &&
+        (ts.isArrowFunction(child.initializer) || ts.isFunctionExpression(child.initializer))
+      ) {
+        localFns.set(child.name.text, child.initializer)
+      }
+    }
+    ts.forEachChild(child, collectLocals)
+  }
+  collectLocals(fn)
+  const localLive = new Set(names)
+  for (let grew = true; grew;) {
+    grew = false
+    for (const [localName, localFn] of localFns) {
+      if (localLive.has(localName)) {
+        continue
+      }
+      if (
+        liveCalls(localFn, localLive).some((call) => readsSynchronously(call, localFn)) ||
+        readsContainerSynchronously(localFn, containers)
+      ) {
+        localLive.add(localName)
+        grew = true
+      }
+    }
+  }
+  return (
+    liveCalls(fn, localLive).some((call) => readsSynchronously(call, fn)) ||
+    readsContainerSynchronously(fn, containers)
+  )
+}
+
 function localWrappers(sf, live) {
   const functions = moduleFunctions(sf)
   const names = new Set(live)
   for (let grew = true; grew;) {
     grew = false
+    const containers = liveModuleContainers(sf, names)
     for (const [name, fn] of functions) {
       if (names.has(name) || /^(?:use[A-Z0-9]|[A-Z])/.test(name)) {
         continue
       }
-      if (liveCalls(fn, names).some((call) => readsSynchronously(call, fn))) {
+      if (functionReadsLiveSynchronously(fn, names, containers)) {
         names.add(name)
         grew = true
       }
@@ -228,6 +333,26 @@ function unreadMemoDeps(sf) {
   return count
 }
 
+// A discarded mobile subscription hook only triggers a re-render; React Compiler still serves
+// cached values unless the hook's return value flows into render.
+function discardedMobileHooks(sf) {
+  let count = 0
+  const visit = (node) => {
+    if (
+      ts.isExpressionStatement(node) &&
+      ts.isCallExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      MOBILE_REACTIVE_HOOKS.has(node.expression.expression.text) &&
+      owningReactFunction(node) !== null
+    ) {
+      count += 1
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sf)
+  return count
+}
+
 export function collectMobileReactCompilerHazards(root = process.cwd()) {
   const parsed = [...readTrackedSources(root, SCAN_ROOTS, isScannedMobilePath)].map(
     ([rel, text]) => ({ rel, sf: parseSource(rel, text) })
@@ -259,6 +384,7 @@ export function collectMobileReactCompilerHazards(root = process.cwd()) {
       }).length +
       liveGetters(calls).size +
       unreadMemoDeps(sf) +
+      discardedMobileHooks(sf) +
       findSourceHazards(rel, sf.text).length
     if (count > 0) {
       counts.set(rel, count)

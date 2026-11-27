@@ -1,21 +1,26 @@
 import { readFile } from 'node:fs/promises'
-import { join, sep } from 'node:path'
+import { join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { transform } from 'oxc-transform-react'
 // Matches the desktop renderer's REACT_COMPILER_OPTIONS (config/build-plugins/react-compiler.ts).
 const REACT_COMPILER_OPTIONS = { target: '19' }
 
 const mobileDir = fileURLToPath(new URL('../../../../mobile', import.meta.url))
+const normalizeForCompare = (file) =>
+  process.platform === 'win32' ? normalize(file).toLowerCase() : normalize(file)
 
 export const REACT_COMPILER_PLUGIN_NAME = 'mobile-react-compiler'
-const SOURCE_ROOTS = ['app', 'src', 'web-entry'].map((dir) => join(mobileDir, dir) + sep)
+const SOURCE_ROOTS = ['app', 'src', 'web-entry'].map(
+  (dir) => normalizeForCompare(join(mobileDir, dir)) + sep
+)
 
 // The app's own components and hooks; packages ship compiled or are left alone, as on native.
 export function isMobileReactCompilerSource(file) {
+  const normalized = normalizeForCompare(file)
   return (
-    SOURCE_ROOTS.some((root) => file.startsWith(root)) &&
-    !file.includes(`${sep}node_modules${sep}`) &&
-    !file.includes('.generated.')
+    SOURCE_ROOTS.some((root) => normalized.startsWith(root)) &&
+    !normalized.includes(`${sep}node_modules${sep}`) &&
+    !normalized.includes('.generated.')
   )
 }
 
