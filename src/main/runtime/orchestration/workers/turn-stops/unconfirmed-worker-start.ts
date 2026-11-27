@@ -147,8 +147,10 @@ export function observeHeldMailNotice(
   notice: { from: string; newestMessageId: string; screen?: string },
   deps: WorkerTurnStopReportDeps
 ): void {
-  // A turn seen since the notice's Enter proves it was taken; an alert would undo that presence.
-  if (readWorkerPresence(db, workerTurnStopDispatchId(target))?.presence === 'working') {
+  // A turn seen since the notice's Enter proves it was taken, and a gone worker reads no mail; an
+  // alert would undo either presence.
+  const presence = readWorkerPresence(db, workerTurnStopDispatchId(target))?.presence
+  if (presence === 'working' || presence === 'gone') {
     return
   }
   const fence = `${MAIL_NOTICE_HELD_FENCE_PREFIX}${notice.newestMessageId}`

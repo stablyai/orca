@@ -41,7 +41,8 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
         this.getWindowsPointerEnterDelayMs(ptyId, pointer),
       armSubmitCheck: (handle, ptyId, pointer, isCurrent) =>
         this.armMailNoticeSubmitCheck(handle, ptyId, pointer, isCurrent),
-      reportHeldNotice: (terminal, messageIds) =>
+      reportHeldNotice: (terminal, messageIds) => {
+        this.terminalRunFacts.noteHeldMailNotice(terminal.ptyId)
         void reportHeldMailNotice(
           {
             getDb: () => this.getExistingOrchestrationDb(),
@@ -52,6 +53,7 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
           terminal,
           messageIds
         ).catch(() => undefined)
+      }
     }
   }
 

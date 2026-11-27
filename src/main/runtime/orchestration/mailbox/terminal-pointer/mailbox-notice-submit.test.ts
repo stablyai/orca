@@ -35,10 +35,17 @@ afterEach(() => {
 
 /** An idle Codex that echoes a typed notice into its composer (plus `userText`) and empties the
  *  composer on the `takesEnter`th Enter; Windows Codex can keep earlier Enters as newlines. */
-async function deliverToCodex(options: { takesEnter: number; userText?: string }) {
+async function deliverToCodex(options: {
+  takesEnter: number
+  userText?: string
+  /** Mail that arrives while the first notice's Enter is checked, and after. */
+  moreMail?: true
+}) {
   vi.useFakeTimers()
   const db = createDatabase('orca-notice-submit-')
   const { runtime, write } = await createRuntime(db)
+  // Orca started this process, so its own typed notice is not a person's draft.
+  runtime.terminalRunFacts.recordSpawnCommit({ id: PTY_ID, incarnationId: 'mailbox-incarnation' })
   let sequence = 10
   const paint = (draft: string) =>
     runtime.onPtyData(
@@ -57,8 +64,17 @@ async function deliverToCodex(options: { takesEnter: number; userText?: string }
   })
   try {
     await driveToLiveIdle(runtime)
-    insertDirectRunMessage(db, createBoundRun(db, 'Notice submit').id, 'Mail')
+    const run = createBoundRun(db, 'Notice submit')
+    insertDirectRunMessage(db, run.id, 'Mail')
     runtime.deliverPendingMessagesForHandle(TERMINAL_HANDLE)
+    if (options.moreMail) {
+      await vi.advanceTimersByTimeAsync(1_000)
+      insertDirectRunMessage(db, run.id, 'Mid-flight mail')
+      runtime.deliverPendingMessagesForHandle(TERMINAL_HANDLE)
+      await vi.advanceTimersByTimeAsync(10_000)
+      insertDirectRunMessage(db, run.id, 'Later mail')
+      runtime.deliverPendingMessagesForHandle(TERMINAL_HANDLE)
+    }
     await vi.advanceTimersByTimeAsync(10_000)
     return {
       pointers: pointerCount(write),
@@ -87,5 +103,13 @@ it('never presses Enter over text that is not exactly the notice', async () => {
     pointers: 1,
     enters: 1,
     reported: 0
+  })
+})
+
+it('types no later notice over one still held in the composer', async () => {
+  expect(await deliverToCodex({ takesEnter: 0, moreMail: true })).toEqual({
+    pointers: 1,
+    enters: 2,
+    reported: 1
   })
 })

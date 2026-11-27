@@ -18,9 +18,11 @@ export async function reportHeldMailNotice(
 ): Promise<void> {
   const newestMessageId = messageIds.at(-1)
   const resolution = { ...deps, getHandle: () => terminal.handle }
-  const worker = terminal.paneKeys
-    .map((paneKey) => resolveTerminalWorkerDispatch(resolution, paneKey))
-    .find((found) => found)
+  const resolveWorker = () =>
+    terminal.paneKeys
+      .map((paneKey) => resolveTerminalWorkerDispatch(resolution, paneKey))
+      .find((found) => found)
+  const worker = resolveWorker()
   if (!worker || !newestMessageId) {
     return
   }
@@ -28,8 +30,14 @@ export async function reportHeldMailNotice(
   const before = readWorkerPresence(worker.db, dispatchId)
   const screen = await deps.readScreen(terminal.handle)
   const after = readWorkerPresence(worker.db, dispatchId)
-  // Submitted and seen to work or rest during the read: the alert would be stale.
-  if (after?.presence !== before?.presence || after?.generation !== before?.generation) {
+  const still = resolveWorker()
+  // Submitted and seen to work or rest during the read, or its Dispatch closed: the alert is stale.
+  if (
+    after?.presence !== before?.presence ||
+    after?.generation !== before?.generation ||
+    !still ||
+    workerTurnStopDispatchId(still.target) !== dispatchId
+  ) {
     return
   }
   observeHeldMailNotice(
