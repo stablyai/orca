@@ -229,6 +229,7 @@ export function planSidebarFeedRows(
     worktreeMap,
     nestLineage: true,
     projectGroups: visibleProjectGroups,
+    repos: visibleRepos,
     placeholderRepoIds,
     importedWorktreesByRepo: extras.importedWorktreesByRepo ?? new Map(),
     newExternalWorktreesInboxByRepo: extras.newExternalWorktreesInboxByRepo ?? new Map(),

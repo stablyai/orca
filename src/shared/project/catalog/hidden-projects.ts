@@ -3,6 +3,9 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../execution-host/execution-host'
+import { groupedBy } from '../../collections/grouped-by'
+import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
+import type { ProjectGroup } from '../groups/project-group-types'
 import type { Repo } from '../../repository/repo-types'
 import { getWorktreeIdFromHostIdentity } from '../../worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
@@ -110,6 +113,48 @@ export function withoutHiddenRepos<R extends Pick<Repo, 'hiddenAt'>>(
   repos: readonly R[]
 ): readonly R[] {
   return repos.some(isRepoHidden) ? repos.filter((repo) => !isRepoHidden(repo)) : repos
+}
+
+/**
+ * Drops groups whose projects are all hidden, judged over the subtree: a group with a listed project,
+ * a folder workspace or a kept child stays, and so does one with no projects yet (#38214).
+ */
+export function withoutHiddenProjectGroups<G extends Pick<ProjectGroup, 'id' | 'parentGroupId'>>({
+  projectGroups: groups,
+  repos = [],
+  folderWorkspaces
+}: {
+  projectGroups: readonly G[]
+  repos?: readonly Pick<Repo, 'projectGroupId' | 'hiddenAt'>[]
+  folderWorkspaces: readonly Pick<FolderWorkspace, 'projectGroupId'>[]
+}): readonly G[] {
+  if (groups.length === 0 || !repos.some(isRepoHidden)) {
+    return groups
+  }
+  const listedGroupIds = new Set(folderWorkspaces.map((folder) => folder.projectGroupId))
+  const hiddenGroupIds = new Set<string>()
+  for (const repo of repos) {
+    if (repo.projectGroupId) {
+      ;(isRepoHidden(repo) ? hiddenGroupIds : listedGroupIds).add(repo.projectGroupId)
+    }
+  }
+  const childrenById = groupedBy(groups, (group) => group.parentGroupId)
+  const droppedById = new Map<string, boolean>()
+  const isDropped = (group: G): boolean => {
+    const known = droppedById.get(group.id)
+    if (known !== undefined) {
+      return known
+    }
+    droppedById.set(group.id, false)
+    const children = childrenById.get(group.id) ?? []
+    const dropped =
+      !listedGroupIds.has(group.id) &&
+      (hiddenGroupIds.has(group.id) || children.length > 0) &&
+      children.every(isDropped)
+    droppedById.set(group.id, dropped)
+    return dropped
+  }
+  return groups.some(isDropped) ? groups.filter((group) => !isDropped(group)) : groups
 }
 
 /** Filter ids whose every copy is hidden select nothing visible; drop them rather than show an empty list. */
