@@ -200,6 +200,8 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
       {t('settings.about.action.check', 'Check')}
     </Button>
   )
+  // When only failed servers can act, the header names the same action as their rows.
+  const onlyFailed = eligible.length > 0 && eligible.every((entry) => entry.phase === 'failed')
   const allArmed = armed !== null && armed.serverId === null
   // Rows carry their own progress while updates run, so the header drops its control.
   const action = running ? null : eligible.length > 0 ? (
@@ -230,13 +232,21 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         <ServerRestartButton
           // One server reads as that server's own action, not "Update all" / "Restart 1?".
           label={
-            eligible.length === 1
-              ? t('settings.about.action.update', 'Update')
-              : t('settings.about.servers.updateAll', 'Update all')
+            onlyFailed
+              ? eligible.length === 1
+                ? t('auto.components.settings.RemoteServerUpdateDialog.retry', 'Retry')
+                : t('settings.about.servers.retryAll', 'Retry all')
+              : eligible.length === 1
+                ? t('settings.about.action.update', 'Update')
+                : t('settings.about.servers.updateAll', 'Update all')
           }
           restingName={
             eligible.length === 1
-              ? t('settings.about.servers.updateOne', 'Update {{name}}', { name: eligible[0].name })
+              ? onlyFailed
+                ? t('settings.about.servers.retryOne', 'Retry {{name}}', { name: eligible[0].name })
+                : t('settings.about.servers.updateOne', 'Update {{name}}', {
+                    name: eligible[0].name
+                  })
               : undefined
           }
           armedLabel={
@@ -289,6 +299,8 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         control={
           <div
             ref={actionRef}
+            // Keeps the header's height when updates hide its button, so the rows below don't jump.
+            className="flex min-h-8 items-center"
             onFocus={() => {
               actionHadFocus.current = true
             }}

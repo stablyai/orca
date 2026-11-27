@@ -101,7 +101,8 @@ function getPrimaryModel(
     return {
       line: { kind: 'install-on-quit' },
       action: act('quit'),
-      details: null,
+      // A failed restart still offers its error beside Quit; a staged download has none.
+      details: status.state === 'error' ? 'message' : null,
       notesVersion: null
     }
   }
@@ -193,9 +194,11 @@ function getPrimaryModel(
           notesVersion: null
         }
       }
-      const known = status.version ?? ctx.retainedVersion
+      // The host names the failed step when it knows it; older hosts leave only the version to go on.
+      const updateFailed =
+        status.failurePhase !== undefined || Boolean(status.version ?? ctx.retainedVersion)
       return {
-        line: { kind: 'failed', phase: known ? 'update' : 'check' },
+        line: { kind: 'failed', phase: updateFailed ? 'update' : 'check' },
         action,
         details: 'message',
         notesVersion: null

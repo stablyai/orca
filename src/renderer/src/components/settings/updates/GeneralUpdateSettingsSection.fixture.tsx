@@ -373,3 +373,42 @@ export const serversSamePrefixNarrow = narrow(
     false
   )
 )
+
+/** The automatic-restart explanation, shown on keyboard focus of the switch. */
+export const automaticUpdatesTooltip = about(
+  { state: 'not-available' },
+  {
+    interact: async (frame) => {
+      frame.querySelector<HTMLElement>('[role="switch"]')?.focus()
+      await wait(700)
+    }
+  }
+)
+export const automaticUpdatesTooltipNarrow = narrow(automaticUpdatesTooltip)
+
+/** A manual server's install procedure opens from its status. */
+export const serversManualHelp = about(
+  { state: 'not-available' },
+  {
+    interact: async (frame) => {
+      expand(frame, 'Servers')
+      await nextFrame()
+      clickButton(frame, 'Manual update')
+      await nextFrame()
+    }
+  }
+)
+export const serversManualHelpNarrow = narrow(serversManualHelp)
+
+/** A browser helper blocks the install; About names its process inline. */
+export const browserInstallBlock = about(
+  {
+    state: 'error',
+    version: NEXT,
+    message: 'Install blocked',
+    retryAction: 'install',
+    installBlock: { reason: 'running-instances', instances: [{ pid: 48213, kind: 'browser' }] }
+  },
+  { interact: (frame) => expand(frame, 'Show details') }
+)
+export const browserInstallBlockNarrow = narrow(browserInstallBlock)

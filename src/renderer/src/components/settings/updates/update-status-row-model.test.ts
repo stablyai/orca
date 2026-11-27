@@ -95,10 +95,30 @@ describe('getUpdateStatusRowModel', () => {
     ).toEqual({ kind: 'failed', phase: 'update' })
   })
 
-  it('offers Quit when macOS staged the update for a normal quit', () => {
+  // A host that reports the failed step is believed even without a version; only older hosts
+  // that omit it fall back to inferring the step from a known target.
+  it('takes the failed step from the host before inferring it from the version', () => {
+    for (const failurePhase of ['download', 'install'] as const) {
+      expect(
+        getUpdateStatusRowModel({ state: 'error', message: 'x', failurePhase }, ctx).line
+      ).toEqual({ kind: 'failed', phase: 'update' })
+    }
+    expect(getUpdateStatusRowModel({ state: 'error', message: 'x' }, ctx).line).toEqual({
+      kind: 'failed',
+      phase: 'check'
+    })
+  })
+
+  it('offers Quit when macOS staged the update for a normal quit, keeping a failure readable', () => {
     expect(
       row(
         { state: 'error', message: 'restart failed', installOnQuit: true },
+        { showManualRestart: true }
+      )
+    ).toEqual(['install-on-quit', 'quit', false, 'message'])
+    expect(
+      row(
+        { state: 'downloaded', version: '9.9.9', installOnQuit: true },
         { showManualRestart: true }
       )
     ).toEqual(['install-on-quit', 'quit', false, null])

@@ -153,7 +153,9 @@ export function ReleaseChannelSection(): React.JSX.Element {
         onOpenChange={setOpen}
         control={
           <Select
-            value={activeChannel}
+            // A synced override this platform can't run shows its fallback as a placeholder, so
+            // picking that fallback is a real change that clears the override.
+            value={activeChannel === requestedChannel ? activeChannel : ''}
             // Selecting the running channel clears the override so browsing cannot permanently pin background checks.
             onValueChange={(value) => {
               const channel = RELEASE_CHANNELS.find((candidate) => candidate === value)
@@ -163,7 +165,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
             }}
           >
             <SelectTrigger size="sm" aria-label={title}>
-              <SelectValue />
+              <SelectValue placeholder={getReleaseChannelLabel(activeChannel, t)} />
             </SelectTrigger>
             <SelectContent>
               {RELEASE_CHANNELS.map((channel) => {

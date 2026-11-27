@@ -37,7 +37,8 @@ export function AboutDisclosureRow({
             aria-expanded={open}
             aria-describedby={summary ? summaryId : undefined}
             onClick={() => onOpenChange(!open)}
-            className="col-start-1 row-start-1 flex min-w-0 items-center gap-3 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            // Hugs the chevron and label, with an inset ring, so its focus ring never reaches the summary.
+            className="col-start-1 row-start-1 -mx-1 -my-0.5 flex min-w-0 items-center gap-3 justify-self-start rounded-sm px-1 py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset"
           >
             <span aria-hidden className="grid w-7 shrink-0 place-items-center">
               <ChevronRight

@@ -1,6 +1,8 @@
 import type React from 'react'
 import { useId } from 'react'
 import { Check, CircleAlert, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
@@ -175,6 +177,20 @@ export function RemoteServerAboutRow({
             onDisarm={onDisarm}
             onConfirm={onConfirm}
           />
+        ) : entry.phase === 'manual' && help ? (
+          // The install procedure is a long, host-specific sentence; it opens from the status.
+          <span className="shrink-0 whitespace-nowrap text-settings-detail">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="link-muted" size="inlineInherit">
+                  {status}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="end" className="w-72">
+                <p className="text-settings-detail">{help}</p>
+              </PopoverContent>
+            </Popover>
+          </span>
         ) : status ? (
           <span className="shrink-0 whitespace-nowrap text-settings-detail text-muted-foreground tabular-nums">
             {status}

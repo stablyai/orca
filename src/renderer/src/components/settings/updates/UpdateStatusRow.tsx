@@ -87,6 +87,8 @@ function lineCopy(line: UpdateStatusLine, t: Translate, intlLocale: string): Lin
     case 'install-blocked':
       return {
         full: t('settings.about.status.installBlocked', 'Install blocked'),
+        // "Install blocked" plus its Details link would cut the status on the 256px card.
+        narrow: t('settings.about.status.blocked', 'Blocked'),
         tone: 'destructive'
       }
     case 'failed':
@@ -116,6 +118,15 @@ function detailsText(
         return null
       }
       const guidance = getUpdateInstallBlockGuidance(status.installBlock, t)
+      const { instances } = status.installBlock
+      // The card's guidance points at a process list that About doesn't show, so name it here.
+      if (instances.length > 0 && instances.every(({ kind }) => kind === 'browser')) {
+        return `${guidance.summary} ${t(
+          'settings.about.status.browserBlockGuidance',
+          'End the browser process (PID {{pids}}), then retry. Its server keeps running.',
+          { pids: instances.map(({ pid }) => pid).join(', ') }
+        )}`
+      }
       return `${guidance.summary} ${guidance.explainer}`
     }
     case 'unsupported-system':
@@ -177,7 +188,8 @@ export function UpdateStatusRow({
 
   return (
     <div className="@container/about-status">
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3">
+      {/* A tighter gap on the 256px card keeps the version clear of the widest action, Skip delay. */}
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 @max-xs/about-status:gap-x-2">
         <img
           src={iconUrl}
           alt=""
@@ -308,7 +320,10 @@ export function UpdateStatusRow({
           </div>
         ) : null}
       </div>
-      {showDetails ? <UpdateStatusDetails text={details} /> : null}
+      {showDetails ? (
+        // Raw updater errors keep their lines and scroll; written guidance wraps to the card.
+        <UpdateStatusDetails text={details} prose={model.details !== 'message'} />
+      ) : null}
     </div>
   )
 }
@@ -362,15 +377,9 @@ function UpdateStatusAction({
             'settings.updateDelay.skipDelayOnceHint',
             'Check for this release now. Your delay setting stays the same.'
           )}
-          aria-label={t('settings.about.action.skipDelay', 'Skip delay')}
           onClick={() => void window.api.updater.check({ ignoreUpdateDelay: true })}
         >
-          <span className="@max-xs/about-status:hidden">
-            {t('settings.about.action.skipDelay', 'Skip delay')}
-          </span>
-          <span className="hidden @max-xs/about-status:inline">
-            {t('settings.about.action.skip', 'Skip')}
-          </span>
+          {t('settings.about.action.skipDelay', 'Skip delay')}
         </Button>
       )
     case 'download':
