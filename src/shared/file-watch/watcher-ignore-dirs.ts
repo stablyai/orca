@@ -11,5 +11,7 @@ export const WATCHER_IGNORE_DIRS: string[] = [
   '__pycache__',
   '.dart_tool',
   '.gradle',
-  '.turbo'
+  '.turbo',
+  '.pytest_cache',
+  '.codegraph'
 ]
