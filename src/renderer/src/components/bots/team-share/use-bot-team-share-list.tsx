@@ -18,6 +18,7 @@ import {
 import {
   TeamShareConnectorPeople,
   useTeamShareConnectors,
+  teamShareConnectorMembers,
   type TeamShareFoundByConnector
 } from './BotTeamShareConnectorPeople'
 import { addBotTeamShare, removeBotTeamShare, resendBotTeamShare } from './bot-team-share-rpc'
@@ -49,6 +50,8 @@ export type BotTeamShareList = {
   onShareAgain: (person: Extract<TeamSharePerson, { kind: 'account' }>) => void
   /** Slack- and GitHub-only people from Who can ask, drawn after `people`; they also feed the search. */
   connectorRows: React.ReactNode
+  /** Someone besides the owner has access or an invite: an account, an invite or a connector member. */
+  othersListed: boolean
 }
 
 export function useBotTeamShareList(bot: Bot): BotTeamShareList {
@@ -114,9 +117,13 @@ export function useBotTeamShareList(bot: Bot): BotTeamShareList {
     setStaged((current) => current.filter((entry) => !saved.has(entry.suggestion.key)))
     setSharing(false)
   }
+  const people = teamSharePeople(bot.shares)
   return {
     owner,
-    people: teamSharePeople(bot.shares),
+    people,
+    othersListed:
+      people.length > 0 ||
+      connectors.some((entry) => teamShareConnectorMembers(bot, entry).length > 0),
     query,
     onQueryChange: setQuery,
     suggestions,

@@ -27009,7 +27009,8 @@
       "replyingOn": "Répond sur {{place}}",
       "waitingCount": "Événements en attente : {{count}}",
       "waitingFor": "Attend {{label}}",
-      "waitingForUntil": "Attend {{label}} · jusqu’à {{time}}"
+      "waitingForUntil": "Attend {{label}} · jusqu’à {{time}}",
+      "share": "Partager…"
     },
     "items": {
       "view": {

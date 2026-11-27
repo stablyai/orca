@@ -27,6 +27,7 @@ function Harness({
       hostName="this computer"
       owner={null}
       people={[]}
+      othersListed={false}
       query=""
       onQueryChange={() => {}}
       suggestions={null}

@@ -141,6 +141,7 @@ function Scene({
         hostName="Jinwoo’s MacBook Pro"
         owner={OWNER}
         people={people}
+        othersListed={people.length > 0}
         query={query}
         onQueryChange={setQuery}
         suggestions={query.trim() === '' ? null : (FOUND[query.trim()] ?? [])}

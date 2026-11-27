@@ -28006,7 +28006,8 @@
       "replyingOn": "Respondendo a {{place}}",
       "waitingCount": "Eventos pendentes: {{count}}",
       "waitingFor": "Aguardando {{label}}",
-      "waitingForUntil": "Aguardando {{label}} · até {{time}}"
+      "waitingForUntil": "Aguardando {{label}} · até {{time}}",
+      "share": "Compartilhar…"
     },
     "items": {
       "view": {

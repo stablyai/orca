@@ -27160,7 +27160,8 @@
       "replyingOn": "正在 {{place}} 上回覆",
       "waitingCount": "等待中的事件：{{count}}",
       "waitingFor": "正在等待 {{label}}",
-      "waitingForUntil": "正在等待 {{label}} · 直到 {{time}}"
+      "waitingForUntil": "正在等待 {{label}} · 直到 {{time}}",
+      "share": "共享…"
     },
     "items": {
       "view": {

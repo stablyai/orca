@@ -26758,7 +26758,8 @@
       "replyingOn": "Отвечает на {{place}}",
       "waitingCount": "Событий в ожидании: {{count}}",
       "waitingFor": "Ожидает {{label}}",
-      "waitingForUntil": "Ожидает {{label}} · до {{time}}"
+      "waitingForUntil": "Ожидает {{label}} · до {{time}}",
+      "share": "Поделиться…"
     },
     "items": {
       "view": {

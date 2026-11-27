@@ -2,7 +2,13 @@
 // service and hook), so a share is confirmed and saved, and a removal made, exactly as Who can ask does.
 import { useContext, useEffect, useEffectEvent } from 'react'
 import { cn } from '@/lib/class-names'
-import { botMemberSource, type Bot, type BotMember } from '../../../../../shared/bot-types'
+import {
+  botMemberSource,
+  gitHubMembersOf,
+  slackMembersOf,
+  type Bot,
+  type BotMember
+} from '../../../../../shared/bot-types'
 import type { BotConnectorEntry } from '../../../../../shared/bots/bot-connector-entries'
 import { useBotConnectorEntries } from '../bot-connector-entries'
 import { BotWhoCanAskSaveFailed, type BotWhoCanAskService } from '../BotWhoCanAskList'
@@ -39,6 +45,13 @@ export function useTeamShareConnectors(bot: Bot): PeopleEntry[] {
   return useBotConnectorEntries(bot).filter(
     (entry): entry is PeopleEntry => entry.kind === 'slack' || entry.kind === 'github'
   )
+}
+
+/** The people one connector's rows list: what its Who can ask service lists. */
+export function teamShareConnectorMembers(bot: Bot, entry: PeopleEntry): BotMember[] {
+  return entry.kind === 'slack'
+    ? slackMembersOf(bot, entry.teamId)
+    : gitHubMembersOf(bot.members, entry.installation?.installationId)
 }
 
 function withoutKey(found: TeamShareFoundByConnector, key: string): TeamShareFoundByConnector {
