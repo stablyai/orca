@@ -365,7 +365,7 @@ describe('Needs you asks kept open --while', () => {
     expect(told).toEqual([])
     withdrawals.tick(LATER + 60_000)
     await withdrawals.settled()
-    expect(told).toContain(first)
+    expect(told.filter((uid) => uid === first)).toEqual([first])
   })
 
   it('stays armed for an ask made while a minute was reading the open questions', async () => {
@@ -396,5 +396,42 @@ describe('Needs you asks kept open --while', () => {
     withdrawals.tick(LATER)
     await withdrawals.settled()
     expect(store.get(uid)!.status).toBe('working')
+  })
+
+  it('keeps a profile’s untold withdrawal when another profile is shown and then it again', async () => {
+    const first = open()
+    const second = open()
+    const uid = asked(first, { kind: 'until', at: LATER })
+    const told: string[] = []
+    let reads = 0
+    const stores: BotItemAskWithdrawalStore[] = [
+      {
+        ...remote(first),
+        viewRows: async (uids) => {
+          if (++reads === 1) {
+            throw new Error('busy')
+          }
+          return first.viewRows(uids)
+        }
+      },
+      remote(second)
+    ]
+    let current = 0
+    const withdrawals = new BotItemAskWithdrawals({
+      store: () => stores[current]!,
+      worker: () => 'unknown',
+      workerTitle: async () => new Map(),
+      changed: (items) => told.push(...items.map((item) => item.uid)),
+      sendOwedMail: async () => {}
+    })
+    withdrawals.tick(LATER)
+    await withdrawals.settled()
+    current = 1
+    withdrawals.tick(LATER + 60_000)
+    await withdrawals.settled()
+    current = 0
+    withdrawals.tick(LATER + 120_000)
+    await withdrawals.settled()
+    expect(told).toEqual([uid])
   })
 })

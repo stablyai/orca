@@ -221,7 +221,8 @@ export class BotItemsWrites extends BotItemsEdits {
         `SELECT items.uid, items.question_event, json_extract(item_events.data, '$.while') AS while_json
            FROM items JOIN item_events ON item_events.id = items.question_event
           WHERE items.status = 'needs_you'
-            AND json_extract(item_events.data, '$.while') IS NOT NULL`
+            AND json_extract(item_events.data, '$.while') IS NOT NULL
+          ORDER BY items.number`
       )
       .all()
       .flatMap((row) => {

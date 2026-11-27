@@ -79,13 +79,23 @@ export class BotItemAskWithdrawals {
   private running: Promise<void> | null = null
   private latest: number | null = null
   private state = freshState(null)
+  /** Each profile's state, so switching back finds what it still owed (mail, list notices). */
+  private readonly states = new WeakMap<BotItemAskWithdrawalStore, ProfileState>()
 
   constructor(private readonly deps: BotItemAskWithdrawalDeps) {}
 
   tick(now = Date.now()): void {
     const store = this.deps.store()
     if (store !== this.state.store) {
-      this.state = freshState(store)
+      const kept = store ? this.states.get(store) : undefined
+      if (kept) {
+        // Its items may have changed while another profile was shown.
+        kept.armed = true
+      }
+      this.state = kept ?? freshState(store)
+      if (store && !kept) {
+        this.states.set(store, this.state)
+      }
     }
     const { armed, unsent, untold, seeded } = this.state
     if (!armed && unsent.size === 0 && untold.size === 0 && seeded) {
