@@ -141,7 +141,7 @@ describe('the Ouro launch', () => {
 
   it('looks for the launcher in ~/.ouro-cli/bin', () => {
     expect(OURO_LAUNCH_SPEC.installDirectories({ env: {}, homePath: '/home/user' })).toEqual([
-      '/home/user/.ouro-cli/bin'
+      join('/home/user', '.ouro-cli', 'bin')
     ])
   })
 
