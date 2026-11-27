@@ -59,6 +59,14 @@ import { ANTIGRAVITY_ACCOUNT_METHODS } from './accounts/antigravity-accounts'
 import { ORCA_ACCOUNT_METHODS } from './orca-account'
 import { USAGE_CREDENTIAL_METHODS } from './accounts/usage-credentials'
 import { GITHUB_METHODS } from './source-control/github/github'
+import { ORCAD_MIGRATION_METHODS } from './orcad/orcad-migration'
+import { WORKSPACE_CLEANUP_RUNNER_METHODS } from './workspaces/workspace-cleanup-runner-methods'
+import { WORKTREE_ARCHIVE_METHODS } from './workspaces/worktree-archive-methods'
+import { AGENT_CONVERSATION_METHODS } from './agent-conversations/agent-conversation-methods'
+import { NOTIFICATION_METHODS } from './notifications/notifications'
+import { FILE_METHODS } from './files/files'
+import { GIT_METHODS } from './source-control/git/git'
+import { CLIPBOARD_METHODS } from './clipboard/clipboard'
 
 const CORE_RPC_METHODS = [
   ...EAGER_CORE_RPC_METHODS,
@@ -70,7 +78,11 @@ const CORE_RPC_METHODS = [
   ...MANAGED_RUNTIME_INSTALL_METHODS,
   ...AGENT_CLI_UPDATE_METHODS,
   ...PAIRED_SERVER_ASKS_METHODS,
-  ...REFERENCE_METHODS
+  ...REFERENCE_METHODS,
+  ...ORCAD_MIGRATION_METHODS,
+  ...WORKSPACE_CLEANUP_RUNNER_METHODS,
+  ...WORKTREE_ARCHIVE_METHODS,
+  ...AGENT_CONVERSATION_METHODS
 ] as const
 
 const SERVICE_RPC_METHODS = [
@@ -124,7 +136,11 @@ const SERVICE_RPC_METHODS = [
   ...ANTIGRAVITY_ACCOUNT_METHODS,
   ...ORCA_ACCOUNT_METHODS,
   ...USAGE_CREDENTIAL_METHODS,
-  ...GITHUB_METHODS
+  ...GITHUB_METHODS,
+  ...NOTIFICATION_METHODS,
+  ...FILE_METHODS,
+  ...GIT_METHODS,
+  ...CLIPBOARD_METHODS
 ] as const
 
 type ConcatMethods<A extends readonly unknown[], B extends readonly unknown[]> = readonly [
