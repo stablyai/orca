@@ -4030,9 +4030,6 @@
       "agentCouldNotStart": "無法啟動 {{label}}。請在「設定」中檢查代理程式的命令，然後再試一次。",
       "agentFailedToStart": "{{label}} 啟動失敗。請在「設定」中檢查代理程式的命令，然後再試一次。",
       "agentReportedError": "{{label}} 回報錯誤。",
-      "antigravityInvalidEvents": "Antigravity 傳回無效的 JSON 事件。",
-      "antigravityInvalidResult": "Antigravity 傳回無效的結果。",
-      "antigravityNoFinalResult": "Antigravity 未傳回最終結果。",
       "chatNameAgentUnsupported": "請在「設定 -> 聊天 -> 聊天名稱」中，為此操作選擇支援的聊天命名代理程式。支援的代理程式：{{agents}}，或選擇「自訂命令」。",
       "chatNameCustomCommandEmpty": "自訂命令為空白。請在「設定 -> 聊天 -> 聊天名稱」中新增。",
       "cliFailed": "{{label}} CLI 命令執行失敗，結束代碼為 {{exitCode}}。",
@@ -5116,9 +5113,50 @@
       },
       "wslDistroStopped": "WSL 發行版 {{distro}} 已停止，因此這次排程執行沒有啟動它。請啟動該發行版或使用「立即執行」；它執行期間，之後的排程會照常進行。",
       "botsOff": "設定中已關閉機器人，因此 Orca 略過了這次執行。",
+      "botsOffByTeam": "你的團隊已關閉機器人，因此 Orca 略過了這次執行。",
       "botMissing": "執行這個自動化的機器人已不存在。",
       "botFolderMissing": "機器人的資料夾已無法使用。",
       "botPaused": "{{bot}} 已暫停，因此 Orca 略過了這次執行。"
+    },
+    "botTarget": {
+      "fieldLabel": "機器人或專案",
+      "option": "機器人 · {{name}}",
+      "deletedBot": "已刪除的機器人",
+      "prompt": "它要做什麼？",
+      "promptMissing": "請輸入它要做什麼。",
+      "when": "執行時機",
+      "noSchedule": "僅由事件觸發",
+      "never": "從不",
+      "onEvents": "有事件發生時…",
+      "runsIn": "執行位置",
+      "runsInNew": "每次新增對話",
+      "chat": "{{name}} 的聊天",
+      "runsInUntitledChat": "未命名的聊天",
+      "agent": "代理程式",
+      "agentSameAsBot": "與 {{name}} 相同",
+      "agentInChat": "此聊天的代理程式",
+      "resultsTo": "結果傳送到",
+      "resultsToThread": "事件所在的討論串",
+      "resultsToChannel": "頻道",
+      "resultsToLinear": "Linear 議題",
+      "resultsToNone": "不傳送",
+      "channelPlaceholder": "#頻道名或 Slack 連結",
+      "channelLabel": "頻道",
+      "linearIssuePlaceholder": "議題編號（例如 ENG-123）或 Linear 連結",
+      "linearIssueLabel": "Linear 議題",
+      "channelMissing": "請輸入接收結果的頻道。",
+      "linearIssueInvalid": "請輸入接收結果的 Linear 議題，例如 ENG-123。",
+      "letBotReact": "讓 {{name}} 做出回應",
+      "letBotReactHelp": "每個結果都會開啟一個新回合，讓 {{name}} 據此採取行動。",
+      "time": "時間",
+      "minute": "分鐘",
+      "runs": "執行"
+    },
+    "botEvents": {
+      "label": "事件",
+      "editInChat": "在聊天中編輯",
+      "editDraft": "修改自動化「{{name}}」： ",
+      "addDraft": "修改自動化「{{name}}」，讓它在以下情況也執行： "
     },
     "eventsWontFire": "只會依排程執行：需要 {{connectors}} 連接器",
     "wontFire": "不會執行：需要 {{connectors}} 連接器"
@@ -5336,7 +5374,10 @@
     }
   },
   "bots": {
-    "section": {},
+    "section": {
+      "reorderTitle": "調整機器人順序",
+      "reorder": "調整順序…"
+    },
     "link": {
       "pairTitle": "配對電腦",
       "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",
@@ -5391,6 +5432,14 @@
       "effort": "推理強度",
       "modelDefault": "預設",
       "signInChanged": "Orca 登入已變更",
+      "whoCanAskName": "誰可以向 {{name}} 提問",
+      "you": "你",
+      "owner": "擁有者",
+      "soulAndMemory": "靈魂與記憶",
+      "memoryFiles_other": "{{count}} 個檔案",
+      "none": "無",
+      "readFailed": "無法載入",
+      "usingChatDefault": "使用你的聊天預設值。",
       "sameAsChatsDetail": "使用你的聊天權限設定。",
       "needsPermissionDetail": "當它或工作者需要你核准時。",
       "taskCompleteDetail": "討論串、自動化或工作者完成時。",
@@ -5416,14 +5465,16 @@
       "save": "儲存",
       "lookNow": "立即檢視",
       "notYet": "尚未",
-      "backToLookAround": "返回四處看看"
+      "backToLookAround": "返回四處看看",
+      "footer": "唯讀。每次四處檢視都會消耗你的代理程式方案額度。"
     },
     "connectorOffer": {
       "slack": "在 Slack 頻道和私信中與機器人聊天。",
       "google": "讓機器人在你的 Gmail、行事曆和 Drive 中工作，並在收到新郵件時啟動自動化。",
       "linear": "透過 @ 提及機器人或將議題分配給它來交辦工作，並在 Linear 事件發生時啟動自動化。",
       "github": "透過 @提及 給機器人派活，並在 GitHub 事件發生時啟動自動化。",
-      "heading": "連線服務"
+      "heading": "連線服務",
+      "connect": "連線 {{service}}"
     },
     "groups": {
       "group": "群組",
@@ -5441,9 +5492,32 @@
       "newThreadTab": "建立討論串",
       "newThreadHint": "重新開始",
       "newThread": "在 {{name}} 中建立討論串",
+      "peerReadItems": "{{bot}} 已讀取其項目的更新",
+      "remoteReplied": "已在 {{computer}} 上回覆",
+      "remoteNotice": "未在 {{computer}} 上回答",
+      "remoteNotSent": "未傳送到 {{computer}}",
+      "remoteUnknown": "送達狀態未知",
+      "remoteStopped": "已在此處停止",
+      "remoteSending": "正在 {{computer}} 上提問…",
+      "remoteAsked": "已在 {{computer}} 上提問",
+      "remoteMayAnswer": "可能仍會在 {{computer}} 上回答。",
+      "remoteShortened": "已縮短。完整回答在 {{computer}} 上。",
+      "needsLocalBot": "此群組至少需要一個位於這台電腦上的機器人。",
+      "remoteOnComputer": "請在 {{host}} 上的 Orca 中新增或移除其他電腦上的機器人。",
       "handoffsPaused": "移交 {{count}} 次後已暫停。回覆即可繼續。",
       "stopCouldNotBeConfirmed": "無法確認是否已停止。",
-      "notStarted": "尚未啟動"
+      "notStarted": "尚未啟動",
+      "workingCount_other": "{{count}} 個執行中",
+      "workingCount": "{{count}} 個執行中",
+      "memberCount_other": "{{count}} 個機器人",
+      "memberCount": "{{count}} 個機器人",
+      "moreCount_other": "另外 {{count}} 個",
+      "moreCount": "另外 {{count}} 個",
+      "andNames": "{{names}} 和 {{last}}",
+      "membersHere_other": "{{names}} 都在這裡。",
+      "membersHere": "{{names}} 都在這裡。",
+      "starting": "正在啟動…",
+      "peerReadReplyFrom": "{{reader}} 已讀取 {{peer}} 的回覆"
     },
     "templates": {
       "title": "機器人範本",
@@ -5466,9 +5540,24 @@
     "tidyUp": {
       "title": "記憶維護",
       "never": "尚未",
-      "backToTidyUp": "返回記憶維護"
+      "backToTidyUp": "返回記憶維護",
+      "footerShort": "只會更改記憶檔案。會消耗你的代理程式方案額度。",
+      "undoNoteShort": "將 MEMORY.md 恢復到這次整理之前的狀態。"
+    },
+    "search": {
+      "pausedMatches_other": "{{count}} 個已暫停的符合項目",
+      "showPausedAction": "顯示已暫停"
+    },
+    "list": {
+      "readFailed": "無法載入 {{host}} 上的機器人。"
     },
     "items": {
+      "chat": {
+        "anotherAgent": "另一個代理程式"
+      },
+      "status": {
+        "waiting": "等待中"
+      },
       "filter": {
         "clearAll": "清除篩選"
       },
@@ -5477,16 +5566,33 @@
         "notSent": "未傳送。",
         "retry": "重試",
         "discard": "放棄",
-        "mayHaveArrived": "可能已送達。"
+        "mayHaveArrived": "可能已送達。",
+        "replyingTo": "回覆：{{question}}。前往該問題"
       },
       "comment": {
-        "replyingTo": "回覆："
+        "replyingTo": "回覆：",
+        "hideReplyingTo": "隱藏"
+      },
+      "link": {
+        "automation": "自動化",
+        "automationOn": "會為此項目喚醒代理程式",
+        "automationEnded": "已結束"
       },
       "view": {
         "title": "項目",
         "placeOf": "第 {{index}} 個，共 {{total}} 個",
         "previous": "上一個項目",
         "next": "下一個項目"
+      },
+      "wait": {
+        "titleOne": "{{title}} 在等待什麼？",
+        "titleMany": "{{count}} 個項目在等待什麼？",
+        "keep": "取消",
+        "confirm": "設為等待中",
+        "offline": "{{host}} 已離線。你輸入的內容會保留；它重新上線後即可再次設為等待中。"
+      },
+      "empty": {
+        "allClear": "沒有需要你處理的項目，也沒有正在執行的工作"
       },
       "write": {
         "offline": "{{host}} 已離線。"
@@ -5504,7 +5610,118 @@
     },
     "needs": {
       "chat": "你與 {{name}} 的對話",
-      "access": "{{person}} 申請了存取權限"
+      "access": "{{person}} 申請了存取權限",
+      "fixConnector": "開啟 {{name}}",
+      "pairedAsk": "{{from}} 想傳訊息給 {{name}}",
+      "connectorFix": "登入或修正",
+      "questions": "{{count}} 個問題",
+      "signInApps": "登入 {{count}} 個應用程式",
+      "listSeparator": "、"
+    },
+    "chat": {
+      "mentionOwnChats": "你的其他聊天",
+      "mentionPaused": "已暫停",
+      "mentionPlaceholder": "隨心輸入，@ 提及機器人或檔案，/ 使用命令",
+      "mentionChatsLoadFailed": "無法載入聊天"
+    },
+    "access": {
+      "titleOne": "要授予 {{person}} 存取 {{name}} 的權限嗎？",
+      "titleMany": "要授予 {{count}} 人存取 {{name}} 的權限嗎？",
+      "place": "{{connector}}（{{workspace}}）",
+      "confirmWarning": "他們將以你的身分在 {{computer}} 上操作。",
+      "confirmComputer": "執行命令和更改檔案",
+      "confirmNoApprovals": "執行操作前不會先詢問",
+      "confirmMaySkipApprovals": "可能不先詢問就執行操作",
+      "confirmApproveOne": "{{person}} 可以核准它的權限請求",
+      "confirmApproveMany": "他們可以核准它的權限請求",
+      "confirmGoogle": "使用你的 Google 帳戶",
+      "confirmGitHub": "以你的身分在 GitHub 上留言和推送",
+      "confirmLinear": "以你的身分更新 Linear 議題",
+      "descriptionOne": "{{person}} 將可以從 {{place}} 向 {{name}} 提問，並透過它以你的身分在 {{computer}} 上工作：執行命令、開啟和更改檔案、使用你已連線的帳戶，以及核准它的請求。",
+      "account": "他們的 {{connector}} 帳戶：{{identity}}",
+      "yourAccess": "他們的請求使用的是你的存取權限，而不是他們自己的。{{name}} 在{{there}}能做的任何事，他們都可以讓它去做。",
+      "removeAnyTime": "你可以隨時將他們從「誰可以提問」中移除。",
+      "thisComputer": "此電腦",
+      "here": "這裡",
+      "thisServer": "此伺服器",
+      "executionComputer": "執行此代理程式的電腦",
+      "there": "那裡",
+      "confirm": "授予存取權限",
+      "heading": "存取申請",
+      "decline": "拒絕",
+      "review": "審查…",
+      "full": "請先移除一位成員，再新增 {{person}}。",
+      "decideFailed": "無法儲存你的答覆。請重試。",
+      "whoCanAsk": "誰可以向 {{name}} 提問",
+      "summaryOnlyYou": "只有你可以向 {{name}} 提問。",
+      "summaryOne": "你和 {{person}} 可以向 {{name}} 提問。",
+      "summarySome": "你、{{people}} 和 {{last}} 可以向 {{name}} 提問。",
+      "summaryMany": "你和其他 {{count}} 人可以向 {{name}} 提問。",
+      "controlNone": "你新增的任何人都可以透過 {{name}} 以你的身分在 {{computer}} 上工作：執行命令、開啟和更改檔案，以及使用你已連線的帳戶。",
+      "controlOne": "{{person}} 可以透過 {{name}} 以你的身分在 {{computer}} 上工作：執行命令、開啟和更改檔案，以及使用你已連線的帳戶。",
+      "controlMany": "他們可以透過 {{name}} 以你的身分在 {{computer}} 上工作：執行命令、開啟和更改檔案，以及使用你已連線的帳戶。",
+      "reachHeading": "{{name}} 可以存取的內容",
+      "reachComputer": "你在 {{computer}} 上的檔案、命令和帳戶",
+      "reachComputerDetail": "以你的身分，在下方權限允許的範圍內。",
+      "reachPermission": "新對話以「{{mode}}」模式開始",
+      "reachPermissionUnknown": "新對話按你的聊天權限設定開始",
+      "permissionFellBack": "{{agent}} 沒有「{{mode}}」模式，因此 {{name}} 使用「請求核准」模式。",
+      "codexAsk": "Codex 沙箱：請求獲得核准前為唯讀。",
+      "codexOwnSandbox": "Codex 使用其已設定的沙箱。",
+      "codexNoSandbox": "不使用 Codex 沙箱。",
+      "whoeverAskedApproves": "如果它請求核准，提問的人可以核准。",
+      "reachLinear": "以你的身分留言、更新和建立 Linear 議題",
+      "reachSlack": "以 {{name}} 的身分在 Slack 中傳送訊息",
+      "reachGitHub": "以你的身分在 GitHub 上留言、審查和推送",
+      "reachGoogleEmail": "讀取和傳送你的郵件",
+      "reachGoogleCalendar": "使用你的行事曆",
+      "reachGoogleDrive": "使用你的雲端硬碟檔案",
+      "reachGoogleDocs": "讀取和編輯你的 Google 文件",
+      "reachGoogleSheets": "讀取和編輯你的 Google 試算表",
+      "reachGoogleUnknown": "你的 Google 帳戶，在你登入時授權的範圍內",
+      "trust": "只新增你放心把鍵盤交給對方的人。",
+      "adviceHeading": "分享之前",
+      "fixOnlyMe": "讓 {{name}} 僅供你自己使用",
+      "fixOnlyMeDetail": "移除你在此處新增的人。",
+      "fixOnlyMeAction": "僅保留我",
+      "fixGoogle": "為 {{name}} 關閉 Google",
+      "fixGoogleDetail": "對所有人（包括你）生效，從它的下一次 Google 請求開始。",
+      "fixGoogleAction": "關閉",
+      "fixGoogleDone": "已為 {{name}} 關閉 Google。",
+      "fixAsk": "讓新對話以「請求核准」模式開始",
+      "fixAskDetail": "{{name}} 會在更多操作前先徵求核准。提問的人仍可核准。已開啟的對話保留原有權限。",
+      "fixAskDetailCodex": "之後 Codex 將以唯讀方式工作，直到請求獲得核准。提問的人仍可核准。已開啟的對話保留原有權限。",
+      "fixAskAction": "切換",
+      "fixOnlyMeConfirm": "要讓 {{name}} 僅供你自己使用嗎？",
+      "fixOnlyMeConfirmDetail": "{{people}} 將無法再向 {{name}} 提問。再次授予他們存取權限時會先徵求你的確認。",
+      "fixAskConfirm": "要讓新對話以「請求核准」模式開始嗎？",
+      "fixOnlyMeFailed": "無法移除 {{names}}。請重試。",
+      "fixAskDone": "新對話將以「請求核准」模式開始。",
+      "undo": "復原",
+      "separateBot": "為團隊單獨建立的機器人擁有自己的權限、Google 開關和工具。它仍會以你的身分在 {{computer}} 上執行。",
+      "newBot": "新增機器人…",
+      "whatTheyCanDo": "{{person}} 可以做什麼",
+      "reject": "拒絕",
+      "controlBrief": "他們可以在這裡以你的身分操作。",
+      "controlBriefIfAdded": "你新增的人可以在這裡以你的身分操作。",
+      "controlBriefOnHost": "他們可以在 {{computer}} 上以你的身分操作。",
+      "controlBriefIfAddedOnHost": "你新增的人可以在 {{computer}} 上以你的身分操作。",
+      "yourComputer": "你的電腦"
+    },
+    "accessDecide": {
+      "expired": "此請求已被回覆或已過期。",
+      "grantedNotAdded": "已授予存取權限，但 {{person}} 還未列出。Orca 會新增他們。",
+      "signedOut": "請在電腦上登入 Orca 以回覆請求。",
+      "whatTheyCanDoMany": "他們可以做什麼"
+    },
+    "tabs": {
+      "homeTitle": "主聊天"
+    },
+    "lookAroundEvery": {
+      "every4h": "每 4 小時一次，上午 8 點至晚上 8 點",
+      "every2h": "每 2 小時一次，上午 8 點至晚上 8 點",
+      "twiceDaily": "每天兩次，上午 8 點和下午 1 點",
+      "mornings": "每天上午 8 點"
     },
     "waits": {
       "cancel": "取消",
@@ -5543,7 +5760,8 @@
         "stopCancels_one": "用於已洩露的金鑰。它放行的 {{count}} 個等待中的呼叫會被取消。",
         "stopCancels_other": "用於已洩露的金鑰。它放行的 {{count}} 個等待中的呼叫會被取消。",
         "stopNote": "用於已洩露的金鑰。",
-        "done": "金鑰已輪換。請複製新的 URL。"
+        "done": "金鑰已輪換。請複製新的 URL。",
+        "action": "輪換"
       },
       "secret": {
         "add": "新增簽名金鑰…",
@@ -5560,6 +5778,9 @@
         "paste": "{{sender}} 金鑰",
         "save": "儲存",
         "saved": "簽名金鑰已儲存",
+        "copyInto": "請將其複製到 {{sender}} 的 Webhook 設定中。",
+        "title": "簽名金鑰",
+        "create": "建立",
         "changeOpen": "更改簽名金鑰…",
         "back": "返回簽名金鑰"
       },
@@ -5656,6 +5877,7 @@
         "unverifiable": "無法驗證",
         "unverifiableDetail": "無法連線 {{bot}} 的電腦"
       },
+      "copiedKey": "已複製金鑰",
       "back": "返回 Webhook"
     },
     "errors": {
@@ -5710,8 +5932,20 @@
       "colorPink": "粉色的",
       "nameLabel": "機器人名稱",
       "mascotN": "吉祥物 {{n}}/{{total}}",
+      "outfit": "裝扮",
+      "outfitNone": "無裝扮",
+      "outfitTie": "領帶",
+      "outfitDetective": "偵探",
+      "outfitHardHat": "安全帽",
+      "outfitReviewer": "審閱者",
+      "outfitNightShift": "夜班",
+      "outfitArtist": "藝術家",
+      "outfitScientist": "科學家",
+      "outfitParty": "派對",
+      "outfitSecurity": "保全",
       "tooBig": "該圖片超過 10 MB。",
       "tooSmall": "太小了。請使用至少 128 px 的圖片。",
+      "color": "顏色",
       "colorLavender": "薰衣草紫",
       "colorPeach": "蜜桃色",
       "colorButter": "奶油黃",
@@ -5791,6 +6025,28 @@
       "readOnly": "此處為唯讀。請在 {{agent}} 中更改。",
       "fromYours": "{{count}} 個來自你的 {{agent}}",
       "tryAgain": "重試",
+      "edit": "編輯",
+      "editTitle": "編輯工具",
+      "save": "儲存",
+      "reading": "正在讀取工具詳情…",
+      "url": "伺服器 URL",
+      "urlPlaceholder": "https://example.com/mcp",
+      "headers": "標頭",
+      "executable": "執行檔",
+      "commandPlaceholder": "npx",
+      "args": "引數",
+      "addArg": "新增引數",
+      "env": "環境變數",
+      "keyPlaceholder": "名稱",
+      "valuePlaceholder": "值",
+      "savedPlaceholder": "已儲存的值 · 輸入以取代",
+      "addHeader": "新增標頭",
+      "addVariable": "新增變數",
+      "show": "顯示",
+      "hide": "隱藏",
+      "nameTaken": "名為 {{name}} 的工具已存在。請換一個名稱。",
+      "useName": "使用 {{name}}",
+      "checkUnfinished": "原生檢查沒有完成。請重新檢查。",
       "signedInTo": "已登入 {{app}}",
       "back": "返回工具",
       "problem": "問題",
@@ -5817,7 +6073,8 @@
       "removeVariableRow": "移除變數",
       "emptyArgument": "空白",
       "valueNew": "新值",
-      "valueSaved": "已儲存"
+      "valueSaved": "已儲存",
+      "hostMcpServers": "你的 MCP 伺服器"
     },
     "handToBot": {
       "menu": "移交給機器人…",
@@ -5877,7 +6134,10 @@
     },
     "saveFailed": "無法儲存",
     "chats": {
-      "readFailedTitle": "無法載入聊天"
+      "readFailedTitle": "無法載入聊天",
+      "needsYouCount": "{{count}} 個需要你處理",
+      "open": "開啟",
+      "delete": "刪除聊天"
     },
     "panel": {
       "backTo": "返回 {{name}}"
@@ -5916,6 +6176,7 @@
       "toolCredentialsRaced": "機器人的工具憑證已在另一個 Orca 中變更。請重試。",
       "toolSourceManaged": "這個工具由 Orca 管理。請到你設定它的地方變更。",
       "toolValuesUnmoved": "有個工具仍保存著它的值。請重新開啟機器人的工具以移轉這些值。",
+      "googleAccountsChanged": "自你開啟後，它的 Google 帳戶已變更。請檢查後再儲存一次。",
       "toolCodexCheckFailed": "Codex 無法檢查或連線這些工具。請檢查它的設定後重試。",
       "toolCodexNoThread": "Codex 沒有啟動用於檢查工具的執行緒。",
       "toolSignInFolderFailed": "無法準備登入資料夾：{{detail}}",
@@ -5971,9 +6232,20 @@
       "groupReplierNotMember": "請在「聊天室回覆」中選擇一位目前的聊天室成員。",
       "groupMailNeverStarted": "這封郵件從未開始一輪對話。",
       "groupRemoteUnreachable": "無法連線到 {{host}}。{{detail}}",
-      "groupRemoteUnreachableRetry": "無法連線到 {{host}}。{{detail}} 重新發布即可重試。"
+      "groupRemoteUnreachableRetry": "無法連線到 {{host}}。{{detail}} 重新發布即可重試。",
+      "composioKeyCantCreateSessions": "此 Composio 金鑰無法建立工作階段。它需要 {{permission}}。",
+      "composioKeyNeedsPermission": "此 Composio 金鑰缺少一項權限。它需要 {{permission}}。",
+      "composioKeyMissingPermission": "此 Composio 金鑰缺少 Orca 需要的權限。"
+    },
+    "pairedServers": {
+      "heading": "已配對的伺服器",
+      "remove": "移除",
+      "removeServer": "移除 {{server}}",
+      "unnamed": "已配對的伺服器",
+      "footer": "它們的代理程式不需你核准即可提問。"
     },
     "automations": {
+      "viewRuns": "檢視執行記錄",
       "paused": "已暫停",
       "newDraft": "設定一個自動化，用來 "
     },
@@ -6040,11 +6312,164 @@
       }
     },
     "share": {
-      "signInOtherSite": "電腦傳來的是其他網站的登入連結，因此沒有開啟。"
+      "receive": {
+        "fromLink": "從連結建立",
+        "pasteDescription": "貼上別人分享的連結。",
+        "ask": "請求核准",
+        "askDetail": "從連結建立的機器人預設選用此項",
+        "full": "完全存取權限",
+        "fullDetail": "直接執行命令，無需詢問",
+        "chatsDetail": "初始採用你的聊天權限設定",
+        "origin": "來自 {{who}} 的連結",
+        "originAnonymous": "來自分享連結",
+        "back": "返回",
+        "continue": "繼續",
+        "linkPlaceholder": "https://app.orca.dev/bots/share/…",
+        "link": "連結",
+        "paste": "貼上",
+        "have": "你已擁有此機器人",
+        "haveDetail": "{{name}} · 建立於 {{date}}",
+        "open": "開啟",
+        "stopped": "此連結已失效",
+        "stoppedDetail": "請向分享者索取新連結。",
+        "sharedBot": "分享的機器人"
+      },
+      "binaryFile": "不是文字檔案，因此不顯示。",
+      "linkCopied": "連結已複製",
+      "copyFailed": "無法複製連結",
+      "previewChanged": "預覽已更改。請先檢視再發布。",
+      "movedHere": "此連結已在其他地方更新。",
+      "shareBot": "分享機器人…",
+      "countOf": "已選 {{picked}}/{{all}}",
+      "removeSecret": "移除機密資訊後才能發布",
+      "title": "分享機器人",
+      "noPurpose": "還沒有用途說明",
+      "linkStatusUnavailable": "無法檢查分享連結",
+      "updatedJustNow": "剛剛更新",
+      "publishedJustNow": "剛剛發布",
+      "description": "任何擁有連結的人都可以建立副本。",
+      "updatedAt": "更新於 {{date}}",
+      "upToDate": "已是最新",
+      "changedSince": "機器人此後已更改",
+      "copy": "複製",
+      "copyLink": "複製連結",
+      "secretFoundTitle": "發現機密資訊",
+      "secretWhere": "{{flag}}，位於 {{where}} 第 {{line}} 行",
+      "view": "檢視",
+      "nextUpdate": "下次更新",
+      "sameLink": "仍發布到同一連結。已建立的副本保持不變。",
+      "none": "無",
+      "soul": "靈魂",
+      "skills": "技能",
+      "automations": "自動化",
+      "tools": "工具",
+      "includeMemory": "包含記憶",
+      "notIncluded": "未包含",
+      "setupNote": "設定說明",
+      "add": "新增",
+      "safetyCheck": "安全檢查",
+      "done": "完成",
+      "waitingSignIn": "正在等待在瀏覽器中登入",
+      "signInFor": "讓 {{host}} 登入 Orca。",
+      "cancelSignIn": "取消登入",
+      "signIn": "請登入 Orca 以分享。",
+      "signInToPublish": "登入以發布",
+      "reload": "重新載入",
+      "updateLink": "更新連結",
+      "publishLink": "發布連結",
+      "previewFile": "預覽 {{name}}",
+      "outsideSkillWith": "來自 {{project}} 外 · {{description}}",
+      "outsideSkill": "來自 {{project}} 外",
+      "duplicateSkill": "同名，位於 {{folder}} · 不會分享",
+      "all": "全部",
+      "memoryLimit": "最多 {{count}} 個檔案",
+      "flagOnLine": "{{flag}}，位於第 {{line}} 行",
+      "memory": "記憶",
+      "review": {
+        "notIncluded": "未包含",
+        "reviewAgain": "重新檢查",
+        "accounts": "需要連線的帳戶",
+        "leftOut": "已排除",
+        "none": "無",
+        "byline": "{{who}} · {{date}} · 未經審查",
+        "someone": "某人",
+        "oneNote": "1 條筆記",
+        "notes": "{{count}} 條筆記",
+        "updated": "{{who}} 更新了此機器人。請重新檢查。",
+        "theSharer": "分享者",
+        "createBot": "建立機器人…",
+        "contact": "允許它存取 {{host}}",
+        "files": "{{count}} 個檔案",
+        "flagLine": "{{flag}}，第 {{line}} 行",
+        "off": "關閉",
+        "suggested": "建議 · {{when}}",
+        "memoryIndex": "它的記憶索引，包含分享的筆記",
+        "flagIn": "{{where}} 中：{{flag}}"
+      },
+      "lines": "{{count}} 行",
+      "backToSharing": "返回分享",
+      "backToLinks": "返回分享連結",
+      "manageLinks": "管理連結",
+      "notShared": "未分享",
+      "loadingLinks": "正在載入分享連結…",
+      "isShared": "{{name}} 已分享",
+      "stopSharing": "停止分享",
+      "stopTitle": "要停止分享 {{name}} 嗎？",
+      "stopDescription": "連結將失效。",
+      "stopping": "正在停止…",
+      "stopped": "已停止分享 {{name}}",
+      "moreActions": "{{name}} 的更多操作",
+      "noLinks": "沒有機器人連結。可在機器人的設定中分享它。",
+      "error": {
+        "blocked": "要分享的內容中發現了機密資訊。請移除後重試。",
+        "noteSecret": "設定說明中似乎包含機密資訊。請移除後重試。",
+        "expired": "此分享預覽已過期。請重新開啟「分享機器人」。",
+        "prepareAgain": "在此期間，此機器人已從另一個視窗分享。請重新開啟「分享機器人」。",
+        "stopped": "此連結已停用。發布即可產生新連結。",
+        "moved": "此連結已在其他地方更新。請重新開啟「分享機器人」檢視。",
+        "unavailable": "Orca Cloud 暫不支援分享機器人。",
+        "avatarRefused": "Orca Cloud 拒絕了此機器人的頭像。請換一張圖片後重試。",
+        "tooLarge": "此機器人太大，無法分享。請去掉部分記憶或技能後重試。"
+      },
+      "reconnect": "請重新登入 Orca 以分享。",
+      "flag": {
+        "secret": "機密資訊",
+        "pipeToShell": "執行下載的指令碼",
+        "sudo": "以系統管理員身分執行",
+        "sendsFile": "傳送檔案",
+        "hiddenUnicode": "隱藏字元",
+        "runnable": "可執行檔案"
+      },
+      "secretFound": "發現 1 項機密資訊",
+      "secretsFound": "發現 {{count}} 項機密資訊",
+      "oneWarning": "1 個警告",
+      "warnings": "{{count}} 個警告",
+      "nothingFound": "未發現問題",
+      "whereLine": "{{where}} 第 {{line}} 行",
+      "oneLine": "1 行",
+      "webhookNotShared": "Webhook · 未分享",
+      "commandNotShared": "命令 · 未分享",
+      "fileLinkNotShared": "含符號連結或硬連結 · 未分享",
+      "tooLargeNotShared": "過大 · 未分享",
+      "unreadableNotShared": "無法讀取 · 未分享",
+      "overLimitNotShared": "超出技能數量上限 · 未分享",
+      "linkNoLongerAvailable": "此分享連結已不可用。",
+      "signInOtherSite": "電腦傳來的是其他網站的登入連結，因此沒有開啟。",
+      "original": {
+        "sharedBy": "由 {{who}} 分享",
+        "viewOriginal": "檢視原始版本",
+        "originalGone": "已不可用"
+      },
+      "sameLinkShort": "已建立的副本保持不變。"
+    },
+    "settingsView": {
+      "sharing": "分享",
+      "sharingOn": "已開啟"
     },
     "settingsPage": {
       "off": "關閉",
       "lastLooked": "上次檢視 {{when}}",
+      "yesterdayAt": "昨天 {{time}}",
       "today": "今天",
       "yesterday": "昨天",
       "lastTidied": "上次整理 {{when}}"
@@ -6054,13 +6479,34 @@
       "continues": "將於 {{time}} 繼續",
       "hitLimit": "已達上限 · {{time}} 重設"
     },
+    "upcoming": {
+      "needsSignIn": "需要登入"
+    },
+    "memoryHistory": {
+      "tidyUp": "整理"
+    },
     "new": {
-      "purposeTooLongForHost": "{{host}} 上的 Orca 最多接受 200 個字元的用途說明。請縮短內容，或更新 {{host}} 上的 Orca。"
+      "purposeLabel": "身分",
+      "purposeTooLongForHost": "{{host}} 上的 Orca 最多接受 200 個字元的用途說明。請縮短內容，或更新 {{host}} 上的 Orca。",
+      "purposePlaceholder": "它是誰，負責做什麼",
+      "noAgent": "無",
+      "noChatAgents": "{{host}} 上沒有可用的聊天代理程式。"
     }
   },
   "sidebar": {
     "cardSlot": {
       "working": "執行中"
+    }
+  },
+  "chats": {
+    "delete": {
+      "title": "要刪除這個聊天嗎？",
+      "descriptionHost": "它會從 {{host}} 永久刪除。此動作無法復原。",
+      "action": "刪除",
+      "failed": "無法刪除聊天",
+      "groupRoom": "無法刪除群組聊天室的聊天",
+      "home": "無法刪除受管代理程式的主聊天",
+      "workerOwed": "仍有編排工作在等待此聊天"
     }
   },
   "mcpServers": {

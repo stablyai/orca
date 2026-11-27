@@ -5,11 +5,13 @@ import { dirname } from '@/lib/path'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
+import type { RuntimeFileListState } from '@/components/file-actions/quick-open/quick-open-file-list'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { RightSidebarExplorerView } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import { FileExplorerTreeStatus } from './FileExplorerTreeStatus'
 import { FileExplorerVirtualRows } from '../panel/FileExplorerVirtualRows'
 import { canShowAddAsProjectAction } from '../navigation/file-explorer-add-project-action'
+import type { FileExplorerNameFilterProjectionSource } from './file-explorer-name-filter-projection'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { useFileExplorerSelection } from '../selection/useFileExplorerSelection'
 import type { useFileExplorerTree } from './useFileExplorerTree'
@@ -21,9 +23,12 @@ type FileExplorerFilesTreePaneProps = {
   activeRepo: Repo | null
   worktreePath: string | null
   displayRootPath: string | null
-  /** 'search' while results cover the tree; it stays mounted to keep scroll position and caches. */
   explorerView: RightSidebarExplorerView
   activeFileId: string | null
+  hasNameFilter: boolean
+  nameFilterSource: FileExplorerNameFilterProjectionSource | null
+  nameFilterFiles: RuntimeFileListState
+  handleExpandNameFilterDir: (dirPath: string) => void
   tree: ReturnType<typeof useFileExplorerTree>
   selection: ReturnType<typeof useFileExplorerSelection>
   paneState: ReturnType<typeof useFileExplorerTreePaneState>
@@ -43,6 +48,10 @@ export function FileExplorerFilesTreePane({
   displayRootPath,
   explorerView,
   activeFileId,
+  hasNameFilter,
+  nameFilterSource,
+  nameFilterFiles,
+  handleExpandNameFilterDir,
   tree,
   selection,
   paneState,
@@ -105,14 +114,23 @@ export function FileExplorerFilesTreePane({
 
   // Keep the root mounted in loading/error/empty states so it can always own OS file drops.
   const isEmptyState = visibleRowCount === 0 && !inlineInput
+  const isNameFilterLoading = nameFilterSource?.relativePaths === null
   const isRootLoading = !rootCache || (!!displayRootPath && loadingDirPaths.has(displayRootPath))
-  const isLoading = isEmptyState && isRootLoading
-  const treeError = displayRootPath ? (rootCache?.error ?? null) : rootError
+  const isLoading = isEmptyState && (hasNameFilter ? isNameFilterLoading : isRootLoading)
+  const treeError = hasNameFilter
+    ? nameFilterFiles.loadError
+    : displayRootPath
+      ? (rootCache?.error ?? null)
+      : rootError
   const hasError = isEmptyState && !isLoading && treeError !== null
   const showTree = !isEmptyState
   // Retry cannot succeed while WSL hosts are off; offer the switch instead.
   const wslHostsTurnedOff = hasError && wslHostUnavailable === 'turned-off'
   const wslHostStopped = hasError && stoppedWslHost !== null
+  const emptyMessage =
+    hasNameFilter && !nameFilterFiles.loadError
+      ? t('auto.components.right.sidebar.FileExplorer.2f4483d6c4', 'No files match this filter')
+      : undefined
 
   return (
     <ScrollArea
@@ -147,6 +165,7 @@ export function FileExplorerFilesTreePane({
     >
       {treeError !== null &&
         !isLoading &&
+        !hasNameFilter &&
         displayRootPath &&
         !wslHostsTurnedOff &&
         !wslHostStopped && (
@@ -166,6 +185,7 @@ export function FileExplorerFilesTreePane({
           isLoading={isLoading}
           error={hasError ? treeError : null}
           isEmpty={isEmptyState && !isLoading && !hasError}
+          emptyMessage={emptyMessage}
           scopedToFolder={!!displayRootPath && displayRootPath !== worktreePath}
           wslHostsTurnedOff={wslHostsTurnedOff}
           stoppedWslHost={stoppedWslHost}
@@ -189,7 +209,7 @@ export function FileExplorerFilesTreePane({
           statusByRelativePath={statusByRelativePath}
           ignoredByRelativePath={ignoredByRelativePath}
           expanded={rowExpandedPaths}
-          canCollapseFolderSubtree
+          canCollapseFolderSubtree={!hasNameFilter}
           loadingDirPaths={loadingDirPaths}
           selectedPaths={selectedPaths}
           activeFileId={activeFileId}
@@ -217,9 +237,11 @@ export function FileExplorerFilesTreePane({
           onMoveDrop={handleMoveDrop}
           onDragTargetChange={setDropTargetDir}
           onDragSourceChange={setDragSourcePath}
-          onDragExpandDir={handleDragExpandDir}
+          onDragExpandDir={hasNameFilter ? handleExpandNameFilterDir : handleDragExpandDir}
           onNativeDragTargetChange={setNativeDropTargetDir}
-          onNativeDragExpandDir={handleNativeDragExpandDir}
+          onNativeDragExpandDir={
+            hasNameFilter ? handleExpandNameFilterDir : handleNativeDragExpandDir
+          }
           dropTargetDir={dropTargetDir}
           dragSourcePath={dragSourcePath}
           nativeDropTargetDir={nativeDropTargetDir}

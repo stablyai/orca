@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { getExplorerTreeView } from '@/store/slices/right-sidebar/right-sidebar-route'
 import type React from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
@@ -53,7 +52,7 @@ export function useFileExplorerKeys(opts: {
 }): void {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
-  const rightSidebarExplorerView = useAppStore(getExplorerTreeView)
+  const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const keybindings = useAppStore((s) => s.keybindings)
 
   const rowProjectionRef = useRef(opts.rowProjection)
