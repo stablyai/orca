@@ -78,8 +78,8 @@ describe('the host-automations rewrite step', () => {
       if (store?.side !== 'main') {
         throw new Error('expected a main-side store')
       }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store reads only the cutover.
       const pass = Promise.resolve(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store reads only the cutover.
         store.run({ cutover } as unknown as WslMoveDesktopRewriteContext)
       )
       const outcome = pass.then(
@@ -131,8 +131,8 @@ describe('the host-automations rewrite step', () => {
         throw new Error('expected a main-side store')
       }
 
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store reads only the cutover.
       const firstPass = Promise.resolve(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store reads only the cutover.
         store.run({ cutover } as unknown as WslMoveDesktopRewriteContext)
       ).then(
         () => 'finished',
