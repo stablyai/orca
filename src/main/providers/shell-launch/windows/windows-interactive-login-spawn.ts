@@ -44,7 +44,9 @@ function buildPidRelayScript(
     `$Arguments = @(${encodedArgs})`,
     `[IO.File]::WriteAllText((Read-OrcaValue '${encodeUtf8(pidFilePath)}'), [string]$PID)`,
     '& $Command @Arguments',
-    '$OrcaExitCode = if ($null -eq $LASTEXITCODE) { 0 } else { $LASTEXITCODE }',
+    // Only a waited native program sets $LASTEXITCODE. A missing command leaves it unset, and so does
+    // an extensionless shim handed to ShellExecute, where $? is still true: neither is a success.
+    '$OrcaExitCode = if ($null -eq $LASTEXITCODE) { 1 } else { $LASTEXITCODE }',
     `[IO.File]::WriteAllText((Read-OrcaValue '${encodeUtf8(exitCodeFilePath)}'), [string]$OrcaExitCode)`,
     'exit $OrcaExitCode'
   ].join('; ')

@@ -37,7 +37,12 @@ const WORKER_ENV_ALLOWLIST = [
   'APPDATA',
   'LOCALAPPDATA',
   // The profile Orca runs from (a path, not a credential), so a worker's `orca` CLI reaches this app.
-  'ORCA_USER_DATA_PATH'
+  'ORCA_USER_DATA_PATH',
+  // The user's TLS trust settings (paths and a flag, not credentials), so corporate CAs verify.
+  'NODE_EXTRA_CA_CERTS',
+  'NODE_USE_SYSTEM_CA',
+  'SSL_CERT_FILE',
+  'SSL_CERT_DIR'
 ] as const
 
 export function buildPluginWorkerEnv(
