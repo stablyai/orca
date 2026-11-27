@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { computeLapsedManualUnreadProtections } from '@/attention/agent-attention-acknowledgement'
+import { startOnScreenAttentionScan } from '@/attention/on-screen-attention-scan'
 import { useAppStore } from '@/store/index'
 import { collectCancelledStructuredSessionIds } from '@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement'
 import * as runtimeRpc from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -10,12 +11,18 @@ import {
 } from '@/runtime/web-session-tabs-sync/tracking/tracking'
 import { UI_STORAGE_KEY } from '@/web/preload-api/web-storage'
 import { writeWebChatReadMarkEdits } from '@/web/preload-api/preferences/web-chat-read-mark-storage'
-import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import {
+  chatPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { hostSnapshotAffirmsAgentSessions } from '../../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import type { RuntimeMobileSessionAgentTab } from '../../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { PersistedUIState } from '../../../../../../shared/orca-profiles/persisted-ui-state-types'
-import { AcceptedAgentStatuses } from '../status-ownership/accepted-agent-statuses'
+import {
+  AcceptedAgentStatuses,
+  acceptedAgentStatuses
+} from '../status-ownership/accepted-agent-statuses'
 import { diffPersistedUIWriteFields } from '../../ui/persisted-ui-write-baseline'
 import { createUIStore, makePersistedUI } from '../../ui/ui-slice-test-harness'
 import {
@@ -227,6 +234,88 @@ it('keeps an on-screen chat protected by the matching hash and lapses it on swit
     expect(
       readWebChatMark(marks.store.getState(), 'manuallyUnreadTurnsByPaneKey', CHAT)
     ).toBeUndefined()
+  }
+})
+
+it('keeps copied unread protection when the chat opens through a view with no active subject', () => {
+  const turn = 70
+  const protection = { [OLD]: turn, [CHAT]: turn }
+  const { store } = load({
+    manuallyUnreadTurnsByPaneKey: protection,
+    chatReadMarksCopiedHere: true
+  })
+  vi.stubGlobal('document', { visibilityState: 'visible', hasFocus: () => true })
+  const chatId = structuredAgentSessionTabId(CHAT_TAB.sessionId)
+  const terminalId = 'terminal-tab'
+  const group = {
+    id: 'group',
+    worktreeId: 'w1',
+    activeTabId: terminalId,
+    tabOrder: [terminalId, chatId]
+  }
+  const terminal = {
+    id: terminalId,
+    entityId: terminalId,
+    groupId: group.id,
+    worktreeId: group.worktreeId,
+    contentType: 'terminal' as const,
+    label: 'Terminal',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+  store.setState({
+    activeView: 'terminal',
+    activeWorktreeId: null,
+    activeGroupIdByWorktree: {},
+    groupsByWorktree: { w1: [group] },
+    unifiedTabsByWorktree: {
+      w1: [
+        terminal,
+        {
+          ...terminal,
+          id: chatId,
+          entityId: CHAT_TAB.sessionId,
+          contentType: 'agent-session',
+          agentSessionAgent: CHAT_TAB.agent,
+          label: CHAT_TAB.title,
+          sortOrder: 1
+        }
+      ]
+    },
+    terminalLayoutsByTabId: {},
+    agentStatusByPaneKey: acceptedAgentStatuses([
+      [
+        CHAT,
+        {
+          paneKey: CHAT,
+          state: 'done',
+          prompt: '',
+          stateStartedAt: turn,
+          updatedAt: turn,
+          stateHistory: []
+        }
+      ]
+    ]),
+    unreadTerminalTabs: {},
+    unreadTerminalPanes: {},
+    readOnScreenAttention: () => {}
+  })
+  const stop = startOnScreenAttentionScan(store, {
+    readDesktopAway: null,
+    subscribeStructuredViews: () => () => {},
+    subscribePresenceSignals: () => () => {}
+  })
+  try {
+    // The workspace is revealed before the chat tab is selected; the terminal has no active leaf.
+    store.setState({ activeWorktreeId: 'w1' })
+    store.setState({ groupsByWorktree: { w1: [{ ...group, activeTabId: chatId }] } })
+
+    expect(store.getState().manuallyUnreadTurnsByPaneKey).toEqual(protection)
+    expect(store.getState().acknowledgedAgentsByPaneKey[CHAT]).toBeUndefined()
+  } finally {
+    stop()
   }
 })
 
