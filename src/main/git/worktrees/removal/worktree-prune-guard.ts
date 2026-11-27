@@ -52,20 +52,25 @@ async function pruneWithForeignEntriesLocked(
   adminRoot: string,
   runsInWsl: boolean
 ): Promise<void> {
-  const locked = await lockForeignWorktreeEntries(adminRoot, runsInWsl)
+  // Set before the first write, so a read that fails mid-loop still gives back what it locked.
+  const locked: string[] = []
   try {
+    await lockForeignWorktreeEntries(adminRoot, runsInWsl, locked)
     await gitExecFileAsync(['worktree', 'prune'], options)
   } finally {
     await Promise.all(locked.map((lockFile) => rm(lockFile, { force: true })))
   }
 }
 
-/** Returns the lock files this module owns now; an entry the user locked is left alone. */
+/**
+ * Appends the lock files this module owns now; an entry the user locked is left alone. Appends as
+ * it goes so a rejection partway through leaves the caller a list to unlock.
+ */
 async function lockForeignWorktreeEntries(
   adminRoot: string,
-  runsInWsl: boolean
-): Promise<string[]> {
-  const locked: string[] = []
+  runsInWsl: boolean,
+  locked: string[]
+): Promise<void> {
   for (const { entry, link } of await readWorktreeLinks(adminRoot)) {
     if (!isForeignLink(link, runsInWsl)) {
       continue
@@ -85,7 +90,6 @@ async function lockForeignWorktreeEntries(
       locked.push(lockFile)
     }
   }
-  return locked
 }
 
 /**

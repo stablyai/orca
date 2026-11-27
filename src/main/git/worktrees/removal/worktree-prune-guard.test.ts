@@ -1,22 +1,33 @@
 // An unreadable worktree record must refuse the prune: `prune` deletes exactly the records this read exists to guard.
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import type * as NodeFs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const gitExecFileAsync = vi.hoisted(() => vi.fn())
+// The un-mocked `readFile`, for assertions and for an override that only intercepts one path.
+const actualReadFile = vi.hoisted(() => ({
+  fn: null as null | ((path: string, encoding: 'utf8') => Promise<string>)
+}))
 const fileOverrides = vi.hoisted(() => ({
   readdir: null as null | ((path: string) => Promise<string[]>),
-  readFile: null as null | ((path: string) => Promise<string>)
+  readFile: null as null | ((path: string) => Promise<string>),
+  writeFile:
+    null as null | ((path: string, content: string, options: { flag?: string }) => Promise<void>)
 }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  const actual = await importOriginal<typeof NodeFs>()
+  actualReadFile.fn = actual.readFile as typeof actualReadFile.fn
   return {
     ...actual,
     readdir: (path: string) => fileOverrides.readdir?.(path) ?? actual.readdir(path),
     readFile: (path: string, encoding: 'utf8') =>
-      fileOverrides.readFile?.(path) ?? actual.readFile(path, encoding)
+      fileOverrides.readFile?.(path) ?? actual.readFile(path, encoding),
+    writeFile: (path: string, content: string, options: { flag?: string }) =>
+      fileOverrides.writeFile?.(path, content, options) ??
+      actual.writeFile(path, content, options)
   }
 })
 vi.mock('../../command-runner/git-exec-file', () => ({ gitExecFileAsync }))
@@ -40,6 +51,7 @@ beforeEach(async () => {
   gitExecFileAsync.mockResolvedValue({ stdout: '', stderr: '' })
   fileOverrides.readdir = null
   fileOverrides.readFile = null
+  fileOverrides.writeFile = null
 })
 
 afterEach(async () => {
@@ -47,7 +59,7 @@ afterEach(async () => {
 })
 
 async function addRecord(name: string, link: string): Promise<void> {
-  await mkdir(join(root, name))
+  await mkdir(join(root, name), { recursive: true })
   await writeFile(join(root, name, 'gitdir'), link)
 }
 
@@ -83,4 +95,22 @@ it('the prune runs when every record reads', async () => {
   gitExecFileAsync.mockResolvedValueOnce({ stdout: root, stderr: '' })
   await pruneGitWorktrees(pruneOptions, 'win32')
   expect(gitExecFileAsync).toHaveBeenCalledWith(['worktree', 'prune'], expect.anything())
+})
+
+it('a lock written before a later write fails does not outlive the refused prune', async () => {
+  const adminRoot = join(root, 'worktrees')
+  await addRecord('worktrees/first', '/home/repo/.git/worktrees/first/.git')
+  await addRecord('worktrees/second', '/home/repo/.git/worktrees/second/.git')
+  // A `locked` entry that exists but cannot be read fails the write with EACCES, not EEXIST.
+  await mkdir(join(adminRoot, 'second', 'locked'))
+  fileOverrides.readFile = (path: string) =>
+    path === join(adminRoot, 'second', 'locked')
+      ? Promise.reject(fileError('EACCES'))
+      : actualReadFile.fn!(path, 'utf8')
+  gitExecFileAsync.mockResolvedValueOnce({ stdout: root, stderr: '' })
+  await expect(pruneGitWorktrees(pruneOptions, 'win32')).rejects.toThrow('EACCES')
+  await expect(actualReadFile.fn!(join(adminRoot, 'first', 'locked'), 'utf8')).rejects.toThrow(
+    'ENOENT'
+  )
+  expect(gitExecFileAsync).toHaveBeenCalledTimes(1)
 })
