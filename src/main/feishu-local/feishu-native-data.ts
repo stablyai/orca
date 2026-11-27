@@ -15,6 +15,7 @@ export const nativeResponse = z.object({
   workers: z.array(z.string()).optional(),
   report: z.literal(true).optional(),
   resumed: z.literal(true).optional(),
+  failed: z.literal(true).optional(),
   messages: z.array(z.object({ id: z.string(), text: z.string() })),
   tools: z.array(nativeStep)
 })

@@ -237,7 +237,12 @@ export class FeishuResponseStore {
           change.value.completedAt !== undefined
         ) {
           response.final = response.native.messages.at(-1)?.text ?? ''
-          response.phase = 'done'
+          response.phase = change.value.failed
+            ? 'failed'
+            : response.workersRunning
+              ? 'working'
+              : 'done'
+          data.text = change.value.failed ? '处理失败' : '已完成'
         }
         break
       case 'begin':

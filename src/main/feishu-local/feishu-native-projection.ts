@@ -118,6 +118,9 @@ export class FeishuNativeProjection {
     if (resumed?.length) {
       native.resumed = true
     }
+    if (latest.turn.outcome && latest.turn.outcome !== 'success') {
+      native.failed = true
+    }
     const continuations: string[] = (resumed?.slice(1) ?? []).map((stamp) => stamp.deliveryId)
     const ordered = [...this.items.values()].sort(
       (a, b) => a.sequence - b.sequence || (a.sequenceIndex ?? 0) - (b.sequenceIndex ?? 0)

@@ -98,6 +98,7 @@ it('routes a native restart claim back to its saved response without trusting te
     const recovered = store.getCard(account, id)!
     expect(recovered.message).toBe('same-message')
     expect(cardData.parse(JSON.parse(recovered.body)).response?.final).toBe('Recovered result')
+    expect(cardData.parse(JSON.parse(recovered.body)).text).toBe('已完成')
     expect(store.getCard(account, newer)).toEqual(before)
     const opener = projection.items.get('resume')!
     if (opener.body.kind === 'message') {
