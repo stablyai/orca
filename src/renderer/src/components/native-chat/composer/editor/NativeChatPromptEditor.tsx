@@ -4,6 +4,7 @@ import {
   nativeChatDraftPositions,
   hasUnsavedNativeChatComposerDraftChange
 } from '../../drafts/native-chat-composer-draft-memory'
+import { applyNativeChatPromptTextChange } from './native-chat-prompt-text-change'
 import { createPromptTextPositionTracking } from './native-chat-prompt-text-position'
 import { resolveNativeChatPastedText } from '../../paste/native-chat-composer-pasted-text-references'
 import { NativeChatPastedTextScopeProvider } from './native-chat-pasted-text-state'
@@ -245,6 +246,7 @@ function NativePromptEditor({
             trackTextPosition: (offset, changed) =>
               textPositions.track(editor.state.doc, offset, changed),
             insertAgentReferences: (references) => insertAgentReferences(editor, references),
+            applyTextChange: (change) => applyNativeChatPromptTextChange(editor, change),
             insertText: (text) => {
               const content = editor.schema.nodeFromJSON(promptTextContent(text))
               editor.view.dispatch(

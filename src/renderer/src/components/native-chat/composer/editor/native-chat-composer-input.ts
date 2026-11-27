@@ -3,6 +3,7 @@ import {
   agentReferenceToken,
   type OrchestrationAgentReference
 } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
+import type { NativeChatTextChange } from './native-chat-markdown-list-lines'
 import type { HTMLAttributes, RefObject } from 'react'
 import { linkedSelectionText } from '../../paste/native-chat-pasted-links'
 import { toLfPastedText } from '@/lib/clipboard/clipboard-line-endings'
@@ -41,6 +42,8 @@ export type NativeChatComposerInput = Pick<
   insertFileReferences?: (paths: string[]) => void
   /** One user paste transaction; ordinary history retains the replaced rich selection. */
   stagePastedText?: (token: string) => void
+  /** Applies text edits and the resulting selection as one undo step. */
+  applyTextChange?: (change: NativeChatTextChange) => void
   /** True only for collapsed carets at the first/last visual line, including wraps. */
   isCaretOnVisualEdge?: (edge: 'start' | 'end') => boolean
 }

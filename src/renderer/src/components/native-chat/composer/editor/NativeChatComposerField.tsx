@@ -128,7 +128,10 @@ export function NativeChatComposerField({
       onKeyDown(event)
     }
   })
+  // Why: lets Cmd/Ctrl+B reach the composer's bold chord instead of toggling the sidebar.
+  const editorFocus = useLatestHandler(() => window.api.ui.setMarkdownEditorFocused(true))
   const editorBlur = useLatestHandler(() => {
+    window.api.ui.setMarkdownEditorFocused(false)
     const compositionWasActive = imeEnterGesture.isComposing()
     imeEnterGesture.reset()
     if (compositionWasActive) {
@@ -262,6 +265,7 @@ export function NativeChatComposerField({
               sideChat={sideChat}
               onChange={editorChange}
               onKeyDownCapture={editorKeyDownCapture}
+              onFocus={editorFocus}
               onBlur={editorBlur}
               onCompositionStart={editorCompositionStart}
               onCompositionEnd={editorCompositionEnd}

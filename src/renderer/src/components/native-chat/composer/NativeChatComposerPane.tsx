@@ -329,6 +329,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       activeSuggestion,
       draft,
       recall: editSession ? undefined : recall.recall,
+      getInput: () => textareaRef.current,
       isComposing: imeEnterGesture.isComposing,
       completePickerItem: editSession ? chooseEditItem : goalMode.interceptPick(completeItem),
       dispatchPickerCommand: editSession
