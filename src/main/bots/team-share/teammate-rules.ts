@@ -19,9 +19,12 @@
 //     the chat's stamp (`chatTabPerson`: whom it acts for, written once when it starts), the host's
 //     own terminals and saved tabs `HOST_STATE_PERSON`. `homeTabListOf` names the list it lands in:
 //     a teammate's own in their agent's Home, the host's everywhere else, so the owner's list only
-//     ever takes owner writes. A teammate's Home list holds chats; `homeTabs.hostList` methods are
-//     refused at admission when they name the teammate's Home. Reads and streams use the device's
-//     list (`tabOwnerOf`). The census test checks every write's person source.
+//     ever takes owner writes. A teammate's Home list holds their chats and the terminals and browser
+//     tabs they open there: each runs on the host, and their list holding it is its stamp, written
+//     before it starts, so no host list or window shows it (`withoutPersonSurfaces`). Other
+//     `homeTabs.hostList` methods are refused at admission when they name the teammate's Home.
+//     Reads and streams use the device's list (`tabOwnerOf`). The census test checks every write's
+//     person source.
 //  5. Name and asker. A teammate is named by their share row's `name`, and every chat or turn they start
 //     acts for them (`botShareAsker`).
 import classes from '../../runtime/rpc/callers/teammate-method-classes.json'

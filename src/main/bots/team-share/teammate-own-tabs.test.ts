@@ -31,6 +31,7 @@ import { makeTestBot } from '../bot.test-fixture'
 import { structuredAgentSessionCreateFingerprint } from '../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { setRuntimeDesktopSurface } from '../../runtime/construction/runtime-desktop-surface'
+import { getRuntimeBrowserPageRegistry } from '../../runtime/browser/client-pages/runtime-browser-page-registry'
 
 const TEAMMATE = { botId: 'bot-1', accountId: 'usr_mate' }
 const SCOPE: BotShareCallerScope = {
@@ -402,9 +403,7 @@ it('never returns to a closed tab when it opens again, after a restart too (#502
 
 it('refuses a host-list tab write in a teammate’s own Home', async () => {
   const r = await rig()
-  const refused = await r.send('mate-desk', 'session.tabs.createTerminal', {
-    worktree: `id:${r.workspace}`
-  })
+  const refused = await r.send('mate-desk', 'terminal.create', { worktree: `id:${r.workspace}` })
   expect(refused).toMatchObject({ ok: false, error: { code: 'not_found' } })
   expect(await r.hostChats()).toEqual([])
 })
@@ -733,4 +732,139 @@ it('closes a deleted chat’s tab in every person’s list, on every device', as
   expect(await r.hostChats()).toEqual([O])
   const saved = r.profile.getMobileClientTabSelections()[teammateTabListKey(TEAMMATE)]
   expect(saved?.[r.workspace]?.personTabs ?? []).toEqual([])
+})
+
+/** The host's terminals start as its daemon's do: each spawn a live process, a kill its exit. */
+function startTerminalsOnTheHost(r: Awaited<ReturnType<typeof rig>>) {
+  r.runtime['graphStatus'] = 'ready'
+  r.runtime.setPtyController({
+    spawn: async () => ({ id: `pty-${randomUUID()}` }),
+    write: () => true,
+    kill: (ptyId) => {
+      void r.runtime.onPtyExit(ptyId, 0)
+      return true
+    },
+    getForegroundProcess: async () => null
+  })
+}
+
+/** A page a computer hosts for the host, published when that computer answers, as the browser
+ *  engine does; the routing, stamp and lists around it are the real ones. */
+function hostPagesOnTheCallersComputer(r: Awaited<ReturnType<typeof rig>>) {
+  vi.spyOn(r.runtime, 'browserTabCreate').mockImplementation(async (params, caller) => {
+    const browserPageId = params.page ?? randomUUID()
+    getRuntimeBrowserPageRegistry(r.runtime).publishClientPage({
+      browserPageId,
+      workspaceId: r.workspace,
+      browserProfileId: 'default',
+      executionHostKey: 'native',
+      placement: {
+        kind: 'client',
+        browserHostClientId: `${caller?.pairedDeviceId}-host`,
+        browserHostGeneration: 1,
+        pageHostGeneration: 1
+      },
+      pairedDeviceId: caller?.pairedDeviceId ?? 'host',
+      url: params.url ?? 'about:blank',
+      loading: false,
+      active: true
+    })
+    r.runtime.notifyMobileSessionTabsChanged(r.workspace)
+    return { browserPageId }
+  })
+}
+
+const openTerminal = async (r: Awaited<ReturnType<typeof rig>>, deviceId: string) =>
+  z
+    .object({
+      // Ready to attach: the client streams it by this handle.
+      tab: z.looseObject({
+        id: z.string(),
+        ptyId: z.string(),
+        status: z.literal('ready'),
+        terminal: z.string()
+      })
+    })
+    .parse(await r.call(deviceId, 'session.tabs.createTerminal', { worktree: `id:${r.workspace}` }))
+    .tab
+const openBrowser = async (r: Awaited<ReturnType<typeof rig>>, deviceId: string) =>
+  z.object({ browserPageId: z.string() }).parse(
+    await r.call(deviceId, 'browser.tabCreate', {
+      worktree: `id:${r.workspace}`,
+      url: 'https://example.com',
+      placement: { kind: 'client', browserHostClientId: `${deviceId}-host` }
+    })
+  ).browserPageId
+const tabIds = (tabs: Tabs) => tabs.tabs.map((tab) => tab.id)
+/** The owner's tab lists in the Home: their devices' and the host's own, with what each has picked. */
+const ownerTabs = async (r: Awaited<ReturnType<typeof rig>>) => {
+  const host = await r.runtime.listMobileSessionTabs(r.workspace)
+  return Object.fromEntries(
+    [
+      ['owner-desk', await r.list('owner-desk')],
+      ['owner-phone', await r.list('owner-phone')],
+      ['host', host]
+    ].map(([name, tabs]) => [
+      name,
+      { tabs: tabIds(tabs as Tabs), active: (tabs as Tabs).activeTabId }
+    ])
+  )
+}
+
+it('opens a teammate’s terminal and browser tab in the agent’s Home in their own list alone', async () => {
+  const r = await rig()
+  startTerminalsOnTheHost(r)
+  hostPagesOnTheCallersComputer(r)
+  await r.reveal('owner-desk', O)
+  // The owner's own terminal there, as before.
+  const owners = await openTerminal(r, 'owner-desk')
+  const before = await ownerTabs(r)
+  expect(tabIds(await r.list('owner-phone'))).toContain(owners.id)
+
+  const terminal = await openTerminal(r, 'mate-desk')
+  const page = await openBrowser(r, 'mate-desk')
+  await chatTabCommandsSettled()
+
+  expect(tabIds(await r.list('mate-phone'))).toEqual([terminal.id, page])
+  expect(await ownerTabs(r)).toEqual(before)
+  expect(tabIds(await r.list('other-desk'))).toEqual([])
+
+  // Closing one closes it in their list only, and ends it.
+  await r.call('mate-desk', 'session.tabs.close', {
+    worktree: `id:${r.workspace}`,
+    tabId: terminal.id,
+    reason: 'user'
+  })
+  await chatTabCommandsSettled()
+  expect(tabIds(await r.list('mate-phone'))).toEqual([page])
+  expect(r.runtime['ptysById'].get(terminal.ptyId)?.connected).not.toBe(true)
+  expect(await ownerTabs(r)).toEqual(before)
+  await r.call('mate-desk', 'session.tabs.close', {
+    worktree: `id:${r.workspace}`,
+    tabId: page,
+    reason: 'user'
+  })
+  expect(tabIds(await r.list('mate-desk'))).toEqual([])
+  await vi.waitFor(() =>
+    expect(getRuntimeBrowserPageRegistry(r.runtime).getPage(page)).toBeUndefined()
+  )
+  expect(await ownerTabs(r)).toEqual(before)
+})
+
+it('brings a teammate’s terminal back in their own list alone after a host restart', async () => {
+  const r = await rig()
+  startTerminalsOnTheHost(r)
+  const terminal = await openTerminal(r, 'mate-desk')
+  await chatTabCommandsSettled()
+
+  const fresh = await rig({ opened: await physicalReload(r) })
+  // The daemon kept the process: the restarted host reattaches it.
+  fresh.runtime.registerPty(terminal.ptyId, fresh.workspace)
+  await chatTabCommandsSettled()
+
+  expect(tabIds(await fresh.list('mate-phone'))).toEqual([terminal.id])
+  expect(tabIds(await fresh.list('owner-desk'))).toEqual([])
+  expect(fresh.runtime['holdsPersonTerminal'](terminal.ptyId)).toBe(true)
+  await fresh.runtime.onPtyExit(terminal.ptyId, 0)
+  expect(tabIds(await fresh.list('mate-phone'))).toEqual([])
 })

@@ -265,6 +265,9 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerMode
       } else {
         // Why: permanent process exit is absence, not a starting/sleeping tab.
         // Retire before publishing so paired clients never persist a ghost.
+        this.forgetPersonSurface(
+          (surface) => surface.kind === 'terminal' && surface.ptyId === ptyId
+        )
         try {
           retirement = this.retireMobileSessionSurfacesForPty(
             ptyId,

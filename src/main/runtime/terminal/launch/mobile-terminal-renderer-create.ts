@@ -108,6 +108,9 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     if (opts.signal?.aborted) {
       throw new Error('client_disconnected')
     }
+    if (opts.personList) {
+      return await this.createPersonTerminal(opts.personList, workspace, cwd, startupCommand, opts)
+    }
     if (opts.clientMutationId && startupCommand.command && startupCommand.launchAgent === 'qoder') {
       const clientIdentity = opts.clientNavigationId ?? 'local'
       const seed = `${clientIdentity}\0${worktreeId}\0${opts.clientMutationId}`

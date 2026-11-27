@@ -161,7 +161,7 @@ describe('a teammate’s own Home tab list (rule 4)', () => {
       }))
     // The Home tab write API: each takes the person (`person`, `personOf` or `people`) as a required field.
     const writes =
-      /\b(publishStructuredAgentSessionTab|activateMobileSessionTab|closeMobileSessionTab|refuseUnattributedMobileSessionTabClose|closeChatTabs|commitStructuredAgentSessionCreate)\(/g
+      /\b(publishStructuredAgentSessionTab|activateMobileSessionTab|closeMobileSessionTab|refuseUnattributedMobileSessionTabClose|closeChatTabs|commitStructuredAgentSessionCreate|createMobileSessionTerminal|createSessionBrowserTab)\(/g
     // Sources: the caller's scope at a handler, a chat's stamp, the host's own state; or the field
     // of a function that took one of those (its own callers are in this census too).
     const source =

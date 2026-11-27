@@ -40,6 +40,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     if (this.mobileSessionTabListeners.size === 0) {
       return
     }
+    this.republishPersonSurfaceLists(worktreeId)
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
       return
