@@ -1,23 +1,40 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
-/** Open state and summary for a worktree's include/exclude filters. */
+/** Open state, summary and region id for a worktree's include/exclude filters. */
 export function useSearchFiltersDisclosure(
   worktreeId: string | null,
   includePattern: string,
   excludePattern: string
-): { filtersOpen: boolean; filterSummary: string; onToggleFilters: () => void } {
+): {
+  queryRow: {
+    filtersOpen: boolean
+    filterSummary: string
+    filtersRegionId: string
+    onToggleFilters: () => void
+  }
+  filters: { open: boolean; regionId: string }
+} {
+  const regionId = useId()
   const filterSummary = [
     includePattern.trim(),
     excludePattern.trim() && `!${excludePattern.trim()}`
   ]
     .filter(Boolean)
     .join(', ')
-  // Why: each worktree opens with its filters shown only if it has some.
-  const [state, setState] = useState({ worktreeId, open: filterSummary.length > 0 })
-  const filtersOpen = state.worktreeId === worktreeId ? state.open : filterSummary.length > 0
+  const hasFilters = filterSummary.length > 0
+  const [state, setState] = useState({ worktreeId, open: hasFilters })
+  // Why: each visit to a worktree starts open only if it has filters, as the old remount did.
+  if (state.worktreeId !== worktreeId) {
+    setState({ worktreeId, open: hasFilters })
+  }
+  const open = state.worktreeId === worktreeId ? state.open : hasFilters
   return {
-    filtersOpen,
-    filterSummary,
-    onToggleFilters: () => setState({ worktreeId, open: !filtersOpen })
+    queryRow: {
+      filtersOpen: open,
+      filterSummary,
+      filtersRegionId: regionId,
+      onToggleFilters: () => setState({ worktreeId, open: !open })
+    },
+    filters: { open, regionId }
   }
 }

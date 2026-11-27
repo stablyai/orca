@@ -5,6 +5,7 @@ import { useTranslate } from '@/i18n/use-translate'
 
 export type SearchFiltersProps = {
   open: boolean
+  regionId?: string
   includePattern: string
   excludePattern: string
   onIncludeChange: (value: string) => void
@@ -16,6 +17,7 @@ export type SearchFiltersProps = {
 /** Include/exclude inputs; the query field owns the toggle that opens them. */
 export function SearchFilters({
   open,
+  regionId,
   includePattern,
   excludePattern,
   onIncludeChange,
@@ -32,7 +34,7 @@ export function SearchFilters({
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {t('fileSearch.filters.active', '{{count}} active', { count: activeCount })}
       </span>
-      <CollapsibleContent animation="height">
+      <CollapsibleContent id={regionId} animation="height">
         <div className="space-y-2 pt-2">
           <label className="flex flex-col gap-1">
             <span className="text-2xs text-muted-foreground">

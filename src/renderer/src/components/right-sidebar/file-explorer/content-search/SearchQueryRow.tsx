@@ -27,6 +27,7 @@ export type SearchQueryRowProps = {
   filtersOpen: boolean
   /** Include/exclude patterns in effect, e.g. "src/**, !dist/**"; empty when none. */
   filterSummary: string
+  filtersRegionId?: string
   onQueryChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   onKeyDown: (e: React.KeyboardEvent) => void
   onClearSearch: () => void
@@ -45,6 +46,7 @@ export function SearchQueryRow({
   useRegex,
   filtersOpen,
   filterSummary,
+  filtersRegionId,
   onQueryChange,
   onKeyDown,
   onClearSearch,
@@ -128,8 +130,9 @@ export function SearchQueryRow({
             <Regex className="size-3.5" />
           </ToggleButton>
           <ToggleButton
-            active={filtersOpen || hasFilters}
+            highlighted={filtersOpen || hasFilters}
             ariaExpanded={filtersOpen}
+            ariaControls={filtersRegionId}
             onClick={onToggleFilters}
             title={hasFilters ? `${filtersLabel} (${filterSummary})` : filtersLabel}
           >

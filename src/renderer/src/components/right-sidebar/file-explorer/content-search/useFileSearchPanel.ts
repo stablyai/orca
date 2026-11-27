@@ -291,10 +291,10 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
         updateActiveSearchState({ useRegex: !fileSearchUseRegex })
         rerunSearch()
       },
-      ...filtersDisclosure
+      ...filtersDisclosure.queryRow
     },
     filtersProps: {
-      open: filtersDisclosure.filtersOpen,
+      ...filtersDisclosure.filters,
       includePattern: fileSearchIncludePattern,
       excludePattern: fileSearchExcludePattern,
       includeInputRef,
