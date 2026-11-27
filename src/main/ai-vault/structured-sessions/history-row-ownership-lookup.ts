@@ -43,6 +43,29 @@ export function historyRowOwnershipLookup():
   }
 }
 
+export type HistoryRowWithOwner<Row> = {
+  row: Row
+  ownership: StructuredProviderSessionOwnership | null
+}
+
+/** Every conversation a chat held opens and deletes that one chat, so it lists once: its head row, else its first. */
+export function oneRowPerChat<Row>(rows: readonly HistoryRowWithOwner<Row>[]): Row[] {
+  const kept = new Map<string, { index: number; head: boolean }>()
+  rows.forEach(({ ownership }, index) => {
+    if (!ownership) {
+      return
+    }
+    const head = ownership.role === 'head'
+    const current = kept.get(ownership.sessionId)
+    if (!current || (head && !current.head)) {
+      kept.set(ownership.sessionId, { index, head })
+    }
+  })
+  return rows.flatMap(({ row, ownership }, index) =>
+    !ownership || kept.get(ownership.sessionId)?.index === index ? [row] : []
+  )
+}
+
 /** Whether a deleted chat held the row's conversation: Orca never lists or resumes it again. */
 export function historyRowOfDeletedChat():
   | ((row: { agent: string; sessionId: string }) => boolean)

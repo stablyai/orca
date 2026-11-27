@@ -262,9 +262,14 @@ export function recognizeAgentProcessFromCommandLine(
   const viaEntrypoint = PYTHON_PROCESS_RE.test(firstNormalized)
     ? recognizePythonEntrypoint(tokens, entrypoint)
     : (recognizeAgentProcess(entrypoint) ?? recognizeNodeScriptEntrypoint(entrypoint))
+  const entrypointArg = tokens[tokens.indexOf(entrypoint, 1) + 1]
+  // Node ZCode re-runs its entrypoint as `__zcode-plugin-host <server.js>` to serve plugin MCP; those children are not the TUI.
+  if (viaEntrypoint?.agent === 'zcode' && entrypointArg === '__zcode-plugin-host') {
+    return null
+  }
   if (
     viaEntrypoint?.agent === 'claude-agent-teams' &&
-    tokens[tokens.indexOf(entrypoint, 1) + 1]?.toLowerCase() !== 'claude-teams'
+    entrypointArg?.toLowerCase() !== 'claude-teams'
   ) {
     return null
   }
