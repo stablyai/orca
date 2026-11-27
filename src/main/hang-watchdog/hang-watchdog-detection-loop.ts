@@ -18,8 +18,8 @@ export type HangWatchdogDetectionLoopConfig = {
 
 export type HangWatchdogDetectionLoop = {
   recordHeartbeat: () => void
-  /** Main relayed a suspend, so it answered then; the silence that follows is the machine's. */
-  recordSuspend: () => void
+  /** Main relayed a suspend or resume, so it answered then; silence after a suspend is the machine's until main answers again. */
+  recordPowerEvent: (event: 'suspend' | 'resume') => void
   tick: () => void
 }
 
@@ -34,6 +34,8 @@ export function createHangWatchdogDetectionLoop(
   let detected: 'stall' | 'hang' | null = null
   // A heartbeat received while the tick was overdue came after the wake; the overdue tick keeps it.
   let wokeHeartbeat = false
+  // A sleep shorter than sleepGapMs leaves no tick gap, so after a suspend only main's next answer restarts the clock.
+  let awaitingWake = false
   return {
     recordHeartbeat: () => {
       const now = config.now()
@@ -50,18 +52,25 @@ export function createHangWatchdogDetectionLoop(
       } else if (detected) {
         detected = null
         config.onHangResolved(silentMs)
-      } else if (stallMs !== null && silentMs > stallMs && now - lastTickAt <= sleepGapMs) {
+      } else if (
+        !awaitingWake &&
+        stallMs !== null &&
+        silentMs > stallMs &&
+        now - lastTickAt <= sleepGapMs
+      ) {
         // A tick-gap reset already moved lastHeartbeatAt past any sleep, so this silence was main's.
         config.onStallMissed?.(silentMs, lastHeartbeatAt)
       }
       wokeHeartbeat ||= now - lastTickAt > sleepGapMs
+      awaitingWake = false
       lastHeartbeatAt = now
     },
-    recordSuspend: () => {
+    recordPowerEvent: (event) => {
       if (detected) {
         detected = null
         config.onEpisodeEndedBySleep?.()
       }
+      awaitingWake = event === 'suspend'
       lastHeartbeatAt = config.now()
     },
     tick: () => {
@@ -87,6 +96,14 @@ export function createHangWatchdogDetectionLoop(
       }
       if (detected === 'hang') {
         return
+      }
+      if (awaitingWake) {
+        if (now - lastHeartbeatAt <= config.timeoutMs + sleepGapMs) {
+          return
+        }
+        // Main never answered: count it unresponsive, less the longest sleep a tick cannot see.
+        awaitingWake = false
+        lastHeartbeatAt += sleepGapMs
       }
       const unresponsiveMs = now - lastHeartbeatAt
       if (unresponsiveMs > config.timeoutMs) {

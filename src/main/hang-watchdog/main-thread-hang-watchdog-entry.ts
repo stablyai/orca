@@ -261,9 +261,11 @@ export function runWatchdog(
       recentPower = [...recentPower, receipt].slice(-4)
       if (receipt.event === 'suspend') {
         sleepPeriod = { suspend: receipt, resumeAt: null }
-        loop.recordSuspend()
       } else if (receipt.event === 'resume' && sleepPeriod) {
         sleepPeriod.resumeAt = receipt.observedAt
+      }
+      if (receipt.event === 'suspend' || receipt.event === 'resume') {
+        loop.recordPowerEvent(receipt.event)
       }
       if (
         receiptWindow &&
