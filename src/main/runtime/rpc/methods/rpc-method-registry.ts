@@ -40,6 +40,7 @@ import { PAIRING_METHODS } from './pairing/pairing'
 import { MOBILE_RELAY_HOSTS_METHODS } from './pairing/mobile-relay-hosts'
 import { MOBILE_PROJECT_SECTIONS_METHODS } from './mobile-delivery/mobile-project-sections'
 import { MOBILE_WEB_BUNDLE_METHODS } from './mobile-delivery/mobile-web-bundle'
+import { ORCHESTRATION_METHODS } from './orchestration/orchestration'
 
 const CORE_RPC_METHODS = [
   ...EAGER_CORE_RPC_METHODS,
@@ -86,7 +87,8 @@ const SERVICE_RPC_METHODS = [
   ...PAIRING_METHODS,
   ...MOBILE_RELAY_HOSTS_METHODS,
   ...MOBILE_PROJECT_SECTIONS_METHODS,
-  ...MOBILE_WEB_BUNDLE_METHODS
+  ...MOBILE_WEB_BUNDLE_METHODS,
+  ...ORCHESTRATION_METHODS
 ] as const
 
 type ConcatMethods<A extends readonly unknown[], B extends readonly unknown[]> = readonly [
