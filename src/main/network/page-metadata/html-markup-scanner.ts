@@ -33,11 +33,14 @@ function findCommentEnd(html: string, from: number): number {
 }
 
 function findRawTextEnd(html: string, name: string, from: number, xml: boolean): number {
-  const end = new RegExp(`${xml ? '<!--|<!\\[CDATA\\[|' : ''}</${name}(?=[\\t\\n\\f\\r />])`, 'gi')
+  const end = new RegExp(
+    `${xml ? '<!--|<!\\[CDATA\\[|<\\?|' : ''}</${name}(?=[\\t\\n\\f\\r />])`,
+    'gi'
+  )
   end.lastIndex = from
   let boundary = end.exec(html)
   while (xml && boundary && !boundary[0].startsWith('</')) {
-    const delimiter = boundary[0] === '<!--' ? '-->' : ']]>'
+    const delimiter = boundary[0] === '<?' ? '?>' : boundary[0] === '<!--' ? '-->' : ']]>'
     const close = html.indexOf(delimiter, end.lastIndex)
     if (close === -1) {
       return -1

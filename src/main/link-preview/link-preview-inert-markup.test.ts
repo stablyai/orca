@@ -50,7 +50,9 @@ it('keeps XHTML script boundaries distinct from HTML raw-text scripts', () => {
   for (const text of [
     '<![CDATA[const example = "<!-- <script>";]]>',
     '<![CDATA[const example = "<!-- <script></script><title>Hidden</title>";]]>',
-    '<!-- <script></script><title>Hidden</title> -->'
+    '<!-- <script></script><title>Hidden</title> -->',
+    '<?probe <!-- ?>',
+    '<?probe </script><title>Hidden</title> ?>'
   ]) {
     const html =
       `<script>${text}</script>` +
@@ -64,7 +66,7 @@ it('keeps XHTML script boundaries distinct from HTML raw-text scripts', () => {
       iconHref: '/xml.ico'
     })
   }
-  for (const opener of ['<![CDATA[', '<!--']) {
+  for (const opener of ['<![CDATA[', '<!--', '<?probe ']) {
     const html = `<script>${opener}</script><title>Still hidden</title>`
     expect(readLinkPreviewMetadata(html, pageUrl, 'application/xhtml+xml').title).toBeNull()
   }
