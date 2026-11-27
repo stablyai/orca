@@ -6,6 +6,7 @@ import { Blocks } from 'lucide-react-native'
 import { botLinearWorkspaces, botMembersFrom, botSlackApps } from '../../../../src/shared/bot-types'
 import {
   botConnectorEntries,
+  botToolAppSignsIn,
   type BotConnectorEntry
 } from '../../../../src/shared/bots/bot-connector-entries'
 import { botConnectorTitleLine } from '../../../../src/shared/bots/bot-connector-titles'
@@ -310,9 +311,13 @@ export function connectorRows(input: ConnectorRowsInput): ReactNode[] {
           <ToolRow
             key={entry.key}
             title={title}
-            // As the desktop's: a listed app that signs in in a browser reads as signed in once checked.
+            // As the desktop's: a browser sign-in app reads as signed in once checked, unless its
+            // saved values mean nothing signs in.
             line={
-              entry.app?.signIn === 'browser' && !entry.problem && input.tools?.problems != null
+              entry.app?.signIn === 'browser' &&
+              botToolAppSignsIn(entry) &&
+              !entry.problem &&
+              input.tools?.problems != null
                 ? t('bots.tools.face.signedIn', 'Signed in')
                 : entry.app
                   ? botMcpAppLine(entry.app, t)
