@@ -71,6 +71,18 @@ it('a missing records folder is nothing to guard', async () => {
   await expect(readWorktreeLinks(join(root, 'worktrees'))).resolves.toEqual([])
 })
 
+it('a missing records folder under an unreadable common directory refuses the prune', async () => {
+  const commonDir = join(root, 'common')
+  fileOverrides.readdir = (path: string) =>
+    path === commonDir ? Promise.reject(fileError('EACCES')) : Promise.reject(fileError('ENOENT'))
+  await expect(readWorktreeLinks(join(commonDir, 'worktrees'))).rejects.toThrow('EACCES')
+})
+
+it('a missing common directory is still nothing to guard', async () => {
+  fileOverrides.readdir = () => Promise.reject(fileError('ENOENT'))
+  await expect(readWorktreeLinks(join(root, 'gone', 'worktrees'))).resolves.toEqual([])
+})
+
 it('a stray file in the records folder stays prunable', async () => {
   await writeFile(join(root, 'stray.txt'), 'not a record')
   await expect(readWorktreeLinks(root)).resolves.toEqual([])

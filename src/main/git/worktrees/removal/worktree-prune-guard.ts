@@ -1,6 +1,6 @@
 // Windows and WSL Git cannot resolve each other’s worktree links; lock foreign entries during prune to preserve their metadata.
 import { readdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { isAbsolute, join } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 import {
   isDrvfsLinuxPath,
   toWindowsWslDrivePath,
@@ -93,15 +93,16 @@ async function lockForeignWorktreeEntries(
 }
 
 /**
- * Each linked worktree's admin entry and its `gitdir` link; none when the folder is missing.
- * Throws when a record cannot be read: a listing that failed must not read as "nothing to guard",
- * because `prune` deletes exactly the entries this read exists to find.
+ * Each linked worktree's admin entry and its `gitdir` link; none when only the `worktrees` folder is
+ * gone. Throws when a record cannot be read, or when the common directory itself is, because `prune`
+ * deletes exactly the entries this read exists to find and an unreadable one may be among them.
  */
 export async function readWorktreeLinks(
   adminRoot: string
 ): Promise<{ entry: string; link: string }[]> {
-  const entries = (await readdir(adminRoot).catch((error: unknown) => {
+  const entries = (await readdir(adminRoot).catch(async (error: unknown) => {
     if (isMissing(error)) {
+      await assertCommonDirReadable(adminRoot)
       return []
     }
     throw error
@@ -122,6 +123,19 @@ export async function readWorktreeLinks(
     }))
   )
   return links.filter(({ link }) => link)
+}
+
+/**
+ * A missing `worktrees` folder under a readable common directory is "nothing to guard". `ENOENT`
+ * also names a missing ancestor, so re-read the parent to tell the two apart: a parent that is
+ * present but unreadable propagates. A parent that does not exist either is still nothing to guard.
+ */
+async function assertCommonDirReadable(adminRoot: string): Promise<void> {
+  await readdir(dirname(adminRoot)).catch((error: unknown) => {
+    if (!isMissing(error)) {
+      throw error
+    }
+  })
 }
 
 function errorCode(error: unknown): unknown {
