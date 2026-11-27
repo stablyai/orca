@@ -7,6 +7,25 @@ const ProjectPeek = lazy(() =>
   import('./ProjectPeek').then((module) => ({ default: module.ProjectPeek }))
 )
 
+/** On the first-ever open, onOpenAutoFocus fires before the lazy chunk renders a tab to land on;
+ *  once the peek mounts, move focus off the container onto the active style tab it meant to reach. */
+function FocusActiveTabAfterLateMount({
+  contentRef
+}: {
+  contentRef: React.RefObject<HTMLDivElement | null>
+}): null {
+  React.useEffect(() => {
+    const content = contentRef.current
+    if (!content || document.activeElement !== content) {
+      return
+    }
+    content
+      .querySelector<HTMLElement>('[role="tab"][data-state="active"]')
+      ?.focus({ preventScroll: true })
+  }, [contentRef])
+  return null
+}
+
 // Why: the content portals out of the DOM but React still bubbles its events to the card underneath,
 // which would select, drag, or rename the workspace on every edit click.
 const stopPropagation = (event: React.SyntheticEvent): void => event.stopPropagation()
@@ -120,6 +139,7 @@ export function ProjectPeekPopover({
         {open ? (
           <Suspense fallback={null}>
             <ProjectPeek repo={repo} onRequestClose={requestClose} />
+            <FocusActiveTabAfterLateMount contentRef={contentRef} />
           </Suspense>
         ) : null}
       </PopoverContent>
