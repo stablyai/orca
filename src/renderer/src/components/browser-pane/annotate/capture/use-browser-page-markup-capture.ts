@@ -39,9 +39,16 @@ export function useBrowserPageMarkupCapture(
 ): MarkupModeController {
   // Committed with the render, so a continuation that runs before passive effects still sees the hidden pane.
   const localPageRef = useRef(localPage)
+  const mountedRef = useRef(true)
   useLayoutEffect(() => {
     localPageRef.current = localPage
   })
+  useLayoutEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
   const cleanPageId = localPage?.page.id
   const markup = useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
@@ -59,7 +66,9 @@ export function useBrowserPageMarkupCapture(
         return { source: { kind: 'webview', webview }, ...size, outputScale }
       }
       const eligible = (): boolean =>
-        localPageRef.current?.isActive === true && localPageRef.current.page.loadError === null
+        mountedRef.current &&
+        localPageRef.current?.isActive === true &&
+        localPageRef.current.page.loadError === null
       const guestId = readCleanCaptureGuestId(webview)
       if (guestId === null || !eligible()) {
         return null

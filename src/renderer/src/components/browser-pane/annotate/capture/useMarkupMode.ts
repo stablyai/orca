@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
@@ -60,8 +60,9 @@ export function useMarkupMode({
   // Aborting retires the capture in flight, including its attempt in main.
   const captureAbortRef = useRef<AbortController | null>(null)
 
-  // Unmount retires any capture in flight, so a closed tab never captures, updates state, or shows an error toast.
-  useEffect(
+  // Unmount retires any capture in flight at commit, before passive cleanup or any held reply can run, so a closed
+  // owner never captures, updates state, or shows an error toast, even while its guest stays connected elsewhere.
+  useLayoutEffect(
     () => () => {
       captureTokenRef.current += 1
       captureAbortRef.current?.abort()

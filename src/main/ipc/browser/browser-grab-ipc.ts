@@ -8,10 +8,7 @@ import {
   disposeGrabModeStateForPage,
   setBrowserGrabMode
 } from '../../browser/element-grab/browser-grab-mode-sequencer'
-import {
-  isBrowserCaptureCleanPageArgs,
-  MAX_CLEAN_CAPTURE_DEADLINE_MS
-} from '../../../shared/browser/element-grab/browser-grab-types'
+import { isBrowserCaptureCleanPageArgs } from '../../../shared/browser/element-grab/browser-grab-types'
 import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
@@ -71,17 +68,13 @@ export function registerBrowserGrabHandlers(): void {
     'browser:captureCleanPage',
     async (event, args: unknown): Promise<BrowserCleanPageCapture | null> => {
       // Validated and authorized before anything shared changes, so a denied caller can't retire a live arm.
-      const now = Date.now()
       if (
         !isTrustedBrowserRenderer(event.sender) ||
         !isBrowserCaptureCleanPageArgs(args) ||
-        args.deadlineMs <= now ||
         cleanCapturesByAttemptId.has(args.attemptId)
       ) {
         return null
       }
-      // One cutoff governs the lifetime and every later check; a far-future deadline gets the maximum, no more.
-      const cutoffMs = Math.min(args.deadlineMs, now + MAX_CLEAN_CAPTURE_DEADLINE_MS)
       const resolveGuest = (): Electron.WebContents | null =>
         browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
       const guest = resolveGuest()
@@ -90,12 +83,16 @@ export function registerBrowserGrabHandlers(): void {
       if (!guest || guest.id !== args.guestId || guest.isLoadingMainFrame()) {
         return null
       }
-      const { capture, retire } = captureCleanBrowserPage(
+      const admitted = captureCleanBrowserPage(
         args.browserPageId,
         guest,
         resolveGuest,
-        cutoffMs
+        args.deadlineMs
       )
+      if (!admitted) {
+        return null
+      }
+      const { capture, retire } = admitted
       cleanCapturesByAttemptId.set(args.attemptId, { senderId: event.sender.id, retire })
       try {
         return await capture

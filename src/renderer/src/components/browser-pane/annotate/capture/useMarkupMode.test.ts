@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { act, renderHook } from '@testing-library/react'
+import { act, render, renderHook } from '@testing-library/react'
+import { createElement, Fragment, useLayoutEffect } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useBrowserPageMarkupCapture } from './use-browser-page-markup-capture'
 import { useLocalPageDraw } from './use-local-page-draw'
@@ -33,6 +34,7 @@ function fakeWebview(): {
   guestId: { current: number }
   loading: { current: boolean }
   size: { current: number }
+  lossListeners: () => number
 } {
   const guestId = { current: 1 }
   const loading = { current: false }
@@ -43,12 +45,31 @@ function fakeWebview(): {
     getBoundingClientRect: () => ({ width: size.current, height: size.current })
   })
   document.body.append(element)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Draw path reads only events, isConnected, size and the guest id.
-  return { webview: element as unknown as Electron.WebviewTag, guestId, loading, size }
+  const loss = { count: 0 }
+  const add = element.addEventListener.bind(element)
+  const remove = element.removeEventListener.bind(element)
+  const isLoss = (type: string): boolean => type === 'destroyed' || type === 'render-process-gone'
+  element.addEventListener = (type: string, listener: EventListener) => {
+    loss.count += isLoss(type) ? 1 : 0
+    add(type, listener)
+  }
+  element.removeEventListener = (type: string, listener: EventListener) => {
+    loss.count -= isLoss(type) ? 1 : 0
+    remove(type, listener)
+  }
+  return {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Draw path reads only events, isConnected, size and the guest id.
+    webview: element as unknown as Electron.WebviewTag,
+    guestId,
+    loading,
+    size,
+    lossListeners: () => loss.count
+  }
 }
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Draw only checks whether a load error is set.
 const FAILED_LOAD = { code: -105 } as unknown as BrowserLoadError
+const settled = (): Promise<void> => act(async () => {})
 const finishCapture = (ok: boolean): Promise<void> =>
   act(async () => {
     page.captures.shift()!.finish(ok)
@@ -196,6 +217,79 @@ it('a pane hidden in a commit publishes nothing, and a capture past its deadline
   await finishCapture(true)
   expect(result.current.state).toBe('drawing')
   vi.useRealTimers()
+})
+
+it('no path leaves a loss listener behind; a hidden entry keeps the pick; a finished drawing survives', async () => {
+  const { webview, loading, lossListeners } = fakeWebview()
+  const draw = renderLocalDraw(webview)
+  draw.rerender({ grabState: 'armed', isActive: false })
+  draw.start()
+  loading.current = true
+  draw.rerender({ grabState: 'armed', isActive: true })
+  draw.start()
+  loading.current = false
+  await settled()
+  expect(draw.stops).toEqual([])
+  expect(page.captures).toHaveLength(0)
+  expect(lossListeners()).toBe(0)
+
+  draw.start()
+  expect(draw.stops).toEqual(['stop'])
+  expect(lossListeners()).toBe(2)
+  await finishCapture(false)
+  await settled()
+  expect(lossListeners()).toBe(0)
+  expect(page.errors).toBe(3)
+
+  draw.rerender({ grabState: 'idle', isActive: true })
+  draw.start()
+  act(() => draw.result.current.draw.viewportBridge.invalidateDocument())
+  await finishCapture(true)
+  draw.start()
+  draw.start()
+  await finishCapture(true)
+  await finishCapture(true)
+  await settled()
+  expect(draw.result.current.markup.state).toBe('drawing')
+  expect(lossListeners()).toBe(0)
+
+  act(() => draw.result.current.draw.viewportBridge.invalidateDocument())
+  draw.rerender({ grabState: 'idle', isActive: false })
+  expect(draw.result.current.markup.state).toBe('drawing')
+  expect(page.errors).toBe(3)
+})
+
+it('an owner unmounted while its guest stays connected retires its capture at commit, before passive cleanup', async () => {
+  const { webview } = fakeWebview()
+  const webviewRef = { current: webview }
+  for (const ok of [true, false]) {
+    let owner: ReturnType<typeof useBrowserPageMarkupCapture> | null = null
+    let retiredAtCommit: boolean | undefined
+    function Owner(): null {
+      owner = useBrowserPageMarkupCapture(webviewRef, {
+        page: { id: 'page-1', loadError: null },
+        isActive: true
+      })
+      return null
+    }
+    // A later sibling's layout cleanup runs after the owner's and before any passive cleanup.
+    function Witness(): null {
+      useLayoutEffect(
+        () => () => {
+          retiredAtCommit = page.captures[0]?.signal?.aborted
+        },
+        []
+      )
+      return null
+    }
+    const view = render(createElement(Fragment, null, createElement(Owner), createElement(Witness)))
+    act(() => void owner!.start())
+    view.unmount()
+    expect(retiredAtCommit).toBe(true)
+    expect(webview.isConnected).toBe(true)
+    await finishCapture(ok)
+  }
+  expect(page.errors).toBe(0)
 })
 
 it('a stale enable reply sends no second off, and a superseded one starts no pick', async () => {

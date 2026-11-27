@@ -1,7 +1,8 @@
 import { browserManager } from '../guest-lifecycle/manager/browser-manager'
-import type {
-  BrowserCleanPageCapture,
-  BrowserSetGrabModeResult
+import {
+  MAX_CLEAN_CAPTURE_DEADLINE_MS,
+  type BrowserCleanPageCapture,
+  type BrowserSetGrabModeResult
 } from '../../../shared/browser/element-grab/browser-grab-types'
 import { captureCleanGuestPage, watchGuestDocument } from './grab-clean-page-capture'
 
@@ -149,9 +150,15 @@ export function captureCleanBrowserPage(
   browserPageId: string,
   guest: Electron.WebContents,
   resolveGuest: () => Electron.WebContents | null,
-  /** The caller's validated cutoff: in the future and no later than the clean capture maximum. */
-  cutoffMs: number
-): { capture: Promise<BrowserCleanPageCapture | null>; retire: () => void } {
+  deadlineMs: number
+): { capture: Promise<BrowserCleanPageCapture | null>; retire: () => void } | null {
+  // One sample, taken after the caller's checks and before anything registers: a request already due changes
+  // nothing, and a far-future one gets the maximum. This cutoff then governs the lifetime and every later check.
+  const now = Date.now()
+  if (deadlineMs <= now) {
+    return null
+  }
+  const cutoffMs = Math.min(deadlineMs, now + MAX_CLEAN_CAPTURE_DEADLINE_MS)
   let retired = false
   let withdraw: (capture: null) => boolean = () => false
   const retirements = cleanCaptureRetirementsByPageId.get(browserPageId) ?? new Set()
@@ -177,7 +184,7 @@ export function captureCleanBrowserPage(
   const document = watchGuestDocument(guest, retire)
   cleanCaptureRetirementsByPageId.set(browserPageId, retirements)
   retirements.add(retire)
-  const lifetime = setTimeout(retire, cutoffMs - Date.now())
+  const lifetime = setTimeout(retire, cutoffMs - now)
   lifetime.unref?.()
   recordIntent(browserPageId, false)
   const queued = queueGrabModeOperation(browserPageId, async () => {

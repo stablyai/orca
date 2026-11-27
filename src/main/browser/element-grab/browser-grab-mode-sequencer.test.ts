@@ -110,7 +110,7 @@ const capture = (
   page: FakeGuest,
   resolve: () => Electron.WebContents | null = () => page.guest,
   deadlineMs = Date.now() + 10_000
-) => captureCleanBrowserPage('page-1', page.guest, resolve, deadlineMs)
+) => captureCleanBrowserPage('page-1', page.guest, resolve, deadlineMs)!
 const ipc = (channel: string, senderId: number, args: unknown): Promise<unknown> =>
   Promise.resolve(handlers.get(channel)!({ sender: { id: senderId } }, args))
 
@@ -223,34 +223,46 @@ it('a retired attempt skips stages not yet started but holds the queue until its
   await flush()
   page.run(ARM)
   await arm
+})
 
-  // Queued behind a head held at its readback: followers retired by their viewer, deadline or a lost document
-  // leave the queue at once, so nothing of theirs is retained while the head keeps the page.
-  const head = capture(page)
-  await passStages(page, false)
-  const headOnly = page.listeners()
-  for (let retry = 0; retry < 3; retry++) {
-    const byViewer = capture(page)
-    const byDeadline = capture(page, () => page.guest, Date.now() + 1_000)
-    const byCrash = capture(page)
-    expect(queuedGrabModeOperationCount()).toBe(3)
-    byViewer.retire()
-    page.emitter.emit('render-process-gone')
-    await vi.advanceTimersByTimeAsync(1_000)
-    await expect(byViewer.capture).resolves.toBeNull()
-    await expect(byDeadline.capture).resolves.toBeNull()
-    await expect(byCrash.capture).resolves.toBeNull()
+it('each way a queued follower ends releases it at once while the head stays held, and a retry then captures', async () => {
+  vi.useFakeTimers()
+  const triggers = ['retire', 'deadline', 'crash', 'navigation', 'dispose'] as const
+  for (const trigger of triggers) {
+    const page = await armedGuest()
+    const head = capture(page)
+    await passStages(page, false)
+    const headOnly = { listeners: page.listeners(), timers: vi.getTimerCount() }
+    const follower = capture(page, () => page.guest, Date.now() + 1_000)
+    expect(queuedGrabModeOperationCount()).toBe(1)
+    if (trigger === 'retire') {
+      follower.retire()
+    } else if (trigger === 'deadline') {
+      await vi.advanceTimersByTimeAsync(1_000)
+    } else if (trigger === 'crash') {
+      page.emitter.emit('render-process-gone')
+    } else if (trigger === 'navigation') {
+      page.emitter.emit('did-start-navigation', {}, 'https://same.test/', false, true)
+    } else {
+      disposeGrabModeStateForPage('page-1')
+    }
+    // Released before the head is: nothing of the follower is queued, watched or timed any more.
+    await expect(follower.capture).resolves.toBeNull()
+    expect(queuedGrabModeOperationCount()).toBe(0)
+    expect(page.listeners()).toBe(headOnly.listeners)
+    expect(vi.getTimerCount()).toBe(headOnly.timers)
+
+    // A successor admitted after disposal keeps its own entries when the old head cleans up.
+    const retry = capture(page)
+    page.readbacks.shift()!.settle(true)
+    const headEndsClean = trigger === 'retire' || trigger === 'deadline'
+    await expect(head.capture).resolves.toEqual(headEndsClean ? CAPTURE : null)
+    expect(pagesWithPendingGrabWaits()).toEqual(['page-1'])
+    await passStages(page)
+    await expect(retry.capture).resolves.toEqual(CAPTURE)
+    expect(pagesWithPendingGrabWaits()).toEqual([])
+    expect(page.listeners()).toBe(0)
   }
-  expect(queuedGrabModeOperationCount()).toBe(0)
-  expect(page.listeners()).toBe(headOnly)
-  // The head saw the crash too, so it returns nothing; a fresh attempt after it settles captures.
-  page.readbacks.shift()!.settle(true)
-  await expect(head.capture).resolves.toBeNull()
-  const retry = capture(page)
-  await passStages(page)
-  await expect(retry.capture).resolves.toEqual(CAPTURE)
-  expect(pagesWithPendingGrabWaits()).toEqual([])
-  expect(page.listeners()).toBe(0)
 })
 
 it('a queued capture refuses a same-URL reload or a disposed page, and never touches a successor guest', async () => {
@@ -293,11 +305,15 @@ it('a throwing paint hold or release leaks no document listeners', async () => {
   expect(page.listeners()).toBe(0)
 })
 
-it('IPC: only the authorized guest the request began on, settled, gets a capture; nothing else changes the page', async () => {
+it('IPC: only the authorized guest the request began on, settled and in time, gets a capture; nothing else changes the page', async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(1_000_000)
   const page = fakeGuest()
-  vi.spyOn(browserManager, 'getAuthorizedGuest').mockImplementation((_id, senderId) =>
-    senderId === 1 ? page.guest : null
-  )
+  let validationTakesMs = 0
+  vi.spyOn(browserManager, 'getAuthorizedGuest').mockImplementation((_id, senderId) => {
+    vi.setSystemTime(Date.now() + validationTakesMs)
+    return senderId === 1 ? page.guest : null
+  })
   const on = ipc('browser:setGrabMode', 1, { browserPageId: 'page-1', enabled: true })
   await flush()
   const attempt = (overrides: object = {}) => ({
@@ -307,22 +323,23 @@ it('IPC: only the authorized guest the request began on, settled, gets a capture
     deadlineMs: Date.now() + 10_000,
     ...overrides
   })
-  page.state.loading = true
-  for (const [senderId, args] of [
-    [2, attempt()],
-    [1, attempt({ guestId: 8 })],
-    [1, attempt({ guestId: undefined })],
-    [1, { browserPageId: 'page-1', attemptId: 'a-1' }],
-    // A load that started before Draw, even to the same URL, is not the document Draw was asked for.
-    [1, attempt()]
-  ] as const) {
+  const refused = async (senderId: number, args: unknown): Promise<void> => {
     await expect(ipc('browser:captureCleanPage', senderId, args)).resolves.toBeNull()
   }
+  page.state.loading = true
+  // A load that started before Draw, even to the same URL, is not the document Draw was asked for.
+  await refused(1, attempt())
   page.state.loading = false
-  // Already at or past its deadline when it arrives: refused before it can supersede the pending arm.
-  await expect(
-    ipc('browser:captureCleanPage', 1, attempt({ deadlineMs: Date.now() }))
-  ).resolves.toBeNull()
+  await refused(2, attempt())
+  await refused(1, attempt({ guestId: 8 }))
+  await refused(1, attempt({ guestId: undefined }))
+  await refused(1, { browserPageId: 'page-1', attemptId: 'a-1' })
+  await refused(1, attempt({ deadlineMs: Date.now() }))
+  await refused(1, attempt({ deadlineMs: Date.now() - 1 }))
+  // Still in time on arrival, but due by the time validation finishes: the clock is read again at admission.
+  validationTakesMs = 20
+  await refused(1, attempt({ deadlineMs: Date.now() + 10 }))
+  validationTakesMs = 0
   page.run(ARM)
   await expect(on).resolves.toEqual({ ok: true })
   expect(page.scripts).toHaveLength(0)
@@ -331,11 +348,14 @@ it('IPC: only the authorized guest the request began on, settled, gets a capture
   await passStages(page)
   await expect(draw).resolves.toEqual(CAPTURE)
 
-  // A far-future deadline gets the host maximum: still at its readback when that passes, it returns nothing.
-  vi.useFakeTimers()
+  // A far-future deadline is clamped to the host maximum; crossing it inside the synchronous encode, where no
+  // timer can run, still returns nothing.
   const overlong = ipc('browser:captureCleanPage', 1, attempt({ deadlineMs: Date.now() + 1e9 }))
-  await passStages(page, false)
-  await vi.advanceTimersByTimeAsync(10_000)
-  page.readbacks.shift()!.settle(true)
+  page.state.onEncode = () => vi.setSystemTime(Date.now() + 10_001)
+  await passStages(page)
   await expect(overlong).resolves.toBeNull()
+  page.state.onEncode = () => {}
+  const healthy = ipc('browser:captureCleanPage', 1, attempt())
+  await passStages(page)
+  await expect(healthy).resolves.toEqual(CAPTURE)
 })
