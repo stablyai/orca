@@ -34,6 +34,7 @@ import {
   setCreatePrIntentNotice
 } from '../panel/worktree-operation-store'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 /** Resolve unattended review fields without a composer; reveal only while the run owns the foreground worktree. */
 export function useSourceControlCreatePrIntentReview({
@@ -198,77 +199,80 @@ export function useSourceControlCreatePrIntentReview({
         )
       })
       operationStore.setState({ isCreatingPr: true })
-      try {
-        const result = await createHostedReview(activeRepo.path, {
-          repoId: activeRepo.id,
-          provider: eligibility.provider,
-          base: fields.base,
-          head: normalizeHostedReviewHeadRef(token.branch),
-          title,
-          body: fields.body,
-          draft: fields.draft,
-          worktreePath: token.worktreePath,
-          useTemplate: currentDefaults.useTemplate
-        })
-
-        if (result.ok) {
-          const openChecks = createPrIntentIsForeground()
-          await handlePullRequestCreated(
-            {
-              provider: eligibility.provider,
-              number: result.number,
-              url: result.url
-            },
-            {
-              repoPath: activeRepo.path,
+      return runWithFinally(
+        async () => {
+          try {
+            const result = await createHostedReview(activeRepo.path, {
               repoId: activeRepo.id,
-              branch: token.branch,
-              worktreeId: token.worktreeId,
-              openChecks
+              provider: eligibility.provider,
+              base: fields.base,
+              head: normalizeHostedReviewHeadRef(token.branch),
+              title,
+              body: fields.body,
+              draft: fields.draft,
+              worktreePath: token.worktreePath,
+              useTemplate: currentDefaults.useTemplate
+            })
+
+            if (result.ok) {
+              const openChecks = createPrIntentIsForeground()
+              await handlePullRequestCreated(
+                {
+                  provider: eligibility.provider,
+                  number: result.number,
+                  url: result.url
+                },
+                {
+                  repoPath: activeRepo.path,
+                  repoId: activeRepo.id,
+                  branch: token.branch,
+                  worktreeId: token.worktreeId,
+                  openChecks
+                }
+              )
+              if (openChecks && currentDefaults.openAfterCreate) {
+                openAppHttpLink(result.url, { worktreeId: token.worktreeId })
+              }
+              setCreatePrIntentNotice(operationStore, null)
+              return true
             }
-          )
-          if (openChecks && currentDefaults.openAfterCreate) {
-            openAppHttpLink(result.url, { worktreeId: token.worktreeId })
+
+            if (result.existingReview?.number && result.existingReview.url) {
+              const openChecks = createPrIntentIsForeground()
+              await handlePullRequestCreated(
+                {
+                  provider: eligibility.provider,
+                  number: result.existingReview.number,
+                  url: result.existingReview.url
+                },
+                {
+                  repoPath: activeRepo.path,
+                  repoId: activeRepo.id,
+                  branch: token.branch,
+                  worktreeId: token.worktreeId,
+                  openChecks
+                }
+              )
+              setCreatePrIntentNotice(operationStore, null)
+              return true
+            }
+
+            setCreatePrIntentNotice(operationStore, {
+              tone: 'destructive',
+              message: localizedCreateFailure(result, eligibility.provider)
+            })
+            return false
+          } catch (error) {
+            const message = localizedCreateException(error, hostedReviewCreateCopy.reviewLabel)
+            setCreatePrIntentNotice(operationStore, {
+              tone: 'destructive',
+              message
+            })
+            return false
           }
-          setCreatePrIntentNotice(operationStore, null)
-          return true
-        }
-
-        if (result.existingReview?.number && result.existingReview.url) {
-          const openChecks = createPrIntentIsForeground()
-          await handlePullRequestCreated(
-            {
-              provider: eligibility.provider,
-              number: result.existingReview.number,
-              url: result.existingReview.url
-            },
-            {
-              repoPath: activeRepo.path,
-              repoId: activeRepo.id,
-              branch: token.branch,
-              worktreeId: token.worktreeId,
-              openChecks
-            }
-          )
-          setCreatePrIntentNotice(operationStore, null)
-          return true
-        }
-
-        setCreatePrIntentNotice(operationStore, {
-          tone: 'destructive',
-          message: localizedCreateFailure(result, eligibility.provider)
-        })
-        return false
-      } catch (error) {
-        const message = localizedCreateException(error, hostedReviewCreateCopy.reviewLabel)
-        setCreatePrIntentNotice(operationStore, {
-          tone: 'destructive',
-          message
-        })
-        return false
-      } finally {
-        operationStore.setState({ isCreatingPr: false })
-      }
+        },
+        () => operationStore.setState({ isCreatingPr: false })
+      )
     },
     [
       activeRepo,

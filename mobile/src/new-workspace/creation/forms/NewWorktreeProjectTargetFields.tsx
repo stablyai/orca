@@ -1,6 +1,5 @@
 import { View } from 'react-native'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { HostKindIcon } from '../../../components/icons/HostKindIcon'
 import {
   LIST_LEADING_INSET,
@@ -8,7 +7,8 @@ import {
   SectionHeader,
   ListRow
 } from '../../../components/list/ListGroup'
-import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
+import { newWorktreeFormStylesSheet } from './new-worktree-form-styles'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 type Selection = { label: string; detail?: string }
 
@@ -26,7 +26,7 @@ export function NewWorktreeProjectTargetFields({
   onOpenProject: () => void
   onOpenRunTarget: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(newWorktreeFormStylesSheet)
   const t = useMobileTranslation()
   const projectTitle = t('components.newWorktreeProjectTargetFields.project', 'Project')
   const runOnTitle = t('components.newWorktreeProjectTargetFields.runOn', 'Run on')

@@ -114,7 +114,7 @@ function decorate(worktree: Worktree): Worktree {
       return { ...worktree, repoId: OFFLINE_REPO.id, linkedItems: [pr(501), pr(502)] }
     case 'ti-grandchild':
       return { ...worktree, linkedItems: [pr(301), pr(302)], automationProvenance }
-    // Detached HEAD fills the details row, so its icon moves there instead of the title line.
+    // Detached HEAD shows as an inline identity icon on the title line alongside trailing icons.
     case 'ti-detached':
       return { ...worktree, branch: '', head: 'f00dcafe1234', linkedItems: [pr(401)] }
     case 'ti-long':

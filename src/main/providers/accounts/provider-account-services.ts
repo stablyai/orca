@@ -15,10 +15,6 @@ import { readMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { readMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { readZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
 import { readOpenCodeGoApiKey } from '../../opencode/accounts/opencode-go-api-key-store'
-import {
-  getAntigravityAccountService,
-  setAntigravityNativeCredentialChangeListener
-} from '../../antigravity/native-account-host'
 import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/service/account-runtime-target-sync'
 import { resolveInactiveCodexAccounts } from '../../rate-limits/inactive-codex-accounts'
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
@@ -67,7 +63,6 @@ export function createProviderAccountServices(
   rateLimits.setKimiHomeResolver(() =>
     resolveKimiHome(resolveLocalAccountUsageTarget(store.getSettings()))
   )
-  rateLimits.setAntigravityFetchTarget(resolveLocalAccountUsageTarget(store.getSettings()))
   rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
   const syncAccountRuntimeTargets = createAccountRuntimeTargetSettingsSync(
     rateLimits,
@@ -156,21 +151,8 @@ export function createProviderAccountServices(
     apiKey: (await readZcodePlanApiKey()) ?? ''
   }))
   rateLimits.setClaudeOAuthUsageEnabledResolver(() => store.getSettings().claudeOAuthUsageEnabled)
-  // Reuse the meter switch so hidden Antigravity usage does not spawn agy.
-  rateLimits.setAntigravityUsageEnabledResolver(() =>
-    store.getUI().statusBarItems.includes('antigravity')
-  )
   // Hidden Muse meters must not spawn the Muse CLI.
   rateLimits.setMuseUsageEnabledResolver(() => store.getUI().statusBarItems.includes('muse'))
-  setAntigravityNativeCredentialChangeListener(() =>
-    rateLimits.invalidateAntigravityCredentialState()
-  )
-  // agy has one shared login: attribute readings to saved accounts instead of switching to read others.
-  rateLimits.setAntigravityAccountUsageRecorder({
-    begin: async (target) => (await getAntigravityAccountService(target)).beginUsageRead(),
-    finish: async (target, login, limits) =>
-      (await getAntigravityAccountService(target)).finishUsageRead(login, limits)
-  })
   rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store.getSettings()

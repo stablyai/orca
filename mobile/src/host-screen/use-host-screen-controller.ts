@@ -49,7 +49,7 @@ export function useHostScreenController({
   hostId: hostIdProp,
   onHideSidebar
 }: HostScreenProps = {}) {
-  useMobileTranslation()
+  const t = useMobileTranslation()
   const params = useLocalSearchParams<{ hostId: string; notice?: string }>()
   const hostId = hostIdProp ?? params.hostId
   const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)
@@ -71,15 +71,18 @@ export function useHostScreenController({
   const storedHost = peekStoredHost(hostId)
   const state = useHostScreenState(hostId, storedHost)
   const settings = useHostViewSettings({ client, connState, state })
-  const connectionVerdict = classifyConnection({
-    state: connState,
-    reconnectAttempts,
-    lastConnectedAt,
-    hostName: state.hostName,
-    // Link-local hosts are never dialed directly, so a refusal there must advise re-pairing.
-    endpoint: storedHost?.endpoint,
-    ...relayRecovery
-  })
+  const connectionVerdict = classifyConnection(
+    {
+      state: connState,
+      reconnectAttempts,
+      lastConnectedAt,
+      hostName: state.hostName,
+      // Link-local hosts are never dialed directly, so a refusal there must advise re-pairing.
+      endpoint: storedHost?.endpoint,
+      ...relayRecovery
+    },
+    t
+  )
   const hostDisplay = useHostDisplay(
     hostId && state.hostName
       ? { id: hostId, name: state.hostName, ...state.hostStoredDescriptor }
@@ -180,6 +183,13 @@ export function useHostScreenController({
   )
   const existingWorktreePaths = useMemo(() => state.worktrees.map((w) => w.path), [state.worktrees])
   const activeWorktreeScroll = useActiveWorktreeScroll(sectionsResult.sections, collapsedGroups)
+  // Rebuilds the connection where this document owns it; a page in the app shell can only nudge it.
+  const reconnect =
+    hostId && forceReconnectHost
+      ? () => void forceReconnectHost(hostId)
+      : client
+        ? () => client.notifyForeground('focus')
+        : null
 
   return {
     actions,
@@ -208,6 +218,7 @@ export function useHostScreenController({
     lastConnectedAt,
     noticeParam,
     onHideSidebar,
+    reconnect,
     reconnectAttempts,
     relayRecovery,
     routeNotice,

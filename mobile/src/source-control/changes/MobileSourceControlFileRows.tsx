@@ -2,13 +2,12 @@ import type { ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { SwipeRowActions } from '../../components/list/SwipeRowActions'
 import { Minus, Plus, Undo2 } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
 import { STATUS_LABELS } from '../../../../src/shared/git/status/git-status-labels'
 import type {
   GitConflictKind,
   GitFileStatus
 } from '../../../../src/shared/git/status/git-status-types'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileDiffLineStats } from '../review/diff-screen/MobileDiffReviewFileSummary'
@@ -17,9 +16,10 @@ import type {
   MobileGitStatusEntryView
 } from './mobile-source-control-screen-state'
 import type { MobileSourceControlState } from '../use-mobile-source-control-state'
-import { styles } from '../mobile-source-control-styles'
+import { stylesSheet } from '../mobile-source-control-styles'
 import { mobileConflictResolutionLabel } from '../conflicts/mobile-source-control-conflict-actions'
 import { getUnstageablePaths, statusColor } from './mobile-git-status'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 export type FileRowState = Pick<
   MobileSourceControlState,
@@ -75,13 +75,14 @@ function FileRowBody({
   /** Wrapping buttons under the name, e.g. a conflict's resolutions, so the name keeps its width. */
   actions?: ReactNode
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const { name, folder } = splitGitPath(path)
   const subtitle = detail ? (folder ? `${detail} · ${folder}` : detail) : folder
   return (
     <>
       <View style={styles.statusBadge}>
-        <Text style={[styles.statusBadgeText, { color: statusColor(status) }]}>
+        <Text style={[styles.statusBadgeText, { color: statusColor(status, colors) }]}>
           {STATUS_LABELS[status]}
         </Text>
       </View>
@@ -112,7 +113,8 @@ export function ChangeFileRow({
   item: MobileGitStatusEntryView
   state: FileRowState
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { busyAction, openDiffForFile, resolveConflict, runGitAction, setDiscardTarget } = state
   const rowBusy =
@@ -165,7 +167,10 @@ export function ChangeFileRow({
       : null
   const trailing = (guard: (onPress: () => void) => () => void) =>
     rowBusy ? (
-      <ActivityIndicator size="small" color={colors.textSecondary} />
+      // In the button's box, so the row keeps its height while the action runs.
+      <View style={styles.iconButton}>
+        <ActivityIndicator size="small" color={colors.textSecondary} />
+      </View>
     ) : !hasConflictActions && (item.canUnstage || item.canStage) ? (
       <Pressable
         style={({ pressed }) => [
@@ -210,9 +215,9 @@ export function ChangeFileRow({
     >
       {(guardPress) => (
         <Pressable
-          style={({ pressed }) => [
+          style={[
             styles.fileRow,
-            pressed && item.canOpen && styles.fileRowPressed,
+            (detail || splitGitPath(item.path).folder) && styles.fileRowTwoLine,
             !item.canOpen && !hasConflictActions && styles.fileRowUnavailable
           ]}
           onPress={guardPress(() => {
@@ -231,15 +236,20 @@ export function ChangeFileRow({
             }
           )}
         >
-          <FileRowBody
-            status={item.status}
-            path={item.path}
-            detail={detail}
-            added={item.added}
-            removed={item.removed}
-            trailing={trailing(guardPress)}
-            actions={conflictActions(guardPress)}
-          />
+          {({ pressed }) => (
+            <>
+              {pressed && item.canOpen ? <PressWash /> : null}
+              <FileRowBody
+                status={item.status}
+                path={item.path}
+                detail={detail}
+                added={item.added}
+                removed={item.removed}
+                trailing={trailing(guardPress)}
+                actions={conflictActions(guardPress)}
+              />
+            </>
+          )}
         </Pressable>
       )}
     </SwipeRowActions>
@@ -253,13 +263,13 @@ export function BranchFileRow({
   entry: MobileBranchEntryView
   state: Pick<FileRowState, 'busyAction' | 'openDiffForFile'>
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <Pressable
-      style={({ pressed }) => [
+      style={[
         styles.fileRow,
-        pressed && entry.canOpen && styles.fileRowPressed,
+        (entry.oldPath || splitGitPath(entry.path).folder) && styles.fileRowTwoLine,
         !entry.canOpen && styles.fileRowUnavailable
       ]}
       onPress={() =>
@@ -272,17 +282,28 @@ export function BranchFileRow({
         { path: entry.path }
       )}
     >
-      <FileRowBody
-        status={entry.status}
-        path={entry.path}
-        detail={
-          entry.oldPath
-            ? t('sourceControl.fileRows.renamedFrom', 'from {{path}}', { path: entry.oldPath })
-            : undefined
-        }
-        added={entry.added}
-        removed={entry.removed}
-      />
+      {({ pressed }) => (
+        <>
+          {pressed && entry.canOpen ? <PressWash /> : null}
+          <FileRowBody
+            status={entry.status}
+            path={entry.path}
+            detail={
+              entry.oldPath
+                ? t('sourceControl.fileRows.renamedFrom', 'from {{path}}', { path: entry.oldPath })
+                : undefined
+            }
+            added={entry.added}
+            removed={entry.removed}
+          />
+        </>
+      )}
     </Pressable>
   )
+}
+
+// The row stays opaque (Discard waits behind it), so the press is a translucent layer over it.
+function PressWash() {
+  const styles = useThemedStyles(stylesSheet)
+  return <View pointerEvents="none" style={styles.fileRowPressed} />
 }

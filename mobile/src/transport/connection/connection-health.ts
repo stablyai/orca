@@ -1,5 +1,5 @@
 import { isTailscaleEndpoint } from '../../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 import type { RelayHostReachability } from '../relay/relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './connection-state'
@@ -25,7 +25,9 @@ export function isUndialableLinkLocal(endpoint: string | null | undefined): bool
   return /\/\/(169\.254\.|\[(fe[89ab]|::ffff:(169\.254\.|a9fe:)))/i.test(endpoint ?? '')
 }
 
-function relayHostCopy(): Record<
+function relayHostCopy(
+  t: Translate
+): Record<
   Exclude<RelayHostReachability, 'connecting'>,
   { kind: 'warning' | 'unreachable'; label: (host: string) => string; detail: string }
 > {
@@ -33,10 +35,10 @@ function relayHostCopy(): Record<
     'signed-out': {
       kind: 'unreachable',
       label: (host) =>
-        translate('connection.connectionHealth.signInRequired', 'Sign-in required on {{host}}', {
+        t('connection.connectionHealth.signInRequired', 'Sign-in required on {{host}}', {
           host
         }),
-      detail: translate(
+      detail: t(
         'connection.connectionHealth.signInDetail',
         'Sign in to Orca on your desktop to reconnect'
       )
@@ -44,8 +46,8 @@ function relayHostCopy(): Record<
     'host-offline': {
       kind: 'unreachable',
       label: (host) =>
-        translate('connection.connectionHealth.hostOffline', '{{host}} is offline', { host }),
-      detail: translate(
+        t('connection.connectionHealth.hostOffline', '{{host}} is offline', { host }),
+      detail: t(
         'connection.connectionHealth.hostOfflineDetail',
         "Check it's awake, Orca is running, and you're signed in"
       )
@@ -54,30 +56,30 @@ function relayHostCopy(): Record<
     'credential-refused': {
       kind: 'unreachable',
       label: (host) =>
-        translate(
-          'connection.connectionHealth.relayAccessRefused',
-          'Relay refused access for {{host}}',
-          {
-            host
-          }
-        ),
+        t('connection.connectionHealth.relayAccessRefused', 'Relay refused access for {{host}}', {
+          host
+        }),
       // Placeholder: refusedCredentialDetail fills in the host-specific advice for this verdict only.
       detail: ''
     },
     // Cell reachability failure says nothing about desktop health, so keep it amber.
     unreachable: {
       kind: 'warning',
-      label: () => translate('connection.connectionHealth.relayUnreachable', "Can't reach Relay"),
-      detail: translate('connection.connectionHealth.checkConnection', 'Check your connection')
+      label: () => t('connection.connectionHealth.relayUnreachable', "Can't reach Relay"),
+      detail: t('connection.connectionHealth.checkConnection', 'Check your connection')
     }
   }
 }
 
 // Only a refused verdict pays for the endpoint check and the interpolated advice.
-function refusedCredentialDetail(host: string, endpoint: string | null | undefined): string {
+function refusedCredentialDetail(
+  host: string,
+  endpoint: string | null | undefined,
+  t: Translate
+): string {
   return isUndialableLinkLocal(endpoint)
-    ? translate('connection.connectionHealth.rePairDetail', 'Re-pair with your desktop')
-    : translate(
+    ? t('connection.connectionHealth.rePairDetail', 'Re-pair with your desktop')
+    : t(
         'connection.connectionHealth.relayAccessRefreshDetail',
         "Connect once on {{host}}'s network to refresh Relay access, or re-pair",
         { host }
@@ -102,37 +104,39 @@ export type ConnectionVerdict =
   | { kind: 'auth-failed'; label: string }
 
 // Recompute staleness against now; lastConnectedAt itself is a fixed timestamp.
-export function classifyConnection(args: {
-  state: ConnectionState
-  reconnectAttempts: number
-  lastConnectedAt: number | null
-  // A pinned endpoint enables Tailscale-specific hints.
-  endpoint?: string | null
-  pendingPath?: MobileConnectionPath | null
-  // Credential refusal needs re-pairing and outranks connecting state.
-  pairingRejected?: boolean
-  // Explicit relay evidence outranks retry-count inference; connecting means no verdict yet.
-  relayHostReachability?: RelayHostReachability
-  // Include host identity because header labels can appear without a row title.
-  hostName?: string
-  nowMs?: number
-  // Callers that read only the verdict's kind (Home's unreachable projection) skip formatting refusal advice.
-  omitAdvice?: boolean
-}): ConnectionVerdict {
+export function classifyConnection(
+  args: {
+    state: ConnectionState
+    reconnectAttempts: number
+    lastConnectedAt: number | null
+    // A pinned endpoint enables Tailscale-specific hints.
+    endpoint?: string | null
+    pendingPath?: MobileConnectionPath | null
+    // Credential refusal needs re-pairing and outranks connecting state.
+    pairingRejected?: boolean
+    // Explicit relay evidence outranks retry-count inference; connecting means no verdict yet.
+    relayHostReachability?: RelayHostReachability
+    // Include host identity because header labels can appear without a row title.
+    hostName?: string
+    nowMs?: number
+    // Callers that read only the verdict's kind (Home's unreachable projection) skip formatting refusal advice.
+    omitAdvice?: boolean
+  },
+  t: Translate
+): ConnectionVerdict {
   const { state, reconnectAttempts, lastConnectedAt } = args
   const now = args.nowMs ?? Date.now()
   const hint = isTailscaleEndpoint(args.endpoint)
-    ? translate('connection.connectionHealth.tailscaleHint', 'check Tailscale')
+    ? t('connection.connectionHealth.tailscaleHint', 'check Tailscale')
     : undefined
-  const host =
-    args.hostName?.trim() || translate('connection.connectionHealth.hostFallback', 'Host')
+  const host = args.hostName?.trim() || t('connection.connectionHealth.hostFallback', 'Host')
   const staleReason = lastConnectedAt == null ? 'never-connected' : 'stale'
 
   // An unrecognized pairing needs re-pairing, not more retries.
   if (state === 'auth-failed' || (args.pairingRejected && state !== 'connected')) {
     return {
       kind: 'auth-failed',
-      label: translate(
+      label: t(
         'connection.connectionHealth.pairingInvalid',
         'Pairing invalid — re-pair with your desktop'
       )
@@ -142,14 +146,14 @@ export function classifyConnection(args: {
   if (state === 'connected') {
     return {
       kind: 'normal',
-      label: translate('connection.connectionHealth.connected', 'Connected')
+      label: t('connection.connectionHealth.connected', 'Connected')
     }
   }
 
   // Revoked pairing outranks sign-in advice; explicit relay verdicts must survive a cleared pending path.
   const reachability = args.relayHostReachability ?? 'connecting'
   if (reachability !== 'connecting') {
-    const copy = relayHostCopy()[reachability]
+    const copy = relayHostCopy(t)[reachability]
     return copy.kind === 'warning'
       ? { kind: 'warning', label: copy.label(host), detail: copy.detail, relay: reachability }
       : {
@@ -158,7 +162,7 @@ export function classifyConnection(args: {
           reason: staleReason,
           detail:
             reachability === 'credential-refused' && !args.omitAdvice
-              ? refusedCredentialDetail(host, args.endpoint)
+              ? refusedCredentialDetail(host, args.endpoint, t)
               : copy.detail,
           relay: reachability
         }
@@ -170,27 +174,21 @@ export function classifyConnection(args: {
       if (lastConnectedAt == null) {
         return {
           kind: 'unreachable',
-          label: translate(
-            'connection.connectionHealth.relayConnectFailed',
-            "Can't connect via Relay"
-          ),
+          label: t('connection.connectionHealth.relayConnectFailed', "Can't connect via Relay"),
           reason: 'never-connected'
         }
       }
       if (now - lastConnectedAt >= STALE_SINCE_LAST_CONNECT_MS) {
         return {
           kind: 'unreachable',
-          label: translate(
-            'connection.connectionHealth.relayConnectFailed',
-            "Can't connect via Relay"
-          ),
+          label: t('connection.connectionHealth.relayConnectFailed', "Can't connect via Relay"),
           reason: 'stale'
         }
       }
     }
     return {
       kind: 'normal',
-      label: translate('connection.connectionHealth.connectingViaRelay', 'Connecting via Relay…'),
+      label: t('connection.connectionHealth.connectingViaRelay', 'Connecting via Relay…'),
       dialing: true
     }
   }
@@ -198,7 +196,7 @@ export function classifyConnection(args: {
   if (state === 'disconnected') {
     return {
       kind: 'normal',
-      label: translate('connection.connectionHealth.disconnected', 'Disconnected')
+      label: t('connection.connectionHealth.disconnected', 'Disconnected')
     }
   }
 
@@ -207,7 +205,7 @@ export function classifyConnection(args: {
     if (lastConnectedAt == null) {
       return {
         kind: 'unreachable',
-        label: translate('connection.connectionHealth.desktopUnreachable', "Can't reach desktop"),
+        label: t('connection.connectionHealth.desktopUnreachable', "Can't reach desktop"),
         reason: 'never-connected',
         hint
       }
@@ -215,7 +213,7 @@ export function classifyConnection(args: {
     if (now - lastConnectedAt >= STALE_SINCE_LAST_CONNECT_MS) {
       return {
         kind: 'unreachable',
-        label: translate('connection.connectionHealth.desktopUnreachable', "Can't reach desktop"),
+        label: t('connection.connectionHealth.desktopUnreachable', "Can't reach desktop"),
         reason: 'stale',
         hint
       }
@@ -225,7 +223,7 @@ export function classifyConnection(args: {
   if (reconnectAttempts >= WARNING_ATTEMPTS) {
     return {
       kind: 'warning',
-      label: translate('connection.connectionHealth.connectFailed', "Can't connect"),
+      label: t('connection.connectionHealth.connectFailed', "Can't connect"),
       hint
     }
   }
@@ -234,8 +232,8 @@ export function classifyConnection(args: {
     kind: 'normal',
     label:
       state === 'reconnecting'
-        ? translate('connection.connectionHealth.reconnecting', 'Reconnecting…')
-        : translate('connection.connectionHealth.connecting', 'Connecting…'),
+        ? t('connection.connectionHealth.reconnecting', 'Reconnecting…')
+        : t('connection.connectionHealth.connecting', 'Connecting…'),
     dialing: true
   }
 }
@@ -251,9 +249,9 @@ export function isConnectionDialing(verdict: ConnectionVerdict): boolean {
   return verdict.kind === 'normal' && verdict.dialing === true
 }
 
-export function verdictDisplayLabel(verdict: ConnectionVerdict): string {
+export function verdictDisplayLabel(verdict: ConnectionVerdict, t: Translate): string {
   if (isConnectionOutage(verdict) && verdict.hint) {
-    return translate('connection.connectionHealth.labelWithHint', '{{label}} — {{hint}}', {
+    return t('connection.connectionHealth.labelWithHint', '{{label}} — {{hint}}', {
       label: verdict.label,
       hint: verdict.hint
     })

@@ -9,7 +9,7 @@ import { useWslDistroList } from '@/components/sidebar/host-admission/wsl/use-ws
 import {
   wsl1DistroReason,
   wslDistroStateLabel
-} from '@/components/sidebar/host-admission/wsl/AddWslHostFormPanel'
+} from '@/components/sidebar/host-admission/wsl/wsl-host-distro-model'
 import { getWslHostServerFilesMissingLabel } from '@/components/sidebar/host-admission/wsl/wsl-host-row-status'
 import { useWslHostServerFilesMissing } from '@/runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { RunTargetRow } from './RunTargetComboboxRow'

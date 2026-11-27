@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { createHmac, randomUUID } from 'node:crypto'
 import { renameSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -12,7 +13,9 @@ import type { RuntimeSourceStamp } from '../../../../shared/remote-runtime/host-
 
 export const HOST_INSTALLATION_FILENAME = 'host-installation.json'
 const MAX_INSTALLATION_FILE_BYTES = 4 * 1024
-const InstallationFileSchema = RuntimeHostDescriptorSchema.pick({ installationId: true })
+const InstallationFileSchema = lazyZodSchema(() =>
+  RuntimeHostDescriptorSchema.pick({ installationId: true })
+)
 
 type InstallationRead =
   | { kind: 'valid'; installationId: string }

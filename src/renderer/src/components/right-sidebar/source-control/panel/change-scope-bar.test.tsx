@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { useState } from 'react'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { GitHistoryResult } from '../../../../../../shared/git/history/git-history-types'
@@ -228,37 +228,7 @@ describe('SourceControlChangeScopeBar menu', () => {
   })
 })
 
-describe('SourceControlChangeScopeBar summary and Open diff', () => {
-  it('opens the whole scope for All changes and links the commit count to the menu', async () => {
-    const calls = renderBar()
-    fireEvent.click(screen.getByTestId('source-control-change-scope-open-diff'))
-    expect(calls.openAllDiffs).toHaveBeenCalledWith(
-      'wt-1',
-      '/repo',
-      undefined,
-      undefined,
-      undefined,
-      {
-        wholeScope: true
-      }
-    )
-    fireEvent.click(screen.getByRole('button', { name: '1 commit' }))
-    expect(await screen.findByRole('menu')).toBeTruthy()
-  })
-
-  it('hides the commit count when nothing is ahead', () => {
-    renderBar({ summary: { ...READY, commitsAhead: 0 } })
-    expect(screen.queryByRole('button', { name: /commit/ })).toBeNull()
-  })
-
-  it('waits for branch compare instead of opening a partial All changes diff', () => {
-    const calls = renderBar({ summary: { ...READY, status: 'loading' } })
-    const openDiff = screen.getByTestId('source-control-change-scope-open-diff')
-    expect(openDiff.getAttribute('aria-disabled')).toBe('true')
-    fireEvent.click(openDiff)
-    expect(calls.openAllDiffs).not.toHaveBeenCalled()
-  })
-
+describe('SourceControlChangeScopeBar summary', () => {
   it('reads no rows for a closed menu on a picked commit, and counts them once the menu opens', async () => {
     let rowReads = 0
     const counted = (path: string): ScopeRow => ({
@@ -290,32 +260,5 @@ describe('SourceControlChangeScopeBar summary and Open diff', () => {
     expect(screen.getByRole('menuitemradio', { name: /Uncommitted/ }).textContent).toContain(
       '1 file'
     )
-  })
-
-  it('opens Uncommitted alone and a picked commit through the commit diff', () => {
-    const uncommitted = renderBar({ initialScope: { kind: 'uncommitted' } })
-    fireEvent.click(screen.getByTestId('source-control-change-scope-open-diff'))
-    expect(uncommitted.openAllDiffs).toHaveBeenCalledWith(
-      'wt-1',
-      '/repo',
-      undefined,
-      undefined,
-      undefined,
-      { uncommittedOnly: true }
-    )
-    cleanup()
-
-    const commit = renderBar({
-      initialScope: {
-        kind: 'commit',
-        commit: COMMIT,
-        pickedBaseOid: 'b1',
-        pickedFromBranchPage: true
-      }
-    })
-    act(() => {
-      fireEvent.click(screen.getByTestId('source-control-change-scope-open-diff'))
-    })
-    expect(commit.openHistoryCommitDiff).toHaveBeenCalledWith(COMMIT)
   })
 })

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, Animated, Easing, Text, View } from 'react-native'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { ActivityIndicator, Animated, Easing, ScrollView, Text, View } from 'react-native'
+import { spacing } from '../../theme/mobile-theme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { SHEET_CURVE } from '../../components/motion/sheet-motion-values'
@@ -9,14 +9,16 @@ import { MobileSourceControlChangesHeader } from './MobileSourceControlChangesHe
 import { MobileCommitFailurePanel } from '../commits/MobileCommitFailurePanel'
 import { MobileSourceControlFileList } from './MobileSourceControlFileList'
 import type { MobileSourceControlState } from '../use-mobile-source-control-state'
-import { styles } from '../mobile-source-control-styles'
-import { hubStyles } from '../panel/mobile-source-control-hub-styles'
+import { stylesSheet } from '../mobile-source-control-styles'
+import { hubStylesSheet } from '../panel/mobile-source-control-hub-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 const CLEAN_FADE_MS = 240
 const REDUCED_CLEAN_FADE_MS = 150
 
 // The clean state settles in when a commit empties the list; on load it is simply there.
 function CleanStateFade({ animate, children }: { animate: boolean; children: ReactNode }) {
+  const styles = useThemedStyles(stylesSheet)
   const reducedMotion = useReducedMotionEnabled() === true
   const shown = useRef(new Animated.Value(animate ? 0 : 1)).current
   useEffect(() => {
@@ -54,7 +56,9 @@ export function MobileSourceControlContent({
   bottomInset,
   onOpenCommits
 }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const hubStyles = useThemedStyles(hubStylesSheet)
   const t = useMobileTranslation()
   const { busyAction, hasVisibleChanges } = state
   // Commit runners keep busyAction set ('commit…') until the refreshed status has landed.
@@ -74,7 +78,6 @@ export function MobileSourceControlContent({
     commitFailureRecovery,
     commitFailureRecoveryAction,
     openBranchPicker,
-    abortConflictOperation,
     sections,
     shouldShowBranchCompareSection,
     branchEntries,
@@ -96,21 +99,12 @@ export function MobileSourceControlContent({
           branchLabel,
           branchCompareResult,
           busyAction,
-          openBranchPicker,
-          abortConflictOperation
+          openBranchPicker
         }}
         onOpenCommits={onOpenCommits}
       />
     ),
-    [
-      abortConflictOperation,
-      branchCompareResult,
-      branchLabel,
-      busyAction,
-      onOpenCommits,
-      openBranchPicker,
-      status
-    ]
+    [branchCompareResult, branchLabel, busyAction, onOpenCommits, openBranchPicker, status]
   )
   const list = useMemo(
     () => (
@@ -163,11 +157,11 @@ export function MobileSourceControlContent({
     connState !== 'connected' || commitFailureRecovery || actionError ? (
       <View style={hubStyles.changesControls}>
         {connState !== 'connected' ? (
-          // Retained rows look actionable offline; show reconnect state beside them.
-          <View style={styles.reconnectBanner}>
-            <ActivityIndicator size="small" color={colors.statusAmber} />
-            <Text style={styles.reconnectBannerText}>
-              {t('sourceControl.content.reconnecting', 'Reconnecting to desktop...')}
+          // Retained rows look actionable offline; say so in one quiet line above them.
+          <View style={styles.feedbackLine}>
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+            <Text style={styles.feedbackText}>
+              {t('sourceControl.content.reconnectingToComputer', 'Reconnecting…')}
             </Text>
           </View>
         ) : null}
@@ -177,11 +171,12 @@ export function MobileSourceControlContent({
             action={commitFailureRecoveryAction}
           />
         ) : actionError ? (
-          <View style={styles.actionError}>
-            <Text style={styles.actionErrorText} numberOfLines={2}>
+          // Whole but bounded: a git error's useful part ("hint: …") is usually its last lines.
+          <ScrollView style={styles.feedbackScroll} nestedScrollEnabled>
+            <Text style={[styles.feedbackText, styles.feedbackError]} selectable>
               {actionError}
             </Text>
-          </View>
+          </ScrollView>
         ) : null}
       </View>
     ) : null
@@ -192,10 +187,7 @@ export function MobileSourceControlContent({
         <View style={hubStyles.changesControls}>{header}</View>
         <CleanStateFade animate={cleanedByCommit}>
           <Text style={styles.stateTitle}>
-            {t('sourceControl.content.emptyTitle', 'No local changes')}
-          </Text>
-          <Text style={styles.stateText}>
-            {t('sourceControl.content.emptyMessage', 'Working tree is clean.')}
+            {t('sourceControl.content.noChanges', 'No changes')}
           </Text>
         </CleanStateFade>
       </View>

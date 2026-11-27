@@ -5,6 +5,7 @@
 // the sign-in, token and revocation modules share.
 import type { BotToolSignInFailure } from '../../../shared/bot-tool-sign-in'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { AuthorizationServerMetadata } from '@modelcontextprotocol/sdk/shared/auth.js'
 import { botToolCredentialsTransaction, type BotToolOAuthRecord } from '../bot-tool-credentials'
 import type { BotToolDiscoveryOptions } from './bot-tool-oauth-discovery'
@@ -55,11 +56,13 @@ export const discoveryOptions = (signal?: AbortSignal): BotToolDiscoveryOptions 
   ...(deps.fetch ? { fetch: deps.fetch } : {})
 })
 
-const MetadataExtras = z.looseObject({
-  revocation_endpoint: z.string().optional().catch(undefined),
-  revocation_endpoint_auth_methods_supported: z.array(z.string()).optional().catch(undefined),
-  authorization_response_iss_parameter_supported: z.boolean().optional().catch(undefined)
-})
+const MetadataExtras = lazyZodSchema(() =>
+  z.looseObject({
+    revocation_endpoint: z.string().optional().catch(undefined),
+    revocation_endpoint_auth_methods_supported: z.array(z.string()).optional().catch(undefined),
+    authorization_response_iss_parameter_supported: z.boolean().optional().catch(undefined)
+  })
+)
 
 /** Fields only the OAuth (not OIDC) metadata shape declares, read from either. */
 export const extra = (metadata: AuthorizationServerMetadata) => MetadataExtras.parse(metadata)

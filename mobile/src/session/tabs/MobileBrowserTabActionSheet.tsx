@@ -1,13 +1,4 @@
-import {
-  ChevronLeft,
-  ChevronRight,
-  Copy,
-  ExternalLink,
-  RefreshCw,
-  RotateCw,
-  UserRound,
-  X
-} from 'lucide-react-native'
+import { Copy, ExternalLink, RotateCw, X } from 'lucide-react-native'
 import type { MobileSessionTab } from './mobile-session-tabs'
 import { ActionSheetModal, type ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'
@@ -21,6 +12,7 @@ type BrowserTab = Extract<MobileSessionTab, { type: 'browser' }>
 export type MobileBrowserNavigationMethod = 'browser.back' | 'browser.forward' | 'browser.reload'
 export type MobileBrowserNavigationOptions = { ignoreCache?: boolean }
 
+/** What the page's own toolbar can't do: back, forward and reload stay on the toolbar. */
 export function MobileBrowserTabActionSheet(props: {
   target: BrowserTab | null
   onClose: () => void
@@ -52,61 +44,24 @@ export function MobileBrowserTabActionSheet(props: {
   } = props
   const url = target && !isBlankBrowserUrl(target.url) ? target.url : null
   const externalUrl = url ? phoneOpenableBrowserUrl(url) : null
+  const header = mobileSessionTabMenuHeader(target, [], t)
   return (
     <ActionSheetModal
       visible={target != null}
-      {...mobileSessionTabMenuHeader(target, [])}
+      {...header}
+      // The profile reads under the title ("Browser · Work"); it can't be changed from here.
+      message={
+        header.message && profileLabel !== null
+          ? `${header.message} · ${profileLabel}`
+          : header.message
+      }
       groupDestructive
       title={
         target
-          ? getMobileSessionTabTitle(target)
+          ? getMobileSessionTabTitle(target, t)
           : t('session.browserTabActionSheet.title', 'Browser')
       }
       actions={[
-        ...(target?.canGoBack
-          ? [
-              {
-                id: 'back',
-                label: t('common.back', 'Back'),
-                icon: ChevronLeft,
-                onPress: () => {
-                  const current = target
-                  onClose()
-                  if (current) {
-                    onNavigate(current, 'browser.back')
-                  }
-                }
-              }
-            ]
-          : []),
-        ...(target?.canGoForward
-          ? [
-              {
-                id: 'forward',
-                label: t('session.browserTabActionSheet.forward', 'Forward'),
-                icon: ChevronRight,
-                onPress: () => {
-                  const current = target
-                  onClose()
-                  if (current) {
-                    onNavigate(current, 'browser.forward')
-                  }
-                }
-              }
-            ]
-          : []),
-        {
-          id: 'reload',
-          label: t('session.browserTabActionSheet.reload', 'Reload'),
-          icon: RefreshCw,
-          onPress: () => {
-            const current = target
-            onClose()
-            if (current) {
-              onNavigate(current, 'browser.reload')
-            }
-          }
-        },
         ...(hardReloadSupported
           ? [
               {
@@ -147,21 +102,9 @@ export function MobileBrowserTabActionSheet(props: {
               }
             ]
           : []),
-        ...(profileLabel !== null
-          ? [
-              {
-                id: 'profile',
-                label: t('session.browserProfile.title', 'Profile'),
-                icon: UserRound,
-                status: profileLabel,
-                disabled: true,
-                onPress: () => {}
-              }
-            ]
-          : []),
         {
           id: 'close',
-          label: t('session.tabMenu.closeTab', 'Close Tab'),
+          label: t('session.tabMenu.closeTab', 'Close tab'),
           icon: X,
           destructive: true,
           onPress: () => {

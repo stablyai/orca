@@ -11,8 +11,7 @@ import {
 } from '../../../../../../src/shared/composio/composio-apps'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../../../platform/external-links/external-link'
-import { colors } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePill'
 import { BOT_CARD_AVATAR_SIZE, MobileBotCardActions } from './MobileBotCardFrame'
 import {
@@ -34,6 +33,7 @@ import {
   MobileGoogleSetupMuted,
   MobileGoogleSetupNotes
 } from './MobileGoogleSetupCardParts'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 type SignInCheck = { signIn: string | null; checking: boolean; again: boolean }
 
@@ -71,6 +71,8 @@ export function MobileComposioConnectCard({
 }: {
   scope: MobileComposioScope
 }): React.JSX.Element | null {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { client, hostKey, card, view, fontScale } = scope
   const { busy, error, setError, run } = useComposioCall()
@@ -255,6 +257,6 @@ export function MobileComposioConnectCard({
 
 const LOGO = BOT_CARD_AVATAR_SIZE - 6
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   logo: { width: LOGO, height: LOGO, borderRadius: 4 }
 }))

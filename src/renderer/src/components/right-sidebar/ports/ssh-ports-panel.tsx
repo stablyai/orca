@@ -89,6 +89,7 @@ export function SshPortsPanel({
     [owner]
   )
 
+  const activeWorktreeId = activeWorktree?.id
   const handleOpenForwardInBrowser = useCallback(
     (entry: PortForwardEntry, event?: React.MouseEvent<HTMLButtonElement>) => {
       const url = browserUrlForPortForwardEntry(entry)
@@ -102,7 +103,7 @@ export function SshPortsPanel({
         void openForwardedUrlInSystemBrowser(url, entry, 'ssh')
         return
       }
-      if (!activeWorktree?.id) {
+      if (!activeWorktreeId) {
         toast.error(
           translate(
             'auto.components.right.sidebar.PortsPanel.409afcc145',
@@ -112,14 +113,14 @@ export function SshPortsPanel({
         return
       }
       void openWorkspaceBrowserTab({
-        workspaceId: activeWorktree.id,
+        workspaceId: activeWorktreeId,
         url,
         intent: { kind: 'url' }
       }).catch((error) => {
         toast.error(error instanceof Error ? error.message : String(error))
       })
     },
-    [activeWorktree?.id, settings]
+    [activeWorktreeId, settings]
   )
 
   const handleDialogClose = useCallback(() => {

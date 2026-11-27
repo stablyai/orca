@@ -33,7 +33,7 @@ import { executeDesktopBrowserBridgeRequest } from '../../browser/desktop-browse
 import { rendererResolveRemoteCliWorkspace } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-renderer-scope'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
-import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
+import { EAGER_RPC_METHODS } from '../../runtime/rpc/methods/eager-rpc-method-registry'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
@@ -51,6 +51,9 @@ import {
 import { markRemoteCliDrivenWorkspace } from '../../browser/desktop-browser-bridge/remote-cli-driven-workspaces'
 import { persistedStore } from '../ssh/ssh-ipc-context'
 import { localSshBrowserTargetIdForSession } from '../../browser/routing/local-host-partitions/local-ssh-browser-partitions'
+import { isTeamBrowserUseBlocked } from '../../browser/browser-team-policy'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../shared/orca-profiles/orca-cloud-team-policy'
+import { onTeamFeatureBlockChanged } from '../../orca-profiles/cloud-auth/active-team-capabilities'
 
 const ATTACH_TIMEOUT_MS = 15_000
 const BRIDGE_CLIENT_ID = randomUUID()
@@ -75,6 +78,7 @@ function hostFilesFor(candidate: DesktopBrowserBridgeCandidate): DesktopBrowserB
   return files
 }
 let stopWatchingRoutingSettings: (() => void) | null = null
+let stopWatchingTeamPolicy: (() => void) | null = null
 
 function log(message: string): void {
   console.info(`[desktop-browser-bridge] ${message}`)
@@ -84,6 +88,9 @@ export async function listDesktopBrowserBridgeCandidates(
   userDataPath: string,
   connections: Pick<SshConnectionManager, 'getState'> | null
 ): Promise<DesktopBrowserBridgeCandidate[]> {
+  if (isTeamBrowserUseBlocked()) {
+    return []
+  }
   const candidates: DesktopBrowserBridgeCandidate[] = []
   // Why: a managed host's eligibility follows its orcad claim, not whether it is listed in SSH
   // settings; environment recipes connect runtime-owned targets that are claimed the same way.
@@ -138,7 +145,7 @@ export function installDesktopBrowserBridge(options: {
     dispatcher ??= new RpcDispatcher({
       runtime,
       // Restrict the registry even if an upstream caller misroutes a method.
-      methods: ALL_RPC_METHODS.filter((method) => isDesktopBrowserBridgeMethod(method.name)),
+      methods: EAGER_RPC_METHODS.filter((method) => isDesktopBrowserBridgeMethod(method.name)),
       callerScope: { kind: 'runtime-paired', grants: [] }
     })
     return dispatcher
@@ -240,6 +247,10 @@ export function installDesktopBrowserBridge(options: {
         manager?.reconcile()
       }
     }) ?? null
+  stopWatchingTeamPolicy?.()
+  stopWatchingTeamPolicy = onTeamFeatureBlockChanged(ORCA_CLOUD_TEAM_POLICY_FLAGS.browserUse, () =>
+    manager?.reconcile()
+  )
   setDesktopBrowserBridgeControl({
     reconcile: () => manager?.reconcile(),
     resetEnvironment: (environmentId) => manager?.resetEnvironment(environmentId)
@@ -258,6 +269,8 @@ function isSshTargetBrowsingRouted(targetId: string): boolean {
 export function disposeDesktopBrowserBridge(): void {
   stopWatchingRoutingSettings?.()
   stopWatchingRoutingSettings = null
+  stopWatchingTeamPolicy?.()
+  stopWatchingTeamPolicy = null
   setDesktopBrowserBridgeControl(null)
   manager?.dispose()
   manager = null

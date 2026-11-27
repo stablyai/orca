@@ -12,9 +12,8 @@ import type {
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import type { AgentJournalBoundedPayload } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
-import { styles } from '../messages/mobile-native-chat-message-styles'
-import { toolStyles } from '../tool-results/mobile-native-chat-tool-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { stylesSheet } from '../messages/mobile-native-chat-message-styles'
+import { toolStylesSheet } from '../tool-results/mobile-native-chat-tool-styles'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MobileNativeChatOwnedScrollView } from '../viewport/MobileNativeChatOwnedScrollView'
 import {
@@ -22,6 +21,7 @@ import {
   readMobileNativeChatItem
 } from '../projection/mobile-native-chat-item-read'
 import { pressedStyle } from '../../../../theme/mobile-theme'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 // Keep full-content state per row so live transcript revisions cannot overwrite the reader’s requested expansion.
 
@@ -38,7 +38,7 @@ function ShowFull({
   load: Load
   onPress: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Pressable
       style={({ pressed }) => [styles.showFull, pressed && pressedStyle]}
@@ -63,7 +63,8 @@ export function MobileNativeChatToolOutput({
   rootIdentity: string
   positionKey: string
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const toolStyles = useThemedStyles(toolStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const source = useContext(MobileNativeChatItemSourceContext)
   const { output, isError, fullOutputItemId } = body
@@ -155,7 +156,7 @@ export function useMobileNativeChatFullMessage(message: NativeChatMessage): {
   showFull: React.JSX.Element | null
   recovery: { load: Load; onPress: () => void } | null
 } {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const source = useContext(MobileNativeChatItemSourceContext)
   const detail = source?.messageDetail

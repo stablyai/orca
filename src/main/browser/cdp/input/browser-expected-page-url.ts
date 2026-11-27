@@ -8,10 +8,23 @@ import {
   type BrowserExpectedUrlMismatch
 } from '../../../../shared/browser/client-hosting/browser-expected-url'
 import { BrowserError } from '../../browser-error'
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
+import { comparableKagiSessionUrl } from '../../../../shared/browser/navigation/kagi-session-url-comparison'
+
+export function redactBrowserExpectedUrlMismatch(
+  mismatch: BrowserExpectedUrlMismatch
+): BrowserExpectedUrlMismatch {
+  return {
+    ...mismatch,
+    expectedUrl: clipUrlForMismatch(redactKagiSessionToken(mismatch.expectedUrl)),
+    actualUrl: clipUrlForMismatch(redactKagiSessionToken(mismatch.actualUrl))
+  }
+}
 
 export function browserExpectedUrlMismatchError(
   mismatch: BrowserExpectedUrlMismatch
 ): BrowserError {
+  mismatch = redactBrowserExpectedUrlMismatch(mismatch)
   return new BrowserError(
     BROWSER_EXPECTED_URL_MISMATCH_CODE,
     expectedUrlMismatchMessage(mismatch),
@@ -30,16 +43,32 @@ export class ExpectedPageUrlGuard {
   ) {}
 
   verify(liveUrls: readonly string[]): void {
-    const actualUrl = liveUrls.find((url) => !isSameBrowserUrl(url, this.expectedUrl))
+    const anchor = this.checkedUrl ?? liveUrls[0]
+    const expected = redactKagiSessionToken(this.expectedUrl)
+    // Compare without the token, treating only the two spellings of a space alike; a query that
+    // cannot be decoded must match exactly.
+    const comparableExpected = comparableKagiSessionUrl(this.expectedUrl)
+    const isSamePage = (url: string): boolean => {
+      const comparable = comparableKagiSessionUrl(url)
+      return comparable === null || comparableExpected === null
+        ? isSameBrowserUrl(url, this.expectedUrl)
+        : isSameBrowserUrl(comparable, comparableExpected)
+    }
+    const actualUrl = liveUrls.find(
+      (url) =>
+        !isSamePage(url) ||
+        (expected !== this.expectedUrl && !isSameBrowserUrl(url, this.expectedUrl)) ||
+        (anchor !== undefined && !isSameBrowserUrl(url, anchor))
+    )
     if (actualUrl !== undefined) {
       throw browserExpectedUrlMismatchError({
         expectedUrl: this.expectedUrl,
-        actualUrl: clipUrlForMismatch(actualUrl),
+        actualUrl,
         browserPageId: this.browserPageId,
         mayHaveStarted: this.stepStarted
       })
     }
-    this.checkedUrl = liveUrls[0]
+    this.checkedUrl ??= liveUrls[0]
   }
 
   verifyStep(liveUrls: readonly string[]): void {
@@ -50,7 +79,12 @@ export class ExpectedPageUrlGuard {
   /** Names the URL the last check saw; the action itself may have navigated since. */
   withReceipt<T>(result: T): T {
     return isRecord(result)
-      ? { ...result, browserPageId: this.browserPageId, checkedUrl: this.checkedUrl }
+      ? {
+          ...result,
+          browserPageId: this.browserPageId,
+          checkedUrl:
+            this.checkedUrl === undefined ? undefined : redactKagiSessionToken(this.checkedUrl)
+        }
       : result
   }
 }

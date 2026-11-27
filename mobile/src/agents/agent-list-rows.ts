@@ -90,36 +90,25 @@ export function hostAgents(input: AgentListInput, hostId: string): HostAgents {
   // Only this connection's own read may show states; anything else is what the agents last were.
   const liveAgents = connected && !info?.catalogUnavailable ? info?.agents : undefined
   const live = liveAgents !== undefined
-  // A relayed server's pane keys are its own, so they never meet the desktop's.
-  const rowKey = (server: string | undefined, paneKey: string) =>
-    agentListRowKey(hostId, server ? `${server}:${paneKey}` : paneKey)
-  const pending = (key: string) => input.pendingActivity?.[key]
+  const pending = (paneKey: string) => input.pendingActivity?.[agentListRowKey(hostId, paneKey)]
   // Only what the desktop lists, less what the phone just cleared; a cleared agent's workers stay, as roots.
   const entries = (liveAgents ?? info?.lastSeenAgents ?? info?.agents ?? []).filter((entry) => {
-    const change = pending(rowKey(entry.executionHost?.id, entry.agent.paneKey))
+    const change = pending(entry.agent.paneKey)
     return entry.agent.activity?.listed !== false && !(change && 'cleared' in change)
   })
-  const entryByKey = new Map(
-    entries.map((entry) => [rowKey(entry.executionHost?.id, entry.agent.paneKey), entry])
-  )
-  const toRow = (
-    node: AgentRowNode,
-    depth: number,
-    server: string | undefined
-  ): AgentListRow | null => {
-    const key = rowKey(server, node.row.paneKey)
-    const entry = entryByKey.get(key)
+  const entryByPaneKey = new Map(entries.map((entry) => [entry.agent.paneKey, entry]))
+  const toRow = (node: AgentRowNode, depth: number): AgentListRow | null => {
+    const entry = entryByPaneKey.get(node.row.paneKey)
     if (!entry) {
       return null
     }
     const { agent } = entry
     const verdict = listedAgentVerdict(agent)
-    // The desktop reads and clears only its own agents, so a relayed server's rows offer neither.
-    const liveVerdict = live && !server ? verdict : undefined
-    const change = pending(key)
+    const liveVerdict = live ? verdict : undefined
+    const change = pending(agent.paneKey)
     const title = verdict?.title.trim() || agentListTitle(agent)
     return {
-      key,
+      key: agentListRowKey(hostId, agent.paneKey),
       hostId,
       entry,
       title,
@@ -136,39 +125,23 @@ export function hostAgents(input: AgentListInput, hostId: string): HostAgents {
         : undefined,
       clearable: liveVerdict?.clearable === true,
       depth,
-      workers: node.children.flatMap((child) => descendants(child, depth + 1, server))
+      workers: node.children.flatMap((child) => descendants(child, depth + 1))
     }
   }
-  const descendants = (
-    node: AgentRowNode,
-    depth: number,
-    server: string | undefined
-  ): AgentListRow[] => {
-    const row = toRow(node, depth, server)
+  const descendants = (node: AgentRowNode, depth: number): AgentListRow[] => {
+    const row = toRow(node, depth)
     return row ? [{ ...row, workers: [] }, ...row.workers] : []
   }
-  const byServer = new Map<string | undefined, HomeAgentEntry[]>()
-  for (const entry of entries) {
-    const server = entry.executionHost?.id
-    const group = byServer.get(server)
-    if (group) {
-      group.push(entry)
-    } else {
-      byServer.set(server, [entry])
-    }
-  }
-  // Lineage spans each host: a coordinator's workers often run in other workspaces. The host's
+  // Lineage spans the desktop: a coordinator's workers often run in other workspaces. Desktop's
   // own nesting wins where it gave a verdict.
-  const roots = [...byServer].flatMap(([server, hostEntries]) => {
-    const lineage = hostEntries.map(({ agent }) => {
-      const verdict = listedAgentVerdict(agent)
-      return verdict ? { ...agent, parentPaneKey: verdict.childOf ?? null } : agent
-    })
-    return flattenAgentRowLineage(lineage)
-      .filter((node) => node.depth === 0)
-      .map((node) => toRow(node, 0, server))
-      .filter((row): row is AgentListRow => row !== null)
+  const lineage = entries.map(({ agent }) => {
+    const verdict = listedAgentVerdict(agent)
+    return verdict ? { ...agent, parentPaneKey: verdict.childOf ?? null } : agent
   })
+  const roots = flattenAgentRowLineage(lineage)
+    .filter((node) => node.depth === 0)
+    .map((node) => toRow(node, 0))
+    .filter((row): row is AgentListRow => row !== null)
   return { hostId, roots, live, offline: !connected, seenAt: info?.countsProvenAt }
 }
 
@@ -217,24 +190,4 @@ export function countAgentsNeedingYouByHost(
     counts[row.hostId] = (counts[row.hostId] ?? 0) + 1
   }
   return counts
-}
-
-export type AgentListHostSummary = Readonly<{
-  hostId: string
-  agents: number
-  needsYou: number
-  offline: boolean
-}>
-
-export function summarizeAgentListHosts(input: AgentListInput): AgentListHostSummary[] {
-  return input.hosts.map((host) => {
-    const agents = hostAgents(input, host.id)
-    const rows = everyRow(agents.roots)
-    return {
-      hostId: host.id,
-      agents: rows.length,
-      needsYou: rows.filter(rowNeedsYou).length,
-      offline: agents.offline
-    }
-  })
 }

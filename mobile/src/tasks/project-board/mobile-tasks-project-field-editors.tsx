@@ -1,15 +1,16 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
-import { translate } from '../../i18n/mobile-i18n'
 import { SHOW_MOBILE_PROJECT_METADATA_EDITORS } from '../task-list/mobile-tasks-options'
 import { editableProjectFields, projectFieldValueLabel } from './mobile-tasks-project-fields'
 import { View, Text, Pressable } from 'react-native'
 import { Check } from 'lucide-react-native'
-import { colors, pressedStyle } from '../../theme/mobile-theme'
+import { pressedStyle } from '../../theme/mobile-theme'
 import { TextField } from '../../components/composer-input/TextField'
-import { styles } from '../mobile-tasks-legacy-styles'
 
 export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentationModel) {
   const {
+    colors,
+    styles,
+    t,
     githubProjectTable,
     mutateProjectRowField,
     projectFieldDrafts,
@@ -25,7 +26,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
     editableProjectFields(githubProjectTable).length > 0 ? (
     <View style={styles.detailSection}>
       <Text style={styles.detailSectionTitle}>
-        {translate('tasks.projectFieldEditors.projectFields', 'Project fields')}
+        {t('tasks.projectFieldEditors.projectFields', 'Project fields')}
       </Text>
       {editableProjectFields(githubProjectTable).map((field) => {
         const currentLabel = projectFieldValueLabel(projectRowItem, field)
@@ -41,7 +42,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
             const number = Number(draftValue)
             if (!Number.isFinite(number)) {
               setProjectRowDetailError(
-                translate('tasks.projectFieldEditors.invalidNumber', 'Enter a valid number.')
+                t('tasks.projectFieldEditors.invalidNumber', 'Enter a valid number.')
               )
               return
             }
@@ -55,7 +56,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
             const date = draftValue.trim()
             if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
               setProjectRowDetailError(
-                translate('tasks.projectFieldEditors.invalidDate', 'Enter a date as YYYY-MM-DD.')
+                t('tasks.projectFieldEditors.invalidDate', 'Enter a date as YYYY-MM-DD.')
               )
               return
             }
@@ -110,10 +111,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
               <View style={styles.projectIterationList}>
                 {field.iterations.length === 0 ? (
                   <Text style={styles.detailMuted}>
-                    {translate(
-                      'tasks.projectFieldEditors.noIterations',
-                      'No iterations available.'
-                    )}
+                    {t('tasks.projectFieldEditors.noIterations', 'No iterations available.')}
                   </Text>
                 ) : (
                   field.iterations.map((iteration) => {
@@ -140,7 +138,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
                           <Text style={styles.actionText}>{iteration.title}</Text>
                           <Text style={styles.detailMuted}>
                             {iteration.completed
-                              ? translate(
+                              ? t(
                                   'tasks.projectFieldEditors.completedIteration',
                                   'Completed · {{startDate}} · {{duration}}d',
                                   {
@@ -148,7 +146,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
                                     duration: iteration.duration
                                   }
                                 )
-                              : translate(
+                              : t(
                                   'tasks.projectFieldEditors.upcomingIteration',
                                   'Current & upcoming · {{startDate}} · {{duration}}d',
                                   {
@@ -176,10 +174,10 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
                   }
                   placeholder={
                     field.dataType === 'DATE'
-                      ? translate('tasks.projectFieldEditors.datePlaceholder', 'YYYY-MM-DD')
+                      ? t('tasks.projectFieldEditors.datePlaceholder', 'YYYY-MM-DD')
                       : field.dataType === 'NUMBER'
-                        ? translate('tasks.projectFieldEditors.numberPlaceholder', 'Number')
-                        : translate('tasks.projectFieldEditors.textPlaceholder', 'Text')
+                        ? t('tasks.projectFieldEditors.numberPlaceholder', 'Number')
+                        : t('tasks.projectFieldEditors.textPlaceholder', 'Text')
                   }
                   keyboardType={field.dataType === 'NUMBER' ? 'numeric' : 'default'}
                   autoCapitalize="none"
@@ -190,7 +188,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
                   onPress={saveTextField}
                 >
                   <Text style={styles.inlineSaveText}>
-                    {translate('tasks.projectFieldEditors.saveField', 'Save field')}
+                    {t('tasks.projectFieldEditors.saveField', 'Save field')}
                   </Text>
                 </Pressable>
               </>
@@ -201,7 +199,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
               onPress={() => void mutateProjectRowField(projectRowItem, field, null)}
             >
               <Text style={styles.inlineSaveText}>
-                {translate('tasks.projectFieldEditors.clearField', 'Clear field')}
+                {t('tasks.projectFieldEditors.clearField', 'Clear field')}
               </Text>
             </Pressable>
           </View>
