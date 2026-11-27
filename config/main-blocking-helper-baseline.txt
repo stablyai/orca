@@ -579,8 +579,10 @@
 22 src/main/ipc/diagnostics.ts
 1 src/main/ipc/emulator/emulator-video-stream.ts
 6 src/main/ipc/ephemeral-vm/ephemeral-vm-recipe-context.ts
+5 src/main/ipc/ephemeral-vm/ephemeral-vm-provision-handler.ts # split out of ephemeral-vm.ts; runs only on invoked provisions, never at boot
 7 src/main/ipc/ephemeral-vm/ephemeral-vm-runtime-handlers.ts
-6 src/main/ipc/ephemeral-vm/ephemeral-vm.ts
+7 src/main/ipc/ephemeral-vm/ephemeral-vm.ts
+2 src/main/ipc/ephemeral-vm/lazy-ephemeral-vm-handlers.ts # one-shot startup reconcile (only when VM state files exist) and first-invoke handler load; nothing blocks an empty boot
 15 src/main/ipc/filesystem/access/filesystem-auth.ts
 20 src/main/ipc/filesystem/access/local-file-access-resolution.ts
 3 src/main/ipc/filesystem/filesystem.ts
