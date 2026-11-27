@@ -29,7 +29,7 @@ export function MobileNativeChatMessageMeta({
     return null
   }
   return (
-    <View style={styles.meta}>
+    <View style={[styles.meta, styles.metaReply]}>
       <View style={styles.metaActions}>
         <MobileNativeChatResponseActions
           message={message}

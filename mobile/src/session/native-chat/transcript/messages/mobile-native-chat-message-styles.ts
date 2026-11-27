@@ -76,6 +76,10 @@ export const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: 6
   },
+  // 24 pt from a reply's last line to its copy and ⋯ glyphs, which sit 4 pt into their 24 pt boxes.
+  metaReply: {
+    marginTop: spacing.lg + spacing.xs
+  },
   // Copy and rewind sit together after the time; each 24 pt box centres a 14 pt glyph, so pulling 5 pt back on
   // both ends keeps the time-to-glyph gap at the meta gap and ends a user row's icons on the bubble's edge.
   metaActions: {

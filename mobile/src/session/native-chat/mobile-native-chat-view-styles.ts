@@ -10,7 +10,7 @@ export const styles = themedStyleSheet(() => ({
   hidden: { display: 'none' },
   root: {
     flex: 1,
-    backgroundColor: colors.bgBase
+    backgroundColor: colors.chatCanvas
   },
   inputLockStatusRow: {
     flexDirection: 'row',
@@ -52,8 +52,9 @@ export const styles = themedStyleSheet(() => ({
     flex: 1,
     position: 'relative'
   },
+  // Clear of the edge fades at either end.
   listContent: {
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.lg,
     flexGrow: 1
   },
   fab: {
