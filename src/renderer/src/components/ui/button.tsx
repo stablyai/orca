@@ -7,6 +7,9 @@ import { cn } from '@/lib/class-names'
 const outlineButtonClasses =
   'border border-border bg-background text-foreground shadow-xs hover:border-muted-foreground/35 hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50'
 
+const mutedGhostButtonClasses =
+  'text-muted-foreground hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50'
+
 const disabledOnAccentButtonClasses =
   'disabled:bg-accent disabled:text-muted-foreground disabled:opacity-100 disabled:hover:bg-accent disabled:hover:text-muted-foreground'
 
@@ -35,8 +38,9 @@ const buttonVariants = cva(
           'bg-theme-accent-fill text-theme-accent-foreground hover:bg-theme-accent-fill-hover',
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         // A quiet secondary action under a title, such as a toast's "Show list": muted until hovered.
-        'ghost-muted':
-          'text-muted-foreground hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        'ghost-muted': mutedGhostButtonClasses,
+        // `ghost-muted` for a Details toggle that stays filled while its list is open.
+        'ghost-muted-disclosure': `${mutedGhostButtonClasses} aria-expanded:bg-accent aria-expanded:text-accent-foreground`,
         // A row action over its hovered row's accent fill, where ghost's accent hover would not show.
         'ghost-on-accent': `text-accent-foreground hover:bg-foreground/10 ${disabledOnAccentButtonClasses}`,
         // `ghost-on-accent` at a clipped list's edge, where an outset ring would lose a side.
