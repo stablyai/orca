@@ -1,17 +1,20 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
 import { PLUGIN_PANEL_IMAGE_ICON_SINCE } from '../manifest/plugin-schema-field-docs'
 import { isPluginJsonObject } from '../manifest/plugin-json-object'
 import { PLUGIN_ICON_RULE_TEXT } from '../images/plugin-image-fields'
 import { pluginPanelObjectIconIssue } from './plugin-panel-path-icon'
 
-export const pluginPanelImageIconSchema = z
-  .strictObject({
-    image: pluginRelativePathSchema.meta({
-      description: `Image file drawn in its own colors on the panel's button. ${PLUGIN_ICON_RULE_TEXT}`
+export const pluginPanelImageIconSchema = lazyZodSchema(() =>
+  z
+    .strictObject({
+      image: pluginRelativePathSchema.meta({
+        description: `Image file drawn in its own colors on the panel's button. ${PLUGIN_ICON_RULE_TEXT}`
+      })
     })
-  })
-  .meta({ 'x-orca-since': PLUGIN_PANEL_IMAGE_ICON_SINCE })
+    .meta({ 'x-orca-since': PLUGIN_PANEL_IMAGE_ICON_SINCE })
+)
 
 /** An icon meant as an image, valid or not: an object with its own `image` key. */
 export function isPluginPanelImageIcon(icon: unknown): boolean {
