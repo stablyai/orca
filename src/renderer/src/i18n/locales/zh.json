@@ -21571,13 +21571,11 @@
         "commandCount_other": "{{count}} 个命令",
         "mixedRegion": "工作者和后台命令",
         "commandsRegion": "后台命令",
-        "stopCommands": "停止命令",
         "stopSubagentsAndCommands": "停止子代理和命令",
         "workersKeepRunning": "工作者会继续运行",
         "clearFailedWorkers": "清除失败的工作者",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}，{{commands}}",
-        "stopSubagents": "停止子代理"
+        "mixedCountSpoken": "{{workers}}，{{commands}}"
       },
       "webhookSetup": {
         "heading": "设置 Webhook",

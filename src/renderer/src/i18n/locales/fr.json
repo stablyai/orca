@@ -21917,13 +21917,11 @@
         "commandCount_other": "{{count}} commandes",
         "mixedRegion": "Workers et commandes en arrière-plan",
         "commandsRegion": "Commandes en arrière-plan",
-        "stopCommands": "Arrêter les commandes",
         "stopSubagentsAndCommands": "Arrêter les sous-agents et les commandes",
         "workersKeepRunning": "Les workers continuent de tourner",
         "clearFailedWorkers": "Effacer les workers en échec",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}, {{commands}}",
-        "stopSubagents": "Arrêter les sous-agents"
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Configurer un webhook",

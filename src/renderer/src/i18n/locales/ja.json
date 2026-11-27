@@ -21452,13 +21452,11 @@
         "commandCount_other": "{{count}} 件のコマンド",
         "mixedRegion": "ワーカーとバックグラウンドコマンド",
         "commandsRegion": "バックグラウンドコマンド",
-        "stopCommands": "コマンドを停止",
         "stopSubagentsAndCommands": "サブ Agent とコマンドを停止",
         "workersKeepRunning": "ワーカーは実行を続けます",
         "clearFailedWorkers": "失敗したワーカーをクリア",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}、{{commands}}",
-        "stopSubagents": "サブ Agent を停止"
+        "mixedCountSpoken": "{{workers}}、{{commands}}"
       },
       "webhookSetup": {
         "heading": "Webhook を設定",

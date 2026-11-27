@@ -22410,13 +22410,11 @@
         "commandCount_other": "{{count}} команды",
         "mixedRegion": "Исполнители и фоновые команды",
         "commandsRegion": "Фоновые команды",
-        "stopCommands": "Остановить команды",
         "stopSubagentsAndCommands": "Остановить субагентов и команды",
         "workersKeepRunning": "Исполнители продолжат работу",
         "clearFailedWorkers": "Очистить исполнителей с ошибками",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}, {{commands}}",
-        "stopSubagents": "Остановить субагентов"
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Настройка вебхука",

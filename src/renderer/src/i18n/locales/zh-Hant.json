@@ -22337,13 +22337,11 @@
         "commandCount_other": "{{count}} 個命令",
         "mixedRegion": "工作者和背景命令",
         "commandsRegion": "背景命令",
-        "stopCommands": "停止命令",
         "stopSubagentsAndCommands": "停止子代理和命令",
         "workersKeepRunning": "工作者會繼續執行",
         "clearFailedWorkers": "清除失敗的工作者",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}，{{commands}}",
-        "stopSubagents": "停止子代理"
+        "mixedCountSpoken": "{{workers}}，{{commands}}"
       },
       "webhookSetup": {
         "heading": "設定 Webhook",

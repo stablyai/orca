@@ -22231,13 +22231,11 @@
         "commandCount_other": "{{count}} comandos",
         "mixedRegion": "Trabajadores y comandos en segundo plano",
         "commandsRegion": "Comandos en segundo plano",
-        "stopCommands": "Detener comandos",
         "stopSubagentsAndCommands": "Detener subagentes y comandos",
         "workersKeepRunning": "Los trabajadores siguen en ejecución",
         "clearFailedWorkers": "Borrar trabajadores con error",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}, {{commands}}",
-        "stopSubagents": "Detener subagentes"
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Configura un webhook",

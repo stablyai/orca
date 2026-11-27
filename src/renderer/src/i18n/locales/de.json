@@ -22644,13 +22644,11 @@
         "commandCount_other": "{{count}} Befehle",
         "mixedRegion": "Worker und Hintergrundbefehle",
         "commandsRegion": "Hintergrundbefehle",
-        "stopCommands": "Befehle stoppen",
         "stopSubagentsAndCommands": "Subagenten und Befehle stoppen",
         "workersKeepRunning": "Worker laufen weiter",
         "clearFailedWorkers": "Fehlgeschlagene Worker entfernen",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}, {{commands}}",
-        "stopSubagents": "Subagenten stoppen"
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Webhook einrichten",

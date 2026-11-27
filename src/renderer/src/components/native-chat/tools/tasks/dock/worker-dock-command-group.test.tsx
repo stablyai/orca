@@ -195,7 +195,8 @@ describe('open tray', () => {
       workers: [worker('a')],
       tasks: [command('shell-1')]
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Stop commands' }))
+    // The stop names no target: it may end subagents that start before the tray updates.
+    fireEvent.click(screen.getByRole('button', { name: 'Stop subagents and commands' }))
     expect(onStop).toHaveBeenCalledWith()
     cleanup()
     renderTray({
@@ -231,7 +232,7 @@ describe('open tray', () => {
     expect(onStop).toHaveBeenCalledWith('shell-1')
   })
 
-  it('names a subagents-only Stop all, and the whole chat when work is unlisted', () => {
+  it('names subagents and commands beside workers whatever subagents or commands are listed', () => {
     renderTray({
       expanded: true,
       supportsTaskStop: false,
@@ -239,7 +240,7 @@ describe('open tray', () => {
       workers: [worker('a')],
       tasks: [subagent('sub-1')]
     })
-    expect(screen.getByRole('button', { name: 'Stop subagents' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Stop subagents and commands' })).toBeInTheDocument()
     cleanup()
     renderTray({
       expanded: true,
@@ -347,7 +348,7 @@ describe('kinds', () => {
     expect(screen.getByRole('button', { name: 'Stop subagents and commands' })).toBeInTheDocument()
   })
 
-  it('names a monitor beside workers as a command', () => {
+  it('names subagents and commands beside workers with only a monitor listed', () => {
     renderTray({
       expanded: true,
       supportsTaskStop: false,
@@ -355,7 +356,35 @@ describe('kinds', () => {
       workers: [worker('a')],
       tasks: [{ id: 'watch-1', kind: 'monitor', description: 'Watch CI', state: 'monitoring' }]
     })
-    expect(screen.getByRole('button', { name: 'Stop commands' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Stop subagents and commands' })).toBeInTheDocument()
+  })
+
+  it('hands focus to the pill when the footer Stop it held goes away', () => {
+    const view = renderTray({
+      expanded: true,
+      supportsTaskStop: false,
+      offersStopAll: true,
+      workers: [worker('a')],
+      tasks: [command('shell-1')]
+    })
+    screen.getByRole('button', { name: 'Stop subagents and commands' }).focus()
+    view.rerender({ offersStopAll: false, tasks: [] })
+    expect(document.activeElement).toBe(chip())
+  })
+
+  it('leaves focus the user moved elsewhere when the footer Stop goes away', () => {
+    const view = renderTray({
+      expanded: true,
+      supportsTaskStop: false,
+      offersStopAll: true,
+      workers: [worker('a')],
+      tasks: [command('shell-1')]
+    })
+    screen.getByRole('button', { name: 'Stop subagents and commands' }).focus()
+    const row = screen.getByRole('button', { name: /^Worker · Review change a/ })
+    row.focus()
+    view.rerender({ offersStopAll: false, tasks: [] })
+    expect(document.activeElement).toBe(row)
   })
 
   it('keeps focus on the same row when a second group appears or leaves', () => {

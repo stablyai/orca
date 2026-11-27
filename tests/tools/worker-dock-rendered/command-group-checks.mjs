@@ -120,26 +120,34 @@ export async function runCommandGroupChecks({ check, scene, assert, open, shot }
         const opener = (index) =>
           page.locator(`[data-index="${index}"] [data-worker-dock-open]`).first()
         await opener(0).focus()
-        // A virtualized move focuses its row once drawn, a frame or more later: wait for each move.
-        const press = async (key) => {
-          const before = await focusedRow(page)
+        // A virtualized move focuses its row once drawn, a frame or more later (focus can rest on
+        // the page meanwhile): wait until the row at the destination index has it.
+        const focusedIndex = () =>
+          page.evaluate(
+            () =>
+              document.activeElement?.closest('[data-index]')?.getAttribute('data-index') ?? null
+          )
+        const press = async (key, destination) => {
           await page.keyboard.press(key)
           await page
             .waitForFunction(
-              (id) =>
-                (document.activeElement
-                  ?.closest('[data-worker-dock-row]')
-                  ?.getAttribute('data-worker-dock-row') ?? null) !== id,
-              before,
+              (index) =>
+                document.activeElement?.closest('[data-index]')?.getAttribute('data-index') ===
+                String(index),
+              destination,
               { timeout: 3000 }
             )
             .catch(() => {})
+          assert(
+            (await focusedIndex()) === String(destination),
+            `${key} did not reach row ${destination}`
+          )
         }
-        for (let step = 0; step < 24; step++) {
-          await press('ArrowDown')
+        for (let step = 1; step <= 24; step++) {
+          await press('ArrowDown', step)
         }
         const lastWorker = await focusedRow(page)
-        await press('ArrowDown')
+        await press('ArrowDown', 25)
         const firstCommand = await focusedRow(page)
         const commandRow = page.locator('[data-index="25"]')
         assert(
@@ -160,12 +168,12 @@ export async function runCommandGroupChecks({ check, scene, assert, open, shot }
           page.locator('[data-index="26"]').boundingBox()
         ])
         assert(next && labelled && next.y >= labelled.y + labelled.height - 1, 'rows overlap')
-        await press('End')
+        await press('End', 34)
         const last = await page
           .locator('[data-index="34"] [data-worker-dock-row]')
           .getAttribute('data-worker-dock-row')
         assert((await focusedRow(page)) === last, 'End did not reach the last command')
-        await press('Home')
+        await press('Home', 0)
         const first = await page
           .locator('[data-index="0"] [data-worker-dock-row]')
           .getAttribute('data-worker-dock-row')

@@ -33,6 +33,7 @@ import {
   type WorkerDockIdentity
 } from './worker-dock-groups'
 import { WorkerDockGroupedRows } from './WorkerDockGroupedRows'
+import { useWorkerDockFooterFocus } from './use-worker-dock-footer-focus'
 import { useWorkerDockCardFocus } from './use-worker-dock-card-focus'
 import { useWorkerDockCardBudget, WORKER_DOCK_ROW } from './use-worker-dock-card-budget'
 import { useWorkerDockDetailReads } from './use-worker-dock-detail-reads'
@@ -200,6 +201,7 @@ export function WorkerDockRoster(props: {
       setHeld(null)
     }
   }
+  useWorkerDockFooterFocus(root, pill, `${Boolean(props.stopAll)}:${clearable >= 2}`)
   const { focusRow, rememberFocus, forgetFocus } = useWorkerDockCardFocus({
     items,
     rows: props.rows,
@@ -221,12 +223,7 @@ export function WorkerDockRoster(props: {
   // With live counts the spoken chip names both groups in full; a held or failed chip says its own text.
   const named = workerDockNamedCounts(t, summary, itemCounts)
   const chipSpoken = chipLabel === named.label && named.spoken ? named.spoken : chipLabel
-  // An unread roster can't vouch that nothing else runs, so Stop all then names everything it may end.
-  const stopAllScope = workerDockStopAllScope(
-    items,
-    props.rows,
-    Boolean(props.incomplete || props.unavailable)
-  )
+  const stopAllScope = workerDockStopAllScope(items, props.rows)
   return (
     <div
       ref={root}

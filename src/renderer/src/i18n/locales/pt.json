@@ -23795,13 +23795,11 @@
         "commandCount_other": "{{count}} comandos",
         "mixedRegion": "Workers e comandos em segundo plano",
         "commandsRegion": "Comandos em segundo plano",
-        "stopCommands": "Parar comandos",
         "stopSubagentsAndCommands": "Parar subagentes e comandos",
         "workersKeepRunning": "Os workers continuam em execução",
         "clearFailedWorkers": "Limpar workers com falha",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}, {{commands}}",
-        "stopSubagents": "Parar subagentes"
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Configurar um webhook",

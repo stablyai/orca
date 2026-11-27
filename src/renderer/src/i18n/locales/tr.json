@@ -22975,13 +22975,11 @@
         "commandCount_other": "{{count}} komut",
         "mixedRegion": "Çalışanlar ve arka plan komutları",
         "commandsRegion": "Arka plan komutları",
-        "stopCommands": "Komutları durdur",
         "stopSubagentsAndCommands": "Alt ajanları ve komutları durdur",
         "workersKeepRunning": "Çalışanlar çalışmaya devam eder",
         "clearFailedWorkers": "Başarısız çalışanları temizle",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}, {{commands}}",
-        "stopSubagents": "Alt ajanları durdur"
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Webhook kur",

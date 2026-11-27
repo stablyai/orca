@@ -22056,13 +22056,11 @@
         "commandCount_other": "명령 {{count}}개",
         "mixedRegion": "워커 및 백그라운드 명령",
         "commandsRegion": "백그라운드 명령",
-        "stopCommands": "명령 중지",
         "stopSubagentsAndCommands": "하위 에이전트 및 명령 중지",
         "workersKeepRunning": "워커는 계속 실행됩니다",
         "clearFailedWorkers": "실패한 워커 지우기",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}, {{commands}}",
-        "stopSubagents": "하위 에이전트 중지"
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "웹훅 설정",

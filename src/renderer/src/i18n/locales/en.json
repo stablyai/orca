@@ -23165,13 +23165,11 @@
         "commandCount_other": "{{count}} commands",
         "mixedRegion": "Workers and background commands",
         "commandsRegion": "Background commands",
-        "stopCommands": "Stop commands",
         "stopSubagentsAndCommands": "Stop subagents and commands",
         "workersKeepRunning": "Workers keep running",
         "clearFailedWorkers": "Clear failed workers",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}, {{commands}}",
-        "stopSubagents": "Stop subagents"
+        "mixedCountSpoken": "{{workers}}, {{commands}}"
       },
       "webhookSetup": {
         "heading": "Set up a webhook",

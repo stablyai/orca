@@ -87,26 +87,12 @@ export function workerDockTopRow(
   )
 }
 
-/** Stop all is the chat's own untargeted stop: it ends the chat's subagents and commands, listed or
- *  not, never orchestration workers. With workers listed beside it, it names what it stops and never
- *  less: a workflow runs agents and their commands, so it reads as both (whatever group it is listed
- *  in), and so does work the roster may not show (`incomplete`, or offered with none of its own rows
- *  listed: the provider offers it only for live work, so something unlisted runs). */
+/** Stop all is the chat's own untargeted stop: it names no target, so it ends whatever subagents and
+ *  commands the chat runs when it lands, listed or not, and never orchestration workers. With workers
+ *  listed beside it, it says so ("Stop subagents and commands"); otherwise it is plain "Stop all". */
 export function workerDockStopAllScope(
   items: readonly WorkerDockIdentity[],
-  rows: Rows,
-  /** Some work may run unlisted: the provider says so, or the roster could not be read. */
-  incomplete: boolean
+  rows: Rows
 ): WorkerDockStopAllScope {
-  const kinds = new Set(items.map((row) => kindOf(row, rows)))
-  if (!kinds.has('worker')) {
-    return 'all'
-  }
-  const subagents = kinds.has('agent')
-  const commands = [...kinds].some((kind) => kind === 'command' || kind === 'monitor')
-  // An unclassified task may be an agent or a workflow Claude has no name for yet.
-  if (incomplete || kinds.has('workflow') || kinds.has('unknown') || subagents === commands) {
-    return 'subagents-and-commands'
-  }
-  return subagents ? 'subagents' : 'commands'
+  return items.some((row) => kindOf(row, rows) === 'worker') ? 'subagents-and-commands' : 'all'
 }

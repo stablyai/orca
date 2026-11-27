@@ -3,7 +3,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 
 /** What the chat's own untargeted stop ends, as its button names it. */
-export type WorkerDockStopAllScope = 'all' | 'subagents' | 'commands' | 'subagents-and-commands'
+export type WorkerDockStopAllScope = 'all' | 'subagents-and-commands'
 
 /** Stop all, for a provider that can only stop everything at once. It stops the chat's own
  *  subagents and commands, never orchestration workers, so with workers listed it says what it stops
@@ -18,16 +18,12 @@ function WorkerDockStopAll({
   const t = useTranslate()
   const noteId = useId()
   const label =
-    scope === 'commands'
-      ? t('components.native-chat.workerDock.stopCommands', 'Stop commands')
-      : scope === 'subagents'
-        ? t('components.native-chat.workerDock.stopSubagents', 'Stop subagents')
-        : scope === 'subagents-and-commands'
-          ? t(
-              'components.native-chat.workerDock.stopSubagentsAndCommands',
-              'Stop subagents and commands'
-            )
-          : t('components.native-chat.workerDock.stopAll', 'Stop all')
+    scope === 'subagents-and-commands'
+      ? t(
+          'components.native-chat.workerDock.stopSubagentsAndCommands',
+          'Stop subagents and commands'
+        )
+      : t('components.native-chat.workerDock.stopAll', 'Stop all')
   const note =
     scope === 'all'
       ? null
