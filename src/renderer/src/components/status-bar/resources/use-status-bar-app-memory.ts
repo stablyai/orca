@@ -3,6 +3,7 @@ import { isOrcaWindowForegroundFocused } from '@/attention/orca-window-foregroun
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 
 const POLL_MS = 30_000
+const TICK_SLACK_MS = 2_000
 
 /** Orca app memory for the status bar: sampled only while this window is visible and focused. */
 export function useStatusBarAppMemory(enabled: boolean): number | null {
@@ -28,12 +29,13 @@ export function useStatusBarAppMemory(enabled: boolean): number | null {
         })
         .catch(() => {})
     }
+    // Why: slack lets a tick land on schedule while still skipping one that just followed a focus sample.
     const sampleIfStale = (): void => {
-      if (Date.now() - sampledAt >= POLL_MS) {
+      if (Date.now() - sampledAt >= POLL_MS - TICK_SLACK_MS) {
         sample()
       }
     }
-    const uninstall = installWindowVisibilityInterval({ run: sample, intervalMs: POLL_MS })
+    const uninstall = installWindowVisibilityInterval({ run: sampleIfStale, intervalMs: POLL_MS })
     window.addEventListener('focus', sampleIfStale)
     return () => {
       disposed = true

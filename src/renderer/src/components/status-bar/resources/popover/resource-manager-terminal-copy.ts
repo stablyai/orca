@@ -94,7 +94,14 @@ export function getResourceManagerAriaLabel(
   const sessions =
     args.appMemoryLabel === null
       ? formatTerminalSessionCount(args.sessionCount, t)
-      : `${appMemoryText(args.appMemoryLabel, t)}, ${formatTerminalSessionCount(args.sessionCount, t)}`
+      : t(
+          'auto.components.status.bar.resource.manager.terminal.copy.appMemoryAndSessions',
+          'Orca app memory {{memory}} (app windows only, not terminals or agents), {{sessions}}',
+          {
+            memory: args.appMemoryLabel,
+            sessions: formatTerminalSessionCount(args.sessionCount, t)
+          }
+        )
 
   if (args.spaceScanReady) {
     return t(

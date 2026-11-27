@@ -74,7 +74,9 @@ export function useResourceUsageStatusController() {
   const ptyViewActive = windowVisible && open && selectedTab === 'ptys'
   const viewActive = resourceViewActive || ptyViewActive
   const fetchSnapshot = useResourceMemorySnapshot(resourceViewActive)
-  const showStatusBarMemory = useAppStore((s) => isStatusBarMemoryShown(s.settings))
+  const showStatusBarMemory = useAppStore(
+    (s) => s.settings != null && isStatusBarMemoryShown(s.settings)
+  )
   const appMemoryBytes = useStatusBarAppMemory(showStatusBarMemory)
   const localPtyInventory = useResourceSessionInventory(workspaceSessionReady, ptyViewActive, true)
   const ptyActions = useResourcePtyActions(localPtyInventory)

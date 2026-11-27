@@ -6399,7 +6399,8 @@
                   "noTerminalSessions": "No terminal sessions yet.",
                   "ariaLabel": "Resource Manager, {{sessions}}",
                   "ariaLabelWithSpaceScan": "Resource Manager, {{sessions}}, {{spaceScan}}",
-                  "appMemory": "Orca app memory: {{memory}}"
+                  "appMemory": "Orca app memory: {{memory}}",
+                  "appMemoryAndSessions": "Orca app memory {{memory}} (app windows only, not terminals or agents), {{sessions}}"
                 }
               }
             }

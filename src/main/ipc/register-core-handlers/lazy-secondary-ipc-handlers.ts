@@ -45,7 +45,6 @@ export const BROWSER_SERVER_DOWNLOAD_COPY_IPC_CHANNELS = [
 
 export const MEMORY_IPC_CHANNELS = [
   'memory:getSnapshot',
-  'memory:getAppMemoryTotal',
   'memory:readPerfNoticeSignals',
   'memory:countHiddenBrowserPages',
   'memory:resourceWindowVisible'
@@ -86,5 +85,10 @@ export function registerLazySecondaryIpcHandlers(
   registerLazyIpcHandleGroup(MEMORY_IPC_CHANNELS, async (ipc) => {
     const { registerMemoryHandlers } = await import('../memory')
     registerMemoryHandlers(store, ipc)
+  })
+  // Why: the status bar polls this at startup; keep it from loading the memory sweep's modules.
+  registerLazyIpcHandleGroup(['memory:getAppMemoryTotal'], async (ipc) => {
+    const { readAppMemoryTotal } = await import('../../memory/app-memory-total')
+    ipc.handle('memory:getAppMemoryTotal', () => readAppMemoryTotal())
   })
 }
