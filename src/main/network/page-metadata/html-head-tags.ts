@@ -41,7 +41,7 @@ type HtmlTag = { attributesStart: number; end: number; contentEnd?: number }
 /** Skip inert text before interpreting tag-shaped strings as page metadata. */
 function* htmlTags(html: string, tagName: string): Generator<HtmlTag> {
   const wanted = tagName.toLowerCase()
-  const open = /<!--|<([a-z][a-z0-9:-]*)(?=[\s/>])/gi
+  const open = /<!--|<(\/?)([a-z][^\t\n\f\r />]*)/gi
   for (let match = open.exec(html); match; match = open.exec(html)) {
     if (match[0] === '<!--') {
       const end = findCommentEnd(html, open.lastIndex)
@@ -51,16 +51,19 @@ function* htmlTags(html: string, tagName: string): Generator<HtmlTag> {
       open.lastIndex = end + 1
       continue
     }
-    const name = match[1].toLowerCase()
+    const name = match[2].toLowerCase()
     const attributesStart = open.lastIndex
     const end = findTagEnd(html, attributesStart)
     if (end === -1) {
       return
     }
     open.lastIndex = end + 1
+    if (match[1] === '/') {
+      continue
+    }
     let contentEnd: number | undefined
     if (/^(script|style|title|textarea|xmp|iframe|noembed|noframes)$/.test(name)) {
-      const close = new RegExp(`</${name}(?=[\\s/>])`, 'gi')
+      const close = new RegExp(`</${name}(?=[\\t\\n\\f\\r />])`, 'gi')
       close.lastIndex = open.lastIndex
       const closing = close.exec(html)
       if (!closing) {

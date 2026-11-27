@@ -8,6 +8,9 @@ it('ignores metadata examples inside comments, raw text and other tags attribute
     <script>const example = '<meta name="description" content="Script example">';</script>
     <style>body::before { content: '<meta property="og:site_name" content="Style example">'; }</style>
     <div data-example='<meta property="og:image" content="/example.png">'></div>
+    <x-card.foo data-example='<meta property="og:title" content="Dot tag example">'></x-card.foo>
+    <x-card_foo data-example='<meta property="og:site_name" content="Underscore tag example">'></x-card_foo>
+    </div data-example='<meta name="description" content="End tag example">'>
     <title-widget>Custom element</title-widget><link-custom rel="icon" href="/custom.ico">
     <meta charset="utf-8"><title data-note=">">Café &amp; tools</title>
     <meta name="description" content="Actual description"><link rel="icon" href="/actual.ico">`
