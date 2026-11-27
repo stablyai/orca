@@ -1202,10 +1202,9 @@
       "openHost": "Ouvrir {{title}}",
       "pairingInvalid": "Appairage invalide",
       "pairingTemporarilyUnavailable": "Appairage temporairement indisponible",
-      "repairHint": "Touchez pour appairer à nouveau votre ordinateur.",
-      "sameNetworkOnlyHint": "Se connecte uniquement sur le même Wi-Fi ou via Tailscale. Pour vous connecter de partout, connectez-vous sur votre ordinateur et appairez de nouveau",
       "unlockHint": "Déverrouillez votre téléphone, puis touchez pour réessayer.",
-      "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} en activité"
+      "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} en activité",
+      "tapToPairAgain": "Touchez pour appairer à nouveau votre ordinateur."
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Vérification de la compatibilité de l'hôte"
@@ -1264,11 +1263,9 @@
       "agent": "Agent",
       "connectTarget": "Se connecter à la cible",
       "options": "Options",
-      "createWorkspace": "Créer un espace de travail",
       "startFrom": "À partir de",
       "loadingProjects": "Chargement des projets…",
       "connectTargetFirst": "Connectez-vous d'abord à la cible",
-      "createWorktree": "Créer un worktree",
       "noProjectsFound": "Aucun projet trouvé",
       "note": "Note",
       "notePlaceholder": "Écrire une note",
@@ -1926,36 +1923,32 @@
       "lastStatus": "Dernière : {{status}}",
       "newAutomation": "Nouvelle automatisation",
       "noAutomations": "Aucune automatisation pour l'instant",
-      "pairDesktop": "Appairez un ordinateur pour afficher et exécuter des automatisations.",
       "paused": "En pause",
       "scheduled": "Planifiées",
       "showFor": "Afficher les automatisations de",
       "toggleFailed": "Impossible de mettre à jour {{name}}",
-      "updateDesktop": "Mettez à jour Orca sur {{desktop}} pour utiliser les automatisations."
+      "updateDesktop": "Mettez à jour Orca sur {{desktop}} pour utiliser les automatisations.",
+      "pairComputer": "Appairez un ordinateur pour afficher et exécuter des automatisations."
     },
     "listFooter": {
-      "hostPickerTitle": "Ouvrir les tâches sur"
+      "openTasksOn": "Ouvrir les tâches sur"
     },
     "listHeader": {
-      "desktopsHeading": "Ordinateurs"
+      "computersHeading": "Ordinateurs"
     },
     "screen": {
       "pairingCheckFailed": "Impossible de vérifier l'appairage",
-      "removeHostFailed": "Impossible de supprimer l'hôte",
-      "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
-      "removeHostTitle": "Supprimer l'hôte",
-      "tryAgain": "Veuillez réessayer."
+      "tryAgain": "Veuillez réessayer.",
+      "removeComputerFailed": "Impossible de supprimer l'hôte",
+      "removeComputerTitle": "Supprimer l'hôte",
+      "removeComputerMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
+      "sameNetworkOnly": "Se connecte uniquement sur le même Wi-Fi ou via Tailscale. Pour vous connecter de partout, connectez-vous sur votre ordinateur et appairez de nouveau"
     },
     "bottomBar": {
-      "connectFirst": "Connectez un ordinateur pour démarrer un nouveau travail.",
       "newWorkspace": "Nouvel espace de travail"
     },
-    "desktops": {
-      "pairDesktop": "Appairer un ordinateur"
-    },
     "sections": {
-      "tasks": "Tâches",
-      "tasksSubtitle": "Parcourez vos issues et vos revues"
+      "tasks": "Tâches"
     },
     "stats": {
       "agentTime": "Temps agent",
@@ -1968,23 +1961,23 @@
     },
     "tabs": {
       "automations": "Automatisations",
-      "chooseDesktop": "{{desktop}}, choisir un autre ordinateur",
       "feed": "Activité",
       "usage": "Utilisation",
       "agents": "Agents",
-      "bots": "Bots"
+      "bots": "Bots",
+      "chooseComputer": "{{desktop}}, choisir un autre ordinateur"
     },
     "usage": {
       "active": "Actif",
-      "addAccounts": "Ajoutez des comptes dans Paramètres → Comptes sur l'ordinateur.",
       "connectDesktop": "Connectez {{desktop}} pour voir l'utilisation des comptes d'agent.",
       "emptyTitle": "Aucune utilisation pour l'instant",
-      "openAccountsHint": "Ouvre les comptes de cet ordinateur",
-      "pairDesktop": "Appairez un ordinateur pour voir l'utilisation des comptes d'agent.",
       "refresh": "Actualiser l'utilisation",
       "showUsageFor": "Afficher l'utilisation de",
       "updatedAgo": "Mis à jour il y a {{time}}",
-      "updatedJustNow": "Mis à jour à l'instant"
+      "updatedJustNow": "Mis à jour à l'instant",
+      "pairComputer": "Appairez un ordinateur pour voir l'utilisation des comptes d'agent.",
+      "addAccountsOnComputer": "Ajoutez des comptes dans Paramètres → Comptes sur l'ordinateur.",
+      "openComputerAccountsHint": "Ouvre les comptes de cet ordinateur"
     },
     "activeAgents": {
       "heading": "Actifs",
@@ -2015,24 +2008,21 @@
       "updateStepsServer": "Mettez à jour Orca sur le serveur, puis redémarrez-le.",
       "orcaVersion": "Version d'Orca",
       "goBack": "Précédent",
-      "hostNamePlaceholder": "Nom de l'hôte",
-      "hostRemoved": "Cet hôte a été supprimé de ce téléphone.",
-      "loadFailed": "Impossible de charger l'hôte.",
-      "missingHost": "Hôte manquant.",
       "name": "Nom",
-      "saveFailed": "Impossible d'enregistrer l'hôte.",
-      "saveHost": "Enregistrer l'hôte",
-      "title": "Modifier l'hôte",
-      "removeHost": "Retirer l'hôte"
+      "editComputer": "Modifier l'hôte",
+      "computerRemoved": "Cet hôte a été supprimé de ce téléphone.",
+      "couldNotLoad": "Impossible de charger l'hôte.",
+      "couldNotSave": "Impossible d'enregistrer l'hôte.",
+      "save": "Enregistrer"
     }
   },
   "hostScreen": {
     "hostListActionSheetActions": {
       "connect": "Se connecter",
       "disconnect": "Déconnecter",
-      "editHost": "Modifier l'hôte",
       "networkDiagnostics": "Diagnostic réseau",
-      "reconnect": "Reconnecter"
+      "reconnect": "Reconnecter",
+      "editComputer": "Modifier l'hôte"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Création de l'espace de travail…"
@@ -2177,7 +2167,6 @@
       "accounts": "Comptes",
       "agentSessionHistory": "Historique des sessions d'agent",
       "changes": "Modifications",
-      "editHost": "Modifier l'hôte",
       "host": "Hôte",
       "pullRequest": "Pull Request",
       "sourceControl": "Contrôle de code source",
@@ -2185,12 +2174,13 @@
       "terminal": "Terminal",
       "workspace": "Espace de travail",
       "automations": "Automatisations",
-      "mcpServers": "Serveurs MCP"
+      "mcpServers": "Serveurs MCP",
+      "editComputer": "Modifier l'hôte"
     }
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "Créer un espace de travail sur"
+      "newWorkspaceOn": "Créer un espace de travail sur"
     },
     "loadingDrawer": {
       "downloadProgress": "Téléchargement… {{progress}}",

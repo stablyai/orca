@@ -29,7 +29,7 @@ export function NewWorkspaceHostPicker({
   }, [nothingToPick, router])
   return (
     <PickerModal
-      title={t('newWorkspace.hostPicker.title', 'Create Workspace On')}
+      title={t('newWorkspace.hostPicker.newWorkspaceOn', 'New workspace on')}
       visible={hosts !== null && !nothingToPick && open}
       options={hostPickerOptions(hosts ?? [])}
       selected=""
