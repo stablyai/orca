@@ -130,18 +130,16 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
 }
 
 // Why: BROWSER callers are often phone-only or headless sessions; when no desktop opens the page, the URL is their way on (#48645).
-function withOpenUrlYourselfLine(error: unknown, url: string): RuntimeClientError {
+function withOpenUrlYourselfLine(error: unknown, url: string): Error {
   // The URL comes from whatever process ran BROWSER, so keep its control bytes off the terminal.
-  const shown = escapeTerminalControlCharacters(url, true)
-  const message = `${error instanceof Error ? error.message : String(error)}\nOpen it in a browser yourself: ${shown}`
+  const line = `\nOpen it in a browser yourself: ${escapeTerminalControlCharacters(url, true)}`
+  if (!(error instanceof Error)) {
+    return new RuntimeClientError('runtime_error', `${String(error)}${line}`)
+  }
+  // Amend in place: rebuilding would re-redact and copy the error's recovery data.
+  error.message += line
   if (error instanceof RuntimeRpcFailureError) {
-    return new RuntimeRpcFailureError({
-      ...error.response,
-      error: { ...error.response.error, message }
-    })
+    error.response.error.message = error.message
   }
-  if (error instanceof RuntimeClientError) {
-    return new RuntimeClientError(error.code, message, error.data)
-  }
-  return new RuntimeClientError('runtime_error', message)
+  return error
 }
