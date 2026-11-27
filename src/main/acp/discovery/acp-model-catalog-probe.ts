@@ -32,7 +32,6 @@ import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
 import { prepareAcpListingAccount } from './acp-listing-account'
 import { acpLaunchSpecForAccount } from '../launch/acp-launch-command'
-
 import {
   resolveAcpLaunchInvocation,
   type AcpLaunchInvocationDeps
