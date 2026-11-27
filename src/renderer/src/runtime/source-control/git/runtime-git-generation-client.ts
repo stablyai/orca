@@ -1,7 +1,6 @@
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { TEXT_GENERATION_CLIENT_TIMEOUT_MS } from '../../../../../shared/text-generation/text-generation-client-timeout'
 import { localizeTextGenerationResult } from '@/lib/text-generation/text-generation-error-copy'
-import { antigravityGenerationCompatibilityError } from './antigravity-generation-compatibility'
 import {
   getRuntimeCommitMessageSettings,
   resolveLocalWorktreePath,
@@ -35,15 +34,6 @@ export async function generateRuntimeCommitMessage(
       ...(overrides?.agentCmdOverrides ? { agentCmdOverrides: overrides.agentCmdOverrides } : {})
     })
     return localizeTextGenerationResult(result)
-  }
-  const compatibilityError = await antigravityGenerationCompatibilityError(
-    target.environmentId,
-    context,
-    'commitMessage',
-    overrides
-  )
-  if (compatibilityError) {
-    return { success: false, error: compatibilityError }
   }
   const result = await callRuntimeRpc<RuntimeGenerateCommitMessageResult>(
     target,
@@ -128,15 +118,6 @@ export async function generateRuntimePullRequestFields(
       ...(overrides?.agentCmdOverrides ? { agentCmdOverrides: overrides.agentCmdOverrides } : {})
     })
     return localizeTextGenerationResult(result)
-  }
-  const compatibilityError = await antigravityGenerationCompatibilityError(
-    target.environmentId,
-    context,
-    'pullRequest',
-    overrides
-  )
-  if (compatibilityError) {
-    return { success: false, error: compatibilityError }
   }
   const result = await callRuntimeRpc<RuntimeGeneratePullRequestFieldsResult>(
     target,

@@ -40,7 +40,7 @@ export function assertFolderWorkspaceStartup(
   }
 }
 
-export const FolderWorkspaceLinkedTask = WorkspaceLinkedItemSchema.nullable()
+export const FolderWorkspaceLinkedTask = lazyZodSchema(() => WorkspaceLinkedItemSchema.nullable())
 
 export function assertLinkedTaskSourceContextMatch(
   value: {

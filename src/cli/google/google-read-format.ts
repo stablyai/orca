@@ -10,6 +10,7 @@ import type {
   GmailSearchView
 } from '../../shared/google/google-read-types'
 import { inlineUntrusted, untrustedContent } from '../../shared/quoted-text-fence'
+import { sliceAtCodeUnitLimit } from '../../shared/text/surrogate-safe-text-slice'
 import { TOOL_OUTPUT_MAX_CHARS, truncationNote } from '../../shared/tool-output-limits'
 
 const SOURCE_NAMES: Record<ContactsFindView['people'][number]['source'], string> = {
@@ -93,9 +94,11 @@ export function eventLine(event: CalendarEventSummary, timeZone: string): string
 
 /** Fenced content, cut at the cap with Orca's note outside the fence. */
 function cappedUntrusted(label: string, text: string, hint: string): string {
-  return text.length <= TOOL_OUTPUT_MAX_CHARS
-    ? untrustedContent(label, text)
-    : `${untrustedContent(label, text.slice(0, TOOL_OUTPUT_MAX_CHARS))}\n${truncationNote(text.length, hint)}`
+  if (text.length <= TOOL_OUTPUT_MAX_CHARS) {
+    return untrustedContent(label, text)
+  }
+  const clipped = sliceAtCodeUnitLimit(text, TOOL_OUTPUT_MAX_CHARS)
+  return `${untrustedContent(label, clipped)}\n${truncationNote(text.length, hint, clipped.length)}`
 }
 
 const accountFlag = (account: string) => ` --account ${account}`

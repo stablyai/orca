@@ -2,6 +2,7 @@ import { quotePosixShellUnlessPlainNoAt } from '../../shell/launch/shell-argumen
 import { encodePowerShellCommand } from '../../shell/launch/powershell-command-encoding'
 import { getPosixCodexShellLaunchPreflight } from '../../shell/launch/agents/codex-shell-function'
 import { getPosixClaudeShellFunction } from '../../shell/launch/agents/claude-shell-function'
+import { getPowerShellAgentWrappers } from '../../shell/launch/agents/powershell-agent-wrappers'
 import {
   nativeWindowsPathToPosixShellPath,
   resolveSetupRunnerCommand,
@@ -98,7 +99,8 @@ export function createSequencedSetupAgentCommands(args: {
           markerPath,
           nonce,
           waitTimeoutSeconds
-        )
+        ),
+        [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: getPowerShellAgentWrappers()
       }
     }
   }
@@ -293,6 +295,9 @@ function buildWindowsStartupScript(
     '        exit 1',
     '      }',
     `      [Console]::Error.WriteLine(${quotePowerShellLiteral(SETUP_COMPLETE_MESSAGE)})`,
+    // Define the quoting wrappers after setup, which may install the agent.
+    `      $wrappers = $env:${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}`,
+    `      if ($wrappers) { Invoke-Expression $wrappers; Remove-Item Env:${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV} }`,
     '      Invoke-Expression $startup',
     '      if ($global:LASTEXITCODE -ne $null) { exit $global:LASTEXITCODE }',
     '      if (-not $?) { exit 1 }',

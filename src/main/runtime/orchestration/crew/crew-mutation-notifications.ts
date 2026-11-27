@@ -39,6 +39,7 @@ const mutations = [
   'prepareStartingWorkerAuthority',
   'markWorkerDispatchReady',
   'recordWorkerStage',
+  'recordWorkerProgress',
   'retainWorkerLaunchObservation',
   'completeDispatch',
   'completeActiveDispatchesForTask',
@@ -125,6 +126,7 @@ const mailboxScopes: Partial<Record<(typeof mutations)[number], MailboxScope>> =
       : undefined
   },
   recordWorkerStage: () => [],
+  recordWorkerProgress: () => [],
   recordAttemptObservation: () => []
 }
 
