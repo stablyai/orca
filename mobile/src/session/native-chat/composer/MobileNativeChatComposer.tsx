@@ -303,6 +303,7 @@ export function MobileNativeChatComposer({
                   {...sessionOptions}
                   sendInFlight={sending || isAttaching}
                   presentation={picker}
+                  editorFocused={focused}
                   onNavigate={(page, expected) =>
                     setPicker((current) =>
                       current && (expected === undefined || current === expected)
@@ -312,12 +313,10 @@ export function MobileNativeChatComposer({
                   }
                   onDrawerOpen={(page) => setPicker({ page, refocus: focused })}
                   onDrawerAfterClose={() => {
-                    if (picker?.page === null) {
-                      if (picker.refocus) {
-                        fieldRef.current?.focus()
-                      }
-                      setPicker((current) => (current === picker ? null : current))
+                    if (picker?.page === null && picker.refocus) {
+                      fieldRef.current?.focus()
                     }
+                    setPicker((current) => (current === picker ? null : current))
                   }}
                 />
               ) : null}

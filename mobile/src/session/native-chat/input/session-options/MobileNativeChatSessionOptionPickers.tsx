@@ -60,6 +60,7 @@ export type MobileNativeChatSessionOptionPickersProps = {
 
 type PresentationProps = {
   presentation: MobileNativeChatPickerPresentation | null
+  editorFocused?: boolean
   onNavigate: (page: string | null, expected?: MobileNativeChatPickerPresentation) => void
   onDrawerOpen: (page: string) => void
   onDrawerAfterClose?: () => void
@@ -76,6 +77,7 @@ export function MobileNativeChatSessionOptionPickers({
   isWorking,
   sendInFlight = false,
   presentation,
+  editorFocused = false,
   onNavigate,
   onDrawerOpen,
   onDrawerAfterClose
@@ -275,7 +277,7 @@ export function MobileNativeChatSessionOptionPickers({
           )}
           disabled={busy || !interactionMode.settable}
           onPointerDown={(event) => {
-            if (Platform.OS === 'web') {
+            if (Platform.OS === 'web' && editorFocused) {
               // Keep the editor focused until opening records whether to restore it.
               event.preventDefault()
             }
@@ -290,8 +292,10 @@ export function MobileNativeChatSessionOptionPickers({
         visible={activeDescriptor !== undefined}
         onClose={closePicker}
         onAfterClose={() => {
-          moreModels.reset()
-          onDrawerAfterClose?.()
+          if (!activeDescriptor) {
+            moreModels.reset()
+            onDrawerAfterClose?.()
+          }
         }}
       >
         {activeDescriptor ? (
@@ -366,9 +370,9 @@ export function MobileNativeChatSessionOptionPickers({
             {permissionView && permissionDeferred ? (
               <SessionOptionCaption>{permissionDeferred}</SessionOptionCaption>
             ) : null}
-            {modeError ? (
-              <View accessibilityLiveRegion="polite">
-                <SessionOptionCaption>{modeError}</SessionOptionCaption>
+            {modeView ? (
+              <View accessibilityLiveRegion="polite" collapsable={false}>
+                {modeError ? <SessionOptionCaption>{modeError}</SessionOptionCaption> : null}
               </View>
             ) : null}
             {reason ? <SessionOptionCaption>{reason}</SessionOptionCaption> : null}
