@@ -110,11 +110,11 @@ export class OrchestrationDbCompaction {
 
   /** Called once per maintenance minute. */
   async tick(): Promise<void> {
-    if (this.finished || this.stopped || this.copying || !this.isEnabled()) {
+    if (this.finished || this.stopped || this.copying) {
       return
     }
     if (!this.started) {
-      // From a session that quit or crashed part-way, a swapped file included.
+      // From a session that quit or crashed part-way, or skipped its swap; cleared even where this is off.
       this.started = true
       await Promise.all([this.removeCopy(), removeQuietly(this.replacedPath)])
       const [count, at] = (await readFile(this.attemptsPath, 'utf8').catch(() => ''))
@@ -122,6 +122,9 @@ export class OrchestrationDbCompaction {
         .map(Number)
       this.attempts = count || 0
       this.lastAttemptAt = at || Number.NEGATIVE_INFINITY
+    }
+    if (!this.isEnabled()) {
+      return
     }
     const state = readFileState(this.orchestrationDb.db)
     if (!state.legacy) {
@@ -174,14 +177,11 @@ export class OrchestrationDbCompaction {
     // keeps its size, which quit would read as pending work, so a large one is truncated too, though only
     // then: that takes the writer lock for a moment. It moves the stamp, so it comes first.
     const walBytes = (await sizeOf(`${this.filename}-wal`)) ?? 0
-    if (walBytes > 0) {
-      const drained = await this.runChild(undefined, MIN_COPY_BUDGET_MS, walBytes > MAX_WAL_BYTES)
-      // A reader pinning frames would leave work for main at quit, or a WAL quit refuses: no copy in vain.
-      if (!drained || ((await sizeOf(`${this.filename}-wal`)) ?? 0) > MAX_WAL_BYTES) {
-        return
-      }
-    }
-    if (this.stopped) {
+    const drained =
+      walBytes === 0 ||
+      (await this.runChild(undefined, MIN_COPY_BUDGET_MS, walBytes > MAX_WAL_BYTES))
+    // A reader pinning frames would leave work for main at quit, or a WAL quit refuses: no copy in vain.
+    if (!drained || ((await sizeOf(`${this.filename}-wal`)) ?? 0) > MAX_WAL_BYTES || this.stopped) {
       return
     }
     // Read before the child takes its snapshot, so any later commit moves the stamp.
