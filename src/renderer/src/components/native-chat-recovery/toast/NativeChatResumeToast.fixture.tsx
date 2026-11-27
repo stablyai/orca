@@ -1,4 +1,6 @@
 import { setRendererUiLanguage } from '@/i18n/i18n'
+import type { Bot } from '../../../../../shared/bot-types'
+import { mascotAvatar } from '../../../../../shared/bot-avatar'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { ResumeCandidate, ResumeFailure } from '../tree/native-chat-resume-on-restart-grouping'
 import type { ResumeRun } from '../runs/native-chat-resume-run'
@@ -259,3 +261,115 @@ export const offerManualDetailsPortuguese416 = offerManualDetailsIn('pt')
 export const offerManualDetailsTurkish416 = offerManualDetailsIn('tr')
 export const offerManualDetailsChinese416 = offerManualDetailsIn('zh')
 export const offerManualDetailsChineseTraditional416 = offerManualDetailsIn('zh-Hant')
+
+function fixtureBot(name: string, avatar: string | null): Bot {
+  return {
+    id: name,
+    name,
+    hostId: 'local',
+    folder: name,
+    folderWorkspaceId: `home-${name}`,
+    agent: 'claude',
+    avatar,
+    paused: false,
+    notifications: { needsPermission: true, taskComplete: true, couldNotFinish: true },
+    members: [],
+    slack: null,
+    linear: null,
+    github: null,
+    chatSessionId: null,
+    createdAt: 1,
+    updatedAt: 1
+  }
+}
+
+const UX_DESIGNER = fixtureBot('UX Designer', mascotAvatar('A1'))
+const RESEARCHER = fixtureBot('Researcher', '🔎')
+const ONBOARDING_01 = fixtureBot('Customer Onboarding Research Assistant 01', mascotAvatar('B1'))
+const ONBOARDING_02 = fixtureBot('Customer Onboarding Research Assistant 02', mascotAvatar('D1'))
+const UNBROKEN = fixtureBot(`${'W'.repeat(62)}A`, null)
+
+const NONE_FAILED: readonly string[] = []
+
+type BotChat = { chat: ResumeCandidate; bot: Bot | null }
+
+function botChat(index: number, latestPrompt: string, bot: Bot | null): BotChat {
+  return { chat: { ...chat(index), latestPrompt }, bot }
+}
+
+function BotChatsToast({
+  rows,
+  failed = NONE_FAILED
+}: {
+  rows: readonly BotChat[]
+  failed?: readonly string[]
+}): React.JSX.Element {
+  const chats = rows.map((row) => row.chat)
+  const bots = new Map(rows.map((row) => [row.chat.sessionId, row.bot]))
+  const failures = new Map(
+    chats
+      .filter((candidate) => failed.includes(candidate.sessionId))
+      .map((candidate): [string, ResumeFailure] => [
+        candidate.sessionId,
+        {
+          ...candidate,
+          failedAt: NOW,
+          outcome: 'refused',
+          reason: 'agent_session_not_attached',
+          retryable: true
+        }
+      ])
+  )
+  return (
+    <NativeChatResumeToast
+      view={resumeToastView(finishedRun(chats, 'launch'), [], failures)}
+      listedAt={NOW}
+      defaultExpanded
+      botFor={(candidate) => bots.get(candidate.sessionId) ?? null}
+      {...actions}
+    />
+  )
+}
+
+const SHORT_NAMES = [
+  botChat(0, 'Home', UX_DESIGNER),
+  botChat(1, 'Summarize the open research threads', RESEARCHER),
+  botChat(2, 'Fix the flaky Windows path test', null),
+  botChat(3, 'Tighten onboarding copy', null)
+]
+const LONG_NAMES = [
+  botChat(0, 'Interview notes from the enterprise pilot accounts', ONBOARDING_01),
+  botChat(1, 'Interview notes from the enterprise pilot accounts', ONBOARDING_02),
+  botChat(2, 'Home', ONBOARDING_01)
+]
+const UNBROKEN_NAMES = [botChat(0, `${'H'.repeat(62)}1`, UNBROKEN), botChat(1, 'Home', UNBROKEN)]
+
+async function focusSecondRow(frame: HTMLElement): Promise<void> {
+  // A Tab first, so focus counts as from the keyboard and shows its ring and tooltip.
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+  frame.querySelectorAll<HTMLElement>('li [tabindex="0"]')[1]?.focus()
+  await new Promise((resolve) => setTimeout(resolve, 300))
+}
+
+export const botChatsShortNames = defineFixture({
+  width: NARROWEST,
+  render: () => <BotChatsToast rows={SHORT_NAMES} />
+})
+export const botChatsLongNames = defineFixture({
+  width: NARROWEST,
+  render: () => <BotChatsToast rows={LONG_NAMES} />
+})
+export const botChatsLongNamesFocused = defineFixture({
+  width: NARROWEST,
+  render: () => <BotChatsToast rows={LONG_NAMES} />,
+  interact: focusSecondRow
+})
+export const botChatsNeedsYou = defineFixture({
+  width: NARROWEST,
+  render: () => <BotChatsToast rows={SHORT_NAMES} failed={['chat-0', 'chat-2']} />
+})
+export const botChatsUnbrokenNamesFocused = defineFixture({
+  width: NARROWEST,
+  render: () => <BotChatsToast rows={UNBROKEN_NAMES} />,
+  interact: focusSecondRow
+})

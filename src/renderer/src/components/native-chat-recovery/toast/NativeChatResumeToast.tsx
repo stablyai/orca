@@ -3,7 +3,9 @@ import { AlertCircle, CheckCircle2, Loader2, RotateCcw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
+import type { Bot } from '../../../../../shared/bot-types'
 import type { ResumeFailureAction } from '../failures/native-chat-resume-failure-guidance'
+import type { ResumeCandidate } from '../tree/native-chat-resume-on-restart-grouping'
 import type { ResumeToastView } from './native-chat-resume-toast-view'
 import { NativeChatResumeToastRow } from './NativeChatResumeToastRow'
 
@@ -13,6 +15,8 @@ export type NativeChatResumeToastProps = {
   machineName?: string
   listedAt: number
   nameFor: (sessionId: string, fallback: string) => string
+  /** The bot whose chat this is, named under the chat's title. */
+  botFor?: (candidate: ResumeCandidate) => Bot | null
   defaultExpanded?: boolean
   onResume: (sessionIds: readonly string[]) => void
   onRowAction: (action: ResumeFailureAction, sessionId: string) => void
@@ -118,16 +122,16 @@ function headline(view: ResumeToastView, t: Translate, machineName?: string): st
 function HeadlineIcon({ view }: { view: ResumeToastView }): React.JSX.Element {
   if (view.phase === 'resuming') {
     return (
-      <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />
+      <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />
     )
   }
   if (view.counts.needsYou > 0) {
-    return <AlertCircle className="size-4 shrink-0 text-status-warning" />
+    return <AlertCircle className="size-3.5 shrink-0 text-status-warning" />
   }
   if (view.phase === 'finished') {
-    return <CheckCircle2 className="size-4 shrink-0 text-status-success" />
+    return <CheckCircle2 className="size-3.5 shrink-0 text-status-success" />
   }
-  return <RotateCcw className="size-4 shrink-0 text-muted-foreground" />
+  return <RotateCcw className="size-3.5 shrink-0 text-muted-foreground" />
 }
 
 /** The resume-on-restart report: one line, a Resume when nothing was sent, chats behind Details. */
@@ -136,6 +140,7 @@ export function NativeChatResumeToast({
   machineName,
   listedAt,
   nameFor,
+  botFor,
   defaultExpanded = false,
   onResume,
   onRowAction,
@@ -149,14 +154,20 @@ export function NativeChatResumeToast({
   const titleId = useId()
   const listId = useId()
   const busy = view.phase === 'resuming'
-  const listRef = useRef<HTMLUListElement>(null)
+  const scrollerRef = useRef<HTMLDivElement>(null)
   const [moreBelow, setMoreBelow] = useState(false)
-  const rowCount = view.rows.length
   useEffect(() => {
-    if (expanded && listRef.current) {
-      setMoreBelow(hasMoreBelow(listRef.current))
+    const scroller = scrollerRef.current
+    const list = scroller?.firstElementChild
+    if (!expanded || !scroller || !list) {
+      return
     }
-  }, [expanded, rowCount])
+    // The list grows past the capped scroller as rows change or late bot names land.
+    const observer = new ResizeObserver(() => setMoreBelow(hasMoreBelow(scroller)))
+    observer.observe(scroller)
+    observer.observe(list)
+    return () => observer.disconnect()
+  }, [expanded])
   const offering = view.phase === 'offer'
   const showResume = offering && view.resumable.length > 0
   const showDismissAll = onDismissAll !== undefined && offering
@@ -165,7 +176,8 @@ export function NativeChatResumeToast({
       aria-labelledby={titleId}
       className="w-full overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-floating"
     >
-      <div className="flex min-w-0 items-start gap-2.5 py-2.5 pr-2 pl-3.5">
+      {/* Header and rows share one icon column (12px in) and one text column (34px in). */}
+      <div className="flex min-w-0 items-start gap-2 py-2.5 pr-2 pl-3">
         <span className="mt-0.5 inline-flex">
           <HeadlineIcon view={view} />
         </span>
@@ -222,35 +234,43 @@ export function NativeChatResumeToast({
         </Button>
       </div>
       <div id={listId} hidden={!expanded} className="border-t border-border">
-        <div className="relative">
-          <ul
-            ref={listRef}
-            aria-label={t('auto.components.NativeChatResumeToast.listLabel', 'Agents')}
-            className="scrollbar-sleek max-h-64 overflow-y-auto p-1"
-            onScroll={(event) => setMoreBelow(hasMoreBelow(event.currentTarget))}
-          >
-            {view.rows.map((row) => (
-              <NativeChatResumeToastRow
-                key={row.candidate.sessionId}
-                row={row}
-                name={nameFor(
-                  row.candidate.sessionId,
-                  firstLine(row.candidate.latestPrompt) ||
-                    t('auto.components.NativeChatResumeToast.untitled', 'Untitled agent')
-                )}
-                age={formatShortTimeAgo(row.candidate.recordedAt, listedAt)}
-                busy={busy}
-                remote={machineName !== undefined}
-                onAction={onRowAction}
-              />
-            ))}
-          </ul>
-          {/* The cap hides rows; a fade says the list goes on until it is scrolled to the end. */}
-          {moreBelow && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-popover to-transparent" />
-          )}
-        </div>
-        <div className="space-y-1.5 border-t border-border px-3.5 py-2.5 text-xs text-muted-foreground">
+        {/* Rows mount only once opened, so an unopened toast fetches no bot avatars. */}
+        {expanded && (
+          <div className="relative">
+            <div
+              ref={scrollerRef}
+              className="scrollbar-sleek max-h-64 overflow-y-auto"
+              onScroll={(event) => setMoreBelow(hasMoreBelow(event.currentTarget))}
+            >
+              <ul
+                aria-label={t('auto.components.NativeChatResumeToast.listLabel', 'Agents')}
+                className="p-1"
+              >
+                {view.rows.map((row) => (
+                  <NativeChatResumeToastRow
+                    key={row.candidate.sessionId}
+                    row={row}
+                    name={nameFor(
+                      row.candidate.sessionId,
+                      firstLine(row.candidate.latestPrompt) ||
+                        t('auto.components.NativeChatResumeToast.untitled', 'Untitled agent')
+                    )}
+                    bot={botFor?.(row.candidate)}
+                    age={formatShortTimeAgo(row.candidate.recordedAt, listedAt)}
+                    busy={busy}
+                    remote={machineName !== undefined}
+                    onAction={onRowAction}
+                  />
+                ))}
+              </ul>
+            </div>
+            {/* The cap hides rows; a fade says the list goes on until it is scrolled to the end. */}
+            {moreBelow && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-popover to-transparent" />
+            )}
+          </div>
+        )}
+        <div className="space-y-1.5 border-t border-border px-3 py-2.5 text-xs text-muted-foreground">
           {/* Balanced, so a longer locale wraps into even lines instead of orphaning a word; CJK breaks only between phrases. */}
           <p className="text-balance break-keep">
             {offering
@@ -296,6 +316,6 @@ function firstLine(text: string): string {
   return text.trim().split('\n', 1)[0]?.trim() ?? ''
 }
 
-function hasMoreBelow(list: HTMLElement): boolean {
-  return list.scrollTop + list.clientHeight < list.scrollHeight - 2
+function hasMoreBelow(scroller: HTMLElement): boolean {
+  return scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 2
 }
