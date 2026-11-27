@@ -1,6 +1,6 @@
 // Share an agent with people: a shortcut to the same people list Settings › Sharing draws. The caller
 // owns the people, the picks and the search (useBotTeamShareList); this draws them.
-import { useRef } from 'react'
+import { Children, useRef } from 'react'
 import { Laptop } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -53,9 +53,12 @@ export function BotTeamShareDialog({
           <TeamShareAddField {...list} inputRef={inputRef} focusedOnOpen />
         </div>
         <div className="scrollbar-sleek min-h-0 max-h-[340px] overflow-y-auto pt-1 pb-2">
-          <h3 className="px-6 pt-4 pb-1 text-xs font-medium text-muted-foreground">
-            {t('bots.teamShare.peopleWithAccess', 'People with access')}
-          </h3>
+          {/* No heading until someone besides the owner has access or an invite. */}
+          {list.people.length > 0 || Children.count(children) > 0 ? (
+            <h3 className="px-6 pt-4 pb-1 text-xs font-medium text-muted-foreground">
+              {t('bots.teamShare.peopleWithAccess', 'People with access')}
+            </h3>
+          ) : null}
           <TeamSharePeopleList {...list}>{children}</TeamSharePeopleList>
         </div>
         <div className="flex items-center gap-2 border-t border-border px-6 py-4">
