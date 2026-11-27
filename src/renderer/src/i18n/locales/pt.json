@@ -16457,7 +16457,10 @@
           "clear": "Limpar filtros",
           "agent": "Agente",
           "bot": "Bot",
-          "lastRun": "Última execução"
+          "lastRun": "Última execução",
+          "removeBotFilterNamed": "Remover filtro de Bot: {{name}}",
+          "botFilterRow": "Bot: {{name}}",
+          "botFilterRowRemove": "{{label}}, remover filtro"
         },
         "createDestination": {
           "label": "Host",

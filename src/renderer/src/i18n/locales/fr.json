@@ -19292,7 +19292,10 @@
           "clear": "Réinitialiser les filtres",
           "agent": "Agent",
           "bot": "Bot",
-          "lastRun": "Dernière exécution"
+          "lastRun": "Dernière exécution",
+          "removeBotFilterNamed": "Retirer le filtre Bot : {{name}}",
+          "botFilterRow": "Bot : {{name}}",
+          "botFilterRowRemove": "{{label}}, retirer le filtre"
         },
         "AutomationListSortHeader": {
           "sortedAscending": "{{value0}}, tri croissant",

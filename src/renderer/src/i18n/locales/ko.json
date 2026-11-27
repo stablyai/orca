@@ -18740,7 +18740,10 @@
           "succeeded": "성공",
           "neverRan": "실행 안 함",
           "clear": "필터 지우기",
-          "removeFilter": "{{value0}} 필터 제거"
+          "removeFilter": "{{value0}} 필터 제거",
+          "removeBotFilterNamed": "봇 필터 제거: {{name}}",
+          "botFilterRow": "봇: {{name}}",
+          "botFilterRowRemove": "{{label}}, 필터 제거"
         },
         "createDestination": {
           "label": "호스트",

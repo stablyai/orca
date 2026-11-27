@@ -19399,7 +19399,10 @@
           "clear": "Filter zurücksetzen",
           "agent": "Agent",
           "bot": "Bot",
-          "lastRun": "Letzte Ausführung"
+          "lastRun": "Letzte Ausführung",
+          "removeBotFilterNamed": "Bot-Filter entfernen: {{name}}",
+          "botFilterRow": "Bot: {{name}}",
+          "botFilterRowRemove": "{{label}}, Filter entfernen"
         },
         "AutomationListSortHeader": {
           "sortedAscending": "{{value0}}, aufsteigend sortiert",

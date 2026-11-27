@@ -19186,7 +19186,10 @@
           "clear": "清除篩選",
           "agent": "代理程式",
           "bot": "機器人",
-          "lastRun": "最後一次執行"
+          "lastRun": "最後一次執行",
+          "removeBotFilterNamed": "刪除機器人篩選條件：{{name}}",
+          "botFilterRow": "機器人：{{name}}",
+          "botFilterRowRemove": "{{label}}，刪除篩選條件"
         },
         "AutomationListSortHeader": {
           "sortedAscending": "{{value0}}，遞增排序",

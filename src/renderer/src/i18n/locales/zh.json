@@ -18836,7 +18836,10 @@
           "succeeded": "成功",
           "neverRan": "从未运行",
           "clear": "清除筛选器",
-          "removeFilter": "移除 {{value0}} 筛选器"
+          "removeFilter": "移除 {{value0}} 筛选器",
+          "removeBotFilterNamed": "移除 Bot 筛选器：{{name}}",
+          "botFilterRow": "Bot：{{name}}",
+          "botFilterRowRemove": "{{label}}，移除筛选器"
         },
         "createDestination": {
           "label": "主机",

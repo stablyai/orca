@@ -20278,7 +20278,10 @@
           "clear": "Сбросить фильтры",
           "agent": "Агент",
           "bot": "Бот",
-          "lastRun": "Последний запуск"
+          "lastRun": "Последний запуск",
+          "removeBotFilterNamed": "Убрать фильтр бота: {{name}}",
+          "botFilterRow": "Бот: {{name}}",
+          "botFilterRowRemove": "{{label}}, убрать фильтр"
         },
         "AutomationListSortHeader": {
           "sortedAscending": "{{value0}}, по возрастанию",

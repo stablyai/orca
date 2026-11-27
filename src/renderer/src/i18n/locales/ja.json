@@ -18550,7 +18550,10 @@
           "succeeded": "成功",
           "neverRan": "未実行",
           "clear": "フィルターをクリア",
-          "removeFilter": "{{value0}} フィルターを解除"
+          "removeFilter": "{{value0}} フィルターを解除",
+          "removeBotFilterNamed": "ボットフィルターを解除：{{name}}",
+          "botFilterRow": "ボット：{{name}}",
+          "botFilterRowRemove": "{{label}}、フィルターを解除"
         },
         "createDestination": {
           "label": "ホスト",
