@@ -77,22 +77,14 @@ export function sendRelayedChunks(
   })
 }
 
-/** After an agent's exit: the final ack (forced on a definitive exit, so an item left open is let
- *  go once the journal holds it), then no more; what still isn't acked goes back to the daemon. */
+/** After an agent's exit: the final output is acked so the daemon can drop the ended relay, and
+ *  then nothing more is read. */
 export function letGoOfExitedRelay(
-  output: Pick<RelayedProviderOutput, 'settle' | 'stop' | 'ackedThrough'>,
-  definitive: boolean,
-  unbind: () => void,
-  handBack: () => Promise<unknown>
+  output: Pick<RelayedProviderOutput, 'settle' | 'stop'>,
+  unbind: () => void
 ): Promise<void> {
-  return output
-    .settle(definitive)
-    .catch(() => {})
-    .finally(() => {
-      output.stop()
-      unbind()
-      if (!output.ackedThrough()) {
-        void handBack().catch(() => {})
-      }
-    })
+  return output.settle().finally(() => {
+    output.stop()
+    unbind()
+  })
 }
