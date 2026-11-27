@@ -101,18 +101,26 @@ export function SearchQueryRow({
             'flex shrink-0 items-center',
             // Why: transparent, not invisible or hidden, so the options stay in the tab order and
             // the a11y tree, tabbing onto one reveals them, and revealing never shifts the input.
+            // Unrevealed they also ignore the pointer, so a click can't hit a control it can't see;
+            // the field (group/search), not this span, carries hover and focus-within to lift that.
             // Touch has no hover, so coarse pointers always show them.
             pinOptions
               ? 'opacity-100'
-              : 'opacity-0 group-hover/search:opacity-100 group-focus-within/search:opacity-100 pointer-coarse:opacity-100'
+              : 'pointer-events-none opacity-0 group-hover/search:pointer-events-auto group-hover/search:opacity-100 group-focus-within/search:pointer-events-auto group-focus-within/search:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100'
           )}
           onMouseDown={(event) => {
             // Why: the options keep the query input's focus, but the disclosure takes it, since
             // closing the filters unmounts a focused include/exclude input and drops focus.
+            // Focus it explicitly: some engines don't focus a button on click.
+            event.preventDefault()
             const disclosure =
               event.target instanceof Element ? event.target.closest('[aria-expanded]') : null
-            if (!disclosure || !event.currentTarget.contains(disclosure)) {
-              event.preventDefault()
+            if (
+              event.button === 0 &&
+              disclosure instanceof HTMLElement &&
+              event.currentTarget.contains(disclosure)
+            ) {
+              disclosure.focus({ preventScroll: true })
             }
           }}
         >
