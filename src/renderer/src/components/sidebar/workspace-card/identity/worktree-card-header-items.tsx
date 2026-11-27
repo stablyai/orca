@@ -1,5 +1,5 @@
 import React from 'react'
-import { FolderMinus, House, Server, ServerOff, Star, Trash2, UserRound } from 'lucide-react'
+import { FolderMinus, House, Server, ServerOff, Star, Trash2 } from 'lucide-react'
 
 import { ProjectPeekPopover } from '@/components/repo/project-peek/ProjectPeekPopover'
 import { RepoMark } from '@/components/repo/RepoMark'
@@ -13,6 +13,7 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import { formatSparseDirectoryPreview } from '../controller/worktree-card-model'
+import { DetachedHeadIcon } from './worktree-card-glyphs'
 
 export function WorktreeCardRepoChip({
   repo,
@@ -293,7 +294,7 @@ export function WorktreeCardDetachedHeadBadge({
         {renderIdentityIcon(
           { card, hasHoverDetails },
           display.tooltip,
-          <UserRound className="size-3" aria-hidden="true" />
+          <DetachedHeadIcon className="size-3.5" />
         )}
       </TooltipTrigger>
       <TooltipContent
