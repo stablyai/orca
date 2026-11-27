@@ -4,6 +4,7 @@ import {
   LEGACY_JOURNAL_RETIREMENT_ACK_METHOD,
   LEGACY_JOURNAL_RETIREMENT_CLAIM_METHOD
 } from '../../../../shared/remote-runtime/protocol/legacy-journal-retirement-forwarding'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   legacyJournalRetirementHostVersionSchema,
   legacyJournalRetirementSchema
@@ -11,11 +12,13 @@ import {
 import { isTelemetryEnabled, onTelemetryEnabled, track } from '../../../telemetry/client'
 import type { RetirementEventSocket } from './runtime-environment-retirement-events'
 
-const ClaimResult = z.strictObject({
-  event: legacyJournalRetirementSchema,
-  hostAppVersion: legacyJournalRetirementHostVersionSchema,
-  deliveryId: z.uuid()
-})
+const ClaimResult = lazyZodSchema(() =>
+  z.strictObject({
+    event: legacyJournalRetirementSchema,
+    hostAppVersion: legacyJournalRetirementHostVersionSchema,
+    deliveryId: z.uuid()
+  })
+)
 const DELIVERY_TIMEOUT_MS = 5_000
 
 export class RemoteLegacyJournalRetirement {

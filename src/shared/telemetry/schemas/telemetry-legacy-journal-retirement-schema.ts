@@ -146,7 +146,10 @@ export const legacyJournalRetirementSchema = lazyZodSchema(() =>
 )
 
 export const legacyJournalRetirementHostVersionSchema = lazyZodSchema(() =>
-  z.string().max(64).refine((version) => version === version.trim() && isValidAppVersion(version))
+  z
+    .string()
+    .max(64)
+    .refine((version) => version === version.trim() && isValidAppVersion(version))
 )
 
 export const legacyJournalRetirementTelemetrySchema = lazyZodSchema(() =>
