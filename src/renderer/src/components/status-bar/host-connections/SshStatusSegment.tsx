@@ -286,11 +286,11 @@ export function SshStatusSegment(): React.JSX.Element | null {
         ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => openHostSettings('servers')}>
-          {t('auto.components.status.bar.SshStatusSegment.3ad70e0365', 'Manage Remote Hosts…')}
+          {t('auto.components.status.bar.SshStatusSegment.3ad70e0365', 'Manage Remote Hosts')}
         </DropdownMenuItem>
         {showManageSshHosts ? (
           <DropdownMenuItem onSelect={() => openHostSettings('ssh')}>
-            {t('auto.components.status.bar.SshStatusSegment.manageSshHosts', 'Manage SSH Hosts…')}
+            {t('auto.components.status.bar.SshStatusSegment.manageSshHosts', 'Manage SSH Hosts')}
           </DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>
