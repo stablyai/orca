@@ -15,9 +15,10 @@ import {
   SkillCloudRequestError
 } from '../../skills/cloud/skill-cloud-request-error'
 import { BOT_SHARE_ERRORS } from '../../../shared/bots/bot-share-errors'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
-const Id = z.string().regex(ID_PATTERN)
+const Id = lazyZodSchema(() => z.string().regex(ID_PATTERN))
 
 const BotCloudVersionSchema = z.object({
   packageId: Id,

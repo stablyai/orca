@@ -2,6 +2,7 @@
 import { z } from 'zod'
 import type { MultiplexerTransport } from '../../protocol/ssh-multiplexer-transport-writer'
 import { SshChannelMultiplexer } from '../../protocol/ssh-channel-multiplexer'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 
 const PROTOCOL_VERSION = 1
 const OPEN_CLIENT_TIMEOUT_MS = 10_000
@@ -67,23 +68,29 @@ function errorCode(error: unknown): unknown {
 }
 
 // Any build's grant is accepted: the bridge talks to whichever relay is already there.
-const OwnerGrantSchema = z.object({
-  protocolVersion: z.literal(PROTOCOL_VERSION),
-  role: z.literal('session-owner'),
-  ownerGeneration: z.number().int().positive(),
-  ownerLease: z.string().min(1).max(512)
-})
+const OwnerGrantSchema = lazyZodSchema(() =>
+  z.object({
+    protocolVersion: z.literal(PROTOCOL_VERSION),
+    role: z.literal('session-owner'),
+    ownerGeneration: z.number().int().positive(),
+    ownerLease: z.string().min(1).max(512)
+  })
+)
 
-const PtyRowSchema = z.object({
-  id: z.string().min(1),
-  cwd: z.string().optional().catch(undefined),
-  title: z.string().optional().catch(undefined),
-  worktreeId: z.string().optional().catch(undefined),
-  incarnationId: z.string().min(1).max(512).optional().catch(undefined),
-  terminalHandle: z.string().min(1).max(512).optional().catch(undefined)
-})
+const PtyRowSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string().min(1),
+    cwd: z.string().optional().catch(undefined),
+    title: z.string().optional().catch(undefined),
+    worktreeId: z.string().optional().catch(undefined),
+    incarnationId: z.string().min(1).max(512).optional().catch(undefined),
+    terminalHandle: z.string().min(1).max(512).optional().catch(undefined)
+  })
+)
 
-const AttachResultSchema = z.object({ replay: z.string().optional().catch(undefined) }).nullable()
+const AttachResultSchema = lazyZodSchema(() =>
+  z.object({ replay: z.string().optional().catch(undefined) }).nullable()
+)
 
 function replayOf(result: unknown): string {
   const parsed = AttachResultSchema.safeParse(result)

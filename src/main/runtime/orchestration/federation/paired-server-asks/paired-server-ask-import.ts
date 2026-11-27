@@ -27,8 +27,9 @@ import {
 import type { PairedServerAsks } from './paired-server-asks-pull'
 import { notifyPairedServerCardsChanged } from './paired-server-card-notices'
 import { replySubject } from '../../../../../shared/orchestration/mailbox/reply-subject'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 
-const Withdrawn = z.object({ requestId: z.string().min(1) })
+const Withdrawn = lazyZodSchema(() => z.object({ requestId: z.string().min(1) }))
 
 export type PulledItem = {
   conversationId: string
