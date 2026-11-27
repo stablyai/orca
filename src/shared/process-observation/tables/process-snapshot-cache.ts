@@ -59,7 +59,9 @@ export function createProcessTableSnapshotReader<T = string>(
         ttlMs > 0 && Number.isFinite(ttlMs)
           ? setTimeout(() => {
               expiryTimer = null
-              cached = cached === next && deps.now() - next.completedAtMs >= ttlMs ? null : cached
+              if (cached === next) {
+                cached = null
+              }
             }, ttlMs)
           : null
       expiryTimer?.unref?.()
