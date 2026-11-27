@@ -13,10 +13,10 @@ describe('annotate palette saved position', () => {
     expect(parseAnnotatePalettePosition('0.25')).toEqual({ x: 0.25, y: 0 })
   })
 
-  it('falls back to top centre for missing, damaged or out-of-range values', () => {
-    expect(parseAnnotatePalettePosition(null)).toEqual({ x: 0.5, y: 0 })
-    expect(parseAnnotatePalettePosition('{not json')).toEqual({ x: 0.5, y: 0 })
-    expect(parseAnnotatePalettePosition('{"x":"left"}')).toEqual({ x: 0.5, y: 0 })
+  it('falls back to bottom centre for missing, damaged or out-of-range values', () => {
+    expect(parseAnnotatePalettePosition(null)).toEqual({ x: 0.5, y: 1 })
+    expect(parseAnnotatePalettePosition('{not json')).toEqual({ x: 0.5, y: 1 })
+    expect(parseAnnotatePalettePosition('{"x":"left"}')).toEqual({ x: 0.5, y: 1 })
     expect(parseAnnotatePalettePosition('{"x":-3,"y":7}')).toEqual({ x: 0, y: 1 })
   })
 })

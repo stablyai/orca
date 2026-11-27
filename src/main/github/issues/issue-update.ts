@@ -91,7 +91,7 @@ export async function updateIssue(
       try {
         const response: { body?: string; body_html?: string } = JSON.parse(stdout)
         if (response?.body === updates.body) {
-          bodyImageUrls = githubBodyImageUrls(response.body, response.body_html)
+          bodyImageUrls = await githubBodyImageUrls(response.body, response.body_html)
         }
       } catch {
         // Optional display data cannot turn an accepted edit into a failed write.

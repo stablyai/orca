@@ -3,6 +3,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import * as z from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { planBotFromPackage, type BotPackagePlan } from '../../../shared/bots/bot-package'
 import { BOT_SHARE_MEMORY_INDEX } from '../../../shared/bots/bot-share-received'
 import { downloadSkillPackageGrant } from '../../skills/package-download/skill-package-download'
@@ -26,7 +27,7 @@ export type FetchedSharedBot = {
   cleanup: () => Promise<void>
 }
 
-const GrantSchema = z.object({ url: z.string(), expiresAt: z.string() })
+const GrantSchema = lazyZodSchema(() => z.object({ url: z.string(), expiresAt: z.string() }))
 
 /** The version the link serves now, or `versionId` exactly. Moved when the link no longer serves
  *  `versionId`; null when it was stopped or never existed. */

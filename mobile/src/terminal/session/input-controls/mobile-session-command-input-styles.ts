@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native'
 
-import { colors, spacing, radii, typography } from '../../../theme/mobile-theme'
+import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
 export const mobileSessionCommandInputStyles = themedStyleSheet(() => ({
@@ -48,22 +48,6 @@ export const mobileSessionCommandInputStyles = themedStyleSheet(() => ({
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: spacing.sm
-  },
-  createButton: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.control
-  },
-  createButtonDisabled: {
-    opacity: 0.5
-  },
-  createButtonText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
   },
   keyboardDismissGlyph: {
     alignItems: 'center',

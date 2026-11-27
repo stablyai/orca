@@ -56,6 +56,7 @@ type TimelineItemResolution =
       identity: AgentJournalItemIdentity
       body: AgentJournalItemBody
       change: 'open' | 'update' | 'close'
+      keepsSavedCall?: true
     }
   | { kind: 'literal'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
   | { kind: 'acp-loss-warning'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
@@ -241,12 +242,35 @@ function resolveTimelineItem(
   }
 }
 
+function withSavedCall<T extends { body: AgentJournalItemBody; keepsSavedCall?: true }>(
+  resolution: T,
+  saved: AgentJournalItemBody | undefined
+): T {
+  const { body } = resolution
+  if (!resolution.keepsSavedCall || saved?.kind !== 'tool-call' || body.kind !== 'tool-call') {
+    return resolution
+  }
+  const output = body.output ?? saved.output
+  // Its name is a fallback, but a given input stands.
+  const input = body.input ?? saved.input
+  const images = body.outputImagePaths ?? saved.outputImagePaths
+  const merged = {
+    ...body,
+    name: saved.name,
+    input,
+    ...(output ? { output } : {}),
+    ...(images ? { outputImagePaths: images } : {})
+  }
+  return { ...resolution, body: merged }
+}
+
 export function resolveJournalGuardedItem(
   view: Pick<JournalTimelineView, 'item' | 'itemBody'>,
-  resolution: Extract<JournalTimelineItemResolution, { kind: 'text-snapshot' | 'guarded-item' }>,
+  given: Extract<JournalTimelineItemResolution, { kind: 'text-snapshot' | 'guarded-item' }>,
   placement: AgentJournalTurnScope
 ): JournalTimelineItemResult {
-  const held = view.item(agentJournalItemKey(resolution.identity))
+  const held = view.item(agentJournalItemKey(given.identity))
+  const resolution = given.kind === 'guarded-item' ? withSavedCall(given, held?.body) : given
   const scope = held ? (held.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE) : placement
   if (resolution.kind === 'guarded-item') {
     if (

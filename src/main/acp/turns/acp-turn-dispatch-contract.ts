@@ -16,7 +16,13 @@ export type AcpDispatchSettlement = { clientMessageId: string } & (
   | { state: 'unknown'; reason: string }
 )
 
-export type AcpTurnSend = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: number }
+// `adopted`: an earlier app's prompt, whose acceptance no replay settles.
+export type AcpTurnSend = {
+  clientMessageId: string
+  prompt: ContentBlock[]
+  requestedAt: number
+  adopted?: true
+}
 export type AcpSteerMode = 'mail' | 'cancel'
 
 export type AcpStructuredTurnsDeps = {

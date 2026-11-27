@@ -76,7 +76,7 @@ const paneForegroundAgentsByTabIdCache = new WeakMap<
   PaneForegroundAgentsByTabId
 >()
 
-function getPaneForegroundAgentsByTabId(
+export function getPaneForegroundAgentsByTabId(
   entries: Record<string, PaneForegroundAgentEntry>
 ): PaneForegroundAgentsByTabId {
   const cached = paneForegroundAgentsByTabIdCache.get(entries)

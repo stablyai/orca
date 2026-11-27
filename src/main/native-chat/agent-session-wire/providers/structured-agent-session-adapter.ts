@@ -275,8 +275,6 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   holdsDispatch?(sessionId: string): boolean
   /** Fresh answer before an idle stop: provider-declared work keeps the child; undefined has none to ask. */
   confirmIdle?(sessionId: string): Promise<AgentSessionIdleConfirmation> | undefined
-  /** Open work, keyed as the provider's relay work markers key it, for a detached idle stop. */
-  relayOpenWork?(sessionId: string, rootTurnRunning: boolean): Record<string, string[][]> | null
   /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
   liveTurnId?(sessionId: string): string | null | undefined
   /** Narrow declared steering to the live acquisition's negotiated support. */

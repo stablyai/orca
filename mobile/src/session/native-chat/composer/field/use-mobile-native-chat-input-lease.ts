@@ -106,5 +106,5 @@ export function mobileNativeChatComposerPlaceholder(
       ? nativeChatTurnStatusCopy(t).queueAfterStop
       : nativeChatTurnStatusCopy(t).sendAfterStop
   }
-  return t('chat.composerPlaceholder.prompt', 'Ask anything, @ to mention files, / for commands')
+  return t('chat.composer.askAnything', 'Ask anything')
 }

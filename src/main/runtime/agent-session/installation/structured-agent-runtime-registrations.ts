@@ -1,3 +1,5 @@
+import { registerAcpRelayAgent } from '../../../acp/process/acp-relay-work-markers'
+import { createZcodeAdapter } from '../../../zcode/structured/session-lifecycle/zcode-runtime-registration'
 import { AcpAtRestCommandCatalog } from '../../../acp/discovery/acp-at-rest-commands'
 import { resolveNativeChatVisualsSkillLocation } from '../../../native-chat/conversation-files/native-chat-visuals-skill-location'
 import { withSupportedCodexCli } from '../../../codex/structured/launch/codex-cli-installation-error'
@@ -24,12 +26,6 @@ import { createOpenCodeAcpConnection } from '../../../opencode/acp/opencode-acp-
 import { acpStructuredLaunchPart } from '../../../acp/launch/acp-structured-launch-resolution'
 import { AcpStructuredSessionAdapter } from '../../../acp/session/acp-structured-session-adapter'
 import { PI_RPC_RUNTIME_REGISTRATION } from '../../../pi/rpc-runtime-registration'
-import { ZcodeStructuredSessionAdapter } from '../../../zcode/structured/session-lifecycle/zcode-structured-session-adapter'
-import { ZcodeAtRestCommandCatalog } from '../../../zcode/structured/catalog/zcode-at-rest-commands'
-import { ZcodeNamingRuns } from '../../../zcode/structured/naming/zcode-naming-run'
-import { zcodeStructuredLaunchPart } from '../../../zcode/structured/launch/zcode-structured-launch-resolution'
-import { ZCODE_STRUCTURED_AGENT } from '../../../zcode/structured/launch/zcode-structured-agent-definition'
-import { resolveZcodeChatCredentials } from '../../../zcode/structured/credentials/zcode-chat-credentials'
 import {
   claudeLaunchEnvOverlay,
   claudeListingDeps
@@ -174,6 +170,7 @@ function createClaudeAdapter(
 function createAcpAdapter(
   spec: AcpLaunchSpec
 ): StructuredAgentRuntimeRegistration['createAdapter'] {
+  registerAcpRelayAgent(spec)
   return (context) => {
     const { deps, followUps } = context
     const savedSession = savedProviderTurns(context)
@@ -225,49 +222,26 @@ function createAcpAdapter(
           : createAcpAgentConnection),
       onChildWorkEvidence: (sessionId, evidence, producer) =>
         context.host()?.publishChildWorkEvidence(sessionId, evidence, producer),
+      keptWork: async (sessionId) => {
+        const work = await context.host()?.currentWork(sessionId)
+        // The oldest unanswered send is the prompt the agent owes; later ones are queued behind it.
+        const send = work?.restatedSubmissions()[0]
+        const turn = work?.activeTurn()
+        const body = turn?.item.body
+        const sentAt =
+          body?.kind === 'turn' ? (body.requestedAt ?? body.startedAt) : send?.submittedAt
+        return {
+          turnId: turn?.turnId ?? null,
+          unansweredSendId: send?.clientMessageId ?? null,
+          sentAt: sentAt ?? null
+        }
+      },
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
       onDispatchSettledLate: followUps.onDispatchSettledLate,
       logger: deps.logger,
       onEvent: context.deliverLifecycle
     })
   }
-}
-
-function createZcodeAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
-  const { deps } = context
-  return new ZcodeStructuredSessionAdapter({
-    resolveCommandSettings: deps.resolveAgentCommandSettings,
-    // Disposable fork/rewind backends need the same per-agent overlay a live chat launch gets.
-    resolveEnvironment: () => context.environment.resolveAgentEnvironment('zcode'),
-    atRestCommands: new ZcodeAtRestCommandCatalog({
-      resolveEnvironment: () => context.environment.resolveAgentEnvironment('zcode'),
-      resolveCommandSettings: deps.resolveAgentCommandSettings,
-      resolveWorkspacePath: deps.resolveWorkspacePath
-    }),
-    namingRuns: new ZcodeNamingRuns({
-      resolveEnvironment: () => context.environment.resolveAgentEnvironment('zcode'),
-      resolveCommandSettings: deps.resolveAgentCommandSettings,
-      resolveChatCredentials: () =>
-        resolveZcodeChatCredentials({ site: deps.resolveZcodeChatPlanSite?.() })
-    }),
-    resolveLaunch: composeStructuredLaunch(
-      ZCODE_STRUCTURED_AGENT,
-      structuredAgentLaunchSources(context),
-      zcodeStructuredLaunchPart({
-        resolveLaunchArgs: () => deps.resolveLaunchArgs('zcode')
-      })
-    ),
-    resolveChatCredentials: () =>
-      resolveZcodeChatCredentials({ site: deps.resolveZcodeChatPlanSite?.() }),
-    logger: deps.logger,
-    onEvent: (event) => {
-      // The lifecycle arms carry the fence; the translator's plain `ended` is diagnostics only.
-      if ('fence' in event) {
-        context.deliverLifecycle(event)
-      }
-    },
-    onDispatchSettledLate: (settlement) => context.followUps.onDispatchSettledLate(settlement)
-  })
 }
 
 function registrationWithAdapter(

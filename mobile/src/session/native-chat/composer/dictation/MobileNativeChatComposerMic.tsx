@@ -38,9 +38,12 @@ export function MobileNativeChatComposerMic({
   onMicPressIn,
   onMicPressOut,
   cancelRef,
-  disabled
+  disabled,
+  filled = false
 }: MobileNativeChatMicProps & {
   disabled: boolean
+  /** On the control fill, like + beside it; a comment box's mic stays bare. */
+  filled?: boolean
   // The composer's ✕ that a held mic may be released over.
   cancelRef?: RefObject<HostInstance | null>
 }): React.JSX.Element {
@@ -62,7 +65,10 @@ export function MobileNativeChatComposerMic({
         active: micActive,
         processing: micProcessing
       })}
-      style={({ pressed }) => [inputStyles.ghostButton, pressed && inputStyles.pressed]}
+      style={({ pressed }) => [
+        filled ? inputStyles.controlButton : inputStyles.ghostButton,
+        pressed && inputStyles.pressed
+      ]}
       // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
       onPress={dictationMode === 'hold' ? undefined : onMicPress}
       onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}

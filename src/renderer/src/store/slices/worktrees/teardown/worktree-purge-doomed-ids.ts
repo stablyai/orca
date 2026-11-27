@@ -1,5 +1,6 @@
 import { discardKagiPrivateInitialNavigation } from '@/lib/kagi-private-initial-navigation'
 import type { AppState } from '../../../types'
+import { structuredAgentSessionAddressTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-session/hibernation/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/components/terminal-pane/parking/retention/foreground-terminal-tabs'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-session/launch/startup/agent-startup-delivery-guards'
@@ -23,6 +24,16 @@ export function collectWorktreePurgeDoomedIds(
   const fileIds: string[] = []
   for (const id of worktreeIdSet) {
     tabs.push(...(s.tabsByWorktree[id] ?? []))
+    // Why unifiedTabs too: chat tabs live only there, and a slot tab's panes are keyed by its session address.
+    for (const tab of s.unifiedTabsByWorktree?.[id] ?? []) {
+      tabs.push({ id: tab.id, ptyId: null })
+      if (tab.contentType === 'agent-session') {
+        const addressTabId = structuredAgentSessionAddressTabId(tab.id, tab.entityId)
+        if (addressTabId !== tab.id) {
+          tabs.push({ id: addressTabId, ptyId: null })
+        }
+      }
+    }
     for (const workspace of s.browserTabsByWorktree[id] ?? []) {
       browserWorkspaceIds.push(workspace.id)
     }

@@ -1,4 +1,20 @@
-import { findNodeAtLocation, parseTree, type Node } from 'jsonc-parser'
+import { parseTree, type Node } from 'jsonc-parser'
+
+/** Match JSONC value parsing: the last property with a name is the active one. */
+export function findActiveJsonNode(
+  tree: Node | undefined,
+  path: readonly string[]
+): Node | undefined {
+  let node = tree
+  for (const key of path) {
+    node =
+      node?.type === 'object'
+        ? node.children?.findLast((property) => property.children?.[0]?.value === key)
+            ?.children?.[1]
+        : undefined
+  }
+  return node
+}
 
 /** The offset of the first character after spaces and comments from `index`. */
 export function skipTrivia(text: string, index: number): number {
@@ -48,15 +64,15 @@ export function removeJsonProperties(
     return text
   }
   const tree = parseTree(text, [], { allowTrailingComma: true })
-  const object = tree && path.length > 0 ? findNodeAtLocation(tree, [...path]) : tree
+  const object = findActiveJsonNode(tree, path)
   const siblings = object?.type === 'object' ? object.children : undefined
   if (!siblings) {
     return text
   }
-  // The first property by each name, as a lookup by path would find it.
+  // Keep shadowed user values; only the last property is the one the reader inspected.
   const wanted = new Set(names)
   const removing: number[] = []
-  for (let index = 0; index < siblings.length && wanted.size > 0; index++) {
+  for (let index = siblings.length - 1; index >= 0 && wanted.size > 0; index--) {
     const property = siblings[index]!
     const key = property.children?.length === 2 ? property.children[0]!.value : undefined
     if (typeof key === 'string' && wanted.delete(key)) {
@@ -65,7 +81,7 @@ export function removeJsonProperties(
   }
   // Last first, so every offset still to be used lies before the text already cut.
   let next = text
-  for (const index of removing.toReversed()) {
+  for (const index of removing) {
     next = removeProperty(next, siblings[index]!, siblings[index - 1])
   }
   return next
@@ -74,7 +90,7 @@ export function removeJsonProperties(
 /** Removes the property at `path` only while its value is `{}` with nothing inside, not even a comment. */
 export function removeEmptyJsonObjectProperty(text: string, path: readonly string[]): string {
   const tree = parseTree(text, [], { allowTrailingComma: true })
-  const value = tree && path.length > 0 ? findNodeAtLocation(tree, [...path]) : undefined
+  const value = path.length > 0 ? findActiveJsonNode(tree, path) : undefined
   const property = value?.parent
   const siblings = property?.parent?.children
   if (

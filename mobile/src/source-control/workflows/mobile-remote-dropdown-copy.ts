@@ -13,11 +13,11 @@ import {
 export function mobileRemoteDropdownCopy(t: Translate): RemoteDropdownCopy {
   return {
     push: t('sourceControl.remoteDropdown.push', 'Push'),
-    forcePush: t('sourceControl.remoteDropdown.forcePush', 'Force Push'),
+    forcePush: t('sourceControl.remoteDropdown.forcePush', 'Force push'),
     pull: t('sourceControl.remoteDropdown.pull', 'Pull'),
     fastForward: t('sourceControl.remoteDropdown.fastForward', 'Fast-forward'),
     sync: t('sourceControl.remoteDropdown.sync', 'Sync'),
-    publishBranch: t('sourceControl.remoteDropdown.publishBranch', 'Publish Branch'),
+    publishBranch: t('sourceControl.remoteDropdown.publishBranch', 'Publish branch'),
     publishPrStatus: t('sourceControl.remoteDropdown.publishPrStatus', 'PR Status'),
     publishLinkedReview: t('sourceControl.remoteDropdown.publishLinkedReview', 'Linked Review'),
     publishNoBranch: t('sourceControl.remoteDropdown.publishNoBranch', 'No Branch'),

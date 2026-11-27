@@ -58,7 +58,6 @@
 4 src/main/amp/hook-service.ts
 8 src/main/antigravity/hook-service.ts
 1 src/main/antigravity/native-account-host.ts
-2 src/main/antigravity/native-account-launch.ts
 4 src/main/antigravity/native-credential-backend.ts
 1 src/main/antigravity/native-file-credentials.ts
 12 src/main/antigravity/native-windows-credentials.ts
@@ -558,7 +557,7 @@
 2 src/main/host/deferred-secret-protection-report.ts
 1 src/main/host/electron-speech-services.ts
 1 src/main/host/secret-protection-report.ts
-13 src/main/index.ts
+11 src/main/index.ts
 2 src/main/ipc/accounts/codex-accounts.ts
 1 src/main/ipc/accounts/codex-config-sync.ts
 1 src/main/ipc/accounts/cursor-accounts.ts
@@ -579,9 +578,11 @@
 2 src/main/ipc/custom-app-icon.ts
 22 src/main/ipc/diagnostics.ts
 1 src/main/ipc/emulator/emulator-video-stream.ts
+5 src/main/ipc/ephemeral-vm/ephemeral-vm-provision-handler.ts # split out of ephemeral-vm.ts; runs only on invoked provisions, never at boot
 6 src/main/ipc/ephemeral-vm/ephemeral-vm-recipe-context.ts
 7 src/main/ipc/ephemeral-vm/ephemeral-vm-runtime-handlers.ts
-11 src/main/ipc/ephemeral-vm/ephemeral-vm.ts
+7 src/main/ipc/ephemeral-vm/ephemeral-vm.ts
+2 src/main/ipc/ephemeral-vm/lazy-ephemeral-vm-handlers.ts # one-shot startup reconcile (only when VM state files exist) and first-invoke handler load; nothing blocks an empty boot
 15 src/main/ipc/filesystem/access/filesystem-auth.ts
 20 src/main/ipc/filesystem/access/local-file-access-resolution.ts
 3 src/main/ipc/filesystem/filesystem.ts
@@ -635,16 +636,16 @@
 2 src/main/ipc/pty/ipc/codex-shared-server.ts
 1 src/main/ipc/pty/ipc/newer-daemon-hold.ts
 2 src/main/ipc/pty/ipc/pty-management.ts
-2 src/main/ipc/pty/ipc/spawn-env.ts
+1 src/main/ipc/pty/ipc/spawn-env.ts
 1 src/main/ipc/pty/ipc/spawn-run.ts
-2 src/main/ipc/pty/provider/local-configure.ts
+1 src/main/ipc/pty/provider/local-configure.ts
 2 src/main/ipc/pty/register-handlers.ts
 1 src/main/ipc/pty/register-headless-runtime.ts
-1 src/main/ipc/pty/runtime/spawn-options.ts
 1 src/main/ipc/pty/spawn/spawn-begin.ts
 1 src/main/ipc/pty/spawn/spawn-options-assembly.ts
-17 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
-1 src/main/ipc/register-core-handlers/runtime-host-handler-registration.ts
+1 src/main/ipc/register-core-handlers/lazy-account-and-diagnostic-ipc-handlers.ts # diagnostics charge moved from direct registration; the module imports on first invoke, so mkdirSync never runs at boot
+2 src/main/ipc/register-core-handlers/lazy-rare-ipc-handlers.ts # charges moved from register-core-handlers; handlers import on first invoke, so the blocking helpers never run at boot
+11 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
 5 src/main/ipc/repos.ts
 1 src/main/ipc/repos/local-repo-registration.ts
 1 src/main/ipc/repos/nested-repo-import-handler.ts
@@ -1031,7 +1032,7 @@
 1 src/main/ports/local-workspace-port-scanner.ts
 1 src/main/ports/port-scan-command-client.ts
 3 src/main/preflight/agent-command-detection.ts
-2 src/main/preflight/agent-detection.ts # glab auth env = the same cached /proc/mounts read the exec helper does by default
+1 src/main/preflight/agent-detection.ts
 1 src/main/preflight/installed-agent-detection.ts
 1 src/main/project-groups/nested-repo-discovery.ts
 2 src/main/provider-process/managed-provider-process.ts
@@ -1107,7 +1108,7 @@
 2 src/main/runtime/agent-session/environment/structured-session-child-env.ts
 2 src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
 3 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
-4 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts # zcode adapter joins the codex/claude/opencode startup wiring; one-shot probes each
+3 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts # zcode adapter joins the codex/claude/opencode startup wiring; one-shot probes each
 1 src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-runtime-teardown.ts
 2 src/main/runtime/agent-session/installation/structured-agent-session-runtime.ts
@@ -1515,6 +1516,7 @@
 10 src/main/zcode/structured/launch/zcode-runtime-resolution.ts # one-shot runtime resolution: bundled discovery, ASAR version and provider table probes
 4 src/main/zcode/structured/launch/zcode-structured-launch-resolution.ts # same one-shot launch resolution probes as zcode-headless-launch
 2 src/main/zcode/structured/naming/zcode-naming-run.ts # one-shot naming run launch and table read
+1 src/main/zcode/structured/session-lifecycle/zcode-runtime-registration.ts # the registration's adapter factory calls zcodeStructuredLaunchPart, a one-shot launch probe
 1 src/main/zcode/structured/session-lifecycle/zcode-structured-session-acquisition.ts # one-shot session acquisition probe
 2 src/main/zcode/structured/session-lifecycle/zcode-structured-session-fork.ts # one-shot fork/rewind backend probes
 1 src/main/zcode/structured/session-lifecycle/zcode-structured-session-open.ts # one-shot table read on session open

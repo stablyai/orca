@@ -9,6 +9,7 @@ import { getPRRefreshOwnerRuntimeEnvironmentId } from '@/store/github/repositori
 import { hostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence'
 import type { ChecksDetailPollingPolicy } from '../../../../../../shared/github/checks/checks-detail-polling-policy'
 import type { ChecksPanelPollingInput, ChecksPanelPollingState } from './use-checks-panel-polling'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function useChecksDetailTimer({
   model,
@@ -141,27 +142,29 @@ export function useChecksDetailTimer({
         // back, the panel opening and a changed aggregate state must read fresh.
         const background = trigger === 'timer' && !shown && !force
         inFlightRef.current = { identity: requestIdentity, token, background }
-        try {
-          await (isGitLabReview
-            ? fetchGitLabDetails(shown ? {} : { background: true })
-            : fetchChecks({
-                force,
-                ...(shown ? { wakeWslDistro: true } : {}),
-                ...(background ? { background: true } : {})
-              }))
-        } finally {
-          if (inFlightRef.current?.token === token) {
-            inFlightRef.current = null
-            if (lastIdentityRef.current === requestIdentity) {
-              if (!background && modelRef.current.isPanelVisible) {
-                wakeNextReadRef.current = false
+        await runWithFinally(
+          () =>
+            isGitLabReview
+              ? fetchGitLabDetails(shown ? {} : { background: true })
+              : fetchChecks({
+                  force,
+                  ...(shown ? { wakeWslDistro: true } : {}),
+                  ...(background ? { background: true } : {})
+                }),
+          () => {
+            if (inFlightRef.current?.token === token) {
+              inFlightRef.current = null
+              if (lastIdentityRef.current === requestIdentity) {
+                if (!background && modelRef.current.isPanelVisible) {
+                  wakeNextReadRef.current = false
+                }
+                const delay = policyDelay()
+                nextAttemptAtRef.current = delay === null ? Infinity : Date.now() + delay
+                refreshRef.current?.()
               }
-              const delay = policyDelay()
-              nextAttemptAtRef.current = delay === null ? Infinity : Date.now() + delay
-              refreshRef.current?.()
             }
           }
-        }
+        )
       },
       getDelayMs: () => {
         const delay = policyDelay()

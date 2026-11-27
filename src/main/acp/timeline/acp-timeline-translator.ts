@@ -9,13 +9,10 @@ import { AcpContextTimeline } from './acp-context-usage'
 import { AcpThreadGoalTimeline } from './acp-thread-goal-timeline'
 import { AcpBackgroundTaskTimeline } from './acp-background-task-timeline'
 import { AcpAgentTurns } from './acp-agent-turns'
-import {
-  GENERIC_ACP_DIALECT,
-  type AcpDialect,
-  type AcpTurnEnding
-} from '../acp-dialects/acp-dialect'
+import { GENERIC_ACP_DIALECT } from '../acp-dialects/acp-dialect'
+import type { AcpDialect, AcpTurnEnding } from '../acp-dialects/acp-dialect'
 import type { AcpAgentError } from '../transport/acp-errors'
-import { acpTurnEndEvents, AcpPromptTurns } from './acp-prompt-turns'
+import { acpTurnEndEvents, AcpPromptTurns, type AcpPromptOpening } from './acp-prompt-turns'
 
 import { translateAcpRequest } from '../requests/acp-timeline-requests'
 import { AcpUrlElicitations } from '../requests/acp-url-elicitation'
@@ -34,6 +31,9 @@ export type AcpTimelineTranslatorOptions = {
   dialect?: AcpDialect
   agentName?: string
   onTextDropped?: (drop: AcpTextDrop) => void
+  /** Number every turn's messages: a relayed agent's rows outlive the acquisition, and its
+   *  replay rewrites the rows it saved. */
+  numbersMessages?: boolean
 }
 
 /** Consume frames once; callers retry returned events. State lasts only for this provider child. */
@@ -42,7 +42,7 @@ export class AcpTimelineTranslator {
   readonly injectsPromptIdentity: boolean
   private readonly dialect: AcpDialect
   private readonly prompts: AcpPromptTurns
-  private readonly backgroundTasks: AcpBackgroundTaskTimeline
+  readonly backgroundTasks: AcpBackgroundTaskTimeline
   /** Drained by the lane in journal order. */
   readonly subagents = new AcpSubagents()
   readonly children: AcpChildSessions
@@ -62,9 +62,7 @@ export class AcpTimelineTranslator {
     this.providerSessionId = options.sessionId
     this.injectsPromptIdentity = this.dialect.injectedPromptIdentity === true
     this.failures = new AcpTurnFailures(options.sessionId, this.dialect, options.agentName)
-    this.backgroundTasks = new AcpBackgroundTaskTimeline((callId) =>
-      this.ownership.tools.join(callId)
-    )
+    this.backgroundTasks = new AcpBackgroundTaskTimeline(this.ownership.tools)
     this.prompts = new AcpPromptTurns(options.sessionId, this.dialect, options.agentName)
     const tools = this.ownership.tools
     this.children = new AcpChildSessions(options.sessionId, this.dialect, this.subagents, tools)
@@ -82,12 +80,13 @@ export class AcpTimelineTranslator {
   openPrompt(
     clientMessageId: string,
     at: number,
-    compactionTurn?: string
+    ...open: AcpPromptOpening
   ): { promptId: string; events: ProviderTimelineEvent[] } {
     if (this.loading) {
       throw new Error('ACP prompt overlaps a prompt or load')
     }
-    const prompt = this.prompts.open(clientMessageId, at, compactionTurn)
+    const prompt = this.prompts.open(clientMessageId, at, open[0], open[1])
+    this.ownership.messages.opened(prompt.promptId, this.options.numbersMessages === true, open[2])
     this.agentTurns.resume()
     if (this.prompts.current?.opened) {
       this.ownership.operation().open(prompt.promptId)
@@ -103,7 +102,8 @@ export class AcpTimelineTranslator {
 
   isSyntheticBackgroundTask = (taskId: string): boolean => this.ownership.tools.backgrounds(taskId)
 
-  agentTurnCalls = (): 'none' | 'running' | null => this.agentTurns.calls(this.activeTurn)
+  /** The running calls of the turn the agent began itself; null when none is open. */
+  agentTurnCalls = () => this.agentTurns.calls(this.activeTurn)
 
   promptResult(
     clientMessageId: string,
@@ -154,9 +154,7 @@ export class AcpTimelineTranslator {
     this.loading = true
   }
 
-  finishLoad(): void {
-    this.loading = false
-  }
+  finishLoad = (): void => void (this.loading = false)
 
   reconcileSubagent(
     id: string,
@@ -167,9 +165,8 @@ export class AcpTimelineTranslator {
   }
 
   /** Provisionally settle missing tasks; later provider endings may revise the outcome. */
-  reconcileBackgroundTask(taskId: string): ProviderTimelineEvent[] {
-    return this.backgroundTasks.reconcile(taskId, this.options.sessionId)
-  }
+  reconcileBackgroundTask = (taskId: string): ProviderTimelineEvent[] =>
+    this.backgroundTasks.reconcile(taskId, this.options.sessionId)
 
   sessionEvent(event: AcpSessionEvent, at: number): ProviderTimelineEvent[] {
     const params = event.kind === 'known' ? event.notification : event.raw
@@ -257,9 +254,14 @@ export class AcpTimelineTranslator {
     }
     if (standard) {
       const messageKey =
-        turn && this.dialect.injectedPromptIdentity
-          ? this.ownership.messages.key(turn, standard.update)
+        this.dialect.injectedPromptIdentity || this.options.numbersMessages
+          ? this.ownership.messages.key(turn, standard.update, this.prompts.current?.turn)
           : undefined
+      // A relayed chat's finished message leaves the text streams, as an unnumbered one would.
+      const ended = this.ownership.messages.takeEnded()
+      if (ended && this.options.numbersMessages) {
+        events.push({ type: 'text.close', item: { id: ended }, join })
+      }
       return [
         ...events,
         ...acpSessionUpdate(standard, turn, at, {

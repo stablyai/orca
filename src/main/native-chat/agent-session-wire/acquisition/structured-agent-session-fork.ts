@@ -7,6 +7,7 @@ import { defaultAgentChatLabel } from '../../../../shared/agent-session/conversa
 import { normalizeAgentSessionConversationName } from '../../../../shared/agent-session/conversation-naming/agent-session-conversation-name'
 import { agentSessionRecordShownName } from '../../../runtime/agent-session/records/agent-session-record-shown-name'
 import { AgentConversationCopyError } from '../../conversation-adoption/agent-conversation-copy-error'
+import { AgentCliInstallationError } from '../../agent-launch/agent-cli-installation-error'
 import { acpAgentName } from '../../../acp/session/acp-structured-agent-definitions'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
@@ -57,7 +58,7 @@ export async function prepareStructuredAgentSessionFork(
       error
     })
     return fail(
-      error instanceof AgentConversationCopyError
+      error instanceof AgentConversationCopyError || error instanceof AgentCliInstallationError
         ? error.message
         : error instanceof Error &&
             (error.name === 'TimeoutError' ||

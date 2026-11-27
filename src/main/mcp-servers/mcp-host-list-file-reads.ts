@@ -2,6 +2,7 @@
 // discovery and imports can ask them on every refresh.
 import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { BotToolServerSchema, type BotToolServer } from '../../shared/bot-tools'
 import type { McpAgentFiles, McpServer } from '../../shared/mcp-servers/mcp-servers'
 import { parseJsonObject } from '../../shared/workspace-setup/setup-script-import-parsers'
@@ -10,7 +11,7 @@ import { agentFilesOf, storedView } from './mcp-host-list'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 import { pluginMarkOf } from './mcp-plugin-server-mark'
 
-const RawEntriesSchema = z.array(z.record(z.string(), z.unknown())).catch([])
+const RawEntriesSchema = lazyZodSchema(() => z.array(z.record(z.string(), z.unknown())).catch([]))
 
 /** The file as written; empty when absent or unreadable. */
 async function readHostFile(folder: string): Promise<Record<string, unknown>> {

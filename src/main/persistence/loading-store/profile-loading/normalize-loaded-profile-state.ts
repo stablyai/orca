@@ -10,8 +10,7 @@ import { normalizeOrcadMigrationStagedCatalogs } from '../../../../shared/orcad-
 import { normalizeWorkspaceLineageByChildKey } from '../../applying-settings/ui-interaction-merge'
 import { dropInferredParentsOverFolderParents } from '../workspace-lineage/folder-parent-lineage-persistence'
 import { normalizeCrossStoreLineageByChildKey } from '../../../../shared/worktree/lineage/cross-store-lineage-records'
-import { normalizePersistedBots } from '../../../../shared/bot-types'
-import { splitBotsByOlderBuildSupport } from '../../../../shared/bots/bot-older-build-support'
+import { normalizePersistedBots, splitBotsByOlderBuildSupport } from '../../../../shared/bot-types'
 import { migrateRetiredBotAgent } from '../../../../shared/bots/bot-retired-agents'
 import {
   markImmutableBotSnapshot,

@@ -88,12 +88,25 @@ export function useOptionPager<Key extends string>() {
     })
   }, [reducedMotion, slide])
 
+  /** Close, then run `after` once the page is gone, e.g. to clear what it showed. */
+  const closeThen = useCallback(
+    (after: () => void) => {
+      slide.value = withTiming(1, pageTiming(reducedMotion), (finished) => {
+        if (finished) {
+          runOnJS(setPage)(null)
+          runOnJS(after)()
+        }
+      })
+    },
+    [reducedMotion, slide]
+  )
+
   const forget = useCallback(() => {
     slide.value = 1
     setPage(null)
   }, [slide])
 
-  return { page, open, close, forget, slide, reducedMotion }
+  return { page, open, close, closeThen, forget, slide, reducedMotion }
 }
 
 export type OptionPagerControls<Key extends string> = ReturnType<typeof useOptionPager<Key>>

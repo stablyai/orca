@@ -55,6 +55,11 @@ export function formatAntigravityAccounts(state: AntigravityAccountState): strin
       (account) =>
         `  ${account.id}  ${account.email ?? account.subject ?? account.id}${
           account.id === state.activeAccountId ? ' (active)' : ''
+        }${
+          // An agy still running on another account can hold the login between launches.
+          account.id === state.selectedAccountId && account.id !== state.activeAccountId
+            ? ' (selected)'
+            : ''
         }`
     )
     .join('\n')}`

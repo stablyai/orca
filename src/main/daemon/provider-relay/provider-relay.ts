@@ -53,6 +53,7 @@ export class ProviderRelay {
     this.idleStop = ProviderRelayIdleStop.forRelay(this, options, () => this.spool.unacked())
     const stdout = options.managed.child.stdout
     this.input = new ProviderRelayInput(options.managed.child.stdin)
+    this.pending.toAgent = (line) => this.attachment === null && this.input.writeLine(line)
     this.spool = new ProviderRelaySpool({
       path: options.spoolPath,
       deliver: (record) => this.deliver(record),
@@ -161,20 +162,13 @@ export class ProviderRelay {
     this.release()
     // Live records wait for this attach's own replay, or they would reach the new client twice.
     this.spool.suspend()
-    const attachment = new ProviderRelayAttachment(
-      clientId,
-      stream,
-      this.relayId,
-      () => void this.detach(clientId)
-    )
+    const gone = () => void this.detach(clientId)
+    const attachment = new ProviderRelayAttachment(clientId, stream, this.relayId, gone)
     this.attachment = attachment
-    // The initialize answer and held requests go first, as events, so no reply line has to carry them.
     const { initializeResult } = this.pending
+    const { records: kept, lines: keptLines } = this.pending.kept.snapshot()
     const pending = this.pending.records()
-    const sent =
-      (initializeResult === null ||
-        (await attachment.sendPieces('relayInitialize', 0, initializeResult))) &&
-      (await attachment.sendPending(pending))
+    const sent = await attachment.sendPreamble(initializeResult, kept, pending)
     // A detach or takeover during the preamble owns the spool now; this attach must not touch it.
     if (!sent || this.attachment !== attachment) {
       throw new Error(RELAY_TAKEN_OVER)
@@ -197,6 +191,7 @@ export class ProviderRelay {
       this.sendExit()
     }
     return {
+      ...this.pending.kept.attachDetails(Math.max(cursor, this.spool.ackedSeq), keptLines),
       replayThroughSeq,
       pending: pending.map((record) => record.seq),
       maxClientRequestId: this.pending.maxClientRequestId,
@@ -322,6 +317,9 @@ export class ProviderRelay {
   private release(): void {
     this.attachment?.release()
     this.attachment = null
+    this.pending.answerHeld()
+    // Answered held requests may free the table that paused stdout.
+    this.updateReading()
   }
 
   private deliver(record: ProviderRelayRecord): void {

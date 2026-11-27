@@ -2,6 +2,7 @@
 
 import type { runProcess } from '@orca/process-host'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { MacTccFolderClass } from '../../../shared/telemetry/daemon-adoption-telemetry'
 import type {
   TccAsked,
@@ -49,9 +50,11 @@ type MsgGroup = {
   result: { authValue: string; authReason: string } | null
 }
 
-const LOG_ENTRY_SCHEMA = z.object({
-  eventMessage: z.string()
-})
+const LOG_ENTRY_SCHEMA = lazyZodSchema(() =>
+  z.object({
+    eventMessage: z.string()
+  })
+)
 const MSG_ID_PATTERN = /\bmsgID=(\d+\.\d+)/
 const ANY_PID_PATTERN = /\bpid=\d+/
 const SERVICE_PATTERN = /\bservice=kTCCService(\w+)/

@@ -5,13 +5,14 @@ import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-sign
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../runtime/agent-session/environment/structured-session-child-env'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import type {
   RequestPermissionRequest,
   RequestPermissionResponse
 } from '../generated/acp-protocol.generated'
 
-const envelope = z.looseObject({ sessionId: z.string() })
+const envelope = lazyZodSchema(() => z.looseObject({ sessionId: z.string() }))
 
 export function denyAcpTextTaskPermission(
   request: RequestPermissionRequest

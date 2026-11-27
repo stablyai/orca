@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import {
   listTeams,
   getTeamStates,
@@ -8,15 +9,15 @@ import {
 import { normalizeWorkspaceId, normalizeWorkspaceSelection } from './ipc-args'
 import type { LinearWorkspaceSelection } from '../../../shared/linear/workspace-types'
 
-export function registerLinearTeamHandlers(): void {
-  ipcMain.handle(
+export function registerLinearTeamHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle(
     'linear:listTeams',
     async (_event, args?: { workspaceId?: LinearWorkspaceSelection }) => {
       return listTeams(normalizeWorkspaceSelection(args?.workspaceId))
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'linear:teamStates',
     async (_event, args: { teamId: string; workspaceId?: string }) => {
       if (typeof args?.teamId !== 'string' || !args.teamId.trim()) {
@@ -26,7 +27,7 @@ export function registerLinearTeamHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'linear:teamLabels',
     async (_event, args: { teamId: string; workspaceId?: string }) => {
       if (typeof args?.teamId !== 'string' || !args.teamId.trim()) {
@@ -36,7 +37,7 @@ export function registerLinearTeamHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'linear:teamMembers',
     async (_event, args: { teamId: string; workspaceId?: string }) => {
       if (typeof args?.teamId !== 'string' || !args.teamId.trim()) {

@@ -2,6 +2,7 @@
 // state (the key and the bot's sign-ins), so it updates on every client. Older clients and the phone
 // paint its `text` as a plain line.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalPlainStatusItem
@@ -18,32 +19,36 @@ export const COMPOSIO_SETUP_CARD_PRESENTATION = 'composio-setup'
 export const COMPOSIO_SETUP_CARD_KINDS = ['key', 'connect', 'ready', 'events'] as const
 export type ComposioSetupCardKind = (typeof COMPOSIO_SETUP_CARD_KINDS)[number]
 
-export const ComposioSetupAppSchema = z.object({
-  slug: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,99}$/),
-  name: z.string().trim().min(1).max(100)
-})
+export const ComposioSetupAppSchema = lazyZodSchema(() =>
+  z.object({
+    slug: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,99}$/),
+    name: z.string().trim().min(1).max(100)
+  })
+)
 export type ComposioSetupApp = z.infer<typeof ComposioSetupAppSchema>
 
-export const ComposioSetupCardRefSchema = z.object({
-  botId: z.string().min(1).max(200),
-  card: z.enum(COMPOSIO_SETUP_CARD_KINDS),
-  /** The app the setup is for; a `key` card started with no app has none. */
-  app: ComposioSetupAppSchema.optional(),
-  /** An `events` card's webhook and Composio trigger, and the trigger's settings as JSON. */
-  hookId: z.string().min(1).max(200).optional(),
-  trigger: z
-    .object({
-      slug: z.string().regex(/^[A-Z0-9_]{1,120}$/),
-      name: z.string().trim().min(1).max(200),
-      config: z.string().max(2000).optional()
-    })
-    .optional(),
-  /** `expired`: a `connect` card Orca put up because a sign-in expired, not because the bot asked;
-   *  reconnecting from it tells only the owner. */
-  reason: z.literal('expired').optional(),
-  /** "Step 1 of 2"; absent when the card is the only step. */
-  step: z.object({ index: z.number().int().min(1), total: z.number().int().min(2) }).optional()
-})
+export const ComposioSetupCardRefSchema = lazyZodSchema(() =>
+  z.object({
+    botId: z.string().min(1).max(200),
+    card: z.enum(COMPOSIO_SETUP_CARD_KINDS),
+    /** The app the setup is for; a `key` card started with no app has none. */
+    app: ComposioSetupAppSchema.optional(),
+    /** An `events` card's webhook and Composio trigger, and the trigger's settings as JSON. */
+    hookId: z.string().min(1).max(200).optional(),
+    trigger: z
+      .object({
+        slug: z.string().regex(/^[A-Z0-9_]{1,120}$/),
+        name: z.string().trim().min(1).max(200),
+        config: z.string().max(2000).optional()
+      })
+      .optional(),
+    /** `expired`: a `connect` card Orca put up because a sign-in expired, not because the bot asked;
+     *  reconnecting from it tells only the owner. */
+    reason: z.literal('expired').optional(),
+    /** "Step 1 of 2"; absent when the card is the only step. */
+    step: z.object({ index: z.number().int().min(1), total: z.number().int().min(2) }).optional()
+  })
+)
 export type ComposioSetupCardRef = z.infer<typeof ComposioSetupCardRefSchema>
 
 function fallbackText(ref: ComposioSetupCardRef): string {

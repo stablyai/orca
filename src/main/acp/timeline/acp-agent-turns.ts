@@ -50,12 +50,12 @@ export class AcpAgentTurns {
     this.stoppedAt = Number.NEGATIVE_INFINITY
   }
 
-  /** Null when no agent turn is active. */
-  calls(active: string | undefined): 'none' | 'running' | null {
-    if (this.open === undefined || this.open !== active) {
-      return null
-    }
-    return this.tools.running(this.open) ? 'running' : 'none'
+  /** The active agent turn's calls; null when no agent turn is active. */
+  calls(active: string | undefined): { running: boolean; ids: () => string[] } | null {
+    const open = this.open
+    return open === undefined || open !== active
+      ? null
+      : { running: this.tools.running(open), ids: () => this.tools.runningIds(open) }
   }
 
   /** A normal end with calls still running means the agent backgrounded them; after Orca's own

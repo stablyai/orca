@@ -1,6 +1,11 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { openKittyPane } from './terminal-pane-input-test-harness'
+import {
+  dispatchImeInput,
+  dispatchKey,
+  nextEventLoop,
+  openKittyPane
+} from './terminal-pane-input-test-harness'
 
 // Huawei Browser on a HarmonyOS PC (#36015): it names Windows and OpenHarmony but never Linux.
 const ARKWEB_PC_UA =
@@ -14,33 +19,6 @@ afterEach(() => {
   vi.restoreAllMocks()
   document.body.replaceChildren()
 })
-
-function nextEventLoop(): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, 0))
-}
-
-function dispatchKey(
-  textarea: HTMLTextAreaElement,
-  type: 'keydown' | 'keyup',
-  key: string,
-  code: string,
-  keyCode: number
-): boolean {
-  const event = new KeyboardEvent(type, { key, code, bubbles: true, cancelable: true })
-  // happy-dom drops keyCode from KeyboardEventInit; xterm and the IME policy read it.
-  Object.defineProperty(event, 'keyCode', { value: keyCode })
-  textarea.dispatchEvent(event)
-  return event.defaultPrevented
-}
-
-function dispatchInsertText(textarea: HTMLTextAreaElement, type: string, data: string): void {
-  const event = new InputEvent(type, { bubbles: true, cancelable: type === 'beforeinput' })
-  // happy-dom ignores these InputEventInit fields; Chromium reports them on the commit.
-  Object.defineProperty(event, 'inputType', { value: 'insertText' })
-  Object.defineProperty(event, 'data', { value: data })
-  Object.defineProperty(event, 'composed', { value: true })
-  textarea.dispatchEvent(event)
-}
 
 it.each([
   ['a plain shell', ''],
@@ -61,9 +39,9 @@ it.each([
   }
   const commitKeydownPrevented = dispatchKey(textarea, 'keydown', '\u0000', '', 229)
   expect(commitKeydownPrevented).toBe(false)
-  dispatchInsertText(textarea, 'beforeinput', '你好')
+  dispatchImeInput(textarea, 'beforeinput', 'insertText', '你好')
   textarea.value = '你好'
-  dispatchInsertText(textarea, 'input', '你好')
+  dispatchImeInput(textarea, 'input', 'insertText', '你好')
   await nextEventLoop()
   dispatchKey(textarea, 'keyup', '\u0000', '', 229)
   await nextEventLoop()

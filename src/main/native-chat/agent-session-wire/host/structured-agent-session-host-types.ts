@@ -144,6 +144,7 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
     /** A kept agent that had ended before its acquisition: queued sends never reached it. */
     endedBeforeAcquire?: true
     startedFor?: string
+    observedAt?: number
     /** Order exit against acceptance; requested closes retain their original Stop boundary. */
     endedAt: AgentJournalCursor
   }
