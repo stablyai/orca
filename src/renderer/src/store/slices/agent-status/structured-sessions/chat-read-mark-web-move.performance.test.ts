@@ -13,8 +13,12 @@ afterEach(() => {
 it('skips storage on a miss and stops walking receipts once the index empties', () => {
   const marks = browserChatMarks({ manuallyUnreadTurnsByPaneKey: { [OLD]: 200 } })
   const { receive } = marks.open()
+  marks.localStorage.getItem.mockClear()
+  marks.localStorage.setItem.mockClear()
+
   receive([{ ...TAB, sessionId: 'session-3' }])
   expect(marks.localStorage.getItem).not.toHaveBeenCalled()
+  expect(marks.localStorage.setItem).not.toHaveBeenCalled()
 
   receive([TAB])
   expect(marks.localStorage.getItem).toHaveBeenCalledTimes(1)
@@ -38,6 +42,10 @@ it('stops walking receipts at the monotonic page deadline even with pending alia
       throw new Error('Unexpected chat row lookup')
     }
   })
+  marks.localStorage.getItem.mockClear()
+  marks.localStorage.setItem.mockClear()
+
   receive(tabs)
   expect(marks.localStorage.getItem).not.toHaveBeenCalled()
+  expect(marks.localStorage.setItem).not.toHaveBeenCalled()
 })
