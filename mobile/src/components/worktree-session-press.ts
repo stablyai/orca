@@ -63,6 +63,24 @@ export function useWorktreeRowSession<T extends SessionRowTarget>(
     onSessionLongPress: ((item: T, paneKey: string) => void) | undefined,
     impact: () => void
   ) => ((paneKey: string) => void) | undefined
+  agentListProps: (
+    selectable: boolean,
+    onSessionLongPress: ((item: T, paneKey: string) => void) | undefined,
+    impact: () => void,
+    guardPress: (onPress: () => void) => () => void
+  ) => {
+    selectable: boolean
+    selectedPaneKey: string | null
+    onPressIn: () => void
+    onPressOut: () => void
+    onWorkspacePress: () => void
+    onAgentPress: ((paneKey: string) => void) | undefined
+    onLongPress: ((paneKey: string) => void) | undefined
+  }
+  pressedStyle: <S>(
+    active: boolean,
+    styles: { worktreeRowActivePressed: S; worktreeRowPressed: S }
+  ) => S | null
 } {
   const selected = useSelectedSidebarSession()
   const sessionPress = useWorktreeSessionPress(() => {
@@ -92,8 +110,31 @@ export function useWorktreeRowSession<T extends SessionRowTarget>(
     cardLongPress: (onLongPress, impact) =>
       workspaceCardLongPress(sessionPress.isClaimed, onLongPress, item, impact),
     sessionLongPress: (onSessionLongPress, impact) =>
-      sessionRowLongPress(sessionPress.claim, onSessionLongPress, item, impact)
+      sessionRowLongPress(sessionPress.claim, onSessionLongPress, item, impact),
+    agentListProps: (selectable, onSessionLongPress, impact, guardPress) => ({
+      selectable,
+      selectedPaneKey: highlightedPane,
+      onPressIn: sessionPress.claim,
+      onPressOut: sessionPress.release,
+      onWorkspacePress: openWorkspace,
+      onAgentPress: openAgent
+        ? (paneKey: string) => guardPress(() => openAgent(paneKey))()
+        : undefined,
+      onLongPress: sessionRowLongPress(sessionPress.claim, onSessionLongPress, item, impact)
+    }),
+    pressedStyle: (active, styles) => rowPressedStyle(sessionPress.isClaimed(), active, styles)
   }
+}
+
+function rowPressedStyle<S>(
+  claimed: boolean,
+  active: boolean,
+  styles: { worktreeRowActivePressed: S; worktreeRowPressed: S }
+): S | null {
+  if (claimed) {
+    return null
+  }
+  return active ? styles.worktreeRowActivePressed : styles.worktreeRowPressed
 }
 
 // The card Pressable is not an accessibility element, so the header is the workspace control.

@@ -163,10 +163,6 @@ function WorktreeListRowComponent({
     : undefined
   const sessionPress = useWorktreeRowSession(item, selectableSessions, onPress, onAgentPress)
   const handleLongPress = sessionPress.cardLongPress(onLongPress, triggerMediumImpact)
-  const handleSessionLongPress = sessionPress.sessionLongPress(
-    onSessionLongPress,
-    triggerMediumImpact
-  )
 
   if (view.botChatLine) {
     return (
@@ -249,9 +245,7 @@ function WorktreeListRowComponent({
             // The open session keeps this accent and takes the fill; the rest of the card does not.
             sessionPress.highlightedPane && { backgroundColor: colors.bgBase },
             view.dimmed && styles.worktreeRowDimmed,
-            pressed &&
-              !sessionPress.isClaimed() &&
-              (item.isActive ? styles.worktreeRowActivePressed : styles.worktreeRowPressed)
+            pressed && sessionPress.pressedStyle(item.isActive, styles)
           ]}
           // One press target. An accessible card would hide the session rows from VoiceOver.
           accessible={false}
@@ -272,7 +266,10 @@ function WorktreeListRowComponent({
             )}
           </View>
 
-          <View style={styles.worktreeMain} {...workspaceCardActivation(isReadOnly, sessionPress.press)}>
+          <View
+            style={styles.worktreeMain}
+            {...workspaceCardActivation(isReadOnly, sessionPress.press)}
+          >
             <View style={styles.worktreeNameRow}>
               {showHostGlyph && (
                 <View
@@ -381,19 +378,14 @@ function WorktreeListRowComponent({
                 unvisited={item.unread}
                 statusLive={statusLive}
                 isReadOnly={isReadOnly}
-                onAgentPress={
-                  sessionPress.openAgent
-                    ? (paneKey) => guardPress(() => sessionPress.openAgent?.(paneKey))()
-                    : undefined
-                }
                 onAgentLongPress={openActions}
                 fullList={agentActivityDisplayMode === 'full'}
-                selectable={selectableSessions}
-                selectedPaneKey={sessionPress.highlightedPane}
-                onPressIn={sessionPress.claim}
-                onPressOut={sessionPress.release}
-                onWorkspacePress={sessionPress.openWorkspace}
-                onLongPress={handleSessionLongPress}
+                {...sessionPress.agentListProps(
+                  selectableSessions,
+                  onSessionLongPress,
+                  triggerMediumImpact,
+                  guardPress
+                )}
               />
             ) : null}
             {count > 0 && onToggleLineage ? (
