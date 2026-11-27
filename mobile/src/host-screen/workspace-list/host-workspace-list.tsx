@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, type ReactElement } from 'react'
+import { useCallback, useEffect, useMemo, useRef, type ReactElement } from 'react'
 import { Animated, Platform, RefreshControl, View } from 'react-native'
 import { isBotsListRow, useMobileBotsListParts } from '../../bots/use-mobile-bots-list-parts'
 import { AuthFailedBanner } from '../../components/host-connection/AuthFailedBanner'
@@ -37,6 +37,8 @@ import { useSlowPendingKeys } from './use-slow-pending-keys'
 import { useHostMutationDrafts } from '../../query/host-mutation-drafts'
 import { workspaceRenameDraftKey } from '../workspace-actions/workspace-rename-sheet'
 import type { HostScreenController } from '../use-host-screen-controller'
+import { isWorktreePinned } from '../../worktree/workspace-list/workspace-list-sections'
+import { folderIdOfSelector } from '../../../../src/shared/workspace/identity/workspace-scope'
 
 export function HostWorkspaceList({
   controller,
@@ -118,7 +120,19 @@ export function HostWorkspaceList({
   const { groupBy, agentActivityDisplayMode } = state.view
   const { toggleCollapsed, toggleWorktreeLineage } = settings
   const { setActionTarget } = state
-  const { openWorktreeSession } = actions
+  const { openWorktreeSession, setWorktreeUnread, togglePin } = actions
+  const { pinnedIds } = state
+  // The writes change identity with every catalog read; rows keep one callback so a poll that
+  // leaves a row alone doesn't re-render it.
+  const rowWrites = useRef({ setWorktreeUnread, togglePin })
+  useEffect(() => {
+    rowWrites.current = { setWorktreeUnread, togglePin }
+  }, [setWorktreeUnread, togglePin])
+  const toggleRead = useCallback(
+    (row: Worktree) => rowWrites.current.setWorktreeUnread(row, !row.unread),
+    []
+  )
+  const toggleRowPin = useCallback((row: Worktree) => rowWrites.current.togglePin(row), [])
   const statusLive = connState === 'connected'
 
   const renderSectionHeader = useCallback(
@@ -180,6 +194,14 @@ export function HostWorkspaceList({
           onToggleLineage={toggleWorktreeLineage}
           unsavedName={unsavedRename(renameDrafts, hostId, item)}
           pairedHostId={hostId ?? null}
+          // worktree.set resolves git worktrees only, so a folder workspace offers no swipe.
+          {...(swipeable(item, view)
+            ? {
+                onToggleRead: toggleRead,
+                onTogglePin: toggleRowPin,
+                pinned: isWorktreePinned(item, pinnedIds)
+              }
+            : {})}
         />
       ),
     [
@@ -188,6 +210,9 @@ export function HostWorkspaceList({
       hostId,
       isReadOnly,
       cardDetails,
+      toggleRead,
+      toggleRowPin,
+      pinnedIds,
       repoLookById,
       groupBy,
       agentActivityDisplayMode,
@@ -334,6 +359,15 @@ export function HostWorkspaceList({
       )}
       {bots.sheets}
     </>
+  )
+}
+
+function swipeable(row: Worktree, view: WorkspaceListItem['view']): boolean {
+  return (
+    folderIdOfSelector(row.worktreeId) === undefined &&
+    row.botHome !== true &&
+    !view.botWorkspace &&
+    !view.botFacts
   )
 }
 
