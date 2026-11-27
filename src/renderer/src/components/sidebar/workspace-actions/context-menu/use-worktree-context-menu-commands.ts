@@ -191,7 +191,10 @@ export function useWorktreeContextMenuCommands(args: {
       return
     }
     args.setMenuOpenState(false)
+    // Empty for detached or bare checkouts, which keep the project default base.
+    const parentBranch = args.worktree.branch.replace(/^refs\/heads\//, '')
     args.openModal('new-workspace-composer', {
+      ...(parentBranch ? { initialBaseBranch: `refs/heads/${parentBranch}` } : {}),
       initialRepoId: repo.id,
       initialWorkspaceTarget: getRepoWorkspaceCreationTargetHint(repo, state.projectHostSetups),
       initialParentWorktreeId: args.worktree.id,

@@ -112,11 +112,14 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     persistDraft ? newWorkspaceDraft?.baseBranch : initialBaseBranch
   )
   // Branch-as-name selections get source pills; checkout-base picks must not hide the typed name.
-  const [baseBranchNamesWorkspace, setBaseBranchNamesWorkspace] = useState(() =>
-    resolveDraftBaseBranchNamesWorkspace({
-      persistDraft,
-      draftValue: newWorkspaceDraft?.baseBranchNamesWorkspace
-    })
+  const [baseBranchNamesWorkspace, setBaseBranchNamesWorkspace] = useState(
+    () =>
+      // A base seeded alongside a parent is only the checkout start point, never the name.
+      !(!persistDraft && initialParentWorktreeId && initialBaseBranch) &&
+      resolveDraftBaseBranchNamesWorkspace({
+        persistDraft,
+        draftValue: newWorkspaceDraft?.baseBranchNamesWorkspace
+      })
   )
 
   const [compareBaseRef, setCompareBaseRef] = useState<string | undefined>(
