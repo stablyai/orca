@@ -63,6 +63,7 @@ import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/conf
 import { reportProfileStateWriteFailure } from './profile-startup/profile-state-write-failure'
 import { reportProfileStateSaveDelay } from './profile-startup/profile-state-save-delay'
 import { preloadSsh2 } from '../ssh/authentication/ssh2-module-load'
+import { setMenuBarHostListener } from '../tray/mac-menu-bar-host'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
@@ -182,6 +183,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   const nativeSettings = createStoreNativeSettingsProjection(store)
   state.nativeSettings = nativeSettings
   hangWatchdog?.setMenuBarIconSetting(nativeSettings.getSettings().showMenuBarIcon !== false)
+  setMenuBarHostListener(hangWatchdog ? (host) => hangWatchdog.setMenuBarHost(host) : null)
   // SSH users keep ssh2 loaded before interactive use, as before #35731; others load it on first connect.
   if (store.getSshTargets().length > 0) {
     preloadSsh2()

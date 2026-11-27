@@ -1,3 +1,4 @@
+import type { MenuBarHost } from '../tray/mac-menu-bar-host'
 import { createNativeHangCaptureId, NativeHangCaptureStore } from './native-hang-capture-store'
 import type { NativeHangProcessMetadata } from './native-hang-report'
 import type { HangObservation } from './hang-observations'
@@ -11,7 +12,10 @@ export function createWatchdogHangCapture(options: {
   publish: (id: string, change: Partial<HangObservation>) => void
   onIdle: () => void
 }): {
-  capture: (record: HangObservation, showMenuBarIcon: boolean | null) => void
+  capture: (
+    record: HangObservation,
+    menuBar: { showMenuBarIcon: boolean | null; menuBarHost: MenuBarHost | null }
+  ) => void
   shutdown: () => void
 } {
   let stopped = false
@@ -20,7 +24,7 @@ export function createWatchdogHangCapture(options: {
     ? new NativeHangCaptureStore(options.artifactDirectory)
     : null
   return {
-    capture: (record, showMenuBarIcon) => {
+    capture: (record, { showMenuBarIcon, menuBarHost }) => {
       if (
         stopped ||
         activeCapture ||
@@ -51,6 +55,7 @@ export function createWatchdogHangCapture(options: {
                   capturedAt: Date.now(),
                   pid: options.parentPid,
                   showMenuBarIcon,
+                  menuBarHost,
                   process: metadata,
                   report
                 })

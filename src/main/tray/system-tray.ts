@@ -1,12 +1,16 @@
-import { Menu, Tray, nativeImage, nativeTheme, type NativeImage } from 'electron'
-import menuBarIconPath from '../../../resources/tray/orca-menu-barTemplate.png?asset&asarUnpack'
-import menuBarIconRetinaPath from '../../../resources/tray/orca-menu-barTemplate@2x.png?asset&asarUnpack'
+import { Menu, Tray, nativeTheme, type NativeImage } from 'electron'
 import { deferAppKitSceneMutation } from '../window/desktop-integration/appkit-scene-mutation'
 import { createAppIconImage } from '../window/desktop-integration/app-icon'
 import { translateMain } from '../i18n/main-i18n'
 import { quitAndStopAllSessionsMenuText } from '../menu/app-menu-quit-item'
 import { composeTrayAttentionIcon, tintTrayTemplateForAttention } from './tray-attention-icon'
-import { stampTrayDevBadge } from './tray-dev-badge'
+import { createMacMenuBarImage, stampMacDevBadge } from './mac-menu-bar-image'
+import { MacMenuBarTray, waitForMacMenuBarRetirement, type TrayMenuItem } from './mac-menu-bar-tray'
+
+import type { MenuBarQACommand } from './mac-menu-bar-protocol'
+import { launchMacMenuBarHost, reportMenuBarHost } from './mac-menu-bar-host'
+
+export type SystemTray = Tray | MacMenuBarTray
 
 export type SystemTrayOptions = {
   /** App icon id from settings; the tray reuses the app icon image. */
@@ -25,10 +29,13 @@ export type SystemTrayOptions = {
   onQuit: () => void
   /** Confirm, then quit with every terminal session stopped; omitted where the item must not show (serve mode). */
   onQuitAndStopAllSessions?: () => void
+  /** Buckets the macOS menu-bar helper rollout. */
+  installId: string | null
+  onCreated?: () => void
 }
 
 // Keep a live reference or Electron GC removes the tray icon.
-let tray: Tray | null = null
+let tray: SystemTray | null = null
 let trayOptions: SystemTrayOptions | null = null
 
 // Cache the plain icon so attention changes do not reload the app PNG.
@@ -114,56 +121,6 @@ function scheduleTrayImage(): void {
   })
 }
 
-function createMacMenuBarImage(): NativeImage | null {
-  const image = nativeImage.createFromPath(menuBarIconPath)
-  const { width, height } = image.getSize()
-  if (width <= 0 || height <= 0) {
-    console.warn('[system-tray] macOS menu bar icon could not be loaded')
-    return null
-  }
-
-  const retinaImage = nativeImage.createFromPath(menuBarIconRetinaPath)
-  const retinaSize = retinaImage.getSize()
-  if (retinaSize.width > 0 && retinaSize.height > 0) {
-    try {
-      // Import/package the 2x asset explicitly instead of relying on bundler-renamed siblings.
-      image.addRepresentation({
-        scaleFactor: 2,
-        dataURL: retinaImage.toDataURL()
-      })
-    } catch (error) {
-      // Bad 2x data may blur Retina but must not abort tray creation.
-      console.warn('[system-tray] macOS retina menu bar icon could not be added', error)
-    }
-  } else {
-    // Report degraded Retina rendering so blurry status icons remain diagnosable.
-    console.warn('[system-tray] macOS retina menu bar icon could not be loaded')
-  }
-  image.setTemplateImage(true)
-  return image
-}
-
-// Badge dev pixels inside the production-width template; attention tint inherits them, unlike a separate tray title.
-function stampMacDevBadge(base: NativeImage): NativeImage {
-  try {
-    const stamped = stampTrayDevBadge(base)
-    if (base.getScaleFactors().includes(2)) {
-      // Bitmap creation drops 2x data; rebuild it so the dev badge stays sharp on Retina.
-      const retinaStamped = stampTrayDevBadge(base, 2)
-      stamped.addRepresentation({
-        scaleFactor: 2,
-        dataURL: retinaStamped.toDataURL()
-      })
-    }
-    stamped.setTemplateImage(true)
-    return stamped
-  } catch (error) {
-    // Diagnostic dev badges must degrade to the plain icon rather than abort creation.
-    console.warn('[system-tray] dev badge could not be stamped; showing plain icon', error)
-    return base
-  }
-}
-
 function watchMacAppearance(): void {
   if (nativeThemeUpdatedListener) {
     return
@@ -197,7 +154,7 @@ function safeMenuAction(action: () => void): () => void {
 }
 
 /** Create at most one Windows/macOS tray; Linux has none. */
-export function createSystemTray(opts: SystemTrayOptions): Tray | null {
+export function createSystemTray(opts: SystemTrayOptions): SystemTray | null {
   if (process.platform !== 'win32' && process.platform !== 'darwin') {
     return null
   }
@@ -222,34 +179,55 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
     })
   }
 
-  tray = new Tray(baseTrayImage)
+  // The helper owns NSStatusItem so AppKit scene deadlocks cannot freeze main.
+  if (process.platform === 'darwin' && launchMacMenuBarHost(opts.installId) === 'helper') {
+    tray = new MacMenuBarTray(baseTrayImage, opts.onCreated)
+  } else {
+    const nativeTray = new Tray(baseTrayImage)
+    if (process.platform === 'win32') {
+      // Windows left-click restores the app; macOS uses its attached menu.
+      nativeTray.on(
+        'click',
+        safeMenuAction(() => opts.onOpen())
+      )
+    }
+    tray = nativeTray
+  }
   applyTrayImage()
-
   trayOptions = opts
-  tray.setContextMenu(buildTrayMenu(opts))
+  setTrayMenu(opts)
   if (process.platform === 'win32') {
     tray.setToolTip(baseTooltip())
-    // Windows left-click restores the app; macOS uses its attached menu.
-    tray.on(
-      'click',
-      safeMenuAction(() => opts.onOpen())
-    )
   } else {
     watchMacAppearance()
+    reportMenuBarHost(tray instanceof MacMenuBarTray ? 'helper' : 'in-process')
+    if (!(tray instanceof MacMenuBarTray)) {
+      opts.onCreated?.()
+    }
   }
   return tray
 }
 
-function buildTrayMenu(opts: SystemTrayOptions): Menu {
-  return Menu.buildFromTemplate([
+function setTrayMenu(opts: SystemTrayOptions): void {
+  const menu = buildTrayMenu(opts)
+  if (tray instanceof MacMenuBarTray) {
+    tray.setMenu(menu)
+  } else {
+    tray?.setContextMenu(Menu.buildFromTemplate(menu))
+  }
+}
+
+function buildTrayMenu(opts: SystemTrayOptions): TrayMenuItem[] {
+  return [
     ...(devIndicator
       ? ([
           // Label dev trays by worktree/branch to distinguish concurrent instances.
           { label: baseTooltip(), enabled: false },
           { type: 'separator' }
-        ] satisfies Electron.MenuItemConstructorOptions[])
+        ] satisfies TrayMenuItem[])
       : []),
     {
+      id: 'open',
       label: translateMain('tray.openOrca', 'Open Orca'),
       click: safeMenuAction(() => opts.onOpen())
     },
@@ -258,26 +236,33 @@ function buildTrayMenu(opts: SystemTrayOptions): Menu {
     ...(process.platform === 'darwin'
       ? ([
           {
+            id: 'settings',
             label: translateMain('menu.settings', 'Settings'),
             click: safeMenuAction(() => opts.onOpenSettings())
           },
           {
+            id: 'updates',
             label: translateMain('menu.checkForUpdates', 'Check for Updates...'),
             click: safeMenuAction(() => opts.onCheckForUpdates())
           },
           { type: 'separator' }
-        ] satisfies Electron.MenuItemConstructorOptions[])
+        ] satisfies TrayMenuItem[])
       : []),
     ...(opts.onQuitAndStopAllSessions
       ? ([
           {
+            id: 'quit-completely',
             ...quitAndStopAllSessionsMenuText(),
             click: safeMenuAction(opts.onQuitAndStopAllSessions)
           }
-        ] satisfies Electron.MenuItemConstructorOptions[])
+        ] satisfies TrayMenuItem[])
       : []),
-    { label: translateMain('tray.quit', 'Quit'), click: safeMenuAction(() => opts.onQuit()) }
-  ])
+    {
+      id: 'quit',
+      label: translateMain('tray.quit', 'Quit'),
+      click: safeMenuAction(() => opts.onQuit())
+    }
+  ]
 }
 
 /** Refreshes translated labels without recreating the tray or its actions. */
@@ -287,18 +272,21 @@ export function rebuildSystemTrayMenu(): void {
     if (!tray || tray.isDestroyed() || !trayOptions) {
       return
     }
-    tray.setContextMenu(buildTrayMenu(trayOptions))
+    setTrayMenu(trayOptions)
     applyTrayImage()
   })
 }
 
 /** Applies the persisted macOS visibility preference without affecting Windows. */
-export function setMacMenuBarIconVisible(visible: boolean, opts: SystemTrayOptions): Tray | null {
+export function setMacMenuBarIconVisible(
+  visible: boolean,
+  opts: SystemTrayOptions
+): SystemTray | null {
   if (process.platform !== 'darwin') {
     return null
   }
   if (!visible) {
-    destroySystemTray()
+    void destroySystemTray()
     return null
   }
   return createSystemTray(opts)
@@ -314,13 +302,23 @@ export function setTrayAttention(active: boolean): void {
   scheduleTrayImage()
 }
 
-export function destroySystemTray(): void {
+export function destroySystemTray(): Promise<void> {
   stopWatchingMacAppearance()
+  if (tray) {
+    reportMenuBarHost(null)
+  }
   if (tray && !tray.isDestroyed()) {
-    tray.destroy()
+    void tray.destroy()
   }
   tray = null
   trayOptions = null
   baseTrayImage = null
   // Notification/visibility flow owns attention; preserve its dot across menu-bar icon hide/show.
+  return waitForMacMenuBarRetirement()
+}
+
+export function inspectSystemTrayForQA(command: MenuBarQACommand): Promise<unknown> {
+  return tray instanceof MacMenuBarTray
+    ? tray.inspectForQA(command)
+    : Promise.reject(new Error('Native menu bar helper unavailable'))
 }

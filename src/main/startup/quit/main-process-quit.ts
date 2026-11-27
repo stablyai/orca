@@ -10,6 +10,7 @@ import {
 } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
 import { destroySystemTray } from '../../tray/system-tray'
+import { waitForMacMenuBarRetirement } from '../../tray/mac-menu-bar-tray'
 import { shutdownTelemetry } from '../../telemetry/client'
 import { shutdownObservability } from '../../observability/index'
 import { applyTeamPolicyBeforeQuit, isQuittingForUpdate } from '../../updater/updater-service'
@@ -148,6 +149,8 @@ function installWillQuitHandler(): void {
     void finishQuitTeardown({
       teardowns: [
         ...coreTeardowns,
+        // Set by afterPushStopped above; quit observes the helper's exit.
+        { name: 'menu-bar-helper', promise: waitForMacMenuBarRetirement() },
         {
           name: 'install-park',
           promise: import('../../updater/lifecycle/serve-supervisor-install-park').then(

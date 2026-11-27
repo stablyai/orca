@@ -1,3 +1,4 @@
+import type { MenuBarHost } from '../tray/mac-menu-bar-host'
 import { isHangWatchdogWorkerData } from './hang-watchdog-worker-protocol'
 import { isMainThread, parentPort, workerData } from 'node:worker_threads'
 import { createHangWatchdogDetectionLoop } from './hang-watchdog-detection-loop'
@@ -49,6 +50,7 @@ export function runWatchdog(
   let activeStallId: string | null = null
   let stopped = false
   let showMenuBarIcon: boolean | null = null
+  let menuBarHost: MenuBarHost | null = null
   let collector: AbortController | null = null
   let recentPower: HangPowerReceipt[] = []
   let sleepPeriod: SleepPeriod | null = null
@@ -171,7 +173,7 @@ export function runWatchdog(
     openReceiptWindow(record.id)
     save()
     if (!isMainThread && live && record.tier === 'hang' && find(record.id)) {
-      captures.capture(record, showMenuBarIcon)
+      captures.capture(record, { showMenuBarIcon, menuBarHost })
     }
     enrich(record)
     return record.id
@@ -201,7 +203,7 @@ export function runWatchdog(
       // Same record (and detectedAt) so the native artifact still pairs with it at next launch.
       update(stall.id, escalationFields(stall, durationMs))
       if (!isMainThread) {
-        captures.capture(stall, showMenuBarIcon)
+        captures.capture(stall, { showMenuBarIcon, menuBarHost })
       }
     },
     onHangResolved: (unresponsiveMs) => {
@@ -253,6 +255,8 @@ export function runWatchdog(
       loop.recordHeartbeat()
     } else if (message.type === 'menu-bar-setting') {
       showMenuBarIcon = message.enabled
+    } else if (message.type === 'menu-bar-host') {
+      menuBarHost = message.host
     } else if (message.type === 'power-event') {
       const receipt = parsePowerReceipt({ ...message, receivedAt: Date.now() })
       if (!receipt) {

@@ -1,3 +1,4 @@
+import type { MenuBarHost } from '../tray/mac-menu-bar-host'
 import { basename } from 'node:path/posix'
 import { sanitizeCrashReportString } from '../../shared/crash-reporting/crash-report-redaction'
 import { redactString } from '../../shared/observability/redactor'
@@ -21,6 +22,8 @@ export type NativeHangArtifact = {
   capturedAt: number
   pid: number
   showMenuBarIcon: boolean | null
+  /** Absent in captures from builds before the menu-bar helper rollout. */
+  menuBarHost?: MenuBarHost | null
   process: NativeHangProcessMetadata
   report: string
 }
@@ -127,6 +130,10 @@ export function parseNativeHangArtifact(value: unknown): NativeHangArtifact | nu
     capturedAt: value.capturedAt,
     pid: value.pid,
     showMenuBarIcon: value.showMenuBarIcon,
+    ...('menuBarHost' in value &&
+    (value.menuBarHost === 'helper' || value.menuBarHost === 'in-process')
+      ? { menuBarHost: value.menuBarHost }
+      : {}),
     process: {
       appVersion: sanitizeCrashReportString(metadata.appVersion),
       electronVersion: sanitizeCrashReportString(metadata.electronVersion),

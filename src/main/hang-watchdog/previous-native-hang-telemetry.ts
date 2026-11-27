@@ -9,7 +9,7 @@ import { reduceNativeHangSample } from './native-hang-capture'
 
 export type NativeHangTelemetry = Pick<
   EventProps<'main_thread_hang_detected'>,
-  'native_top_frames' | 'macos_build' | 'menu_bar_icon'
+  'native_top_frames' | 'macos_build' | 'menu_bar_icon' | 'menu_bar_host'
 >
 
 export async function readPreviousNativeHangTelemetry(
@@ -34,7 +34,8 @@ export async function readPreviousNativeHangTelemetry(
         stack.frames.map((frame) => `${frame.name} [${frame.module}]`)
       ),
       ...(macosBuild && macosBuild.length <= 64 ? { macos_build: macosBuild } : {}),
-      menu_bar_icon: artifact.showMenuBarIcon
+      menu_bar_icon: artifact.showMenuBarIcon,
+      ...(artifact.menuBarHost ? { menu_bar_host: artifact.menuBarHost } : {})
     }
   }
   return {}

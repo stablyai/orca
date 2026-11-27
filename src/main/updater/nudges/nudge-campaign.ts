@@ -1,5 +1,6 @@
 import { net } from 'electron'
 import { compareVersions, isValidVersion } from '../releases/updater-fallback'
+import { parseRolloutConfig, recordRolloutConfig } from '../rollout/rollout-flags'
 
 export type NudgeConfig = {
   id: string
@@ -20,6 +21,8 @@ export async function fetchNudge(): Promise<NudgeConfig | null> {
     if (!json || typeof json !== 'object' || Array.isArray(json)) {
       return null
     }
+    // Rides the campaign poll; independent of whether a nudge is active.
+    void recordRolloutConfig(parseRolloutConfig(json))
 
     const { id, minVersion, maxVersion } = json as Record<string, unknown>
     if (typeof id !== 'string' || !id.trim()) {
