@@ -39,6 +39,9 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
   const [connectionFailedSettings, setConnectionFailedSettings] = useState<GlobalSettings | null>(
     null
   )
+  // What the failed read said, when it said anything; the update-required answer of a server
+  // without the capability is one of these, and is the user's instruction.
+  const [connectionReadError, setConnectionReadError] = useState<string | null>(null)
   const connectionLoadGenerationRef = useRef(0)
 
   // Read metadata only; mounting must not decrypt secrets or trigger keychain prompts.
@@ -55,8 +58,9 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
         setConnection(next)
         setConnectionSettings(settings)
         setConnectionFailedSettings(null)
+        setConnectionReadError(null)
       }
-    } catch {
+    } catch (error) {
       // Report unreadable state as unknown rather than indistinguishable from missing credentials.
       if (
         mountedRef.current &&
@@ -65,6 +69,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
       ) {
         setConnectionSettings(settings)
         setConnectionFailedSettings(settings)
+        setConnectionReadError(readIpcErrorMessage(error) ?? null)
       }
     }
   }, [mountedRef, readConnectionStatus, settings])
@@ -235,10 +240,11 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
           {disconnectError ? <p className="text-xs text-destructive">{disconnectError}</p> : null}
           {readFailed ? (
             <p role="alert" className="text-xs text-destructive">
-              {t(
-                'auto.components.settings.bitbucket.integration.card.statusLoadFailed',
-                'Could not check for a saved Bitbucket credential.'
-              )}
+              {connectionReadError ??
+                t(
+                  'auto.components.settings.bitbucket.integration.card.statusLoadFailed',
+                  'Could not check for a saved Bitbucket credential.'
+                )}
             </p>
           ) : null}
           {credentialStatusKnown ? (
