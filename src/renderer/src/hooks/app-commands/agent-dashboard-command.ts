@@ -1,13 +1,23 @@
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { AppState } from '../../store/types'
-import { resolveAgentDashboardMode } from '../../components/dashboard/settings/agent-dashboard-open-mode'
+import {
+  resolveAgentDashboardMode,
+  toggleAgentDashboardInRightSidebar
+} from '../../components/dashboard/settings/agent-dashboard-open-mode'
 import { showWorkspaceListThen } from '../../components/app-rail/app-rail-navigation'
 import { useAppStore } from '../../store/index'
 
 export function toggleAgentDashboardFromShortcut(
   state: Pick<
     AppState,
-    'activeView' | 'agentDashboardDrawerOpen' | 'setSidebarOpen' | 'setAgentDashboardDrawerOpen'
+    | 'activeView'
+    | 'agentDashboardDrawerOpen'
+    | 'setSidebarOpen'
+    | 'setAgentDashboardDrawerOpen'
+    | 'rightSidebarOpen'
+    | 'rightSidebarEffectiveTab'
+    | 'setRightSidebarOpen'
+    | 'setRightSidebarTab'
   > & {
     settings: Pick<
       GlobalSettings,
@@ -22,8 +32,13 @@ export function toggleAgentDashboardFromShortcut(
   ) {
     return
   }
-  if (resolveAgentDashboardMode(state.settings) === 'popout') {
+  const mode = resolveAgentDashboardMode(state.settings)
+  if (mode === 'popout') {
     openPopout()
+    return
+  }
+  if (mode === 'right-sidebar') {
+    toggleAgentDashboardInRightSidebar(state)
     return
   }
   const nextOpen = !state.agentDashboardDrawerOpen

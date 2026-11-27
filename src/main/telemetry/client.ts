@@ -26,6 +26,7 @@ import { buildCommonProps, createPostHogClient } from './posthog-transport'
 import { captureOptOutBeforeSdkOptOut } from './opt-out-capture'
 import { flushPickerAccepts, rollUpPickerAccept } from './picker-accept-rollup'
 import { saveDashboardActiveDay, trackedDashboardActiveDays } from './agent-dashboard-active-days'
+import { isAgentDashboardSurface } from '../../shared/telemetry/schemas/telemetry-agent-dashboard-event-schemas'
 import { commonPropsSchema, validate } from './validator'
 
 export { shouldOptOutSdkAtInit } from './posthog-transport'
@@ -171,7 +172,7 @@ export function track<N extends events.EventName>(name: N, props: events.EventPr
     props !== null &&
     typeof props === 'object' &&
     'surface' in props &&
-    (props.surface === 'in_window' || props.surface === 'popout')
+    isAgentDashboardSurface(props.surface)
       ? props.surface
       : null
   const dashboardActiveDay = dashboardActiveSurface ? Math.floor(now / 86_400_000) : 0

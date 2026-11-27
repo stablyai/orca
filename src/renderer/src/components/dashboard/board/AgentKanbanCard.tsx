@@ -23,7 +23,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { DashboardHostBadge } from './DashboardHostBadge'
 import { AgentCardLastMessages, hasAgentCardLastMessages } from './AgentCardLastMessages'
 
-function formatStartedAgo(startedAt: number, now: number, t: Translate = translate): string {
+export function formatStartedAgo(startedAt: number, now: number, t: Translate = translate): string {
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
   if (seconds < 60) {
     return t('dashboardPopout.card.time.justNow', 'just now')
@@ -42,7 +42,7 @@ function formatStartedAgo(startedAt: number, now: number, t: Translate = transla
 }
 
 /** Count from completion when present, otherwise start, matching the worktree sidebar. */
-function displayTimestamp(card: DashboardCard): number {
+export function displayTimestamp(card: DashboardCard): number {
   return card.finishedAt ?? card.startedAt
 }
 

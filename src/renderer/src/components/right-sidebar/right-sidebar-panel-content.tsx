@@ -24,6 +24,9 @@ const PluginPanel = lazy(() => import('./plugin-panels/PluginPanel'))
 const BotActivityPanel = lazy(() => import('../bots/BotActivityPanel'))
 const BotConnectorsPanel = lazy(() => import('../bots/BotConnectorsPanel'))
 const BotChatsPanel = lazy(() => import('../bots/BotChatsPanel'))
+const AgentDashboardRightSidebarPanel = lazy(
+  () => import('../dashboard/AgentDashboardRightSidebarPanel')
+)
 
 type RightSidebarPanelContentProps = {
   effectiveTab: ActiveRightSidebarTab
@@ -77,6 +80,10 @@ export function RightSidebarPanelContent({
         {effectiveTab === 'bot-activity' && <BotActivityPanel />}
         {effectiveTab === 'bot-connectors' && <BotConnectorsPanel />}
         {effectiveTab === 'bot-chats' && <BotChatsPanel />}
+        {/* Mount only while shown so the live snapshot stays off the hidden path. */}
+        {effectiveTab === 'agent-dashboard' && rightSidebarOpen && (
+          <AgentDashboardRightSidebarPanel />
+        )}
         {/* Remount on plugin changes so an old iframe cannot post through the next plugin's rebound bridge. */}
         {isPluginPanelTabKey(effectiveTab) && (
           <PluginPanel key={effectiveTab} tabKey={effectiveTab} />

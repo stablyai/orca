@@ -10,6 +10,8 @@ import {
   withDistinctPluginPanelNames
 } from '../plugin-panels/plugin-panel-activity-items'
 import { getDefaultRightSidebarActivityItems } from './right-sidebar-default-activity-items'
+import { LayoutDashboard } from 'lucide-react'
+import { isAgentDashboardInRightSidebar } from '../../dashboard/settings/agent-dashboard-open-mode'
 import {
   getPortsPanelOwnerKey,
   portsPanelHostForOwnerKey,
@@ -86,6 +88,7 @@ export function useRightSidebarActivityItems({
     )
   )
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
+  const agentDashboardDocked = useAppStore((s) => isAgentDashboardInRightSidebar(s.settings))
   const pluginPanels = usePluginPanels()
   const visiblePluginPanels = useMemo(
     () => (pluginSystemEnabled ? pluginPanels : []),
@@ -106,17 +109,31 @@ export function useRightSidebarActivityItems({
 
   // A bot's page labels every tab (labeledTab): Home, Connectors, Chats, Files.
   const activityItems = useMemo<ActivityBarItem[]>(() => {
-    const builtInItems = getDefaultRightSidebarActivityItems({
-      t,
-      explorerShortcut,
-      sourceControlShortcut,
-      checksShortcut,
-      portsShortcut,
-      isBot,
-      showsHomeTab,
-      needsYou,
-      connectorsNeedingOwner
-    })
+    const builtInItems: ActivityBarItem[] = [
+      ...getDefaultRightSidebarActivityItems({
+        t,
+        explorerShortcut,
+        sourceControlShortcut,
+        checksShortcut,
+        portsShortcut,
+        isBot,
+        showsHomeTab,
+        needsYou,
+        connectorsNeedingOwner
+      }),
+      ...(agentDashboardDocked
+        ? [
+            {
+              id: 'agent-dashboard' as const,
+              icon: LayoutDashboard,
+              title: t('dashboard.sidebar.dashboardLabel', 'Agent Dashboard'),
+              shortcut: '',
+              // The board spans every workspace, so a bot's page must not hide it.
+              everyPage: true
+            }
+          ]
+        : [])
+    ]
     return [
       ...builtInItems,
       // Append plugin tabs to preserve built-in navigation positions. Checked against every built-in
@@ -132,6 +149,7 @@ export function useRightSidebarActivityItems({
     ]
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
   }, [
+    agentDashboardDocked,
     checksShortcut,
     explorerShortcut,
     pluginPanelErrors,

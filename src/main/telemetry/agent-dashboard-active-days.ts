@@ -1,4 +1,7 @@
-import type { AgentDashboardSurface } from '../../shared/telemetry/schemas/telemetry-agent-dashboard-event-schemas'
+import {
+  isAgentDashboardSurface,
+  type AgentDashboardSurface
+} from '../../shared/telemetry/schemas/telemetry-agent-dashboard-event-schemas'
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import type { Store } from '../persistence/loading-store/store'
 
@@ -11,7 +14,7 @@ export function hasTrackedAgentDashboardActiveToday(props: unknown): boolean {
   }
   const surface = props.surface
   return (
-    (surface === 'in_window' || surface === 'popout') &&
+    isAgentDashboardSurface(surface) &&
     (trackedDashboardActiveDays.get(surface) ?? -1) >= Math.floor(Date.now() / 86_400_000)
   )
 }
