@@ -21317,6 +21317,7 @@
       "explicitChatWslRunAsHost": "{{distro}}을(를) 호스트로 실행",
       "explicitChatSsh": "SSH 연결에서는 채팅을 사용할 수 없습니다. 대신 터미널에서 에이전트를 여세요.",
       "structuredSessionTerminalNotVisible": "Orca가 터미널에서 {{value0}}을(를) 열었지만 실행이 완료된 후 여기에 표시하지 못했습니다. 채팅 초안은 보관되었습니다.",
+      "explicitChatWorkspaceAccess": "Orca에 이 워크스페이스 폴더를 열 권한이 없습니다. 폴더 권한을 확인한 후 다시 시도하세요.",
       "explicitChatUnavailable": "이 워크스페이스에서는 채팅을 실행할 수 없습니다. 에이전트 설치 상태를 확인하거나 터미널에서 여세요.",
       "goalControl": {
         "settingsRejected": "Codex가 선택한 모델과 추론 수준을 적용하지 못했습니다. 이 목표 변경은 전송되지 않았습니다. 선택 항목을 확인하고 다시 시도하세요.",
