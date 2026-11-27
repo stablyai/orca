@@ -1,5 +1,5 @@
 import { Animated } from 'react-native'
-import { Hourglass, LoaderCircle } from 'lucide-react-native'
+import { Hourglass, LoaderCircle } from '../icons/icon-set'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useWorkingRingRotation } from '../motion/use-working-motion'
 
@@ -14,11 +14,11 @@ export function LoadingSpinner({
   const reducedMotion = useReducedMotionEnabled()
   const ring = useWorkingRingRotation(reducedMotion === false)
   if (reducedMotion) {
-    return <Hourglass size={size} color={color} strokeWidth={2} />
+    return <Hourglass size={size} color={color} />
   }
   return (
     <Animated.View ref={ring.ref} style={ring.style}>
-      <LoaderCircle size={size} color={color} strokeWidth={2} />
+      <LoaderCircle size={size} color={color} />
     </Animated.View>
   )
 }

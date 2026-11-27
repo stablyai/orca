@@ -10,7 +10,7 @@ import {
   type NativeSyntheticEvent,
   type ScrollViewInstance
 } from 'react-native'
-import { ChevronRight } from 'lucide-react-native'
+import { ChevronRight } from '../../../../components/icons/icon-set'
 import { useWorkingPulse } from '../../../../components/motion/use-working-motion'
 import { MobileNativeChatReplyRevealsContext } from './mobile-native-chat-reply-reveals'
 import {
@@ -249,7 +249,7 @@ export function ToolRun({
           </Text>
         ) : null}
         <View style={open ? styles.caretOpen : undefined}>
-          <ChevronRight size={14 * fontScale} color={colors.textMuted} strokeWidth={2} />
+          <ChevronRight size={14 * fontScale} color={colors.textMuted} />
         </View>
       </Pressable>
       {/* A read's result is the image the agent saw, so it shows without opening the run. */}

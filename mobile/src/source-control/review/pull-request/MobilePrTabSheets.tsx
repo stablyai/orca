@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Text, View } from 'react-native'
-import { GitMerge } from 'lucide-react-native'
+import { GitMerge } from '../../../components/icons/icon-set'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import type { GitHubPRMergeMethod } from '../../../../../src/shared/github/pull-requests/pull-request-types'

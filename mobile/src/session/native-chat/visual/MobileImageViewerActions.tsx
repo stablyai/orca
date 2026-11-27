@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Pressable } from 'react-native'
-import { Copy, Download, Share, type LucideIcon } from 'lucide-react-native'
+import { Copy, Download, Share } from '../../../components/icons/icon-set'
+import type { MobileIcon } from '../../../components/icons/mobile-icon'
 import { ActionSheetModal } from '../../../components/sheets/ActionSheetModal'
 import { TransientToast, useTransientToast } from '../../../components/feedback/TransientToast'
 import type { Translate } from '../../../i18n/mobile-i18n'
@@ -16,7 +17,7 @@ import type { ImageViewerActionsProps } from '../../../files/media/presentation/
 import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 
 type OperationCopy = {
-  icon: LucideIcon
+  icon: MobileIcon
   label: string
   done: string | null
   failed: string
@@ -88,7 +89,7 @@ export function MobileImageViewerActions({
         accessibilityRole="button"
         accessibilityLabel={t('chat.nativeChatImageViewer.imageActions', 'Image actions')}
       >
-        <Share size={20} color={colors.textPrimary} strokeWidth={2} />
+        <Share size={20} color={colors.textPrimary} />
       </Pressable>
       <ActionSheetModal
         visible={menuOpen}

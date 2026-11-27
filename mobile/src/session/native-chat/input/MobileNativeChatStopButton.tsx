@@ -1,4 +1,4 @@
-import { Square } from 'lucide-react-native'
+import { Square } from '../../../components/icons/icon-set'
 import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { triggerSelection } from '../../../platform/haptics/haptics'
@@ -28,9 +28,7 @@ export function MobileNativeChatStopButton({
           : t('chat.stopButton.stopAgent', 'Stop the agent')
       }
       iconOnly
-      icon={
-        <Square size={13} color={colors.textPrimary} strokeWidth={2.4} fill={colors.textPrimary} />
-      }
+      icon={<Square size={13} color={colors.textPrimary} fill={colors.textPrimary} />}
       pending={held}
       onPress={() => {
         // Every Stop press sends; a terminal chat's Stop ends the turn at once, so it has no wait to show.

@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../../components/icons/icon-set'
 import { isResolvedPRCommentGroup } from '../../../../../src/shared/source-control/review-comments/pr-comment-groups'
 import { spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
@@ -49,7 +49,7 @@ export function MobileDiffReviewThreadRow({
       onPress={() => onOpenThread(false)}
       accessibilityRole="button"
     >
-      <Check size={14} color={colors.textMuted} strokeWidth={2.2} />
+      <Check size={14} color={colors.textMuted} />
       <Text style={styles.resolvedText} numberOfLines={1}>
         {count === 1
           ? t('pullRequest.commentsSection.resolvedThreadSingle', 'Resolved thread by {{author}}', {

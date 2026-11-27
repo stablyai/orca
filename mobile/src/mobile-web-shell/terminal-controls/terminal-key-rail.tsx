@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AppState, Pressable, ScrollView, Text, View } from 'react-native'
 import {
-  Keyboard,
   ChevronDown,
-  Ellipsis,
+  ChevronsRight,
+  Keyboard,
   Monitor,
-  Smartphone,
-  ChevronsRight
-} from 'lucide-react-native'
+  MoreHorizontal,
+  Smartphone
+} from '../../components/icons/icon-set'
 import { hasTerminalDirectionPadSpace } from '../../layout/side-rail-strip'
 import { useSideRailStrip, useSideRailDirectionPadAvailable } from '../../layout/side-rail'
 import {
@@ -322,7 +322,7 @@ export function TerminalKeyRail({
             ) : key.id === 'toggleInputMode' ? (
               <ChevronsRight size={16} color={key.active ? colors.bgBase : colors.textSecondary} />
             ) : key.id === 'moreKeys' ? (
-              <Ellipsis size={18} color={colors.textSecondary} />
+              <MoreHorizontal size={18} color={colors.textSecondary} />
             ) : (
               <Text
                 style={[styles.keyText, key.active && styles.keyTextActive]}

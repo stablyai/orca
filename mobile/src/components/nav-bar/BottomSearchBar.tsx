@@ -1,7 +1,7 @@
 import { useEffect, useState, type ComponentType } from 'react'
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
-import { X } from 'lucide-react-native'
+import { X } from '../icons/icon-set'
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useKeyboardOcclusion } from '../../platform/keyboard/keyboard-occlusion'
@@ -17,7 +17,7 @@ const FADE_ID = 'bottom-search-bar-fade'
 const BUTTON_SIZE = 44
 const LEADING_SLIDE_MS = 220
 
-type IconProps = { size?: number; color?: string; strokeWidth?: number }
+type IconProps = { size?: number; color?: string }
 
 type BarButton = {
   icon: ComponentType<IconProps>
@@ -214,11 +214,7 @@ function RoundButton({ button, emphasis = false }: { button: BarButton; emphasis
         button.disabled && styles.disabled
       ]}
     >
-      <Icon
-        size={20}
-        color={emphasis ? colors.onCreateActionFill : colors.textPrimary}
-        strokeWidth={2.2}
-      />
+      <Icon size={20} color={emphasis ? colors.onCreateActionFill : colors.textPrimary} />
       {lit ? (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{badge}</Text>

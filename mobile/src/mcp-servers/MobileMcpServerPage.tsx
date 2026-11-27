@@ -2,7 +2,7 @@
 // switch per installed agent, and Remove. A server from a plugin is the plugin's to change or remove.
 import { useEffect, useRef, useState } from 'react'
 import { Pressable, Text, type HostInstance } from 'react-native'
-import { LogOut, MoreHorizontal, RefreshCw } from 'lucide-react-native'
+import { LogOut, MoreHorizontal, RefreshCw } from '../components/icons/icon-set'
 import type { BotToolDetails } from '../../../src/shared/bot-tools'
 import { botToolSignInUnreadable } from '../../../src/shared/bot-tool-sign-in'
 import { ListRow, SectionHeader } from '../components/list/ListGroup'

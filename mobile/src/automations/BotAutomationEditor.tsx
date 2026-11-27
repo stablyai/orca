@@ -3,7 +3,7 @@
 import { translate } from '../i18n/mobile-i18n'
 import { useEffect, useRef, useState } from 'react'
 import { Text, View } from 'react-native'
-import { Zap } from 'lucide-react-native'
+import { Zap } from '../components/icons/icon-set'
 import type { AutomationOwnerPrecondition } from '../../../src/shared/automations/ownership/automation-owner-precondition'
 import type { AutomationEventSource } from '../../../src/shared/automation-event-triggers'
 import {
@@ -358,7 +358,7 @@ export function BotAutomationEditor(props: {
                     key={trigger.id}
                     title={eventLabel(trigger, t)}
                     wrapTitle
-                    leading={<Zap size={17} color={colors.statusAmber} strokeWidth={1.8} />}
+                    leading={<Zap size={17} color={colors.statusAmber} />}
                   />
                 )),
                 ...(askInChat

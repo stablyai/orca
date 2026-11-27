@@ -2,7 +2,7 @@ import { MobileBotAvatar } from '../../../../bots/MobileBotAvatar'
 import { MobileNativeChatBotIdentityContext } from '../../mobile-native-chat-bot-identity'
 import { useContext, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronRight } from 'lucide-react-native'
+import { ChevronRight } from '../../../../components/icons/icon-set'
 import { nativeChatElapsedSeconds } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import {
   formatMobileNativeChatTurnStatusLabel,
@@ -81,7 +81,7 @@ export function MobileNativeChatTurnStatus({
           {label}
         </Text>
         <View style={expanded ? styles.caretOpen : undefined}>
-          <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
+          <ChevronRight size={14} color={colors.textMuted} />
         </View>
       </Pressable>
     )

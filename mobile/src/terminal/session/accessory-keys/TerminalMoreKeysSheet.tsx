@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ClipboardPaste, Image, Monitor, Paperclip, Plus } from 'lucide-react-native'
-import type { LucideIcon } from 'lucide-react-native'
+import { ClipboardPaste, Image, Monitor, Paperclip, Plus } from '../../../components/icons/icon-set'
+import type { MobileIcon } from '../../../components/icons/mobile-icon'
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
 import {
   LIST_LEADING_INSET,
@@ -131,7 +131,7 @@ export function TerminalMoreKeysSheet({
   })
   const keys = sheetKeys.filter((key) => shortcutName(t, key.id) === null)
 
-  const icon = (Icon: LucideIcon) => <Icon size={16} color={colors.textSecondary} />
+  const icon = (Icon: MobileIcon) => <Icon size={16} color={colors.textSecondary} />
 
   const key = (id: string, label: string, accessibilityLabel: string, onPress: () => void) => (
     <Pressable
@@ -289,7 +289,7 @@ export function TerminalMoreKeysSheet({
               accessibilityRole="button"
               accessibilityLabel={t('session.terminalMoreKeys.addCustomKey', 'Add custom key')}
             >
-              <Plus size={14} color={colors.textSecondary} strokeWidth={2.2} />
+              <Plus size={14} color={colors.textSecondary} />
               <Text style={[styles.keyText, styles.ghostKeyText]}>
                 {t('session.terminalMoreKeys.add', 'Add')}
               </Text>

@@ -1,5 +1,5 @@
 import { View } from 'react-native'
-import { CornerDownRight, Pause } from 'lucide-react-native'
+import { CornerDownRight, Pause } from '../components/icons/icon-set'
 import type { BotGroupMessage } from '../../../src/shared/bots/bot-group'
 import {
   botGroupPeerLine,
@@ -69,7 +69,7 @@ export function MobileBotGroupPeerRequestLine({ message }: { message: BotGroupMe
   return (
     <View style={messageStyles.row}>
       <MobileNativeChatEventRow
-        icon={<Icon size={14} color={colors.textMuted} strokeWidth={2} />}
+        icon={<Icon size={14} color={colors.textMuted} />}
         label={parts.join('')}
         fontScale={1}
         wordsLines={2}

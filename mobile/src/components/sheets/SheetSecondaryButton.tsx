@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react-native'
+import type { MobileIcon } from '../icons/mobile-icon'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MobilePendingButton } from '../controls/MobilePendingButton'
@@ -17,7 +17,7 @@ export function SheetSecondaryButton({
   onPress: () => void
   disabled?: boolean
   busy?: boolean
-  icon?: LucideIcon
+  icon?: MobileIcon
   accessibilityLabel?: string
 }) {
   const colors = useMobileColors()
@@ -26,7 +26,7 @@ export function SheetSecondaryButton({
   return (
     <MobilePendingButton
       label={label}
-      icon={Icon ? <Icon size={17} color={colors.textSecondary} strokeWidth={2} /> : undefined}
+      icon={Icon ? <Icon size={17} color={colors.textSecondary} /> : undefined}
       style={[sheetPrimaryButtonStyles.button, styles.button]}
       labelStyle={styles.label}
       spinnerColor={colors.textSecondary}

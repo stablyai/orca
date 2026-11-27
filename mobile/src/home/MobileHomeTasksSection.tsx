@@ -1,5 +1,6 @@
 import { memo } from 'react'
-import { ChevronRight, ListTodo, type LucideIcon } from 'lucide-react-native'
+import { ChevronRight, ListTodo } from '../components/icons/icon-set'
+import type { MobileIcon } from '../components/icons/mobile-icon'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { PickerModal } from '../components/sheets/PickerModal'
@@ -37,7 +38,7 @@ export const MobileHomeTasksSection = memo(function MobileHomeTasksSection(
 
 function HomeSection(
   props: HomeHostSectionProps & {
-    icon: LucideIcon
+    icon: MobileIcon
     title: string
     pickerTitle: string
   }
@@ -60,7 +61,7 @@ function HomeSection(
           onPress={() => hostPicker.pickHost(props.onOpen)}
         >
           <View style={[styles.status, styles.singleLineStatus]}>
-            <Icon size={17} strokeWidth={1.8} color={colors.textSecondary} />
+            <Icon size={17} color={colors.textSecondary} />
           </View>
           <View style={[styles.text, styles.singleLineText]}>
             <Text style={styles.title} numberOfLines={1}>

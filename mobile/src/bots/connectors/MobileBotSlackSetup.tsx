@@ -3,7 +3,7 @@
 // stands in for it.
 import { useState, type ReactNode } from 'react'
 import { ActivityIndicator } from 'react-native'
-import { ArrowUpRight } from 'lucide-react-native'
+import { ArrowUpRight } from '../../components/icons/icon-set'
 import {
   SLACK_CONFIG_REFRESH_TOKEN_PREFIX,
   slackAppMessagesUrl,

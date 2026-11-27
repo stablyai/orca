@@ -7,7 +7,7 @@ import {
 } from '../../../src/shared/automations/automation-run-row-words'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { ScrollView, Text, View, type HostInstance } from 'react-native'
-import { Copy, Ellipsis, SquareTerminal } from 'lucide-react-native'
+import { Copy, MoreHorizontal, SquareTerminal } from '../components/icons/icon-set'
 import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import { getAutomationRunContent } from '../../../src/shared/automations/history/automation-run-content'
 import { mobileSessionRouteTarget } from '../session/mobile-session-route'
@@ -282,7 +282,7 @@ function AutomationRunMenu(props: { runId: string; showToast: (message: string) 
     <>
       <NavBarButton
         ref={anchor}
-        icon={Ellipsis}
+        icon={MoreHorizontal}
         accessibilityLabel={t('automations.mobile.moreActions', 'More actions')}
         onPress={() => setOpen(true)}
       />

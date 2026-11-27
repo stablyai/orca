@@ -2,7 +2,7 @@ import { Fragment, memo, useMemo, useRef, useState } from 'react'
 import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronRight, Columns2, CornerDownRight } from 'lucide-react-native'
+import { ChevronRight, Columns2, CornerDownRight } from '../../components/icons/icon-set'
 import { DisclosureChevron } from '../../components/list/DisclosureChevron'
 import { AutoHeight, Presence } from '../../components/motion/AutoHeight'
 import { SHEET_HEIGHT_DURATION_MS } from '../../components/motion/sheet-motion-values'
@@ -209,9 +209,7 @@ export const MobileSessionSidebarTabs = memo(function MobileSessionSidebarTabs({
         >
           <SidebarRowMark
             state={badgeState}
-            mark={
-              <Columns2 size={SIDEBAR_MARK_SIZE - 2} color={colors.textSecondary} strokeWidth={2} />
-            }
+            mark={<Columns2 size={SIDEBAR_MARK_SIZE - 2} color={colors.textSecondary} />}
           />
           <SidebarRowText title={splitTitle} unread={entry.unread} />
         </SidebarRow>
@@ -226,7 +224,7 @@ export const MobileSessionSidebarTabs = memo(function MobileSessionSidebarTabs({
             pane
             onPress={() => onPick(row.tab)}
           >
-            <CornerDownRight size={14} color={colors.textMuted} strokeWidth={2} />
+            <CornerDownRight size={14} color={colors.textMuted} />
             <SidebarRowText title={row.title} unread={false} />
           </SidebarRow>
         )

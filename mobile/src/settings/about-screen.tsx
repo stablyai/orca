@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { View, Text } from 'react-native'
-import { Globe } from 'lucide-react-native'
+import { Globe } from '../components/icons/icon-set'
 import Svg, { Path } from 'react-native-svg'
 import { OrcaLogo } from '../components/icons/OrcaLogo'
 import { LIST_LEADING_INSET, ListRow } from '../components/list/ListGroup'

@@ -14,7 +14,7 @@ import { TextField } from '../../components/composer-input/TextField'
 import { pressedStyle } from '../../theme/mobile-theme'
 import { Pressable, Text, View, ActivityIndicator } from 'react-native'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../components/icons/icon-set'
 import { detailPayloadBody } from '../mobile-tasks-provider-detail-types'
 import { SectionHeader } from '../../components/list/ListGroup'
 

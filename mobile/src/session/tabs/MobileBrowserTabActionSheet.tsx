@@ -1,4 +1,4 @@
-import { Copy, ExternalLink, RotateCw, X } from 'lucide-react-native'
+import { Copy, ExternalLink, RotateCw, X } from '../../components/icons/icon-set'
 import type { MobileSessionTab } from './mobile-session-tabs'
 import { ActionSheetModal, type ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'

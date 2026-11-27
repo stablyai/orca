@@ -12,7 +12,7 @@ import {
   useWindowDimensions,
   type HostInstance
 } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check } from '../icons/icon-set'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { radii, spacing, typography } from '../../theme/mobile-theme'
@@ -213,11 +213,11 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
                         </Text>
                       ) : null}
                       {action.checked ? (
-                        <Check size={17} color={tint} strokeWidth={2.2} />
+                        <Check size={17} color={tint} />
                       ) : action.renderIcon ? (
                         action.renderIcon()
                       ) : (
-                        Icon && <Icon size={17} color={tint} strokeWidth={2} />
+                        Icon && <Icon size={17} color={tint} />
                       )}
                     </Pressable>
                   )

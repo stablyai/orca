@@ -3,7 +3,7 @@
 // the item where the screen can open one; the owner's comment is their own message under the item's chip.
 import { useContext, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ListTodo, MessageSquare } from 'lucide-react-native'
+import { ListTodo, MessageSquare } from '../../../../components/icons/icon-set'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { isNativeChatOrcaCard } from '../../../../../../src/shared/native-chat/native-chat-orca-card'
 import { stripSentImagePromptMarkers } from '../../../../../../src/shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
@@ -96,7 +96,7 @@ function ChatChip({
   const open = useContext(BotChatOpenContext)
   const body = (
     <>
-      <MessageSquare size={12 * fontScale} strokeWidth={2} color={colors.textSecondary} />
+      <MessageSquare size={12 * fontScale} color={colors.textSecondary} />
       <Text numberOfLines={1} style={[styles.chipText, scaledType(CHIP_SIZE, fontScale, 4)]}>
         {chat.name}
       </Text>
@@ -175,7 +175,7 @@ function QuietLine({
   const glued = !line.tail && line.detail ? ':' : null
   const icon = (
     <View style={[styles.icon, { height: LINE_HEIGHT * fontScale }]}>
-      <ListTodo size={14 * fontScale} strokeWidth={2} color={colors.textMuted} />
+      <ListTodo size={14 * fontScale} color={colors.textMuted} />
     </View>
   )
   if (line.items.length === 1) {
@@ -247,7 +247,7 @@ function CommentLine({
     // A message, so a row gap below what the note drew above it, not the lines' 3 pt.
     <View style={[messageStyles.userBubble, styles.comment, belowAnother && styles.belowAnother]}>
       <View style={styles.commentOn}>
-        <ListTodo size={12 * fontScale} strokeWidth={2} color={colors.textMuted} />
+        <ListTodo size={12 * fontScale} color={colors.textMuted} />
         <Text style={[styles.text, scaledType(typography.metaSize, fontScale)]}>
           {t('bots.items.chat.commentOn', 'On')}
         </Text>

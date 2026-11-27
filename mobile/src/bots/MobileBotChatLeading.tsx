@@ -2,7 +2,7 @@
 import { useId } from 'react'
 import { View, type ViewStyle } from 'react-native'
 import { Circle, Defs, Mask, Rect } from 'react-native-svg'
-import { CalendarClock, House, MessageSquare } from 'lucide-react-native'
+import { CalendarClock, House, MessageSquare } from '../components/icons/icon-set'
 import {
   AGENT_STATE_DOT_SIZE,
   AGENT_WORKING_COLOR,
@@ -45,7 +45,7 @@ function ChatStateDot({ chat }: { chat: LeadingChat }) {
 export function ChatBadgedIcon({ chat }: { chat: LeadingChat }) {
   const styles = useThemedStyles(stylesSheet)
   const badgeSize = chat.live === 'needs-you' ? AGENT_STATE_DOT_SIZE : WORKING_BADGE_SIZE
-  const size = isSource(chat.origin) ? SOURCE_SIZE : LUCIDE_SIZE
+  const size = isSource(chat.origin) ? SOURCE_SIZE : ICON_SIZE
   return (
     <View style={{ width: size, height: size }}>
       <ChatIcon chat={chat} badgeSize={chat.live === 'idle' ? undefined : badgeSize} />
@@ -61,7 +61,7 @@ export function ChatBadgedIcon({ chat }: { chat: LeadingChat }) {
 }
 
 const SOURCE_SIZE = 14
-const LUCIDE_SIZE = 15
+const ICON_SIZE = 15
 
 function isSource(origin: BotChatTreeChat['origin']): origin is SuggestionSource {
   return origin === 'slack' || origin === 'linear' || origin === 'github'
@@ -104,7 +104,7 @@ function ChatIcon({ chat, badgeSize }: { chat: LeadingChat; badgeSize?: number }
   const colors = useMobileColors()
   const { mask, defs } = useCutout(
     badgeSize,
-    isSource(chat.origin) ? SOURCE_SIZE : LUCIDE_SIZE,
+    isSource(chat.origin) ? SOURCE_SIZE : ICON_SIZE,
     isSource(chat.origin) ? SOURCE_ICON_VIEW_BOX[chat.origin] : 24
   )
   switch (chat.origin) {
@@ -118,19 +118,19 @@ function ChatIcon({ chat, badgeSize }: { chat: LeadingChat; badgeSize?: number }
       )
     case 'home':
       return (
-        <House size={LUCIDE_SIZE} color={colors.textSecondary} mask={mask}>
+        <House size={ICON_SIZE} color={colors.textSecondary} mask={mask}>
           {defs}
         </House>
       )
     case 'automation':
       return (
-        <CalendarClock size={LUCIDE_SIZE} color={colors.textSecondary} mask={mask}>
+        <CalendarClock size={ICON_SIZE} color={colors.textSecondary} mask={mask}>
           {defs}
         </CalendarClock>
       )
     case 'side':
       return (
-        <MessageSquare size={LUCIDE_SIZE} color={colors.textSecondary} mask={mask}>
+        <MessageSquare size={ICON_SIZE} color={colors.textSecondary} mask={mask}>
           {defs}
         </MessageSquare>
       )
@@ -163,7 +163,7 @@ export function useMobileBotChatLabel(chat: LeadingChat, title: string): string 
 
 const stylesSheet = themedStyleSheet(() => ({
   // One width whichever icon follows the lane, so chat titles line up.
-  leading: { flexDirection: 'row', alignItems: 'center', gap: 6, width: 10 + 6 + LUCIDE_SIZE },
+  leading: { flexDirection: 'row', alignItems: 'center', gap: 6, width: 10 + 6 + ICON_SIZE },
   lane: { width: 10, alignItems: 'center' },
   badgeRing: {
     ...badgePosition,

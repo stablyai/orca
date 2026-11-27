@@ -1,6 +1,6 @@
 // A reply's quote of the question it answers: one muted line above its text; a tap shows the question.
 import { Pressable, Text, View } from 'react-native'
-import { CornerDownRight } from 'lucide-react-native'
+import { CornerDownRight } from '../../components/icons/icon-set'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { pressedStyle, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'

@@ -11,7 +11,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../../src/components/icons/icon-set'
 import { radii, spacing, typography, pressedStyle } from '../../../src/theme/mobile-theme'
 import { NavBarButton } from '../../../src/components/nav-bar/NavBarButton'
 import { themedStyleSheet, useThemedStyles } from '../../../src/theme/themed-styles'

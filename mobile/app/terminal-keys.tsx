@@ -7,7 +7,7 @@ import Animated, {
   useSharedValue
 } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
-import { ArrowUpDown } from 'lucide-react-native'
+import { ArrowUpDown } from '../src/components/icons/icon-set'
 import { spacing } from '../src/theme/mobile-theme'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
 import { NavBarButton } from '../src/components/nav-bar/NavBarButton'

@@ -6,7 +6,7 @@ import {
   MessageSquareWarning,
   OctagonAlert,
   TriangleAlert
-} from 'lucide-react-native'
+} from '../../icons/icon-set'
 import type { GitHubCalloutKind } from '../../../../../src/shared/github/markdown/github-callouts'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -51,7 +51,7 @@ function CalloutIcon({
   color: string
   size: number
 }) {
-  const icon = { size, color, strokeWidth: 2.2 }
+  const icon = { size, color }
   switch (kind) {
     case 'note':
       return <Info {...icon} />

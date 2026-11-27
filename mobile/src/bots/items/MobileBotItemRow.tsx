@@ -2,7 +2,7 @@
 // bot's question under a Needs you row, the unseen dot and its age (a snoozed row's wake time); and the
 // floating bar while rows are checked.
 import { Pressable, Text, View } from 'react-native'
-import { Circle, CircleCheck, CircleHelp, X } from 'lucide-react-native'
+import { Circle, CircleCheck, CircleHelp, X } from '../../components/icons/icon-set'
 import {
   botItemActivityAt,
   formatBotItemNumber,
@@ -74,7 +74,7 @@ export function MobileBotItemRow({
         checked === null ? (
           asking ? (
             // Needs you's own glyph, as its other asks draw theirs.
-            <CircleHelp size={17} strokeWidth={2.1} color={colors.agentQuestion} />
+            <CircleHelp size={17} color={colors.agentQuestion} />
           ) : (
             <MobileBotItemStatusIcon
               status={item.status}
@@ -83,11 +83,7 @@ export function MobileBotItemRow({
             />
           )
         ) : (
-          <Check
-            size={18}
-            color={checked ? colors.textPrimary : colors.textMuted}
-            strokeWidth={2}
-          />
+          <Check size={18} color={checked ? colors.textPrimary : colors.textMuted} />
         )
       }
       accessory={
@@ -183,7 +179,7 @@ export function MobileBotItemSelectionBar({
         hitSlop={8}
         style={({ pressed }) => [styles.barClear, pressed && styles.pressed]}
       >
-        <X size={16} color={colors.textSecondary} strokeWidth={2.2} />
+        <X size={16} color={colors.textSecondary} />
       </Pressable>
     </View>
   )

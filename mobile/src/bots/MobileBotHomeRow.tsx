@@ -1,6 +1,6 @@
 import type React from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
+import { ChevronDown, ChevronRight } from '../components/icons/icon-set'
 import { botGroupRowLine } from '../../../src/shared/bots/bot-sidebar-entries'
 import {
   splitBotSearchText,

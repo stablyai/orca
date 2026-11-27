@@ -1,6 +1,6 @@
 import { memo, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
-import { ChevronUp, ListChecks } from 'lucide-react-native'
+import { ChevronUp, ListChecks } from '../../../../components/icons/icon-set'
 import {
   nativeChatCompletedTaskCount,
   nativeChatTaskLabel,
@@ -66,13 +66,13 @@ function MobileNativeChatDockedTaskListImpl({
           style={({ pressed }) => [strip.header, pressed && strip.pressed]}
           onPress={() => setOpen(!open)}
         >
-          <ListChecks size={14} color={colors.textMuted} strokeWidth={2} />
+          <ListChecks size={14} color={colors.textMuted} />
           <Text style={styles.lead} numberOfLines={1} ellipsizeMode="tail">
             {lead}
           </Text>
           <Text style={styles.count}>{`${completed}/${list.tasks.length}`}</Text>
           <View style={open ? strip.caretOpen : undefined}>
-            <ChevronUp size={14} color={colors.textMuted} strokeWidth={2} />
+            <ChevronUp size={14} color={colors.textMuted} />
           </View>
         </Pressable>
         {open ? (

@@ -1,5 +1,5 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { Ellipsis, FilePlus2, FolderPlus, Plus } from 'lucide-react-native'
+import { FilePlus2, FolderPlus, MoreHorizontal, Plus } from '../../components/icons/icon-set'
 import { FILE_MOBILE_EXPLORER_MUTATIONS_RUNTIME_CAPABILITY } from '../../../../src/shared/file-access/files-runtime-capabilities'
 import { TransientToast, useTransientToast } from '../../components/feedback/TransientToast'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
@@ -94,7 +94,7 @@ export function useMobileFileExplorerActions(args: {
     rootMenuButton: openCreate ? (
       <NavBarButton
         ref={menuAnchor}
-        icon={Ellipsis}
+        icon={MoreHorizontal}
         accessibilityLabel={t('files.fileExplorerPanel.more', 'More')}
         onPress={() => {
           void preloadNameSheet()

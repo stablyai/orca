@@ -2,7 +2,7 @@
 // text as it goes out. The desktop's BotShareLists, BotShareFlagPages and BotSharePartView.
 import type { ReactNode } from 'react'
 import { Pressable, View } from 'react-native'
-import { Check, Eye } from 'lucide-react-native'
+import { Check, Eye } from '../../components/icons/icon-set'
 import { BOT_SHARE_MAX_PICKS } from '../../../../src/shared/rpc-contract/bots-share-params'
 import { allMemory, pickedOf, toggled } from '../../../../src/shared/bots/bot-share-pick-lists'
 import {
@@ -36,7 +36,7 @@ function ShareTick(props: { on: boolean }) {
   const styles = useThemedStyles(stylesSheet)
   return (
     <View style={[styles.tick, props.on && styles.tickOn]}>
-      {props.on ? <Check size={13} color={colors.bgBase} strokeWidth={3} /> : null}
+      {props.on ? <Check size={13} color={colors.bgBase} /> : null}
     </View>
   )
 }

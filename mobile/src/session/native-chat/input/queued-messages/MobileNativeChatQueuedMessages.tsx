@@ -3,7 +3,7 @@ import { DragReorderList } from '../../../../components/reorder/DragReorderList'
 import type { DragReorderMove } from '../../../../components/reorder/drag-reorder-positions'
 import { useContext, useLayoutEffect, useState, type ReactNode } from 'react'
 import { Pressable, Text, View, type LayoutRectangle } from 'react-native'
-import { ChevronDown, ChevronUp, Pencil, Play, Trash2 } from 'lucide-react-native'
+import { ChevronDown, ChevronUp, Pencil, Play, Trash2 } from '../../../../components/icons/icon-set'
 import { ActionSheetModal } from '../../../../components/sheets/ActionSheetModal'
 import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
@@ -202,7 +202,7 @@ export function MobileNativeChatQueuedMessages({
       {onClearAll ? (
         <MobilePendingButton
           label={t('chat.queuedMessages.deleteAll', 'Delete all')}
-          icon={<Trash2 size={12} color={colors.textPrimary} strokeWidth={2} />}
+          icon={<Trash2 size={12} color={colors.textPrimary} />}
           style={styles.headerAction}
           labelStyle={styles.actionLabel}
           spinnerColor={colors.textPrimary}
@@ -217,7 +217,7 @@ export function MobileNativeChatQueuedMessages({
           'chat.queuedMessages.resumeSending',
           'Resume sending the queued messages'
         )}
-        icon={<Play size={12} color={colors.textPrimary} strokeWidth={2} />}
+        icon={<Play size={12} color={colors.textPrimary} />}
         style={styles.headerAction}
         labelStyle={styles.actionLabel}
         spinnerColor={colors.textPrimary}
@@ -369,9 +369,9 @@ export function MobileNativeChatQueuedMessages({
               {foldLabel}
             </Text>
             {showAll ? (
-              <ChevronUp size={12} color={colors.textSecondary} strokeWidth={2} />
+              <ChevronUp size={12} color={colors.textSecondary} />
             ) : (
-              <ChevronDown size={12} color={colors.textSecondary} strokeWidth={2} />
+              <ChevronDown size={12} color={colors.textSecondary} />
             )}
           </Pressable>
         ) : null}

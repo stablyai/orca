@@ -3,7 +3,7 @@
 // on a computer paired to the chat's host names that computer and rereads with the host's changes.
 import { useEffect, useState } from 'react'
 import { Pressable, Text } from 'react-native'
-import { ArrowUpRight, Send } from 'lucide-react-native'
+import { ArrowUpRight, Send } from '../../../../components/icons/icon-set'
 import { botRequestCardView } from '../../../../../../src/shared/bots/bot-request-card-view'
 import type {
   BotRequestCard,
@@ -92,7 +92,7 @@ function useRequestReading(
 
 function SendIcon(): React.JSX.Element {
   const colors = useMobileColors()
-  return <Send size={14} color={colors.textMuted} strokeWidth={2} />
+  return <Send size={14} color={colors.textMuted} />
 }
 
 const SEND_ICON = <SendIcon />

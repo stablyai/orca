@@ -4,7 +4,7 @@ import { NavBar } from '../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
 import { View } from 'react-native'
-import { ChevronLeft, Ellipsis, RefreshCw } from 'lucide-react-native'
+import { ChevronLeft, MoreHorizontal, RefreshCw } from '../../components/icons/icon-set'
 import { StatusDot } from '../../components/feedback/StatusDot'
 import { MobileTasksHostSubtitle } from './mobile-tasks-host-subtitle'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -59,7 +59,7 @@ function MobileTasksNavBar({ model }: { model: ConnectionPresentationModel }) {
         trailing={
           <NavBarButton
             ref={menuAnchor}
-            icon={Ellipsis}
+            icon={MoreHorizontal}
             accessibilityLabel={t('tasks.screenChrome.more', 'More')}
             onPress={() => setMenuOpen(true)}
           />

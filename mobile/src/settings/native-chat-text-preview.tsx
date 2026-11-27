@@ -1,4 +1,4 @@
-import { Copy, TextWrap } from 'lucide-react-native'
+import { Copy, TextWrap } from '../components/icons/icon-set'
 import { ScrollView, Text, View, useWindowDimensions } from 'react-native'
 import { MobileSyntaxSegments } from '../components/code-presentation/MobileSyntaxSegments'
 import {

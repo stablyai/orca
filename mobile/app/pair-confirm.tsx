@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { View, BackHandler, ScrollView, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft, CircleAlert, Laptop } from 'lucide-react-native'
+import { ChevronLeft, CircleAlert, Laptop } from '../src/components/icons/icon-set'
 import { pairConfirmServerName } from '../src/pairing/pair-confirm-server-name'
 import {
   resolvePairConfirmRouteState,

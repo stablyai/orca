@@ -96,7 +96,7 @@ export function MobileTaskRow({
   return (
     <View style={[styles.cell, first && styles.first, last && styles.last]}>
       <ListRow
-        leading={<glyph.icon size={18} color={glyph.color} strokeWidth={2} />}
+        leading={<glyph.icon size={18} color={glyph.color} />}
         title={item.title}
         subtitle={meta}
         subtitleLines={1}

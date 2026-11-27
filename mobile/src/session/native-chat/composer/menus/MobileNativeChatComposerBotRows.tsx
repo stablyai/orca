@@ -1,6 +1,6 @@
 // The `@` list's bot rows, as the desktop's: a bot with "Chats ›", and one level down "‹ Bot" over its chats.
 import { Pressable, Text, View } from 'react-native'
-import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, RotateCcw } from '../../../../components/icons/icon-set'
 import { MobileBotAvatar } from '../../../../bots/MobileBotAvatar'
 import { ChatBadgedIcon } from '../../../../bots/MobileBotChatLeading'
 import { useNow } from '../../../../hooks/use-now'
@@ -67,7 +67,7 @@ export function MobileNativeChatComposerBotRow({
               <Text style={styles.muted}>
                 {t('components.native-chat.composer.botChats', 'Chats')}
               </Text>
-              <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
+              <ChevronRight size={14} color={colors.textMuted} />
             </Pressable>
           ) : null}
         </View>
@@ -81,7 +81,7 @@ export function MobileNativeChatComposerBotRow({
           style={({ pressed }) => [styles.row, styles.main, pressed && styles.pressed]}
           onPress={() => onPick(row)}
         >
-          <ChevronLeft size={16} color={colors.textSecondary} strokeWidth={2} />
+          <ChevronLeft size={16} color={colors.textSecondary} />
           <MobileBotAvatar avatar={bot.avatar} size={20} />
           <Text style={[styles.name, styles.body]} numberOfLines={1}>
             {bot.name}
@@ -139,7 +139,7 @@ export function MobileNativeChatComposerBotRow({
               style={({ pressed }) => [styles.chats, pressed && styles.pressed]}
               onPress={() => onPick(row)}
             >
-              <RotateCcw size={13} color={colors.textSecondary} strokeWidth={2} />
+              <RotateCcw size={13} color={colors.textSecondary} />
               <Text style={styles.retry}>
                 {t('components.native-chat.composer.retryChats', 'Retry')}
               </Text>

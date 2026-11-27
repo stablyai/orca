@@ -3,7 +3,7 @@ import { mobileNativeChatMemberId } from '../viewport/mobile-native-chat-reading
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MobileNativeChatOwnedScrollView } from '../viewport/MobileNativeChatOwnedScrollView'
-import { Brain, ChevronRight } from 'lucide-react-native'
+import { Brain, ChevronRight } from '../../../../components/icons/icon-set'
 import {
   nativeChatReasoningDisclosureKey,
   nativeChatReasoningHeadline,
@@ -75,12 +75,12 @@ export function MobileNativeChatReasoningRow({
         // Desktop's screen-reader prefix: the headline alone does not say what was thought.
         accessibilityLabel={headline === label ? label : `${label}: ${headline}`}
       >
-        <Brain size={15} color={colors.textMuted} strokeWidth={2} />
+        <Brain size={15} color={colors.textMuted} />
         <Text style={styles.reasoningHeadline} numberOfLines={1}>
           {headline}
         </Text>
         <View style={expanded ? styles.reasoningCaretOpen : undefined}>
-          <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
+          <ChevronRight size={14} color={colors.textMuted} />
         </View>
       </Pressable>
       {expanded ? (

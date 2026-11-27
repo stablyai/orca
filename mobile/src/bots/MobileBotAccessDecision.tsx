@@ -3,7 +3,8 @@
 // waiting.
 import { useEffect, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { Laptop, Mail, ShieldAlert, ShieldOff, type LucideIcon } from 'lucide-react-native'
+import { Laptop, Mail, ShieldAlert, ShieldOff } from '../components/icons/icon-set'
+import type { MobileIcon } from '../components/icons/mobile-icon'
 import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { LIST_LEADING_INSET, ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
@@ -30,7 +31,7 @@ import { MobileConnectorSourceIcon } from './MobileConnectorSourceIcon'
 import { mobileBotAccessCopy } from './mobile-bot-access-copy'
 import { SettingsNote } from '../settings/settings-screen-frame'
 
-const ROW_ICONS: Partial<Record<AccessDecisionRow['kind'], LucideIcon>> = {
+const ROW_ICONS: Partial<Record<AccessDecisionRow['kind'], MobileIcon>> = {
   computer: Laptop,
   'no-approvals': ShieldOff,
   'may-skip-approvals': ShieldAlert,
@@ -44,9 +45,7 @@ function RowIcon({ row }: { row: AccessDecisionRow }) {
     return <MobileConnectorSourceIcon source={row.connector} size={16} />
   }
   const Icon = ROW_ICONS[row.kind] ?? ShieldAlert
-  return (
-    <Icon size={17} strokeWidth={2} color={row.warn ? colors.statusRed : colors.textSecondary} />
-  )
+  return <Icon size={17} color={row.warn ? colors.statusRed : colors.textSecondary} />
 }
 
 export function MobileBotAccessDecisionContent({
@@ -73,7 +72,7 @@ export function MobileBotAccessDecisionContent({
       media={
         <View style={styles.tile}>
           <View style={[styles.tileWash, { backgroundColor: tone }]} />
-          <ShieldAlert size={24} strokeWidth={2} color={tone} />
+          <ShieldAlert size={24} color={tone} />
         </View>
       }
       title={copy.title}

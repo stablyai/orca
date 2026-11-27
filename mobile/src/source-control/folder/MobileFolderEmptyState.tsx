@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { ActivityIndicator, ScrollView, View } from 'react-native'
-import { FolderGit2, GitBranch, Plus } from 'lucide-react-native'
+import { FolderGit2, GitBranch, Plus } from '../../components/icons/icon-set'
 import type { Repo } from '../../../../src/shared/repository/repo-types'
 import { projectGroupIdFromRepoId } from '../../../../src/shared/folder-workspaces/folder-workspace-worktree'
 import { getRepoExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
@@ -159,12 +159,12 @@ function FolderRepoCreateCard(props: {
     <ListGroup>
       <ListRow
         title={props.repo.displayName}
-        leading={<FolderGit2 size={18} color={colors.textSecondary} strokeWidth={1.9} />}
+        leading={<FolderGit2 size={18} color={colors.textSecondary} />}
         accessory={
           busy ? (
             <ActivityIndicator size="small" color={colors.textSecondary} />
           ) : (
-            <Plus size={18} color={colors.textSecondary} strokeWidth={2.2} />
+            <Plus size={18} color={colors.textSecondary} />
           )
         }
         busy={busy}

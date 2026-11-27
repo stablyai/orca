@@ -1,6 +1,6 @@
 import { useContext } from 'react'
 import { Pressable, View } from 'react-native'
-import { Ellipsis } from 'lucide-react-native'
+import { MoreHorizontal } from '../../../../components/icons/icon-set'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { MobileSourceCopyButton } from '../../../../components/code-presentation/MobileSourceCopyButton'
 import { pressedStyle, spacing } from '../../../../theme/mobile-theme'
@@ -37,7 +37,7 @@ export function MobileNativeChatResponseActions({
         accessibilityLabel={t('chat.message.moreActions', 'More actions')}
         onPress={() => openActions(message)}
       >
-        <Ellipsis size={16} color={colors.textMuted} />
+        <MoreHorizontal size={16} color={colors.textMuted} />
       </Pressable>
     </View>
   )

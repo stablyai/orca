@@ -14,7 +14,7 @@ import {
   CircleX,
   RotateCcw,
   X
-} from 'lucide-react-native'
+} from '../../components/icons/icon-set'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import {
@@ -86,11 +86,11 @@ function StepMark({ state }: { state: BotSetupStepState }): React.JSX.Element {
     case 'running':
       return <LoadingSpinner size={17} color={colors.textMuted} />
     case 'done':
-      return <CircleCheck size={17} color={colors.textMuted} strokeWidth={2} />
+      return <CircleCheck size={17} color={colors.textMuted} />
     case 'failed':
-      return <CircleX size={17} color={colors.statusRed} strokeWidth={2} />
+      return <CircleX size={17} color={colors.statusRed} />
     case 'pending':
-      return <Circle size={17} color={colors.textMuted} strokeWidth={2} />
+      return <Circle size={17} color={colors.textMuted} />
   }
 }
 
@@ -98,11 +98,11 @@ function LookMark({ state }: { state: FirstLookRow['state'] }): React.JSX.Elemen
   const colors = useMobileColors()
   switch (state) {
     case 'done':
-      return <Check size={15} color={colors.textMuted} strokeWidth={2.2} />
+      return <Check size={15} color={colors.textMuted} />
     case 'running':
       return <LoadingSpinner size={15} color={colors.textMuted} />
     case 'stopped':
-      return <X size={15} color={colors.textMuted} strokeWidth={2.2} />
+      return <X size={15} color={colors.textMuted} />
   }
 }
 
@@ -215,7 +215,7 @@ export function MobileBotFirstScreen({
               title={t('common.details', 'Details')}
               leading={
                 <DisclosureChevron expanded={detailsOpen} collapsedDeg={0} expandedDeg={90}>
-                  <ChevronRight size={15} color={colors.textMuted} strokeWidth={2.2} />
+                  <ChevronRight size={15} color={colors.textMuted} />
                 </DisclosureChevron>
               }
               detail={

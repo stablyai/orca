@@ -7,7 +7,7 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native'
-import { ChevronDown, Keyboard as KeyboardIcon, Plus } from 'lucide-react-native'
+import { ChevronDown, Keyboard as KeyboardIcon, Plus } from '../../../components/icons/icon-set'
 import { ActionSheetModal } from '../../../components/sheets/ActionSheetModal'
 import { mobileNativeChatAttachActions } from '../../../session/native-chat/composer/attachments/mobile-native-chat-attach-actions'
 import { stylesSheet as sessionStylesSheet } from '../../../session/mobile-session-styles'
@@ -101,11 +101,10 @@ export function MobileTerminalLeadingButton({
         accessibilityLabel={t('session.accessoryKeys.dismissKeyboard', 'Dismiss keyboard')}
       >
         <View style={sessionStyles.keyboardDismissGlyph}>
-          <KeyboardIcon size={15} color={colors.textPrimary} strokeWidth={2} />
+          <KeyboardIcon size={15} color={colors.textPrimary} />
           <ChevronDown
             size={10}
             color={colors.textPrimary}
-            strokeWidth={2.5}
             style={sessionStyles.keyboardDismissChevron}
           />
         </View>
@@ -133,7 +132,7 @@ export function MobileTerminalLeadingButton({
         {isAttaching ? (
           <ActivityIndicator size="small" color={colors.textSecondary} />
         ) : (
-          <Plus size={19} color={colors.textPrimary} strokeWidth={2} />
+          <Plus size={19} color={colors.textPrimary} />
         )}
       </Pressable>
       {/* Uploads go through host RPC, so remote and SSH terminals attach the same way as local ones. */}
@@ -212,7 +211,6 @@ function MobileTerminalDictationButton({
         active={dictationActive}
         processing={dictation.isProcessing}
         micSize={17}
-        micStroke={2.4}
       />
     </Pressable>
   )

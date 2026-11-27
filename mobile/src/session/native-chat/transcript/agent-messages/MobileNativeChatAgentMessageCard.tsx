@@ -1,7 +1,7 @@
 import { useNativeChatProseText } from '../../preferences/native-chat-text-settings'
 import { Fragment, memo, useContext, useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ArrowUpRight, Bot } from 'lucide-react-native'
+import { ArrowUpRight, Bot } from '../../../../components/icons/icon-set'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import {
   agentMessageSendersShown,
@@ -356,7 +356,7 @@ function SenderMark({
   return agentType ? (
     <MobileAgentIcon agentId={agentType} size={14} />
   ) : (
-    <Bot size={14} color={colors.textMuted} strokeWidth={2} />
+    <Bot size={14} color={colors.textMuted} />
   )
 }
 

@@ -1,6 +1,6 @@
 import { Children, Fragment, isValidElement, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
-import { Check, ChevronDown, ChevronRight } from 'lucide-react-native'
+import { Check, ChevronDown, ChevronRight } from '../icons/icon-set'
 import { DisclosureChevron } from './DisclosureChevron'
 import { triggerSelection } from '../../platform/haptics/haptics'
 import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
@@ -105,7 +105,7 @@ export function SectionHeader({
     >
       {label}
       <DisclosureChevron expanded={expanded === true} collapsedDeg={-90} expandedDeg={0}>
-        <ChevronDown size={15} color={colors.textMuted} strokeWidth={2.2} />
+        <ChevronDown size={15} color={colors.textMuted} />
       </DisclosureChevron>
     </Pressable>
   )
@@ -290,9 +290,9 @@ export function ListRow({
         </WithIcon>
       ) : null}
       {accessory}
-      {selected ? <Check size={17} color={colors.textPrimary} strokeWidth={2.4} /> : null}
+      {selected ? <Check size={17} color={colors.textPrimary} /> : null}
       {selected === false ? <View style={listRowStyles.checkSpace} /> : null}
-      {navigates ? <ChevronRight size={15} color={colors.textMuted} strokeWidth={2.2} /> : null}
+      {navigates ? <ChevronRight size={15} color={colors.textMuted} /> : null}
     </>
   )
   if (onPress === undefined) {

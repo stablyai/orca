@@ -10,7 +10,7 @@ import {
   FolderPlus,
   MessageSquareText,
   X
-} from 'lucide-react-native'
+} from '../components/icons/icon-set'
 import { DisclosureChevron } from '../components/list/DisclosureChevron'
 import { LIST_LEADING_INSET, LIST_ROW_PADDING, ListRow } from '../components/list/ListGroup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -28,7 +28,7 @@ function StepMark({ n, done }: { n: number; done: boolean }) {
   return (
     <View style={[styles.step, done && styles.stepDone]}>
       {done ? (
-        <Check size={13} color={colors.bgBase} strokeWidth={3} />
+        <Check size={13} color={colors.bgBase} />
       ) : (
         <Text style={styles.stepNumber}>{n}</Text>
       )}
@@ -84,7 +84,7 @@ export function MobileBotImportExportSteps(props: {
           title={t('bots.import.seeMessage', 'See the message')}
           accessory={
             <DisclosureChevron expanded={seeMessage} collapsedDeg={0} expandedDeg={180}>
-              <ChevronDown size={15} color={colors.textMuted} strokeWidth={2.2} />
+              <ChevronDown size={15} color={colors.textMuted} />
             </DisclosureChevron>
           }
           onPress={() => setSeeMessage(!seeMessage)}

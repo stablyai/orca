@@ -1,6 +1,6 @@
 // Under the owner's Orca-typed message on the phone: its Slack post's Posting or failed line.
 import { Pressable, Text, View } from 'react-native'
-import { CircleAlert } from 'lucide-react-native'
+import { CircleAlert } from '../../../components/icons/icon-set'
 import { MobileConnectorSourceIcon } from '../../../bots/MobileConnectorSourceIcon'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { spacing, typography } from '../../../theme/mobile-theme'

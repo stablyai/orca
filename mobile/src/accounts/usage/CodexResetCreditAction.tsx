@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native'
-import { RotateCcw } from 'lucide-react-native'
+import { RotateCcw } from '../../components/icons/icon-set'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'

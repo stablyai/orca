@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronRight, X } from 'lucide-react-native'
+import { ChevronRight, X } from '../../../../components/icons/icon-set'
 import { AGENT_WORKING_COLOR, WorkingRing } from '../../../../agents/presentation/AgentStateDot'
 import { radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
@@ -40,7 +40,7 @@ function MobileNativeChatEventIcon({
             <WorkingRing color={AGENT_WORKING_COLOR} style={styles.spinner} />
           ) : (
             <View style={styles.failed}>
-              <X size={6} color={colors.bgBase} strokeWidth={4} />
+              <X size={6} color={colors.bgBase} />
             </View>
           )}
         </View>
@@ -146,7 +146,7 @@ export function MobileNativeChatEventRow({
             pointerEvents="none"
             style={[styles.icon, subtitle ? styles.trailing : line, open && styles.chevronOpen]}
           >
-            <ChevronRight size={ICON} color={colors.textMuted} strokeWidth={2} />
+            <ChevronRight size={ICON} color={colors.textMuted} />
           </View>
         ) : null}
         {time ? (

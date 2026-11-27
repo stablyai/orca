@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronDown, MessageSquare } from 'lucide-react-native'
+import { ChevronDown, MessageSquare } from '../../../components/icons/icon-set'
 import {
   buildSourceControlTree,
   compactSourceControlTree,
@@ -149,7 +149,7 @@ function FolderRow({
       ]}
     >
       <DisclosureChevron expanded={expanded} collapsedDeg={-90} expandedDeg={0}>
-        <ChevronDown size={13} color={colors.textMuted} strokeWidth={2.2} />
+        <ChevronDown size={13} color={colors.textMuted} />
       </DisclosureChevron>
       <Text style={styles.folderName} numberOfLines={1}>
         {node.name}
@@ -201,7 +201,7 @@ function FileRow({
         ) : null}
         {item.noteCount > 0 ? (
           <View style={styles.notes}>
-            <MessageSquare size={12} color={colors.textMuted} strokeWidth={2} />
+            <MessageSquare size={12} color={colors.textMuted} />
             <Text style={styles.count}>{item.noteCount}</Text>
           </View>
         ) : null}

@@ -3,7 +3,7 @@
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { BOTS_SLACK_POST_AS_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Ellipsis, ExternalLink, Plus, RefreshCw } from 'lucide-react-native'
+import { ExternalLink, MoreHorizontal, Plus, RefreshCw } from '../../components/icons/icon-set'
 import { botMembersFrom, slackMembersOf, type BotMember } from '../../../../src/shared/bot-types'
 import { ListRow } from '../../components/list/ListGroup'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
@@ -205,7 +205,7 @@ export function MobileBotSlackPage(props: {
           menu.length > 0 ? (
             <NavBarButton
               ref={menuAnchor}
-              icon={Ellipsis}
+              icon={MoreHorizontal}
               accessibilityLabel={t('bots.connector.actions', '{{name}} actions', {
                 name: BOT_CONNECTOR_NAMES.slack
               })}

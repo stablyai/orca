@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronDown, ShieldAlert, type LucideIcon } from 'lucide-react-native'
+import { ChevronDown, ShieldAlert } from '../../../../components/icons/icon-set'
+import type { MobileIcon } from '../../../../components/icons/mobile-icon'
 import { pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { COMPOSER_CONTROL_SIZE } from '../../../../components/composer-input/composer-input-styles'
 import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
@@ -56,9 +57,9 @@ export function ModelPill({
 }: {
   primary: string
   warning: boolean
-  icon?: LucideIcon
+  icon?: MobileIcon
   /** Shown before the label, unlike `icon`, which replaces it. */
-  leading?: LucideIcon
+  leading?: MobileIcon
   accessibleName: string
   disabled: boolean
   onPress: () => void
@@ -81,7 +82,6 @@ export function ModelPill({
         <PillIcon
           size={15}
           color={warning ? colors.statusAmber : disabled ? colors.textMuted : colors.textSecondary}
-          strokeWidth={2.2}
         />
       ) : null}
       {!Icon ? (
@@ -93,7 +93,7 @@ export function ModelPill({
           {primary}
         </Text>
       ) : null}
-      <ChevronDown size={14} color={colors.textMuted} strokeWidth={2.2} />
+      <ChevronDown size={14} color={colors.textMuted} />
     </Pressable>
   )
 }

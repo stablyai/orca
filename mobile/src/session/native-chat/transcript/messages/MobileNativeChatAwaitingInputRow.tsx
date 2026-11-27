@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native'
-import { MessageSquareMore } from 'lucide-react-native'
+import { MessageSquareMore } from '../../../../components/icons/icon-set'
 import type { NativeChatAskRowSubject } from '../../../../../../src/shared/native-chat/input/questions/native-chat-ask-row'
 import { nativeChatAskRowCopy } from './native-chat-ask-row-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -13,7 +13,7 @@ import { MobileNativeChatEventName, MobileNativeChatEventRow } from './MobileNat
 /** The chat's ask mark, shared by its asked and answered lines. */
 export function MobileNativeChatAskMark(): React.JSX.Element {
   const colors = useMobileColors()
-  return <MessageSquareMore size={14} color={colors.textMuted} strokeWidth={2} />
+  return <MessageSquareMore size={14} color={colors.textMuted} />
 }
 
 /** An ask as one status line, as the desktop's: "Asked:" or "Awaiting user input:" and the question,

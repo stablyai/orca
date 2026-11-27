@@ -16,9 +16,9 @@ import {
   LoaderCircle,
   MessageCircle,
   MoreHorizontal,
-  RotateCw,
-  type LucideIcon
-} from 'lucide-react-native'
+  RotateCw
+} from '../../../components/icons/icon-set'
+import type { MobileIcon } from '../../../components/icons/mobile-icon'
 import { MobileLoadErrorState, MobileStateView } from '../../../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
@@ -123,7 +123,7 @@ export function MobilePrTabBody({
           accessibilityRole="button"
           accessibilityLabel={t('components.prSidebar.retryLoading', 'Retry loading pull request')}
         >
-          <RotateCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
+          <RotateCw size={14} color={colors.textPrimary} />
           <Text style={sidebarStyles.retryText}>{t('common.retry', 'Retry')}</Text>
         </Pressable>
       </View>
@@ -245,7 +245,7 @@ function PrTabHeader({ data }: { data: PrSidebarData }) {
     <View style={styles.header}>
       <View style={styles.metaRow}>
         <View style={[styles.badge, { borderColor: badgeColor }]}>
-          <PrStateIcon state={pr.state} size={12} color={badgeColor} strokeWidth={2.2} />
+          <PrStateIcon state={pr.state} size={12} color={badgeColor} />
           <Text style={[styles.badgeText, { color: badgeColor }]}>{badge.label}</Text>
         </View>
         <Text style={styles.number}>#{pr.number}</Text>
@@ -263,7 +263,7 @@ function PrTabHeader({ data }: { data: PrSidebarData }) {
           <Text style={styles.ref} numberOfLines={1}>
             {headRef}
           </Text>
-          <ArrowRight size={12} color={colors.textMuted} strokeWidth={2.2} />
+          <ArrowRight size={12} color={colors.textMuted} />
           <Text style={styles.ref} numberOfLines={1}>
             {baseRef}
           </Text>
@@ -273,7 +273,7 @@ function PrTabHeader({ data }: { data: PrSidebarData }) {
   )
 }
 
-const GATE_ICON: Record<Exclude<PrGateTone, 'loading'>, LucideIcon> = {
+const GATE_ICON: Record<Exclude<PrGateTone, 'loading'>, MobileIcon> = {
   passed: CircleCheck,
   blocking: CircleX,
   waiting: CircleDashed,
@@ -299,7 +299,7 @@ function GateIcon({ row }: { row: PrGateRow }) {
         : row.tone === 'waiting'
           ? colors.statusAmber
           : colors.textMuted
-  return <Icon size={20} color={color} strokeWidth={2} />
+  return <Icon size={20} color={color} />
 }
 
 type SidebarProps = Omit<Parameters<typeof useMobilePrTab>[0], 'onOpenScreen'> & {

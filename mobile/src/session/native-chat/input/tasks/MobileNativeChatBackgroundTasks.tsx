@@ -15,7 +15,7 @@ import {
   CircleHelp,
   SquareTerminal,
   Workflow
-} from 'lucide-react-native'
+} from '../../../../components/icons/icon-set'
 import type { AgentChildRowModel } from '../../../../../../src/shared/agent-status/presentation/agent-child-row-model'
 import type { AgentSessionBackgroundTask } from '../../../../../../src/shared/agent-session/background-tasks/agent-session-background-task-wire'
 import { mobileBackgroundTaskSay } from './mobile-background-task-copy'
@@ -63,7 +63,7 @@ export function BackgroundTaskKindIcon({
   color?: string
 }): React.JSX.Element {
   const colors = useMobileColors()
-  const props = { size, color: color ?? kindIconColor(colors, kind), strokeWidth: 2 }
+  const props = { size, color: color ?? kindIconColor(colors, kind) }
   switch (kind) {
     case 'agent':
       return <Bot {...props} />
@@ -230,7 +230,7 @@ function MobileNativeChatBackgroundTasksImpl({
             ) : null}
           </View>
           <View style={expanded ? strip.caretOpen : undefined}>
-            <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} />
+            <ChevronDown size={14} color={colors.textMuted} />
           </View>
         </Pressable>
         {expanded ? (

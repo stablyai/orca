@@ -9,7 +9,7 @@ import {
   PencilRuler,
   Plus,
   Terminal
-} from 'lucide-react-native'
+} from '../../../../components/icons/icon-set'
 import { spacing } from '../../../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
@@ -88,7 +88,7 @@ export function MobileNativeChatComposerAttachButton({
         {isAttaching ? (
           <ActivityIndicator size="small" color={colors.textSecondary} />
         ) : (
-          <Plus size={19} color={colors.textPrimary} strokeWidth={2} />
+          <Plus size={19} color={colors.textPrimary} />
         )}
       </Pressable>
       {sheet ? (

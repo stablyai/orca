@@ -3,7 +3,7 @@ import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tas
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { TextField } from '../../components/composer-input/TextField'
-import { Search, AlertTriangle } from 'lucide-react-native'
+import { Search, TriangleAlert } from '../../components/icons/icon-set'
 import { pressedStyle } from '../../theme/mobile-theme'
 import {
   githubProjectIdentityKey as githubProjectKey,
@@ -148,7 +148,7 @@ export function renderMobileTasksGitHubProjectPickerBody(
 
       {githubProjectPartialFailures.length > 0 ? (
         <View style={styles.projectWarningBanner}>
-          <AlertTriangle size={15} color={colors.statusAmber} />
+          <TriangleAlert size={15} color={colors.statusAmber} />
           <View style={styles.projectWarningTextWrap}>
             <Text style={styles.projectWarningTitle}>
               {githubProjectPartialFailures.length === 1 &&

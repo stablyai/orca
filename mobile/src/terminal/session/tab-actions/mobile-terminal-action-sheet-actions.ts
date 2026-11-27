@@ -1,4 +1,4 @@
-import { Eraser, Monitor, Pencil, Smartphone, X } from 'lucide-react-native'
+import { Eraser, Monitor, Pencil, Smartphone, X } from '../../../components/icons/icon-set'
 import type { ActionSheetAction } from '../../../components/sheets/ActionSheetModal'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import type { MobileNativeChatTab } from '../../../session/native-chat/conversation/mobile-native-chat-eligibility'

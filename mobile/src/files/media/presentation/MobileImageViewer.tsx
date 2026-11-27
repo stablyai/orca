@@ -8,7 +8,7 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native'
-import { ChevronLeft, ChevronRight, X } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, X } from '../../../components/icons/icon-set'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
 import { feedback, radii, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
@@ -101,7 +101,7 @@ export function MobileImageViewer({
           accessibilityRole="button"
           accessibilityLabel={t('chat.nativeChatImageViewer.closeImage', 'Close image')}
         >
-          <X size={22} color={colors.textPrimary} strokeWidth={2} />
+          <X size={22} color={colors.textPrimary} />
         </Pressable>
         {Actions ? (
           <Actions
@@ -148,7 +148,7 @@ function StepButton({
       accessibilityLabel={label}
       accessibilityState={{ disabled: !onPress }}
     >
-      <Icon size={22} color={colors.textPrimary} strokeWidth={2} />
+      <Icon size={22} color={colors.textPrimary} />
     </Pressable>
   )
 }

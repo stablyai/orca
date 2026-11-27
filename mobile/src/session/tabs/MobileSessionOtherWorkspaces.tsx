@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Text } from 'react-native'
-import { FolderGit2 } from 'lucide-react-native'
+import { FolderGit2 } from '../../components/icons/icon-set'
 import { NavBarBadge } from '../../components/nav-bar/NavBarButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { spacing } from '../../theme/mobile-theme'
@@ -64,13 +64,7 @@ export function MobileSessionOtherWorkspaces({
         >
           <SidebarRowMark
             state={undefined}
-            mark={
-              <FolderGit2
-                size={SIDEBAR_MARK_SIZE - 2}
-                color={colors.textSecondary}
-                strokeWidth={2}
-              />
-            }
+            mark={<FolderGit2 size={SIDEBAR_MARK_SIZE - 2} color={colors.textSecondary} />}
           />
           <SidebarRowText title={row.name} unread={row.needsYou > 0}>
             {row.needsYou > 0 ? (

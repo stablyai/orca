@@ -1,4 +1,4 @@
-import { CalendarClock } from 'lucide-react-native'
+import { CalendarClock } from '../../components/icons/icon-set'
 import { Fragment, useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native'
 import Animated, { FadeIn } from 'react-native-reanimated'

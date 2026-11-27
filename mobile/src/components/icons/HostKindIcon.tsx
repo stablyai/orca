@@ -1,4 +1,4 @@
-import { Monitor, Server } from 'lucide-react-native'
+import { Monitor, Server } from './icon-set'
 import { isRemoteExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 

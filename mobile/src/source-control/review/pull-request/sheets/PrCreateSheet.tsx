@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Text, View } from 'react-native'
-import { ChevronsUpDown } from 'lucide-react-native'
+import { ChevronsUpDown } from '../../../../components/icons/icon-set'
 import { spacing } from '../../../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
@@ -369,7 +369,7 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
               key="base"
               title={t('pullRequest.createSheet.base', 'Base')}
               value={fields.base}
-              accessory={<ChevronsUpDown size={14} color={colors.textMuted} strokeWidth={2.2} />}
+              accessory={<ChevronsUpDown size={14} color={colors.textMuted} />}
               onPress={() => setPickingBase(true)}
               // Generated text describes the base it was asked about, so the base waits for it.
               disabled={creating || generating}

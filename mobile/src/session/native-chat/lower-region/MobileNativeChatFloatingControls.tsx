@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Easing, Platform, Pressable, View } from 'react-native'
-import { ArrowDown } from 'lucide-react-native'
+import { ArrowDown } from '../../../components/icons/icon-set'
 import { SHEET_CURVE } from '../../../components/motion/sheet-motion-values'
 import { useReducedMotionEnabled } from '../../../platform/accessibility/use-reduced-motion'
 import { feedback } from '../../../theme/mobile-theme'
@@ -65,7 +65,7 @@ export function MobileNativeChatFloatingControls({
             hitSlop={3}
             onPress={onJumpToTail}
           >
-            <ArrowDown size={18} color={colors.textPrimary} strokeWidth={2.2} />
+            <ArrowDown size={18} color={colors.textPrimary} />
           </Pressable>
         </Animated.View>
       </View>

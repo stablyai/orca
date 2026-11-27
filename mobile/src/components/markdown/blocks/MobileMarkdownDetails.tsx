@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Pressable, Text, View, type StyleProp, type TextStyle } from 'react-native'
-import { ChevronRight } from 'lucide-react-native'
+import { ChevronRight } from '../../icons/icon-set'
 import { DisclosureChevron } from '../../list/DisclosureChevron'
 import { stylesSheet } from '../mobile-markdown-styles'
 import { pressedStyle } from '../../../theme/mobile-theme'
@@ -31,7 +31,7 @@ export function MobileMarkdownDetails({
         accessibilityState={{ expanded }}
       >
         <DisclosureChevron expanded={expanded} collapsedDeg={0} expandedDeg={90}>
-          <ChevronRight size={14} color={colors.textSecondary} strokeWidth={2.2} />
+          <ChevronRight size={14} color={colors.textSecondary} />
         </DisclosureChevron>
         <Text style={[summaryStyle, styles.detailsSummaryText]}>{summary}</Text>
       </Pressable>

@@ -2,7 +2,7 @@
 // load at the end isn't a surprise; the address it lands on is pasted back here.
 import { useState, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { ArrowUpRight, Check, Copy } from 'lucide-react-native'
+import { ArrowUpRight, Check, Copy } from '../../components/icons/icon-set'
 import { ListRow } from '../../components/list/ListGroup'
 import { TextField } from '../../components/composer-input/TextField'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
@@ -20,7 +20,7 @@ export function StepNumber({ n, done = false }: { n: number; done?: boolean }) {
   return (
     <View style={[styles.number, done && styles.numberDone]}>
       {done ? (
-        <Check size={14} color={colors.bgBase} strokeWidth={3} />
+        <Check size={14} color={colors.bgBase} />
       ) : (
         <Text style={styles.numberText}>{n}</Text>
       )}

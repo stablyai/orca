@@ -3,14 +3,14 @@ import {
   BellRing,
   Bot,
   CircleDashed,
-  Edit3,
   Eye,
   EyeOff,
   Moon,
+  PencilLine,
   Pin,
   PinOff,
   Smartphone
-} from 'lucide-react-native'
+} from '../../components/icons/icon-set'
 import { DELEGATED_PHONE_SERVER_OFFER_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/pairing/delegated-phone-server-offer-contract'
 import { useServerOwnPairingRequest } from './server-own-pairing'
 import { BRIDGE_MAX_ROUTE_HREF_CHARS } from '../../mobile-web-shell/bridge/protocol/bridge-caps'
@@ -175,7 +175,7 @@ export function useWorkspaceRowMenuActions(args: {
       id: 'rename',
       group: 'change',
       label: t('hostScreen.hostScreenOverlays.rename', 'Rename'),
-      icon: Edit3,
+      icon: PencilLine,
       onPress: () => onRename(row)
     },
     ...serverOwnPairing,

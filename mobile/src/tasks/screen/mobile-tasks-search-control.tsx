@@ -1,5 +1,5 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
-import { Plus, SlidersHorizontal } from 'lucide-react-native'
+import { Plus, SlidersHorizontal } from '../../components/icons/icon-set'
 import { getTaskPresetQuery } from '../../../../src/shared/work-items/task-preset-query'
 import {
   getDefaultPresetForGitHubTaskKind,

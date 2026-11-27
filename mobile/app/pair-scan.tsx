@@ -19,7 +19,7 @@ import {
   ChevronLeft,
   CircleAlert,
   Clipboard as ClipboardIcon
-} from 'lucide-react-native'
+} from '../src/components/icons/icon-set'
 import { decodePairingUrl, parsePairingCode } from '../src/pairing/pairing'
 import { getPairingScanErrorMessage } from '../src/pairing/pairing-scan-error-message'
 import { takePastedPairingCode } from '../src/pairing/pasted-pairing-code'
@@ -362,7 +362,7 @@ export default function PairScanScreen() {
             onPress={() => setPasteVisible(true)}
             accessibilityRole="button"
           >
-            <ClipboardIcon size={17} color={CAMERA_INK} strokeWidth={2} />
+            <ClipboardIcon size={17} color={CAMERA_INK} />
             <Text style={styles.cameraPasteLabel}>{pasteAction.label}</Text>
           </Pressable>
         </View>

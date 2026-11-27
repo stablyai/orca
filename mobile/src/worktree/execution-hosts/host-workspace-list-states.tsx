@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native'
-import { CircleAlert, FolderTree, KeyRound, WifiOff } from 'lucide-react-native'
+import { CircleAlert, FolderTree, KeyRound, WifiOff } from '../../components/icons/icon-set'
 import { MobileNoMatchState, MobileStateView } from '../../components/feedback/MobileStateView'
 import { spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'

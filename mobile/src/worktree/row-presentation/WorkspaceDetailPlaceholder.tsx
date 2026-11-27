@@ -1,5 +1,5 @@
 import { View, Text } from 'react-native'
-import { SquareTerminal } from 'lucide-react-native'
+import { SquareTerminal } from '../../components/icons/icon-set'
 import { radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'

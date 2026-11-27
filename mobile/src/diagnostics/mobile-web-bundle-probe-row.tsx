@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
-import { Package } from 'lucide-react-native'
+import { Package } from '../components/icons/icon-set'
 import { loadHosts } from '../host-catalog/host-store'
 import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { troubleshootScreenStylesSheet } from './troubleshoot-screen-styles'

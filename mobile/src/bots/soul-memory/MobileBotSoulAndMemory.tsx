@@ -2,7 +2,7 @@
 // as the desktop's Memory panel.
 import { useState, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { MessageSquareText } from 'lucide-react-native'
+import { MessageSquareText } from '../../components/icons/icon-set'
 import type { BotMemoryFact } from '../../../../src/shared/bot-memory-lines'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
@@ -121,9 +121,7 @@ export function MobileBotSoulPage(
               {onAskInChat ? (
                 <SettingsSection>
                   <ListRow
-                    leading={
-                      <MessageSquareText size={18} color={colors.textPrimary} strokeWidth={2} />
-                    }
+                    leading={<MessageSquareText size={18} color={colors.textPrimary} />}
                     title={t('bots.soul.changeInChat', 'Change in chat')}
                     accessibilityRole="button"
                     onPress={() =>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { History, SlidersHorizontal } from 'lucide-react-native'
+import { History, SlidersHorizontal } from '../components/icons/icon-set'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { intlLocaleFor } from '../i18n/ui-intl-locale'
 import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'

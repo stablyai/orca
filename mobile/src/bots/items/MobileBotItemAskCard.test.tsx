@@ -22,7 +22,7 @@ vi.mock('react-native', () => ({
   Linking: { openURL: () => Promise.resolve() },
   Platform: { OS: 'ios', select: (o: Record<string, unknown>) => o.ios }
 }))
-vi.mock('lucide-react-native', () => ({ Check: 'Check', ChevronDown: 'ChevronDown', X: 'X' }))
+vi.mock('../../components/icons/mobile-icon', () => ({ mobileIcon: () => () => null }))
 vi.mock(
   '../../session/native-chat/transcript/message-content/MobileNativeChatQuestionText',
   async () => {

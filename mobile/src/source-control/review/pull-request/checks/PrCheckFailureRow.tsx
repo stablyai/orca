@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View, type HostInstance } from 'react-native'
 import {
-  Copy,
   CircleX,
+  Copy,
   ExternalLink,
   MoreHorizontal,
   Sparkles,
   SquareTerminal
-} from 'lucide-react-native'
+} from '../../../../components/icons/icon-set'
 import { pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
@@ -126,11 +126,7 @@ export function PrCheckFailureRow({
           accessibilityLabel={check.name}
         >
           <View style={styles.leading}>
-            <CircleX
-              size={20}
-              color={isCancelled ? colors.textSecondary : colors.statusRed}
-              strokeWidth={2}
-            />
+            <CircleX size={20} color={isCancelled ? colors.textSecondary : colors.statusRed} />
           </View>
           <View style={styles.titles}>
             <Text style={styles.title} numberOfLines={1}>
@@ -155,7 +151,7 @@ export function PrCheckFailureRow({
             name: check.name
           })}
         >
-          <MoreHorizontal size={18} color={colors.textSecondary} strokeWidth={2.2} />
+          <MoreHorizontal size={18} color={colors.textSecondary} />
         </Pressable>
       </View>
       {open ? (

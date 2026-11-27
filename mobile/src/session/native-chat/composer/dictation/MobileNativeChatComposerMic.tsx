@@ -88,12 +88,7 @@ export function MobileNativeChatComposerMic({
         swapKey={micProcessing ? 'processing' : micActive ? 'active' : 'idle'}
         icon
       >
-        <MobileDictationMicIcon
-          active={micActive}
-          processing={micProcessing}
-          micSize={19}
-          micStroke={2}
-        />
+        <MobileDictationMicIcon active={micActive} processing={micProcessing} micSize={19} />
       </MobileNativeChatControlSwap>
     </Pressable>
   )

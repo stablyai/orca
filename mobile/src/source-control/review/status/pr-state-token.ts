@@ -2,9 +2,9 @@ import {
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
-  GitPullRequestDraft,
-  type LucideIcon
-} from 'lucide-react-native'
+  GitPullRequestDraft
+} from '../../../components/icons/icon-set'
+import type { MobileIcon } from '../../../components/icons/mobile-icon'
 import type { MobileStatusToken } from '../pull-request/checks/pr-checks-presentation'
 
 // Share status tokens between workspace PR badge and sidebar to prevent color drift, matching desktop ReviewIcon.
@@ -23,7 +23,7 @@ export function prStateToken(state: string): MobileStatusToken {
 }
 
 // Glyph per state, like GitHub and desktop's getReviewStateIcon; open and unknown keep the plain PR glyph.
-export function prStateIcon(state: string): LucideIcon {
+export function prStateIcon(state: string): MobileIcon {
   switch (state.toLowerCase()) {
     case 'merged':
       return GitMerge

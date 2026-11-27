@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
-import { Code, Eye } from 'lucide-react-native'
+import { Code, Eye } from '../../../components/icons/icon-set'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
@@ -34,7 +34,7 @@ export function MobilePreviewSourceTabs({ mode, onModeChange, previewLabel, sour
         aria-selected={mode === 'preview'}
         accessibilityLabel={previewLabel}
       >
-        <Eye size={13} color={colors.textSecondary} strokeWidth={2.2} />
+        <Eye size={13} color={colors.textSecondary} />
         <Text style={styles.toggleText}>{t('components.htmlPreview.preview', 'Preview')}</Text>
       </Pressable>
       <Pressable
@@ -49,7 +49,7 @@ export function MobilePreviewSourceTabs({ mode, onModeChange, previewLabel, sour
         aria-selected={mode === 'source'}
         accessibilityLabel={sourceLabel}
       >
-        <Code size={13} color={colors.textSecondary} strokeWidth={2.2} />
+        <Code size={13} color={colors.textSecondary} />
         <Text style={styles.toggleText}>{t('components.htmlPreview.source', 'Source')}</Text>
       </Pressable>
     </View>

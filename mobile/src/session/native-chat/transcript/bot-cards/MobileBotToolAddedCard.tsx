@@ -2,7 +2,7 @@
 // Signing in opens the app's page in the phone's browser and finishes from the address it lands on, pasted here.
 import { useCallback, useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Copy, ExternalLink, Wrench } from 'lucide-react-native'
+import { Copy, ExternalLink, Wrench } from '../../../../components/icons/icon-set'
 import type { NativeChatBotCardValues } from '../../../../../../src/shared/native-chat/bot-cards/native-chat-bot-card-kind'
 import { botToolAddedCardView } from '../../../../../../src/shared/bots/bot-tool-added-card-view'
 import { botToolSubtitle, botToolTitle } from '../../../../../../src/shared/bots/bot-tool-labels'
@@ -114,7 +114,7 @@ export function MobileBotToolAddedCard({
   return (
     <View testID={`bot-tool-added-card:${tool.name}`}>
       <MobileNativeChatEventRow
-        icon={<Wrench size={14} color={colors.textMuted} strokeWidth={2} />}
+        icon={<Wrench size={14} color={colors.textMuted} />}
         label={[`${view.lead} ${title}`, ...view.after].join(' · ')}
         timestamp={timestamp}
         fontScale={fontScale}

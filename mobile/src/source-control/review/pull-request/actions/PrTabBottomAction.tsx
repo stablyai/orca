@@ -1,5 +1,6 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { GitMerge, GitPullRequest, Sparkles, type LucideIcon } from 'lucide-react-native'
+import { GitMerge, GitPullRequest, Sparkles } from '../../../../components/icons/icon-set'
+import type { MobileIcon } from '../../../../components/icons/mobile-icon'
 import { feedback, pressedStyle } from '../../../../theme/mobile-theme'
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -63,7 +64,7 @@ export function PrTabBottomAction({ tab, bottomInset }: { tab: MobilePrTab; bott
       <View style={footerStyle}>
         {errorLine}
         <View style={styles.mergedNote}>
-          <GitMerge size={16} color={colors.statusPurple} strokeWidth={2.2} />
+          <GitMerge size={16} color={colors.statusPurple} />
           <Text style={styles.reason}>
             {pr.baseRefName
               ? t('pullRequest.tab.mergedInto', 'Merged into {{base}}', { base: pr.baseRefName })
@@ -204,7 +205,7 @@ function ActionButton({
   grow = false
 }: {
   tone: Tone
-  icon?: LucideIcon
+  icon?: MobileIcon
   label: string
   onPress?: () => void
   disabled?: boolean
@@ -238,7 +239,7 @@ function ActionButton({
       {busy ? (
         <ActivityIndicator color={foreground} />
       ) : Icon ? (
-        <Icon size={17} color={foreground} strokeWidth={2.2} />
+        <Icon size={17} color={foreground} />
       ) : null}
       <Text
         style={[

@@ -1,5 +1,13 @@
 import { lazy, Suspense, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { Copy, CopyPlus, Edit3, FilePlus2, FolderPlus, Share, Trash2 } from 'lucide-react-native'
+import {
+  Copy,
+  CopyPlus,
+  FilePlus2,
+  FolderPlus,
+  PencilLine,
+  Share,
+  Trash2
+} from '../../components/icons/icon-set'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import {
   ActionSheetContent,
@@ -315,7 +323,7 @@ function RowActionsMenu({
           id: 'rename',
           group: 'change',
           label: t('files.fileExplorerRowActions.rename', 'Rename'),
-          icon: Edit3,
+          icon: PencilLine,
           onPress: () => onOpen({ kind: 'rename', node })
         },
         // Desktop duplicates files only.

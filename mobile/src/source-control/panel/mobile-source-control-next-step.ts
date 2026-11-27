@@ -8,7 +8,7 @@ import { presentPrMerge } from '../review/pull-request/actions/pr-actions-state'
 import type { MobileCreatePrAction } from '../review/creation/mobile-create-pr-action'
 import type { MobileSourceControlPrimaryAction } from '../workflows/mobile-source-control-primary-action'
 
-// String keys keep native lucide imports out of this module.
+// String keys keep native icon imports out of this module.
 export type MobileNextStepIcon =
   | 'push'
   | 'pull'

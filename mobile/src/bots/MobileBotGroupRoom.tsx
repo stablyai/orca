@@ -4,7 +4,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileBotGroupReader } from './MobileBotGroupTurns'
 import { useCallback, useMemo, useState } from 'react'
 import { Keyboard, Pressable, Text, View } from 'react-native'
-import { ChevronLeft, Ellipsis, ListChecks } from 'lucide-react-native'
+import { ChevronLeft, ListChecks, MoreHorizontal } from '../components/icons/icon-set'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useMobileSessionKeyboardLift } from '../terminal/session/input-controls/use-mobile-session-keyboard-lift'
 import { useRouteHandoff } from '../navigation/route-handoff'
@@ -221,7 +221,7 @@ export function MobileBotGroupRoom({
               />
             ) : null}
             <NavBarButton
-              icon={Ellipsis}
+              icon={MoreHorizontal}
               accessibilityLabel={t('bots.groups.groupActions', 'Group actions')}
               onPress={() => setMenu('actions')}
             />

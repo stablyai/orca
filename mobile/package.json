@@ -60,7 +60,6 @@
     "i18next": "26.7.2",
     "katex": "0.18.10",
     "lowlight": "^3.3.0",
-    "lucide-react-native": "^1.14.0",
     "markdown-it": "^14.3.3",
     "markdown-it-cjk-friendly": "^2.0.3",
     "markdown-it-footnote": "^4.0.0",

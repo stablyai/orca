@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide-react-native'
+import { ChevronRight } from '../components/icons/icon-set'
 import { Pressable, Text, View } from 'react-native'
 import { openAppMoveScreen, playStoreAvailable } from '../app-move/app-move-gate'
 import { isRetiredGithubAndroidApp } from '../app-update/app-update-runtime'

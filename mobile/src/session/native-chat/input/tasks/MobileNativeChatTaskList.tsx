@@ -1,5 +1,11 @@
 import { Pressable, Text, View } from 'react-native'
-import { ChevronRight, Circle, CircleCheck, CircleDot, ListChecks } from 'lucide-react-native'
+import {
+  ChevronRight,
+  Circle,
+  CircleCheck,
+  CircleDot,
+  ListChecks
+} from '../../../../components/icons/icon-set'
 import {
   diffNativeChatTaskLists,
   nativeChatCompletedTaskCount,
@@ -61,11 +67,7 @@ function TaskRow({
       })}
     >
       <View style={[styles.taskIcon, { height: toolType(fontScale).row.lineHeight }]}>
-        <Icon
-          size={14 * fontScale}
-          color={active ? colors.textPrimary : colors.textMuted}
-          strokeWidth={2}
-        />
+        <Icon size={14 * fontScale} color={active ? colors.textPrimary : colors.textMuted} />
       </View>
       <Text
         style={[
@@ -125,7 +127,7 @@ function FullList({
         accessibilityState={{ expanded: open }}
       >
         <View style={open ? styles.caretOpen : undefined}>
-          <ChevronRight size={14 * fontScale} color={colors.textMuted} strokeWidth={2} />
+          <ChevronRight size={14 * fontScale} color={colors.textMuted} />
         </View>
         <Text style={[styles.lineMeta, toolType(fontScale).meta]}>
           {nativeChatTaskListCopy(t).showAll}
@@ -166,7 +168,7 @@ export function MobileNativeChatTaskList({
   return (
     <View style={styles.taskCard}>
       <View style={styles.taskHeader} accessibilityLabel={copy.progress}>
-        <ListChecks size={15 * fontScale} color={colors.textMuted} strokeWidth={2} />
+        <ListChecks size={15 * fontScale} color={colors.textMuted} />
         <Text style={[styles.lineMeta, styles.taskTitle, type.meta]}>{copy.title}</Text>
         <Text style={[styles.lineMeta, type.meta]}>{`${completed}/${list.tasks.length}`}</Text>
       </View>

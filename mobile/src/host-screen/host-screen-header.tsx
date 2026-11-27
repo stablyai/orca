@@ -3,14 +3,14 @@ import { Pressable, Text, type HostInstance } from 'react-native'
 import {
   CalendarClock,
   ChevronLeft,
+  CircleUserRound,
   Link,
   List,
   MoreHorizontal,
   PanelLeftClose,
   Server,
-  SquareTerminal,
-  UserCircle
-} from 'lucide-react-native'
+  SquareTerminal
+} from '../components/icons/icon-set'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { hostDiagnosticsAction, hostEditAction } from '../host-list-action-sheet-actions'
 import { NavBar, NavBarSubtitleText } from '../components/nav-bar/NavBar'
@@ -174,7 +174,7 @@ export function HostScreenHeader({
     {
       id: 'accounts',
       label: t('hostScreen.hostScreenHeader.accounts', 'Accounts'),
-      icon: UserCircle,
+      icon: CircleUserRound,
       disabled: disconnected,
       closeBeforePress: true,
       onPress: () => actions.navigateFromHostList(`${hostPath}/accounts`)
