@@ -88,8 +88,15 @@ INSERT OR REPLACE INTO meta(key, value) VALUES ('${versionKey}', '1');
 const FILES_REPAIR_SQL =
   // Grok transcripts indexed before the synthetic-turn filter.
   filesRepairSql('grok_files_version', 'grok') +
+  // Grok transcripts whose prompt was cut by an İ before <user_query>.
+  filesRepairSql('grok_query_unicode_files_version', 'grok') +
   // Pi transcripts indexed before session_info names became titles.
-  filesRepairSql('pi_title_files_version', 'pi')
+  filesRepairSql('pi_title_files_version', 'pi') +
+  // CodeBuddy transcripts indexed before first-prompt titles were normalized.
+  filesRepairSql('codebuddy_title_files_version', 'codebuddy') +
+  // Pi and OMP transcripts indexed before thinking block text was searchable.
+  filesRepairSql('pi_thinking_files_version', 'pi') +
+  filesRepairSql('omp_thinking_files_version', 'omp')
 
 export function openSessionSearchDatabase(path: string): SyncDatabase {
   return openVersionedCacheDatabase(path, {

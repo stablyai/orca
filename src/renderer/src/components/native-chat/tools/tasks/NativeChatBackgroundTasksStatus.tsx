@@ -53,6 +53,8 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
   workerRows?: ReadonlyMap<string, WorkerDockRowView>
   workerIdentities?: readonly {
     id: string
+    /** Absent on an orchestration worker's identity. */
+    kind?: string
     state: WorkerDockRowView['state']
     changedAt: number | null
     settlement: string | null
@@ -207,7 +209,8 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
       onOpen={(row, opener) => {
         if (row.kind === 'worker') {
           props.onOpenWorker?.(row, opener)
-        } else if (row.kind === 'command' || row.settlement) {
+        } else if (row.kind !== 'agent' || row.settlement) {
+          // Only an agent's activity streams into the conversation, filed under the provider's id.
           props.onShowProviderDetails?.(row, opener)
         } else if (row.providerId) {
           props.onShowAgent?.(row.providerId)

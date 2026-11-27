@@ -1,6 +1,9 @@
 import { execFile } from 'node:child_process'
 import type { WebContents } from 'electron'
 import { BrowserError } from '../../browser-error'
+import { assertTeamAllowsBrowserUse } from '../../browser-team-policy'
+import { getActiveRpcCaller } from '../../../runtime/rpc/callers/active-call'
+import { isAgentRpcCaller } from '../../../runtime/rpc/callers/rpc-caller-identity'
 import {
   isCdpProxyRejectedError,
   isTabClosedTransportError,
@@ -73,6 +76,9 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
   protected assertCommandAdmission(): void {
     if (this.shutdownStarted) {
       throw new BrowserError('browser_owner_unavailable', 'Browser runtime is shutting down')
+    }
+    if (isAgentRpcCaller(getActiveRpcCaller())) {
+      assertTeamAllowsBrowserUse()
     }
   }
 

@@ -112,3 +112,65 @@ it.each(['agent', 'command'] as const)(
     }
   }
 )
+
+it('never keeps a failed foreground command, which only its transcript tool row shows', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'orca-provider-failure-'))
+  const db = new OrchestrationDb(join(directory, 'orchestration.db'))
+  const session = '22222222-2222-4222-8222-222222222222'
+  try {
+    const parent = makeStructuredAgentStatusSubject(
+      {
+        executionHostId: 'local',
+        wslDistro: null,
+        workspaceId: '/folder',
+        workspaceKind: 'folder'
+      },
+      session
+    )
+    const store = createAgentStatusStore({ epoch: 'provider-retention', mode: 'authority' })
+    store.applyMutation({ parent: { subject: parent } })
+    let identity = 0
+    const admission = createAgentChildWorkAdmission(store, {
+      mintChildWorkId: () => `child-${++identity}`
+    })
+    const sink = workerDockFailureSink(
+      {
+        publish: () => {},
+        forget: () => {},
+        publishChildWork: (_subject, evidence, provider) =>
+          reconcileAgentChildWorkEvidence({ store, admission, parent, evidence, provider })
+      },
+      { getOrchestrationDb: () => db }
+    )!
+    sink.publishChildWork!(
+      parent,
+      [
+        {
+          type: 'live',
+          observedAt: 100,
+          child: {
+            handle: { idKind: 'task_id', id: 'shell-fg', runId: 'run' },
+            kind: 'command',
+            residency: 'foreground',
+            state: 'working',
+            description: 'grep -r missing .',
+            stoppable: false
+          }
+        },
+        {
+          type: 'ended',
+          observedAt: 200,
+          handle: { idKind: 'task_id', id: 'shell-fg', runId: 'run' },
+          outcome: 'failed'
+        }
+      ],
+      'claude'
+    )
+    expect(
+      readWorkerDock(db, { party: `orca_session_id:${session}`, direction: 'around' }).identities
+    ).toEqual([])
+  } finally {
+    db.close()
+    rmSync(directory, { recursive: true, force: true })
+  }
+})

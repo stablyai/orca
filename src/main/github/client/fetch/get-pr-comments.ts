@@ -76,7 +76,9 @@ async function readPRComments(
         }
       }
 
-      let conversation: ReturnType<typeof parsePRConversationResponse> = { reviewComments: [] }
+      let conversation: Awaited<ReturnType<typeof parsePRConversationResponse>> = {
+        reviewComments: []
+      }
       if (threadsResult) {
         try {
           conversation = await readCompletePRConversation(
@@ -156,7 +158,7 @@ async function readPRComments(
               ),
               restViewer
             ])
-            const result = parseRestPRCommentPage(stdout, reviews, viewer)
+            const result = await parseRestPRCommentPage(stdout, reviews, viewer)
             const advanced = result.rawIds.some((id) => !rawIds.has(id))
             for (const id of result.rawIds) {
               rawIds.add(id)

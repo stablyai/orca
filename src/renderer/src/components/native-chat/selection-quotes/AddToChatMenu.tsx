@@ -1,4 +1,3 @@
-import { useSyncExternalStore } from 'react'
 import { Quote } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
@@ -12,12 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ReviewNotesSendMenuContent } from '@/components/editor/review-note-delivery/ReviewNotesSendMenuContent'
 import { preventAgentSendTargetOutsideDismiss } from '@/components/browser-pane/annotate/delivery/prevent-agent-send-target-outside-dismiss'
-import {
-  readPointMenu,
-  setPointMenu,
-  subscribePointMenu,
-  type AddToChatSource
-} from './add-to-chat-point-menu'
+import { setPointMenu, type OpenPointMenu, type AddToChatSource } from './add-to-chat-point-menu'
 
 /** The notes target list, adding the quote unsent to the chat or new agent the user picks. */
 function AddToChatTargets({ worktreeId, quote, launchSource }: AddToChatSource): React.JSX.Element {
@@ -52,11 +46,7 @@ export function AddToChatSubmenu(props: AddToChatSource): React.JSX.Element {
   )
 }
 
-export function AddToChatPointMenuHost(): React.JSX.Element | null {
-  const menu = useSyncExternalStore(subscribePointMenu, readPointMenu)
-  if (!menu) {
-    return null
-  }
+export function AddToChatPointMenu({ menu }: { menu: OpenPointMenu }): React.JSX.Element {
   return (
     <DropdownMenu
       // A new open replaces the old one in place rather than animating between points.

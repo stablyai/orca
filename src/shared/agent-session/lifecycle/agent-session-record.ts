@@ -37,6 +37,8 @@ import {
   type AgentSessionLaunchedAccount
 } from './accounts/agent-session-account-home'
 
+import type { AgentSessionRunPlacement } from './agent-session-run-placement'
+
 export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
 
 export type AgentSessionWorkspaceKind = 'git-worktree' | 'folder'
@@ -116,6 +118,9 @@ export type AgentSessionRecord = {
   accountHome: AgentSessionAccountHome
   /** Where the latest proven runtime actually launched; absent before any or from older hosts. */
   launchedAccount?: AgentSessionLaunchedAccount
+  /** Where the last run started (in this app or under which daemon start); read through
+   *  `agentSessionRunPlacement`, which drops a malformed one. */
+  lastRunPlacement?: AgentSessionRunPlacement
   /** Optional host-written construction observation; checked independently of record readability. */
   acquiredAccount?: unknown
   /** Initial launch directory in host path syntax. Floating sessions resume here; worktree/folder IDs resolve their durable location. */
@@ -259,6 +264,7 @@ function isAgentSessionDeathEvidence(value: unknown): value is AgentSessionDeath
     isBoundedString(evidence.detail, MAX_AGENT_SESSION_DEATH_DETAIL_CHARS) &&
     isNonNegativeSafeInteger(observedAt) &&
     (ownerFence === undefined || isNonNegativeSafeInteger(ownerFence)) &&
+    (evidence.resumeByMail === undefined || evidence.resumeByMail === true) &&
     (lastProvenAliveAt === undefined ||
       (isNonNegativeSafeInteger(lastProvenAliveAt) && lastProvenAliveAt <= observedAt)) &&
     (runtimeEnd === undefined || isBoundedString(runtimeEnd, MAX_ID_LENGTH))

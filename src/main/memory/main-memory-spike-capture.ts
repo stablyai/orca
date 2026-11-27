@@ -20,7 +20,8 @@ export const MAIN_MEMORY_SPIKE_MIN_INTERVAL_MS = 60 * 60_000
 const MB = 2 ** 20
 
 type Details = Record<string, CrashReportDetailValue>
-type Sample = { atMs: number; mb: number }
+/** Heap read with each sample, so a spike record carries the heap at its quiet baseline. */
+type Sample = { atMs: number; mb: number; heap: Details }
 
 /** Counts only, never names or paths. */
 export type MainMemorySpikeCounts = () => Record<string, number>
@@ -76,13 +77,14 @@ export function observeMainMemorySample(footprintMB: number, nowMs: number): voi
   ) {
     recent.shift()
   }
-  let baseline: Sample = { atMs: nowMs, mb: footprintMB }
-  for (const sample of recent) {
-    if (sample.mb < baseline.mb) {
-      baseline = sample
+  const sample: Sample = { atMs: nowMs, mb: footprintMB, heap: v8Heap() }
+  let baseline = sample
+  for (const prior of recent) {
+    if (prior.mb < baseline.mb) {
+      baseline = prior
     }
   }
-  recent.push({ atMs: nowMs, mb: footprintMB })
+  recent.push(sample)
   if (
     footprintMB - baseline.mb < MAIN_MEMORY_SPIKE_RISE_MB ||
     nowMs - lastCaptureAtMs < MAIN_MEMORY_SPIKE_MIN_INTERVAL_MS ||
@@ -94,7 +96,8 @@ export function observeMainMemorySample(footprintMB: number, nowMs: number): voi
   void captureMainMemorySpike({
     footprintMB,
     baselineMB: baseline.mb,
-    baselineAgeMs: nowMs - baseline.atMs
+    baselineAgeMs: nowMs - baseline.atMs,
+    baselineHeap: baseline.heap
   })
 }
 
@@ -102,13 +105,17 @@ async function captureMainMemorySpike(trigger: {
   footprintMB: number
   baselineMB: number
   baselineAgeMs: number
+  baselineHeap: Details
 }): Promise<void> {
   const span = startSpan('memory.main-spike', {
     attributes: {
       mainFootprintMB: trigger.footprintMB,
       baselineFootprintMB: trigger.baselineMB,
       riseMB: trigger.footprintMB - trigger.baselineMB,
-      baselineAgeMs: trigger.baselineAgeMs
+      baselineAgeMs: trigger.baselineAgeMs,
+      ...Object.fromEntries(
+        Object.entries(trigger.baselineHeap).map(([key, value]) => [`baseline_${key}`, value])
+      )
     }
   })
   const record = (attributes: Details): void => {

@@ -122,17 +122,25 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
     }
   }, [])
   useTitlebarControlFocusHandoff(controlsRef)
+  const {
+    titlebarLeftControlsRef,
+    leftTitlebarChromeLayout,
+    isFullScreen,
+    showSidebar,
+    showTitlebarAppName,
+    activeView
+  } = layout
 
   return (
     // Measure the whole row for tab-strip spacing. w-max prevents the collapsed w-0 wrapper shrinking Windows text to one glyph.
     <div
-      ref={layout.titlebarLeftControlsRef}
+      ref={titlebarLeftControlsRef}
       className={`flex h-full shrink-0 items-center${
-        layout.leftTitlebarChromeLayout.isFloating ? ' w-max' : ' w-full'
+        leftTitlebarChromeLayout.isFloating ? ' w-max' : ' w-full'
       }`}
     >
       <div className="flex h-full items-center">
-        {hasMacTrafficLights && !layout.isFullScreen ? (
+        {hasMacTrafficLights && !isFullScreen ? (
           <div className="titlebar-traffic-light-pad" />
         ) : hasCustomTitleBar ? (
           /* Replace native Windows/Linux chrome with logo and application-menu access. */
@@ -158,7 +166,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
         ) : (
           <div className="pl-2" />
         )}
-        {layout.showSidebar && !hasCustomTitleBar && layout.showTitlebarAppName && (
+        {showSidebar && !hasCustomTitleBar && showTitlebarAppName && (
           <ContextMenu>
             <ContextMenuTrigger asChild>
               <div className="titlebar-app-name" aria-label={t('auto.App.5096cbbc86', 'Orca')}>
@@ -176,7 +184,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
             </ContextMenuContent>
           </ContextMenu>
         )}
-        {layout.showSidebar && (
+        {showSidebar && (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -202,7 +210,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
         )}
       </div>
       {/* Show shared workspace/page history wherever its shortcut is available. */}
-      {shouldShowWorktreeHistoryControls(layout.activeView) && (
+      {shouldShowWorktreeHistoryControls(activeView) && (
         // Collapsed headers shrink-wrap, so ml-auto alone cannot leave a history-button gutter.
         <div className="ml-auto mr-3 flex items-center pl-2">
           <Tooltip>

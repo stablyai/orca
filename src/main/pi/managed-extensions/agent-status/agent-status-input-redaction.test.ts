@@ -3,9 +3,10 @@ import { createAgentStatusExtensionHarness } from './agent-status-extension-test
 
 async function postedInput(input: unknown, eventName = 'tool_call', kind: 'omp' | 'pi' = 'omp') {
   const harness = createAgentStatusExtensionHarness({ kind })
+  await harness.callHook('agent_start')
   await harness.callHook(eventName, { toolName: 'custom', input, args: input })
-  await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
-  return JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body)).payload.tool_input
+  await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+  return JSON.parse(String(harness.fetchMock.mock.calls[1]?.[1]?.body)).payload.tool_input
 }
 
 describe('generated status input redaction', () => {

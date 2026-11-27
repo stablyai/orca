@@ -222,8 +222,8 @@ export class StructuredAgentSessionHost {
   attach = this.entry.attach
   create = this.entry.create
 
-  /** Test-only barrier for streamed event writes. */
-  flushStreamedEvents = (id: string) => this.runtimeState.flushEventSink(id)
+  /** Barrier for streamed event writes; `landed` waits for admitted writes only (relay acks). */
+  flushStreamedEvents = (id: string, landed?: true) => this.runtimeState.flushEventSink(id, landed)
 
   /** Quit stops delivery and queued-card handover. */
   stopDelivery = () => {
@@ -270,7 +270,7 @@ export class StructuredAgentSessionHost {
 
   waitForSendSettlement = this.clientDelivery.waitForSendSettlement
 
-  private mutations = mutationWiring.structuredAgentSessionMutationDelegates(
+  readonly mutations = mutationWiring.structuredAgentSessionMutationDelegates(
     () => this.mutationContext(),
     () => this.attachContext()
   )

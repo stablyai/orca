@@ -13,6 +13,7 @@ export type FeatureWallSetupProgressInput = {
   settings: GlobalSettings | null
   featureInteractions: FeatureInteractionState
   hasConnectedTaskSource: boolean
+  browserUseBlocked?: boolean
   browserUseSkillInstalled: boolean
   computerUseBlocked?: boolean
   computerUseSkillInstalled: boolean
@@ -44,6 +45,7 @@ function countAvailableNonMainWorktrees(worktreesByRepo: Record<string, Worktree
 }
 
 export type AgentCapabilitiesState = {
+  browserUseBlocked?: boolean | undefined
   browserUseSkillInstalled: boolean
   computerUseBlocked?: boolean | undefined
   computerUseSkillInstalled: boolean
@@ -54,7 +56,7 @@ export type AgentCapabilitiesState = {
 
 export function isAgentCapabilitiesDone(state: AgentCapabilitiesState): boolean {
   return (
-    state.browserUseSkillInstalled &&
+    (state.browserUseBlocked || state.browserUseSkillInstalled) &&
     (state.computerUseBlocked ||
       (state.computerUseSkillInstalled &&
         (state.computerUseReady || state.computerUseUnavailable))) &&
