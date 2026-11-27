@@ -1,9 +1,13 @@
-// A watch released to a successor keeps routing until main confirms the unwatch, then routes what main handed back.
+// A folder watch released to a successor still routes main's late payloads for it, and asks main for what it had queued.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { FsChangedPayload } from '../../../../../../shared/file-watch/filesystem-change-event'
 import type { EditorExternalWatchTarget } from './editor-external-watch-targets'
-import type { HeldWatchRoots } from './editor-external-watch-local-roots'
+import {
+  localWatchRoot,
+  watchRootStatus,
+  type HeldWatchRoots
+} from './editor-external-watch-local-roots'
 import { SymlinkedTabFolderWatches } from './editor-external-watch-symlink-folders'
 import { selectLocalTabFoldersKey } from './editor-external-watch-tab-folders-key'
 
@@ -16,24 +20,22 @@ const target: EditorExternalWatchTarget = {
   runtimeEnvironmentId: null
 }
 
-let finishUnwatch: ((payload: FsChangedPayload | undefined) => void) | undefined
-let unwatchArgs: unknown[] = []
+/** What main still held for this window on the inner watch when it was released. */
+const queued: FsChangedPayload = {
+  worktreePath: INNER,
+  events: [{ kind: 'update', absolutePath: `${INNER}/file.md` }]
+}
 
 beforeEach(() => {
-  finishUnwatch = undefined
-  unwatchArgs = []
   vi.useFakeTimers()
   vi.stubGlobal('window', {
     api: {
       fs: {
         findSymlinkBelowRoot: async () => '/ws/linked',
         watchWorktree: async () => 'watching',
-        unwatchWorktree: (args: unknown) => {
-          unwatchArgs.push(args)
-          return new Promise((resolve) => {
-            finishUnwatch = resolve
-          })
-        }
+        // Why: main hands back only to a caller that asks for it.
+        unwatchWorktree: async (args: { worktreePath: string; handOver?: boolean }) =>
+          args.handOver === true && args.worktreePath === INNER ? queued : undefined
       }
     }
   })
@@ -67,14 +69,8 @@ it('routes what the released inner watch had queued, and its late payloads, to t
 
   folders.sync(tabsIn([OUTER, INNER]), [target], held)
   await vi.advanceTimersByTimeAsync(0)
-  expect(unwatchArgs).toEqual([{ worktreePath: INNER, connectionId: undefined, handOver: true }])
-  const payload: FsChangedPayload = {
-    worktreePath: INNER,
-    events: [{ kind: 'update', absolutePath: `${INNER}/file.md` }]
-  }
-  finishUnwatch?.(payload)
-  await vi.advanceTimersByTimeAsync(0)
-  expect(handedBack).toEqual([payload])
+  expect(watchRootStatus(held, localWatchRoot(INNER))).toBeUndefined()
+  expect(handedBack).toEqual([queued])
   // Why after the reply: main's last flush for the watch travels on another pipe and can land after it.
   expect(folders.targetsFor(INNER, undefined, held)).toEqual([target])
   folders.clear()

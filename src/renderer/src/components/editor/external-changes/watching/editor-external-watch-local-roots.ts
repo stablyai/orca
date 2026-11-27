@@ -132,12 +132,8 @@ export function releaseWatchRoot(
     return
   }
   roots.delete(key)
-  if (!onHandOver) {
-    void window.api.fs.unwatchWorktree(held.args)
-    return
-  }
-  void window.api.fs.unwatchWorktree({ ...held.args, handOver: true }).then(
-    (undelivered) => undelivered && onHandOver(undelivered),
+  void window.api.fs.unwatchWorktree({ ...held.args, handOver: onHandOver !== undefined }).then(
+    (undelivered) => undelivered && onHandOver?.(undelivered),
     // Why: a failed unwatch has nothing to hand over.
     () => undefined
   )

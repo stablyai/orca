@@ -5,7 +5,11 @@ import type {
   FsChangedPayload
 } from '../../../../shared/file-watch/filesystem-change-event'
 import { watchBatchFlushDelayMs } from '../../../../shared/file-watch/filesystem-watch-batch-window'
-import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
+import {
+  MAX_BATCHED_WATCHER_EVENTS,
+  queueWatcherEvents,
+  type WatcherEventBatchState
+} from './filesystem-watcher-event-batch'
 // Filter high-churn events at source; Explorer display filters only hide rows.
 import { buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
 import { WATCHER_IGNORE_DIRS } from '../../../../shared/file-watch/watcher-ignore-dirs'
@@ -205,11 +209,18 @@ export function undeliveredBatchPayload(root: WatchedRoot): FsChangedPayload | u
   if (cancelled || (events.length === 0 && !overflowed && !flushing)) {
     return undefined
   }
-  const raw = flushing ? [...flushing.events, ...events] : events
-  if (overflowed || flushing?.overflowed || raw.length > MAX_BATCHED_WATCHER_EVENTS) {
+  const pending: WatcherEventBatchState = {
+    events: flushing ? [...flushing.events] : events,
+    overflowed: overflowed || flushing?.overflowed === true
+  }
+  if (flushing) {
+    // Why the queue's rule: past the batch cap the merged hand-over is an overflow, as a flush of it would be.
+    queueWatcherEvents(pending, events)
+  }
+  if (pending.overflowed) {
     return overflowPayload(root)
   }
-  const coalesced = coalesceEvents(raw)
+  const coalesced = coalesceEvents(pending.events)
   // Why: a create then delete of one path cancels out, leaving nothing worth a renderer pass.
   if (coalesced.length === 0) {
     return undefined
