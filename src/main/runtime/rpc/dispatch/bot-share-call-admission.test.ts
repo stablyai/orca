@@ -382,12 +382,7 @@ describe('the share guard', () => {
   it('lists a teammate their own items by default and everyone’s when they ask, on the shared bot only', async () => {
     const store = BotItemsStore.open(':memory:')
     try {
-      const add = (
-        botId: string,
-        title: string,
-        actsForAccounts: string[] | null,
-        status: 'working' | 'needs_you' | 'done' = 'working'
-      ): string =>
+      const add = (botId: string, title: string, actsForAccounts: string[] | null): string =>
         store.add(
           {
             ownerBotId: botId,
@@ -395,7 +390,7 @@ describe('the share guard', () => {
             source: { kind: 'home', title: null },
             actsForAccounts,
             title,
-            status,
+            status: 'working',
             links: []
           },
           { kind: 'bot', botId, chatId: ids.alicesChat }
@@ -403,9 +398,16 @@ describe('the share guard', () => {
       add(SHARED.id, 'Alice’s', ['acct-alice'])
       const ownersUid = add(SHARED.id, 'The owner’s', null)
       add(SHARED.id, 'Bob’s', ['acct-bob'])
-      add(SHARED.id, 'Alice’s done', ['acct-alice'], 'done')
-      add(SHARED.id, 'The owner’s done', null, 'done')
-      add(SHARED.id, 'The owner’s ask', null, 'needs_you')
+      const set = (uid: string, status: 'needs_you' | 'done'): void => {
+        store.set(
+          uid,
+          { status, note: 'x' },
+          { kind: 'bot', botId: SHARED.id, chatId: ids.alicesChat }
+        )
+      }
+      set(add(SHARED.id, 'Alice’s done', ['acct-alice']), 'done')
+      set(add(SHARED.id, 'The owner’s done', null), 'done')
+      set(add(SHARED.id, 'The owner’s ask', null), 'needs_you')
       const otherBotsUid = add(OTHER.id, 'Another bot’s', ['acct-alice'])
       vi.spyOn(runtime.bots, 'assertEnabled').mockReturnValue(undefined)
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list and show handlers read only these two

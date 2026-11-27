@@ -87,7 +87,7 @@ export type BotItemsWhose = 'default' | 'everyone' | 'owner' | `person:${string}
  *  Everyone as its default, the bot's one whole read with no second read of the same rows. */
 export function botItemsWhoseOfPick(
   pick: BotChatPersonPick,
-  bot: Pick<Bot, 'shareViewer'>
+  bot: Pick<Bot, 'shares' | 'shareViewer'>
 ): BotItemsWhose {
   if (bot.shareViewer || pick.kind === 'everyone') {
     return 'default'
