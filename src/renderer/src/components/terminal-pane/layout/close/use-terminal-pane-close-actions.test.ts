@@ -114,4 +114,28 @@ describe('handleRequestClosePane', () => {
     )
     expect(manager.closePane).not.toHaveBeenCalled()
   })
+
+  it('confirms when the pane restarted while the probe was out', async () => {
+    let answer: (probes: PtyRunningWorkProbe[]) => void = () => {}
+    mocks.probePtyRunningWork.mockReturnValue(
+      new Promise<PtyRunningWorkProbe[]>((resolve) => {
+        answer = resolve
+      })
+    )
+    const { controller, manager } = makeController({ panes: 2 })
+    const { result } = renderHook(() => useTerminalPaneCloseActions(controller))
+
+    act(() => result.current.handleRequestClosePane(1))
+    // The answer below is about the PTY a restart has already replaced.
+    const replacement = Object.assign(Object.create(null), { getPtyId: () => 'pty-2' })
+    controller.paneTransportsRef.current.set(1, replacement)
+    await act(async () => {
+      answer(makeProbe('unverifiable', false))
+    })
+
+    expect(controller.setPendingCloseConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({ paneId: 1 })
+    )
+    expect(manager.closePane).not.toHaveBeenCalled()
+  })
 })
