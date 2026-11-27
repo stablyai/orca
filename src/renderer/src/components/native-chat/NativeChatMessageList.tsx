@@ -8,7 +8,7 @@ import { NativeChatNewRowsAnnouncement } from './viewport/new-rows/NativeChatNew
 import { useNativeChatNewRowsMarker } from './viewport/new-rows/native-chat-new-rows-marker'
 import { useNativeChatRowTypography } from './viewport/virtualization/use-native-chat-row-typography'
 import { useNativeChatShownRows } from './conversation/slots/use-native-chat-shown-rows'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { nativeChatShowsTurnDiffSummary } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
@@ -34,10 +34,10 @@ import type { NativeChatTimedRow } from './conversation/slots/native-chat-timed-
 import { useNativeChatTranscriptWindow } from './viewport/virtualization/use-native-chat-transcript-window'
 import { useNativeChatHistoryRetention } from './viewport/history/use-native-chat-history-retention'
 import { useNativeChatSubagentScope } from './subagents/use-native-chat-subagent-scope'
+import { useNativeChatExpandedTurns } from './messages/disclosure/use-native-chat-expanded-turns'
 import type { NativeChatSubagentView } from './subagents/native-chat-open-subagent'
 import type { StructuredAgentSubagentRoster } from '../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 import type { NativeChatTranscriptSlot } from './conversation/slots/native-chat-transcript-slots'
-import { toggleNativeChatExpandedKey } from './messages/disclosure/native-chat-expanded-keys'
 import {
   useNativeChatSideChatForkOffer,
   useNativeChatSideChatForkPointReport
@@ -97,9 +97,12 @@ export function NativeChatMessageList({
   runtimeContext,
   botHome,
   turnBot,
-  structuredAttachments = false
+  structuredAttachments = false,
+  conversationKey = ''
 }: {
   turnBot?: BotChatIdentity | null
+  /** Names the conversation a rewind or /clear replaced, so its view state never carries over. */
+  conversationKey?: string
   ref?: Parameters<typeof useNativeChatMessageListHandle>[0]
   session: NativeChatLiveSession
   structuredAttachments?: boolean
@@ -138,10 +141,8 @@ export function NativeChatMessageList({
   const receipts = useNativeChatQuestionReceipts(journalItems)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<string>>(new Set())
-  const toggleExpandedTurn = useCallback((turnKey: string) => {
-    setExpandedTurnIds((current) => toggleNativeChatExpandedKey(current, turnKey))
-  }, [])
+  const transcriptKey = `${session.agent}:${session.sessionId ?? ''}:${subagentView?.agentId ?? ''}:${conversationKey}`
+  const [expandedTurnIds, toggleExpandedTurn] = useNativeChatExpandedTurns(transcriptKey)
 
   const { hasMore, loadingEarlier, loadEarlier } = session
   const historyRetention = useNativeChatHistoryRetention({
@@ -251,7 +252,8 @@ export function NativeChatMessageList({
   const newRows = useNativeChatNewRowsMarker(
     slots,
     waitingSlots,
-    isVisible && session.readCurrent === true
+    isVisible && session.readCurrent === true,
+    transcriptKey
   )
   const transcriptWindow = useNativeChatTranscriptWindow({
     scrollRef,
@@ -304,12 +306,14 @@ export function NativeChatMessageList({
     request: navigationRequest,
     rail,
     slots,
+    waitingSlots,
     conversation,
     subagentRows,
     roster: subagentRoster,
     journalItems,
     subagentId,
     sessionKey: `${session.agent}:${session.sessionId}`,
+    transcriptKey,
     sessionId: session.sessionId,
     ready: session.readPhase === 'ready',
     isVisible,
@@ -319,6 +323,7 @@ export function NativeChatMessageList({
     scrollRef,
     scrollMessageToTop,
     readerLeavesEnd,
+    readerAtEnd,
     scrollToBottom
   })
   const { beginNavigation, jumpToLatest } = navigation
@@ -376,6 +381,7 @@ export function NativeChatMessageList({
             showJump={showJump}
             onJump={jumpToLatest}
             label={scope.regionLabel}
+            memoryKey={transcriptKey}
             overlays={
               <>
                 <NativeChatMessageRail

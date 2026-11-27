@@ -80,6 +80,7 @@ export function NativeChatStructuredAsyncQuestion({
     <NativeChatQuestionCard
       key={promptKey}
       prompt={prompt}
+      memoryKey={`async-question:${promptKey}`}
       isSubmitting={answerPending || (operation?.promptKey === promptKey && operationPending)}
       onAnswer={(selections) => {
         const current: PromptAnswerOperation = { promptKey, inFlight: true }

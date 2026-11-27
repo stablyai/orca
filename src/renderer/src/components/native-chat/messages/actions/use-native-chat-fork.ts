@@ -1,5 +1,6 @@
 import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { useNativeChatViewState } from '../../pane/ownership/native-chat-view-memory'
 import { useHostStructuredAgent } from '@/runtime/native-chat/agent-catalogs/use-host-structured-agent'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import {
@@ -105,14 +106,19 @@ export function useNativeChatFork(input: {
   })
   // Reserved at the click, before any await, so a second click never starts a second fork.
   const inFlight = useRef(false)
-  const [pendingItemId, setPendingItemId] = useState<string | null>(null)
+  // Kept with the chat tab: a view released mid-fork returns still waiting on it, so it can't start a second.
+  const [pendingItemId, setPendingItemId] = useNativeChatViewState<string | null>('fork-pending', null)
+  const pendingRef = useRef(pendingItemId)
+  useLayoutEffect(() => {
+    pendingRef.current = pendingItemId
+  })
   const request = useCallback(
     (
       throughItemId: string,
       side?: NativeChatSideChatRequest
     ): Promise<NativeChatForkOutcome | undefined> => {
       const { agent, sessionId, tabId, target, worktreeId } = latest.current
-      if (inFlight.current || !worktreeId || !isTuiAgent(agent)) {
+      if (inFlight.current || pendingRef.current !== null || !worktreeId || !isTuiAgent(agent)) {
         return Promise.resolve(undefined)
       }
       inFlight.current = true
@@ -147,7 +153,7 @@ export function useNativeChatFork(input: {
           setPendingItemId(null)
         })
     },
-    []
+    [setPendingItemId]
   )
   // The floor and inventory read no reply text, so they hold while a reply streams.
   const structure = rowsBesideStreamedText(input.items)
@@ -175,7 +181,7 @@ export function useNativeChatFork(input: {
     forkableRef.current = forkableItemIds
   }, [forkableItemIds])
   const forkLatest = useCallback((): NativeChatForkLatestOutcome => {
-    if (inFlight.current) {
+    if (inFlight.current || pendingRef.current !== null) {
       return 'pending'
     }
     const { items, contextFloor, epoch } = latest.current

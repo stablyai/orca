@@ -29,6 +29,8 @@ import { NativeChatUrlTarget, openUrlRequestPage } from './NativeChatUrlRequest'
 
 export type NativeChatApprovalCardProps = {
   approval: ChatApproval
+  /** Names this prompt within its chat tab, so a released chat returns with its detail as the reader left it. */
+  memoryKey?: string
   /** Deliver the option's transport-specific response token. */
   onChoose: (option: string) => void
   /** Cancel the active provider turn while this card owns the composer region. */
@@ -59,6 +61,7 @@ export type NativeChatApprovalCardProps = {
 /** PTY options are literal replies; structured options are journal ids. The first option is primary unless the options are neutral. */
 export function NativeChatApprovalCard({
   approval,
+  memoryKey,
   onChoose,
   onCancel,
   onCollapse,
@@ -110,7 +113,8 @@ export function NativeChatApprovalCard({
   } = useNativeChatApprovalQuietDetail(
     quiet ? (approval.detail ?? null) : null,
     approval.toolName,
-    approval.description
+    approval.description,
+    memoryKey
   )
   const hasContext = Boolean(
     countdown ||

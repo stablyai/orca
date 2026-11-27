@@ -1,4 +1,8 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  KEPT_PROMPT_VIEWS,
+  useNativeChatViewState
+} from '../pane/ownership/native-chat-view-memory'
 import { approvalDetailPreview } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
 import { readShellApprovalDetail } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-shell-detail'
 
@@ -6,7 +10,9 @@ import { readShellApprovalDetail } from '../../../../../shared/agent-session/req
 export function useNativeChatApprovalQuietDetail(
   detail: string | null,
   toolName: string | undefined,
-  description: string | undefined
+  description: string | undefined,
+  /** Names the prompt within its chat tab, so a released chat returns with its detail as the reader left it. */
+  memoryKey?: string
 ): {
   text: string | null
   otherArguments: string | null
@@ -16,7 +22,11 @@ export function useNativeChatApprovalQuietDetail(
   setOpen: (open: boolean) => void
   showsToggle: boolean
 } {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useNativeChatViewState(
+    memoryKey === undefined ? undefined : `approval-detail:${memoryKey}`,
+    false,
+    KEPT_PROMPT_VIEWS
+  )
   const [clamped, setClamped] = useState(false)
   const textRef = useRef<HTMLDivElement>(null)
   const otherArgumentsRef = useRef<HTMLDivElement>(null)
