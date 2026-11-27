@@ -1,15 +1,18 @@
 import { Text, View } from 'react-native'
 import type { ClaudeSessionStatus } from '../../../../../src/shared/native-chat/claude-session-status'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography, type MobilePalette } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import {
   viewClaudeSessionStatus,
   type ClaudeSessionStatusView
 } from './mobile-claude-session-status-view'
 
-function contextColor(tone: NonNullable<ClaudeSessionStatusView['context']>['tone']): string {
+function contextColor(
+  colors: MobilePalette,
+  tone: NonNullable<ClaudeSessionStatusView['context']>['tone']
+): string {
   switch (tone) {
     case 'crit':
       return colors.statusRed
@@ -20,7 +23,10 @@ function contextColor(tone: NonNullable<ClaudeSessionStatusView['context']>['ton
   }
 }
 
-function compactionColor(tone: ClaudeSessionStatusView['compactionTone']): string {
+function compactionColor(
+  colors: MobilePalette,
+  tone: ClaudeSessionStatusView['compactionTone']
+): string {
   switch (tone) {
     case 'crit':
       return colors.statusRed
@@ -37,14 +43,15 @@ export function MobileClaudeStatusRow({
 }: {
   status: ClaudeSessionStatus | null | undefined
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const view = status ? viewClaudeSessionStatus(status) : null
   if (!view) {
     return null
   }
   const { context } = view
-  const color = context ? contextColor(context.tone) : colors.textMuted
+  const color = context ? contextColor(colors, context.tone) : colors.textMuted
   return (
     <View style={styles.row} testID="native-chat-claude-session-status">
       {context?.percent != null ? (
@@ -70,7 +77,7 @@ export function MobileClaudeStatusRow({
         </Text>
       )}
       <Text style={styles.text}>·</Text>
-      <Text style={[styles.text, { color: compactionColor(view.compactionTone) }]}>
+      <Text style={[styles.text, { color: compactionColor(colors, view.compactionTone) }]}>
         {t('chat.claudeSessionStatus.compacted', 'compacted {{times}}×', {
           times: view.compactions
         })}
@@ -79,7 +86,7 @@ export function MobileClaudeStatusRow({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     flexDirection: 'row',
     flexWrap: 'wrap',

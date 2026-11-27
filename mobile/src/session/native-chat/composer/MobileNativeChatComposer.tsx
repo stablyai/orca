@@ -279,13 +279,13 @@ export function MobileNativeChatComposer({
         {orca.usageSheet}
         {goal.strip}
         {editSession ? null : <MobileNativeChatQuoteTab {...{ value, onChangeText, fieldRef }} />}
+        <MobileClaudeStatusRow status={sessionOptions?.controller.claudeSessionStatus} />
         <Animated.View style={[styles.bar, collapse.frame]} testID="native-chat-composer">
           <View
             style={[styles.barContent, collapsed && styles.barContentPill]}
             onLayout={collapse.onContentLayout}
           >
             {collapsed ? null : <MobileNativeChatContextLimitLine {...modes.context} />}
-            {collapsed ? null : <MobileClaudeStatusRow status={sessionOptions?.controller.claudeSessionStatus} />}
             <MobileNativeChatComposerAttachments
               images={attachments}
               files={files}
