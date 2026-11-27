@@ -27294,7 +27294,8 @@
       "replyingOn": "{{place}} に返信中",
       "waitingCount": "待機中のイベント：{{count}} 件",
       "waitingFor": "{{label}} を待機中",
-      "waitingForUntil": "{{label}} を待機中 · {{time}} まで"
+      "waitingForUntil": "{{label}} を待機中 · {{time}} まで",
+      "share": "共有…"
     },
     "items": {
       "view": {

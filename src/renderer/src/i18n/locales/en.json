@@ -27706,6 +27706,7 @@
       "waitingForUntil": "Waiting for {{label}} · until {{time}}",
       "waitingCount": "Waiting on {{count}} events",
       "settings": "Bot settings…",
+      "share": "Share…",
       "disconnected": "Disconnected",
       "connecting": "Connecting…",
       "runsOn": "Runs on {{host}}"

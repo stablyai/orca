@@ -28280,7 +28280,8 @@
       "markRead": "标记为已读",
       "markUnread": "标记为未读",
       "delete": "删除 bot",
-      "settings": "Bot 设置…"
+      "settings": "Bot 设置…",
+      "share": "共享…"
     },
     "panel": {
       "needYou_other": "{{count}} 个需要你",

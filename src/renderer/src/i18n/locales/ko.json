@@ -28096,7 +28096,8 @@
       "replyingOn": "{{place}}에 답변 중",
       "waitingCount": "대기 중인 이벤트: {{count}}개",
       "waitingFor": "{{label}} 대기 중",
-      "waitingForUntil": "{{label}} 대기 중 · {{time}}까지"
+      "waitingForUntil": "{{label}} 대기 중 · {{time}}까지",
+      "share": "공유…"
     },
     "items": {
       "view": {
