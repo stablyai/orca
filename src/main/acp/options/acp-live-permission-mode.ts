@@ -56,6 +56,22 @@ export function acpKeptModeTakesLive(
     : !session.launchArgsGrantFullAccess
 }
 
+// Mode writes asked and not yet answered or given up, per chat.
+const writesInFlight = new WeakMap<LivePermissionSession, number>()
+
+/** Only a fresh agent, or a live write first, runs `mode`. A kept agent that takes it live with
+ *  no write on its way goes through the transition, which writes it before the send; with one on
+ *  its way, the send waits for it (`acpPermissionWritesSettled`). */
+export function acpModeRequiresAcquisition(
+  session: LivePermissionSession,
+  mode: AgentChatPermissionChoice
+): boolean {
+  if (acpRunningPermission(session) === mode) {
+    return false
+  }
+  return !acpKeptModeTakesLive(session, mode) || (writesInFlight.get(session) ?? 0) === 0
+}
+
 /** Settles once every mode write already asked of this chat has been answered or given up. */
 export function acpPermissionWritesSettled(session: LivePermissionSession): Promise<void> {
   return modeWrites.get(session) ?? Promise.resolve()
@@ -75,9 +91,10 @@ export function applyAcpLivePermissionMode(
     }
     return Promise.resolve()
   }
-  const written = (modeWrites.get(session) ?? Promise.resolve()).then(() =>
-    writeAcpSessionMode(session, mode, bound.timeoutMs)
-  )
+  writesInFlight.set(session, (writesInFlight.get(session) ?? 0) + 1)
+  const written = (modeWrites.get(session) ?? Promise.resolve())
+    .then(() => writeAcpSessionMode(session, mode, bound.timeoutMs))
+    .finally(() => writesInFlight.set(session, (writesInFlight.get(session) ?? 1) - 1))
   modeWrites.set(
     session,
     written.catch(() => undefined)

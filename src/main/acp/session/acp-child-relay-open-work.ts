@@ -42,7 +42,8 @@ export async function acpChildKeptLaunchOutgrown(
   if (session?.spec.agent === 'omp') {
     return kept ? false : undefined
   }
-  if (kept?.freshOwed && session?.turns?.running === false) {
+  // Any idle kept agent: a tools change made since its reattach is compared once its replay is in.
+  if (kept && session?.turns?.running === false) {
     await kept.replaySettled()
   }
   return kept?.launchOutgrown
