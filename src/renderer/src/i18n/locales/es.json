@@ -15250,7 +15250,10 @@
             "operationResolve": "Resolver",
             "operationResolveLabel": "Resolver conflictos con IA",
             "operationMoreActions": "Más acciones",
-            "operationAbortConfirm": "Vuelve a seleccionar para abortar"
+            "operationAbortConfirm": "Vuelve a seleccionar para abortar",
+            "operationRunChangedTitle": "No se abortó nada",
+            "operationRunChangedDescription": "La operación cambió después de elegir Abortar. Revisa su estado actual e inténtalo de nuevo.",
+            "operationRunUnknown": "No se puede saber qué ejecución está en pausa, así que Abortar no está disponible aquí. Actualiza el control de código fuente o abórtala en una terminal."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",

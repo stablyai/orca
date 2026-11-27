@@ -15622,7 +15622,10 @@
             "operationResolve": "Résoudre",
             "operationResolveLabel": "Résoudre les conflits avec l'IA",
             "operationMoreActions": "Plus d'actions",
-            "operationAbortConfirm": "Sélectionnez à nouveau pour abandonner"
+            "operationAbortConfirm": "Sélectionnez à nouveau pour abandonner",
+            "operationRunChangedTitle": "Rien n'a été abandonné",
+            "operationRunChangedDescription": "L'opération a changé après le choix d'Abandonner. Vérifiez son état actuel et réessayez.",
+            "operationRunUnknown": "Impossible de savoir quelle exécution est en pause : Abandonner est désactivé ici. Actualisez le contrôle de code source ou abandonnez-la dans un terminal."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Impossible de démarrer l'agent sélectionné.",

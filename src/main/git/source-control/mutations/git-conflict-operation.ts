@@ -1,6 +1,9 @@
 import { access } from 'node:fs/promises'
 import * as path from 'node:path'
-import type { GitConflictOperation } from '../../../../shared/git/status/git-status-types'
+import type {
+  GitAbortOperationRequest,
+  GitConflictOperation
+} from '../../../../shared/git/status/git-status-types'
 
 import {
   type GitRuntimeOptions,
@@ -11,6 +14,7 @@ import { trackGitOperationWriters } from '../../command-runner/git-writer-lifeti
 import { runWithGitReadCacheInvalidation } from '../git-read-cache-invalidation'
 import { runWithGitWorktreeOperationLock } from '../../../../shared/git/worktrees/git-worktree-operation-lock'
 import { resolveGitDir } from '../resolve-git-dir'
+import { assertOperationRunIdentity } from './operation-run-identity'
 
 // HEAD detection races may yield unknown for one poll; rebase directories persist more reliably than REBASE_HEAD.
 export async function detectConflictOperation(
@@ -58,8 +62,10 @@ async function pathExists(target: string): Promise<boolean> {
 
 export async function abortMerge(
   worktreePath: string,
-  options: GitRuntimeOptions = {}
+  options: GitRuntimeOptions = {},
+  request: GitAbortOperationRequest = {}
 ): Promise<void> {
+  await assertOperationRunIdentity(worktreePath, 'merge', request.expectedRunIdentity, options)
   await runWithGitReadCacheInvalidation(() =>
     gitExecFileAsync(['merge', '--abort'], gitOptionsForWorktree(worktreePath, options))
   )
@@ -67,20 +73,24 @@ export async function abortMerge(
 
 export async function abortRebase(
   worktreePath: string,
-  options: GitRuntimeOptions = {}
+  options: GitRuntimeOptions = {},
+  request: GitAbortOperationRequest = {}
 ): Promise<void> {
   const lifetime = trackGitOperationWriters(options, true)
   // Queued Abort runs once in this worktree after any Orca operation already holding the lane.
   await runWithGitWorktreeOperationLock(
     worktreePath,
     options.signal,
-    () =>
-      runWithGitReadCacheInvalidation(() =>
+    async () => {
+      // Checked inside the lane, so no Orca operation can start a new run between check and abort.
+      await assertOperationRunIdentity(worktreePath, 'rebase', request.expectedRunIdentity, options)
+      return runWithGitReadCacheInvalidation(() =>
         gitExecFileAsync(['rebase', '--abort'], {
           ...gitOptionsForWorktree(worktreePath, lifetime.options),
           terminationBarrier: 'wait-for-posix-group'
         })
-      ),
+      )
+    },
     lifetime.waitForWriters
   )
 }
