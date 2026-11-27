@@ -3997,7 +3997,9 @@
       "count": "{{count}} running terminals",
       "count_one": "{{count}} running terminal",
       "count_other": "{{count}} running terminals"
-    }
+    },
+    "startupPromptMore_one": "({{count}} more)",
+    "startupPromptMore_other": "({{count}} more)"
   },
   "updates": {
     "failure": {

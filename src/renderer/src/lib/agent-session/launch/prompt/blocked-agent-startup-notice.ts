@@ -94,7 +94,7 @@ export async function copyStartupDraft(id: number): Promise<void> {
   }
   copyingDraft = true
   try {
-    await window.api.ui.writeClipboardText(prompt)
+    await window.api.ui.writeTerminalClipboardText(prompt)
   } catch {
     return
   } finally {
