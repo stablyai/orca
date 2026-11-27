@@ -5,7 +5,6 @@ import type { PersistedTrustedOrcaHooks } from '../../../../../shared/workspace-
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type {
   ActivityBarPosition,
-  TaskViewPresetId,
   TopLevelView,
   VisibleWorkspaceHostIds
 } from '../../../../../shared/ui-chrome/ui-chrome-types'
@@ -224,24 +223,6 @@ export function clampPetSize(
     return defaults.fallback
   }
   return Math.max(defaults.min, Math.min(defaults.max, Math.round(size)))
-}
-
-export function presetToQuery(presetId: TaskViewPresetId | null): string {
-  switch (presetId) {
-    case 'all':
-    case 'issues':
-      return 'is:issue is:open'
-    case 'my-issues':
-      return 'assignee:@me is:issue is:open'
-    case 'prs':
-      return 'is:pr is:open'
-    case 'review':
-      return 'review-requested:@me is:pr is:open'
-    case 'my-prs':
-      return 'author:@me is:pr is:open'
-    case null:
-      return 'is:issue is:open'
-  }
 }
 
 export function hydrateUnexpectedSignoutDismissal(
