@@ -330,14 +330,15 @@ function ReferencePeek({
         alignOffset={geometry?.alignOffset ?? 0}
         collisionPadding={PEEK_CARD_INSET}
         showArrow={false}
-        className={cn('overflow-hidden p-0', geometry ? 'max-w-none' : 'w-72')}
+        className={cn('overflow-hidden', geometry ? 'max-w-none' : 'w-72')}
         style={geometry ? { width: geometry.width } : undefined}
         // Why: pointer moves inside the portaled peek bubble to the card; keep its details card shut.
         data-activity-thread-control=""
       >
         <ul
           ref={listRef}
-          className="scrollbar-sleek flex max-h-42 flex-col overflow-x-hidden overflow-y-auto px-3 py-1.5"
+          // Why: the list spans the padded card so its scrollbar sits on the edge.
+          className="scrollbar-sleek -m-3 flex max-h-42 flex-col overflow-x-hidden overflow-y-auto p-3"
         >
           {ordered.map((item) => (
             <ReferencePeekRow key={getWorkspaceAttachmentKey(item)} item={item} details={details} />
