@@ -57,11 +57,11 @@ export function claudeLaunchToolsKey(
   return mcpServerSetKey(identities)
 }
 
-/** The kept agent launched with other MCP servers than `currentKey` names; one from a build that
- *  noted none had none only if the launch now has none. */
+/** The kept agent launched with other MCP servers than `currentKey` names; one whose note keys
+ *  none (an earlier build, or a key that couldn't be made) is unknown, so it is replaced once. */
 function claudeKeptToolsOutgrown(child: RelayedProviderChild, currentKey: string): boolean {
   const word = noteWords(child).find((each) => each.startsWith(TOOLS_NOTE))
-  return (word?.slice(TOOLS_NOTE.length) ?? 'none') !== currentKey
+  return word === undefined || word.slice(TOOLS_NOTE.length) !== currentKey
 }
 
 export type ClaudeKeptMode = {
