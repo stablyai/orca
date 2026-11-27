@@ -1,5 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
+import { runProcess } from '@orca/process-host'
 import { test } from '../../desktop/electron-fixtures/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from '../../desktop/renderer-probes/store'
 
@@ -25,8 +26,15 @@ async function renameByDoubleClick(page: Page, from: string, to: string): Promis
 }
 
 // Renaming shuts the details hover; dropping it instead would remount the title and end the rename.
-test('double-click renames the active new-style card', async ({ orcaPage }) => {
-  await renameByDoubleClick(orcaPage, 'main', 'renamed-active-card')
+test('double-click renames the active new-style card', async ({ orcaPage, testRepoPath }) => {
+  const branch = await runProcess({
+    program: 'git',
+    args: ['branch', '--show-current'],
+    cwd: testRepoPath
+  })
+  expect(branch.code).toBe(0)
+  expect(branch.stdout.trim()).not.toBe('')
+  await renameByDoubleClick(orcaPage, branch.stdout.trim(), 'renamed-active-card')
 })
 
 // The first click wakes a sleeping workspace; un-dimming it must not remount the title mid-rename.
