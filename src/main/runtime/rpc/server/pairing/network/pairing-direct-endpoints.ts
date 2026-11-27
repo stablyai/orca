@@ -1,8 +1,7 @@
-import { classifyRemotePairingHostname } from '../../../../../../shared/remote-runtime/pairing/remote-pairing-address'
-import { isPairingWildcardHostname } from '../../../../../../shared/network/pairing-url'
 import { resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
 import {
   getPairingNetworkInterfaces,
+  pinnedListenerAddress,
   type DefaultRouteInterfaceLookup
 } from './pairing-network-interfaces'
 import { getWindowsDefaultRouteInterfaceNames } from './windows-default-route-interfaces'
@@ -55,12 +54,9 @@ async function listDirectEndpoints(
   lookup: DefaultRouteInterfaceLookup
 ): Promise<string[]> {
   const boundHost = new URL(boundEndpoint).hostname.replace(/^\[|\]$/g, '')
-  if (classifyRemotePairingHostname(boundHost) === 'loopback') {
-    return []
-  }
-  if (!isPairingWildcardHostname(boundHost)) {
-    // A pinned interface bind answers only on its own address.
-    return [boundEndpoint]
+  const pinned = pinnedListenerAddress(boundHost)
+  if (pinned !== undefined) {
+    return pinned ? [boundEndpoint] : []
   }
   // Bridges stay listed (ranked last): the list says which addresses are still this host's, not which to pair.
   const interfaces = await getPairingNetworkInterfaces(boundHost, lookup)

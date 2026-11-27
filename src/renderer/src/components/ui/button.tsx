@@ -52,7 +52,7 @@ const buttonVariants = cva(
         'ghost-inset': `hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 transition-colors ${insetFocusRingClasses}`,
         // Keep icon states visible on muted fields, which share accent's light-theme fill.
         'muted-field-icon':
-          'text-muted-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:bg-foreground/[0.08] focus-visible:text-foreground aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground',
+          'text-muted-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:bg-foreground/[0.08] focus-visible:text-foreground aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground aria-pressed:bg-foreground/15 aria-pressed:text-foreground data-[active=true]:bg-foreground/15 data-[active=true]:text-foreground',
         // The head queued card's Steer: ghost, filled as the primary while the composer previews Steer queued.
         'queued-head-steer':
           'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:bg-primary [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:text-primary-foreground',

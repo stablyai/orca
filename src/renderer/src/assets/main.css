@@ -1620,6 +1620,17 @@ html.native-shell .app-layout {
   user-select: none;
 }
 
+/* Rail pages: titlebar and rail form one tray, so the page card's own border is the only seam and its rounded
+   corner meets plain tray. */
+[data-rail-page-active] .titlebar {
+  background: var(--worktree-sidebar);
+  border-bottom-color: transparent;
+}
+
+[data-rail-page-active] [data-app-rail-nav] {
+  border-right-color: transparent;
+}
+
 /* Reserve the same 36px baseline (4px drag strip + 32px tabs) for macOS traffic lights and sidebar chrome. */
 .titlebar-left {
   height: var(--app-header-height);

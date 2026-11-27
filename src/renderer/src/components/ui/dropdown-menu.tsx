@@ -100,7 +100,7 @@ function DropdownMenuContent({
               className={cn(
                 'z-[70] max-h-(--radix-dropdown-menu-content-available-height) min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek',
                 MENU_SURFACE_CLASS,
-                dropdownMenuContentVariants({ variant }),
+                dropdownMenuContentVariants({ density, variant }),
                 'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
                 className
               )}
@@ -201,9 +201,11 @@ function DropdownMenuRadioItem({
   className,
   children,
   density,
+  indicator = 'dot',
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.RadioItem> & {
   density?: MenuDensity
+  indicator?: 'dot' | 'check'
 }) {
   const rowDensity = useMenuDensity(density)
   return (
@@ -214,7 +216,11 @@ function DropdownMenuRadioItem({
     >
       <span className={MENU_ITEM_INDICATOR_CLASS}>
         <DropdownMenuPrimitive.ItemIndicator>
-          <CircleIcon className="size-2 fill-current" />
+          {indicator === 'check' ? (
+            <CheckIcon className="size-3.5" />
+          ) : (
+            <CircleIcon className="size-2 fill-current" />
+          )}
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}
@@ -320,15 +326,18 @@ function DropdownMenuSubTrigger({
 }
 
 const dropdownMenuContentVariants = cva('', {
-  variants: { variant: { default: '', picker: 'p-0' } },
-  defaultVariants: { variant: 'default' }
+  variants: {
+    density: { default: '', compact: '', comfortable: 'p-2' },
+    variant: { default: '', picker: 'p-0' }
+  },
+  defaultVariants: { density: 'default', variant: 'default' }
 })
 
 function DropdownMenuSubContent({
   className,
   portalContainer,
   style,
-  alignOffset = -5,
+  alignOffset,
   scrollable = false,
   variant = 'default',
   density,
@@ -344,6 +353,7 @@ function DropdownMenuSubContent({
   const pointerHighlight = useMenuPointerHighlight(props)
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(pointerHighlight.ref)
   const subDensity = useMenuDensity(density)
+  const resolvedAlignOffset = alignOffset ?? (subDensity === 'comfortable' ? -9 : -5)
   return (
     <PortalContainerContext value={container}>
       <DropdownMenuPrimitive.Portal container={container ?? undefined}>
@@ -353,12 +363,12 @@ function DropdownMenuSubContent({
               data-slot="dropdown-menu-sub-content"
               data-variant={variant}
               // Level the first submenu row with its trigger (border + padding).
-              alignOffset={alignOffset}
+              alignOffset={resolvedAlignOffset}
               className={cn(
                 'z-[70] min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden',
                 MENU_SURFACE_CLASS,
                 'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
-                dropdownMenuContentVariants({ variant }),
+                dropdownMenuContentVariants({ density: subDensity, variant }),
                 scrollable &&
                   'max-h-(--radix-dropdown-menu-content-available-height) overflow-x-hidden overflow-y-auto scrollbar-sleek',
                 className

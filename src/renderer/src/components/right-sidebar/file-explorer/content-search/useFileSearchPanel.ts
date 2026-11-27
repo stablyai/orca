@@ -13,6 +13,7 @@ import { cancelRevealFrame, openMatchResult } from './search-match-open'
 import type { SearchQueryRowProps } from './SearchQueryRow'
 import type { SearchFiltersProps } from './SearchFilters'
 import { useFileSearchRunner } from './useFileSearchRunner'
+import { useSearchFiltersDisclosure } from './use-search-filters-disclosure'
 
 const EMPTY_COLLAPSED_FILES = new Set<string>()
 
@@ -68,6 +69,11 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
   const seededInputSelectionRafRef = useRef<number | null>(null)
   const includeInputRef = useRef<HTMLInputElement>(null)
   const excludeInputRef = useRef<HTMLInputElement>(null)
+  const filtersDisclosure = useSearchFiltersDisclosure(
+    activeWorktreeId,
+    fileSearchIncludePattern,
+    fileSearchExcludePattern
+  )
 
   const updateActiveSearchState = useCallback(
     (updates: Partial<NonNullable<typeof searchState>>) => {
@@ -284,9 +290,11 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
       onToggleRegex: () => {
         updateActiveSearchState({ useRegex: !fileSearchUseRegex })
         rerunSearch()
-      }
+      },
+      ...filtersDisclosure.queryRow
     },
     filtersProps: {
+      ...filtersDisclosure.filters,
       includePattern: fileSearchIncludePattern,
       excludePattern: fileSearchExcludePattern,
       includeInputRef,

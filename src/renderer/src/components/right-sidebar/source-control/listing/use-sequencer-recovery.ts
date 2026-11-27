@@ -1,7 +1,6 @@
 import { refreshGitStatusForWorktree } from '../sync/git-status-refresh'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -31,7 +30,8 @@ async function runSequencerRecovery(run: () => Promise<void>, refresh: () => voi
   }
 }
 
-export function SequencerRecoveryControls({
+/** Continue/Abort for a paused cherry-pick or revert; abort asks first unless the caller already did. */
+export function useSequencerRecovery({
   worktreeId,
   operation,
   disabled
@@ -51,7 +51,7 @@ export function SequencerRecoveryControls({
       ? t('gitGraph.revert', 'Revert')
       : t('gitGraph.cherryPick', 'Cherry-pick')
   const confirm = useConfirmationDialog()
-  const [busy, setBusy] = useState(false)
+  const [busyAction, setBusyAction] = useState<'abort' | 'continue' | null>(null)
   const navigation = useRef(0)
   useEffect(() => {
     const invalidate = () => {
@@ -70,11 +70,18 @@ export function SequencerRecoveryControls({
       unsubscribe()
     }
   }, [])
-  const run = async (action: 'abort' | 'continue') => {
+  const run = async (action: 'abort' | 'continue', { confirmed = false } = {}) => {
     const copy = resolveWorktreeGitCopyNow(worktreeId)
     const target = copy?.transport
     const path = context.worktreePath
-    if (busy || disabled || !copy || !target || !path || context.activeWorktreeId !== worktreeId) {
+    if (
+      busyAction ||
+      disabled ||
+      !copy ||
+      !target ||
+      !path ||
+      context.activeWorktreeId !== worktreeId
+    ) {
       return
     }
     const generation = navigation.current
@@ -84,6 +91,7 @@ export function SequencerRecoveryControls({
       JSON.stringify(resolveWorktreeGitCopyNow(worktreeId)) === JSON.stringify(copy)
     if (
       action === 'abort' &&
+      !confirmed &&
       !(await confirm({
         title: t('gitGraph.abortOperationTitle', 'Abort {{operation}}?', {
           operation: operationLabel
@@ -100,7 +108,7 @@ export function SequencerRecoveryControls({
     ) {
       return
     }
-    setBusy(true)
+    setBusyAction(action)
     await runSequencerRecovery(
       async () => {
         try {
@@ -139,7 +147,7 @@ export function SequencerRecoveryControls({
         }
       },
       () => {
-        setBusy(false)
+        setBusyAction(null)
         const state = useAppStore.getState()
         if (shouldApply()) {
           void refreshGitStatusForWorktree({
@@ -157,28 +165,5 @@ export function SequencerRecoveryControls({
       }
     )
   }
-  return (
-    <div className="space-y-1.5">
-      {reason && <p className="text-xs text-muted-foreground">{reason}</p>}
-      <Button
-        className="h-7 w-full text-xs"
-        size="sm"
-        disabled={!supported || disabled || busy}
-        onClick={() => void run('continue')}
-      >
-        {t('gitGraph.continueOperation', 'Continue {{operation}}', {
-          operation: operationLabel
-        })}
-      </Button>
-      <Button
-        className="h-7 w-full text-xs"
-        size="sm"
-        variant="outline"
-        disabled={!supported || disabled || busy}
-        onClick={() => void run('abort')}
-      >
-        {t('gitGraph.abortOperation', 'Abort {{operation}}', { operation: operationLabel })}
-      </Button>
-    </div>
-  )
+  return { supported, reason, busyAction, run }
 }

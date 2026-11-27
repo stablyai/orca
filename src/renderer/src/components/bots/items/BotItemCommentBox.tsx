@@ -221,7 +221,9 @@ function BotItemCommentField({
     replyMark,
     onShowQuestion
   )
-  const layout = useBotItemCommentStacked(draft, field, reply.crowded)
+  const images = attachments.imageAttachments
+  const leads = !reply.quote && images.length + mentions.notices.length === 0
+  const layout = useBotItemCommentStacked(draft, field, reply.crowded, leads)
   const caretToEnd = useBotItemCommentBoxHandle(ref, {
     scopeKey,
     input: () => input.current,
@@ -229,7 +231,6 @@ function BotItemCommentField({
     reply,
     setDraft
   })
-  const images = attachments.imageAttachments
   // The thumbnails' order numbers their pills, as in chat.
   const imageRow = useMemo(() => images.map(({ id }) => id), [images])
   const pending = images.some((image) => image.pending) || attachments.pastedTextSaving

@@ -13,6 +13,7 @@ import { destroySystemTray } from '../../tray/system-tray'
 import { shutdownTelemetry } from '../../telemetry/client'
 import { shutdownObservability } from '../../observability/index'
 import { applyTeamPolicyBeforeQuit, isQuittingForUpdate } from '../../updater/updater-service'
+import { swapCompactedOrchestrationDbAtQuit } from '../../runtime/orchestration/db/maintenance/orchestration-db-compaction-quit'
 import { recordUpdaterLifecycle } from '../../updater/updater-lifecycle-diagnostics'
 import { stopTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
 import { installWindowAllClosedHandler } from './window-all-closed-quit-handler'
@@ -175,10 +176,21 @@ function installWillQuitHandler(): void {
         await shutdownTelemetry()
         await shutdownObservability()
       }
-    }).then(() => {
-      daemonDisconnectDone = true
-      app.quit()
     })
+      // Last: nothing can reach the orchestration database again. Renames only, capped. Desktop quits
+      // whose teardowns all fulfilled; not Windows updates, whose exit watchdog leaves no room for it.
+      .then(({ teardownsFulfilled }) =>
+        teardownsFulfilled &&
+        !state.isServeMode &&
+        !isDevParentShutdownRequested() &&
+        !(updateQuitInProgress && process.platform === 'win32')
+          ? swapCompactedOrchestrationDbAtQuit(state.core.runtime)
+          : undefined
+      )
+      .then(() => {
+        daemonDisconnectDone = true
+        app.quit()
+      })
   })
 }
 

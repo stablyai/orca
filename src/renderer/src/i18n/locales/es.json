@@ -14940,12 +14940,7 @@
             "keepFile": "Conservar archivo",
             "keepDeletion": "Mantener eliminación",
             "refreshAll": "Actualizar todo",
-            "rebaseConflictCount_one": "{{count}} conflicto",
-            "rebaseConflictCount_other": "{{count}} conflictos",
-            "rebaseConflictCount_many": "{{count}} conflictos",
-            "rebasePaused": "Rebase en pausa",
             "rebaseResolveConflictsFirst": "Resuelve primero los conflictos",
-            "rebaseAbort": "Abortar",
             "rebaseContinue": "Continuar",
             "continueRebasePausedAgain": "Rebase en pausa en el siguiente conflicto",
             "continueRebaseFailed": "Error al continuar el rebase",
@@ -14956,7 +14951,6 @@
             "rebaseStopMovedOn": "El rebase ya avanzó. Revisa el panel e inténtalo de nuevo.",
             "rebaseEmptyStep": "No hay nada que confirmar en este paso. Aborta el rebase o termínalo en una terminal.",
             "rebaseStepUnreadableShort": "Comprobación fallida",
-            "rebaseCheckAgain": "Comprobar de nuevo",
             "rebaseRetryInspect": "Reintentar",
             "rebaseRetryInspectLabel": "Volver a comprobar el paso del rebase",
             "rebaseStoppedFinishInTerminal": "Git pausó este paso. Termínalo en una terminal o aborta.",
@@ -14990,7 +14984,11 @@
             "scopeNoUncommitted": "No hay cambios sin confirmar.",
             "scopeCommitFiles": "Archivos",
             "gitGraphButton": "Grafo",
-            "compareLoadingAgainst": "Comparando con {{base}}"
+            "compareLoadingAgainst": "Comparando con {{base}}",
+            "operationResolve": "Resolver",
+            "operationResolveLabel": "Resolver conflictos con IA",
+            "operationMoreActions": "Más acciones",
+            "operationAbortConfirm": "Vuelve a seleccionar para abortar"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -15616,15 +15614,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "Fusionar conflictos",
-                    "7f3af87549": "Rebase de conflictos",
-                    "6a8e9ad490": "Conflictos selectos",
-                    "bdf8772106": "Conflictos",
-                    "edc2d82a2b": "Fusión en progreso",
-                    "5c3707aa44": "Rebase en progreso",
-                    "ffe53a1da6": "Selección en progreso",
-                    "35eb76d323": "Operación en curso",
-                    "completeMerge": "Completar fusión"
+                    "bdf8772106": "Conflictos"
                   }
                 }
               },
@@ -20255,7 +20245,10 @@
         "resumedMany_other": "Reanudados: {{count}} agentes",
         "needYou_one": "{{count}} te necesita",
         "needYou_many": "{{count}} te necesitan",
-        "needYou_other": "{{count}} te necesitan"
+        "needYou_other": "{{count}} te necesitan",
+        "resumedCount_one": "Reanudado: {{count}}",
+        "resumedCount_many": "Reanudados: {{count}}",
+        "resumedCount_other": "Reanudados: {{count}}"
       },
       "RunTargetCombobox": {
         "noWslDistros": "No se encontraron distribuciones WSL",
@@ -24082,10 +24075,11 @@
     },
     "clientHosted": {
       "preparationFailed": "No se pudo iniciar el navegador remoto en este escritorio. Comprueba la conexión emparejada y vuelve a intentarlo.",
-      "unavailableTitle": "Navegador alojado en el cliente no disponible",
-      "unavailableDescription": "Esta página no está disponible en este escritorio en este momento.",
-      "unavailableOtherDesktopDescription": "Esta página está abierta en otro escritorio.",
-      "unavailableHostOfflineDescription": "{{host}} está sin conexión. Esta página se volverá a cargar aquí cuando se reconecte.",
+      "runsOnServerTitle": "Esta pestaña se ejecuta en tu servidor",
+      "runsOnServerBody": "Ábrela allí para continuar.",
+      "details": "Detalles",
+      "noBrowserTitle": "No se puede abrir esta pestaña aquí",
+      "noBrowserBody": "Este servidor no tiene navegador.",
       "download": {
         "started": "Descargando {{filename}}…",
         "completed": "{{filename}} descargado",
@@ -24110,9 +24104,9 @@
       "reload": "Recargar"
     },
     "reopenOnServer": {
-      "action": "Reabrir en el servidor",
-      "pending": "Reabriendo…",
-      "caveat": "Esto abre una nueva página en el host remoto en la última dirección de esta página. El estado de sesión iniciada y otros estados transitorios pueden diferir, y una página que provenga del envío de un formulario se abrirá en blanco.",
+      "action": "Abrir en el servidor",
+      "pending": "Abriendo…",
+      "caveat": "Se abre en el servidor en la última dirección de esta página. El estado de inicio de sesión puede ser distinto.",
       "failed": "No se pudo abrir esta página en el host remoto. Comprueba la conexión y vuelve a intentarlo."
     },
     "deviceMove": {
@@ -25570,6 +25564,9 @@
         "planModelWithoutThinking": "El modelo «{{model}}» no admite un nivel de esfuerzo de razonamiento.",
         "planThinkingLevelInvalid": "El nivel de razonamiento «{{level}}» no es válido para {{model}}.",
         "openCodeInvalidEvents": "OpenCode devolvió eventos JSON no válidos.",
+        "antigravityInvalidEvents": "Antigravity devolvió eventos JSON no válidos.",
+        "antigravityInvalidResult": "Antigravity devolvió un resultado no válido.",
+        "antigravityNoFinalResult": "Antigravity no devolvió ningún resultado final.",
         "kimiUnreadableOutput": "Kimi devolvió una salida que Orca no pudo leer. Vuelve a intentarlo.",
         "kimiSessionOccupied": "Kimi no pudo usar esta sesión porque está activa en otro cliente. Detén la sesión allí o sal de ese cliente y vuelve a intentarlo.",
         "kimiInterrupted": "Kimi se interrumpió antes de terminar de generar texto. Vuelve a intentarlo.",
@@ -25766,7 +25763,9 @@
     "failed": "La búsqueda falló. Reintenta.",
     "filters": {
       "toggle": "Mostrar u ocultar detalles de búsqueda",
-      "active": "{{count}} activos"
+      "active": "{{count}} activos",
+      "includeSummary": "Incluir: {{patterns}}",
+      "excludeSummary": "Excluir: {{patterns}}"
     },
     "noResults": "No hay resultados. Prueba otra búsqueda o ajusta los filtros."
   },
@@ -27767,13 +27766,10 @@
     "loadFailed": "No se pudo cargar el historial de Git",
     "updateHost": "Actualiza Orca en {{host}} para abrir el grafo de Git",
     "title": "Grafo de Git",
-    "revertConflicts": "Conflictos de reversión",
-    "revertInProgress": "Reversión en curso",
     "abortOperationTitle": "¿Abortar {{operation}}?",
     "abortOperationDescription": "Esto cancela la operación en curso y puede descartar las resoluciones de conflictos realizadas durante ella.",
     "abortOperation": "Abortar {{operation}}",
     "recoveryFailed": "No se pudo finalizar la operación. Actualiza el control de código fuente e inténtalo de nuevo.",
-    "continueOperation": "Continuar {{operation}}",
     "reverting": "Revirtiendo",
     "updateActionsHost": "Actualiza Orca en {{host}} para realizar acciones sobre commits",
     "thisHost": "este host",
@@ -27933,15 +27929,11 @@
       "colorSlate": "Pizarra",
       "colorGraphite": "Grafito",
       "colorInk": "Tinta",
-      "noChatAgents": "No hay agentes de chat disponibles en este ordenador.",
-      "change": "Cambiar",
       "computer": "Ordenador",
-      "computerHint": "Dónde se ejecuta el bot.",
       "computerAccountHint": "Dónde se ejecuta el bot, con la sesión de Orca iniciada como {{account}}.",
       "useChatDefaults": "Usar los valores predeterminados del chat",
       "chatDefault": "Del chat",
       "agent": "Agente",
-      "folder": "Carpeta: {{path}}",
       "name": "Nombre",
       "validation": {
         "addName": "Añade un nombre",

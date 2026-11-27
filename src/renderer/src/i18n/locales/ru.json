@@ -460,10 +460,11 @@
     },
     "clientHosted": {
       "preparationFailed": "Не удалось запустить удалённый браузер на этом компьютере. Проверьте соединение с подключённым сервером и повторите попытку.",
-      "unavailableTitle": "Браузер на этом устройстве недоступен",
-      "unavailableDescription": "Эта страница сейчас недоступна на этом компьютере.",
-      "unavailableOtherDesktopDescription": "Эта страница открыта на другом компьютере.",
-      "unavailableHostOfflineDescription": "{{host}} не в сети. Страница перезагрузится здесь после восстановления подключения.",
+      "runsOnServerTitle": "Эта вкладка работает на вашем сервере",
+      "runsOnServerBody": "Откройте её там, чтобы продолжить.",
+      "details": "Подробнее",
+      "noBrowserTitle": "Эту вкладку нельзя открыть здесь",
+      "noBrowserBody": "На этом сервере нет браузера.",
       "download": {
         "started": "Загрузка {{filename}}…",
         "completed": "Загружено: {{filename}}",
@@ -488,9 +489,9 @@
       "reload": "Перезагрузить"
     },
     "reopenOnServer": {
-      "action": "Открыть заново на сервере",
-      "pending": "Повторное открытие…",
-      "caveat": "На удалённом сервере откроется новая страница по последнему адресу этой страницы. Статус входа в учётные записи и другие временные данные страницы могут отличаться. Страница, полученная после отправки формы, откроется пустой.",
+      "action": "Открыть на сервере",
+      "pending": "Открытие…",
+      "caveat": "Откроется на сервере по последнему адресу этой страницы. Состояние входа может отличаться.",
       "failed": "Не удалось открыть эту страницу на удалённом хосте. Проверьте соединение и попробуйте снова."
     },
     "deviceMove": {
@@ -16121,13 +16122,7 @@
             "keepFile": "Сохранить файл",
             "keepDeletion": "Сохранить удаление",
             "refreshAll": "Обновить всё",
-            "rebaseConflictCount_one": "{{count}} конфликт",
-            "rebaseConflictCount_few": "{{count}} конфликта",
-            "rebaseConflictCount_many": "{{count}} конфликтов",
-            "rebaseConflictCount_other": "{{count}} конфликта",
-            "rebasePaused": "Rebase приостановлен",
             "rebaseResolveConflictsFirst": "Сначала разрешите конфликты",
-            "rebaseAbort": "Прервать",
             "rebaseContinue": "Продолжить",
             "continueRebasePausedAgain": "Rebase приостановлен на следующем конфликте",
             "continueRebaseFailed": "Не удалось продолжить rebase",
@@ -16138,7 +16133,6 @@
             "rebaseStopMovedOn": "Rebase уже продвинулся дальше. Проверьте панель и повторите попытку.",
             "rebaseEmptyStep": "На этом шаге нечего коммитить. Прервите rebase или завершите его в терминале.",
             "rebaseStepUnreadableShort": "Проверка не удалась",
-            "rebaseCheckAgain": "Проверить снова",
             "rebaseRetryInspect": "Повторить",
             "rebaseRetryInspectLabel": "Повторно проверить шаг rebase",
             "rebaseStoppedFinishInTerminal": "Git приостановил этот шаг. Завершите его в терминале или прервите.",
@@ -16174,7 +16168,11 @@
             "scopeFileCount_many": "{{count}} файлов",
             "scopeCommitCount_few": "{{count}} коммита",
             "scopeCommitCount_many": "{{count}} коммитов",
-            "compareLoadingAgainst": "Сравнение с {{base}}"
+            "compareLoadingAgainst": "Сравнение с {{base}}",
+            "operationResolve": "Разрешить",
+            "operationResolveLabel": "Разрешить конфликты с ИИ",
+            "operationMoreActions": "Другие действия",
+            "operationAbortConfirm": "Выберите ещё раз, чтобы прервать"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Не удалось запустить выбранного агента.",
@@ -16809,15 +16807,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "Конфликты слияния",
-                    "7f3af87549": "Конфликты перебазирования",
-                    "6a8e9ad490": "Конфликты cherry-pick",
-                    "bdf8772106": "Конфликты",
-                    "edc2d82a2b": "Выполняется слияние",
-                    "5c3707aa44": "Выполняется перебазирование",
-                    "ffe53a1da6": "Выполняется cherry-pick",
-                    "35eb76d323": "Выполняется операция",
-                    "completeMerge": "Завершить слияние"
+                    "bdf8772106": "Конфликты"
                   }
                 }
               },
@@ -21534,7 +21524,11 @@
         "needYou_one": "{{count}} ждёт вас",
         "needYou_few": "{{count}} ждут вас",
         "needYou_many": "{{count}} ждут вас",
-        "needYou_other": "{{count}} ждут вас"
+        "needYou_other": "{{count}} ждут вас",
+        "resumedCount_one": "Продолжено: {{count}}",
+        "resumedCount_few": "Продолжено: {{count}}",
+        "resumedCount_many": "Продолжено: {{count}}",
+        "resumedCount_other": "Продолжено: {{count}}"
       },
       "RunTargetCombobox": {
         "noWslDistros": "Дистрибутивы WSL не найдены",
@@ -25814,6 +25808,9 @@
         "planModelWithoutThinking": "Модель «{{model}}» не поддерживает настройку глубины рассуждений.",
         "planThinkingLevelInvalid": "Глубина рассуждений «{{level}}» недопустима для {{model}}.",
         "openCodeInvalidEvents": "OpenCode вернул некорректные события JSON.",
+        "antigravityInvalidEvents": "Antigravity вернул некорректные события JSON.",
+        "antigravityInvalidResult": "Antigravity вернул некорректный результат.",
+        "antigravityNoFinalResult": "Antigravity не вернул итоговый результат.",
         "kimiUnreadableOutput": "Kimi вернул вывод, который Orca не удалось прочитать. Повторите попытку.",
         "kimiSessionOccupied": "Kimi не удалось использовать эту сессию, поскольку она активна в другом клиенте. Остановите сессию там или закройте тот клиент, затем повторите попытку.",
         "kimiInterrupted": "Kimi был прерван до завершения создания текста. Повторите попытку.",
@@ -26605,7 +26602,9 @@
     "failed": "Не удалось выполнить поиск. Попробуйте снова.",
     "filters": {
       "toggle": "Показать или скрыть параметры поиска",
-      "active": "Активных: {{count}}"
+      "active": "Активных: {{count}}",
+      "includeSummary": "Включить: {{patterns}}",
+      "excludeSummary": "Исключить: {{patterns}}"
     },
     "noResults": "Нет результатов. Попробуйте другой запрос или измените фильтры."
   },
@@ -28706,7 +28705,6 @@
       "hostNoBots": "Orca на {{host}} пока не может запускать ботов",
       "fromTemplate": "Шаблон",
       "agent": "Агент",
-      "change": "Изменить",
       "colorButter": "Сливочный",
       "colorGraphite": "Графитовый",
       "colorInk": "Чернильный",
@@ -28720,8 +28718,6 @@
       "colorWhite": "Белый",
       "computer": "Компьютер",
       "computerAccountHint": "Здесь работает бот. Вход в Orca выполнен как {{account}}.",
-      "computerHint": "Где работает бот.",
-      "folder": "Папка: {{path}}",
       "hostNeedsServer": "Нужен сервер Orca",
       "hostNeedsServerHint": "Чтобы запускать ботов, настройте сервер Orca на {{host}} в разделе Настройки → Удалённые серверы Orca.",
       "hostAs": "как {{account}}",
@@ -28729,7 +28725,6 @@
       "hostReconnecting": "Повторное подключение…",
       "hostUpdateAction": "Обновить",
       "title": "Новый бот",
-      "noChatAgents": "На этом компьютере нет доступных агентов для чата.",
       "pictureColor": "Цвет фона",
       "pictureColorCustom": "Свой цвет",
       "useChatDefaults": "Использовать настройки чата по умолчанию",
@@ -28752,11 +28747,8 @@
       "outfitScientist": "Учёный",
       "outfitParty": "Праздник",
       "outfitSecurity": "Охрана",
-      "runsOn": "Работает на <host/> с <agent/>",
-      "runsOnAs": "Работает на <host/> как <account/> с <agent/>",
       "usingChatDefault": "Используется ваша настройка чата по умолчанию. Фоновые запуски используют вашу настройку «Агенты».",
       "cancel": "Отмена",
-      "creating": "Создание…",
       "create": "Создать",
       "openFailed": "{{name}} создан, но пока не удалось его открыть.",
       "watches": "Отслеживает",
@@ -29814,10 +29806,8 @@
       "description": "Ваш новый бот прочитает старого и настроится сам.",
       "exportDescription": "Попросите старого бота сделать копию самого себя, затем передайте её новому боту.",
       "importedBefore": "{{bot}} создан на основе этого бота",
-      "neverCopied": "Ключи, токены и данные входа никогда не копируются; вы подключаете их заново здесь.",
       "back": "Назад",
       "update": "Обновить {{bot}}",
-      "create": "Создать {{name}}",
       "copyMessage": "Копировать сообщение",
       "dropHint": "Перетащите сюда или",
       "chooseFolder": "выберите папку…",
@@ -29826,27 +29816,16 @@
       "defaultProfile": "профиль по умолчанию",
       "profile": "профиль",
       "agent": "агент",
-      "looking": "Поиск на этом компьютере…",
       "noneFoundNote": "Боты не найдены в OpenClaw (~/.openclaw), Hermes (~/.hermes) или OpenBot.",
-      "otherApp": "Другое приложение…",
-      "otherAppNote": "Ваш старый бот сам скопирует свои файлы",
-      "addFolder": "Добавить его папку",
       "exportNotOnServer": "Папки экспорта с этого компьютера пока нельзя передать на {{host}}. Скопируйте папку на {{host}} или создайте бота здесь.",
-      "nameIt": "Назовите бота",
-      "oldBot": "Старый бот",
       "nameAnother": "Назовите нового бота",
-      "keysStay": "Ключи и данные входа не переносятся",
       "removePath": "Убрать {{name}}",
       "sendStep": "Отправьте старому боту это сообщение",
       "copied": "Скопировано",
       "seeMessage": "Показать сообщение",
       "addStep": "Добавьте созданную им папку",
       "replyLabel": "Его ответ",
-      "newBotLabel": "Новый бот",
-      "changePicture": "Сменить изображение",
-      "rowDetail": "{{app}} {{kind}}",
-      "bringOver": "Перенести",
-      "found": "Найдено: {{count}}"
+      "rowDetail": "{{app}} {{kind}}"
     },
     "section": {
       "scrollLeft": "Прокрутить влево · скрыто: {{amount}}",
@@ -31586,13 +31565,10 @@
     "loadFailed": "Не удалось загрузить историю Git",
     "updateHost": "Обновите Orca на {{host}}, чтобы открыть граф Git",
     "title": "Граф Git",
-    "revertConflicts": "Конфликты отмены коммита",
-    "revertInProgress": "Выполняется отмена коммита",
     "abortOperationTitle": "Прервать {{operation}}?",
     "abortOperationDescription": "Текущая операция будет отменена. Выполненные во время неё разрешения конфликтов могут быть потеряны.",
     "abortOperation": "Прервать {{operation}}",
     "recoveryFailed": "Не удалось завершить операцию. Обновите панель контроля версий и повторите попытку.",
-    "continueOperation": "Продолжить {{operation}}",
     "reverting": "Отмена коммита",
     "updateActionsHost": "Обновите Orca на {{host}}, чтобы выполнять действия с коммитами",
     "thisHost": "этом хосте",
