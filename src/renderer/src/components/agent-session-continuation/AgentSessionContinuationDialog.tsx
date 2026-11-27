@@ -13,14 +13,9 @@ import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-
 import { useAgentDetectionTargetForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { DialogCancel, DialogError } from '@/components/ui/dialog-parts'
 import {
   Select,
@@ -37,7 +32,10 @@ import {
   type AgentSessionContinuationContextMode,
   type AgentSessionContinuationRequest
 } from '../../../../shared/agent-session/conversation-context/agent-session-continuation'
-import { launchAgentSessionContinuation } from '@/lib/agent-session/launch/continuation/launch-agent-session-continuation'
+import {
+  launchAgentSessionContinuation,
+  supportsContinuationInterruptDestination
+} from '@/lib/agent-session/launch/continuation/launch-agent-session-continuation'
 import { useAppStore } from '@/store'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -45,11 +43,13 @@ import {
   chooseInitialContinuationAgent,
   isContinuationAgentAllowed
 } from './agent-session-continuation-selection'
+import { AgentSessionContinuationHeader } from './AgentSessionContinuationHeader'
 
 type AgentSessionContinuationDialogProps = {
   open: boolean
   request: AgentSessionContinuationRequest | null
   onOpenChange: (open: boolean) => void
+  interruptOriginal?: (signal: AbortSignal) => Promise<boolean>
   /** Fires after the new session launched, so a host can step aside for the new tab. */
   onStarted?: () => void
 }
@@ -60,6 +60,7 @@ export function AgentSessionContinuationDialog({
   open,
   request,
   onOpenChange,
+  interruptOriginal,
   onStarted
 }: AgentSessionContinuationDialogProps): React.JSX.Element {
   const t = useTranslate()
@@ -67,6 +68,7 @@ export function AgentSessionContinuationDialog({
   const abortRef = useRef<AbortController | null>(null)
   const agentFieldRef = useRef<HTMLDivElement>(null)
   const contextLabelId = useId()
+  const interruptLabelId = useId()
   const settings = useAppStore((state) => state.settings)
   const [pick, setPick] = useState<{
     request: AgentSessionContinuationRequest | null
@@ -83,7 +85,9 @@ export function AgentSessionContinuationDialog({
   // One start's own token: a closed or reopened dialog no longer waits on a start it left behind.
   const [startingFor, setStartingFor] = useState<{
     request: AgentSessionContinuationRequest
+    interruptAbort?: AbortController
   } | null>(null)
+  const [interruptFor, setInterruptFor] = useState<AgentSessionContinuationRequest | null>(null)
   if (!open) {
     if (pick) {
       setPick(null)
@@ -93,6 +97,9 @@ export function AgentSessionContinuationDialog({
     }
     if (startingFor) {
       setStartingFor(null)
+    }
+    if (interruptFor) {
+      setInterruptFor(null)
     }
   }
   const contextMode = contextPick?.request === request ? contextPick.mode : 'focused'
@@ -178,6 +185,8 @@ export function AgentSessionContinuationDialog({
       defaultAgent: settings?.defaultTuiAgent
     })
   const selection = observation.selectionFor(selectedAgent, currentPick?.surface)
+  const canInterruptOriginal =
+    Boolean(interruptOriginal) && supportsContinuationInterruptDestination(selection.choice)
 
   useEffect(() => {
     if (!starting) {
@@ -204,7 +213,9 @@ export function AgentSessionContinuationDialog({
     if (!prompt) {
       return
     }
-    const start = { request }
+    const interruptAbort =
+      canInterruptOriginal && interruptFor === request ? new AbortController() : undefined
+    const start = { request, interruptAbort }
     // Aborts when the dialog closes or moves to another request; a sent launch still settles.
     const signal = abortRef.current?.signal
     setStartingFor(start)
@@ -226,6 +237,9 @@ export function AgentSessionContinuationDialog({
           )
         : {}),
       launchSource: request.launchSource,
+      ...(interruptAbort && interruptOriginal
+        ? { interruptOriginal: { signal: interruptAbort.signal, run: interruptOriginal } }
+        : {}),
       signal
     })
     setStartingFor((current) => (current === start ? null : current))
@@ -242,9 +256,6 @@ export function AgentSessionContinuationDialog({
     : null
   const startDisabled =
     controlsDisabled || agents.length === 0 || !selectedAgent || !selection.ready
-  const sourceLabel =
-    sourceName || t('components.agentSessionContinuation.untitledSession', 'Current session')
-
   const agentStatus = preparing
     ? t('components.agentSessionContinuation.preparingContext', 'Preparing saved chat context…')
     : detecting
@@ -266,7 +277,15 @@ export function AgentSessionContinuationDialog({
         : null
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          startingFor?.interruptAbort?.abort()
+        }
+        onOpenChange(nextOpen)
+      }}
+    >
       <DialogContent
         size="form"
         onOpenAutoFocus={(event) => {
@@ -275,27 +294,11 @@ export function AgentSessionContinuationDialog({
           ;(field?.querySelector<HTMLButtonElement>('button:not(:disabled)') ?? field)?.focus()
         }}
       >
-        <DialogHeader>
-          <DialogTitle>
-            {t(
-              'components.agentSessionContinuation.dialogTitleSentence',
-              'Hand off to another agent'
-            )}
-          </DialogTitle>
-          <DialogDescription size="compact">
-            {sourceAgentLabel
-              ? t(
-                  'components.agentSessionContinuation.metaWithAgent',
-                  'From {{agent}} · {{session}} · original stays unchanged',
-                  { agent: sourceAgentLabel, session: sourceLabel }
-                )
-              : t(
-                  'components.agentSessionContinuation.meta',
-                  '{{session}} · original stays unchanged',
-                  { session: sourceLabel }
-                )}
-          </DialogDescription>
-        </DialogHeader>
+        <AgentSessionContinuationHeader
+          sourceName={sourceName}
+          sourceAgentLabel={sourceAgentLabel}
+          canInterruptOriginal={canInterruptOriginal}
+        />
 
         <div
           className="grid min-w-0 gap-1.5 outline-none"
@@ -368,6 +371,23 @@ export function AgentSessionContinuationDialog({
             </p>
           ) : null}
         </div>
+
+        {canInterruptOriginal ? (
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id={interruptLabelId}
+              checked={interruptFor === request}
+              disabled={controlsDisabled}
+              onCheckedChange={(checked) => setInterruptFor(checked === true ? request : null)}
+            />
+            <Label htmlFor={interruptLabelId} variant="dialog-muted">
+              {t(
+                'components.agentSessionContinuation.interruptOriginal',
+                'Interrupt original agent after handoff'
+              )}
+            </Label>
+          </div>
+        ) : null}
 
         <DialogFooter>
           <DialogCancel>{t('components.native-chat.question.cancel', 'Cancel')}</DialogCancel>

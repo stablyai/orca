@@ -17,7 +17,7 @@ import type { CloseTerminalDialogCopyKind } from '../layout/close/CloseTerminalD
 import type { TerminalLinkActionRequest } from '../links/terminal-link-action-request'
 import { closeLinkActionRequest as closeTerminalLinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { PreparedAgentSessionFork } from '../session-fork/terminal-agent-session-fork'
-import type { AgentSessionContinuationRequest } from '../../../../../shared/agent-session/conversation-context/agent-session-continuation'
+import type { PreparedTerminalAgentSessionContinuation } from '../session-continuation/terminal-agent-session-continuation'
 import { createTerminalQuickCommandDraft } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { useDaemonActions } from '@/components/shared/useDaemonActions'
 import { useMobileOverlayTicks } from '../mobile-driver/use-mobile-overlay-ticks'
@@ -137,7 +137,7 @@ export function useTerminalPaneFoundation(props: TerminalPaneProps) {
   const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
   const [agentSessionFork, setAgentSessionFork] = useState<PreparedAgentSessionFork | null>(null)
   const [agentSessionContinuation, setAgentSessionContinuation] =
-    useState<AgentSessionContinuationRequest | null>(null)
+    useState<PreparedTerminalAgentSessionContinuation | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
   const [terminalErrorsByPaneId, setTerminalErrorsByPaneId] = useState<TerminalErrorsByPaneId>({})
   const [paneProcessExitsByPaneId, setPaneProcessExitsByPaneId] = useState<

@@ -24,6 +24,8 @@ import { translate } from '@/i18n/i18n'
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import { workspaceNavigationToastAction } from '@/lib/workspace/activation/workspace-navigation-toast-action'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
+import { waitForTerminalHandoffSubmission } from './terminal-handoff-submission'
 
 type LaunchAgentSessionContinuationArgs = {
   agent: TuiAgent
@@ -34,6 +36,7 @@ type LaunchAgentSessionContinuationArgs = {
   launchChoice?: AgentLaunchChoice
   launchSource: LaunchSource
   signal?: AbortSignal
+  interruptOriginal?: { signal: AbortSignal; run: (signal: AbortSignal) => Promise<boolean> }
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>
   agentArgs?: string | null
@@ -45,6 +48,14 @@ export function detectAgentSessionContinuationAgents(worktreeId: string, signal?
     worktreeLaunchWorkspace(worktreeId),
     () => ensureDetectedAgentsForWorktree(useAppStore.getState(), worktreeId),
     signal
+  )
+}
+
+export function supportsContinuationInterruptDestination(choice?: AgentLaunchChoice): boolean {
+  return (
+    choice?.executionHostId === LOCAL_EXECUTION_HOST_ID &&
+    choice.agent !== 'claude' &&
+    (choice.route === 'structured-native-chat' || choice.agent === 'codex')
   )
 }
 
@@ -106,6 +117,7 @@ export async function launchAgentSessionContinuation({
   launchChoice,
   launchSource,
   signal,
+  interruptOriginal,
   sessionOptions,
   chatSessionOptions,
   agentArgs
@@ -174,6 +186,14 @@ export async function launchAgentSessionContinuation({
   const workspace = state.getKnownWorktreeById(worktreeId, executionHostId)
   const workspaceName =
     (workspace && resolveWorktreeDisplayName(workspace)) || initialCwd || worktreeId
+  const interrupt = supportsContinuationInterruptDestination({
+    agent,
+    route: plan.route,
+    executionHostId
+  })
+    ? interruptOriginal
+    : undefined
+  const startedAt = Date.now()
   const result = launchAgentInNewTabWithOutcome({ ...delivery, agentSessionLaunchPlan: plan })
   if (!result || 'refused' in result) {
     return false
@@ -199,7 +219,70 @@ export async function launchAgentSessionContinuation({
         notifyDeliveryFailed(label, prompt)
       })
   }
+  if (interrupt) {
+    // The new session can activate before delivery settles and unmount the dialog.
+    const observation = new AbortController()
+    const tabId = result.surface.kind === 'local-terminal' ? result.surface.tabId : null
+    const terminal = plan.route === 'terminal-tui' ? result.terminalPromptTarget : undefined
+    const submitted =
+      tabId && terminal
+        ? terminal.started
+            .then((ptyId) =>
+              ptyId
+                ? waitForTerminalHandoffSubmission({
+                    tabId,
+                    leafId: terminal.leafId,
+                    ptyId,
+                    startedAt,
+                    prompt,
+                    signal: AbortSignal.any([observation.signal, interrupt.signal])
+                  })
+                : false
+            )
+            .catch(() => false)
+        : null
+    void (async () => {
+      const receipt = await result.promptDeliveryResult
+      if (
+        interrupt.signal.aborted ||
+        !receipt?.delivered ||
+        receipt.unconfirmed ||
+        deliveryUnconfirmed
+      ) {
+        return
+      }
+      const settlement = await result.structuredSettlement
+      const opening =
+        settlement?.kind === 'structured' ? await settlement.promptDeliveryResult : null
+      const destinationConfirmed =
+        plan.route === 'terminal-tui'
+          ? (await submitted) === true
+          : opening?.delivered === true && !opening.unconfirmed && !opening.inComposer
+      if (interrupt.signal.aborted) {
+        return
+      }
+      const interrupted = destinationConfirmed && (await interrupt.run(interrupt.signal))
+      if (!interrupted && !interrupt.signal.aborted) {
+        notifyInterruptUnconfirmed()
+      }
+    })()
+      .catch(() => {
+        if (!interrupt.signal.aborted) {
+          notifyInterruptUnconfirmed()
+        }
+      })
+      .finally(() => observation.abort())
+  }
   return true
+}
+
+function notifyInterruptUnconfirmed(): void {
+  toast.warning(
+    translate(
+      'components.agentSessionContinuation.interruptUnconfirmed',
+      'Could not confirm the original agent was interrupted. Check its terminal.'
+    )
+  )
 }
 
 function notifyDeliveryFailed(agentLabel: string, prompt: string): void {

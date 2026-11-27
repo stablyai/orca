@@ -24,10 +24,12 @@ export function launchNewTabPromptThroughHost(
   }
 ): {
   tabId: string
+  leafId: string
+  started: Promise<string | null>
   promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }>
 } {
   const { pasteContent, submit, onPromptDelivered, onPromptDeliveryUnconfirmed, ...launch } = args
-  const { tabId, started } = launchAgentThroughHost({
+  const { tabId, leafId, started } = launchAgentThroughHost({
     ...launch,
     suppressStartupUpdatePrompt: submit
   })
@@ -46,5 +48,5 @@ export function launchNewTabPromptThroughHost(
   const promptDeliveryResult = started.then((launched) =>
     launched ? pasted : { delivered: false, failureNotified: true }
   )
-  return { tabId, promptDeliveryResult }
+  return { tabId, leafId, started, promptDeliveryResult }
 }

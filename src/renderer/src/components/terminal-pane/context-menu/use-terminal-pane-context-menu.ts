@@ -125,6 +125,7 @@ export function useTerminalPaneContextMenu({
 
   const agentSessionContext = {
     paneCwdRef,
+    paneTransportsRef,
     tabId,
     worktreeId,
     groupId,

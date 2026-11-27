@@ -54,6 +54,7 @@ function launchParams(args: HostAgentLaunchArgs) {
 
 export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
   tabId: string
+  leafId: string
   /** The tab pane's PTY once its agent started there; null when it could not, or the user closed it. */
   started: Promise<string | null>
 } {
@@ -89,5 +90,5 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
     store.setActiveTabType('terminal', args.worktreeId)
   }
   persistAgentLaunchTabOrder(args.worktreeId, tabId)
-  return { tabId, started }
+  return { tabId, leafId, started }
 }

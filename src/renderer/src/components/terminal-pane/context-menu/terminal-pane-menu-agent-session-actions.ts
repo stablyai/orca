@@ -6,17 +6,22 @@ import {
   prepareAgentSessionForkFromPane,
   type PreparedAgentSessionFork
 } from '../session-fork/terminal-agent-session-fork'
-import { prepareAgentSessionContinuationFromPane } from '../session-continuation/terminal-agent-session-continuation'
-import type { AgentSessionContinuationRequest } from '../../../../../shared/agent-session/conversation-context/agent-session-continuation'
+import {
+  prepareAgentSessionContinuationFromPane,
+  type PreparedTerminalAgentSessionContinuation
+} from '../session-continuation/terminal-agent-session-continuation'
+import { captureTerminalContinuationInterrupt } from '../session-continuation/terminal-continuation-interrupt'
+import type { PtyTransport } from '../pty-transport/pty-transport-types'
 
 export type TerminalPaneMenuAgentSessionContext = {
   paneCwdRef: React.RefObject<PaneCwdMap>
+  paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   tabId: string
   worktreeId: string
   groupId: string | null
   fallbackCwd: string
   onAgentSessionForkReady: (fork: PreparedAgentSessionFork) => void
-  onAgentSessionContinuationReady: (request: AgentSessionContinuationRequest) => void
+  onAgentSessionContinuationReady: (request: PreparedTerminalAgentSessionContinuation) => void
 }
 
 export const forkAgentSessionFromMenuPane = async (
@@ -51,7 +56,14 @@ export const continueAgentSessionFromMenuPane = (
     initialCwd
   })
   if (request) {
-    context.onAgentSessionContinuationReady(request)
+    context.onAgentSessionContinuationReady({
+      ...request,
+      interruptOriginal: captureTerminalContinuationInterrupt(
+        tabId,
+        pane,
+        context.paneTransportsRef
+      )
+    })
   }
 }
 
