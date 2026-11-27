@@ -3851,7 +3851,7 @@
         "waitingForSignIn": "Waiting for sign-in…",
         "tools_one": "{{count}} tool",
         "tools_other": "{{count}} tools",
-        "off": "Off",
+        "disabled": "Disabled",
         "notStarted": "Not started"
       },
       "title": "MCP servers",
@@ -3860,6 +3860,7 @@
       "readFailed": "Couldn't load MCP servers.",
       "retry": "Retry",
       "empty": "No MCP servers are set up for this chat.",
+      "unreported": "{{agent}} doesn't report connection status.",
       "signIn": "Sign in",
       "reconnect": "Reconnect",
       "toggleLabel": "Use {{name}}",

@@ -1150,7 +1150,7 @@
         "finishOnPage": "開いたページで完了してください",
         "needsAuth": "サインインが必要",
         "needsAuthAfterSend": "サインインが必要です。メッセージを送信すると、ここでサインインできます。",
-        "off": "オフ",
+        "disabled": "無効",
         "pending": "接続中…",
         "tools_other": "{{count}} 個のツール",
         "waitingForSignIn": "サインイン待ち…",
