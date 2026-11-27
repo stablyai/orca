@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/rows/DashboardAgentChildDisclosure'
 import { AGENT_ROW_TITLE_BESIDE_MODEL_CHIP } from '@/components/dashboard/rows/agent-row-title-floor'
 import {
@@ -153,15 +153,18 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const turn = agent.entry.stateStartedAt
   const currentMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
   const turnHoldable = agent.state === 'working' && turn > 0
-  const heldMessageRef = useRef<{ turn: number; message: string } | null>(null)
+  const [held, setHeld] = useState<{ turn: number; message: string } | null>(null)
   useEffect(() => {
     if (turnHoldable && currentMessage) {
-      heldMessageRef.current = { turn, message: currentMessage }
+      setHeld((prev) =>
+        prev?.turn === turn && prev.message === currentMessage
+          ? prev
+          : { turn, message: currentMessage }
+      )
     } else if (!turnHoldable) {
-      heldMessageRef.current = null
+      setHeld((prev) => (prev === null ? prev : null))
     }
   }, [turnHoldable, turn, currentMessage])
-  const held = heldMessageRef.current
   const stableMessage =
     turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
   const secondary = getCompactAgentSecondary(agent, now, stableMessage, presentation, t)
