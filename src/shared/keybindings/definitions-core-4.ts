@@ -25,6 +25,8 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     title: 'Go Back in Editor',
     group: 'Editors',
     scope: 'editor',
+    // Why: global and tab chords run first wherever focus is, so a rebind there would shadow this.
+    conflictGroups: ['global', 'tabs', 'editor'],
     searchKeywords: ['editor', 'navigation', 'history', 'cursor', 'back', 'previous'],
     // Why: Option+Arrow is macOS word navigation; mirror VS Code's Ctrl+- there.
     defaultBindings: {
@@ -38,6 +40,7 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     title: 'Go Forward in Editor',
     group: 'Editors',
     scope: 'editor',
+    conflictGroups: ['global', 'tabs', 'editor'],
     searchKeywords: ['editor', 'navigation', 'history', 'cursor', 'forward', 'next'],
     defaultBindings: {
       darwin: ['Ctrl+Shift+Underscore'],
