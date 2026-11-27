@@ -35,7 +35,11 @@ export async function uploadFileWithWindow(
   highWaterMark: number,
   options?: { exclusive?: boolean; signal?: AbortSignal }
 ): Promise<void> {
-  const handle = await open(localPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  // A FIFO must reach the regular-file check without waiting for a writer.
+  const handle = await open(
+    localPath,
+    constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
+  )
   let handleClose: Promise<void> | undefined
   let readStream: ReadStream | undefined
   let writeStream: ReturnType<SFTPWrapper['createWriteStream']> | undefined
