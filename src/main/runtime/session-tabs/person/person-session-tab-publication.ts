@@ -5,6 +5,11 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { normalizeMobileSessionTabSelection } from '../layout/mobile-session-tab-selection'
+import type {
+  RuntimeMobileSessionBrowserTab,
+  RuntimeMobileSessionSnapshotTab
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { PersistedMobileClientTabSelections } from '../../../../shared/orca-profiles/persisted-state-types'
 import { defaultAgentChatLabel } from '../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
@@ -24,6 +29,10 @@ import {
 } from '../../client/navigation/client-session-tab-selection'
 import { OrcaRuntimeWithRuntimeId } from '../../construction/runtime-identity-state'
 import { PersonSessionTabLists } from './person-session-tab-lists'
+import type { PersonSurface, PersonSurfaceRow } from './person-tab-list-snapshot'
+import { buildMaterializedHeadlessParentLayout } from '../../terminal/surface/mobile-session-layout-projection'
+
+type PersonSurfaceRowTab = NonNullable<ReturnType<PersonSurfaceRow>>
 import {
   structuredConversationForked,
   titleStructuredConversationTabs
@@ -67,6 +76,11 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
     Projection['getMobileSessionProjectionHost']
   >
   abstract getExplicitSessionWorktreeIdSelector(selector: string | undefined): string | null
+  /** A client-hosted page's row, when the page is in this workspace. */
+  protected abstract clientBrowserPageRow(
+    worktreeId: string,
+    browserPageId: string
+  ): RuntimeMobileSessionBrowserTab | null
   abstract currentLocalStructuredSessionPresentation(
     sessionId: string
   ): { worktreeId: string; tabId: string } | null
@@ -122,14 +136,94 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
     worktreeId: string,
     includeAgentSenders = true
   ): RuntimeMobileSessionTabsResult {
-    const snapshot = this.personSessionTabs.snapshot(person, worktreeId, (_worktree, sessionId) => {
-      const record = getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)
-      return record?.location.workspaceId === worktreeId
-        ? { agent: record.provider, title: defaultAgentChatLabel(record.provider) }
-        : null
-    })
+    const snapshot = this.personSessionTabs.snapshot(
+      person,
+      worktreeId,
+      (_worktree, sessionId) => {
+        const record = getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)
+        return record?.location.workspaceId === worktreeId
+          ? { agent: record.provider, title: defaultAgentChatLabel(record.provider) }
+          : null
+      },
+      (_worktree, surface) => this.personSurfaceRow(worktreeId, surface)
+    )
     const result = this.titledSessionTabsResult(snapshot)
     return includeAgentSenders ? this.withMobileSessionTabSenders(result) : result
+  }
+
+  /** Rule 4: the host's list never shows a terminal or page a teammate opened in their Home. Every
+   *  write of the host's list passes here (`storeMobileSessionSnapshot`), whichever projection made it. */
+  protected withoutPersonSurfaces(
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsSnapshot {
+    const held = this.personSessionTabs.surfacesIn(snapshot.worktree)
+    const hidden = (tab: RuntimeMobileSessionSnapshotTab) =>
+      held.some((surface) =>
+        surface.kind === 'browser'
+          ? tab.type === 'browser' && tab.browserPageId === surface.browserPageId
+          : tab.type === 'terminal' &&
+            (tab.parentTabId === surface.parentTabId ||
+              (surface.ptyId !== null && tab.ptyId === surface.ptyId))
+      )
+    const gone = held.length > 0 ? snapshot.tabs.filter(hidden) : []
+    if (gone.length === 0) {
+      return snapshot
+    }
+    const goneIds = new Set(
+      gone.flatMap((tab) =>
+        tab.type === 'terminal'
+          ? [tab.id, tab.parentTabId]
+          : tab.type === 'browser'
+            ? [tab.id, tab.browserWorkspaceId]
+            : [tab.id]
+      )
+    )
+    return normalizeMobileSessionTabSelection({
+      ...snapshot,
+      tabs: snapshot.tabs.filter((tab) => !gone.includes(tab)),
+      ...(snapshot.tabGroups
+        ? {
+            tabGroups: snapshot.tabGroups.map((group) => ({
+              ...group,
+              tabOrder: group.tabOrder.filter((id) => !goneIds.has(id)),
+              activeTabId:
+                group.activeTabId && goneIds.has(group.activeTabId) ? null : group.activeTabId
+            }))
+          }
+        : {})
+    })
+  }
+
+  /** Whether a teammate's own list holds this terminal: then no host list or window places it. */
+  protected holdsPersonTerminal(ptyId: string): boolean {
+    return (
+      this.personSessionTabs.holderOfSurface(
+        (surface) => surface.kind === 'terminal' && surface.ptyId === ptyId
+      ) !== null
+    )
+  }
+
+  /** A person's terminal or page as its row reads now; null while it is not running here. */
+  private personSurfaceRow(worktreeId: string, surface: PersonSurface): PersonSurfaceRowTab | null {
+    if (surface.kind === 'browser') {
+      return this.clientBrowserPageRow(worktreeId, surface.browserPageId)
+    }
+    const pty = surface.ptyId ? this.terminalIdentity.ptys.get(surface.ptyId) : undefined
+    if (!pty?.connected || pty.worktreeId !== worktreeId) {
+      return null
+    }
+    return {
+      type: 'terminal',
+      id: `${surface.parentTabId}::${surface.leafId}`,
+      title: pty.title || 'Terminal',
+      parentTabId: surface.parentTabId,
+      leafId: surface.leafId,
+      ptyId: pty.ptyId,
+      incarnationId: pty.incarnationId,
+      ...(pty.launchAgent ? { launchAgent: pty.launchAgent } : {}),
+      parentLayout: buildMaterializedHeadlessParentLayout(surface.leafId, pty.ptyId, undefined),
+      isActive: false
+    }
   }
 
   /** Chat tabs titled and the agent's Home pinned: the host's list, or a teammate's own (no saved tabs). */
@@ -224,8 +318,14 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
         )
       )
     )
-    this.personSessionTabs.forgetPeople((person) => !live.has(person))
+    const ended = this.personSessionTabs.forgetPeople((person) => !live.has(person))
+    for (const { worktreeId, surface } of ended) {
+      this.endPersonSurface(worktreeId, surface)
+    }
   }
+
+  /** Stops a closed terminal, closes a closed page. */
+  protected abstract endPersonSurface(worktreeId: string, surface: PersonSurface): void
 
   /** The workspace is gone: each person's list there, and their devices' picks in it, go too. */
   protected forgetPersonTabListsIn(worktreeId: string): void {

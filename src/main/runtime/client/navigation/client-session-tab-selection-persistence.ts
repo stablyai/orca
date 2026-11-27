@@ -1,4 +1,5 @@
 import type {
+  PersistedPersonSurface,
   PersistedMobileClientTabSelection,
   PersistedMobileClientTabSelections
 } from '../../../../shared/orca-profiles/persisted-state-types'
@@ -33,13 +34,35 @@ function normalizeClientSessionTabSelection(
   const personTabs = Array.isArray(candidate.personTabs)
     ? candidate.personTabs.filter((sessionId): sessionId is string => typeof sessionId === 'string')
     : []
+  const personSurfaces = Array.isArray(candidate.personSurfaces)
+    ? candidate.personSurfaces.flatMap(normalizePersonSurface)
+    : []
   return {
     activeTabId,
     activeGroupId,
     activeTabIdByGroupId,
     ...(recentTabIds.length > 0 ? { recentTabIds } : {}),
-    ...(personTabs.length > 0 ? { personTabs } : {})
+    ...(personTabs.length > 0 ? { personTabs } : {}),
+    ...(personSurfaces.length > 0 ? { personSurfaces } : {})
   }
+}
+
+function normalizePersonSurface(raw: unknown): PersistedPersonSurface[] {
+  if (typeof raw !== 'object' || raw === null) {
+    return []
+  }
+  const text = (key: string): string | null => {
+    const value: unknown = Reflect.get(raw, key)
+    return typeof value === 'string' ? value : null
+  }
+  const kind = text('kind')
+  const parentTabId = text('parentTabId')
+  const leafId = text('leafId')
+  const browserPageId = text('browserPageId')
+  if (kind === 'terminal' && parentTabId && leafId) {
+    return [{ kind: 'terminal', parentTabId, leafId, ptyId: text('ptyId') }]
+  }
+  return kind === 'browser' && browserPageId ? [{ kind: 'browser', browserPageId }] : []
 }
 
 // Malformed disk/remote payloads must degrade to no selection without throwing.

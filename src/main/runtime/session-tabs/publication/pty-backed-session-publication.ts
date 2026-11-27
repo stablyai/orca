@@ -202,5 +202,12 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
     )) {
       this.touchMobileSessionTabsForWorktree(worktreeId, options)
     }
+    // A teammate's own terminal redraws with the next coalesced change of its workspace.
+    const held = this.personSessionTabs.holderOfSurface(
+      (surface) => surface.kind === 'terminal' && surface.ptyId === ptyId
+    )
+    if (held) {
+      this.scheduleMobileSessionTabsChanged(held.worktreeId)
+    }
   }
 }

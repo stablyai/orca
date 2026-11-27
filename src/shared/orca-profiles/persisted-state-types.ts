@@ -54,7 +54,13 @@ export type PersistedMobileClientTabSelection = {
   recentTabIds?: string[]
   /** Under a teammate's tab list key only: the chats of their own list there, in order. */
   personTabs?: string[]
+  /** Under a teammate's tab list key only: the terminals and browser tabs they opened there. */
+  personSurfaces?: PersistedPersonSurface[]
 }
+
+export type PersistedPersonSurface =
+  | { kind: 'terminal'; parentTabId: string; leafId: string; ptyId: string | null }
+  | { kind: 'browser'; browserPageId: string }
 
 /** deviceId (or a teammate's tab list key) → worktreeId → selection. */
 export type PersistedMobileClientTabSelections = Record<

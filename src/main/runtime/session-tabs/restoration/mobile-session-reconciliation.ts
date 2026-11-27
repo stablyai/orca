@@ -54,7 +54,7 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
       }
       snapshot = merged
     }
-    snapshot = preserveTerminalRetirementProofs(snapshot, existing)
+    snapshot = preserveTerminalRetirementProofs(this.withoutPersonSurfaces(snapshot), existing)
     const stamped = stampMobileSnapshotVersion(snapshot, existing)
     this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
     return stamped

@@ -26,9 +26,21 @@ import { runtimeBrowserCommandsFactoryIsAvailable } from '../installation/runtim
 import { hasPairedPageHost } from './browser-client-page-opening'
 import { resolveRemoteCliBrowserScopeSelector } from '../../desktop-browser-bridge/remote-cli-browser-scope'
 import type { RpcContext } from '../../rpc/core'
+import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import { buildRuntimeClientBrowserTabs } from '../../session-lifecycle/projection/build-runtime-client-browser-tabs'
 import { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../../session-graph/session-graph-authority'
 
 export abstract class OrcaRuntimeWithBrowserWorkspaceRouting extends OrcaRuntimeWithTransitionGraphReloadToTerminalState {
+  protected clientBrowserPageRow(
+    worktreeId: string,
+    browserPageId: string
+  ): RuntimeMobileSessionBrowserTab | null {
+    const page = getRuntimeBrowserPageRegistry(this).getPage(browserPageId)
+    return page?.workspaceId === worktreeId
+      ? (buildRuntimeClientBrowserTabs([page], getBrowserHostLeaseRegistry(this))[0] ?? null)
+      : null
+  }
+
   async actOnClientPageInitialization(
     params: z.infer<typeof BrowserPageInitializationActionParams>
   ): Promise<void> {
