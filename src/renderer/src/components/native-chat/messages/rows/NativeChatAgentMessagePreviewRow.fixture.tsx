@@ -9,6 +9,11 @@ import type { OrchestrationSessionWorker } from '../../../../../../shared/orches
 import { projectStructuredAgentStartItem } from '../../../../../../shared/native-chat/transcript/messages/structured-agent-start-projection'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { NativeChatWorkersContext } from '../../native-chat-workers-context'
+import { createMembershipStore } from '../../../../../../shared/collections/membership-store'
+import {
+  NativeChatWaitingAgentMailContext,
+  type NativeChatWaitingAgentMail
+} from '../../queue/NativeChatWaitingAgentMailActions'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { MessageRow } from './NativeChatMessageRow'
 
@@ -132,8 +137,24 @@ const messages = [
   mail('yesterday', longName, text('Rebased onto main.\n\nCI is running.'), {
     task: true,
     minute: -24 * 60
-  })
+  }),
+  // Waiting mail: short words with Steer, Edit and Delete hidden until hover; it opens nothing.
+  {
+    ...mail('waiting', builder, text('Ready when you are.'), { minute: 14 }),
+    queued: true as const,
+    queuedMessageId: 'waiting'
+  }
 ]
+const noop = async (): Promise<void> => {}
+const waitingMail: NativeChatWaitingAgentMail = {
+  steer: noop,
+  remove: noop,
+  edit: noop,
+  pending: () => null,
+  isWorking: true,
+  steerHeld: false,
+  editable: createMembershipStore(() => true)
+}
 const started = projectStructuredAgentStartItem({
   itemId: 'preview-started',
   revision: 1,
@@ -213,42 +234,44 @@ const workers: OrchestrationSessionWorker[] = [
 function rows() {
   return (
     <NativeChatWorkersContext.Provider value={workers}>
-      <div className="space-y-1 bg-chat-pane p-4 text-chat-foreground">
-        <MessageRow
-          message={started}
-          expandSignal={false}
-          onScrollMessageToTop={() => {}}
-          runtimeContext={runtimeContext}
-        />
-        <MessageRow
-          message={startedForItem}
-          expandSignal={false}
-          onScrollMessageToTop={() => {}}
-          runtimeContext={runtimeContext}
-        />
-        <MessageRow
-          message={startedLongForItem}
-          expandSignal={false}
-          onScrollMessageToTop={() => {}}
-          runtimeContext={runtimeContext}
-        />
-        <MessageRow
-          message={startedLongForItems}
-          expandSignal={false}
-          onScrollMessageToTop={() => {}}
-          runtimeContext={runtimeContext}
-        />
-        {messages.map((message) => (
-          <NativeChatAgentMessageCard
-            key={message.id}
-            message={message}
-            from={message.from}
+      <NativeChatWaitingAgentMailContext.Provider value={waitingMail}>
+        <div className="space-y-1 bg-chat-pane p-4 text-chat-foreground">
+          <MessageRow
+            message={started}
+            expandSignal={false}
+            onScrollMessageToTop={() => {}}
             runtimeContext={runtimeContext}
-            onRefolded={() => {}}
           />
-        ))}
-        <p className="pt-1 text-sm">On it. I&apos;ll post when CI is green.</p>
-      </div>
+          <MessageRow
+            message={startedForItem}
+            expandSignal={false}
+            onScrollMessageToTop={() => {}}
+            runtimeContext={runtimeContext}
+          />
+          <MessageRow
+            message={startedLongForItem}
+            expandSignal={false}
+            onScrollMessageToTop={() => {}}
+            runtimeContext={runtimeContext}
+          />
+          <MessageRow
+            message={startedLongForItems}
+            expandSignal={false}
+            onScrollMessageToTop={() => {}}
+            runtimeContext={runtimeContext}
+          />
+          {messages.map((message) => (
+            <NativeChatAgentMessageCard
+              key={message.id}
+              message={message}
+              from={message.from}
+              runtimeContext={runtimeContext}
+              onRefolded={() => {}}
+            />
+          ))}
+          <p className="pt-1 text-sm">On it. I&apos;ll post when CI is green.</p>
+        </div>
+      </NativeChatWaitingAgentMailContext.Provider>
     </NativeChatWorkersContext.Provider>
   )
 }

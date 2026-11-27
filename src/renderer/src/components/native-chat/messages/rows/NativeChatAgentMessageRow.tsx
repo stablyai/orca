@@ -52,7 +52,8 @@ function previewCutShort(
   end: HTMLElement,
   action: HTMLElement | null
 ): boolean {
-  if (textOverflow(preview) > 0.01) {
+  const overflow = textOverflow(preview)
+  if (overflow > 0.01) {
     return true
   }
   const hidden = hiddenWidth(action)
@@ -63,7 +64,8 @@ function previewCutShort(
     return false
   }
   const gap = Number.parseFloat(getComputedStyle(end.parentElement ?? end).columnGap) || 0
-  return hidden > endBox.left - line.right - gap + 0.01
+  // The line's box fills the free room, so its own room past the words counts too.
+  return hidden > -overflow + endBox.left - line.right - gap + 0.01
 }
 
 /**
