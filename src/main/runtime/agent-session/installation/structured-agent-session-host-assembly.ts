@@ -71,6 +71,8 @@ export async function installOnJournal(
   )
   // Custom ACP agents come from settings, which can change while the host runs.
   const lateAdapters: StructuredAgentRuntimeAdapter[] = []
+  // Set before shutdown snapshots the adapters, so none is created that it would not close.
+  let closing = false
   const allAdapters = (): StructuredAgentRuntimeAdapter[] => [
     ...registrations.map((registration) => registration.adapter),
     ...lateAdapters
@@ -78,9 +80,13 @@ export async function installOnJournal(
   const agents = new StructuredAgentRegistry(registrations, {
     definition: (agent) => customAcpRuntimeRegistration(agent)?.definition ?? null,
     createAdapter: (agent) => {
-      const registration = customAcpRuntimeRegistration(agent)
+      const registration = closing ? null : customAcpRuntimeRegistration(agent)
       if (!registration) {
-        throw new Error(`structured agent ${agent} is not defined on this host`)
+        throw new Error(
+          closing
+            ? `structured agent ${agent} cannot start while the host closes`
+            : `structured agent ${agent} is not defined on this host`
+        )
       }
       const created = registration.createAdapter(context)
       lateAdapters.push(created)
@@ -89,6 +95,7 @@ export async function installOnJournal(
     agents: () => listCustomAcpAgents().map(({ id }) => id)
   })
   const adapter = new StructuredAgentSessionAdapterRouter(agents, async () => {
+    closing = true
     await Promise.all(allAdapters().map((adapter) => adapter.closeAll()))
   })
   const providerNaming = createStructuredAgentSessionProviderNaming({

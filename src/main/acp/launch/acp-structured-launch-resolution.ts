@@ -191,6 +191,9 @@ export function acpStructuredLaunchPart(
   deps: AcpStructuredLaunchPartDeps
 ): StructuredAgentLaunchPartResolver<AcpStructuredLaunch> {
   return withAcpToolFreeFolder(deps, async (basis, identity) => {
+    // A custom agent's spec changes in place when its settings are saved; one launch reads one
+    // version of the command, environment and arguments however long it awaits in between.
+    agentSpec = { ...agentSpec }
     const { record } = basis
     const movedHome = await homeBeforeFirstTurn(agentSpec, record, basis, deps.dataDirectory)
     const accountHome = movedHome ?? record.accountHome

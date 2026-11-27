@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import {
+  CUSTOM_ACP_AGENT_LIMITS,
   normalizeCustomAcpAgents,
   savedCustomAcpDefaultAgent,
   type CustomAcpAgent,
@@ -40,17 +41,29 @@ export function CustomAcpAgentsSetting({ settings, updateSettings }: Props): Rea
   const t = useTranslate()
   const saved = normalizeCustomAcpAgents(settings.customAcpAgents)
   const [draft, setDraft] = useState<CustomAcpAgentDraft | null>(null)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'failed'>('idle')
   const defaultId = savedCustomAcpDefaultAgent(settings)?.id ?? null
-  const save = (next: CustomAcpAgent[]): void => {
+  // Settings keep only the first CUSTOM_ACP_AGENT_LIMITS.agents rows, so none is added past them.
+  const atLimit = saved.length >= CUSTOM_ACP_AGENT_LIMITS.agents
+  /** Resolves false when the settings could not be saved. */
+  const save = async (next: CustomAcpAgent[]): Promise<boolean> => {
     // A removed default would otherwise come back if an agent with its id were added again.
     const keepsDefault = next.some(({ id }) => id === settings.defaultCustomAcpAgent)
-    // New chats list this machine's agents from its runtime, which reads the saved settings.
-    void Promise.resolve(
-      updateSettings({
+    try {
+      await updateSettings({
         customAcpAgents: next,
         ...(settings.defaultCustomAcpAgent && !keepsDefault ? { defaultCustomAcpAgent: null } : {})
       })
-    ).then(reloadLocalHostStructuredAgents)
+    } catch {
+      return false
+    }
+    // New chats list this machine's agents from its runtime, which reads the saved settings.
+    void reloadLocalHostStructuredAgents()
+    return true
+  }
+  const openDraft = (next: CustomAcpAgentDraft | null): void => {
+    setSaveState('idle')
+    setDraft(next)
   }
   const setDefault = (id: CustomAcpAgentId | null): void => {
     // Built-in choices clear this one; this clears the built-in default, so one agent is the default.
@@ -59,11 +72,15 @@ export function CustomAcpAgentsSetting({ settings, updateSettings }: Props): Rea
   const editor = (current: CustomAcpAgentDraft): React.JSX.Element => (
     <CustomAcpAgentEditor
       draft={current}
+      saveState={saveState}
       onChange={setDraft}
-      onCancel={() => setDraft(null)}
+      onCancel={() => openDraft(null)}
       onSave={() => {
-        save(saveCustomAcpAgentDraft(saved, current, randomSuffix))
-        setDraft(null)
+        setSaveState('saving')
+        // The draft stays open until the settings hold it, so a failed save can be retried.
+        void save(saveCustomAcpAgentDraft(saved, current, randomSuffix)).then((ok) =>
+          ok ? openDraft(null) : setSaveState('failed')
+        )
       }}
     />
   )
@@ -80,7 +97,8 @@ export function CustomAcpAgentsSetting({ settings, updateSettings }: Props): Rea
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => setDraft(emptyCustomAcpAgentDraft())}
+            disabled={atLimit}
+            onClick={() => openDraft(emptyCustomAcpAgentDraft())}
           >
             <Plus />
             {t('settings.agents.customAcp.add', 'Local ACP command')}
@@ -103,9 +121,9 @@ export function CustomAcpAgentsSetting({ settings, updateSettings }: Props): Rea
             disabled={draft !== null}
             isDefault={agent.id === defaultId}
             onSetDefault={(isDefault) => setDefault(isDefault ? agent.id : null)}
-            onEdit={() => setDraft(customAcpAgentDraftFrom(agent))}
+            onEdit={() => openDraft(customAcpAgentDraftFrom(agent))}
             onSetEnabled={(enabled) =>
-              save(
+              void save(
                 saved.map((existing) => {
                   if (existing.id !== agent.id) {
                     return existing
@@ -115,22 +133,33 @@ export function CustomAcpAgentsSetting({ settings, updateSettings }: Props): Rea
                 })
               )
             }
-            onRemove={() => save(saved.filter(({ id }) => id !== agent.id))}
+            onRemove={() => void save(saved.filter(({ id }) => id !== agent.id))}
           />
         )
       )}
       {draft && !draft.id ? editor(draft) : null}
+      {atLimit && !draft ? (
+        <div data-settings-row="" className="py-3 text-xs text-muted-foreground">
+          {t(
+            'settings.agents.customAcp.limit',
+            'Orca keeps up to {{limit}} custom agents. Remove one to add another.',
+            { limit: CUSTOM_ACP_AGENT_LIMITS.agents }
+          )}
+        </div>
+      ) : null}
     </SettingsGroup>
   )
 }
 
 function CustomAcpAgentEditor({
   draft,
+  saveState,
   onChange,
   onCancel,
   onSave
 }: {
   draft: CustomAcpAgentDraft
+  saveState: 'idle' | 'saving' | 'failed'
   onChange: (draft: CustomAcpAgentDraft) => void
   onCancel: () => void
   onSave: () => void
@@ -277,11 +306,21 @@ function CustomAcpAgentEditor({
           {t('settings.agents.customAcp.addEnv', 'Add variable')}
         </Button>
       </div>
-      <div className="flex justify-end gap-2">
+      <div className="flex items-center justify-end gap-2">
+        {saveState === 'failed' ? (
+          <p role="alert" className="mr-auto text-xs text-destructive">
+            {t('settings.agents.customAcp.saveFailed', "Orca couldn't save the agent. Try again.")}
+          </p>
+        ) : null}
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
           {t('settings.agents.customAcp.cancel', 'Cancel')}
         </Button>
-        <Button type="button" size="sm" disabled={problems.size > 0} onClick={onSave}>
+        <Button
+          type="button"
+          size="sm"
+          disabled={problems.size > 0 || saveState === 'saving'}
+          onClick={onSave}
+        >
           {t('settings.agents.customAcp.save', 'Save')}
         </Button>
       </div>

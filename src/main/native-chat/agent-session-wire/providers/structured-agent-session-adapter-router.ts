@@ -366,7 +366,5 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     return registration
   }
 
-  private adapters(): Adapter[] {
-    return [...this.agents.adapters()]
-  }
+  private adapters = (): Adapter[] => [...this.agents.adapters()]
 }

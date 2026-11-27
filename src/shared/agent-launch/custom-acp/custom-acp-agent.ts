@@ -1,6 +1,7 @@
 // User-defined ACP agents: a local command Orca runs as an ACP server for Chat.
 
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import type { TuiAgent } from '../catalog/tui-agent'
 
 /** Prefixed so a custom id never collides with a built-in agent or another host's built-in. */
@@ -65,28 +66,31 @@ export function isCustomAcpAgentId(value: unknown): value is CustomAcpAgentId {
   return typeof value === 'string' && ID_PATTERN.test(value)
 }
 
-const customAcpAgentSchema = z.object({
-  id: z.string().refine(isCustomAcpAgentId),
-  name: z.string().trim().min(1).max(CUSTOM_ACP_AGENT_LIMITS.name),
-  command: z.string().trim().min(1).max(CUSTOM_ACP_AGENT_LIMITS.command),
-  args: z
-    .array(z.string().max(CUSTOM_ACP_AGENT_LIMITS.arg))
-    .max(CUSTOM_ACP_AGENT_LIMITS.args)
-    .default([]),
-  env: z
-    .record(z.string().regex(ENV_NAME_PATTERN), z.string().max(CUSTOM_ACP_AGENT_LIMITS.envValue))
-    .refine((env) => Object.keys(env).length <= CUSTOM_ACP_AGENT_LIMITS.envEntries)
-    .default({}),
-  // Anything but true reads as on, so a malformed flag never hides an agent.
-  disabled: z.literal(true).optional().catch(undefined),
-  defaultModel: z
-    .string()
-    .trim()
-    .min(1)
-    .max(CUSTOM_ACP_AGENT_LIMITS.model)
-    .optional()
-    .catch(undefined)
-})
+// Built on first parse, so a build that never reads custom agents keeps no schema objects.
+const customAcpAgentSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string().refine(isCustomAcpAgentId),
+    name: z.string().trim().min(1).max(CUSTOM_ACP_AGENT_LIMITS.name),
+    command: z.string().trim().min(1).max(CUSTOM_ACP_AGENT_LIMITS.command),
+    args: z
+      .array(z.string().max(CUSTOM_ACP_AGENT_LIMITS.arg))
+      .max(CUSTOM_ACP_AGENT_LIMITS.args)
+      .default([]),
+    env: z
+      .record(z.string().regex(ENV_NAME_PATTERN), z.string().max(CUSTOM_ACP_AGENT_LIMITS.envValue))
+      .refine((env) => Object.keys(env).length <= CUSTOM_ACP_AGENT_LIMITS.envEntries)
+      .default({}),
+    // Anything but true reads as on, so a malformed flag never hides an agent.
+    disabled: z.literal(true).optional().catch(undefined),
+    defaultModel: z
+      .string()
+      .trim()
+      .min(1)
+      .max(CUSTOM_ACP_AGENT_LIMITS.model)
+      .optional()
+      .catch(undefined)
+  })
+)
 
 /** The saved agents this build can run; each row parses alone, so one bad row hides no others. */
 export function normalizeCustomAcpAgents(value: unknown): CustomAcpAgent[] {

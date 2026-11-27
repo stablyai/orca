@@ -19,7 +19,9 @@ export function launchCustomAcpAgentChat(args: {
 }): ReturnType<typeof launchStructuredAgentFromNewTab> {
   const plan = adoptAgentSessionLaunchVerdict({
     route: 'structured-native-chat',
-    requestedSurface: 'chat',
+    // A launch with its own fallback, such as an empty workspace's shell, lets a declining host
+    // open it; without one, the chat is what was asked for, and a decline is reported as failed.
+    ...(args.onHostDeclined ? {} : { requestedSurface: 'chat' as const }),
     requestId: createNonSecureContextUuid(),
     agent: args.agent,
     worktreeId: args.worktreeId,

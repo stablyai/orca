@@ -13,7 +13,10 @@ import {
   readDetectedAgentsForTarget
 } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
-import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import {
+  launchStartsOutsideWorkspaceRoot,
+  worktreeLaunchWorkspace
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {
   chosenAgentChatUnlearned,
   agentChoiceOpensAsChat
@@ -82,6 +85,11 @@ export function openDefaultAgentChatInEmptyWorkspace(
   // A custom default needs no detected CLI: its command is the chat program.
   const custom = customAcpDefaultAgentForWorktree(state, worktreeId)
   if (custom) {
+    // A chat starts in the workspace root; asked for another folder, the shell opens there instead,
+    // as it does when a built-in default could only open there as a terminal.
+    if (launchStartsOutsideWorkspaceRoot(state, worktreeId, initialCwd)) {
+      return null
+    }
     const opened = launchCustomAcpAgentChat({
       agent: custom.id,
       worktreeId,

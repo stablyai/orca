@@ -68,7 +68,8 @@ export function customAcpAgentDraftProblems(
   return problems
 }
 
-/** The saved list with `draft` added or replacing its earlier version; blank rows are dropped. */
+/** The saved list with `draft` added or replacing its earlier version; unnamed environment rows
+ *  are dropped. */
 export function saveCustomAcpAgentDraft(
   saved: readonly CustomAcpAgent[],
   draft: CustomAcpAgentDraft,
@@ -78,7 +79,8 @@ export function saveCustomAcpAgentDraft(
     id: draft.id ?? createCustomAcpAgentId(randomSuffix),
     name: draft.name.trim(),
     command: draft.command.trim(),
-    args: draft.args.map(({ value }) => value).filter((arg) => arg !== ''),
+    // Arguments pass as written, an empty one included; a row the user doesn't want is removed.
+    args: draft.args.map(({ value }) => value),
     env: Object.fromEntries(
       draft.env
         .map(({ name, value }) => [name.trim(), value] as const)

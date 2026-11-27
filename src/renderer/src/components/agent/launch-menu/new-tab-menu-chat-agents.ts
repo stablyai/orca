@@ -50,8 +50,14 @@ export function newTabMenuChatAgents(input: {
   const customAgents = host
     ? (listed ?? []).flatMap(({ agent, label, disabled }): CustomAcpAgentMenuRow[] => {
         const availability = published?.get(agent)
-        // A published roster that no longer reports the agent means its host dropped it.
-        if (!isCustomAcpAgentId(agent) || disabled || (published && !availability)) {
+        // A published roster that no longer reports the agent means its host dropped it; a refusal
+        // means the host can't run its chat, as for a built-in agent.
+        if (
+          !isCustomAcpAgentId(agent) ||
+          disabled ||
+          (published && !availability) ||
+          availability?.state === 'refused'
+        ) {
           return []
         }
         const missing = availability?.chatProgram === 'missing'

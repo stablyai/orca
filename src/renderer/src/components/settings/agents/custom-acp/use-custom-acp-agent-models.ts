@@ -1,6 +1,6 @@
 // The models a saved custom ACP agent reported, read from this machine's catalog; Refresh lists again.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentSessionModelCatalogResult } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionModelOption } from '../../../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type { CustomAcpAgentId } from '../../../../../../shared/agent-launch/custom-acp/custom-acp-agent'
@@ -28,11 +28,15 @@ export function useCustomAcpAgentModels(agent: CustomAcpAgentId | undefined): Cu
   const [models, setModels] = useState<readonly AgentSessionModelOption[]>([])
   const [state, setState] = useState<CustomAcpAgentModels['state']>('idle')
   const [problem, setProblem] = useState<CustomAcpAgentModels['problem']>(undefined)
+  // Each read takes a number; only the newest one writes, so an opening read that answers after a
+  // Refresh began cannot replace what the Refresh lists.
+  const latest = useRef(0)
   // Opening Settings reads what the host already knows and never starts the agent.
   useEffect(() => {
     if (!agent) {
       return
     }
+    const order = ++latest.current
     let stale = false
     void callStructuredAgentSession<AgentSessionModelCatalogResult>(
       LOCAL,
@@ -40,7 +44,7 @@ export function useCustomAcpAgentModels(agent: CustomAcpAgentId | undefined): Cu
       { agent, savedOnly: true }
     )
       .then((catalog) => {
-        if (!stale) {
+        if (!stale && latest.current === order) {
           setModels(listedModels(catalog))
         }
       })
@@ -53,6 +57,7 @@ export function useCustomAcpAgentModels(agent: CustomAcpAgentId | undefined): Cu
     if (!agent) {
       return
     }
+    const order = ++latest.current
     setState('listing')
     setProblem(undefined)
     const read = async (): Promise<AgentSessionModelCatalogResult> => {
@@ -74,12 +79,19 @@ export function useCustomAcpAgentModels(agent: CustomAcpAgentId | undefined): Cu
     }
     void read()
       .then((catalog) => {
+        if (latest.current !== order) {
+          return
+        }
         const listed = listedModels(catalog)
         setModels(listed)
         setProblem(catalog.unavailable?.reason)
         setState(listed.length > 0 && !catalog.listingInProgress ? 'idle' : 'failed')
       })
-      .catch(() => setState('failed'))
+      .catch(() => {
+        if (latest.current === order) {
+          setState('failed')
+        }
+      })
   }, [agent])
   return { models, state, ...(problem ? { problem } : {}), refresh }
 }
