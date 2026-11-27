@@ -25,8 +25,15 @@ function readProgress(value: unknown): CompareProgress {
   }
   return Object.fromEntries(
     Object.entries(value).filter((entry): entry is [string, { key: string; matched: number }] => {
-      const item = entry[1] as { key?: unknown; matched?: unknown } | null
-      return typeof item?.key === 'string' && Number.isSafeInteger(item.matched)
+      const item: unknown = entry[1]
+      return (
+        typeof item === 'object' &&
+        item !== null &&
+        'key' in item &&
+        'matched' in item &&
+        typeof item.key === 'string' &&
+        Number.isSafeInteger(item.matched)
+      )
     })
   )
 }

@@ -7,6 +7,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { join, relative } from 'node:path'
+import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { COPIES_TRASH_DIR, SET_ASIDE_ROLLOUTS_DIR } from './codex-account-history-cleanup-manifest'
 import {
   hasNoLinkBelowHome,
@@ -37,16 +38,16 @@ export type TrashEntry = {
   progress?: { key: string; matched: number }
 }
 
-const isEntry = (value: unknown): value is TrashEntry => {
-  const entry = value as Partial<TrashEntry> | null
+const STRING_FIELDS = ['name', 'from', 'original', 'copyKey', 'originalKey'] as const
+
+function isEntry(value: unknown): value is TrashEntry {
+  if (typeof value !== 'object' || value === null || !('movedAt' in value)) {
+    return false
+  }
+  const fields: Record<string, unknown> = { ...value }
   return (
-    !!entry &&
-    typeof entry.name === 'string' &&
-    typeof entry.from === 'string' &&
-    typeof entry.original === 'string' &&
-    typeof entry.copyKey === 'string' &&
-    typeof entry.originalKey === 'string' &&
-    typeof entry.movedAt === 'number'
+    typeof value.movedAt === 'number' &&
+    STRING_FIELDS.every((field) => typeof fields[field] === 'string')
   )
 }
 
@@ -56,11 +57,12 @@ export function readEntries(trash: string): TrashEntry[] | null {
   try {
     text = readFileSync(join(trash, ENTRIES_FILE), 'utf8')
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? [] : null
+    return errnoCodeOrUnknown(error) === 'ENOENT' ? [] : null
   }
   try {
     const parsed: unknown = JSON.parse(text)
-    const entries = (parsed as { entries?: unknown } | null)?.entries
+    const entries =
+      typeof parsed === 'object' && parsed !== null && 'entries' in parsed ? parsed.entries : null
     return Array.isArray(entries) ? entries.filter(isEntry) : null
   } catch {
     return null
@@ -118,5 +120,4 @@ export function safeToRemove(
 }
 
 export const busyOnWindows = (error: unknown): boolean =>
-  process.platform === 'win32' &&
-  ['EBUSY', 'EPERM', 'EACCES'].includes((error as NodeJS.ErrnoException | null)?.code ?? '')
+  process.platform === 'win32' && ['EBUSY', 'EPERM', 'EACCES'].includes(errnoCodeOrUnknown(error))
