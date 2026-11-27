@@ -1,7 +1,3 @@
-import {
-  localAccountRuntimeTargetKey,
-  type LocalAccountRuntimeTarget
-} from '../../../shared/agent-accounts/local-account-runtime'
 import type { BrowserWindow } from 'electron'
 import {
   USAGE_PROVIDER_KEYS,
@@ -11,7 +7,6 @@ import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
 import { RateLimitServiceTargetUsageRead } from './service-target-usage-read'
-import type { AntigravityAccountUsageRecorder } from '../providers/antigravity/antigravity-account-usage'
 import {
   type CodexAccountSelectionTarget,
   normalizeCodexAccountSelectionTarget
@@ -23,7 +18,6 @@ import {
   type ClaudeAuthPreparationResolver,
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
-  type AntigravityUsageEnabledResolver,
   type ClaudeOAuthUsageEnabledResolver,
   type MuseUsageEnabledResolver,
   type ZcodePlanRateLimitConfig,
@@ -42,25 +36,14 @@ import type { UsageHistoryRecorder } from '../usage-history/usage-history-record
 export class RateLimitService extends RateLimitServiceTargetUsageRead {
   private lastOwnerReturnAt = Number.NEGATIVE_INFINITY
   private usageLastGood: UsageLastGoodStore | null = null
-  /** Set when startup picks a target other than the host default before last-good loads. */
-  private antigravityTargetMoved = false
 
   /** Shows each provider's persisted last windows until a poll replaces them. Loads well inside
    *  the deferred startup poll; a provider already read by then keeps its own reading. */
   setUsageLastGoodStore(store: UsageLastGoodStore): Promise<void> {
     this.usageLastGood = store
     return store.loaded.then((restored) => {
-      const currentTarget = localAccountRuntimeTargetKey(this.antigravityFetchTarget)
-      const savedTarget = store.savedAntigravityTarget
-      // A reading saved for another target, or an old file with no target after startup already
-      // switched off the host default, must not fill the slot the target change just cleared.
-      const skipAntigravity =
-        savedTarget === null ? this.antigravityTargetMoved : savedTarget !== currentTarget
       const seeded = { ...this.state }
       for (const key of USAGE_PROVIDER_KEYS) {
-        if (key === 'antigravity' && skipAntigravity) {
-          continue
-        }
         seeded[key] ??= restored[key] ?? null
       }
       this.updateState(seeded)
@@ -69,7 +52,7 @@ export class RateLimitService extends RateLimitServiceTargetUsageRead {
 
   protected override updateState(next: InternalRateLimitState): void {
     super.updateState(next)
-    this.usageLastGood?.record(next, localAccountRuntimeTargetKey(this.antigravityFetchTarget))
+    this.usageLastGood?.record(next)
   }
 
   refreshOnOwnerReturn(): Promise<void> {
@@ -144,29 +127,6 @@ export class RateLimitService extends RateLimitServiceTargetUsageRead {
     }
   }
 
-  setAntigravityUsageEnabledResolver(resolver: AntigravityUsageEnabledResolver): void {
-    this.antigravityUsageEnabledResolver = resolver
-  }
-
-  setAntigravityFetchTarget(target: LocalAccountRuntimeTarget): void {
-    if (
-      localAccountRuntimeTargetKey(target) ===
-      localAccountRuntimeTargetKey(this.antigravityFetchTarget)
-    ) {
-      return
-    }
-    this.antigravityFetchTarget = { ...target }
-    this.antigravityTargetMoved = true
-    this.antigravityFetchGeneration += 1
-    this.antigravityAccounts = []
-    this.activeFailureStreakByProvider.antigravity = 0
-    this.updateState({ ...this.state, antigravity: null })
-  }
-
-  setAntigravityAccountUsageRecorder(recorder: AntigravityAccountUsageRecorder): void {
-    this.antigravityAccountUsageRecorder = recorder
-  }
-
   setMuseUsageEnabledResolver(resolver: MuseUsageEnabledResolver): void {
     this.museUsageEnabledResolver = resolver
   }
@@ -178,6 +138,12 @@ export class RateLimitService extends RateLimitServiceTargetUsageRead {
   setUsageHistoryRecorder(recorder: UsageHistoryRecorder): void {
     this.usageHistory = recorder
     recorder.record(this.state)
+    // A client that read state before the saved history loaded gets it without waiting for a poll.
+    void recorder.loaded.then(() => {
+      if (this.usageHistory === recorder) {
+        this.pushToRenderer()
+      }
+    })
   }
 
   setInactiveClaudeAccountsResolver(resolver: () => InactiveClaudeAccount[]): void {
@@ -287,7 +253,7 @@ export class RateLimitService extends RateLimitServiceTargetUsageRead {
         this.inactiveCodexCache,
         this.inactiveCodexFetching
       ),
-      antigravityAccounts: this.antigravityAccounts,
+      antigravityAccounts: [],
       usageHistory: this.usageHistory?.snapshot()
     }
   }

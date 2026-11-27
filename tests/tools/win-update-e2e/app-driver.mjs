@@ -317,7 +317,18 @@ export async function createTerminalTab(page) {
     .getByRole(NEW_TAB_BUTTON.role, { name: NEW_TAB_BUTTON.name })
     .first()
     .click({ force: true })
-  await page.getByRole('menuitem', { name: NEW_TERMINAL_ITEM }).first().click({ force: true })
+  // Newer builds show the create actions as an icon row with no labelled menu item; fall back to
+  // the New terminal tab shortcut there.
+  const clicked = await page
+    .getByRole('menuitem', { name: NEW_TERMINAL_ITEM })
+    .first()
+    .click({ force: true, timeout: 5_000 })
+    .then(() => true)
+    .catch(() => false)
+  if (!clicked) {
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Control+T')
+  }
   await page.waitForFunction(
     ({ selector, prev }) => document.querySelectorAll(selector).length > prev,
     { selector: SORTABLE_TAB, prev: before },

@@ -50,6 +50,8 @@ describe('recordUsageWindowSample', () => {
     })
     const times = series!.samples.map((s) => s.at)
     expect(times).toEqual([...times].sort((a, b) => a - b))
+    // Older points thin out instead of falling off, so the line still starts at the first reading.
+    expect(times[0]).toBe(NOW)
   })
 
   it('drops series whose window has ended', () => {

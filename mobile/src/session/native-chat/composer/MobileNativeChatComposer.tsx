@@ -16,11 +16,16 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileNativeChatComposerSuggestions } from './menus/MobileNativeChatComposerMenu'
 import { MobileNativeChatComposerField } from './field/MobileNativeChatComposerField'
 import { MobileNativeChatComposerAttachments } from './attachments/MobileNativeChatComposerAttachments'
-import type { PendingNativeChatFile } from './attachments/mobile-native-chat-file-attachment'
+import {
+  NO_ATTACHMENTS,
+  NO_FILES,
+  NO_FILE_PATHS,
+  mobileNativeChatComposerPlaceholder,
+  type MobileNativeChatComposerProps
+} from './mobile-native-chat-composer-props'
 import { MobileNativeChatComposerAttachButton } from './attachments/MobileNativeChatComposerAttachButton'
 import { MobileNativeChatSessionOptionPickers } from '../input/session-options/MobileNativeChatSessionOptionPickers'
 import { useMobileNativeChatPickerPresentation } from '../input/session-options/use-mobile-native-chat-picker-presentation'
-import type { PendingNativeChatImage } from './attachments/mobile-native-chat-image-attachment'
 import { mobileNativeChatComposerPasteHandler } from './attachments/mobile-native-chat-composer-paste'
 import { useMobileNativeChatComposerMenu } from './menus/use-mobile-native-chat-composer-menu'
 import { useMobileNativeChatMentionBots } from './menus/use-mobile-native-chat-mention-bots'
@@ -36,21 +41,17 @@ import { MobileNativeChatDictationLeading } from './dictation/MobileNativeChatDi
 import { useMobileNativeChatComposerGoalMode } from './commands/use-mobile-native-chat-composer-goal-mode'
 import { useMobileNativeChatOrcaCommands } from './commands/use-mobile-native-chat-orca-commands'
 import { MobileNativeChatComposerPlanChip } from './commands/MobileNativeChatComposerPlanChip'
-import type { MobileNativeChatComposerProps } from './mobile-native-chat-composer-props'
 import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
 import { MobileNativeChatQuoteTab } from './quotes/MobileNativeChatQuoteTab'
 import { MobileNativeChatActionGap } from './MobileNativeChatActionGap'
 import { MobileNativeChatWidthToggle } from './MobileNativeChatWidthToggle'
 export type { MobileNativeChatStructuredComposer } from './commands/mobile-native-chat-structured-composer'
 
-const NO_FILE_PATHS: string[] = []
-const NO_ATTACHMENTS: PendingNativeChatImage[] = []
-const NO_FILES: PendingNativeChatFile[] = []
-
-type Props = MobileNativeChatComposerProps
-
 /** What a chat's composer sends through, which the chat view hands down from its route. */
-export type MobileNativeChatSendProps = Pick<Props, 'onSend' | 'sendFollowUp'>
+export type MobileNativeChatSendProps = Pick<
+  MobileNativeChatComposerProps,
+  'onSend' | 'sendFollowUp'
+>
 
 export function MobileNativeChatComposer({
   roomReplies,
@@ -96,7 +97,7 @@ export function MobileNativeChatComposer({
   fitScreenCorners = false,
   widthToggle = null,
   steerHead
-}: Props): React.JSX.Element {
+}: MobileNativeChatComposerProps): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const fallbackInputRef = useRef<TextInputInstance>(null)
@@ -310,19 +311,12 @@ export function MobileNativeChatComposer({
               dictation.readSelection(menu.dictationAnchor(e))
               menu.onSelectionChange(e.nativeEvent.selection)
             }}
-            placeholder={
-              goal.placeholder ??
-              placeholder ??
-              (mentionBots && mentionBots.bots.length > 0
-                ? t(
-                    'bots.chat.mentionPlaceholder',
-                    'Ask anything, @ to mention bots or files, / for commands'
-                  )
-                : t(
-                    'chat.composer.placeholder',
-                    'Ask anything, @ to mention files, / for commands'
-                  ))
-            }
+            placeholder={mobileNativeChatComposerPlaceholder(
+              goal.placeholder,
+              placeholder,
+              mentionBots !== undefined && mentionBots.bots.length > 0,
+              t
+            )}
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.accentBlue}
             multiline

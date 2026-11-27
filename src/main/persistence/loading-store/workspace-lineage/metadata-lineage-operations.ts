@@ -90,11 +90,12 @@ export class MetadataLineageOperations {
     return this[metadataLineageOperationsContext].runtime.state.worktreeMeta
   }
 
-  getAllWorktreeMetaForHost(executionHostId: ExecutionHostId): Record<string, WorktreeMeta> {
-    return getAllWorktreeMetaForHostOperation(
-      this[metadataLineageOperationsContext].runtime,
-      executionHostId
-    )
+  getAllWorktreeMetaForHost(
+    hostId: ExecutionHostId,
+    repoId?: string
+  ): Record<string, WorktreeMeta> {
+    const { runtime } = this[metadataLineageOperationsContext]
+    return getAllWorktreeMetaForHostOperation(runtime, hostId, repoId)
   }
 
   captureNativeLocalWorktreeMetadataScanExpectation(
@@ -290,9 +291,8 @@ export class MetadataLineageOperations {
   }
 
   getWorkspaceLineage(childWorkspaceKey: WorkspaceKey): WorkspaceLineage | undefined {
-    return this[metadataLineageOperationsContext].runtime.state.workspaceLineageByChildKey[
-      childWorkspaceKey
-    ]
+    const { state } = this[metadataLineageOperationsContext].runtime
+    return state.workspaceLineageByChildKey[childWorkspaceKey]
   }
 
   getAllWorkspaceLineage(): Record<WorkspaceKey, WorkspaceLineage> {

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { parse as parseToml } from 'smol-toml'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
 const DEFAULT_OAUTH_HOST = 'https://auth.kimi.com'
 const DEFAULT_BASE_URL = 'https://api.kimi.com/coding/v1'
@@ -11,16 +12,20 @@ export type KimiCodeRuntimeAuth = {
   usageUrl: string
 }
 
-const KimiManagedProviderSchema = z.object({
-  base_url: z.string().optional(),
-  oauth: z.object({ oauth_host: z.string().optional() }).optional()
-})
+const KimiManagedProviderSchema = lazyZodSchema(() =>
+  z.object({
+    base_url: z.string().optional(),
+    oauth: z.object({ oauth_host: z.string().optional() }).optional()
+  })
+)
 
 type KimiManagedProviderConfig = z.infer<typeof KimiManagedProviderSchema>
 
-const KimiConfigSchema = z.object({
-  providers: z.object({ 'managed:kimi-code': KimiManagedProviderSchema.optional() }).optional()
-})
+const KimiConfigSchema = lazyZodSchema(() =>
+  z.object({
+    providers: z.object({ 'managed:kimi-code': KimiManagedProviderSchema.optional() }).optional()
+  })
+)
 
 function readManagedProviderConfig(configToml: string): KimiManagedProviderConfig | undefined {
   try {

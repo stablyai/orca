@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { SSH_RUNTIME_DURATION_BUCKETS } from './telemetry-ssh-runtime-event-schemas'
 
 // Why enum-only: these rows size how WSL moves end. A distro, repo or path name, a migration
@@ -57,17 +58,19 @@ export const WSL_MOVE_BYTES_BUCKETS = [
 ] as const
 
 // `started` counts attempts (it precedes refusals too) and carries placeholder buckets.
-export const wslMoveSchema = z
-  .object({
-    outcome: z.enum(['started', 'finished', 'reset', 'refused', 'waiting_for_host']),
-    refusal: z.enum(WSL_MOVE_REFUSAL_VALUES),
-    phase: z.enum(WSL_MOVE_PHASE_VALUES),
-    reset_reason: z.enum(WSL_MOVE_RESET_REASON_VALUES),
-    duration_bucket: z.enum(SSH_RUNTIME_DURATION_BUCKETS),
-    // Scrollback, shell history and restore hints sent: what the move had to carry.
-    bytes_bucket: z.enum(WSL_MOVE_BYTES_BUCKETS)
-  })
-  .strict()
+export const wslMoveSchema = lazyZodSchema(() =>
+  z
+    .object({
+      outcome: z.enum(['started', 'finished', 'reset', 'refused', 'waiting_for_host']),
+      refusal: z.enum(WSL_MOVE_REFUSAL_VALUES),
+      phase: z.enum(WSL_MOVE_PHASE_VALUES),
+      reset_reason: z.enum(WSL_MOVE_RESET_REASON_VALUES),
+      duration_bucket: z.enum(SSH_RUNTIME_DURATION_BUCKETS),
+      // Scrollback, shell history and restore hints sent: what the move had to carry.
+      bytes_bucket: z.enum(WSL_MOVE_BYTES_BUCKETS)
+    })
+    .strict()
+)
 
 /** What woke the move orchestrator (D3a) for a distro; `timer` is a retry or deferred re-check. */
 export const WSL_MOVE_ORCHESTRATOR_TRIGGER_VALUES = [
@@ -108,16 +111,18 @@ export const WSL_MOVE_ORCHESTRATOR_PARK_REASON_VALUES = [
 export const WSL_MOVE_ORCHESTRATOR_ATTEMPT_BUCKETS = ['0', '1', '2_3', 'gte_4'] as const
 
 // Same enum-only rule as `wsl_move`: no distro, project or migration id leaves.
-export const wslMoveOrchestratorSchema = z
-  .object({
-    trigger: z.enum(WSL_MOVE_ORCHESTRATOR_TRIGGER_VALUES),
-    transition: z.enum(WSL_MOVE_ORCHESTRATOR_TRANSITION_VALUES),
-    refusal: z.enum(WSL_MOVE_REFUSAL_VALUES),
-    reset_reason: z.enum(WSL_MOVE_RESET_REASON_VALUES),
-    park_reason: z.enum(WSL_MOVE_ORCHESTRATOR_PARK_REASON_VALUES),
-    attempt_bucket: z.enum(WSL_MOVE_ORCHESTRATOR_ATTEMPT_BUCKETS)
-  })
-  .strict()
+export const wslMoveOrchestratorSchema = lazyZodSchema(() =>
+  z
+    .object({
+      trigger: z.enum(WSL_MOVE_ORCHESTRATOR_TRIGGER_VALUES),
+      transition: z.enum(WSL_MOVE_ORCHESTRATOR_TRANSITION_VALUES),
+      refusal: z.enum(WSL_MOVE_REFUSAL_VALUES),
+      reset_reason: z.enum(WSL_MOVE_RESET_REASON_VALUES),
+      park_reason: z.enum(WSL_MOVE_ORCHESTRATOR_PARK_REASON_VALUES),
+      attempt_bucket: z.enum(WSL_MOVE_ORCHESTRATOR_ATTEMPT_BUCKETS)
+    })
+    .strict()
+)
 
 /** How "use this project here again" ended; refusals keep the result's own reason. */
 export const WSL_MOVE_UNDO_OUTCOME_VALUES = [
@@ -135,9 +140,11 @@ export const WSL_MOVE_UNDO_OUTCOME_VALUES = [
 ] as const
 
 // Same enum-only rule as `wsl_move`: no distro, project or migration id leaves.
-export const wslMoveUndoSchema = z
-  .object({
-    outcome: z.enum(WSL_MOVE_UNDO_OUTCOME_VALUES),
-    duration_bucket: z.enum(SSH_RUNTIME_DURATION_BUCKETS)
-  })
-  .strict()
+export const wslMoveUndoSchema = lazyZodSchema(() =>
+  z
+    .object({
+      outcome: z.enum(WSL_MOVE_UNDO_OUTCOME_VALUES),
+      duration_bucket: z.enum(SSH_RUNTIME_DURATION_BUCKETS)
+    })
+    .strict()
+)

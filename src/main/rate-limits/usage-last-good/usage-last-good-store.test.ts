@@ -41,9 +41,6 @@ vi.mock('../providers/cursor/cursor-auth', () => ({
 vi.mock('../providers/zcode/zcode-usage-fetcher', () => ({
   fetchZcodeRateLimits: failing('zcode')
 }))
-vi.mock('../providers/antigravity/antigravity-usage-fetcher', () => ({
-  fetchAntigravityRateLimits: failing('antigravity')
-}))
 vi.mock('../providers/muse/muse-usage-fetcher', () => ({ fetchMuseRateLimits: failing('muse') }))
 vi.mock('../../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: async () => false
@@ -84,7 +81,6 @@ async function persistThenRestart(
     codex: null,
     opencodeGo: null,
     kimi: readings.kimi ?? null,
-    antigravity: null,
     minimax: null,
     grok: null,
     cursor: null,
@@ -98,45 +94,6 @@ async function persistThenRestart(
   await service.setUsageLastGoodStore(new UsageLastGoodStore(file))
   return service
 }
-
-it('does not restore an Antigravity reading saved for a different runtime target', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'usage-last-good-'))
-  dirs.push(dir)
-  const file = join(dir, 'last-good.json')
-  const reading: ProviderRateLimits = {
-    provider: 'antigravity',
-    session: null,
-    weekly: window(40, 10080, now + 72 * HOUR),
-    updatedAt: now - 10 * 60_000,
-    error: null,
-    status: 'ok'
-  }
-  const empty = {
-    claude: null,
-    codex: null,
-    opencodeGo: null,
-    kimi: null,
-    antigravity: reading,
-    minimax: null,
-    grok: null,
-    cursor: null,
-    zcode: null,
-    muse: null
-  }
-  const before = new UsageLastGoodStore(file)
-  await before.loaded
-  before.record(empty, 'host')
-  await before.whenSaved()
-
-  const same = new RateLimitService()
-  await same.setUsageLastGoodStore(new UsageLastGoodStore(file))
-  expect((await same.getState()).antigravity?.weekly?.usedPercent).toBe(40)
-
-  const moved = new RateLimitService()
-  moved.setAntigravityFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-  await moved.setUsageLastGoodStore(new UsageLastGoodStore(file))
-  expect((await moved.getState()).antigravity).toBeNull()
-})
 
 it('keeps the persisted windows when the first poll after a restart fails', async () => {
   const service = await persistThenRestart({
