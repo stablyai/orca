@@ -112,7 +112,7 @@ export function BrowserAnnotateToolMenuItems({
   )
 }
 
-/** Grab, Annotate and Draw are one mode with three flavours: click annotates, right-click offers the rest. */
+/** Grab, Annotate and Draw are one mode with three flavours: click grabs, right-click offers the rest. */
 export function BrowserAnnotateToolButton({
   tools,
   markup,
@@ -147,7 +147,8 @@ export function BrowserAnnotateToolButton({
     } else if (tools.activeIntent) {
       tools.onStartIntent(tools.activeIntent)
     } else {
-      tools.onStartIntent('annotate')
+      // Grab is the palette's first and default tool.
+      tools.onStartIntent('copy')
     }
   }
   const startDraw = (): void => {

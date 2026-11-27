@@ -32,6 +32,8 @@ export function samePaletteLayout(a: PaletteLayout, b: PaletteLayout): boolean {
 
 /** Gap kept between the palette and every edge of the page. */
 export const PALETTE_EDGE_INSET_PX = 8
+/** Gap under the palette at its lowest (its default spot), so it floats clear of the page's bottom edge. */
+export const PALETTE_BOTTOM_INSET_PX = 20
 const KEY_STEP = 0.05
 const KEY_STEP_LARGE = 0.25
 const HINT_GAP_PX = 8
