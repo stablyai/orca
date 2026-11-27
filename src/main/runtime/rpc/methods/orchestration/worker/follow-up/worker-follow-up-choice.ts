@@ -29,6 +29,10 @@ import {
   type WorkerFollowUp
 } from './worker-follow-up-placement'
 import { inspectWorkerTerminal } from '../observation/worker-observation'
+import {
+  chatAssigneeSessionId,
+  observeChatAssignee
+} from '../../../../../orchestration/workers/lifecycle/chat-assignee'
 import { completeWorkerTerminalRelease } from '../release/worker-release-completion'
 
 const RELEASE_SETTLE_WAIT_MS = 15_000
@@ -64,7 +68,8 @@ export async function chooseWorkerFollowUpPlacement(
     throw notRestartable(latest.id)
   }
   const structured = !!found && isStructuredWorkerHandle(found.terminal_handle)
-  if (structured && !getStructuredAgentSessionHost()) {
+  const chat = chatAssigneeSessionId(found?.terminal_handle)
+  if ((structured || chat) && !getStructuredAgentSessionHost()) {
     await runtime.ensureStructuredAgentSessionHost()
   }
   assertWorkerFollowUpUnclaimed(db, latest.id)
@@ -81,6 +86,14 @@ export async function chooseWorkerFollowUpPlacement(
   const options = parseStartOptions(worker.start_options)
   const resource = found && (releaseInProgress(found) ? await settledRelease(db, found) : found)
   assertWorkerFollowUpUnclaimed(db, latest.id)
+  if (resource && chat) {
+    refuseUnsettledWorkerTerminalRelease(resource)
+    // Orca never reopens a chat it only borrowed.
+    if (observeChatAssignee(chat, db).status === 'exited') {
+      throw notRestartable(latest.id)
+    }
+    return { delivery: 'follow_up', worktreeId, terminal: resource.terminal_handle }
+  }
   if (resource && structured) {
     refuseUnsettledWorkerTerminalRelease(resource)
     const handle = resource.terminal_handle
