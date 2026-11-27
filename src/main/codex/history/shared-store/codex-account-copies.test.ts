@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { zstdCompressSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { writeKeptCopies } from './codex-account-copies-kept'
+import { writeCursor, writeKeptCopies } from './codex-account-copies-kept'
 import { cleanUpCodexAccountCopies } from './codex-account-copies-cleanup'
 import { verifyCodexAccountCopies } from './codex-account-copies'
 import { runCodexAccountCopiesRequest } from './codex-account-copies-requests'
@@ -26,11 +26,11 @@ import { recheckTrashedCopies } from './codex-account-copies-trash-recheck'
 import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-move-telemetry'
 
 // Lets a test make every directory listing cost time, as on a slow or network disk.
-const listings = vi.hoisted(() => ({ onRead: null as null | (() => void) }))
+const listings = vi.hoisted(() => ({ onRead: null as null | ((path: unknown) => void) }))
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   const readdirSync = ((...args: Parameters<typeof actual.readdirSync>) => {
-    listings.onRead?.()
+    listings.onRead?.(args[0])
     return actual.readdirSync(...args)
   }) as typeof actual.readdirSync
   return { ...actual, readdirSync, default: { ...actual, readdirSync } }
@@ -669,5 +669,49 @@ describe('writeKeptCopies', () => {
 
     const after = statSync(file, { bigint: true })
     expect([after.ino, after.mtimeNs]).toEqual([before.ino, before.mtimeNs])
+  })
+})
+
+describe('a launch that resumes mid-walk', () => {
+  const verify = (version: string) =>
+    verifyCodexAccountCopies({
+      accountHome: home,
+      storeHome: store,
+      budget: { maxBytes: 4 * 1024 ** 3, deadline: Date.now() + 60_000 },
+      version,
+      managedAccountsRoot: join(root, 'codex-accounts')
+    })
+
+  it('lists the folder holding its cursor once, though the walk passes it twice', async () => {
+    for (const n of [1, 2, 3]) {
+      put(storeFile(otherThread(n)), LINE_1)
+      put(conflictCopy(otherThread(n)), LINE_1)
+    }
+    writeCursor(home, { walkAfter: `sessions.orca-profile-merge/${otherThread(2)}` })
+    const reads: unknown[] = []
+    listings.onRead = (path) => reads.push(path)
+    try {
+      expect((await verify('test-wrap')).verified).toHaveLength(3)
+    } finally {
+      listings.onRead = null
+    }
+
+    expect(reads.filter((path) => path === dirname(conflictCopy()))).toHaveLength(1)
+  })
+
+  it('serializes no kept-copies record when the launch learned nothing new', async () => {
+    put(storeFile(), LINE_1 + LINE_2)
+    put(conflictCopy(), LINE_1 + LINE_2.replace('second', 'secAnd'))
+    await verify('test-1')
+    const stringify = vi.spyOn(JSON, 'stringify')
+    try {
+      expect((await verify('test-2')).tally.differs).toBe(1)
+      const records = stringify.mock.calls.filter(
+        ([value]) => typeof value === 'object' && value !== null && 'differs' in value
+      )
+      expect(records).toHaveLength(0)
+    } finally {
+      stringify.mockRestore()
+    }
   })
 })

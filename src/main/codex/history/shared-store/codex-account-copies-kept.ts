@@ -131,8 +131,13 @@ export function readKeptCopies(accountHome: string): KeptCopiesRecord {
 // Only ever skips work: a stale entry keeps a copy, never deletes one.
 export function writeKeptCopies(
   accountHome: string,
-  { differs, settled, progress = {}, verified = {} }: KeptCopiesRecord
+  { differs, settled, progress = {}, verified = {} }: KeptCopiesRecord,
+  /** The record as read this launch: when nothing differs from it, nothing is serialized. */
+  previous?: KeptCopiesRecord
 ): void {
+  if (previous && sameRecord(previous, { differs, settled, progress, verified })) {
+    return
+  }
   // Keys sorted: the same record always serializes the same, whatever order a walk visited it in.
   const text = `${JSON.stringify({
     version: 1,
@@ -142,6 +147,33 @@ export function writeKeptCopies(
     verified: sortedKeys(verified)
   })}\n`
   writeIfChanged(join(accountHome, KEPT_COPIES_FILE), text, false)
+}
+
+function sameKeys<T>(
+  a: Record<string, T>,
+  b: Record<string, T>,
+  same: (x: T, y: T) => boolean
+): boolean {
+  const keys = Object.keys(a)
+  return (
+    keys.length === Object.keys(b).length &&
+    keys.every((key) => Object.hasOwn(b, key) && same(a[key], b[key]))
+  )
+}
+
+// Compared entry by entry, without sorting or serializing anything.
+function sameRecord(a: KeptCopiesRecord, b: KeptCopiesRecord): boolean {
+  const equal = (x: string, y: string): boolean => x === y
+  return (
+    a.settled === b.settled &&
+    sameKeys(a.differs, b.differs, equal) &&
+    sameKeys(a.verified ?? {}, b.verified ?? {}, equal) &&
+    sameKeys(
+      a.progress ?? {},
+      b.progress ?? {},
+      (x, y) => x.key === y.key && x.matched === y.matched
+    )
+  )
 }
 
 const sortedKeys = <T>(record: Record<string, T>): Record<string, T> =>

@@ -271,12 +271,16 @@ export async function verifyCodexAccountCopies(args: {
       tally.open +
       tally.busy ===
       0
-  writeKeptCopies(args.accountHome, {
-    differs: nextKept,
-    settled: settled ? stamp : null,
-    progress: nextProgress,
-    verified: nextVerified
-  })
+  writeKeptCopies(
+    args.accountHome,
+    {
+      differs: nextKept,
+      settled: settled ? stamp : null,
+      progress: nextProgress,
+      verified: nextVerified
+    },
+    record
+  )
   writeCursor(args.accountHome, {
     ...cursor,
     walkAfter: outOfTime ? (lastVisited ?? cursor.walkAfter) : undefined,

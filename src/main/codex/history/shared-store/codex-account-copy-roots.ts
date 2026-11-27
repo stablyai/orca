@@ -1,4 +1,4 @@
-import { type BigIntStats, readFileSync, readdirSync } from 'node:fs'
+import { type BigIntStats, type Dirent, readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { MERGE_PENDING_SUFFIX } from '../../../filesystem/merged-directory-link'
@@ -91,16 +91,21 @@ function* sortedRolloutFiles(
   root: CopyRoot,
   folder: string,
   segments: string[],
-  after: string[] | null
+  after: string[] | null,
+  listed: Map<string, Dirent[]>
 ): Generator<WalkedCopy> {
-  let entries
+  let entries = listed.get(folder)
   try {
-    entries = readdirSync(folder, { withFileTypes: true }).sort((a, b) => byName(a.name, b.name))
+    entries ??= readdirSync(folder, { withFileTypes: true }).sort((a, b) => byName(a.name, b.name))
   } catch (error) {
     if (isDefinitiveAbsence(error)) {
       return
     }
     throw error
+  }
+  // A folder on the cursor's path is listed again when the walk wraps round: kept, not reread.
+  if (after) {
+    listed.set(folder, entries)
   }
   for (const entry of entries) {
     const next = [...segments, entry.name]
@@ -115,7 +120,7 @@ function* sortedRolloutFiles(
     }
     const path = join(folder, entry.name)
     if (entry.isDirectory()) {
-      yield* sortedRolloutFiles(root, path, next, from)
+      yield* sortedRolloutFiles(root, path, next, from, listed)
     } else if (entry.isFile() && ROLLOUT_FILE.test(entry.name)) {
       yield { root, copy: path, segments: next }
     }
@@ -132,20 +137,21 @@ export function* walkCopies(
   after?: string
 ): Generator<WalkedCopy> {
   const cursor = after ? after.split('/') : null
+  const listed = new Map<string, Dirent[]>()
   const roots = listCopyRoots(accountHome, storeHome)
     .map((root) => ({ root, segments: relative(accountHome, root.root).split(/[\\/]/) }))
     .sort((a, b) => compareWalkPaths(a.segments, b.segments))
   for (const { root, segments } of roots) {
     const order = cursor ? compareWalkPaths(segments, cursor.slice(0, segments.length)) : 1
     if (order >= 0) {
-      yield* sortedRolloutFiles(root, root.root, segments, order === 0 ? cursor : null)
+      yield* sortedRolloutFiles(root, root.root, segments, order === 0 ? cursor : null, listed)
     }
   }
   if (!cursor) {
     return
   }
   for (const { root, segments } of roots) {
-    for (const item of sortedRolloutFiles(root, root.root, segments, null)) {
+    for (const item of sortedRolloutFiles(root, root.root, segments, null, listed)) {
       if (compareWalkPaths(item.segments, cursor) > 0) {
         return
       }
