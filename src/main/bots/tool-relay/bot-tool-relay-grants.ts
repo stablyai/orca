@@ -10,9 +10,9 @@ import {
   relayUnlockThrottle,
   sealRelaySecret,
   type RelayUnlockThrottle,
-  unsealRelaySecret,
-  type RelaySealedFile
+  unsealRelaySecret
 } from './relay-sealed-file'
+import type { RelaySealedEntries } from './relay-sealed-entries'
 
 /** The folders a token reaches: its bot's home, and the host's MCP server list when it may use it. */
 export type RelayFolders = { bot?: string; host?: string }
@@ -59,7 +59,7 @@ export function relayToolPath(path: string): RelayToolPath | null {
   return { scope: match[1] === 'mcp-servers' ? 'host' : 'bot', credentialId: match[2]! }
 }
 
-/** A kept grant as the file holds it; only the token is sealed (by the OS keychain). */
+/** A kept grant as its file holds it (one file per owner); only the token is sealed (by the OS keychain). */
 export type StoredRelayGrant = { owner: string; folders: RelayFolders; sealedToken: string }
 
 export function isStoredRelayGrant(value: unknown): value is StoredRelayGrant {
@@ -97,7 +97,7 @@ export class RelayGrants {
   /** Entries in the file the keychain hasn't opened yet; kept as written. */
   private readonly locked = new Map<string, StoredRelayGrant>()
   private loading: Promise<void> | null = null
-  private file: RelaySealedFile<StoredRelayGrant> | null = null
+  private file: RelaySealedEntries<StoredRelayGrant> | null = null
   private current: ((owner: string) => RelayFolders | null) | undefined
 
   constructor(private readonly throttle: RelayUnlockThrottle = relayUnlockThrottle) {}
@@ -107,7 +107,7 @@ export class RelayGrants {
    * each owner's reach from the current config, null for a deleted bot; absent keeps the file's.
    */
   configure(
-    file: RelaySealedFile<StoredRelayGrant>,
+    file: RelaySealedEntries<StoredRelayGrant>,
     current?: (owner: string) => RelayFolders | null
   ): void {
     this.file = file
@@ -129,11 +129,12 @@ export class RelayGrants {
     if (!file) {
       return
     }
-    let dropped = false
+    const drops: Promise<void>[] = []
     for (const stored of await file.read()) {
       const folders = current ? current(stored.owner) : stored.folders
-      if (!folders || this.kept.has(stored.owner) || this.locked.has(stored.owner)) {
-        dropped = true
+      if (!folders) {
+        // A deleted bot's entry goes.
+        drops.push(file.delete(stored))
         continue
       }
       const entry = { ...stored, folders: resolvedFolders(folders) }
@@ -141,11 +142,9 @@ export class RelayGrants {
         this.locked.set(entry.owner, entry)
       }
     }
-    if (dropped) {
-      await this.persist().catch((error: unknown) =>
-        console.warn('[bot-tool-relay] could not drop deleted bots from the grants file', error)
-      )
-    }
+    await Promise.all(drops).catch((error: unknown) =>
+      console.warn('[bot-tool-relay] could not drop a deleted bot from the grants', error)
+    )
   }
 
   /** The owner's token, now reaching only `folders`, as the owner's latest launch named them. */
@@ -196,7 +195,7 @@ export class RelayGrants {
         return false
       }
       record.entry = { owner, folders, sealedToken }
-      await this.persist()
+      await this.file?.put(record.entry)
       return this.kept.get(owner) === record
     } catch (error) {
       if (this.kept.get(owner) === record) {
@@ -243,7 +242,7 @@ export class RelayGrants {
     const inFile = this.kept.delete(owner) || this.locked.delete(owner)
     try {
       if (inFile) {
-        await this.persist()
+        await this.file?.deleteKey(owner)
       }
     } finally {
       // A failed write still ends the token now; the next start drops a deleted bot's entry.
@@ -282,15 +281,5 @@ export class RelayGrants {
     this.tokens.set(entry.owner, token)
     this.kept.set(entry.owner, { entry, token, durable: Promise.resolve(true) })
     return true
-  }
-
-  private persist(): Promise<void> {
-    if (!this.file) {
-      return Promise.resolve()
-    }
-    return this.file.write(() => [
-      ...[...this.kept.values()].flatMap(({ entry }) => (entry ? [entry] : [])),
-      ...this.locked.values()
-    ])
   }
 }

@@ -22,7 +22,10 @@ const hostAccount = (email: string) => ({
 })
 
 vi.mock('../../../bots/tool-relay/bot-tool-relay', () => ({
-  botToolRelay: { botOf: (token: string) => (token === BOT_TOKEN ? 'scout' : null) }
+  botToolRelay: {
+    botOf: (token: string) => (token === BOT_TOKEN ? 'scout' : null),
+    kept: { anyLocked: () => false }
+  }
 }))
 vi.mock('../../../google/google-credential-store', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),

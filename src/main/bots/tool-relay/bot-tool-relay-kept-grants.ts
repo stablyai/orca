@@ -12,7 +12,7 @@ import {
 } from './bot-tool-relay-grants'
 import { ToolRelayFronts } from './bot-tool-relay-fronts'
 import { keptGrantOwnerFolders, keptToolGrantsConfig, keptToolGrantsPath } from './kept-tool-grants'
-import { RelaySealedFile } from './relay-sealed-file'
+import { RelaySealedEntries } from './relay-sealed-entries'
 import { answerCredentialsLocked } from './bot-tool-relay-sign-in-answer'
 
 /**
@@ -61,7 +61,11 @@ export class KeptRelayGrants {
     const config = keptToolGrantsConfig()
     if (config && !this.grants.configured) {
       this.grants.configure(
-        new RelaySealedFile(keptToolGrantsPath(config.directory), isStoredRelayGrant),
+        new RelaySealedEntries(
+          keptToolGrantsPath(config.directory),
+          isStoredRelayGrant,
+          (entry) => entry.owner
+        ),
         keptGrantOwnerFolders(config)
       )
     }

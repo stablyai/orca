@@ -19,8 +19,9 @@ let config: KeptToolGrantsConfig | null = null
 let currentRun: ((sessionId: string) => number | null) | null = null
 let restoring: Promise<void> | null = null
 
+/** A folder: one file per kept owner. */
 export const keptToolGrantsPath = (directory: string): string =>
-  join(directory, 'bot-tool-relay-grants.json')
+  join(directory, 'bot-tool-relay-grants')
 /** A folder: one file per kept chat run. */
 export const keptToolCallersPath = (directory: string): string =>
   join(directory, 'shared-tool-callers')

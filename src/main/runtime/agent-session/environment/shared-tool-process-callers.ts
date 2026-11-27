@@ -13,6 +13,9 @@ const callers = new Map<string, Readonly<Record<string, string>>>()
 
 const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex')
 
+// A kept caller retired (its chat ended or was deleted, its bot revoked) names no one from now on.
+sharedToolCallerStore.onRetired = (token) => callers.delete(hashToken(token))
+
 /** Kept chats' callers from an earlier run of Orca, whose runs are still current. */
 export function restoreKeptSharedToolCallers(kept: readonly KeptSharedToolCaller[]): void {
   for (const caller of kept) {

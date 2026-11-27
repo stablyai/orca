@@ -179,7 +179,12 @@ export class ToolRelayFronts {
         watched.servedConnection = null
         const connection = watched.connection
         setTimeout(() => {
-          if (this.watched.get(client) === watched && watched.connection === connection) {
+          // A daemon start that's gone stops here; its next hello serves again.
+          if (
+            this.watched.get(client) === watched &&
+            watched.connection === connection &&
+            client.isConnected()
+          ) {
             void this.serveOnce(client).catch(() => {})
           }
         }, watched.retryMs).unref()

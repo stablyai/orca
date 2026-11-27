@@ -2,6 +2,7 @@
 // when the agent may outlive the app, and a reattached agent goes on with the token it already holds.
 import type { AcpStructuredLaunch } from '../launch/acp-structured-launch-resolution'
 import { SharedToolProcessSession } from '../../runtime/agent-session/environment/shared-tool-process-callers'
+import { forgetKeptSharedToolChat } from '../../runtime/agent-session/environment/shared-tool-caller-store'
 import { BOT_TOOLS_TOKEN_ENV } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { botToolRelay, MCP_HOST_LIST_RELAY_OWNER } from '../../bots/tool-relay/bot-tool-relay'
 import { providerRelayQuitting } from '../../provider-relay/app-provider-relays'
@@ -62,6 +63,13 @@ export async function acpSharedToolLaunch<
       // A reattached agent whose kept caller the keychain won't open yet keeps that entry, carried
       // to this run, so its tools have their identity once it opens.
       await launched?.settle(run.sessionId, reattached ? run.runFence : undefined)
+      if (reattached) {
+        // Closed before its connection took over, the reattached agent leaves no entry behind.
+        unowned = () => {
+          launched?.abandon()
+          forgetKeptSharedToolChat(run.sessionId)
+        }
+      }
       return launched
     },
     connecting:

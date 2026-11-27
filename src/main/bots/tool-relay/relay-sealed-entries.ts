@@ -78,7 +78,11 @@ export class RelaySealedEntries<Entry> {
 
   /** Resolves once the entry's file is gone. */
   delete(entry: Entry): Promise<void> {
-    const path = this.pathOf(this.keyOf(entry))
+    return this.deleteKey(this.keyOf(entry))
+  }
+
+  deleteKey(key: string): Promise<void> {
+    const path = this.pathOf(key)
     return this.after(path, async () => {
       await this.files.remove(path)
     })

@@ -19,6 +19,7 @@ import { withdrawClientAsksOf } from '../../runtime/orchestration/federation/cli
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/agent-session/identity/orca-session-address-prefix'
 import { retireChatRuns } from '../../runtime/orchestration/db/runs/retired-coordinator-runs'
 import { dropListedProviderRelay } from '../../provider-relay/app-provider-relays'
+import { forgetKeptSharedToolChat } from '../../runtime/agent-session/environment/shared-tool-caller-store'
 
 type ChatHost = NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>
 
@@ -163,6 +164,7 @@ export async function deleteOrcaChat(
     retireChatRuns(runtime, record.sessionId)
     // An agent the terminal host still keeps for it (or its kept output) goes with it.
     dropListedProviderRelay(record.sessionId)
+    forgetKeptSharedToolChat(record.sessionId)
   }
   if (bot) {
     for (const record of chat.records) {

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -8,7 +8,8 @@ import {
   type SecretStore
 } from '../../../shared/secure-storage/secret-store'
 import { isStoredRelayGrant, RelayGrants, type StoredRelayGrant } from './bot-tool-relay-grants'
-import { RELAY_UNLOCK_RETRY_MS, RelaySealedFile, RelayUnlockThrottle } from './relay-sealed-file'
+import { RELAY_UNLOCK_RETRY_MS, RelayUnlockThrottle } from './relay-sealed-file'
+import { RelaySealedEntries } from './relay-sealed-entries'
 import { jsonProperty } from '../../../shared/json-stream/json-value-property'
 
 /**
@@ -47,17 +48,26 @@ let clock = 0
 
 const grantsAt = (current?: (owner: string) => { bot?: string } | null) => {
   const grants = new RelayGrants(new RelayUnlockThrottle(() => clock))
-  grants.configure(new RelaySealedFile(path, isStoredRelayGrant), current)
+  grants.configure(
+    new RelaySealedEntries(path, isStoredRelayGrant, (entry) => entry.owner),
+    current
+  )
   return grants
 }
-const fileEntries = (): StoredRelayGrant[] => {
-  const entries = jsonProperty(JSON.parse(readFileSync(path, 'utf8')), 'entries')
-  return Array.isArray(entries) ? entries.filter(isStoredRelayGrant) : []
-}
+/** Every kept owner's file, as written. */
+const filesText = (): string =>
+  readdirSync(path)
+    .toSorted()
+    .map((name) => readFileSync(join(path, name), 'utf8'))
+    .join('')
+const fileEntries = (): StoredRelayGrant[] =>
+  readdirSync(path)
+    .map((name) => jsonProperty(JSON.parse(readFileSync(join(path, name), 'utf8')), 'entry'))
+    .filter(isStoredRelayGrant)
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'relay-grants-'))
-  path = join(dir, 'bot-tool-relay-grants.json')
+  path = join(dir, 'bot-tool-relay-grants')
   Object.assign(keychain, {
     locked: false,
     sealing: 'os-keychain',
@@ -79,7 +89,7 @@ describe('kept relay grants', () => {
     const token = first.grant('scout', { bot: '/bots/scout' })
     expect(await first.keep('scout')).toBe(true)
     // Durable before keep resolved, and never in the clear.
-    expect(readFileSync(path, 'utf8')).not.toContain(token)
+    expect(filesText()).not.toContain(token)
 
     const next = grantsAt((owner) => (owner === 'scout' ? { bot: '/bots/scout' } : null))
     await next.load()
@@ -109,7 +119,7 @@ describe('kept relay grants', () => {
     const first = grantsAt()
     const token = first.grant('scout', { bot: '/bots/scout' })
     await first.keep('scout')
-    const written = readFileSync(path, 'utf8')
+    const written = filesText()
 
     keychain.locked = true
     const next = grantsAt()
@@ -119,7 +129,7 @@ describe('kept relay grants', () => {
     // A new launch for a locked owner stays memory-only.
     next.grant('scout', { bot: '/bots/scout' })
     expect(await next.keep('scout')).toBe(false)
-    expect(readFileSync(path, 'utf8')).toBe(written)
+    expect(filesText()).toBe(written)
 
     const opensAfterLoad = keychain.opens
     expect(await next.unlock(token)).toBe('locked')

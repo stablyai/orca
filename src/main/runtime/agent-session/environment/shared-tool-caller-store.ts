@@ -88,8 +88,10 @@ export class SharedToolCallerStore {
   private readonly chats = new Map<string, Map<number, Entry>>()
   /** The entries still locked, so a lookup that finds nothing to retry does no scan. */
   private readonly locked = new Set<Entry>()
-  /** Bumped by each owner's revoke, so a seal racing it never writes that owner back. */
-  private readonly revocations = new Map<string, number>()
+  /** Each owner's seals still running; a revoke marks them, so none writes that owner back. */
+  private readonly sealing = new Map<string, Set<{ revoked: boolean }>>()
+  /** Told of each kept caller token that retires, so this run stops answering for it. */
+  onRetired: (token: string) => void = () => {}
   private loading: Promise<void> | null = null
 
   constructor(private readonly throttle: RelayUnlockThrottle = relayUnlockThrottle) {}
@@ -196,12 +198,30 @@ export class SharedToolCallerStore {
 
   /** Durably keeps a caller; false (memory-only, so its launch is app-bound) when it can't. */
   async keep(caller: KeptSharedToolCaller, resealed?: string): Promise<boolean> {
+    // Marked by a revoke of its owner until it lands; tracked only while it runs.
+    const pending = { revoked: false }
+    const ofOwner = this.sealing.get(caller.owner) ?? new Set()
+    this.sealing.set(caller.owner, ofOwner.add(pending))
+    try {
+      return await this.sealAndKeep(caller, resealed, pending)
+    } finally {
+      ofOwner.delete(pending)
+      if (ofOwner.size === 0 && this.sealing.get(caller.owner) === ofOwner) {
+        this.sealing.delete(caller.owner)
+      }
+    }
+  }
+
+  private async sealAndKeep(
+    caller: KeptSharedToolCaller,
+    resealed: string | undefined,
+    pending: { revoked: boolean }
+  ): Promise<boolean> {
     await this.load()
     const files = this.files
     if (!files || (resealed === undefined && !relaySealingProtected())) {
       return false
     }
-    const revocation = this.revocations.get(caller.owner) ?? 0
     let sealed: string
     try {
       sealed =
@@ -210,8 +230,8 @@ export class SharedToolCallerStore {
     } catch {
       return false
     }
-    // Its owner was revoked while sealing: a deleted bot's caller never reaches the file.
-    if ((this.revocations.get(caller.owner) ?? 0) !== revocation) {
+    // Its owner was revoked meanwhile: a deleted bot's caller never reaches the file.
+    if (pending.revoked) {
       return false
     }
     const { sessionId, runFence, owner } = caller
@@ -256,13 +276,25 @@ export class SharedToolCallerStore {
       // The reattached agent holds that entry's token, so the run's caller is it, not `current`.
       const moved: Entry = { stored: { ...carried.stored, runFence: carryLockedTo }, kept: null }
       this.put(moved)
-      await this.files?.put(moved.stored).catch(() => {})
-      return carryLockedTo
+      try {
+        await this.files?.put(moved.stored)
+        return carryLockedTo
+      } catch {
+        // Not durable: the entry the saved placement names stays until one is.
+        this.remove(moved)
+        return carried.stored.runFence
+      }
     }
-    if (current && this.chats.get(sessionId)?.get(current.runFence)?.kept?.token !== current.token) {
+    if (
+      current &&
+      this.chats.get(sessionId)?.get(current.runFence)?.kept?.token !== current.token
+    ) {
       // A reattached caller is sealed already: its earlier entry's sealing is reused, not redone.
-      const sealed = runs.find((entry) => entry.kept?.token === current.token)?.stored.sealed
-      await this.keep(current, sealed)
+      const earlier = runs.find((entry) => entry.kept?.token === current.token)
+      if (!(await this.keep(current, earlier?.stored.sealed)) && earlier) {
+        // Not durable: the earlier entry stays until one is.
+        return earlier.stored.runFence
+      }
     }
     return current?.runFence
   }
@@ -287,7 +319,9 @@ export class SharedToolCallerStore {
 
   /** The owner's grant is being revoked: its callers go durably first. */
   async forgetOwner(owner: string): Promise<void> {
-    this.revocations.set(owner, (this.revocations.get(owner) ?? 0) + 1)
+    for (const pending of this.sealing.get(owner) ?? []) {
+      pending.revoked = true
+    }
     await this.load()
     const going = [...this.chats.values()].flatMap((runs) =>
       [...runs.values()].filter((entry) => entry.stored.owner === owner)
@@ -299,6 +333,13 @@ export class SharedToolCallerStore {
   private retire(entry: Entry): Promise<void> {
     if (!this.remove(entry)) {
       return Promise.resolve()
+    }
+    const token = entry.kept?.token
+    const stillUsed = [...(this.chats.get(entry.stored.sessionId)?.values() ?? [])].some(
+      (other) => other.kept?.token === token
+    )
+    if (token !== undefined && !stillUsed) {
+      this.onRetired(token)
     }
     return this.files?.delete(entry.stored) ?? Promise.resolve()
   }
@@ -333,6 +374,11 @@ export class SharedToolCallerStore {
 }
 
 export const sharedToolCallerStore = new SharedToolCallerStore()
+
+/** A deleted chat's kept callers go, from the files and from what this run answers for. */
+export function forgetKeptSharedToolChat(sessionId: string): void {
+  void sharedToolCallerStore.retireExcept(sessionId, undefined).catch(() => {})
+}
 
 export function forgetKeptSharedToolCallers(owner: string): Promise<void> {
   return sharedToolCallerStore.forgetOwner(owner)
