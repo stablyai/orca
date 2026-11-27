@@ -19738,7 +19738,7 @@
         "failedSome_other": "再開できませんでした：{{total}} 件中 {{count}} 件",
         "resumedOne": "再開済み：{{name}}",
         "resumedMany_other": "再開済み：{{count}} 件の Agent",
-        "partial_other": "{{total}} 件中 {{resumed}} 件を再開しました。{{count}} 件は対応が必要です。"
+        "needYou_other": "{{count}} 件は対応が必要です"
       },
       "RunTargetCombobox": {
         "noWslDistros": "WSL ディストリビューションが見つかりません",

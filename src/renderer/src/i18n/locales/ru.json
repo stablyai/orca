@@ -21567,10 +21567,10 @@
         "resumedMany_few": "Возобновлены {{count}} агента",
         "resumedMany_many": "Возобновлено {{count}} агентов",
         "resumedMany_other": "Возобновлено {{count}} агента",
-        "partial_one": "Возобновлено {{resumed}} из {{total}}. {{count}} ждёт вас.",
-        "partial_few": "Возобновлено {{resumed}} из {{total}}. {{count}} ждут вас.",
-        "partial_many": "Возобновлено {{resumed}} из {{total}}. {{count}} ждут вас.",
-        "partial_other": "Возобновлено {{resumed}} из {{total}}. {{count}} ждут вас."
+        "needYou_one": "{{count}} ждёт вас",
+        "needYou_few": "{{count}} ждут вас",
+        "needYou_many": "{{count}} ждут вас",
+        "needYou_other": "{{count}} ждут вас"
       },
       "RunTargetCombobox": {
         "noWslDistros": "Дистрибутивы WSL не найдены",

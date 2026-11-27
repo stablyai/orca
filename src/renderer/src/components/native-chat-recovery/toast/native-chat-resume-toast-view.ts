@@ -70,8 +70,13 @@ export function resumeToastView(
   const failureFor = (sessionId: string) => failureBySession.get(sessionId)
   const view = run ? resumeRunView(run, listed, failureFor, 'all') : null
   const phase = run === null ? 'offer' : run.inFlight ? 'resuming' : 'finished'
+  // One pass over the run, so a large settled run stays linear.
+  const refused = refusedWithoutRecord(run)
   const rows = (view?.rows ?? listed).map((candidate): ResumeToastRow => {
     const failure = failureFor(candidate.sessionId)
+    if (!failure && refused.has(candidate.sessionId)) {
+      return { candidate, state: 'needs-you', openOnly: true }
+    }
     const status = view?.statusBySession.get(candidate.sessionId)
     const state: ResumeToastRowState =
       status?.kind === 'resumed'
@@ -83,8 +88,6 @@ export function resumeToastView(
             : 'stopped'
     return failure ? { candidate, state, failure } : { candidate, state }
   })
-  // One pass over the run, so a large settled run stays linear.
-  const refused = refusedWithoutRecord(run)
   if (refused.size > 0) {
     const shown = new Set(rows.map((row) => row.candidate.sessionId))
     for (const { candidate } of run?.entries ?? []) {

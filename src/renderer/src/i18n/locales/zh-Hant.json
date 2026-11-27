@@ -20381,7 +20381,7 @@
         "failedSome_other": "無法恢復：{{total}} 個中的 {{count}} 個",
         "resumedOne": "已恢復 {{name}}",
         "resumedMany_other": "已恢復 {{count}} 個聊天",
-        "partial_other": "已恢復 {{total}} 個聊天中的 {{resumed}} 個。{{count}} 個需要你處理。"
+        "needYou_other": "{{count}} 個需要你處理"
       },
       "RunTargetCombobox": {
         "noWslDistros": "找不到 WSL 發行版",

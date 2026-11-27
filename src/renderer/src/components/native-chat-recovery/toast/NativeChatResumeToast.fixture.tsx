@@ -128,17 +128,6 @@ export const oneResumed = defineFixture({
   )
 })
 
-export const oneResumedShort = defineFixture({
-  width: NARROW,
-  render: () => (
-    <NativeChatResumeToast
-      view={resumeToastView(finishedRun(twelve.slice(1, 2), 'launch'), [], new Map())}
-      listedAt={NOW}
-      {...actions}
-    />
-  )
-})
-
 export const oneResuming = defineFixture({
   width: NARROW,
   render: () => (
@@ -240,22 +229,6 @@ export const remoteServer = defineFixture({
   )
 })
 
-export const remoteOneFailed = defineFixture({
-  width: NARROW,
-  render: () => (
-    <NativeChatResumeToast
-      view={resumeToastView(
-        finishedRun(twelve.slice(0, 3), 'user'),
-        [],
-        new Map([[notAttached.sessionId, notAttached]])
-      )}
-      machineName="build-server-02"
-      listedAt={NOW}
-      {...actions}
-    />
-  )
-})
-
 export const remoteOneResumed = defineFixture({
   width: NARROW,
   render: () => (
@@ -336,6 +309,31 @@ export const oneLeftForPerson = defineFixture({
       {...actions}
     />
   )
+})
+
+/** The host refused one without filing a failure while it is still offered: a failure, open only. */
+export const refusedStillOffered = defineFixture({
+  width: NARROW,
+  render: () => {
+    const run = finishedRun(twelve.slice(0, 3), 'launch')
+    return (
+      <NativeChatResumeToast
+        view={resumeToastView(
+          {
+            ...run,
+            continued: run.continued?.map((entry, index) =>
+              index === 0 ? { ...entry, outcome: 'refused' as const } : entry
+            )
+          },
+          [twelve[0]!],
+          new Map()
+        )}
+        listedAt={NOW}
+        defaultExpanded
+        {...actions}
+      />
+    )
+  }
 })
 
 type FixtureLanguage =

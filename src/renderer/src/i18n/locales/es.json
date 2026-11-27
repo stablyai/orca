@@ -20244,9 +20244,9 @@
         "resumedMany_one": "Reanudado: {{count}} agente",
         "resumedMany_many": "Reanudados: {{count}} agentes",
         "resumedMany_other": "Reanudados: {{count}} agentes",
-        "partial_one": "{{resumed}} de {{total}} agentes reanudados. {{count}} te necesita.",
-        "partial_many": "{{resumed}} de {{total}} agentes reanudados. {{count}} te necesitan.",
-        "partial_other": "{{resumed}} de {{total}} agentes reanudados. {{count}} te necesitan."
+        "needYou_one": "{{count}} te necesita",
+        "needYou_many": "{{count}} te necesitan",
+        "needYou_other": "{{count}} te necesitan"
       },
       "RunTargetCombobox": {
         "noWslDistros": "No se encontraron distribuciones WSL",

@@ -89,8 +89,8 @@
       "NativeChatResumeToast": {
         "failedSome_one": "Couldn’t resume {{count}} of {{total}}",
         "failedSome_other": "Couldn’t resume {{count}} of {{total}}",
-        "partial_one": "Resumed {{resumed}} of {{total}} agents. {{count}} needs you.",
-        "partial_other": "Resumed {{resumed}} of {{total}} agents. {{count}} need you.",
+        "needYou_one": "{{count}} needs you",
+        "needYou_other": "{{count}} need you",
         "resumedMany_one": "Resumed {{count}} agent",
         "resumedMany_other": "Resumed {{count}} agents",
         "resuming_one": "Resuming {{count}} agent…",

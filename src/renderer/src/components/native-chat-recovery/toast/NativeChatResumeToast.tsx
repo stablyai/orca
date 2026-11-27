@@ -36,28 +36,25 @@ function headline(
   onlyName: string | undefined
 ): string {
   const { phase, counts } = view
-  // Agents left for the person (waiting on an approval) were never tried, so nothing failed.
-  const leftForPerson = phase === 'finished' && counts.failed === 0 && counts.needsYou > 0
   if (phase === 'offer') {
     return stoppedHeadline(view, t, machine)
   }
-  if (leftForPerson && counts.resumed === 0) {
-    // Past the offer the server is named by the label beside the line.
-    return stoppedHeadline(view, t, undefined)
-  }
-  if (leftForPerson) {
-    return t(
-      'auto.components.NativeChatResumeToast.partial',
-      'Resumed {{resumed}} of {{total}} agents. {{count}} need you.',
-      {
-        resumed: counts.resumed,
-        total: counts.total,
-        count: counts.needsYou,
-        defaultValue_one: 'Resumed {{resumed}} of {{total}} agents. {{count}} needs you.'
-      }
-    )
+  if (leftForPerson(view) && counts.resumed === 0) {
+    return needYouLine(view, t)
   }
   return progressLine(view, t, onlyName)
+}
+
+function needYouLine(view: ResumeToastView, t: Translate): string {
+  return t('auto.components.NativeChatResumeToast.needYou', '{{count}} need you', {
+    count: view.counts.needsYou,
+    defaultValue_one: '{{count}} needs you'
+  })
+}
+
+/** Agents left for the person (waiting on an approval) were never tried, so nothing failed. */
+function leftForPerson({ phase, counts }: ResumeToastView): boolean {
+  return phase === 'finished' && counts.failed === 0 && counts.needsYou > 0
 }
 
 function progressLine(view: ResumeToastView, t: Translate, onlyName: string | undefined): string {
@@ -174,9 +171,10 @@ export function NativeChatResumeToast({
     )
   const offering = view.phase === 'offer'
   const onlyRow = rowCount === 1 ? view.rows[0] : undefined
-  const namesAgent = onlyRow !== undefined && !offering
+  const namesAgent = onlyRow !== undefined && !offering && !leftForPerson(view)
   const title = headline(view, t, machineName, namesAgent ? rowName(onlyRow) : undefined)
   const showResume = offering && view.resumable.length > 0
+  const needYou = leftForPerson(view) && view.counts.resumed > 0 ? needYouLine(view, t) : undefined
   const showRetry = view.phase === 'finished' && view.retryable.length > 0
   const showDetails = resumeToastShowsDetails(view)
   const showDismissAll = onDismissAll !== undefined && offering
@@ -229,6 +227,14 @@ export function NativeChatResumeToast({
                 >
                   {title}
                 </span>
+                {needYou && (
+                  <span
+                    className="min-w-0 truncate font-normal text-muted-foreground"
+                    title={needYou}
+                  >
+                    {needYou}
+                  </span>
+                )}
                 {/* A server's name yields first: capped beside a name, only announced where it can't be read. */}
                 {machineName && (
                   <span

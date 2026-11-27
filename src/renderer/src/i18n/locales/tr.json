@@ -20883,8 +20883,8 @@
         "resumedOne": "Devam ettirildi: {{name}}",
         "resumedMany_one": "Devam ettirildi: {{count}} ajan",
         "resumedMany_other": "Devam ettirildi: {{count}} ajan",
-        "partial_one": "{{resumed}}/{{total}} ajan devam ettirildi. {{count}} tanesi sizi bekliyor.",
-        "partial_other": "{{resumed}}/{{total}} ajan devam ettirildi. {{count}} tanesi sizi bekliyor."
+        "needYou_one": "{{count}} tanesi sizi bekliyor",
+        "needYou_other": "{{count}} tanesi sizi bekliyor"
       },
       "RunTargetCombobox": {
         "noWslDistros": "WSL dağıtımı bulunamadı",
