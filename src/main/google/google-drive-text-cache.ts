@@ -5,6 +5,7 @@ const MAX_FILES = 8
 
 type Entry = { text: string; source: string; at: number }
 const entries = new Map<string, Entry>()
+const pending = new Map<string, Promise<Entry>>()
 
 /** The text for this version of the file, made once and reused for a few minutes. */
 export async function cachedFileText(
@@ -21,14 +22,26 @@ export async function cachedFileText(
   if (hit && now - hit.at < TTL_MS) {
     return hit
   }
-  const made = { ...(await make()), at: now }
-  entries.delete(name)
-  entries.set(name, made)
-  for (const [old, entry] of entries) {
-    if (entries.size <= MAX_FILES && now - entry.at < TTL_MS) {
-      break
-    }
-    entries.delete(old)
+  const running = pending.get(name)
+  if (running) {
+    return running
   }
-  return made
+  const work = (async () => {
+    const made = { ...(await make()), at: now }
+    entries.delete(name)
+    entries.set(name, made)
+    for (const [old, entry] of entries) {
+      if (entries.size <= MAX_FILES && now - entry.at < TTL_MS) {
+        break
+      }
+      entries.delete(old)
+    }
+    return made
+  })()
+  pending.set(name, work)
+  try {
+    return await work
+  } finally {
+    pending.delete(name)
+  }
 }
