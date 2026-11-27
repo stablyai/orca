@@ -1,6 +1,5 @@
 import { readFile } from 'node:fs/promises'
 import { removeStaleDurableWriteTempFiles } from '../../../../filesystem/durable-file-write'
-import { isENOENT } from '../../../../filesystem/local-file-io/filesystem-path-containment'
 import { writeQuietly } from './orchestration-db-compaction-files'
 
 const MIB = 1024 * 1024
@@ -42,7 +41,7 @@ export async function readAttempts(
   } catch (error) {
     // Only a missing record means no copies yet; one that can't be read holds copies off this session.
     return {
-      attempts: isENOENT(error) ? 0 : Number.POSITIVE_INFINITY,
+      attempts: isMissingFile(error) ? 0 : Number.POSITIVE_INFINITY,
       lastAttemptAt: Number.NEGATIVE_INFINITY
     }
   }
@@ -62,4 +61,9 @@ export function writeAttempts(
   inFlight = false
 ): Promise<boolean> {
   return writeQuietly(path, inFlight ? `${attempts} ${at} ${attempts + 1}` : `${attempts} ${at}`)
+}
+
+// The error's code only: a message can quote a path that happens to read like one.
+function isMissingFile(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
 }
