@@ -289,18 +289,25 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     const daemonPid = this.options.channel.daemonPid
     const done = Promise.withResolvers<void>()
     this.reattached = done.promise
+    let attaching = false
     try {
       await this.options.channel.client.ensureConnected()
       if (this.options.channel.daemonPid !== daemonPid) {
         throw new Error('A different terminal host answered')
       }
       const fromSeq = this.output.restartAt()
+      attaching = true
       const result = await this.options.channel.attach(this.relayId, fromSeq, this.options.policy())
       this.output.deliveredPending.forgetSettled(fromSeq, result.pending)
       if (this.state === 'reattaching') {
         this.state = 'attached'
       }
     } catch {
+      // The same host may have installed an attach whose answer never came: it is handed back, so
+      // the relay never reads as attached with no reader and the chat's next open reattaches it.
+      if (attaching) {
+        void this.options.channel.detach(this.relayId, this.options.policy()).catch(() => {})
+      }
       // The host that owned the agent is gone, and the agent with it (its owner pipe closed).
       this.end({ code: null, signal: null }, true)
     } finally {

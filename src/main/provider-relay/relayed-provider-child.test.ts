@@ -144,4 +144,32 @@ describe('relayed provider child', () => {
     await child.start(2)
     expect(child.initializeLine).toBe('{"id":1,"result":{}}')
   })
+
+  it('a reattach whose attach the same host never answered hands that attach back', async () => {
+    let attaches = 0
+    const detached: string[] = []
+    const relay = fakeProviderRelayChannel({
+      // The first attach opens the chat; the reattach after a dropped stream times out unanswered.
+      attach: async () => {
+        attaches += 1
+        if (attaches > 1) {
+          throw new Error('Request timed out')
+        }
+        return EMPTY_RELAY_ATTACH
+      },
+      detach: async (relayId) => {
+        detached.push(relayId)
+        return {}
+      }
+    })
+    const child = new RelayedProviderChild({ channel: relay.channel, relayId: 'r', pid: 42, policy })
+    await child.start(0)
+    child.releaseOutput()
+    relay.sink().disconnected()
+    await turns()
+
+    expect(attaches).toBe(2)
+    expect(detached).toEqual(['r'])
+    expect(child.outcomeLost).toBe(true)
+  })
 })

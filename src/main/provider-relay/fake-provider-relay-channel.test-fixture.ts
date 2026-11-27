@@ -15,6 +15,7 @@ export const EMPTY_RELAY_ATTACH: ProviderRelayAttachResult = {
 export function fakeProviderRelayChannel(members: {
   attach: () => Promise<ProviderRelayAttachResult>
   ack?: (relayId: string, seq: number, keepFrom?: number) => Promise<unknown>
+  detach?: (relayId: string) => Promise<unknown>
 }): { channel: ProviderRelayChannel; sink: () => ProviderRelaySink } {
   let bound: ProviderRelaySink | null = null
   const fake = {
@@ -28,7 +29,10 @@ export function fakeProviderRelayChannel(members: {
       const timer = setTimeout(run, 1_000)
       return () => clearTimeout(timer)
     },
-    close: async () => ({})
+    close: async () => ({}),
+    detach: members.detach ?? (async () => ({})),
+    daemonPid: 1,
+    client: { ensureConnected: async () => {} }
   }
   return {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a relayed child calls only these members
