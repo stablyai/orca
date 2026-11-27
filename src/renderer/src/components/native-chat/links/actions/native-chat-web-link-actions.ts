@@ -2,7 +2,8 @@ import type { LinkActionRequest } from '@/components/link-actions/link-action-re
 // Chat shares the terminal's link-click vocabulary: plain click asks, modifier click opens.
 import {
   isTerminalLinkActionActivation,
-  isTerminalLinkDirectActivation
+  isTerminalLinkDirectActivation,
+  isTerminalMiddleClickActivation
 } from '@/components/terminal-pane/links/gestures/terminal-link-activation'
 import type { TerminalLinkClickBehavior } from '@/components/terminal-pane/links/gestures/terminal-link-click-behavior'
 import {
@@ -40,12 +41,14 @@ export function openNativeChatWebLink(
   url: string,
   deps: Pick<NativeChatWebLinkDeps, 'worktreeId' | 'sourceOwner' | 'sourceTabId'>,
   destination: HttpLinkDestination | undefined,
-  openInSourceGroup = false
+  openInSourceGroup = false,
+  backgroundSystemBrowser = false
 ): void {
   openRoutedHttpLink(url, {
     worktreeId: deps.worktreeId,
     ...(deps.sourceTabId ? { sourceTabId: deps.sourceTabId } : {}),
     ...(openInSourceGroup ? { openInSourceGroup: true } : {}),
+    ...(backgroundSystemBrowser ? { backgroundSystemBrowser: true } : {}),
     sourceOwner: deps.sourceOwner,
     modifierHeld: false,
     ...(destination ? { forceDestination: destination } : {})
@@ -61,6 +64,11 @@ export function handleNativeChatWebLink(
   const open = (destination: HttpLinkDestination | undefined): void =>
     openNativeChatWebLink(url, deps, destination)
 
+  if (isTerminalMiddleClickActivation(event)) {
+    event.preventDefault()
+    openNativeChatWebLink(url, deps, 'system', false, true)
+    return true
+  }
   if (isTerminalLinkDirectActivation(event)) {
     event.preventDefault()
     open(httpLinkDirectClickDestination(deps.destinations, event.shiftKey))

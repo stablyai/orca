@@ -30,6 +30,7 @@ import type { WorkspacePortScanResult } from '../../../../../shared/workspace/po
 import type { AppState } from '@/store/types'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { ShellOpenUrlOptions } from '../../../../../shared/shell/opening/shell-open-types'
 import type { OpenHttpLinkOptions, WorkspaceHttpLinkBrowserOpener } from './http-link-destinations'
 
 function settleHttpLinkBrowserOpen(
@@ -139,15 +140,21 @@ export function canHttpLinkOpenInSourceGroup(
 }
 
 /** The one renderer route to the system browser for an address already resolved for it. */
-export async function openSystemHttpLink(url: string): Promise<void> {
-  await openSystemHttpLinkReportingOutcome(url)
+export async function openSystemHttpLink(
+  url: string,
+  options?: ShellOpenUrlOptions
+): Promise<void> {
+  await openSystemHttpLinkReportingOutcome(url, options)
 }
 
 /** openSystemHttpLink for a caller that reports success: false when the launch failed, which it
  *  has already reported. */
-export async function openSystemHttpLinkReportingOutcome(url: string): Promise<boolean> {
+export async function openSystemHttpLinkReportingOutcome(
+  url: string,
+  options?: ShellOpenUrlOptions
+): Promise<boolean> {
   try {
-    await window.api.shell.openUrl(url)
+    await (options ? window.api.shell.openUrl(url, options) : window.api.shell.openUrl(url))
     return true
   } catch {
     showBrowserOpenFailure(null)
@@ -289,16 +296,20 @@ function executeHttpLink(
     return 'orca-browser'
   }
 
+  const systemOpenOptions = opts.backgroundSystemBrowser ? { background: true } : undefined
+  const openSystem = (targetUrl: string): Promise<void> =>
+    openSystemHttpLink(targetUrl, systemOpenOptions)
+
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
   if (!localhostRoute) {
-    openOwnedSystemHttpLink(url, effectiveSourceOwner, worktreeId, openSystemHttpLink)
+    openOwnedSystemHttpLink(url, effectiveSourceOwner, worktreeId, openSystem)
     return 'system-browser'
   }
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
     if (opts.linkContext?.isCurrentRequest?.() === false) {
       return
     }
-    void openSystemHttpLink(labeledUrl)
+    void openSystem(labeledUrl)
   })
   return 'system-browser'
 }

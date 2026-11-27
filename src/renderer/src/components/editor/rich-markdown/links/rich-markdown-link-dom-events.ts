@@ -127,7 +127,8 @@ export function handleRichMarkdownEditorAuxClick({
     state: useAppStore.getState(),
     worktreeId,
     sourceOwner: htmlSuperscriptLinkContext.getSnapshot().sourceOwner,
-    destination: 'system'
+    destination: 'system',
+    background: true
   })
   return true
 }

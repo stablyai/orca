@@ -12,12 +12,14 @@ export function openMarkdownExternalUrl(
     state,
     worktreeId,
     sourceOwner,
-    destination
+    destination,
+    background
   }: {
     state: AppState
     worktreeId: string | null
     sourceOwner: HttpLinkSourceOwner
     destination: 'orca' | 'system'
+    background?: boolean
   }
 ): void {
   if (sourceOwner.kind === 'unknown') {
@@ -27,7 +29,8 @@ export function openMarkdownExternalUrl(
     openOwnedHttpLink(url, {
       worktreeId,
       sourceOwner,
-      forceSystemBrowser: true
+      forceSystemBrowser: true,
+      ...(background ? { backgroundSystemBrowser: true } : {})
     })
     return
   }

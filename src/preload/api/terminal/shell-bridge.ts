@@ -4,7 +4,8 @@ import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
   ShellOpenFileResult,
-  ShellOpenLocalPathResult
+  ShellOpenLocalPathResult,
+  ShellOpenUrlOptions
 } from '../../../shared/shell/opening/shell-open-types'
 import type { RuntimeFileOpenPosition } from '../../../shared/file-access/runtime-editor-file-open'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
@@ -30,7 +31,10 @@ export const shellApi = {
   ): Promise<ShellOpenExternalEditorResult> =>
     ipcRenderer.invoke('shell:openInExternalEditor', request),
 
-  openUrl: (url: string): Promise<void> => ipcRenderer.invoke('shell:openUrl', url),
+  openUrl: (url: string, options?: ShellOpenUrlOptions): Promise<void> =>
+    options
+      ? ipcRenderer.invoke('shell:openUrl', url, options)
+      : ipcRenderer.invoke('shell:openUrl', url),
 
   openForwardedUrl: (request: ForwardedUrlOpenRequest): Promise<ForwardedUrlOpenResult> =>
     ipcRenderer.invoke('shell:openForwardedUrl', request),
