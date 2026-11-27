@@ -61,7 +61,7 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
   /** Bump snapshotVersion before emitting (coalesced and owed until a client frame unless immediate); clients discard re-emits at the same version. */
   touchMobileSessionTabsForWorktree(
     worktreeId: string,
-    options: { immediate?: boolean } = {}
+    options: { immediate?: boolean; statusPaneKeys?: readonly string[] } = {}
   ): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
@@ -71,7 +71,10 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     if (!options.immediate && snapshot.worktree === worktreeId) {
       // Status bursts bump once per client frame, and only build one when someone listens.
       this.mobileSessionTabsByWorktree.oweVersion(worktreeId)
-      if (this.mobileSessionTabListeners.size > 0) {
+      const listened = options.statusPaneKeys
+        ? options.statusPaneKeys.some((paneKey) => this.hasPaneStatusListeners(paneKey))
+        : this.mobileSessionTabListeners.size > 0
+      if (listened) {
         this.scheduleMobileSessionTabsChanged(worktreeId)
       }
       return
@@ -107,8 +110,15 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     )
   }
 
-  scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(worktreeId: string): void {
-    if (this.mobileSessionTabListeners.size === 0) {
+  scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(
+    worktreeId: string,
+    paneKey?: string
+  ): void {
+    if (
+      paneKey === undefined
+        ? this.mobileSessionTabListeners.size === 0
+        : !this.hasPaneStatusListeners(paneKey)
+    ) {
       return
     }
     this.mobileSessionTabsAgentStatusHeartbeat.scheduleWorktreeHeartbeat(worktreeId)
