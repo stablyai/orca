@@ -94,9 +94,23 @@ class OpenCodeAcpConnection extends AcpAgentConnection {
       throw new Error('ACP prompt already in progress')
     }
     this.prompting = true
-    const startedAt = Date.now()
     try {
-      return await super.prompt(prompt, meta)
+      return await this.withNativeFailure(() => super.prompt(prompt, meta))
+    } finally {
+      this.prompting = false
+    }
+  }
+
+  /** A kept agent's earlier prompt, sent before this app started, fails as one sent here would. */
+  earlierPrompt(sentAt?: number) {
+    const { kept } = this
+    return kept ? this.withNativeFailure(() => kept.earlierPrompt(), sentAt) : undefined
+  }
+
+  private async withNativeFailure<T>(answered: () => Promise<T>, sentAt?: number): Promise<T> {
+    const startedAt = sentAt ?? Date.now()
+    try {
+      return await answered()
     } catch (error) {
       if (
         !(error instanceof AcpAgentError) ||
@@ -128,8 +142,6 @@ class OpenCodeAcpConnection extends AcpAgentConnection {
       }
       this.lastRecoveredInput = failure.inputId
       throw nativePromptError(failure, error)
-    } finally {
-      this.prompting = false
     }
   }
 }

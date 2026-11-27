@@ -43,6 +43,9 @@ type Produced = {
 }
 
 type Joined = { join?: ProviderTimelineJoin }
+/** A call update whose start this run never read (its replay was cut): the saved row's name and
+ *  input stand, as does its output when the update has none. */
+type SavedCall = { keepsSavedCall?: true }
 
 export type ProviderTimelineEvent =
   /** Bind the send to an unclaimed open turn, otherwise the next; join.turn names its opener. */
@@ -65,7 +68,9 @@ export type ProviderTimelineEvent =
       durationMs?: number
     }
   /** Background-task messages outlive their initiating call/turn and become unverifiable on session end. */
-  | ({ type: 'item.open'; item: string; body: ProviderTimelineItemBody } & Produced & Joined)
+  | ({ type: 'item.open'; item: string; body: ProviderTimelineItemBody } & Produced &
+      Joined &
+      SavedCall)
   /** Full snapshot; settled tools retain terminal bodies. */
   | ({
       type: 'item.update'
@@ -74,9 +79,12 @@ export type ProviderTimelineEvent =
       /** ACP startup retries a lost-session warning by visible semantic identity. */
       lossWarning?: true
     } & Produced &
-      Joined)
+      Joined &
+      SavedCall)
   /** Terminal snapshot replaces text streamed under the same item ID. */
-  | ({ type: 'item.close'; item: string; body: ProviderTimelineItemBody } & Produced & Joined)
+  | ({ type: 'item.close'; item: string; body: ProviderTimelineItemBody } & Produced &
+      Joined &
+      SavedCall)
   | ({
       type: 'text.delta'
       item: ProviderTimelineTextItem

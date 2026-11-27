@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import {
-  RELAY_CUT_KEY_MAX_CHARS,
-  RELAY_CUT_KEYS_MAX,
+  readProviderRelayCutKeys,
   type ProviderRelayAttachResult,
   type ProviderRelayListResult,
   type ProviderRelaySpawnResult,
@@ -83,7 +82,8 @@ export class ProviderRelayHost {
     spec: ProviderRelaySpawnSpec | undefined,
     chatKey: unknown,
     policy?: unknown,
-    agent?: unknown
+    agent?: unknown,
+    keep?: unknown
   ): Promise<ProviderRelaySpawnResult> {
     if (!this.supported || this.disposed || !this.options.acceptsWork()) {
       return { refused: 'unavailable' }
@@ -111,9 +111,7 @@ export class ProviderRelayHost {
       }
     )
     const failure: { error: (Error & { code?: unknown }) | null } = { error: null }
-    managed.child.on('error', (error: Error & { code?: unknown }) => {
-      failure.error ??= error
-    })
+    managed.child.on('error', (error: Error & { code?: unknown }) => void (failure.error ??= error))
     const relay = new ProviderRelay({
       relayId,
       chatKey,
@@ -140,6 +138,7 @@ export class ProviderRelayHost {
       onIdleUnread: () => this.cap.idleUnread(relay)
     })
     relay.idleStopPolicy.configure(readProviderRelayDetachPolicy(policy))
+    relay.pending.kept.configure(keep)
     this.relays.set(relayId, relay)
     await managed.child.ready?.catch(() => {})
     // Shutdown during the launch closes this agent; the caller must not be told it runs.
@@ -169,11 +168,13 @@ export class ProviderRelayHost {
     stream: ProviderRelayStream,
     relayId: unknown,
     fromSeq: unknown,
-    policy?: unknown
+    policy?: unknown,
+    kept?: unknown
   ): Promise<ProviderRelayAttachResult> {
     // An ended relay's expiry keeps running through attaches: it lives at most a day after it ends.
     const relay = this.requireRelay(relayId)
     relay.idleStopPolicy.configure(readProviderRelayDetachPolicy(policy))
+    relay.pending.kept.sendOnAttach = kept === true
     try {
       const attached = await relay.attach(
         clientId,
@@ -203,7 +204,7 @@ export class ProviderRelayHost {
     relayId: unknown,
     seq: unknown,
     keepFrom?: unknown,
-    flags?: { cut?: unknown; held?: unknown; cutKeys?: unknown }
+    flags?: { cut?: unknown; held?: unknown; cutKeys?: unknown; savedThrough?: unknown }
   ): { ackedThrough: number; truncatedThrough: number } {
     const relay = this.requireAttached(clientId, relayId)
     const acked = relay.ack(
@@ -212,7 +213,10 @@ export class ProviderRelayHost {
       {
         cut: flags?.cut === true,
         held: flags?.held === true,
-        cutKeys: flags?.cutKeys === undefined ? undefined : relayCutKeys(flags.cutKeys)
+        cutKeys: flags?.cutKeys === undefined ? undefined : readProviderRelayCutKeys(flags.cutKeys),
+        ...(Number.isSafeInteger(flags?.savedThrough)
+          ? { savedThrough: Number(flags?.savedThrough) }
+          : {})
       }
     )
     this.removeIfFinished(relay)
@@ -303,16 +307,4 @@ export class ProviderRelayHost {
     )
     return this.ready
   }
-}
-
-/** Opaque item keys a cut ack names; anything past the bounds is refused, not trimmed. */
-function relayCutKeys(value: unknown): string[] {
-  if (
-    !Array.isArray(value) ||
-    value.length > RELAY_CUT_KEYS_MAX ||
-    !value.every((key) => typeof key === 'string' && key.length <= RELAY_CUT_KEY_MAX_CHARS)
-  ) {
-    throw new Error('Invalid relay cut keys')
-  }
-  return value
 }
