@@ -623,7 +623,8 @@
 1 src/main/ipc/preflight/preflight-wsl-agent-detection.ts
 1 src/main/ipc/preflight/preflight-wsl-command.ts
 5 src/main/ipc/profiles/orca-profile-org-members-handlers.ts
-1 src/main/ipc/profiles/orca-profiles.ts
+11 src/main/ipc/profiles/orca-profile-action-handlers.ts # action charges moved from orca-profiles.ts; the module imports on first invoke, so the sync fs helpers never run at boot
+2 src/main/ipc/profiles/orca-profiles.ts # eager list handler reads the profile index once; the action-handler name is only the lazy loader binding
 2 src/main/ipc/pty/delivery/producer-sync.ts
 2 src/main/ipc/pty/delivery/wire-session.ts
 8 src/main/ipc/pty/host-env/assembly.ts
