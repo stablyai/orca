@@ -30,15 +30,12 @@ export function createClaudeKeptLinePump(input: {
 
   // From the exit on, even for a wait begun before it, a pause that never lifts (a failed journal
   // read keeps its hold) gives up the rest, untaken: the chat recovers it from Claude's transcript.
-  const waitPause = (): Promise<boolean> => {
+  const waitHold = (held: Promise<void>): Promise<boolean> => {
     // A hold that rejects is gone as surely as one that lifts.
-    const pause = input.paused()?.then(
+    const pause = held.then(
       () => true,
       () => true
     )
-    if (!pause) {
-      return Promise.resolve(true)
-    }
     if (final) {
       return withTimeout(pause, FINAL_DRAIN_PAUSE_WAIT_MS, false)
     }
@@ -51,17 +48,34 @@ export function createClaudeKeptLinePump(input: {
     })
   }
 
+  /** Every pause until none is held: one can be put in place before the drain resumes from the last. */
+  const waitPause = async (): Promise<boolean> => {
+    for (let held = input.paused(); held; held = input.paused()) {
+      if (!(await waitHold(held))) {
+        return false
+      }
+    }
+    return true
+  }
+
+  /** Ends delivery: the lines not handed on stay untaken (never acked), and none are kept. */
+  const end = (): void => {
+    stopped = true
+    lines = []
+    head = 0
+  }
+
   const pump = (): Promise<void> => {
     draining = draining.then(async () => {
       while (!stopped && head < lines.length) {
         if (!(await waitPause()) || stopped) {
-          stopped = true
+          end()
           break
         }
         try {
           input.deliver(lines[head])
         } catch (error) {
-          stopped = true
+          end()
           input.failed(error)
           break
         }
@@ -78,6 +92,9 @@ export function createClaudeKeptLinePump(input: {
 
   return {
     push(chunk: string): void {
+      if (stopped) {
+        return
+      }
       const parts = (partial + chunk).split('\n')
       partial = parts.pop() ?? ''
       for (const part of parts) {
@@ -100,7 +117,7 @@ export function createClaudeKeptLinePump(input: {
     },
     /** Nothing more is delivered (the connection ended). */
     stop(): void {
-      stopped = true
+      end()
     }
   }
 }
