@@ -19,10 +19,15 @@ export type NetworkInterface = {
 export type DefaultRouteInterfaceLookup = () => Promise<ReadonlySet<string> | null>
 
 // 0.0.0.0 cannot accept IPv6; only an IPv6 bind can offer both families (#31161).
-function listenerServesFamily(listenerHost: string, family: 'IPv4' | 'IPv6'): boolean {
-  const listenerFamily = isIP(listenerHost)
-  if (listenerFamily === 6 && /^[0:]+$/.test(listenerHost)) {
+// `host` is a canonical IP literal.
+function listenerServesFamily(host: string, family: 'IPv4' | 'IPv6'): boolean {
+  const listenerFamily = isIP(host)
+  if (listenerFamily === 6 && /^[0:]+$/.test(host)) {
     return true
+  }
+  // An IPv4-mapped bind (`::ffff:0.0.0.0`) accepts only IPv4.
+  if (listenerFamily === 6 && host.startsWith('::ffff:')) {
+    return family === 'IPv4'
   }
   return listenerFamily === (family === 'IPv6' ? 6 : 4)
 }
@@ -41,6 +46,7 @@ export async function getPairingNetworkInterfaces(
     return []
   }
   const pinnedCanonical = pinned === undefined ? undefined : canonicalIpLiteral(pinned)
+  const listenerCanonical = canonicalIpLiteral(listenerHost)
   const result: NetworkInterface[] = []
   const interfaces = networkInterfaces()
   const hasHyperVInterface = Object.keys(interfaces).some((name) => /^vEthernet /i.test(name))
@@ -65,7 +71,7 @@ export async function getPairingNetworkInterfaces(
       ) {
         continue
       }
-      if (!listenerServesFamily(listenerHost, addr.family)) {
+      if (!listenerServesFamily(listenerCanonical, addr.family)) {
         continue
       }
       result.push({

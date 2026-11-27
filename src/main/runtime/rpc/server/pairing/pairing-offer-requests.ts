@@ -43,7 +43,7 @@ const NO_PAIRING_ADDRESS_GUIDANCE =
   'No reachable network address is available for pairing. Connect to Wi‑Fi or Tailscale, or pick an address manually.'
 
 const LOOPBACK_PINNED_GUIDANCE =
-  'This Orca listens only on loopback, so nothing can dial it directly. Pass --address for a tunnel or SSH port-forward to it.'
+  'This Orca listens only on loopback, so nothing can dial it directly. Give an address that forwards to it, such as a tunnel or SSH port-forward.'
 
 function isLoopbackPinned(server: PairingOfferServer): boolean {
   return pinnedListenerAddress(server.getNetworkExposureBindHost()) === null
@@ -59,7 +59,7 @@ function noPairingAddress(
   return pairingUnavailable(
     'invalid_advertised_endpoint',
     scope === 'mobile'
-      ? `${LOOPBACK_PINNED_GUIDANCE} Or pair the phone through Orca Relay with --relay.`
+      ? `${LOOPBACK_PINNED_GUIDANCE} Or pair the phone through Orca Relay.`
       : LOOPBACK_PINNED_GUIDANCE
   )
 }
