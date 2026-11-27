@@ -9,15 +9,19 @@ import {
 import { ProviderReceiptReaders } from '../../publication/receipts/provider-receipt-readers'
 import { StructuredAgentSessionProviderReceipts } from '../structured-agent-session-provider-receipts'
 import { createQueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
-import { receiptDestination } from './structured-agent-session-provider-receipt-rig.test-fixture'
+import {
+  claudeReceiptIngress,
+  receiptDestination
+} from './structured-agent-session-provider-receipt-rig.test-fixture'
+import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   HOST_TEST_SESSION as CHAT,
   HOST_TEST_NOW as NOW
 } from './structured-agent-session-host-test-data.test-fixture'
 
-async function receiptRig() {
-  const rig = await createQueuedMessageTestRig()
-  await rig.workingSend()
+async function receiptRig(agent?: 'claude') {
+  const rig = await createQueuedMessageTestRig({ agent })
+  const seed = await rig.workingSend()
   const session = await rig.host.conversation(CHAT)
   const { journal, child } = session
   const source = new StructuredAgentSessionProviderReceipts(
@@ -65,7 +69,7 @@ async function receiptRig() {
     source.close()
     await rig.dispose()
   }
-  return { source, readers, cursor, stamp, renderer, dispose }
+  return { rig, seed, session, source, readers, cursor, stamp, renderer, dispose }
 }
 
 it('keeps one credit through invalid continuations, replacement, terminal detach and discard', async () => {
@@ -120,8 +124,13 @@ it('keeps one credit through invalid continuations, replacement, terminal detach
     rig.readers.handoff(renderer.endpoint)
     expect(() => renderer.read(reset)).toThrow()
     rig.readers.discard(renderer.endpoint, terminal.revision)
-    const unknown = await renderer.read()
-    expect(unknown.status).toBe('reader_unknown')
+    renderer.attach('reopened')!.reachedHead()
+    expect(() =>
+      renderer.read(terminal, { since: { ...terminal.revision, nonce: randomUUID() } })
+    ).toThrow('provider_receipt_read_pending')
+    const reopened = await renderer.read(terminal)
+    expect(reopened.revision.sequence).toBe(terminal.revision.sequence + 1)
+    expect(reopened.streams[0]).toMatchObject({ subscription: 'reopened' })
   } finally {
     await rig.dispose()
   }
@@ -358,6 +367,45 @@ it('caps 256 destinations and 4,096 handovers and wakes a blocked reader on cred
     expect(excess.attach('new-slot')).toBeDefined()
   } finally {
     await rig.dispose()
+  }
+})
+
+it('keeps durable Claude echo settlement when the receipt destination or handover is refused', async () => {
+  const { rig, seed, session, source, readers, stamp, renderer, dispose } =
+    await receiptRig('claude')
+  const echo = async (id: string, handover?: 'indexed' | 'refused') => {
+    await eventually(() => expect(rig.dispatch.mock.lastCall?.[0].clientMessageId).toBe(id))
+    expect(await rig.submission(id)).toMatchObject({ dispatchState: 'pending' })
+    const ingress = claudeReceiptIngress(rig)
+    ingress.lifecycle('queued', NOW + 100)
+    if (handover === 'indexed') {
+      expect(source.stampFor(CHAT, id)?.observedAt).toBe(NOW + 100)
+    } else if (handover === 'refused') {
+      expect(source.stampFor(CHAT, id)).toBeUndefined()
+    }
+    ingress.echo(randomUUID())
+    expect(await ingress.flush()).toEqual({ ok: true })
+    expect(await rig.submission(id)).toMatchObject({ dispatchState: 'accepted' })
+  }
+  try {
+    // Alias the same journal owner for fixture entries while exercising the production index.
+    session.providerReceipts = source
+    await echo(seed)
+    for (let i = 0; i < 4096; i++) {
+      stamp(`chat-${Math.floor(i / 64)}`, `handover-${i}`, i)
+    }
+    await echo(await rig.workingSend(), 'refused')
+
+    source.retire('chat-0')
+    for (let i = 0; i < 256; i++) {
+      expect(renderer().attach(`reader-${i}`)).toBeDefined()
+    }
+    const excess = renderer()
+    expect(excess.attach('overflow')).toBeUndefined()
+    expect(readers.canOpenPort(excess.endpoint, excess.reader)).toBe(false)
+    await echo(await rig.workingSend(), 'indexed')
+  } finally {
+    await dispose()
   }
 })
 

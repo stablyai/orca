@@ -11,7 +11,6 @@ import { fitProviderReceiptUpdates, providerReceiptFrameBytes } from './provider
 
 import {
   ProviderReceiptCredits,
-  sameCursor,
   type Destination,
   type Membership,
   type ProviderReceiptDestination,
@@ -39,36 +38,44 @@ export class ProviderReceiptReaders {
   }
 
   canBind(endpoint: ProviderReceiptDestination, identity?: ProviderReceiptReader): boolean {
+    return this.credits.hasRoom(endpoint.transport) && this.ownsDocument(endpoint, identity)
+  }
+
+  private ownsDocument(
+    endpoint: ProviderReceiptDestination,
+    identity?: ProviderReceiptReader,
+    exact = false
+  ): boolean {
     const unread = this.credits.get(endpoint.transport)?.unread
     const generation = this.generations.get(endpoint.document)
     return (
       !endpoint.document.aborted &&
       !endpoint.transport.aborted &&
-      this.credits.hasRoom(endpoint.transport) &&
       (!unread || unread.document === endpoint.document) &&
       (!identity ||
         !generation ||
-        (identity.id === generation.id && identity.generation >= generation.generation))
+        (identity.id === generation.id &&
+          (exact
+            ? identity.generation === generation.generation
+            : identity.generation >= generation.generation)))
     )
   }
 
-  canRead(endpoint: ProviderReceiptDestination, input: ProviderReceiptRead): boolean {
-    const target = this.credits.get(endpoint.transport)
-    if (!this.canOpenPort(endpoint, input.reader) || target?.waiting) {
-      return false
+  readAdmission(
+    endpoint: ProviderReceiptDestination,
+    input: ProviderReceiptRead
+  ): 'ready' | 'capacity' | 'invalid' {
+    if (
+      !this.ownsDocument(endpoint, input.reader, true) ||
+      !this.credits.canContinue(endpoint, input.since)
+    ) {
+      return 'invalid'
     }
-    const unread = target?.unread
-    return unread
-      ? unread.handedOff && sameCursor(unread.revision, input.since)
-      : input.since === null || sameCursor(input.since, target?.consumed ?? null)
+    return this.credits.hasRoom(endpoint.transport) ? 'ready' : 'capacity'
   }
 
   canOpenPort(endpoint: ProviderReceiptDestination, identity: ProviderReceiptReader): boolean {
-    const generation = this.generations.get(endpoint.document)
-    return (
-      this.canBind(endpoint, identity) &&
-      (!generation || generation.generation === identity.generation)
-    )
+    return this.credits.hasRoom(endpoint.transport) && this.ownsDocument(endpoint, identity, true)
   }
 
   attach(
@@ -178,11 +185,11 @@ export class ProviderReceiptReaders {
     if (endpoint.document.aborted || endpoint.transport.aborted) {
       throw new Error('provider_receipt_sender_retired')
     }
-    if (!this.credits.hasRoom(endpoint.transport)) {
-      throw new Error('provider_receipt_capacity')
-    }
-    if (!this.canRead(endpoint, input)) {
-      throw new Error('provider_receipt_read_pending')
+    const admission = this.readAdmission(endpoint, input)
+    if (admission !== 'ready') {
+      throw new Error(
+        admission === 'capacity' ? 'provider_receipt_capacity' : 'provider_receipt_read_pending'
+      )
     }
     const target = (this.credits.get(endpoint.transport) ??
       this.credits.allocate(endpoint.transport))!
@@ -206,7 +213,7 @@ export class ProviderReceiptReaders {
       failure =
         this.streamCount === MAX_PROVIDER_RECEIPT_STREAMS && !reader ? 'capacity' : 'reader_unknown'
     }
-    if (!failure && !input.since && target.consumed && reader) {
+    if (!failure && !input.since && this.credits.consumed(endpoint.document) && reader) {
       for (const member of reader.streams.values()) {
         member.stream.discard()
         this.ready(target, reader, member)
@@ -262,7 +269,10 @@ export class ProviderReceiptReaders {
     const makeReply = (): ProviderReceiptReply => ({
       status: wait.failure ?? 'changed',
       hostIncarnation: wait.source?.incarnation ?? this.absentIncarnation,
-      revision: { sequence: (target.consumed?.sequence ?? 0) + 1, nonce: randomUUID() },
+      revision: {
+        sequence: (this.credits.consumed(wait.document)?.sequence ?? 0) + 1,
+        nonce: randomUUID()
+      },
       streams: []
     })
     const runtimeId = this.runtimeId()

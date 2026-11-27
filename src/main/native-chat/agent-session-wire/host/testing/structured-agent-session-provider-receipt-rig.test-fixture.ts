@@ -173,13 +173,13 @@ export function claudeReceiptIngress(
     sink,
     lifecycle: (state: 'queued' | 'started', now: number, uuid = SENT) =>
       frame({ type: 'command_lifecycle', state, command_uuid: uuid }, now),
-    echo: () =>
+    echo: (uuid = ECHO) =>
       frame(
         {
           type: 'user',
           message: { role: 'user', content: [{ type: 'text', text: 'work on this' }] },
           parent_tool_use_id: null,
-          uuid: ECHO,
+          uuid,
           user_message_uuid: SENT
         },
         NOW + 200

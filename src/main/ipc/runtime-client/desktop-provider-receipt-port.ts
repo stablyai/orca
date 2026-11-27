@@ -1,10 +1,4 @@
-import {
-  app,
-  ipcMain,
-  MessageChannelMain,
-  type IpcMainInvokeEvent,
-  type WebContents
-} from 'electron'
+import { app, ipcMain, MessageChannelMain, type IpcMainInvokeEvent } from 'electron'
 import {
   MAX_PROVIDER_RECEIPT_REQUEST_BYTES,
   MAX_PROVIDER_RECEIPT_REPLY_BYTES,
@@ -13,32 +7,20 @@ import {
   PROVIDER_RECEIPT_PORT_DELIVERY,
   ReceiptCursor,
   ReceiptPortRequest,
-  ReceiptRead,
-  type ProviderReceiptReader
+  ReceiptRead
 } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-provider-receipts'
 import { backendDocumentRole } from '../../backend-desktop/backend-desktop-capabilities'
 import { electronDocumentEndpoint } from '../../backend-desktop/electron-document-endpoint'
-import { inspectProcessSignal } from '../../daemon/endpoint/identity/daemon-process-inspection'
 import type { ProviderReceiptDestination } from '../../native-chat/agent-session-wire/publication/receipts/provider-receipt-credits'
 import type { ProviderReceiptReaders } from '../../native-chat/agent-session-wire/publication/receipts/provider-receipt-readers'
 import { providerReceiptEnvelope } from '../../native-chat/agent-session-wire/publication/receipts/provider-receipt-frame'
 import type { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import { DESKTOP_RPC_CALLER } from '../../runtime/rpc/callers/rpc-caller-identity'
+import {
+  DesktopProviderReceiptWindow,
+  type ReceiptDocument
+} from './desktop-provider-receipt-window'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
-
-type ReceiptDocument = {
-  endpoint: ProviderReceiptDestination
-  isCurrent: () => boolean
-  binding?: { reader: ProviderReceiptReader; pending: boolean; close: () => void }
-  retire: () => void
-}
-
-type ReceiptWindow = {
-  transport: AbortController
-  postedToPid?: number
-  document?: ReceiptDocument
-  dispose: () => void
-}
 
 const decoder = new TextDecoder('utf-8', { fatal: true })
 const encoder = new TextEncoder()
@@ -55,7 +37,7 @@ function decodeRequest(data: unknown): unknown {
 }
 
 export class DesktopProviderReceiptPort {
-  private readonly windows = new Map<number, ReceiptWindow>()
+  private readonly windows = new Map<number, DesktopProviderReceiptWindow>()
 
   constructor(
     private readonly readers: ProviderReceiptReaders,
@@ -94,10 +76,13 @@ export class DesktopProviderReceiptPort {
     if (!Number.isSafeInteger(pid) || pid <= 0) {
       return undefined
     }
-    const window = this.windows.get(sender.id) ?? this.trackWindow(sender)
-    if (window.postedToPid !== pid) {
-      this.collectExitedRenderer(window)
+    const id = sender.id
+    let window = this.windows.get(id)
+    if (!window) {
+      window = new DesktopProviderReceiptWindow(sender, this.readers, () => this.windows.delete(id))
+      this.windows.set(id, window)
     }
+    window.observeRenderer(pid)
     if (window.document?.isCurrent()) {
       return { window, document: window.document, pid, senderFrame }
     }
@@ -129,38 +114,6 @@ export class DesktopProviderReceiptPort {
     return { window, document, pid, senderFrame }
   }
 
-  private trackWindow(sender: WebContents): ReceiptWindow {
-    const id = sender.id
-    const rendererGone = (): void => this.collectExitedRenderer(window)
-    const window: ReceiptWindow = {
-      transport: new AbortController(),
-      dispose: () => {
-        window.document?.retire()
-        rendererGone()
-        sender.off('destroyed', window.dispose)
-        sender.off('render-process-gone', rendererGone)
-        this.windows.delete(id)
-      }
-    }
-    this.windows.set(id, window)
-    sender.on('render-process-gone', rendererGone)
-    sender.once('destroyed', window.dispose)
-    return window
-  }
-
-  private collectExitedRenderer(window: ReceiptWindow): void {
-    if (
-      window.postedToPid !== undefined &&
-      this.readers.hasPostedReply(window.transport.signal) &&
-      inspectProcessSignal(window.postedToPid) === 'missing'
-    ) {
-      window.document?.retire()
-      window.transport.abort()
-      window.transport = new AbortController()
-      window.postedToPid = undefined
-    }
-  }
-
   private acquire(event: IpcMainInvokeEvent, bytes: unknown): boolean {
     const request = ReceiptPortRequest.safeParse(decodeRequest(bytes))
     const admitted = request.success ? this.currentDocument(event) : undefined
@@ -183,16 +136,23 @@ export class DesktopProviderReceiptPort {
     previous?.close()
     const { port1, port2 } = new MessageChannelMain()
     const onClose = (): void => document.retire()
-    const binding = {
+    const binding: NonNullable<ReceiptDocument['binding']> = {
       reader,
       pending: false,
       close: () => {
+        if (document.binding === binding) {
+          document.binding = undefined
+        }
         port1.off('message', onMessage)
         port1.off('close', onClose)
         port1.close()
       }
     }
     const isCurrent = (): boolean => document.binding === binding && document.isCurrent()
+    const restart = (): void => {
+      this.readers.suppress(endpoint)
+      binding.close()
+    }
     const onMessage = ({ data }: { data: unknown }): void => {
       if (!isCurrent() || binding.pending) {
         return
@@ -207,9 +167,16 @@ export class DesktopProviderReceiptPort {
       if (
         !input.success ||
         input.data.reader.id !== reader.id ||
-        input.data.reader.generation !== reader.generation ||
-        !this.readers.canRead(endpoint, input.data)
+        input.data.reader.generation !== reader.generation
       ) {
+        return
+      }
+      const admission = this.readers.readAdmission(endpoint, input.data)
+      if (admission === 'invalid') {
+        return
+      }
+      if (admission === 'capacity') {
+        restart()
         return
       }
       binding.pending = true
@@ -237,15 +204,15 @@ export class DesktopProviderReceiptPort {
           }
           let result = dispatched.ok ? dispatched.result : undefined
           if (!dispatched.ok) {
-            if (!this.readers.canRead(endpoint, input.data)) {
-              document.retire()
+            if (this.readers.readAdmission(endpoint, input.data) !== 'ready') {
+              restart()
               return
             }
             result = await this.readers.read(endpoint, input.data, undefined, 'closed')
           }
           const prepared = this.readers.preparedReply(endpoint)
           if (!prepared || prepared !== result) {
-            document.retire()
+            restart()
             return
           }
           const encoded = encoder.encode(
@@ -257,14 +224,13 @@ export class DesktopProviderReceiptPort {
           }
           if (
             encoded.byteLength > MAX_PROVIDER_RECEIPT_REPLY_BYTES ||
+            !window.watchRenderer(pid) ||
             !this.readers.handoff(endpoint, encoded.byteLength, () => port1.postMessage(encoded))
           ) {
-            document.retire()
-            return
+            restart()
           }
-          window.postedToPid = pid
         } catch {
-          document.retire()
+          restart()
         } finally {
           binding.pending = false
         }

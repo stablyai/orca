@@ -57,20 +57,17 @@ export type Destination = {
   reader?: Reader
   waiting?: Wait
   unread?: Unread
-  consumed?: ProviderReceiptCursor
   scheduled?: true
   retire: () => void
 }
 
-export function sameCursor(
-  left: ProviderReceiptCursor,
-  right: ProviderReceiptCursor | null
-): boolean {
+function sameCursor(left: ProviderReceiptCursor, right: ProviderReceiptCursor | null): boolean {
   return left.sequence === right?.sequence && left.nonce === right.nonce
 }
 
 export class ProviderReceiptCredits {
   private readonly destinations = new Map<AbortSignal, Destination>()
+  private readonly consumedByDocument = new WeakMap<AbortSignal, ProviderReceiptCursor>()
   private readonly blocked = new Set<Destination>()
   private unreadBytes = 0
   private waking = false
@@ -79,6 +76,21 @@ export class ProviderReceiptCredits {
 
   get(transport: AbortSignal): Destination | undefined {
     return this.destinations.get(transport)
+  }
+
+  consumed(document: AbortSignal): ProviderReceiptCursor | undefined {
+    return this.consumedByDocument.get(document)
+  }
+
+  canContinue(endpoint: ProviderReceiptDestination, since: ProviderReceiptCursor | null): boolean {
+    const target = this.get(endpoint.transport)
+    if (target?.waiting) {
+      return false
+    }
+    const unread = target?.unread
+    return unread
+      ? unread.handedOff && sameCursor(unread.revision, since)
+      : since === null || sameCursor(since, this.consumed(endpoint.document) ?? null)
   }
 
   preparedReply(endpoint: ProviderReceiptDestination): ProviderReceiptReply | undefined {
@@ -196,7 +208,9 @@ export class ProviderReceiptCredits {
       return false
     }
     target.unread = undefined
-    target.consumed = unread.revision
+    if (unread.handedOff) {
+      this.consumedByDocument.set(document, unread.revision)
+    }
     this.unreadBytes -= unread.bytes
     const member = unread.stream && target.reader?.streams.get(unread.stream.subscription)
     if (member && member.token === unread.stream?.token && member.staged) {
