@@ -1,11 +1,13 @@
 import type { OrchestrationDb } from '../orchestration-db'
 
-/** Whom a Dispatch acts for, stamped once when it is made. Skipped when present. */
+/** Passive live progress note recorded on an active worker Dispatch without mailing its coordinator. */
 export function migrateV52(this: OrchestrationDb, current: number): void {
   if (current >= 52) {
     return
   }
-  if (!this.hasColumn('dispatch_contexts', 'acts_for')) {
-    this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN acts_for TEXT')
+  for (const column of ['progress_note', 'progress_updated_at'] as const) {
+    if (!this.hasColumn('dispatch_contexts', column)) {
+      this.db.exec(`ALTER TABLE dispatch_contexts ADD COLUMN ${column} TEXT`)
+    }
   }
 }

@@ -52,17 +52,26 @@ type Change = { event: BotItemEventRecord; item: BotItemRecord }
 export function botItemChangeMail(
   changes: readonly Change[]
 ): { subject: string; body: string } | null {
-  const actor = changes[0]?.event.actor
+  const lead =
+    changes.find(({ event }) => event.actor.kind === 'owner') ??
+    changes.find(
+      ({ event, item }) => event.actor.kind === 'bot' && event.actor.botId !== item.ownerBotId
+    ) ??
+    changes.find(({ event }) => event.actor.kind === 'bot') ??
+    changes[0]
+  const actor = lead?.event.actor
   const who =
     actor?.kind === 'owner'
       ? actor.person
         ? `Your owner's teammate ${actor.person.name}`
         : 'Your owner'
       : actor?.kind === 'bot'
-        ? actor.botId === changes[0]?.item.ownerBotId
+        ? actor.botId === lead?.item.ownerBotId
           ? 'Your other chat'
           : 'Another agent'
-        : null
+        : actor?.kind === 'orca'
+          ? 'Orca'
+          : null
   const lines = changes.flatMap((change) => {
     const what = changeWords(change.event)
     return what ? [{ ...change, what }] : []
@@ -90,7 +99,7 @@ export function botItemChangeMail(
   const answeredOn = commentedOn(true)
   // The owner's answer or other comment on a Needs you item moves it to In progress with it.
   const movedWith = (on: Set<string>, event: BotItemEventRecord, item: BotItemRecord) =>
-    actor?.kind === 'owner' &&
+    event.actor.kind === 'owner' &&
     on.has(item.uid) &&
     event.kind === 'status' &&
     statusOf(event.data.from) === 'needs_you' &&
