@@ -52,14 +52,13 @@ export async function parseOpenCodeSessionFile(
   return finalizeSession(accumulator, platform)
 }
 
-// Rebuild arbitrary directory order by creation time; undated files sort last so they cannot displace the first prompt.
-async function readOpenCodeMessagesInOrder(
-  messageDir: string,
+async function readOpenCodeJsonDirectory(
+  directory: string,
   signal?: AbortSignal
-): Promise<Record<string, unknown>[]> {
+): Promise<{ name: string; record: Record<string, unknown> }[]> {
   let entries
   try {
-    entries = await waitForAiVaultScan(wslGatedReaddir(messageDir, 'scan', signal), signal)
+    entries = await waitForAiVaultScan(wslGatedReaddir(directory, 'scan', signal), signal)
   } catch (error) {
     throwIfAiVaultScanCancelled(signal)
     // Propagate WSL refusal so an unreachable message directory is not cached as an empty transcript.
@@ -68,20 +67,20 @@ async function readOpenCodeMessagesInOrder(
     }
     return []
   }
-  const messages: { name: string; createdMs: number; message: Record<string, unknown> }[] = []
+  const records: { name: string; record: Record<string, unknown> }[] = []
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith('.json')) {
       continue
     }
-    let message: Record<string, unknown> | null = null
+    let record: Record<string, unknown> | null = null
     try {
       const parsed: unknown = JSON.parse(
         await waitForAiVaultScan(
-          wslGatedReadFile(join(messageDir, entry.name), 'utf-8', 'scan', signal),
+          wslGatedReadFile(join(directory, entry.name), 'utf-8', 'scan', signal),
           signal
         )
       )
-      message = asRecord(parsed)
+      record = asRecord(parsed)
     } catch (error) {
       throwIfAiVaultScanCancelled(signal)
       // Skip malformed live writes, but propagate WSL refusal so incomplete transcripts remain retryable.
@@ -90,19 +89,58 @@ async function readOpenCodeMessagesInOrder(
       }
       continue
     }
-    if (!message) {
-      continue
+    if (record) {
+      records.push({ name: entry.name, record })
     }
-    const createdMs = timestampMs(timeObjectValue(message.time, 'created'))
-    messages.push({
-      name: entry.name,
-      createdMs: Number.isFinite(createdMs) ? createdMs : Number.POSITIVE_INFINITY,
-      message
-    })
   }
+  return records
+}
+
+// Rebuild arbitrary directory order by creation time; undated files sort last so they cannot displace the first prompt.
+async function readOpenCodeMessagesInOrder(
+  messageDir: string,
+  signal?: AbortSignal
+): Promise<Record<string, unknown>[]> {
+  const messages = (await readOpenCodeJsonDirectory(messageDir, signal)).map(({ name, record }) => {
+    const createdMs = timestampMs(timeObjectValue(record.time, 'created'))
+    return {
+      name,
+      createdMs: Number.isFinite(createdMs) ? createdMs : Number.POSITIVE_INFINITY,
+      record
+    }
+  })
   return messages
     .sort((a, b) => a.createdMs - b.createdMs || a.name.localeCompare(b.name))
-    .map((entry) => entry.message)
+    .map((entry) => entry.record)
+}
+
+async function readOpenCodeMessageParts(
+  storageRoot: string,
+  messageId: unknown,
+  signal?: AbortSignal
+): Promise<Record<string, unknown>[]> {
+  // Message IDs are storage keys, never paths outside their part directory.
+  if (
+    typeof messageId !== 'string' ||
+    !messageId ||
+    messageId === '.' ||
+    messageId === '..' ||
+    /[/\\\0]/.test(messageId)
+  ) {
+    return []
+  }
+  const entries = await readOpenCodeJsonDirectory(join(storageRoot, 'part', messageId), signal)
+  entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+  return entries.flatMap(({ record }) => {
+    if (record.type !== 'tool') {
+      return [record]
+    }
+    const state = asRecord(record.state)
+    return [
+      { type: 'tool_use', name: record.tool, input: state?.input },
+      { type: 'tool_result', content: state?.error ?? state?.output }
+    ]
+  })
 }
 
 export async function consumeOpenCodeMessages(
@@ -128,7 +166,9 @@ export async function consumeOpenCodeMessages(
         accumulator.title ??= extractString(summary?.title) ?? extractString(summary?.body)
       }
       const timestamp = timeObjectValue(message.time, 'created')
-      const hasPreview = addSessionContent(accumulator, role, message.content, timestamp)
+      const content =
+        message.content ?? (await readOpenCodeMessageParts(storageRoot, message.id, signal))
+      const hasPreview = addSessionContent(accumulator, role, content, timestamp)
       if (!hasPreview) {
         addPreviewMessage(accumulator, {
           role,
