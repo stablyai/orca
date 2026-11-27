@@ -47,7 +47,7 @@ export async function sendCliSkillAgentInventory(userDataPath: string): Promise<
   let reply: SkillInstallProviderId[] | string
   try {
     const { readManagedAgentsFromDisk } =
-      await import('../../managed-agent-cli/managed-agent-cli-registry')
+      await import('../../managed-agent-cli/managed-agent-cli-registry.js')
     reply = await detectLocalSkillInstallProviders(undefined, () =>
       readManagedAgentsFromDisk(userDataPath, isSkillInstallProviderId)
     )

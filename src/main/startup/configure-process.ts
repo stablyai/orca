@@ -166,9 +166,11 @@ export function patchPackagedProcessPath(): void {
         join(home, 'bin'),
         join(home, '.local/bin'),
         join(home, '.nix-profile/bin'),
-        join(home, '.vite-plus/bin')
+        // GUI PATH omits agent-specific install directories (#829).
+        join(home, '.opencode/bin'),
+        join(home, '.vite-plus/bin'),
+        join(home, '.grok/bin')
       )
-      // Agent installer folders (~/.opencode/bin, ~/.grok/bin) stay lookup-only so terminals inherit no agent folder.
     }
 
     if (process.platform === 'darwin' && existsSync('/opt/local/bin/port')) {
