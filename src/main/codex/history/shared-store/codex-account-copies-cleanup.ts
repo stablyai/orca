@@ -11,6 +11,7 @@ import { distinctFolders } from '../bridges/codex-legacy-session-copy-writer-loc
 import { holdThreadLockFolders, WRITER_LOCKS } from './codex-thread-writer-locks'
 import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { addTally, emptyTally, type CopiesTally } from './codex-account-copies-tally'
+import type { VerifiedCopy } from './codex-account-copies-delete'
 import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-move-telemetry'
 import type {
   CodexAccountCopiesRequest,
@@ -34,7 +35,10 @@ const OPEN_CHECK_BATCH = 128
 
 export type CodexAccountCopiesWorker = {
   call(request: CodexAccountCopiesRequest): Promise<CodexAccountCopiesResponse>
+  /** Ends the worker, waiting a bounded time: for when nothing it does can still matter. */
   stop(): Promise<void>
+  /** Ends the worker and resolves only once its thread has exited, however long that takes. */
+  retire(): Promise<void>
 }
 
 export function startCodexAccountCopiesWorker(): CodexAccountCopiesWorker {
@@ -67,6 +71,11 @@ export function startCodexAccountCopiesWorker(): CodexAccountCopiesWorker {
       fail(new Error('Codex account copies cleanup stopped'))
       // A worker stuck in a read on a hung mount never exits; a pass must not wait on it.
       await withTimeoutResult(worker.terminate(), STOP_WAIT_MS)
+    },
+    retire: async () => {
+      fail(new Error('Codex account copies cleanup stopped'))
+      // Resolves on the thread's exit, after any filesystem call it was inside returns.
+      await worker.terminate()
     }
   }
 }
@@ -156,6 +165,7 @@ export async function cleanUpCodexAccountCopies(args: {
         return null
       }
       const batch = checked.verified.slice(start, start + OPEN_CHECK_BATCH)
+      const aclKept: VerifiedCopy[] = []
       if (!moved(accountHome) || Date.now() > deleteDeadline) {
         total.deferred += batch.length
         continue
@@ -185,10 +195,8 @@ export async function cleanUpCodexAccountCopies(args: {
             ? batch.filter((copy) => !open.has(copy.copy) && !withAcl.has(copy.copy))
             : []
         total.open += batch.length - closed.length
-        const aclKept = withAcl ? batch.filter((copy) => withAcl.has(copy.copy)) : []
-        if (aclKept.length > 0) {
-          await args.worker.call({ op: 'remember-acl', accountHome, copies: aclKept })
-        }
+        // Noted after the hold is let go: it rewrites a file, and only ever saves later work.
+        aclKept.push(...(withAcl ? batch.filter((copy) => withAcl.has(copy.copy)) : []))
         if (closed.length === 0) {
           continue
         }
@@ -203,9 +211,9 @@ export async function cleanUpCodexAccountCopies(args: {
           args.deleteTimeoutMs ?? DELETE_CALL_TIMEOUT_MS
         )
         if (!answer.ok) {
-          // A delete stuck on a hung mount: the worker is retired before the hold goes (finally),
-          // so no unlink runs after Codex's locks are let go, and Codex waits no longer.
-          await args.worker.stop()
+          // A delete stuck on a hung mount: the hold lasts until the worker has really exited
+          // (finally), since an unlink already under way can still complete. Codex waits as long.
+          await args.worker.retire()
           return null
         }
         const deleted = answer.value
@@ -223,6 +231,9 @@ export async function cleanUpCodexAccountCopies(args: {
         }
       } finally {
         await hold.release()
+      }
+      if (aclKept.length > 0) {
+        await args.worker.call({ op: 'remember-acl', accountHome, copies: aclKept.splice(0) })
       }
     }
     // Once per home and outside the locks: empty folders only, so Codex never waits on the walk.

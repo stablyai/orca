@@ -59,18 +59,22 @@ function run(
     shouldStop: () => false,
     findOpen: async (paths) => (options.open ? options.open(paths) : new Set()),
     findAcl: async (paths) => (options.acl ? options.acl([...paths]) : new Set()),
-    holdLocks: async () =>
-      options.locks === false
-        ? null
-        : {
-            stillHeld: () => true,
-            release: async () => {
-              options.events?.push('release')
-            }
-          },
+    holdLocks: async () => {
+      if (options.locks === false) {
+        return null
+      }
+      options.events?.push('hold')
+      return {
+        stillHeld: () => true,
+        release: async () => {
+          options.events?.push('release')
+        }
+      }
+    },
     deleteTimeoutMs: 50,
     worker: {
       call: async (request) => {
+        options.events?.push(request.op)
         if (request.op === 'delete') {
           options.beforeDelete?.()
           if (options.hangDelete) {
@@ -84,6 +88,12 @@ function run(
       },
       stop: async () => {
         options.events?.push('stop')
+      },
+      // The thread exits a while later, as one leaving a filesystem call on a hung mount would.
+      retire: async () => {
+        options.events?.push('retire')
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        options.events?.push('exited')
       }
     }
   })
@@ -223,15 +233,31 @@ describe('cleanUpCodexAccountCopies', () => {
     expect(existsSync(copy)).toBe(true)
   })
 
-  it('retires a worker stuck in a delete before letting go of the locks', async () => {
+  it('holds the locks until a worker stuck in a delete has really exited', async () => {
     put(storeFile(), LINE_1)
     const copy = put(conflictCopy(), LINE_1)
     const events: string[] = []
 
     expect(await run({ hangDelete: true, events })).toBeNull()
 
-    expect(events).toEqual(['stop', 'release'])
+    expect(events.slice(events.indexOf('delete'))).toEqual([
+      'delete',
+      'retire',
+      'exited',
+      'release'
+    ])
     expect(existsSync(copy)).toBe(true)
+  })
+
+  it('notes copies kept for an ACL only after letting go of the locks', async () => {
+    put(storeFile(), LINE_1)
+    put(conflictCopy(), LINE_1)
+    const events: string[] = []
+
+    await run({ acl: (paths) => new Set(paths), events })
+
+    expect(events).toContain('remember-acl')
+    expect(events.indexOf('remember-acl')).toBeGreaterThan(events.indexOf('release'))
   })
 
   it.skipIf(process.platform === 'win32')(
