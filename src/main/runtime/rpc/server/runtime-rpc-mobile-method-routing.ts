@@ -110,6 +110,8 @@ export const EXECUTION_HOST_METHODS = [
   'files.saveAbort',
   'files.stat',
   'files.statTerminalArtifact',
+  // Phone edits of workspace files; the host's disk precondition refuses a save over a newer desktop change.
+  'files.writeIfUnchanged',
   'files.writeTerminalArtifact',
   // A folder row's Delete removes the Orca workspace on its host, as desktop's Remove Workspace does.
   'folderWorkspace.delete',
