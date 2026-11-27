@@ -263,6 +263,12 @@ it('finds a complete body after an earlier occurrence inside another word', () =
   const expected = 'PreApproved policies\nApproved\nFooter'
   expect(bodyText({ mimeType: 'multipart/mixed', parts: [plain, html] })).toBe(expected)
   expect(bodyText({ mimeType: 'multipart/mixed', parts: [html, plain] })).toBe(expected)
+  expect(
+    bodyText({
+      mimeType: 'multipart/mixed',
+      parts: [textPart('text/plain', 'a-a'), textPart('text/html', '<p>xa-a-a</p>')]
+    })
+  ).toBe('xa-a-a')
 })
 
 it('keeps independent plain text when HTML joins its word with Unicode name characters', () => {
@@ -273,7 +279,8 @@ it('keeps independent plain text when HTML joins its word with Unicode name char
     ['भारत', 'भारत\u200cअ'],
     ['Build', '𐐀Build'],
     ['Build', 'Build𐐀'],
-    ['Build', '\u0301Build']
+    ['Build', '\u0301Build'],
+    ['a'.repeat(64_000), 'a'.repeat(128_000)]
   ]) {
     const parts = [textPart('text/plain', plain), textPart('text/html', `<p>${html}</p>`)]
     expect(bodyText({ mimeType: 'multipart/mixed', parts })).toBe(`${plain}\n${html}`)

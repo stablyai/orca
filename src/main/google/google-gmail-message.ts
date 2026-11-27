@@ -177,13 +177,35 @@ function containsCompleteBody(html: string, plain: string): boolean {
   const wordEnd = /[\p{L}\p{M}\p{N}_\u200c\u200d]$/u
   const startsWithWord = wordStart.test(plain)
   const endsWithWord = wordEnd.test(plain)
-  for (let at = html.indexOf(plain); at >= 0; at = html.indexOf(plain, at + 1)) {
+  // Prefix fallback visits overlapping matches without rescanning long repeated bodies.
+  const fallback = new Uint32Array(plain.length)
+  for (let index = 1, matched = 0; index < plain.length; index++) {
+    while (matched > 0 && plain[index] !== plain[matched]) {
+      matched = fallback[matched - 1]
+    }
+    if (plain[index] === plain[matched]) {
+      matched++
+    }
+    fallback[index] = matched
+  }
+  for (let index = 0, matched = 0; index < html.length; index++) {
+    while (matched > 0 && html[index] !== plain[matched]) {
+      matched = fallback[matched - 1]
+    }
+    if (html[index] === plain[matched]) {
+      matched++
+    }
+    if (matched !== plain.length) {
+      continue
+    }
+    const at = index + 1 - matched
     if (
       (!startsWithWord || !wordEnd.test(html.slice(Math.max(0, at - 2), at))) &&
       (!endsWithWord || !wordStart.test(html.slice(at + plain.length, at + plain.length + 2)))
     ) {
       return true
     }
+    matched = fallback[matched - 1]
   }
   return false
 }
