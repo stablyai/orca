@@ -5,7 +5,9 @@ import type { BotChatRow } from '../../../../shared/bots/bot-chat-row'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { BotRosterEntry } from '../../../../shared/bot-roster'
 import { botOfHomeWorkspace } from '../../../../shared/bots/bot-homes'
-import { BotChats, BotChatsSeen } from '../../../../shared/rpc-contract/bots-params'
+import { BotChats, BotChatsOpen, BotChatsSeen } from '../../../../shared/rpc-contract/bots-params'
+import { botOfSession } from '../../../bots/bot-session-tabs'
+import { requireStructuredHost } from '../../../bots/bot-chat-session'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
@@ -24,7 +26,7 @@ import {
 } from '../../orchestration/mailbox/routing/structured-session-mail-address'
 import { refuseUndeliverableSessionRecipientWith } from './orchestration/messaging/session-recipient'
 import { namedOrCallerBot } from './bots-caller-bot'
-import { defineMethod } from '../core'
+import { defineMethod, InvalidArgumentError } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   isBotBackgroundRun,
@@ -66,7 +68,37 @@ const BOT_CHATS_SEEN_METHOD = defineMethod({
   }
 })
 
-export const BOT_CHATS_METHODS = [BOT_CHATS_METHOD, BOT_CHATS_UNSEEN_METHOD, BOT_CHATS_SEEN_METHOD]
+const BOT_CHATS_OPEN_METHOD = defineMethod({
+  name: 'bots.chats.open',
+  permission: 'workspace',
+  params: BotChatsOpen,
+  handler: async ({ chatId, focus }, { runtime }) => {
+    const host = await requireStructuredHost(runtime)
+    const bot = botOfSession(runtime.bots, chatId, host)
+    const chat = bot && botChatTakingMailNow(runtime, bot, chatId)
+    if (!chat) {
+      throw new InvalidArgumentError('Pick an open chat from `orca bot chats`.')
+    }
+    const record = host.deps.store.requireWritableRecord(chat.sessionId)
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: record.location.workspaceId,
+      sessionId: record.sessionId,
+      agent: record.provider,
+      activate: focus === true
+    })
+    if (!host.isSessionTabVisible(chat.sessionId)) {
+      throw new Error('Could not save the chat tab.')
+    }
+    return { sessionId: chat.sessionId }
+  }
+})
+
+export const BOT_CHATS_METHODS = [
+  BOT_CHATS_METHOD,
+  BOT_CHATS_OPEN_METHOD,
+  BOT_CHATS_UNSEEN_METHOD,
+  BOT_CHATS_SEEN_METHOD
+]
 
 /** A bot's chats on this host; with `all`, its closed ones (earlier Home Chats) too. */
 export async function readBotChats(

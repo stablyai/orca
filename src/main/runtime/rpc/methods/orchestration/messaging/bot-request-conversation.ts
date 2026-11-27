@@ -23,7 +23,7 @@ async function requestConversation(
   subject: string
 ): Promise<string> {
   const sessionId = await startBotSession(runtime, bot, {
-    background: true,
+    background: 'until-admitted',
     actsFor: {
       actsFor: record.askers,
       ...(record.triggeredBy ? { triggeredBy: record.triggeredBy } : {})
@@ -79,8 +79,7 @@ export async function admitInNewChat(
   return admitted.receipt
 }
 
-/** The request is already delivered, so a tab that can't be shown only leaves the chat in the bot's
- *  Chats, where it was before; reopening it from there publishes the same tab. */
+/** The chat already owns a durable tab. Restart restores it even if this projection fails. */
 async function showConversationTab(
   runtime: OrcaRuntimeService,
   bot: Bot,

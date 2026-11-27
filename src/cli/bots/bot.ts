@@ -9,7 +9,8 @@ import {
 } from '../../shared/bot-roster'
 import type { BotConnectors } from '../../shared/bot-event-sources'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
-import { getOptionalStringFlag } from '../arguments/flags'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
+import { BOT_CHAT_ID_PREFIX } from '../../shared/bots/bot-chat-row'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { callerChat } from '../automations/automation-caller-chat'
@@ -121,6 +122,14 @@ export const BOT_HANDLERS: Record<string, CommandHandler> = {
       ...(flags.has('all') ? { all: true } : {})
     })
     printResult(result, json, (value) => formatBotChats(value))
+  },
+  'bot chats open': async ({ flags, client, json }) => {
+    const id = getRequiredStringFlag(flags, 'id')
+    const result = await callBots<{ sessionId: string }>(client, 'bots.chats.open', {
+      chatId: id.startsWith(BOT_CHAT_ID_PREFIX) ? id.slice(BOT_CHAT_ID_PREFIX.length) : id,
+      focus: flags.has('focus')
+    })
+    printResult(result, json, () => `Opened ${id}.`)
   },
   'bot list': async ({ client, json }) => {
     const result = await client.call<{
