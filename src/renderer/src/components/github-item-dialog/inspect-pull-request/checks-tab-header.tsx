@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/class-names'
+import { PRChecksSummaryLineLoading } from '@/components/github/pr-check-tab-loading'
 import { SpinnerFrame } from '@/components/ui/LoadingSpinner'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
@@ -156,6 +157,7 @@ export function ChecksTabCompactHeader({
   summaryLabel,
   listLength,
   showSummary = false,
+  summaryLoading = false,
   refreshAction,
   rerunAction,
   secondaryActions
@@ -165,6 +167,8 @@ export function ChecksTabCompactHeader({
   counts: { failing: number; pending: number }
   summaryLabel: string
   showSummary?: boolean
+  /** Cold read: hold the summary line's slot with a bar so the header keeps its loaded height. */
+  summaryLoading?: boolean
   listLength: number
   refreshAction: React.JSX.Element
   rerunAction: React.JSX.Element | null
@@ -186,11 +190,13 @@ export function ChecksTabCompactHeader({
             <div className="text-[13px] font-medium leading-5 text-foreground">
               {t('auto.components.GitHubItemDialog.4bd1f5b055', 'Checks')}
             </div>
-            {(listLength > 0 || showSummary) && (
+            {listLength > 0 || showSummary ? (
               <div className="truncate text-[11px] leading-4 text-muted-foreground">
                 {summaryLabel}
               </div>
-            )}
+            ) : summaryLoading ? (
+              <PRChecksSummaryLineLoading />
+            ) : null}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">

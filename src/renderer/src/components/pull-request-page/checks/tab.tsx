@@ -326,6 +326,7 @@ export function ChecksTab({
       summaryLabel={summaryLabel}
       counts={overallCounts}
       showSummary={isCompletePRCheckOwner(checkOwner)}
+      summaryLoading={loading && list.length === 0}
       listLength={list.length}
       refreshAction={refreshAction}
       rerunAction={rerunAction}
