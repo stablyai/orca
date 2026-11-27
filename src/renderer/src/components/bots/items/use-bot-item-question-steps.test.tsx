@@ -227,6 +227,49 @@ it('shows "Replying to" again on a reopened line whose × was closed', () => {
   expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([words, 'No'])
 })
 
+// Both picked, line 0 reopened, and its replacement started in the box.
+function reopenedDraft(uid: string, words: string) {
+  const run = steps(uid)
+  act(() => run.hook.result.current.steps!.pick(0, 'Yes'))
+  act(() => run.hook.result.current.steps!.pick(1, 'No'))
+  act(() => run.hook.result.current.steps!.reopen(0))
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: words }, 'immediate')
+  )
+  return run
+}
+
+function enter(hook: ReturnType<typeof steps>['hook'], words: string): void {
+  const { replyMark, waitingLine } = hook.result.current
+  act(() =>
+    hook.result.current.fromBox(words, [], replyMark.hidden ? null : (waitingLine?.id ?? null))
+  )
+}
+
+it("keeps a reopened line's draft on it when another line's pick changes", () => {
+  const words = 'only the internal ones'
+  const { hook, posted } = reopenedDraft('reopen-other-pick', words)
+  act(() => hook.result.current.steps!.pick(1, 'Yes'))
+  expect(hook.result.current.steps!.reopened).toBe(0)
+  enter(hook, words)
+  expect(posted).toEqual([])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
+    words,
+    'Yes'
+  ])
+})
+
+it("keeps a reopened line's draft on it across a restart", () => {
+  const uid = 'reopen-restart'
+  const words = 'only the internal ones'
+  reopenedDraft(uid, words).hook.unmount()
+  const { hook, posted } = steps(uid)
+  expect(hook.result.current.waitingLine?.line).toBe(HOSTS)
+  enter(hook, words)
+  expect(posted).toEqual([])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([words, 'No'])
+})
+
 it('holds an answer with images, files and skills like a pick; Send posts them all as one comment', () => {
   const { hook, posted } = steps('files')
   const skill = { name: 'review', path: '/skills/review/SKILL.md' }

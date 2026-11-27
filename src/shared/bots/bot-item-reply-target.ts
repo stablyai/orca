@@ -128,6 +128,15 @@ function parseKept(text: string): Kept | null {
   return null
 }
 
+/** The line id a box's kept target names, as stored: none when it names no line. */
+export function readBotItemReplyTargetLineId(
+  store: BotItemReplyTargetStore,
+  scope: string
+): string | null {
+  const bound = parseKept(store.read(botItemReplyTargetKey(scope)))?.bound
+  return bound && bound !== 'none' ? bound.id : null
+}
+
 type Asked = {
   open: readonly BotItemWaitingLine[]
   /** The item is read and waits on no question: every kept line is gone. */

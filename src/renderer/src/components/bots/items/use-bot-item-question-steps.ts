@@ -35,6 +35,7 @@ import {
 import {
   botItemWaitsOnNoQuestion,
   createBotItemReplyTargetHook,
+  readBotItemReplyTargetLineId,
   type BotItemReplyMarkState
 } from '../../../../../shared/bots/bot-item-reply-target'
 import type {
@@ -170,8 +171,13 @@ export function useBotItemQuestionSteps(
   const picks = shape.decisions.map((_, at) => (lines.includes(at) ? (held[at] ?? null) : null))
   const [reopenedAt, setReopenedAt] = useState<{ askId: string; index: number } | null>(null)
   const reopened = reopenedAt?.askId === askId && picks[reopenedAt.index] ? reopenedAt.index : null
+  // A draft started on a picked line stays its answer, even once the line folds or the app restarts.
+  const drafting = boxEmpty
+    ? null
+    : readBotItemReplyTargetLineId(botItemReplyTargetDrafts, boxScope)
   const eligible = (index: number): boolean =>
-    lines.includes(index) && (!picks[index] || index === reopened)
+    lines.includes(index) &&
+    (!picks[index] || index === reopened || drafting === `${askId}:${index}`)
   // The line the box's draft answers, taken when its first words arrived (typed, pasted, dictated or
   // restored alike: the box's draft store says). A one-question ask's line goes once its answer is
   // on its way.
@@ -202,7 +208,9 @@ export function useBotItemQuestionSteps(
     send(text, paths, askId, undefined, skills, skipped, { askId, shape, answers, rideAlongText })
   const pick = useLatestHandler((index: number, words: string) => {
     if (lines.includes(index)) {
-      setReopenedAt(null)
+      if (index === reopened) {
+        setReopenedAt(null)
+      }
       if (!botItemHeldAnswerIsReply(held[index], words)) {
         hold(stored(index, botItemHeldAnswer(words)))
       }
