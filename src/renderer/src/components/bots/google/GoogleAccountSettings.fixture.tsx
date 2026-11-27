@@ -91,7 +91,11 @@ export const needsFixing = defineFixture({
     stubGoogle({
       ...host,
       accounts: [
-        { ...work, status: 'reconnect' },
+        {
+          ...work,
+          status: 'reconnect',
+          googleError: 'reauth related error (invalid_rapt) (invalid_grant, invalid_rapt)'
+        },
         {
           ...personal,
           services: [

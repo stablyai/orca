@@ -142,6 +142,7 @@ export function journalReaderOperationAdmitted(operation: JournalSqlReaderOperat
       return operation.operation.kind !== 'records'
     case 'conversion-page':
     case 'conversion-prepare':
+    case 'conversion-storage':
     case 'domain-history':
     case 'fork-next':
     case 'fork-prepare':

@@ -7,7 +7,8 @@ import {
   toRemoteRuntimeClientErrorLike
 } from '../../../../shared/remote-runtime/remote-runtime-client-error-classification'
 
-export type AgentPickerCatalogJob = { index: number }
+/** `relist`: a Refresh the next read must carry, kept until a read with it answers. */
+export type AgentPickerCatalogJob = { index: number; relist?: true }
 export function agentPickerCatalogJobs(entries: AgentPickerEntry[]): AgentPickerCatalogJob[] {
   return entries.flatMap((entry, index) =>
     entry.surfaces.length && entry.catalogRead !== 'unsupported' ? [{ index }] : []

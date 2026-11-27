@@ -239,6 +239,7 @@ export function worktreeAgentProjectionInputs(state: AppState): readonly unknown
     state.ptyIdsByTabId,
     state.terminalLayoutsByTabId,
     state.runtimeAgentOrchestrationByPaneKey,
+    state.remoteAgentOrchestrationByHost,
     state.paneForegroundAgentByPaneKey,
     ...structuredAgentSessionOwnerInputs(state),
     state.runtimePaneTitlesByTabId,

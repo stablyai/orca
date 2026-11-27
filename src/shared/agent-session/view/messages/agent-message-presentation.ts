@@ -68,7 +68,22 @@ export function agentMessageHeading(
   return 'generic'
 }
 
-export function agentMessageSenderLabel(facts: {
+/** A follow-up or a hand-off names who received it; every other heading names who sent it. */
+export function agentMessageHeadingNamesRecipient(heading: AgentMessageHeading): boolean {
+  return heading === 'followed-up-worker' || heading === 'handed-off'
+}
+
+/** A candidate name that names someone; a blank one names no one. */
+const nonBlank = (name: string | null | undefined): string | null => (name?.trim() ? name : null)
+
+/** The name the card saved for a sender, when it names someone; a blank one names no one. */
+export function agentMessageSavedName(
+  sender: Pick<AgentMessageSender, 'name'> | undefined
+): string | null {
+  return nonBlank(sender?.name)
+}
+
+export function resolveAgentMessageSenderName(facts: {
   localChat: boolean
   /** The bot whose home the sender's chat is in; it names every chat there. */
   botName?: string | null
@@ -76,13 +91,15 @@ export function agentMessageSenderLabel(facts: {
   conversationName?: string | null
   snapshotName?: string | null
   tabLabel?: string | null
-  fallback: string
-}): string {
+}): string | null {
   return (
-    (facts.localChat && (facts.botName || facts.customLabel?.trim() || facts.conversationName)) ||
-    facts.snapshotName ||
-    facts.tabLabel?.trim() ||
-    facts.fallback
+    (facts.localChat &&
+      (nonBlank(facts.botName) ||
+        nonBlank(facts.customLabel?.trim()) ||
+        nonBlank(facts.conversationName))) ||
+    nonBlank(facts.snapshotName) ||
+    nonBlank(facts.tabLabel?.trim()) ||
+    null
   )
 }
 
@@ -126,4 +143,14 @@ export function agentMessageSenderView(
 
 export function agentMessageCanCopy(text: string): boolean {
   return text.length > 0
+}
+
+/** The id Steer and Delete act on while the host still holds this agent message as a queued card;
+ *  a handed-off one (its send recorded) is past them. */
+export function agentMessageWaitingQueuedId(
+  message: Pick<NativeChatMessage, 'queued' | 'queuedMessageId' | 'deliveryState'>
+): string | null {
+  return message.queued && message.deliveryState === undefined
+    ? (message.queuedMessageId ?? null)
+    : null
 }

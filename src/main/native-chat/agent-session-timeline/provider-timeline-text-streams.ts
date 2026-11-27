@@ -2,10 +2,7 @@
 // Flush text at event barriers or coalescing windows. Recheck turn settlement on every write,
 // retaining stopped keys until their boundary so trailing deltas cannot escape into thread messages.
 
-import type {
-  AgentJournalRenderItem,
-  AgentJournalProducerLinkage
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalProducerLinkage } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   createAgentSessionDeltaCoalescer,
   type AgentSessionDeltaCoalescerDeps
@@ -23,6 +20,7 @@ import type {
 } from './provider-timeline-event'
 import {
   providerTimelineLiveText,
+  providerTimelineHasLiveText,
   providerTimelineCloseSaves,
   providerTimelineTextResolution,
   type ProviderTimelineStream
@@ -56,7 +54,8 @@ export class ProviderTimelineTextStreams {
       emit: (id, text) => this.flushOnWindow(id, text)
     })
     this.releaseLiveText = deps.sink.bindLiveText?.({
-      read: (epoch) => this.liveText(epoch),
+      read: (epoch, readers) => this.liveText(epoch, readers?.takes),
+      has: (epoch) => providerTimelineHasLiveText(this.byId.values(), epoch, this.coalescer.has),
       flush: () => this.flush()
     })
   }
@@ -260,9 +259,9 @@ export class ProviderTimelineTextStreams {
     return admission?.accepted !== false || admission.reason !== 'backpressure'
   }
 
-  private liveText(epoch: string): AgentJournalRenderItem[] {
+  private liveText(epoch: string, takes?: (itemId: string) => boolean) {
     return [...this.byId.values()].flatMap((stream) =>
-      providerTimelineLiveText(stream, epoch, this.coalescer.snapshot(stream.id))
+      providerTimelineLiveText(stream, epoch, () => this.coalescer.snapshot(stream.id), takes)
     )
   }
 

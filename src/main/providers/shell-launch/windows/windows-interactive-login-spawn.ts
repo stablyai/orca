@@ -2,11 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, win32 } from 'node:path'
+import { join } from 'node:path'
 import {
   getSpawnArgsForWindows,
   wrapWindowsStartWait
 } from '../../../../shared/shell/launch/windows-batch-spawn'
+import { getSystem32ExePath } from '../../../windows/windows-command-paths'
 
 export type WindowsHostInteractiveLoginSpawn = {
   command: string
@@ -43,7 +44,9 @@ function buildPidRelayScript(
     `$Arguments = @(${encodedArgs})`,
     `[IO.File]::WriteAllText((Read-OrcaValue '${encodeUtf8(pidFilePath)}'), [string]$PID)`,
     '& $Command @Arguments',
-    '$OrcaExitCode = if ($null -eq $LASTEXITCODE) { 0 } else { $LASTEXITCODE }',
+    // Only a waited native program sets $LASTEXITCODE. A missing command leaves it unset, and so does
+    // an extensionless shim handed to ShellExecute, where $? is still true: neither is a success.
+    '$OrcaExitCode = if ($null -eq $LASTEXITCODE) { 1 } else { $LASTEXITCODE }',
     `[IO.File]::WriteAllText((Read-OrcaValue '${encodeUtf8(exitCodeFilePath)}'), [string]$OrcaExitCode)`,
     'exit $OrcaExitCode'
   ].join('; ')
@@ -98,13 +101,7 @@ export function buildWindowsHostInteractiveLoginSpawn(
   const relayId = randomUUID()
   const pidFilePath = join(tmpdir(), `orca-interactive-login-${relayId}.pid`)
   const exitCodeFilePath = join(tmpdir(), `orca-interactive-login-${relayId}.exit`)
-  const powershell = win32.join(
-    process.env.SystemRoot ?? 'C:\\Windows',
-    'System32',
-    'WindowsPowerShell',
-    'v1.0',
-    'powershell.exe'
-  )
+  const powershell = getSystem32ExePath('WindowsPowerShell\\v1.0\\powershell.exe')
   const script = buildPidRelayScript(spawnCmd, spawnArgs, pidFilePath, exitCodeFilePath)
   // EncodedCommand needs no execution-policy override, so omit noisy no-op Bypass. Keep base64: start reparses via cmd, whose guard rejects the raw script’s metacharacters.
   const wrapped = wrapWindowsStartWait(powershell, [

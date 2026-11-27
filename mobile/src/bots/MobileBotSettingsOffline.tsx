@@ -1,14 +1,11 @@
-import { View } from 'react-native'
 import {
   HostOfflineBanner,
   useHostOfflineBanner
 } from '../components/host-connection/HostOfflineBanner'
 import { useClientState } from '../query/host-mutation'
-import { spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
-/** Under a Settings page's header while the host can't be reached; its settings are read-only until it is back. */
+/** The offline line under a Settings page's header while the host can't be reached. */
 export function MobileBotSettingsOffline(props: { hostName: string; client: RpcClient | null }) {
   const { client } = props
   const banner = useHostOfflineBanner({
@@ -20,18 +17,15 @@ export function MobileBotSettingsOffline(props: { hostName: string; client: RpcC
     hasData: true,
     asOf: null
   })
-  return banner ? (
-    <View style={styles.offline}>
-      <HostOfflineBanner
-        hostName={props.hostName}
-        offline={banner.offline}
-        asOf={null}
-        onRetry={banner.retry}
-      />
-    </View>
-  ) : null
+  if (!banner) {
+    return null
+  }
+  return (
+    <HostOfflineBanner
+      hostName={props.hostName}
+      offline={banner.offline}
+      asOf={null}
+      onRetry={banner.retry}
+    />
+  )
 }
-
-const styles = themedStyleSheet(() => ({
-  offline: { marginVertical: spacing.sm }
-}))

@@ -1,3 +1,5 @@
+import { useWebviewInputLock } from '../host-guest/input/use-webview-input-lock'
+import { useBrowserPageAnnotateTools } from '../annotate/palette/use-browser-page-annotate-tools'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/class-names'
@@ -15,7 +17,12 @@ import {
 } from '../host-guest/viewport/browser-page-viewport'
 import { isBrowserPagePanePaintable } from '../host-guest/retention/browser-page-paintability'
 import { getShareableBrowserArtifactFile } from '../describe-page/browser-artifact-upload'
-import { getOpenableExternalUrl, toDisplayUrl } from '../describe-page/browser-page-url-display'
+import {
+  getOpenableExternalUrl,
+  getSshRoutedOpenableExternalUrl,
+  toDisplayUrl
+} from '../describe-page/browser-page-url-display'
+import { useSshRoutedPagePortForwards } from './profile-routing/use-ssh-workspace-browser-route'
 import type { BrowserPagePaneProps } from '../describe-page/browser-page-types'
 import { BrowserPageChromeHeader } from './browser-page-chrome-header'
 import { BrowserPageContextMenu } from './context-menu/browser-page-context-menu'
@@ -36,6 +43,8 @@ import { useBrowserPageWebviewUrlSync } from '../navigate/use-browser-page-webvi
 import { useBrowserPageZoomFeedback } from '../host-guest/viewport/use-browser-page-zoom-feedback'
 import { useBrowserPageViewportScrollReporting } from '../host-guest/viewport/use-browser-page-viewport-scroll-reporting'
 import { BrowserPageDevToolsDock } from '../devtools-dock/BrowserDevToolsDock'
+import { openSshRoutedUrlInSystemBrowser } from '@/lib/workspace-ports/forwarded-url-system-browser-open'
+import { openSystemHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import { useBrowserPageViewportSizeFeedback } from '../host-guest/viewport/use-browser-page-viewport-size-feedback'
 
 export function BrowserPagePane({
@@ -165,12 +174,13 @@ export function BrowserPagePane({
     isActive,
     toolsDisabled: isBlankTab,
     markupIsActive: markup.isActive,
+    paletteKeys: true,
     containerRef,
     guestSurfaceRef: webviewRef,
     trackingContainer: pageViewport?.container ?? null,
     trackingScroller: pageViewport?.scroller ?? null,
     currentDocumentUrl: browserTab.url,
-    shortcuts: { workspaceId, chromeShortcutScope }
+    shortcuts: { workspaceId, chromeShortcutScope, bind: false }
   })
   const nav = useBrowserPageNavigationDownloads({
     browserTabId: browserTab.id,
@@ -188,7 +198,7 @@ export function BrowserPagePane({
     addressBarInputRef,
     browserTabUrl: browserTab.url
   })
-  useBrowserPageWebviewLifecycle({
+  const { documentGeneration } = useBrowserPageWebviewLifecycle({
     browserTabId: browserTab.id,
     browserTabUrl: browserTab.url,
     browserTabLoading: browserTab.loading,
@@ -254,6 +264,17 @@ export function BrowserPagePane({
     chromeShortcutScope,
     setFindOpen
   })
+  const toolSwitch = useBrowserPageAnnotateTools({
+    grab,
+    grabAnnotations,
+    markup,
+    browserTab,
+    documentGeneration,
+    isBlankTab,
+    isActive,
+    workspaceId,
+    chromeShortcutScope
+  })
   useBrowserPageWebviewShortcuts({
     browserTabId: browserTab.id,
     workspaceId,
@@ -267,22 +288,25 @@ export function BrowserPagePane({
 
   // Why: synchronous webview URL access blocks render; navigation handlers update this cache before their store writes can re-render the pane.
   const liveBrowserUrl = getLiveBrowserUrl(browserTab.id) ?? browserTab.url
-  const externalUrl = getOpenableExternalUrl(liveBrowserUrl)
+  // An SSH-routed page's localhost is the SSH host's; the system browser reaches it only through a forward.
+  const sshRouted = Boolean(sessionPartition?.startsWith('persist:orca-browser-v1-'))
+  const sshPortForwards = useSshRoutedPagePortForwards(worktreeId, sshRouted)
+  const sshRoutedExternalUrl = sshRouted
+    ? (url: string) => getSshRoutedOpenableExternalUrl(url, sshPortForwards)
+    : undefined
+  const openExternalUrl = (url: string): void =>
+    sshRouted ? openSshRoutedUrlInSystemBrowser(url, sshPortForwards) : void openSystemHttpLink(url)
+  const externalUrl = (sshRoutedExternalUrl ?? getOpenableExternalUrl)(liveBrowserUrl)
   const currentBrowserUrl = toDisplayUrl(liveBrowserUrl)
   // A file: page in this webview is always this machine's file, even in an SSH workspace.
   const shareableArtifactFile = getShareableBrowserArtifactFile(currentBrowserUrl)
   const failedNavigationUrl = browserTab.loadError?.validatedUrl ?? currentBrowserUrl
-  const failureExternalUrl = normalizeExternalBrowserUrl(failedNavigationUrl)
+  const failureExternalUrl = (sshRoutedExternalUrl ?? normalizeExternalBrowserUrl)(
+    failedNavigationUrl
+  )
   const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab
 
-  useEffect(() => {
-    const webview = webviewRef.current
-    if (!webview) {
-      return
-    }
-    // Why: Electron webviews keep receiving native input under a React overlay unless their own hit testing is disabled.
-    webview.style.pointerEvents = inputLocked ? 'none' : 'auto'
-  }, [inputLocked])
+  useWebviewInputLock(webviewRef, inputLocked)
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -316,6 +340,8 @@ export function BrowserPagePane({
         canGoForward={browserTab.canGoForward}
         webviewRef={webviewRef}
         onReload={() => reload.reloadWebviewOrRecoverGuest(false)}
+        externalUrl={sshRoutedExternalUrl}
+        openExternal={sshRouted ? openExternalUrl : undefined}
       />
       <BrowserPageChromeHeader
         chromeHeaderRef={chromeHeaderRef}
@@ -332,15 +358,15 @@ export function BrowserPagePane({
         grab={grab}
         grabAnnotations={grabAnnotations}
         annotationSend={annotationSend}
-        elementTools={elementTools}
+        elementTools={{ ...elementTools, onStartIntent: toolSwitch.toggleTool }}
         notes={notes}
         onOpenFind={() => setFindOpen(true)}
         markupIsActive={markup.isActive}
-        markupStart={markup.start}
-        markupCancel={markup.cancel}
+        markupStart={async () => toolSwitch.selectTool('draw')}
+        markupCancel={toolSwitch.exit}
         shareableArtifactFile={shareableArtifactFile}
         currentBrowserUrl={currentBrowserUrl}
-        externalUrl={externalUrl}
+        onOpenExternal={externalUrl ? () => openExternalUrl(externalUrl) : null}
         isBlankTab={isBlankTab}
         resourceNotice={resourceNotice}
         setResourceNotice={setResourceNotice}
@@ -350,6 +376,8 @@ export function BrowserPagePane({
             <BrowserPageViewportOverlays
               isActive={isActive}
               markup={markup}
+              toolSwitch={toolSwitch}
+              canPickElements={!isBlankTab && !browserTab.loadError}
               feedbackBadgeRef={zoom.feedbackBadgeRef}
               findOpen={findOpen}
               setFindOpen={setFindOpen}
@@ -361,7 +389,7 @@ export function BrowserPagePane({
               retryGuestRecoveryRef={retryGuestRecoveryRef}
               navigateToUrl={nav.navigateToUrl}
               certificateFailure={certificateFailure}
-              sshRouted={Boolean(sessionPartition?.startsWith('persist:orca-browser-v1-'))}
+              sshRouted={sshRouted}
               autoRetry={{
                 active: isPaintable,
                 whileWindowHidden: isMobileDriven || isRemotelyViewed

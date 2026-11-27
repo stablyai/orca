@@ -3,27 +3,32 @@ import { randomUUID } from 'node:crypto'
 import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type {
   BrowserScreenshotAnnotation,
   BrowserScreenshotResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../browser-error'
 
-const Annotation: z.ZodType<BrowserScreenshotAnnotation> = z.object({
-  ref: z.string(),
-  number: z.number(),
-  role: z.string(),
-  name: z.string().optional(),
-  box: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })
-})
+const Annotation: z.ZodType<BrowserScreenshotAnnotation> = lazyZodSchema(() =>
+  z.object({
+    ref: z.string(),
+    number: z.number(),
+    role: z.string(),
+    name: z.string().optional(),
+    box: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })
+  })
+)
 
-const AgentBrowserScreenshotResult = z.object({
-  // Absent when --if-changed found no change.
-  path: z.string().min(1).optional(),
-  changed: z.boolean().optional(),
-  // A changed legend shape must not cost the agent its screenshot.
-  annotations: z.array(Annotation).optional().catch(undefined)
-})
+const AgentBrowserScreenshotResult = lazyZodSchema(() =>
+  z.object({
+    // Absent when --if-changed found no change.
+    path: z.string().min(1).optional(),
+    changed: z.boolean().optional(),
+    // A changed legend shape must not cost the agent its screenshot.
+    annotations: z.array(Annotation).optional().catch(undefined)
+  })
+)
 
 export function agentBrowserScreenshotArgs(
   options: BrowserScreenshotOptions,

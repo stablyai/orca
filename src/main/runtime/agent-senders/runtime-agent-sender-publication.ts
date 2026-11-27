@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import type {
-  AgentSenderAssociation,
-  AgentSenderPublication,
-  AgentSenderRevision
+import {
+  sameAgentSenderContent,
+  type AgentSenderAssociation,
+  type AgentSenderPublication,
+  type AgentSenderRevision
 } from '../../../shared/orchestration/mailbox/agent-sender-associations'
 
 export type AgentSenderScope = AgentSenderPublication & {
@@ -10,19 +11,6 @@ export type AgentSenderScope = AgentSenderPublication & {
   attachments: (AgentSenderAssociation & { homePeerFingerprint: string })[]
 }
 type Content = Omit<AgentSenderScope, 'revision'>
-
-/** Field by field, as clients read them; key order and the revision stamp never count. */
-function sameContent(
-  a: Omit<AgentSenderPublication, 'revision'>,
-  b: Omit<AgentSenderPublication, 'revision'>
-): boolean {
-  return (
-    a.peerFingerprint === b.peerFingerprint &&
-    JSON.stringify(a.principals) === JSON.stringify(b.principals) &&
-    JSON.stringify(a.associations) === JSON.stringify(b.associations) &&
-    JSON.stringify(a.attachments) === JSON.stringify(b.attachments)
-  )
-}
 
 /** The host's one immutable sender publication and its worktree scopes. Its revision moves only
  *  when what clients read changes, so every delivery can say "unchanged" without the rows; the
@@ -103,7 +91,7 @@ export class AgentSenderPublisher {
   }
 
   publish(next: Content): void {
-    if (sameContent(next, this.publication)) {
+    if (sameAgentSenderContent(next, this.publication)) {
       return
     }
     this.revision++
@@ -135,7 +123,7 @@ export class AgentSenderPublisher {
     }
     for (const [id, scope] of scopes) {
       const previous = this.scoped.get(id)
-      if (!previous || !sameContent(previous, scope)) {
+      if (!previous || !sameAgentSenderContent(previous, scope)) {
         this.scoped.set(id, this.stamp(scope))
       }
     }

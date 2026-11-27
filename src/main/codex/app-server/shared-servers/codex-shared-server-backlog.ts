@@ -18,6 +18,9 @@ type BacklogLease = {
   shed: () => void
 }
 
+const takesFrames = (lease: BacklogLease): boolean => lease.reading || lease.waiting
+const isWaiting = (lease: BacklogLease): boolean => lease.waiting
+
 /** Bytes queued by the paused chats on one server, bounded however many chats stall. Past the
  *  budget the shared reader pauses, so Codex waits as it would on a dedicated chat's pipe. With
  *  every chat paused (a journal stall) that is all: nothing is dropped. If a chat needs the server
@@ -34,13 +37,16 @@ export class CodexSharedServerBacklog {
   private graceFrom = 0
   /** When the current wait began; null while nobody waits on the backlog. */
   private graceSince: number | null = null
+  /** The chat each test last matched, checked first so a queued frame doesn't walk every chat;
+   *  weakly held, so a chat that closed isn't kept alive by it. */
+  private readonly witnesses = new Map<(lease: BacklogLease) => boolean, WeakRef<BacklogLease>>()
 
   constructor(
     private readonly reader: () => Pick<
       CodexAppServerConnection,
       'pauseReading' | 'resumeReading'
     > | null,
-    private readonly leases: Iterable<BacklogLease>
+    private readonly leases: ReadonlySet<BacklogLease>
   ) {}
 
   /** A chat's queue grew or shrank, or it may have started waiting (delta 0). */
@@ -70,6 +76,7 @@ export class CodexSharedServerBacklog {
     this.graceSince = null
     this.bytes.clear()
     this.waiters.clear()
+    this.witnesses.clear()
     this.total = 0
     this.paused = false
   }
@@ -78,15 +85,13 @@ export class CodexSharedServerBacklog {
     const half = CODEX_SHARED_SERVER_BACKLOG_BYTES / 2
     // No chat can take a frame and none waits on one: Codex holds the rest, as on a paused pipe.
     const stalled =
-      this.total > 0 &&
-      this.waiters.size === 0 &&
-      ![...this.leases].some((lease) => lease.reading || lease.waiting)
+      this.total > 0 && this.waiters.size === 0 && !this.anyLease(takesFrames, this.leases)
     if (stalled) {
       this.setPaused(true)
     }
     if (this.total > (this.paused ? half : CODEX_SHARED_SERVER_BACKLOG_BYTES)) {
       this.setPaused(true)
-      if ([...this.leases, ...this.waiters].some((lease) => lease.waiting)) {
+      if (this.anyLease(isWaiting, this.leases, this.waiters)) {
         // A grace that saw the backlog shrink starts over, up to a cap: catching up isn't stalling.
         const now = Date.now()
         this.graceSince ??= now
@@ -114,6 +119,26 @@ export class CodexSharedServerBacklog {
       this.graceSince = null
       this.setPaused(false)
     }
+  }
+
+  private anyLease(
+    test: (lease: BacklogLease) => boolean,
+    ...groups: ReadonlySet<BacklogLease>[]
+  ): boolean {
+    const witness = this.witnesses.get(test)?.deref()
+    if (witness && test(witness) && groups.some((group) => group.has(witness))) {
+      return true
+    }
+    for (const group of groups) {
+      for (const lease of group) {
+        if (test(lease)) {
+          this.witnesses.set(test, new WeakRef(lease))
+          return true
+        }
+      }
+    }
+    this.witnesses.delete(test)
+    return false
   }
 
   private setPaused(paused: boolean): void {

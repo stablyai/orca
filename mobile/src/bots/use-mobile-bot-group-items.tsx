@@ -1,78 +1,34 @@
-// A group's Items, read: each member's items and asks from its own reads, scoped to the group's rooms
-// by the filter, merged into one set of groups as the desktop's group panel merges them.
-import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject
+} from 'react'
 import {
   botItemStaleDays,
   botItemsClosedInTimeOrder,
-  botItemsByDispatch,
   filterBotItems,
   groupBotsItems,
   isBotItemUnseen
 } from '../../../src/shared/bots/bot-item-groups'
 import { mergeBotItemsByUid } from '../../../src/shared/bots/bot-item-merge'
 import type { BotItem } from '../../../src/shared/bots/bot-items'
-import { botGroupSessionIds, type BotGroup } from '../../../src/shared/bots/bot-group'
+import type { BotGroup } from '../../../src/shared/bots/bot-group'
 import { botGroupMemberBots } from '../../../src/shared/bots/bot-sidebar-entries'
 import { readHostMethodReply } from '../host-screen/sidebar-feed/host-sidebar-feed-operations'
-import type { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { groupList } from './bot-group-operations'
 import { botActivityRead, type SheetActivity } from './bot-sheet-operations'
 import type { BotGroupItemReads } from './use-mobile-bot-group-transcript'
 import type { PhoneBot } from './host-bots-operations'
-import { usePhoneBotChatTree } from './use-phone-bot-chat-tree'
+import { usePhoneBotChatTree, type PhoneBotChatTree } from './use-phone-bot-chat-tree'
 import { usePhoneNeedsYouAsks, type PhoneAsk } from './items/phone-needs-you-asks'
 import { usePhoneBotItems, type PhoneBotItems } from './items/use-phone-bot-items'
-
-type Translate = ReturnType<typeof useMobileTranslation>
-export const GROUP_SCOPE = 'group'
-const ALL_SCOPE = 'all'
-export type BotGroupItemsScope = {
-  key: string
-  name: string
-  kind: 'group' | 'room' | 'thread' | 'all'
-  chatIds: string[] | null
-}
-
-function groupScopes(group: BotGroup, t: Translate): BotGroupItemsScope[] {
-  const threads = group.threads ?? []
-  return [
-    {
-      key: GROUP_SCOPE,
-      name: t('bots.groups.items.thisGroup', 'This group'),
-      kind: 'group',
-      chatIds: botGroupSessionIds([group, ...threads])
-    },
-    // A group without threads has one room, which This group already is.
-    ...(threads.length > 0
-      ? [
-          {
-            key: group.id,
-            name: group.name,
-            kind: 'room' as const,
-            chatIds: botGroupSessionIds([group])
-          },
-          ...threads.map((thread) => ({
-            key: thread.id,
-            name: thread.title ?? t('bots.groups.items.thread', 'Thread'),
-            kind: 'thread' as const,
-            chatIds: botGroupSessionIds([thread])
-          }))
-        ]
-      : []),
-    {
-      key: ALL_SCOPE,
-      name: t('bots.groups.items.all', 'All their work'),
-      kind: 'all',
-      chatIds: null
-    }
-  ]
-}
-
-/** A member's item read count: its own notices', and those naming every member. */
-export function memberItemReads(reads: BotGroupItemReads, botId: string): number {
-  return reads.all + (reads.bots[botId] ?? 0)
-}
+import { groupItemsFresh, memberItemReads } from './phone-group-items-freshness'
+export { memberItemReads } from './phone-group-items-freshness'
 
 /** A member's ask read count: its item reads', and its chats' own. */
 function memberAskReads(reads: BotGroupItemReads, botId: string): number {
@@ -114,27 +70,32 @@ function useMemberWorkers(
   return workers
 }
 
-/** One member's items and asks, read as its own panel reads them; hooks can't run in a loop, so each
- *  member mounts one. Its asks are those of the filter's chats; an access request is no chat's, so only
- *  All their work could list it, and the phone reviews those from the bot's own panel. */
 function MemberItemsReader({
   client,
+  hostKey,
   botId,
-  chatIds,
   showing,
   reads,
   askReads,
-  report
+  report,
+  forget
 }: {
   client: RpcClient | null
+  hostKey: string
   botId: string
-  chatIds: readonly string[] | null
   showing: boolean
   reads: number
   askReads: number
-  report: (botId: string, items: PhoneBotItems, asks: readonly PhoneAsk[]) => void
+  forget: (botId: string) => void
+  report: (
+    botId: string,
+    items: PhoneBotItems,
+    asks: readonly PhoneAsk[],
+    tree: PhoneBotChatTree
+  ) => void
 }) {
-  const items = usePhoneBotItems({ client, botId, chatIds, showing, reads })
+  useLayoutEffect(() => () => forget(botId), [botId, forget])
+  const items = usePhoneBotItems({ client, hostKey, botId, chatIds: null, showing, reads })
   const tree = usePhoneBotChatTree({ client, botId, showing, reads: askReads })
   const workers = useMemberWorkers(client, botId, showing, askReads)
   const chats = tree.kind === 'tree' ? tree.chats : null
@@ -147,56 +108,31 @@ function MemberItemsReader({
     access: null,
     itemCount: 0
   })
-  // As the desktop scopes them: a chat's ask by that chat, a worker's by its item's chat, else by
-  // the chat it runs under.
-  const asks = useMemo(() => {
-    if (!chatIds) {
-      return all
-    }
-    const byDispatch = botItemsByDispatch(allItems ?? [])
-    const under = new Map(
-      (chats ?? []).flatMap((chat) => chat.running.map((worker) => [worker.key, chat.chatId]))
-    )
-    return all.filter((ask) => {
-      const open = ask.open
-      const chatId = !open
-        ? null
-        : 'chat' in open
-          ? open.chat.chatId
-          : 'worker' in open
-            ? ((open.worker.dispatchId
-                ? byDispatch.get(open.worker.dispatchId)?.chat.id
-                : undefined) ?? under.get(open.worker.key))
-            : null
-      return chatId != null && chatIds.includes(chatId)
-    })
-  }, [all, chatIds, chats, allItems])
   // Runs each render; the panel redraws only when a read itself changed.
-  useEffect(() => report(botId, items, asks))
+  useEffect(() => report(botId, items, all, tree))
   return null
 }
 
 export function useMobileBotGroupItems({
   visible,
   client,
+  hostKey,
   groupId,
   bots,
-  needsYou,
   reads,
   memberIds,
-  now,
-  t
+  now
 }: {
   visible: boolean
   client: RpcClient | null
+  /** The phone's key for the group's host (`hostBotsKey`). */
+  hostKey: string
   groupId: string
   bots: readonly PhoneBot[]
-  needsYou: Readonly<Record<string, number>>
   reads: BotGroupItemReads
   /** Set to the members read here, so a notice re-reads only theirs. */
   memberIds: RefObject<readonly string[]>
   now: number
-  t: Translate
 }) {
   // The whole group, with its original room's members: a thread's room read lists the thread's.
   const [group, setGroup] = useState<BotGroup | null>(null)
@@ -230,11 +166,8 @@ export function useMobileBotGroupItems({
     }
   }, [visible, client, groupId, reads.rooms, groupAttempt])
 
-  const [scopeKey, setScopeKey] = useState(GROUP_SCOPE)
   const [pickedIds, setBotIds] = useState<readonly string[] | null>(null)
   const [needsYouOnly, setNeedsYouOnly] = useState(false)
-  const scopes = useMemo(() => (group ? groupScopes(group, t) : []), [group, t])
-  const scope = scopes.find((entry) => entry.key === scopeKey) ?? scopes[0]
   const members = useMemo(() => (group ? botGroupMemberBots(group, bots) : []), [group, bots])
   useEffect(() => {
     memberIds.current = members.map((bot) => bot.id)
@@ -247,27 +180,39 @@ export function useMobileBotGroupItems({
 
   const memberReads = useRef(new Map<string, PhoneBotItems>())
   const memberAsks = useRef(new Map<string, readonly PhoneAsk[]>())
+  const memberTrees = useRef(new Map<string, PhoneBotChatTree>())
   const [version, setVersion] = useState(0)
-  const report = useRef((botId: string, items: PhoneBotItems, asks: readonly PhoneAsk[]) => {
-    const last = memberReads.current.get(botId)
-    const lastAsks = memberAsks.current.get(botId)
-    memberReads.current.set(botId, items)
-    memberAsks.current.set(botId, asks)
-    if (
-      // Two empty lists are the same.
-      (lastAsks !== asks && ((lastAsks?.length ?? 0) > 0 || asks.length > 0)) ||
-      last?.read !== items.read ||
-      last.error !== items.error ||
-      // A page read again holds other rows at the same length; two empty lists are the same.
-      (last.items !== items.items && (last.items.length > 0 || items.items.length > 0)) ||
-      (last.loadMoreClosed === null) !== (items.loadMoreClosed === null)
-    ) {
-      setVersion((version) => version + 1)
-    }
+  const forget = useRef((botId: string) => {
+    memberReads.current.delete(botId)
+    memberAsks.current.delete(botId)
+    memberTrees.current.delete(botId)
   }).current
+  const report = useRef(
+    (botId: string, items: PhoneBotItems, asks: readonly PhoneAsk[], tree: PhoneBotChatTree) => {
+      const last = memberReads.current.get(botId)
+      const lastAsks = memberAsks.current.get(botId)
+      const lastTree = memberTrees.current.get(botId)
+      memberReads.current.set(botId, items)
+      memberAsks.current.set(botId, asks)
+      memberTrees.current.set(botId, tree)
+      if (
+        // Two empty lists are the same.
+        (lastAsks !== asks && ((lastAsks?.length ?? 0) > 0 || asks.length > 0)) ||
+        lastTree?.currentReads !== tree.currentReads ||
+        lastTree?.refreshFailed !== tree.refreshFailed ||
+        last?.read !== items.read ||
+        last.error !== items.error ||
+        last.currentReads !== items.currentReads ||
+        // A page read again holds other rows at the same length; two empty lists are the same.
+        (last.items !== items.items && (last.items.length > 0 || items.items.length > 0)) ||
+        (last.loadMoreClosed === null) !== (items.loadMoreClosed === null)
+      ) {
+        setVersion((version) => version + 1)
+      }
+    }
+  ).current
   const readOf = (bot: PhoneBot) => memberReads.current.get(bot.id)
 
-  const filterChats = scope?.chatIds ?? null
   const shownKey = shownBots.map((bot) => bot.id).join('\n')
   // Merged once per read or filter change: the room redraws this on every keystroke.
   const { shownReads, groups, ownerOf, asks } = useMemo(() => {
@@ -277,7 +222,7 @@ export function useMobileBotGroupItems({
     })
     const perBot = shownReads.map(({ bot, items, read }) => ({
       items: filterBotItems(mergeBotItemsByUid(read.items, items.items), {
-        chatIds: filterChats,
+        chatIds: null,
         botIds: null,
         needsYou: needsYouOnly
       }),
@@ -310,27 +255,28 @@ export function useMobileBotGroupItems({
     )
     return { shownReads, groups, ownerOf, asks }
     // `version` stands for the member reads (a ref, so a report never loops), `shownKey` for the shown bots.
-  }, [version, members, shownKey, filterChats, needsYouOnly, now])
+  }, [version, members, shownKey, needsYouOnly, now])
   const isUnseen = (item: BotItem) => {
     const owner = ownerOf.get(item.uid)
     const seen = owner ? readOf(owner)?.read?.seenEventId : undefined
     return seen !== undefined && isBotItemUnseen(item, seen)
   }
-  const needsYouShown = groups.needs_you.length
-  // A group whose members were all deleted has nothing to read, and shows its empty list.
   const allRead = group !== null && shownReads.length === shownBots.length
   const failed =
-    groupError !== null || shownBots.some((bot) => (readOf(bot)?.error ?? null) !== null)
-  const outside =
-    filterChats && allRead
-      ? Math.max(
-          0,
-          shownBots.reduce((sum, bot) => sum + (needsYou[bot.id] ?? 0), 0) - needsYouShown
-        )
-      : 0
-  const filterOn = scopeKey !== GROUP_SCOPE || botIds !== null || needsYouOnly
+    groupError !== null ||
+    shownBots.some(
+      (bot) =>
+        (readOf(bot)?.error ?? null) !== null ||
+        memberTrees.current.get(bot.id)?.refreshFailed === true
+    )
+  const fresh =
+    !failed &&
+    groupItemsFresh(shownBots, reads, memberReads.current) &&
+    shownBots.every(
+      (bot) => memberTrees.current.get(bot.id)?.currentReads === memberAskReads(reads, bot.id)
+    )
+  const filterOn = botIds !== null || needsYouOnly
   const clearFilter = () => {
-    setScopeKey(GROUP_SCOPE)
     setBotIds(null)
     setNeedsYouOnly(false)
   }
@@ -343,33 +289,30 @@ export function useMobileBotGroupItems({
   const moreClosed = shownBots.flatMap((bot) => readOf(bot)?.loadMoreClosed ?? [])
   const retry = () => {
     setGroupAttempt((attempt) => attempt + 1)
-    shownBots.forEach((bot) => readOf(bot)?.retry())
+    shownBots.forEach((bot) => {
+      readOf(bot)?.retry()
+      memberTrees.current.get(bot.id)?.retry()
+    })
   }
   const openCount = (bot: PhoneBot) =>
-    readOf(bot)?.read?.items.filter(
-      (item) =>
-        item.status !== 'done' &&
-        item.status !== 'canceled' &&
-        (filterChats === null || filterChats.includes(item.chat.id))
-    ).length ?? 0
+    readOf(bot)?.read?.items.filter((item) => item.status !== 'done' && item.status !== 'canceled')
+      .length ?? 0
   const readers: ReactNode = members.map((bot) => (
     <MemberItemsReader
       key={bot.id}
       client={client}
+      hostKey={hostKey}
       botId={bot.id}
-      chatIds={filterChats}
       showing={visible}
       reads={memberItemReads(reads, bot.id)}
       askReads={memberAskReads(reads, bot.id)}
       report={report}
+      forget={forget}
     />
   ))
   return {
     group,
     members,
-    scopes,
-    scope,
-    setScopeKey,
     botIds,
     setBotIds,
     needsYouOnly,
@@ -380,9 +323,9 @@ export function useMobileBotGroupItems({
     isUnseen,
     allRead,
     failed,
+    fresh,
     error:
       groupError ?? shownBots.map((bot) => readOf(bot)?.error).find((error) => error != null) ?? '',
-    outside,
     filterOn,
     clearFilter,
     closedTotal,

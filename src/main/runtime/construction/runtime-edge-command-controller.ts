@@ -109,6 +109,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserGrabSetMode',
   'browserGrabAwait',
   'browserGrabCancel',
+  'browserGrabPickedPresent',
   'browserGrabCaptureSelection',
   'browserGrabExtractHover',
   'browserGrabViewportBridge',
@@ -135,6 +136,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserProfileImportFromBrowser',
   'browserProfileClearGoogleCookies',
   'browserProfileClearDefaultCookies',
+  'browserProfileClearCookies',
   'browserTabClose'
 ] as const satisfies readonly (keyof RuntimeBrowserCommands)[]
 

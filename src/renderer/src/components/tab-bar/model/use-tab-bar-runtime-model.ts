@@ -1,6 +1,6 @@
 import { shallow } from 'zustand/shallow'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store/index'
 import { buildStatusMap } from '../../../../../shared/git/status/git-path-decoration'
@@ -15,6 +15,11 @@ import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
+import {
+  isReturningToHeldWindowsTerminalCapabilities,
+  holdWindowsTerminalCapabilitiesForReleasedStrip,
+  takeWindowsTerminalCapabilityHold
+} from '@/runtime/hosts/capabilities/windows-terminal-capability-holds'
 import type { WindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { shouldShowMobileEmulatorTabIntro } from '../../emulator-pane/tab-intro/mobile-emulator-tab-intro-visibility'
 import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
@@ -140,12 +145,41 @@ export function useTabBarRuntimeModel({
     Boolean(activeRuntimeEnvironmentId?.trim()) ||
     isWebClient ||
     Boolean(worktreeConnectionId)
+  const [returningStrip] = useState(
+    // A different host on return (e.g. host-qualified activation) takes the normal TTL load.
+    () =>
+      groupId !== undefined &&
+      isReturningToHeldWindowsTerminalCapabilities(
+        worktreeId,
+        groupId,
+        windowsTerminalCapabilityOwnerKey
+      )
+  )
+  useEffect(() => {
+    if (!groupId) {
+      return
+    }
+    // Runs after every dependency change too, so a hold the previous cleanup left for a still-mounted strip is dropped here.
+    takeWindowsTerminalCapabilityHold(worktreeId, groupId)
+    if (!shouldProbeWindowsShellCapabilities) {
+      return
+    }
+    return () => {
+      // Unmounting with the group still open means its workspace released the layout; keep the answer for the return.
+      holdWindowsTerminalCapabilitiesForReleasedStrip(
+        worktreeId,
+        groupId,
+        windowsTerminalCapabilityOwnerKey
+      )
+    }
+  }, [groupId, worktreeId, shouldProbeWindowsShellCapabilities, windowsTerminalCapabilityOwnerKey])
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldProbeWindowsShellCapabilities,
     false,
     windowsTerminalCapabilityOwnerKey,
     runtimeTarget,
-    worktreeConnectionId
+    worktreeConnectionId,
+    returningStrip
   )
   const shellMenuHostPlatform = worktreeConnectionId
     ? (worktreeRemotePlatform ?? windowsTerminalCapabilities.hostPlatform)

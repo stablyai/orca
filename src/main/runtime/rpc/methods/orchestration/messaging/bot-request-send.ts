@@ -13,6 +13,7 @@ import {
 import { admitInNewChat, sessionAddress } from './bot-request-conversation'
 import { ownerChatCard } from './bot-request-owner-card'
 import { botRequestPayload, type BotRequestRecord } from '../../../../../bots/bot-request-view'
+import { requestAskersOf } from '../../../../../bots/bot-request-askers-of'
 import type { BotRequestAdmission } from '../../../../orchestration/db/bot-requests/bot-request-store'
 import {
   BOT_REQUEST_TYPE_REFUSAL,
@@ -199,12 +200,13 @@ async function admitBotRequestMail(
     toBotName: target.name,
     purpose,
     depth: chain.depth,
-    askers: acting.turn.askers,
+    askers: requestAskersOf(acting.turn),
     askedBy: acting.turn.askedBy,
     request: groupScope?.originalHumanInstruction ?? acting.turn.request,
     conversation: acting.conversation,
     ...(acting.triggeredBy ? { triggeredBy: acting.triggeredBy } : {}),
     ...(acting.turn.origin ? { origin: acting.turn.origin } : {}),
+    ...(acting.turn.originPlace ? { originPlace: acting.turn.originPlace } : {}),
     ...asked,
     ...answersRequest(db, acting)
   }

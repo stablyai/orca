@@ -19,7 +19,6 @@ import { normalizeClaudeEvent } from './providers/claude/claude-events'
 import { normalizeCodexEvent } from './providers/codex/codex-events'
 import { codexHookEventForEndedTurn } from './providers/codex/codex-ended-turn-event'
 import { codexHookEventForEphemeralThread } from './providers/codex/codex-ephemeral-threads'
-import { normalizeGeminiEvent } from './providers/gemini/gemini-events'
 import { normalizeOpenCodeFamilyEvent } from './providers/opencode-family/opencode-family-events'
 import { normalizeCursorEvent } from './providers/cursor/cursor-events'
 import { normalizePiCompatibleEvent } from './providers/pi-family/pi-family-events'
@@ -111,9 +110,6 @@ export function normalizeProviderEvent(input: {
         hookPayload,
         input.eventName
       )
-      break
-    case 'gemini':
-      payload = normalizeGeminiEvent(state, eventName, promptText, paneKey, hookPayload)
       break
     case 'antigravity':
       if (isNewTurnEvent('antigravity', eventName)) {

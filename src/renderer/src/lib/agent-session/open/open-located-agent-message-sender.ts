@@ -2,6 +2,7 @@
 // tab, else that same pane through its host. Never whatever the card's saved address names now.
 
 import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
@@ -45,7 +46,7 @@ const provesTerminalGone = (error: unknown) =>
 
 export function openLocatedAgentMessageSender(
   location: LocatedAgentSender,
-  name: string,
+  name: string | undefined,
   click: Click
 ): Promise<void> {
   if (location.sessionId) {
@@ -63,11 +64,11 @@ export function openLocatedAgentMessageSender(
 async function openLocatedChat(
   location: LocatedAgentSender,
   sessionId: string,
-  name: string
+  name: string | undefined
 ): Promise<void> {
   const host = structuredAgentSessionTargetForHost(location.host)
   if (!host) {
-    showLookupFailure('unreachable', name)
+    structuredSessionOpenFeedback.unavailable(name)
     return
   }
   const session = {
@@ -96,7 +97,7 @@ function heldTabId(
  *  on this host, else the host's answer for the pane itself. */
 async function openUnheldTerminal(
   location: LocatedAgentSender,
-  name: string,
+  name: string | undefined,
   click: Click
 ): Promise<void> {
   const host = structuredAgentSessionTargetForHost(location.host)
@@ -166,11 +167,13 @@ export async function focusTerminal(
 
 export function showLookupFailure(
   failure: LookupFailure,
-  name: string,
+  name: string | undefined,
   feedback: StructuredSessionOpenFeedback = structuredSessionOpenFeedback
 ): void {
   if (failure === 'unreachable') {
-    feedback.unavailable(name)
+    toast.error(
+      translate('components.native-chat.writeNotice.unreachable', "Orca couldn't reach the agent.")
+    )
   } else {
     feedback.hostCannotOpen(name)
   }

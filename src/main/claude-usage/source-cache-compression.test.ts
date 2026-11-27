@@ -15,8 +15,7 @@ const source = {
 const ref = () => ({
   path: join(directory, 'sources.json'),
   schemaVersion: 7,
-  worktreeFingerprint: null,
-  reuse: true
+  worktreeFingerprint: null
 })
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orca-claude-stream-'))

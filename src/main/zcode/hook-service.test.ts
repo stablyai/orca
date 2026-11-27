@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as fs from 'node:fs'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SFTPWrapper } from 'ssh2'
 
 const { homedirMock } = vi.hoisted(() => ({ homedirMock: vi.fn<() => string>() }))
 
@@ -14,6 +12,7 @@ vi.mock('node:os', async () => {
 })
 
 import { zcodeHookService } from './hook-service'
+import { localDiskSftp } from '../agent-hooks/installation/remote/local-disk-sftp.test-fixture'
 
 const EVENTS = [
   'PermissionRequest',
@@ -30,36 +29,6 @@ function managedEvents(path: string): string[] {
   return Object.keys(events)
     .filter((event) => JSON.stringify(events[event]).includes('zcode-hook.'))
     .sort()
-}
-
-type NodeCallback = (error: NodeJS.ErrnoException | null, value?: unknown) => void
-
-// Serve SFTP from local disk; ssh2 reports a missing file as status code 2.
-function localDiskSftp(): SFTPWrapper {
-  const forward =
-    (call: (...args: unknown[]) => void) =>
-    (...args: unknown[]): void => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ssh2 and node:fs both pass the callback last.
-      const callback = args.pop() as NodeCallback
-      call(...args, (error: NodeJS.ErrnoException | null, value?: unknown) =>
-        callback(error?.code === 'ENOENT' ? Object.assign(error, { code: 2 }) : error, value)
-      )
-    }
-  const methods = [
-    'readFile',
-    'readdir',
-    'writeFile',
-    'stat',
-    'rename',
-    'unlink',
-    'chmod',
-    'mkdir'
-  ] as const
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer only calls these callback methods.
-  return Object.fromEntries(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each node:fs method here takes its callback last, like ssh2's.
-    methods.map((name) => [name, forward(fs[name] as (...args: unknown[]) => void)])
-  ) as unknown as SFTPWrapper
 }
 
 describe('ZCode managed hooks', () => {

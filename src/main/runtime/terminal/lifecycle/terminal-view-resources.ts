@@ -21,6 +21,7 @@ import type { createAgentStatusOscProcessor } from '../../../../shared/agent-sta
 import { RuntimeTerminalViewSubscribers } from '../view/runtime-terminal-view-subscribers'
 import { MainDaemonAttachments } from './main-daemon-attachments'
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import type { HostTerminalUsage } from '../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 
 export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequestedPtyIds {
   protected readonly terminalIdentity = createCrewNotifiedTerminalIdentity(this.crewChanges)
@@ -30,6 +31,11 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   protected readonly handleByPtyId = this.terminalIdentity.reverse
   protected readonly handleByPtyIncarnation = this.terminalIdentity.incarnations
   protected readonly syntheticTerminalHandles = this.terminalIdentity.synthetic
+  /** What a terminal's own spawn reported of its host's terminals; asks no host. */
+  getSpawnHostTerminalUsage(handle: string): HostTerminalUsage | undefined {
+    const ptyId = this.handles.get(handle)?.ptyId
+    return ptyId ? this.ptysById.get(ptyId)?.spawnHostTerminalUsage : undefined
+  }
   protected get leaves() {
     return this.terminalIdentity.leaves
   }

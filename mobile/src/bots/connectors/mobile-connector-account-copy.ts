@@ -1,17 +1,20 @@
 // The desktop's Linear and GitHub words (bot-linear-copy, bot-github-copy, bot-host-copy), for the phone.
 import { BOT_GITHUB_OFF } from '../../../../src/shared/connector-bot-github-contract'
 import { BOT_LINEAR_OFF } from '../../../../src/shared/connector-bot-linear-contract'
+import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { HOST_OFFLINE } from './bot-slack-operations'
-import { CONNECT_NOT_ROUTED, CONNECT_ON_HOST } from './use-phone-connect-trip'
+import { CONNECT_ON_HOST } from './connect-host-trip'
+import { CONNECT_NOT_ROUTED } from './use-phone-connect-trip'
 
+/** Google's sign-in shares only the trip's own codes (offline, not routed). */
 export function connectorAccountErrorMessage(
-  source: 'linear' | 'github',
+  source: 'linear' | 'github' | 'google',
   code: string,
   hostName: string,
   t: Translate
 ): string {
-  const service = source === 'linear' ? 'Linear' : 'GitHub'
+  const service = BOT_CONNECTOR_NAMES[source]
   switch (code) {
     case HOST_OFFLINE:
       return t('bots.items.write.offline', '{{host}} is offline.', { host: hostName })

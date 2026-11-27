@@ -43,17 +43,14 @@ import {
   YES_NO_VALUES
 } from '../../terminal/daemon/daemon-tcc-denial-capture'
 import { errorClassSchema, settingsChangedKeySchema } from './telemetry-property-schemas'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 // Enum-only start-failure signals diagnose fleet outages without sending raw stderr (v1.4.129-rc.1).
 export const daemonStartFailedSchema = z.object({ error_class: errorClassSchema }).strict()
 
-export const runtimeRpcStartErrorClassSchema = z.enum([
-  'permission_denied',
-  'address_in_use',
-  'storage_unavailable',
-  'invalid_path',
-  'unknown'
-])
+export const runtimeRpcStartErrorClassSchema = lazyZodSchema(() =>
+  z.enum(['permission_denied', 'address_in_use', 'storage_unavailable', 'invalid_path', 'unknown'])
+)
 export type RuntimeRpcStartErrorClass = z.infer<typeof runtimeRpcStartErrorClassSchema>
 
 // Discovery errors may contain user paths; send only closed filesystem/socket categories.
@@ -124,16 +121,18 @@ const daemonAsyncIoHealthBase = {
   protocol_generation: z.number().int().positive().max(1_000),
   app_version_match: z.enum(DAEMON_ADOPTED_APP_VERSION_MATCH)
 }
-export const daemonAsyncIoHealthSchema = z.discriminatedUnion('transition', [
-  z.object({ transition: z.literal('stalled'), ...daemonAsyncIoHealthBase }).strict(),
-  z
-    .object({
-      transition: z.literal('recovered'),
-      ...daemonAsyncIoHealthBase,
-      stalled_for_bucket: z.enum(DAEMON_ASYNC_IO_STALL_DURATION_BUCKETS)
-    })
-    .strict()
-])
+export const daemonAsyncIoHealthSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('transition', [
+    z.object({ transition: z.literal('stalled'), ...daemonAsyncIoHealthBase }).strict(),
+    z
+      .object({
+        transition: z.literal('recovered'),
+        ...daemonAsyncIoHealthBase,
+        stalled_for_bucket: z.enum(DAEMON_ASYNC_IO_STALL_DURATION_BUCKETS)
+      })
+      .strict()
+  ])
+)
 
 // Denied means proven app/daemon cwd-access divergence; readable is the TCC-folder-only control (#17696).
 export const daemonPtyCwdVerdictSchema = z
@@ -190,56 +189,64 @@ export const daemonFolderAccessNoticeSchema = z
 
 // Diagnose replacement/retirement without requesting daemon.log (#7936). Enum/bucket-only fields exclude paths/raw versions/exact counts;
 // the union pins reasons to transitions so death cannot masquerade as replacement.
-export const daemonLifecycleSchema = z.discriminatedUnion('transition', [
-  z
-    .object({
-      transition: z.literal(DAEMON_LIFECYCLE_TRANSITIONS[0]),
-      reason: z.enum(DAEMON_REPLACE_REASONS),
-      live_session_count_bucket: z.enum(DAEMON_LIFECYCLE_SESSION_BUCKETS)
-    })
-    .strict(),
-  z
-    .object({
-      transition: z.literal(DAEMON_LIFECYCLE_TRANSITIONS[1]),
-      reason: z.enum(DAEMON_RETIRE_REASONS),
-      live_session_count_bucket: z.enum(DAEMON_LIFECYCLE_SESSION_BUCKETS)
-    })
-    .strict()
-])
+export const daemonLifecycleSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('transition', [
+    z
+      .object({
+        transition: z.literal(DAEMON_LIFECYCLE_TRANSITIONS[0]),
+        reason: z.enum(DAEMON_REPLACE_REASONS),
+        live_session_count_bucket: z.enum(DAEMON_LIFECYCLE_SESSION_BUCKETS)
+      })
+      .strict(),
+    z
+      .object({
+        transition: z.literal(DAEMON_LIFECYCLE_TRANSITIONS[1]),
+        reason: z.enum(DAEMON_RETIRE_REASONS),
+        live_session_count_bucket: z.enum(DAEMON_LIFECYCLE_SESSION_BUCKETS)
+      })
+      .strict()
+  ])
+)
 
-export const daemonAuditEligibilityBaseSchema = z.object({
-  state: z.enum(DAEMON_AUDIT_STATE_VALUES),
-  reason: z.enum(DAEMON_AUDIT_REASON_VALUES),
-  trigger: z.enum(DAEMON_AUDIT_TRIGGER_VALUES),
-  evidence_sources: z.array(z.enum(DAEMON_EVIDENCE_SOURCE_VALUES)).min(1).max(12),
-  protocol_generation: z.number().int().positive().max(1_000),
-  generation_role: z.enum(DAEMON_AUDIT_GENERATION_ROLE_VALUES),
-  provider: z.literal('local-daemon'),
-  endpoint_kind: z.enum(['unix-socket', 'windows-named-pipe']),
-  profile_scope: z.enum(['configured', 'unspecified']),
-  reachability: z.enum(['authenticated', 'disconnected', 'unknown']),
-  inventory_authority: z.enum(['authoritative', 'unavailable']),
-  process_liveness: z.enum(['present', 'gone', 'unknown']),
-  process_reason: z.enum(DAEMON_AUDIT_PROCESS_REASON_VALUES).nullable(),
-  endpoint_state: z.enum(['missing', 'named-pipe', 'non-socket', 'socket', 'unknown']),
-  sample_rate: z.literal(0.001).optional()
-})
+export const daemonAuditEligibilityBaseSchema = lazyZodSchema(() =>
+  z.object({
+    state: z.enum(DAEMON_AUDIT_STATE_VALUES),
+    reason: z.enum(DAEMON_AUDIT_REASON_VALUES),
+    trigger: z.enum(DAEMON_AUDIT_TRIGGER_VALUES),
+    evidence_sources: z.array(z.enum(DAEMON_EVIDENCE_SOURCE_VALUES)).min(1).max(12),
+    protocol_generation: z.number().int().positive().max(1_000),
+    generation_role: z.enum(DAEMON_AUDIT_GENERATION_ROLE_VALUES),
+    provider: z.literal('local-daemon'),
+    endpoint_kind: z.enum(['unix-socket', 'windows-named-pipe']),
+    profile_scope: z.enum(['configured', 'unspecified']),
+    reachability: z.enum(['authenticated', 'disconnected', 'unknown']),
+    inventory_authority: z.enum(['authoritative', 'unavailable']),
+    process_liveness: z.enum(['present', 'gone', 'unknown']),
+    process_reason: z.enum(DAEMON_AUDIT_PROCESS_REASON_VALUES).nullable(),
+    endpoint_state: z.enum(['missing', 'named-pipe', 'non-socket', 'socket', 'unknown']),
+    sample_rate: z.literal(0.001).optional()
+  })
+)
 
-export const daemonAuditEligibilitySchema = z.discriminatedUnion('exact_incarnation', [
-  daemonAuditEligibilityBaseSchema
-    .extend({
-      exact_incarnation: z.literal('endpoint-identity'),
-      exact_incarnation_correlation: z.string().regex(/^v1:[0-9a-f]{32}$/)
-    })
-    .strict(),
-  daemonAuditEligibilityBaseSchema
-    .extend({
-      exact_incarnation: z.literal('endpoint-identity-linux-ticks'),
-      exact_incarnation_correlation: z.string().regex(/^v1:[0-9a-f]{32}$/)
-    })
-    .strict(),
-  daemonAuditEligibilityBaseSchema.extend({ exact_incarnation: z.literal('unavailable') }).strict()
-])
+export const daemonAuditEligibilitySchema = lazyZodSchema(() =>
+  z.discriminatedUnion('exact_incarnation', [
+    daemonAuditEligibilityBaseSchema
+      .extend({
+        exact_incarnation: z.literal('endpoint-identity'),
+        exact_incarnation_correlation: z.string().regex(/^v1:[0-9a-f]{32}$/)
+      })
+      .strict(),
+    daemonAuditEligibilityBaseSchema
+      .extend({
+        exact_incarnation: z.literal('endpoint-identity-linux-ticks'),
+        exact_incarnation_correlation: z.string().regex(/^v1:[0-9a-f]{32}$/)
+      })
+      .strict(),
+    daemonAuditEligibilityBaseSchema
+      .extend({ exact_incarnation: z.literal('unavailable') })
+      .strict()
+  ])
+)
 
 // Measure Codex app-server trust grants instead of computed trusted_hash: fallback/verify_failed detect rollout failures.
 // Omit steady ledger skips (launch volume only); lane separates real/managed homes and closed error/verify classes explain failures without raw errors.
@@ -294,7 +301,7 @@ export const profileStateAuthoritySelectedSchema = z
   .strict()
 
 // Managed-hook installer label from `AGENT_HOOK_TARGETS`, distinct from `AGENT_KIND_VALUES`; `claude` (not `claude-code`) is intentional.
-export const hookInstallAgentSchema = z.enum(AGENT_HOOK_TARGETS)
+export const hookInstallAgentSchema = lazyZodSchema(() => z.enum(AGENT_HOOK_TARGETS))
 export type HookInstallAgent = z.infer<typeof hookInstallAgentSchema>
 
 // Why (#21492): field name kept for dashboards, but it holds an errno code or 'unknown', never the raw message (home-dir paths).

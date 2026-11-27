@@ -76,8 +76,9 @@ const SHOW = defineMethod({
       throw new BotItemError('invalid_argument', '--after takes an event id such as e41.')
     }
     const limit = pageSize(params.limit, BOT_ITEM_LIMITS.eventsPage, BOT_ITEM_LIMITS.eventsPage)
-    const events = await runtime.botItems.events(record.uid, after, limit + 1)
-    const [item] = botItemsForClient(await runtime.botItems.views([record]), context)
+    const view = await runtime.botItems.showView(record, after, limit + 1)
+    const [item] = botItemsForClient([view.item], context)
+    const { events } = view
     const page = events.slice(0, limit)
     const last = page.at(-1)
     return {

@@ -65,6 +65,10 @@ export function applyRemoveWorktreeSuccessState(
       workspaceLineageByChildKey: omitRecordKeys(s.workspaceLineageByChildKey, [
         worktreeWorkspaceKey(worktreeId)
       ]),
+      contestedPrimaryHostBySessionKey: omitRecordKeys(s.contestedPrimaryHostBySessionKey, [
+        worktreeId,
+        worktreeWorkspaceKey(worktreeId)
+      ]),
       runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
       automaticAgentResumeClaimsByTabId: omitByTabId(s.automaticAgentResumeClaimsByTabId),
       nativeChatLaunchPromptByTabId: omitByTabId(s.nativeChatLaunchPromptByTabId),
@@ -111,6 +115,9 @@ export function applyRemoveWorktreeSuccessState(
       // Why: git status/compare caches stop refreshing once the worktree is deleted; remove them so no stale badges/diffs linger.
       gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
       gitStatusHeadByWorktree: omitByWorktree(s.gitStatusHeadByWorktree),
+      gitRebaseIndexObservationByWorktree: omitByWorktree(
+        s.gitRebaseIndexObservationByWorktree ?? {}
+      ),
       gitBranchLineTotalByWorktree: omitByWorktree(s.gitBranchLineTotalByWorktree),
       gitIgnoredPathsByWorktree: omitByWorktree(s.gitIgnoredPathsByWorktree),
       gitConflictOperationByWorktree: omitByWorktree(s.gitConflictOperationByWorktree),

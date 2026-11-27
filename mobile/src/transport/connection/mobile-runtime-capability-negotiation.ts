@@ -5,6 +5,7 @@ import {
 import { isRpcDeliveryUnknown } from '../rpc/rpc-delivery-ambiguity'
 import {
   pageClientCapabilities,
+  sameClientCapabilities,
   watchPageClientCapabilities
 } from './mobile-page-client-capabilities'
 import { defineRpcOperation, runRpcOperation } from '../rpc/rpc-operation'
@@ -18,21 +19,27 @@ export async function settleMobileRuntimeCapabilities(
   sendRequest: CapabilityRequest,
   hostId?: string
 ): Promise<void> {
-  let response: RpcResponse
-  try {
-    response = await sendRequest(
-      MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD,
-      mobileRuntimeClientCapabilityUpdateParams(pageClientCapabilities(hostId))
-    )
-  } catch (error) {
-    if (!isRpcDeliveryUnknown(error)) {
-      throw error
+  let sent: readonly string[] | null = null
+  // A page that loads mid-handshake changes the list after it was read, and nothing re-advertises before `connected`.
+  while (sent === null || !sameClientCapabilities(sent, pageClientCapabilities(hostId))) {
+    sent = pageClientCapabilities(hostId)
+    let response: RpcResponse
+    try {
+      response = await sendRequest(
+        MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD,
+        mobileRuntimeClientCapabilityUpdateParams(sent)
+      )
+    } catch (error) {
+      if (!isRpcDeliveryUnknown(error)) {
+        throw error
+      }
+      console.warn('[net] mobile capability negotiation unanswered — proceeding', error)
+      return
     }
-    console.warn('[net] mobile capability negotiation unanswered — proceeding', error)
-    return
-  }
-  if (!response.ok) {
-    console.warn('[net] mobile capability negotiation unavailable', response.error.code)
+    if (!response.ok) {
+      console.warn('[net] mobile capability negotiation unavailable', response.error.code)
+      return
+    }
   }
 }
 

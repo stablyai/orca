@@ -670,3 +670,38 @@ it('keeps a chat deleted here from a journal written before some queue columns e
     'queued in an older journal'
   )
 })
+
+it('converts nothing for the proof or its copies below the disk floor, and both with room', async () => {
+  const GB = 1024 ** 3
+  const low = async () => ({ freeBytes: 20 * GB, totalBytes: 100 * GB, remainingBytes: 20 * GB })
+  const room = async () => ({ freeBytes: 60 * GB, totalBytes: 100 * GB, remainingBytes: 20 * GB })
+  async function copied(storage: typeof low) {
+    const continued = await profile({ storage })
+    // An open converts below the floor; the older Orca's later turns then need a copy.
+    await continued.convert('unopened')
+    continueInOlderOrca(continued.filename, 'unopened')
+    await initializeJournalDomainDatabase(continued.root)
+    const copy = String(
+      continued.db
+        .prepare(
+          "SELECT key FROM agent_session_store_meta WHERE key LIKE 'journal.legacy-copy-source:%'"
+        )
+        .get()!.key
+    ).slice('journal.legacy-copy-source:'.length)
+    await continued.launch().run()
+    return { ...continued, state: journalDomainImportState(continued.db, copy).state }
+  }
+  for (const storage of [low, room]) {
+    const chat = await profile({ storage })
+    await chat.launch().run()
+    const copy = await copied(storage)
+    const converted = storage === room
+    expect(journalDomainImportState(chat.db, 'unopened').state).toBe(
+      converted ? 'ready' : 'converting'
+    )
+    expect(companions(chat.filename).length > 0).toBe(!converted)
+    expect(copy.state).toBe(converted ? 'ready' : 'converting')
+    expect(companions(copy.filename).length > 0).toBe(!converted)
+    expect(String(copy.errors.at(-1) ?? '')).toContain(converted ? '' : 'deferred for storage')
+  }
+})
