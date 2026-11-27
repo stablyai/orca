@@ -191,7 +191,12 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
       return
     }
     // Stamp and count repeated read failures so unchanged unreadable files can be held out.
-    this.store.setFileState(candidate.file.path, 'failed', candidate.file.mtimeMs)
+    this.store.setFileState(
+      candidate.file.path,
+      'failed',
+      candidate.file.mtimeMs,
+      candidate.file.dependencySignature
+    )
   }
 }
 

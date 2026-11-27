@@ -9,6 +9,8 @@ export type SessionSearchFileRow = {
   identity: SessionSearchFileIdentity
   mtimeMs: number
   sizeBytes: number | null
+  /** Failed rows carry the attempted revision; current rows carry the committed revision. */
+  dependencySignature?: string
   state: SessionSearchFileState
   failCount: number
   failedMtimeMs: number | null

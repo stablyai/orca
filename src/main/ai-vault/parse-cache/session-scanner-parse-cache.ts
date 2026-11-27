@@ -146,6 +146,7 @@ function sessionParseCacheCoversTranscript(
   return (
     entry !== undefined &&
     entry.platform === platform &&
+    entry.dependencySignature === file.dependencySignature &&
     entry.mtimeMs === file.mtimeMs &&
     (entry.sizeBytes === null || file.sizeBytes === undefined || entry.sizeBytes === file.sizeBytes)
   )
@@ -219,6 +220,7 @@ async function parseCachedInLane(
       agent: candidate.agent,
       mtimeMs: file.mtimeMs,
       sizeBytes: file.sizeBytes ?? null,
+      dependencySignature: file.dependencySignature,
       platform,
       session: enriched.session,
       // Preserve transcript work while refused sidecars stay unknown for a metadata-only retry.
@@ -245,6 +247,7 @@ async function parseCachedInLane(
     agent: candidate.agent,
     mtimeMs: file.mtimeMs,
     sizeBytes: file.sizeBytes ?? null,
+    dependencySignature: file.dependencySignature,
     platform,
     session: enriched.session,
     sidecar: enriched.refused ? 'unknown' : file.sidecar,

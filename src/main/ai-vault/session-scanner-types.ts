@@ -83,6 +83,8 @@ export type FileWithMtime = {
   modifiedAt: string
   // Discovery’s transcript byte length avoids restats; synthetic database rows omit it.
   sizeBytes?: number
+  /** Revision of separately stored transcript content; never an artificial parent-file stat. */
+  dependencySignature?: string
   sidecar?: SessionSidecarObservation
   // Codex dual-root scans use filesystem identity to deduplicate hardlink aliases.
   dev?: number

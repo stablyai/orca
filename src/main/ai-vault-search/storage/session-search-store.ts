@@ -96,12 +96,14 @@ export class SessionSearchStore {
             // With a known file identity, a missing stored identity must force a rewrite.
             `SELECT 1 FROM files WHERE path = ? AND state = 'current'
            AND mtime_ms = ? AND size_bytes = ? AND byte_offset = size_bytes
+           AND dependency_signature IS ?
            AND (? IS NULL OR (CAST(dev AS REAL) = ? AND CAST(ino AS REAL) = ?))`
           )
           .get(
             file.path,
             file.mtimeMs,
             file.sizeBytes,
+            file.dependencySignature ?? null,
             identity?.dev ?? null,
             identity?.dev ?? null,
             identity?.ino ?? null
@@ -127,11 +129,13 @@ export class SessionSearchStore {
             `SELECT byte_offset AS byteOffset, prefix_hash AS prefixHash FROM files
              WHERE path = ? AND state = 'current' AND prefix_hash IS NOT NULL
              AND byte_offset > 0 AND byte_offset <= ?
+             AND dependency_signature IS ?
              AND (? IS NULL OR (CAST(dev AS REAL) = ? AND CAST(ino AS REAL) = ?))`
           )
           .get(
             file.path,
             file.sizeBytes,
+            file.dependencySignature ?? null,
             identity?.dev ?? null,
             identity?.dev ?? null,
             identity?.ino ?? null
@@ -178,47 +182,54 @@ export class SessionSearchStore {
   }
 
   files(): SessionSearchFileRow[] {
-    return (
-      this.db
-        .prepare(
-          // Numeric stat IDs may exceed SQLite's safe INTEGER-to-number read range.
-          `SELECT path, CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
-                  mtime_ms AS mtimeMs, size_bytes AS sizeBytes,
+    return this.db
+      .prepare(
+        // Numeric stat IDs may exceed SQLite's safe INTEGER-to-number read range.
+        `SELECT path, CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
+                  mtime_ms AS mtimeMs, size_bytes AS sizeBytes, dependency_signature AS dependencySignature,
                   state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs
            FROM files`
-        )
-        .all() as (Omit<SessionSearchFileRow, 'identity'> & {
-        dev: number | null
-        ino: number | null
-      })[]
-    ).map((row) => ({
-      path: row.path,
-      identity:
-        typeof row.dev === 'number' && typeof row.ino === 'number'
-          ? { dev: row.dev, ino: row.ino }
-          : null,
-      mtimeMs: row.mtimeMs,
-      sizeBytes: row.sizeBytes,
-      state: row.state,
-      failCount: row.failCount,
-      failedMtimeMs: row.failedMtimeMs
-    }))
+      )
+      .all()
+      .map((row): SessionSearchFileRow => ({
+        path: String(row.path),
+        identity:
+          typeof row.dev === 'number' && typeof row.ino === 'number'
+            ? { dev: row.dev, ino: row.ino }
+            : null,
+        mtimeMs: Number(row.mtimeMs),
+        sizeBytes: row.sizeBytes === null ? null : Number(row.sizeBytes),
+        ...(typeof row.dependencySignature === 'string'
+          ? { dependencySignature: row.dependencySignature }
+          : {}),
+        state: row.state === 'due' ? 'due' : row.state === 'failed' ? 'failed' : 'current',
+        failCount: Number(row.failCount),
+        failedMtimeMs: row.failedMtimeMs === null ? null : Number(row.failedMtimeMs)
+      }))
   }
 
-  setFileState(path: string, state: SessionSearchFileState, atMtimeMs?: number): void {
+  setFileState(
+    path: string,
+    state: SessionSearchFileState,
+    atMtimeMs?: number,
+    dependencySignature?: string
+  ): void {
     try {
       if (state === 'failed') {
         // Persist initial failures too, or unreadable new files retry forever.
         this.db
           .prepare(
-            `INSERT INTO files(path, byte_offset, mtime_ms, state, fail_count, failed_mtime_ms)
-             VALUES (?, 0, ?, 'failed', 1, ?)
+            `INSERT INTO files(path, byte_offset, mtime_ms, state, fail_count, failed_mtime_ms, dependency_signature)
+             VALUES (?, 0, ?, 'failed', 1, ?, ?)
              ON CONFLICT(path) DO UPDATE SET
                state = 'failed',
-               fail_count = files.fail_count + 1,
-               failed_mtime_ms = excluded.failed_mtime_ms`
+               fail_count = CASE WHEN files.failed_mtime_ms IS excluded.failed_mtime_ms
+                 AND files.dependency_signature IS excluded.dependency_signature
+                 THEN files.fail_count + 1 ELSE 1 END,
+               failed_mtime_ms = excluded.failed_mtime_ms,
+               dependency_signature = excluded.dependency_signature`
           )
-          .run(path, atMtimeMs ?? 0, atMtimeMs ?? null)
+          .run(path, atMtimeMs ?? 0, atMtimeMs ?? null, dependencySignature ?? null)
         return
       }
       this.db

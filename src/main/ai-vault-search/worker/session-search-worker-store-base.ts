@@ -142,9 +142,14 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
   reportWriteFailure(error: unknown): void {
     this.onError(error)
   }
-  setFileState(path: string, state: SessionSearchFileState, mtime?: number): void {
+  setFileState(
+    path: string,
+    state: SessionSearchFileState,
+    mtime?: number,
+    dependencySignature?: string
+  ): void {
     if (this.acceptingReads) {
-      void this.send({ op: 'state', path, state, mtime })
+      void this.send({ op: 'state', path, state, mtime, dependencySignature })
     }
   }
   removeFile(path: string): void {

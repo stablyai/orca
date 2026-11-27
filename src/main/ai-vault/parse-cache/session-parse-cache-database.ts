@@ -1,3 +1,7 @@
+import {
+  SESSION_PARSE_ROWS_SCHEMA_SQL,
+  addSessionParseDependencyColumn
+} from './session-parse-cache-schema'
 import { startSpan } from '../../observability/tracer'
 // Scanner-owned per-transcript rows persist changes without rewriting or capping the full working set.
 import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
@@ -27,24 +31,6 @@ import {
 // Bump for row-layout or cached-semantic changes; mismatched databases are discarded.
 export const SESSION_PARSE_CACHE_SCHEMA_VERSION = 10
 
-const SCHEMA_SQL = `
-CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS rows(
-  path TEXT PRIMARY KEY,
-  mtime_ms REAL NOT NULL,
-  size_bytes INTEGER,
-  platform TEXT NOT NULL,
-  -- JSON, validated on read like any other untrusted file content.
-  sidecar TEXT,
-  session TEXT NOT NULL,
-  skipped_records TEXT NOT NULL,
-  -- Wall-clock ms the transcript was last parsed or found still on disk. Rows
-  -- past an age are re-checked, which is what ends a row whose transcript was
-  -- deleted outside Orca.
-  seen_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS rows_seen_at ON rows(seen_at);
-`
 // Reparse rows cached before a parser fix once, without a schema bump. The pending gate is the
 // outer loop, so later opens skip the rows scan.
 function rowsRepairSql(versionKey: string, rowFilter: string): string {
@@ -98,7 +84,7 @@ export class SessionParseCacheDatabase {
     return this.run((db) => {
       const row = db
         .prepare(
-          'SELECT mtime_ms, size_bytes, platform, sidecar, session, skipped_records FROM rows WHERE path = ?'
+          'SELECT mtime_ms, size_bytes, dependency_signature, platform, sidecar, session, skipped_records FROM rows WHERE path = ?'
         )
         .get(path)
       if (row === undefined) {
@@ -109,6 +95,7 @@ export class SessionParseCacheDatabase {
         {
           mtimeMs: row.mtime_ms,
           sizeBytes: row.size_bytes,
+          dependencySignature: row.dependency_signature,
           platform: row.platform,
           sidecar: typeof row.sidecar === 'string' ? JSON.parse(row.sidecar) : undefined,
           session: typeof row.session === 'string' ? JSON.parse(row.session) : undefined,
@@ -143,7 +130,7 @@ export class SessionParseCacheDatabase {
   ): void {
     this.run((db) => {
       const insert = db.prepare(
-        `INSERT OR ${keepExisting ? 'IGNORE' : 'REPLACE'} INTO rows(path, mtime_ms, size_bytes, platform, sidecar, session, skipped_records, seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT OR ${keepExisting ? 'IGNORE' : 'REPLACE'} INTO rows(path, mtime_ms, size_bytes, dependency_signature, platform, sidecar, session, skipped_records, seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       db.exec('BEGIN IMMEDIATE')
       try {
@@ -152,6 +139,7 @@ export class SessionParseCacheDatabase {
             path,
             entry.mtimeMs,
             entry.sizeBytes,
+            entry.dependencySignature ?? null,
             entry.platform,
             entry.sidecar === undefined ? null : JSON.stringify(entry.sidecar),
             JSON.stringify(entry.session),
@@ -259,10 +247,13 @@ export class SessionParseCacheDatabase {
 function openDatabase(path: string): SyncDatabase {
   const db = openVersionedCacheDatabase(path, {
     version: SESSION_PARSE_CACHE_SCHEMA_VERSION,
-    sql: `${SCHEMA_SQL}${ROWS_REPAIR_SQL}`,
+    sql: `${SESSION_PARSE_ROWS_SCHEMA_SQL}${ROWS_REPAIR_SQL}`,
     directoryMode: PRIVATE_DIRECTORY_MODE,
     pageSize: PAGE_SIZE,
-    afterSchema: ensureScopeCwdsTable
+    afterSchema: (db) => {
+      ensureScopeCwdsTable(db)
+      addSessionParseDependencyColumn(db)
+    }
   })
   hardenSqliteDatabaseFiles(path)
   return db
@@ -321,6 +312,9 @@ export function parsePersistedSessionParseCacheRow(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: written only from AiVaultSession values by this build or one with the same schema version; a semantics change bumps the version and drops the rows.
       session: session as AiVaultSession | null,
       skippedRecords: mergeSkippedTranscriptRecords([], skippedRecords),
+      ...(typeof entry.dependencySignature === 'string'
+        ? { dependencySignature: entry.dependencySignature }
+        : {}),
       ...(sidecar === undefined ? {} : { sidecar })
     }
   ]

@@ -91,8 +91,8 @@ export class SessionSearchFileRecords {
     this.db
       .prepare(
         `INSERT INTO files(path, dev, ino, byte_offset, mtime_ms, size_bytes, session_row_id,
-                           prefix_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                           prefix_hash, dependency_signature)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(path) DO UPDATE SET
            -- Partial observations must never create a pair that no stat proved.
            dev = CASE WHEN excluded.dev IS NOT NULL AND excluded.ino IS NOT NULL
@@ -101,7 +101,8 @@ export class SessionSearchFileRecords {
              THEN excluded.ino ELSE files.ino END,
            byte_offset = excluded.byte_offset, mtime_ms = excluded.mtime_ms,
            size_bytes = excluded.size_bytes, session_row_id = excluded.session_row_id,
-           prefix_hash = excluded.prefix_hash`
+           prefix_hash = excluded.prefix_hash,
+           dependency_signature = excluded.dependency_signature`
       )
       .run(
         file.path,
@@ -111,7 +112,8 @@ export class SessionSearchFileRecords {
         file.mtimeMs,
         file.sizeBytes ?? null,
         sessionRowId,
-        prefixHash ?? null
+        prefixHash ?? null,
+        file.dependencySignature ?? null
       )
   }
 }

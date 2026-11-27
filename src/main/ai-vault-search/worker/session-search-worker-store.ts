@@ -67,7 +67,12 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
         .then((response) => {
           if (response.failure === 'write' && !failed) {
             failed = true
-            this.setFileState(candidate.file.path, 'failed', candidate.file.mtimeMs)
+            this.setFileState(
+              candidate.file.path,
+              'failed',
+              candidate.file.mtimeMs,
+              candidate.file.dependencySignature
+            )
             for (const [dependent, path] of this.invalidations) {
               if (dependent !== owner && path === candidate.file.path) {
                 dependent.abort()
@@ -177,6 +182,9 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
               : null,
           mtimeMs: candidate.file.mtimeMs,
           sizeBytes: candidate.file.sizeBytes ?? null,
+          ...(candidate.file.dependencySignature === undefined
+            ? {}
+            : { dependencySignature: candidate.file.dependencySignature }),
           state: 'current',
           failCount: 0,
           failedMtimeMs: null,

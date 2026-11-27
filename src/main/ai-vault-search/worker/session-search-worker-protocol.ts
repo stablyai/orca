@@ -40,7 +40,13 @@ export type SearchWorkerCommand =
     }
   | { op: 'finish'; handle: number; outcome: TranscriptReadOutcome; hash: SessionContentHash }
   | { op: 'discard'; handle: number }
-  | { op: 'state'; path: string; state: SessionSearchFileState; mtime?: number }
+  | {
+      op: 'state'
+      path: string
+      state: SessionSearchFileState
+      mtime?: number
+      dependencySignature?: string
+    }
   | { op: 'remove'; path: string }
   | { op: 'purge'; cutoff: number | null }
   | { op: 'sync' }

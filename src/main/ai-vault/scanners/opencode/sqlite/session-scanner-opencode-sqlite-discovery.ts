@@ -9,6 +9,13 @@ import type {
   SessionFileDiscovery
 } from '../../../session-scanner-types'
 import { scopeWalksAgentFiles } from '../../../scope/session-scope-cwd'
+import { mapWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
+import { openCodeDependencySignature } from '../session-scanner-opencode-dependencies'
+import { throwIfAiVaultScanCancelled } from '../../../scan-lifecycle/ai-vault-scan-cancellation'
+import {
+  recordSessionScanIssue,
+  scanIssueTextFromError
+} from '../../../parsing/session-scan-issues'
 
 function sessionIdFromLegacyFilePath(filePath: string): string {
   return basename(filePath, extname(filePath))
@@ -59,14 +66,44 @@ export async function discoverOpenCodeSessions(args: {
   }
   const withoutSqliteDuplicates = (files: readonly FileWithMtime[]): FileWithMtime[] =>
     files.filter((file) => !sqliteSessionIds.has(sessionIdFromLegacyFilePath(file.path)))
+  const legacyFiles = withoutSqliteDuplicates(fileDiscovery.files)
+  const legacyScopeFiles = withoutSqliteDuplicates(fileDiscovery.scopeFiles ?? [])
+  const observed = new Map<string, FileWithMtime>()
+  // Only retained legacy sessions need dependency stats; SQLite owns its own revision tracking.
+  await mapWithConcurrency(
+    [...new Map([...legacyFiles, ...legacyScopeFiles].map((file) => [file.path, file])).values()],
+    4,
+    async (file) => {
+      try {
+        const dependencySignature = await openCodeDependencySignature(
+          args.storageDir,
+          file.path,
+          args.signal
+        )
+        observed.set(file.path, { ...file, dependencySignature })
+      } catch (error) {
+        throwIfAiVaultScanCancelled(args.signal)
+        recordSessionScanIssue(args.issues, {
+          agent: 'opencode',
+          path: file.path,
+          ...scanIssueTextFromError(error)
+        })
+      }
+    }
+  )
+  const withObservedDependencies = (files: readonly FileWithMtime[]): FileWithMtime[] =>
+    files.flatMap((file) => {
+      const current = observed.get(file.path)
+      return current ? [current] : []
+    })
   const scopeFiles = walksScope
-    ? [...withoutSqliteDuplicates(fileDiscovery.scopeFiles ?? []), ...(sqliteScopeFiles ?? [])]
+    ? [...withObservedDependencies(legacyScopeFiles), ...(sqliteScopeFiles ?? [])]
     : undefined
 
   return {
     agent: 'opencode' as const,
     rootDir: fileDiscovery.rootDir,
-    files: [...withoutSqliteDuplicates(fileDiscovery.files), ...sqliteFiles],
+    files: [...withObservedDependencies(legacyFiles), ...sqliteFiles],
     ...(scopeFiles ? { scopeFiles } : {})
   }
 }

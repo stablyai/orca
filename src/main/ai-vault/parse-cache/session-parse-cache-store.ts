@@ -30,6 +30,7 @@ export type SessionParseResumePoint = {
 export type SessionParseCacheEntry = {
   mtimeMs: number
   sizeBytes: number | null
+  dependencySignature?: string
   platform: NodeJS.Platform
   session: AiVaultSession | null
   // Sidecar and transcript versions can become stale independently.
@@ -240,6 +241,7 @@ export function storeSessionParseCacheEntry(path: string, entry: SessionParseCac
     previous === undefined ||
     previous.mtimeMs !== entry.mtimeMs ||
     previous.sizeBytes !== entry.sizeBytes ||
+    previous.dependencySignature !== entry.dependencySignature ||
     previous.platform !== entry.platform ||
     previous.session !== entry.session ||
     previous.skippedRecords !== entry.skippedRecords ||
@@ -249,6 +251,9 @@ export function storeSessionParseCacheEntry(path: string, entry: SessionParseCac
     coldTier?.stored(path, {
       mtimeMs: entry.mtimeMs,
       sizeBytes: entry.sizeBytes,
+      ...(entry.dependencySignature === undefined
+        ? {}
+        : { dependencySignature: entry.dependencySignature }),
       platform: entry.platform,
       session: entry.session,
       skippedRecords: entry.skippedRecords,

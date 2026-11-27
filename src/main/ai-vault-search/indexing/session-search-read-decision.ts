@@ -6,7 +6,7 @@ import {
 } from '../storage/session-search-file-cursor'
 import type { SessionSearchFileRow } from '../storage/session-search-store-types'
 
-// Allow transient rewrite failures before holding out a file at an unchanged mtime.
+// Allow transient rewrite failures before holding out an unchanged source revision.
 export const SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT = 3
 
 /** any forces a read; whole also discards the session-list resume point to recover missing spans. */
@@ -29,7 +29,7 @@ export function sessionSearchReadDecision(args: {
   if (!row) {
     return 'any'
   }
-  if (heldOut(row, file.mtimeMs)) {
+  if (heldOut(row, file)) {
     return 'skip'
   }
   if (row.state === 'due') {
@@ -50,18 +50,20 @@ export function sessionSearchReadDecision(args: {
   return statMatches(row, file) ? 'skip' : 'any'
 }
 
-/** A held-out file is retried only when its mtime changes. */
-function heldOut(row: SessionSearchFileRow, mtimeMs: number): boolean {
+/** A held-out file is retried when its parent or separately stored content changes. */
+function heldOut(row: SessionSearchFileRow, file: SessionFileCandidate['file']): boolean {
   return (
     row.state === 'failed' &&
     row.failCount >= SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT &&
-    row.failedMtimeMs === mtimeMs
+    row.failedMtimeMs === file.mtimeMs &&
+    row.dependencySignature === file.dependencySignature
   )
 }
 
 function statMatches(row: SessionSearchFileRow, file: SessionFileCandidate['file']): boolean {
   return (
     row.mtimeMs === file.mtimeMs &&
+    row.dependencySignature === file.dependencySignature &&
     (row.sizeBytes === null || file.sizeBytes === undefined || row.sizeBytes === file.sizeBytes)
   )
 }

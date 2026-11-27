@@ -43,6 +43,7 @@ export abstract class SessionSearchCursorSnapshot {
       !!row &&
       row.state === 'current' &&
       row.mtimeMs === file.mtimeMs &&
+      row.dependencySignature === file.dependencySignature &&
       typeof file.sizeBytes === 'number' &&
       row.sizeBytes === file.sizeBytes &&
       row.byteOffset === file.sizeBytes &&
@@ -61,6 +62,7 @@ export abstract class SessionSearchCursorSnapshot {
     )
     return row &&
       row.state === 'current' &&
+      row.dependencySignature === file.dependencySignature &&
       row.prefixHash &&
       row.byteOffset !== null &&
       row.byteOffset > 0 &&

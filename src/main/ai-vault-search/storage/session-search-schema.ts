@@ -46,11 +46,12 @@ CREATE TABLE IF NOT EXISTS files(
   byte_offset INTEGER NOT NULL,
   mtime_ms REAL NOT NULL,
   size_bytes INTEGER,
+  dependency_signature TEXT,
   session_row_id INTEGER,
   -- current covers the recorded stat; due needs a whole read; failed did not commit.
   state TEXT NOT NULL DEFAULT 'current',
   fail_count INTEGER NOT NULL DEFAULT 0,
-  -- Retry held-out failures only after the source mtime changes.
+  -- Retry held-out failures after the source mtime or dependency signature changes.
   failed_mtime_ms REAL,
   -- SHA-256 of bytes [0, byte_offset); lets a reread after restart append instead of replace.
   prefix_hash TEXT
@@ -130,13 +131,16 @@ export function openSessionSearchDatabase(path: string): SyncDatabase {
   })
 }
 
-/** Version 8 indexes predate the column; check under the write lock so concurrent openers add it once. */
+/** Version 8 indexes predate these columns; the write lock serializes concurrent openers. */
 export function addSessionSearchPrefixHashColumn(db: SyncDatabase): void {
   db.exec('BEGIN IMMEDIATE')
   try {
     const columns = db.prepare('PRAGMA table_info(files)').all()
     if (!columns.some((column) => asRecord(column)?.name === 'prefix_hash')) {
       db.exec('ALTER TABLE files ADD COLUMN prefix_hash TEXT')
+    }
+    if (!columns.some((column) => asRecord(column)?.name === 'dependency_signature')) {
+      db.exec('ALTER TABLE files ADD COLUMN dependency_signature TEXT')
     }
     db.exec('COMMIT')
   } catch (error) {
