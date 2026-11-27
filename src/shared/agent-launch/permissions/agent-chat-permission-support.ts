@@ -2,6 +2,7 @@ import type {
   AgentChatPermissionChoice,
   AgentChatPermissionMode
 } from './agent-chat-permission-mode'
+import { isCustomAcpAgentId } from '../custom-acp/custom-acp-agent'
 /** The modes one agent's chats offer. */
 export type AgentChatPermissionModeSupport = {
   modes: readonly AgentChatPermissionMode[]
@@ -100,8 +101,12 @@ export function chatAsksNoApprovals(agent: string): boolean {
   return isNativeChatAgent(agent) && AGENT_CHAT_PERMISSION_MODES_BY_AGENT[agent] === null
 }
 
-/** The one table of which agents' chats offer which modes; null keeps following Agent Permissions. */
+/** The one table of which agents' chats offer which modes; null keeps following Agent Permissions.
+ *  A custom ACP agent's chats offer the generic ACP modes: Orca answers its requests. */
 export function agentChatPermissionModes(agent: string): AgentChatPermissionModeSupport | null {
+  if (isCustomAcpAgentId(agent)) {
+    return ACP_CHAT_PERMISSION_MODES
+  }
   return isNativeChatAgent(agent) ? AGENT_CHAT_PERMISSION_MODES_BY_AGENT[agent] : null
 }
 

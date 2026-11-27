@@ -44,6 +44,7 @@ export function isAgentChatPermissionMode(value: unknown): value is AgentChatPer
 }
 
 import { agentChatPermissionModes, savedChatPermissionMode } from './agent-chat-permission-support'
+import { customAcpNewChatPermission, isCustomAcpAgentId } from '../custom-acp/custom-acp-agent'
 
 export function newChatPermissionMode(
   agent: string,
@@ -54,7 +55,7 @@ export function newChatPermissionMode(
 }
 
 export type NewChatPermissionSettings = AgentPermissionSettings &
-  Partial<Pick<GlobalSettings, 'nativeChatPermissionMode'>>
+  Partial<Pick<GlobalSettings, 'nativeChatPermissionMode' | 'customAcpAgents'>>
 
 /** The four-mode value shipped clients understand; delegation has no legacy representation. */
 export function publishedLegacyChatPermissionMode(
@@ -71,6 +72,10 @@ export function newChatPermissionModeForSettings(
   agent: string,
   settings: NewChatPermissionSettings | null | undefined
 ): AgentChatPermissionChoice | null {
+  // A custom agent has no terminal settings to follow; its own setting names the default.
+  if (isCustomAcpAgentId(agent)) {
+    return customAcpNewChatPermission(settings, agent)
+  }
   const support = agentChatPermissionModes(agent)
   if (support && isTuiAgent(agent) && hasTypedAgentPermission(settings)) {
     return savedChatPermissionMode(support, resolveAgentPermission(agent, settings).choice)

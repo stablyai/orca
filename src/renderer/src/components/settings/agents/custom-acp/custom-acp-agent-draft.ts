@@ -5,7 +5,8 @@ import {
   createCustomAcpAgentId,
   isValidCustomAcpEnvName,
   type CustomAcpAgent,
-  type CustomAcpAgentId
+  type CustomAcpAgentId,
+  type CustomAcpNewChatPermission
 } from '../../../../../../shared/agent-launch/custom-acp/custom-acp-agent'
 
 /** `key` keeps a row's identity while rows above it are removed. */
@@ -23,6 +24,7 @@ export type CustomAcpAgentDraft = {
   disabled?: true
   /** Empty leaves the agent's own default. */
   defaultModel: string
+  newChatPermission: CustomAcpNewChatPermission
 }
 
 let nextRowKey = 0
@@ -36,7 +38,14 @@ export function draftRowKey(): number {
 export type CustomAcpAgentDraftProblem = 'name' | 'command' | 'envName' | 'tooLong'
 
 export function emptyCustomAcpAgentDraft(): CustomAcpAgentDraft {
-  return { name: '', command: '', args: [], env: [], defaultModel: '' }
+  return {
+    name: '',
+    command: '',
+    args: [],
+    env: [],
+    defaultModel: '',
+    newChatPermission: 'full-access'
+  }
 }
 
 export function customAcpAgentDraftFrom(agent: CustomAcpAgent): CustomAcpAgentDraft {
@@ -47,7 +56,8 @@ export function customAcpAgentDraftFrom(agent: CustomAcpAgent): CustomAcpAgentDr
     args: agent.args.map((value) => ({ key: draftRowKey(), value })),
     env: Object.entries(agent.env).map(([name, value]) => ({ key: draftRowKey(), name, value })),
     ...(agent.disabled ? { disabled: agent.disabled } : {}),
-    defaultModel: agent.defaultModel ?? ''
+    defaultModel: agent.defaultModel ?? '',
+    newChatPermission: agent.newChatPermission ?? 'full-access'
   }
 }
 
@@ -110,7 +120,8 @@ export function saveCustomAcpAgentDraft(
         .filter(([name]) => name !== '')
     ),
     ...(draft.disabled ? { disabled: draft.disabled } : {}),
-    ...(draft.defaultModel.trim() ? { defaultModel: draft.defaultModel.trim() } : {})
+    ...(draft.defaultModel.trim() ? { defaultModel: draft.defaultModel.trim() } : {}),
+    newChatPermission: draft.newChatPermission
   }
   return draft.id && saved.some(({ id }) => id === draft.id)
     ? saved.map((existing) => (existing.id === draft.id ? agent : existing))

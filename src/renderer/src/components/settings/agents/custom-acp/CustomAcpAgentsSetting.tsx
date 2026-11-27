@@ -11,6 +11,7 @@ import {
 } from '../../../../../../shared/agent-launch/custom-acp/custom-acp-agent'
 import { buildDefaultAgentSettingsUpdate } from '../../../../../../shared/agent-launch/choices/default-agent-settings'
 import { CustomAcpAgentModelField } from './CustomAcpAgentModelField'
+import { CustomAcpAgentPermissionField } from './CustomAcpAgentPermissionField'
 import { CustomAcpAgentRow } from './CustomAcpAgentRow'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
@@ -229,6 +230,11 @@ function CustomAcpAgentEditor({
             draft.defaultModel.trim().length > CUSTOM_ACP_AGENT_LIMITS.model
           }
           onChange={(defaultModel) => onChange({ ...draft, defaultModel })}
+          idPrefix={idPrefix}
+        />
+        <CustomAcpAgentPermissionField
+          value={draft.newChatPermission}
+          onChange={(newChatPermission) => onChange({ ...draft, newChatPermission })}
           idPrefix={idPrefix}
         />
         <div className="space-y-1">

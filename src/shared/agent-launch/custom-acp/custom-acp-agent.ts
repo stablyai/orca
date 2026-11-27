@@ -25,7 +25,12 @@ export type CustomAcpAgent = {
   disabled?: true
   /** The model new chats start on, as the agent names it; absent leaves the agent's own default. */
   defaultModel?: string
+  /** How new chats answer the agent's permission requests; absent is full access. Each chat's
+   *  picker can still change its own. */
+  newChatPermission?: CustomAcpNewChatPermission
 }
+
+export type CustomAcpNewChatPermission = 'ask' | 'full-access'
 
 export type CustomAcpAgentSettings = {
   /** Local ACP commands this host runs as Chat agents; absent means none. */
@@ -33,6 +38,16 @@ export type CustomAcpAgentSettings = {
   /** New agent tabs open this custom agent's chat while `defaultTuiAgent` is unset. Separate so
    *  features that need an agent CLI never see it; choosing a built-in default clears it. */
   defaultCustomAcpAgent?: CustomAcpAgentId | null
+}
+
+/** The permission a new chat with `agent` starts on, from the agent's saved settings. */
+export function customAcpNewChatPermission(
+  // Read as saved, unchecked: normalizing decides what each row may grant.
+  settings: { customAcpAgents?: unknown } | null | undefined,
+  agent: CustomAcpAgentId
+): CustomAcpNewChatPermission {
+  const saved = normalizeCustomAcpAgents(settings?.customAcpAgents).find((row) => row.id === agent)
+  return saved?.newChatPermission ?? 'full-access'
 }
 
 /** The saved custom default, when it still names an agent that is defined and switched on. */
@@ -88,7 +103,9 @@ const customAcpAgentSchema = lazyZodSchema(() =>
       .min(1)
       .max(CUSTOM_ACP_AGENT_LIMITS.model)
       .optional()
-      .catch(undefined)
+      .catch(undefined),
+    // A value this build can't read asks: a malformed row never grants more access.
+    newChatPermission: z.enum(['ask', 'full-access']).optional().catch('ask')
   })
 )
 
@@ -104,12 +121,13 @@ export function normalizeCustomAcpAgents(value: unknown): CustomAcpAgent[] {
     const id = parsed?.id
     if (parsed && isCustomAcpAgentId(id) && !seen.has(id)) {
       seen.add(id)
-      const { disabled, defaultModel, ...rest } = parsed
+      const { disabled, defaultModel, newChatPermission, ...rest } = parsed
       agents.push({
         ...rest,
         id,
         ...(disabled ? { disabled } : {}),
-        ...(defaultModel ? { defaultModel } : {})
+        ...(defaultModel ? { defaultModel } : {}),
+        ...(newChatPermission ? { newChatPermission } : {})
       })
     }
   }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   createCustomAcpAgentId,
+  customAcpNewChatPermission,
   normalizeCustomAcpAgents,
   savedCustomAcpDefaultAgent,
   type CustomAcpAgent,
@@ -57,5 +58,18 @@ describe('savedCustomAcpDefaultAgent', () => {
     expect(pick('custom-acp-on', 'blank')).toBeNull()
     expect(pick('custom-acp-off')).toBeNull()
     expect(pick('custom-acp-gone')).toBeNull()
+  })
+})
+
+describe('customAcpNewChatPermission', () => {
+  it('starts new chats with full access unless the agent asks, and a malformed value asks', () => {
+    const row = (newChatPermission?: unknown) => ({
+      customAcpAgents: [
+        { id: 'custom-acp-x', name: 'X', command: 'x', args: [], env: {}, newChatPermission }
+      ]
+    })
+    expect(customAcpNewChatPermission(row(), 'custom-acp-x')).toBe('full-access')
+    expect(customAcpNewChatPermission(row('ask'), 'custom-acp-x')).toBe('ask')
+    expect(customAcpNewChatPermission(row('yolo'), 'custom-acp-x')).toBe('ask')
   })
 })

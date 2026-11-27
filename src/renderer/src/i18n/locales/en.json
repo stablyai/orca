@@ -1351,7 +1351,11 @@
         },
         "limit": "Orca keeps up to {{limit}} custom agents. Remove one to add another.",
         "saveFailed": "Orca couldn't save the agent. Try again.",
-        "tooLong": "A highlighted value is too long to save."
+        "tooLong": "A highlighted value is too long to save.",
+        "permission": {
+          "label": "Permissions for new chats",
+          "description": "Orca answers the agent’s permission requests. Each chat can change its own from the composer."
+        }
       }
     },
     "followSymlinkedDirectoriesKeywords": {
