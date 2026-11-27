@@ -229,9 +229,8 @@ export async function verifyCodexAccountCopies(args: {
           tally.differs += 1
           continue
         }
-        // The copy, and as much of the original.
-        const size = Number(copyStats.size) * 2
-        // A pair larger than the whole budget goes first in its launch rather than never.
+        // The most the comparison reads. A pair over the whole budget goes first, not never.
+        const size = Number(copyStats.size) * 2 + 1
         const oversizedFirst = args.budget.admitOversized && bytesRead === 0
         if (!oversizedFirst && bytesRead + size > args.budget.maxBytes) {
           tally.deferred += 1
@@ -243,7 +242,7 @@ export async function verifyCodexAccountCopies(args: {
         bytesRead += size
         let holds: boolean
         try {
-          holds = originalHoldsCopy(copy, original.path, args.budget.deadline)
+          holds = originalHoldsCopy(copy, original.path, copyStats.size, args.budget.deadline)
         } catch (error) {
           if (error instanceof OutOfTime) {
             tally.deferred += 1
