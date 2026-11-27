@@ -37,19 +37,23 @@ export function watchGuestDocument(
 }
 
 /**
- * Draw's page image, taken only after the picker's teardown ran and the page painted two frames without it.
+ * Draw's page image, taken only after the picker's teardown ran and, if an overlay was shown, the page painted
+ * two frames without it.
  * Each stage starts only while `isLive`; a stage already issued is awaited, so the caller's queue stays held.
  */
 export async function captureCleanGuestPage({
   guest,
   isLive,
   teardown,
-  holdPaint
+  holdPaint,
+  paintProof
 }: {
   guest: Electron.WebContents
   isLive: () => boolean
   teardown: () => Promise<boolean>
   holdPaint: () => () => void
+  /** Only a guest whose overlay was (or may still be) shown owes a painted frame; others are captured directly. */
+  paintProof: { needed: () => boolean; proven: () => void }
 }): Promise<BrowserCleanPageCapture | null> {
   if (!isLive()) {
     return null
@@ -60,16 +64,19 @@ export async function captureCleanGuestPage({
     if (!(await teardown()) || !isLive()) {
       return null
     }
-    if (pendingFrameProbes.has(guest)) {
-      return null
-    }
-    pendingFrameProbes.add(guest)
-    const probe = guest
-      .executeJavaScriptInIsolatedWorld(GRAB_PAINT_WORLD_ID, [{ code: TWO_FRAMES_SCRIPT }])
-      .finally(() => pendingFrameProbes.delete(guest))
-    const painted = await withTimeout(probe, GUEST_PAINT_DEADLINE_MS, false)
-    if (painted !== true || !isLive()) {
-      return null
+    if (paintProof.needed()) {
+      if (pendingFrameProbes.has(guest)) {
+        return null
+      }
+      pendingFrameProbes.add(guest)
+      const probe = guest
+        .executeJavaScriptInIsolatedWorld(GRAB_PAINT_WORLD_ID, [{ code: TWO_FRAMES_SCRIPT }])
+        .finally(() => pendingFrameProbes.delete(guest))
+      const painted = await withTimeout(probe, GUEST_PAINT_DEADLINE_MS, false)
+      if (painted !== true || !isLive()) {
+        return null
+      }
+      paintProof.proven()
     }
     const image = await guest.capturePage()
     if (image.isEmpty() || !isLive()) {

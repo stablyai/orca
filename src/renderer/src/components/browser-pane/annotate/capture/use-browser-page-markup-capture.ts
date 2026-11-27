@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import { MAX_CLEAN_CAPTURE_DEADLINE_MS } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 import type { BrowserPage } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import { useGuestEscape } from '../../host-guest/input/use-guest-escape'
 import { deliverMarkupToClipboard } from './markup-clipboard-delivery'
 import {
   useMarkupMode,
@@ -89,6 +90,12 @@ export function useBrowserPageMarkupCapture(
     }, [cleanPageId, webviewRef]),
     onDeliver: deliverMarkupToClipboard
   })
+  // Escape typed into the focused page ends a capture still in progress too.
+  useGuestEscape(
+    cleanPageId ?? '',
+    cleanPageId !== undefined && markup.state === 'capturing',
+    markup.cancel
+  )
   // Layout, not passive: a pane hidden in this commit drops its capture before any continuation can publish.
   const hidden = localPage?.isActive === false
   const { abandonCapture } = markup

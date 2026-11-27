@@ -11,17 +11,26 @@ import type { BrowserSetGrabModeResult } from '../../../../../../shared/browser/
 import type { BrowserLoadError } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 
 const page = vi.hoisted(() => ({
-  captures: [] as { finish: (ok: boolean) => void; signal?: AbortSignal }[],
-  errors: 0
+  captures: [] as { finish: (ok: boolean, side?: number) => void; signal?: AbortSignal }[],
+  errors: 0,
+  composedAt: [] as { width: number; height: number }[]
 }))
+vi.mock('./markup-screenshot-compose', () => ({
+  composeMarkupDataUrl: async (input: { displayCssWidth: number; displayCssHeight: number }) => {
+    page.composedAt.push({ width: input.displayCssWidth, height: input.displayCssHeight })
+    return { dataUrl: 'data:image/png;base64,', width: 1, height: 1 }
+  }
+}))
+vi.mock('./markup-clipboard-delivery', () => ({ deliverMarkupToClipboard: async () => {} }))
 vi.mock('./markup-base-image', () => ({
   captureMarkupBaseImage: (_source: unknown, signal?: AbortSignal) =>
     new Promise((resolve, reject) =>
       page.captures.push({
         signal,
-        finish: (ok) =>
+        // A healthy capture matches the 10 px stand-in page at a device scale of 1.
+        finish: (ok, side = 10) =>
           ok
-            ? resolve({ dataUrl: 'data:image/png;base64,', width: 1, height: 1 })
+            ? resolve({ dataUrl: 'data:image/png;base64,', width: side, height: side })
             : reject(new Error('no capture'))
       })
     )
@@ -70,26 +79,21 @@ function fakeWebview(): {
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Draw only checks whether a load error is set.
 const FAILED_LOAD = { code: -105 } as unknown as BrowserLoadError
 const settled = (): Promise<void> => act(async () => {})
-const finishCapture = (ok: boolean): Promise<void> =>
+const finishCapture = (ok: boolean, side?: number): Promise<void> =>
   act(async () => {
-    page.captures.shift()!.finish(ok)
+    page.captures.shift()!.finish(ok, side)
   })
 
-function renderLocalDraw(webview: Electron.WebviewTag) {
+type DrawProps = { grabState: GrabModeState; isActive: boolean; unavailable?: boolean }
+
+function renderLocalDraw(webview: Electron.WebviewTag, onStopPicker: () => void = () => {}) {
   const webviewRef = { current: webview }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Draw path reads only invalidateDocument from the bridge.
   const bridge = { invalidateDocument: vi.fn() } as unknown as BrowserGuestAnnotationViewportBridge
   const stops: string[] = []
+  const initialProps: DrawProps = { grabState: 'idle', isActive: true }
   const hook = renderHook(
-    ({
-      grabState,
-      isActive,
-      unavailable = false
-    }: {
-      grabState: GrabModeState
-      isActive: boolean
-      unavailable?: boolean
-    }) => {
+    ({ grabState, isActive, unavailable = false }: DrawProps) => {
       const markup = useBrowserPageMarkupCapture(webviewRef, {
         page: { id: 'page-1', loadError: unavailable ? FAILED_LOAD : null },
         isActive
@@ -97,21 +101,26 @@ function renderLocalDraw(webview: Electron.WebviewTag) {
       const draw = useLocalPageDraw({
         markup,
         grabState,
-        stopPicker: () => stops.push('stop'),
+        stopPicker: () => {
+          stops.push('stop')
+          onStopPicker()
+        },
         viewportBridge: bridge,
         webviewRef
       })
       return { markup, draw }
     },
-    { initialProps: { grabState: 'idle' as GrabModeState, isActive: true } }
+    { initialProps }
   )
   const start = (): void => act(() => void hook.result.current.draw.startMarkup())
   return { ...hook, start, stops }
 }
 
 beforeEach(() => {
+  vi.stubGlobal('api', { browser: { onGuestEscape: () => () => {} } })
   page.captures.length = 0
   page.errors = 0
+  page.composedAt.length = 0
 })
 afterEach(() => vi.unstubAllGlobals())
 
@@ -288,6 +297,57 @@ it('an owner unmounted while its guest stays connected retires its capture at co
     expect(retiredAtCommit).toBe(true)
     expect(webview.isConnected).toBe(true)
     await finishCapture(ok)
+  }
+  expect(page.errors).toBe(0)
+})
+
+it('Draw from an armed picker captures, shows and composes at the page size left once its banner closed', async () => {
+  const { webview, size } = fakeWebview()
+  // Stopping the picker closes its banner, so the page grows from 10 to 30 px before Draw measures it.
+  const draw = renderLocalDraw(webview, () => (size.current = 30))
+  draw.rerender({ grabState: 'armed', isActive: true })
+  draw.start()
+  // The guest hadn't caught up with the resize yet: that capture is taken once more.
+  await finishCapture(true, 10)
+  expect(draw.result.current.markup.state).toBe('capturing')
+  await finishCapture(true, 30)
+  expect(draw.result.current.markup.baseImage).toMatchObject({ width: 30, height: 30 })
+  await act(() =>
+    draw.result.current.markup.complete({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: compose is mocked and never reads it.
+      imageElement: {} as CanvasImageSource,
+      shapes: [],
+      displayCssWidth: 30,
+      displayCssHeight: 30
+    })
+  )
+  expect(page.composedAt).toEqual([{ width: 30, height: 30 }])
+})
+
+it('Escape, typed in the app or in the page, ends a capture still in progress before Draw opens', async () => {
+  const guestEscapes: ((event: { browserPageId: string }) => void)[] = []
+  vi.stubGlobal('api', {
+    browser: {
+      onGuestEscape: (listener: (event: { browserPageId: string }) => void) => {
+        guestEscapes.push(listener)
+        return () => guestEscapes.splice(guestEscapes.indexOf(listener), 1)
+      }
+    }
+  })
+  const { webview } = fakeWebview()
+  const draw = renderLocalDraw(webview)
+  for (const press of [
+    () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })),
+    () => guestEscapes.forEach((listener) => listener({ browserPageId: 'page-1' }))
+  ]) {
+    draw.start()
+    expect(draw.result.current.markup.state).toBe('capturing')
+    const pending = page.captures[0]
+    act(press)
+    expect(draw.result.current.markup.state).toBe('idle')
+    expect(pending.signal?.aborted).toBe(true)
+    await finishCapture(true)
+    expect(draw.result.current.markup.state).toBe('idle')
   }
   expect(page.errors).toBe(0)
 })

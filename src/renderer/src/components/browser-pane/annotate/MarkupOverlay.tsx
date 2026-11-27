@@ -7,14 +7,14 @@ import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { MarkupToolbar } from './markup-tools/MarkupToolbar'
 import type { MarkupBaseImage } from './capture/markup-base-image'
-import type { MarkupShape } from './drawing/markup-drawing-model'
+import type { MarkupCompleteInput } from './capture/useMarkupMode'
 import { TEXT_FONT_FAMILY } from './drawing/markup-shape-render'
 import { useMarkupEditor } from './drawing/useMarkupEditor'
 
 export type MarkupOverlayProps = {
   baseImage: MarkupBaseImage
   busy: boolean
-  onComplete: (input: { imageElement: HTMLImageElement; shapes: MarkupShape[] }) => void
+  onComplete: (input: MarkupCompleteInput) => void
   onCancel: () => void
   /** Element outside the page box that hosts the controls as a footer instead of over the page. */
   controlsContainer?: HTMLElement | null
@@ -33,13 +33,20 @@ export function MarkupOverlay({
   const editor = useMarkupEditor(busy, onCancel)
   const { pendingText } = editor
 
+  const { rootRef } = editor
   const handleDone = useCallback(() => {
     const imageElement = baseImgRef.current
-    if (!imageElement || !baseLoaded) {
+    const surface = rootRef.current?.getBoundingClientRect()
+    if (!imageElement || !baseLoaded || !surface || surface.width <= 0 || surface.height <= 0) {
       return
     }
-    onComplete({ imageElement, shapes: editor.shapes })
-  }, [baseLoaded, editor.shapes, onComplete])
+    onComplete({
+      imageElement,
+      shapes: editor.shapes,
+      displayCssWidth: surface.width,
+      displayCssHeight: surface.height
+    })
+  }, [baseLoaded, editor.shapes, onComplete, rootRef])
 
   const controls = (
     <div

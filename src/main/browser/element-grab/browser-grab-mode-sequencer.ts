@@ -5,6 +5,10 @@ import {
   type BrowserSetGrabModeResult
 } from '../../../shared/browser/element-grab/browser-grab-types'
 import { captureCleanGuestPage, watchGuestDocument } from './grab-clean-page-capture'
+import {
+  grabCaptureNeedsPaintProof,
+  markGrabPaintProven
+} from '../guest-lifecycle/manager/grab/browser-manager-grab'
 
 const grabModeIntentByPageId = new Map<string, { generation: number; enabled: boolean }>()
 type GrabModeQueue = { entries: (() => Promise<void>)[]; draining: boolean }
@@ -193,7 +197,11 @@ export function captureCleanBrowserPage(
         guest,
         isLive: () => !retired && Date.now() < cutoffMs && resolveGuest() === guest,
         teardown: () => browserManager.setGrabMode(browserPageId, false, guest),
-        holdPaint: () => browserManager.holdPaintForCapture(guest.id)
+        holdPaint: () => browserManager.holdPaintForCapture(guest.id),
+        paintProof: {
+          needed: () => grabCaptureNeedsPaintProof(guest),
+          proven: () => markGrabPaintProven(guest)
+        }
       })
     } catch {
       return null

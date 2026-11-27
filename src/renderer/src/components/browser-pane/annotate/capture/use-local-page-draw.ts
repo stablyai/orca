@@ -1,4 +1,5 @@
 import { useCallback, useMemo, type RefObject } from 'react'
+import { flushSync } from 'react-dom'
 import type { GrabModeState } from '../grab/useGrabMode'
 import type { BrowserGuestAnnotationViewportBridge } from '../use-browser-guest-annotate-tools'
 import type { MarkupModeController } from './useMarkupMode'
@@ -29,7 +30,8 @@ export function useLocalPageDraw({
     webview?.addEventListener('destroyed', onGuestLost)
     webview?.addEventListener('render-process-gone', onGuestLost)
     // The pick is dropped only once the page is known capturable, so a Draw that can't start leaves it alone.
-    return start(grabState === 'idle' ? undefined : stopPicker).finally(() => {
+    // Committed at once, so the picker's banner is gone and the page has its final size before Draw measures it.
+    return start(grabState === 'idle' ? undefined : () => flushSync(stopPicker)).finally(() => {
       webview?.removeEventListener('destroyed', onGuestLost)
       webview?.removeEventListener('render-process-gone', onGuestLost)
     })

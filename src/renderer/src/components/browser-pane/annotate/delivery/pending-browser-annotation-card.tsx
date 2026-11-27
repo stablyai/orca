@@ -91,6 +91,12 @@ export function PendingBrowserAnnotationCard({
           event.preventDefault()
           onCancel()
         }}
+        // Opening a toolbar or page menu must not throw away typed text; only Cancel, Escape or Add end it.
+        onInteractOutside={(event) => {
+          if (trimmed) {
+            event.preventDefault()
+          }
+        }}
       >
         {/* Selector lives in the tooltip: truncated to a popover width it reads as noise. */}
         <div className="mb-2 flex min-w-0 items-center gap-1.5" title={payload.target.selector}>

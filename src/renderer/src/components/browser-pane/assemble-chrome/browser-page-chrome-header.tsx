@@ -33,6 +33,7 @@ export function BrowserPageChromeHeader({
   notes,
   onOpenFind,
   markupIsActive,
+  markupCapturing,
   markupStart,
   markupCancel,
   shareableArtifactFile,
@@ -60,6 +61,7 @@ export function BrowserPageChromeHeader({
   notes: BrowserChromeNoteActions
   onOpenFind: () => void
   markupIsActive: boolean
+  markupCapturing: boolean
   markupStart: () => Promise<void>
   markupCancel: () => void
   shareableArtifactFile: ShareableBrowserArtifactFile | null
@@ -102,6 +104,7 @@ export function BrowserPageChromeHeader({
         annotationDraftOpen={grabAnnotations.pendingAnnotationPayload !== null}
         isBlankTab={isBlankTab}
         markupIsActive={markupIsActive}
+        markupCapturing={markupCapturing}
         markupStart={markupStart}
         markupCancel={markupCancel}
         notes={notes}

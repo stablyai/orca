@@ -1,4 +1,5 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
@@ -28,6 +29,9 @@ export type MarkupCaptureContext = {
 export type MarkupCompleteInput = {
   imageElement: CanvasImageSource
   shapes: readonly MarkupShape[]
+  /** The CSS size of the surface the shapes were drawn on, which the base image fills. */
+  displayCssWidth: number
+  displayCssHeight: number
 }
 
 type UseMarkupModeParams = {
@@ -45,6 +49,14 @@ export type MarkupModeController = {
   /** Drops a capture still in flight (its document or viewer is gone) without an error; a drawing stays open. */
   abandonCapture: () => void
   complete: (input: MarkupCompleteInput) => Promise<void>
+}
+
+function matchesSurface(image: MarkupBaseImage, context: MarkupCaptureContext): boolean {
+  const expected = (css: number): number => Math.round(css * context.outputScale)
+  return (
+    Math.abs(image.width - expected(context.cssWidth)) <= 1 &&
+    Math.abs(image.height - expected(context.cssHeight)) <= 1
+  )
 }
 
 export function useMarkupMode({
@@ -85,15 +97,23 @@ export function useMarkupMode({
 
   const start = useCallback(
     async (onContextReady?: () => void) => {
-      const context = getCaptureContext()
-      if (!context) {
+      const reportUnavailable = (): void =>
         reportError(
           'auto.components.browser-pane.markup.errorUnavailable',
           'Screenshot markup is not available on this page.'
         )
+      const measured = getCaptureContext()
+      if (!measured) {
+        reportUnavailable()
         return
       }
       onContextReady?.()
+      // Acting on the ready context (closing the picker's banner) can resize the page, so it is measured again.
+      const context = onContextReady ? getCaptureContext() : measured
+      if (!context) {
+        reportUnavailable()
+        return
+      }
       captureAbortRef.current?.abort()
       const abort = new AbortController()
       captureAbortRef.current = abort
@@ -111,9 +131,16 @@ export function useMarkupMode({
         return false
       }
       try {
-        const image = await captureMarkupBaseImage(context.source, abort.signal)
+        let image = await captureMarkupBaseImage(context.source, abort.signal)
         if (isStale()) {
           return
+        }
+        // A capture taken before the guest caught up with a resize wouldn't match the surface Draw shows it on.
+        if (context.source.kind === 'clean-page' && !matchesSurface(image, context)) {
+          image = await captureMarkupBaseImage(context.source, abort.signal)
+          if (isStale()) {
+            return
+          }
         }
         if (context.source.kind === 'clean-page' && Date.now() >= context.source.deadlineMs) {
           throw new Error('markup: the capture finished after its deadline')
@@ -140,6 +167,23 @@ export function useMarkupMode({
     reset()
   }, [reset])
 
+  // Escape ends a capture still in progress, so Draw never opens after the user backed out.
+  const capturing = state === 'capturing'
+  useEffect(() => {
+    if (!capturing) {
+      return
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        reset()
+      }
+    }
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
+  }, [capturing, reset])
+
   const abandonCapture = useCallback(() => {
     if (captureAbortRef.current) {
       reset()
@@ -147,7 +191,7 @@ export function useMarkupMode({
   }, [reset])
 
   const complete = useCallback(
-    async ({ imageElement, shapes }: MarkupCompleteInput) => {
+    async ({ imageElement, shapes, displayCssWidth, displayCssHeight }: MarkupCompleteInput) => {
       const context = contextRef.current
       if (!context) {
         reset()
@@ -164,8 +208,10 @@ export function useMarkupMode({
       try {
         const result = await composeMarkupDataUrl({
           image: imageElement,
-          displayCssWidth: context.cssWidth,
-          displayCssHeight: context.cssHeight,
+          // The drawn surface, not the size measured at start: the page can resize between the two (Draw from
+          // Grab closes the picker's banner, so the page grows before it is captured).
+          displayCssWidth,
+          displayCssHeight,
           outputScale: context.outputScale,
           shapes,
           // Match the clipboard handler’s byte/pixel ceilings; oversize dimensions are silently rejected.

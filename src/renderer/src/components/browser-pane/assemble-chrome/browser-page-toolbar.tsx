@@ -76,6 +76,7 @@ export function BrowserPageToolbar({
   annotationDraftOpen,
   isBlankTab,
   markupIsActive,
+  markupCapturing,
   markupStart,
   markupCancel,
   notes,
@@ -117,6 +118,7 @@ export function BrowserPageToolbar({
   annotationDraftOpen: boolean
   isBlankTab: boolean
   markupIsActive: boolean
+  markupCapturing: boolean
   markupStart: () => Promise<void>
   markupCancel: () => void
   notes: BrowserChromeNoteActions
@@ -244,6 +246,7 @@ export function BrowserPageToolbar({
       elementTools={elementTools}
       markup={{
         active: markupIsActive,
+        busy: markupCapturing,
         disabled: isBlankTab || annotationDraftOpen,
         onToggle: () => (markupIsActive ? markupCancel() : void markupStart()),
         canShowDiscoveryHint: isActive

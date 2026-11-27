@@ -363,6 +363,7 @@ export function BrowserPagePane({
         notes={notes}
         onOpenFind={() => setFindOpen(true)}
         markupIsActive={markup.isActive}
+        markupCapturing={markup.state === 'capturing'}
         markupStart={startMarkup}
         markupCancel={markup.cancel}
         shareableArtifactFile={shareableArtifactFile}

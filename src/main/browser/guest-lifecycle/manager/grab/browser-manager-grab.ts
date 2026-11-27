@@ -17,6 +17,17 @@ import { BrowserManagerViewport } from '../viewport/browser-manager-viewport'
 
 // A guest no arm ever reached has no overlay to remove, so its teardown never waits behind a page load.
 const armedGuests = new WeakSet<Electron.WebContents>()
+// Torn down, but not yet seen painting a frame without the overlay.
+const unpaintedTeardowns = new WeakSet<Electron.WebContents>()
+
+/** Whether a capture must first see the guest paint without the picker; false if no overlay could still show. */
+export function grabCaptureNeedsPaintProof(guest: Electron.WebContents): boolean {
+  return armedGuests.has(guest) || unpaintedTeardowns.has(guest)
+}
+
+export function markGrabPaintProven(guest: Electron.WebContents): void {
+  unpaintedTeardowns.delete(guest)
+}
 
 // Electron's executeJavaScript waits for did-stop-loading, so a guest destroyed mid-load never settles it.
 function runOverlayScript(guest: Electron.WebContents, mode: 'arm' | 'teardown'): Promise<boolean> {
@@ -73,7 +84,15 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     if (!enabled) {
       this.cancelGrabOp(browserTabId, 'user')
       // A cancelled op only queues its teardown; awaiting this idempotent one after it means "off" is off in the page.
-      return armedGuests.has(guest) ? runOverlayScript(guest, 'teardown') : true
+      if (!armedGuests.has(guest)) {
+        return true
+      }
+      const removed = await runOverlayScript(guest, 'teardown')
+      if (removed) {
+        armedGuests.delete(guest)
+        unpaintedTeardowns.add(guest)
+      }
+      return removed
     }
     armedGuests.add(guest)
     // Arm eagerly so hover feedback appears before selection starts.

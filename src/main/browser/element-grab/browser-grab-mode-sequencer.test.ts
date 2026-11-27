@@ -290,6 +290,41 @@ it('a queued capture refuses a same-URL reload or a disposed page, and never tou
   expect(old.listeners() + successor.listeners()).toBe(0)
 })
 
+it('a never-armed page is captured at once even with its frames stalled; an armed one owes teardown and paint', async () => {
+  vi.useFakeTimers()
+  const idle = fakeGuest()
+  const direct = capture(idle).capture
+  await flush()
+  idle.readbacks.shift()!.settle(true)
+  await expect(direct).resolves.toEqual(CAPTURE)
+  expect(idle.scripts).toHaveLength(0)
+  expect(idle.frames).toHaveLength(0)
+
+  const armed = await armedGuest()
+  const stalled = capture(armed).capture
+  await flush()
+  armed.run(TEARDOWN)
+  await vi.advanceTimersByTimeAsync(600)
+  await expect(stalled).resolves.toBeNull()
+  expect(armed.readbacks).toHaveLength(0)
+  // Still owed: the next capture probes again (the stalled probe is still pending, so it refuses until it settles).
+  armed.frames.shift()!.settle(true)
+  await flush()
+  const proven = capture(armed).capture
+  await flush()
+  expect(armed.frames).toHaveLength(1)
+  armed.frames.shift()!.settle(true)
+  await flush()
+  armed.readbacks.shift()!.settle(true)
+  await expect(proven).resolves.toEqual(CAPTURE)
+  // Once a frame without the overlay was seen, later captures go straight to the readback.
+  const after = capture(armed).capture
+  await flush()
+  armed.readbacks.shift()!.settle(true)
+  await expect(after).resolves.toEqual(CAPTURE)
+  expect(armed.frames).toHaveLength(0)
+})
+
 it('a throwing paint hold or release leaks no document listeners', async () => {
   const page = await armedGuest()
   vi.spyOn(browserManager, 'holdPaintForCapture').mockImplementationOnce(() => {

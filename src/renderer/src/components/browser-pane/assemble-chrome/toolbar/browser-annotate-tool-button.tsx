@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Copy, Crosshair, PenTool, SquareMousePointer, Trash2 } from 'lucide-react'
+import { Check, Copy, Crosshair, Loader2, PenTool, SquareMousePointer, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -33,6 +33,8 @@ export type BrowserChromeElementTools = {
 
 export type BrowserChromeMarkupTool = {
   active: boolean
+  /** Capturing the page to draw on; Escape or another click cancels it. */
+  busy?: boolean
   disabled: boolean
   onToggle: () => void
   /** Only the owning visible browser pane may consume the discovery hint; hidden panes misplace it and previews would spend it prematurely. */
@@ -141,7 +143,7 @@ export function BrowserAnnotateToolButton({
       ? { icon: Crosshair, label: t('browser.toolbar.grab', 'Grab') }
       : { icon: SquareMousePointer, label: t('browser.toolbar.annotate', 'Annotate') }
   const active = markup.active || tools.activeIntent !== null
-  const ModeIcon = mode.icon
+  const ModeIcon = markup.busy ? Loader2 : mode.icon
 
   // Clicking while armed stops that tool, so the button is always the way back out.
   const onPrimary = (): void => {
@@ -191,6 +193,7 @@ export function BrowserAnnotateToolButton({
                   disabled={!active && tools.disabled}
                   aria-label={annotateLabel}
                   aria-pressed={active}
+                  aria-busy={markup.busy || undefined}
                   // Same gestures as Reload: left click runs the tool, right click opens the menu.
                   onPointerDown={(event) => {
                     if (event.button === 0) {
@@ -209,7 +212,7 @@ export function BrowserAnnotateToolButton({
                     setMenuOpen(true)
                   }}
                 >
-                  <ModeIcon className="size-3.5" />
+                  <ModeIcon className={cn('size-3.5', markup.busy && 'motion-safe:animate-spin')} />
                   {tools.annotationCount > 0 ? (
                     <span className="pointer-events-none absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-3xs leading-none font-semibold text-primary-foreground ring-2 ring-background">
                       {tools.annotationCount}
