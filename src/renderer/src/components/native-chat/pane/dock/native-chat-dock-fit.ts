@@ -1,11 +1,12 @@
 // Fallbacks for a dock short of room, cumulative and in this order; the last one only scrolls the dock.
 export const NATIVE_CHAT_DOCK_FIT_LEVELS = [
   '',
-  'queue',
-  'queue composer',
-  'queue composer transcript',
-  'queue composer transcript card',
-  'queue composer transcript card dock'
+  'question',
+  'question queue',
+  'question queue composer',
+  'question queue composer transcript',
+  'question queue composer transcript card',
+  'question queue composer transcript card dock'
 ] as const
 
 export const NATIVE_CHAT_DOCK_FIT_ATTRIBUTE = 'data-native-chat-dock-fit'
