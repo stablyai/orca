@@ -9,7 +9,7 @@ import { useRouteHandoff } from '../navigation/route-handoff'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { MobileOfflineState, MobileStateView } from '../components/feedback/MobileStateView'
-import { groupStyles as styles } from './mobile-bot-group-styles'
+import { groupStylesSheet } from './mobile-bot-group-styles'
 import { useHostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
 import { classifyConnection } from '../transport/connection/connection-health'
 import { useHostProfile } from '../host-catalog/use-host-profile'
@@ -19,8 +19,10 @@ import { mobileNativeChatHostOutage } from '../session/native-chat/status/mobile
 import { MobileBotGroupRoom } from './MobileBotGroupRoom'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { keptHomeComputers, subscribeKeptHomeComputers } from '../home/bots/kept-home-computers'
+import { useThemedStyles } from '../theme/themed-styles'
 
 export function MobileBotGroupChat() {
+  const styles = useThemedStyles(groupStylesSheet)
   const [focused, setFocused] = useState(false)
   useFocusEffect(
     useCallback(() => {
@@ -32,7 +34,7 @@ export function MobileBotGroupChat() {
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
   const forceReconnect = useForceReconnect()
-  const params = useLocalSearchParams<{ hostId: string; groupId: string }>()
+  const params = useLocalSearchParams<{ hostId: string; groupId: string; threadId?: string }>()
   const { client, state } = useHostClient(params.hostId)
   const connected = client !== null && state === 'connected'
   // Once open, the room outlasts an outage and Reconnect's new client, keeping its transcript as a chat does.
@@ -53,7 +55,7 @@ export function MobileBotGroupChat() {
     ? mobileNativeChatHostOutage(
         {
           pairedHostState: state,
-          pairedVerdict: classifyConnection({ state, ...connectionInputs }),
+          pairedVerdict: classifyConnection({ state, ...connectionInputs }, t),
           hostName,
           reconnect: forceReconnect ? () => void forceReconnect(params.hostId) : null
         },
@@ -75,6 +77,7 @@ export function MobileBotGroupChat() {
         connected={connected}
         outage={outage}
         groupId={params.groupId}
+        initialThreadId={params.threadId}
         hostId={params.hostId}
         hostName={hostName}
         visible={focused}

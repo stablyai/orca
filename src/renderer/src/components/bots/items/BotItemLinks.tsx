@@ -15,7 +15,7 @@ import {
   X,
   type LucideIcon
 } from 'lucide-react'
-import { useContext, type MouseEvent, type ReactNode } from 'react'
+import { useContext, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -38,7 +38,8 @@ import { BotAppBrandLogo } from '../apps/BotAppBrandLogo'
 import { BotChatTreeWorkerRow } from '../BotChatTreeWorkerRow'
 import { useBotGroupFileContexts } from '../BotGroupTranscriptOwner'
 import {
-  botItemLinkRows,
+  BOT_ITEM_LINK_ROWS,
+  botItemLinkPage,
   botItemWorkerRow,
   type BotItemGitHubRow,
   type BotItemLinkRow
@@ -367,25 +368,37 @@ export function BotItemLinks({
   /** The item's chat, as the worker row's hover card names it. */
   chat: string
 }): React.JSX.Element {
-  return <BotItemLinkRowList bot={bot} rows={botItemLinkRows(links)} chat={chat} />
+  return <BotItemLinkRowList bot={bot} links={links} chat={chat} />
 }
 
-/** Rows already put in order by `botItemLinkRows`, such as the ones a chips row had no room for. */
+/** An item's links as rows, newest page first; each Show more adds the next older page. */
 export function BotItemLinkRowList({
   bot,
-  rows,
+  links,
   chat
 }: {
   bot: Bot
-  rows: readonly BotItemLinkRow[]
+  links: readonly BotItemLinkView[]
   chat: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const fileContext = useBotItemFileContext(bot)
+  const [shown, setShown] = useState(BOT_ITEM_LINK_ROWS)
+  const { rows, more } = useMemo(() => botItemLinkPage(links, shown), [links, shown])
   return (
     <div className="flex flex-col">
       {rows.map((row) => (
         <Row key={row.key} bot={bot} chat={chat} row={row} fileContext={fileContext} />
       ))}
+      {more > 0 ? (
+        <button
+          type="button"
+          className="self-start px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+          onClick={() => setShown(shown + BOT_ITEM_LINK_ROWS)}
+        >
+          {t('bots.items.group.showMore', 'Show {{count}} more', { count: more })}
+        </button>
+      ) : null}
     </div>
   )
 }

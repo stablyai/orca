@@ -16,7 +16,8 @@ import {
   hostTestOperationId
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED } from '../native-chat/agent-session-journal/queued-messages/queued-message-table'
-import { outcomeSentence, replyEventsOf } from '../connector-cloud/connector-reply-outbox'
+import { replyEventsOf } from '../connector-cloud/connector-reply-outbox'
+import { outcomeSentence } from '../connector-cloud/connector-reply-outcome-sentence'
 import { botChatSessions } from './bot-chat-session'
 import { eventually } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import { NO_STRUCTURED_AGENTS } from '../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'

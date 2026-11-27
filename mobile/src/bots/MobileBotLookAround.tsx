@@ -15,9 +15,9 @@ import {
   DrillRow,
   SwitchRow
 } from '../host-screen/workspace-options/workspace-option-rows'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { SheetBot } from './bot-sheet-operations'
 import { lookedWhen } from './bot-up-next-copy'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
@@ -37,18 +37,14 @@ export function MobileLookAroundSection(props: {
   onLookNow: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const setting = botLookAround(props.bot)
   const state = props.upNext?.state
   const lastLookedAt = state?.lastLookedAt
   return (
     <SettingsSection
       first
-      footer={t(
-        'bots.lookAround.detail',
-        'Reads connected apps and projects to suggest next steps. Read-only. Each look uses your agent plan, and Orca must be running on the host.',
-        { name: props.bot.name }
-      )}
+      footer={t('bots.lookAround.footer', 'Read-only. Each look uses your agent plan.')}
     >
       <SwitchRow
         label={t('bots.lookAround.on', 'Suggest next steps')}
@@ -87,7 +83,7 @@ export function MobileLookAroundSection(props: {
               value={
                 lastLookedAt === undefined
                   ? t('bots.lookAround.notYet', 'Not yet')
-                  : lookedWhen(lastLookedAt)
+                  : lookedWhen(lastLookedAt, t, intlLocale)
               }
             />,
             <ListRow
@@ -97,6 +93,7 @@ export function MobileLookAroundSection(props: {
                   ? t('bots.lookAround.looking', 'Looking…')
                   : t('bots.lookAround.lookNow', 'Look now')
               }
+              accent
               disabled={props.disabled || state?.running === true || props.bot.paused}
               onPress={props.onLookNow}
               accessibilityRole="button"
@@ -148,7 +145,6 @@ export function MobileLookAroundPage(props: {
   banner: ReactNode
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
   useBackClaim(() => {
     props.onBack()
     return true

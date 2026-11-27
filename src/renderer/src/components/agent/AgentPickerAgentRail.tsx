@@ -27,7 +27,8 @@ export function AgentPickerAgentTabs({
   blankTerminal,
   defaultAgent,
   onSetDefault,
-  onSelect
+  onSelect,
+  onLeaveUp
 }: {
   entries: AgentPickerEntry[]
   /** Null while the Blank Terminal tile is the selected tab. */
@@ -36,6 +37,8 @@ export function AgentPickerAgentTabs({
   defaultAgent?: Agent | 'blank' | null
   onSetDefault?: (agent: Agent) => void
   onSelect: (agent: Agent) => void
+  /** ArrowUp or Shift+Tab: the rows over the tabs. */
+  onLeaveUp?: () => void
 }) {
   const t = useTranslate()
   return (
@@ -69,6 +72,12 @@ export function AgentPickerAgentTabs({
           } else if ((event.key === 'Tab' && !event.shiftKey) || event.key === 'ArrowDown') {
             event.preventDefault()
             focusSearch(event.currentTarget)
+          } else if (
+            onLeaveUp &&
+            (event.key === 'ArrowUp' || (event.key === 'Tab' && event.shiftKey))
+          ) {
+            event.preventDefault()
+            onLeaveUp()
           }
         }}
       >

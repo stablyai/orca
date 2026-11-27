@@ -1,4 +1,5 @@
-import { clipboard } from 'electron'
+import { clipboard, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type {
   BrowserPasswordCopyResult,
   BrowserPasswordEntryDetailsResult,
@@ -36,7 +37,7 @@ function editFailure(result: BrowserPasswordStoreResult<unknown>): BrowserPasswo
   return { ok: false, reason: result.reason === 'invalid-origin' ? 'invalid-site' : 'unavailable' }
 }
 
-export function registerBrowserPasswordsEntryHandlers(): void {
+export function registerBrowserPasswordsEntryHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
   handleBrowserPasswordsChannel(
     'browserPasswords:getEntryDetails',
     async (event, raw): Promise<BrowserPasswordEntryDetailsResult> => {
@@ -57,7 +58,8 @@ export function registerBrowserPasswordsEntryHandlers(): void {
         return { ok: false, reason: 'unavailable' }
       }
       return { ok: true, password: password.value, note: note.value }
-    }
+    },
+    ipc
   )
 
   handleBrowserPasswordsChannel(
@@ -76,15 +78,18 @@ export function registerBrowserPasswordsEntryHandlers(): void {
         return { ok: false, reason: password.reason === 'not-found' ? 'not-found' : 'unavailable' }
       }
       const copied = password.value
-      clipboard.writeText(copied)
+      await clipboard.writeText(copied)
       setTimeout(() => {
         // Why compare first: never wipe something the user copied afterwards.
-        if (clipboard.readText() === copied) {
-          clipboard.clear()
-        }
+        void clipboard.readText().then((current) => {
+          if (current === copied) {
+            clipboard.clear()
+          }
+        })
       }, CLIPBOARD_CLEAR_MS).unref?.()
       return { ok: true }
-    }
+    },
+    ipc
   )
 
   handleBrowserPasswordsChannel(
@@ -108,7 +113,8 @@ export function registerBrowserPasswordsEntryHandlers(): void {
       return editFailure(
         added.ok && note ? request.vault.updateNote(added.value.entry.id, note) : added
       )
-    }
+    },
+    ipc
   )
 
   handleBrowserPasswordsChannel(
@@ -132,14 +138,19 @@ export function registerBrowserPasswordsEntryHandlers(): void {
         }
       }
       return { ok: true }
-    }
+    },
+    ipc
   )
 
-  handleBrowserPasswordsChannel('browserPasswords:deleteEntry', (event, raw): boolean => {
-    const request = readBrowserPasswordsVaultRequest(event, raw)
-    const entryId = request ? text(request.args.entryId) : ''
-    return Boolean(request && entryId && request.vault.remove(entryId).ok)
-  })
+  handleBrowserPasswordsChannel(
+    'browserPasswords:deleteEntry',
+    (event, raw): boolean => {
+      const request = readBrowserPasswordsVaultRequest(event, raw)
+      const entryId = request ? text(request.args.entryId) : ''
+      return Boolean(request && entryId && request.vault.remove(entryId).ok)
+    },
+    ipc
+  )
 
   handleBrowserPasswordsChannel(
     'browserPasswords:deleteAll',
@@ -152,17 +163,26 @@ export function registerBrowserPasswordsEntryHandlers(): void {
         return false
       }
       return deleteBrowserPasswordVault(request.vault).ok
-    }
+    },
+    ipc
   )
 
-  handleBrowserPasswordsChannel('browserPasswords:listNever', (event, raw): string[] | null => {
-    const listed = readBrowserPasswordsVaultRequest(event, raw)?.vault.listNever()
-    return listed?.ok ? listed.value : null
-  })
+  handleBrowserPasswordsChannel(
+    'browserPasswords:listNever',
+    (event, raw): string[] | null => {
+      const listed = readBrowserPasswordsVaultRequest(event, raw)?.vault.listNever()
+      return listed?.ok ? listed.value : null
+    },
+    ipc
+  )
 
-  handleBrowserPasswordsChannel('browserPasswords:removeNever', (event, raw): boolean => {
-    const request = readBrowserPasswordsVaultRequest(event, raw)
-    const origin = request ? toBrowserPasswordOrigin(text(request.args.origin)) : null
-    return Boolean(request && origin && request.vault.removeNever(origin).ok)
-  })
+  handleBrowserPasswordsChannel(
+    'browserPasswords:removeNever',
+    (event, raw): boolean => {
+      const request = readBrowserPasswordsVaultRequest(event, raw)
+      const origin = request ? toBrowserPasswordOrigin(text(request.args.origin)) : null
+      return Boolean(request && origin && request.vault.removeNever(origin).ok)
+    },
+    ipc
+  )
 }

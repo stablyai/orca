@@ -29,6 +29,7 @@ export function useMobileNativeChatMentionBotMenu(bots: MentionBots | undefined)
       bots?.bots.map((bot) => ({
         name: bot.name,
         key: bot.id,
+        ...(bot.purpose ? { detail: bot.purpose } : {}),
         ...(bot.paused ? { unavailable: 'paused' } : {})
       })) ?? [],
     [bots]

@@ -2,7 +2,10 @@ import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult
 } from '../../../../../shared/git/remotes/git-fork-sync'
-import type { GitUpstreamStatus } from '../../../../../shared/git/status/git-status-types'
+import type {
+  GitUpstreamStatus,
+  RebaseFromBaseResult
+} from '../../../../../shared/git/status/git-status-types'
 import { REBASE_FROM_BASE_RPC_TIMEOUT_MS } from '../../../../../shared/git/remotes/git-rebase-source'
 import type { GitPushTarget } from '../../../../../shared/worktree/types'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
@@ -167,17 +170,17 @@ export async function fastForwardRuntimeGit(
 export async function rebaseRuntimeGitFromBase(
   context: RuntimeGitContext,
   baseRef: string
-): Promise<void> {
+): Promise<RebaseFromBaseResult> {
   const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
-    await window.api.git.rebaseFromBase({
+    return window.api.git.rebaseFromBase({
       worktreePath: resolveLocalWorktreePath(context),
       baseRef,
       connectionId: context.connectionId
     })
-    return
   }
-  await callRuntimeRpc(
+  // Older hosts answer { ok: true } only, which reads as no autostash conflict.
+  return callRuntimeRpc<RebaseFromBaseResult>(
     target,
     'git.rebaseFromBase',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), baseRef },

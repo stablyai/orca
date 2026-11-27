@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { appStarSourceSchema } from '../../../shared/github/repositories/gh-star-source'
 import { resolveGhAccountRequiredHost } from '../../github/accounts/account-binding-required-host'
 import { diagnoseGhAuth } from '../../github/accounts/auth-diagnose'
@@ -14,10 +15,13 @@ import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
 import { track } from '../../telemetry/client'
 import { assertRegisteredGitHubRepo, getGitHubLocalGitOptionArgs } from './github-repo-routing'
 
-export function registerGitHubAccountHandlers(store: Store): void {
-  ipcMain.handle('gh:viewer', () => getAuthenticatedViewer())
-  ipcMain.handle('gh:checkOrcaStarred', () => checkOrcaStarred())
-  ipcMain.handle('gh:starOrca', async (_event, source: unknown) => {
+export function registerGitHubAccountHandlers(
+  store: Store,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle('gh:viewer', () => getAuthenticatedViewer())
+  ipc.handle('gh:checkOrcaStarred', () => checkOrcaStarred())
+  ipc.handle('gh:starOrca', async (_event, source: unknown) => {
     const sourceParse = appStarSourceSchema.safeParse(source)
     const starred = await starOrca()
     if (starred && sourceParse.success) {
@@ -29,15 +33,13 @@ export function registerGitHubAccountHandlers(store: Store): void {
     return starred
   })
 
-  ipcMain.handle('gh:rateLimit', (_event, args?: { force?: boolean }) =>
+  ipc.handle('gh:rateLimit', (_event, args?: { force?: boolean }) =>
     getRateLimit(args?.force ? { force: true } : undefined)
   )
 
-  ipcMain.handle('gh:diagnoseAuth', (_event, args?: { host?: string }) =>
-    diagnoseGhAuth(args?.host)
-  )
+  ipc.handle('gh:diagnoseAuth', (_event, args?: { host?: string }) => diagnoseGhAuth(args?.host))
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:listBindableAccounts',
     async (_event, args: { repoPath: string; repoId?: string; refreshCapability?: boolean }) => {
       const repo = assertRegisteredGitHubRepo(args, store)
@@ -50,7 +52,7 @@ export function registerGitHubAccountHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:validateAccountBinding',
     async (_event, args: { repoPath: string; repoId?: string; host: string; user: string }) => {
       const repo = assertRegisteredGitHubRepo(args, store)

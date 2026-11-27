@@ -1,3 +1,5 @@
+// @protected-copy scope=file
+// The pill names the policy the agent runs under: a language pack must not reword what it says.
 import { memo } from 'react'
 import { ChevronDown, PencilRuler, Settings2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -94,7 +96,7 @@ export type NativeChatPermissionModePickerProps = {
   agent?: string | null
   disabled?: boolean
   currentLabel?: string
-  /** `icon` is the composer pill: the mode's icon and a chevron, named by its tooltip. */
+  /** `icon` is the composer pill: the mode's neutral icon alone, named by its tooltip. */
   appearance?: 'icon' | 'compact' | 'form'
   activeValue?: string
   onSelect: (mode: AgentChatPermissionMode) => void
@@ -192,7 +194,7 @@ function NativeChatPermissionModePickerInner({
             <Button
               type="button"
               variant={appearance === 'form' ? 'outline' : 'ghost'}
-              size="xs"
+              size={iconOnly ? 'icon-sm' : 'xs'}
               aria-label={
                 // An unrecognized value falls back to the title, which must not be said twice.
                 described === title
@@ -210,15 +212,12 @@ function NativeChatPermissionModePickerInner({
                 appearance === 'form'
                   ? 'h-8 w-64 max-w-full justify-between'
                   : iconOnly
-                    ? undefined
+                    ? 'size-7 pointer-coarse:size-11'
                     : 'min-w-0 shrink'
               }
             >
               {iconOnly ? (
-                <TriggerIcon
-                  className={`size-3.5 shrink-0 ${shown === 'full-access' ? 'text-status-warning' : ''}`}
-                  aria-hidden
-                />
+                <TriggerIcon className="size-3.5 shrink-0" aria-hidden />
               ) : isAgentChatPermissionMode(shown) ? (
                 <NativeChatPermissionModeName mode={shown} label={label} truncate />
               ) : (
@@ -227,7 +226,7 @@ function NativeChatPermissionModePickerInner({
                   <span className="truncate">{label}</span>
                 </>
               )}
-              <ChevronDown className="size-3" />
+              {iconOnly ? null : <ChevronDown className="size-3" />}
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>

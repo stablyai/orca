@@ -6,6 +6,10 @@ import type { CommentMarkdownExtension } from './CommentMarkdown'
 import { useChatMathRendering } from './chat-markdown-math-rendering'
 import { rehypeWordFade } from './comment-markdown-word-fade'
 import {
+  CommentMarkdownClosingFenceContext,
+  createClosingFenceCheck
+} from './comment-markdown-code-fence'
+import {
   splitMarkdownTopLevelBlocks,
   type HtmlRendersAsText,
   type MarkdownBlock,
@@ -13,26 +17,86 @@ import {
 } from './markdown-top-level-blocks'
 
 type RemarkPlugins = NonNullable<React.ComponentProps<typeof Markdown>['remarkPlugins']>
+type RehypePlugins = NonNullable<React.ComponentProps<typeof Markdown>['rehypePlugins']>
+
+type MemoizedMarkdownProps = React.ComponentProps<typeof Markdown> & {
+  math: boolean
+  /** Source offset in this block where fading words start; none renders plain. */
+  fadeFrom?: number
+  /** The block no longer grows: while it fades it keeps the fade point it first rendered with, so
+   *  steps don't re-run its pipeline. Its words finish fading on their own. */
+  fadeSettled?: boolean
+  /** Block offsets of selected fading words, whose groups keep their word elements. */
+  fadeHoldFrom?: number
+  fadeHoldTo?: number
+  /** Where this block starts in the whole content. */
+  fadeBase?: number
+  block?: MarkdownBlock
+  authoredCodeFenceSource?: string
+}
+
+/** Equal props, except that a settled block's moving fade point doesn't count until it renders plain. */
+// Runs for every block of a reply on every step, so it compares in place and allocates nothing.
+function sameBlockRender(previous: MemoizedMarkdownProps, next: MemoizedMarkdownProps): boolean {
+  const before = previous.fadeFrom
+  const after = next.fadeFrom
+  const holdsFade = next.fadeSettled === true && before !== undefined && after !== undefined
+  if (before !== after && !holdsFade) {
+    return false
+  }
+  const was: Readonly<Record<string, unknown>> = previous
+  const is: Readonly<Record<string, unknown>> = next
+  let count = 0
+  for (const key in was) {
+    if (key === 'fadeFrom' || !Object.hasOwn(was, key)) {
+      continue
+    }
+    count += 1
+    if (!Object.hasOwn(is, key) || !Object.is(was[key], is[key])) {
+      return false
+    }
+  }
+  for (const key in is) {
+    if (key !== 'fadeFrom' && Object.hasOwn(is, key)) {
+      count -= 1
+    }
+  }
+  return count === 0
+}
 
 /** One render of the pipeline; memoized so an unchanged block is not parsed again. */
 export const MemoizedMarkdown = React.memo(function DeferredMarkdown({
   math,
-  fadeWords,
+  fadeFrom,
+  fadeSettled: _settled,
+  fadeHoldFrom,
+  fadeHoldTo,
+  fadeBase = 0,
   block,
+  authoredCodeFenceSource,
   ...props
-}: React.ComponentProps<typeof Markdown> & {
-  math: boolean
-  fadeWords: boolean
-  block?: MarkdownBlock
-}) {
+}: MemoizedMarkdownProps) {
   const renderMath = useChatMathRendering(math)
-  const plugins = React.useMemo(
+  const plugins = React.useMemo<RehypePlugins>(
     () => [
       ...(props.rehypePlugins ?? []),
       ...(math ? [renderMath] : []),
-      ...(fadeWords ? [rehypeWordFade] : [])
+      ...(fadeFrom === undefined
+        ? []
+        : [
+            [
+              rehypeWordFade,
+              {
+                from: fadeFrom,
+                base: fadeBase,
+                ...(fadeHoldFrom !== undefined && fadeHoldTo !== undefined
+                  ? { hold: { from: fadeHoldFrom, to: fadeHoldTo } }
+                  : {})
+              }
+            ] satisfies RehypePlugins[number]
+          ])
     ],
-    [props.rehypePlugins, math, renderMath, fadeWords]
+    [props.rehypePlugins, math, renderMath, fadeFrom, fadeHoldFrom, fadeHoldTo, fadeBase]
   )
   const parsedPlugins = React.useMemo<RemarkPlugins>(() => {
     if (!block?.tree) {
@@ -50,8 +114,23 @@ export const MemoizedMarkdown = React.memo(function DeferredMarkdown({
     }
     return [...(props.remarkPlugins ?? []), reuseParsedBlock]
   }, [block, props.remarkPlugins])
-  return <Markdown {...props} remarkPlugins={parsedPlugins} rehypePlugins={plugins} />
-})
+  const drawn = props.children ?? ''
+  const checkClosingFence = React.useMemo(
+    () =>
+      authoredCodeFenceSource === undefined
+        ? null
+        : createClosingFenceCheck(authoredCodeFenceSource, drawn),
+    [authoredCodeFenceSource, drawn]
+  )
+  const markdown = <Markdown {...props} remarkPlugins={parsedPlugins} rehypePlugins={plugins} />
+  return checkClosingFence === null ? (
+    markdown
+  ) : (
+    <CommentMarkdownClosingFenceContext.Provider value={checkClosingFence}>
+      {markdown}
+    </CommentMarkdownClosingFenceContext.Provider>
+  )
+}, sameBlockRender)
 
 /** The content as the blocks to render. Cut into blocks from the first time it is growing, and
  *  from then on, so the stream ending does not redraw what is already there. */

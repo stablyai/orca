@@ -1,4 +1,5 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import { randomUUID } from 'node:crypto'
 import { open, writeFile } from 'node:fs/promises'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
@@ -22,10 +23,13 @@ function validateRequiredString(value: unknown, label: string): string {
   return value
 }
 
-export function registerFilesystemDownloadHandlers(context: FilesystemHandlerContext): void {
+export function registerFilesystemDownloadHandlers(
+  context: FilesystemHandlerContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { downloadSessions, closeDownloadSession } = context
 
-  ipcMain.handle(
+  ipc.handle(
     'fs:downloadFile',
     async (_event, args: { filePath?: string; connectionId?: string }): Promise<never> => {
       validateRequiredString(args?.filePath, 'filePath')
@@ -34,7 +38,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'fs:downloadFolder',
     async (_event, args: { dirPath?: string; connectionId?: string }): Promise<never> => {
       validateRequiredString(args?.dirPath, 'dirPath')
@@ -43,7 +47,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'fs:saveDownloadedFile',
     async (
       event,
@@ -82,7 +86,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'fs:startDownloadedFile',
     async (
       event,
@@ -155,7 +159,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'fs:appendDownloadedFileChunk',
     async (
       _event,
@@ -168,11 +172,12 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
         throw new Error('Download session not found')
       }
       await session.handle.writeFile(Buffer.from(contentBase64, 'base64'))
+      session.cleanupTimer.refresh()
       return { ok: true }
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'fs:finishDownloadedFile',
     async (
       _event,
@@ -200,7 +205,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'fs:cancelDownloadedFile',
     async (_event, args: { transferId?: string }): Promise<{ ok: true }> => {
       const transferId = validateRequiredString(args?.transferId, 'transferId')

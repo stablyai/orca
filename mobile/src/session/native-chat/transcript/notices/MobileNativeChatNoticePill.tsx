@@ -1,8 +1,9 @@
 import { Pressable, Text, type StyleProp, type ViewStyle } from 'react-native'
 import type { Play } from 'lucide-react-native'
-import { colors, pressedStyle, spacing } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { styles as chatStyles } from '../../mobile-native-chat-view-styles'
+import { pressedStyle, spacing } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { stylesSheet } from '../../mobile-native-chat-view-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 // The chat's small secondary action, as its Try Again on earlier messages; `primary` fills it.
 export function MobileNativeChatNoticePill({
@@ -22,6 +23,9 @@ export function MobileNativeChatNoticePill({
   disabled?: boolean
   style?: StyleProp<ViewStyle>
 }): React.JSX.Element {
+  const chatStyles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesThemedSheet)
   return (
     <Pressable
       accessibilityRole="button"
@@ -46,7 +50,7 @@ export function MobileNativeChatNoticePill({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesThemedSheet = themedStyleSheet((colors) => ({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',

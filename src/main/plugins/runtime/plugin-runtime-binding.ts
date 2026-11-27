@@ -8,13 +8,14 @@ import type { PluginService } from '../plugin-service'
 import { installPluginHookRunner } from '../hooks/plugin-hook-participants'
 import { installPluginOpenedTerminalPruning } from '../workers/host-api/plugin-opened-terminals'
 import { installPluginAutomationOwnershipEnd } from '../contributions/plugin-automation-ownership'
+import { installPluginMcpServerSync } from '../contributions/plugin-mcp-server-sync'
 import { installPluginResidentWorkerWarmer } from '../workers/worker-admission/plugin-resident-worker'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { pluginRuntimeRpc } from './plugin-runtime-rpc'
 import type { DispatcherOptions } from '../../runtime/rpc/dispatcher'
 import type { PluginRuntimeRpc } from '../workers/host-api/plugin-host-runtime-call'
 import {
-  pluginTerminalTitle,
+  pluginWorkspaceTerminal,
   projectPluginWorkspaceContext,
   terminalForPane,
   type PluginAgentStatusRow,
@@ -101,6 +102,7 @@ export function bindPluginRuntime(
   installPluginHookRunner(service, runtime)
   installPluginOpenedTerminalPruning(service)
   installPluginAutomationOwnershipEnd(service, runtime)
+  installPluginMcpServerSync(service, () => runtime.notifyMcpServersChanged())
   installPluginResidentWorkerWarmer(service)
   return delegate
 }
@@ -114,13 +116,7 @@ async function listWorkspaceTerminals(
     PLUGIN_WORKSPACE_TERMINAL_LIMIT,
     { includeVisualLayouts: false }
   )
-  return terminals.map((terminal) => ({
-    id: terminal.handle,
-    title: pluginTerminalTitle(terminal),
-    ...(terminal.tabId && terminal.leafId
-      ? { paneKey: `${terminal.tabId}:${terminal.leafId}` }
-      : {})
-  }))
+  return terminals.map(pluginWorkspaceTerminal)
 }
 
 /**

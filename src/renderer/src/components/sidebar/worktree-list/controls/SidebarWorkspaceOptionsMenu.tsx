@@ -1,13 +1,17 @@
-import React from 'react'
+import React, { Suspense } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useAppStore } from '@/store/index'
 import { WorktreeCardsKeptHintContent } from '../../workspace-card/template/WorktreeCardsIntroNotice'
 import { SidebarOptionsPopover } from './SidebarOptionsPopover'
-import {
-  useWorkspaceOptionsFilterBadge,
-  WorkspaceOptionsMenuItems
-} from './workspace-options-menu-items'
+import { useWorkspaceOptionsFilterBadge } from './use-workspace-options-filter-badge'
+
+const WorkspaceOptionsMenuItems = lazy(() =>
+  import('./workspace-options-menu-items').then((module) => ({
+    default: module.WorkspaceOptionsMenuItems
+  }))
+)
 
 const dismissKeptHint = (): void => useAppStore.getState().setWorktreeCardsIntroKeptHintOpen(false)
 
@@ -60,7 +64,9 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         content: <WorktreeCardsKeptHintContent />
       }}
     >
-      <WorkspaceOptionsMenuItems preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen} />
+      <Suspense fallback={null}>
+        <WorkspaceOptionsMenuItems preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen} />
+      </Suspense>
     </SidebarOptionsPopover>
   )
 })

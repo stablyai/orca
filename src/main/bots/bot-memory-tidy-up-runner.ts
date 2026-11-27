@@ -5,9 +5,8 @@ import { OWNER_ACTS_FOR } from '../../shared/bots/bot-acts-for'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { botMemoryDate } from '../../shared/bot-memory-lines'
-import type { Bot } from '../../shared/bot-types'
+import { tidyUpSupported, type Bot } from '../../shared/bot-types'
 import { botTidyUp, tidyUpChangeCount, type TidyNowRefusal } from '../../shared/bots/bot-tidy-up'
-import { lookAroundSupported } from '../../shared/bots/bot-look-around'
 import {
   type BackgroundRunWatch,
   awaitRunEnd,
@@ -28,6 +27,7 @@ import {
   TIDY_UP_FAILURES,
   TIDY_UP_FIRST_LOOKBACK_MS,
   TIDY_UP_RUN_LIMIT_MS,
+  tidyUpOfferedNow,
   tidyUpOwed,
   tidyUpRunSummary,
   type TidyUpApplied,
@@ -64,7 +64,7 @@ export class BotTidyUpRunner {
 
   /** None of the bot's conversations is running a turn, and it may tidy at all. */
   private idle(bot: Bot): boolean {
-    return !bot.paused && lookAroundSupported(bot.agent) && !this.deps.busy(bot)
+    return !bot.paused && tidyUpSupported(bot.agent) && !this.deps.busy(bot)
   }
 
   /** Settings' and the phone's Tidy now: a run now, on whatever chats are new, even none. */
@@ -91,6 +91,9 @@ export class BotTidyUpRunner {
       const now = this.deps.now()
       const bots = this.deps.bots()
       this.closeAbandoned(bots, now)
+      bots
+        .filter((bot) => tidyUpOfferedNow(bot, tidyUpState(this.deps.store.get(bot.id)), now))
+        .forEach((bot) => this.change(bot.id, (state) => tidyUpOfferedNow(bot, state, now)))
       // Never in a dark wake, where the host sleeps again within seconds. Read every tick while
       // a bot tidies, so the awake clock keeps sampling and sees a sleep without power events.
       const settled = bots.some((bot) => botTidyUp(bot).on) && this.deps.power.settled()

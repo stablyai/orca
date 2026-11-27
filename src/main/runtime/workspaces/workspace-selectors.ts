@@ -28,6 +28,7 @@ import {
 } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import { RuntimeProjectLaunchContext } from './startup/runtime-project-launch-context'
 import { folderIdOfSelector } from '../../../shared/workspace/identity/workspace-scope'
+import { storedNameMatcher } from '../../../shared/text/typed-name-normalization'
 import {
   folderCandidate,
   folderCatalogOf,
@@ -167,8 +168,9 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
         branchSelectorMatches(worktree.branch, branchSelector)
       )
     } else if (selector.startsWith('name:')) {
-      // Keep display-name matching exact so duplicate names hit the same ambiguity path as other selectors.
-      candidates = worktrees.filter((worktree) => worktree.displayName === selector.slice(5))
+      // Case-sensitive (Unicode form aside) so duplicate names hit the same ambiguity path as other selectors.
+      const matchesName = storedNameMatcher(selector.slice(5))
+      candidates = worktrees.filter((worktree) => matchesName(worktree.displayName))
     } else if (selector.startsWith('issue:')) {
       candidates = worktrees.filter(
         (worktree) =>
@@ -248,13 +250,15 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
       return repos.filter((repo) => runtimePathsEqual(repo.path, selector.slice(5)))
     }
     if (selector.startsWith('name:')) {
-      return repos.filter((repo) => repo.displayName === selector.slice(5))
+      const matchesName = storedNameMatcher(selector.slice(5))
+      return repos.filter((repo) => matchesName(repo.displayName))
     }
+    const matchesName = storedNameMatcher(selector)
     return repos.filter(
       (repo) =>
         repo.id === selector ||
         runtimePathsEqual(repo.path, selector) ||
-        repo.displayName === selector
+        matchesName(repo.displayName)
     )
   }
 

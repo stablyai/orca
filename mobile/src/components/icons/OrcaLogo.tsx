@@ -1,14 +1,14 @@
 import Svg, { G, Path, Defs } from 'react-native-svg'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 type Props = {
   size?: number
   color?: string
 }
 
-export function OrcaLogo({ size = 24, color = colors.textPrimary }: Props) {
-  useMobileColorScheme()
+export function OrcaLogo({ size = 24, color: colorProp }: Props) {
+  const colors = useMobileColors()
+  const color = colorProp ?? colors.textPrimary
   const aspectRatio = 318.6 / 202.67
   const width = size * aspectRatio
   return (

@@ -212,6 +212,11 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       const { runtimeState, sessions } = context()
       return runtimeState.startFlights.has(id) || sessions.get(id)?.child?.phase === 'starting'
     },
+    /** Its agent is attached, or a start is under way. */
+    agentRunning: (id: string): boolean => {
+      const { runtimeState, sessions } = context()
+      return runtimeState.startFlights.has(id) || sessions.get(id)?.child != null
+    },
     /** A decided start's acquire is still out, and no later start's child is attached. */
     startWindingDown: (id: string): boolean => {
       const { runtimeState, sessions } = context()
@@ -219,13 +224,6 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     },
     /** A cancelled start's provider work, including releasing what it acquired, has ended. */
     startAttemptsEnded: (id: string) => context().runtimeState.startFlights.attemptsEnded(id),
-    onSessionsHeld: (listener: () => void) => context().deps.store.onHeldChange(listener),
-    prospectiveAccountHome: (id: string) => {
-      const { deps, serialize } = context()
-      return serialize(
-        id,
-        async () => (await deps.launchAccountHome?.(deps.store.requireWritableRecord(id))) ?? null
-      )
-    }
+    onSessionsHeld: (listener: () => void) => context().deps.store.onHeldChange(listener)
   }
 }

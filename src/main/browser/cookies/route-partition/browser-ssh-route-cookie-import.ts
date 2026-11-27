@@ -50,8 +50,12 @@ async function importIntoSshRoutePartition(
     (target.targetRegistered
       ? bindLocalSshBrowserPartition(target.sshTargetId, target.browserProfileId)
       : null)
-  // Refuse before the file picker opens: an unknown host has no jar to fill.
-  if (resolvePartition() === null) {
+  // Refuse before the file picker opens: an unknown host has no jar to fill. Binding waits for a
+  // chosen source, since a new binding can evict another jar.
+  if (
+    !target.targetRegistered &&
+    preparedLocalSshBrowserPartition(target.sshTargetId, target.browserProfileId) === null
+  ) {
     return browserCookieImportFailure('sshHostDisconnected')
   }
   const imported = await importIntoRoutePartition(

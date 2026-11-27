@@ -4,13 +4,8 @@ import { hasUsageData } from '../../../../../shared/agent-usage/display/usage-pr
 
 export type UsageProviderSettings = Pick<
   GlobalSettings,
-  | 'codexManagedAccounts'
-  | 'claudeManagedAccounts'
-  | 'opencodeSessionCookie'
-  | 'geminiCliOAuthEnabled'
+  'codexManagedAccounts' | 'claudeManagedAccounts' | 'opencodeSessionCookie'
 > & {
-  // Antigravity setup is a checked item plus PATH detection; agy usage needs no Gemini OAuth.
-  antigravityUsageConfigured: boolean
   // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
   minimaxApiKeyConfigured: boolean
@@ -25,10 +20,8 @@ export type UsageProviderSettings = Pick<
 type UsageProviderSnapshots = {
   claude: ProviderRateLimits | null | undefined
   codex: ProviderRateLimits | null | undefined
-  gemini: ProviderRateLimits | null | undefined
   opencodeGo: ProviderRateLimits | null | undefined
   kimi: ProviderRateLimits | null | undefined
-  antigravity: ProviderRateLimits | null | undefined
   minimax: ProviderRateLimits | null | undefined
   grok: ProviderRateLimits | null | undefined
   cursor: ProviderRateLimits | null | undefined
@@ -62,10 +55,8 @@ export function hasUsageProviderSettings(
   return Boolean(
     (settings?.codexManagedAccounts?.length ?? 0) > 0 ||
     (settings?.claudeManagedAccounts?.length ?? 0) > 0 ||
-    settings?.geminiCliOAuthEnabled === true ||
     Boolean(settings?.opencodeSessionCookie?.trim()) ||
     settings?.opencodeGoApiKeyConfigured === true ||
-    settings?.antigravityUsageConfigured === true ||
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true ||
@@ -87,18 +78,11 @@ export function hasUsageProviderSettingsForProvider(
   if (providerId === 'codex') {
     return (settings.codexManagedAccounts?.length ?? 0) > 0
   }
-  if (providerId === 'gemini') {
-    return settings.geminiCliOAuthEnabled === true
-  }
   if (providerId === 'opencode-go') {
     return (
       Boolean(settings.opencodeSessionCookie?.trim()) ||
       settings.opencodeGoApiKeyConfigured === true
     )
-  }
-  if (providerId === 'antigravity') {
-    // The agy probe needs only the PATH-gated checked item, independent of Gemini OAuth.
-    return settings.antigravityUsageConfigured === true
   }
   if (providerId === 'minimax') {
     return settings.minimaxCookieConfigured === true || settings.minimaxApiKeyConfigured === true
@@ -122,9 +106,7 @@ export function createPendingProviderSnapshot(providerId: UsageProviderId): Prov
     weekly: null,
     ...(providerId === 'opencode-go' ? { monthly: null } : {}),
     // Bucket-backed providers need bucket-shaped pending skeletons to avoid layout changes on their first reading.
-    ...(providerId === 'gemini' || providerId === 'cursor' || providerId === 'antigravity'
-      ? { buckets: [] }
-      : {}),
+    ...(providerId === 'cursor' ? { buckets: [] } : {}),
     updatedAt: 0,
     error: null,
     status: 'fetching'
@@ -154,16 +136,11 @@ export function isUsageEmptyState(
     return false
   }
   // System-default Claude/Codex have no saved account row; wait for snapshots before proposing setup.
-  const antigravitySnapshotPending =
-    hasUsageProviderSettingsForProvider('antigravity', settings) &&
-    isProviderSnapshotPending(providers.antigravity)
   if (
     isProviderSnapshotPending(providers.claude) ||
     isProviderSnapshotPending(providers.codex) ||
-    isProviderSnapshotPending(providers.gemini) ||
     isProviderSnapshotPending(providers.opencodeGo) ||
     isProviderSnapshotPending(providers.kimi) ||
-    antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
     isProviderSnapshotPending(providers.grok) ||
     isProviderSnapshotPending(providers.cursor) ||
@@ -176,10 +153,8 @@ export function isUsageEmptyState(
     !hasUsageProviderSettings(settings) &&
     !isProviderConfigured(providers.claude) &&
     !isProviderConfigured(providers.codex) &&
-    !isProviderConfigured(providers.gemini) &&
     !isProviderConfigured(providers.opencodeGo) &&
     !isProviderConfigured(providers.kimi) &&
-    !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&
     !isProviderConfigured(providers.grok) &&
     !isProviderConfigured(providers.cursor) &&

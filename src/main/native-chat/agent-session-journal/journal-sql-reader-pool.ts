@@ -6,7 +6,10 @@ import type {
 import { ReaderSlot } from './journal-sql-reader-slot'
 import { JOURNAL_SQL_READERS } from './journal-sql-reader-requests'
 import type { JournalForkPreparationInput } from './journal-fork-preparation'
-import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../../shared/concurrency/abort-signal-reason'
 import type { JournalOutlineCache } from './journal-domain-outline'
 import type { JournalLegacyChatComparison } from './journal-sql-reader-protocol'
 import {
@@ -30,11 +33,33 @@ import {
   trackJournalReaderRetention,
   type JournalReaderRetention
 } from './journal-sql-reader-retention'
+import {
+  JournalSqlReaderIdleShrink,
+  retireJournalReaderSlot,
+  shrinkIdleBurstReaders
+} from './journal-sql-reader-burst-shrink'
 
 /** Four WAL readers isolate slow pages; each request executes entirely on its assigned connection. */
 export class JournalSqlReaderPool {
   private readonly slots: ReaderSlot[] = []
   private readonly retiring = new Set<Promise<void>>()
+  private readonly idleShrink = new JournalSqlReaderIdleShrink({
+    onBurstShrink: () =>
+      !this.closed &&
+      shrinkIdleBurstReaders(
+        this.slots,
+        [this.forkSlot, this.conversionSlot],
+        this.replaced,
+        this.retiring
+      ),
+    onWarmShrink: () =>
+      !this.closed &&
+      shrinkIdleBurstReaders(this.slots, [this.forkSlot], this.replaced, this.retiring, 0, (r) => {
+        if (this.conversionSlot === r) {
+          this.conversionSlot = undefined
+        }
+      })
+  })
   private closed = false
   private closing?: Promise<void>
   private conversionSlot?: ReaderSlot
@@ -92,29 +117,7 @@ export class JournalSqlReaderPool {
       }
       throwIfSignalAborted(signal)
       const current = this.forkRelease.promise
-      await (!signal
-        ? current
-        : new Promise<void>((resolve, reject) => {
-            const aborted = () => {
-              cleanup()
-              reject(signal.reason)
-            }
-            const cleanup = () => signal.removeEventListener('abort', aborted)
-            signal.addEventListener('abort', aborted, { once: true })
-            void current.then(
-              () => {
-                cleanup()
-                resolve()
-              },
-              (error: unknown) => {
-                cleanup()
-                reject(error)
-              }
-            )
-            if (signal.aborted) {
-              aborted()
-            }
-          }))
+      await waitForPromiseWithSignal(current, signal)
     }
     throwIfSignalAborted(signal)
     const slot = this.slot(true)
@@ -209,6 +212,7 @@ export class JournalSqlReaderPool {
     const lease = new AbortController()
     this.sourceLease = lease
     this.sourceRelease = Promise.withResolvers<void>()
+    this.idleShrink.clear()
     const retired = this.slots.splice(0)
     this.conversionSlot = undefined
     try {
@@ -282,13 +286,7 @@ export class JournalSqlReaderPool {
     }
     for (let index = this.slots.length - 1; index >= 0; index--) {
       if (this.slots[index]!.failed) {
-        const [failed] = this.slots.splice(index, 1)
-        const stats = failed!.admissionStats()
-        this.replaced.receivedBytes += stats.receivedBytes
-        this.replaced.consumedBytes += stats.consumedBytes
-        this.replaced.creditWaitsExpired += stats.creditWaitsExpired
-        const closed = failed!.close().finally(() => this.retiring.delete(closed))
-        this.retiring.add(closed)
+        retireJournalReaderSlot(this.slots, index, this.replaced, this.retiring)
       }
     }
     let slot = this.slots
@@ -304,10 +302,12 @@ export class JournalSqlReaderPool {
       )
       this.slots.push(slot)
     }
+    this.idleShrink.onSlotUsed(this.slots.length, this.slots.indexOf(slot!))
     return slot!
   }
 
   close(): Promise<void> {
+    this.idleShrink.clear()
     this.sourceLease?.abort()
     this.closed = true
     this.forkRelease?.resolve()

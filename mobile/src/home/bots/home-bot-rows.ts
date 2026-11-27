@@ -3,6 +3,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/e
 import type { BotGroup } from '../../../../src/shared/bots/bot-group'
 import type { BotComputerAnswer } from '../../bots/bot-link-host-reads'
 import { botHomeWorktreeId, hostBotsKey } from '../../bots/host-bots-read'
+import type { Translate } from '../../i18n/mobile-i18n'
 import { pairedNewBotComputers, type NewBotComputer } from '../../bots/new-bot-computers'
 import type { KeptComputerBots } from '../../bots/kept-computer-bots'
 import {
@@ -37,7 +38,7 @@ export type HomeBots = {
   computers: readonly HomeComputerEntry[]
   /** Each computer's name by its key: a paired computer's own, or its server's. */
   labels: ReadonlyMap<string, string>
-  /** Each computer that lists no bots here, and why; and each listing one that takes no new bot. */
+  /** Each computer that lists no bots here, and why. */
   unavailable: readonly HomeBotsUnavailable[]
   /** Some computer lists its bots, even none. */
   listable: boolean
@@ -62,6 +63,7 @@ export type HomeBotRowsInput = {
   hydrated: ReadonlySet<string>
   worktreeInfo: Readonly<Record<string, HostWorktreeInfo>>
   now: number
+  t: Translate
 }
 
 /** Needs you first, then the most recent; name and key keep equal rows in place. */
@@ -78,7 +80,7 @@ export function compareHomeBotRows(a: HomeBotRow, b: HomeBotRow): number {
 export type HomeBotsUnavailable = {
   key: string
   label: string
-  reason: 'update' | 'off' | 'unreachable' | 'no-create'
+  reason: 'update' | 'off' | 'unreachable'
   /** A server's paired computer, whose Settings hold its Bots switch. */
   desktopLabel?: string
 }
@@ -203,9 +205,6 @@ export function homeBotRows(input: HomeBotRowsInput): HomeBots {
       continue
     }
     listable = true
-    if (!answer.takesCreate) {
-      why('no-create')
-    }
     const place: Place = {
       placeKey: placeKey(entry),
       computerKey: entry.key,
@@ -218,7 +217,7 @@ export function homeBotRows(input: HomeBotRowsInput): HomeBots {
     const first = rows.length
     if (entry.mode !== 'live') {
       const lastActivity = input.kept[pairedHostId]?.lastActivity ?? {}
-      rows.push(...keptRows(place, answer, entry.mode, groups, lastActivity, input.now))
+      rows.push(...keptRows(place, answer, entry.mode, groups, lastActivity, input.now, input.t))
     } else {
       const homes = homesOf(pairedHostId)
       const workersOf = own ? workersByHome(input.worktreeInfo[pairedHostId]) : null
@@ -226,10 +225,15 @@ export function homeBotRows(input: HomeBotRowsInput): HomeBots {
       for (const bot of answer.bots) {
         const home = botHomeWorktreeId(bot)
         rows.push(
-          botRow(place, answer, bot, homes.get(home) ?? NO_AGENTS, input.now, {
-            workers: workersOf?.(home),
-            access
-          })
+          botRow(
+            place,
+            answer,
+            bot,
+            homes.get(home) ?? NO_AGENTS,
+            input.now,
+            { workers: workersOf?.(home), access },
+            input.t
+          )
         )
       }
       if (groups.length > 0) {
@@ -246,7 +250,8 @@ export function homeBotRows(input: HomeBotRowsInput): HomeBots {
               answer.bots,
               (paneKey) => byPane.get(paneKey),
               unread.has(botHomeWorktreeId(group)),
-              input.now
+              input.now,
+              input.t
             )
           )
         }
@@ -279,7 +284,7 @@ export function homeBotRows(input: HomeBotRowsInput): HomeBots {
 
 /** Runs on from Home: every computer Home knows. One without a live answer stays listed, "Checking…"
  *  while it may answer and "Offline" while it is down, and takes no bot until it answers. */
-export function homeNewBotComputers(bots: HomeBots): NewBotComputer[] {
+export function homeNewBotComputers(bots: HomeBots, t: Translate): NewBotComputer[] {
   const asAnswered = bots.computers.map((computer): BotComputerAnswer =>
     computer.mode === 'live'
       ? computer
@@ -288,5 +293,5 @@ export function homeNewBotComputers(bots: HomeBots): NewBotComputer[] {
           answer: { kind: computer.mode === 'offline' ? 'unreachable' : 'unreadable' }
         }
   )
-  return pairedNewBotComputers(asAnswered, (computer) => bots.labels.get(computer.key) ?? '')
+  return pairedNewBotComputers(asAnswered, (computer) => bots.labels.get(computer.key) ?? '', t)
 }

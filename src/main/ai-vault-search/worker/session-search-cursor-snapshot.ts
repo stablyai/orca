@@ -65,7 +65,7 @@ export abstract class SessionSearchCursorSnapshot {
       row.byteOffset !== null &&
       row.byteOffset > 0 &&
       typeof file.sizeBytes === 'number' &&
-      row.byteOffset < file.sizeBytes
+      row.byteOffset <= file.sizeBytes
       ? { byteOffset: row.byteOffset, prefixHash: row.prefixHash }
       : null
   }

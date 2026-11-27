@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import {
   compareAppVersions,
   isValidAppVersion
@@ -20,12 +21,14 @@ export const MAX_AUTOMATIC_ATTEMPTS = 3
 const RETRY_MS = 60 * 60_000
 const RECORD_MAX_BYTES = 4 * 1024
 
-const recordSchema = z.object({
-  releaseId: z.string().min(1),
-  attempts: z.number().int().nonnegative(),
-  lastAt: z.number().finite().nonnegative(),
-  declined: z.boolean()
-})
+const recordSchema = lazyZodSchema(() =>
+  z.object({
+    releaseId: z.string().min(1),
+    attempts: z.number().int().nonnegative(),
+    lastAt: z.number().finite().nonnegative(),
+    declined: z.boolean()
+  })
+)
 type AutoUpdateRecord = z.infer<typeof recordSchema>
 
 /** What launches run now, as status reports it. */

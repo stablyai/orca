@@ -15,23 +15,42 @@ export type BotGroupFace<T> = {
 }
 
 type Spot = { x: number; y: number; size: number; font: number }
-const PAIR: Spot[] = [
-  { x: 11, y: 0, size: 17, font: 10 },
-  { x: 0, y: 10, size: 18, font: 10 }
-]
-const TRIO: Spot[] = [
-  { x: 14, y: 0, size: 14, font: 8 },
-  { x: 0, y: 3, size: 15, font: 9 },
-  { x: 5, y: 15, size: 13, font: 8 }
-]
+type Spots = { one: Spot; pair: Spot[]; trio: Spot[] }
+const LOOSE: Spots = {
+  one: { x: 4, y: 4, size: 20, font: 11 },
+  pair: [
+    { x: 11, y: 0, size: 17, font: 10 },
+    { x: 0, y: 10, size: 18, font: 10 }
+  ],
+  trio: [
+    { x: 14, y: 0, size: 14, font: 8 },
+    { x: 0, y: 3, size: 15, font: 9 },
+    { x: 5, y: 15, size: 13, font: 8 }
+  ]
+}
+/** Equal faces that reach every edge of the slot: the phone's rows, beside square bot pictures. */
+const FILLED: Spots = {
+  one: { x: 2, y: 2, size: 24, font: 13 },
+  pair: [
+    { x: 10, y: 0, size: 18, font: 10 },
+    { x: 0, y: 10, size: 18, font: 10 }
+  ],
+  trio: [
+    { x: 12, y: 0, size: 16, font: 9 },
+    { x: 0, y: 0, size: 16, font: 9 },
+    { x: 6, y: 12, size: 16, font: 9 }
+  ]
+}
 
 /** A group's circles, back to front: every member up to three; past that two faces and a "+N" circle.
  *  `scale` sizes the row's 28px picture for a larger slot. */
 export function botGroupFaces<T>(
   members: readonly T[],
   keyOf: (member: T) => string,
-  scale = 1
+  scale = 1,
+  filled = false
 ): BotGroupFace<T>[] {
+  const { one, pair, trio } = filled ? FILLED : LOOSE
   const [first, second, third] = members
   if (!first) {
     return []
@@ -45,20 +64,20 @@ export function botGroupFaces<T>(
     font: spot.font * scale
   })
   if (!second) {
-    return [at({ x: 4, y: 4, size: 20, font: 11 }, { member: first }, keyOf(first))]
+    return [at(one, { member: first }, keyOf(first))]
   }
   if (!third) {
     return [
-      at(PAIR[0]!, { member: second }, keyOf(second)),
-      at(PAIR[1]!, { member: first }, keyOf(first))
+      at(pair[0]!, { member: second }, keyOf(second)),
+      at(pair[1]!, { member: first }, keyOf(first))
     ]
   }
   return [
-    at(TRIO[0]!, { member: second }, keyOf(second)),
-    at(TRIO[1]!, { member: first }, keyOf(first)),
+    at(trio[0]!, { member: second }, keyOf(second)),
+    at(trio[1]!, { member: first }, keyOf(first)),
     members.length === 3
-      ? at(TRIO[2]!, { member: third }, keyOf(third))
-      : at({ ...TRIO[2]!, font: 7 }, { more: members.length - 2 }, 'more')
+      ? at(trio[2]!, { member: third }, keyOf(third))
+      : at({ ...trio[2]!, font: trio[2]!.font - 1 }, { more: members.length - 2 }, 'more')
   ]
 }
 

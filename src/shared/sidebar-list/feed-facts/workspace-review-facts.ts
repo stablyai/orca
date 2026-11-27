@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import type { Repo } from '../../repository/repo-types'
 import type { Worktree } from '../../worktree/types'
 import { getGitHubPRCacheKeyCandidates } from '../../github/cache/github-cache-key'
@@ -14,15 +15,19 @@ import { listGitWorkspaceRows } from './workspace-rows'
 import { UNCACHED_LINKED_PR_STATE } from '../../worktree/catalog/runtime-worktree-contracts'
 
 /** PR grouping currently admits only GitHub facts. */
-const WorkspaceReviewFactSchema = z.object({
-  provider: z.literal('github'),
-  reviewState: z.string()
-})
+const WorkspaceReviewFactSchema = lazyZodSchema(() =>
+  z.object({
+    provider: z.literal('github'),
+    reviewState: z.string()
+  })
+)
 
 /** On-demand facts have no revision; absent row key means no PR. */
-export const WorkspaceReviewFactsSnapshotSchema = z.object({
-  facts: z.record(z.string(), WorkspaceReviewFactSchema)
-})
+export const WorkspaceReviewFactsSnapshotSchema = lazyZodSchema(() =>
+  z.object({
+    facts: z.record(z.string(), WorkspaceReviewFactSchema)
+  })
+)
 
 export type WorkspaceReviewFact = z.infer<typeof WorkspaceReviewFactSchema>
 export type WorkspaceReviewFactsSnapshot = z.infer<typeof WorkspaceReviewFactsSnapshotSchema>

@@ -84,17 +84,17 @@ export default function PendingNativeChatCreation({
   const transport = React.useMemo((): NativeChatStructuredComposerTransport => {
     const sendBlockedReason =
       handedOff && status !== 'error'
-        ? translate(
+        ? t(
             'auto.components.worktree.creation.PendingNativeChatCreation.openingChat',
             'Opening chat…'
           )
         : status === 'error'
-          ? translate(
+          ? t(
               'auto.components.worktree.creation.PendingNativeChatCreation.sendBlockedFailed',
               'Retry creating the worktree to send'
             )
           : held
-            ? translate(
+            ? t(
                 'auto.components.worktree.creation.PendingNativeChatCreation.sendBlockedHeld',
                 'Sends when the worktree is ready'
               )
@@ -148,7 +148,8 @@ export default function PendingNativeChatCreation({
     options.surface,
     reportComposerError,
     sourceWorktreeId,
-    status
+    status,
+    t
   ])
 
   const notices = React.useMemo(

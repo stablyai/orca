@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-list/feed/sidebar-inputs-switch'
 import { buildSidebarFeedRows } from '../../../../src/shared/sidebar-list/feed/sidebar-feed-rows'
 import { repoIconFeedKey } from '../../../../src/shared/sidebar-list/catalog/repo-icon-data-urls-contract'
@@ -33,6 +33,7 @@ import { useHostBotSections } from '../../bots/use-host-bot-sections'
 import type { LastVisitedWorktreeOnHost } from '../../worktree/row-presentation/host-list-highlight'
 import { indexHiddenProjects } from '../../../../src/shared/project/catalog/hidden-projects'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/execution-host'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 export type HostListSectionsInputs = {
   client: RpcClient | null
@@ -68,6 +69,10 @@ export type HostListSections = {
   repoById: ReadonlyMap<string, SectionRepo>
   collapsedGroups: Set<string>
   projectOrderBy: ProjectOrderBy
+  /** A search's paused bots the Bot options hide, when they are its only bot matches. */
+  pausedBotMatches?: number
+  /** Lists those paused bots for this search. */
+  showPausedBots?: () => void
 }
 
 function useCollapsedGroups(state: HostScreenState): Set<string> {
@@ -78,9 +83,10 @@ function useFilterRepos(
   catalogRepos: readonly SectionRepo[],
   displayWorktrees: Worktree[]
 ): WorkspaceSectionRepo[] {
+  const t = useMobileTranslation()
   return useMemo(
-    () => buildFilterRepos(catalogRepos, displayWorktrees),
-    [catalogRepos, displayWorktrees]
+    () => buildFilterRepos(catalogRepos, displayWorktrees, t),
+    [catalogRepos, displayWorktrees, t]
   )
 }
 
@@ -256,6 +262,8 @@ export function useHostListSections(inputs: HostListSectionsInputs): HostListSec
   const collapsedGroups = useCollapsedGroups(state)
   const lastVisited = useLastVisitedWorktreeOnHost(inputs.hostId)
   const lineageStores = useLineageStores(inputs)
+  // Show paused holds for the search it was asked in.
+  const [showPausedFor, setShowPausedFor] = useState<string | null>(null)
   const botSections = useHostBotSections({
     client: inputs.client,
     connected: inputs.connected,
@@ -266,9 +274,12 @@ export function useHostListSections(inputs: HostListSectionsInputs): HostListSec
     collapsedGroups,
     repoHostIdByRepoId: state.repoHostIdByRepoId,
     search: state.search,
+    showPaused: showPausedFor === state.search,
     lastVisited,
     lineageStores
   })
+  const { search } = state
+  const showPausedBots = useCallback(() => setShowPausedFor(search), [search])
   // Left out before the list is planned, as the desktop's are, so counts and empty sections follow its rules.
   const listRows = useMemo(
     () =>
@@ -287,13 +298,17 @@ export function useHostListSections(inputs: HostListSectionsInputs): HostListSec
     lastVisited
   })
   return useMemo(() => {
+    const paused = botSections.pausedMatches
+      ? { pausedBotMatches: botSections.pausedMatches, showPausedBots }
+      : {}
     if (botSections.sections.length === 0) {
-      return base
+      return { ...base, ...paused }
     }
     return {
       ...base,
+      ...paused,
       sections: [...botSections.sections, ...base.sections],
       rawSections: [...botSections.sections, ...base.rawSections]
     }
-  }, [base, botSections])
+  }, [base, botSections, showPausedBots])
 }

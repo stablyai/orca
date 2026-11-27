@@ -5,10 +5,8 @@ import { KeyedBottomDrawer } from '../../../../components/bottom-drawer/keyed-bo
 import { SheetHeader } from '../../../../components/nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../../../../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-
+import { radii, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 const sheetKey = () => 'option-preview'
 
 export function MobileNativeChatOptionPreviewSheet({
@@ -28,7 +26,7 @@ export function MobileNativeChatOptionPreviewSheet({
   onChoose: (index: number) => void
   onClose: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const previews = useMemo(
     () => options.flatMap((option, index) => (option.preview ? [{ option, index }] : [])),
@@ -99,7 +97,7 @@ export function MobileNativeChatOptionPreviewSheet({
 }
 
 function ReadablePreview({ preview }: { preview: string }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <ScrollView style={styles.preview} showsVerticalScrollIndicator nestedScrollEnabled>
       <ScrollView horizontal showsHorizontalScrollIndicator nestedScrollEnabled>
@@ -111,7 +109,7 @@ function ReadablePreview({ preview }: { preview: string }): React.JSX.Element {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   preview: { flex: 1, minHeight: 0, backgroundColor: colors.bgPanel },
   text: {
     padding: spacing.md,

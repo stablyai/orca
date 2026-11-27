@@ -39,19 +39,6 @@ export function botToolSignInLine(
   }
 }
 
-/** What Needs you says the face asks of the owner; null when it isn't a sign-in to ask for. */
-export function botToolSignInNeed(
-  face: BotToolSignInFace | null,
-  t: Translate,
-  name: string
-): string | null {
-  return face === 'needs-sign-in'
-    ? t('bots.needs.signIn', '{{name}} needs you to sign in.', { name })
-    : face === 'sign-in-again'
-      ? t('bots.needs.signInAgain', '{{name}} needs you to sign in again.', { name })
-      : null
-}
-
 /** The button that starts a sign-in, when the face calls for one. */
 export function botToolSignInActionLabel(
   face: BotToolSignInFace | null,

@@ -11,7 +11,7 @@ import { BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY } from '../../../../../shar
 import { NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/workspace-ports-runtime-capabilities'
 import {
   NetworkPortForwardAttachParams,
-  pairedPortForwardDialHost
+  loopbackPortForwardDialHost
 } from '../../../../../shared/workspace/ports/port-forward-loopback-host'
 import { defineStreamingMethod } from '../../core'
 
@@ -25,7 +25,7 @@ export function connectPairedPortForwardTarget(
   target: Parameters<ConnectTarget>[0],
   connect: ConnectTarget = connectNativeLoopbackTarget
 ): ReturnType<ConnectTarget> {
-  const host = pairedPortForwardDialHost(target.host)
+  const host = loopbackPortForwardDialHost(target.host)
   if (!host) {
     throw new BrowserTunnelDestinationBlockedError('not_loopback')
   }

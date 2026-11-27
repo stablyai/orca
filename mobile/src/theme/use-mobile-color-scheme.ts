@@ -1,14 +1,17 @@
 import { useSyncExternalStore } from 'react'
-import { getMobileUiRevision, subscribeMobileUiLanguage } from '../i18n/mobile-i18n'
 import {
   getMobileColorScheme,
+  paletteForScheme,
   subscribeMobileColorScheme,
-  type MobileColorScheme
+  type MobileColorScheme,
+  type MobilePalette
 } from './mobile-theme'
 
-// Call in every component that reads `colors` or themed styles while rendering, so a scheme change repaints it.
-// A language switch repaints the same components, so labels built by helpers during render follow it too.
 export function useMobileColorScheme(): MobileColorScheme {
-  useSyncExternalStore(subscribeMobileUiLanguage, getMobileUiRevision)
   return useSyncExternalStore(subscribeMobileColorScheme, getMobileColorScheme)
+}
+
+// One frozen palette per scheme, so a scheme change is a new value React Compiler can track.
+export function useMobileColors(): MobilePalette {
+  return paletteForScheme(useMobileColorScheme())
 }

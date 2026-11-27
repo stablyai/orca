@@ -25,8 +25,12 @@ import {
   persistBrowserSessionMeta,
   type BrowserSessionMeta
 } from './browser-session-meta-store'
-import { installBrowserSessionPartitionPolicies } from '../partition-policies/browser-session-partition-policies'
+import {
+  installBrowserSessionPartitionPolicies,
+  restoreBrowserSessionPartitionPolicies
+} from '../partition-policies/browser-session-partition-policies'
 import { isValidPersistedBrowserSessionProfile } from './browser-session-persisted-profile-validation'
+import { BrowserSessionProfileMap } from './browser-session-profile-map'
 import { inspectRetiredBrowserSessionProfileUserAgentModes } from '../../identity/mode/browser-retired-profile-identity-inspection'
 import {
   clearBrowserRoutePartitionPolicies,
@@ -62,7 +66,7 @@ export type BrowserSessionRegistryProfileOptions = {
 // This registry supplies the partition allowlist used by will-attach-webview.
 
 class BrowserSessionRegistry {
-  private readonly profiles = new Map<string, BrowserSessionProfile>()
+  private readonly profiles = new BrowserSessionProfileMap()
   private activeOrcaProfileId = DEFAULT_LOCAL_ORCA_PROFILE_ID
   private metadataPathOverride: string | null = null
   private defaultPartition = ORCA_BROWSER_PARTITION
@@ -103,8 +107,7 @@ class BrowserSessionRegistry {
   }
 
   private persistProfiles(): void {
-    const nonDefault = [...this.profiles.values()].filter((p) => p.id !== 'default')
-    this.persistMeta({ profiles: nonDefault })
+    this.persistMeta({ profiles: [...this.profiles.values()].filter((p) => p.id !== 'default') })
   }
 
   private loadPersistedMeta(): BrowserSessionMeta {
@@ -134,10 +137,7 @@ class BrowserSessionRegistry {
     const hydrated = this.hydrateFromPersisted(meta.profiles)
 
     // Hydration skips the default profile, so install its policies separately.
-    const defaultProfile = this.getDefaultProfile()
-    void installBrowserSessionPartitionPolicies(defaultProfile).catch(() => {
-      console.warn('[proxy] Failed to apply proxy to browser partition', defaultProfile.partition)
-    })
+    restoreBrowserSessionPartitionPolicies(this.getDefaultProfile())
     return hydrated && didReadBrowserSessionMeta(this.metadataPath)
   }
 
@@ -218,7 +218,7 @@ class BrowserSessionRegistry {
 
   /** The local browser profile a partition belongs to; tabs attach only in these. */
   profileIdForPartition(partition: string): string | null {
-    return this.listProfiles().find((p) => p.partition === partition)?.id ?? null
+    return this.profiles.idForPartition(partition)
   }
 
   resolvePartition(profileId: string | null | undefined): string {
@@ -233,11 +233,8 @@ class BrowserSessionRegistry {
   }
 
   setupRoutePartitionPolicies(partition: string, browserProfileId: string): Promise<void> {
-    const profile = this.profiles.get(browserProfileId)
-    if (!profile) {
-      throw new Error('browser_route_partition_profile_unavailable')
-    }
-    return installBrowserRoutePartitionPolicies(profile, partition)
+    this.requireRouteBrowserProfile(browserProfileId)
+    return installBrowserRoutePartitionPolicies(this.profiles.get(browserProfileId)!, partition)
   }
 
   requireRouteBrowserProfile(browserProfileId: string): void {
@@ -344,9 +341,7 @@ class BrowserSessionRegistry {
     for (const profile of valid) {
       this.profiles.set(profile.id, profile)
       if (profile.partition !== this.defaultPartition) {
-        void installBrowserSessionPartitionPolicies(profile).catch(() => {
-          console.warn('[proxy] Failed to apply proxy to browser partition', profile.partition)
-        })
+        restoreBrowserSessionPartitionPolicies(profile)
       }
     }
     return valid.length === profiles.length

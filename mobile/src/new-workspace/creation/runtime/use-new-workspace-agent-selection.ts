@@ -1,3 +1,4 @@
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useState } from 'react'
 import { isMobileTuiAgentEnabled } from '../../../agents/mobile-tui-agents'
 import {
@@ -18,6 +19,7 @@ export function useNewWorkspaceAgentSelection(args: {
   setAgentOverridden: (overridden: boolean) => void
   pickerAgentOptions: NewWorktreeAgentOption[]
 } {
+  const t = useMobileTranslation()
   const [selectedAgentState, setSelectedAgent] = useState<NewWorktreeAgentOption>(
     NEW_WORKTREE_AGENT_OPTIONS[0]!
   )
@@ -42,10 +44,15 @@ export function useNewWorkspaceAgentSelection(args: {
       (args.detectedAgentIds === null || args.detectedAgentIds.has(agent.id)) &&
       isMobileTuiAgentEnabled(agent.id, args.runtimeSettings?.disabledTuiAgents)
   )
+  const blankAgent = {
+    ...NEW_WORKTREE_BLANK_AGENT,
+    label: t('components.newWorktreeAgentSelection.blankTerminal', 'Blank Terminal')
+  }
   return {
-    selectedAgent: resolution.selectedAgent,
+    selectedAgent:
+      resolution.selectedAgent.id === '__blank__' ? blankAgent : resolution.selectedAgent,
     setSelectedAgent,
     setAgentOverridden,
-    pickerAgentOptions: [...visibleAgentOptions, NEW_WORKTREE_BLANK_AGENT]
+    pickerAgentOptions: [...visibleAgentOptions, blankAgent]
   }
 }

@@ -8,6 +8,13 @@ import {
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { Bot } from '../../shared/bot-types'
 import { mailboxAddresses } from '../../shared/google/email-address-list'
+import {
+  botGoogleAccess,
+  botGoogleDefault,
+  botMayUseGoogleAccount,
+  googleEmailKey,
+  type GoogleDefaultRead
+} from '../../shared/google/google-bot-accounts'
 import type { UpcomingEvent } from './google-calendar-changes'
 import type { GoogleDefaultAccount } from './google-credential-store'
 import { senderAddress, type NewMail } from './google-gmail-changes'
@@ -25,48 +32,69 @@ export type GoogleRuleTarget<Rule extends AutomationGoogleTrigger = AutomationGo
 export type GoogleRunEvent = { automationId: string; event: AutomationRunEvent }
 
 /**
- * The enabled bot automations' Google rules on accounts connected here, for bots whose owner turned
- * Google on. A rule without an account listens on this computer's default, while it is connected.
+ * The enabled bot automations' Google rules on accounts connected here that the bot may use, for bots
+ * whose owner turned Google on. A rule without an account listens on the bot's default, while connected.
  */
 export function googleRuleTargets(
   automations: readonly Pick<Automation, 'id' | 'enabled' | 'bot' | 'on'>[],
-  bots: readonly Pick<Bot, 'id' | 'google'>[],
+  bots: readonly Pick<Bot, 'id' | 'google' | 'googleAccounts'>[],
   accounts: readonly string[],
-  defaultAccount: string | null
+  defaultAccount: GoogleDefaultRead
 ): GoogleRuleTarget[] {
-  const connected = new Set(accounts.map((email) => email.toLowerCase()))
-  const fallback = defaultAccount?.toLowerCase()
+  const connected = new Set(accounts.map(googleEmailKey))
   return automations.flatMap((automation) => {
     const botId = automation.bot?.botId
     const bot = bots.find((entry) => entry.id === botId)
     if (!automation.enabled || !botId || bot?.google !== true) {
       return []
     }
+    const access = botGoogleAccess(bot)
+    const read = botGoogleDefault(access, defaultAccount)
+    const fallback = 'email' in read ? read.email : null
     return (automation.on ?? []).flatMap((rule) => {
       if (!isGoogleTrigger(rule)) {
         return []
       }
-      const account = rule.account?.toLowerCase() ?? fallback
-      return account && connected.has(account)
+      const account = rule.account ? googleEmailKey(rule.account) : fallback
+      return account && connected.has(account) && botMayUseGoogleAccount(access, account)
         ? [{ automationId: automation.id, botId, account, rule }]
         : []
     })
   })
 }
 
+/** Whether the target's bot may still use its account, read at fire time: a Calendar timer or a slow
+ *  Gmail read can outlast the account's removal from the bot. */
+export function googleTargetStillAllowed(
+  bots: readonly Pick<Bot, 'id' | 'google' | 'googleAccounts'>[],
+  target: Pick<GoogleRuleTarget, 'botId' | 'account'>
+): boolean {
+  const bot = bots.find((entry) => entry.id === target.botId)
+  return bot !== undefined && botMayUseGoogleAccount(botGoogleAccess(bot), target.account)
+}
+
 /** Why rules without an account (on bots with Google on) can't listen now, or null while they can. */
 export function accountlessRulesPausedBy(
   fallback: GoogleDefaultAccount,
   automations: readonly Pick<Automation, 'enabled' | 'bot' | 'on'>[],
-  bots: readonly Pick<Bot, 'id' | 'google'>[]
+  bots: readonly Pick<Bot, 'id' | 'google' | 'googleAccounts'>[]
 ): string | null {
-  const waiting = automations.some(
-    (automation) =>
-      automation.enabled &&
-      bots.some((bot) => bot.id === automation.bot?.botId && bot.google === true) &&
-      (automation.on ?? []).some((rule) => isGoogleTrigger(rule) && !rule.account)
-  )
-  return waiting && 'unreadable' in fallback ? fallback.unreadable : null
+  // The same rule googleRuleTargets follows: paused only where the bot's own default is unreadable.
+  for (const automation of automations) {
+    const bot = bots.find((entry) => entry.id === automation.bot?.botId)
+    if (
+      !automation.enabled ||
+      !bot ||
+      !(automation.on ?? []).some((rule) => isGoogleTrigger(rule) && !rule.account)
+    ) {
+      continue
+    }
+    const read = botGoogleDefault(botGoogleAccess(bot), fallback)
+    if ('unreadable' in read) {
+      return read.unreadable
+    }
+  }
+  return null
 }
 
 export function isGmailTarget(target: GoogleRuleTarget): target is GoogleRuleTarget<GmailRule> {

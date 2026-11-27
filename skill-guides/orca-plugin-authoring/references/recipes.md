@@ -93,6 +93,13 @@ Code waits, so `{ deny }` refuses the call and `next` can change its `input`), a
 `editor.save.before` (format on save: return `next({ ...event, text: formatted })`, or `{ deny }` to
 stop the save; autosaves are not hooked).
 
+Workers run on the desktop machine. An `agent.launch.before` hook that adds desktop script paths
+or a worker socket to a command must leave WSL, SSH and `runtime:` launches unchanged: use
+`workspace.list` and rewrite only when `hostId` is `local` or null and `path` is not a
+`\\wsl.localhost\`, `\\wsl$\` or `//wsl.localhost/` path (any case). When `workspaceId` is null or the
+lookup finds nothing, leave the launch unchanged. A Windows-drive project whose runtime is WSL
+can't be detected yet.
+
 Return `{ deny }` to stop, nothing (or `next(event)`) to pass. Past 2 s or on a throw Orca carries
 on as if the hook passed and logs it (`ORCA plugin logs`); a guard that must fail closed lists the
 hook as `{ "event": "terminal.send", "onError": "deny" }`. Decide before any other awaited call:

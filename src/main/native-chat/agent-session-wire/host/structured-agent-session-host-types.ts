@@ -141,7 +141,10 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
     /** Defaults to provider exit without details. */
     failure?: SubmissionRejectionFact
     duringStartup: boolean
+    /** A kept agent that had ended before its acquisition: queued sends never reached it. */
+    endedBeforeAcquire?: true
     startedFor?: string
+    observedAt?: number
     /** Order exit against acceptance; requested closes retain their original Stop boundary. */
     endedAt: AgentJournalCursor
   }
@@ -251,8 +254,8 @@ export type StructuredAgentSessionHostDeps = {
     record: AgentSessionRecord,
     purpose?: 'read' | 'identity'
   ) => Promise<AgentSessionAccountHome | null>
-  /** The tools a chat's agent launched with, against what its next launch would get; absent or a
-   *  chat that launched none (not a bot's, or look-around) never refreshes for tools. */
+  /** The MCP servers a chat's agent launched with from Orca (a bot's own, the host list's), against
+   *  what its next launch would get; a chat that got none never refreshes for tools. */
   launchTools?: {
     /** Rereads the tools, so it also sees edits made outside Orca. */
     changed: (sessionId: string) => Promise<boolean>
@@ -325,6 +328,8 @@ export type StructuredAgentSessionConversationLifetime = ReturnType<
 
 export type StructuredAgentSessionConversationDelivery = {
   loop: StructuredAgentSessionDeliveryLoop
+  /** The chat closed: a run it waited on stops being asked about for it. */
+  closed: (sessionId: string) => void
   open: (
     sessionId: string,
     options?: StructuredAgentSessionConversationOpenOptions
