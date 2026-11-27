@@ -136,6 +136,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     parent: worktree,
     lineage: lineageDelete,
     isFolderWorkspace: isFolderWorkspaceDelete,
+    initialPreserveChildren: modalData.initialPreserveChildren === true,
     confirmedIdentities: lineagePreserveIdentities,
     resolveConfirmedTargets
   })

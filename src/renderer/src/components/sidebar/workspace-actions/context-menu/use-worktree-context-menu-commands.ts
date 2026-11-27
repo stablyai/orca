@@ -226,21 +226,27 @@ export function useWorktreeContextMenuCommands(args: {
       ...args.subtreeSleepableWorktrees.filter((target) => target.id !== args.worktree.id)
     ])
   }, [args.worktree, args.subtreeSleepableWorktrees, sleepWorktreesAfterMenuClose])
-  const handleDelete = useCallback(() => {
-    if (!args.openedDeleteTarget) {
-      return
-    }
-    const { worktree, folderWorkspaceId } = args.openedDeleteTarget
-    const restoreSidebarPosition = preserveDeleteSiblingPosition(args.scopeRef.current)
-    const intent = createWorktreeContextMenuDeleteIntent({
-      worktree,
-      batchDeleteWorktrees: args.batchDeleteWorktrees,
-      isMultiContext: args.isMultiContext,
-      ...(folderWorkspaceId ? { folderWorkspaceId } : {})
-    })
-    deferWorktreeContextMenuDeleteIntent(intent, restoreSidebarPosition)
-    args.setMenuOpenState(false)
-  }, [args])
+  const openDeleteIntent = useCallback(
+    (preserveChildren: boolean) => {
+      if (!args.openedDeleteTarget) {
+        return
+      }
+      const { worktree, folderWorkspaceId } = args.openedDeleteTarget
+      const restoreSidebarPosition = preserveDeleteSiblingPosition(args.scopeRef.current)
+      const intent = createWorktreeContextMenuDeleteIntent({
+        worktree,
+        batchDeleteWorktrees: args.batchDeleteWorktrees,
+        isMultiContext: args.isMultiContext,
+        ...(folderWorkspaceId ? { folderWorkspaceId } : {}),
+        ...(preserveChildren ? { preserveChildren: true } : {})
+      })
+      deferWorktreeContextMenuDeleteIntent(intent, restoreSidebarPosition)
+      args.setMenuOpenState(false)
+    },
+    [args]
+  )
+  const handleDelete = useCallback(() => openDeleteIntent(false), [openDeleteIntent])
+  const handleDeleteKeepChildren = useCallback(() => openDeleteIntent(true), [openDeleteIntent])
   const handleOpenParent = useCallback(() => {
     if (args.validParent) {
       // A parent on another machine shares no host with the child; open the parent's own row.
@@ -263,6 +269,7 @@ export function useWorktreeContextMenuCommands(args: {
     handleCreateGroupDialogOpenChange,
     handleCreateGroupFromRepo,
     handleDelete,
+    handleDeleteKeepChildren,
     handleMoveProjectToGroup,
     handleNewChildWorktree,
     handleOpenParent,

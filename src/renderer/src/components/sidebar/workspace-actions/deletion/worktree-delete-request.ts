@@ -18,6 +18,8 @@ export type WorktreeDeleteOptions = {
   expectedInstanceId?: string
   /** Pin deletion to the confirmed host because workspace IDs repeat across hosts. */
   expectedHostId?: ExecutionHostId
+  /** Open the lineage review with "keep child workspaces" ticked; the user can still untick it. */
+  preserveChildren?: boolean
 }
 
 export type WorktreeDeleteWithToastOptions = {

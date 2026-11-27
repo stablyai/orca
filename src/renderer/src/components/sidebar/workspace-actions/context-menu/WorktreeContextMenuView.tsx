@@ -64,7 +64,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     hasAnyContextLineage,
     isDeleting,
     isMultiContext,
-    lineageDescendantCount,
+    lineageDescendants,
     menuOpen,
     menuPoint,
     onContextMenuSelect,
@@ -89,7 +89,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
       isMultiContext={isMultiContext}
       sleepLabel={sleepLabel}
       sleepDisabled={deletingContext || sleepableWorktrees.length === 0}
-      descendantCount={lineageDescendantCount}
+      descendantCount={lineageDescendants.length}
       subtreeSleepDisabled={deletingSubtree || subtreeSleepableWorktrees.length === 0}
       onSleep={handleCloseTerminals}
       onSleepSubtree={handleSleepSubtree}
@@ -187,7 +187,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               )}
               onSleepSubtree={handleSleepSubtreeWithVm}
               sleepItems={sleepItems}
-              replacesSleep={lineageDescendantCount === 0}
+              replacesSleep={lineageDescendants.length === 0}
             />
           )}
           {!isMultiContext && (

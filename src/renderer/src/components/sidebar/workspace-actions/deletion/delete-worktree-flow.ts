@@ -111,7 +111,8 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
           lineagePreserveIdentities: toWorktreeDeleteIdentities([
             target,
             ...deleteLineage.descendants
-          ])
+          ]),
+          ...(options.preserveChildren === true ? { initialPreserveChildren: true } : {})
         }
       : {}),
     ...(hasLineageChildren ? { allowSkipConfirm: false } : {})
