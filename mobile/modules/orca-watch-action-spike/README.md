@@ -1,0 +1,191 @@
+# Apple Watch action spike: build and test runbook
+
+Spike branch `CJNA/orca-applewatch`. **Do not merge**: the native module autolinks into every build.
+
+## What we're proving
+
+Watch controls would ride on iPhone notifications that mirror to the Watch: **Yes / No** buttons and a
+**Reply** text action (system dictation). iOS runs a background action on the **iPhone**, even when it's
+tapped on the Watch. So the phone has to wake, read pairing credentials, reach the desktop over E2EE
+(LAN or relay) and get an answer, all while it's locked and within its background time.
+
+Decisions in force:
+
+- A locked phone may approve (pairing keychain becomes readable after first unlock).
+- Double Tap may approve (Yes is the first nondestructive action).
+
+## What the build contains
+
+| Piece                 | Path                                                                | Role                                                                                                  |
+| --------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Native module         | `mobile/modules/orca-watch-action-spike/ios/`                       | Logs every launch and spike tap natively (works even if JS never runs), holds ~30s of background time |
+| Category, arm, result | `mobile/src/watch-action-spike/watch-action-spike-notifications.ts` | Yes/No/Reply category, local test notification, result notification                                   |
+| Tap handler           | `mobile/src/watch-action-spike/watch-action-spike-response.ts`      | Started from `mobile/index.js`; refuses taps that reach JS more than 30s late (`stale`)               |
+| Round trip            | `mobile/src/watch-action-spike/watch-action-spike-round-trip.ts`    | Keychain read → `openHostLogicalClient` → `status.get`                                                |
+| UI                    | `mobile/src/watch-action-spike/WatchActionSpikeRow.tsx`             | "Watch test" section in Settings → Troubleshoot                                                       |
+
+Everything is gated on `ORCA_WATCH_SPIKE=1` at build time (`app.config.js` → `extra.orcaWatchSpike`),
+except the native module, which links unconditionally but only acts on its own notification category.
+
+No desktop or cloud changes are needed. Any paired desktop running a normal Orca works.
+
+## 1. Prerequisites (Mac)
+
+- Xcode 27.1 (matches `mobile-ios-release.yml`), with your Apple ID signed in on the **Stably** team
+- Node 24+, pnpm (`corepack enable` gives the pinned `pnpm@12.14.0`)
+- iPhone with **Developer Mode** on (Settings → Privacy & Security → Developer Mode), connected by cable
+- Apple Watch paired to that iPhone (Series 9 / Ultra 2 or later for the Double Tap test)
+- Desktop Orca running and already paired with the iPhone
+
+## 2. Build and install
+
+```bash
+git fetch origin
+git checkout CJNA/orca-applewatch
+git pull
+
+cd mobile
+pnpm install
+
+# Release bundles the JS, so background launches don't depend on Metro.
+ORCA_WATCH_SPIKE=1 npx expo run:ios --device --configuration Release
+```
+
+- Pick the iPhone when prompted.
+- If signing fails, open `mobile/ios/Orca.xcworkspace`, choose the Stably team under Signing &
+  Capabilities for the app target, then rerun the command.
+- This build replaces the App Store Orca on the phone (same bundle ID). Pairing should survive. If the
+  host shows as missing, re-pair from desktop.
+- Not on the Stably team? Use your own bundle ID:
+  `ORCA_IOS_BUNDLE_ID=com.yourname.orca ORCA_WATCH_SPIKE=1 npx expo run:ios --device --configuration Release`.
+  This needs a paid account because of the push entitlement, and you must re-pair.
+
+**If the Swift doesn't compile:** this code was written on Windows and has never been compiled. Copy the
+first Xcode error back to the agent. The likely spots are the `NotificationCenterManager` /
+`NotificationDelegate` import from `ExpoNotifications` and the `ExpoAppDelegateSubscriber` signature.
+
+## 3. One-time setup
+
+1. Open Orca on the phone. Allow notifications if asked. Check that the desktop host connects.
+2. iPhone **Watch** app → Notifications → Orca → **Mirror iPhone Alerts** on.
+3. Orca → Settings → **Troubleshoot** → scroll to the **Watch test** section.
+   - **Watch test host** shows the host it will dial. Tap it to cycle if you have several.
+
+Notifications only go to the Watch while the iPhone is **locked** and the Watch is on your wrist and
+unlocked.
+
+## 4. Tests
+
+For every test: tap **Arm**, lock the iPhone immediately with the side button, raise your wrist and wait.
+Note the result notification on the Watch.
+
+| #   | Steps                                                              | What it answers                                | Expected                                              |
+| --- | ------------------------------------------------------------------ | ---------------------------------------------- | ----------------------------------------------------- |
+| 1   | **Arm 15s**, stay in the app, long-press the banner, tap **Yes**   | Plumbing works                                 | `✓ Yes reached host`                                  |
+| 2   | **Arm 60s**, lock, tap **Yes** on the Watch                        | Does a locked phone read the pairing keychain? | `✓ Yes reached host in …ms`                           |
+| 3   | Same as 2, but **Double Tap** instead of tapping                   | Does Double Tap fire Yes?                      | Same result as 2, action `yes`                        |
+| 4   | Retired: compared keychain classes with a toggle (see below)       |                                                |                                                       |
+| 5   | **Arm 60s**, lock, tap **Reply**, dictate a sentence               | Dictation reaches the phone                    | Result quotes your sentence                           |
+| 6   | iPhone Settings → Wi-Fi **off** (not Control Center), repeat 2     | Does it work over the cloud relay?             | `path relay` (see the relay-only caveat in section 8) |
+| 7   | **Arm 60s**, swipe Orca out of the app switcher, lock, tap **Yes** | Cold launch: app not in memory                 | Prediction: no result; after reopening, a `stale` row |
+
+Why 60s: iOS keeps "when unlocked" keychain items readable briefly after locking, so a 15s test can
+pass by accident.
+
+Tests 2 and 4 originally compared the old `WHEN_UNLOCKED_THIS_DEVICE_ONLY` class (`✗ Yes failed at keychain`)
+with after-first-unlock (`✓ Yes reached host in 651ms`). #42634 made after-first-unlock the default and
+migrates old items on first read, so the toggle that switched classes was removed. To rerun the old
+baseline, build from a commit before #42634.
+
+## 5. Reading the results
+
+The Troubleshoot section has two lists. Tap **Refresh results** after each test.
+
+**Results** (one row per tap that reached JS):
+
+- `reached` / `failed` / `stale`, total ms, `app background|active`
+- `native→JS ms`: from iOS delivering the tap to JS handling it
+- steps: `protected-data true|false` (false = phone locked, keychain class unavailable),
+  `keychain ready|temporarily-unavailable|missing`, `host-answer lan|tailscale|relay`
+- the last connection-log lines when the host step fails
+
+`protected-data false` with `keychain ready` means the token came from the in-memory cache in
+`host-store.ts`, not the keychain. Only a cold launch (test 7) proves a locked keychain read.
+
+**Native timeline** (written by Swift, even when JS never ran):
+
+- `launch background|active`: iOS launched the app
+- `response <action> protected=…`: iOS delivered the tap
+- `hold-started bg Ns` / `hold-ended js-done|expired Nms`: background time used
+
+How to read test 7: a `launch background` plus a `response` with **no matching result** means iOS woke the
+app but no JS ran. React Native only starts when a UI scene connects (`plugins/ios-scene-lifecycle.js`).
+A `stale` row after you reopen the app means the tap was replayed late, which production must never act on.
+
+## 6. What to send back
+
+For each test: the Watch result text, plus one screenshot of the Results and Native timeline lists
+after test 7. Note anything odd: buttons missing on the Watch, the dictation UI, Double Tap firing
+the wrong button.
+
+## 7. Decisions this unblocks
+
+- **Test 4 passed:** pairing items move to `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` in
+  `mobile/src/host-credentials/pairing-keychain.ts`, with a migration on first read (#42634).
+- **Test 7 fails as predicted:** a production tap needs either a native Swift handler for the response
+  (E2EE + relay in Swift) or a way to start React Native when iOS relaunches the app in the background.
+  That's the next spike.
+- **All pass:** real build order: push `category` and prompt identity in
+  `cloud/packages/push-contract/src/send-messages.ts` and `cloud/apps/push/src/apns-client.ts` →
+  `agentSession.respondToApproval` for native chat → a host-checked terminal approval.
+
+## 8. Later research
+
+- **Watch away from the phone (2026-11-15):** iPhone Bluetooth off, Watch on cellular. The prompt reached
+  the Watch, but the tapped Yes was queued on the Watch and reached the phone only after Bluetooth came back
+  (~2 min later). The JS `stale` guard did not fire, because it measures from iOS delivery to the phone, not
+  from the tap. Mirrored actions therefore can't answer prompts at a distance; that needs a standalone watchOS
+  app over an HTTPS relay endpoint (watchOS blocks WebSockets for non-audio apps, Apple TN3135). The host must
+  also refuse late answers by ticket expiry and prompt revision.
+
+- **Cloud relay path (test 6):** failed on 2026-11-14 (cold launch, locked, cellular only, keychain
+  ready). The client opened a direct WebSocket, hit `CONNECT_TIMEOUT_MS` (12s,
+  `src/transport/rpc/rpc-client-socket-session.ts`), retried direct, and timed out at 20s without trying the
+  relay. A Watch tap only gets ~30s of background time, so the relay must be tried first or in parallel when
+  no direct route exists. Caveat: the normal app couldn't reach this host without Tailscale either, so the
+  host had no working relay route. Rerun once the relay works for this host.
+  Also expect this for any relay-only host: with the phone locked the endpoint lifecycle is background, which
+  only suspends an existing relay and never starts dialing one, and the probe sends `status.get` without a
+  foreground nudge. Whether a notification action may start a relay dial in the background is the product
+  decision for #42627; until then test 6 fails at `host-answer` for relay-only hosts.
+
+- **Standalone watchOS app, background action (2026-11-15, `watch-spike/`):** iPhone Bluetooth off, Watch on
+  cellular, Watch-only app answering its own notification. A background action (`Yes`) got ≥25s of runtime
+  (expiring activity never expired) but **no network**: the path stayed `unsatisfied` with a cellular interface
+  listed, and every request timed out (`-1001`) even with `waitsForConnectivity`. Without it, it failed in 116ms
+  ("offline"). The same request from the open app woke cellular and reached `relay.onorca.dev/health` in 694ms.
+  Background `URLSession` downloads completed only at the next foreground launch (7–10 min later). So a Watch
+  answer at a distance must come from a foreground action (`.foreground`, opens the app), not a background one.
+  Confirmed: `Yes (open app)` from the notification, same conditions, reached the relay in 465ms.
+
+## 9. Watch app and bridge (Option B prototype)
+
+Standalone watchOS app (`watch-app/`) plus a Mac bridge (`watch-bridge/watch-bridge.mjs`). Covers terminal
+Claude Code permission prompts in Orca tabs. Verified 2026-11-15 on cellular with the phone away: push in ~2s,
+notification **Yes** opens the app and answers in ~0.75s.
+
+- **Bridge:** loopback `:6790`. Lists waiting prompts from `session.tabs.listAll`, rechecks the dialog on screen,
+  types the option key with `orca terminal send`. Bearer token in `~/.orca/watch-bridge-token`; APNs key in
+  `~/.orca/watch-apns/AuthKey_<id>.p8`; Watch push tokens in `~/.orca/watch-bridge-devices.json`.
+- **Service:** `~/Library/LaunchAgents/com.cjna.orca-watch-bridge.plist` runs a copy at
+  `~/.orca/watch-bridge/` (launchd can't read `~/Desktop`). After editing the script:
+  `cp watch-bridge/*.mjs ~/.orca/watch-bridge/ && launchctl kickstart -k gui/$(id -u)/com.cjna.orca-watch-bridge`.
+  Log: `~/Library/Logs/orca-watch-bridge.log`. Stop: `launchctl bootout gui/$(id -u)/com.cjna.orca-watch-bridge`.
+- **Public URL:** `tailscale funnel --bg --https=8443 http://127.0.0.1:6790` (off: `tailscale funnel --https=8443 off`).
+- **Watch build:** `cd watch-app && xcodegen generate`, then build with
+  `ORCA_BRIDGE_URL=https://<host>.ts.net:8443 ORCA_BRIDGE_TOKEN="$(cat ~/.orca/watch-bridge-token)"` and install
+  with `devicectl device install app`. The Watch must be on the Mac's Wi-Fi to install.
+- **Watch UX:** the ✓ on a watchOS notification dismisses it; scroll to **Yes**/**No**, or tap the body to open the
+  prompt. "Yes, and …" options change Claude's mode and need a second tap.
+- **Not covered:** AskUserQuestion prompts, non-Claude agents, phone-based Watch enrollment (token is baked
+  into this personal build).

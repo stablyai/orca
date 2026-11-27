@@ -3,6 +3,10 @@ import { MobileWebBundleProbeRow } from '../src/diagnostics/mobile-web-bundle-pr
 import { MobileWebShellUpdateFailureRow } from '../src/diagnostics/mobile-web-shell-update-failure-row'
 import { TroubleshootView } from '../src/diagnostics/troubleshoot-view'
 import { useTroubleshootDiagnostics } from '../src/diagnostics/use-troubleshoot-diagnostics'
+import { isWatchActionSpikeEnabled } from '../src/watch-action-spike/watch-action-spike-config'
+import { WatchActionSpikeRow } from '../src/watch-action-spike/WatchActionSpikeRow'
+import { isSiriEnabled } from '../src/siri/siri-config'
+import { SiriSetupRow } from '../src/siri/SiriSetupRow'
 
 // Guard __DEV__ outside RN. Static import keeps graph/schemas in release, but mounts no row and makes no host lookup/request.
 // Trimming it needs shell support for conditional imports; existing mobile require calls are Metro assets.
@@ -25,6 +29,8 @@ export default function NativeTroubleshootRoute() {
       developerRow={
         // The bundle probe stays development-only: it fetches.
         <>
+          {isWatchActionSpikeEnabled() ? <WatchActionSpikeRow /> : null}
+          {isSiriEnabled() ? <SiriSetupRow /> : null}
           {isDevelopmentBuild ? <MobileWebBundleProbeRow /> : null}
           <MobileWebShellUpdateFailureRow />
         </>

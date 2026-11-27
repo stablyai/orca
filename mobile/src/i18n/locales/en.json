@@ -8530,5 +8530,38 @@
     "workspacesAllButCount": "All but {{count}}",
     "headerMissing": "Fill in {{header}} to add this server.",
     "servers": "Servers"
+  },
+  "watchActionSpike": {
+    "armed": "Armed. Lock the phone now; the test arrives on your Watch in {{seconds}}s.",
+    "notificationsOff": "Notifications are off for this build. Allow them in iOS Settings → Notifications.",
+    "permission": "Permission {{status}} · iOS {{iosStatus}} · alert {{alert}} · lock screen {{lockScreen}} · style {{style}}",
+    "pending": "{{count}} scheduled",
+    "armFailed": "Arm failed: {{message}}",
+    "host": "Watch test host",
+    "noHost": "No paired host",
+    "arm": "Arm Watch test ({{seconds}}s)",
+    "refresh": "Refresh results",
+    "clear": "Clear results",
+    "nativeTimeline": "Native timeline",
+    "yes": "Yes",
+    "no": "No",
+    "reply": "Reply",
+    "send": "Send",
+    "replyPlaceholder": "Say a reply",
+    "testTitle": "Orca watch test",
+    "testBody": "Claude wants to run: echo hello. Allow?"
+  },
+  "siri": {
+    "nativeMissing": "Siri module missing from this build.",
+    "testing": "Testing…",
+    "testOk": "{{ms}} ms. Siri would say: “{{speech}}”",
+    "testFailed": "Failed after {{ms}} ms: {{message}}",
+    "bridge": "Siri bridge",
+    "notSet": "Not set",
+    "urlPlaceholder": "https://your-mac.ts.net:8443",
+    "tokenPlaceholder": "Siri token (~/.orca/siri-bridge-token)",
+    "save": "Save and test",
+    "test": "Test Siri connection",
+    "clear": "Remove Siri bridge"
   }
 }

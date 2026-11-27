@@ -8,20 +8,33 @@ module.exports = ({ config }) => ({
   // `expo run` installs a dev-client build cached for the current native fingerprint instead of
   // rebuilding; scripts/native-client.mjs populates the cache.
   buildCacheProvider: { plugin: './scripts/native-build-cache.cjs' },
+  // Watch action spike: only builds made with ORCA_WATCH_SPIKE=1 register its category and Troubleshoot row.
+  // Siri actions: only builds made with ORCA_SIRI=1 get the App Intents and the setup row.
+  extra: {
+    ...config.extra,
+    orcaWatchSpike: process.env.ORCA_WATCH_SPIKE === '1',
+    orcaSiri: process.env.ORCA_SIRI === '1'
+  },
   ios: {
     ...config.ios,
+    // Watch action spike: lets a developer sign a device build under their own Apple team.
+    bundleIdentifier: process.env.ORCA_IOS_BUNDLE_ID || config.ios?.bundleIdentifier,
     entitlements: { ...config.ios?.entitlements, 'aps-environment': APS_ENVIRONMENT }
   },
-  plugins: (config.plugins ?? []).map((plugin) =>
-    plugin === 'expo-notifications'
-      ? [
-          'expo-notifications',
-          {
-            enableBackgroundRemoteNotifications: true,
-            mode: APS_ENVIRONMENT,
-            icon: './assets/notification-icon.png'
-          }
-        ]
-      : plugin
-  )
+  plugins: [
+    ...(config.plugins ?? []).map((plugin) =>
+      plugin === 'expo-notifications'
+        ? [
+            'expo-notifications',
+            {
+              enableBackgroundRemoteNotifications: true,
+              mode: APS_ENVIRONMENT,
+              icon: './assets/notification-icon.png'
+            }
+          ]
+        : plugin
+    ),
+    // Runs on every prebuild so an ios/ folder generated with ORCA_SIRI=1 can't silently keep the intents.
+    ['./plugins/ios-siri-app-intents.js', { enabled: process.env.ORCA_SIRI === '1' }]
+  ]
 })
