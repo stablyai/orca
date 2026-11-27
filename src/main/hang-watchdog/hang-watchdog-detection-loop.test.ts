@@ -29,13 +29,6 @@ function harness() {
 }
 
 describe('hang watchdog detection loop: sleep is never main-thread silence', () => {
-  it('reports a real hang with its own duration', () => {
-    const { loop, events, silentFor } = harness()
-    silentFor(50_000)
-    loop.recordHeartbeat()
-    expect(events).toEqual(['stall:10000', 'hang:50000', 'resolved:50000'])
-  })
-
   for (const wakeOrder of ['heartbeat-first', 'tick-first'] as const) {
     it(`ends a detected hang at a long sleep (${wakeOrder})`, () => {
       const { loop, events, silentFor, sleep } = harness()
@@ -52,14 +45,23 @@ describe('hang watchdog detection loop: sleep is never main-thread silence', () 
     })
   }
 
-  it('ends a detected stall at a relayed suspend, so a short sleep cannot promote it to a hang', () => {
+  it('resolves a stall when main relays a suspend, so a short sleep cannot promote it to a hang', () => {
     const { loop, events, silentFor, sleep } = harness()
     silentFor(40_000)
     loop.recordPowerEvent('suspend')
     sleep(10_000)
     loop.tick()
     loop.recordHeartbeat()
-    expect(events).toEqual(['stall:10000', 'slept'])
+    expect(events).toEqual(['stall:10000', 'resolved:40000'])
+  })
+
+  it('reports a hang that starts right after waking from a long sleep', () => {
+    const { loop, events, silentFor, sleep } = harness()
+    loop.recordPowerEvent('suspend')
+    sleep(3_600_000)
+    silentFor(55_000)
+    loop.recordHeartbeat()
+    expect(events).toEqual(['stall:10000', 'hang:50000', 'resolved:50000'])
   })
 
   it('still reports a hang when main never answers after a suspend, less the unseen sleep', () => {

@@ -66,12 +66,14 @@ export function createHangWatchdogDetectionLoop(
       lastHeartbeatAt = now
     },
     recordPowerEvent: (event) => {
+      const now = config.now()
       if (detected) {
+        // Only a responsive main relays power events, so the episode ended here.
         detected = null
-        config.onEpisodeEndedBySleep?.()
+        config.onHangResolved(now - lastHeartbeatAt)
       }
       awaitingWake = event === 'suspend'
-      lastHeartbeatAt = config.now()
+      lastHeartbeatAt = now
     },
     tick: () => {
       const now = config.now()
@@ -92,6 +94,8 @@ export function createHangWatchdogDetectionLoop(
           lastHeartbeatAt = now
         }
         wokeHeartbeat = false
+        // The tick saw the sleep, so the silence after the wake is main's again.
+        awaitingWake = false
         return
       }
       if (detected === 'hang') {
