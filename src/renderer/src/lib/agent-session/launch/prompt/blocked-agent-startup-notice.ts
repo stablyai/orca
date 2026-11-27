@@ -184,7 +184,7 @@ function BlockedStartupDraftNotice(): ReturnType<typeof createElement> | null {
       draftNoticeMounted = false
       // Recreate after Sonner removes the old card so this id returns at the front of the stack.
       queueMicrotask(() => {
-        if (!draftNoticeMounted) {
+        if (dismissingDraftNotice && !draftNoticeMounted) {
           dismissingDraftNotice = false
           restoreBlockedStartupDraftNotice()
         }
