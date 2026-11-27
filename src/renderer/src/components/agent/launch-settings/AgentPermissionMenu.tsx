@@ -76,6 +76,7 @@ export function AgentPermissionMenu({
               {permission.source === 'all' ? <span className="shrink-0">{followAll} ·</span> : null}
               <AgentPermissionChoiceName
                 choice={rawValue ? 'own' : permission.choice}
+                agent={agentId}
                 ownLabel={rawValue ?? ownLabel}
                 truncate
               />
@@ -104,7 +105,7 @@ export function AgentPermissionMenu({
           {t(
             'settings.agents.permissionSurfaceDifference',
             'Terminals use the agent’s own settings; new chats use {{mode}}.',
-            { mode: nativeChatPermissionModeLabel(permission.chatChoice, t) }
+            { mode: nativeChatPermissionModeLabel(permission.chatChoice, t, agentId) }
           )}
         </span>
       ) : !permission.argsSetPermission &&
@@ -118,7 +119,7 @@ export function AgentPermissionMenu({
             'Terminals use {{terminal}}; new chats use {{mode}}.',
             {
               terminal: nativeChatPermissionModeLabel(permission.terminalChoice, t),
-              mode: nativeChatPermissionModeLabel(permission.chatChoice, t)
+              mode: nativeChatPermissionModeLabel(permission.chatChoice, t, agentId)
             }
           )}
         </span>

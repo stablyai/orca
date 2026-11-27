@@ -27,7 +27,7 @@ export function catalogModelsFromModelDiscovery(
 ): CatalogModel[] | null {
   if (
     !result.success ||
-    result.models.length === 0 ||
+    (result.models.length === 0 && agent !== 'dima') ||
     // Static fallback lists cannot stand in for the host's authoritative inventory.
     ((agent === 'claude' ||
       getAgentSessionOptionCatalog(agent)?.discoveredModelsAreAuthoritative) &&

@@ -153,6 +153,12 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       label: translate('auto.lib.agent.catalog.jcode_label', 'Jcode'),
       cmd: 'jcode',
       homepageUrl: 'https://github.com/1jehuang/jcode'
+    },
+    {
+      id: 'dima',
+      label: translate('auto.lib.agent.catalog.dima_label', 'DimAgent'),
+      cmd: 'dima',
+      homepageUrl: 'https://github.com/arcships/dim'
     }
   ]
 }

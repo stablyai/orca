@@ -10,6 +10,7 @@ export function agentPickerCatalogAuthoritative(
     (entry.catalogRead === undefined || entry.catalogRead === 'settled') &&
     entry.catalog.origin !== 'unknown' &&
     !entry.catalog.listingInProgress &&
+    !entry.catalog.partial &&
     // A refused Command does not make the account's listed models any less current.
     (unavailable === undefined || unavailable.reason === 'agentCommandNotRunnable')
   )

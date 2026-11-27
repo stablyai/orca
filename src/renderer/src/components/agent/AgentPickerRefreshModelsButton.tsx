@@ -28,7 +28,7 @@ export function AgentPickerRefreshModelsButton({
     !ownerKey ||
     !entry.surfaces.length ||
     entry.catalogRead === 'unsupported' ||
-    !keepsRicherAgentModelListing(entry.agent)
+    (entry.agent !== 'dima' && !keepsRicherAgentModelListing(entry.agent))
   ) {
     return null
   }

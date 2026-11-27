@@ -45,7 +45,8 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   openclaw: 'OpenClaw',
   copilot: 'GitHub Copilot',
   grok: 'Grok',
-  jcode: 'Jcode'
+  jcode: 'Jcode',
+  dima: 'DimAgent'
 }
 
 /** Derive the exhaustive list here so shared modules need no renderer import. */

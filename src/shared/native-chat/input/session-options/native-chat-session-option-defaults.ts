@@ -135,11 +135,16 @@ export function structuredLaunchSeedOptions(
   agent: AgentType
 ): Record<string, string> | undefined {
   const remembered = resolveStructuredLaunchSeedOptions(settings?.nativeChatSessionOptions, agent)
+  const launchDefaults = settings?.agentLaunchChoices?.[agent]
   const choices = isTuiAgent(agent)
     ? resolveAgentChoiceLayers({
         agent,
         argumentOwner: 'defaults',
-        defaults: settings?.agentLaunchChoices?.[agent],
+        // A terminal selector names no model the chat's own option offers.
+        defaults:
+          launchDefaults && getAgentSessionOptionCatalog(agent)?.chatModelId
+            ? { options: launchDefaults.options }
+            : launchDefaults,
         remembered: {
           model: remembered?.model,
           options: Object.fromEntries(

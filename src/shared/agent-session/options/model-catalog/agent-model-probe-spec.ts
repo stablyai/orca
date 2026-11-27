@@ -41,6 +41,17 @@ const MODEL_DISCOVERY_ONLY_SPECS: Partial<Record<TuiAgent, AgentModelProbeSpec>>
     // No OMP model is universal; use discovered first row when a default is required.
     models: [],
     defaultModelId: ''
+  },
+  dima: {
+    id: 'dima',
+    label: 'DimAgent',
+    binary: 'dima',
+    modelSource: 'dynamic',
+    // No dima command lists every provider's models; its App Server does.
+    modelDiscovery: { binary: 'dima', listing: 'dima-app-server' },
+    // No static list: dima's own default (a bare `dima`) is the only built-in choice.
+    models: [],
+    defaultModelId: ''
   }
 }
 

@@ -16,6 +16,7 @@ import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { SetupTrustMismatch } from '../../shared/worktree/create-types'
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { toAgentLaunchPreferences } from '../../shared/agent-launch/choices/agent-launch-preferences'
+import { getAgentSessionOptionCatalog } from '../../shared/agent-session/options/agent-session-option-catalog'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/model-launch/opencode-model-startup-plan'
 
 /** Inject creation so orchestration can add subscriptions without duplicating launch sequencing. */
@@ -128,9 +129,34 @@ export type AgentLaunchWorkspaceFactory = {
   createFolderWorkspace?: AgentLaunchWorkspaceFactory['createWorktree']
 }
 
-/** The options a terminal leg starts with: a caller's saved chat choice applies to it too. */
-function terminalLaunchOptions(intent: Pick<AgentLaunchIntent, 'sessionOptions' | 'chatOptions'>) {
-  return intent.sessionOptions ?? intent.chatOptions
+type TerminalOptionsIntent = Pick<
+  AgentLaunchIntent,
+  'agent' | 'surface' | 'sessionOptions' | 'chatOptions'
+>
+
+/** A model the launch names in its chat's own ids, which this agent's terminal would misread as a
+ *  provider selector: the chat's options, or the only options of a launch that asked for a chat. */
+export function terminalLaunchChatModel(intent: TerminalOptionsIntent): string | undefined {
+  const chatNamed =
+    intent.sessionOptions === undefined ||
+    (intent.surface === 'chat' && intent.chatOptions === undefined)
+  const model = (intent.sessionOptions ?? intent.chatOptions)?.model
+  return chatNamed &&
+    typeof model === 'string' &&
+    getAgentSessionOptionCatalog(intent.agent)?.chatModelId
+    ? model
+    : undefined
+}
+
+/** The options a terminal leg starts with: a caller's saved chat choice applies to it too, except
+ *  a chat model id the terminal can't take. */
+function terminalLaunchOptions(intent: TerminalOptionsIntent) {
+  const options = intent.sessionOptions ?? intent.chatOptions
+  if (!options || terminalLaunchChatModel(intent) === undefined) {
+    return options
+  }
+  const { model: _chatModel, ...terminalOptions } = options
+  return terminalOptions
 }
 
 /** Refuses, before anything exists, an OpenCode terminal its host cannot verify, read as that

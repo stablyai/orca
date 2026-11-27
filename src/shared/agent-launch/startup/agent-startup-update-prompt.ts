@@ -18,7 +18,8 @@ export const STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV: Partial<
   antigravity: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },
   grok: { GROK_DISABLE_AUTOUPDATER: '1' },
   pi: { PI_SKIP_VERSION_CHECK: '1' },
-  kimi: { KIMI_CODE_NO_AUTO_UPDATE: '1', KIMI_CLI_NO_AUTO_UPDATE: '1' }
+  kimi: { KIMI_CODE_NO_AUTO_UPDATE: '1', KIMI_CLI_NO_AUTO_UPDATE: '1' },
+  dima: { DIMCODE_UPDATE_CHECK: '0' }
 }
 
 /** What keeps an agent's update screen from taking the first Enter Orca sends; aider's flags must trail its args. */

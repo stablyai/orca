@@ -2,6 +2,7 @@ import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-se
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import {
   agentPickerListsCliModels,
+  agentPickerListsOnlyCliModels,
   readAgentPickerCliModelCatalog
 } from './agent-launch-picker-cli-model-catalog'
 import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
@@ -32,8 +33,10 @@ export function agentPickerModelCatalogReads(
       relist = false
     ) =>
       cliDiscoveryRuntime && agentPickerListsCliModels(entry)
-        ? readAgentPickerCliModelCatalog(entry.agent, cliDiscoveryRuntime)
-        : !target
+        ? entry.agent === 'dima' && !relist
+          ? { origin: 'unknown' as const }
+          : readAgentPickerCliModelCatalog(entry.agent, cliDiscoveryRuntime)
+        : !target || agentPickerListsOnlyCliModels(entry)
           ? undefined
           : entry.agent === 'antigravity'
             ? callStructuredAgentSession<AgentSessionModelCatalogResult>(
@@ -58,9 +61,13 @@ export function agentPickerModelCatalogReads(
                 waitForListing,
                 signal
               ),
+    readsCatalog: (entry: Pick<AgentPickerEntry, 'agent'>) =>
+      Boolean(cliDiscoveryRuntime && agentPickerListsCliModels(entry)) ||
+      (!!target && !agentPickerListsOnlyCliModels(entry)),
     refreshOnInvalidation: (entry: Pick<AgentPickerEntry, 'agent'>) =>
       !!target &&
       !(cliDiscoveryRuntime && agentPickerListsCliModels(entry)) &&
+      !agentPickerListsOnlyCliModels(entry) &&
       entry.agent !== 'antigravity',
     subscribeInvalidation: target
       ? (listener: () => void) => subscribeModelMenuInvalidation(target, listener)

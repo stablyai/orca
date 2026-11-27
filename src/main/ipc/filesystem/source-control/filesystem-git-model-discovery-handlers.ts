@@ -23,7 +23,8 @@ export function registerFilesystemGitModelDiscoveryHandlers(
       args: { agentId: string; worktreePath?: string; connectionId?: string }
     ): Promise<DiscoverCommitMessageModelsResult> => {
       const agentId = args.agentId
-      const agentCommandOverride = store.getSettings().agentCmdOverrides?.[agentId as TuiAgent]
+      const settings = store.getSettings()
+      const agentCommandOverride = settings.agentCmdOverrides?.[agentId as TuiAgent]
       if (args.connectionId) {
         if (!args.worktreePath) {
           return { success: false, error: 'Missing worktree path for remote model discovery.' }
@@ -55,6 +56,13 @@ export function registerFilesystemGitModelDiscoveryHandlers(
       )
       if (!localEnv.ok) {
         return { success: false, error: localEnv.error }
+      }
+      if (agentId === 'dima') {
+        localDiscoveryOptions = {
+          ...localDiscoveryOptions,
+          dimaArgs: settings.agentDefaultArgs?.dima,
+          dimaEnv: settings.agentDefaultEnv?.dima
+        }
       }
       return localDiscoveryOptions
         ? discoverCommitMessageModelsLocal(

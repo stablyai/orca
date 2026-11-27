@@ -26,11 +26,14 @@ export const NATIVE_CHAT_PERMISSION_MODE_ICONS = {
 
 export function nativeChatPermissionModeLabel(
   mode: AgentChatPermissionMode,
-  t: Translate = translate
+  t: Translate = translate,
+  agent?: string | null
 ): string {
   switch (mode) {
     case 'ask':
-      return t('components.native-chat.composer.permissionAsk', 'Ask for approval')
+      return agent === 'dima'
+        ? t('components.native-chat.composer.permissionReadOnly', 'Read-only')
+        : t('components.native-chat.composer.permissionAsk', 'Ask for approval')
     case 'accept-edits':
       return t('components.native-chat.composer.permissionAcceptEdits', 'Accept edits')
     case 'auto':
@@ -48,6 +51,13 @@ export function nativeChatPermissionModeDescription(
 ): string {
   switch (mode) {
     case 'ask':
+      // dima's read-only preset refuses what Ask would ask about.
+      if (agent === 'dima') {
+        return t(
+          'components.native-chat.composer.permissionAskReadOnlyDescription',
+          'Allows reads. Declines edits and commands.'
+        )
+      }
       if (agent !== 'claude') {
         return t(
           'components.native-chat.composer.permissionAskSharedDescription',
@@ -59,7 +69,7 @@ export function nativeChatPermissionModeDescription(
         "Asks before edits and commands your settings don't allow"
       )
     case 'accept-edits':
-      if (agent === 'antigravity') {
+      if (agent === 'antigravity' || agent === 'dima') {
         return t(
           'components.native-chat.composer.permissionAcceptEditsAntigravityDescription',
           'Approves file edits; asks for the rest'

@@ -1,5 +1,6 @@
 import type { ComposerModalData } from './composer-modal-data'
 import { toast } from 'sonner'
+import { useAgentPickerChatPick } from '@/components/agent/use-agent-picker-chat-pick'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
@@ -217,6 +218,11 @@ function QuickTabBody({
   const quickAgentSurface = quickAgentPick.agent === quickAgent ? quickAgentPick.surface : undefined
   const launchSelection = observation.selectionFor(quickAgent, quickAgentSurface)
   const createDisabled = formDisabled || !launchSelection.ready
+  const chatPick = useAgentPickerChatPick(
+    observation.model,
+    { entry: quickAgentPick.entry, draft: pickerDraft },
+    active && pickerDraft?.surface === 'chat'
+  )
 
   const handleQuickAgentChange = useCallback(
     (
@@ -233,6 +239,10 @@ function QuickTabBody({
 
   const handleCreate = useCallback(async (): Promise<void> => {
     if (createDisabled) {
+      return
+    }
+    if (chatPick.refusal) {
+      toast.error(chatPick.refusal)
       return
     }
     await submitQuick(quickAgent, {
@@ -272,7 +282,7 @@ function QuickTabBody({
       },
       ...quickWorkspacePickerInputs(
         pickerDraft,
-        quickAgentPick.entry,
+        chatPick.entry,
         launchSelection.choice?.executionHostId
       )
     })
@@ -283,6 +293,7 @@ function QuickTabBody({
     submitQuick,
     pickerDraft,
     quickAgentPick,
+    chatPick,
     isSubmissionCancelled,
     modalData,
     cardProps

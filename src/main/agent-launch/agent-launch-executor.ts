@@ -12,7 +12,8 @@ import {
 } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import {
   combineLaunchWarnings,
-  ignoredStructuredLaunchInputsWarning
+  ignoredStructuredLaunchInputsWarning,
+  terminalLaunchWarning
 } from './agent-launch-warnings'
 import {
   argvLaunchPrompt,
@@ -319,7 +320,7 @@ async function createTerminalSurface(
       ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {})
     },
     terminalCreation: terminal.terminalCreation,
-    ...(terminal.warning ? { warning: terminal.warning } : {}),
+    ...terminalLaunchWarning(intent, terminal.warning),
     ...(startupPrompt && terminal.promptRodeLaunchCommand ? { promptRodeLaunchCommand: true } : {})
   }
 }

@@ -32,6 +32,7 @@ import {
   type CodexModelListDiscovery
 } from './codex-model-list-discovery'
 import { killSourceControlAgentProcess } from '../execution/source-control-agent-termination'
+import { discoverDimaModelsOnHost } from './dima-model-list-startup'
 import type {
   DiscoverCommitMessageModelsResult,
   LocalProcessExecution,
@@ -42,9 +43,11 @@ import type {
 export type CommitMessageModelDiscoveryLocalOptions = {
   cwd?: string
   wslDistro?: string
+  dimaArgs?: string
+  dimaEnv?: Record<string, string>
 }
 
-type DiscoverModelsLocalInput = {
+export type DiscoverModelsLocalInput = {
   agentId: TuiAgent
   env: NodeJS.ProcessEnv | undefined
   agentCommandOverride?: string
@@ -64,6 +67,9 @@ export async function discoverModelsLocal(
   }
   if (spec.modelSource === 'static' || !spec.modelDiscovery) {
     return staticModelDiscoveryResult(spec)
+  }
+  if ('listing' in spec.modelDiscovery && spec.modelDiscovery.listing === 'dima-app-server') {
+    return discoverDimaModelsOnHost(spec, input)
   }
 
   const planned = planModelDiscovery(spec, input.agentCommandOverride, input.backslash)

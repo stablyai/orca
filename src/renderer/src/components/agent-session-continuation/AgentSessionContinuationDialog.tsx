@@ -4,6 +4,7 @@ import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agen
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
+import { useAgentPickerChatPick } from '@/components/agent/use-agent-picker-chat-pick'
 import {
   agentPickerFreshLaunchInputs,
   type AgentPickerDraft,
@@ -178,6 +179,13 @@ export function AgentSessionContinuationDialog({
       defaultAgent: settings?.defaultTuiAgent
     })
   const selection = observation.selectionFor(selectedAgent, currentPick?.surface)
+  const chatPick = useAgentPickerChatPick(
+    destinationModel,
+    currentPick,
+    open && selection.choice?.route !== 'terminal-tui',
+    request?.worktreeId
+  )
+  const chatModelRefusal = chatPick.refusal
 
   useEffect(() => {
     if (!starting) {
@@ -196,7 +204,8 @@ export function AgentSessionContinuationDialog({
       !selectedAgent ||
       starting ||
       !selection.ready ||
-      !selection.choice
+      !selection.choice ||
+      chatModelRefusal
     ) {
       return
     }
@@ -222,7 +231,7 @@ export function AgentSessionContinuationDialog({
               surface: selection.choice.route === 'terminal-tui' ? 'terminal' : 'chat',
               executionHostId: selection.choice.executionHostId
             },
-            currentPick.entry
+            chatPick.entry
           )
         : {}),
       launchSource: request.launchSource,
@@ -241,7 +250,11 @@ export function AgentSessionContinuationDialog({
     ? getAgentLabel(request.source.sourceAgent)
     : null
   const startDisabled =
-    controlsDisabled || agents.length === 0 || !selectedAgent || !selection.ready
+    controlsDisabled ||
+    agents.length === 0 ||
+    !selectedAgent ||
+    !selection.ready ||
+    Boolean(chatModelRefusal)
   const sourceLabel =
     sourceName || t('components.agentSessionContinuation.untitledSession', 'Current session')
 
@@ -320,6 +333,7 @@ export function AgentSessionContinuationDialog({
             }
           />
           {agentStatus ? <p className="text-xs text-muted-foreground">{agentStatus}</p> : null}
+          {chatModelRefusal ? <DialogError>{chatModelRefusal}</DialogError> : null}
           {detectionFailed && !preparing && !detecting ? (
             <DialogError>
               {t(
