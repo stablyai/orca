@@ -19,7 +19,7 @@ const configAgentOf = (agent: string): McpConfigAgent | null =>
   CONFIG_AGENT_OF[agent] ?? MCP_CONFIG_AGENTS.find((known) => known === agent) ?? null
 
 export type AgentOwnMcpConfig = {
-  /** Names the agent's files hold here, readable entries or not. */
+  /** Names the agent's files hold here, readable entries or not; a name may repeat. */
   names: string[]
   /** Host-list servers Orca's own bridge entries in its files already serve. */
   bridged: string[]
@@ -88,7 +88,7 @@ export async function agentOwnMcpConfig(
   }
   const entries = names.filter(inFolder)
   return {
-    names: [...new Set(entries.map(({ name }) => name))],
+    names: entries.map(({ name }) => name),
     bridged,
     entries,
     orcaOwned,

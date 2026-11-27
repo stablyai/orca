@@ -218,17 +218,15 @@ export async function readAgentMcpServerNames(
       const blocks = agentMcpServerBlocks(location, parsed, options.skipProject ?? (() => false))
       return {
         names: blocks.flatMap((block) =>
-          Object.entries(record(valueAtKeyPath(parsed, block.path)) ?? {}).map(([name, raw]) => {
-            const entry = record(raw)
-            return {
-              name,
-              scope: location.scope,
-              ...(block.projectPath ? { projectPath: block.projectPath } : {}),
-              disabled:
-                (block.disabledNames?.has(name) ?? false) ||
-                (entry !== null && agentMcpConfigEntryDisabled(entry, block.dialect))
-            }
-          })
+          Object.entries(record(valueAtKeyPath(parsed, block.path)) ?? {}).map(([name, raw]) => ({
+            name,
+            scope: location.scope,
+            ...(block.projectPath ? { projectPath: block.projectPath } : {}),
+            // Parsed config is plain data, so its own flags are read in place.
+            disabled:
+              (block.disabledNames?.has(name) ?? false) ||
+              (isRecord(raw) && agentMcpConfigEntryDisabled(raw, block.dialect))
+          }))
         ),
         servers: serversInBlocks(location, parsed, blocks, true),
         folderDisabled: blocks.flatMap((block) =>
