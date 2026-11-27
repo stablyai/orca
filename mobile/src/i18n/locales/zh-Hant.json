@@ -7303,6 +7303,284 @@
       "yesterday": "昨天",
       "lastTidied": "上次整理 {{when}}"
     },
+    "memory": {
+      "source": "來自 {{source}}",
+      "title": "記憶",
+      "cancel": "取消",
+      "save": "儲存",
+      "fact": "記憶",
+      "topicLines_other": "{{count}} 行",
+      "topicFiles": "主題檔案",
+      "add": "新增記憶",
+      "addPlaceholder": "記住新的內容…",
+      "lines": "{{count}} / {{cap}} 行",
+      "empty": "還沒有儲存任何記憶。",
+      "edit": "編輯",
+      "forget": "忘記",
+      "tabFacts": "它知道的事",
+      "tabHistory": "歷史記錄"
+    },
+    "homeFile": {
+      "offline": "{{host}} 恢復連線後即可開啟 {{file}}。",
+      "retry": "重試",
+      "reading": "正在讀取 {{file}}…"
+    },
+    "soul": {
+      "title": "靈魂",
+      "stats": "{{lines}} 行 · {{words}} 個字",
+      "empty": "還沒有指令。",
+      "changeInChat": "在聊天中修改",
+      "changeDraft": "請修改你的 SOUL.md，讓"
+    },
+    "skills": {
+      "count_other": "{{count}} 個技能",
+      "none": "此專案中還沒有技能",
+      "own": "{{bot}} 自己的技能",
+      "title": "技能",
+      "listedTitle": "{{agent}} 無法直接載入這些技能。",
+      "listedBody": "{{bot}} 會在其指令中獲得這些技能的清單，並在合適時讀取對應的技能。它們不會出現在其 / 選單中。",
+      "reading": "正在讀取其技能…",
+      "nextChat": "技能會在 {{bot}} 的下一次聊天中載入。",
+      "ownNone": "還沒有自己的技能。",
+      "link": "連結專案",
+      "notYet": "暫不可用",
+      "noneShort": "沒有技能",
+      "back": "返回技能",
+      "search": "搜尋專案",
+      "noMatch": "沒有符合搜尋的專案。",
+      "remoteShort": "位於另一台主機",
+      "missingShort": "已不在 Orca 中",
+      "remove": "移除",
+      "removeProject": "移除 {{project}}"
+    },
+    "whoCanAsk": {
+      "cap": "此處最多 {{count}} 人。",
+      "addPeople": "新增人員",
+      "addFailed": "無法新增 {{names}}。",
+      "fullBot": "未新增任何人：新增 {{names}} 將超過每個機器人最多 {{count}} 人的上限。",
+      "fullWorkspace": "未新增任何人：新增 {{names}} 將超過此工作區最多 {{count}} 人的上限。",
+      "retry": "重試",
+      "searching": "正在搜尋…",
+      "cancel": "取消",
+      "selectedHeading": "已選擇",
+      "incomplete": "這裡未列出所有人。請搜尋姓名來找人。",
+      "searchIn": "在 {{workspace}} 中搜尋人員",
+      "peopleIn": "{{workspace}} 中的人員",
+      "noOneNamed": "{{workspace}} 中沒有名為「{{query}}」的人",
+      "needsSlack": "請先將 {{name}} 新增到 Slack，才能從你的工作區中選擇人員。",
+      "noMatchDetail": "可以新增 Slack 工作區 {{workspace}} 中的成員、訪客以及來自其他組織的人員。其他人會收到一則私密提示，可藉此向你申請存取權限。",
+      "add": "新增",
+      "allAdded": "他們已經可以提問"
+    },
+    "linear": {
+      "whoCanAsk": {
+        "needsSetup": "完成設定以連結你在 {{workspace}} 中的 Linear 帳戶，然後在此選擇人員。",
+        "noMatchDetail": "可以新增 Linear 工作區 {{workspace}} 的成員和訪客。其他人會收到一則公開回覆，可藉此向你申請存取權限。"
+      },
+      "errors": {
+        "off": "Linear 即將推出。",
+        "replaced": "Linear 連線未完成，可能已被之後發起的 Linear 或 GitHub 連線取代。請重新開始。",
+        "wrongAccount": "此登入是從另一個 Orca 帳戶發起的。請從目前帳戶重新連線 Linear。",
+        "alreadyLinked": "此 Orca 帳戶已連結到該工作區中的另一個 Linear 使用者。請先在 Linear 頁面的 ⋯ 中取消連結。",
+        "notAMember": "只有該 Linear 工作區的正式成員才能從中選擇人員。",
+        "rateLimited": "嘗試次數過多。請等待一分鐘，然後重試。",
+        "unavailable": "Linear 未回應。請重試。"
+      },
+      "connection": {
+        "removeNote": "{{workspace}} 中的人將無法再把議題交給它，它的 Linear 人員名單也會被清除。Orca 不會從該工作區解除安裝。",
+        "removeConfirm": "移除",
+        "finishSetup": "完成設定"
+      },
+      "howToAskPlain": "在議題中提及 @Orca {{handle}}，或新增標籤 bot:{{handle}}。",
+      "setup": {
+        "isOn": "{{name}} 已在 Linear 上啟用",
+        "checking": "正在檢查 Linear…",
+        "retry": "重試",
+        "install": "Orca 尚未安裝到 {{workspace}}。Linear 管理員只需為所有人安裝一次。",
+        "copyForAdmin": "複製連結發給管理員",
+        "installing": "正在等待安裝…",
+        "copied": "已複製連結。",
+        "connectTitle": "連線 Linear",
+        "close": "關閉",
+        "tryIt": "在任意 Linear 議題上試試",
+        "orLabelLine": "或新增標籤 {{label}}。"
+      },
+      "connect": {
+        "another": "使用其他工作區",
+        "stuck": "卡在顯示「Could not find OAuth client」的 Linear 頁面上？Orca 的 Linear 應用程式尚未向此工作區開放。擁有該應用程式的工作區的管理員必須將其設為公開。",
+        "pick": "選擇一個 Linear 工作區。",
+        "handoffPick": "選擇工作區並點選 Authorize。",
+        "signIn": "登入 Linear",
+        "pickSubtitle": "選擇 {{name}} 工作的工作區"
+      },
+      "address": "linear.app/{{urlKey}}",
+      "account": {
+        "unlink": "取消連結 Linear 帳戶",
+        "reconnect": "重新連線"
+      }
+    },
+    "github": {
+      "whoCanAsk": {
+        "needsSetup": "完成設定以連結你的 GitHub 帳戶，然後在此選擇人員。",
+        "exactOnly": "GitHub 只能透過完整的使用者名稱尋找使用者。",
+        "search": "搜尋 GitHub 使用者名稱",
+        "found": "GitHub 上的人員",
+        "noUser": "沒有名為「{{query}}」的 GitHub 使用者",
+        "typeUsername": "輸入 GitHub 使用者名稱"
+      },
+      "errors": {
+        "off": "GitHub 即將推出。",
+        "replaced": "GitHub 連線未完成，可能已被之後發起的 Linear 或 GitHub 連線取代。請重新開始。",
+        "wrongAccount": "此登入是從另一個 Orca 帳戶發起的。請從目前帳戶重新使用 GitHub 登入。",
+        "alreadyLinked": "此 Orca 帳戶已連結到另一個 GitHub 使用者。請先在 GitHub 頁面的 ⋯ 中取消連結。",
+        "unavailable": "GitHub 未回應。請重試。"
+      },
+      "setup": {
+        "isOn": "{{name}} 已在 GitHub 上啟用",
+        "repositories": "存放庫",
+        "checking": "正在檢查 GitHub…",
+        "retry": "重試",
+        "installing": "正在等待安裝完成或組織擁有者核准…",
+        "install": "安裝 Orca 應用程式",
+        "finish": "完成",
+        "connectTitle": "連線 GitHub",
+        "close": "關閉",
+        "tryIt": "在任意議題或 PR 中試用",
+        "preview": {
+          "ask": "審查這個 PR"
+        },
+        "pushesOnHost": "{{name}} 會在 {{host}} 上使用該電腦的 git 憑證推送程式碼。"
+      },
+      "connection": {
+        "removeNote": "大家將無法再在 GitHub 上向它提問，它的 GitHub 人員名單也會被清除。Orca 應用程式不會被解除安裝。",
+        "removeConfirm": "移除",
+        "finishSetup": "完成設定",
+        "refresh": "重新整理",
+        "addAnotherAccount": "新增另一個帳戶"
+      },
+      "allRepositories": "{{account}} 的所有存放庫",
+      "account": {
+        "unlink": "取消連結 GitHub 帳戶",
+        "reconnect": "重新連線"
+      },
+      "howToAskPlain": "在議題或 PR 中提及 {{mention}} {{handle}} …。",
+      "addMore": "新增存放庫或組織",
+      "checkingInstalls": "正在檢查 GitHub 上的變更…",
+      "connect": {
+        "readsOnly": "Orca 只會讀取你的 GitHub 使用者名稱和 ID。",
+        "requested": "已請求組織擁有者核准 Orca 應用程式。",
+        "notInstalled": "Orca 應用程式尚未安裝在你的任何存放庫上。",
+        "handoffPick": "登入並選擇存放庫。",
+        "signIn": "登入 GitHub",
+        "pickSubtitle": "選擇它可以使用的存放庫"
+      },
+      "allRepositoriesShort": "所有存放庫"
+    },
+    "connect": {
+      "finishOnHost": "請在 {{host}} 上的 Orca 中完成 {{service}} 的連線。",
+      "otherComputer": "另一台電腦上的機器人",
+      "askEachTime": "詢問使用哪個機器人",
+      "account": "帳戶",
+      "linkedAs": "已連結為",
+      "defaultBot": "處理我的請求的預設機器人",
+      "opensOnHost": "將在 {{host}} 上的 Orca 瀏覽器中開啟。",
+      "signedInAs": "已以 {{who}} 身分登入",
+      "continueOn": "在 {{host}} 上繼續",
+      "openSignInPage": "開啟登入頁面",
+      "cancel": "取消",
+      "signInTo": "登入 {{app}}",
+      "updatesWhenDone": "完成後這裡會自動更新。",
+      "turnOnShort": "啟用"
+    },
+    "google": {
+      "isOn": "{{name}} 已啟用 Google",
+      "continuesInChat": "Google 的設定會在 {{name}} 的聊天中繼續。",
+      "file": {
+        "notAFile": "該檔案不是 Google 應用程式檔案，請換一個檔案試試。"
+      },
+      "turnOn": {
+        "title": "要為 {{name}} 開啟 Google 嗎？",
+        "confirm": "開啟"
+      },
+      "connect": "連線 Google",
+      "cancel": "取消",
+      "retry": "重試",
+      "checking": "正在檢查 Google…",
+      "hostChoice": {
+        "continue": "繼續",
+        "description": "選擇 {{bot}} 登入你的 Gmail、日曆和雲端硬碟的方式。",
+        "self": "自行託管",
+        "selfNote": "使用你自己的 Google 應用程式。",
+        "orca": "Orca 託管",
+        "orcaNote": "使用 Google 登入。",
+        "soon": "即將推出"
+      },
+      "importFromTeam": "匯入團隊提供的設定檔案",
+      "service": {
+        "contacts": "按姓名查詢聯絡人"
+      },
+      "bot": {
+        "removeTitle": "要從 {{name}} 移除 Google 嗎？",
+        "removeNoteOnHost": "{{name}} 將無法再使用你的 Gmail、日曆和雲端硬碟。Google 在 {{host}} 上仍保持連線。",
+        "removeConfirm": "移除",
+        "signedOutOnHost": "{{host}} 上未連線",
+        "uses": "可使用的服務",
+        "whoNote": "任何可以向 {{name}} 提問的人，都能讓它讀取和傳送你的郵件、日曆和檔案。",
+        "removeFrom": "從 {{name}} 移除 Google…"
+      },
+      "fix": {
+        "turnOn": "啟用",
+        "copyForAdmin": "複製給管理員",
+        "checkAgain": "重新檢查",
+        "allowAgain": "再次允許"
+      },
+      "adminRequest": "請在 Google 管理控制台（安全性 › API 控制項 › 管理第三方應用程式存取權）中將此 Google 應用程式標記為「受信任」：{{clientId}}",
+      "copied": "已複製。請傳送給你的 Google 管理員。",
+      "state": {
+        "ready": "就緒",
+        "apiOff": "已在 Google Cloud 中停用",
+        "adminBlocked": "已被你公司的 Google 管理員阻止",
+        "error": "無法檢查",
+        "notAllowed": "你沒有允許",
+        "allowOnHost": "在 {{host}} 上重新允許"
+      },
+      "headline": {
+        "connected": "Google 已連線",
+        "toFixOne": "快完成了：還有 1 個問題需要處理",
+        "toFix": "快完成了：還有 {{count}} 個問題需要處理",
+        "noDefault": "選擇預設帳戶",
+        "ended": "Google 存取已結束。",
+        "endedOnHost": "Google 存取已結束。請在 {{host}} 上重新登入。"
+      },
+      "defaultBadge": "預設",
+      "setDefault": "設為預設",
+      "shareButton": "分享設定",
+      "share": {
+        "copied": "已複製。請傳送給你的隊友。"
+      },
+      "disconnect": {
+        "title": "要中斷 {{email}} 的連線嗎？",
+        "revokeNote": "機器人將停止在此處使用此帳戶，Google 也會在所有已授權的地方撤銷 Orca 的存取權限。",
+        "removeOneNote": "機器人將停止在此處使用此帳戶。",
+        "removeNote": "機器人將停止在此處使用此帳戶。機器人設定會保留，之後點選「連線 Google」即可重新開啟。",
+        "promotes": "{{email}} 將成為預設帳戶。",
+        "confirm": "中斷連線",
+        "removeFromHost": "從 {{host}} 移除",
+        "revoke": "移除並在 Google 撤銷授權"
+      },
+      "accounts": "帳戶",
+      "row": {
+        "signedOut": "已被 Google 登出"
+      },
+      "reconnect": "重新連線",
+      "addAccount": "新增另一個帳戶",
+      "signIn": "登入 Google",
+      "handoff": "選擇你的帳戶，然後選擇「允許」。",
+      "signInWarning": "由於此應用程式屬於你且是全新的，Google 會顯示警告。請選擇「進階」，再選擇「前往 Orca」，並在下一個畫面勾選所有方塊。",
+      "signInRun": {
+        "failed": "Google 登入失敗。請再試一次。"
+      }
+    },
     "usageLimit": {
       "continuesAt": "將於 {{time}} 繼續",
       "continues": "將於 {{time}} 繼續",
