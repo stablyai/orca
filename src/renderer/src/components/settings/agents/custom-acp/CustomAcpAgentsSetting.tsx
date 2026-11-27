@@ -186,174 +186,173 @@ function CustomAcpAgentEditor({
   const setEnv = (entry: CustomAcpEnvRow): void =>
     onChange({ ...draft, env: draft.env.map((row) => (row.key === entry.key ? entry : row)) })
   return (
-    <div data-settings-row="" className="space-y-3 py-3">
-      <div className="space-y-1">
-        <Label htmlFor={`${idPrefix}-name`}>
-          {t('settings.agents.customAcp.name', 'Display name')}
-        </Label>
-        <Input
-          id={`${idPrefix}-name`}
-          value={draft.name}
-          aria-invalid={nameInvalid}
-          placeholder={t('settings.agents.customAcp.namePlaceholder', 'My agent')}
-          onChange={(event) => onChange({ ...draft, name: event.target.value })}
-        />
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor={`${idPrefix}-command`}>
-          {t('settings.agents.customAcp.command', 'Command')}
-        </Label>
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'settings.agents.customAcp.commandDescription',
-            'An executable path, or a program name on PATH.'
-          )}
-        </p>
-        <Input
-          id={`${idPrefix}-command`}
-          variant="code"
-          value={draft.command}
-          aria-invalid={commandInvalid}
-          placeholder={t('settings.agents.customAcp.commandPlaceholder', 'my-agent')}
-          spellCheck={false}
-          onChange={(event) => onChange({ ...draft, command: event.target.value })}
-        />
-      </div>
-      <CustomAcpAgentModelField
-        agent={draft.id}
-        value={draft.defaultModel}
-        invalid={
-          problems.has('tooLong') &&
-          draft.defaultModel.trim().length > CUSTOM_ACP_AGENT_LIMITS.model
-        }
-        onChange={(defaultModel) => onChange({ ...draft, defaultModel })}
-        idPrefix={idPrefix}
-      />
-      <div className="space-y-1">
-        <Label>{t('settings.agents.customAcp.args', 'Arguments')}</Label>
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'settings.agents.customAcp.argsDescription',
-            'One argument per row, passed as written: no shell expansion or quoting.'
-          )}
-        </p>
-        {draft.args.map((arg, index) => (
-          <div key={arg.key} className="flex items-center gap-2">
-            <Input
-              variant="code"
-              value={arg.value}
-              aria-invalid={!customAcpArgFits(arg.value)}
-              spellCheck={false}
-              aria-label={t('settings.agents.customAcp.argLabel', 'Argument {{value0}}', {
-                value0: index + 1
-              })}
-              onChange={(event) => setArg(arg.key, event.target.value)}
-            />
-            <RemoveRowButton
-              label={t('settings.agents.customAcp.removeArg', 'Remove argument {{value0}}', {
-                value0: index + 1
-              })}
-              onClick={() =>
-                onChange({ ...draft, args: draft.args.filter((row) => row.key !== arg.key) })
-              }
-            />
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          disabled={!rowsFit.args}
-          onClick={() =>
-            onChange({ ...draft, args: [...draft.args, { key: draftRowKey(), value: '' }] })
-          }
-        >
-          <Plus />
-          {t('settings.agents.customAcp.addArg', 'Add argument')}
-        </Button>
-      </div>
-      <div className="space-y-1">
-        <Label>{t('settings.agents.customAcp.env', 'Environment variables')}</Label>
-        {draft.env.map((entry, index) => (
-          <div key={entry.key} className="flex items-center gap-2">
-            <Input
-              variant="code"
-              className="w-2/5"
-              value={entry.name}
-              spellCheck={false}
-              aria-invalid={entry.name.trim() !== '' && problems.has('envName')}
-              placeholder={t('settings.agents.customAcp.envNamePlaceholder', 'NAME')}
-              aria-label={t('settings.agents.customAcp.envName', 'Variable {{value0}} name', {
-                value0: index + 1
-              })}
-              onChange={(event) => setEnv({ ...entry, name: event.target.value })}
-            />
-            <Input
-              variant="code"
-              value={entry.value}
-              aria-invalid={!customAcpEnvValueFits(entry.value)}
-              spellCheck={false}
-              placeholder={t('settings.agents.customAcp.envValuePlaceholder', 'value')}
-              aria-label={t('settings.agents.customAcp.envValue', 'Variable {{value0}} value', {
-                value0: index + 1
-              })}
-              onChange={(event) => setEnv({ ...entry, value: event.target.value })}
-            />
-            <RemoveRowButton
-              label={t('settings.agents.customAcp.removeEnv', 'Remove variable {{value0}}', {
-                value0: index + 1
-              })}
-              onClick={() =>
-                onChange({ ...draft, env: draft.env.filter((row) => row.key !== entry.key) })
-              }
-            />
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          disabled={!rowsFit.env}
-          onClick={() =>
-            onChange({
-              ...draft,
-              env: [...draft.env, { key: draftRowKey(), name: '', value: '' }]
-            })
-          }
-        >
-          <Plus />
-          {t('settings.agents.customAcp.addEnv', 'Add variable')}
-        </Button>
-      </div>
-      <div className="flex items-center justify-end gap-2">
-        {saveState === 'failed' ? (
-          <p role="alert" className="mr-auto text-xs text-destructive">
-            {t('settings.agents.customAcp.saveFailed', "Orca couldn't save the agent. Try again.")}
+    <div data-settings-row="" className="py-3">
+      {/* A pending save holds this draft as it was, so nothing in it changes until it settles. */}
+      <fieldset disabled={saveState === 'saving'} className="min-w-0 space-y-3">
+        <div className="space-y-1">
+          <Label htmlFor={`${idPrefix}-name`}>
+            {t('settings.agents.customAcp.name', 'Display name')}
+          </Label>
+          <Input
+            id={`${idPrefix}-name`}
+            value={draft.name}
+            aria-invalid={nameInvalid}
+            placeholder={t('settings.agents.customAcp.namePlaceholder', 'My agent')}
+            onChange={(event) => onChange({ ...draft, name: event.target.value })}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor={`${idPrefix}-command`}>
+            {t('settings.agents.customAcp.command', 'Command')}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'settings.agents.customAcp.commandDescription',
+              'An executable path, or a program name on PATH.'
+            )}
           </p>
-        ) : problems.has('tooLong') ? (
-          <p className="mr-auto text-xs text-destructive">
-            {t('settings.agents.customAcp.tooLong', 'A highlighted value is too long to save.')}
+          <Input
+            id={`${idPrefix}-command`}
+            variant="code"
+            value={draft.command}
+            aria-invalid={commandInvalid}
+            placeholder={t('settings.agents.customAcp.commandPlaceholder', 'my-agent')}
+            spellCheck={false}
+            onChange={(event) => onChange({ ...draft, command: event.target.value })}
+          />
+        </div>
+        <CustomAcpAgentModelField
+          agent={draft.id}
+          value={draft.defaultModel}
+          invalid={
+            problems.has('tooLong') &&
+            draft.defaultModel.trim().length > CUSTOM_ACP_AGENT_LIMITS.model
+          }
+          onChange={(defaultModel) => onChange({ ...draft, defaultModel })}
+          idPrefix={idPrefix}
+        />
+        <div className="space-y-1">
+          <Label>{t('settings.agents.customAcp.args', 'Arguments')}</Label>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'settings.agents.customAcp.argsDescription',
+              'One argument per row, passed as written: no shell expansion or quoting.'
+            )}
           </p>
-        ) : null}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          // A pending save settles this draft; another opened meanwhile would take its result.
-          disabled={saveState === 'saving'}
-          onClick={onCancel}
-        >
-          {t('settings.agents.customAcp.cancel', 'Cancel')}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          disabled={problems.size > 0 || saveState === 'saving'}
-          onClick={onSave}
-        >
-          {t('settings.agents.customAcp.save', 'Save')}
-        </Button>
-      </div>
+          {draft.args.map((arg, index) => (
+            <div key={arg.key} className="flex items-center gap-2">
+              <Input
+                variant="code"
+                value={arg.value}
+                aria-invalid={!customAcpArgFits(arg.value)}
+                spellCheck={false}
+                aria-label={t('settings.agents.customAcp.argLabel', 'Argument {{value0}}', {
+                  value0: index + 1
+                })}
+                onChange={(event) => setArg(arg.key, event.target.value)}
+              />
+              <RemoveRowButton
+                label={t('settings.agents.customAcp.removeArg', 'Remove argument {{value0}}', {
+                  value0: index + 1
+                })}
+                onClick={() =>
+                  onChange({ ...draft, args: draft.args.filter((row) => row.key !== arg.key) })
+                }
+              />
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            disabled={!rowsFit.args}
+            onClick={() =>
+              onChange({ ...draft, args: [...draft.args, { key: draftRowKey(), value: '' }] })
+            }
+          >
+            <Plus />
+            {t('settings.agents.customAcp.addArg', 'Add argument')}
+          </Button>
+        </div>
+        <div className="space-y-1">
+          <Label>{t('settings.agents.customAcp.env', 'Environment variables')}</Label>
+          {draft.env.map((entry, index) => (
+            <div key={entry.key} className="flex items-center gap-2">
+              <Input
+                variant="code"
+                className="w-2/5"
+                value={entry.name}
+                spellCheck={false}
+                aria-invalid={entry.name.trim() !== '' && problems.has('envName')}
+                placeholder={t('settings.agents.customAcp.envNamePlaceholder', 'NAME')}
+                aria-label={t('settings.agents.customAcp.envName', 'Variable {{value0}} name', {
+                  value0: index + 1
+                })}
+                onChange={(event) => setEnv({ ...entry, name: event.target.value })}
+              />
+              <Input
+                variant="code"
+                value={entry.value}
+                aria-invalid={!customAcpEnvValueFits(entry.value)}
+                spellCheck={false}
+                placeholder={t('settings.agents.customAcp.envValuePlaceholder', 'value')}
+                aria-label={t('settings.agents.customAcp.envValue', 'Variable {{value0}} value', {
+                  value0: index + 1
+                })}
+                onChange={(event) => setEnv({ ...entry, value: event.target.value })}
+              />
+              <RemoveRowButton
+                label={t('settings.agents.customAcp.removeEnv', 'Remove variable {{value0}}', {
+                  value0: index + 1
+                })}
+                onClick={() =>
+                  onChange({ ...draft, env: draft.env.filter((row) => row.key !== entry.key) })
+                }
+              />
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            disabled={!rowsFit.env}
+            onClick={() =>
+              onChange({
+                ...draft,
+                env: [...draft.env, { key: draftRowKey(), name: '', value: '' }]
+              })
+            }
+          >
+            <Plus />
+            {t('settings.agents.customAcp.addEnv', 'Add variable')}
+          </Button>
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          {saveState === 'failed' ? (
+            <p role="alert" className="mr-auto text-xs text-destructive">
+              {t(
+                'settings.agents.customAcp.saveFailed',
+                "Orca couldn't save the agent. Try again."
+              )}
+            </p>
+          ) : problems.has('tooLong') ? (
+            <p className="mr-auto text-xs text-destructive">
+              {t('settings.agents.customAcp.tooLong', 'A highlighted value is too long to save.')}
+            </p>
+          ) : null}
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+            {t('settings.agents.customAcp.cancel', 'Cancel')}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={problems.size > 0 || saveState === 'saving'}
+            onClick={onSave}
+          >
+            {t('settings.agents.customAcp.save', 'Save')}
+          </Button>
+        </div>
+      </fieldset>
     </div>
   )
 }
