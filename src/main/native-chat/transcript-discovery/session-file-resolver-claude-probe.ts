@@ -3,17 +3,7 @@ import { join } from 'node:path'
 import { encodeClaudeProjectPaths } from '../../ai-vault/scanners/claude/claude-project-dir-encoding'
 import { isMissingTranscriptPathError } from '../../ai-vault/discovery/session-path-absence'
 import { errnoCodeOrUnknown } from '../../../shared/errors/errno-code'
-
-// Ids become path segments here; a separator or dot segment would escape the bucket.
-function isSafeClaudeSessionId(sessionId: string): boolean {
-  return (
-    sessionId !== '.' &&
-    sessionId !== '..' &&
-    !sessionId.includes('/') &&
-    !sessionId.includes('\\') &&
-    !sessionId.includes('\0')
-  )
-}
+import { isSafeSessionIdPathSegment } from './session-id-path-segment'
 
 // A bucket this user can't read can't hold a transcript their Claude can resume (e.g. one left by `sudo claude`).
 function isAbsentForUserError(error: unknown): boolean {
@@ -51,7 +41,7 @@ export async function findClaudeSessionFile(
   sessionId: string,
   options: ProbeOptions & { cwd?: string }
 ): Promise<string | null> {
-  if (!isSafeClaudeSessionId(sessionId)) {
+  if (!isSafeSessionIdPathSegment(sessionId)) {
     return null
   }
   const fileName = `${sessionId}.jsonl`

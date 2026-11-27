@@ -1,5 +1,5 @@
 import { antigravityConversationIdFromTranscriptPath } from '../../../ai-vault/scanners/antigravity/session-scanner-antigravity-paths'
-import { decodeAntigravityTranscriptLine } from '../../transcript-decoding/transcript-line-decoders-antigravity'
+import { decodeAntigravityAdoptionLine } from '../../transcript-decoding/transcript-line-decoders-antigravity-adoption'
 import type { JournalReplacementItem } from '../context-epochs/journal-epoch-replacement'
 import type { JournalPayloadLimits } from '../item-lifecycle/journal-payload-bounds'
 import { readLegacyImportTranscript } from './journal-legacy-transcript-stream'
@@ -34,7 +34,7 @@ export async function prepareAntigravityImport(
       { filePath: options.filePath, codex: false },
       (line) => {
         options.signal?.throwIfAborted()
-        const step = decodeAntigravityTranscriptLine(line)
+        const step = decodeAntigravityAdoptionLine(line)
         if (step) {
           decoded++
           retained.push(

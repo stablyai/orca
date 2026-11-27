@@ -6,7 +6,15 @@ export type NativeChatDiffLine = {
 }
 
 /** Tools whose call carries the edit itself, so its row is a file change. */
-export const EDIT_TOOL_NAMES = new Set(['Edit', 'MultiEdit', 'Write', 'str_replace', 'apply_patch'])
+export const EDIT_TOOL_NAMES = new Set([
+  'Edit',
+  'MultiEdit',
+  'Write',
+  'str_replace',
+  'apply_patch',
+  'edit_file',
+  'write_file'
+])
 const MAX_DIFF_CHARS = 32_000
 const DEFAULT_MAX_DIFF_LINES = 120
 const DIFF_TRUNCATED_LINE: NativeChatDiffLine = {
@@ -131,9 +139,18 @@ export function diffFromToolCall(
   if (patchText !== null) {
     return diffFromText(patchText, maxLines)
   }
-  const oldLines = toLines(value.old_string ?? value.oldString ?? value.old, maxLines)
+  const oldLines = toLines(
+    value.old_string ?? value.oldString ?? value.old ?? value.Target,
+    maxLines
+  )
   const newLines = toLines(
-    value.new_string ?? value.newString ?? value.new ?? value.content ?? value.file_text,
+    value.new_string ??
+      value.newString ??
+      value.new ??
+      value.Replacement ??
+      value.content ??
+      value.Content ??
+      value.file_text,
     maxLines
   )
   const deleted = oldLines.lines.map((text): NativeChatDiffLine => ({ kind: 'del', text }))
@@ -141,7 +158,7 @@ export function diffFromToolCall(
   if (deleted.length === 0 && added.length === 0) {
     return null
   }
-  const path = value.file_path ?? value.path
+  const path = value.file_path ?? value.path ?? value.Path
   const prefix: NativeChatDiffLine[] =
     typeof path === 'string' ? [{ kind: 'meta', text: path }] : []
   const combined = [...prefix, ...deleted, ...added]

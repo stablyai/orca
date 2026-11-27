@@ -5,6 +5,7 @@ import type {
 import { transcriptFallbackId } from '../transcript-streaming/transcript-fallback-id'
 import { extendTranscriptBoundary } from './transcript-file-version'
 import { inTranscriptFileOrder } from '../transcript-streaming/transcript-file-order'
+import { decodedTranscriptMessages } from '../transcript-streaming/transcript-stream-lines'
 import {
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
   type NativeChatLineDecoder
@@ -133,19 +134,18 @@ export async function readIncrementalTranscriptMessages(
     if (lifecycle) {
       onLifecycle?.(lifecycle)
     }
-    const message = decode(line, fallbackId)
-    if (!message) {
-      return
-    }
-    const ordered = inTranscriptFileOrder(
-      message,
-      state.latestTimestamp,
-      sourceOrder ? state.pendingStart : undefined
-    )
-    state.latestTimestamp = ordered.latest
-    messages.push(ordered.message)
-    if (onBatch && messages.length >= APPEND_BATCH_MESSAGE_LIMIT) {
-      onBatch(messages.splice(0))
+    const batch = decodedTranscriptMessages(decode(line, fallbackId))
+    for (const message of batch) {
+      const ordered = inTranscriptFileOrder(
+        message,
+        state.latestTimestamp,
+        sourceOrder ? state.pendingStart : undefined
+      )
+      state.latestTimestamp = ordered.latest
+      messages.push(ordered.message)
+      if (onBatch && messages.length >= APPEND_BATCH_MESSAGE_LIMIT) {
+        onBatch(messages.splice(0))
+      }
     }
   }
 }

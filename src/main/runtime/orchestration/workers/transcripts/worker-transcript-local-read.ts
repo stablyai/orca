@@ -6,6 +6,7 @@ import {
   type NativeChatLineDecoder
 } from '../../../../native-chat/transcript-tail-reader'
 import { TAIL_CHUNK_BYTES } from '../../../../native-chat/transcript-watching/transcript-tail-boundary'
+import { decodedTranscriptMessages } from '../../../../native-chat/transcript-streaming/transcript-stream-lines'
 import type {
   nativeChatTurnEvidenceObserverForAgent,
   NativeChatTurnEvidence
@@ -257,8 +258,10 @@ async function scanForwardPage(args: {
       malformedRecordCount++
       return
     }
-    const message = args.decode(line, transcriptFallbackId(args.filePath, pendingStart))
-    if (message) {
+    const batch = decodedTranscriptMessages(
+      args.decode(line, transcriptFallbackId(args.filePath, pendingStart))
+    )
+    for (const message of batch) {
       messages.push(message)
       messageEnds.push(lineEnd)
     }
@@ -302,17 +305,11 @@ function sourceChanged(): Extract<LocalTranscriptReadResult, { ok: false }> {
 }
 
 function recordWarnings(malformed = 0, oversized = 0, scanLimited = false): string[] {
-  const warnings: string[] = []
-  if (malformed > 0) {
-    warnings.push(`${malformed} malformed transcript record(s) were skipped.`)
-  }
-  if (oversized > 0) {
-    warnings.push(`${oversized} oversized transcript record(s) were skipped.`)
-  }
-  if (scanLimited) {
-    warnings.push(
-      'Transcript scanning stopped at the bounded byte limit; continue with the cursor.'
-    )
-  }
-  return warnings
+  return [
+    ...(malformed > 0 ? [`${malformed} malformed transcript record(s) were skipped.`] : []),
+    ...(oversized > 0 ? [`${oversized} oversized transcript record(s) were skipped.`] : []),
+    ...(scanLimited
+      ? ['Transcript scanning stopped at the bounded byte limit; continue with the cursor.']
+      : [])
+  ]
 }

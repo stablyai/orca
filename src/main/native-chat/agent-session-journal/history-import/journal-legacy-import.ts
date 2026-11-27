@@ -10,13 +10,17 @@ import type * as ids from '../../../../shared/agent-session/journal/agent-sessio
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from '../../session-file-resolver'
+import { decodedTranscriptMessages } from '../../transcript-streaming/transcript-stream-lines'
 import { readLegacyImportTranscript, TRANSCRIPT_DECODERS } from './journal-legacy-transcript-stream'
 import { readOpenCodeNativeChatTranscriptFull } from '../../transcript-history/opencode/transcript-opencode'
 import { prepareHermesImport } from './journal-hermes-import'
 import { prepareAntigravityImport } from './journal-antigravity-import'
 import { replacementItem, replacementItems } from './journal-replacement-items'
 import { mayBeClaudeConversationRecord } from '../../transcript-decoding/transcript-line-decoders-claude'
-import { createLegacyIdentityTracker } from './journal-legacy-identity'
+import {
+  createLegacyIdentityTracker,
+  resolveDecodedLegacyMessageIdentity
+} from './journal-legacy-identity'
 import { createPiTranscriptCollector } from './journal-pi-active-branch'
 import { createNewestItemWindow } from './journal-newest-item-window'
 import { createCodexHistoryCollector } from './journal-codex-history'
@@ -246,18 +250,16 @@ async function decodeReplacementItems(input: {
           pi.record(line, fallbackId, currentLineIndex)
           return null
         }
-        const message = TRANSCRIPT_DECODERS[input.transcriptAgent](line, fallbackId)
-        conversation ||= !!message || mayBeClaudeConversationRecord(line)
-        if (message) {
-          const identity =
-            recordId || input.decodedMessageIdentities
-              ? {
-                  provider: 'legacy' as const,
-                  agent: input.agent,
-                  sessionId: input.sessionId,
-                  recordId: recordId ?? message.id
-                }
-              : tracker.identify(line, currentLineIndex)
+        const decoded = TRANSCRIPT_DECODERS[input.transcriptAgent](line, fallbackId)
+        conversation ||= !!decoded || mayBeClaudeConversationRecord(line)
+        for (const message of decodedTranscriptMessages(decoded)) {
+          const identity = resolveDecodedLegacyMessageIdentity(tracker, line, currentLineIndex, {
+            ...input,
+            messageId: message.id,
+            role: message.role,
+            splitLine: Array.isArray(decoded),
+            recordId
+          })
           retained.push(toItem(message, identity))
         }
         if (input.transcriptAgent === 'omp') {

@@ -165,7 +165,14 @@ function findSessionPath(
   sessionId: string
 ): string | null {
   const { fileMatchesId } = SESSION_FILE_ID_LAYOUTS[agent]
-  return paths.find((path) => fileMatchesId(path, sessionId)) ?? null
+  const matches = paths.filter((path) => fileMatchesId(path, sessionId))
+  if (matches.length === 0) {
+    return null
+  }
+  // Prefer the full transcript over the compact one on WSL UNC scans, matching host lookup.
+  return agent === 'antigravity'
+    ? (matches.find((path) => /[\\/]transcript_full\.jsonl$/i.test(path)) ?? matches[0]!)
+    : matches[0]!
 }
 
 /** Share one walk per WSL root; refresh misses to discover transcripts created after startup. */
