@@ -1,5 +1,6 @@
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
 
 // Stream and final frames have different UUIDs; reconcile by message.id and block order to avoid duplicate rows.
 
@@ -86,7 +87,9 @@ export function createClaudeStreamedBlockRegistry(
       return text
     }
     if (blockType === 'text' && !/\S/.test(text)) {
-      block.blank = (block.blank + text.slice(-HELD_BLANK_LIMIT)).slice(-HELD_BLANK_LIMIT)
+      block.blank = ownRetainedString(
+        (block.blank + text.slice(-HELD_BLANK_LIMIT)).slice(-HELD_BLANK_LIMIT)
+      )
       return null
     }
     block.awaited = true
