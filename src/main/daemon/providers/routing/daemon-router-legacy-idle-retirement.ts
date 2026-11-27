@@ -26,6 +26,8 @@ export type LegacyIdleRetirementOptions = {
 export class DaemonRouterLegacyIdleRetirement {
   private readonly timers = new Map<DaemonPtyAdapter, Timer>()
   private readonly checking = new Set<DaemonPtyAdapter>()
+  /** Asked again while checking: the running inventory may predate the exit that asked. */
+  private readonly checkAgain = new Set<DaemonPtyAdapter>()
   private readonly waitingForQuiet = new Set<DaemonPtyAdapter>()
   private readonly fences = new Set<Promise<void>>()
   private reattachesInFlight = 0
@@ -87,6 +89,7 @@ export class DaemonRouterLegacyIdleRetirement {
     }
     this.timers.clear()
     this.waitingForQuiet.clear()
+    this.checkAgain.clear()
   }
 
   /** The current generation is never retired here, even when it is empty. */
@@ -101,7 +104,11 @@ export class DaemonRouterLegacyIdleRetirement {
   }
 
   private async check(adapter: DaemonPtyAdapter): Promise<void> {
-    if (this.disposed || this.checking.has(adapter)) {
+    if (this.disposed) {
+      return
+    }
+    if (this.checking.has(adapter)) {
+      this.checkAgain.add(adapter)
       return
     }
     if (this.reattachesInFlight > 0) {
@@ -116,6 +123,9 @@ export class DaemonRouterLegacyIdleRetirement {
       console.warn('[daemon] Older terminal host emptiness check failed:', error)
     } finally {
       this.checking.delete(adapter)
+      if (this.checkAgain.delete(adapter)) {
+        this.schedule(adapter)
+      }
     }
   }
 
@@ -132,13 +142,13 @@ export class DaemonRouterLegacyIdleRetirement {
       }
       return
     }
-    if (this.reattachesInFlight > 0 || this.reattachEpoch !== epoch) {
-      // A reattach began after the inventory; it may own work the inventory missed.
+    // A reattach that began after the inventory may bring work it missed.
+    if (this.reattachesInFlight > 0) {
       this.waitingForQuiet.add(adapter)
-      if (this.reattachesInFlight === 0) {
-        this.waitingForQuiet.delete(adapter)
-        this.schedule(adapter)
-      }
+      return
+    }
+    if (this.reattachEpoch !== epoch) {
+      this.schedule(adapter)
       return
     }
     // From this turn until the generation answers, reattaches wait instead of probing it.
