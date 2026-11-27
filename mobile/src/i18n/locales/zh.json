@@ -5778,7 +5778,7 @@
       "letBotReactHelp": "每个结果都会开启一个新回合，让 {{name}} 据此采取行动",
       "time": "时间",
       "minute": "分钟",
-      "runs": "运行"
+      "runs": "运行设置"
     },
     "botEvents": {
       "label": "事件",
@@ -7378,7 +7378,7 @@
       "outfitTie": "领带",
       "outfitDetective": "侦探",
       "outfitHardHat": "安全帽",
-      "outfitReviewer": "审阅者",
+      "outfitReviewer": "评审人",
       "outfitNightShift": "夜班",
       "outfitArtist": "艺术家",
       "outfitScientist": "科学家",
@@ -7663,7 +7663,7 @@
         "otherUserNext": "登录了另一个 Slack 账号的人批准了 Slack 链接，因此 {{bot}} 无法以你的身份操作。请获取新链接，并在登录你自己的 Slack 账号后批准",
         "expired": "Slack 登录未完成",
         "expiredNext": "Slack 链接在有人批准连接前已过期",
-        "code": "代码",
+        "code": "错误代码",
         "computer": "电脑",
         "workspace": "工作区"
       }
@@ -7718,7 +7718,7 @@
         "connectTitle": "连接 Composio",
         "once": "只需连接一次，即可用于你的所有 bots",
         "browseAll": "浏览 Composio 应用",
-        "keyOnHost": "保存在 {{host}}；机器人永远看不到。"
+        "keyOnHost": "保存在 {{host}} 上；bots 永远看不到"
       },
       "close": "关闭",
       "couldNotSignIn": "无法登录 {{app}}",
@@ -8318,7 +8318,7 @@
         "apiOff": "已在 Google Cloud 中停用",
         "adminBlocked": "已被你公司的 Google 管理员阻止",
         "error": "无法检查",
-        "notAllowed": "你没有允许",
+        "notAllowed": "你未授权",
         "allowOnHost": "在 {{host}} 上再次允许"
       },
       "headline": {
@@ -8350,9 +8350,9 @@
         "signedOut": "已被 Google 退出登录"
       },
       "reconnect": "重新连接",
-      "addAccount": "添加另一个账号",
+      "addAccount": "添加另一个账户",
       "signIn": "登录 Google",
-      "handoff": "选择你的账号，然后选择“允许”。",
+      "handoff": "选择你的账户，然后点击“允许”",
       "signInWarning": "由于这是你刚创建的自有应用，Google 会显示一条警告。请选择“高级”，然后选择“转至 Orca”，并在下一个页面勾选所有复选框",
       "signInRun": {
         "failed": "Google 登录失败。请重试"
