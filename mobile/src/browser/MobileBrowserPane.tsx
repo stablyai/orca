@@ -332,10 +332,13 @@ export function MobileBrowserPane({
     if (controlsDisabled) {
       return
     }
-    runPageCommand(async (rpc, page, options) =>
-      browserStop.interpret(await browserStop.request(rpc, page, options))
+    // Not queued: Stop has to reach the host while an address navigation holds the queue.
+    void sendBrowserRequest(
+      async (rpc, page, options) =>
+        browserStop.interpret(await browserStop.request(rpc, page, options)),
+      { suppressError: true }
     )
-  }, [controlsDisabled, runPageCommand])
+  }, [controlsDisabled, sendBrowserRequest])
 
   // As on desktop's streamed pane: reloading the host's error page only refreshes it, so re-attempt the URL that failed.
   const retryFailedLoad = useCallback(() => {

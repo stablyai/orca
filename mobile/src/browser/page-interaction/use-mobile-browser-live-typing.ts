@@ -76,9 +76,12 @@ export function useMobileBrowserLiveTyping({ disabled, pageInput }: LiveTypingAr
   const [focused, setFocused] = useState(false)
   // What the page's field has been sent of the hidden field's text.
   const sentRef = useRef('')
+  // The hidden field's own text, including an IME word not yet picked (and so not sent).
+  const fieldRef = useRef('')
 
   const resetMirror = useCallback(() => {
     sentRef.current = ''
+    fieldRef.current = ''
     setValue('')
   }, [])
   // A tap or navigation may move the page to another field, which holds none of what was typed.
@@ -102,6 +105,7 @@ export function useMobileBrowserLiveTyping({ disabled, pageInput }: LiveTypingAr
 
   const apply = useCallback(
     (next: string, composing: boolean) => {
+      fieldRef.current = next
       setValue(next)
       // An IME's word goes to the page once picked, not letter by letter.
       if (composing) {
@@ -126,7 +130,7 @@ export function useMobileBrowserLiveTyping({ disabled, pageInput }: LiveTypingAr
   // An empty field has nothing for Backspace to change, so the key itself goes to the page.
   const onKeyPress = useCallback(
     (event: TextInputKeyPressEvent) => {
-      if (event.nativeEvent.key === 'Backspace' && sentRef.current === '') {
+      if (event.nativeEvent.key === 'Backspace' && fieldRef.current === '') {
         send([{ key: 'Backspace' }])
       }
     },
