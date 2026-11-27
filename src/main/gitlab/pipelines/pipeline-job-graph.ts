@@ -202,7 +202,6 @@ export async function fetchPipelineJobs(
     ).catch(tolerateUnreadable([] as GitLabRawBridge[]))
   ])
 
-  const bridgeRows = bridges.map((bridge) => mapBridgeAsJob(bridge, pipelineId))
   const childTargets: { projectRef: ProjectRef; pipelineId: number }[] = []
   const seenChildIds = new Set<number>()
   for (const bridge of bridges) {
@@ -231,9 +230,14 @@ export async function fetchPipelineJobs(
       ).catch(tolerateUnreadable([] as GitLabPipelineJob[]))
   )
 
-  // Keep parent/child job order, and add bridge rollups only when no expanded job shares their name.
+  // Keep parent/child job order; a bridge rollup collapses only into its own child's same-named job.
+  const expandedNamesByPipeline = new Map(
+    childTargets.map((target, index) => [
+      target.pipelineId,
+      new Set(childJobBatches[index].map((job) => job.name))
+    ])
+  )
   const seenJobIds = new Set<number>()
-  const seenNames = new Set<string>()
   const out: GitLabPipelineJob[] = []
   for (const job of [...parentJobs, ...childJobBatches.flat()]) {
     if (job.id) {
@@ -243,18 +247,17 @@ export async function fetchPipelineJobs(
       seenJobIds.add(job.id)
     }
     out.push(job)
-    if (job.name) {
-      seenNames.add(job.name)
-    }
   }
-  for (const bridge of bridgeRows) {
-    if (bridge.name && seenNames.has(bridge.name)) {
+  for (const bridge of bridges) {
+    const childId = bridge.downstream_pipeline?.id
+    if (
+      bridge.name &&
+      childId !== undefined &&
+      expandedNamesByPipeline.get(childId)?.has(bridge.name)
+    ) {
       continue
     }
-    out.push(bridge)
-    if (bridge.name) {
-      seenNames.add(bridge.name)
-    }
+    out.push(mapBridgeAsJob(bridge, pipelineId))
   }
   return out
 }
