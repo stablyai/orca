@@ -185,13 +185,12 @@ export class FeishuConnection {
     }
     const b = this.binding
     if (b.owner) {
-      if (b.owner !== m.sender_id || b.chat !== m.chat_id) {
-        return
-      }
       if (b.profile !== null) {
         await this.ingress.receive(b, m)
-      } else if (m.chat_type === 'p2p') {
+      } else if (b.owner === m.sender_id && b.chat === m.chat_id && m.chat_type === 'p2p') {
         await this.inbox.accept(b, m)
+      } else {
+        return
       }
       this.wake()
     } else if (m.message_type === 'text' && this.pairing?.matches(m.content)) {
