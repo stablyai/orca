@@ -1,12 +1,9 @@
 // Markdown cut at a height with Show more: the item's description and its long comments.
-import { createContext, useContext, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { BotItemMarkdown } from './BotItemMarkdown'
-
-/** Bumped to open every cut text inside it (a jump to an entry shows its whole question). */
-export const BotItemClampedOpenContext = createContext(0)
 
 export function BotItemClampedText({
   text,
@@ -36,14 +33,6 @@ export function BotItemClampedText({
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [clamped, setClamped] = useState(false)
-  const opened = useContext(BotItemClampedOpenContext)
-  const [seenOpened, setSeenOpened] = useState(opened)
-  if (opened !== seenOpened) {
-    setSeenOpened(opened)
-    if (clamped) {
-      setOpen(true)
-    }
-  }
   const opening = useRef(startOpen)
   const body = useRef<HTMLDivElement | null>(null)
   const id = useId()

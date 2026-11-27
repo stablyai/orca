@@ -10,6 +10,7 @@ import { createOpenCodeTextTaskHttp } from './opencode-text-task-http'
 import { z } from 'zod'
 import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type { OpenCodeTextTaskInput } from './opencode-text-task-input'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 export type OpenCodeTextTaskSession = {
   version: 'v1' | 'v2'
@@ -38,14 +39,16 @@ export type OpenCodeTextTaskSession = {
   signal: AbortSignal
 }
 
-const reply = z.looseObject({
-  info: z.looseObject({
-    id: z.string().optional(),
-    error: z.unknown().optional(),
-    parentID: z.string().optional()
-  }),
-  parts: z.array(z.looseObject({ type: z.string(), text: z.string().optional() }))
-})
+const reply = lazyZodSchema(() =>
+  z.looseObject({
+    info: z.looseObject({
+      id: z.string().optional(),
+      error: z.unknown().optional(),
+      parentID: z.string().optional()
+    }),
+    parts: z.array(z.looseObject({ type: z.string(), text: z.string().optional() }))
+  })
+)
 
 let messageTimestamp = 0
 let messageCounter = 0

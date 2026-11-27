@@ -24,8 +24,7 @@ import {
 import { isTerminalPhoneDisplayMode } from '../terminal/session/pane-layout/terminal-phone-display-mode'
 import { fitDimensionsFromCell } from '../terminal/viewport/terminal-grid-fit'
 import { spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import {
   updateNativeChatTextSettings,
   useNativeChatTextSettings
@@ -72,7 +71,7 @@ export function MobileSessionTextSizeSheet({
 }
 
 function ChatTextSheet({ onDone, onMore }: { onDone: () => void; onMore: () => void }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const settings = useNativeChatTextSettings()
   return (
@@ -142,7 +141,6 @@ function TerminalTextSheet({
   onDone: () => void
   onMore: () => void
 }) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const { terminalTextScale, terminalFontStyle, commitPinchedTextScale, commitTerminalFontStyle } =
     controller
@@ -202,6 +200,6 @@ function TerminalTextSheet({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   segmentRow: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md }
 }))

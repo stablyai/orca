@@ -8,6 +8,7 @@ import type {
   BrowserExtensionListResult
 } from '../../../../../../shared/browser/extensions/browser-extension-types'
 import { useTranslate } from '@/i18n/use-translate'
+import { browserExtensionFailureMessage } from './browser-extension-failure-message'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
@@ -184,7 +185,7 @@ export function BrowserExtensionsSection({
     try {
       const outcome = await action()
       if (!outcome.ok) {
-        toast.error(outcome.error)
+        toast.error(browserExtensionFailureMessage(t, outcome))
       }
     } finally {
       setBusyId(null)

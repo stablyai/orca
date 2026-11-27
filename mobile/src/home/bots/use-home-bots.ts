@@ -7,6 +7,7 @@ import type { ConnectionState } from '../../transport/connection/connection-stat
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { HostWorktreeInfo } from '../../worktree/catalog/home-worktree-info'
 import { homeBotRows } from './home-bot-rows'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { homeBotsQuery, type HomeComputerBots } from './home-bots-query'
 import type { KeptComputerBots } from '../../bots/kept-computer-bots'
 import {
@@ -31,6 +32,7 @@ export function useHomeBots(args: {
   subscribed: boolean
 }) {
   const { homeHosts, hosts, hostStates, unreachableHosts, worktreeInfo, now, subscribed } = args
+  const t = useMobileTranslation()
   const queries = useMemo(
     () =>
       homeHosts.map((host) =>
@@ -92,9 +94,10 @@ export function useHomeBots(args: {
         kept,
         hydrated,
         worktreeInfo,
-        now
+        now,
+        t
       }),
-    [hosts, hostStates, unreachableHosts, reads, fresh, kept, hydrated, worktreeInfo, now]
+    [hosts, hostStates, unreachableHosts, reads, fresh, kept, hydrated, worktreeInfo, now, t]
   )
   // Folds each live read into its computer's record; the record skips a read it already holds. Only a
   // shown Home folds: a hidden one's reads are frozen, and two Homes folding different reads never settle.

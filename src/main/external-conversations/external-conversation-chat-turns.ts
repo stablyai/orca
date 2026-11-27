@@ -10,6 +10,7 @@ import { isConversationReport } from './external-conversation-turn-opener'
 import { turnLeave } from './external-conversation-thread-leaves'
 import { ToldWorkLinks } from './external-conversation-told-work-links'
 import { ConversationWorkers } from './external-conversation-workers'
+import { TurnDates } from './external-conversation-turn-dates'
 import type { ChatTurnsDeps } from './external-conversation-chat-turns-deps'
 import {
   endAdoptedTurn,
@@ -35,6 +36,8 @@ export class ChatTurns {
   // A chat turn's id is the start this told; the host's feed names none.
   private readonly startedAt = new Map<string, number>()
   private readonly leadState = new Map<string, AgentStatusState>()
+  // The dates each chat's open (or last ended) turn showed on its status row: the turn's identity.
+  readonly dates = new TurnDates()
   // Chats whose current turn the conversation was told of.
   private readonly told = new Set<string>()
   private readonly toldLinks: ToldWorkLinks
@@ -50,6 +53,7 @@ export class ChatTurns {
       hears: (link) => this.hears(link),
       remember: (paneKey, at) => {
         this.startedAt.set(paneKey, at)
+        this.dates.tookOver(paneKey, at, this.openerOf(paneKey))
         const row = deps.readHookRow(paneKey)
         if (row) {
           this.leadState.set(paneKey, leadOf(row).state)
@@ -66,7 +70,8 @@ export class ChatTurns {
     }
     const row = this.deps.readHookRow(paneKey)
     const lead = row?.structuredHost ? leadOf(row) : null
-    return lead?.state === 'working'
+    // A row still showing the ended turn's date is that turn, not one running now.
+    return lead?.state === 'working' && !this.dates.isEnded(paneKey, lead.stateStartedAt)
       ? lead.stateStartedAt
       : (this.deps.turnStartedAt?.(this.deps.linkedFor(paneKey)?.link.sessionId ?? '') ?? null)
   }
@@ -105,6 +110,7 @@ export class ChatTurns {
     const at = this.turnOf(paneKey)
     if (at !== null) {
       this.startedAt.set(paneKey, at)
+      this.dates.tookOver(paneKey, at, this.openerOf(paneKey))
       this.leadState.set(paneKey, 'working')
       // A turn adopted for its prompt stays adopted: its end tells no words.
       if (!this.prompts.adopted.has(paneKey)) {
@@ -136,6 +142,12 @@ export class ChatTurns {
     return true
   }
 
+  /** The message that opened the turn the chat's host runs now, when it can be read. */
+  private openerOf(paneKey: string): string | undefined {
+    const sessionId = this.deps.linkedFor(paneKey)?.link.sessionId
+    return sessionId === undefined ? undefined : this.deps.turnOpener(sessionId)?.itemId
+  }
+
   /** The chat's running turn, once its conversation was told it started; null for any other. */
   toldTurn(paneKey: string): number | null {
     return this.told.has(paneKey) ? (this.startedAt.get(paneKey) ?? null) : null
@@ -152,8 +164,11 @@ export class ChatTurns {
     const previous = this.leadState.get(paneKey)
     this.leadState.set(paneKey, lead.state)
     const open = this.startedAt.get(paneKey)
+    if (lead.state !== 'working') {
+      return
+    }
     if (
-      lead.state !== 'working' ||
+      // Resumed from an answered prompt: the same turn.
       previous === 'blocked' ||
       previous === 'waiting' ||
       open === lead.stateStartedAt ||
@@ -163,9 +178,17 @@ export class ChatTurns {
         previous === 'working' &&
         !this.deps.chatTurnWaiting(linked.link.sessionId))
     ) {
+      if (open !== undefined) {
+        this.dates.showed(paneKey, lead.stateStartedAt, this.openerOf(paneKey) ?? null)
+      }
+      return
+    }
+    // The ended turn's row read again (a real next turn shows a date of its own).
+    if (open === undefined && this.dates.isEnded(paneKey, lead.stateStartedAt)) {
       return
     }
     this.startedAt.set(paneKey, lead.stateStartedAt)
+    this.dates.started(paneKey, lead.stateStartedAt, this.openerOf(paneKey))
     this.told.delete(paneKey)
     this.prompts.adopted.delete(paneKey)
     this.tell(paneKey, linked, lead.stateStartedAt)
@@ -181,6 +204,7 @@ export class ChatTurns {
     }
     this.leadState.set(paneKey, lead.state)
     this.startedAt.set(paneKey, lead.stateStartedAt)
+    this.dates.started(paneKey, lead.stateStartedAt, this.openerOf(paneKey) ?? null)
     this.tell(paneKey, linked, lead.stateStartedAt)
     this.news({ kind: 'prompt', sessionId })
   }
@@ -203,6 +227,7 @@ export class ChatTurns {
       this.deps.chatTurnOrigin(news.sessionId, this.startedAt.get(paneKey) ?? null)
       this.startedAt.delete(paneKey)
       this.told.delete(paneKey)
+      this.dates.forget(paneKey)
       return
     }
     if (news.kind !== 'prompt') {
@@ -215,6 +240,7 @@ export class ChatTurns {
       if (news.kind !== 'prompt') {
         this.deps.chatTurnOrigin(news.sessionId, this.startedAt.get(paneKey) ?? null)
         this.startedAt.delete(paneKey)
+        this.dates.forget(paneKey)
       }
       return
     }
@@ -237,6 +263,7 @@ export class ChatTurns {
       at: news.at
     }
     this.startedAt.delete(paneKey)
+    this.dates.endedTurn(paneKey)
     const heard = this.told.delete(paneKey) || origin === 'delivery'
     const adopted = this.prompts.adopted.delete(paneKey)
     if (linked.link.adoptedTurn) {
@@ -308,11 +335,14 @@ export class ChatTurns {
   /** Signed out or another account: a turn end still being read reaches no one. */
   reset(): void {
     this.generation += 1
+    this.dates.clear()
     this.clear()
   }
 
-  /** A watch went; a turn end still being read reaches the next one. */
+  /** A watch went; a turn end still being read reaches the next one. Ended turns' dates are kept,
+   *  so the next watch's snapshot doesn't take one's row for a running turn. */
   clear(): void {
+    this.dates.gap()
     this.startedAt.clear()
     this.told.clear()
     this.prompts.clear()

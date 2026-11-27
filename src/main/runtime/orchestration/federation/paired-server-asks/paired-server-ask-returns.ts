@@ -1,18 +1,21 @@
 // Replies and notices this computer's agents owe asks from a paired server's agents wait in its
 // relay queue; it hands them back as soon as one is queued, since the server can't pull from here.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { PairedServerAsks } from './paired-server-asks-pull'
 
 const RETURN_TIMEOUT_MS = 15_000
 const PAGE = 50
 
-const Returned = z.object({
-  acknowledgments: z.array(
-    z.object({ conversationId: z.string(), throughSequence: z.number().int().nonnegative() })
-  ),
-  gone: z.array(z.string())
-})
+const Returned = lazyZodSchema(() =>
+  z.object({
+    acknowledgments: z.array(
+      z.object({ conversationId: z.string(), throughSequence: z.number().int().nonnegative() })
+    ),
+    gone: z.array(z.string())
+  })
+)
 
 // Per server: a flush is running, and whether a wake landed while it ran.
 type Flush = { again: boolean; done: Promise<void> }

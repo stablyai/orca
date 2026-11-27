@@ -1,8 +1,8 @@
 import { defineMethod } from '../../core'
 import {
-  AGENT_ACTIVITY_ORCHESTRATION_MAX_CONTEXTS,
   AGENT_ACTIVITY_ORCHESTRATION_METHOD,
   AgentActivityClearParams,
+  AgentActivityOrchestrationParams,
   AgentActivitySetReadParams,
   type AgentActivityOrchestrationResult
 } from '../../../../../shared/rpc-contract/agent-activity/agent-activity-params'
@@ -34,14 +34,8 @@ export const AGENT_ACTIVITY_METHODS = [
   defineMethod({
     name: AGENT_ACTIVITY_ORCHESTRATION_METHOD,
     permission: 'workspace',
-    params: null,
-    handler: async (_params, { runtime }): Promise<AgentActivityOrchestrationResult> => ({
-      contexts: Object.fromEntries(
-        Object.entries(runtime.agentOrchestrationByPaneKey() ?? {}).slice(
-          0,
-          AGENT_ACTIVITY_ORCHESTRATION_MAX_CONTEXTS
-        )
-      )
-    })
+    params: AgentActivityOrchestrationParams,
+    handler: async (params, { runtime }): Promise<AgentActivityOrchestrationResult> =>
+      runtime.readAgentOrchestrationSince(params.sinceRevision)
   })
 ]

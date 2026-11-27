@@ -92,7 +92,11 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       url: '',
       cols: session.cols,
       rows: session.rows,
-      ...(startupOverride?.command ? { command: startupOverride.command } : {}),
+      // One writer per start: a pane that types its startup command itself doesn't also hand it to the shell.
+      ...(startupOverride?.command &&
+      session.pendingStartupCommand?.command !== startupOverride.command
+        ? { command: startupOverride.command }
+        : {}),
       ...(startupOverride?.env
         ? { env: session.mergeStartupEnvWithPaneIdentity(startupOverride.env) }
         : {}),

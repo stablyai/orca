@@ -113,4 +113,23 @@ describe('orca google bot', () => {
     })
     expect(status).toContain('Me@Gmail.com (default): connected')
   })
+  it('says Reconnect once for an ended account in orca google status', () => {
+    const status = formatGoogleStatus({
+      client: null,
+      accounts: [
+        {
+          email: 'me@work.com',
+          status: 'reconnect',
+          reason: 'Google access ended (revoked, expired, or the password changed).',
+          googleError: 'Token has been expired or revoked. (invalid_grant)',
+          services: [],
+          connectedAt: 0
+        }
+      ],
+      bots: []
+    })
+    expect(status).toContain(
+      'me@work.com: Reconnect. Google access ended (revoked, expired, or the password changed). Google said: Token has been expired or revoked. (invalid_grant). Run `orca google connect --account me@work.com`.'
+    )
+  })
 })

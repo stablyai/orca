@@ -26,10 +26,11 @@ import {
   type MobileComposio
 } from '../../session/native-chat/transcript/bot-cards/mobile-composio-store'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { MobileBotTextButton } from '../MobileBotTextButton'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export type ComposioScope = {
   client: RpcClient | null
@@ -56,6 +57,8 @@ export function MobileBotComposioConnect(
     onDone: () => void
   }
 ) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { client, app, composio } = props
   const [busy, setBusy] = useState(false)
@@ -258,6 +261,8 @@ export function MobileBotComposioFixKey(props: ComposioScope & { onClose: () => 
 
 /** The host's Composio key: asked before an app's sign-in, or alone (Fix key) to replace a refused one. */
 export function MobileBotComposioKey(props: ComposioScope & { onClose: () => void }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { client } = props
   const clipboard = useClipboardReader()
@@ -362,7 +367,7 @@ export function MobileBotComposioKey(props: ComposioScope & { onClose: () => voi
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   field: { marginTop: spacing.lg },
   waiting: {
     flexDirection: 'row',

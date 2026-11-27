@@ -130,6 +130,10 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     return true
   }
 
+  reopenClosedMobileSessionTab(worktreeId: string, tabId: string): void {
+    this.clientSessionTabSelections.reopenForAllClients(worktreeId, tabId)
+  }
+
   async reopenMobileSessionTabForClient(
     worktreeId: string,
     sessionId: string,

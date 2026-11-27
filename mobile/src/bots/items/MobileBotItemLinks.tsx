@@ -31,9 +31,9 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { openExternalLink } from '../../platform/external-links/external-link'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { prStateColor } from '../../worktree/row-presentation/WorktreeMetaGlyphs'
 import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
 import { MobileBotWorkerRow } from '../MobileBotWorkerRow'
@@ -83,6 +83,7 @@ function gitHubTitle(row: BotItemGitHubRow, t: Translate): string {
 }
 
 function GitHubIcon({ row }: { row: BotItemGitHubRow }) {
+  const colors = useMobileColors()
   if (!row.state) {
     return row.type === 'pr' ? (
       <GitPullRequest size={ICON} color={colors.textMuted} />
@@ -92,12 +93,12 @@ function GitHubIcon({ row }: { row: BotItemGitHubRow }) {
   }
   if (row.type === 'issue') {
     return row.state === 'closed' ? (
-      <CircleCheck size={ICON} color={prStateColor('merged')} />
+      <CircleCheck size={ICON} color={prStateColor('merged', colors)} />
     ) : (
-      <CircleDot size={ICON} color={prStateColor('open')} />
+      <CircleDot size={ICON} color={prStateColor('open', colors)} />
     )
   }
-  const color = prStateColor(row.state)
+  const color = prStateColor(row.state, colors)
   switch (row.state) {
     case 'merged':
       return <GitMerge size={ICON} color={color} />
@@ -112,6 +113,7 @@ function GitHubIcon({ row }: { row: BotItemGitHubRow }) {
 
 /** CI only where it can still change: open and draft PRs with a finished result. */
 function CiMark({ row }: { row: BotItemGitHubRow }) {
+  const colors = useMobileColors()
   if (
     row.type !== 'pr' ||
     (row.state !== 'open' && row.state !== 'draft') ||
@@ -140,7 +142,8 @@ export function MobileBotItemLinks({
   /** Opens a file in the bot's folder; refuses one outside it. */
   onOpenFile: (path: string) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
   const [pressed, setPressed] = useState<LongPress | null>(null)
@@ -295,7 +298,7 @@ export function MobileBotItemLinks({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   trail: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   label: { fontSize: typography.metaSize, color: colors.textMuted, fontVariant: ['tabular-nums'] }
 }))

@@ -6,8 +6,9 @@ import { parseBotAvatar } from '../bot-avatar'
 import type { Bot } from '../bot-types'
 import { DEFAULT_BOT_AVATAR_COLOR } from './bot-avatar-color'
 
-// Bumped when the mascots' or outfits' art changes, so each icon is drawn again from the new art.
+// Bump the version of an affected look when its artwork changes.
 const SLACK_ICON_ART_VERSION = 'v1'
+const CORAL_HARD_HAT_VERSION = 'v2'
 
 // As BotAvatarColorSchema and BotStoredOutfitSchema take them.
 const COLOR = /^#[0-9a-f]{6}$/
@@ -28,7 +29,16 @@ export function botSlackIconLook(bot: LookedBot): string | null {
   const outfit =
     typeof bot.avatarOutfit === 'string' && OUTFIT.test(bot.avatarOutfit) ? bot.avatarOutfit : null
   const tile = color && color !== DEFAULT_BOT_AVATAR_COLOR ? color.slice(1) : null
-  return [SLACK_ICON_ART_VERSION, parsed.id, tile ?? 'plain', outfit ?? 'none'].join('-')
+  const artVersion =
+    parsed.id === 'G1' && outfit === 'hard-hat' ? CORAL_HARD_HAT_VERSION : SLACK_ICON_ART_VERSION
+  return [artVersion, parsed.id, tile ?? 'plain', outfit ?? 'none'].join('-')
+}
+
+/** The previous drawing of this same look, which older windows and hosts still use. */
+export function botSlackIconLegacyLook(look: string): string | null {
+  return look.startsWith(`${CORAL_HARD_HAT_VERSION}-G1-`) && look.endsWith('-hard-hat')
+    ? `${SLACK_ICON_ART_VERSION}${look.slice(CORAL_HARD_HAT_VERSION.length)}`
+    : null
 }
 
 export function botSlackIconFile(look: string): string {

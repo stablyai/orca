@@ -30,7 +30,7 @@ const inputVariants = cva('', {
     density: {
       default: '',
       // pl/pr, not px: a later sheet re-emits px-2, which would beat the leading icon's pl-8.
-      compact: 'h-7 border-border bg-input/50 pr-2 pl-2 text-xs shadow-none md:text-xs'
+      compact: 'h-7 border-border pr-2 pl-2 text-xs shadow-none md:text-xs'
     },
     /** Room for an absolutely positioned icon at the start, such as a search glass. */
     inset: {
@@ -41,32 +41,60 @@ const inputVariants = cva('', {
     // Reserves room for an icon button absolutely positioned inside the field's right edge.
     adornment: {
       none: '',
-      trailing: 'pr-8'
+      trailing: 'pr-8',
+      warningAndClear: 'pr-20',
+      shortcut: 'pr-16 group-focus-within/rail-search:pr-8 @max-[40rem]/rail-page:pr-8',
+      shortcutAndClear: 'pr-16 @max-[40rem]/rail-page:pr-8'
+    },
+    focusFeedback: {
+      default: '',
+      border: 'focus-visible:border-ring/70 focus-visible:ring-0',
+      quiet: 'focus-visible:border-border focus-visible:ring-0'
     }
   },
-  defaultVariants: { variant: 'default', density: 'default', inset: 'default', adornment: 'none' }
+  compoundVariants: [{ density: 'compact', surface: 'default', className: 'bg-input/50' }],
+  defaultVariants: {
+    variant: 'default',
+    surface: 'default',
+    density: 'default',
+    inset: 'default',
+    adornment: 'none',
+    focusFeedback: 'default'
+  }
 })
 
 const Input = React.forwardRef<
   HTMLInputElement,
   React.ComponentProps<'input'> & VariantProps<typeof inputVariants>
->(({ className, type, variant, surface, density, inset, adornment, ...props }, ref) => {
-  return (
-    <ImeInput
-      ref={ref}
-      type={type}
-      data-slot="input"
-      className={cn(
-        'h-9 w-full min-w-0 appearance-none rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none selection:bg-primary selection:text-primary-foreground file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30',
-        'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
-        'aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
-        inputVariants({ variant, surface, density, inset, adornment }),
-        className
-      )}
-      {...props}
-    />
-  )
-})
+>(
+  (
+    { className, type, variant, surface, density, inset, adornment, focusFeedback, ...props },
+    ref
+  ) => {
+    return (
+      <ImeInput
+        ref={ref}
+        type={type}
+        data-slot="input"
+        className={cn(
+          'h-9 w-full min-w-0 appearance-none rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none selection:bg-primary selection:text-primary-foreground file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30',
+          'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+          'aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
+          inputVariants({
+            variant,
+            surface: surface ?? undefined,
+            density,
+            inset,
+            adornment,
+            focusFeedback
+          }),
+          className
+        )}
+        {...props}
+      />
+    )
+  }
+)
 
 Input.displayName = 'Input'
 

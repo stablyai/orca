@@ -3,7 +3,6 @@ import { ListRow } from '../components/list/ListGroup'
 import { useAllHostClients } from '../transport/connection/use-all-host-clients'
 import { loadHostCatalog } from '../host-catalog/host-store'
 import { pushDeliveryTest } from '../notifications/push-registration/mobile-push-delivery-test-operations'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNote, SettingsSection } from './settings-screen-frame'
 import * as Notifications from 'expo-notifications'
@@ -23,7 +22,6 @@ import {
 } from '../notifications/foreground-delivery/desktop-notification-channel'
 
 export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: () => void }) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const busy = useRef(false)
   const pending = useRef<AbortController | null>(null)

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import {
   TERMINAL_COLOR_KEYS,
   hasUsableTerminalThemeColors,
@@ -10,8 +11,8 @@ import {
   type PluginArtifactStrictness
 } from './plugin-theme-artifact'
 
-const terminalColorKeySchema = z.enum(TERMINAL_COLOR_KEYS)
-const terminalModeSchema = z.enum(['dark', 'light', 'unknown'])
+const terminalColorKeySchema = lazyZodSchema(() => z.enum(TERMINAL_COLOR_KEYS))
+const terminalModeSchema = lazyZodSchema(() => z.enum(['dark', 'light', 'unknown']))
 
 const TERMINAL_COLOR_KEY_SET: ReadonlySet<string> = new Set(TERMINAL_COLOR_KEYS)
 
@@ -28,14 +29,16 @@ function pluginTerminalThemeArtifactSchema(strictness: PluginArtifactStrictness)
   return strictness === 'strict' ? z.strictObject(fields) : z.object(fields)
 }
 
-const pluginTerminalThemeRegistrationSchema = z.object({
-  id: pluginContentIdSchema,
-  pluginKey: z.string(),
-  pluginName: z.string(),
-  label: z.string(),
-  mode: terminalModeSchema,
-  terminal: z.partialRecord(terminalColorKeySchema, z.string())
-})
+const pluginTerminalThemeRegistrationSchema = lazyZodSchema(() =>
+  z.object({
+    id: pluginContentIdSchema,
+    pluginKey: z.string(),
+    pluginName: z.string(),
+    label: z.string(),
+    mode: terminalModeSchema,
+    terminal: z.partialRecord(terminalColorKeySchema, z.string())
+  })
+)
 
 export type PluginTerminalThemeRegistration = z.infer<typeof pluginTerminalThemeRegistrationSchema>
 

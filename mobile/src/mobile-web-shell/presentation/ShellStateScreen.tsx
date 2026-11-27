@@ -2,9 +2,8 @@ import type { ReactNode } from 'react'
 import { Platform, Pressable, Text, View } from 'react-native'
 import { currentWebViewProvider } from '../../../modules/orca-mobile-web-shell/src/index'
 import { ProtocolBlockScreen } from '../../components/host-connection/ProtocolBlockScreen'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { HostDisplaySource } from '../../host-descriptors/use-host-display'
@@ -52,7 +51,7 @@ function failureMessage(reason: MobileWebShellFailureCause, t: Translate): strin
 }
 
 function Centered({ children }: { children: ReactNode }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return <View style={styles.centered}>{children}</View>
 }
 
@@ -64,7 +63,7 @@ function Failed({
   onRetry: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   // Retry cannot change a settled isolation gate or give an unsupported WebView the missing fence.
   const retryable = state.reason !== 'isolation-unavailable' && state.reason !== 'status-unreadable'
   const provider = state.reason === 'isolation-unavailable' ? currentWebViewProvider() : null
@@ -120,6 +119,7 @@ export function ShellStateScreen({
   downloadProgress: DownloadProgressFeed
   host: HostDisplaySource | null
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   switch (state.kind) {
     case 'route-unavailable':
@@ -162,7 +162,7 @@ export function ShellStateScreen({
   }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   centered: {
     flex: 1,
     alignItems: 'center',

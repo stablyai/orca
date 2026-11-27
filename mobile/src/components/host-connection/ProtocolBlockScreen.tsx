@@ -4,9 +4,8 @@ import { leaveHostRoute } from '../../host-route-exit'
 import { useRouteHandoff } from '../../navigation/route-handoff'
 import { useSessionListLongPressProps } from '../../navigation/session-list-long-press-props'
 import { Platform, Pressable, Text, View } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { CompatVerdict } from '../../transport/connection/protocol-compat'
@@ -153,7 +152,7 @@ export function useMobileUpdateLink(): { label: string; url: string } {
 }
 
 export function ProtocolBlockScreen({ verdict }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const sessionListLongPress = useSessionListLongPressProps()
   const router = useRouteHandoff()
@@ -217,7 +216,7 @@ export function ProtocolBlockScreen({ verdict }: Props) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,

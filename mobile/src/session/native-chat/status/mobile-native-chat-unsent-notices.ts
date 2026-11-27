@@ -1,5 +1,6 @@
 import { agentJournalSubmissionKey } from '../../../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { mobileAgentSessionWriteNoticeText } from '../agent-session/agent-session-write-notice-copy'
+import type { Translate } from '../../../i18n/mobile-i18n'
 import { agentSessionVisibleFailureFacts } from '../../../../../src/shared/agent-session/failures/agent-session-visible-failures'
 import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import { dispatchWasWithdrawn } from '../../../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'
@@ -11,7 +12,8 @@ const NO_NOTICES: ReadonlyMap<string, string> = new Map()
 // Share the empty result during streaming; Stop withdrawals are not send failures.
 export function mobileNativeChatUnsentNotices(
   journal: NativeChatTurnJournal | null,
-  agent: string | null | undefined
+  agent: string | null | undefined,
+  t: Translate
 ): ReadonlyMap<string, string> {
   const rejected = (journal?.submissions ?? []).filter(
     (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
@@ -25,7 +27,8 @@ export function mobileNativeChatUnsentNotices(
     rejected.map((submission) => [
       agentJournalSubmissionKey(submission.clientMessageId),
       mobileAgentSessionWriteNoticeText(
-        structuredAgentSessionRecordedRejectionParts(submission, { agentName }, startFailures)
+        structuredAgentSessionRecordedRejectionParts(submission, { agentName }, startFailures),
+        t
       )
     ])
   )

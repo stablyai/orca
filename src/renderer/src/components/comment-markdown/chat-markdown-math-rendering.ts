@@ -18,13 +18,15 @@ export function useChatMathRendering(enabled: boolean): () => ReturnType<typeof 
       return
     }
     let active = true
-    pending ??= import('./chat-markdown-math-typeset').then(
-      (module) => (loaded = module.typesetChatMath),
-      () => {
-        pending = undefined
-        return undefined
-      }
-    )
+    if (pending == null) {
+      pending = import('./chat-markdown-math-typeset').then(
+        (module) => (loaded = module.typesetChatMath),
+        () => {
+          pending = undefined
+          return undefined
+        }
+      )
+    }
     void pending.then((render) => {
       if (active && render) {
         setTypeset(() => render)

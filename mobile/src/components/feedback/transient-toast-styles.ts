@@ -1,8 +1,8 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, radii } from '../../theme/mobile-theme'
+import { spacing, radii } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const transientToastStyles = themedStyleSheet(() => ({
+export const transientToastStylesSheet = themedStyleSheet((colors) => ({
   toast: {
     position: 'absolute',
     bottom: spacing.lg,

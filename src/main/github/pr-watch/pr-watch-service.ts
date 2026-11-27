@@ -1,5 +1,5 @@
 import { orderPRWatchOutcome } from './pr-watch-outcome-order'
-import { sweepGonePRChats } from './pr-watch-chat-retirement'
+import { PRChatSweepCadence, sweepGonePRChats } from './pr-watch-chat-retirement'
 // The host's CI-line service: chats' verified PR actions start watches the pr-refresh queue reads;
 // each new final result on a head becomes one line in every chat that owned the PR when it landed.
 
@@ -28,7 +28,6 @@ import { prKeyOf, prWatchCandidate, type PRWatchServiceDeps } from './pr-watch-t
 
 const ACTION_WINDOW_MS = 14 * 24 * 60 * 60_000
 const STARTUP_SPACING_MS = 10_000
-const SWEEP_INTERVAL_MS = 60_000
 
 type ChatWatch = { candidate: reads.GitHubPRRefreshCandidate; lastActionAt: number }
 
@@ -39,7 +38,7 @@ export class PRWatchService {
   private readonly deliveries: PREventDeliveryTrigger
   private stopObserving: (() => void) | null = null
   private readonly outcomes = new Map<string, Promise<unknown>>()
-  private lastSweepAt = 0
+  private readonly sweeps = new PRChatSweepCadence(() => this.now())
   private readonly now: () => number
 
   constructor(private readonly deps: PRWatchServiceDeps) {
@@ -300,16 +299,17 @@ export class PRWatchService {
   }
 
   private async sweepGoneChats(force: boolean): Promise<void> {
-    if (!force && this.now() - this.lastSweepAt < SWEEP_INTERVAL_MS) {
+    const due = this.sweeps.due(force)
+    if (!due) {
       return
     }
-    this.lastSweepAt = this.now()
     await sweepGonePRChats(
       this.deps,
       () => this.stopped,
       this.chatWatches.keys(),
       (id) => this.deliveries.forget(id),
-      (key) => this.endChatWatch(key)
+      (key) => this.endChatWatch(key),
+      due
     )
   }
   private readonly failed = (error: unknown): void =>

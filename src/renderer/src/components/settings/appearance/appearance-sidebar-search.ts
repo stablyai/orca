@@ -183,7 +183,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
       ...translateSearchKeyword('auto.components.settings.appearance.search.839fb1e3ed', 'toolbox')
     ]
   },
-  getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
   getShowPinnedWorktreesInGroupsEntry()
 ])

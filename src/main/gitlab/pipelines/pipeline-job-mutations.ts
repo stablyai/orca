@@ -38,10 +38,12 @@ function mapRetriedPipelineJob(
     started_at?: string | null
     finished_at?: string | null
   },
-  fallbackJobId: number
+  fallbackJobId: number,
+  projectRef: ProjectRef
 ): GitLabPipelineJob {
   return {
     id: data.id ?? fallbackJobId,
+    projectRef,
     ...(typeof data.pipeline?.id === 'number' ? { pipelineId: data.pipeline.id } : {}),
     name: data.name ?? '',
     stage: data.stage ?? '',
@@ -126,7 +128,7 @@ export async function retryJob(
         const trimmed = stdout.trim()
         return {
           ok: true,
-          ...(trimmed ? { job: mapRetriedPipelineJob(JSON.parse(trimmed), jobId) } : {})
+          ...(trimmed ? { job: mapRetriedPipelineJob(JSON.parse(trimmed), jobId, projectRef) } : {})
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
