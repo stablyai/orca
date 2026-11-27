@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { normalizeWorkspaceAttachments } from './workspace-attachment-normalization'
+import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
 import type { WorkspaceAttachment } from '../worktree/types'
 
 function pr(number: number, repository?: string): WorkspaceAttachment {
@@ -60,5 +61,17 @@ describe('workspace attachment normalization', () => {
       linearB
     ])
     expect(normalizeWorkspaceAttachments(normalized)).toEqual(normalized)
+  })
+
+  it("keeps an It's a Plan linked item and attachment", () => {
+    const item = {
+      provider: 'itsaplan',
+      type: 'issue',
+      number: 42,
+      title: 'KEY-42 Fix login',
+      url: 'https://app.itsaplan.test/issues/42'
+    } as const
+    expect(normalizeWorkspaceLinkedItem(item)).toEqual(item)
+    expect(normalizeWorkspaceAttachments([item])).toEqual([item])
   })
 })
