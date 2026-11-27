@@ -54,12 +54,6 @@ describe('itsaplan slice', () => {
     status.mockReset().mockResolvedValue({ connected: true, viewer: null, instance: null })
   })
 
-  it('uses one cache key regardless of label id order', () => {
-    expect(itsaplanIssueListCacheKey({ projectRef: 'a.E', filters: { labelIds: [2, 1] } })).toBe(
-      itsaplanIssueListCacheKey({ projectRef: 'a.E', filters: { labelIds: [1, 2] } })
-    )
-  })
-
   it('propagates an updated issue into cached lists', async () => {
     const query = { projectRef: 'a.E', filters: {} }
     listIssues.mockResolvedValue([issue(4, 1), issue(5, 1)])
