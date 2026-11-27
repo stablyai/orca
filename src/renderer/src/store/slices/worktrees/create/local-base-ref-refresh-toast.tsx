@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 import { LocalBaseRefNotUpdatedCard } from './local-base-ref-not-updated-card'
 import {
   dismissLocalBaseRefToast,
+  isLocalBaseRefToastShowing,
   openLocalBaseRefToastId,
   renderLocalBaseRefToast,
   rerenderLocalBaseRefToast,
@@ -187,19 +188,19 @@ function showUnshallowLaunchFailure(command: string): void {
 const unshallowLaunchesInFlight = new Set<string>()
 
 function runUnshallowInNewTerminalTab(
-  toastId: string,
+  target: string,
   closeToast: () => void,
   worktreeId: string,
   executionHostId: ExecutionHostId | undefined,
   command: string
 ): void {
-  // Why: a second click would race the first fetch for Git's shallow lock.
-  if (unshallowLaunchesInFlight.has(toastId)) {
+  // Why per target: a second click, even on a re-shown toast, would race the first fetch for Git's shallow lock.
+  if (unshallowLaunchesInFlight.has(target)) {
     return
   }
-  unshallowLaunchesInFlight.add(toastId)
+  unshallowLaunchesInFlight.add(target)
   const settle = (started: boolean): void => {
-    unshallowLaunchesInFlight.delete(toastId)
+    unshallowLaunchesInFlight.delete(target)
     if (started) {
       closeToast()
     } else {
@@ -244,6 +245,12 @@ export function showLocalBaseRefRefreshToast(
   const id = openLocalBaseRefToastId(target)
   const onDismiss = (): void => retireLocalBaseRefToast(target, id)
   const closeToast = (): void => dismissLocalBaseRefToast(target, id)
+  // Why: a launch settles later; a newer result shown in place since then must stay up.
+  const closeLaunchingResult = (): void => {
+    if (isLocalBaseRefToastShowing(target, id, show)) {
+      closeToast()
+    }
+  }
   const runnableCommand = result.shallowHistory ? runnableUnshallowCommand(result) : undefined
 
   const actions = (
@@ -281,8 +288,8 @@ export function showLocalBaseRefRefreshToast(
           size="sm"
           onClick={() =>
             runUnshallowInNewTerminalTab(
-              id,
-              closeToast,
+              target,
+              closeLaunchingResult,
               createdWorktree.id,
               executionHostId,
               runnableCommand

@@ -6,6 +6,16 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type { LocalBaseRefRefreshResult } from '../../../../../../shared/worktree/base-refs/base-ref-drift-types'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
 
+type Launch = { onSettled: (started: boolean) => void }
+const launches = vi.hoisted((): Launch[] => [])
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: () => true
+}))
+vi.mock('@/components/terminal/tab-lifecycle/terminal-tab-create', () => ({
+  createNewTerminalTab: (_worktreeId: string, _tab: unknown, options: Launch) =>
+    launches.push(options)
+}))
+
 const REFRESH: LocalBaseRefRefreshResult = {
   status: 'skipped_not_fast_forward',
   baseRef: 'origin/main',
@@ -41,6 +51,7 @@ let resizeCallbacks: (() => void)[] = []
 beforeEach(() => {
   vi.useFakeTimers()
   resizeCallbacks = []
+  launches.length = 0
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -59,6 +70,8 @@ beforeEach(() => {
 })
 afterEach(() => {
   // Why settle, not runAllTimers: sonner's removal needs React effects between its frame and timer.
+  // Why: the in-flight unshallow guard is module state, so finish every launch.
+  act(() => launches.forEach((launch) => launch.onSettled(true)))
   act(() => toast.dismiss())
   settle()
   cleanup()
@@ -160,6 +173,32 @@ describe('local base ref refresh toast', () => {
     act(() => olderCardResize())
     settle()
     expect(shownTitles()).toEqual([SHALLOW_TITLE])
+  })
+
+  async function clickUnshallow(): Promise<void> {
+    act(() => fireEvent.click(screen.getByRole('button', { name: 'Unshallow' })))
+    await act(() => vi.dynamicImportSettled())
+  }
+
+  it('runs one unshallow per target, even from a re-shown toast', async () => {
+    act(() => show(SHALLOW))
+    act(() => vi.advanceTimersByTime(0))
+    await clickUnshallow()
+    act(() => fireEvent.click(screen.getAllByRole('button', { name: /^Close/ })[0]))
+    act(() => show(SHALLOW))
+    settle()
+    await clickUnshallow()
+    expect(launches).toHaveLength(1)
+  })
+
+  it('keeps a newer result shown in place when an earlier unshallow finishes', async () => {
+    act(() => show(SHALLOW))
+    act(() => vi.advanceTimersByTime(0))
+    await clickUnshallow()
+    act(() => show(REFRESH))
+    act(() => launches[0].onSettled(true))
+    settle()
+    expect(shownTitles()).toEqual([REFRESH_TITLE])
   })
 
   it('shows a result that arrives while the closed card is still leaving', () => {

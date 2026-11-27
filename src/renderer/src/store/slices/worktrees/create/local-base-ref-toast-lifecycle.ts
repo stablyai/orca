@@ -28,6 +28,16 @@ export function renderLocalBaseRefToast(target: string, id: string, render: () =
   }
 }
 
+/** True while the open toast still shows the result this render belongs to. */
+export function isLocalBaseRefToastShowing(
+  target: string,
+  id: string,
+  render: () => void
+): boolean {
+  const open = openToasts.get(target)
+  return open?.id === id && open.render === render
+}
+
 /** Re-renders the open toast with its latest result, never the caller's. */
 export function rerenderLocalBaseRefToast(target: string, id: string): void {
   const open = openToasts.get(target)

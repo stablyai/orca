@@ -83,7 +83,7 @@ export function LocalBaseRefNotUpdatedCard({
       {open ? (
         <p
           id={detailId}
-          className="mt-1 select-text whitespace-pre-wrap rounded-md bg-muted px-2 py-1.5 font-mono text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]"
+          className="mt-1 ml-6 select-text whitespace-pre-wrap rounded-md bg-muted px-2 py-1.5 font-mono text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]"
         >
           {detail}
         </p>
