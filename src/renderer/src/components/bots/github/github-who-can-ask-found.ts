@@ -54,6 +54,18 @@ type Answer = {
 /** A reused list older than this is worth mentioning on every search. */
 export const STALE_LIST_MS = 60 * 60_000
 
+/** All an answer's wording takes from the time now: whether the list was read today (its time)
+ *  or before (its date), and whether a reused list is past STALE_LIST_MS. Answers composed at
+ *  two times with the same key say the same. */
+export function listClock(roster: GitHubRosterState | null, now: number): string {
+  if (roster?.status !== 'read') {
+    return ''
+  }
+  const today = new Date(now).toDateString() === new Date(roster.readAt).toDateString()
+  const old = roster.reused && now - roster.readAt > STALE_LIST_MS
+  return `${today}:${old}`
+}
+
 /** One search as the picker draws it. Every line says only what was actually read: an empty list
  *  never reads as "no one exists" when nothing, or not everything, was looked at, and a list read
  *  for another scope or account makes no claim about the current ones. */

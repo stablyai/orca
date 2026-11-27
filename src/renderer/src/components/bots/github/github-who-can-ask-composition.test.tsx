@@ -323,3 +323,92 @@ describe('a session on its own', () => {
     expect(users).not.toHaveBeenCalled()
   })
 })
+
+describe('what the clock changes in a later answer', () => {
+  const HOUR = 60 * 60_000
+  /** A read list with one matching person, read at `readAt`; `reused` from an earlier picker
+   *  open, read as `viewer` (another gh account than the linked one). */
+  const listAt = (readAt: number, reused: boolean, viewer?: string): People => ({
+    ok: true,
+    value: {
+      status: 'read',
+      people: [{ id: '5', login: 'sam-k', name: 'Sam K' }],
+      from: { repositories: true, organizations: false },
+      complete: true,
+      omitted: false,
+      cut: { people: false, members: false, repositories: false },
+      readAt,
+      reused,
+      readFor: { scope, owner: 'o' },
+      ...(viewer ? { searchedAs: viewer } : {})
+    }
+  })
+  // Expected wording, built here from the read time (not by the code under test).
+  const timeOf = (at: number): string =>
+    new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(at)
+  const dayOf = (at: number): string =>
+    new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(at)
+  /** The note's first line (the list's date), whitespace as the screen reads it. */
+  const note = (): string =>
+    (screen.getByText(/^Repo list from /).textContent ?? '').split('\n')[0].replace(/\s+/g, ' ')
+  const shows = (text: string): string => text.replace(/\s+/g, ' ')
+
+  // Exact times: only the debounce moves this clock, so each composition's moment is known.
+  beforeEach(() => vi.useFakeTimers())
+
+  it('a list read before midnight, searched again just after it: dated by its day', async () => {
+    const readAt = new Date(2026, 10, 20, 23, 50).getTime()
+    vi.setSystemTime(readAt)
+    const view = picker(async () => listAt(readAt, false))
+    view.change('sam')
+    await view.wait(300)
+    expect(screen.getByText('sam-k')).toBeTruthy()
+    expect(note()).toBe(shows(`Repo list from ${timeOf(readAt)}.`))
+    // Past midnight; the same search again (a trailing space: the session sees the same query).
+    vi.setSystemTime(new Date(2026, 10, 21, 0, 5))
+    view.change('sam ')
+    await view.wait(300)
+    expect(screen.getByText('sam-k')).toBeTruthy()
+    expect(note()).toBe(shows(`Repo list from ${dayOf(readAt)}.`))
+    expect(view.people).toHaveBeenCalledOnce()
+    expect(view.users).toHaveBeenCalledTimes(1)
+  })
+
+  it('a reused list past an hour old gets the restart advice; at exactly an hour, not yet', async () => {
+    const readAt = new Date(2026, 10, 20, 9, 1).getTime()
+    // The search composes when the debounce fires, 250 ms after the change.
+    vi.setSystemTime(readAt + 59 * 60_000 - 250)
+    const view = picker(async () => listAt(readAt, true, 'viewer-two'))
+    view.change('sam')
+    await view.wait(300)
+    expect(note()).toBe(shows(`Repo list from ${timeOf(readAt)}.`))
+    expect(screen.getByText(/Repos read as @viewer-two\./)).toBeTruthy()
+    // Exactly an hour old when it composes: still no advice.
+    vi.setSystemTime(readAt + HOUR - 250)
+    view.change('sam ')
+    await view.wait(300)
+    expect(note()).toBe(shows(`Repo list from ${timeOf(readAt)}.`))
+    // Past the hour: the same row, the same read time and viewer, now with the advice.
+    vi.setSystemTime(readAt + HOUR + 60_000 - 250)
+    view.change('sam')
+    await view.wait(300)
+    expect(screen.getByText('sam-k')).toBeTruthy()
+    expect(note()).toBe(shows(`Repo list from ${timeOf(readAt)}. Restart Orca to refresh.`))
+    expect(screen.getByText(/Repos read as @viewer-two\./)).toBeTruthy()
+    expect(view.people).toHaveBeenCalledOnce()
+  })
+
+  it('the same search later on the same day, the list still fresh: the answer it composed', async () => {
+    const readAt = new Date(2026, 10, 20, 10, 0).getTime()
+    vi.setSystemTime(readAt)
+    const view = picker(async () => listAt(readAt, false))
+    view.change('sam')
+    await view.wait(300)
+    const from = composedFor('sam')
+    vi.setSystemTime(readAt + 30 * 60_000)
+    view.change('sam ')
+    await view.wait(300)
+    expect(composedFor('sam')).toBe(from)
+    expect(note()).toBe(shows(`Repo list from ${timeOf(readAt)}.`))
+  })
+})

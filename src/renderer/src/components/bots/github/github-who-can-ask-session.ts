@@ -8,7 +8,11 @@ import type { BotSlackResult } from '../../../../../shared/connector-bot-slack-c
 import type { GitHubPeopleScope } from '../../../../../shared/bots/github-people-scope'
 import type { BotWhoCanAskSession } from '../BotWhoCanAskList'
 import { WhoCanAskIdentityLedger } from '../who-can-ask-identity-ledger'
-import { gitHubWhoCanAskAnswer, type GitHubRosterState } from './github-who-can-ask-found'
+import {
+  gitHubWhoCanAskAnswer,
+  listClock,
+  type GitHubRosterState
+} from './github-who-can-ask-found'
 
 /** How long one keystroke's answer waits for a roster still loading; it then goes out with what
  *  it has, and the session tells its listener when the roster lands. Logical only. */
@@ -90,14 +94,16 @@ export function gitHubWhoCanAskSession(
   // picker keeps its rows on screen meanwhile), rather than going out at ROSTER_WAIT_MS.
   let patient = false
   // The last answer composed, with what it was composed from: the query, the list state, the
-  // lookup's answer and the picker's record of checks as of then. One settlement can reach the
-  // same query twice (a search waiting on it, and the listener asking again); a search with
-  // nothing newer than that gets the same answer rather than composing it again.
+  // lookup's answer, the picker's record of checks and what its wording took from the clock (the
+  // list's day, a reused list's age) as of then. One settlement can reach the same query twice (a
+  // search waiting on it, and the listener asking again); a search with nothing newer than that
+  // gets the same answer rather than composing it again.
   let composed: {
     query: string
     roster: GitHubRosterState | null
     exact: Exact | 'pending' | null
     evidence: number
+    clock: string
     answer: ReturnType<typeof gitHubWhoCanAskAnswer>
   } | null = null
 
@@ -170,11 +176,14 @@ export function gitHubWhoCanAskSession(
       // The roster may have landed while the exact lookup was still on its way.
       const now = settled ?? early
       const evidence = ledger.version()
+      const at = Date.now()
+      const clock = listClock(now, at)
       if (
         composed?.query === query &&
         composed.roster === now &&
         composed.exact === exactAnswer &&
-        composed.evidence === evidence
+        composed.evidence === evidence &&
+        composed.clock === clock
       ) {
         return composed.answer
       }
@@ -187,11 +196,12 @@ export function gitHubWhoCanAskSession(
           linkedLogins,
           scope,
           producer,
+          now: at,
           identity: (id, login) => ledger.identity(id, login)
         },
         t
       )
-      composed = { query, roster: now, exact: exactAnswer, evidence, answer }
+      composed = { query, roster: now, exact: exactAnswer, evidence, clock, answer }
       return answer
     },
     // Only what failed is asked again: a list request the host never answered (one new request,
