@@ -3963,6 +3963,10 @@
     }
   },
   "taskProviders": {
+    "itsaplan": {
+      "labelCount_one": "{{count}} label",
+      "labelCount_other": "{{count}} labels"
+    },
     "linear": {
       "truncated": {
         "issues_one": "Showing the first {{count}} issue. Search or open Linear for the full set.",

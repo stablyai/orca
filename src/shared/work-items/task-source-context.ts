@@ -133,7 +133,7 @@ export function areTaskSourceContextsEqual(
   )
 }
 
-/** Jira identity is siteId (site + login); its label is display-only. Callers match providers first. */
+/** Jira identity is siteId (site + login), It's a Plan is instanceId; labels are display-only. Callers match providers first. */
 export function haveConflictingTaskSourceAccounts(
   a: Pick<TaskSourceContext, 'provider' | 'providerIdentity' | 'accountLabel'>,
   b: Pick<TaskSourceContext, 'provider' | 'providerIdentity' | 'accountLabel'>
@@ -141,6 +141,11 @@ export function haveConflictingTaskSourceAccounts(
   if (a.provider === 'jira') {
     const left = a.providerIdentity?.provider === 'jira' ? a.providerIdentity.siteId : null
     const right = b.providerIdentity?.provider === 'jira' ? b.providerIdentity.siteId : null
+    return Boolean(left && right && left !== right)
+  }
+  if (a.provider === 'itsaplan') {
+    const left = a.providerIdentity?.provider === 'itsaplan' ? a.providerIdentity.instanceId : null
+    const right = b.providerIdentity?.provider === 'itsaplan' ? b.providerIdentity.instanceId : null
     return Boolean(left && right && left !== right)
   }
   const left = a.accountLabel?.trim()
@@ -228,6 +233,7 @@ function normalizeTaskProvider(value: unknown): TaskProvider | null {
     case 'gitlab':
     case 'linear':
     case 'jira':
+    case 'itsaplan':
       return value
     default:
       return null

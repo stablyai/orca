@@ -16,6 +16,9 @@ export function useIntegrationProviderStatusRefresh(): void {
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
+  const itsaplanStatusChecked = useAppStore((s) => s.itsaplanStatus !== null)
+  const itsaplanStatusContextKey = useAppStore((s) => s.itsaplanStatusContextKey)
+  const refreshItsaplanStatus = useAppStore((s) => s.refreshItsaplanStatus)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
@@ -29,6 +32,7 @@ export function useIntegrationProviderStatusRefresh(): void {
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
   const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey
+  const itsaplanStatusCurrent = itsaplanStatusContextKey === providerRuntimeContextKey
 
   useEffect(() => {
     if (!linearStatusCurrent || !linearStatusChecked) {
@@ -37,10 +41,17 @@ export function useIntegrationProviderStatusRefresh(): void {
     if (!jiraStatusCurrent || !jiraStatusChecked) {
       void checkJiraConnection()
     }
+    if (!itsaplanStatusCurrent || !itsaplanStatusChecked) {
+      void refreshItsaplanStatus()
+    }
     if (!preflightStatusCurrent || !preflightStatusChecked) {
       void refreshPreflightStatus()
     }
   }, [
+    itsaplanStatusChecked,
+    itsaplanStatusContextKey,
+    itsaplanStatusCurrent,
+    refreshItsaplanStatus,
     checkJiraConnection,
     checkLinearConnection,
     jiraStatusChecked,

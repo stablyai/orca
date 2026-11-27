@@ -226,6 +226,7 @@
 2 src/renderer/src/runtime/hosts/observations/use-integration-provider-status-refresh.ts
 1 src/renderer/src/runtime/hosts/preflight/local-preflight-context.ts
 1 src/renderer/src/runtime/hosts/selection/default-creation-host.ts # the sanctioned reader of the default host
+1 src/renderer/src/runtime/itsaplan/runtime-itsaplan-client.ts # the row-less It's a Plan client resolves the default scope host, like the Jira client
 17 src/renderer/src/runtime/jira/runtime-jira-client.ts
 2 src/renderer/src/runtime/jira/runtime-jira-summary-client.ts
 5 src/renderer/src/runtime/jira/runtime-jira-user-fields-client.ts
@@ -241,7 +242,7 @@
 5 src/renderer/src/runtime/web-session-tabs-sync/subscriptions/use-runtime-session-mirror-environment-key.ts
 1 src/renderer/src/runtime/web-session-tabs-sync/tracking/tracking-decisions.ts
 3 src/renderer/src/runtime/web-session-tabs-sync/use-web-session-tabs-sync.ts
-9 src/renderer/src/store/index.ts
+10 src/renderer/src/store/index.ts # +1: the It's a Plan slice spread joins the store like the Jira slice
 2 src/renderer/src/store/project-groups/project-group-mutations.ts
 1 src/renderer/src/store/repos/all-host-repo-catalog-actions.ts
 3 src/renderer/src/store/repos/create-repo-slice.ts
@@ -264,6 +265,7 @@
 1 src/renderer/src/store/slices/editor/opening/open-file-apply.ts
 1 src/renderer/src/store/slices/hosted-review/hosted-review-cache-identity.ts
 1 src/renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets.ts
+3 src/renderer/src/store/slices/itsaplan/itsaplan.ts # account-backed slice reads the default scope host and keys its status and caches to the runtime, like jira-connection-actions
 5 src/renderer/src/store/slices/jira/jira-collection-read-actions.ts
 32 src/renderer/src/store/slices/jira/jira-connection-actions.ts
 8 src/renderer/src/store/slices/jira/jira-issue-read-actions.ts

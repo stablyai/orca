@@ -22,6 +22,7 @@ type NewWorkspaceComposerNameSectionProps = Pick<
   | 'onSmartBranchSelect'
   | 'onSmartLinearIssueSelect'
   | 'onSmartJiraIssueSelect'
+  | 'onSmartItsaplanIssueSelect'
   | 'onOpenJiraSettings'
   | 'smartNameSelection'
   | 'onClearSmartNameSelection'
@@ -64,6 +65,7 @@ export function NewWorkspaceComposerNameSection({
   onSmartBranchSelect,
   onSmartLinearIssueSelect,
   onSmartJiraIssueSelect,
+  onSmartItsaplanIssueSelect,
   onOpenJiraSettings,
   smartNameSelection,
   onClearSmartNameSelection,
@@ -134,6 +136,7 @@ export function NewWorkspaceComposerNameSection({
         onBranchSelect={onSmartBranchSelect}
         onLinearIssueSelect={onSmartLinearIssueSelect}
         onJiraIssueSelect={onSmartJiraIssueSelect}
+        onItsaplanIssueSelect={onSmartItsaplanIssueSelect}
         onOpenJiraSettings={onOpenJiraSettings}
         selectedSource={smartNameSelection}
         onClearSelectedSource={onClearSmartNameSelection}

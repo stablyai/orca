@@ -64,6 +64,7 @@ export type RepoUpdate = Partial<
     | 'dictationTerms'
     | 'issueSourcePreference'
     | 'defaultJiraProject'
+    | 'defaultItsaplanProject'
     | 'forkSyncMode'
     | 'agentWorkspaceTrust'
     | 'externalWorktreeVisibilityPromptDismissedAt'

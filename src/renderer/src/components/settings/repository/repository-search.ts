@@ -8,6 +8,7 @@ import {
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { getRepositoryItsaplanSearchEntry } from './RepositoryItsaplanProjectSection'
 import { searchKeywordTranslator } from '../search/settings-search-keywords'
 import { getRepositoryGitAuthorSearchEntries } from './source-control/repository-git-author-search-entries'
 import { getRepositoryMcpConfigSearchEntries } from './mcp/mcp-config-search'
@@ -209,7 +210,7 @@ function getRepositorySearchParts(
   return {
     agentTrust: getRepositoryAgentTrustSearchEntry(),
     browserProfile: getRepositoryBrowserProfileSearchEntry(t),
-    jira,
+    taskTrackers: [jira, getRepositoryItsaplanSearchEntry(repo, t)],
     displayName,
     icon,
     github,
@@ -233,7 +234,7 @@ export function getRepositoryPaneSearchEntries(
     getRepositoryFormatterSearchEntry(t),
     parts.agentTrust,
     parts.browserProfile,
-    parts.jira,
+    ...parts.taskTrackers,
     parts.displayName,
     parts.icon
   ]
@@ -273,7 +274,7 @@ export function getRepositoryPaneSearchMetadata(
   const identity = [
     parts.agentTrust,
     parts.browserProfile,
-    parts.jira,
+    ...parts.taskTrackers,
     parts.displayName,
     parts.icon
   ]

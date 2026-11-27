@@ -506,7 +506,7 @@
 3 src/renderer/src/components/task-page/linear/use-task-page-linear-context-actions.ts
 1 src/renderer/src/components/task-page/linear/use-task-page-linear-context-state.ts
 1 src/renderer/src/components/task-page/linear/use-task-page-linear-view-state.ts
-10 src/renderer/src/components/task-page/use-task-page-composer-actions.ts
+11 src/renderer/src/components/task-page/use-task-page-composer-actions.ts
 3 src/renderer/src/components/task-page/use-task-page-detail-routing.ts
 1 src/renderer/src/components/task-page/use-task-page-global-effects.ts
 8 src/renderer/src/components/task-page/use-task-page-provider-metadata.ts

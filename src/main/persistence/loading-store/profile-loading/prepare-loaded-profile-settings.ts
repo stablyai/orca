@@ -3,6 +3,7 @@ import type { PersistedState } from '../../../../shared/orca-profiles/persisted-
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../../shared/execution-host/project-runtime-legacy-migration'
 import { normalizeTaskProviderSettings } from '../../../../shared/work-items/task-providers'
+import { migrateItsaplanVisibility } from './itsaplan-visible-provider-migration'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/source-control/ai/settings/auto-rename-branch-from-work-settings'
 import { normalizePluginSystemEnabledDefaultOn } from '../../../../shared/plugins/plugin-system-settings'
 import { migrateNestedWorkerMaxDepthDefault } from '../../../../shared/orchestration/workers/nested-worker-depth'
@@ -135,8 +136,9 @@ export function prepareLoadedProfileSettings(
     : rawTaskProviderSettings.visibleTaskProviders.includes('jira')
       ? rawTaskProviderSettings.visibleTaskProviders
       : [...rawTaskProviderSettings.visibleTaskProviders, 'jira' as const]
+  const itsaplan = migrateItsaplanVisibility(migratedVisibleTaskProviders, parsed.settings)
   const taskProviderSettings = normalizeTaskProviderSettings({
-    visibleTaskProviders: migratedVisibleTaskProviders,
+    visibleTaskProviders: itsaplan.providers,
     defaultTaskSource: rawTaskProviderSettings.defaultTaskSource
   })
   const primarySelectionDefaultedForLinux =
@@ -155,7 +157,7 @@ export function prepareLoadedProfileSettings(
   if (migratePrimarySelectionPlatformDefault || stampPrimarySelectionTerminalDefaults) {
     markNeedsSave()
   }
-  if (!visibleTaskProvidersDefaultedForJira) {
+  if (!visibleTaskProvidersDefaultedForJira || itsaplan.needsSave) {
     markNeedsSave()
   }
   const claudeAgentTeamsDefaultDisabledMigrated =

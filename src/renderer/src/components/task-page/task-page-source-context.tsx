@@ -11,6 +11,7 @@ import type {
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
+import type { ItsaplanIssue } from '../../../../shared/itsaplan/itsaplan-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TaskPageRepoCacheRowInput } from './task-page-cache-selectors'
 import {
@@ -80,6 +81,16 @@ export function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
       },
       getJiraIssueKeyCasingSeedOptions()
     )?.seedName ?? getLinkedWorkItemSuggestedName(issue)
+  )
+}
+export function getItsaplanIssueWorkspaceSeed(issue: ItsaplanIssue): string {
+  return (
+    getLinkedWorkItemWorkspaceName({
+      type: 'issue',
+      provider: 'itsaplan',
+      number: issue.sequenceNumber,
+      title: `${issue.identifier} ${issue.title}`
+    })?.seedName ?? getLinkedWorkItemSuggestedName(issue)
   )
 }
 /** The GitHub fan-out's repo arguments; a repo on a host known unreachable is marked, not dialled. */

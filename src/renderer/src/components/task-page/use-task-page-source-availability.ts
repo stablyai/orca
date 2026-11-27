@@ -1,5 +1,5 @@
 import type { TaskPageRuntimeHostsModel } from './use-task-page-runtime-hosts'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
 import { getJiraAccountLabel } from '@/lib/work-items/jira/jira-account-label'
 import type { Repo } from '../../../../shared/repository/repo-types'
@@ -40,6 +40,13 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     hostRegistryById,
     runtimeStatusByEnvironmentId
   } = model
+  const itsaplanChecked = useAppStore((s) => s.itsaplanStatus !== null)
+  const refreshItsaplanStatus = useAppStore((s) => s.refreshItsaplanStatus)
+  useEffect(() => {
+    if (!itsaplanChecked) {
+      void refreshItsaplanStatus()
+    }
+  }, [itsaplanChecked, refreshItsaplanStatus])
   const getTaskPickerRepoHostLabel = useCallback(
     (repo: Repo): string | null => {
       const provider = taskSource === 'gitlab' ? 'gitlab' : 'github'
@@ -171,7 +178,7 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     ? getTaskSourceCacheScope(jiraTaskSourceContext)
     : providerRuntimeContextKey
   const accountBackedTaskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
-    if (taskSource !== 'linear' && taskSource !== 'jira') {
+    if (taskSource !== 'linear' && taskSource !== 'jira' && taskSource !== 'itsaplan') {
       return []
     }
     const host = hostRegistryById.get(accountBackedTaskSourceHostId)

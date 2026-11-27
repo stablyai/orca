@@ -7,11 +7,14 @@ import type { RuntimeEmulatorCommands } from '../emulator/runtime-emulator-comma
 import { RuntimeBrowserScreencastController } from '../browser/screencast/runtime-browser-screencast-controller'
 import { createRuntimeBrowserCommands } from '../browser/installation/runtime-browser-commands-factory'
 import type { RuntimeJiraCommands } from '../integrations/jira/runtime-jira-commands'
+import type { RuntimeItsaplanCommands } from '../integrations/itsaplan/runtime-itsaplan-commands'
 import type { RpcBinarySender } from '../rpc/transports/rpc-binary-sender'
 import {
   bindLazyAsyncMethods,
   EMULATOR_COMMAND_NAMES,
-  JIRA_ASYNC_COMMAND_NAMES
+  ITSAPLAN_COMMAND_NAMES,
+  JIRA_ASYNC_COMMAND_NAMES,
+  loadItsaplanCommands
 } from './lazy-edge-command-bindings'
 
 type PublicMethods<T> = Pick<T, keyof T>
@@ -31,6 +34,7 @@ type BrowserSurface = Omit<PublicMethods<RuntimeBrowserCommands>, 'browserScreen
 
 export type RuntimeEdgeCommandSurface = BrowserSurface &
   PublicMethods<RuntimeJiraCommands> &
+  PublicMethods<RuntimeItsaplanCommands> &
   PublicMethods<RuntimeEmulatorCommands>
 
 type ScreencastDependencies = ConstructorParameters<typeof RuntimeBrowserScreencastController>[0]
@@ -191,6 +195,7 @@ export class RuntimeEdgeCommandController {
         this.jiraInstance
           ? this.jiraInstance.jiraCancelGenerateIssueSummary(cancelArgs, owner)
           : { ok: true },
+      ...bindLazyAsyncMethods(loadItsaplanCommands, ITSAPLAN_COMMAND_NAMES),
       ...bindBrowserMethods(this.browser, BROWSER_COMMAND_NAMES),
       ...bindLazyAsyncMethods(() => this.loadEmulator(), EMULATOR_COMMAND_NAMES),
       browserScreencast: (params, options) => this.screencasts.start(params, options)

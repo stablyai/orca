@@ -9,6 +9,7 @@ import type { TaskPageGitHubIssueDraftModel } from './github/issue-creation/use-
 import { useState, useMemo, useCallback, useLayoutEffect, useRef } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
+import type { ItsaplanIssue } from '../../../../shared/itsaplan/itsaplan-types'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import {
@@ -21,7 +22,8 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
     openTaskPage,
     linearTaskSourceContext,
     jiraTaskSourceContext,
-    setDialogWorkItem
+    setDialogWorkItem,
+    taskSource
   } = model
   const linearDetailSourceContext =
     pageData.openLinearSourceContext?.provider === 'linear' && pageData.openLinearIssue
@@ -161,7 +163,16 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
     },
     [openLinearDetailPage]
   )
+  // It's a Plan detail is page-local, not a nav-history entry.
+  const [selectedItsaplanIssue, setSelectedItsaplanIssue] = useState<ItsaplanIssue | null>(null)
+  const openItsaplanDetailPage = useCallback((issue: ItsaplanIssue) => {
+    setSelectedItsaplanIssue(issue)
+  }, [])
   const closeTaskDetailPage = useCallback(() => {
+    if (taskSource === 'itsaplan' && selectedItsaplanIssue) {
+      setSelectedItsaplanIssue(null)
+      return
+    }
     const state = useAppStore.getState()
     const currentEntry = state.worktreeNavHistory[state.worktreeNavHistoryIndex]
     if (
@@ -188,7 +199,7 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
         openJiraSourceContext: undefined
       }
     }))
-  }, [clearSelectedLinearIssue, setDialogWorkItem])
+  }, [clearSelectedLinearIssue, selectedItsaplanIssue, setDialogWorkItem, taskSource])
   const [selectedJiraIssueKeyState, setSelectedJiraIssueKey] = useState<string | null>(null)
   const [selectedJiraIssueFallbackState, setSelectedJiraIssueFallback] = useState<JiraIssue | null>(
     null
@@ -281,7 +292,10 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
     selectedJiraIssue: selectedJiraIssue,
     jiraDetailSourceContext: jiraDetailSourceContext,
     setSelectedJiraIssue: setSelectedJiraIssue,
-    openJiraDetailPage: openJiraDetailPage
+    openJiraDetailPage: openJiraDetailPage,
+    selectedItsaplanIssue,
+    setSelectedItsaplanIssue,
+    openItsaplanDetailPage
   })
   return nextModel
 }

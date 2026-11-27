@@ -8,6 +8,7 @@ import {
   GitLabIntegrationCard
 } from '../../integrations/source-control/cli-source-control-integration-cards'
 import { JiraIntegrationCard } from '../../integrations/task-trackers/jira-integration-card'
+import { ItsaplanIntegrationCard } from '../../integrations/task-trackers/itsaplan-integration-card'
 import { LinearIntegrationCard } from '../../integrations/task-trackers/linear-integration-card'
 import { IntegrationCardPresentationProvider } from '../../integrations/presentation/integration-card-presentation'
 import { useIntegrationProviderStatusRefresh } from '../../../runtime/hosts/observations/use-integration-provider-status-refresh'
@@ -74,6 +75,9 @@ export function IntegrationsPane(): React.JSX.Element {
           </ProviderRow>
           <ProviderRow>
             <JiraIntegrationCard />
+          </ProviderRow>
+          <ProviderRow>
+            <ItsaplanIntegrationCard />
           </ProviderRow>
         </SettingsGroup>
       </div>

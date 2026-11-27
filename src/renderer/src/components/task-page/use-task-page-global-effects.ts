@@ -38,13 +38,16 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     selectedLinearIssue,
     selectedJiraIssue,
     newLinearIssueOpen,
-    newJiraIssueOpen
+    newJiraIssueOpen,
+    selectedItsaplanIssue,
+    newItsaplanIssueOpen
   } = model
   const githubTasksBusy = githubListPending || tasksRefreshing || tasksFiltering
-  // GitHub and Linear details replace the list in-page; the Jira detail is a Sheet that owns Esc.
+  // GitHub, Linear and It's a Plan details replace the list in-page; the Jira detail is a Sheet that owns Esc.
   const detailPageOpen =
     (taskSource === 'github' && Boolean(dialogWorkItem)) ||
-    (taskSource === 'linear' && Boolean(selectedLinearIssue))
+    (taskSource === 'linear' && Boolean(selectedLinearIssue)) ||
+    (taskSource === 'itsaplan' && Boolean(selectedItsaplanIssue))
   useEffect(() => {
     // Why: when a modal is open, let it own Esc dismissal.
     if (
@@ -52,6 +55,7 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
       newIssueOpen ||
       newLinearIssueOpen ||
       newJiraIssueOpen ||
+      newItsaplanIssueOpen ||
       activeModal !== 'none'
     ) {
       return
@@ -100,6 +104,7 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     newIssueOpen,
     newLinearIssueOpen,
     newJiraIssueOpen,
+    newItsaplanIssueOpen,
     selectedJiraIssue
   ])
   useEffect(() => {

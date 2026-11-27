@@ -33,11 +33,9 @@ type IssueSourceActionsInput = Pick<
 
 import { useCallback, useMemo } from 'react'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
-import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import {
   buildLinearWorkspaceSource as toLinearLinkedWorkItem,
-  buildJiraWorkspaceSource,
   buildWorkspaceSourceSelection,
   shouldApplyWorkspaceSourceAutoName
 } from '../../../../../shared/new-workspace/workspace-source'
@@ -46,16 +44,12 @@ import {
   getSmartNameSelection as getFolderSmartNameSelection
 } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 import { getLinearLinkedWorkItemBranchName } from '@/lib/work-items/linear/linear-linked-work-item'
-import {
-  getLinearIssueWorkspaceName,
-  getLinkedWorkItemSuggestedName,
-  getLinkedWorkItemWorkspaceName
-} from '../../../../../shared/workspace/naming/workspace-name'
-import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
+import { getLinearIssueWorkspaceName } from '../../../../../shared/workspace/naming/workspace-name'
 import '@/lib/workspace/creation/new-workspace'
-import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/name-field/smart-workspace-name-field-model'
-import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { useAccountBackedIssueSelect } from './account-backed-issue-select'
+
+export type { IssueSourceActionsInput }
 
 export function useIssueSourceActions(input: IssueSourceActionsInput) {
   const {
@@ -161,63 +155,8 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     ]
   )
 
-  const handleSmartJiraIssueSelect = useCallback(
-    (issue: JiraIssue, sourceContext: TaskSourceContext): void => {
-      smartSourceSelectionRef.current = null
-      const linkedItem: LinkedWorkItemSummary = buildJiraWorkspaceSource(issue)
-      setLinkedIssue('')
-      setLinkedPR(null)
-      setLinkedGitLabIssue(null)
-      setLinkedGitLabMR(null)
-      if (baseBranchNamesWorkspace) {
-        setBaseBranch(undefined)
-      }
-      setCompareBaseRef(undefined)
-      setPushTarget(undefined)
-      setBranchNameOverride(undefined)
-      setBranchNameOverridePreservesNameEdits(false)
-      setForkPushWarning(null)
-      branchAutoNameRef.current = ''
-      setLinkedWorkItem(linkedItem)
-      setLinkedTaskSourceContext(sourceContext)
-      const suggestedName =
-        getLinkedWorkItemWorkspaceName(linkedItem, getJiraIssueKeyCasingSeedOptions())?.seedName ??
-        getLinkedWorkItemSuggestedName(linkedItem)
-      // Why: the Jira lookup is async, so a name the user typed while it resolved must survive.
-      if (
-        suggestedName &&
-        shouldApplyWorkspaceSourceAutoName({
-          currentName: name,
-          lastAutoName: lastAutoNameRef.current,
-          lookupTextIsQuery: !linkedWorkItem
-        })
-      ) {
-        setName(suggestedName)
-        lastAutoNameRef.current = suggestedName
-      }
-    },
-    [
-      name,
-      linkedWorkItem,
-      baseBranchNamesWorkspace,
-      branchAutoNameRef,
-      lastAutoNameRef,
-      setBaseBranch,
-      setBranchNameOverride,
-      setBranchNameOverridePreservesNameEdits,
-      setCompareBaseRef,
-      setForkPushWarning,
-      setLinkedGitLabIssue,
-      setLinkedGitLabMR,
-      setLinkedIssue,
-      setLinkedPR,
-      setLinkedTaskSourceContext,
-      setLinkedWorkItem,
-      setName,
-      setPushTarget,
-      smartSourceSelectionRef
-    ]
-  )
+  const { handleSmartJiraIssueSelect, handleSmartItsaplanIssueSelect } =
+    useAccountBackedIssueSelect(input)
 
   const handleClearSmartNameSelection = useCallback((): void => {
     smartSourceSelectionRef.current = null
@@ -289,6 +228,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
   return {
     handleSmartLinearIssueSelect,
     handleSmartJiraIssueSelect,
+    handleSmartItsaplanIssueSelect,
     handleClearSmartNameSelection,
     smartNameSelection
   }

@@ -48,6 +48,7 @@ type RepositoryUpdates = Partial<
     | 'dictationTerms'
     | 'issueSourcePreference'
     | 'defaultJiraProject'
+    | 'defaultItsaplanProject'
     | 'externalWorktreeVisibility'
     | 'externalWorktreeVisibilityPromptDismissedAt'
     | 'externalWorktreeInboxBaselinePaths'

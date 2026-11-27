@@ -27,6 +27,7 @@ import {
   getLinearDisplayProperties
 } from '@/components/task-page/task-page-localized-options'
 import { toast } from 'sonner'
+import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import { getTaskPageRepoSourceContext } from '../../lib/work-items/task-repo-source-context'
 export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
@@ -41,6 +42,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     preflightStatusCurrent,
     linearConnected
   } = model
+  const itsaplanConnected = useAppStore((s) => s.itsaplanStatus?.connected === true)
   const eligibleRepos = useMemo(() => getTaskEligibleRepos(repos), [repos])
 
   // Explicit repo preselection overrides saved defaults so repo-scoped entry points stay single-repo.
@@ -133,12 +135,14 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
-          linearConnected: linearConnected === true
+          linearConnected: linearConnected === true,
+          itsaplanConnected
         },
         defaultTaskSource
       ),
     [
       defaultTaskSource,
+      itsaplanConnected,
       linearConnected,
       preferredVisibleTaskProviders,
       preflightStatusCurrent,

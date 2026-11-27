@@ -9,6 +9,7 @@ import {
 import { canUseGitLabSmartSource } from './smart-workspace-provider-availability'
 import type { useWorkItemSourceState } from './use-work-item-source-state'
 import { useTranslate } from '../../../i18n/use-translate'
+import { useAppStore } from '@/store/index'
 
 type FieldState = ReturnType<typeof useWorkItemSourceState>
 
@@ -87,13 +88,15 @@ export function useSmartWorkspaceFieldAvailability({
       sourceHostId: target.gitlabSourceContext?.hostId
     })
   )
+  const itsaplanConnected = useAppStore((s) => s.itsaplanStatus?.connected === true)
   const availableTaskProviders = useMemo(
     () =>
       filterAvailableTaskProviders(['github', 'gitlab', 'linear'], {
         gitlabInstalled: gitlabSourceAvailable,
-        linearConnected: linearStatus.connected === true
+        linearConnected: linearStatus.connected === true,
+        itsaplanConnected
       }),
-    [gitlabSourceAvailable, linearStatus.connected]
+    [gitlabSourceAvailable, itsaplanConnected, linearStatus.connected]
   )
   const linearAvailable = availableTaskProviders.includes('linear')
   const availableModes = getSmartWorkspaceNameModes(t).filter((item) => {
@@ -111,6 +114,9 @@ export function useSmartWorkspaceFieldAvailability({
     }
     if (item.id === 'jira') {
       return jiraSourceConnected
+    }
+    if (item.id === 'itsaplan') {
+      return itsaplanConnected && !repoBackedSourcesDisabled
     }
     if (item.id === 'branches') {
       return branchesEnabled && !repoBackedSourcesDisabled

@@ -33,6 +33,11 @@ export function translateSmartWorkspaceEmptyHint(mode: SmartNameMode): string {
         'auto.components.new.workspace.smart.workspace.empty.hint.5ba5d3e516',
         'Start typing to search Jira issues, or paste an issue URL.'
       )
+    case 'itsaplan':
+      return translate(
+        'auto.components.new.workspace.smart.workspace.empty.hint.itsaplan',
+        "Start typing to search It's a Plan issues."
+      )
     case 'text':
       return ''
   }

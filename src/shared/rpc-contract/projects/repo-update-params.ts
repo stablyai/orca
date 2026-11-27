@@ -5,6 +5,7 @@ import { normalizeRepoBadgeColor } from '../../repository/appearance/repo-badge-
 import { sanitizeRepoIcon } from '../../repository/appearance/repo-icon'
 import { normalizeGhAccountBinding } from '../../github/accounts/account-binding'
 import { normalizeJiraProjectReference } from '../../jira/jira-project-reference'
+import { normalizeItsaplanProjectReference } from '../../itsaplan/itsaplan-project-reference'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
@@ -71,6 +72,7 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
       dictationTerms: z.unknown().transform(normalizeDictationTerms).optional(),
       issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional(),
       defaultJiraProject: z.unknown().optional().transform(normalizeJiraProjectReference),
+      defaultItsaplanProject: z.unknown().optional().transform(normalizeItsaplanProjectReference),
       ghAccount: z
         .unknown()
         .optional()

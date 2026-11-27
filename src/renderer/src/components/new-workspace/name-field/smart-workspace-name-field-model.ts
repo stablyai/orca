@@ -3,6 +3,7 @@ import type { useAppStore } from '@/store'
 import type { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab/gitlab-types'
+import type { ItsaplanIssue } from '../../../../../shared/itsaplan/itsaplan-types'
 import type { JiraIssue, JiraSite } from '../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../../../shared/repository/repo-types'
@@ -27,6 +28,7 @@ export type SmartWorkspaceNameFieldProps = {
   onBranchSelect: (refName: string, localBranchName: string) => void
   onLinearIssueSelect: (issue: LinearIssue) => void
   onJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  onItsaplanIssueSelect?: (issue: ItsaplanIssue, sourceContext: TaskSourceContext) => void
   onOpenJiraSettings?: () => void
   selectedSource: SmartWorkspaceNameSelection | null
   onClearSelectedSource: () => void
@@ -48,7 +50,15 @@ export type SmartWorkspaceNameFieldProps = {
 }
 
 export type SmartWorkspaceNameSelection = {
-  kind: 'github-pr' | 'github-issue' | 'gitlab-mr' | 'gitlab-issue' | 'branch' | 'linear' | 'jira'
+  kind:
+    | 'github-pr'
+    | 'github-issue'
+    | 'gitlab-mr'
+    | 'gitlab-issue'
+    | 'branch'
+    | 'linear'
+    | 'jira'
+    | 'itsaplan'
   label: string
   url?: string
 }

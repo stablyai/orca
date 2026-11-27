@@ -2,6 +2,7 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import {
+  ITSAPLAN_INTEGRATION_SECTION_ID,
   JIRA_INTEGRATION_SECTION_ID,
   LINEAR_INTEGRATION_SECTION_ID
 } from '../../integrations/task-trackers/task-provider-integration-section-ids'
@@ -14,6 +15,7 @@ export const INTEGRATION_SETTING_TARGET_IDS = {
   azuredevops: 'integrations-azure-devops',
   gitea: 'integrations-gitea',
   jira: JIRA_INTEGRATION_SECTION_ID,
+  itsaplan: ITSAPLAN_INTEGRATION_SECTION_ID,
   linear: LINEAR_INTEGRATION_SECTION_ID
 } as const
 
@@ -201,6 +203,31 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
         'auto.components.settings.integrations.search.20540996ef',
         'credentials'
       ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.3c3d3d8ffa',
+        'connect'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.a626990bd2',
+        'disconnect'
+      )
+    ]
+  },
+  {
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.itsaplan,
+    title: translate('components.itsaplanIntegrationCard.searchTitle', "It's a Plan integration"),
+    description: translate(
+      'components.itsaplanIntegrationCard.searchDescription',
+      "Connect a self-hosted It's a Plan or update its API key."
+    ),
+    keywords: [
+      ...translateSearchKeyword('components.itsaplanIntegrationCard.keywordItsaplan', 'itsaplan'),
+      ...translateSearchKeyword('components.itsaplanIntegrationCard.keywordPlan', "it's a plan"),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.c450244ad7',
+        'integration'
+      ),
+      ...translateSearchKeyword('components.itsaplanIntegrationCard.keywordApiKey', 'api key'),
       ...translateSearchKeyword(
         'auto.components.settings.integrations.search.3c3d3d8ffa',
         'connect'

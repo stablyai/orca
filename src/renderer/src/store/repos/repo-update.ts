@@ -5,6 +5,7 @@ import { sanitizeRepoIcon } from '../../../../shared/repository/appearance/repo-
 import { normalizeRepoBadgeColor } from '../../../../shared/repository/appearance/repo-badge-color'
 import { normalizeGhAccountBinding } from '../../../../shared/github/accounts/account-binding'
 import { normalizeJiraProjectReference } from '../../../../shared/jira/jira-project-reference'
+import { normalizeItsaplanProjectReference } from '../../../../shared/itsaplan/itsaplan-project-reference'
 import { sanitizeAgentWorkspaceTrustDecision } from '../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import { findRepoForHost, repoMatchesHostIdentity } from './repo-host-identity'
 import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
@@ -27,6 +28,14 @@ export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
       delete sanitized.defaultJiraProject
     } else {
       sanitized.defaultJiraProject = reference
+    }
+  }
+  if ('defaultItsaplanProject' in sanitized) {
+    const reference = normalizeItsaplanProjectReference(sanitized.defaultItsaplanProject)
+    if (reference === undefined) {
+      delete sanitized.defaultItsaplanProject
+    } else {
+      sanitized.defaultItsaplanProject = reference
     }
   }
   if ('badgeColor' in sanitized) {

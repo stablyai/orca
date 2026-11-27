@@ -77,6 +77,9 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
+  const itsaplanChecked = useAppStore((s) => s.itsaplanStatus !== null)
+  const itsaplanConnected = useAppStore((s) => s.itsaplanStatus?.connected === true)
+  const refreshItsaplanStatus = useAppStore((s) => s.refreshItsaplanStatus)
   const prefetchWorkItems = useAppStore((s) => s.prefetchWorkItems)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const defaultTaskViewPreset = useAppStore((s) => s.settings?.defaultTaskViewPreset ?? 'all')
@@ -91,13 +94,15 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
-          linearConnected: linearStatus.connected === true
+          linearConnected: linearStatus.connected === true,
+          itsaplanConnected
         },
         defaultTaskSource
       ),
     [
       defaultTaskSource,
       linearStatus.connected,
+      itsaplanConnected,
       preferredVisibleTaskProviders,
       preflightStatusCurrent,
       preflightStatus?.glab?.installed
@@ -115,8 +120,13 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
     if (!linearStatusChecked) {
       void checkLinearConnection()
     }
+    if (!itsaplanChecked) {
+      void refreshItsaplanStatus()
+    }
   }, [
     checkLinearConnection,
+    itsaplanChecked,
+    refreshItsaplanStatus,
     linearStatusChecked,
     preflightStatusChecked,
     preflightStatusCurrent,

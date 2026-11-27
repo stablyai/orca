@@ -10,6 +10,7 @@ import {
   GitLabIntegrationCard
 } from '@/components/integrations/source-control/cli-source-control-integration-cards'
 import { JiraIntegrationCard } from '@/components/integrations/task-trackers/jira-integration-card'
+import { ItsaplanIntegrationCard } from '@/components/integrations/task-trackers/itsaplan-integration-card'
 import { LinearIntegrationCard } from '@/components/integrations/task-trackers/linear-integration-card'
 import {
   IntegrationCardGroup,
@@ -157,6 +158,7 @@ export function ConnectIntegrationsList(): React.JSX.Element {
           <IntegrationCardGroup>
             <LinearIntegrationCard />
             <JiraIntegrationCard />
+            <ItsaplanIntegrationCard />
           </IntegrationCardGroup>
           <p className="px-1 pt-0.5 text-[12px] leading-snug text-muted-foreground">
             {t(

@@ -14,6 +14,7 @@ import { useSmartWorkspaceGithubSearch } from './use-smart-workspace-github-sear
 import { useSmartWorkspaceGitlabSearch } from './use-smart-workspace-gitlab-search'
 import { useWorkItemSourcePresentation } from './use-work-item-source-presentation'
 import { useSmartWorkspaceSecondarySearches } from './use-smart-workspace-secondary-searches'
+import { useItsaplanComposerSource } from './use-itsaplan-composer-source'
 
 export function useWorkItemSourceSearch({
   jiraSourceContext = null,
@@ -116,10 +117,18 @@ export function useWorkItemSourceSearch({
     sourceQueryWithinLimit,
     shouldQueryGitlab
   })
+  const itsaplan = useItsaplanComposerSource({
+    selectedRepo: foundation.selectedRepo,
+    mode: foundation.mode,
+    debouncedQuery: foundation.debouncedQuery,
+    enabled: !disabled && !textOnly && !repoBackedSourcesDisabled
+  })
   const presentation = useWorkItemSourcePresentation(foundation, {
     linearUrlIntent,
     linearUrlIntentOwnsInput,
-    linearQuery
+    linearQuery,
+    itsaplanIssues: itsaplan.itsaplanIssues,
+    itsaplanLoading: itsaplan.itsaplanLoading
   })
   const resolveRow = useCallback(
     (row: (typeof presentation.rows)[number]) =>
@@ -129,7 +138,8 @@ export function useWorkItemSourceSearch({
           github: foundation.githubSourceContext,
           gitlab: foundation.gitlabSourceContext ?? null,
           linear: foundation.linearSourceContext,
-          jira: foundation.jiraSource.boundSourceContext ?? foundation.jiraSourceContext
+          jira: foundation.jiraSource.boundSourceContext ?? foundation.jiraSourceContext,
+          itsaplan: itsaplan.itsaplanSourceContext
         },
         foundation.jiraConnectionStatus?.sites
       ),
@@ -139,7 +149,8 @@ export function useWorkItemSourceSearch({
       foundation.linearSourceContext,
       foundation.jiraSource.boundSourceContext,
       foundation.jiraSourceContext,
-      foundation.jiraConnectionStatus?.sites
+      foundation.jiraConnectionStatus?.sites,
+      itsaplan.itsaplanSourceContext
     ]
   )
   return {

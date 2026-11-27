@@ -7,6 +7,8 @@ import { TaskPageJiraIssueDialog } from './jira/creation/IssueDialog'
 import { TaskPageGitLabDialog } from './gitlab/Dialog'
 import { TaskPageLinearConnectDialog } from './linear/ConnectDialog'
 import { TaskPageJiraConnectDialog } from './jira/ConnectDialog'
+import { ItsaplanConnectDialog } from '@/components/itsaplan-connect-dialog'
+import { TaskPageItsaplanIssueDialog } from './itsaplan/creation/IssueDialog'
 export function TaskPageSurface({
   model
 }: {
@@ -29,6 +31,13 @@ export function TaskPageSurface({
       <TaskPageLinearConnectDialog model={model} />
 
       <TaskPageJiraConnectDialog model={model} />
+
+      <TaskPageItsaplanIssueDialog model={model} />
+
+      <ItsaplanConnectDialog
+        open={model.itsaplanConnectOpen}
+        onOpenChange={model.setItsaplanConnectOpen}
+      />
     </div>
   )
 }

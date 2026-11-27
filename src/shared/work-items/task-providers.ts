@@ -1,6 +1,12 @@
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
+export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira' | 'itsaplan'
 
-export const TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+export const TASK_PROVIDERS: readonly TaskProvider[] = [
+  'github',
+  'gitlab',
+  'linear',
+  'jira',
+  'itsaplan'
+]
 
 const TASK_PROVIDER_SET = new Set<TaskProvider>(TASK_PROVIDERS)
 
@@ -52,6 +58,7 @@ export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
 export type TaskProviderAvailability = {
   gitlabInstalled: boolean
   linearConnected: boolean
+  itsaplanConnected: boolean
 }
 
 export function filterAvailableTaskProviders(
@@ -97,7 +104,7 @@ function isTaskProviderAvailable(
     return availability.gitlabInstalled
   }
   // Disconnected Jira must remain visible as its own first-time setup entry point.
-  if (provider === 'jira') {
+  if (provider === 'jira' || provider === 'itsaplan') {
     return true
   }
   return availability.linearConnected

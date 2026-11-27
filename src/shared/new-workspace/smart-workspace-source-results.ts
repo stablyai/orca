@@ -1,5 +1,6 @@
 import type { GitHubWorkItem } from '../github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../gitlab/gitlab-types'
+import type { ItsaplanIssue } from '../itsaplan/itsaplan-types'
 import type { JiraIssue } from '../jira/jira-types'
 import type { LinearIssue } from '../linear/issue-types'
 import type { LinearCollectionResult } from '../linear/workspace-types'
@@ -13,22 +14,14 @@ import {
   type SmartWorkspaceGitLabUrlIntent
 } from './smart-workspace-url-source-results'
 import { isSmartWorkspaceSourceQueryWithinLimit } from './smart-workspace-source-query'
+import type { SmartNameMode, SmartWorkspaceSourceRow } from './smart-workspace-source-row-types'
 
 export {
   SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES,
   isSmartWorkspaceSourceQueryWithinLimit
 } from './smart-workspace-source-query'
 
-export type SmartNameMode = 'smart' | 'github' | 'gitlab' | 'branches' | 'linear' | 'jira' | 'text'
-
-export type SmartWorkspaceSourceRow =
-  | { kind: 'use-name'; value: string; name: string }
-  | { kind: 'create-branch'; value: string; name: string }
-  | { kind: 'github'; value: string; item: GitHubWorkItem }
-  | { kind: 'gitlab'; value: string; item: GitLabWorkItem }
-  | { kind: 'branch'; value: string; refName: string; localBranchName: string; label?: string }
-  | { kind: 'linear'; value: string; issue: LinearIssue }
-  | { kind: 'jira'; value: string; issue: JiraIssue }
+export type { SmartNameMode, SmartWorkspaceSourceRow } from './smart-workspace-source-row-types'
 
 type LinearIssueSourceInput = LinearIssue[] | LinearCollectionResult<LinearIssue> | null | undefined
 
@@ -39,6 +32,7 @@ const EMPTY_HINT_BY_MODE: Record<SmartNameMode, string> = {
   branches: 'No matching branches.',
   linear: 'Start typing to search Linear issues.',
   jira: 'Start typing to search Jira issues, or paste an issue URL.',
+  itsaplan: "Start typing to search It's a Plan issues.",
   text: ''
 }
 
@@ -203,6 +197,7 @@ export function buildSmartWorkspaceSourceRows({
   jiraIntent = false,
   jiraIssue,
   jiraIssues = [],
+  itsaplanIssues = [],
   linearAvailable,
   linearIssues,
   linearUrlIntentOwnsResults = false,
@@ -219,6 +214,7 @@ export function buildSmartWorkspaceSourceRows({
   jiraIntent?: boolean
   jiraIssue?: JiraIssue | null
   jiraIssues?: JiraIssue[]
+  itsaplanIssues?: ItsaplanIssue[]
   linearAvailable: boolean
   linearIssues: LinearIssueSourceInput
   linearUrlIntentOwnsResults?: boolean
@@ -309,6 +305,15 @@ export function buildSmartWorkspaceSourceRows({
   }
   if (mode === 'jira') {
     nextRows.push(...jiraIssues.map(toJiraSourceRow))
+  }
+  if (mode === 'itsaplan') {
+    nextRows.push(
+      ...itsaplanIssues.map((issue) => ({
+        kind: 'itsaplan' as const,
+        value: `itsaplan-${issue.id}`,
+        issue
+      }))
+    )
   }
   return nextRows.slice(0, resultLimit + 1)
 }

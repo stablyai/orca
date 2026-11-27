@@ -42,7 +42,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { RepositoryWindowsRuntimeSection } from './runtime/RepositoryWindowsRuntimeSection'
 import { matchesRepositoryIdentitySearch } from './identity/repository-identity-search'
 import { RepositoryWorktreeDefaultsSection } from './worktrees/RepositoryWorktreeDefaultsSection'
-import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
+import { RepositoryTaskTrackerProjectSections } from './RepositoryTaskTrackerProjectSections'
 import { RepositoryWorkspaceCleanupSection } from './workspace-cleanup/RepositoryWorkspaceCleanupSection'
 import { getProjectRuntimeSessionSummary } from './runtime/repository-runtime-session-summary'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
@@ -286,8 +286,8 @@ export function RepositoryPane({
           <RepositoryIconPicker repo={repo} updateRepo={updateSelectedRepo} />
         </SearchableSetting>
 
-        <RepositoryJiraProjectSection
-          key={`${selectedHostId}:${repo.id}`}
+        <RepositoryTaskTrackerProjectSections
+          hostId={selectedHostId}
           repo={repo}
           updateRepo={updateSelectedRepo}
           forceVisible={forceFullPaneForRepoMatch}

@@ -10793,7 +10793,9 @@
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
           "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
-          "30255b39dc": "Task providers"
+          "30255b39dc": "Task providers",
+          "itsaplanLabel": "It's a Plan",
+          "itsaplanDescription": "Connect a self-hosted It's a Plan and show it in Tasks."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -12579,7 +12581,9 @@
             "apiKey": "api key",
             "skill": "skill",
             "connect": "connect",
-            "12d2fdff3c": "Task providers"
+            "12d2fdff3c": "Task providers",
+            "itsaplan": "itsaplan",
+            "itsaplanName": "it's a plan"
           }
         },
         "terminal": {
@@ -17127,6 +17131,7 @@
             "retryJira": "Retry",
             "searchJira": "Search Jira issues or paste an issue URL",
             "jiraMode": "Jira",
+            "itsaplanMode": "It's a Plan",
             "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
             "emoji": "Emoji",
             "loadingLinearIssue": "Loading Linear issue…",
@@ -17167,7 +17172,8 @@
                   "b1418294ea": "Start typing to search GitLab MRs and issues.",
                   "80e7791c93": "No matching branches.",
                   "b4e65d98a6": "Start typing to search Linear issues.",
-                  "5ba5d3e516": "Start typing to search Jira issues, or paste an issue URL."
+                  "5ba5d3e516": "Start typing to search Jira issues, or paste an issue URL.",
+                  "itsaplan": "Start typing to search It's a Plan issues."
                 }
               }
             }
@@ -24560,6 +24566,65 @@
         "filesStayLine": "Its files stay on {{host}}.",
         "removing": "Removing…"
       }
+    },
+    "itsaplanIntegrationCard": {
+      "name": "It's a Plan",
+      "connectedDescription": "1 instance connected",
+      "checking": "Checking It's a Plan access before showing setup actions.",
+      "description": "Browse and start work from your self-hosted It's a Plan issues.",
+      "statusConnected": "Connected",
+      "statusNotConnected": "Not connected",
+      "connect": "Connect It's a Plan",
+      "credentialName": "Your It's a Plan API key",
+      "disconnect": "Disconnect",
+      "credentialCopy": "Connect a self-hosted It's a Plan with an API key. The key is stored locally and encrypted when local storage supports it.",
+      "searchTitle": "It's a Plan integration",
+      "searchDescription": "Connect a self-hosted It's a Plan or update its API key.",
+      "keywordItsaplan": "itsaplan",
+      "keywordPlan": "it's a plan",
+      "keywordApiKey": "api key"
+    },
+    "itsaplanConnectDialog": {
+      "errors": {
+        "invalidUrl": "Enter a valid It's a Plan URL.",
+        "apiNotFound": "Could not find the API for this URL. Enter the API URL manually.",
+        "invalidApiKey": "API key invalid. Check the key and try again.",
+        "unreachable": "Could not reach It's a Plan. Check the URL and your network.",
+        "connectionFailed": "Connection failed"
+      },
+      "title": "Connect It's a Plan",
+      "description": "Use your It's a Plan URL and an API key to browse issues.",
+      "appUrl": "App URL",
+      "apiKey": "API key",
+      "apiKeyPlaceholder": "API key",
+      "apiUrl": "API URL",
+      "detecting": "Detecting…",
+      "guide": "Create an API key in It's a Plan under /account/api-keys.",
+      "storage": "The API key is stored locally and encrypted when local storage supports it.",
+      "cancel": "Cancel",
+      "verifying": "Verifying…",
+      "connect": "Connect",
+      "appUrlPlaceholder": "https://plan.example.com",
+      "apiUrlPlaceholder": "https://api.plan.example.com"
+    },
+    "RepositoryItsaplanProjectSection": {
+      "title": "Default It's a Plan project",
+      "description": "Default the It's a Plan issue list to this project. You can change it for each worktree.",
+      "keywordItsaplan": "itsaplan",
+      "keywordDefaultProject": "default project",
+      "saveFailed": "Could not save the default It's a Plan project.",
+      "runtimeUpdate": "Update this runtime to save a default It's a Plan project.",
+      "none": "No default project",
+      "search": "Search It's a Plan projects",
+      "empty": "No projects found.",
+      "connect": "Connect It's a Plan in Integrations to choose a project."
+    },
+    "TaskSourceItsaplanSetup": {
+      "connectTitle": "Connect It's a Plan",
+      "connectDescription": "Add your self-hosted It's a Plan with an API key.",
+      "manage": "Manage keys",
+      "add": "Add It's a Plan access",
+      "providerLabel": "It's a Plan"
     }
   },
   "dashboardPopout": {
@@ -27148,6 +27213,49 @@
         "projectListLimit": "Jira project list exceeded the page limit. Select a project with JQL instead.",
         "invalidCloudId": "The site did not report a valid Atlassian cloud ID."
       }
+    },
+    "itsaplan": {
+      "none": "None",
+      "openInBrowser": "Open in browser",
+      "invalidKeyTitle": "API key invalid, reconnect",
+      "reconnect": "Reconnect",
+      "noDescription": "No description.",
+      "subtasks": "Subtasks",
+      "delegate": "Delegate",
+      "commentFailed": "Failed to add the comment.",
+      "comments": "Comments",
+      "noComments": "No comments yet.",
+      "commentPlaceholder": "Leave a comment...",
+      "addComment": "Comment",
+      "updateFailed": "Failed to update the issue.",
+      "project": "Project",
+      "listLabel": "It's a Plan list",
+      "connectTitle": "Connect It's a Plan",
+      "invalidKeyDescription": "It's a Plan rejected the saved API key. Reconnect with a new key to load issues.",
+      "connectDescription": "Browse, update, create, and start work from It's a Plan issues directly from here.",
+      "connect": "Connect It's a Plan",
+      "hide": "Hide It's a Plan",
+      "issuesHeading": "It's a Plan issues",
+      "noProjects": "No projects available",
+      "noIssues": "No issues found",
+      "noProjectsDescription": "Your API key cannot read any project.",
+      "noIssuesSearch": "Try different search terms.",
+      "noIssuesFilters": "No issues match the filters.",
+      "allStates": "All states",
+      "labelCount_one": "{{count}} label",
+      "labelCount_other": "{{count}} labels",
+      "searchPlaceholder": "Search issues...",
+      "newIssue": "New issue",
+      "refresh": "Refresh",
+      "createFailed": "Failed to create the issue.",
+      "descriptionPlaceholder": "Add description (Markdown)...",
+      "linkSourceUnavailable": "Couldn't link this It's a Plan issue. Reconnect It's a Plan, then try again.",
+      "label": "It's a Plan",
+      "stateBacklog": "Backlog",
+      "stateUnstarted": "Todo",
+      "stateStarted": "In progress",
+      "stateCompleted": "Done",
+      "stateCanceled": "Canceled"
     }
   },
   "editorConflicts": {

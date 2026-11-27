@@ -52,6 +52,7 @@ export function useSmartWorkspaceNameFieldActions(
     onGitHubItemSelect,
     onGitLabItemSelect,
     onJiraIssueSelect,
+    onItsaplanIssueSelect,
     onLinearIssueSelect,
     onValueChange,
     setOpen,
@@ -101,6 +102,18 @@ export function useSmartWorkspaceNameFieldActions(
           return
         }
         onJiraIssueSelect?.(row.issue, sourceContext)
+      } else if (row.kind === 'itsaplan') {
+        const sourceContext = resolveRow(row)?.taskSourceContext
+        if (!sourceContext) {
+          toast.error(
+            translate(
+              'taskProviders.itsaplan.linkSourceUnavailable',
+              "Couldn't link this It's a Plan issue. Reconnect It's a Plan, then try again."
+            )
+          )
+          return
+        }
+        onItsaplanIssueSelect?.(row.issue, sourceContext)
       } else {
         onLinearIssueSelect(row.issue)
       }
@@ -112,6 +125,7 @@ export function useSmartWorkspaceNameFieldActions(
       onGitHubItemSelect,
       onGitLabItemSelect,
       onJiraIssueSelect,
+      onItsaplanIssueSelect,
       onLinearIssueSelect,
       onValueChange,
       setOpen,

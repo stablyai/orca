@@ -2,6 +2,7 @@ import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
+import type { ItsaplanIssue } from '../../../../shared/itsaplan/itsaplan-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
@@ -55,6 +56,7 @@ export type ComposerSourceModel = {
   handleSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   handleSmartGitLabItemSelect: (item: GitLabWorkItem) => void
   handleSmartJiraIssueSelect: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  handleSmartItsaplanIssueSelect: (issue: ItsaplanIssue, sourceContext: TaskSourceContext) => void
   handleSmartLinearIssueSelect: (issue: LinearIssue) => void
   handleSparseSelectPreset: (preset: SparsePreset | null) => void
   insertComposerFolderPaths: (folderPaths: string[]) => void

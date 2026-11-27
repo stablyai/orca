@@ -9,6 +9,7 @@ import {
   type GhAccountBinding
 } from '../../../shared/github/accounts/account-binding'
 import { normalizeJiraProjectReference } from '../../../shared/jira/jira-project-reference'
+import { normalizeItsaplanProjectReference } from '../../../shared/itsaplan/itsaplan-project-reference'
 
 import { sanitizeAgentWorkspaceTrustDecision } from '../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import {
@@ -83,6 +84,7 @@ export function sanitizeRepoUpdatesForPersistence<
       | 'forkSyncMode'
       | 'agentWorkspaceTrust'
       | 'defaultJiraProject'
+      | 'defaultItsaplanProject'
       | 'customWorktreeVisibilitySources'
       | 'worktreeVisibilitySourcePreferences'
     >
@@ -101,6 +103,14 @@ export function sanitizeRepoUpdatesForPersistence<
       delete sanitized.defaultJiraProject
     } else {
       sanitized.defaultJiraProject = reference
+    }
+  }
+  if ('defaultItsaplanProject' in sanitized) {
+    const reference = normalizeItsaplanProjectReference(sanitized.defaultItsaplanProject)
+    if (reference === undefined) {
+      delete sanitized.defaultItsaplanProject
+    } else {
+      sanitized.defaultItsaplanProject = reference
     }
   }
   if ('badgeColor' in sanitized) {

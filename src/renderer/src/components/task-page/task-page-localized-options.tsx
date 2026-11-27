@@ -2,6 +2,7 @@ import React from 'react'
 import { Github, Gitlab, LayoutGrid, List } from 'lucide-react'
 
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { ItsaplanIcon } from '@/components/icons/ItsaplanIcon'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import {
@@ -19,6 +20,7 @@ import type { GitLabMRInvolvement } from '../../../../shared/gitlab/gitlab-types
 import type { GitHubPRStateChip, GitHubPRWhoChip } from './github/listing/task-page-pr-chips'
 import type { TaskProvider } from '../../../../shared/work-items/task-providers'
 import type { TaskViewPresetId } from '../../../../shared/ui-chrome/ui-chrome-types'
+import type { ItsaplanStateType } from '../../../../shared/itsaplan/itsaplan-types'
 
 export type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
 export type GitLabIssueFilter = 'opened' | 'assigned-to-me'
@@ -144,8 +146,23 @@ export const getSourceOptions = createLocalizedCatalog((): SourceOption[] => [
     id: 'jira',
     label: translate('auto.components.TaskPage.9cd11ba218', 'Jira'),
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  {
+    id: 'itsaplan',
+    label: translate('taskProviders.itsaplan.label', "It's a Plan"),
+    Icon: ({ className }) => <ItsaplanIcon className={className} />
   }
 ])
+
+export const getItsaplanStateTypeOptions = createLocalizedCatalog(
+  (): { id: ItsaplanStateType; label: string }[] => [
+    { id: 'backlog', label: translate('taskProviders.itsaplan.stateBacklog', 'Backlog') },
+    { id: 'unstarted', label: translate('taskProviders.itsaplan.stateUnstarted', 'Todo') },
+    { id: 'started', label: translate('taskProviders.itsaplan.stateStarted', 'In progress') },
+    { id: 'completed', label: translate('taskProviders.itsaplan.stateCompleted', 'Done') },
+    { id: 'canceled', label: translate('taskProviders.itsaplan.stateCanceled', 'Canceled') }
+  ]
+)
 
 export const getJiraPresets = createLocalizedCatalog((): JiraPreset[] => [
   { id: 'assigned', label: translate('auto.components.TaskPage.1301d376f1', 'Assigned') },
