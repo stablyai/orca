@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useBotForWorkspace } from '@/components/bots/bot-workspace'
 import { isTuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
@@ -17,6 +17,7 @@ export function useNativeChatCrossVendorControl(input: {
   const { pane, worktreeId, isWorking, reportError } = input
   // A bot's chats keep the bot's own agent.
   const isBotChat = useBotForWorkspace(worktreeId) !== null
+  const t = useTranslate()
   const [switching, setSwitching] = useState<TuiAgent | null>(null)
   const inFlight = useRef(false)
   const switchTo = useCallback(
@@ -56,7 +57,7 @@ export function useNativeChatCrossVendorControl(input: {
             worktreeId,
             target: pane.target,
             blockedReason: isWorking
-              ? translate(
+              ? t(
                   'components.native-chat.crossVendor.waitForTurn',
                   'Wait for the current reply to finish, or stop it, before switching agents.'
                 )
@@ -65,6 +66,6 @@ export function useNativeChatCrossVendorControl(input: {
             switchTo
           }
         : null,
-    [available, pane.agent, worktreeId, pane.target, isWorking, switching, switchTo]
+    [available, pane.agent, worktreeId, pane.target, isWorking, switching, switchTo, t]
   )
 }

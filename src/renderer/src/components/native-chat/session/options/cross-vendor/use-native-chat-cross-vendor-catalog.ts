@@ -33,13 +33,11 @@ export function useNativeChatCrossVendorCatalog(input: {
 }): CrossVendorCatalog {
   const { open, worktreeId, target, currentAgent } = input
   const [catalog, setCatalog] = useState<CrossVendorCatalog>({ vendors: null, models: {} })
-  const targetKey = JSON.stringify(target)
   useEffect(() => {
     if (!open || !worktreeId) {
       return
     }
     const abort = new AbortController()
-    const scopeTarget = JSON.parse(targetKey) as RuntimeClientTarget
     void (async () => {
       let detected: readonly TuiAgent[] | null = null
       let offered: readonly TuiAgent[] = []
@@ -78,7 +76,7 @@ export function useNativeChatCrossVendorCatalog(input: {
             let models: CrossVendorModels
             try {
               const answer = await readModelMenuCatalog(
-                { target: scopeTarget, agent, worktree: toRuntimeWorktreeSelector(worktreeId) },
+                { target, agent, worktree: toRuntimeWorktreeSelector(worktreeId) },
                 true,
                 abort.signal
               )
@@ -108,7 +106,7 @@ export function useNativeChatCrossVendorCatalog(input: {
       )
     })()
     return () => abort.abort()
-  }, [open, worktreeId, targetKey, currentAgent])
+  }, [open, worktreeId, target, currentAgent])
   return catalog
 }
 

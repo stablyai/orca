@@ -21991,7 +21991,22 @@
       "htmlPreview": "HTML 预览",
       "htmlView": "HTML 视图",
       "htmlViewCode": "代码",
-      "htmlViewPreview": "预览"
+      "htmlViewPreview": "预览",
+      "crossVendor": {
+        "cancelled": "已取消切换。",
+        "failed": "无法将此聊天切换到 {{agent}}",
+        "vendors": "代理",
+        "currentAgent": "{{agent}} · 当前聊天",
+        "hint": "使用 {{agent}} 继续此对话。之前的消息保留在这里，并作为上下文共享。",
+        "loadingModels": "正在加载 {{agent}} 模型…",
+        "modelsUnknown": "{{agent}} 未列出模型；将使用其默认模型启动。",
+        "switchDefault": "切换到 {{agent}}",
+        "effortFor": "{{model}} 的推理强度",
+        "notSignedIn": "未登录",
+        "cliMissing": "此主机未安装",
+        "notRunnable": "无法在此主机上启动",
+        "waitForTurn": "请等待当前回复完成或停止它，再切换代理。"
+      }
     },
     "tab": {
       "bar": {

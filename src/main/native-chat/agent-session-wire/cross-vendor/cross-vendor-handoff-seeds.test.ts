@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import {
   createCrossVendorHandoffSeeds,
   withCrossVendorHandoffTurnContext
@@ -48,9 +48,10 @@ it('rides once ahead of the next turn, survives a restart, and is gone once the 
   expect((await context.plan('session-0001', message))?.text).toContain('EARLIER CONVERSATION')
   plan?.given({ instructionsRecorded: false })
   expect(innerGiven).toBe(1)
-  await new Promise((resolve) => setTimeout(resolve, 10))
   expect((await context.plan('session-0001', message))?.text).toBe('BOT RULES')
-  expect(await createCrossVendorHandoffSeeds(directory).read('session-0001')).toBeNull()
+  await vi.waitFor(async () =>
+    expect(await createCrossVendorHandoffSeeds(directory).read('session-0001')).toBeNull()
+  )
   expect(await context.plan('session-0002', message)).toMatchObject({ text: 'BOT RULES' })
 })
 
