@@ -29,6 +29,8 @@ import {
 import { createSessionWorkerLivenessReader } from '../lifecycle/session-worker-liveness'
 import { escalateChatWorkerError } from './chat-worker-error-escalation'
 import { reportChatWorkerProviderDeath } from './chat-worker-provider-death'
+import { observeChatWorkerWorking } from './chat-worker-turn-stops'
+import type { ChatWorkerUsageLimit } from './chat-worker-usage-limit-read'
 
 const SESSION = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')
 const HANDLE = mintStructuredWorkerHandle()
@@ -47,7 +49,10 @@ afterEach(async () => {
   db = undefined
 })
 
-async function startWorker({ unavailableErrorRead = false } = {}) {
+async function startWorker({
+  unavailableErrorRead = false,
+  usageLimits = [] as ChatWorkerUsageLimit[]
+} = {}) {
   const database = new OrchestrationDb(':memory:')
   db = database
   const run = database.createRun({
@@ -85,7 +90,8 @@ async function startWorker({ unavailableErrorRead = false } = {}) {
         const request = unavailableErrorRead
           ? { ...failure, read: () => Promise.reject(new Error('journal read unavailable')) }
           : failure
-        reports.push(escalateChatWorkerError(request, deps))
+        const limit = usageLimits.shift() ?? null
+        reports.push(escalateChatWorkerError(request, deps, async () => limit))
       },
       onIdleProviderDeath: (death) => reportChatWorkerProviderDeath(death, deps)
     }
@@ -135,12 +141,13 @@ async function startWorker({ unavailableErrorRead = false } = {}) {
   const reportExit = () => current.host.handleAdapterEvent(exit)
   const endTimeline = () =>
     timeline.apply([{ type: 'session.ended', verdict: { state: 'interrupted', completedAt: NOW } }])
-  const finishAtUsageLimit = async () => {
+  const finishAtUsageLimit = async (turn = 'work') => {
     timeline.apply([
+      ...(turn === 'work' ? [] : [{ type: 'turn.open' as const, turn, at: NOW }]),
       {
         type: 'item.open',
-        item: 'usage-limit',
-        join: { turn: 'work' },
+        item: `usage-limit-${turn}`,
+        join: { turn },
         body: {
           kind: 'status',
           ...agentSessionFailureWords(
@@ -153,10 +160,10 @@ async function startWorker({ unavailableErrorRead = false } = {}) {
       },
       {
         type: 'turn.end',
-        turn: 'work',
+        turn,
         state: 'completed',
         outcome: 'failure',
-        at: NOW - 1
+        at: turn === 'work' ? NOW - 1 : NOW + 1
       }
     ])
     await sink.written?.()
@@ -201,6 +208,7 @@ async function startWorker({ unavailableErrorRead = false } = {}) {
     return { fence: resumed.fence, acquisitionGeneration: resumed.generation }
   }
   return {
+    deps,
     current,
     database,
     task,
@@ -309,4 +317,33 @@ it('wakes on a proven exit when the journal detail read fails and leaves an expl
     nextAction: { argv: ['orchestration', 'worker-read', '--dispatch', worker.dispatch.id] }
   })
   expect(await worker.readReports()).toHaveLength(1)
+})
+
+it('escalates a usage limit once while Orca keeps continuing the worker, and again when it stops', async () => {
+  const continuesAt = NOW + 60_000
+  const worker = await startWorker({
+    usageLimits: [
+      { chain: 0, resetsAt: continuesAt, continuesAt },
+      { chain: 1, resetsAt: continuesAt, continuesAt },
+      { chain: 2, resetsAt: continuesAt }
+    ]
+  })
+  await worker.finishAtUsageLimit()
+  const first = await worker.readReports()
+  expect(first).toMatchObject([
+    { failureKind: 'usageLimitReached', continuesAt: new Date(continuesAt).toISOString() }
+  ])
+
+  // Orca's automatic continue opens a turn that meets the same limit: no second escalation.
+  observeChatWorkerWorking(SESSION, worker.deps)
+  await worker.finishAtUsageLimit('continued')
+  expect(await worker.readReports()).toHaveLength(1)
+
+  // Orca stops continuing it: the coordinator hears once more, with the reset.
+  observeChatWorkerWorking(SESSION, worker.deps)
+  await worker.finishAtUsageLimit('given-up')
+  const reports = await worker.readReports()
+  expect(reports).toHaveLength(2)
+  expect(reports[1]).toMatchObject({ resetsAt: new Date(continuesAt).toISOString() })
+  expect(reports[1]).not.toHaveProperty('continuesAt')
 })
