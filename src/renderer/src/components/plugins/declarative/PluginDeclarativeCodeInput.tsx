@@ -299,10 +299,12 @@ export function PluginDeclarativeCodeInput({
               autoCorrect="off"
               rows={rows}
               title={diagnostics.map((diagnostic) => diagnostic.message).join('\n') || undefined}
-              role="combobox"
-              aria-multiline={rows > 1}
+              // Only a single-line editor is a combobox; a multi-line one (Enter breaks the line) is a
+              // multi-line textbox, which still owns the suggestion listbox through aria-controls.
+              role={rows > 1 ? 'textbox' : 'combobox'}
+              aria-multiline={rows > 1 || undefined}
               aria-autocomplete="list"
-              aria-expanded={open}
+              aria-expanded={rows > 1 ? undefined : open}
               aria-controls={open ? listId : undefined}
               aria-activedescendant={open ? `${listId}-${shown}` : undefined}
               aria-invalid={props.invalid || undefined}

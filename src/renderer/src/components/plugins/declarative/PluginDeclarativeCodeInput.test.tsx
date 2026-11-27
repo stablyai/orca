@@ -29,7 +29,7 @@ beforeEach(() => {
 afterEach(cleanup)
 
 function rendered(): HTMLTextAreaElement {
-  const textarea = screen.getByRole('combobox')
+  const textarea = screen.queryByRole('combobox') ?? screen.getByRole('textbox')
   if (!(textarea instanceof HTMLTextAreaElement)) {
     throw new Error('CodeInput did not render a textarea')
   }
@@ -52,6 +52,24 @@ function suggest(textarea: HTMLTextAreaElement, at: number): void {
   placeCaret(textarea, at)
   fireEvent.keyDown(textarea, { key: ' ', ctrlKey: true })
 }
+
+it('is a single-line combobox and a multi-line textbox that owns the suggestions', () => {
+  const single = field(base).textarea
+  expect(single.getAttribute('role')).toBe('combobox')
+  expect(single.hasAttribute('aria-multiline')).toBe(false)
+  expect(single.getAttribute('aria-expanded')).toBe('false')
+  cleanup()
+
+  const { textarea } = field({ ...base, defaultValue: 'to', rows: 2 })
+  expect(textarea.getAttribute('role')).toBe('textbox')
+  expect(textarea.getAttribute('aria-multiline')).toBe('true')
+  expect(textarea.hasAttribute('aria-expanded')).toBe(false)
+  suggest(textarea, 2)
+  const listbox = screen.getByRole('listbox')
+  expect(textarea.getAttribute('aria-autocomplete')).toBe('list')
+  expect(textarea.getAttribute('aria-controls')).toBe(listbox.id)
+  expect(textarea.getAttribute('aria-activedescendant')).toBe(screen.getByRole('option').id)
+})
 
 it('replaces the word at the caret with the chosen suggestion', () => {
   const { textarea } = field({ ...base, defaultValue: 'to + status' })
