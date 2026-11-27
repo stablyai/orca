@@ -2,7 +2,10 @@ import { scrollRichMarkdownElementToContainerTop } from './rich-markdown-viewpor
 import { revealMarkdownNavigationDetails } from '../../markdown/navigation/markdown-navigation-details'
 import { useCallback, useEffect, useMemo, useState, type MutableRefObject } from 'react'
 import type { MarkdownTocItem } from '../../markdown/navigation/markdown-table-of-contents'
-import { findRichMarkdownTocHeadingTarget } from './rich-markdown-toc-heading-target'
+import {
+  findRichMarkdownTocHeadingTarget,
+  resolveRichMarkdownTocHeadingTargets
+} from './rich-markdown-toc-heading-target'
 import { selectMarkdownTableOfContents } from '../../markdown/navigation/markdown-toc-visibility-gate'
 
 function flattenMarkdownTocItems(items: MarkdownTocItem[]): MarkdownTocItem[] {
@@ -40,14 +43,16 @@ export function useRichMarkdownTableOfContents(
     const update = (): void => {
       frame = 0
       const top = container.getBoundingClientRect().top + 16
+      const headings = resolveRichMarkdownTocHeadingTargets(container, flatTableOfContentsItems)
       let current: string | null = null
       for (const item of flatTableOfContentsItems) {
-        const heading = findRichMarkdownTocHeadingTarget(
-          container,
-          flatTableOfContentsItems,
-          item.id
-        )
-        if (heading && heading.getBoundingClientRect().top <= top) {
+        const heading = headings.get(item.id)
+        // A heading inside a closed <details> has no layout box and its rect top is 0.
+        if (
+          heading &&
+          heading.getClientRects().length > 0 &&
+          heading.getBoundingClientRect().top <= top
+        ) {
           current = item.id
         }
       }
@@ -59,9 +64,18 @@ export function useRichMarkdownTableOfContents(
       }
     }
     container.addEventListener('scroll', schedule, { passive: true })
+    // Wrapping changes which heading is current without moving scrollTop (e.g. a narrower floating panel).
+    const content =
+      container.querySelector<HTMLElement>('.ProseMirror, .tiptap') ?? container.firstElementChild
+    const observer = new ResizeObserver(schedule)
+    observer.observe(container)
+    if (content instanceof HTMLElement) {
+      observer.observe(content)
+    }
     update()
     return () => {
       container.removeEventListener('scroll', schedule)
+      observer.disconnect()
       if (frame !== 0) {
         window.cancelAnimationFrame(frame)
       }

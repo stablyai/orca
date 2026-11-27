@@ -29,30 +29,39 @@ function matchingTitle(value: string): string {
   )
 }
 
+/** Resolve every listed heading in one DOM pass, keeping duplicate-title occurrence order. */
+export function resolveRichMarkdownTocHeadingTargets(
+  container: ParentNode,
+  items: readonly MarkdownTocItem[]
+): Map<string, HTMLElement> {
+  const byTitle = new Map<string, HTMLElement[]>()
+  for (const candidate of container.querySelectorAll<HTMLElement>(
+    RICH_MARKDOWN_TOC_HEADING_SELECTOR
+  )) {
+    const title = matchingTitle(headingText(candidate))
+    const candidates = byTitle.get(title) ?? []
+    candidates.push(candidate)
+    byTitle.set(title, candidates)
+  }
+
+  const resolved = new Map<string, HTMLElement>()
+  const used = new Map<string, number>()
+  for (const item of items) {
+    const title = matchingTitle(item.title)
+    const occurrence = used.get(title) ?? 0
+    used.set(title, occurrence + 1)
+    const heading = byTitle.get(title)?.[occurrence]
+    if (heading) {
+      resolved.set(item.id, heading)
+    }
+  }
+  return resolved
+}
+
 export function findRichMarkdownTocHeadingTarget(
   container: ParentNode,
   items: readonly MarkdownTocItem[],
   id: string
 ): HTMLElement | undefined {
-  const target = items.find((item) => item.id === id)
-  if (!target) {
-    return undefined
-  }
-
-  const title = matchingTitle(target.title)
-  const sameTitleIndex = items
-    .filter((item) => matchingTitle(item.title) === title)
-    .findIndex((item) => item.id === target.id)
-  let remaining = Math.max(0, sameTitleIndex)
-  for (const candidate of container.querySelectorAll<HTMLElement>(
-    RICH_MARKDOWN_TOC_HEADING_SELECTOR
-  )) {
-    if (matchingTitle(headingText(candidate)) === title) {
-      if (remaining === 0) {
-        return candidate
-      }
-      remaining -= 1
-    }
-  }
-  return undefined
+  return resolveRichMarkdownTocHeadingTargets(container, items).get(id)
 }
