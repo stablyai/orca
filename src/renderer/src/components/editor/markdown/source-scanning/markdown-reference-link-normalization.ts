@@ -3,6 +3,7 @@ import {
   createMarkdownFenceTracker,
   getMarkdownFenceRanges
 } from '../../../../../../shared/markdown/markdown-fence-scanner'
+import { createMarkdownCodeSpanScanner } from '../../../../../../shared/markdown/markdown-code-span-scanner'
 
 type ReferenceLinkDefinition = {
   label: string
@@ -141,8 +142,17 @@ function replaceReferenceLinks(
   let result = ''
   let index = 0
   const isInsideFence = createMarkdownFenceRangeCursor(getMarkdownFenceRanges(markdown))
+  const codeSpans = createMarkdownCodeSpanScanner(markdown)
 
   while (index < markdown.length) {
+    if (markdown[index] === '`' && !isInsideFence(index)) {
+      const spanEnd = codeSpans.findSpanEnd(index)
+      if (spanEnd !== null) {
+        result += markdown.slice(index, spanEnd)
+        index = spanEnd
+        continue
+      }
+    }
     if (isInsideFence(index) || markdown[index] !== '[' || isEscaped(markdown, index)) {
       result += markdown[index]
       index += 1
