@@ -63,7 +63,7 @@ export default function ProjectGroupHeader({
           <span className="shrink-0 text-[10px] text-muted-foreground">{dateRange}</span>
         ) : null}
         {isCurrent ? (
-          <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 text-[10px] text-emerald-700 dark:text-emerald-300">
+          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 text-[10px] text-emerald-700 dark:text-emerald-300">
             {t('auto.components.github.project.ProjectGroupHeader.82a22d2079', 'Current')}
           </span>
         ) : null}
