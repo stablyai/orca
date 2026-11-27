@@ -130,10 +130,16 @@ class World {
       ? this.state[receiver] === 'running'
       : this.workerOf(session)?.state === 'running'
   }
+  // A chat at a prompt waits on a person: it has not finished, so what it holds is still its.
+  awaitingPerson(session: string): boolean {
+    const receiver = this.receiverOf(session)
+    return receiver !== null ? this.state[receiver] === 'prompt' : false
+  }
 
   reads: QuestionPartyReads = {
     liveSession: (root) => root,
     chatRunning: async (session) => this.running(session),
+    chatAwaitingPerson: async (session) => this.awaitingPerson(session),
     chatReceiving: (mailbox) => {
       if (mailbox === `run:${this.runId}`) {
         return this.bound && this.receiving(session(COORDINATOR)) ? session(COORDINATOR) : null
@@ -202,6 +208,9 @@ class World {
       return null
     }
     const session = taker.slice('session:'.length)
+    if (this.awaitingPerson(session)) {
+      return `${taker} waits on a person`
+    }
     if (this.running(session) || this.wakePending(session)) {
       return `${taker} is running or about to`
     }

@@ -9,6 +9,7 @@ import {
 import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent-transition-detector'
 import type { QuestionPartyReads } from './question-party-facts'
 import {
+  chatAwaitingPerson,
   chatTurnRunning,
   type ChatStateReader
 } from '../../../../native-chat/agent-session-wire/observations/chat-turn-running'
@@ -17,7 +18,7 @@ export type QuestionReconcilerInstall = Omit<
   QuestionReconcilerDeps,
   'terminalParty' | 'reads' | 'notices'
 > & {
-  reads: Omit<QuestionPartyReads, 'chatRunning'>
+  reads: Omit<QuestionPartyReads, 'chatRunning' | 'chatAwaitingPerson'>
   /** As the reconciler's, with the chat status reader for the notice's wording. */
   notices(
     taker: string,
@@ -45,6 +46,10 @@ export function installQuestionReconciler(
       chatRunning: async (sessionId) => {
         const state = await readChatNow(sessionId)
         return state ? chatTurnRunning(state) : null
+      },
+      chatAwaitingPerson: async (sessionId) => {
+        const state = await readChatNow(sessionId)
+        return state ? chatAwaitingPerson(state) : null
       }
     },
     terminalParty: (ptyId) => terminalParty(install.terminalOfPty(ptyId))

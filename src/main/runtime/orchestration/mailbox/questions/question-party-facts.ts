@@ -16,6 +16,8 @@ export type QuestionPartyReads = {
   liveSession(root: string): string
   /** Its lead turn runs now; null when the chat isn't loaded here. */
   chatRunning(sessionId: string): Promise<boolean | null>
+  /** Its lead turn waits on a person being asked now; null when the chat isn't loaded here. */
+  chatAwaitingPerson(sessionId: string): Promise<boolean | null>
   /** The chat a structured delivery pass would send this mailbox's mail to now, if it can take it. */
   chatReceiving(mailbox: string): string | null
   chatHandingOver(mailbox: string): boolean
@@ -48,6 +50,7 @@ export async function readQuestionPartyFacts(
   parties: Iterable<string>
 ): Promise<QuestionPartyFacts> {
   const running = new Map<string, boolean>()
+  const awaitingPerson = new Map<string, boolean>()
   const mailboxes = new Map<string, readonly string[]>()
   const ptys = new Map<string, string>()
   for (const party of new Set(parties)) {
@@ -55,6 +58,7 @@ export async function readQuestionPartyFacts(
       const root = party.slice('session:'.length)
       const live = reads.liveSession(root)
       running.set(party, (await reads.chatRunning(live)) === true)
+      awaitingPerson.set(party, (await reads.chatAwaitingPerson(live)) === true)
       const ids = [...new Set([root, live])]
       const runs = ids.flatMap((id) =>
         isOrcaSessionId(id)
@@ -76,6 +80,8 @@ export async function readQuestionPartyFacts(
       const handle = party.slice('terminal:'.length)
       const terminal = reads.terminal(handle)
       running.set(party, terminal?.working === true)
+      // A dialog holding the pane is a person being asked, on the terminal lane as on a chat's.
+      awaitingPerson.set(party, terminal?.asking === true)
       if (terminal && !terminal.asking && terminal.takesInput) {
         ptys.set(party, terminal.ptyId)
         mailboxes.set(party, [
@@ -90,6 +96,7 @@ export async function readQuestionPartyFacts(
   }
   return {
     running: (party) => running.get(party) ?? false,
+    awaitingPerson: (party) => awaitingPerson.get(party) ?? false,
     mailboxes: (party) => mailboxes.get(party) ?? [],
     handingOver: (party, mailbox) => {
       const ptyId = ptys.get(party)

@@ -12,15 +12,17 @@ const TAKER = `terminal:${HANDLE}`
 describe("a terminal taker's pending wake", () => {
   let db: OrchestrationDb
   let takesInput: boolean
+  let asking: boolean
 
   const reads: QuestionPartyReads = {
     liveSession: (root) => root,
     chatRunning: async () => false,
+    chatAwaitingPerson: async () => false,
     chatReceiving: () => null,
     chatHandingOver: () => false,
     terminal: (handle) =>
       handle === HANDLE
-        ? { ptyId: 'pty-1', paneKeys: [], asking: false, takesInput, working: false }
+        ? { ptyId: 'pty-1', paneKeys: [], asking, takesInput, working: false }
         : null,
     terminalHandingOver: () => false
   }
@@ -28,6 +30,7 @@ describe("a terminal taker's pending wake", () => {
   beforeEach(() => {
     db = new OrchestrationDb(':memory:')
     takesInput = true
+    asking = false
   })
   afterEach(() => db.close())
 
@@ -70,5 +73,17 @@ describe("a terminal taker's pending wake", () => {
     db.insertMessage({ from: 'term_worker', to: HANDLE, subject: 'status', body: 'b' })
     takesInput = false
     expect(await told()).toEqual([id])
+  })
+
+  it('holds the question while a dialog asks a person on the pane', async () => {
+    const id = takenQuestion()
+    asking = true
+    expect(await told()).toEqual([])
+    // A held question stays awaiting, so the agent can still answer it after the person does.
+    expect(db.db.prepare(`SELECT awaiting FROM bot_requests WHERE message_id = ?`).get(id)).toEqual(
+      {
+        awaiting: 1
+      }
+    )
   })
 })

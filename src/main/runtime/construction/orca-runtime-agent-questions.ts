@@ -42,7 +42,7 @@ export abstract class OrcaRuntimeWithAgentQuestions extends OrcaRuntimeSidebarBa
     this.stopQuestionReconciler = installed.stop
   }
 
-  private questionPartyReads(): Omit<QuestionPartyReads, 'chatRunning'> {
+  private questionPartyReads(): Omit<QuestionPartyReads, 'chatRunning' | 'chatAwaitingPerson'> {
     const structured = this.orchestrationStructuredMailboxPointerDelivery
     return {
       liveSession: liveLineageSession,

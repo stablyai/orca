@@ -15,6 +15,14 @@ export function chatTurnRunning(
   )
 }
 
+/** Its lead turn stopped because a person is being asked: it waits on a person, it has not
+ *  finished, so a question it holds is still its to answer. Unreadable → false. */
+export function chatAwaitingPerson(
+  state: Pick<StructuredAgentSessionStatusState, 'pendingPromptIds'>
+): boolean {
+  return state.pendingPromptIds.length > 0
+}
+
 /** A chat's status as its journal stands now; null when the chat isn't loaded here. */
 export type ChatStateReader = (
   sessionId: string

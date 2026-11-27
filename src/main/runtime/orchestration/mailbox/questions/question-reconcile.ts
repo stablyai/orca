@@ -1,7 +1,7 @@
-// Whether an agent question's asker is owed a notice now: its taker stopped without answering, no
-// delivery would wake that taker, and no worker started `--for` the question still runs. Each fact
-// that can't be read counts toward telling, so a question is never held silently; at worst the
-// asker hears once and the answer still lands later.
+// Whether an agent question's asker is owed a notice now: its taker stopped without answering,
+// waits on no person, no delivery would wake that taker, and no worker started `--for` the
+// question still runs. Each fact that can't be read counts toward telling, so a question is never
+// held silently; at worst the asker hears once and the answer still lands later.
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { selectOrchestrationPointerBatch } from '../terminal-pointer/mailbox-pointer-eligibility'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
@@ -10,6 +10,9 @@ import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transacti
 export type QuestionPartyFacts = {
   /** Its lead turn runs, or owes a queued send, with no person asked. Unreadable → false. */
   running(party: string): boolean
+  /** Its lead turn stopped because a person is being asked: the taker waits on a person, it has
+   *  not finished, so what it holds is still its to answer. Unreadable → false. */
+  awaitingPerson(party: string): boolean
   /** The mailboxes a delivery pass would hand this party mail from now; none when it can't attach. */
   mailboxes(party: string): readonly string[]
   /** A delivery pass is handing this mailbox's mail to the party right now (in memory, ended in a
@@ -52,7 +55,10 @@ function wakePending(db: OrchestrationDb, facts: QuestionPartyFacts, party: stri
 }
 
 function busy(db: OrchestrationDb, facts: QuestionPartyFacts, party: string): boolean {
-  return !NEVER_RUNS.test(party) && (facts.running(party) || wakePending(db, facts, party))
+  return (
+    !NEVER_RUNS.test(party) &&
+    (facts.running(party) || facts.awaitingPerson(party) || wakePending(db, facts, party))
+  )
 }
 
 /** The open Dispatches started `--for` this question, and every open helper below them. */

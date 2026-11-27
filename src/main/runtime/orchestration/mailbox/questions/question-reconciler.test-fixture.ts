@@ -10,6 +10,7 @@ export function startRestingQuestionReconciler(
     reads: {
       liveSession: (root) => root,
       chatRunning: async () => false,
+      chatAwaitingPerson: async () => false,
       chatReceiving: () => null,
       chatHandingOver: () => false,
       terminal: () => null,
