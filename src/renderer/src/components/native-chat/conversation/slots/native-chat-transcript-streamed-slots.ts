@@ -5,7 +5,10 @@ import {
   noteRevisedInPlace,
   positionsRevisedFrom
 } from '../../../../../../shared/agent-session/view/revised-in-place-lists'
-import { noteStreamedTextStage } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import {
+  noteStreamedTextStage,
+  stageBesideStreamedText
+} from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import {
   buildNativeChatTranscript,
   type NativeChatMessageSlot,
@@ -20,9 +23,9 @@ import {
 } from '../../viewport/virtualization/native-chat-row-height-estimate'
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
 
-/** Where each row is drawn: a slot's own row or a work run's member by the slot's index; a note
- *  cluster's rows as -1. */
-type SlotPlace = { at: number; inRun: boolean }
+/** Where each row is drawn: a slot's own row or a work run's member (`member` its run position)
+ *  by the slot's index; a note cluster's rows as -1. */
+type SlotPlace = { at: number; inRun: boolean; member?: number }
 
 const slotIndexes = new WeakMap<readonly NativeChatTranscriptSlot[], Map<string, SlotPlace>>()
 
@@ -42,8 +45,8 @@ function slotIndexById(slots: readonly NativeChatTranscriptSlot[]): Map<string, 
         continue
       }
       index.set(slot.message.id, { at, inRun: slot.workRun !== undefined })
-      for (const member of slot.workRun ?? []) {
-        index.set(member.id, { at, inRun: true })
+      for (const [member, row] of (slot.workRun ?? []).entries()) {
+        index.set(row.id, { at, inRun: true, member })
       }
     }
     slotIndexes.set(slots, index)
@@ -55,13 +58,13 @@ function slotIndexById(slots: readonly NativeChatTranscriptSlot[]): Map<string, 
  *  height reads only a lead head's text, and a member's lifecycle can regroup the run. */
 function withStreamedRunMember(
   slot: NativeChatMessageSlot,
+  at: number | undefined,
   before: NativeChatMessage,
   current: NativeChatMessage
 ): NativeChatMessageSlot | null {
   const members = slot.workRun ?? []
-  const at = members.indexOf(before)
   const isHead = slot.message === before
-  if (at === -1 || before.state !== current.state) {
+  if (at === undefined || members[at] !== before || before.state !== current.state) {
     return null
   }
   if (isHead && nativeChatWorkRunMember(before, slot.receipt !== undefined, false) === 'lead') {
@@ -71,6 +74,12 @@ function withStreamedRunMember(
   workRun[at] = current
   // Only a thought's text changed, so the run's calls and header hold.
   noteStreamedTextStage(workRun, members)
+  // The run's reader diffs against the laid-out run, so name every member changed since it.
+  const laidOut = stageBesideStreamedText(workRun)
+  const earlier = laidOut === members ? [] : positionsRevisedFrom(members, laidOut)
+  if (earlier) {
+    noteRevisedInPlace(workRun, laidOut, earlier.includes(at) ? earlier : [...earlier, at])
+  }
   return { ...slot, workRun, message: isHead ? current : slot.message }
 }
 
@@ -142,6 +151,9 @@ export function withStreamedRows(
   /** The only positions `rows` replaced in `built`, when known. */
   revisedAt?: readonly number[]
 ): NativeChatTranscriptSlot[] | null {
+  if (built === rows) {
+    return slots
+  }
   if (built.length !== rows.length) {
     return null
   }
@@ -167,7 +179,7 @@ export function withStreamedRows(
       return null
     }
     if (place.inRun) {
-      const run = withStreamedRunMember(slot, before, current)
+      const run = withStreamedRunMember(slot, place.member, before, current)
       if (!run) {
         return null
       }
@@ -226,7 +238,11 @@ export function createNativeChatStreamedTranscript(): (
       }
       last = null
     }
-    const revisedAt = last ? positionsRevisedFrom(rows, last.rows) : undefined
+    const revisedAt = last
+      ? last.rows === rows
+        ? []
+        : positionsRevisedFrom(rows, last.rows)
+      : undefined
     const slots =
       last && revisedAt
         ? withStreamedRows(last.slots, last.rows, rows, input.typography, revisedAt)

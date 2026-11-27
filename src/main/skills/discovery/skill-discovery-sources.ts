@@ -124,6 +124,8 @@ export function buildSkillDiscoverySources(
     includeCwd?: boolean
     pathApi?: SkillDiscoveryPathApi
     providerRootOverrides?: SkillProviderRootOverrides
+    /** A bot home's linked-project skills folder, which every chat of that bot loads. */
+    linkedSkillsFolder?: string
   } = {}
 ): SkillScanRoot[] {
   const pathApi = args.pathApi ?? { basename, join }
@@ -135,6 +137,7 @@ export function buildSkillDiscoverySources(
   const hermesSkillsRoot = args.pathApi
     ? pathApi.join(home, '.hermes', 'skills')
     : (resolveEnvironmentHermesSkillsRoot() ?? resolveDefaultHermesSkillsRoot({ homeDir: home }))
+  const doubaoSkillsRoot = pathApi.join(home, 'Doubao', 'skills')
   const roots: SkillScanRoot[] = [
     // Why: Codex reads `.agents/skills` today; this legacy home still holds older installs.
     source(
@@ -174,14 +177,7 @@ export function buildSkillDiscoverySources(
       ['agent-skills'],
       'opencode'
     ),
-    source(
-      'home-doubao',
-      'Doubao home',
-      pathApi.join(home, 'Doubao', 'skills'),
-      'home',
-      ['agent-skills'],
-      'doubao'
-    ),
+    source('home-doubao', 'Doubao home', doubaoSkillsRoot, 'home', ['agent-skills'], 'doubao'),
     source(
       'home-pi',
       'Pi home',
@@ -298,6 +294,35 @@ export function buildSkillDiscoverySources(
       )
     )
   }
+  if (args.linkedSkillsFolder) {
+    roots.push(...linkedSkillsFolderSources(args.linkedSkillsFolder, pathApi))
+  }
 
   return roots
+}
+
+// Same links in both: Claude loads .claude/skills as an added directory, every other agent skills/.
+function linkedSkillsFolderSources(
+  folder: string,
+  pathApi: SkillDiscoveryPathApi
+): SkillScanRoot[] {
+  const id = stablePathId(folder)
+  return [
+    source(
+      `linked-claude-${id}`,
+      'Linked projects',
+      pathApi.join(folder, '.claude', 'skills'),
+      'repo',
+      ['claude'],
+      'claude'
+    ),
+    source(
+      `linked-agents-${id}`,
+      'Linked projects',
+      pathApi.join(folder, 'skills'),
+      'repo',
+      ['codex', 'agent-skills'],
+      null
+    )
+  ]
 }

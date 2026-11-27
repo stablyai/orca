@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 import type { E2EEKeypair } from '../rpc/server/pairing/e2ee-keypair'
 import { deriveRelayHostId } from '../mobile-cloud-relay/director/relay-http-client'
@@ -16,26 +17,30 @@ const HANDSHAKE_REFUSAL_TTL_MS = 30_000
 // Back off the per-IP challenge bucket instead of exhausting it on unusable sessions.
 const HANDSHAKE_RATE_LIMIT_TTL_MS = 60_000
 
-const ChallengeResponseSchema = z
-  .object({
-    challengeId: z.string().min(1).max(512),
-    gatewayEphemeralPublicKeyB64: z.string().min(1).max(128),
-    nonceB64: z.string().min(1).max(128),
-    ciphertextB64: z
-      .string()
-      .min(1)
-      .max(8 * 1024),
-    expiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
-  })
-  .strict()
+const ChallengeResponseSchema = lazyZodSchema(() =>
+  z
+    .object({
+      challengeId: z.string().min(1).max(512),
+      gatewayEphemeralPublicKeyB64: z.string().min(1).max(128),
+      nonceB64: z.string().min(1).max(128),
+      ciphertextB64: z
+        .string()
+        .min(1)
+        .max(8 * 1024),
+      expiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+    })
+    .strict()
+)
 
-const SessionResponseSchema = z
-  .object({
-    sessionToken: z.string().min(1).max(1024),
-    expiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-    hostFingerprint: z.string().min(1).max(64)
-  })
-  .strict()
+const SessionResponseSchema = lazyZodSchema(() =>
+  z
+    .object({
+      sessionToken: z.string().min(1).max(1024),
+      expiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+      hostFingerprint: z.string().min(1).max(64)
+    })
+    .strict()
+)
 
 export type PushSession = { token: string; expiresAt: number }
 export type PushSessionOutcome = { ok: true; session: PushSession } | PushGatewayFailure

@@ -166,7 +166,9 @@ function buildStatusScanRawText(prefix: string, data: string): string {
   const head = headBudget > 0 ? data.slice(0, headBudget) : ''
   const tail = tailBudget > 0 ? data.slice(-tailBudget) : ''
   // Megabyte pasted echoes need only boundary/recent context; scan head/tail windows instead of stripping the entire payload.
-  return `${boundedPrefix}${head}\n${tail}`
+  // CAN aborts a control string whose terminator was dropped with the middle; escape-free windows keep the strip fast path.
+  const cut = boundedPrefix.includes('\x1b') || head.includes('\x1b') ? '\x18\n' : '\n'
+  return `${boundedPrefix}${head}${cut}${tail}`
 }
 
 function patternOverlapsSanitizedText(

@@ -24,7 +24,33 @@ export function findTerminalHttpLinkAtBufferPosition(
   position: TerminalLinkBufferPosition,
   terminalColumns: number
 ): string | null {
-  for (const logicalLine of buildTerminalHttpLogicalLines(buffer, position.y)) {
+  return findHttpLinkInLogicalLines(
+    buffer,
+    buildTerminalHttpLogicalLines(buffer, position.y),
+    position,
+    terminalColumns
+  )
+}
+
+/** Only rows xterm itself wrapped, so a guessed hard-wrap or edge join cannot claim the cell. */
+export function findSoftWrappedTerminalHttpLinkAtBufferPosition(
+  buffer: TerminalLinkBuffer,
+  position: TerminalLinkBufferPosition,
+  terminalColumns: number
+): string | null {
+  const logicalLine = buildWrappedLogicalLine(buffer, position.y)
+  return logicalLine
+    ? findHttpLinkInLogicalLines(buffer, [logicalLine], position, terminalColumns)
+    : null
+}
+
+function findHttpLinkInLogicalLines(
+  buffer: TerminalLinkBuffer,
+  logicalLines: WrappedLogicalLine[],
+  position: TerminalLinkBufferPosition,
+  terminalColumns: number
+): string | null {
+  for (const logicalLine of logicalLines) {
     for (const parsed of extractTerminalHttpLinks(logicalLine.text)) {
       const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
       const rowRange = rangeForParsedLinkOnRow(

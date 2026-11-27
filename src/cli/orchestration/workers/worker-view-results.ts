@@ -24,6 +24,8 @@ export type WorkerShowResult = {
     runId?: string
     status: string
     followUpOf?: string | null
+    progressNote?: string | null
+    progressUpdatedAt?: string | null
   } | null
   worker: {
     dispatchId?: string
