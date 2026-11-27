@@ -35,10 +35,8 @@ import {
   PLUGIN_COMMIT_PATTERN
 } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import { resolvePluginGitSource } from '../../plugins/installation/plugin-git-ref-resolution'
-import {
-  registerPluginMarketplaceHandlers,
-  type PluginMarketplaceHandlerServices
-} from './plugin-marketplaces'
+import type { PluginMarketplaceHandlerServices } from './plugin-marketplaces'
+import { registerLazyPluginMarketplaceHandlers } from './lazy-plugin-marketplaces-ipc'
 
 export function parsePluginConsentArgs(args: unknown): z.infer<typeof pluginConsentRequestSchema> {
   return pluginConsentRequestSchema.parse(args)
@@ -282,7 +280,7 @@ export function registerPluginHandlers(
     return listPluginsForClients(pluginService)
   })
   if (marketplaceServices) {
-    registerPluginMarketplaceHandlers(
+    registerLazyPluginMarketplaceHandlers(
       pluginService,
       marketplaceServices,
       () => store.getSettings(),
