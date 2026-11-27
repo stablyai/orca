@@ -21,8 +21,11 @@ import { useGoogleNewApp } from '../bots/google/use-google-new-app'
 import { useGoogleSignIn } from '../bots/google/use-google-sign-in'
 import { useTurnOnBotGoogle } from '../bots/google/use-turn-on-bot-google'
 import { giveBotGoogleAccount, readFreshBot } from '../bots/google/give-bot-google-account'
+import { botHostTakes } from '../bots/bot-host-capability'
+import { BOTS_CONFIRMED_OFFER_ANSWER_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotOfferTold } from '../../../../shared/bots/bot-offer-answers'
+import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import {
   NativeChatCardActions,
   NativeChatCardFrame,
@@ -63,6 +66,16 @@ export function NativeChatGoogleOfferCard({
     ) {
       return
     }
+    if (botHostTakes(bot, BOTS_CONFIRMED_OFFER_ANSWER_RUNTIME_CAPABILITY)) {
+      const params = {
+        botId: bot.id,
+        account: connected.email,
+        ...(chat?.sessionId ? { sessionId: chat.sessionId } : {}),
+        card: { cardId: messageId, actionId: createNonSecureContextUuid() }
+      }
+      answering.confirm(() => callBotRpc<BotOfferTold>(bot, 'google.bot.connected', params))
+      return
+    }
     // The sign-in can take minutes; compare with the default as it is now, not at the click.
     const latest = await refreshGoogle(botTarget(bot))
     const answer = googleOfferSignedInAnswer(connected.email, {
@@ -78,13 +91,14 @@ export function NativeChatGoogleOfferCard({
       // A hidden card answer: the Connected card already shows the account, and the bot reads a fact.
       hidden: () =>
         answering.answer(
-          (answerKey) =>
-            callBotRpc<BotOfferTold>(bot, 'google.bot.connected', {
-              botId: bot.id,
-              account: connected.email,
-              ...(chat?.sessionId ? { sessionId: chat.sessionId } : {}),
-              answerKey
-            }),
+          async () =>
+            (
+              await callBotRpc<{ sent: boolean }>(bot, 'google.bot.connected', {
+                botId: bot.id,
+                account: connected.email,
+                ...(chat?.sessionId ? { sessionId: chat.sessionId } : {})
+              })
+            ).sent,
           chosen,
           again
         ),
@@ -117,7 +131,11 @@ export function NativeChatGoogleOfferCard({
   const footer = waiting ? undefined : face.kind === 'connected' ? (
     face.canAdd ? (
       <NativeChatCardActions>
-        <GoogleUseAnotherAccountMenu onSignIn={() => void signInThenTurnOn()} onNewApp={newApp} />
+        <GoogleUseAnotherAccountMenu
+          onSignIn={() => void signInThenTurnOn()}
+          onNewApp={newApp}
+          disabled={answering.pending}
+        />
       </NativeChatCardActions>
     ) : undefined
   ) : face.kind === 'choose' ? (

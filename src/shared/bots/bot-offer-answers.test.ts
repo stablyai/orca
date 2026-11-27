@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   answerBotOffer,
   answerBotOfferAgain,
-  botOfferAnswerKey,
   withBotOfferAnswer,
   type BotOfferAnswer,
   type BotOfferAnswerUpdate
@@ -22,7 +21,7 @@ function host(answers: BotOfferAnswer[]) {
         if (accepted) {
           sent.push(text)
         }
-        return { sent: accepted }
+        return accepted
       }
     })
   }
@@ -36,16 +35,18 @@ describe('a further action on an answered offer card', () => {
     const side = { cardId: 'card', sent: { chosen: ['side@x.com'] } }
     expect(await answerBotOffer(side, card.ops('Use side'))).toBe('already_answered')
     expect(card.sent).toEqual([])
-    expect(await answerBotOfferAgain(side, answered, card.ops('Use side'))).toBe('sent')
+    expect(await answerBotOfferAgain(side, answered.sent, card.ops('Use side'))).toBe('sent')
     expect(card.sent).toEqual(['Use side'])
-    expect(card.answers()).toEqual([{ ...side, revision: 1 }])
+    expect(card.answers()).toEqual([side])
   })
 
   it('puts the previous answer back when the chat refuses it', async () => {
     const card = host([answered])
     const side = { cardId: 'card', sent: { chosen: ['side@x.com'] } }
-    expect(await answerBotOfferAgain(side, answered, card.ops('Use side', false))).toBe('refused')
-    expect(card.answers()).toEqual([{ ...answered, revision: 0 }])
+    expect(await answerBotOfferAgain(side, answered.sent, card.ops('Use side', false))).toBe(
+      'refused'
+    )
+    expect(card.answers()).toEqual([answered])
   })
 })
 
@@ -75,51 +76,5 @@ describe('a first answer whose send outcome is unknown', () => {
       'already_answered'
     )
     expect(card.sent).toEqual([])
-  })
-})
-
-describe('the answer key a card answer carries', () => {
-  it('is the same for every press of one answer, and new for each further action', async () => {
-    const keys: string[] = []
-    const card = host([])
-    const ops = (accepted: boolean) => ({
-      ...card.ops('Import', accepted),
-      send: async (answerKey: string) => (keys.push(answerKey), { sent: accepted })
-    })
-    const entry = () => card.answers().find((answer) => answer.cardId === 'card')
-    // A refused first press gives the card back; the next press keys the same answer, whatever it chose.
-    expect(await answerBotOffer({ cardId: 'card', sent: { chosen: ['ws-1'] } }, ops(false))).toBe(
-      'refused'
-    )
-    expect(await answerBotOffer({ cardId: 'card', sent: { chosen: ['ws-2'] } }, ops(true))).toBe(
-      'sent'
-    )
-    expect(keys[1]).toBe(keys[0])
-
-    // Each further action is the card's next revision, even one that picks an earlier choice again.
-    const further = (chosen: string) =>
-      answerBotOfferAgain({ cardId: 'card', sent: { chosen: [chosen] } }, entry(), ops(true))
-    await further('ws-3')
-    await further('ws-2')
-    await further('ws-3')
-    expect(keys).toEqual([
-      botOfferAnswerKey('card', 'sent'),
-      botOfferAnswerKey('card', 'sent'),
-      botOfferAnswerKey('card', 'sent', 1),
-      botOfferAnswerKey('card', 'sent', 2),
-      botOfferAnswerKey('card', 'sent', 3)
-    ])
-    expect(entry()).toEqual({ cardId: 'card', sent: { chosen: ['ws-3'] }, revision: 3 })
-    expect(botOfferAnswerKey('card', 'dismissed')).not.toBe(keys[0])
-  })
-
-  it('takes back the choice the host already told the bot for that key', async () => {
-    const card = host([])
-    const told = await answerBotOffer(
-      { cardId: 'card', sent: { chosen: ['ws-2'] } },
-      { ...card.ops('Import'), send: async () => ({ sent: true, chosen: ['ws-1'] }) }
-    )
-    expect(told).toBe('sent')
-    expect(card.answers()).toEqual([{ cardId: 'card', sent: { chosen: ['ws-1'] } }])
   })
 })

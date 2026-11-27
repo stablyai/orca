@@ -133,7 +133,7 @@ export type BotUpdateParams = z.infer<typeof BotUpdate>
  *  or the host MCP list, which only bots.tools.setHostMcpServers sets. */
 export type BotHostUpdates = BotUpdateParams['updates'] &
   Pick<Bot, 'google' | 'googleAccounts' | 'hostMcpServers'> &
-  Pick<Bot, 'acceptedOffers' | 'handedPairedWorkspaces' | 'itemsSeen'> & {
+  Pick<Bot, 'acceptedOffers' | 'handedPairedWorkspaces' | 'itemsSeen' | 'offerAnswers'> & {
     /** Host-only: a wait of this bot's was cancelled. */
     cancelledWait?: BotCancelledWait
   }

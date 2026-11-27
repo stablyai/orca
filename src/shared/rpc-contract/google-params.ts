@@ -1,6 +1,6 @@
 import * as z from 'zod'
+import { BotOfferActionIdSchema, BotOfferCardIdSchema } from '../bots/bot-offer-answers'
 import { lazyZodSchema } from '../schema/lazy-zod-schema'
-import { BotOfferAnswerKeySchema } from '../bots/bot-offer-answers'
 import { GOOGLE_CLIENT_FILE_MAX_BYTES } from '../google/google-client-config'
 import { GOOGLE_SERVICE_CHOICES } from '../google/google-scopes'
 import { OptionalString, requiredString } from './rpc-param-primitives'
@@ -99,7 +99,6 @@ export const GoogleBotConnectedParams = lazyZodSchema(() =>
     account: Email,
     /** The chat the card sits in, which gets the answer; the bot's Chat when absent. */
     sessionId: OptionalString,
-    /** The card answer's idempotency key: a repeat the host already queued tells the bot nothing new. */
-    answerKey: BotOfferAnswerKeySchema.optional()
+    card: z.object({ cardId: BotOfferCardIdSchema, actionId: BotOfferActionIdSchema }).optional()
   })
 )

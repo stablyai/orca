@@ -251,6 +251,9 @@ export class BotController {
         store.updateFolderWorkspace(bot.folderWorkspaceId, { name: next.name })
       }
       store.saveBot(next)
+      if (updates.offerAnswers !== undefined) {
+        await persistBotStore(store)
+      }
       this.deps.notifyBotsWritten(next.name !== bot.name)
       if (next.agent !== bot.agent) {
         this.deps.botAgentChanged?.(next)

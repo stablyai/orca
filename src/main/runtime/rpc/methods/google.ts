@@ -282,27 +282,33 @@ export const GOOGLE_METHODS = [
     name: 'google.bot.connected',
     permission: 'workspace',
     params: GoogleBotConnectedParams,
-    handler: async ({ botToken, botId, account, sessionId, answerKey }, ctx) => {
+    handler: async ({ botToken, botId, account, sessionId, card }, ctx) => {
       refuseFromBot(botToken, ctx)
       // The card runs in the owner's Orca; an agent's CLI never answers for it.
       if (isAgentRpcCaller(ctx.caller)) {
         throw new InvalidArgumentError(GOOGLE_OWNER_ONLY)
       }
       ctx.runtime.bots.assertEnabled()
-      const connect = google()
-      if (!(await connect.accounts()).some((entry) => entry.email === account)) {
-        throw new InvalidArgumentError(`${account} isn't connected on this computer.`)
-      }
-      // Read now, not at the click: the sign-in can take minutes.
-      const line = googleConnectedLine(account, await connect.defaultAccount())
-      // Each account signed in is its own fact for the bot, so the key names it: a repeat of one
-      // account's answer tells nothing new, while another account's still reaches the bot.
       return tellBotCardAnswer(
         ctx.runtime,
         botId,
         sessionId,
-        line,
-        answerKey ? { answerKey: `${answerKey}\n${account}`, chosen: [account] } : undefined
+        async (current) => {
+          const connect = google()
+          if (!(await connect.accounts()).some((entry) => entry.email === account)) {
+            throw new InvalidArgumentError(`${account} isn't connected on this computer.`)
+          }
+          const defaultAccount = await connect.defaultAccount()
+          // The default needs no announcement until this card starts naming specific accounts.
+          if (card && !current?.sent && account === defaultAccount) {
+            return null
+          }
+          return googleConnectedLine(account, defaultAccount)
+        },
+        card && {
+          selection: { cardId: card.cardId, sent: { chosen: [account] } },
+          googleActionId: card.actionId
+        }
       )
     }
   })
