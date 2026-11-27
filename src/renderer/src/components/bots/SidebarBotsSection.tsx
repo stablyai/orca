@@ -7,6 +7,7 @@ import {
 } from '@/components/sidebar/worktree-list/drag/project-group-header-drop'
 import { WorktreeSidebarDropIndicator } from '@/components/sidebar/worktree-list/drag/WorktreeSidebarDropIndicator'
 import { SidebarSectionHeader } from '@/components/sidebar/SidebarSectionHeader'
+import { Button } from '@/components/ui/button'
 import { selectActiveBotGroupRoomId } from '@/lib/bot-group-catalog'
 import { useBotGroups } from '@/lib/bot-group-list'
 import { useTranslate } from '@/i18n/use-translate'
@@ -14,7 +15,10 @@ import { updateBot, useBotHomeWorkspaces, useBots } from '@/lib/bot-catalog'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/class-names'
-import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../../shared/execution-host/execution-host'
+import {
+  ALL_EXECUTION_HOSTS_SCOPE,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
 import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 import {
   folderWorkspaceKey,
@@ -259,7 +263,7 @@ export function SidebarBotsSection({
                   onToggle={search.toggleOpen}
                 />
               ) : null}
-              {hasEntries || hostFilter.pairedHosts.length > 0 ? (
+              {hasEntries || hostFiltered || hostFilter.pairedHosts.length > 0 ? (
                 <BotSidebarOptionsMenu hostFilter={hostFilter.webClient ? null : hostFilter} />
               ) : null}
               <BotSidebarNewMenu
@@ -307,10 +311,25 @@ export function SidebarBotsSection({
             {/* A room kept after its last bot went still lists, so it can be opened or deleted. */}
             {collapsed ? null : entries.length === 0 ? (
               scopedEntries.length > 0 || hostFiltered ? (
-                <div className="px-4 text-xs text-muted-foreground">
-                  {scopedEntries.length > 0
-                    ? t('bots.options.allHidden', 'All bots are paused and hidden.')
-                    : t('bots.options.noBotsOnHost', 'No bots to show on this host.')}
+                <div className="flex flex-wrap items-center gap-x-1 px-4 text-xs text-muted-foreground">
+                  <span>
+                    {scopedEntries.length > 0
+                      ? t('bots.options.allHidden', 'All bots are paused and hidden.')
+                      : t('bots.options.noBotsOnHost', 'No bots to show on this host.')}
+                  </span>
+                  {hostScope === LOCAL_EXECUTION_HOST_ID && scopedEntries.length === 0 ? (
+                    <span className="inline-flex items-center gap-1">
+                      <span aria-hidden="true">·</span>
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="inlineText"
+                        onClick={() => hostFilter.onChange(ALL_EXECUTION_HOSTS_SCOPE)}
+                      >
+                        {t('bots.options.showAllHosts', 'Show all hosts')}
+                      </Button>
+                    </span>
+                  ) : null}
                 </div>
               ) : (
                 <SidebarBotsEmptyState onNewBot={openNewBot} />
