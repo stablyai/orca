@@ -31409,6 +31409,8 @@
     "movedTitle": "Search moved to {{key}}",
     "notNow": "Not now",
     "profileOnly": "Only this profile changes; your custom shortcuts are kept.",
+    "refusedDetail": "Settings › Shortcuts shows what changed.",
+    "retry": "Try again",
     "searchDescription": "Open Search with Cmd+K or Ctrl+K instead of clearing the terminal.",
     "searchTitle": "Search shortcut",
     "settingsCostMac": "If you choose {{key}}, it no longer clears the terminal.",

@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Button } from '../../ui/button'
 import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -33,7 +34,10 @@ function SearchShortcutOptInRow({ state }: { state: SearchShortcutOfferState }):
   const setSearchShortcutChoice = useAppStore((s) => s.setSearchShortcutChoice)
   const mountedRef = useMountedRef()
   const [pending, setPending] = useState(false)
-  const [notice, setNotice] = useState<SearchShortcutChoiceResult['outcome'] | 'error' | null>(null)
+  const [notice, setNotice] = useState<{
+    outcome: SearchShortcutChoiceResult['outcome'] | 'error'
+    choice: SearchShortcutChoice
+  } | null>(null)
   const accepted = state.offer.kind === 'accepted'
   // The toggle is the undo: it is offered whenever a choice can be made or reverted.
   const toggleable = accepted || state.offer.kind === 'eligible'
@@ -44,7 +48,7 @@ function SearchShortcutOptInRow({ state }: { state: SearchShortcutOfferState }):
     const outcome = await requestSearchShortcutChoice(setSearchShortcutChoice, choice)
     if (mountedRef.current) {
       // A superseded save is explained by the row's own accepted-but-taken description.
-      setNotice(outcome === 'applied' || outcome === 'superseded' ? null : outcome)
+      setNotice(outcome === 'applied' || outcome === 'superseded' ? null : { outcome, choice })
       setPending(false)
     }
   }
@@ -57,14 +61,24 @@ function SearchShortcutOptInRow({ state }: { state: SearchShortcutOfferState }):
       description={
         <>
           {describeOffer(state, t)}
-          {notice === 'unconfirmed' ? (
+          {notice?.outcome === 'unconfirmed' ? (
             <span className="block text-muted-foreground" role="status">
               {t(
                 'searchShortcutOptIn.unconfirmedInSettings',
                 "Couldn't confirm the change was saved. This row shows what's active now."
-              )}
+              )}{' '}
+              {/* The toggle already shows the unsaved choice, so it can't resubmit it; the service saves a repeat again. */}
+              <Button
+                variant="link"
+                size="xs"
+                className="h-auto p-0"
+                disabled={pending}
+                onClick={() => void choose(notice.choice)}
+              >
+                {t('searchShortcutOptIn.retry', 'Try again')}
+              </Button>
             </span>
-          ) : notice === 'unchanged' || notice === 'refused' || notice === 'error' ? (
+          ) : notice ? (
             <span className="block text-destructive" role="alert">
               {t('searchShortcutOptIn.failed', "Couldn't switch. Your shortcuts are unchanged.")}
             </span>

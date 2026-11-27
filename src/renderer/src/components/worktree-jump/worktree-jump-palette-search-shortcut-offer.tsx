@@ -22,6 +22,8 @@ type SettledCard =
   | { kind: 'switched'; keys: KeyLabels; keepsLegacyKey: boolean }
   | { kind: 'superseded'; keys: KeyLabels }
   | { kind: 'unconfirmed' }
+  // Refused because Mod+K or Search changed since the card rendered; the card itself is gone by then.
+  | { kind: 'refused' }
   | { kind: 'undone'; keys: KeyLabels }
 
 /** Points at the Switch button while it may take Mod+Enter; the palette clicks it so disabled states hold. */
@@ -107,6 +109,8 @@ function SearchShortcutOfferCard({
       onSettled({ kind: 'switched', keys, keepsLegacyKey })
     } else if (choice === 'accepted' && outcome === 'superseded') {
       onSettled({ kind: 'superseded', keys })
+    } else if (outcome === 'refused') {
+      onSettled({ kind: 'refused' })
     } else if (outcome !== 'applied' && mountedRef.current) {
       setFailed(true)
     }
@@ -290,6 +294,11 @@ function settledCopy(card: SettledCard, t: Translate): { title: string; detail: 
           'searchShortcutOptIn.unconfirmedDetail',
           'Settings › Shortcuts shows which Search shortcut is active.'
         )
+      }
+    case 'refused':
+      return {
+        title: t('searchShortcutOptIn.failed', "Couldn't switch. Your shortcuts are unchanged."),
+        detail: t('searchShortcutOptIn.refusedDetail', 'Settings › Shortcuts shows what changed.')
       }
     case 'undone':
       return {
