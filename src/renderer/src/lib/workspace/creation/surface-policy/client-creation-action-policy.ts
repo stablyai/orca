@@ -7,6 +7,7 @@ import { expectsBrowserClientHosting } from '../../../../../../shared/browser/cl
 import { getOrcadSshDeployment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { BrowserClientHostPlacementPreference } from '../../../../../../shared/browser/client-hosting/browser-client-host-placement'
 import type { AppState } from '@/store/types'
 import { readAppRuntimeStatuses } from '@/store/slices/runtime-status/views/app-runtime-status-binding'
 import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
@@ -134,7 +135,8 @@ export type RuntimeBrowserHostingState = {
 export function runtimeHostsPagesOnThisDesktop(
   state: RuntimeBrowserHostingState,
   runtimeEnvironmentId: string,
-  statuses: RuntimeBrowserHostingStatuses = readAppRuntimeStatuses()
+  statuses: RuntimeBrowserHostingStatuses = readAppRuntimeStatuses(),
+  preference?: BrowserClientHostPlacementPreference
 ): boolean {
   if (isPairedWebClientWindow()) {
     return false
@@ -146,7 +148,7 @@ export function runtimeHostsPagesOnThisDesktop(
   const status = statuses.get(runtimeEnvironmentId)?.status
   return expectsBrowserClientHosting({
     enabled: state.settings?.browserClientHostedRemoteEnabled !== false,
-    preference: undefined,
+    preference,
     deviceScope: status?.deviceScope,
     capabilities: status?.capabilities
   })

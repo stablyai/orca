@@ -3,6 +3,7 @@ import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import './pane-webgl-renderer'
 import { presentPaneViewport } from './pane-viewport-present'
 import { resetAndRefreshAllTerminalWebglAtlases } from '../pane-manager-registry'
+import { verifyPaneWebglAtlasIntegrity } from './terminal-webgl-atlas-integrity'
 
 type PaneGetter = () => Iterable<ManagedPaneInternal>
 type PaneRevealOwner = { isVisibleForAtlasRecovery(): boolean }
@@ -121,6 +122,8 @@ export function schedulePaneRevealPresent(
 ): void {
   forEachPaneOnSettledFrame(resolvePaneGetter(ownerOrGetter, panes), (pane) => {
     reattachWebglIfNeeded(pane)
+    // Present keeps the shared atlas, so check it still holds the glyphs it claims.
+    verifyPaneWebglAtlasIntegrity(pane, 'reveal')
     presentPaneViewport(pane)
   })
 }

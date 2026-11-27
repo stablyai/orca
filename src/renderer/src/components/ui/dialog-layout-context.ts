@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 
-export type UnifiedDialogSize = 'confirm' | 'form' | 'list'
+export type UnifiedDialogSize = 'confirm' | 'form' | 'list' | 'review'
 
 export type DialogLayout = {
   /** The dialog uses one of the unified sizes, so its parts use the unified type scale. */
@@ -16,5 +16,5 @@ export function useDialogLayout(): DialogLayout {
 }
 
 export function isUnifiedDialogSize(size: string | undefined): size is UnifiedDialogSize {
-  return size === 'confirm' || size === 'form' || size === 'list'
+  return size === 'confirm' || size === 'form' || size === 'list' || size === 'review'
 }

@@ -7,6 +7,7 @@
 #include <sddl.h>
 #include <wincred.h>
 
+#include "connection-owner.h"
 #include "isolated-spawn.h"
 
 #include <functional>
@@ -223,22 +224,13 @@ Napi::Value SidString(Napi::Env env, PSID sid) {
 
 Napi::Value CurrentUserSid(const Napi::CallbackInfo& info) {
   auto env = info.Env();
-  HANDLE token = nullptr;
-  if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) {
-    ToError(env, Fail("OpenProcessToken", GetLastError())).ThrowAsJavaScriptException();
+  std::u16string sid;
+  DWORD code = ERROR_SUCCESS;
+  if (const char* failed = ReadProcessUserSid(GetCurrentProcess(), &sid, &code)) {
+    ToError(env, Fail(failed, code)).ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  DWORD size = 0;
-  GetTokenInformation(token, TokenUser, nullptr, 0, &size);
-  std::vector<BYTE> buffer(size);
-  BOOL queried = size > 0 && GetTokenInformation(token, TokenUser, buffer.data(), size, &size);
-  DWORD queryError = GetLastError();
-  CloseHandle(token);
-  if (!queried) {
-    ToError(env, Fail("GetTokenInformation", queryError)).ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  return SidString(env, reinterpret_cast<TOKEN_USER*>(buffer.data())->User.Sid);
+  return Napi::String::New(env, sid);
 }
 
 Napi::Value DaclValue(Napi::Env env, PSECURITY_DESCRIPTOR rawDescriptor, PACL dacl) {
@@ -564,6 +556,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("grantAccessAsync", Napi::Function::New(env, GrantAccessAsync));
   exports.Set("clearStdHandleInheritance", Napi::Function::New(env, ClearStdHandleInheritance));
   exports.Set("spawnDetachedIsolated", Napi::Function::New(env, SpawnDetachedIsolated));
+  exports.Set("tcpClientOwnerAsync", Napi::Function::New(env, TcpClientOwnerAsync));
   exports.Set("isolatedSpawnBreaksAwayFromJob",
               Napi::Function::New(env, IsolatedSpawnBreaksAwayFromJob));
   return exports;

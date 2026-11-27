@@ -21,6 +21,7 @@ import {
   type GoogleServiceChoice
 } from '../../../../../shared/google/google-scopes'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { joinSentences } from '../../../../../shared/text/sentence-joining'
 import { STATUS_DOT_CLASSES } from '../bot-connector-row-parts'
 import {
   googleAccountChoices,
@@ -30,6 +31,7 @@ import {
 } from './google-account-readiness'
 import { GoogleAddServiceDialog } from './GoogleAddServiceDialog'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { googleAccountApp } from '../../../../../shared/google/google-account-app'
 import { disconnectGoogle, refreshGoogle } from './google-connect-client'
 import {
   googleFixLabel,
@@ -69,7 +71,7 @@ export function GoogleAccountRow({
   const intlLocale = useIntlLocale()
   const confirm = useConfirmationDialog()
   const [adding, setAdding] = useState(false)
-  const client = google.client
+  const app = googleAccountApp(account, google.client)
   const choices = googleAccountChoices(account)
   const connected = account.status === 'connected'
   const problem = connected ? (googleProblems(account)[0] ?? null) : null
@@ -77,8 +79,7 @@ export function GoogleAccountRow({
   const fix = googleReadinessFixer({
     target,
     account,
-    clientId: client?.clientId ?? null,
-    projectId: client?.projectId ?? null,
+    ...app,
     onAllowAgain: (services) => signIn(services, account.email)
   })
   const face = problem ? googleReadinessFace(problem.readiness) : null
@@ -95,16 +96,16 @@ export function GoogleAccountRow({
   const disconnect = async (revoke: boolean): Promise<void> => {
     const promoted =
       isDefault && nextDefault
-        ? ` ${t('bots.google.disconnect.promotes', '{{email}} becomes the default.', {
+        ? t('bots.google.disconnect.promotes', '{{email}} becomes the default.', {
             email: nextDefault
-          })}`
+          })
         : ''
     const confirmed = await confirm({
       title: t('bots.google.disconnect.title', 'Disconnect {{email}}?', {
         email: account.email
       }),
-      description:
-        (revoke
+      description: joinSentences([
+        revoke
           ? t(
               'bots.google.disconnect.revokeNote',
               'Bots stop using this account here, and Google cancels Orca’s access everywhere it was allowed.'
@@ -114,7 +115,9 @@ export function GoogleAccountRow({
             : t(
                 'bots.google.disconnect.removeNote',
                 'Bots stop using this account here. Bot settings stay, so Connect Google turns it back on.'
-              )) + promoted,
+              ),
+        promoted
+      ]),
       confirmLabel: t('bots.google.disconnect.confirm', 'Disconnect'),
       confirmVariant: 'destructive'
     })
@@ -152,6 +155,9 @@ export function GoogleAccountRow({
         ) : (
           <p className="truncate text-xs text-muted-foreground">{servicesLine}</p>
         )}
+        {!connected && account.googleError ? (
+          <p className="text-xs break-words text-muted-foreground">{account.googleError}</p>
+        ) : null}
       </div>
       {!connected ? (
         <Button size="sm" onClick={() => signIn(googleSignInChoices(account), account.email)}>
@@ -203,7 +209,7 @@ export function GoogleAccountRow({
         open={adding}
         onOpenChange={setAdding}
         have={choices}
-        projectId={client?.projectId}
+        projectId={app.projectId ?? undefined}
         account={account.email}
         onSignIn={(picked) => {
           setAdding(false)

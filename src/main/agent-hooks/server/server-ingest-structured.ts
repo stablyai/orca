@@ -98,7 +98,10 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
       childWork,
       turnOutcome: summary.turnOutcome,
       ...(summary.stopping ? { stopping: summary.stopping } : {}),
-      ...(summary.awaitsAnswer ? { awaitsAnswer: summary.awaitsAnswer } : {})
+      ...(summary.awaitsAnswer ? { awaitsAnswer: summary.awaitsAnswer } : {}),
+      ...(summary.attentionAsksOnlyQuestions
+        ? { attentionAsksOnlyQuestions: summary.attentionAsksOnlyQuestions }
+        : {})
     })
     const { state, workingMode } = agentStatus
     // Journal dates preserve main-agent continuity across republishing after restart.

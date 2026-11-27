@@ -178,7 +178,7 @@ export function reserveGroupMailTurn(
   }
   if (line) {
     groups.store.retarget(id, input.operationId)
-    groups.changed()
+    groups.changed(group.id)
     return
   }
   const bot = groups.runtime.bots.list().find((bot) => bot.id === member.botId)
@@ -235,7 +235,7 @@ export function reserveGroupMailTurn(
       }
     ]
   })
-  groups.changed()
+  groups.changed(group.id)
 }
 
 /** The group operation a member is running now (as it starts a worker or answers a peer), read

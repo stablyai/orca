@@ -220,7 +220,11 @@ export function NativeChatWorkerApprovalStack({
     )
   }
   return (
-    <div ref={root} className="min-h-0 border-t border-border" data-native-chat-worker-approvals="">
+    <div
+      ref={root}
+      className="scrollbar-sleek min-h-0 max-h-[max(44px,min(40cqh,calc(100cqh-180px)))] overflow-y-auto overscroll-contain"
+      data-native-chat-worker-approvals=""
+    >
       <span key={announcement?.id} className="sr-only" role="status" aria-live="polite">
         {announcement?.text}
       </span>

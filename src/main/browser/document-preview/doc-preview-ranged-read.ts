@@ -74,7 +74,8 @@ export async function readRuntimeDocPreviewChunk(
     DOC_PREVIEW_CHUNK_TIMEOUT_MS,
     undefined,
     undefined,
-    options.signal ? { signal: options.signal } : undefined
+    // Reading the preview the user opened may wake an idle-stopped WSL host (#46567).
+    { wake: true, ...(options.signal ? { signal: options.signal } : {}) }
   )
   if (!response.ok) {
     // Hosts before ranged preview reads keep the one-reply size refusal.

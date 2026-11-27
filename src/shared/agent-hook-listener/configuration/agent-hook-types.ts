@@ -8,7 +8,6 @@ export const AGENT_HOOK_TARGETS = [
   'qoder-cn',
   'qwen-code',
   'codebuddy',
-  'gemini',
   'antigravity',
   'amp',
   'cursor',
@@ -39,9 +38,15 @@ export type AgentHookInstallStatus = {
   agent: AgentHookTarget
   state: AgentHookInstallState
   configPath: string
+  /** Other files carrying this agent's managed hooks; configPath is the one state and detail describe. */
+  additionalConfigPaths?: string[]
   managedHooksPresent: boolean
   detail: string | null
   skipReason?: AgentHookInstallSkipReason
+}
+
+export function getAgentHookConfigPaths(status: AgentHookInstallStatus): string[] {
+  return [status.configPath, ...(status.additionalConfigPaths ?? [])].filter(Boolean)
 }
 
 // Reserve version bumps for wire changes. Endpoint files are additive; no durable pre-rollout v1 fleet needs distinguishing, and Cursor scripts rewrite on install. Mismatches warn about stale scripts.

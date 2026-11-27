@@ -2,12 +2,16 @@
 // A built-in template reads in the UI language; text the owner leaves as shown is saved in the
 // template's English, so SOUL.md keeps the words the template was written in.
 import type { Translate } from '@/i18n/use-translate'
-import { proposalIdentity, type BotProposal } from '../../../../shared/bots/bot-proposal'
+import {
+  BOT_PURPOSE_MAX_LENGTH,
+  proposalIdentity,
+  type BotProposal
+} from '../../../../shared/bots/bot-proposal'
 import { botTemplate } from '../../../../shared/bots/bot-templates'
 import { botTemplateText } from '../../../../shared/bots/bot-template-text'
+import { sliceAtCodeUnitLimit } from '../../../../shared/text/surrogate-safe-text-slice'
 import { finalSentenceStop, joinSentences } from '../../../../shared/text/sentence-joining'
 import type { NewBotProposalDraft } from './NewBotProposalFields'
-import { PURPOSE_MAX_LENGTH } from './NewBotPurposeField'
 
 export type NewBotDraft = NewBotProposalDraft & { purpose: string }
 
@@ -50,8 +54,12 @@ export function shownTemplateIdentity(
   return `${text}${finalSentenceStop(text)}`
 }
 
+// Why: a prefilled purpose skips the box's maxLength, so it is cut the same way typing would be.
 export const draftOf = (proposal: BotProposal | undefined, purpose?: string): NewBotDraft => ({
-  purpose: templateIdentity(proposal) ?? proposal?.purpose ?? purpose ?? '',
+  purpose:
+    templateIdentity(proposal) ??
+    proposal?.purpose ??
+    sliceAtCodeUnitLimit(purpose?.trim() ?? '', BOT_PURPOSE_MAX_LENGTH),
   watches: proposal?.watches,
   does: proposal?.does,
   reports: proposal?.reports
@@ -115,17 +123,14 @@ export function identityUntouched(
   )
 }
 
-/** An edited template identity becomes the bot's purpose, so it keeps the purpose's limit. */
-export function templateIdentityTooLong(
+/** Whether the purpose Create would send, a cleared box falling back to the proposal's, is over
+ *  the host's limit. */
+export function identityTooLong(
   proposal: BotProposal | undefined,
-  purpose: string,
+  draft: NewBotDraft,
   t: Translate
 ): boolean {
-  return (
-    templateIdentity(proposal) !== undefined &&
-    !identityUntouched(proposal, purpose, t) &&
-    purpose.trim().length > PURPOSE_MAX_LENGTH
-  )
+  return (editedProposal(proposal, draft, '', t)?.purpose.length ?? 0) > BOT_PURPOSE_MAX_LENGTH
 }
 
 // An emptied field drops out of the new bot's SOUL.md.

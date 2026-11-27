@@ -4,7 +4,8 @@ import type { BrowserExtensionToolbarState } from '../../../../../../shared/brow
 
 /**
  * The extension buttons main reports for one browser page, or null when the page's session runs
- * no extensions (route, SSH and doc-preview pages) or extensions are turned off in Settings.
+ * no extensions (doc previews, streamed pages, This-device pages of a server's other profiles) or
+ * extensions are turned off in Settings.
  *
  * Why refetch on `pageKey`: a page's guest registers with main a moment after mount, and a
  * navigation can reset tab-scoped badges; main only pushes "this profile changed".

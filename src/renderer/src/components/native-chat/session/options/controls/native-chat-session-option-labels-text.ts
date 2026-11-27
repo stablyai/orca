@@ -41,6 +41,13 @@ const PIECES: Record<NativeChatSessionOptionCopyId, (values?: { value0: string }
       'components.native-chat.composer.availableAfterSessionStarts',
       'Available after the session starts.'
     ),
+  modelsLoading: () =>
+    translate('components.native-chat.composer.modelsLoading', 'Loading models…'),
+  signInForModels: () =>
+    translate(
+      'components.native-chat.composer.signInForModels',
+      'Sign in to see the models you can use.'
+    ),
   sessionOptions: () =>
     translate('components.native-chat.composer.sessionOptions', 'Session options')
 }

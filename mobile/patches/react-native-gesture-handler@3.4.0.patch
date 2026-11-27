@@ -1,0 +1,128 @@
+diff --git a/lib/module/web/tools/PointerEventManager.js b/lib/module/web/tools/PointerEventManager.js
+index 7879b636fba999d9da79c6eb4c028e6898c2d442..71f9f613ab474ad4a91cfa55fdde0dbdd6cb36b2 100644
+--- a/lib/module/web/tools/PointerEventManager.js
++++ b/lib/module/web/tools/PointerEventManager.js
+@@ -29,6 +29,7 @@ export default class PointerEventManager extends EventManager {
+     }
+     this.markAsInBounds(adaptedEvent.pointerId);
+     this.trackedPointers.add(adaptedEvent.pointerId);
++    this.watchReleasesOutsideView();
+     if (++this.activePointersCounter > 1) {
+       adaptedEvent.eventType = EventTypes.ADDITIONAL_POINTER_DOWN;
+       this.onPointerAdd(adaptedEvent);
+@@ -139,6 +140,33 @@ export default class PointerEventManager extends EventManager {
+       this.trackedPointers.clear();
+     }
+   };
++  // Pointer capture routes a release to the view, but capture ends when the captured node leaves the
++  // DOM; the release then lands on whatever is under the pointer. Unseen, it leaves the pointer
++  // counted as down and every later touch is handled as an extra pointer.
++  releaseOutsideViewCallback = event => {
++    if (this.trackedPointers.size === 0) {
++      this.stopWatchingReleasesOutsideView();
++      return;
++    }
++    if (!this.trackedPointers.has(event.pointerId) || this.view.contains(event.target)) {
++      return;
++    }
++    if (event.type === 'pointercancel') {
++      this.pointerCancelCallback(event);
++    } else {
++      this.pointerUpCallback(event);
++    }
++  };
++  watchReleasesOutsideView() {
++    const document = this.view.ownerDocument;
++    document.addEventListener('pointerup', this.releaseOutsideViewCallback, true);
++    document.addEventListener('pointercancel', this.releaseOutsideViewCallback, true);
++  }
++  stopWatchingReleasesOutsideView() {
++    const document = this.view.ownerDocument;
++    document.removeEventListener('pointerup', this.releaseOutsideViewCallback, true);
++    document.removeEventListener('pointercancel', this.releaseOutsideViewCallback, true);
++  }
+   registerListeners() {
+     this.view.addEventListener('pointerdown', this.pointerDownCallback);
+     this.view.addEventListener('pointerup', this.pointerUpCallback);
+@@ -161,6 +189,7 @@ export default class PointerEventManager extends EventManager {
+     this.view.removeEventListener('pointerenter', this.pointerEnterCallback);
+     this.view.removeEventListener('pointerleave', this.pointerLeaveCallback);
+     this.view.removeEventListener('lostpointercapture', this.lostPointerCaptureCallback);
++    this.stopWatchingReleasesOutsideView();
+   }
+   mapEvent(event, eventType) {
+     const local = viewportToLocal(this.view, {
+diff --git a/src/web/tools/PointerEventManager.ts b/src/web/tools/PointerEventManager.ts
+index 7c928914a9078ef0052966b631331ec870132bb6..2a9d28418896884645d007111127db30e19d8e09 100644
+--- a/src/web/tools/PointerEventManager.ts
++++ b/src/web/tools/PointerEventManager.ts
+@@ -44,6 +44,7 @@ export default class PointerEventManager extends EventManager<HTMLElement> {
+ 
+     this.markAsInBounds(adaptedEvent.pointerId);
+     this.trackedPointers.add(adaptedEvent.pointerId);
++    this.watchReleasesOutsideView();
+ 
+     if (++this.activePointersCounter > 1) {
+       adaptedEvent.eventType = EventTypes.ADDITIONAL_POINTER_DOWN;
+@@ -188,6 +189,53 @@ export default class PointerEventManager extends EventManager<HTMLElement> {
+     }
+   };
+ 
++  // Pointer capture routes a release to the view, but capture ends when the captured node leaves the
++  // DOM; the release then lands on whatever is under the pointer. Unseen, it leaves the pointer
++  // counted as down and every later touch is handled as an extra pointer.
++  private releaseOutsideViewCallback = (event: PointerEvent) => {
++    if (this.trackedPointers.size === 0) {
++      this.stopWatchingReleasesOutsideView();
++      return;
++    }
++
++    if (
++      !this.trackedPointers.has(event.pointerId) ||
++      this.view.contains(event.target as Node)
++    ) {
++      return;
++    }
++
++    if (event.type === 'pointercancel') {
++      this.pointerCancelCallback(event);
++    } else {
++      this.pointerUpCallback(event);
++    }
++  };
++
++  private watchReleasesOutsideView(): void {
++    const document = this.view.ownerDocument;
++    document.addEventListener('pointerup', this.releaseOutsideViewCallback, true);
++    document.addEventListener(
++      'pointercancel',
++      this.releaseOutsideViewCallback,
++      true
++    );
++  }
++
++  private stopWatchingReleasesOutsideView(): void {
++    const document = this.view.ownerDocument;
++    document.removeEventListener(
++      'pointerup',
++      this.releaseOutsideViewCallback,
++      true
++    );
++    document.removeEventListener(
++      'pointercancel',
++      this.releaseOutsideViewCallback,
++      true
++    );
++  }
++
+   public registerListeners(): void {
+     this.view.addEventListener('pointerdown', this.pointerDownCallback);
+     this.view.addEventListener('pointerup', this.pointerUpCallback);
+@@ -217,6 +265,7 @@ export default class PointerEventManager extends EventManager<HTMLElement> {
+       'lostpointercapture',
+       this.lostPointerCaptureCallback
+     );
++    this.stopWatchingReleasesOutsideView();
+   }
+ 
+   protected mapEvent(event: PointerEvent, eventType: EventTypes): AdaptedEvent {

@@ -6,12 +6,13 @@ import { StyleSheet, Text, View } from 'react-native'
 import { Laptop, Mail, ShieldAlert, ShieldOff, type LucideIcon } from 'lucide-react-native'
 import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
-import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
+import { LIST_LEADING_INSET, ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import type { BotPanelOpen } from './MobileBotPanel'
 import {
   accessDecisionCopy,
@@ -27,6 +28,7 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import { MobileConnectorSourceIcon } from './MobileConnectorSourceIcon'
 import { mobileBotAccessCopy } from './mobile-bot-access-copy'
+import { SettingsNote } from '../settings/settings-screen-frame'
 
 const ROW_ICONS: Partial<Record<AccessDecisionRow['kind'], LucideIcon>> = {
   computer: Laptop,
@@ -37,6 +39,7 @@ const ROW_ICONS: Partial<Record<AccessDecisionRow['kind'], LucideIcon>> = {
 }
 
 function RowIcon({ row }: { row: AccessDecisionRow }) {
+  const colors = useMobileColors()
   if (row.connector) {
     return <MobileConnectorSourceIcon source={row.connector} size={16} />
   }
@@ -60,9 +63,10 @@ export function MobileBotAccessDecisionContent({
   onDecline?: () => void
   onClose: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  const copy = accessDecisionCopy(grant, bot, t)
+  const copy = accessDecisionCopy(grant, bot, t, intlLocaleFor(useMobileUiLocale()))
   const tone = copy.tone === 'high' ? colors.statusRed : colors.statusAmber
   return (
     <ConfirmContent
@@ -78,12 +82,12 @@ export function MobileBotAccessDecisionContent({
         <>
           <Text style={styles.warning}>{copy.warning}</Text>
           <SectionHeader title={copy.whatTheyCanDo} first />
-          <ListGroup>
+          <ListGroup separatorInset={LIST_LEADING_INSET}>
             {copy.rows.map((row) => (
               <ListRow key={row.kind} title={row.text} leading={<RowIcon row={row} />} />
             ))}
           </ListGroup>
-          <Text style={styles.footer}>{mobileBotAccessCopy(t, 'removeAnyTime')}</Text>
+          <SettingsNote>{mobileBotAccessCopy(t, 'removeAnyTime')}</SettingsNote>
         </>
       }
       {...(onDecline
@@ -168,7 +172,7 @@ export function useBotAccessDecisionSheet(
   return { review: setReviewing, sheet }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   tile: {
     width: 48,
     height: 48,
@@ -184,11 +188,5 @@ const styles = themedStyleSheet(() => ({
     textAlign: 'center',
     marginTop: spacing.sm,
     marginBottom: spacing.md
-  },
-  footer: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.xs
   }
 }))

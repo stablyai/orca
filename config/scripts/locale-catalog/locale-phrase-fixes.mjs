@@ -73,7 +73,6 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /새로 고치지/g, replacement: '새로고침하지', whenEnIncludes: 'refresh' },
     { pattern: /새로 고치는/g, replacement: '새로고침', whenEnIncludes: 'Refreshing' },
     { pattern: /새로 고치고/g, replacement: '새로고침하고', whenEnIncludes: 'refresh' },
-    { pattern: /새로 고치/g, replacement: '새로고침', whenEnIncludes: 'Refresh' },
     { pattern: /GitHub 문제/g, replacement: 'GitHub 이슈', whenEnIncludes: 'issue' },
     { pattern: /미리 보는/g, replacement: '미리보기', whenEnIncludes: 'Preview' },
     { pattern: /미리 보고/g, replacement: '미리보기하고', whenEnIncludes: 'Preview' },

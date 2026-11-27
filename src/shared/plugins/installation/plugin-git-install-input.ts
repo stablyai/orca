@@ -41,7 +41,7 @@ export function isSafePluginGitRef(ref: string): boolean {
 
 /**
  * What users paste: `owner/repo`, a repository URL with or without `.git`, an SSH URL, or a
- * GitHub/GitLab release, tag, branch or commit page. `#ref` still pins a version explicitly.
+ * GitHub/GitLab release, tag, branch, commit or file page. `#ref` still pins a version explicitly.
  */
 export function parsePluginGitInstallInput(input: string): PluginGitInstallInputParseResult {
   let value = input.trim()
@@ -122,7 +122,7 @@ function pageRef(
   const page = ownerRepoPageRef(segments, hostname)
   // Why only public owner/repo forges: elsewhere `/group/sub/tree/p/-/blob/main` is a GitLab
   // project under a subgroup named `tree`, so the `-` must stay GitLab's separator.
-  if (page && (gitLabMarker === -1 || readsPastGitLabMarker(hostname))) {
+  if (page && (gitLabMarker === -1 || hasOnlyOwnerRepoPaths(hostname))) {
     return page
   }
   if (gitLabMarker !== -1) {
@@ -135,12 +135,15 @@ function pageRef(
   return segments.length >= 2 ? { repositoryLength: segments.length, ref: '' } : null
 }
 
-function readsPastGitLabMarker(hostname: string): boolean {
+function hasOnlyOwnerRepoPaths(hostname: string): boolean {
   const provider = getPublicForgeProviderForHost(hostname)
   return provider === 'github' || provider === 'gitea'
 }
 
-/** GitHub: /owner/repo/tree/<ref>; Gitea/Forgejo/Codeberg: /owner/repo/src/{branch,tag,commit}/<ref>. */
+/**
+ * GitHub: /owner/repo/tree/<ref>, /blob/<ref>/<path>;
+ * Gitea/Forgejo/Codeberg: /owner/repo/src/{branch,tag,commit}/<ref>.
+ */
 function ownerRepoPageRef(
   segments: string[],
   hostname: string
@@ -165,7 +168,14 @@ function ownerRepoPageRef(
   if (kind === 'releases') {
     return { repositoryLength: 2, ref: rest[0] === 'tag' ? decodeRef(rest.slice(1)) : '' }
   }
-  if (kind === 'tags' || kind === 'branches' || kind === 'commits') {
+  // Why no ref for blob: /blob/<ref>/<path> can't be split when the ref has a `/`. Why GitHub
+  // and Codeberg only: elsewhere `blob` can be a GitLab subgroup name.
+  if (
+    kind === 'tags' ||
+    kind === 'branches' ||
+    kind === 'commits' ||
+    (kind === 'blob' && hasOnlyOwnerRepoPaths(hostname))
+  ) {
     return { repositoryLength: 2, ref: '' }
   }
   return null

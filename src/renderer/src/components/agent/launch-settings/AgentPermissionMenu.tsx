@@ -83,7 +83,11 @@ export function AgentPermissionMenu({
             <ChevronDown className="size-3 shrink-0" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" collisionPadding={8} className="w-80">
+        <DropdownMenuContent
+          align="start"
+          collisionPadding={8}
+          className="w-80 max-w-(--radix-dropdown-menu-content-available-width)"
+        >
           <AgentPermissionMenuOptions
             agentId={agentId}
             permission={permission}

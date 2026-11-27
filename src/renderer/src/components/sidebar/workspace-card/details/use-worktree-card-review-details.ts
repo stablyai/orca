@@ -1,12 +1,14 @@
 import { useState } from 'react'
-import { getLinearReadScope, scopedLinearCacheKey } from '@/store/slices/linear/linear-slice-scope'
 import { getWorkspaceAttachmentSourceContext } from '../review/workspace-attachment-source-result'
 import { getWorkspaceReferenceLinearWorkspaceId } from '../review/workspace-reference-details'
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import { useAppStore } from '@/store'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache/cache-identity'
 import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
-import { areTaskSourceContextsEqual } from '../../../../../../shared/work-items/task-source-context'
+import {
+  areTaskSourceContextsEqual,
+  getTaskSourceCacheScope
+} from '../../../../../../shared/work-items/task-source-context'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getWorktreeGitHubIssueRepository } from '../../../../../../shared/worktree/github-issue-repository'
 import {
@@ -76,11 +78,13 @@ export function useWorktreeCardReviewDetails({
     worktree.linkedLinearIssueWorkspaceId,
     linearSourceContext
   )
+  const linearCachePrefix = linearSourceContext
+    ? getTaskSourceCacheScope(linearSourceContext)
+    : null
   const linearIssueCacheKey = worktree.linkedLinearIssue
-    ? scopedLinearCacheKey(
-        getLinearReadScope(settings, linearSourceContext),
-        `${linearWorkspaceId}::${worktree.linkedLinearIssue}`
-      )
+    ? linearCachePrefix
+      ? `${linearCachePrefix}::${linearWorkspaceId}::${worktree.linkedLinearIssue}`
+      : `${linearWorkspaceId}::${worktree.linkedLinearIssue}`
     : ''
 
   // Subscribe to ONLY the specific cache entry, not entire review/issue caches.

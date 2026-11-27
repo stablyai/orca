@@ -1,3 +1,4 @@
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import { createBrowserTabInRenderer } from './browser-tab-renderer-create'
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { BrowserPageCreationPlacement } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
@@ -134,7 +135,7 @@ export class RuntimeBrowserTabCreation {
     }
     const { browserPageId } = await createBrowserTabInRenderer(
       this.host,
-      url,
+      redactKagiSessionToken(url),
       worktreeId,
       params.profileId,
       params.profileId ? sessionPartition : undefined,
@@ -163,11 +164,13 @@ export class RuntimeBrowserTabCreation {
       targetGroupId: params.targetGroupId
     })
 
-    // The webview starts at about:blank; bridge navigation preserves registered ownership.
     if (url && url !== 'about:blank') {
       const navigate = async (): Promise<void> => {
         // Nobody reads a new tab's effects, so its first load skips the settle.
-        const result = await bridge.goto(url, worktreeId, browserPageId, { reportEffects: false })
+        const result = await bridge.goto(url, worktreeId, browserPageId, {
+          reportEffects: false,
+          awaitFirstLoad: true
+        })
         this.targets.notifyRendererNavigation(browserPageId, result.url, result.title)
         if (this.host.getAvailableAuthoritativeWindowId() === null && worktreeId) {
           this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)

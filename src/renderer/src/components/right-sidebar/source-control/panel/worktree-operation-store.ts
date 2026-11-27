@@ -1,5 +1,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { useAppStore } from '@/store'
+import { clearRememberedChangeScope } from './change-scope'
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
@@ -13,7 +14,10 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
-import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
+import type {
+  GitConflictOperation,
+  RebaseStopToken
+} from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlActionError } from '../sync/action-error'
 import type { CreatePrIntentNotice } from '../commit/commit-area-types'
 import {
@@ -22,6 +26,38 @@ import {
   type CreatePrIntentRunToken
 } from '../review/create-pr-intent-flow'
 
+// `unsupported`: an older host without the probe, which callers treat as off.
+export type RebaseAutoStashSetting = boolean | 'unsupported' | null
+
+/**
+ * Orca's own rebase of this branch integrated this upstream tip, so the remote only holds old
+ * copies. done: just finished; active: a diverged reading has matched it. Mismatches retire it.
+ * behind is pinned at the first match: the old copies never change count at the same upstream tip,
+ * so a different count means the local history was reset or rewritten outside Orca.
+ */
+export type OrcaRebaseMarker = {
+  branch: string
+  upstreamOid: string
+  state: 'done' | 'active'
+  behind?: number
+}
+
+/** The stop the panel last read; Continue sends it back so Git only continues what was shown. */
+export type RebaseStopReading = {
+  token: RebaseStopToken
+  indexObservation?: string
+  branch: string | null
+  // Git cannot continue this stop. empty: nothing to commit, so Abort or finish in a terminal; stopped: Git paused
+  // for its own reason (edit, break, exec), so Abort or finish in a terminal.
+  blocked: 'empty' | 'stopped' | null
+}
+
+/** The automatic stop read failed for this HEAD; the strip says so and offers a retry. */
+export type RebaseStopInspectFailure = {
+  head: string | null
+  message: string | null
+}
+
 /** Everything Source Control tracks for one worktree copy; lives past panel/section unmounts. */
 export type WorktreeOperationRecord = {
   readonly draftKey: string
@@ -29,6 +65,14 @@ export type WorktreeOperationRecord = {
   commitError: string | null
   isCommitting: boolean
   isAbortingOperation: boolean
+  // Also holds isAbortingOperation so every conflict-operation gate covers Continue.
+  isContinuingRebase: boolean
+  // null until probed; Git refuses a rebase over tracked changes unless this is on.
+  rebaseAutoStash: RebaseAutoStashSetting
+  rebaseStop: RebaseStopReading | null
+  rebaseStopInspectFailure: RebaseStopInspectFailure | null
+  // Orca started this rebase; once done it hides Pull/Sync/Fast-forward, never enables a force path.
+  orcaRebase: OrcaRebaseMarker | null
   remoteActionError: SourceControlActionError | null
   remoteActionSequence: number
   generateInFlight: boolean
@@ -70,6 +114,11 @@ function createRecord(draftKey: string): WorktreeOperationRecord {
     commitError: null,
     isCommitting: false,
     isAbortingOperation: false,
+    isContinuingRebase: false,
+    rebaseAutoStash: null,
+    rebaseStop: null,
+    rebaseStopInspectFailure: null,
+    orcaRebase: null,
     remoteActionError: null,
     remoteActionSequence: 0,
     generateInFlight: false,
@@ -129,6 +178,12 @@ function subscribeRetirement(): void {
   retiringSubscribed = true
   subscribeWorktreeCommitDraftRetirement(retireRemovedWorktreeOperationStores)
   useAppStore.subscribe((state, previous) => {
+    if (
+      state.activeWorktreeId !== previous.activeWorktreeId ||
+      state.activeWorkspaceExecutionHostId !== previous.activeWorkspaceExecutionHostId
+    ) {
+      clearRememberedChangeScope()
+    }
     const worktreesByRepo = selectWorktreesByRepo(state)
     if (worktreesByRepo === selectWorktreesByRepo(previous)) {
       return

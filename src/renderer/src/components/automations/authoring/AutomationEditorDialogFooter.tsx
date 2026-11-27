@@ -28,7 +28,7 @@ export function AutomationEditorDialogFooter({
 
   return (
     <div className="flex items-center justify-between gap-3 border-t border-border/50 px-5 py-3">
-      <p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+      <p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground @max-sm:hidden">
         <Sparkles className="size-3.5 shrink-0" />
         <span className="truncate">
           {t(
@@ -37,7 +37,7 @@ export function AutomationEditorDialogFooter({
           )}
         </span>
       </p>
-      <div className="flex shrink-0 justify-end gap-2">
+      <div className="ml-auto flex shrink-0 justify-end gap-2">
         <Button variant="outline" onClick={() => onOpenChange(false)}>
           {t('auto.components.automations.AutomationEditorDialog.fb1896a5e7', 'Cancel')}
         </Button>

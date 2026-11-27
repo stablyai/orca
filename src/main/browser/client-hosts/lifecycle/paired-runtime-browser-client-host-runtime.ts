@@ -115,6 +115,8 @@ const browserClientHosts =
             retireAutomation: retireBrowserClientPageAutomation,
             fileChannel,
             uploadStaging,
+            claimRelayedDownload: (guestWebContentsId) =>
+              browserManager.claimNextDownload(guestWebContentsId, null),
             // A window reload loses every guest before its new renderer attaches; recreating them earlier fails for good.
             onPageUnavailable: (browserPageId, generation) =>
               whenBrowserClientPageRendererAvailable(() =>

@@ -1786,7 +1786,7 @@ index 81a70c77a18e25c50b26f0d80aa0e8d8c2672805..f23925ec12a9c36ed78bc82b263f3d58
 +  }
  }
 diff --git a/src/win/conpty.cc b/src/win/conpty.cc
-index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9959f544d 100644
+index 7b286d3d644c26141df516929703aa6e129df4b2..f649cbc15d11f4c55889fc0d6889c0a8ee9b3a26 100644
 --- a/src/win/conpty.cc
 +++ b/src/win/conpty.cc
 @@ -18,7 +18,10 @@
@@ -1800,7 +1800,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
  #include <Windows.h>
  #include <strsafe.h>
  #include "path_util.h"
-@@ -44,15 +47,39 @@ struct pty_baton {
+@@ -44,15 +47,39 @@
    HANDLE hOut;
    HPCON hpc;
  
@@ -1811,7 +1811,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
 +  // watcher closes hShell on another thread -- reading it there is an
 +  // invalid-handle operation, and under strict handle checks that is fatal.
 +  DWORD shellPid = 0;
-+
+ 
 +  // Orca: job object owning this pty's whole process tree. Null when the OS
 +  // refused to create or assign one (an outer job without breakaway rights),
 +  // in which case callers fall back to their pre-job behaviour.
@@ -1826,7 +1826,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
 +  // leaked its pseudoconsole and the console host it reaps (#18601 / F24).
 +  bool shellExited = false;
 +  bool consoleClosed = false;
- 
++
    pty_baton(int _id, HANDLE _hIn, HANDLE _hOut, HPCON _hpc) : id(_id), hIn(_hIn), hOut(_hOut), hpc(_hpc) {};
  };
  
@@ -1842,7 +1842,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
    auto it = std::find_if(ptyHandles.begin(), ptyHandles.end(), [id](const auto& ptyHandle) {
      return ptyHandle->id == id;
    });
-@@ -62,7 +89,7 @@ static pty_baton* get_pty_baton(int id) {
+@@ -62,7 +89,7 @@
    return nullptr;
  }
  
@@ -1851,7 +1851,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
    auto it = std::remove_if(ptyHandles.begin(), ptyHandles.end(), [id](const auto& ptyHandle) {
      return ptyHandle->id == id;
    });
-@@ -102,8 +129,31 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
+@@ -102,8 +129,31 @@
      // Get process exit code.
      GetExitCodeProcess(baton->hShell, (LPDWORD)(&exit_event->exit_code));
      // Clean up handles
@@ -1885,7 +1885,83 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
  
      auto status = tsfn.BlockingCall(exit_event, callback); // In main thread
      switch (status) {
-@@ -242,6 +292,20 @@ HRESULT CreateNamedPipesAndPseudoConsole(const Napi::CallbackInfo& info,
+@@ -197,41 +247,69 @@
+                                          std::wstring& inName,
+                                          std::wstring& outName,
+                                          const std::wstring& pipeName,
+-                                         const bool useConptyDll)
++                                         const bool useConptyDll,
++                                         std::string& failedStep,
++                                         std::wstring& modulePath)
+ {
+   HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
+   DWORD error = GetLastError();
+   bool fLoadedDll = hLibrary != nullptr;
+   if (fLoadedDll)
+   {
++    // Orca: report which module was used, so a failure names the DLL it came from.
++    wchar_t loadedPath[MAX_PATH] = {};
++    if (GetModuleFileNameW((HMODULE)hLibrary, loadedPath, MAX_PATH) != 0) {
++      modulePath = loadedPath;
++    }
++    const char* createName = useConptyDll ? "ConptyCreatePseudoConsole" : "CreatePseudoConsole";
+     PFNCREATEPSEUDOCONSOLE const pfnCreate = (PFNCREATEPSEUDOCONSOLE)GetProcAddress(
+         (HMODULE)hLibrary,
+-        useConptyDll ? "ConptyCreatePseudoConsole" : "CreatePseudoConsole");
++        createName);
+     if (pfnCreate)
+     {
+       if (phPC == NULL || phInput == NULL || phOutput == NULL)
+       {
++        failedStep = "argument check";
+         return E_INVALIDARG;
+       }
+ 
+       bool success = createDataServerPipe(true, L"in", phInput, inName, pipeName);
+       if (!success)
+       {
+-        return HRESULT_FROM_WIN32(GetLastError());
++        // Orca: read the error before string work can overwrite it.
++        const DWORD pipeError = GetLastError();
++        failedStep = "CreateNamedPipe(in)";
++        return HRESULT_FROM_WIN32(pipeError);
+       }
+       success = createDataServerPipe(false, L"out", phOutput, outName, pipeName);
+       if (!success)
+       {
+-        return HRESULT_FROM_WIN32(GetLastError());
++        const HRESULT pipeHr = HRESULT_FROM_WIN32(GetLastError());
++        // Orca: a failed launch must not leak the pipe it already created.
++        CloseHandle(*phInput);
++        *phInput = INVALID_HANDLE_VALUE;
++        failedStep = "CreateNamedPipe(out)";
++        return pipeHr;
+       }
+-      return pfnCreate(size, *phInput, *phOutput, dwFlags, phPC);
++      const HRESULT createHr = pfnCreate(size, *phInput, *phOutput, dwFlags, phPC);
++      if (FAILED(createHr)) {
++        CloseHandle(*phInput);
++        CloseHandle(*phOutput);
++        *phInput = INVALID_HANDLE_VALUE;
++        *phOutput = INVALID_HANDLE_VALUE;
++        failedStep = createName;
++      }
++      return createHr;
+     }
+     else
+     {
+       // Failed to find CreatePseudoConsole in kernel32. This is likely because
+       //    the user is not running a build of Windows that supports that API.
+       //    We should fall back to winpty in this case.
+-      return HRESULT_FROM_WIN32(GetLastError());
++      // Orca: read the error before string work can overwrite it.
++      const DWORD procError = GetLastError();
++      failedStep = std::string("GetProcAddress(") + createName + ")";
++      return HRESULT_FROM_WIN32(procError);
+     }
+   } else {
+     throw errorWithCode(info, "Failed to load conpty.dll");
+@@ -242,6 +320,20 @@
    return HRESULT_FROM_WIN32(GetLastError());
  }
  
@@ -1906,7 +1982,18 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
  static Napi::Value PtyStartProcess(const Napi::CallbackInfo& info) {
    Napi::Env env(info.Env());
    Napi::HandleScope scope(env);
-@@ -301,8 +365,10 @@ static Napi::Value PtyStartProcess(const Napi::CallbackInfo& info) {
+@@ -289,7 +381,9 @@
+ 
+   HANDLE hIn, hOut;
+   HPCON hpc;
+-  HRESULT hr = CreateNamedPipesAndPseudoConsole(info, {cols, rows}, inheritCursor ? 1/*PSEUDOCONSOLE_INHERIT_CURSOR*/ : 0, &hIn, &hOut, &hpc, inName, outName, pipeName, useConptyDll);
++  std::string failedStep;
++  std::wstring modulePath;
++  HRESULT hr = CreateNamedPipesAndPseudoConsole(info, {cols, rows}, inheritCursor ? 1/*PSEUDOCONSOLE_INHERIT_CURSOR*/ : 0, &hIn, &hOut, &hpc, inName, outName, pipeName, useConptyDll, failedStep, modulePath);
+ 
+   // Restore default handling of ctrl+c
+   SetConsoleCtrlHandler(NULL, FALSE);
+@@ -301,10 +395,22 @@
      // We were able to instantiate a conpty
      const int ptyId = InterlockedIncrement(&ptyCounter);
      marshal.Set("pty", Napi::Number::New(env, ptyId));
@@ -1917,9 +2004,22 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
 +    std::lock_guard<std::mutex> guard(ptyJobMutex);
 +    ptyHandles.emplace_back(std::move(baton));
    } else {
-     throw Napi::Error::New(env, "Cannot launch conpty");
+-    throw Napi::Error::New(env, "Cannot launch conpty");
++    // Orca: keep the upstream prefix (callers match it) but name the step,
++    // HRESULT and module, so a field report is diagnosable without a repro.
++    char hrText[16];
++    StringCchPrintfA(hrText, sizeof(hrText), "0x%08lX", static_cast<unsigned long>(hr));
++    std::string why = "Cannot launch conpty: ";
++    why += failedStep.empty() ? std::string("unknown step") : failedStep;
++    why += " failed with HRESULT ";
++    why += hrText;
++    why += " using ";
++    why += modulePath.empty() ? std::string("<unknown module>") : path_util::wstring_to_string(modulePath);
++    throw Napi::Error::New(env, why);
    }
-@@ -350,11 +416,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+ 
+   std::string inNameStr = path_util::wstring_to_string(inName);
+@@ -350,11 +456,15 @@
    const bool useConptyDll = info[4].As<Napi::Boolean>().Value();
    Napi::Function exitCallback = info[5].As<Napi::Function>();
  
@@ -1939,7 +2039,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
  
    // Prepare command line
    std::unique_ptr<wchar_t[]> mutableCommandline = std::make_unique<wchar_t[]>(cmdline.length() + 1);
-@@ -409,6 +479,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -409,6 +519,15 @@
      throw errorWithCode(info, "UpdateProcThreadAttribute failed");
    }
  
@@ -1955,7 +2055,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
    PROCESS_INFORMATION piClient{};
    fSuccess = !!CreateProcessW(
        nullptr,
-@@ -416,7 +495,10 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -416,7 +535,10 @@
        nullptr,                      // lpProcessAttributes
        nullptr,                      // lpThreadAttributes
        false,                        // bInheritHandles VERY IMPORTANT that this is false
@@ -1967,7 +2067,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
        envArg,                       // lpEnvironment
        mutableCwd.get(),             // lpCurrentDirectory
        &siEx.StartupInfo,            // lpStartupInfo
-@@ -426,8 +508,54 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -426,8 +548,54 @@
      throw errorWithCode(info, "Cannot create process");
    }
  
@@ -2024,7 +2124,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
    if (useConptyDll && fLoadedDll)
    {
      PFNRELEASEPSEUDOCONSOLE const pfnReleasePseudoConsole = (PFNRELEASEPSEUDOCONSOLE)GetProcAddress(
-@@ -438,8 +566,12 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -438,8 +606,12 @@
      }
    }
  
@@ -2039,7 +2139,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
  
    // Close the thread handle to avoid resource leak
    CloseHandle(piClient.hThread);
-@@ -472,9 +604,10 @@ static Napi::Value PtyResize(const Napi::CallbackInfo& info) {
+@@ -472,9 +644,10 @@
    SHORT rows = static_cast<SHORT>(info[2].As<Napi::Number>().Uint32Value());
    const bool useConptyDll = info[3].As<Napi::Boolean>().Value();
  
@@ -2052,7 +2152,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
      HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
      bool fLoadedDll = hLibrary != nullptr;
      if (fLoadedDll)
-@@ -513,9 +646,10 @@ static Napi::Value PtyClear(const Napi::CallbackInfo& info) {
+@@ -513,9 +686,10 @@
      return env.Undefined();
    }
  
@@ -2065,7 +2165,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
      HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
      bool fLoadedDll = hLibrary != nullptr;
      if (fLoadedDll)
-@@ -544,26 +678,332 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+@@ -544,30 +718,336 @@
    int id = info[0].As<Napi::Number>().Int32Value();
    const bool useConptyDll = info[1].As<Napi::Boolean>().Value();
  
@@ -2088,6 +2188,13 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
 -    HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
 -    bool fLoadedDll = hLibrary != nullptr;
 -    if (fLoadedDll)
+-    {
+-      PFNCLOSEPSEUDOCONSOLE const pfnClosePseudoConsole = (PFNCLOSEPSEUDOCONSOLE)GetProcAddress(
+-        (HMODULE)hLibrary,
+-        useConptyDll ? "ConptyClosePseudoConsole" : "ClosePseudoConsole");
+-      if (pfnClosePseudoConsole)
+-      {
+-        pfnClosePseudoConsole(handle->hpc);
 +  // Orca: the baton now outlives the shell, so this runs on a self-exited pty
 +  // too -- that is the whole point. Take what we need under the lock: the
 +  // watcher thread nulls hShell the moment the shell dies, and TerminateProcess
@@ -2118,39 +2225,35 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
 +          hShellDup = nullptr;
 +          TerminateProcess(handle->hShell, 1);
 +        }
-+      }
+       }
 +      if (handle->shellExited) {
 +        const bool removed = remove_pty_baton_locked(id);
 +        assert(removed);
 +        (void)removed;
 +      }
 +      // Else the shell is still running and the watcher frees the baton.
-+    }
+     }
+-    if (useConptyDll) {
+-      TerminateProcess(handle->hShell, 1);
 +  }
 +
 +  // Why outside the lock: ClosePseudoConsole blocks until the conout side has
 +  // drained, and the watcher must be able to take the lock while it does.
 +  if (owed) {
 +    if (pfnClosePseudoConsole)
-     {
--      PFNCLOSEPSEUDOCONSOLE const pfnClosePseudoConsole = (PFNCLOSEPSEUDOCONSOLE)GetProcAddress(
--        (HMODULE)hLibrary,
--        useConptyDll ? "ConptyClosePseudoConsole" : "ClosePseudoConsole");
--      if (pfnClosePseudoConsole)
--      {
--        pfnClosePseudoConsole(handle->hpc);
++    {
 +      pfnClosePseudoConsole(hpc);
-+    }
+     }
 +    if (hShellDup != nullptr) {
 +      TerminateProcess(hShellDup, 1);
 +      CloseHandle(hShellDup);
 +    }
-+  }
-+
-+  return env.Undefined();
-+}
-+
-+/**
+   }
+ 
+   return env.Undefined();
+ }
+ 
+ /**
 + * Orca: confirm a baton really is the pty the caller means.
 + *
 + * The winpty backend mints its own `pty` ids from a separate counter, and the
@@ -2229,14 +2332,12 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
 +      auto pids = Napi::Array::New(env, list->NumberOfProcessIdsInList);
 +      for (DWORD i = 0; i < list->NumberOfProcessIdsInList; i++) {
 +        pids.Set(i, Napi::Number::New(env, static_cast<double>(list->ProcessIdList[i])));
-       }
++      }
 +      return pids;
-     }
--    if (useConptyDll) {
--      TerminateProcess(handle->hShell, 1);
++    }
 +    if (GetLastError() != ERROR_MORE_DATA) {
 +      return env.Null();
-     }
++    }
 +    capacity *= 4;
 +  }
 +  return env.Null();
@@ -2271,8 +2372,8 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
 +  std::lock_guard<std::mutex> guard(ptyJobMutex);
 +  if (hHostJob != nullptr) {
 +    return Napi::Boolean::New(env, allowBreakaway || !hostJobAllowsBreakaway);
-   }
- 
++  }
++
 +  HANDLE job = CreateJobObjectW(nullptr, nullptr);
 +  if (job == nullptr) {
 +    return Napi::Boolean::New(env, false);
@@ -2408,10 +2509,14 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..492ca9a49aac95a06142c6a3c7c097f9
 +  if (found != orcaExitWatches.end()) {
 +    OrcaReleaseExitWatch(found->second);
 +  }
-   return env.Undefined();
- }
++  return env.Undefined();
++}
++
++/**
+ * Init
+ */
  
-@@ -577,6 +1017,13 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+@@ -577,6 +1057,13 @@
    exports.Set("resize", Napi::Function::New(env, PtyResize));
    exports.Set("clear", Napi::Function::New(env, PtyClear));
    exports.Set("kill", Napi::Function::New(env, PtyKill));

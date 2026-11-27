@@ -1,4 +1,5 @@
 import { daemonDiedRespawnMessage } from '../../launch/daemon-exit-record'
+import { HOST_LOST_EXIT_CAUSE } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import {
   rebindLocalProviderListeners,
   unbindLocalProviderListeners
@@ -104,17 +105,22 @@ async function runRestartDaemon(
   const killedCount =
     new Set([...currentOnly.getActiveSessionIds(), ...currentDaemonSessionIds]).size +
     fallbackKilledCount
-  currentOnly.fanoutSyntheticExits(-1, { replacedByRestart: true })
+  // The host goes away under its sessions; no stop was asked of them.
+  const restartExit = { replacedByRestart: true as const, cause: HOST_LOST_EXIT_CAUSE }
+  currentOnly.fanoutSyntheticExits(-1, restartExit)
   if (currentAdapter instanceof DegradedDaemonPtyProvider) {
-    currentAdapter.fanoutCurrentDaemonSyntheticExits(-1, { replacedByRestart: true })
+    currentAdapter.fanoutCurrentDaemonSyntheticExits(-1, restartExit)
   }
 
   // Unbind only after synthetic exits have reached renderer listeners.
   unbindLocalProviderListeners()
 
   let info: Awaited<ReturnType<DaemonSpawner['ensureRunning']>>
+  let killedRelayCount = 0
   try {
-    await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION, expectedDaemonPid)
+    killedRelayCount =
+      (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION, expectedDaemonPid))
+        .killedRelayCount ?? 0
 
     // Reuse the spawner captured by long-lived respawn closures.
     currentSpawner.resetHandle()
@@ -193,7 +199,7 @@ async function runRestartDaemon(
   rebindLocalProviderListeners()
   clearSeveredDaemon()
 
-  return { killedCount }
+  return { killedCount: killedCount + killedRelayCount }
 }
 
 async function assertDaemonEndpointOwner(

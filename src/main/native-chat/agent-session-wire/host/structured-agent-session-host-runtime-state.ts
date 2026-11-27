@@ -39,13 +39,12 @@ export class StructuredAgentSessionHostRuntimeState {
   readonly reconcileLeases: ReturnType<typeof createRestartReconciler>
   readonly startupAttempts: StructuredAgentSessionStartupAttempts
   private readonly leaseRenewer: StructuredAgentSessionLeaseRenewer
-  private readonly onEventSinkFailure?: (sessionId: string, error: unknown) => void
 
   constructor(
     private readonly deps: StructuredAgentSessionHostDeps,
     /** Held children renew without PID probes. */
     private readonly sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>,
-    onEventSinkFailure?: (sessionId: string, error: unknown) => void,
+    private readonly onEventSinkFailure?: (sessionId: string, error: unknown) => void,
     /** Expire published starts; still-acquiring attempts abort here. */
     onStartupExpired?: (expired: StructuredAgentSessionExpiredStartup) => void,
     private readonly deliveryActive?: (sessionId: string) => boolean,
@@ -56,7 +55,6 @@ export class StructuredAgentSessionHostRuntimeState {
   ) {
     this.acquireAborts = new StructuredAgentSessionAcquireAborts((id) => this.refreshActivity(id))
     this.startFlights = new StructuredAgentSessionStartFlights((id) => this.refreshActivity(id))
-    this.onEventSinkFailure = onEventSinkFailure
     this.startupAttempts = new StructuredAgentSessionStartupAttempts({
       ...(deps.startupLimits ? { limits: deps.startupLimits } : {}),
       settled: recordAgentSessionStartup,
@@ -259,14 +257,18 @@ export class StructuredAgentSessionHostRuntimeState {
     this.refreshActivity(sessionId)
   }
 
-  async flushEventSink(sessionId: string): Promise<void> {
-    await this.requireSuccessfulBarrier(
-      this.currentEventSink(sessionId)?.drained() ?? Promise.resolve({ ok: true } as const)
-    )
-    await this.childWork?.drainChildWork(sessionId)
-    await this.requireSuccessfulBarrier(
-      this.currentEventSink(sessionId)?.drained() ?? Promise.resolve({ ok: true } as const)
-    )
+  /** `landed` waits only for admitted writes, and is false while streamed text is still unsaved. */
+  async flushEventSink(sessionId: string, landed?: true): Promise<boolean> {
+    const sink = () => this.currentEventSink(sessionId)
+    const ok = Promise.resolve({ ok: true } as const)
+    // A forced save asks in the same task as its flush, so text a source saves only on ask is saved.
+    void (landed || sink()?.hasLiveText())
+    await this.requireSuccessfulBarrier((landed ? sink()?.landed() : sink()?.drained()) ?? ok)
+    if (!landed) {
+      await this.childWork?.drainChildWork(sessionId)
+      await this.requireSuccessfulBarrier(sink()?.drained() ?? ok)
+    }
+    return !landed || !sink()?.hasLiveText()
   }
 
   async lifecycleBarrier(sessionId: string): Promise<StructuredAgentSessionSinkBarrier> {

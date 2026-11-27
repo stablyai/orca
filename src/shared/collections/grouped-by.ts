@@ -1,4 +1,4 @@
-// Not `Map.groupBy`: the relay runs this core on Node 18, which lacks it.
+// Not `Map.groupBy`: the relay's Node 18 and older phone WebViews (Chrome < 117) lack it.
 export function groupedBy<T, K>(items: readonly T[], keyOf: (item: T) => K): Map<K, T[]> {
   const groups = new Map<K, T[]>()
   for (const item of items) {

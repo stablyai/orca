@@ -4,6 +4,8 @@ import { parentPort } from 'node:worker_threads'
 import { BotItemError } from '../bot-item-error'
 import { callBotItemsOp, isBotItemsOp } from '../bot-items-ops'
 import { BotItemsStore } from '../bot-items-store'
+import { callBotWorkOp, isBotWorkOp } from '../bot-work-ops'
+import { BotWorkStore } from '../bot-work-store'
 import type {
   BotsDbStoreName,
   BotsDbWorkerRequest,
@@ -28,9 +30,19 @@ function openItems(path: string): OpenStore {
   }
 }
 
+function openWork(path: string): OpenStore {
+  const store = BotWorkStore.open(path)
+  return {
+    call: (op, args) =>
+      isBotWorkOp(op) ? { found: true, value: callBotWorkOp(store, op, args) } : { found: false },
+    dispose: () => store.dispose()
+  }
+}
+
 /** Each store this worker hosts, by the name requests carry. */
 const STORES: Record<BotsDbStoreName, (path: string) => OpenStore> = {
-  items: openItems
+  items: openItems,
+  work: openWork
 }
 
 const opened = new Map<string, OpenStore>()

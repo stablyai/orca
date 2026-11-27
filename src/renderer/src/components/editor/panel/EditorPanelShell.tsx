@@ -100,6 +100,7 @@ export function EditorPanelShell({
       {shouldShowEditorPanelHeader(activeFile, model.isCombinedDiff) && (
         <EditorPanelHeader
           activeFile={activeFile}
+          viewStateId={activeViewStateId ?? activeFile.id}
           copiedPathVisible={copiedPathVisible}
           isSingleDiff={model.isSingleDiff}
           isDiffSurface={model.isDiffSurface}

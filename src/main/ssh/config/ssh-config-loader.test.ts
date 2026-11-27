@@ -57,6 +57,54 @@ function writeFile(root: string, relativePath: string, content: string): string 
 }
 
 describe('loadUserSshConfig', () => {
+  it('preserves literal backslashes in quoted identity paths', () => {
+    const home = makeHome()
+    writeFile(
+      home,
+      '.ssh/config',
+      String.raw`Host windows-key
+  IdentityFile "C:\Users\Test User\.ssh\id_ed25519"
+  IdentityAgent "/tmp/agent\socket"
+Host escaped-key
+  IdentityFile "/keys/a\"b\\c\'d"
+Host unquoted-key
+  IdentityFile C:\Users\My\ Keys\\id_ed25519
+`
+    )
+
+    expect(loadUserSshConfig()).toEqual([
+      {
+        host: 'windows-key',
+        identityFile: String.raw`C:\Users\Test User\.ssh\id_ed25519`,
+        identityAgent: String.raw`/tmp/agent\socket`
+      },
+      { host: 'escaped-key', identityFile: String.raw`/keys/a"b\c'd` },
+      { host: 'unquoted-key', identityFile: String.raw`C:\Users\My Keys\id_ed25519` }
+    ])
+  })
+
+  it('tokenizes quotes, escaped spaces and # like OpenSSH', () => {
+    const home = makeHome()
+    writeFile(home, '.ssh/my configs/a', 'Host single-include\n')
+    writeFile(home, '.ssh/my configs/b', 'Host escaped-include\n')
+    writeFile(
+      home,
+      '.ssh/config',
+      String.raw`Include '~/.ssh/my configs/a'
+Include ~/.ssh/my\ configs/b
+Host 'quoted-key' team#1 # comment
+  IdentityFile '/keys/my "work" key'
+`
+    )
+
+    expect(loadUserSshConfig()).toEqual([
+      { host: 'single-include' },
+      { host: 'escaped-include' },
+      { host: 'quoted-key', identityFile: '/keys/my "work" key' },
+      { host: 'team#1', identityFile: '/keys/my "work" key' }
+    ])
+  })
+
   it('supports OrbStack includes, Include= syntax, quoted paths, and multiple pathnames', () => {
     const home = makeHome()
     writeFile(

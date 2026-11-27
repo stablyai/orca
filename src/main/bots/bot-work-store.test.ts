@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from '../sqlite/sync-database'
-import { BotWorkStore, botWorkStoreFile, type BotWorkBind } from './bot-work-store'
+import { botWorkStoreFile } from './bot-work-ops'
+import { BotWorkStore, type BotWorkBind } from './bot-work-store'
 
 const THREAD = { source: 'slack', externalId: 'T1:C1:1.0' } as const
 

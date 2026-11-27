@@ -35,8 +35,9 @@ import {
   type SetSessionModelRequest,
   type SetSessionModelResponse
 } from '../generated/acp-protocol.generated'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
-const ForkSessionResponseSchema = z.looseObject({ sessionId: SessionIdSchema })
+const ForkSessionResponseSchema = lazyZodSchema(() => z.looseObject({ sessionId: SessionIdSchema }))
 
 type Meta = PromptRequest['_meta']
 const withMeta = (meta: Meta): { _meta?: Meta } => (meta ? { _meta: meta } : {})
@@ -262,17 +263,11 @@ export class AcpSessionRuntime {
     params: unknown,
     schema: z.ZodType<T>,
     received?: (response: T) => void,
-    timeoutMs: number | null = null
+    timeoutMs: number | null = null,
+    onId?: (id: number) => void
   ): Promise<T> {
-    return callAcpSession(
-      this.peer,
-      method,
-      params,
-      schema,
-      this.options.onAuthAnswered,
-      received,
-      timeoutMs
-    )
+    const answered = this.options.onAuthAnswered
+    return callAcpSession(this.peer, method, params, schema, answered, received, timeoutMs, onId)
   }
 
   private handleRequest(method: string, params: unknown, context: AcpRequestContext): unknown {
@@ -302,7 +297,7 @@ export class AcpSessionRuntime {
     }
   }
 
-  private handleNotification(method: string, params: unknown): void {
+  protected handleNotification(method: string, params: unknown): void {
     if (method !== 'session/update') {
       try {
         this.options.onExtensionNotification?.(method, params)

@@ -21,6 +21,7 @@ function downloadRequestedEvent(
     totalBytes: download.totalBytes,
     mimeType: download.mimeType,
     savePath: download.savePath,
+    ...(download.claimLabel ? { claimLabel: download.claimLabel } : {}),
     status: 'downloading'
   }
 }
@@ -186,6 +187,15 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     }
   }
 
+  cancelDownload(args: { downloadId: string; senderWebContentsId: number }): boolean {
+    const download = this.downloadsById.get(args.downloadId)
+    if (!download || download.rendererWebContentsId !== args.senderWebContentsId) {
+      return false
+    }
+    this.cancelDownloadInternal(args.downloadId, 'Canceled.')
+    return true
+  }
+
   protected cancelDownloadInternal(
     downloadId: string,
     reason: string,
@@ -250,6 +260,7 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
       status,
       savePath: download.savePath || null,
       ...(download.remoteDestination ? { remoteDestination: download.remoteDestination } : {}),
+      ...(download.claimLabel ? { claimLabel: download.claimLabel } : {}),
       error
     }
     download.terminalEvent = event

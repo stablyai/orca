@@ -56,6 +56,39 @@ export function advanceAutomationNextRun(
   return updated
 }
 
+/** Moves each recurring schedule's next run past `now` in one list write and one flush. */
+export function advanceAutomationNextRuns(
+  state: PersistedState,
+  flush: () => void,
+  ids: ReadonlySet<string>,
+  authority: AutomationStorageAuthority,
+  now = Date.now()
+): number {
+  if (ids.size === 0) {
+    return 0
+  }
+  let advanced = 0
+  const automations = (state.automations ?? []).map((entry) => {
+    if (!ids.has(entry.id) || entry.once) {
+      return entry
+    }
+    advanced += 1
+    const nextRunAt = nextAutomationOccurrenceAfter(
+      entry.rrule,
+      entry.dtstart,
+      now,
+      automationScheduleZone(entry, authority)
+    )
+    return { ...entry, nextRunAt, updatedAt: now }
+  })
+  if (advanced > 0) {
+    // Replace the array to invalidate identity-keyed list projections.
+    state.automations = automations
+    flush()
+  }
+  return advanced
+}
+
 /** Bypasses owner fencing: callers disable rows another authority now schedules. */
 export function disableAutomations(
   state: PersistedState,

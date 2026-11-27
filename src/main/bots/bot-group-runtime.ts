@@ -2,6 +2,7 @@ import type { z } from 'zod'
 import type {
   BotGroup,
   BotGroupCreate,
+  BotGroupRenameThread,
   BotGroupSend,
   BotGroupUpdate
 } from '../../shared/bots/bot-group'
@@ -30,6 +31,7 @@ import {
   type SendBotGroupMessageOptions
 } from './bot-group-delivery'
 import { stopBotGroup } from './bot-group-stop'
+import { renameBotGroupThread } from './bot-group-thread-rename'
 import { pausedBotChatHoldsMail } from './bot-paused-mail'
 import {
   assertGroupPeerScope,
@@ -155,8 +157,9 @@ export class BotGroupRuntime {
     this.store = new BotGroupStore(runtime.getOrchestrationDb().db)
   }
 
-  changed(): void {
-    this.runtime.notifyBotGroupsChanged()
+  /** Readers re-read; open rooms of `groupId` only, when it is given (a change inside one room). */
+  changed(groupId?: string): void {
+    this.runtime.notifyBotGroupsChanged(groupId === undefined ? undefined : [groupId])
   }
 
   /** Names the members' chats after their rooms, once `group` is saved with new members or names. */
@@ -175,6 +178,8 @@ export class BotGroupRuntime {
     sendBotGroupMessage(this, input, options)
   newThread = (groupId: string) =>
     createBotGroupThread(this, groupId).then((made) => ({ ...made, group: this.named(made.group) }))
+  renameThread = (input: z.infer<typeof BotGroupRenameThread>) =>
+    renameBotGroupThread(this, input).then(this.named)
   read = (groupId: string, beforeSequence?: number, threadId?: string) =>
     readBotGroup(this, groupId, beforeSequence, threadId)
   stop = (groupId: string, botId?: string, threadId?: string) =>

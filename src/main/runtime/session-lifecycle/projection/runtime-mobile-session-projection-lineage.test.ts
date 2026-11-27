@@ -205,4 +205,22 @@ describe('paired-client frame lineage identity', () => {
       orchestration: ORCHESTRATION
     })
   })
+
+  it('stamps a status-only done after a status-only working so paired clients accept it (#49012)', () => {
+    const hookDone: AgentStatusEntry = { ...workingWorkerRow(NOW - 60_000), state: 'done' }
+    const pty = workingTitlePty(NOW - 59_000)
+    pty.lastOscTitleEpochMs = NOW - 120_000
+    pty.lastAgentStatusRichInvalidatedAtEpochMs = NOW - 59_000
+    const working = renewRuntimeMobileAgentStatusFromPtyTitle(hookDone, pty)
+    expect(working).toMatchObject({ state: 'working', updatedAt: NOW - 59_000 })
+
+    pty.lastAgentStatus = 'idle'
+    pty.lastAgentStatusStartedAtEpochMs = NOW - 2_000
+    pty.lastAgentStatusRichInvalidatedAtEpochMs = NOW - 2_000
+    expect(renewRuntimeMobileAgentStatusFromPtyTitle(hookDone, pty)).toMatchObject({
+      state: 'done',
+      updatedAt: NOW - 2_000,
+      stateStartedAt: NOW - 60_000
+    })
+  })
 })

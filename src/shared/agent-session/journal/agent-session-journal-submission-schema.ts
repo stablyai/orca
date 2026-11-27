@@ -1,33 +1,36 @@
 // Deep-validate dispatch submissions with open string vocabularies, as in agent-session-journal-schemas.ts.
 
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { AgentJournalAnsweredTurnSchema } from '../view/agent-session-answered-turn-schema'
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
 import type { AgentJournalSubmission } from './agent-session-journal-types'
 import { AgentSessionExecutionOptionsSchema } from '../options/protocol/agent-session-execution-options'
 
 // Every persisted field is listed, or a parse strips it: this schema drops unknown keys.
-export const AgentJournalSubmissionSchema = z.object({
-  clientMessageId: z.string().min(1),
-  fence: z.number().int(),
-  payloadFingerprint: z.string(),
-  dispatchState: z.string().min(1),
-  providerItemId: z.string().nullable(),
-  reason: z.string().nullable(),
-  submittedAt: z.number(),
-  resolvedAt: z.number().nullable(),
-  submittedSequence: z.number().int().optional(),
-  answeredInTurn: AgentJournalAnsweredTurnSchema.optional(),
-  recovered: z.literal(true).optional(),
-  handoverRecorded: z.literal(true).optional(),
-  handedOverAt: z.number().optional(),
-  rejection: AgentSessionFailureFactSchema.optional(),
-  queuedMessageId: z.string().min(1).optional(),
-  // The kind only; an object's other keys (a sender) are stripped, never published.
-  source: z.object({ kind: z.string() }).optional(),
-  keptAsQueuedMessageId: z.string().min(1).optional(),
-  options: AgentSessionExecutionOptionsSchema.optional()
-})
+export const AgentJournalSubmissionSchema = lazyZodSchema(() =>
+  z.object({
+    clientMessageId: z.string().min(1),
+    fence: z.number().int(),
+    payloadFingerprint: z.string(),
+    dispatchState: z.string().min(1),
+    providerItemId: z.string().nullable(),
+    reason: z.string().nullable(),
+    submittedAt: z.number(),
+    resolvedAt: z.number().nullable(),
+    submittedSequence: z.number().int().optional(),
+    answeredInTurn: AgentJournalAnsweredTurnSchema.optional(),
+    recovered: z.literal(true).optional(),
+    handoverRecorded: z.literal(true).optional(),
+    handedOverAt: z.number().optional(),
+    rejection: AgentSessionFailureFactSchema.optional(),
+    queuedMessageId: z.string().min(1).optional(),
+    // The kind only; an object's other keys (a sender) are stripped, never published.
+    source: z.object({ kind: z.string() }).optional(),
+    keptAsQueuedMessageId: z.string().min(1).optional(),
+    options: AgentSessionExecutionOptionsSchema.optional()
+  })
+)
 
 export function isAdmissibleAgentJournalSubmission(
   value: unknown

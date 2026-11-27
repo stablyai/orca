@@ -11,6 +11,7 @@ import type { AgentType } from '../../../../../../shared/agent-status/contracts/
 import { isAiVaultAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { selectAiVaultPanelWorkspace } from '@/components/right-sidebar/ai-vault/scope/ai-vault-panel-workspace'
 import { openAgentSessionHistoryModal } from '@/components/right-sidebar/ai-vault/panel/agent-session-history-modal'
+import { usePreloadAgentSessionHistoryDialog } from '@/components/right-sidebar/ai-vault/session-list/agent-session-history-dialog-preload'
 import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import type { NativeChatPickerState } from '@/components/native-chat/composer/pickers/use-native-chat-picker-state'
 import { findNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/ownership/native-chat-tab-owner'
@@ -99,6 +100,7 @@ export function useNativeChatResumeCommand(args: {
   const { setNotice } = args
   const structured = structuredTransport !== undefined
   const structuredWorktreeId = structuredTransport?.worktreeId
+  usePreloadAgentSessionHistoryDialog(structured)
   // A room's history spans its members' agents; with no chat agent, nothing replaces the room.
   const ownConversation = useContext(NativeChatSessionHistoryScopeContext) === 'conversation'
   const usage = structuredTransport?.accountUsage

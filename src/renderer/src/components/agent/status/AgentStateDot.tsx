@@ -160,7 +160,8 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         <CircleDashed className={cn('text-amber-500', icon)} aria-hidden="true" />
       </span>
     )
-  } else if (state === 'permission' || state === 'waiting') {
+  } else if (state === 'permission' || state === 'waiting' || state === 'blocked') {
+    // Blocked waits on the user like waiting/permission, so it shares the needs-you glyph; red stays for failed.
     indicator = (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
@@ -179,7 +180,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
           className={cn(
             'block rounded-full',
             inner,
-            state === 'blocked' || state === 'failed'
+            state === 'failed'
               ? 'bg-red-500'
               : // User Stop is muted, not a fault or completion.
                 state === 'interrupted'

@@ -21,6 +21,32 @@ export type CombinedDiffNotesActions = {
   setScrollSurfaceMounted: (mounted: boolean) => void
 }
 
+async function runClearDiffNotesAction(
+  run: () => Promise<boolean>,
+  mountedRef: { current: boolean },
+  setIsClearingNotes: (clearing: boolean) => void,
+  setClearNotesDialogOpen: (open: boolean) => void
+): Promise<void> {
+  setIsClearingNotes(true)
+  try {
+    const ok = await run()
+    if (!mountedRef.current) {
+      return
+    }
+    if (ok) {
+      setClearNotesDialogOpen(false)
+    } else {
+      toast.error(
+        translate('auto.components.editor.CombinedDiffViewer.45cf23b418', 'Failed to clear notes.')
+      )
+    }
+  } finally {
+    if (mountedRef.current) {
+      setIsClearingNotes(false)
+    }
+  }
+}
+
 export function useCombinedDiffNotesActions({
   owner,
   clearDiffComments,
@@ -134,29 +160,15 @@ export function useCombinedDiffNotesActions({
     if (!clearTarget || clearNotesCount === 0 || isClearingNotes) {
       return
     }
-    setIsClearingNotes(true)
-    try {
-      const ok = await clearDiffComments(clearTarget.owner, {
-        keepMarkdownNotes: !markdownReviewNotesEnabled
-      })
-      if (!mountedRef.current) {
-        return
-      }
-      if (ok) {
-        setClearNotesDialogOpen(false)
-      } else {
-        toast.error(
-          translate(
-            'auto.components.editor.CombinedDiffViewer.45cf23b418',
-            'Failed to clear notes.'
-          )
-        )
-      }
-    } finally {
-      if (mountedRef.current) {
-        setIsClearingNotes(false)
-      }
-    }
+    await runClearDiffNotesAction(
+      () =>
+        clearDiffComments(clearTarget.owner, {
+          keepMarkdownNotes: !markdownReviewNotesEnabled
+        }),
+      mountedRef,
+      setIsClearingNotes,
+      setClearNotesDialogOpen
+    )
   }, [
     clearDiffComments,
     clearNotesCount,

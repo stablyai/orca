@@ -1,6 +1,6 @@
 // A bot chat, worker or run stopped on its usage limit: the usage-limit row's amber gauge, the
 // same whether Orca continues it at the reset or not; only the words and the tooltip differ.
-import { Gauge } from 'lucide-react'
+import { GaugeMaxIcon } from '@/components/icons/GaugeMaxIcon'
 import { StateIndicatorTooltip } from '@/components/agent/status/StateIndicatorTooltip'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -12,14 +12,6 @@ import type {
   NamedUsageLimitStop,
   UsageLimitStop
 } from '../../../../shared/bots/bot-usage-limit-stop'
-
-/** "Continues at 9:50 PM", or "Hit limit · resets 9:50 PM" when Orca won't continue it. */
-export function usageLimitStopText(t: Translate, stop: UsageLimitStop): string {
-  const time = formatUsageLimitResetClock(stop.at)
-  return stop.auto
-    ? t('bots.usageLimit.continuesAt', 'Continues at {{time}}', { time })
-    : t('bots.usageLimit.hitLimit', 'Hit limit · resets {{time}}', { time })
-}
 
 /** A worker row's short meta: its name keeps the room; the mark's tooltip says the rest. */
 export function usageLimitStopMeta(t: Translate, stop: UsageLimitStop): string {
@@ -61,7 +53,7 @@ export function UsageLimitStopMark({
   return (
     <StateIndicatorTooltip label={tip}>
       <span role="img" aria-label={tip} className="inline-flex shrink-0">
-        <Gauge className={cn('size-3 text-status-warning', className)} aria-hidden />
+        <GaugeMaxIcon className={cn('size-3 text-status-warning', className)} />
       </span>
     </StateIndicatorTooltip>
   )

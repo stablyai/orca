@@ -1,6 +1,10 @@
 // Consume /compact output; select its one result: an ordinary provider failure or the command's own row.
 
 import { agentSessionCompactCommandText } from '../../../shared/agent-session/conversation-context/agent-session-conversation-command'
+import type {
+  AgentSessionContextUsage,
+  AgentSessionContextUsed
+} from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import { providerDiagnostic } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../../shared/agent-session/conversation-context/agent-session-compaction'
@@ -14,6 +18,7 @@ import {
   type AcpTurnFailureEvidence
 } from './acp-turn-failure-evidence'
 import type { AcpTurnFailures } from '../timeline/acp-turn-failures'
+import { acpUsedEstimate } from '../timeline/acp-context-usage'
 import type { ContentBlock, SessionUpdate } from '../generated/acp-protocol.generated'
 
 export function acpCompactPrompt(instructions?: string, command?: string): ContentBlock[] {
@@ -25,12 +30,15 @@ export type AcpCompaction = {
   failure?: AcpTurnFailureEvidence
   startedId?: string
   cancelledId?: string
+  /** The agent restated context usage during the compaction. */
+  usageReported?: true
 }
 
 export type AcpCompactionFrame = {
   failureDetail?: string
   failure?: Pick<AcpTurnEnding, 'stopReason' | 'failureDetail' | 'usageLimit'>
   end?: Omit<AcpTurnEnding, 'at' | 'notSignedIn'>
+  usage?: AgentSessionContextUsage
 }
 
 /** Returns true when the update belongs to the compaction. */
@@ -76,6 +84,9 @@ export function absorbAcpCompactionFrame(
   const { compaction } = prompt
   if (!compaction) {
     return false
+  }
+  if (extension?.usage?.used || update?.sessionUpdate === 'usage_update') {
+    compaction.usageReported = true
   }
   const failure = extension?.failure ?? extension?.end
   const detail = extension?.failureDetail ?? failure?.failureDetail
@@ -171,5 +182,19 @@ export function acpCompactionEnd(
           }),
           tone: 'error' as const
         }
-  return [{ type: 'item.close', item: `compaction:${turn}`, body, join }, end(verdict.outcome)]
+  // The pre-compaction count is stale; it stays unknown until the agent restates it.
+  const used =
+    verdict.outcome === 'success' && !compaction.usageReported
+      ? compactedUsage(input.dialect, compaction.reply, input.at)
+      : undefined
+  return [
+    { type: 'item.close', item: `compaction:${turn}`, body, join },
+    ...(used ? [{ type: 'context.usage' as const, usage: { used }, join }] : []),
+    end(verdict.outcome)
+  ]
+}
+
+function compactedUsage(dialect: AcpDialect, reply: string, at: number): AgentSessionContextUsed {
+  const tokens = dialect.compactedContextTokens?.(reply)
+  return tokens === undefined ? { kind: 'unknown', capturedAt: at } : acpUsedEstimate(tokens, at)
 }

@@ -6,12 +6,13 @@ import '../../source-control/ai/recipes/source-control-action-launch-preferences
 import '../../agent-launch/startup/agent-startup-plan-inputs'
 import '../../agent-launch/startup/tui-agent-startup'
 import { spawnSync } from 'node:child_process'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import './agents/powershell-agent-wrappers'
+import { getPowerShellCodexShellLaunchPreflight } from './agents/codex-shell-function'
 import {
   getPowerShellEscapeNativeArgsFunction,
   quotePowerShellLiteral
@@ -43,6 +44,55 @@ async function captureNativeArgv(
 // Why native: argv marshalling, not the generated text, is what a launched agent actually receives.
 
 const isWindows = process.platform === 'win32'
+
+it.skipIf(!isWindows)(
+  'runs npm Codex past a policy-blocked shim with its args, stdin and exit code',
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca npm codex '))
+    try {
+      const bin = join(root, 'node_modules', '@openai', 'codex', 'bin')
+      await mkdir(bin, { recursive: true })
+      await writeFile(join(root, 'codex.ps1'), "throw 'unexpected PowerShell shim'")
+      await writeFile(
+        join(bin, 'codex.js'),
+        "if (process.argv.includes('--help')) console.log('--no-daemon'); else { console.log(process.argv.slice(2).join('|')); process.stdin.pipe(process.stdout); process.exitCode = 17 }"
+      )
+      const result = await runProcess({
+        program: 'powershell.exe',
+        args: [
+          '-NoProfile',
+          '-NonInteractive',
+          '-ExecutionPolicy',
+          'Restricted',
+          '-Command',
+          [
+            "$ErrorActionPreference = 'Stop'",
+            `$env:PATH = ${quotePowerShellLiteral(`${root};`)} + $env:PATH`,
+            getPowerShellEscapeNativeArgsFunction(),
+            getPowerShellCodexShellLaunchPreflight(),
+            "'from stdin' | codex 'arg & value'",
+            'exit $LASTEXITCODE'
+          ].join('\n')
+        ],
+        cwd: root,
+        env: {
+          ...Object.fromEntries(
+            Object.entries(process.env).filter(([k]) => !k.startsWith('ORCA_'))
+          ),
+          ORCA_PANE_KEY: 'pane'
+        }
+      })
+      expect(result.code, JSON.stringify(result)).toBe(17)
+      expect(result.stdout.trim().split(/\r?\n/)).toEqual([
+        "--no-daemon|-c|shell_environment_policy.set.ORCA_PANE_KEY='pane'|arg & value",
+        'from stdin'
+      ])
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  }
+)
+
 const pwshAvailable =
   isWindows &&
   spawnSync('pwsh.exe', ['-NoProfile', '-Command', 'exit 0'], { windowsHide: true }).status === 0

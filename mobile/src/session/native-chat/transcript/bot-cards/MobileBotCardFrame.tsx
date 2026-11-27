@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { styles as card } from '../agent-messages/mobile-agent-message-card-styles'
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { stylesSheet } from '../agent-messages/mobile-agent-message-card-styles'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
 
 export const BOT_CARD_AVATAR_SIZE = 24
@@ -35,7 +34,8 @@ export function MobileBotCardFrame({
   testID?: string
   children?: ReactNode
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const card = useThemedStyles(stylesSheet)
+  const styles = useThemedStyles(stylesThemedSheet)
   const head = (
     <View style={styles.head}>
       <View style={styles.avatar}>{avatar}</View>
@@ -94,6 +94,7 @@ export function MobileBotCardMeta({
   fontScale: number
   lines?: number
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesThemedSheet)
   return (
     <Text
       numberOfLines={lines}
@@ -106,10 +107,11 @@ export function MobileBotCardMeta({
 
 /** The card's left-aligned row of pills. */
 export function MobileBotCardActions({ children }: { children: ReactNode }): React.JSX.Element {
+  const styles = useThemedStyles(stylesThemedSheet)
   return <View style={styles.actions}>{children}</View>
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesThemedSheet = themedStyleSheet((colors) => ({
   toggle: { borderRadius: radii.surface },
   head: {
     flexDirection: 'row',

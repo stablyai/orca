@@ -36,7 +36,10 @@ function tokenizeSearchQueryWithRaw(rawQuery: string): SearchQueryToken[] {
       continue
     }
     raw += char
-    if ((char === '"' || char === "'") && quote === null) {
+    // Why: an apostrophe inside a word (won't-fix, don't) is text, not an opening quote.
+    const opensQuote =
+      char === '"' || (char === "'" && !/[\p{L}\p{N}]/u.test(rawQuery[i - 1] ?? ''))
+    if (opensQuote && quote === null) {
       quote = char
       continue
     }
@@ -281,8 +284,20 @@ export function withQualifier(
  * Re-quote whitespace-bearing tokens to preserve phrase/label semantics. */
 export function stripRepoQualifiers(rawQuery: string): string {
   const kept: string[] = []
-  for (const token of tokenizeSearchQuery(rawQuery.trim())) {
-    if (/^repo:[^\s]+$/i.test(token)) {
+  for (const { value: token, raw } of tokenizeSearchQueryWithRaw(rawQuery.trim())) {
+    // Why: parseTaskQuery reads quoted tokens as free text, so "is:closed" and "repo:x/y" must stay quoted.
+    const quoted = raw.startsWith('"') || raw.startsWith("'")
+    if (!quoted && /^repo:[^\s]+$/i.test(token)) {
+      continue
+    }
+    // Why: this tokenizer has no escape for " inside "...", so re-wrapping would split the phrase into qualifiers.
+    if (token.includes('"')) {
+      kept.push(raw)
+      continue
+    }
+    // Double quotes because GitHub search ignores single-quoted phrases.
+    if (quoted) {
+      kept.push(`"${token}"`)
       continue
     }
     if (/\s/.test(token)) {

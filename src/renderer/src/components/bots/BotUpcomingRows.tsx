@@ -1,7 +1,7 @@
 // The Automations section's rows: Look around, Tidy memory, automations and waits, one line each. The
 // leading icon is the state (failed, can't run, running, paused), details sit in the hover card, and
 // Pause/Resume, Run now and the row's other commands show on hover or focus. Folded, only trouble stays.
-import { useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { botTarget } from '@/lib/bot-hosts'
 import {
   ArrowUpRight,
@@ -10,13 +10,13 @@ import {
   Hourglass,
   Moon,
   Settings,
+  Trash2,
   Zap
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import { useTranslate } from '@/i18n/use-translate'
-import { useBotWebhooks } from '@/lib/bot-catalog'
 import { hasAutomationSchedule } from '../../../../shared/automation-event-triggers'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-rows'
@@ -27,8 +27,15 @@ import {
   runAutomationNowForTarget,
   updateAutomationForTarget
 } from '../automations/hosts/automation-host-client'
-import { automationWontFire } from '../automations/details/automation-wont-fire'
 import type { BotAutomationCardRow } from './bot-automation-card'
+import {
+  automationEnabled,
+  botAutomationMembershipState,
+  type AutomationEnabledOverride,
+  type AutomationOverrideOwner,
+  type BotAutomationMembership,
+  type NormalAutomationCardRow
+} from './bot-automation-row-membership'
 import { openBotAutomation } from './bot-automation-open'
 import { botAutomationWhen } from './bot-automation-when'
 import { botErrorMessage } from './bot-presentation'
@@ -40,6 +47,7 @@ import {
   BotRowMoreMenu,
   BotRowStateIcon,
   isBotRowTrouble,
+  type BotRowMenuItem,
   type BotRowState
 } from './BotPanelRow'
 import { LookAroundRow } from './BotLookAroundRow'
@@ -48,10 +56,8 @@ import {
   paused,
   pauseResume,
   PauseResumeButton,
-  updateBotReporting,
-  wontFireState
+  updateBotReporting
 } from './bot-automation-row-controls'
-import { useOrcaCloudSignedOut } from './orca-cloud-signed-out'
 
 const HOUR = { hour: 'numeric' } as const
 
@@ -70,6 +76,7 @@ function TidyUpRow({ bot, folded }: { bot: Bot; folded: boolean }): React.JSX.El
   const toggle = pauseResume(t, setting.on, (on) => updateBotReporting(bot, { tidyUp: { on } }))
   return (
     <BotPanelRow
+      rowKey="tidy-up"
       icon={<BotRowStateIcon state={rowState} kind={<Moon className={ICON} />} />}
       title={t('bots.upcoming.tidyUp', 'Tidy memory')}
       state={rowState?.label}
@@ -115,60 +122,69 @@ function TidyUpRow({ bot, folded }: { bot: Bot; folded: boolean }): React.JSX.El
   )
 }
 
+/** Delete on an automation row: its state while deleting, and how to ask for it. */
+export type BotAutomationRowDeletion = {
+  pending: boolean
+  /** Keep a row that was in trouble at admission visible while folded and pending. */
+  admittedAsTrouble: boolean
+  /** Offline or deleting. */
+  disabled: boolean
+  request: () => void
+  /** The visit and Activity authority showing this row; null before a read lands. */
+  owner: AutomationOverrideOwner | null
+  commitSaved: (rowKey: string, saved: AutomationEnabledOverride | null) => void
+}
+
 /** A click opens it on the Automations page, at its failed run if it failed. */
 function AutomationRow({
   card,
-  row,
-  bot,
-  signInShownApart,
+  membership,
   now,
-  folded
+  folded,
+  deletion
 }: {
-  card: BotAutomationCardRow
-  row: BotAutomationRow
-  bot: Bot
-  /** Its sign-in stop is listed in Needs you, so the row doesn't say it again. */
-  signInShownApart: boolean
+  card: NormalAutomationCardRow
+  membership: BotAutomationMembership
   now: number
   folded: boolean
+  deletion: BotAutomationRowDeletion | null
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const row = card.row
   const { automation } = row
-  const wontFire = automationWontFire(
-    automation,
-    [bot],
-    useBotWebhooks(bot.hostId),
-    useOrcaCloudSignedOut()
-  )
+  const { bot } = membership
   const [saving, setSaving] = useState(false)
   const [starting, setStarting] = useState(false)
   // The saved state until the list re-reads; a newer record from the host replaces it.
-  const [saved, setSaved] = useState<{ enabled: boolean; from: number } | null>(null)
-  const enabled = saved?.from === automation.updatedAt ? saved.enabled : automation.enabled
-  const rowState: BotRowState | null =
-    !enabled && !card.running
-      ? paused(t)
-      : card.failed
-        ? { kind: 'failed', label: t('bots.automations.failed', 'Failed') }
-        : card.running
-          ? { kind: 'running', label: t('bots.automations.running', 'Running') }
-          : wontFire
-            ? wontFireState(wontFire.label)
-            : row.needsSignIn && !signInShownApart
-              ? {
-                  kind: 'alert',
-                  label: t('bots.upcoming.needsSignIn', 'Needs sign-in'),
-                  reason: t('bots.upcoming.lastNeededSignIn', 'Its last run stopped for a sign-in')
-                }
-              : null
-  if (folded && !isBotRowTrouble(rowState)) {
+  const [saved, setSaved] = useState<AutomationEnabledOverride | null>(null)
+  const commitSaved = deletion?.commitSaved
+  const rowKey = card.key
+  useLayoutEffect(() => {
+    if (commitSaved && saved) {
+      commitSaved(rowKey, saved)
+      return () => commitSaved(rowKey, null)
+    }
+    return undefined
+  }, [commitSaved, rowKey, saved])
+  const owner = deletion?.owner ?? null
+  const enabled = automationEnabled(automation, saved, owner)
+  const membershipState = botAutomationMembershipState(card, membership, t, enabled)
+  const trouble = isBotRowTrouble(membershipState)
+  const pending = deletion?.pending === true
+  if (folded && !trouble && !(pending && deletion?.admittedAsTrouble)) {
     return null
   }
+  const rowState: BotRowState | null = pending
+    ? { kind: 'deleting', label: t('bots.automations.deleting', 'Deleting…') }
+    : membershipState
   const when = botAutomationWhen(automation)
   const setEnabled = (next: boolean): void => {
+    // Owned by what showed the row when asked: a reply after a re-pair cannot speak for the new one.
+    const asked = owner
+    const from = automation.updatedAt
     setSaving(true)
     void updateAutomationForTarget(automation, { enabled: next }, botTarget(bot))
-      .then((updated) => setSaved({ enabled: updated.enabled, from: automation.updatedAt }))
+      .then((updated) => setSaved(asked ? { enabled: updated.enabled, from, owner: asked } : null))
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
       .finally(() => setSaving(false))
   }
@@ -185,7 +201,16 @@ function AutomationRow({
   }
   const open = (): void =>
     openBotAutomation(bot.hostId, automation.id, card.failed ? (row.latestRunId ?? null) : null)
-  const toggle = pauseResume(t, enabled, setEnabled, saving)
+  const toggle = pauseResume(t, enabled, setEnabled, saving || pending)
+  const deleteItem: BotRowMenuItem | null = deletion
+    ? {
+        icon: <Trash2 />,
+        label: t('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete'),
+        onSelect: deletion.request,
+        disabled: deletion.disabled,
+        variant: 'destructive'
+      }
+    : null
   const kind = hasAutomationSchedule(automation) ? (
     <CalendarClock className={ICON} />
   ) : (
@@ -193,23 +218,29 @@ function AutomationRow({
   )
   return (
     <BotPanelRow
+      rowKey={card.key}
       icon={<BotRowStateIcon state={rowState} kind={kind} />}
       title={automation.name}
       state={rowState?.label}
       dimmed={rowState?.kind === 'paused'}
+      // An event-only row has no next; one whose events won't fire still runs on its schedule.
+      next={!pending && enabled && card.nextAt !== null ? { at: card.nextAt, now } : null}
       card={{
         state: rowState,
-        facts: [
-          enabled && card.nextAt !== null
-            ? {
-                label: t('bots.automations.next', 'Next'),
-                text: `${upcomingAt(card.nextAt, now)} · ${when}`
-              }
-            : { text: when },
-          ...(card.mark?.kind === 'ran' ? [{ text: ranText(card.mark.at, now) }] : [])
-        ]
+        facts: pending
+          ? []
+          : [
+              enabled && card.nextAt !== null
+                ? {
+                    label: t('bots.automations.next', 'Next'),
+                    text: `${upcomingAt(card.nextAt, now)} · ${when}`
+                  }
+                : { text: when },
+              ...(card.mark?.kind === 'ran' ? [{ text: ranText(card.mark.at, now) }] : [])
+            ]
       }}
       onOpen={open}
+      contextMenu={deleteItem ? [deleteItem] : undefined}
       actions={
         <>
           <PauseResumeButton item={toggle} />
@@ -220,7 +251,7 @@ function AutomationRow({
                   icon: <CirclePlay />,
                   label: t('bots.automations.runNow', 'Run now'),
                   onSelect: runNow,
-                  disabled: starting
+                  disabled: starting || pending
                 },
                 toggle
               ],
@@ -230,7 +261,8 @@ function AutomationRow({
                   label: t('bots.automations.openOnPage', 'Open on Automations page'),
                   onSelect: () => openBotAutomation(bot.hostId, automation.id, null)
                 }
-              ]
+              ],
+              deleteItem ? [deleteItem] : []
             ]}
           />
         </>
@@ -263,6 +295,7 @@ function WaitRow({
   }
   return (
     <BotPanelRow
+      rowKey={`wait:${row.key}`}
       icon={<Hourglass className={ICON} />}
       title={automation.name}
       card={
@@ -288,35 +321,37 @@ function WaitRow({
 }
 
 export function UpcomingItem({
-  bot,
+  membership,
   row,
   upNext,
-  signInStops,
   now,
-  folded
+  folded,
+  deletion
 }: {
-  bot: Bot
+  membership: BotAutomationMembership
   row: BotAutomationCardRow
   upNext: UpNextState | undefined
-  signInStops: ReadonlySet<string>
   now: number
   /** The section is folded: only rows in trouble render. */
   folded: boolean
+  /** Delete for an automation row; none elsewhere. */
+  deletion?: BotAutomationRowDeletion | null
 }): React.JSX.Element | null {
+  const { bot } = membership
   switch (row.kind) {
     case 'look-around':
       return <LookAroundRow bot={bot} row={row} state={upNext} now={now} folded={folded} />
     case 'tidy-up':
+      // Its next run is a window, or whenever this computer wakes after one, so it says no time.
       return <TidyUpRow bot={bot} folded={folded} />
     case 'automation':
       return (
         <AutomationRow
-          bot={bot}
           card={row}
-          row={row.row}
-          signInShownApart={signInStops.has(row.row.key)}
+          membership={membership}
           now={now}
           folded={folded}
+          deletion={deletion ?? null}
         />
       )
     case 'wait':

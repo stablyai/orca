@@ -1,10 +1,8 @@
-import { WifiOff, Shield, Monitor, Clock, Globe, Bell, type LucideIcon } from 'lucide-react-native'
 import type { Translate } from '../i18n/mobile-i18n'
 import { endpointPort } from '../transport/hosts/host-endpoint'
 
 export type TroubleshootSection = {
   id: string
-  icon: LucideIcon
   title: string
   steps: string[]
 }
@@ -38,25 +36,8 @@ export function troubleshootCommonIssues(
   }
   return [
     {
-      id: 'notifications',
-      icon: Bell,
-      title: t('diagnostics.troubleshootCommonIssues.notificationsTitle', 'Push Notifications'),
-      steps: [
-        t(
-          'diagnostics.troubleshootCommonIssues.allowNotifications',
-          'Check that system settings allow Orca notifications and that Focus or Do Not Disturb is off.'
-        ),
-        t(
-          'diagnostics.troubleshootCommonIssues.notificationNetwork',
-          'Try cellular or another Wi-Fi network. If alerts arrive after switching, your network may be delaying delivery.'
-        )
-      ]
-    },
-
-    {
       id: 'wifi',
-      icon: WifiOff,
-      title: t('diagnostics.troubleshootCommonIssues.wifiTitle', 'Different WiFi Networks'),
+      title: t('diagnostics.troubleshootCommonIssues.wifiIssue', 'Not on the same Wi-Fi'),
       steps: [
         t(
           'diagnostics.troubleshootCommonIssues.sameNetwork',
@@ -74,14 +55,9 @@ export function troubleshootCommonIssues(
     },
     ...Array.from(ports, (port) => ({
       id: `firewall-${port}`,
-      icon: Shield,
-      title: t(
-        'diagnostics.troubleshootCommonIssues.firewallTitle',
-        'Firewall Blocking Port {{port}}',
-        {
-          port
-        }
-      ),
+      title: t('diagnostics.troubleshootCommonIssues.firewallIssue', 'Port {{port}} is blocked', {
+        port
+      }),
       steps: [
         t(
           'diagnostics.troubleshootCommonIssues.macosFirewall',
@@ -102,8 +78,10 @@ export function troubleshootCommonIssues(
     })),
     {
       id: 'desktop',
-      icon: Monitor,
-      title: t('diagnostics.troubleshootCommonIssues.desktopTitle', 'Desktop App Not Running'),
+      title: t(
+        'diagnostics.troubleshootCommonIssues.desktopIssue',
+        'Orca isn’t running on the computer'
+      ),
       steps: [
         t(
           'diagnostics.troubleshootCommonIssues.openDesktop',
@@ -121,8 +99,7 @@ export function troubleshootCommonIssues(
     },
     {
       id: 'timeout',
-      icon: Clock,
-      title: t('diagnostics.troubleshootCommonIssues.timeoutTitle', 'Connection Timeout'),
+      title: t('diagnostics.troubleshootCommonIssues.timeoutIssue', 'The connection times out'),
       steps: [
         t(
           'diagnostics.troubleshootCommonIssues.wifiSignal',
@@ -140,8 +117,7 @@ export function troubleshootCommonIssues(
     },
     {
       id: 'tailscale',
-      icon: Globe,
-      title: t('diagnostics.troubleshootCommonIssues.tailscaleTitle', 'Tailscale Host Unreachable'),
+      title: t('diagnostics.troubleshootCommonIssues.tailscaleIssue', 'Tailscale can’t reach it'),
       steps: [
         t(
           'diagnostics.troubleshootCommonIssues.keepTailscaleOn',
@@ -163,8 +139,7 @@ export function troubleshootCommonIssues(
     },
     {
       id: 'vpn',
-      icon: Shield,
-      title: t('diagnostics.troubleshootCommonIssues.vpnTitle', 'Other VPN Interference'),
+      title: t('diagnostics.troubleshootCommonIssues.vpnIssue', 'Another VPN is on'),
       steps: [
         t(
           'diagnostics.troubleshootCommonIssues.vpnRouting',
@@ -173,6 +148,23 @@ export function troubleshootCommonIssues(
         t(
           'diagnostics.troubleshootCommonIssues.disableVpn',
           'Disable that VPN or enable split tunneling / "Allow LAN".'
+        )
+      ]
+    },
+    {
+      id: 'notifications',
+      title: t(
+        'diagnostics.troubleshootCommonIssues.notificationsIssue',
+        'Notifications don’t arrive'
+      ),
+      steps: [
+        t(
+          'diagnostics.troubleshootCommonIssues.allowNotifications',
+          'Check that system settings allow Orca notifications and that Focus or Do Not Disturb is off.'
+        ),
+        t(
+          'diagnostics.troubleshootCommonIssues.notificationNetwork',
+          'Try cellular or another Wi-Fi network. If alerts arrive after switching, your network may be delaying delivery.'
         )
       ]
     }

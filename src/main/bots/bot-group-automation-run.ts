@@ -57,7 +57,8 @@ export async function sendBotGroupAutomationRun(
         room,
         threadId,
         groups.runtime.bots.list(),
-        [bot.id]
+        [bot.id],
+        () => run?.messageId
       )
       const stored = groups.store.append(
         {
@@ -82,7 +83,7 @@ export async function sendBotGroupAutomationRun(
       return stored
     }
   )
-  groups.changed()
+  groups.changed(message.groupId)
   const [turn] = message.turns
   const fingerprint = turn ? await deliverTurn(groups, message, turn, run) : undefined
   if (!turn || fingerprint === undefined) {

@@ -154,8 +154,9 @@ export function useAiVaultSessionRefresh(
       // Queue scope changes during an in-flight scan so the new view still refreshes.
       if (refreshInFlightRef.current) {
         pendingRefreshRef.current = true
-        pendingForceRef.current ||= args.force === true
-        pendingBackgroundRef.current &&= args.background === true || cachedResult !== null
+        pendingForceRef.current = pendingForceRef.current || args.force === true
+        pendingBackgroundRef.current =
+          pendingBackgroundRef.current && (args.background === true || cachedResult !== null)
         if (args.force === true && args.background !== true) {
           void window.api.aiVault
             .cancelListSessions({ requestToken: requestTokenRef.current })

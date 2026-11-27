@@ -169,5 +169,10 @@ export const runtimeApi = {
     const listener = (): void => callback()
     ipcRenderer.on('runtime:peerMailReturned', listener)
     return () => ipcRenderer.removeListener('runtime:peerMailReturned', listener)
+  },
+  onMcpServersChanged: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('runtime:mcpServersChanged', listener)
+    return () => ipcRenderer.removeListener('runtime:mcpServersChanged', listener)
   }
 } satisfies PreloadApi['runtime']

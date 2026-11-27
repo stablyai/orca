@@ -7,10 +7,50 @@ import type { WorkerDockRowView } from './dock/WorkerDockRow'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 
 afterEach(cleanup)
-it('opens a command through its command route and retains capability-gated untargeted Stop', () => {
-  const stop = vi.fn()
-  const command = vi.fn()
+it.each([
+  { kind: 'command', opens: 'details' },
+  // A workflow has no subagent transcript, so the agent view would be empty.
+  { kind: 'workflow', opens: 'details' },
+  { kind: 'agent', opens: 'agent' }
+] as const)('opens a $kind row in its $opens view', ({ kind, opens }) => {
+  const details = vi.fn()
   const agent = vi.fn()
+  render(
+    <TooltipProvider>
+      <NativeChatBackgroundTasksStatus
+        tasks={[{ id: 'task-7', kind, description: 'Verify the journal', state: 'working' }]}
+        settledTasks={[]}
+        supportsTaskStop={false}
+        offersStopAll={false}
+        stoppingTaskIds={new Set()}
+        stoppingAll={false}
+        indicatorActive
+        isVisible
+        expanded
+        onExpandedChange={() => {}}
+        onStop={() => {}}
+        onShowProviderDetails={details}
+        onShowAgent={agent}
+      />
+    </TooltipProvider>
+  )
+  // The only list in the card, named by what it holds (workers or background commands).
+  const opener = within(screen.getByRole('region')).getAllByRole('button')[0]
+  fireEvent.click(opener)
+  if (opens === 'agent') {
+    expect(agent).toHaveBeenCalledWith('task-7')
+    expect(details).not.toHaveBeenCalled()
+  } else {
+    expect(details).toHaveBeenCalledWith(
+      expect.objectContaining({ kind, providerId: 'task-7' }),
+      opener
+    )
+    expect(agent).not.toHaveBeenCalled()
+  }
+})
+
+it('retains capability-gated untargeted Stop', () => {
+  const stop = vi.fn()
   render(
     <TooltipProvider>
       <NativeChatBackgroundTasksStatus
@@ -20,7 +60,6 @@ it('opens a command through its command route and retains capability-gated untar
         settledTasks={[]}
         supportsTaskStop={false}
         offersStopAll
-        incomplete
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         indicatorActive
@@ -28,19 +67,10 @@ it('opens a command through its command route and retains capability-gated untar
         expanded
         onExpandedChange={() => {}}
         onStop={stop}
-        onShowProviderDetails={command}
-        onShowAgent={agent}
       />
     </TooltipProvider>
   )
-  const opener = within(screen.getByRole('region', { name: 'Workers' })).getAllByRole('button')[0]
-  fireEvent.click(opener)
-  expect(command).toHaveBeenCalledWith(
-    expect.objectContaining({ kind: 'command', providerId: 'shell-7' }),
-    opener
-  )
-  expect(agent).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: /^Stop$/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Stop all$/ }))
   expect(stop).toHaveBeenCalledWith()
 })
 
@@ -85,8 +115,8 @@ it('opens captured invocation details for a retained provider failure', () => {
       />
     </TooltipProvider>
   )
-  // The newest needs-attention row is the lead row: it opens from its own Show.
-  const opener = screen.getByRole('button', { name: 'Show Old agent' })
+  // The row itself opens it: there is no separate Show button.
+  const opener = screen.getByRole('button', { name: /^Verify the journal · Failed/ })
   fireEvent.click(opener)
   expect(details).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -97,57 +127,4 @@ it('opens captured invocation details for a retained provider failure', () => {
     opener
   )
   expect(agent).not.toHaveBeenCalled()
-})
-
-it('marks the folded header needs-you over failed over neutral', () => {
-  const row = (id: string, state: WorkerDockRowView['state']): WorkerDockRowView => ({
-    id,
-    dispatchId: id,
-    source: 'source',
-    kind: 'worker',
-    name: id,
-    title: 'Task',
-    model: null,
-    state,
-    changedAt: 100,
-    startedAt: 0,
-    reason: null,
-    settlement: null,
-    resultId: null,
-    stoppable: state === 'running',
-    ownerActionsAvailable: true
-  })
-  const header = (rows: WorkerDockRowView[]) => {
-    cleanup()
-    const { container } = render(
-      <TooltipProvider>
-        <NativeChatBackgroundTasksStatus
-          tasks={[]}
-          settledTasks={[]}
-          supportsTaskStop={false}
-          offersStopAll={false}
-          stoppingTaskIds={new Set()}
-          stoppingAll={false}
-          indicatorActive
-          isVisible
-          expanded={false}
-          onExpandedChange={() => {}}
-          onStop={() => {}}
-          workerRows={new Map(rows.map((entry) => [entry.id, entry]))}
-          workerIdentities={rows}
-        />
-      </TooltipProvider>
-    )
-    const summary = container.querySelector('[data-worker-dock-header] > button')
-    return {
-      urgent: summary?.querySelector('[data-worker-dock-urgent]') !== null,
-      failed: summary?.querySelector('[data-worker-dock-failed]') !== null
-    }
-  }
-  expect(header([row('a', 'failed')])).toEqual({ urgent: false, failed: true })
-  expect(header([row('a', 'failed'), row('b', 'needs-you')])).toEqual({
-    urgent: true,
-    failed: false
-  })
-  expect(header([row('a', 'running')])).toEqual({ urgent: false, failed: false })
 })

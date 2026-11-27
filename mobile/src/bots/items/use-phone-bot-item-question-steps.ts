@@ -8,10 +8,18 @@ import {
   useState,
   useSyncExternalStore
 } from 'react'
-import { createBotItemQuestionStepsHooks } from '../../../../src/shared/bots/use-bot-item-question-steps'
+import {
+  botItemHeldAnswersScope,
+  createBotItemQuestionStepsHooks
+} from '../../../../src/shared/bots/use-bot-item-question-steps'
 
 const held = new Map<string, string>()
 const listeners = new Map<string, Set<() => void>>()
+
+/** An ask's held answers on the item `itemScope` names, as stored. */
+export function readPhoneBotItemHeldAnswers(itemScope: string, askId: string): string {
+  return held.get(botItemHeldAnswersScope(itemScope, askId)) ?? ''
+}
 
 function useHeldDraft(scopeKey: string): { draft: string; setDraft: (next: string) => void } {
   const draft = useSyncExternalStore(
@@ -46,6 +54,6 @@ function useHeldDraft(scopeKey: string): { draft: string; setDraft: (next: strin
 }
 
 export const { useBotItemHeldAnswers, useBotItemQuestionSteps } = createBotItemQuestionStepsHooks(
-  { useCallback, useLayoutEffect, useMemo, useRef, useState },
+  { useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore },
   useHeldDraft
 )

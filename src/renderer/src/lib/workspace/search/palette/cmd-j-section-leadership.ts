@@ -60,12 +60,33 @@ export function comparePaletteRankedItems(a: PaletteRankedItem, b: PaletteRanked
   return a.identity < b.identity ? -1 : a.identity > b.identity ? 1 : 0
 }
 
-/** Ties prefer Open Tabs, matching the documented section-leadership rule. */
+/** Lowest (strongest) `rank.destination` among matched rows; unmatched sections never win the comparison. */
+export function bestPaletteDestination(
+  ranks: readonly (PaletteDocumentRank | null | undefined)[]
+): number {
+  let best = Number.MAX_SAFE_INTEGER
+  for (const rank of ranks) {
+    if (rank) {
+      best = Math.min(best, rank.destination)
+    }
+  }
+  return best
+}
+
+/**
+ * Workspaces contain their tabs, so they lead unless Open Tabs hold a strictly stronger match:
+ * a better quality class, or on a class tie a better destination (e.g. a whole tab title).
+ */
 export function shouldOpenTabsLeadPaletteSections(args: {
   bestWorktreeQualityRank: number
   bestOpenTabQualityRank: number
+  bestWorktreeDestination: number
+  bestOpenTabDestination: number
 }): boolean {
-  return args.bestOpenTabQualityRank <= args.bestWorktreeQualityRank
+  if (args.bestOpenTabQualityRank !== args.bestWorktreeQualityRank) {
+    return args.bestOpenTabQualityRank < args.bestWorktreeQualityRank
+  }
+  return args.bestOpenTabDestination < args.bestWorktreeDestination
 }
 
 /** Decisive settings/action/project intent may outrank weaker entities, never an exact visible entity name. */

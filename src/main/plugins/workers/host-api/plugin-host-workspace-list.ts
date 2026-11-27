@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { PluginHostResult } from '../../../../shared/plugins/workers/plugin-host-api'
 import {
   PLUGIN_HOST_ID_MAX_LENGTH,
@@ -16,61 +17,71 @@ type WorkspaceList = PluginHostResult<'workspace.list'>
 type WorkspaceStatus = NonNullable<WorkspaceList['workspaces'][number]['status']>
 
 // The parts of each runtime answer `workspace.list` and `project.list` read; the rest is dropped.
-const worktreeListAnswer = z.object({
-  worktrees: z.array(
-    z.object({
-      id: z.string(),
-      repoId: z.string(),
-      displayName: z.string(),
-      path: z.string(),
-      branch: z.string().optional(),
-      hostId: z.string().optional(),
-      identity: z.object({ key: z.string() }).optional()
-    })
-  ),
-  totalCount: z.number().optional(),
-  truncated: z.boolean().optional()
-})
-const repoRow = z.object({
-  id: z.string(),
-  kind: z.string().optional(),
-  displayName: z.string().optional(),
-  executionHostId: z.string().nullable().optional(),
-  connectionId: z.string().nullable().optional()
-})
-const repoListAnswer = z.object({ repos: z.array(repoRow) })
-const projectListAnswer = z.object({
-  repos: z.array(
-    // A malformed `hiddenAt` reads as shown, as Orca's sidebar reads it, not as a failed list.
-    repoRow.extend({ path: z.string(), hiddenAt: z.number().optional().catch(undefined) })
-  )
-})
-const folderListAnswer = z.object({
-  folderWorkspaces: z.array(
-    z.object({
-      id: z.string(),
-      name: z.string(),
-      folderPath: z.string(),
-      executionHostId: z.string().nullable().optional(),
-      connectionId: z.string().nullable().optional()
-    })
-  )
-})
-const worktreePsAnswer = z.object({
-  worktrees: z.array(
-    z.object({
-      worktreeId: z.string(),
-      identity: z.object({ key: z.string() }).optional(),
-      status: z.enum(['working', 'permission', 'done', 'active', 'inactive']),
-      unread: z.boolean(),
-      liveTerminalCount: z.number().int().nonnegative(),
-      lastOutputAt: z.number().finite().nullable().optional(),
-      lastActivityAt: z.number().finite().optional()
-    })
-  ),
-  totalCount: z.number().optional(),
-  truncated: z.boolean().optional()
-})
+const worktreeListAnswer = lazyZodSchema(() =>
+  z.object({
+    worktrees: z.array(
+      z.object({
+        id: z.string(),
+        repoId: z.string(),
+        displayName: z.string(),
+        path: z.string(),
+        branch: z.string().optional(),
+        hostId: z.string().optional(),
+        identity: z.object({ key: z.string() }).optional()
+      })
+    ),
+    totalCount: z.number().optional(),
+    truncated: z.boolean().optional()
+  })
+)
+const repoRow = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    kind: z.string().optional(),
+    displayName: z.string().optional(),
+    executionHostId: z.string().nullable().optional(),
+    connectionId: z.string().nullable().optional()
+  })
+)
+const repoListAnswer = lazyZodSchema(() => z.object({ repos: z.array(repoRow) }))
+const projectListAnswer = lazyZodSchema(() =>
+  z.object({
+    repos: z.array(
+      // A malformed `hiddenAt` reads as shown, as Orca's sidebar reads it, not as a failed list.
+      repoRow.extend({ path: z.string(), hiddenAt: z.number().optional().catch(undefined) })
+    )
+  })
+)
+const folderListAnswer = lazyZodSchema(() =>
+  z.object({
+    folderWorkspaces: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        folderPath: z.string(),
+        executionHostId: z.string().nullable().optional(),
+        connectionId: z.string().nullable().optional()
+      })
+    )
+  })
+)
+const worktreePsAnswer = lazyZodSchema(() =>
+  z.object({
+    worktrees: z.array(
+      z.object({
+        worktreeId: z.string(),
+        identity: z.object({ key: z.string() }).optional(),
+        status: z.enum(['working', 'permission', 'done', 'active', 'inactive']),
+        unread: z.boolean(),
+        liveTerminalCount: z.number().int().nonnegative(),
+        lastOutputAt: z.number().finite().nullable().optional(),
+        lastActivityAt: z.number().finite().optional()
+      })
+    ),
+    totalCount: z.number().optional(),
+    truncated: z.boolean().optional()
+  })
+)
 
 /** `refs/heads/main` reads as `main`; a detached or folder workspace has none. */
 function branchName(branch: string | undefined): string | null {

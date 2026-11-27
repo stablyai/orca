@@ -2,13 +2,17 @@ import { TaskPageJiraStatusFilters } from './filters/TaskPageJiraStatusFilters'
 import { TaskPageJiraSavedFilters } from './filters/TaskPageJiraSavedFilters'
 import { TaskPageJiraFavouriteFilters } from './filters/TaskPageJiraFavouriteFilters'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { cn } from '@/lib/class-names'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { useRef } from 'react'
+import { RailPagePrimaryButton, RailPageRefreshButton } from '@/components/rail-page/RailPageHeader'
+import { RailPageSearch } from '@/components/rail-page/RailPageSearch'
+import { RailPageFilterButton, RailPageViews } from '@/components/rail-page/RailPageToolbar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { TaskPageListBands } from '../ListBands'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { getJiraProjectSelectionKey } from '@/components/task-page/jira/task-page-jira-project-selection'
 import { useTranslate } from '@/i18n/use-translate'
-import { LoaderCircle, Plus, RefreshCw, Search, X } from 'lucide-react'
+import { LoaderCircle, Plus, Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { shouldSuppressEnterSubmit } from '@/lib/workspace/creation/new-workspace-enter-guard'
 import { JiraProjectPicker } from '@/components/task-page/jira/project-selection/jira-project-picker'
@@ -53,69 +57,97 @@ export function TaskPageJiraFilters({
     setNewJiraIssueTypeId,
     sortedAvailableJiraProjects
   } = model
+  const inputRef = useRef<HTMLInputElement>(null)
+  const selectView = (view: typeof activeJiraPreset | 'workspace'): void => {
+    setJiraSearchInput('')
+    setAppliedJiraSearch('')
+    if (view === 'workspace') {
+      setJiraHasWorkspace(true)
+      setTaskResumeState({ jiraQuery: '' })
+      return
+    }
+    setJiraHasWorkspace(false)
+    void clearJiraSavedFilterSelection().catch(() => {})
+    setActiveJiraPreset(view)
+    setTaskResumeState({ jiraPreset: view, jiraQuery: '' })
+    setJiraRefreshNonce((n) => n + 1)
+  }
+  const activeView = jiraHasWorkspace
+    ? 'workspace'
+    : jiraSearchInput || model.jiraFavouriteFilter || jiraActiveSavedFilterId
+      ? null
+      : activeJiraPreset
   return (
-    <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          <div className="min-w-0 max-w-64">
-            <JiraProjectPicker
-              projects={sortedAvailableJiraProjects}
-              value={model.jiraProjectFilter}
-              onChange={model.setJiraProjectFilter}
-              label={t('components.jiraProjectPicker.label', 'Jira project')}
-              emptyLabel={t('components.jiraProjectPicker.all', 'All Jira projects')}
-              disabled={jiraProjectsLoading || jiraHasWorkspace}
-            />
-          </div>
-          {jiraPresets.map((preset) => {
-            const active =
-              !jiraHasWorkspace &&
-              !jiraSearchInput &&
-              !model.jiraFavouriteFilter &&
-              activeJiraPreset === preset.id
-            return (
-              <button
-                key={preset.id}
-                disabled={jiraSavedFiltersPending}
-                type="button"
-                onClick={() => {
-                  setJiraHasWorkspace(false)
-                  void clearJiraSavedFilterSelection().catch(() => {})
-                  setJiraSearchInput('')
-                  setAppliedJiraSearch('')
-                  setActiveJiraPreset(preset.id)
-                  setTaskResumeState({
-                    jiraPreset: preset.id,
-                    jiraQuery: ''
-                  })
-                  setJiraRefreshNonce((n) => n + 1)
-                }}
-                className={cn(
-                  'rounded-md border px-2 py-1 text-xs transition',
-                  active
-                    ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
-                    : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
-                )}
-              >
-                {preset.label}
-              </button>
-            )
-          })}
-          <Button
-            variant={jiraHasWorkspace ? 'secondary' : 'ghost'}
-            size="sm"
-            aria-pressed={jiraHasWorkspace}
+    <TaskPageListBands
+      model={model}
+      scope={
+        <JiraProjectPicker
+          projects={sortedAvailableJiraProjects}
+          value={model.jiraProjectFilter}
+          onChange={model.setJiraProjectFilter}
+          label={t('components.jiraProjectPicker.label', 'Jira project')}
+          emptyLabel={t('components.jiraProjectPicker.all', 'All Jira projects')}
+          triggerClassName="h-7 min-w-0 max-w-52 shrink"
+          disabled={jiraProjectsLoading || jiraHasWorkspace}
+        />
+      }
+      actions={
+        <>
+          <RailPageRefreshButton
+            label={t('auto.components.TaskPage.2ff9fd71fd', 'Refresh Jira issues')}
+            busy={jiraLoading}
+            onRefresh={() => setJiraRefreshNonce((n) => n + 1)}
+          />
+          <RailPagePrimaryButton
+            label={t('common.new', 'New')}
+            aria-label={t('auto.components.TaskPage.0c11ca0b6d', 'New Jira issue')}
+            disabled={sortedAvailableJiraProjects.length === 0 || jiraProjectsLoading}
+            icon={
+              jiraProjectsLoading ? (
+                <LoaderCircle className="size-3.5 animate-spin" />
+              ) : (
+                <Plus className="size-3.5" />
+              )
+            }
             onClick={() => {
-              setJiraHasWorkspace(true)
-              setJiraSearchInput('')
-              setAppliedJiraSearch('')
-              setTaskResumeState({ jiraQuery: '' })
+              // Why: restore dismissed typed text (accidental dismissal recoverable); pickers keep their fresh open-time defaults.
+              const draft = useAppStore.getState().newJiraIssueDraft
+              setNewJiraIssueTitle(draft?.title ?? '')
+              setNewJiraIssueBody(draft?.body ?? '')
+              const projectFilter = model.jiraProjectFilter
+              const defaultProject = projectFilter
+                ? sortedAvailableJiraProjects.find((project) =>
+                    matchesJiraProject(project, projectFilter)
+                  )
+                : null
+              const project = defaultProject ?? sortedAvailableJiraProjects[0]
+              setNewJiraIssueProjectId(project ? getJiraProjectSelectionKey(project) : null)
+              setNewJiraIssueProjectQuery('')
+              setNewJiraIssueProjectCommandValue('')
+              setNewJiraIssueTypeId(null)
+              setNewJiraIssueOpen(true)
             }}
-          >
-            {t('jira.workspace.mode', 'Has Workspace')}
-          </Button>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+          />
+        </>
+      }
+      views={
+        <RailPageViews
+          label={t('auto.components.TaskPage.9cd11ba218', 'Jira')}
+          value={activeView}
+          onValueChange={selectView}
+          onReselect={selectView}
+          items={[
+            ...jiraPresets.map((preset) => ({
+              value: preset.id,
+              label: preset.label,
+              disabled: jiraSavedFiltersPending
+            })),
+            { value: 'workspace', label: t('jira.workspace.mode', 'Has Workspace') }
+          ]}
+        />
+      }
+      controls={
+        <>
           <TaskPageJiraFavouriteFilters key={model.jiraTaskSourceScopeKey} model={model} />
           <TaskPageJiraSavedFilters
             filters={jiraSavedFilters}
@@ -134,140 +166,120 @@ export function TaskPageJiraFilters({
             onUpdate={updateJiraSavedFilter}
             onDelete={deleteJiraSavedFilter}
           />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => {
-                  // Why: restore dismissed typed text (accidental dismissal recoverable); pickers keep their fresh open-time defaults.
-                  const draft = useAppStore.getState().newJiraIssueDraft
-                  setNewJiraIssueTitle(draft?.title ?? '')
-                  setNewJiraIssueBody(draft?.body ?? '')
-                  const projectFilter = model.jiraProjectFilter
-                  const defaultProject = projectFilter
-                    ? sortedAvailableJiraProjects.find((project) =>
-                        matchesJiraProject(project, projectFilter)
-                      )
-                    : null
-                  const project = defaultProject ?? sortedAvailableJiraProjects[0]
-                  setNewJiraIssueProjectId(project ? getJiraProjectSelectionKey(project) : null)
-                  setNewJiraIssueProjectQuery('')
-                  setNewJiraIssueProjectCommandValue('')
-                  setNewJiraIssueTypeId(null)
-                  setNewJiraIssueOpen(true)
-                }}
-                disabled={sortedAvailableJiraProjects.length === 0 || jiraProjectsLoading}
-                aria-label={t('auto.components.TaskPage.0c11ca0b6d', 'New Jira issue')}
-                className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
-              >
-                {jiraProjectsLoading ? (
-                  <LoaderCircle className="size-4 animate-spin" />
-                ) : (
-                  <Plus className="size-4" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {t('auto.components.TaskPage.0c11ca0b6d', 'New Jira issue')}
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setJiraRefreshNonce((n) => n + 1)}
-                disabled={jiraLoading}
-                aria-label={t('auto.components.TaskPage.2ff9fd71fd', 'Refresh Jira issues')}
-                className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
-              >
-                {jiraLoading ? (
-                  <LoaderCircle className="size-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="size-4" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {t('auto.components.TaskPage.2ff9fd71fd', 'Refresh Jira issues')}
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-      {jiraSavedFiltersError ? (
-        <p role="alert" className="mt-2 text-xs text-destructive">
-          {jiraSavedFiltersError}
-        </p>
-      ) : null}
-      <TaskPageJiraStatusFilters model={model} />
-      <div className="mt-3 flex items-center gap-3">
-        <div className="relative min-w-[320px] flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={jiraSearchInput}
-            disabled={jiraSavedFiltersPending}
-            onChange={(e) => {
-              void clearJiraSavedFilterSelection().catch(() => {})
-              setJiraSearchInput(e.target.value)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                if (
-                  shouldSuppressEnterSubmit(
-                    {
-                      isComposing: e.nativeEvent.isComposing,
-                      shiftKey: e.shiftKey
-                    },
-                    false
-                  )
-                ) {
-                  return
-                }
-                e.preventDefault()
-                const trimmed = jiraSearchInput.trim()
-                setJiraSearchInput(trimmed)
-                setAppliedJiraSearch(trimmed)
-                setTaskResumeState({
-                  jiraQuery: trimmed
-                })
-                if (!jiraHasWorkspace) {
-                  setJiraRefreshNonce((n) => n + 1)
-                }
-              }
-            }}
-            placeholder={
-              jiraHasWorkspace
-                ? t('jira.workspace.search', 'Search linked issues')
-                : t(
-                    'auto.components.TaskPage.99c2755218',
-                    'Search issues or enter JQL, e.g. project = ABC'
-                  )
-            }
-            className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
-          />
-          {jiraSearchInput ? (
-            <button
-              type="button"
-              aria-label={t('auto.components.TaskPage.b797bdd7c3', 'Clear search')}
-              onClick={() => {
-                void clearJiraSavedFilterSelection().catch(() => {})
-                setJiraSearchInput('')
-                setAppliedJiraSearch('')
-                setTaskResumeState({
-                  jiraQuery: ''
-                })
-                if (!jiraHasWorkspace) {
-                  setJiraRefreshNonce((n) => n + 1)
-                }
-              }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
-            >
-              <X className="size-4" />
-            </button>
+          {!jiraHasWorkspace ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <RailPageFilterButton activeCount={model.selectedJiraStatuses.length} />
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80">
+                <div className="p-3">
+                  <TaskPageJiraStatusFilters model={model} />
+                </div>
+              </PopoverContent>
+            </Popover>
           ) : null}
-        </div>
-      </div>
-    </div>
+          <RailPageSearch
+            inputRef={inputRef}
+            hasValue={Boolean(jiraSearchInput)}
+            disabled={jiraSavedFiltersPending}
+          >
+            <div className="relative min-w-0 w-full">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                ref={inputRef}
+                value={jiraSearchInput}
+                disabled={jiraSavedFiltersPending}
+                onChange={(e) => {
+                  void clearJiraSavedFilterSelection().catch(() => {})
+                  setJiraSearchInput(e.target.value)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (
+                      shouldSuppressEnterSubmit(
+                        {
+                          isComposing: e.nativeEvent.isComposing,
+                          shiftKey: e.shiftKey
+                        },
+                        false
+                      )
+                    ) {
+                      return
+                    }
+                    e.preventDefault()
+                    const trimmed = jiraSearchInput.trim()
+                    setJiraSearchInput(trimmed)
+                    setAppliedJiraSearch(trimmed)
+                    setTaskResumeState({
+                      jiraQuery: trimmed
+                    })
+                    if (!jiraHasWorkspace) {
+                      setJiraRefreshNonce((n) => n + 1)
+                    }
+                  }
+                }}
+                placeholder={
+                  jiraHasWorkspace
+                    ? t('jira.workspace.search', 'Search linked issues')
+                    : t(
+                        'auto.components.TaskPage.99c2755218',
+                        'Search issues or enter JQL, e.g. project = ABC'
+                      )
+                }
+                density="compact"
+                surface="background"
+                inset="leadingIcon"
+                adornment={jiraSearchInput ? 'trailing' : 'shortcut'}
+              />
+              {jiraSearchInput ? (
+                <button
+                  type="button"
+                  aria-label={t('auto.components.TaskPage.b797bdd7c3', 'Clear search')}
+                  onClick={() => {
+                    inputRef.current?.focus({ preventScroll: true })
+                    void clearJiraSavedFilterSelection().catch(() => {})
+                    setJiraSearchInput('')
+                    setAppliedJiraSearch('')
+                    setTaskResumeState({
+                      jiraQuery: ''
+                    })
+                    if (!jiraHasWorkspace) {
+                      setJiraRefreshNonce((n) => n + 1)
+                    }
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              ) : null}
+            </div>
+          </RailPageSearch>
+        </>
+      }
+      notices={
+        jiraSavedFiltersError || (!jiraHasWorkspace && model.jiraQuickFiltersError) ? (
+          <>
+            {jiraSavedFiltersError ? (
+              <p role="alert" className="text-xs text-destructive">
+                {jiraSavedFiltersError}
+              </p>
+            ) : null}
+            {!jiraHasWorkspace && model.jiraQuickFiltersError ? (
+              <div role="alert" className="flex items-center gap-2 text-xs text-destructive">
+                <span>{model.jiraQuickFiltersError}</span>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  disabled={model.jiraQuickFiltersLoading || model.jiraQuickFiltersPending}
+                  onClick={model.retryJiraQuickFilters}
+                >
+                  {t('jira.savedFilters.retry', 'Retry')}
+                </Button>
+              </div>
+            ) : null}
+          </>
+        ) : null
+      }
+    />
   )
 }

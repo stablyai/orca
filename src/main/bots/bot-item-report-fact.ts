@@ -9,7 +9,8 @@ import type { BotItemsRemote } from './bot-items-ops'
 
 const REPORT_ITEM_READ_TIMEOUT_MS = 2_000
 
-/** Reads, from `items`' store, the open item a finished worker's report was started for. */
+/** Reads, from `items`' store, the open item a finished worker's report was started for, and where
+ *  that item's work started. */
 export function botItemOfReport(items: { store(): BotItemsRemote }): StructuredMailReportItem {
   return async (db, message) => {
     const dispatchId = currentCompletionReportDispatchId(db, message)
@@ -17,13 +18,22 @@ export function botItemOfReport(items: { store(): BotItemsRemote }): StructuredM
     if (!uid) {
       return null
     }
-    const item = await withTimeout(
-      (async () => items.store().get(uid))(),
+    // One store call, so nothing is left queued once the report has gone out without it.
+    const fact = await withTimeout(
+      (async () => items.store().reportFact(uid))(),
       REPORT_ITEM_READ_TIMEOUT_MS,
       null
     )
-    return item && isOpenBotItemStatus(item.status)
-      ? { number: item.number, title: item.title, status: item.status, doneMeans: item.doneMeans }
-      : null
+    if (!fact || !isOpenBotItemStatus(fact.item.status)) {
+      return null
+    }
+    const { item, startedIn } = fact
+    return {
+      number: item.number,
+      title: item.title,
+      status: item.status,
+      doneMeans: item.doneMeans,
+      ...(startedIn ? { startedIn } : {})
+    }
   }
 }

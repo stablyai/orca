@@ -149,7 +149,10 @@ export async function projectDispatchFleet(
     limit: rows.length,
     now,
     completeProjection: true,
-    observeSession: createSessionWorkerLivenessReader(db, statuses, undefined, read.parties)
+    observeSession: createSessionWorkerLivenessReader(db, statuses, undefined, {
+      parties: read.parties,
+      includeResumeGuidance: true
+    })
   })
   // This machine's statuses cover only its own panes; a paired host's worker needs that host's verdict.
   const openIds = new Set(
@@ -268,6 +271,12 @@ function sessionWorker(
     paneKey: structured ? null : durable.paneKey,
     chatSessionId,
     summary: task?.result ? workerResultSummary(task.result) : null,
+    ...(dispatch?.progress_note
+      ? {
+          progressNote: dispatch.progress_note,
+          progressUpdatedAt: epochMs(dispatch.progress_updated_at)
+        }
+      : {}),
     startedAt: epochMs(dispatch?.dispatched_at ?? dispatch?.created_at ?? null) ?? Date.now(),
     settledAt
   }

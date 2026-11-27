@@ -12,7 +12,13 @@ export type BotChatTreeWorker = {
   state: 'running' | 'needs-you' | 'asking-bot' | 'unreachable' | 'done' | 'failed'
   startedAt: number
   settledAt?: number
+  /** `settledAt` is a stand-in (when it was created): its record has no completion time. It orders the
+   *  list and pages it; it dates nothing. Absent from older hosts. */
+  settledUndated?: true
   worktreeId?: string
+  /** Its record couldn't be read: the workspace its Dispatch names, with no host known. It only claims
+   *  that id for the fold when two hosts already share it; nothing shows it as the row's workspace. */
+  placedWorktreeId?: string
   paneKey?: string
   note?: 'handed-over' | 'from-closed-chat' | 'automation-terminal'
   /** Running, but its turn is over and it waits on background tasks it started. Absent from older hosts. */
@@ -132,6 +138,12 @@ export function chatFoldCounts(chat: BotChatTreeChat): ChatFoldCounts | null {
   const waiting = chatWaitingCount(chat)
   const running = chatRunningCount(chat)
   return waiting > 0 || running > 0 ? { waiting, running } : null
+}
+
+/** Delete chat's rows: a terminal-only run has no chat, and the live Home, where the agent's mail
+ *  and connectors land, stays. */
+export function botChatOffersDelete(chat: BotChatTreeChat): boolean {
+  return !chat.run && !(chat.origin === 'home' && !chat.closed)
 }
 
 /** Each client's `t`: the desktop's and the phone's both fit. */

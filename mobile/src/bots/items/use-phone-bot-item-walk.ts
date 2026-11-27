@@ -1,5 +1,5 @@
-// Next and previous item on the item page, as the desktop's stepper walks: through the list the item was
-// opened from, fixed at open. Stepping onto a Closed item not read yet reads the next page first; the
+// Next and previous item on the item page, as the desktop's stepper walks: through the section the item
+// was opened from, fixed at open. Stepping onto a Closed item not read yet reads the next page first; the
 // current item stays up meanwhile. An item opened from elsewhere (a link, Needs you) has no walk.
 import { useEffect, useRef, useState } from 'react'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
@@ -97,9 +97,9 @@ export function usePhoneBotItemWalk({
   }
 
   return {
-    /** Opens `item` from the list, with `walk` the list as it shows now. */
-    open: ({ uid }: BotItem, walk: BotItemWalk) => {
-      setOpen(botItemWalkIndex(walk, uid) !== null ? { from: uid, uid, walk } : null)
+    /** Opens `item` from the list, with `walk` its section as it shows now; null: no walk. */
+    open: ({ uid }: BotItem, walk: BotItemWalk | null) => {
+      setOpen(walk ? { from: uid, uid, walk } : null)
       pager.open(`item:${uid}`)
     },
     /** The item shown on the page opened on `from`, and its stepper; none without a walk. */

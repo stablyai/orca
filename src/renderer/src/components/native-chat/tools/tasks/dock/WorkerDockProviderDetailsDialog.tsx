@@ -1,3 +1,4 @@
+import { returnWorkerDockFocus, workerDockOpenerPane } from './worker-dock-focus-return'
 import { useEffect, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -28,6 +29,7 @@ export function WorkerDockProviderDetailsDialog({
   target: RuntimeClientTarget
   onClose: () => void
 }) {
+  const [pane] = useState(() => workerDockOpenerPane(opener))
   const t = useTranslate()
   const [block, setBlock] = useState<NativeChatBackgroundTaskBlock | null>(null)
   useEffect(() => {
@@ -87,9 +89,7 @@ export function WorkerDockProviderDetailsDialog({
         scrollable
         onCloseAutoFocus={(event) => {
           event.preventDefault()
-          if (opener.isConnected) {
-            opener.focus()
-          }
+          returnWorkerDockFocus(opener, pane)
         }}
       >
         <DialogHeader>
@@ -101,7 +101,7 @@ export function WorkerDockProviderDetailsDialog({
         ) : (
           <p className="text-sm text-muted-foreground">
             {row.reason ??
-              (row.kind === 'command'
+              (row.kind !== 'agent' && row.kind !== 'worker'
                 ? t(
                     'components.native-chat.workerDock.commandOutputPending',
                     'Command output is not available yet.'

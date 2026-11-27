@@ -1,10 +1,10 @@
 import { paintBottomRowBackdrop } from '../viewport/bottom-row-backdrop'
-import { colors } from '../../../theme/mobile-theme'
 import type { TerminalDocumentScope } from '../document-scope'
 import type { TerminalDocumentTheme } from '../document-terminal-shape'
+import { paletteForScheme } from '../../../theme/mobile-theme'
 import { resolveTerminalMinimumContrastRatio } from '../../../../../src/shared/terminal-themes/terminal-contrast-correction'
 
-const TERMINAL_BACKGROUND_FALLBACK = colors.terminalBg
+const TERMINAL_BACKGROUND_FALLBACK = paletteForScheme('dark').terminalBg
 
 // Wire fields stay unknown; older hosts omit the contrast floor.
 export type TerminalDocumentThemeMessage =
