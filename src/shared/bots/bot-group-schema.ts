@@ -7,6 +7,7 @@ import type { AgentJournalRenderItem } from '../agent-session/journal/agent-sess
 import type { NativeChatBlock, NativeChatMessage } from '../native-chat/native-chat-types'
 import { isQuietBotResult, quietBotResultText } from '../bot-quiet-result'
 import { AutomationRunMessageSchema } from '../automations/automation-run-message'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 // Read back through readBotFailure, which drops a code this build doesn't know.
 const StoredBotFailureSchema = z
@@ -61,17 +62,19 @@ export const BOT_GROUP_THREAD_TITLE_MAX_LENGTH = 80
 
 /** A thread's name given by hand: on one line and cut as its first post's name is, never empty.
  *  Bounded before the collapse so a huge title costs no more than a long one. */
-export const BotGroupThreadName = z
-  .string()
-  .transform((title) =>
-    title
-      .slice(0, 4 * BOT_GROUP_THREAD_TITLE_MAX_LENGTH)
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, BOT_GROUP_THREAD_TITLE_MAX_LENGTH)
-      .trimEnd()
-  )
-  .pipe(z.string().min(1, 'Missing thread name'))
+export const BotGroupThreadName = lazyZodSchema(() =>
+  z
+    .string()
+    .transform((title) =>
+      title
+        .slice(0, 4 * BOT_GROUP_THREAD_TITLE_MAX_LENGTH)
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, BOT_GROUP_THREAD_TITLE_MAX_LENGTH)
+        .trimEnd()
+    )
+    .pipe(z.string().min(1, 'Missing thread name'))
+)
 
 /** Another room in the group, opened from its tab's + menu: every member on a fresh session. */
 const BotGroupThreadSchema = z.object({
