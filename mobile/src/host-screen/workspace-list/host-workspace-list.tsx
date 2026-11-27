@@ -133,7 +133,8 @@ export function HostWorkspaceList({
   const { groupBy, agentActivityDisplayMode } = state.view
   const { toggleCollapsed, toggleWorktreeLineage } = settings
   const { setActionTarget } = state
-  const { openWorktreeSession, setWorktreeUnread, togglePin } = actions
+  const { openWorktreeSession, openNewWorktreeModal, setWorktreeUnread, togglePin } = actions
+  const canCreate = connState === 'connected' && !isReadOnly
   const { pinnedIds } = state
   // The writes change identity with every catalog read; rows keep one callback so a poll that
   // leaves a row alone doesn't re-render it.
