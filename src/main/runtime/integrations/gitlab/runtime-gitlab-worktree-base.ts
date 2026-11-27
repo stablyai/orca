@@ -1,4 +1,4 @@
-import type { GitPushTarget } from '../../../../shared/worktree/types'
+import type { GitLabMrStartPoint } from '../../../../shared/worktree/types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { requireRepoLocalGitRoute } from '../../../workspaces/execution-host/repo-execution-host'
@@ -28,9 +28,7 @@ export type RuntimeGitLabWorktreeBaseArgs = {
   wakeWslDistro?: boolean
 }
 
-type RuntimeGitLabWorktreeBaseResult =
-  | { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget }
-  | { error: string }
+type RuntimeGitLabWorktreeBaseResult = GitLabMrStartPoint | { error: string }
 
 export async function resolveRuntimeGitLabWorktreeBase(
   args: RuntimeGitLabWorktreeBaseArgs,
@@ -170,6 +168,7 @@ async function resolveGitLabMrBaseInRepo(
   return {
     baseBranch: remoteRef,
     ...(compareBaseFetched ? { compareBaseRef } : {}),
+    branchNameOverride: sourceBranch,
     pushTarget: { remoteName: remote, branchName: sourceBranch }
   }
 }

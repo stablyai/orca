@@ -25,6 +25,7 @@ export type ComposerSourceModel = {
     item: GitLabWorkItem,
     nextPushTarget?: GitPushTarget | undefined,
     nextCompareBaseRef?: string | undefined,
+    nextBranchNameOverride?: string | undefined,
     options?: { sourceAlreadyLinked?: boolean }
   ) => void
   handleBaseBranchPrSelect: (

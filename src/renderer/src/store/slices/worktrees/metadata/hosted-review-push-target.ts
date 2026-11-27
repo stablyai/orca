@@ -1,5 +1,6 @@
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { requestGitLabMrStartPoint } from '../../../../lib/source-control/review/gitlab-mr-start-point'
 import { isPositiveHostedReviewNumber } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type {
   GitHubPrStartPoint,
@@ -44,15 +45,7 @@ export async function resolveGitLabReviewPushTarget(
   mrIid: number
 ): Promise<GitPushTarget | undefined> {
   try {
-    const result =
-      target.kind === 'local'
-        ? await window.api.worktrees.resolveMrBase({ repoId, mrIid })
-        : await callRuntimeRpc<
-            | { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget }
-            | {
-                error: string
-              }
-          >(target, 'worktree.resolveMrBase', { repo: repoId, mrIid }, { timeoutMs: 30_000 })
+    const result = await requestGitLabMrStartPoint({ repoId, mrIid, target })
     if ('error' in result) {
       console.warn(`Failed to resolve push target for MR !${mrIid}: ${result.error}`)
       return undefined

@@ -233,6 +233,14 @@ export type GitHubPrStartPoint = {
   maintainerCanModify?: boolean
 }
 
+export type GitLabMrStartPoint = {
+  baseBranch: string
+  compareBaseRef?: string
+  pushTarget?: GitPushTarget
+  /** Exact local branch name to create/reuse when the MR source is a same-project branch. */
+  branchNameOverride?: string
+}
+
 export type WorktreeOwnership = 'orca-managed' | 'external' | 'unknown-legacy' | 'agent-scratch'
 
 export type DetectedWorktreeListSource = 'git' | 'metadata-fallback' | 'session-fallback'

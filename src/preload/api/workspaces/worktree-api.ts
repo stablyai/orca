@@ -53,7 +53,7 @@ import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type {
   DetectedWorktreeListResult,
   GitHubPrStartPoint,
-  GitPushTarget,
+  GitLabMrStartPoint,
   GitStatusMetadataChangedEvent,
   GitWorktreeInfo,
   Worktree,
@@ -104,9 +104,7 @@ export type WorktreeApi = {
     isCrossRepository?: boolean
     /** The user creating from the MR: it may start a stopped WSL distro. */
     wakeWslDistro?: boolean
-  }) => Promise<
-    { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget } | { error: string }
-  >
+  }) => Promise<GitLabMrStartPoint | { error: string }>
   previewNestedRemoval?: (args: {
     worktreeId: string
     hostId?: ExecutionHostId

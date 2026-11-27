@@ -1,4 +1,8 @@
-import type { GitHubPrStartPoint, GitPushTarget } from '../../../../../shared/worktree/types'
+import type {
+  GitHubPrStartPoint,
+  GitLabMrStartPoint,
+  GitPushTarget
+} from '../../../../../shared/worktree/types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab/gitlab-types'
 import { getWorkspaceSourceProvider } from '../../../../../shared/new-workspace/workspace-source'
@@ -29,7 +33,7 @@ export type SmartGitHubPrStartPointSelection = {
 
 export type SmartSourceSelection =
   | SmartGitHubPrStartPointSelection
-  | { kind: 'gitlab-mr'; repoId: string; item: GitLabWorkItem }
+  | { kind: 'gitlab-mr'; repoId: string; item: GitLabWorkItem; resolved?: GitLabMrStartPoint }
   | { kind: 'github-submit-lookup'; query: string }
 
 export function getGitHubLinkedWorkItemIdentity(

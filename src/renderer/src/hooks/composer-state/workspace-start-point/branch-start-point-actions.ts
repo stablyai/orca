@@ -186,13 +186,15 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       item: GitLabWorkItem,
       nextPushTarget?: GitPushTarget,
       nextCompareBaseRef?: string,
+      nextBranchNameOverride?: string,
       options: { sourceAlreadyLinked?: boolean } = {}
     ): void => {
       setBaseBranch(nextBaseBranch)
       setBaseBranchNamesWorkspace(true)
       setCompareBaseRef(nextCompareBaseRef)
       setPushTarget(nextPushTarget)
-      setBranchNameOverride(undefined)
+      setBranchNameOverride(nextBranchNameOverride)
+      setBranchNameOverridePreservesNameEdits(Boolean(nextBranchNameOverride))
       branchAutoNameRef.current = ''
       setStartFromResetHint(null)
       if (!options.sourceAlreadyLinked) {
@@ -216,6 +218,7 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       setBaseBranch,
       setBaseBranchNamesWorkspace,
       setBranchNameOverride,
+      setBranchNameOverridePreservesNameEdits,
       setCompareBaseRef,
       setNote,
       setPushTarget,
