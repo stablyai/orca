@@ -168,7 +168,6 @@
 1 src/shared/attachment-text/attachment-text-source.ts
 1 src/shared/automations/automation-run-message.ts
 4 src/shared/bot-tools.ts
-12 src/shared/bot-types.ts
 1 src/shared/bots/bot-agent-setup.ts
 1 src/shared/bots/bot-avatar-color.ts
 1 src/shared/bots/bot-avatar-outfit.ts
@@ -176,7 +175,6 @@
 2 src/shared/bots/bot-chat-tree-schema.ts
 1 src/shared/bots/bot-connector-offer.ts
 8 src/shared/bots/bot-first-look.ts
-12 src/shared/bots/bot-group.ts
 3 src/shared/bots/bot-import-cards.ts
 2 src/shared/bots/bot-import.ts
 3 src/shared/bots/bot-item-ask.ts
@@ -216,7 +214,6 @@
 1 src/shared/connector-webhook-contract.ts
 2 src/shared/connector-webhook-routes.ts
 1 src/shared/connector-work-link-contract.ts
-17 src/shared/connectors/connector-cloud-contract.ts
 1 src/shared/connectors/connector-failure-contract.ts
 2 src/shared/connectors/connector-slack-mirror-contract.ts
 1 src/shared/editor/formatting/editor-formatter.ts
@@ -277,7 +274,6 @@
 1 src/shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-write-ahead-store.ts
 1 src/shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts.ts
 1 src/shared/remote-runtime/host-catalog/pending-runtime-repo-removal.ts
-11 src/shared/remote-runtime/host-catalog/runtime-environments.ts
 3 src/shared/remote-runtime/host-catalog/wsl-host-deployment-link.ts
 1 src/shared/remote-runtime/host-status/runtime-host-descriptor.ts
 1 src/shared/remote-runtime/host-store/runtime-environment-sidecar.ts
@@ -315,7 +311,6 @@
 2 src/shared/rpc-contract/structured-agent-session/agent-session-attachment-params.ts
 2 src/shared/rpc-contract/structured-agent-session/structured-agent-session-create-tab-params.ts
 2 src/shared/rpc-contract/workspace-layout/workspace-layout-sleep-wake-params.ts
-9 src/shared/rpc-contract/workspaces/folder-workspace-params.ts
 2 src/shared/settings/host-owned-settings.ts
 1 src/shared/sidebar-list/catalog/project-section-catalog-schema.ts
 1 src/shared/sidebar-list/catalog/repo-icon-data-urls-contract.ts
@@ -339,7 +334,6 @@
 2 src/shared/telemetry/schemas/telemetry-plugin-event-schemas.ts
 3 src/shared/telemetry/schemas/telemetry-repository-event-schemas.ts
 3 src/shared/telemetry/schemas/telemetry-ssh-host-server-event-schemas.ts
-10 src/shared/telemetry/schemas/telemetry-workspace-create-schemas.ts
 3 src/shared/telemetry/schemas/telemetry-worktree-card-event-schemas.ts
 1 src/shared/work-items/task-source-context-schema.ts
 2 src/shared/workspace-attachments/workspace-attachment-schema.ts
@@ -350,7 +344,6 @@
 2 src/shared/workspace-layout/terminal-topology/terminal-layout-snapshot-schema.ts
 1 src/shared/workspace-session/client-hosted-browser-close-intent.ts
 2 src/shared/workspace-session/workspace-session-close-intent-schema.ts
-8 src/shared/workspace-session/workspace-session-schema.ts
 2 src/shared/workspace-session/workspace-session-tab-type-schema.ts
 1 src/shared/workspace/ports/port-forward-loopback-host.ts
 1 src/shared/wsl-move/wsl-mapped-drive-paths.ts
