@@ -21,16 +21,23 @@ export type AutoNameFailure = {
 type FailureState = {
   failure: string | null
   /** Distinct per occurrence, so a reply for an earlier, identical error can't land on this one. */
-  occurrence: object
+  occurrence: number
   dismissed: boolean
   dismissing: boolean
   canDismiss: boolean
 }
 
 const noop = (): void => {}
+let occurrences = 0
 
 function freshState(failure: string | null): FailureState {
-  return { failure, occurrence: {}, dismissed: false, dismissing: false, canDismiss: false }
+  return {
+    failure,
+    occurrence: ++occurrences,
+    dismissed: false,
+    dismissing: false,
+    canDismiss: false
+  }
 }
 
 /** A row's failed auto-name, shared by its row mark and its hover card section; null when there's none. */
@@ -53,7 +60,7 @@ export function useAutoNameFailure({
     setState(current)
   }
   const update = useCallback(
-    (owner: object, patch: Partial<FailureState>) =>
+    (owner: number, patch: Partial<FailureState>) =>
       setState((prev) => (prev.occurrence === owner ? { ...prev, ...patch } : prev)),
     []
   )
