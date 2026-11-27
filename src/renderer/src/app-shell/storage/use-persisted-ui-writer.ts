@@ -10,6 +10,7 @@ import type { WebUiApi } from '@/web/preload-api/preferences/web-ui-api'
 import {
   capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields,
+  PERSISTED_UI_WRITE_BASELINE_FIELDS,
   persistedUIWriteFieldsToWireUpdate,
   type PersistedUIWriteBaseline
 } from '../../store/slices/ui/persisted-ui-write-baseline'
@@ -77,7 +78,7 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
       }
       changed = hostAndOtherLocalChanges
     }
-    const fields = Object.keys(changed) as (keyof PersistedUIWriteBaseline)[]
+    const fields = PERSISTED_UI_WRITE_BASELINE_FIELDS.filter((field) => Object.hasOwn(changed, field))
     if (fields.length === 0) {
       if (baseline && marks) {
         try {
@@ -102,7 +103,7 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
         if (typeof setPersistedUIWithAck !== 'function') {
           throw new TypeError('Web UI persistence is unavailable')
         }
-        request = Reflect.apply(setPersistedUIWithAck, ui, [updates, marks, baseline])
+        request = setPersistedUIWithAck.call(ui, updates, marks, baseline)
         // The local write settled synchronously, independently of the host acknowledgement.
         useAppStore.setState({ persistedUIWriteBaseline: { ...baseline, ...marks } })
       } else {
@@ -134,8 +135,8 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
         )
         const shouldRetry =
           changedDuringFlight ||
-          Object.keys(dirty).some(
-            (field) => !fields.includes(field as keyof PersistedUIWriteBaseline)
+          PERSISTED_UI_WRITE_BASELINE_FIELDS.some(
+            (field) => Object.hasOwn(dirty, field) && !fields.includes(field)
           )
         if (shouldRetry) {
           scheduleTrailing()
