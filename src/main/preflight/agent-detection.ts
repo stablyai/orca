@@ -30,7 +30,11 @@ import {
 } from '../ipc/preflight/preflight-command-exec'
 import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
 import { withConfiguredProxyEnv } from '../network/configured-proxy-child-env'
-import { _resetGlabOnlyCache, readDefaultDistroGlab } from './default-wsl-glab-preflight'
+import {
+  _resetGlabOnlyCache,
+  readDefaultDistroGlab,
+  WSL_PREFLIGHT_CACHE_TTL_MS
+} from './default-wsl-glab-preflight'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import {
   detectRemoteWindowsTerminalCapabilities,
@@ -78,8 +82,6 @@ export type { RemoteWindowsTerminalCapabilities }
 let cached: PreflightStatus | null = null
 // Statuses whose native probe found no glab at all, as opposed to one that failed to run.
 const nativeGlabAbsent = new WeakSet<PreflightStatus>()
-// Cache per distro; a short TTL recovers unreachable distros whose failures appear as missing tooling.
-const WSL_PREFLIGHT_CACHE_TTL_MS = 30_000
 const MAX_WSL_PREFLIGHT_DISTRO_ENTRIES = 128
 const cachedByWslDistro = new Map<string, { result: PreflightStatus; expiresAt: number }>()
 const preflightInFlight = new Map<string, Promise<PreflightStatus>>()

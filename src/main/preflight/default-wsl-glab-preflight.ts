@@ -6,9 +6,11 @@ import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-e
 export type GlabStatus = { installed: boolean; authenticated: boolean }
 type GlabAuthProbe = (probe: { wslTarget: WslPreflightTarget }) => Promise<boolean>
 
+// Cache per distro; a short TTL recovers unreachable distros whose failures appear as missing tooling.
+// Shared by both caches: newest-wins precedence compares their expiries.
+export const WSL_PREFLIGHT_CACHE_TTL_MS = 30_000
 // Covers misses of the distro's full preflight entry only, which owns the answer whenever it is fresh.
 // A full entry costs 5 wsl.exe launches plus host provider checks; glab alone needs 2.
-const GLAB_ONLY_TTL_MS = 30_000
 const MAX_GLAB_ONLY_ENTRIES = 16
 const glabOnlyByDistro = new Map<string, { glab: GlabStatus; expiresAt: number }>()
 const glabOnlyInFlight = new Map<string, Promise<GlabStatus>>()
@@ -87,7 +89,7 @@ async function readGlabOnly(
     const glab = await run
     // Superseded or reset probes answer their caller but cannot populate the cache.
     if (latestGlabOnlyRun.get(distro) === runId && epochAtStart === glabOnlyEpoch) {
-      glabOnlyByDistro.set(distro, { glab, expiresAt: Date.now() + GLAB_ONLY_TTL_MS })
+      glabOnlyByDistro.set(distro, { glab, expiresAt: Date.now() + WSL_PREFLIGHT_CACHE_TTL_MS })
     }
     return glab
   } finally {
