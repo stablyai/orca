@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { DispatchCreator } from '../db/dispatch-depth'
 import { createDispatchCreatorEvaluation } from '../db/dispatch-creator-evaluation'
@@ -10,33 +11,39 @@ import {
 } from '../db/pane-key-match'
 import { potentiallyLiveRemoteAttachmentSql } from '../db/federation/remote-attachment-liveness'
 
-const nullable = z.string().nullable()
-const Dispatch = z.object({
-  id: z.string(),
-  run_id: z.string(),
-  creator_dispatch_id: nullable,
-  follow_up_of_dispatch_id: nullable,
-  process_incarnation: nullable,
-  host_scope: nullable,
-  creator_handle: nullable,
-  creator_pane_key: nullable,
-  assignee_handle: nullable,
-  assignee_pane_key: nullable,
-  depth: z.number()
-})
-const Resource = z.object({
-  id: z.string(),
-  owner_dispatch_id: z.string(),
-  prior_owner_dispatch_ids: z.string()
-})
-const Remote = z.object({
-  dispatch_id: z.string(),
-  depth: z.number(),
-  pane_key: nullable,
-  process_incarnation: nullable,
-  state: z.enum(['starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown'])
-})
-const Run = z.object({ id: z.string(), legacy: z.number() })
+const nullable = lazyZodSchema(() => z.string().nullable())
+const Dispatch = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    run_id: z.string(),
+    creator_dispatch_id: nullable,
+    follow_up_of_dispatch_id: nullable,
+    process_incarnation: nullable,
+    host_scope: nullable,
+    creator_handle: nullable,
+    creator_pane_key: nullable,
+    assignee_handle: nullable,
+    assignee_pane_key: nullable,
+    depth: z.number()
+  })
+)
+const Resource = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    owner_dispatch_id: z.string(),
+    prior_owner_dispatch_ids: z.string()
+  })
+)
+const Remote = lazyZodSchema(() =>
+  z.object({
+    dispatch_id: z.string(),
+    depth: z.number(),
+    pane_key: nullable,
+    process_incarnation: nullable,
+    state: z.enum(['starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown'])
+  })
+)
+const Run = lazyZodSchema(() => z.object({ id: z.string(), legacy: z.number() }))
 const columns = Object.keys(Dispatch.shape).join(', ')
 
 /** Only complete raw values/null survive in the disposable generation; throwing misses stay uncovered. */

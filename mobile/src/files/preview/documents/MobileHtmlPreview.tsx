@@ -2,8 +2,7 @@ import { useMemo, useState } from 'react'
 import { View } from 'react-native'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobilePreviewSourceTabs, type MobilePreviewMode } from './MobilePreviewSourceTabs'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
 import { htmlPreviewWithInertLinks } from './html-preview-inert-links'
 import { useHtmlPreviewLinkGrant } from './use-html-preview-link-grant'
 
@@ -35,7 +34,7 @@ export function MobileHtmlPreview({
   notice
 }: MobileHtmlPreviewProps) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const [mode, setMode] = useState<MobilePreviewMode>(initialMode)
   // Read immutable session grants once after init, before page mounts.
   const linksOpen = useHtmlPreviewLinkGrant()
@@ -69,7 +68,7 @@ export function MobileHtmlPreview({
 // Use DOM iframe: RN has no primitive. Set srcdoc attribute to parse untrusted content only inside sealed frame.
 function PreviewFrame({ html, linksOpen }: { html: string; linksOpen: boolean }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.frame}>
       <iframe
@@ -93,7 +92,7 @@ const IFRAME_STYLE = {
   backgroundColor: '#ffffff'
 } as const
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   container: { flex: 1 },
   frame: { flex: 1, backgroundColor: '#ffffff' }
 }))

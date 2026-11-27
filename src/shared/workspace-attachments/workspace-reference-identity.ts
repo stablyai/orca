@@ -117,12 +117,15 @@ function parseReferenceRoute(
       url: url.href
     }
   }
-  const gitlab = /^(\/.+)\/-\/(merge_requests|issues)\/(\d+)(?:\/.*)?$/.exec(url.pathname)
+  // /-/work_items/N is GitLab's newer route for issues.
+  const gitlab = /^(\/.+)\/-\/(merge_requests|issues|work_items)\/(\d+)(?:\/.*)?$/.exec(
+    url.pathname
+  )
   if (gitlab && url.hostname !== 'github.com' && url.hostname !== 'linear.app') {
     return numberedReference(
       url,
       'gitlab',
-      gitlab[2] === 'issues' ? 'issue' : 'mr',
+      gitlab[2] === 'merge_requests' ? 'mr' : 'issue',
       `${gitlab[1]}/-/${gitlab[2]}`,
       gitlab[3]
     )
@@ -222,7 +225,12 @@ export function getProvenWorkspaceReferenceIdentity(item: WorkspaceAttachment): 
         const path = CASE_INSENSITIVE_PATH_PROVIDERS.has(parsed.provider)
           ? url.pathname.toLowerCase()
           : url.pathname
-        return JSON.stringify([parsed.provider, parsed.type, url.host, path])
+        // GitLab serves one issue at both /-/issues/N and /-/work_items/N.
+        const canonicalPath =
+          parsed.provider === 'gitlab'
+            ? path.replace(/\/-\/work_items\/(\d+)$/, '/-/issues/$1')
+            : path
+        return JSON.stringify([parsed.provider, parsed.type, url.host, canonicalPath])
       }
     } catch {
       // Legacy links without a provable source remain removable by their opaque key.

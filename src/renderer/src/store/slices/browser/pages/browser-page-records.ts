@@ -27,6 +27,7 @@ export function normalizeBrowserTitle(
   url: string,
   docLocation?: BrowserPageDocLocation | null
 ): string {
+  title = title ? redactKagiSessionToken(title) : title
   if (docLocation) {
     // Document blank URLs cannot supply titles; use file fallback. Reject grant-URL title echoes: persisted/mirrored titles would retain expired read authority.
     if (!title || isDocPreviewUrl(title)) {

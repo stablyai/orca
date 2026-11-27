@@ -1,6 +1,18 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { ExperimentalPane } from './ExperimentalPane'
+import { getOptInOnlyExperimentVisibility } from './experimental-search'
+
+function Pane({ settings }: { settings: GlobalSettings }): React.JSX.Element {
+  return (
+    <ExperimentalPane
+      settings={settings}
+      updateSettings={() => {}}
+      optInOnlyExperimentRows={getOptInOnlyExperimentVisibility(settings)}
+    />
+  )
+}
 
 const settings = {
   ...getDefaultSettings('/home/test'),
@@ -10,7 +22,7 @@ const settings = {
 export const orchestrationPanelSuspended = defineFixture({
   width: 760,
   store: { settings },
-  render: () => <ExperimentalPane settings={settings} updateSettings={() => {}} />
+  render: () => <Pane settings={settings} />
 })
 
 const newUserSettings = getDefaultSettings('/home/test')
@@ -19,7 +31,7 @@ const newUserSettings = getDefaultSettings('/home/test')
 export const newUserHidesOptInOnlyExperiments = defineFixture({
   width: 760,
   store: { settings: newUserSettings },
-  render: () => <ExperimentalPane settings={newUserSettings} updateSettings={() => {}} />
+  render: () => <Pane settings={newUserSettings} />
 })
 
 const optedInSettings = {
@@ -32,5 +44,5 @@ const optedInSettings = {
 export const optedInKeepsOptInOnlyExperiments = defineFixture({
   width: 760,
   store: { settings: optedInSettings },
-  render: () => <ExperimentalPane settings={optedInSettings} updateSettings={() => {}} />
+  render: () => <Pane settings={optedInSettings} />
 })

@@ -10,6 +10,7 @@ import {
   type AiVaultTitleRequest
 } from './ai-vault-tab-title-requests'
 import { settleAiVaultTitleRequestBatches } from './ai-vault-tab-title-batches'
+import { isKnownHarnessInjectedUserTurnText } from '../../../../../../shared/agent-session/journal/harness-injected-user-turns'
 import {
   aiVaultTitleRequestInputsChanged,
   aiVaultTitleSyncInputsChanged
@@ -30,6 +31,10 @@ import {
 
 function requestIdentity(request: AiVaultTitleRequest): string {
   return `${request.executionHostId}\0${request.agent}\0${request.providerSession.id}`
+}
+
+function isClaudeHarnessTitle(title: Pick<AiVaultSessionTitle, 'agent' | 'title'>): boolean {
+  return title.agent === 'claude' && isKnownHarnessInjectedUserTurnText(title.title)
 }
 
 type RequestSnapshot = {
@@ -140,7 +145,8 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
     }
     const titleByIdentity = new Map<string, Pick<AiVaultSessionTitle, 'title' | 'kind'>>()
     for (const title of result.titles) {
-      if (title.title.trim()) {
+      // Older hosts still name Claude sessions with harness markup such as /clear's command caveat.
+      if (title.title.trim() && !isClaudeHarnessTitle(title)) {
         titleByIdentity.set(`${first.executionHostId}\0${title.agent}\0${title.sessionId}`, {
           title: title.title.trim(),
           kind: title.kind
@@ -190,12 +196,16 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
       const stored = storedTitles(request)
       const identityMatches =
         stored?.agent === request.agent && stored.sessionId === request.providerSession.id
-      if (stored && !identityMatches) {
+      const last = lastSettledAttemptAt.get(aiVaultTitleRequestKey(request))
+      // Drop a harness-markup title saved from an older host once, and re-ask.
+      const savedHarnessTitle =
+        identityMatches && last === undefined && isClaudeHarnessTitle(stored)
+      if (stored && (!identityMatches || savedHarnessTitle)) {
         writeTitle(request, null)
       }
-      const last = lastSettledAttemptAt.get(aiVaultTitleRequestKey(request))
       return (
         !identityMatches ||
+        savedHarnessTitle ||
         !stored?.title.trim() ||
         (request.refresh && last === undefined) ||
         // Titles saved before they carried a kind are asked for once, so a sleeping session's name can outrank its quick-command label.

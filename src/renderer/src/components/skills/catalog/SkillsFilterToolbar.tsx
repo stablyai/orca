@@ -1,16 +1,22 @@
-import { RefreshCw, Search } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { useRef } from 'react'
+import { Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/class-names'
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { RailPageSearch } from '@/components/rail-page/RailPageSearch'
+import {
+  RailPageFilterButton,
+  RailPageToolbar,
+  RailPageViews
+} from '@/components/rail-page/RailPageToolbar'
 import { useTranslate } from '@/i18n/use-translate'
 import type { SkillSourceKind } from '../../../../../shared/skills/discovery/skills'
 import {
@@ -18,12 +24,12 @@ import {
   shareLinkCountLabel,
   sourceKindLabel
 } from '../presentation/skill-display-labels'
-import { SKILLS_PAGE_COLUMN } from './skills-page-column'
 import type { SkillsFilterState } from './skills-filter'
 import type { SkillsPageView } from './skills-page-view'
 import type { SkillAgentOption } from './skill-agent-filter'
 
 const SOURCE_KINDS: SkillSourceKind[] = ['home', 'repo', 'bundled', 'plugin']
+type SkillView = SkillsFilterState['sourceKind'] | 'shared'
 
 export function SkillsFilterToolbar({
   view,
@@ -33,181 +39,137 @@ export function SkillsFilterToolbar({
   totalCount,
   resultCount,
   linkCount,
-  loading,
-  onViewChange,
-  onFiltersChange,
-  onRefresh
+  linkCountKnown,
+  onOpenSharedLinks,
+  onSelectSource,
+  onFiltersChange
 }: {
   view: SkillsPageView
   filters: SkillsFilterState
   agentOptions: readonly SkillAgentOption[]
   sourceCounts: Record<SkillSourceKind, number>
-  totalCount: number
+  totalCount: number | null
   resultCount: number
   linkCount: number
-  loading: boolean
-  onViewChange: (next: SkillsPageView) => void
+  linkCountKnown: boolean
+  onOpenSharedLinks: () => void
+  onSelectSource: (next: SkillsFilterState['sourceKind']) => void
   onFiltersChange: (next: SkillsFilterState) => void
-  onRefresh: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const inputRef = useRef<HTMLInputElement>(null)
   const sharedView = view === 'shared'
-  const filtered =
-    filters.query.trim() !== '' || filters.sourceKind !== 'all' || filters.agent !== 'all'
+  const agentFiltered = filters.agent !== 'all'
+  const showResultCount = filters.query.trim() !== '' || agentFiltered
+  const filtered = showResultCount || filters.sourceKind !== 'all'
+  const searchLabel = sharedView
+    ? t('auto.components.skills.SkillsPage.searchLinks', 'Search links')
+    : t('auto.components.skills.SkillsPage.a68dee6a32', 'Search skills')
   return (
-    <section className="shrink-0 border-b border-border">
-      <div className={cn(SKILLS_PAGE_COLUMN, 'flex flex-col gap-2 py-3')}>
-        <div className="flex items-center gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={filters.query}
-              onChange={(event) => onFiltersChange({ ...filters, query: event.target.value })}
-              placeholder={
-                sharedView
-                  ? t('auto.components.skills.SkillsPage.searchLinks', 'Search links')
-                  : t('auto.components.skills.SkillsPage.a68dee6a32', 'Search skills')
+    <>
+      <RailPageToolbar
+        fadeOverflow
+        start={
+          <RailPageViews<SkillView>
+            label={t('auto.components.skills.SkillsPage.viewSwitch', 'Show')}
+            hideCountsWhenNarrow
+            value={sharedView ? 'shared' : filters.sourceKind}
+            onValueChange={(next) =>
+              next === 'shared' ? onOpenSharedLinks() : onSelectSource(next)
+            }
+            items={[
+              {
+                value: 'all',
+                label: t('auto.components.skills.SkillsPage.allSources', 'All'),
+                count: totalCount
+              },
+              ...SOURCE_KINDS.map((kind) => ({
+                value: kind,
+                label: sourceKindLabel(kind, t),
+                count: totalCount === null ? null : sourceCounts[kind]
+              })),
+              {
+                value: 'shared',
+                label: t('auto.components.skills.SkillsPage.sharedLinks', 'Shared links'),
+                count: linkCountKnown ? linkCount : null,
+                separatorBefore: true
               }
-              aria-label={
-                sharedView
-                  ? t('auto.components.skills.SkillsPage.searchLinks', 'Search links')
-                  : t('auto.components.skills.SkillsPage.a68dee6a32', 'Search skills')
-              }
-              className="h-8 pl-8 text-sm"
-            />
-          </div>
-          {sharedView ? null : (
-            <Select
-              value={filters.agent}
-              onValueChange={(value) => onFiltersChange({ ...filters, agent: value })}
-            >
-              <SelectTrigger
-                className="h-8 w-[170px]"
-                aria-label={t(
-                  'auto.components.skills.SkillsPage.filterProvider',
-                  'Filter by agent'
-                )}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">
-                  {t('auto.components.skills.filter.allAgents', 'All agents')}
-                </SelectItem>
-                {agentOptions.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {option.label} <span className="text-muted-foreground">{option.count}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="shrink-0 border border-border/50 bg-transparent hover:bg-muted/50"
-                disabled={loading}
-                onClick={onRefresh}
-                aria-label={t('auto.components.skills.SkillsPage.cb142070b4', 'Refresh')}
-              >
-                <RefreshCw className={loading ? 'animate-spin' : undefined} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {t('auto.components.skills.SkillsPage.cb142070b4', 'Refresh')}
-            </TooltipContent>
-          </Tooltip>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          {/* Match chip pill shapes; the divider separates view selection from filters. */}
-          <ToggleGroup
-            type="single"
-            variant="outline"
-            size="sm"
-            spacing={1}
-            value={view}
-            onValueChange={(value) => onViewChange((value || 'skills') as SkillsPageView)}
-            aria-label={t('auto.components.skills.SkillsPage.viewSwitch', 'Show')}
-          >
-            <ToggleGroupItem value="skills" className="rounded-full px-2.5 text-xs">
-              {t('auto.components.skills.SkillsPage.f43ad6edf3', 'Skills')}
-            </ToggleGroupItem>
-            <ToggleGroupItem value="shared" className="rounded-full px-2.5 text-xs">
-              {t('auto.components.skills.SkillsPage.sharedLinks', 'Shared links')}
-            </ToggleGroupItem>
-          </ToggleGroup>
-          {sharedView ? null : (
-            <>
-              <div className="h-4 w-px shrink-0 bg-border" aria-hidden />
-              <ToggleGroup
-                type="single"
-                variant="outline"
-                size="sm"
-                spacing={1}
-                value={filters.sourceKind}
-                // Radix emits empty on re-press; fall back to all so a source filter always remains selected.
-                onValueChange={(value) =>
-                  onFiltersChange({
-                    ...filters,
-                    sourceKind: (value || 'all') as SkillsFilterState['sourceKind']
-                  })
-                }
-                aria-label={t('auto.components.skills.SkillsPage.filterSource', 'Filter by source')}
-              >
-                <ToggleGroupItem value="all" className="gap-1.5 rounded-full px-2.5 text-xs">
-                  {t('auto.components.skills.SkillsPage.allSources', 'All')}
-                  <span className="tabular-nums text-muted-foreground">{totalCount}</span>
-                </ToggleGroupItem>
-                {SOURCE_KINDS.map((sourceKind) => (
-                  <ToggleGroupItem
-                    key={sourceKind}
-                    value={sourceKind}
-                    className="gap-1.5 rounded-full px-2.5 text-xs"
+            ]}
+          />
+        }
+        end={
+          <>
+            {!sharedView ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <RailPageFilterButton activeCount={Number(agentFiltered)} />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>
+                    {t('auto.components.skills.SkillsPage.filterProvider', 'Filter by agent')}
+                  </DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={filters.agent}
+                    onValueChange={(agent) => onFiltersChange({ ...filters, agent })}
                   >
-                    {sourceKindLabel(sourceKind, t)}
-                    <span className="tabular-nums text-muted-foreground">
-                      {sourceCounts[sourceKind]}
-                    </span>
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-              <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-                <span role="status" aria-live="polite">
-                  {resultCountLabel(resultCount, t)}
-                </span>
-                {filtered ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    onClick={() =>
-                      onFiltersChange({
-                        query: '',
-                        sourceKind: 'all',
-                        agent: 'all'
-                      })
-                    }
-                  >
-                    {t('auto.components.skills.SkillsPage.clearFilters', 'Clear filters')}
-                  </Button>
-                ) : null}
+                    <DropdownMenuRadioItem value="all">
+                      {t('auto.components.skills.filter.allAgents', 'All agents')}
+                    </DropdownMenuRadioItem>
+                    {agentOptions.map((option) => (
+                      <DropdownMenuRadioItem key={option.id} value={option.id}>
+                        {option.label} <span className="text-muted-foreground">{option.count}</span>
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                  {filtered ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          onFiltersChange({ query: '', sourceKind: 'all', agent: 'all' })
+                        }
+                      >
+                        {t('auto.components.skills.SkillsPage.clearFilters', 'Clear filters')}
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+            <RailPageSearch inputRef={inputRef} hasValue={filters.query !== ''}>
+              <div className="relative w-full">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  ref={inputRef}
+                  value={filters.query}
+                  onChange={(event) => onFiltersChange({ ...filters, query: event.target.value })}
+                  placeholder={searchLabel}
+                  aria-label={searchLabel}
+                  density="compact"
+                  surface="background"
+                  inset="leadingIcon"
+                  adornment={filters.query === '' ? 'shortcut' : 'none'}
+                />
               </div>
-            </>
-          )}
-          {sharedView ? (
-            <span
-              className="ml-auto text-xs text-muted-foreground"
-              role="status"
-              aria-live="polite"
-            >
-              {shareLinkCountLabel(linkCount, t)}
-            </span>
-          ) : null}
-        </div>
+            </RailPageSearch>
+          </>
+        }
+      />
+      <div
+        className={
+          !sharedView && showResultCount
+            ? 'px-(--rail-page-gutter) py-1 text-right text-xs text-muted-foreground'
+            : 'sr-only'
+        }
+        role="status"
+        aria-live="polite"
+      >
+        {sharedView
+          ? linkCountKnown
+            ? shareLinkCountLabel(linkCount, t)
+            : ''
+          : resultCountLabel(resultCount, t)}
       </div>
-    </section>
+    </>
   )
 }

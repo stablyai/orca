@@ -36,11 +36,27 @@ type BotToolReads = {
 }
 // Shared by every row and card of a bot until the next change: a check starts its servers. Keyed by botRefKey.
 const reads = new Map<string, BotToolReads>()
+const MAX_CLOSED_READS = 64
 
 // Readers of a bot's tools, told when another window or the host changed them (a sign-in's state).
 const listReaders = new Map<string, Set<(tools: BotTools) => void>>()
 let listeningForHost = false
 const TOOL_KINDS: readonly BotChangeKind[] = ['settings', 'bot']
+
+function pruneClosedReads(): void {
+  const limit = listReaders.size + MAX_CLOSED_READS
+  if (reads.size <= limit) {
+    return
+  }
+  for (const [key, read] of reads) {
+    if (reads.size <= limit) {
+      break
+    }
+    if (!listReaders.has(key) && Object.values(read.checks).every((entry) => entry.users === 0)) {
+      reads.delete(key)
+    }
+  }
+}
 
 /**
  * The host says its bots changed (in any window, or on its own: a sign-in ended, couldn't start):
@@ -95,6 +111,7 @@ function onToolList(bot: BotRef, reader: (tools: BotTools) => void): () => void 
     readers.delete(reader)
     if (readers.size === 0) {
       listReaders.delete(key)
+      pruneClosedReads()
     }
   }
 }
@@ -114,6 +131,8 @@ function readsFor(bot: BotRef, agent: string | null): BotToolReads {
       cached.stale = false
       cached.tools = callBotRpc<BotTools>(cached.bot, 'bots.tools.list', { botId: bot.id })
     }
+    reads.delete(key)
+    reads.set(key, cached)
     return cached
   }
   if (cached) {
@@ -128,7 +147,9 @@ function readsFor(bot: BotRef, agent: string | null): BotToolReads {
     tools: callBotRpc<BotTools>(ref, 'bots.tools.list', { botId: bot.id }),
     checks: {}
   }
+  reads.delete(key)
   reads.set(key, fresh)
+  pruneClosedReads()
   return fresh
 }
 

@@ -9,6 +9,7 @@ import { Pressable, Text, View, type HostInstance, type TextInputInstance } from
 import { WifiOff, X } from 'lucide-react-native'
 import type { BotItem, BotItemCommentSkill } from '../../../../src/shared/bots/bot-items'
 import type { BotItemWaitingLine } from '../../../../src/shared/bots/bot-item-question-answers'
+import type { BotItemReplyMarkState } from '../../../../src/shared/bots/bot-item-reply-target'
 import { folderWorkspaceKey } from '../../../../src/shared/workspace/identity/workspace-scope'
 import { SkillRefLimitError } from '../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { sentBotItemCommentSkills } from '../../../../src/shared/bots/bot-item-comment-skills'
@@ -34,9 +35,9 @@ import {
   focusMobileNativeChatTextDestination
 } from '../../session/native-chat/composer/drafts/mobile-native-chat-draft-inputs'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { colors, pressedStyle, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { pressedStyle, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { BotItemCommentMicContext } from './bot-item-comment-mic'
 import { MobileBotItemReplyQuote } from './MobileBotItemReplyQuote'
 import { useBotDraftImages } from '../use-bot-draft-images'
@@ -63,6 +64,7 @@ export function MobileBotItemCommentBox({
   online,
   hostName,
   question = null,
+  replyMark,
   attachTo,
   onSend,
   showToast,
@@ -88,17 +90,18 @@ export function MobileBotItemCommentBox({
   showToast: (message: string) => void
   /** The agent's question waiting on the owner (what is sent is the reply). */
   question?: BotItemWaitingQuestion | null
+  /** Its "Replying to" closed (×) on that question, kept with the draft as on the desktop. */
+  replyMark: BotItemReplyMarkState
   /** The field, which the page focuses for a quote. */
   fieldRef: RefObject<TextInputInstance | null>
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const mic = useContext(BotItemCommentMicContext)
   const key = botItemCommentDraftKey(hostId, item.uid)
   const [text, setTextState] = useState(() => drafts.get(key) ?? '')
-  // The question whose "Replying to" the owner closed.
-  const [unmarked, setUnmarked] = useState<string | null>(null)
-  const quote = question && unmarked !== question.id ? question : null
+  const quote = question && !replyMark.hidden ? question : null
   const [error, setError] = useState<string | null>(null)
   const cancelRef = useRef<HostInstance>(null)
   const { uid } = item
@@ -259,7 +262,7 @@ export function MobileBotItemCommentBox({
             accessibilityRole="button"
             accessibilityLabel={t('bots.items.comment.hideReplyingTo', 'Hide')}
             hitSlop={10}
-            onPress={() => setUnmarked(quote.id)}
+            onPress={replyMark.hide}
             style={({ pressed }) => pressed && pressedStyle}
           >
             <X size={13} color={colors.textMuted} />
@@ -340,7 +343,6 @@ export function MobileBotItemCommentBox({
             micStarting={mic.micStarting}
             micProcessing={mic.micProcessing}
             cancelRef={cancelRef}
-            trailing={null}
           >
             {null}
           </MobileNativeChatDictationLeading>
@@ -358,7 +360,7 @@ export function MobileBotItemCommentBox({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   box: {
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,

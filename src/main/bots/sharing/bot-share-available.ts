@@ -42,12 +42,16 @@ export async function availableParts(
       event
     })),
     tools: shareable.tools.map(({ name, url }) => ({ name, url })),
-    memory: await Promise.all(
-      shareable.memory.map(async ({ topic, path }) => ({
-        topic,
-        lines: textLineCount(shared(`memory/${topic}.md`) ?? (await readFile(path, 'utf8')))
-      }))
-    )
+    // An unpicked note that can't be read is left off the list, as a picked one is.
+    memory: (
+      await Promise.all(
+        shareable.memory.map(async ({ topic, path }) => {
+          const text =
+            shared(`memory/${topic}.md`) ?? (await readFile(path, 'utf8').catch(() => undefined))
+          return text === undefined ? [] : [{ topic, lines: textLineCount(text) }]
+        })
+      )
+    ).flat()
   }
 }
 

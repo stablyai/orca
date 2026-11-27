@@ -2,6 +2,7 @@
 import { requireOpenableUrl } from '../tabs-and-windows/browser-extension-requested-navigation'
 
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
@@ -45,41 +46,47 @@ import {
   listBrowserExtensionWindows
 } from '../tabs-and-windows/browser-extension-window-model'
 
-const tabIdSchema = z.number().int().nonnegative()
-const nativeTabSchema = z.record(z.string(), z.unknown())
-const queryInfoSchema = z
-  .object({
-    active: z.boolean(),
-    highlighted: z.boolean(),
-    currentWindow: z.boolean(),
-    lastFocusedWindow: z.boolean(),
-    windowId: z.number().int(),
-    windowType: z.string(),
-    status: z.string(),
-    index: z.number().int(),
-    pinned: z.boolean(),
-    discarded: z.boolean(),
-    frozen: z.boolean(),
-    groupId: z.number().int()
-  })
-  .partial()
-  .loose()
-const createPropertiesSchema = z
-  .object({
-    url: z.string(),
-    active: z.boolean(),
-    selected: z.boolean(),
-    windowId: z.number().int(),
-    index: z.number().int(),
-    pinned: z.boolean(),
-    openerTabId: tabIdSchema
-  })
-  .partial()
-  .loose()
-const updatePropertiesSchema = z
-  .object({ url: z.string(), muted: z.boolean(), active: z.boolean(), highlighted: z.boolean() })
-  .partial()
-  .loose()
+const tabIdSchema = lazyZodSchema(() => z.number().int().nonnegative())
+const nativeTabSchema = lazyZodSchema(() => z.record(z.string(), z.unknown()))
+const queryInfoSchema = lazyZodSchema(() =>
+  z
+    .object({
+      active: z.boolean(),
+      highlighted: z.boolean(),
+      currentWindow: z.boolean(),
+      lastFocusedWindow: z.boolean(),
+      windowId: z.number().int(),
+      windowType: z.string(),
+      status: z.string(),
+      index: z.number().int(),
+      pinned: z.boolean(),
+      discarded: z.boolean(),
+      frozen: z.boolean(),
+      groupId: z.number().int()
+    })
+    .partial()
+    .loose()
+)
+const createPropertiesSchema = lazyZodSchema(() =>
+  z
+    .object({
+      url: z.string(),
+      active: z.boolean(),
+      selected: z.boolean(),
+      windowId: z.number().int(),
+      index: z.number().int(),
+      pinned: z.boolean(),
+      openerTabId: tabIdSchema
+    })
+    .partial()
+    .loose()
+)
+const updatePropertiesSchema = lazyZodSchema(() =>
+  z
+    .object({ url: z.string(), muted: z.boolean(), active: z.boolean(), highlighted: z.boolean() })
+    .partial()
+    .loose()
+)
 
 async function createTab(
   caller: BrowserExtensionCaller,

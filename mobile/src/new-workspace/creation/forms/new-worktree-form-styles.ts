@@ -1,8 +1,8 @@
-import { colors, radii, spacing } from '../../../theme/mobile-theme'
+import { radii, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { LIST_ROW_PADDING } from '../../../components/list/ListGroup'
 
-export const newWorktreeFormStyles = themedStyleSheet(() => ({
+export const newWorktreeFormStylesSheet = themedStyleSheet((colors) => ({
   header: {
     marginTop: -spacing.xs
   },
@@ -14,11 +14,12 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     fontSize: 15
   },
-  // A field's own label inside a section, lined up with the field's text.
+  // A field's own label, set like a SectionHeader so it lines up with the field's text.
   fieldLabel: {
     fontSize: 13,
+    fontWeight: '500',
     color: colors.textSecondary,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: LIST_ROW_PADDING,
     marginBottom: 6
   },
   options: {

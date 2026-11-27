@@ -19,12 +19,31 @@ export type TaskListResult = {
   legacyReadOnly?: boolean
 }
 
-// The task row echoes the caller's spec back; the id and status are what it acts on.
+export type TaskReceiptResult = {
+  task: { id: string; status: string }
+  dispatchId?: string
+  progressNote?: string
+  progressUpdatedAt?: string
+}
+
+// The task row echoes the caller's spec back; the id, status, and optional passive note are what it acts on.
 export const TASK_RECEIPT_VIEW: OrchestrationAgentView<
-  { task: { id: string; status: string } },
-  { taskId: string; status: string }
+  TaskReceiptResult,
+  {
+    taskId: string
+    status: string
+    dispatchId?: string
+    note?: string
+    updatedAt?: string
+  }
 > = {
-  fields: (value) => ({ taskId: value.task.id, status: value.task.status })
+  fields: (value) => ({
+    taskId: value.task.id,
+    status: value.task.status,
+    ...(value.dispatchId ? { dispatchId: value.dispatchId } : {}),
+    ...(value.progressNote !== undefined ? { note: value.progressNote } : {}),
+    ...(value.progressUpdatedAt ? { updatedAt: value.progressUpdatedAt } : {})
+  })
 }
 
 export const TASK_LIST_VIEW: OrchestrationAgentView<TaskListResult, Record<string, unknown>> = {

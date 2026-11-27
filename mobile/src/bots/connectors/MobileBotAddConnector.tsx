@@ -20,9 +20,9 @@ import { useSheetPageFooter } from '../../components/nav-bar/sheet-page-scroll'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { SettingsSection } from '../../settings/settings-screen-frame'
-import { colors, radii } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { AppLogo } from './MobileBotComposio'
@@ -56,6 +56,7 @@ const CATEGORY: Record<AddConnectorOption['id'], BotAppCategory | null> = {
 
 /** An app's own logo, its corners rounded so a full-square logo reads as a small app tile. */
 export function AppLogoMark({ slug }: { slug: string }) {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.logo}>
       <AppLogo slug={slug} size={ICON} />
@@ -84,7 +85,7 @@ export function MobileBotAddConnector(props: {
     onAddByUrl: () => void
   }
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const [query, setQuery] = useState('')
   const [picked, setFilter] = useState<Filter>(null)
@@ -363,6 +364,6 @@ export function MobileBotAddConnector(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   logo: { borderRadius: radii.mark, overflow: 'hidden' }
 }))

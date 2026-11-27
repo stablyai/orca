@@ -29,10 +29,13 @@ import {
   type GoogleSetupActor
 } from './google-setup-rules'
 import { revivedGoogleSetupRun } from './google-setup-revive'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
 export { GoogleSetupError, isPersonOwnedStep, type GoogleSetupActor }
 
-const FileSchema = z.object({ runs: z.record(z.string(), GoogleSetupRunSchema).default({}) })
+const FileSchema = lazyZodSchema(() =>
+  z.object({ runs: z.record(z.string(), GoogleSetupRunSchema).default({}) })
+)
 
 export type GoogleSetupChange =
   | { action: 'start'; mode?: GoogleSetupRunMode; browserPageId?: string; newApp?: true }

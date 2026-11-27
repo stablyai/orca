@@ -4,7 +4,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { wslMoveCutoverFixture } from '../../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../../__fixtures__/wsl-mover/wsl-move-journal-seeding'
-import { removeCommittedWslMoveCutover } from '../cutover-recovery/wsl-move-cutover-journal'
+import {
+  listWslMoveCutovers,
+  removeCommittedWslMoveCutover
+} from '../cutover-recovery/wsl-move-cutover-journal'
 import {
   runWslMoveHostAutomationsExclusive,
   WSL_MOVE_HOST_AUTOMATION_TURN_DEADLINE_MS
@@ -14,7 +17,11 @@ import {
   resetWslMoveDesktopRewriteStoresForTests,
   type WslMoveDesktopRewriteContext
 } from './wsl-move-desktop-rewrite-stores'
-import { registerWslMoveHostAutomationsStore } from './wsl-move-host-automations-rewrite'
+import {
+  registerWslMoveHostAutomationsStore,
+  wslMoveAutomationsPending,
+  type WslMoveMovedAutomation
+} from './wsl-move-host-automations-rewrite'
 
 let userDataPath: string
 beforeEach(() => {
@@ -84,6 +91,65 @@ describe('the host-automations rewrite step', () => {
       await expect(outcome).resolves.toBe('wsl_move_host_automation_turn_timed_out')
       expect(seen?.aborted).toBe(true)
       await expect(undo).resolves.toBe('undo ran')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('persists confirmed ids on timeout so the next pass resumes with only the remainder', async () => {
+    vi.useFakeTimers()
+    try {
+      const cutover = wslMoveCutoverFixture('move-1', 'destination-committed', {
+        automationsToReenable: ['auto-1', 'auto-2', 'auto-3']
+      })
+      seedWslMoveCutover(userDataPath, cutover)
+      const seenBatches: string[][] = []
+      let lateSettle: (() => void) | undefined
+      const enable = vi.fn(
+        (
+          _env: string,
+          automations: readonly WslMoveMovedAutomation[],
+          _signal?: AbortSignal,
+          onSettled?: (id: string) => void
+        ) => {
+          seenBatches.push(automations.map((row) => row.id))
+          if (seenBatches.length === 1) {
+            onSettled?.('auto-1')
+            onSettled?.('auto-2')
+            lateSettle = () => onSettled?.('auto-3')
+            return new Promise<void>(() => {})
+          }
+          for (const row of automations) {
+            onSettled?.(row.id)
+          }
+          return Promise.resolve()
+        }
+      )
+      registerWslMoveHostAutomationsStore({ enable }, userDataPath)
+      const store = listWslMoveDesktopRewriteStores()[0]
+      if (store?.side !== 'main') {
+        throw new Error('expected a main-side store')
+      }
+
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store reads only the cutover.
+      const firstPass = Promise.resolve(
+        store.run({ cutover } as unknown as WslMoveDesktopRewriteContext)
+      ).then(
+        () => 'finished',
+        (error: Error) => error.message
+      )
+      await vi.advanceTimersByTimeAsync(WSL_MOVE_HOST_AUTOMATION_TURN_DEADLINE_MS)
+      await expect(firstPass).resolves.toBe('wsl_move_host_automation_turn_timed_out')
+      // A late callback from the abandoned turn must not mark the timed-out id confirmed.
+      lateSettle?.()
+
+      const persisted = listWslMoveCutovers(userDataPath)[0]
+      expect(persisted?.reenabledAutomationIds).toEqual(['auto-1', 'auto-2'])
+      expect(persisted ? wslMoveAutomationsPending(persisted) : []).toEqual(['auto-3'])
+
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store reads only the cutover.
+      await store.run({ cutover } as unknown as WslMoveDesktopRewriteContext)
+      expect(seenBatches).toEqual([['auto-1', 'auto-2', 'auto-3'], ['auto-3']])
     } finally {
       vi.useRealTimers()
     }

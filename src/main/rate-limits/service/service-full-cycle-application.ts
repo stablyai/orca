@@ -48,13 +48,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       miniMaxGeneration,
       zcodeConfigChanged,
       zcodeGeneration,
-      antigravityGeneration,
       claudeFetchGated,
       results: [claudeResult, codexResult, opencodeGoResult, kimiResult, miniMaxResult],
       grokResultPromise,
       cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise
+      zcodeResultPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -194,11 +192,10 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled] = await Promise.all([
+    const [grokSettled, cursorSettled, zcodeSettled] = await Promise.all([
       grokResultPromise,
       cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise
+      zcodeResultPromise
     ])
     if (signal.aborted) {
       return
@@ -217,8 +214,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           error: 'ZCode Coding Plan account changed during refresh'
         }
     const shouldApplyZcode = zcodeGeneration === this.zcodeFetchGeneration
-    const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
-    const shouldApplyAntigravity = antigravityGeneration === this.antigravityFetchGeneration
     // Discard Cursor stale usage only for a known account change; unidentified transient failures retain their last reading.
     const cursorAccountChanged = hasKnownProvenanceChange(previousState.cursor, cursor)
     const previousZcodeAccount = previousState.zcode?.usageMetadata?.authProvenance
@@ -232,9 +227,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
     }
-    if (shouldApplyAntigravity) {
-      this.trackActiveFailureStreak('antigravity', antigravity)
-    }
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
@@ -245,13 +237,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           ? zcode
           : zcode.status === 'error' && !sameZcodeAccount
             ? zcode
-            : this.applyStalePolicy(zcode, previousState.zcode),
-      // Another runtime's last reading must not stand in for this runtime's failure.
-      antigravity: !shouldApplyAntigravity
-        ? this.state.antigravity
-        : hasKnownProvenanceChange(previousState.antigravity, antigravity)
-          ? antigravity
-          : this.applyStalePolicy(antigravity, previousState.antigravity)
+            : this.applyStalePolicy(zcode, previousState.zcode)
     })
 
     // Published separately so a slow Muse CLI never delays the sibling batch above.

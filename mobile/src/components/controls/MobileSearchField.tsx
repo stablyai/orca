@@ -9,10 +9,11 @@ import {
 } from 'react-native'
 import { Search, X } from 'lucide-react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { TextField } from '../composer-input/TextField'
+import { composerInputStylesSheet } from '../composer-input/composer-input-styles'
 import { runAfterInteractions } from '../../platform/after-interactions'
 
 // Delay focus until opening chrome settles; native autoFocus alone often shows caret without iOS/Android keyboard.
@@ -55,8 +56,10 @@ export function MobileSearchField({
   accessibilityLabel,
   style
 }: MobileSearchFieldProps) {
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const inputRef = useRef<TextInputInstance>(null)
   const clearVisible = showClear ?? value.length > 0
 
@@ -128,14 +131,14 @@ export function MobileSearchField({
       onSubmitEditing={onSubmitEditing}
       onBlur={onBlur}
       onFocus={onFocus}
-      style={style}
+      style={[composerInputStyles.filledField, style]}
       clearButtonMode="never"
       accessibilityLabel={accessibilityLabel ?? placeholder}
     />
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   clearButton: {
     // Pull the 36pt target into the field's end padding so the chip sits near the edge.
     marginRight: -spacing.sm,

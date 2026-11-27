@@ -90,6 +90,28 @@ export const githubConnected = defineFixture({
   render: () => <Offers sources={['github']} />
 })
 
+// gh signed out on the bot's computer: still Connected, with one line on what to run there.
+export const githubConnectedGhSignedOut = defineFixture({
+  width: 560,
+  setup: () => {
+    stubBots({ ...scout, github: {} })
+    Reflect.set(window.api, 'botGitHub', {
+      state: async () => ({
+        ok: true,
+        value: {
+          installUrl: 'https://github.com/apps/orca-ide/installations/new',
+          account: { userId: '42', login: 'cos-orca' },
+          installations: [{ installationId: '1', accountLogin: 'stablyai', repositories: null }],
+          defaultBotId: null,
+          gh: 'signed-out'
+        }
+      }),
+      members: notAnswered
+    })
+  },
+  render: () => <Offers sources={['github']} />
+})
+
 export const githubConnectedNarrow = defineFixture({
   width: 380,
   setup: () => stubBots({ ...scout, github: {} }),

@@ -5,8 +5,8 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type {
   RuntimeTerminalAttention,
-  RuntimeTerminalListResult,
-  RuntimeTerminalSummary
+  RuntimeTerminalListResultWithoutPreview,
+  RuntimeTerminalSummaryWithoutPreview
 } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { resolveTerminalPtyOwner } from '../../workspace/ownership/terminal-worktree-route'
 import {
@@ -81,7 +81,7 @@ export function getRuntimeLivenessTargetWorktrees(
   return targets
 }
 
-function getTypedRuntimePtyId(terminal: RuntimeTerminalSummary): string | null {
+function getTypedRuntimePtyId(terminal: RuntimeTerminalSummaryWithoutPreview): string | null {
   if (terminal.ptyId) {
     return terminal.ptyId
   }
@@ -138,7 +138,7 @@ export async function collectHostPtyEvidence(
         return
       }
       try {
-        const result = await callRuntimeRpc<RuntimeTerminalListResult>(
+        const result = await callRuntimeRpc<RuntimeTerminalListResultWithoutPreview>(
           { kind: 'environment', environmentId: runtimeEnvironmentId },
           'terminal.list',
           {
@@ -146,6 +146,7 @@ export async function collectHostPtyEvidence(
             limit: 10_000,
             requireFreshPtyLiveness: true,
             includeVisualLayouts: false,
+            includePreview: false,
             includeAttention: true
           },
           // A periodic evidence pass: no use of an idle WSL host (#46567).
