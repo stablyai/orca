@@ -328,7 +328,6 @@
       "addToMessage": "Añadir al mensaje",
       "attachImage": "Adjuntar imagen",
       "cancelEditing": "Cancelar edición",
-      "placeholder": "Pregunta lo que quieras, @ para referenciar archivos, / para comandos",
       "saveEditedMessage": "Guardar mensaje editado",
       "sendMessage": "Enviar mensaje",
       "sendQueue": "Poner en cola",
@@ -338,10 +337,7 @@
       "sendSteerHint": "Entra en lo que el agente está haciendo ahora"
     },
     "contextUsage": {
-      "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",
-      "title": "Contexto",
-      "estimated": "Estimado a partir de la última respuesta.",
-      "deferredNote": "Se cargan cuando se necesitan. No cuentan en el total usado."
+      "title": "Contexto"
     },
     "composerAttachments": {
       "attachedImage": "Imagen adjunta",
@@ -353,7 +349,6 @@
       "uploadingImage": "Subiendo imagen"
     },
     "composerPlaceholder": {
-      "prompt": "Pregunta lo que quieras, @ para referenciar archivos, / para comandos",
       "waitingForTerminal": "Esperando a la terminal…"
     },
     "diffCard": {
@@ -570,8 +565,6 @@
       "signInForModels": "Inicia sesión para ver los modelos que puedes usar."
     },
     "sessionOptionPickers": {
-      "agentWorking": "El agente está trabajando",
-      "backToModels": "Volver a los modelos",
       "dispatchUnconfirmed": "Enviado al agente — sin confirmar",
       "modelFullAccessLabel": "Modelo, {{value}}, acceso total",
       "modelLabel": "Modelo, {{value}}",
@@ -581,17 +574,13 @@
       "workingAnnouncement": "El agente está trabajando. La configuración del modelo se desbloqueará cuando termine este turno.",
       "applying": "Aplicando…",
       "onAttach": "Se aplica cuando el chat se conecte",
-      "heldPickRefused": "{{picked}} no está disponible en este chat. Se mantiene {{kept}}.",
-      "optionsSection": "Opciones"
+      "heldPickRefused": "{{picked}} no está disponible en este chat. Se mantiene {{kept}}."
     },
     "sessionOptionRows": {
       "defaultMarker": "Predeterminado",
       "notReportedMarker": "No indicado",
       "moreModels": "Más modelos",
       "fewerModels": "Menos modelos"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "Enviado al agente — sin confirmar"
     },
     "stopButton": {
       "stopAgent": "Detener el agente",
@@ -2997,9 +2986,7 @@
       "loading": "Cargando documento…"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "Disponibles: {{count}}",
       "commands": "Comandos",
-      "fileTypes": "PDF, texto, código…",
       "files": "Archivos",
       "photos": "Fotos",
       "skills": "Habilidades",
