@@ -40,7 +40,7 @@ import {
   type RuntimeServiceCommandSurface,
   installRuntimeServiceCommandSurface
 } from './runtime-service-command-surface'
-import { RuntimeSkillCommands } from '../integrations/skill/runtime-skill-command-surface'
+import { LazyRuntimeSkillCommands } from '../integrations/skill/lazy-runtime-skill-commands'
 import {
   type RuntimeSkillCommandSurface,
   installRuntimeSkillCommandSurface
@@ -195,7 +195,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithBots {
       browserDrivers: this.browserDrivers,
       messageWaiters: this.messageWaiters
     })
-    this.skillCommands = new RuntimeSkillCommands({
+    this.skillCommands = new LazyRuntimeSkillCommands({
       getRuntimeId: () => this.runtimeId,
       getUserDataPath: () => getAppEnvironment().getPath('userData'),
       isPackaged: () => getAppEnvironment().isPackaged(),

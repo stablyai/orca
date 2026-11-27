@@ -38,6 +38,7 @@ export type QuickLaunchAgentMenuItemsProps = {
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   /** Default launch telemetry to tab_bar_quick_launch. */
   launchSource?: LaunchSource
+  canSendPrompt?: () => boolean
   /** Called after a prompt is queued into the agent, or immediately for argv prompt launches. */
   onPromptDelivered?: () => void
   /** Given the launch's own delivery result while the prompt is still on its way. */
@@ -59,6 +60,7 @@ export function useTabAgentMenuLaunch({
   prompt,
   promptDelivery,
   launchSource,
+  canSendPrompt,
   onPromptDelivered,
   onPromptHandedOff,
   disabled,
@@ -178,6 +180,9 @@ export function useTabAgentMenuLaunch({
       ) {
         return false
       }
+      if (canSendPrompt && !canSendPrompt()) {
+        return false
+      }
       // Why captured before the account prompt: the prompt itself takes focus.
       const focusIntent = captureNativeChatComposerFocusIntent()
       const launched = launchWithClaudeAccountChoice(
@@ -188,6 +193,6 @@ export function useTabAgentMenuLaunch({
       )
       return launched instanceof Promise ? launched.then((owned) => owned ?? false) : launched
     },
-    [disabled, worktreeId, afterDeferredLaunch, launchOnAccount]
+    [disabled, canSendPrompt, worktreeId, afterDeferredLaunch, launchOnAccount]
   )
 }

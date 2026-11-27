@@ -174,9 +174,6 @@
       "dictationOffFooter": "Talk instead of typing in chats and terminals.",
       "swipeToDelete": "Swipe a downloaded model left to delete it."
     },
-    "agents": {
-      "permissionOwnAll": "Agents' own settings"
-    },
     "voiceTranscribeOn": {
       "heading": "Transcribe on",
       "automatic": "Automatic",
@@ -1678,7 +1675,9 @@
         "permissionAcceptEditsDescription": "Approves file edits and file commands; asks for the rest",
         "permissionAutoDescription": "Reviews approval requests for you",
         "permissionFullAccessCodexDescription": "Never asks; can edit any file and use the network",
-        "permissionFullAccessDescription": "Never asks before edits or commands"
+        "permissionFullAccessDescription": "Never asks before edits or commands",
+        "permissionAgentSettings": "{{agent}} settings",
+        "permissionFromAgentSettings": "{{mode}}, from {{agent}} settings"
       },
       "goal": {
         "sentAsGoal": "Sent as goal"

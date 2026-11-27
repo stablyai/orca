@@ -19,7 +19,6 @@ import { useSourceControlScope } from './worktree-scope'
 export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
   const { currentWorktreeId, model, worktreePath } = props
   const {
-    activeGroupId,
     activeWorktreeId,
     branchLineTotal,
     branchSummary,
@@ -175,7 +174,6 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
           <SourceControlNotesShelf
             activeWorktreeId={activeWorktreeId}
-            activeGroupId={activeGroupId}
             diffCommentsForActive={diffCommentsForActive}
             diffCommentCount={diffCommentCount}
             diffCommentsExpanded={diffCommentsExpanded}
