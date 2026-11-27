@@ -96,7 +96,9 @@ export function initializeMainProcessRuntime(
     // Provide managed Codex homes here for desktop and headless session discovery; core IPC registration is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>
       core.codexRuntimeHome?.getHostCodexHomePathsForSessionDiscovery() ?? [],
-    prepareAiVaultSessionResume: async (request) => {
+    // Adoption passes its native system home as a second argument; forward it or the
+    // preparation would silently fall back to the settings-resolved source home.
+    prepareAiVaultSessionResume: async (request, nativeSystemHomePath?: string) => {
       const [
         { codexAiVaultSessionResumePreparation },
         { resolveHostCodexSessionSourceHome },
@@ -110,7 +112,7 @@ export function initializeMainProcessRuntime(
         runtimeHome: core.codexRuntimeHome,
         systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
         preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
-      }))(request)
+      }))(request, nativeSystemHomePath)
     },
     ...codexStructuredLaunchHomeResolvers,
     prepareCodexCatalogProbeHome: (homePath) =>
