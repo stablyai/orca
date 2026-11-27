@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { BotToolServer } from '../../shared/bot-tools'
 import { ensureNodePtySpawnHelperExecutable } from '../providers/local-pty/local-pty-executable-spawn'
 import { codexToolProblems, isTakenByCodexStdio } from './bot-tools-codex'
@@ -23,7 +24,7 @@ import {
 import { cliWithLaunchTools } from './bot-launch-tools'
 import { advanceBotToolsEpoch } from './bot-tools-revision'
 
-const LoginStarted = z.object({ authorizationUrl: z.string() })
+const LoginStarted = lazyZodSchema(() => z.object({ authorizationUrl: z.string() }))
 
 // Time to finish signing in in the browser.
 const SIGN_IN_TIMEOUT_MS = 600_000

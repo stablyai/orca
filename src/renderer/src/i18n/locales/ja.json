@@ -5815,7 +5815,6 @@
           "c13b82793c": "インストールを管理",
           "aee7b99cc6": "リンクからインストール",
           "filterProvider": "Agent で絞り込み",
-          "filterSource": "ソースで絞り込み",
           "allSources": "すべて",
           "clearFilters": "フィルターをクリア",
           "closeSkills": "スキルを閉じる",

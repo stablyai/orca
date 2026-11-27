@@ -5882,7 +5882,6 @@
           "c13b82793c": "설치 관리",
           "aee7b99cc6": "링크에서 설치",
           "filterProvider": "에이전트별 필터",
-          "filterSource": "소스별 필터",
           "allSources": "전체",
           "clearFilters": "필터 지우기",
           "closeSkills": "스킬 닫기",

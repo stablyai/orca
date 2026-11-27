@@ -1,5 +1,6 @@
 import { open } from 'node:fs/promises'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 
 const BLOCK_BYTES = 64 * 1024
 // Bound tail scanning to the peer's maximum accepted reply size.
@@ -43,7 +44,9 @@ export async function readPiSessionLastEntryId(file: string): Promise<string | n
   }
 }
 
-const entryHeadSchema = z.looseObject({ type: z.unknown(), id: z.string().min(1) })
+const entryHeadSchema = lazyZodSchema(() =>
+  z.looseObject({ type: z.unknown(), id: z.string().min(1) })
+)
 
 function entryId(parts: Buffer[]): string | null {
   let record: unknown

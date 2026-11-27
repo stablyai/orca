@@ -135,43 +135,25 @@
     },
     "pairConfirm": {
       "backToHome": "Volver al inicio",
-      "connectTimedOut": "No se pudo conectar en {{seconds}} s; consulta el registro de abajo para ver dónde se detuvo.",
       "connecting": "Conectando…",
-      "description": "Has abierto un enlace de emparejamiento desde tu escritorio. Confirma para añadirlo a tus hosts.",
       "pairButton": "Emparejar",
-      "pairingFailed": "Error de emparejamiento: {{error}}",
-      "pairingLog": "Registro de emparejamiento",
-      "title": "¿Emparejar con este escritorio?"
+      "pairingFailed": "Error de emparejamiento: {{error}}"
     },
     "pairScan": {
-      "cameraDisabledDescription": "Activa el acceso a la cámara en Ajustes o pega el código de emparejamiento.",
-      "cameraDisabledTitle": "Acceso a la cámara desactivado",
-      "cameraPermissionDescription": "Escanea el código QR de Orca en tu escritorio o pega el código de emparejamiento.",
-      "connectTimedOut": "No se pudo conectar en {{seconds}} s; consulta el registro de abajo para ver dónde se detuvo.",
       "connecting": "Conectando…",
       "invalidPairingCode": "No es un código de emparejamiento válido; cópialo de tu ordenador y vuelve a pegarlo.",
       "invalidQrCode": "No es un código QR de Orca válido",
-      "downloadQrCode": "Ese es el código de descarga. Escanea el código de emparejamiento del paso 2 en tu ordenador.",
-      "openDesktopStep": "Abre Orca en tu ordenador",
-      "openMobileSettingsStep": "Ve a Ajustes → Móvil",
       "openSettings": "Abrir Ajustes",
       "pairingFailed": "Error de emparejamiento: {{error}}",
-      "pairingLog": "Registro de emparejamiento",
       "pasteCodeMessage": "Copia el código que aparece debajo del QR en tu ordenador.",
       "pasteCodePlaceholder": "orca://pair?code=... o pega el código",
       "pasteCodeTitle": "Pegar código de emparejamiento",
-      "pasteInstead": "Pegar código en su lugar",
-      "pastePairingCode": "Pegar código de emparejamiento",
-      "scanCodeStep": "Escanea el código QR",
-      "title": "Emparejar con un escritorio",
-      "tryAgain": "Reintentar",
-      "codeNoLongerValid": "Este código de emparejamiento caducó, ya se usó o se reemplazó. Muestra un código nuevo en tu ordenador y vuelve a escanear.",
       "runtimeAccessLink": "Este enlace es para otra app de Orca. Escanea el código en Ajustes → Móvil en tu equipo o ejecuta orca pair --mobile en tu servidor."
     },
     "terminalSettings": {
       "keepPhoneSize": "Mantener en tamaño de teléfono (predeterminado)",
       "leaveAppDescription": "Mientras usas un terminal en el teléfono, Orca lo reduce para ajustarlo a la pantalla. Al cerrar la aplicación o dejarla en segundo plano, este ajuste controla si el terminal mantiene el tamaño del teléfono (para que las herramientas CLI interactivas no redistribuyan su contenido) o recupera el tamaño del escritorio. Siempre puedes pulsar Restaurar en el banner del escritorio para cambiar el tamaño manualmente.",
-      "leaveAppHeading": "AL SALIR DE LA APLICACIÓN",
+      "leaveAppHeading": "Al salir de la aplicación",
       "noPairedDesktops": "Aún no hay escritorios emparejados. Empareja uno para controlar el comportamiento del terminal.",
       "restoreAfterMinutes_many": "Después de {{count}} minutos",
       "restoreAfterMinutes_one": "Después de {{count}} minuto",
@@ -1380,14 +1362,10 @@
       "linkUrl": "URL del enlace"
     },
     "richMarkdownToolbar": {
-      "body": "Cuerpo",
       "bold": "Negrita",
       "bulletList": "Lista con viñetas",
       "checklist": "Lista de verificación",
       "codeBlock": "Bloque de código",
-      "heading1": "H1",
-      "heading2": "H2",
-      "heading3": "H3",
       "image": "Imagen",
       "inlineCode": "Código inline",
       "italic": "Cursiva",
@@ -1462,14 +1440,14 @@
     "terminalShortcutSettings": {
       "addDescription": "Crear una combinación de teclas o una macro de texto",
       "addShortcut": "Añadir atajo personalizado…",
-      "customShortcuts": "ATAJOS PERSONALIZADOS",
+      "customShortcuts": "Atajos personalizados",
       "empty": "Aún no hay atajos personalizados definidos.",
       "removeShortcut": "Eliminar {{label}}",
       "resetDefaults": "Restablecer valores predeterminados",
       "resetDescription": "Mostrar todas las teclas de atajo integradas en su orden original",
-      "moreKeys": "MÁS TECLAS",
+      "moreKeys": "Más teclas",
       "moreKeysDescription": "Estas teclas están bajo ⋯ en la fila de teclas del terminal. Activa o desactiva las teclas para mostrarlas u ocultarlas y mantén pulsado el asa para arrastrarlas al orden que quieras. Las teclas que ya están en la fila, como Esc o las flechas, no aparecen en ⋯.",
-      "directionPad": "CRUCETA",
+      "directionPad": "Cruceta",
       "showDirectionPad": "Mostrar cruceta",
       "showDirectionPadDescription": "Fija la cruceta en la barra lateral. Si está desactivada, la barra muestra las teclas de flecha.",
       "showShortcut": "Mostrar atajo {{label}}"
@@ -1700,23 +1678,13 @@
   },
   "diagnostics": {
     "connectionDiagnosticsView": {
-      "authFailed": "autenticación fallida",
-      "connected": "conectado",
-      "connecting": "conectando",
       "copyReport": "Copiar informe",
-      "diagnosisHeading": "Posible causa",
-      "disconnected": "desconectado",
-      "handshaking": "negociando la conexión",
       "noEvents": "Aún no hay eventos de conexión. Aparecerán a medida que la aplicación intente conectarse a este host.",
       "noHosts": "No hay hosts emparejados.",
-      "privacyHint": "Envía un informe de tamaño limitado con los datos sensibles ocultos, que incluye el nombre del host, el punto de conexión, las versiones, el estado de la conexión y los eventos; nunca el contenido del terminal ni las credenciales.",
-      "reconnecting": "reconectando",
       "retrySending": "Reintentar envío",
-      "sendDiagnostics": "Enviar diagnóstico",
       "sending": "Enviando…",
       "sent": "Diagnósticos enviados",
-      "stateWithAttempt": "{{state}} · intento {{attempts}}",
-      "title": "Diagnóstico de red"
+      "stateWithAttempt": "{{state}} · intento {{attempts}}"
     },
     "mobileWebBundleProbeRow": {
       "assets": "Recursos",
@@ -1737,14 +1705,11 @@
     "troubleshootCommonIssues": {
       "allowNotifications": "Comprueba que los ajustes del sistema permitan las notificaciones de Orca y que los modos de concentración y No molestar estén desactivados.",
       "checkTailnet": "Comprueba que el escritorio esté activo y aparezca conectado en tu red de Tailscale.",
-      "desktopTitle": "App de escritorio cerrada",
       "disableVpn": "Desactiva esa VPN o activa la tunelización dividida / \"Allow LAN\".",
-      "firewallTitle": "El cortafuegos bloquea el puerto {{port}}",
       "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "Las direcciones de host como 100.x.x.x o *.ts.net se conectan a través de Tailscale — mantenlo ACTIVADO.",
       "macosFirewall": "macOS: Ajustes del Sistema → Red → Firewall — permite las conexiones de Orca.",
       "notificationNetwork": "Prueba con datos móviles u otra red Wi-Fi. Si las alertas llegan tras cambiar de red, es posible que tu red esté retrasando la entrega.",
-      "notificationsTitle": "Notificaciones push",
       "openDesktop": "Orca debe estar abierto en tu escritorio para aceptar conexiones.",
       "pairAfterUpdate": "Tras una actualización, puede que debas volver a emparejar mediante un código QR.",
       "reconnectWifi": "Prueba a volver a conectar el WiFi en ambos dispositivos.",
@@ -1755,22 +1720,14 @@
       "retryHost": "Vuelve a la lista de hosts y toca tu host para reintentar.",
       "sameNetwork": "Ambos dispositivos deben estar en la misma LAN (salvo que se conecten a través de Tailscale).",
       "sameSubnet": "Ethernet y WiFi deben compartir la misma subred.",
-      "tailscaleTitle": "Host de Tailscale inaccesible",
-      "timeoutTitle": "Tiempo de espera de conexión agotado",
       "updateTailscale": "Actualiza la app de Tailscale: las versiones recientes corrigen errores de reconexión.",
       "vpnRouting": "Las VPN distintas de Tailscale pueden dirigir el tráfico local a través de un servidor remoto.",
-      "vpnTitle": "Interferencias de otras VPN",
       "wifiSignal": "Comprueba la intensidad de la señal WiFi en tu teléfono.",
-      "wifiTitle": "Redes WiFi diferentes",
       "windowsFirewall": "Windows: Firewall de Windows Defender → Permitir una aplicación — habilita Orca para redes privadas."
     },
     "troubleshootView": {
       "commonIssues": "Problemas comunes",
-      "runAgain": "Volver a ejecutar",
-      "runDiagnostics": "Ejecutar diagnósticos",
-      "running": "Ejecutando…",
-      "title": "Solución de problemas",
-      "viewNetworkDiagnostics": "Ver diagnósticos de red"
+      "title": "Solución de problemas"
     },
     "useTroubleshootDiagnostics": {
       "connected": "Conectado",
@@ -2030,17 +1987,6 @@
       "toggleFailed": "No se pudo actualizar {{name}}",
       "updateDesktop": "Actualiza Orca en {{desktop}} para usar las automatizaciones."
     },
-    "emptyState": {
-      "connectedDescription": "Tu escritorio aparecerá aquí. Todo está cifrado de extremo a extremo.",
-      "connectedTitle": "Ya tienes conexión",
-      "description": "Empareja tu teléfono con Orca en tu ordenador para supervisar a tus agentes, acceder a cualquier terminal y gestionar el trabajo desde el móvil.",
-      "pairDesktopButton": "Emparejar escritorio",
-      "scanCodeBelowDescription": "Toca Emparejar escritorio abajo y apunta con la cámara al código QR de tu pantalla.",
-      "openDesktopDescription": "Ve a Ajustes → Móvil y genera un código QR de emparejamiento.",
-      "openDesktopTitle": "Abre Orca en el escritorio",
-      "scanCodeTitle": "Escanea el código",
-      "title": "Conecta tu escritorio"
-    },
     "listFooter": {
       "hostPickerTitle": "Abrir tareas en"
     },
@@ -2177,7 +2123,6 @@
       "deleteDestroysEnvironment": "También se destruye el entorno «{{environment}}» que Orca creó para él, con los cambios sin confirmar y los terminales en ejecución que haya en él.",
       "deleteKeepsEnvironment": "El entorno «{{environment}}» que Orca creó para él sigue en ejecución: su receta no tiene un paso de destrucción.",
       "pin": "Fijar",
-      "primaryWorktreeDeleteHint": "El worktree principal no se puede eliminar. Quita el proyecto en su lugar.",
       "removeHost": "Eliminar host",
       "removeHostMessage": "¿Eliminar \"{{name}}\"? Puedes volver a emparejarlo más tarde.",
       "deleteFailed": "No se pudo eliminar \"{{name}}\"",
@@ -2187,8 +2132,7 @@
       "markRead": "Marcar como leído",
       "markUnread": "Marcar como no leído",
       "muteNotifications": "Silenciar notificaciones",
-      "unmuteNotifications": "Reactivar notificaciones",
-      "moveToStatus": "Mover al estado"
+      "unmuteNotifications": "Reactivar notificaciones"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Checks: fallidos",
@@ -2347,16 +2291,11 @@
       "waitingOnYou": "Te está esperando."
     },
     "onboardingPage": {
-      "enableAgentNotifications": "Activar notificaciones de agentes",
       "enableNotifications": "Activar notificaciones",
       "keepTerminal": "Mantener el terminal",
       "notNow": "Ahora no",
-      "notificationsDescription": "Recibe una notificación en este teléfono cuando un agente termine o esté esperando, aunque no estés usando la aplicación.",
-      "notificationsDisclosure": "Se envían a través del servicio de notificaciones push de Orca cuando tu escritorio lleva 3 minutos inactivo. Puedes cambiarlo cuando quieras en Ajustes.",
       "notificationsTitle": "Entérate cuando un agente te necesite",
-      "openInChatUi": "Abrir sesiones en la interfaz de chat",
       "openInTerminal": "Abrir sesiones en el terminal",
-      "sessionViewDescription": "Elige si las sesiones de agentes compatibles se abren en el terminal o en la interfaz de chat de este dispositivo. Mantén pulsada la pestaña de una sesión para cambiar su vista, o cambia la opción predeterminada cuando quieras en Ajustes → Interfaz de chat.",
       "sessionViewTitle": "¿Cómo quieres abrir las sesiones?",
       "skipNotifications": "Omitir las notificaciones por ahora",
       "useChatUi": "Usar interfaz de chat"
@@ -2727,7 +2666,6 @@
       "creatingTab": "Creando…",
       "fileTitle": "Archivo",
       "loadingTerminal": "Cargando terminal",
-      "retryLoadingTerminal": "Reintentar cargar la terminal",
       "terminalTakingLonger": "La terminal está tardando más de lo esperado"
     },
     "agentChildRow": {
@@ -3045,17 +2983,13 @@
       "requestFailed": "La solicitud falló: {{method}}"
     },
     "header": {
-      "workspaceDetailsHint": "Muestra el nombre completo del espacio de trabajo y dónde se encuentra",
       "backToWorktrees": "Volver a los worktrees",
       "moreActions": "Más acciones de la sesión",
-      "openSourceControl": "Abrir control de código fuente",
       "reconnectToDesktop": "Volver a conectar con el escritorio",
       "showSidebar": "Mostrar barra lateral",
       "terminalTitle": "Terminal",
       "terminalLayout": "Diseño del terminal",
-      "fileExplorer": "Explorador de archivos",
       "sourceControl": "Control de código fuente",
-      "newTab": "Nueva pestaña",
       "quickCommands": "Comandos rápidos",
       "items": "Elementos",
       "textSize": "Tamaño del texto"
@@ -3063,16 +2997,11 @@
     "headerMoreActionsSheet": {
       "agentHistory": "Historial de agentes",
       "agentHistoryHint": "Explora y reanuda sesiones de agentes",
-      "checks": "Checks",
-      "checksHint": "Abrir los checks de la pull request"
+      "checks": "Checks"
     },
     "markdownReader": {
       "changedOnDesktop": "Modificado en el escritorio",
       "copyLoaded": "Copiar lo cargado",
-      "copyLoadedSource": "Copiar el código fuente Markdown cargado",
-      "copyPath": "Copiar ruta",
-      "copyPathLabel": "Copiar la ruta del archivo Markdown",
-      "copySource": "Copiar el código fuente Markdown",
       "discard": "Descartar",
       "previewTruncated": "Vista previa truncada.",
       "readOnly": "Solo lectura",
@@ -3226,16 +3155,12 @@
     "sheets": {
       "browser": "Navegador",
       "chat": "Chat",
-      "copyAllAndLeave": "Copiar todo y salir",
-      "copyDraftsFailed": "No se pudieron copiar los borradores",
       "copyNotes": "Copiar notas",
       "copyNotesFailed": "No se pudieron copiar las notas",
       "copyPath": "Copiar ruta",
       "discard": "Descartar",
-      "discardAndLeave": "Descartar y salir",
       "discardChanges": "Descartar cambios",
       "discardMessage": "¿Reemplazar el borrador del teléfono por la última versión del archivo del escritorio?",
-      "draftsHint": "Copia o descarta los borradores del teléfono antes de salir.",
       "file": "Archivo",
       "markdown": "Markdown",
       "markdownNote": "Nota en Markdown",
@@ -3253,7 +3178,6 @@
       "shellGitBash": "Git Bash",
       "shellWsl": "WSL",
       "terminalName": "Nombre de la terminal",
-      "unsavedMarkdown": "Cambios en Markdown sin guardar",
       "allowAutoClose": "Permitir cierre automático",
       "agents": "Agentes",
       "renameTerminalFailed": "No se pudo cambiar el nombre del terminal. {{reason}}",
@@ -3276,7 +3200,6 @@
     },
     "tabStrip": {
       "checkingCapabilities": "Comprobando las funciones del escritorio. Inténtalo de nuevo en un momento.",
-      "newTab": "Nueva pestaña",
       "quickCommandsUpdateRequired": "Actualiza el escritorio para usar los comandos rápidos."
     },
     "terminalActionSheetActions": {
@@ -3532,14 +3455,9 @@
     "terminalLayoutSheet": {
       "title": "Diseño del terminal",
       "oneTerminal": "Un terminal",
-      "selected": "Seleccionado",
       "auto": "Automático",
-      "autoHint": "Dividir según el espacio disponible",
       "sideBySide": "En paralelo",
-      "sideBySideHint": "Dos columnas, incluso con la barra lateral abierta",
-      "stacked": "Apilados",
-      "stackedHint": "Dos filas en cualquier orientación",
-      "selectedHint": "Seleccionado · {{hint}}"
+      "stacked": "Apilados"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "No se pudo guardar el diseño",
@@ -3560,8 +3478,7 @@
     "terminalPaneView": {
       "focusedPane": "{{title}}, enfocado",
       "terminal": "Terminal",
-      "tapToFocusPane": "{{title}}, toca para enfocar",
-      "inputPane": "{{title}} · Entrada"
+      "tapToFocusPane": "{{title}}, toca para enfocar"
     },
     "structuredOpen": {
       "worktreeDeleted": "El worktree se eliminó.",
@@ -3606,8 +3523,6 @@
       "oneTab": "1 pestaña",
       "tabCount": "Pestañas: {{count}}",
       "actionsHint": "Muestra las acciones de esta pestaña",
-      "next": "Pestaña siguiente",
-      "previous": "Pestaña anterior",
       "hint": "Muestra todas las pestañas"
     },
     "contentState": {
@@ -3682,7 +3597,6 @@
       "checkUpdates": "Buscar actualizaciones",
       "checkUpdatesStatus": "Buscar actualizaciones, {{status}}",
       "checking": "Comprobando…",
-      "installedVersion": "Versión {{version}}",
       "lastCheckedDays_many": "Última comprobación: hace {{count}} d",
       "lastCheckedDays_one": "Última comprobación: hace {{count}} d",
       "lastCheckedDays_other": "Última comprobación: hace {{count}} d",
@@ -3695,13 +3609,12 @@
       "lastCheckedMinutes_other": "Última comprobación: hace {{count}} min",
       "neverChecked": "Nunca",
       "upToDate": "Actualizado",
-      "update": "Actualizar",
       "updateToVersion": "Actualizar a Orca {{version}}"
     },
     "appearance": {
       "language": {
         "description": "La opción Sistema usa el idioma de este dispositivo. Las solicitudes de permiso siempre usan el idioma del dispositivo.",
-        "heading": "IDIOMA",
+        "heading": "Idioma",
         "systemWithCurrent": "Sistema ({{language}})"
       },
       "usage": {
@@ -3713,7 +3626,7 @@
       "theme": {
         "dark": "Oscuro",
         "description": "La opción Sistema usa el modo claro u oscuro de este dispositivo.",
-        "heading": "TEMA",
+        "heading": "Tema",
         "light": "Claro",
         "system": "Sistema"
       },
@@ -3725,7 +3638,7 @@
       "desktopBrowser": "Navegador de Orca en el escritorio",
       "desktopBrowserDescription": "Abrir en el navegador de tu escritorio emparejado y verlo en el teléfono.",
       "terminalAndChatLinksDescription": "Elige dónde se abren los enlaces web que tocas en la salida de la terminal y en el chat.",
-      "linksHeading": "ENLACES",
+      "linksHeading": "Enlaces",
       "loadFailed": "No se pudieron cargar las preferencias del navegador. Vuelve a intentarlo.",
       "openLinks": "Abrir enlaces",
       "phoneBrowser": "Navegador del teléfono",
@@ -3737,7 +3650,6 @@
       "about": "Acerca de",
       "appearance": "Apariencia",
       "browser": "Navegador",
-      "chatUi": "Interfaz de chat",
       "notifications": "Notificaciones",
       "terminal": "Terminal",
       "troubleshooting": "Solución de problemas",
@@ -3749,11 +3661,10 @@
     },
     "nativeChatSettingsScreen": {
       "defaultViewDescription": "Elige cómo se abren en este dispositivo las sesiones de agentes compatibles (Claude, Codex y otros agentes con funciones de chat). La terminal muestra la CLI tal cual; la interfaz de chat ofrece una vista como la de la app de escritorio. También puedes cambiar la vista de cada sesión desde el menú que aparece al mantenerla pulsada.",
-      "defaultViewHeading": "VISTA PREDETERMINADA",
+      "defaultViewHeading": "Vista predeterminada",
       "off": "Desactivado",
       "on": "Activado",
-      "openInChatUi": "Abrir sesiones en la interfaz de chat",
-      "title": "Interfaz de chat"
+      "openInChatUi": "Abrir sesiones en la interfaz de chat"
     },
     "nativeChatText": {
       "heading": "TEXTO",
@@ -3834,7 +3745,7 @@
       "connectDesktop": "Conéctate a un escritorio para gestionar los ajustes de voz.",
       "deleteFailed": "Error al eliminar",
       "dictationDescription": "Dicta texto en cualquier panel que tenga el foco en tu escritorio.",
-      "dictationHeading": "DICTADO",
+      "dictationHeading": "Dictado",
       "dictationMode": "Modo de dictado",
       "dictationModeDescription": "Alternar: pulsa una vez para iniciar y otra para detener. Mantener pulsado: dicta sin soltar.",
       "dictationModeWithAutoDescription": "Automático: toca para iniciar y detener; en tu ordenador, mantener el atajo graba hasta que lo sueltes. Mantener pulsado: dicta sin soltar. Alternar: pulsa una vez para iniciar y otra para detener.",
@@ -3848,7 +3759,7 @@
       "selectModelFailed": "No se pudo seleccionar el modelo",
       "speechModel": "Modelo de voz",
       "loading": "Cargando ajustes de voz…",
-      "speechModelHeading": "MODELO DE VOZ",
+      "speechModelHeading": "Modelo de voz",
       "title": "Voz",
       "toggleMode": "Alternar",
       "updateFailed": "No se pudo actualizar"
@@ -3857,7 +3768,7 @@
       "permissionOwnAll": "Configuración propia de los agentes"
     },
     "voiceTranscribeOn": {
-      "heading": "TRANSCRIBIR EN",
+      "heading": "Transcribir en",
       "description": "Lo que escucha este teléfono se queda en él. Automático usa tu ordenador cuando este teléfono no puede transcribir.",
       "automatic": "Automático",
       "phone": "Este teléfono",
@@ -4453,33 +4364,18 @@
     },
     "pagination": {
       "pageUnreachable": "La página {{page}} está fuera del alcance de la búsqueda de GitHub.",
-      "loadPageFailed": "No se pudo cargar la página {{page}} desde GitHub.",
-      "noMoreResults": "No hay más resultados en la página {{page}}."
+      "loadPageFailed": "No se pudo cargar la página {{page}} desde GitHub."
     },
     "filterSheet": {
-      "sortBy": "Ordenar por",
       "issueSource": "Fuente de issues",
-      "issueSourceRow": "Upstream u origin",
       "view": "Vista",
-      "projectView": "Vista del proyecto",
-      "projectItems_many": "{{count}} elementos",
-      "projectItems_one": "{{count}} elemento",
-      "projectItems_other": "{{count}} elementos",
-      "chooseView": "Elegir",
       "showOnRows": "Mostrar en las filas",
-      "projectFields": "Campos del proyecto",
       "workspace": "Espacio de trabajo",
-      "linearWorkspace": "Espacio de trabajo de Linear",
       "layout": "Diseño",
       "groupBy": "Agrupar por",
       "orderBy": "Ordenar por",
-      "displayProperties": "Propiedades de visualización",
       "title": "Filtrar y mostrar",
-      "done": "Listo",
-      "jqlReplacesPreset": "Tu búsqueda JQL reemplaza el filtro predefinido. Borra la búsqueda para volver a elegir uno."
-    },
-    "jiraViewControls": {
-      "jqlSearch": "Búsqueda JQL"
+      "done": "Listo"
     },
     "itemComments": {
       "noComments": "Aún no hay comentarios",
@@ -4517,24 +4413,11 @@
     "filterPickers": {
       "allTeams": "Todos los equipos",
       "changeStatus": "Cambiar estado",
-      "fieldHidden": "Oculto en las tarjetas",
-      "fieldShown": "Visible en las tarjetas",
-      "fieldsSubtitle": "Elige qué campos del proyecto aparecen en las tarjetas de los elementos.",
-      "fieldsTitle": "Campos del proyecto",
-      "gitlabFilter": "Filtro de GitLab",
-      "gitlabView": "Vista de GitLab",
-      "jiraFilter": "Filtro de Jira",
-      "jiraSite": "Sitio de Jira",
       "statesFailed": "No se pudieron cargar los estados. Vuelve a abrir para intentarlo de nuevo.",
-      "linearFilter": "Filtro de Linear",
       "linearIssue": "Issue de Linear",
-      "linearWorkspace": "Espacio de trabajo de Linear",
       "loadingStates": "Cargando estados…",
-      "noFields": "Esta vista no tiene campos adicionales que mostrar.",
       "noStates": "No hay estados disponibles",
       "switchWorkspaceFailed": "No se pudo cambiar de espacio de trabajo",
-      "teamsSubtitle": "Elige qué equipos aparecen en Tareas.",
-      "teamsTitle": "Equipos de Linear",
       "teams_many": "{{count}} equipos",
       "teams_one": "{{count}} equipo",
       "teams_other": "{{count}} equipos"
@@ -4588,41 +4471,19 @@
       "copyLink": "Copiar enlace",
       "startWorkspace": "Iniciar espacio de trabajo",
       "moreActions": "Más acciones",
-      "copyGitHubLink": "Copiar enlace de GitHub",
-      "copyLinearLink": "Copiar enlace de Linear",
-      "creating": "Creando…",
       "mergeConflicts": "GitHub informa de conflictos de merge.",
       "mergeMergeRequest": "Hacer merge de la merge request",
       "mergePullRequest": "Hacer merge del pull request"
     },
     "itemDetailContent": {
-      "addSubIssue": "Añadir sub-issue",
       "checks": "Checks",
       "description": "Descripción",
       "discussion": "Discusión",
-      "noChecks": "No se encontraron checks.",
-      "noComments": "No hay comentarios.",
-      "details": "Detalles",
-      "type": "Tipo",
-      "status": "Estado",
-      "assignee": "Asignado",
       "project": "Proyecto",
       "priority": "Prioridad",
       "assignees": "Asignados",
       "loading": "Cargando detalles…",
-      "noPipelineRuns": "No hay ejecuciones de pipeline para este MR.",
-      "noSubIssues": "No hay sub-issues.",
-      "none": "Ninguno",
-      "pipeline": "Pipeline",
-      "pipelineJobs_many": "{{count}} trabajos",
-      "pipelineJobs_one": "{{count}} trabajo",
-      "pipelineJobs_other": "{{count}} trabajos",
-      "rerunAll": "Reejecutar todos",
-      "subIssueTitle": "Título del sub-issue",
       "subIssues": "Sub-issues"
-    },
-    "itemDetailDrawer": {
-      "refreshDetails": "Actualizar detalles"
     },
     "itemFieldEditors": {
       "addLabels": "Añade etiquetas, separadas por comas",
@@ -4675,9 +4536,6 @@
     },
     "linearList": {
       "changeStatusFrom": "Cambiar el estado actual: {{status}}"
-    },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "Propiedades visibles"
     },
     "listSurface": {
       "connectLinearButton": "Conectar Linear",
@@ -4732,7 +4590,6 @@
       "projectMergeRequests": "MRs del proyecto",
       "projectMergeRequestsDescription": "Solicitudes de fusión e issues por repositorio",
       "projects": "Proyectos",
-      "pullRequests": "PRs",
       "repository": "Repositorio",
       "repositorySortDescription": "Agrupar por repositorio y luego por actividad más reciente",
       "reviewRequestsDescription": "Solicitudes de revisión asignadas a ti",
@@ -4854,42 +4711,8 @@
       "reviewers": "Revisores",
       "viewFile": "Ver"
     },
-    "providerControls": {
-      "myTodos": "Mis tareas pendientes",
-      "reposLabel": "Repositorios: {{repos}}",
-      "filterCount": "Filtrar · {{count}}",
-      "filter": "Filtrar",
-      "filterLabel": "Filtrar y mostrar",
-      "projectMergeRequests": "MR del proyecto"
-    },
-    "providerItemList": {
-      "intoBranch": "en {{base}}",
-      "kindAndStatus": "{{kind}}, {{status}}",
-      "nextPage": "Página siguiente",
-      "page": "Página {{page}}",
-      "pageOfTotal": "Página {{page}} de {{total}}",
-      "previousPage": "Página anterior",
-      "selectPage": "Seleccionar página, página {{page}}",
-      "selectPageOfTotal": "Seleccionar página, página {{page}} de {{total}}"
-    },
     "providerPickers": {
-      "allRepositories": "Todos los repositorios",
-      "githubView": "Vista de GitHub",
-      "issueSources": "Fuentes de issues de GitHub",
-      "issueSourcesDescription": "Elige si usar upstream u origin para consultar y crear issues en cada repositorio.",
-      "issues": "Issues",
-      "noIssueSources": "No hay fuentes alternativas de issues disponibles.",
-      "origin": "Origen",
-      "pageHint": "Ve a una página de resultados cargada o disponible.",
-      "pageLoaded": "Cargada",
-      "pageNotLoaded": "Carga resultados anteriores",
-      "pageNumber": "Página {{page}}",
-      "pages": "Páginas de GitHub",
-      "pullRequests": "Pull requests",
-      "queryingSource": "Consultando {{source}}",
-      "repoDescription": "Elige qué repositorios consultar.",
-      "repos": "Repositorios",
-      "upstream": "Upstream"
+      "allRepositories": "Todos los repositorios"
     },
     "providerViewProjection": {
       "all": "Todo",
@@ -4898,7 +4721,6 @@
       "allWorkspaces": "Todos los espacios de trabajo",
       "chooseProject": "Elige proyecto",
       "default": "Predeterminado",
-      "defaultSubtitle": "{{subtitle}} · Predeterminado",
       "issues": "Issues",
       "openState": "Abierto",
       "projects": "Proyectos",
@@ -4915,15 +4737,7 @@
     "screenChrome": {
       "newGitHubIssue": "Nuevo issue de GitHub",
       "newLinearIssue": "Nuevo issue de Linear",
-      "refreshGitHub": "Actualizar trabajo de GitHub",
-      "refreshGitLab": "Actualizar elementos de trabajo de GitLab",
-      "refreshJira": "Actualizar issues de Jira",
-      "refreshLinear": "Actualizar Linear",
       "title": "Tareas"
-    },
-    "searchControl": {
-      "projectPlaceholder": "Buscar en la vista del proyecto…",
-      "providerPlaceholder": "Buscar tareas de {{provider}}…"
     },
     "smartSourceModes": {
       "allStates": "Todo",
@@ -4980,8 +4794,6 @@
       "advanced": "Avanzado",
       "agent": "Agente",
       "connectFirst": "Conecta primero el repositorio",
-      "connectRepository": "Conectar repositorio",
-      "optionalLabel": "Opcional",
       "defaultBranch": "Rama predeterminada",
       "detectingAgents": "Detectando agentes…",
       "remoteRepository": "Repositorio remoto",
@@ -4989,8 +4801,9 @@
       "repositoryNotFound": "No se encontró el repositorio.",
       "selectRepository": "Selecciona un repositorio",
       "startFrom": "Iniciar desde",
-      "title": "Crear espacio de trabajo",
-      "workspaceName": "Nombre del espacio de trabajo"
+      "createWorkspace": "Crear espacio de trabajo",
+      "nameSection": "Nombre del espacio de trabajo",
+      "connectRepositoryAction": "Conectar repositorio"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "\"{{name}}\" ya existe.",
@@ -5071,7 +4884,6 @@
     },
     "webviewEngineErrorState": {
       "code": "código {{code}}",
-      "reload": "Recargar",
       "rendererCrashed": "el proceso de renderizado se cerró inesperadamente",
       "status": "estado {{statusCode}}",
       "title": "No se pudo cargar la terminal"
@@ -5183,7 +4995,6 @@
   },
   "automations": {
     "mobile": {
-      "extraAgentArguments": "Argumentos adicionales del agente",
       "allAutomations": "Todas las automatizaciones",
       "schedule": "Cronograma",
       "agent": "Agente",
@@ -5196,8 +5007,6 @@
       "cancel": "Cancelar",
       "name": "Nombre",
       "back": "Atrás",
-      "continue": "Continuar",
-      "createAutomation": "Crear automatización",
       "automations": "Automatizaciones",
       "runs": "Ejecuciones",
       "refresh": "Actualizar",
@@ -5221,40 +5030,17 @@
       "host": "Anfitrión",
       "pending": "Pendientes",
       "starting": "Iniciando",
-      "baseBranchOptional": "Rama base (opcional)",
-      "workspaceSetupScript": "Script de configuración del espacio de trabajo",
-      "useProjectSettings": "Usar configuración del proyecto",
-      "runSetupScript": "Ejecutar script de configuración",
-      "skipSetupScript": "Omitir script de configuración",
       "reuseAgentSession": "Reutilizar sesión del agente",
-      "precheckCommandOptional": "Comando de comprobación previa (opcional)",
-      "precheckTimeoutSeconds": "Tiempo de espera de la comprobación previa (segundos)",
-      "missedRunGraceMinutes": "Margen para ejecuciones omitidas (minutos)",
-      "choose": "Elegir…",
       "runOnSchedule": "Ejecutar {{name}} según la programación",
       "noNextScheduledRun": "No hay próxima ejecución programada",
-      "newWorkspacePerRun": "Nuevo espacio de trabajo por ejecución",
       "instructions": "Instrucciones",
       "runNow": "Ejecutar ahora",
-      "savedAgent": "{{agent}} (guardado)",
       "chooseAProjectSetUpOnThisHost": "Elige un proyecto configurado en este host.",
       "newAutomation": "Nueva automatización",
-      "editorStep": "{{step}} de 3 · {{section}}",
-      "retryProjectLoading": "Reintentar carga de proyectos",
-      "loadingProjects": "Cargando proyectos…",
-      "projectAndHostSetup": "Configuración de proyecto y host",
       "savedTarget": "Destino guardado",
-      "useAnExistingWorkspace": "Usar un espacio de trabajo existente",
-      "existingWorkspace": "Espacio de trabajo existente",
       "savedWorkspace": "Espacio de trabajo guardado",
       "loadMoreWorkspaces": "Cargar más espacios de trabajo",
-      "thisHostSWorkspaceInventoryIsIncompleteRefreshOrLoadMoreWorkspaces": "El inventario de espacios de trabajo de este host está incompleto. Actualiza o carga más espacios de trabajo.",
-      "agentDetecting": "Agente · detectando…",
       "installAndEnableAnAgentOnThisHostThenRetry": "Instala y habilita un agente en este host y vuelve a intentarlo.",
-      "hideAdvancedOptions": "Ocultar opciones avanzadas",
-      "advancedOptions": "Opciones avanzadas",
-      "chooseAnAgent": "Elige un agente",
-      "saveChanges": "Guardar cambios",
       "loadingAutomations": "Cargando automatizaciones…",
       "letYourAgentsWorkOnASchedule": "Deja que tus agentes trabajen según una programación",
       "createAnAutomationToRunATaskOnThisHost": "Crea una automatización para ejecutar una tarea en este host.",
@@ -5285,12 +5071,7 @@
       "scheduled": "Programada",
       "loadMoreRuns": "Cargar más ejecuciones",
       "customCronOrRRULE": "Cron o RRULE personalizado",
-      "cronOrRRULE": "Cron o RRULE",
-      "minuteFromHHMM": "Minuto (de HH:MM)",
-      "timeHHMM24Hour": "Hora (HH:MM, 24 horas)",
-      "useATimeSuchAs0900": "Usa una hora como 09:00.",
       "timeZone": "Zona horaria",
-      "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "Se ejecuta en el host seleccionado. Mantén ese host disponible a la hora programada.",
       "pairedHost": "Host vinculado",
       "chooseHost": "Automatizaciones en {{host}}, elegir otro host",
       "selectedServerUnavailable": "Servidor seleccionado (no disponible)",
@@ -5319,15 +5100,12 @@
       "unknownResult": "Resultado desconocido",
       "notReported": "No informado",
       "searchOptions": "Buscar opciones",
-      "task": "Tarea",
-      "review": "Revisar",
       "discardChangesTitle": "¿Descartar cambios?",
       "discardChangesMessage": "Se perderán los cambios no guardados de esta automatización.",
       "discard": "Descartar",
       "keepEditing": "Seguir editando",
       "on": "Activada",
       "repeats": "Se repite",
-      "newOnePerRun": "Uno nuevo por ejecución",
       "moreActions": "Más acciones",
       "noRunsYet": "Aún no hay ejecuciones",
       "nextRunToday": "Próxima ejecución hoy a las {{time}}",
@@ -5403,7 +5181,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Busca issues o escribe JQL, p. ej. project = ABC",
         "jiraTextMatchesNotice": "Mostrando coincidencias de texto. Jira no pudo ejecutar esta búsqueda como JQL."
       },
       "editor": {
@@ -5618,11 +5395,8 @@
       "workers_other": "{{count}} workers",
       "noMatches": "Ningún agente coincide con «{{query}}»",
       "emptyTitle": "No hay agentes en ejecución",
-      "pairDesktop": "Empareja un escritorio para ver aquí sus agentes.",
       "emptyBody": "Inicia un agente en cualquier espacio de trabajo y aparecerá aquí.",
       "unread": "Sin leer",
-      "noDesktopTitle": "No hay ningún escritorio conectado",
-      "noDesktopBody": "Los agentes aparecen aquí cuando se conecta un escritorio.",
       "hideWorkers": "Ocultar {{workers}}",
       "showWorkers": "Mostrar {{workers}}"
     },
@@ -5641,31 +5415,17 @@
       "status": "Estado",
       "workspace": "Espacio de trabajo",
       "project": "Proyecto",
-      "agent": "Agente",
-      "desktop": "Escritorio"
+      "agent": "Agente"
     },
     "options": {
       "groupBy": "Agrupar por",
       "showWorkers": "Mostrar agentes worker",
-      "open": "Opciones de la lista de agentes",
       "unreadOnly": "Solo sin leer",
       "markAllRead": "Marcar todo como leído",
       "clearFinished": "Quitar agentes terminados"
     },
     "search": {
-      "toggle": "Buscar agentes",
       "placeholder": "Buscar agentes"
-    },
-    "desktops": {
-      "pickerTitle": "Mostrar agentes de",
-      "agents_many": "{{count}} agentes",
-      "agents_one": "{{count}} agente",
-      "agents_other": "{{count}} agentes",
-      "all": "Todos los escritorios",
-      "offline": "Sin conexión",
-      "needsYou_many": "{{count}} te necesitan",
-      "needsYou_one": "{{count}} te necesita",
-      "needsYou_other": "{{count}} te necesitan"
     },
     "sections": {
       "needsYou": "Requieren tu atención",
@@ -6177,7 +5937,6 @@
       "valueSaved": "Guardado"
     },
     "handToBot": {
-      "menu": "Traspasar a un bot…",
       "title": "Traspasar {{name}} a un bot",
       "noAgents": "No tiene agentes en ejecución.",
       "oneAgent": "Su agente sigue ejecutándose y trabaja para el bot.",

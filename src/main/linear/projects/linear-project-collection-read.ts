@@ -27,14 +27,18 @@ export async function readCollection<T>(
   force = false,
   signal?: AbortSignal
 ): Promise<LinearCollectionResult<T>> {
-  return coalesce(
+  const entries = await getClients(workspaceId, signal)
+  if (entries.length === 0) {
+    return { items: [] }
+  }
+  // Resolve mutable default/all selections before sharing an in-flight request.
+  const scopedKey = JSON.stringify([
     key,
+    entries.map(({ workspace }) => [workspace.id, workspace.credentialRevision ?? 0])
+  ])
+  return coalesce(
+    scopedKey,
     async () => {
-      const entries = await getClients(workspaceId, signal)
-      if (entries.length === 0) {
-        return { items: [] }
-      }
-
       const results = await Promise.all(
         entries.map(async (entry) => {
           await acquire(signal)

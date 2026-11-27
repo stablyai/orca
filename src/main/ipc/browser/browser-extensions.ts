@@ -20,7 +20,7 @@ import { registerBrowserExtensionToolbarHandlers } from './browser-extension-too
 import { registerBrowserExtensionSidePanelHandlers } from './browser-extension-side-panels'
 import { registerBrowserExtensionWebStoreHandlers } from './browser-extension-webstore'
 
-const profileArgs = z.object({ profileId: z.string().min(1) })
+const profileArgs = lazyZodSchema(() => z.object({ profileId: z.string().min(1) }))
 const extensionArgs = lazyZodSchema(() =>
   profileArgs.extend({ extensionId: z.string().refine(isChromeExtensionId) })
 )

@@ -10,6 +10,7 @@ import type {
   ProviderTimelineTextItem
 } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { AGENT_CHILD_WORK_LAST_MESSAGE_MAX_LENGTH } from '../../../shared/agent-status/child-work/agent-status-child-work'
 import type {
   AcpChildSessionReport,
@@ -24,7 +25,7 @@ import { acpNamedTextKey } from './acp-turn-messages'
 
 const textKey = (item: ProviderTimelineTextItem): string => ('id' in item ? item.id : item.stream)
 
-const sessionSchema = z.object({ sessionId: z.string() })
+const sessionSchema = lazyZodSchema(() => z.object({ sessionId: z.string() }))
 
 export class AcpChildSessions {
   /** ACP has no message end; a child's text closes at the next message on its channel, or when it ends. */

@@ -14,9 +14,39 @@ import {
 import { PickerModal } from '../../components/sheets/PickerModal'
 import { ListGroup, SectionHeader, ListRow } from '../../components/list/ListGroup'
 import { styles } from '../mobile-tasks-legacy-styles'
-import { PROJECT_VIEW_DEFAULT_SORT } from '../task-list/mobile-tasks-options'
+import {
+  PROJECT_VIEW_DEFAULT_SORT,
+  TASK_SECONDARY_DRAWER_Z_INDEX
+} from '../task-list/mobile-tasks-options'
 
 export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentationModel) {
+  const { setShowGitHubProjectPicker, showGitHubProjectPicker, taskUiReady } = model
+  return (
+    <BottomDrawer
+      visible={taskUiReady && showGitHubProjectPicker}
+      onClose={() => setShowGitHubProjectPicker(false)}
+    >
+      <View style={styles.sheetHeader}>
+        <Text style={styles.sheetTitle}>
+          {translate('tasks.githubProjectPickers.title', 'GitHub Projects')}
+        </Text>
+        <Text style={styles.sheetSubtitle}>
+          {translate(
+            'tasks.githubProjectPickers.subtitle',
+            'Choose a project view for the Tasks page.'
+          )}
+        </Text>
+      </View>
+      {renderMobileTasksGitHubProjectPickerBody(model, () => setShowGitHubProjectPicker(false))}
+    </BottomDrawer>
+  )
+}
+
+/** Search, add by URL, and the pinned, recent and browsable projects; `onPicked` leaves the picker. */
+export function renderMobileTasksGitHubProjectPickerBody(
+  model: ConnectionPresentationModel,
+  onPicked: () => void
+) {
   const {
     activeGitHubProject,
     browseGitHubProjects,
@@ -38,10 +68,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
     setGithubProjectError,
     setGithubProjectPasteError,
     setGithubProjectPasteInput,
-    setGithubProjectPickerSearch,
-    setShowGitHubProjectPicker,
-    showGitHubProjectPicker,
-    taskUiReady
+    setGithubProjectPickerSearch
   } = model
   const count = githubProjectPartialFailures.length
   const isActiveProject = (project: GitHubProjectRef) =>
@@ -66,28 +93,13 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
       accessory={action}
       selected={isActiveProject(project)}
       onPress={() => {
-        setShowGitHubProjectPicker(false)
+        onPicked()
         void selectGitHubProject(project)
       }}
     />
   )
   return (
-    <BottomDrawer
-      visible={taskUiReady && showGitHubProjectPicker}
-      onClose={() => setShowGitHubProjectPicker(false)}
-    >
-      <View style={styles.sheetHeader}>
-        <Text style={styles.sheetTitle}>
-          {translate('tasks.githubProjectPickers.title', 'GitHub Projects')}
-        </Text>
-        <Text style={styles.sheetSubtitle}>
-          {translate(
-            'tasks.githubProjectPickers.subtitle',
-            'Choose a project view for the Tasks page.'
-          )}
-        </Text>
-      </View>
-
+    <>
       <View style={styles.projectPickerControls}>
         <TextField
           value={githubProjectPickerSearch}
@@ -282,7 +294,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
           )}
         </>
       )}
-    </BottomDrawer>
+    </>
   )
 }
 
@@ -298,29 +310,9 @@ export function renderMobileTasksGitHubProjectViewPicker(model: ConnectionPresen
       }
       options={model.githubProjectViewOptions}
       selected={pending ? '' : (model.activeGitHubProjectViewId ?? '')}
-      onSelect={(viewId) => {
-        const view = (pending?.views ?? model.githubProjectViews).find(
-          (candidate) => candidate.id === viewId
-        )
-        if (view && view.layout !== 'TABLE_LAYOUT') {
-          model.setGithubProjectError(
-            translate(
-              'tasks.githubProjectPickers.unsupportedLayout',
-              "Orca doesn't support this GitHub Project layout yet."
-            )
-          )
-          return
-        }
-        if (pending) {
-          model.commitGitHubProjectView(pending.project, viewId, pending.views)
-          model.setPendingGitHubProjectViewSelection(null)
-          return
-        }
-        if (!model.activeGitHubProject || !model.activeGitHubProjectKey) {
-          return
-        }
-        model.commitGitHubProjectView(model.activeGitHubProject, viewId)
-      }}
+      onSelect={(viewId) => selectMobileTasksGitHubProjectView(model, viewId)}
+      // Asked for from the Filter sheet's project page too, so it layers over that sheet.
+      zIndex={TASK_SECONDARY_DRAWER_Z_INDEX}
       onClose={() => {
         model.setShowGitHubProjectViewPicker(false)
         if (pending) {
@@ -329,6 +321,34 @@ export function renderMobileTasksGitHubProjectViewPicker(model: ConnectionPresen
       }}
     />
   )
+}
+
+export function selectMobileTasksGitHubProjectView(
+  model: ConnectionPresentationModel,
+  viewId: string
+) {
+  const pending = model.pendingGitHubProjectViewSelection
+  const view = (pending?.views ?? model.githubProjectViews).find(
+    (candidate) => candidate.id === viewId
+  )
+  if (view && view.layout !== 'TABLE_LAYOUT') {
+    model.setGithubProjectError(
+      translate(
+        'tasks.githubProjectPickers.unsupportedLayout',
+        "Orca doesn't support this GitHub Project layout yet."
+      )
+    )
+    return
+  }
+  if (pending) {
+    model.commitGitHubProjectView(pending.project, viewId, pending.views)
+    model.setPendingGitHubProjectViewSelection(null)
+    return
+  }
+  if (!model.activeGitHubProject || !model.activeGitHubProjectKey) {
+    return
+  }
+  model.commitGitHubProjectView(model.activeGitHubProject, viewId)
 }
 
 // Picking the active field again flips it to descending, then back to the view's own order.

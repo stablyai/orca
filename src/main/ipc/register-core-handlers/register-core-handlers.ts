@@ -21,7 +21,7 @@ import { registerStatsHandlers } from '../stats'
 import { registerRateLimitHandlers } from '../rate-limits'
 import { registerRuntimeHandlers } from '../runtime'
 import { registerRuntimeHostHandlers } from './runtime-host-handler-registration'
-import { registerEphemeralVmHandlers } from '../ephemeral-vm/ephemeral-vm'
+import { registerLazyEphemeralVmHandlers } from '../ephemeral-vm/lazy-ephemeral-vm-handlers'
 import { registerAiVaultHandlers } from '../ai-vault/ai-vault'
 import { registerAiVaultSearchHandlers } from '../ai-vault/ai-vault-search'
 import { registerNativeChatHandlers } from '../native-chat'
@@ -190,7 +190,7 @@ export async function registerCoreHandlers(
       registerNonWindowsWslIpcStubs()
     }
     installProjectRuntimeGitRouter(store)
-    registerEphemeralVmHandlers(store, pluginService)
+    registerLazyEphemeralVmHandlers(store, pluginService)
     // Session history and terminal resume are not chats; skip booting an empty chat journal host.
     const ensureStructuredSessionOwnership = () =>
       ensurePersistedStructuredAgentSessionHostUnlessRefused(() =>
