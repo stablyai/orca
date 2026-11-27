@@ -97,6 +97,11 @@ export function useBotItems(bot: Bot | null): {
   return { read, ...useBotHostReadState(itemsRead, bot) }
 }
 
+/** The bot's items as an Items tab (or Activity) last read them, without subscribing; null until one has. */
+export function botItemsLastRead(bot: BotRef): readonly BotItem[] | null {
+  return itemsRead.snapshot(botRefKey(bot))?.items ?? null
+}
+
 /** The item as an Items tab last read it, without subscribing; null until one has. */
 export function botItemLastRead(bot: BotRef, uid: string): BotItem | null {
   return itemsRead.snapshot(botRefKey(bot))?.items.find((item) => item.uid === uid) ?? null

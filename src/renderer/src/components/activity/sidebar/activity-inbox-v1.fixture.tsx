@@ -102,7 +102,14 @@ function InboxPreview() {
   return (
     <ul className="px-1.5 pb-2">
       {INBOX_ENTRIES.map((entry) => (
-        <ActivityInboxEntryRow key={entry.key} entry={entry} onOpenThread={noop} />
+        <ActivityInboxEntryRow
+          key={entry.key}
+          entry={entry}
+          // The bot item you opened last, drawn as the selected row.
+          selected={entry.key === 'item-1'}
+          onOpened={noop}
+          onOpenThread={noop}
+        />
       ))}
     </ul>
   )

@@ -17,6 +17,7 @@ export function ActivityInboxRow({
   ask,
   contextIcon,
   context,
+  selected,
   onOpen
 }: {
   avatar: React.ReactNode
@@ -27,6 +28,8 @@ export function ActivityInboxRow({
   ask: boolean
   contextIcon: React.ReactNode
   context: string
+  /** The row you have open: drawn like the selected workspace card. */
+  selected: boolean
   onOpen: () => void
 }): React.JSX.Element {
   return (
@@ -34,6 +37,9 @@ export function ActivityInboxRow({
       <button
         type="button"
         onClick={onOpen}
+        aria-current={selected ? 'true' : undefined}
+        data-worktree-card-surface="true"
+        data-worktree-card-active={selected ? 'primary' : undefined}
         className="group relative flex w-full flex-col gap-1 rounded-lg border border-transparent px-1.5 py-1.5 text-left outline-none worktree-sidebar-card-hover focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         <span className="flex min-w-0 items-start gap-1.5">

@@ -9,11 +9,13 @@ import { botRefKey } from '@/lib/bot-hosts'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { findBotByWorkspace } from '@/components/bots/bot-workspace'
 import { botOfFolders, selectFolderAncestors } from '@/components/bots/use-worktree-bot'
+import { getFocusedAgentPaneKeyForWorktree } from '@/components/sidebar/workspace-card/activity/focused-agent-row-highlight'
 import { useAllAgentPaneThreads } from '../threads/use-agent-pane-threads'
 import { useActivityThreadActionBindings } from '../thread-list/use-activity-thread-action-bindings'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
 import type { Bot } from '../../../../../shared/bot-types'
 import { activityInboxKind } from './activity-inbox'
+import { withOpenedEntry } from './activity-inbox-opened'
 import {
   ActivityInboxBotItemsReader,
   useActivityInboxBotSources,
@@ -37,18 +39,12 @@ function createBotOfThread(bots: readonly Bot[]): (thread: AgentPaneThread) => B
     botOfFolders(selectFolderAncestors(state, statuses, thread.worktree), bots)
 }
 
-function agentEntriesOf(
-  threads: readonly AgentPaneThread[],
-  bots: readonly Bot[],
-  openedPaneKey: string | null
-): AgentEntry[] {
+function agentEntriesOf(threads: readonly AgentPaneThread[], bots: readonly Bot[]): AgentEntry[] {
   const botOfThread = createBotOfThread(bots)
   const entries: AgentEntry[] = []
   for (const thread of threads) {
     const kind = activityInboxKind(thread)
-    const listed =
-      kind === 'ask' || (kind === 'outcome' && (thread.unread || thread.paneKey === openedPaneKey))
-    if (listed) {
+    if (kind === 'ask' || (kind === 'outcome' && thread.unread)) {
       entries.push({
         kind: 'agent',
         key: `agent:${thread.paneKey}`,
@@ -65,7 +61,6 @@ function agentEntriesOf(
 /**
  * Agents waiting on you, bots' items in Needs you, access requests, and finished turns you haven't read, in one
  * list, newest first. A bot's own chats and workspaces show as that bot; dispatched child workers never show.
- * Opening a finished row reads it; it stays until you leave Activity, so the row you clicked never vanishes.
  */
 export default function ActivityInbox({
   actionsTarget
@@ -76,7 +71,13 @@ export default function ActivityInbox({
   const { storeData, allThreads } = useAllAgentPaneThreads()
   const bots = useSyncExternalStore(subscribeToBotChanges, readBots)
   const sources = useActivityInboxBotSources()
-  const [openedPaneKey, setOpenedPaneKey] = useState<string | null>(null)
+  // The row you last opened from this list; kept listed and highlighted until you open another or leave.
+  const [opened, setOpened] = useState<ActivityInboxEntry | null>(null)
+  const focusedPaneKey = useAppStore((s) =>
+    s.activeView === 'terminal' && s.activeWorktreeId
+      ? getFocusedAgentPaneKeyForWorktree(s, s.activeWorktreeId)
+      : null
+  )
   const [itemsByBot, setItemsByBot] = useState<ReadonlyMap<string, BotItemsNeedingYou>>(
     () => new Map()
   )
@@ -95,10 +96,7 @@ export default function ActivityInbox({
     })
   }, [])
 
-  const agentEntries = useMemo(
-    () => agentEntriesOf(allThreads, bots, openedPaneKey),
-    [allThreads, bots, openedPaneKey]
-  )
+  const agentEntries = useMemo(() => agentEntriesOf(allThreads, bots), [allThreads, bots])
   const entries = useMemo(() => {
     const all: ActivityInboxEntry[] = [...agentEntries]
     for (const { bot, items } of itemsByBot.values()) {
@@ -121,17 +119,37 @@ export default function ActivityInbox({
         bot: bots.find((bot) => bot.id === request.botId && bot.hostId === request.hostId) ?? null
       })
     }
-    return all.sort((a, b) => b.at - a.at)
-  }, [agentEntries, itemsByBot, sources.requests, bots])
+    return withOpenedEntry(all, opened, allThreads).sort((a, b) => b.at - a.at)
+  }, [agentEntries, itemsByBot, sources.requests, bots, opened, allThreads])
 
   const agentThreads = useMemo(() => agentEntries.map((entry) => entry.thread), [agentEntries])
   const { selectThread, markAllThreadsRead, hasUnreadThreads } = useActivityThreadActionBindings({
     visibleThreads: agentThreads,
     markAllReadThreads: agentThreads,
     acknowledgeAgents: storeData.acknowledgeAgents,
-    unacknowledgeAgents: storeData.unacknowledgeAgents,
-    setSelectedPaneKey: setOpenedPaneKey
+    unacknowledgeAgents: storeData.unacknowledgeAgents
   })
+
+  // A bot item or access request stays selected once opened. An agent row follows the pane you have focused,
+  // so focusing another pane anywhere moves the highlight; until a focus lands, the row you opened keeps it.
+  const focusedKey = focusedPaneKey === null ? null : `agent:${focusedPaneKey}`
+  const selectedKey =
+    opened && opened.kind !== 'agent' ? opened.key : (focusedKey ?? opened?.key ?? null)
+
+  // Items are read for bots with items needing you, and for bots whose chats are listed, so opening a chat's
+  // notification can open the item it is about.
+  const readBotsOf = useMemo(() => {
+    const byKey = new Map<string, Bot>()
+    for (const { bot } of sources.bots) {
+      byKey.set(botRefKey(bot), bot)
+    }
+    for (const entry of agentEntries) {
+      if (entry.bot && !byKey.has(botRefKey(entry.bot))) {
+        byKey.set(botRefKey(entry.bot), entry.bot)
+      }
+    }
+    return [...byKey.values()]
+  }, [sources.bots, agentEntries])
 
   // A bot whose items are still being read may hold the only rows: say nothing rather than "all caught up".
   const itemsPending = sources.bots.some(({ bot }) => !itemsByBot.get(botRefKey(bot))?.items)
@@ -148,13 +166,19 @@ export default function ActivityInbox({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1.5 pb-2 scrollbar-sleek">
       {actions}
-      {sources.bots.map(({ bot }) => (
+      {readBotsOf.map((bot) => (
         <ActivityInboxBotItemsReader key={botRefKey(bot)} bot={bot} onItems={onItems} />
       ))}
       {entries.length > 0 ? (
         <ul aria-label={t('appRail.activity', 'Activity')}>
           {entries.map((entry) => (
-            <ActivityInboxEntryRow key={entry.key} entry={entry} onOpenThread={selectThread} />
+            <ActivityInboxEntryRow
+              key={entry.key}
+              entry={entry}
+              selected={entry.key === selectedKey}
+              onOpened={setOpened}
+              onOpenThread={selectThread}
+            />
           ))}
         </ul>
       ) : itemsPending ? null : (
