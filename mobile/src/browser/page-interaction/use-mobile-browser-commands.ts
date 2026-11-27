@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { translate } from '../../i18n/mobile-i18n'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
+import { RpcRefusedError } from '../../transport/rpc/rpc-refused-error'
 import type { BrowserScreencastFrameMetadata } from '../screencast/browser-screencast-protocol'
 import {
   browserDialogAccept,
@@ -105,6 +106,8 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
               y: point.y,
               button,
               modifiers: pointerModifiers,
+              // This phone shows a tap's picker refusal instead of replaying the tap; old hosts strip it.
+              fileChooserRefusal: 1,
               ...(button === 'left'
                 ? {
                     radius: computeBrowserTouchClickRadiusCss(
@@ -124,6 +127,11 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
         }
         return
       } catch (error) {
+        // The click landed and opened a file picker the host closed; replaying would open it again.
+        if (isFileChooserRefusal(error)) {
+          onToast(error.message, 3000)
+          return
+        }
         // Why: a timed-out click may still run on the host, and the move/down/up replay drops modifiers.
         if (
           generation !== commandGenerationRef.current ||
@@ -151,11 +159,14 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
         if (generation === commandGenerationRef.current) {
           setError(null)
         }
-      } catch {
-        // Pointer sends race navigation; keep stream and surface actionable failures through navigation/stream paths.
+      } catch (error) {
+        if (isFileChooserRefusal(error)) {
+          onToast(error.message, 3000)
+        }
+        // Other pointer failures race navigation; keep stream and surface actionable failures through navigation/stream paths.
       }
     },
-    [client, pageParams, pointerModifiers]
+    [client, onToast, pageParams, pointerModifiers]
   )
 
   const togglePointerModifier = useCallback((modifier: BrowserPointerModifier) => {
@@ -219,12 +230,22 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
   const sendKeypress = useCallback(
     async (key: string) => {
       await sendBrowserRequest(
-        async (rpc, page, options) =>
-          browserKeypress.interpret(await browserKeypress.request(rpc, { ...page, key }, options)),
+        async (rpc, page, options) => {
+          try {
+            return browserKeypress.interpret(
+              await browserKeypress.request(rpc, { ...page, key }, options)
+            )
+          } catch (error) {
+            if (isFileChooserRefusal(error)) {
+              onToast(error.message, 3000)
+            }
+            throw error
+          }
+        },
         { suppressError: true }
       )
     },
-    [sendBrowserRequest]
+    [onToast, sendBrowserRequest]
   )
 
   // Card represents page’s actual block; only host dialogClosed proves answer applied, not button press.
@@ -276,4 +297,9 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
     sendWheel,
     togglePointerModifier
   }
+}
+
+/** The host's sentence for a file picker it refused to open from a remote view. */
+function isFileChooserRefusal(error: unknown): error is RpcRefusedError {
+  return error instanceof RpcRefusedError && error.code === 'browser_file_chooser_opened'
 }

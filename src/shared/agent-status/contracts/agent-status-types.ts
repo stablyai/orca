@@ -18,7 +18,8 @@ import {
   normalizeOptionalField,
   normalizeOptionalMultilineField,
   normalizePromptField,
-  normalizeTurnCompletedAtField
+  normalizeTurnCompletedAtField,
+  normalizeBackgroundCommandsField
 } from './agent-status-field-normalization'
 import { assertJsonTextStructureWithinLimits } from '../../json-stream/json-text-structure-limit'
 
@@ -173,6 +174,8 @@ export type AgentStatusPayload = {
   turnCompletedAt?: number
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
+  /** While the lead's turn is over and only its background shells keep the row `working`: what they run. */
+  backgroundCommands?: string[]
   /** The main agent's own state and last-turn verdict. See AgentMainAgentStatus. Producers publish it
    *  beside the combined `state`; a reader that predates it keeps reading `state`. */
   mainAgent?: AgentMainAgentStatus
@@ -207,6 +210,7 @@ export function pickParsedAgentStatusPayload(
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
     ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
     ...(row.subagents !== undefined ? { subagents: row.subagents } : {}),
+    ...(row.backgroundCommands !== undefined ? { backgroundCommands: row.backgroundCommands } : {}),
     ...(row.mainAgent !== undefined ? { mainAgent: row.mainAgent } : {}),
     ...(row.claudeTaskWakeupPending !== undefined
       ? { claudeTaskWakeupPending: row.claudeTaskWakeupPending }
@@ -335,6 +339,7 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
     turnCompletedAt: normalizeTurnCompletedAtField(obj.turnCompletedAt, state),
     subagents: normalizeAgentSubagentsField(obj.subagents),
+    backgroundCommands: normalizeBackgroundCommandsField(obj.backgroundCommands, state),
     mainAgent: normalizeMainAgentStatusField(obj.mainAgent),
     ...(obj.agentType === 'claude' &&
     state !== 'done' &&

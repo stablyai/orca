@@ -69,11 +69,7 @@ export default function ClientHostedBrowserTab({
             className={`mr-1 size-3 shrink-0 ${loading ? 'motion-safe:animate-spin' : ''} ${row.hostAbsent ? 'text-muted-foreground' : 'text-blue-500'}`}
             aria-hidden
           />
-          <span
-            className={`${TAB_LABEL_WIDTH_CLASSES} mr-1 ${row.hostAbsent ? 'text-muted-foreground' : ''}`}
-          >
-            {label}
-          </span>
+          <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{label}</span>
           <button
             type="button"
             aria-label={t('browser.clientHosted.hostRowClose', 'Close hosted page')}

@@ -8,13 +8,11 @@ import { normalizeRepoSourceControlAiOverrides } from '../../../../src/shared/so
 import { useHostQuery } from '../../query/host-query'
 import {
   hostRepoCatalogQuery,
-  NO_HOST_LIST_INPUT
+  NO_HOST_LIST_INPUT,
+  relayedHostRepoCatalogQuery
 } from '../../host-screen/catalog/host-list-queries'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
-
-// A relayed server's repo changes are not signalled to the phone, so its read holds no event stream.
-const relayedRepoCatalogQuery = { ...hostRepoCatalogQuery, signal: undefined }
 
 /** Desktop's Source Control AI switch for this worktree: the repo's override, else the host's setting. */
 export function useMobileSourceControlAiEnabled(args: {
@@ -28,7 +26,7 @@ export function useMobileSourceControlAiEnabled(args: {
   const { hostId, client, connState, worktreeId, executionHost, hostEnabled } = args
   const exec = executionHost ?? LOCAL_EXECUTION_HOST_ID
   const { data: repos } = useHostQuery(
-    exec === LOCAL_EXECUTION_HOST_ID ? hostRepoCatalogQuery : relayedRepoCatalogQuery,
+    exec === LOCAL_EXECUTION_HOST_ID ? hostRepoCatalogQuery : relayedHostRepoCatalogQuery,
     { hostId, client },
     { exec },
     NO_HOST_LIST_INPUT,

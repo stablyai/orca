@@ -7,6 +7,7 @@ import {
   openDesktopStructuredSession,
   structuredSessionOpenFeedbackText
 } from './activate-ai-vault-structured-session'
+import { showChatOpenUnavailable } from './chat-open-failure-toast'
 import type { StructuredSessionOpenFeedback } from './activate-ai-vault-structured-session'
 import { useAppStore } from '@/store/index'
 import {
@@ -32,6 +33,7 @@ import {
 import type { OrchestrationCrewRow } from '../../../../../shared/orchestration/orchestration-crew'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { unreachableOpenFailure } from '../../../../../shared/agent-session/view/structured-session-open-failure-detail'
 
 type Sender = AgentMessageSource['senders'][number]
 const opensInFlight = new Map<string, Promise<void>>()
@@ -55,6 +57,8 @@ export function openAgentMessageSender(
     dispatchId
   )
   const label = name ?? sender.name ?? unnamedSenderLabel()
+  const reopen = () =>
+    openAgentMessageSender(source, sender, chatWorktreeId, target, dispatchId, name)
   if (resolved.kind === 'located') {
     return openLocatedAgentMessageSender(resolved.location, label, {
       current: () =>
@@ -65,7 +69,7 @@ export function openAgentMessageSender(
           target,
           dispatchId
         ),
-      reopen: () => openAgentMessageSender(source, sender, chatWorktreeId, target, dispatchId, name)
+      reopen
     })
   }
   // Only a publishing host's answer can say nothing opens; an older host keeps its own lookup.
@@ -93,7 +97,7 @@ export function openAgentMessageSender(
   if (inFlight) {
     return inFlight
   }
-  const opening = openSender(source, sender, host, label)
+  const opening = openSender(source, sender, host, label, reopen)
     .catch((error: unknown) => {
       // Every answer above shows its own words; one that threw showed none.
       console.warn('[agent-message-sender] opening the sender failed', error)
@@ -108,7 +112,8 @@ async function openSender(
   source: AgentMessageSource,
   sender: Sender,
   host: RuntimeClientTarget,
-  name: string
+  name: string,
+  retry: () => Promise<void>
 ): Promise<void> {
   const { party } = sender
   // Mail identifies senders beyond old terminal handles; tasks carry no mail and resolve coordinators by address.
@@ -137,7 +142,7 @@ async function openSender(
       displayName: name ?? undefined,
       ...(known ? { fallback: known } : {})
     },
-    host
+    { target: host, retry }
   )
   if (result.kind === 'terminal') {
     if (
@@ -186,10 +191,11 @@ export async function openOrchestrationDispatch(
         messageIds: [],
         displayName: label
       },
-      host,
-      undefined,
-      undefined,
-      feedback?.open
+      {
+        target: host,
+        feedback: feedback?.open,
+        retry: () => openOrchestrationDispatch(address, label, host, feedback)
+      }
     )
     if (result.kind === 'terminal') {
       await focusTerminal(result.handle, terminalEnvironmentId(host, result), terminal)
@@ -224,19 +230,13 @@ export async function openOrchestrationCrewAgent(
   const feedback: StructuredSessionOpenFeedback =
     target?.kind === 'chat'
       ? {
-          unavailable: () =>
-            unavailable(
-              translate(
-                'components.orchestrationCrew.chatUnavailable',
-                'This host cannot open the chat. Try again.'
-              )
-            ),
+          unavailable: (_agent, context) => showChatOpenUnavailable(context, row.label),
           gone: () => unavailable(structuredSessionOpenFeedbackText.gone()),
           hostCannotOpen: () => unavailable(structuredSessionOpenFeedbackText.hostCannotOpen()),
           notLocated: () => unavailable(structuredSessionOpenFeedbackText.notLocated())
         }
       : {
-          unavailable: () => unavailable(structuredSessionOpenFeedbackText.unavailable()),
+          unavailable: (_agent, context) => showChatOpenUnavailable(context, row.label),
           hostCannotOpen: () => unavailable(structuredSessionOpenFeedbackText.hostCannotOpen()),
           gone: () => unavailable(structuredSessionOpenFeedbackText.gone()),
           notLocated: () => unavailable(structuredSessionOpenFeedbackText.notLocated()),
@@ -277,19 +277,21 @@ export async function openOrchestrationCrewAgent(
         kind: 'history',
         structuredSession: { workspaceId: target.worktreeId, sessionId: target.sessionId }
       },
-      host,
-      undefined,
-      undefined,
-      feedback
+      { target: host, feedback, retry: () => openOrchestrationCrewAgent(row, host) }
     )
     if (result.kind === 'terminal') {
       await focusTerminal(result.handle, terminalEnvironmentId(host, result), terminalFeedback)
     }
   } catch (error) {
-    showLookupFailure(
-      isRuntimeCompatBlockError(error) ? 'update' : 'unreachable',
-      row.label,
-      feedback
-    )
+    if (isRuntimeCompatBlockError(error)) {
+      feedback.hostCannotOpen(row.label)
+    } else if (target?.kind === 'chat') {
+      feedback.unavailable(row.label, {
+        detail: unreachableOpenFailure(error).detail,
+        retry: () => void openOrchestrationCrewAgent(row, host)
+      })
+    } else {
+      showLookupFailure('unreachable', row.label, feedback)
+    }
   }
 }

@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 // A new bot, proposed before it exists: by a template or by a bot's
 // `orca bot create --offer` card. The prefilled New bot dialog edits one, and bots.create makes it.
 import * as z from 'zod'
@@ -18,10 +19,27 @@ import { HANDED_WORKSPACES_MAX, HandedWorkspaceSchema } from './bot-made-for-wor
 
 const line = (max: number) => z.string().trim().min(1).max(max)
 
+export const BOT_PURPOSE_MAX_LENGTH = 1000
+// Hosts before the 1,000 limit refuse more with a schema error naming this one.
+const OLDER_HOST_PURPOSE_MAX_LENGTH = 200
+
+/** Whether a host refused a create only because it is older and checks the earlier 200 limit. */
+export function refusedForOlderHostPurposeLimit(
+  code: string | undefined,
+  message: string,
+  purpose: string | undefined
+): boolean {
+  return (
+    code === 'invalid_argument' &&
+    (purpose?.length ?? 0) > OLDER_HOST_PURPOSE_MAX_LENGTH &&
+    message.includes(`<=${OLDER_HOST_PURPOSE_MAX_LENGTH}`)
+  )
+}
+
 /** What goes into the new bot's SOUL.md. */
 export const BotProposalSeedSchema = z.object({
   /** One sentence: what the bot is for. SOUL.md's first paragraph, so `bot list` shows it. */
-  purpose: line(200),
+  purpose: line(BOT_PURPOSE_MAX_LENGTH),
   watches: line(300).optional(),
   does: line(500).optional(),
   /** Where and how often it reports ("Here, weekday mornings"). */
@@ -34,13 +52,15 @@ export const BotProposalSeedSchema = z.object({
 
 export type BotProposalSeed = z.infer<typeof BotProposalSeedSchema>
 
-export const BotProposalSchema = BotProposalSeedSchema.extend({
-  name: BotNameSchema,
-  /** A mascot id; absent, the new bot gets a random one. */
-  mascot: z.string().refine(isBotMascotId).optional(),
-  /** Workspaces it is made for: its first turn offers to take them over. */
-  worktrees: z.array(HandedWorkspaceSchema).max(HANDED_WORKSPACES_MAX).optional()
-})
+export const BotProposalSchema = lazyZodSchema(() =>
+  BotProposalSeedSchema.extend({
+    name: BotNameSchema,
+    /** A mascot id; absent, the new bot gets a random one. */
+    mascot: z.string().refine(isBotMascotId).optional(),
+    /** Workspaces it is made for: its first turn offers to take them over. */
+    worktrees: z.array(HandedWorkspaceSchema).max(HANDED_WORKSPACES_MAX).optional()
+  })
+)
 
 export type BotProposal = z.infer<typeof BotProposalSchema>
 
@@ -84,6 +104,8 @@ export function proposalSeed({
 export type ProposalCreateTarget = {
   templatePackages: boolean
   skills?: readonly string[]
+  /** The template's name as this client shows it, when it proposed the bot's name in that language. */
+  templateNameShown?: string
   /** From a bot's card: that card. */
   fromOffer?: BotCreateParams['fromOffer']
 }
@@ -109,6 +131,9 @@ export function proposalCreateParams(
     seed,
     ...(template && target.templatePackages
       ? { fromTemplate: { id: template.id, skills: [...(target.skills ?? template.skills)] } }
+      : {}),
+    ...(template && target.templateNameShown
+      ? { templateNameShown: target.templateNameShown }
       : {}),
     ...(target.fromOffer ? { fromOffer: target.fromOffer } : {})
   }

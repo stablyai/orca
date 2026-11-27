@@ -35,6 +35,7 @@ export type BotsListResult = {
   threadReplies: boolean
   githubEvents2?: boolean
   githubWorkflows?: boolean
+  githubCiFinished?: boolean
   connectorStatus?: string
   /** The host's name when it is a headless Orca server; null with a window; absent from an older host. */
   signInServer?: string | null
@@ -44,7 +45,12 @@ export type BotsListResult = {
 export type HostBot = Bot &
   Pick<
     BotConnectors,
-    'webhooks' | 'cloudSignedOut' | 'signInServer' | 'githubEvents2' | 'githubWorkflows'
+    | 'webhooks'
+    | 'cloudSignedOut'
+    | 'signInServer'
+    | 'githubEvents2'
+    | 'githubWorkflows'
+    | 'githubCiFinished'
   > & {
     threadReplies: boolean
   }
@@ -68,6 +74,7 @@ export async function findBot(
     threadReplies: result.threadReplies,
     githubEvents2: result.githubEvents2 === true,
     githubWorkflows: result.githubWorkflows === true,
+    githubCiFinished: result.githubCiFinished === true,
     cloudSignedOut: orcaCloudNeedsSignIn(result.connectorStatus),
     ...(result.signInServer !== undefined ? { signInServer: result.signInServer } : {})
   }

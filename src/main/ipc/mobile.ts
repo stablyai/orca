@@ -178,7 +178,7 @@ export function registerMobileHandlers(
       return { grants: [] }
     }
     // Runtime links are bearer credentials immediately, so unconnected grants must remain revocable.
-    const all = registry.listDevices()
+    const all = registry.listDevices({ fresh: true })
     return {
       grants: all
         .filter((d) => d.scope === 'runtime')

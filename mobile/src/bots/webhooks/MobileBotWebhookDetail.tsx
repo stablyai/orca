@@ -13,7 +13,6 @@ import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { webhookKeyReveal } from '../../session/native-chat/transcript/bot-cards/mobile-bot-card-operations'
 import { mobileWebhookStatus } from '../../session/native-chat/transcript/bot-cards/MobileBotWebhookCard'
 import { spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -24,14 +23,11 @@ import {
   webhookChecks,
   webhookErrorMessage,
   webhookOnlyWhen,
-  webhookReplyErrorCode,
   webhookStarts
 } from './mobile-webhook-copy'
 import type { PhoneWebhook, PhoneWebhookCall } from './mobile-webhook-operations'
 import { usePhoneWebhookCalls } from './use-phone-webhooks'
-
-/** Owner writes fail at once while the phone can't reach the host, instead of waiting for it. */
-export const WEBHOOK_WRITE = { failWhenDisconnected: true } as const
+import { copyPhoneWebhookUrl } from './mobile-webhook-url-copy'
 
 const URL_KEY_MASK = '••••••••'
 // Closed lists show this many; Show all reveals the rest the host returned.
@@ -80,21 +76,17 @@ export function MobileBotWebhookDetail(props: DetailProps) {
     setCopying(true)
     const scope = keyScope.current
     try {
-      const reply = await webhookKeyReveal.request(
+      const copied = await copyPhoneWebhookUrl(
         props.client,
-        { hookId: hook.hookId },
-        WEBHOOK_WRITE
+        hook.hookId,
+        clipboard,
+        () => scope === keyScope.current
       )
-      if (scope !== keyScope.current) {
-        return
+      if (copied.kind === 'refused') {
+        props.showToast(webhookErrorMessage(copied.code, props.botName, t))
+      } else if (copied.kind === 'copied') {
+        props.showToast(t('bots.webhooks.copiedUrl', 'URL copied'))
       }
-      if (!reply.ok) {
-        const code = webhookReplyErrorCode(reply.error.code)
-        props.showToast(webhookErrorMessage(code, props.botName, t))
-        return
-      }
-      await clipboard.writeText(webhookKeyReveal.interpret(reply).url)
-      props.showToast(t('bots.webhooks.copiedUrl', 'URL copied'))
     } catch {
       props.showToast(t('bots.webhooks.copyFailed', 'Couldn’t copy. Try again.'))
     } finally {

@@ -159,7 +159,9 @@ const QUEUED_TEXT_COLUMNS = [
   'consumed_as',
   'carried_from',
   'queued_epoch',
-  'options_json'
+  'options_json',
+  // No build reads it, but a kept original holds it verbatim (journal-legacy-source-proof.ts).
+  'source_json'
 ] as const
 
 /**

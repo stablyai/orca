@@ -5,9 +5,24 @@ import { BrowserClientPageRendererBridgeRegistry } from './browser-client-page-r
 import type { BrowserClientPageRendererEndpoint } from './browser-client-page-renderer-reply-admission'
 
 let rendererBridges: BrowserClientPageRendererBridgeRegistry | null = null
+const rendererWaiters = new Set<() => void>()
 
 export function attachBrowserClientPageRenderer(renderer: BrowserClientPageRendererEndpoint): void {
   getRendererBridges().attachRenderer(renderer)
+  const waiters = [...rendererWaiters]
+  rendererWaiters.clear()
+  for (const waiter of waiters) {
+    waiter()
+  }
+}
+
+/** Runs `listener` once a renderer can mount pages: now, or when the next one attaches. */
+export function whenBrowserClientPageRendererAvailable(listener: () => void): void {
+  if (getRendererBridges().hasCurrentRenderer()) {
+    listener()
+  } else {
+    rendererWaiters.add(listener)
+  }
 }
 
 export function retireBrowserClientPageRenderer(

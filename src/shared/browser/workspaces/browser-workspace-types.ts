@@ -99,6 +99,8 @@ export type BrowserPage = {
   remoteBrowserPageId?: string | null
   /** The remote page was hosted by this desktop, not the runtime; it must not restore as streamed. */
   remoteBrowserPageClientHosted?: boolean
+  /** This desktop itself placed it here, so a relaunch keeps hosting it whatever Settings › Browser says. */
+  remoteBrowserPagePlacedHere?: boolean
   /** Active CDP viewport emulation preset. null = default (fill pane, no CDP override) */
   viewportPresetId?: BrowserViewportPresetId | null
   /** Set on a page that shows a workspace document; absent on every page that shows a URL. */
@@ -188,6 +190,15 @@ export type BrowserCookieImportSummary = {
 
 /** `sshTargetId` fills that SSH host's page jar instead of the profile's own. */
 export type BrowserProfileCookieImportArgs = { profileId: string; sshTargetId?: string }
+
+/** A server profile's import on this desktop: its id names no local profile, so its metadata rides along. */
+export type BrowserClientHostCookieImportArgs = {
+  environmentId: string
+  profileId: string
+  profile?: { id: string; label: string; scope: BrowserSessionProfileScope }
+  /** Fills that page's own jar, which differs from the profile's when the page browses through another host. */
+  browserPageId?: string
+}
 
 export type BrowserCookieImportResult =
   | {

@@ -26,7 +26,7 @@ import {
   useOrcaChatDeleteHostReason
 } from '@/lib/agent-session/chat-deletion/orca-chat-delete'
 import type { Bot } from '../../../../shared/bot-types'
-import type { BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
+import { botChatOffersDelete, type BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
 
 type MenuKind = 'dropdown' | 'context'
 
@@ -46,7 +46,6 @@ function BotChatMenuItems({
   const hostReason = useOrcaChatDeleteHostReason(bot.hostId)
   const Item = kind === 'context' ? ContextMenuItem : DropdownMenuItem
   const Separator = kind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
-  const home = chat.origin === 'home' && !chat.closed
   const label = t('bots.chats.delete', 'Delete chat')
   return (
     <>
@@ -54,7 +53,7 @@ function BotChatMenuItems({
         <ArrowUpRight className="size-3.5" />
         {t('bots.chats.open', 'Open')}
       </Item>
-      {home ? null : (
+      {botChatOffersDelete(chat) ? (
         <>
           <Separator />
           <DeleteItem
@@ -64,7 +63,7 @@ function BotChatMenuItems({
             onDelete={() => void deleteChat({ hostId: bot.hostId, sessionId: chat.chatId })}
           />
         </>
-      )}
+      ) : null}
     </>
   )
 }

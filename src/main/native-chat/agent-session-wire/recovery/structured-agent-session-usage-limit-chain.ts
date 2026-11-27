@@ -10,6 +10,14 @@ export const usageLimitContinueIdentity = (
   cut: Pick<NativeChatUsageLimitCut, 'turnItemId' | 'resetsAt'>
 ): string => JSON.stringify([cut.turnItemId, cut.resetsAt])
 
+/** Set on a cut whose reset is the time its chat moved accounts (see `withSwitchReset`). */
+export type SwitchReset = { resetFromSwitch?: true }
+
+/** The identity of the cut as its journal reads, before a switch stood in for its reset. */
+export const switchFreeIdentity = (
+  cut: Pick<NativeChatUsageLimitCut, 'turnItemId' | 'resetsAt'> & SwitchReset
+): string => usageLimitContinueIdentity(cut.resetFromSwitch ? { turnItemId: cut.turnItemId } : cut)
+
 /** Names the cut an automatic continue answers; its message id carries this, so the journal keeps the chain. */
 export const usageLimitContinueTag = (
   cut: Pick<NativeChatUsageLimitCut, 'turnItemId' | 'resetsAt'>

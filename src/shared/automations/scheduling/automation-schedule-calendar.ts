@@ -4,6 +4,7 @@ const MINUTE_MS = 60_000
 const DAY_MS = 24 * 60 * MINUTE_MS
 // Offsets change on quarter-hour instants, so one lookup serves each quarter hour.
 const OFFSET_BUCKET_MS = 15 * MINUTE_MS
+const OFFSET_CACHE_SIZE = 1024
 
 export type ScheduleWallTime = {
   month: number
@@ -60,12 +61,12 @@ function zonedCalendar(timeZone: string): ScheduleCalendar {
     hour: 'numeric',
     minute: 'numeric'
   })
-  let cachedBucket = Number.NaN
-  let cachedOffset = 0
+  const offsets = new Map<number, number>()
   // Wall time minus the instant, in ms; cached because a cron scan asks once per minute.
   const offsetAt = (timestamp: number): number => {
     const bucket = Math.floor(timestamp / OFFSET_BUCKET_MS)
-    if (bucket !== cachedBucket) {
+    let offset = offsets.get(bucket)
+    if (offset === undefined) {
       const parts = Object.fromEntries(
         format.formatToParts(bucket * OFFSET_BUCKET_MS).map((part) => [part.type, part.value])
       )
@@ -76,10 +77,13 @@ function zonedCalendar(timeZone: string): ScheduleCalendar {
         Number(parts.hour),
         Number(parts.minute)
       )
-      cachedBucket = bucket
-      cachedOffset = wall - bucket * OFFSET_BUCKET_MS
+      offset = wall - bucket * OFFSET_BUCKET_MS
+      if (offsets.size >= OFFSET_CACHE_SIZE) {
+        offsets.clear()
+      }
+      offsets.set(bucket, offset)
     }
-    return cachedOffset
+    return offset
   }
   const wallOf = (timestamp: number) => new Date(timestamp + offsetAt(timestamp))
   // As local Date math resolves it: a skipped time moves forward, a repeated one takes the first.
@@ -115,6 +119,20 @@ function zonedCalendar(timeZone: string): ScheduleCalendar {
     atTime: (day, hour, minute) =>
       instantOf(wallMidnight(day) + hour * 60 * MINUTE_MS + minute * MINUTE_MS)
   }
+}
+
+/** Whether Intl knows the zone; a schedule stored in an unknown one runs on the host's clock. */
+export function isKnownTimeZone(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone })
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function unknownTimeZoneMessage(timeZone: string): string {
+  return `Unknown time zone ${JSON.stringify(timeZone)}; use an IANA name like America/New_York.`
 }
 
 /** The host's own clock when the zone is absent, unknown, or the host's; otherwise that zone's. */

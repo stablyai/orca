@@ -49,9 +49,11 @@ export function AgentHistorySessionRow({
   const t = useMobileTranslation()
   const count = card.messageCount
   const messages =
-    count === 1
-      ? t('agentHistory.sessionHistoryList.messages_one', '{{count}} message', { count })
-      : t('agentHistory.sessionHistoryList.messages_other', '{{count}} messages', { count })
+    count === null
+      ? null
+      : count === 1
+        ? t('agentHistory.sessionHistoryList.messages_one', '{{count}} message', { count })
+        : t('agentHistory.sessionHistoryList.messages_other', '{{count}} messages', { count })
   const resumeDisabled = resumeActionState?.disabled === true
 
   return (
@@ -89,7 +91,7 @@ export function AgentHistorySessionRow({
             ) : null}
             <View style={styles.metaRow}>
               <Text style={styles.metaText} numberOfLines={1}>
-                {`${card.agentLabel} · ${messages}`}
+                {messages ? `${card.agentLabel} · ${messages}` : card.agentLabel}
               </Text>
               {showCurrentWorktreeBadge && card.isCurrentWorktree ? (
                 <View style={styles.currentBadge}>

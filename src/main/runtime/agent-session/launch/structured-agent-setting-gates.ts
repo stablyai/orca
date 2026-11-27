@@ -14,6 +14,7 @@ export function structuredAgentSettingGates(
   | 'piManagedExtensionsEnabled'
   | 'nativeChatPromptSuggestions'
   | 'transientRecovery'
+  | 'sharedCodexServers'
 > {
   const getSettings = () => readStore().getSettings()
   return {
@@ -29,6 +30,10 @@ export function structuredAgentSettingGates(
             listener()
           }
         }) ?? (() => {})
-    }
+    },
+    // Offered for this computer's chats only: a remote or WSL server runs plain Node, not Electron.
+    sharedCodexServers: () =>
+      process.versions.electron !== undefined &&
+      getSettings().experimentalSharedCodexServers === true
   }
 }

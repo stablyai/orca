@@ -1,5 +1,6 @@
 import { isAbsolute } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
   ClaudeAgentViewIdentity as Identity,
   type RegisteredClaudeAgentView
@@ -10,22 +11,24 @@ import {
   type ClaudeAgentViewSnapshot
 } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
-export const ClaudeAgentViewMessage = z.discriminatedUnion('action', [
-  Identity.extend({
-    action: z.literal('register'),
-    keybindings: z.string().max(128 * 1024),
-    configDir: z.string().min(1).max(4096).optional(),
-    view: ClaudeAgentViewObservation.optional()
-  }),
-  Identity.extend({ action: z.literal('observe'), view: ClaudeAgentViewObservation }),
-  Identity.extend({ action: z.literal('take') }),
-  Identity.extend({
-    action: z.literal('ack'),
-    requestId: z.string().max(64),
-    deny: z.string().max(1024).optional()
-  }),
-  Identity.extend({ action: z.literal('end') })
-])
+export const ClaudeAgentViewMessage = lazyZodSchema(() =>
+  z.discriminatedUnion('action', [
+    Identity.extend({
+      action: z.literal('register'),
+      keybindings: z.string().max(128 * 1024),
+      configDir: z.string().min(1).max(4096).optional(),
+      view: ClaudeAgentViewObservation.optional()
+    }),
+    Identity.extend({ action: z.literal('observe'), view: ClaudeAgentViewObservation }),
+    Identity.extend({ action: z.literal('take') }),
+    Identity.extend({
+      action: z.literal('ack'),
+      requestId: z.string().max(64),
+      deny: z.string().max(1024).optional()
+    }),
+    Identity.extend({ action: z.literal('end') })
+  ])
+)
 
 export type PendingView = {
   requestId: string

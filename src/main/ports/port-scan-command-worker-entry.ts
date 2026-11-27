@@ -26,7 +26,8 @@ async function handleRequest(request: PortScanCommandRequest): Promise<PortScanC
     const { stdout, spawnMs } = await runPortScanCommandInProcess(
       request.command,
       request.args,
-      request.darwinOperation
+      request.darwinOperation,
+      request.linuxSocketInodes
     )
     return { id: request.id, ok: true, stdout, spawnMs }
   } catch (err) {

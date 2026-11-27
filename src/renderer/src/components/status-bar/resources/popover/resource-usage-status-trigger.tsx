@@ -7,6 +7,10 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from '../../composition/status-bar-context-menu-policy'
 
+export function focusResourceManagerTrigger(): void {
+  document.querySelector<HTMLElement>('[data-resource-manager-trigger]')?.focus()
+}
+
 export function renderResourceUsageStatusTrigger(
   {
     daemonUnreachable,
@@ -33,6 +37,7 @@ export function renderResourceUsageStatusTrigger(
         <PopoverTrigger asChild>
           <button
             type="button"
+            data-resource-manager-trigger=""
             {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
             className="relative inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
             aria-label={

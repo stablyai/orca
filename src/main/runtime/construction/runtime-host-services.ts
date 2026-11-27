@@ -223,6 +223,8 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
     rollback: (candidate) => this.rollbackLegacyWorkerTerminalSurface(candidate),
     reconcileMissing: (candidate) =>
       this.legacyWorkerRecoveryPersistence.reconcileMissing(candidate, this.lostWorkerReport),
+    holdForRestartResume: (candidate) => this.holdLostWorkerForRestartResume(candidate),
+    isResuming: (dispatchId) => this.terminalWorkerRestartResume.isHeld(dispatchId),
     notifyResolution: (candidate, resolution) =>
       this.notifier?.resolveLegacyWorkerTerminalRecovery?.(candidate.paneKey, resolution),
     canRecoverPersistentLocalPtys: () => this.canRecoverPersistentLocalPtysFn(),

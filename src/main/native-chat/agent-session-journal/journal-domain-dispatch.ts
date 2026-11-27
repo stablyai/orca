@@ -1,5 +1,6 @@
 import type Database from '../../sqlite/sync-database'
 import { JournalSqlScope } from './journal-sql-scope'
+import { withdrawStopRejectedConnectorReplies } from './connector-replies/journal-connector-stop-withdrawal'
 import { journalDomainSubmission } from './journal-domain-status-inputs'
 import { refreshJournalDomainAcceptedHandover } from './journal-domain-input-ends'
 import {
@@ -161,6 +162,8 @@ export function applyJournalDomainDispatch(
         }
       }
     }
+    // After its card's return is saved, which keeps a card that can still run owed.
+    withdrawStopRejectedConnectorReplies(db, target, next, savedAt)
     if (
       input.state === 'rejected' &&
       attempt.admission.familyId !== null &&

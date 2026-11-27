@@ -20,7 +20,14 @@ const ReviewSchema = z.looseObject({
   bot: z.looseObject({
     name: z.string(),
     purpose: z.string(),
-    avatar: z.looseObject({ mascot: z.string().optional() }).optional(),
+    avatar: z
+      .looseObject({
+        mascot: z.string().optional(),
+        // The shared mascot's look, which the host gives the new bot when it keeps that mascot.
+        color: z.string().optional().catch(undefined),
+        outfit: z.string().optional().catch(undefined)
+      })
+      .optional(),
     skills: z.array(z.looseObject({ name: z.string() })),
     tools: z.array(z.looseObject({ id: z.string(), name: z.string(), url: z.string() })),
     connectors: z.array(z.looseObject({ kind: z.string() })),
@@ -69,13 +76,16 @@ const botShareReview = bindDeferredRpcOperation(
   })
 )
 
-/** The version the link serves now; null when it was stopped. */
+/** The version the link serves now, or `versionId` while the link still serves it; null when it was stopped. */
 export async function reviewPhoneBotShare(
   client: RpcClient,
-  shareId: string
+  shareId: string,
+  versionId?: string
 ): Promise<PhoneShareReview | null> {
   return botShareReview.interpret(
-    await botShareReview.request(client, { shareId }, { failWhenDisconnected: true })
+    await botShareReview.request(client, versionId ? { shareId, versionId } : { shareId }, {
+      failWhenDisconnected: true
+    })
   ).review
 }
 

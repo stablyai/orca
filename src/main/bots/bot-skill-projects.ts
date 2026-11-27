@@ -12,6 +12,7 @@ import {
 import { skillDirectoryMaxDepth } from '../../shared/skills/discovery/skill-discovery-depth'
 import { declaredSkillMetadata } from '../../shared/skills/discovery/skill-metadata'
 import { findSkillFiles } from '../skills/discovery/skill-root-file-walk'
+import { clearSkillDiscoveryCaches } from '../skills/discovery/skill-discovery-target'
 import type {
   LinkedProjectSkill,
   LinkedSkillListing,
@@ -68,8 +69,12 @@ export async function admittedSkill(skillFile: string): Promise<ScannedSkill | n
   }
 }
 
-export async function scanSkillsFolder(skillsDir: string): Promise<ScannedSkill[]> {
-  const files = await findSkillFiles(skillsDir, skillDirectoryMaxDepth('repo'))
+export async function scanSkillsFolder(
+  skillsDir: string,
+  signal?: AbortSignal
+): Promise<ScannedSkill[]> {
+  const files = await findSkillFiles(skillsDir, skillDirectoryMaxDepth('repo'), signal)
+  signal?.throwIfAborted()
   const admitted = await Promise.all(files.map(admittedSkill))
   const byFolder = new Map<string, ScannedSkill>()
   for (const skill of admitted) {
@@ -81,10 +86,13 @@ export async function scanSkillsFolder(skillsDir: string): Promise<ScannedSkill[
 }
 
 /** The project's skills from .agents/skills, else .claude/skills; null when it has none. */
-export async function scanSkillProject(repoPath: string): Promise<ScannedProject | null> {
+export async function scanSkillProject(
+  repoPath: string,
+  signal?: AbortSignal
+): Promise<ScannedProject | null> {
   for (const folder of SKILL_FOLDERS) {
     const skillsDir = join(repoPath, folder, 'skills')
-    const skills = await scanSkillsFolder(skillsDir)
+    const skills = await scanSkillsFolder(skillsDir, signal)
     if (skills.length > 0) {
       return { skillsDir, skills }
     }
@@ -232,14 +240,23 @@ export async function linkedSkillProjects(
 }
 
 /** The bot's links changed: its open chats load the skills before their next turn, and its resting
- *  chats' `/` menus reread them. */
+ *  chats' and item comments' `/` menus reread them. */
 export function relinkBotSkills(
   bot: Pick<Bot, 'id' | 'skillProjects' | 'folderWorkspaceId'>,
   repos: readonly Repo[]
-): void {
-  void linkedSkillProjects(bot, repos, botLinkedSkillsFolder(bot.id))
-    .catch(() => {})
-    .finally(() => retireAtRestCommandContext(folderWorkspaceKey(bot.folderWorkspaceId)))
+): Promise<void> {
+  return linkedSkillProjects(bot, repos, botLinkedSkillsFolder(bot.id))
+    .then(
+      () => {},
+      (error: unknown) => {
+        // The folder keeps its last links, which the bot's chats and `/` menus still load.
+        console.warn("[bots] the bot's linked project skills could not be relinked", bot.id, error)
+      }
+    )
+    .finally(() => {
+      clearSkillDiscoveryCaches()
+      retireAtRestCommandContext(folderWorkspaceKey(bot.folderWorkspaceId))
+    })
 }
 
 /** Projects as Settings shows them, from the same scan a chat's launch uses. */

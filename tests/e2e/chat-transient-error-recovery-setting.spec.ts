@@ -1,5 +1,6 @@
-import { test, expect } from './helpers/orca-app'
-import { waitForSessionReady } from './helpers/store'
+import { expect } from '@stablyai/playwright-test'
+import { test } from './desktop/electron-fixtures/orca-app'
+import { waitForSessionReady } from './desktop/renderer-probes/store'
 
 test.use({ seedTestRepo: false })
 

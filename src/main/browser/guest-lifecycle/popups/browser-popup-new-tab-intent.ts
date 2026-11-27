@@ -17,13 +17,13 @@ export function isNewBrowserTabPopupIntent(details: NewBrowserTabPopupRequest): 
 }
 
 // A link and a featureless `window.open(url, '_blank')` arrive alike; only the created child's opener tells them apart.
-// Only this desktop's user sees a child window; other opens stay tabs, as do background tabs (no child) and file links.
+// A paired viewer can't see this desktop's child windows, so its opens stay tabs, as do unclicked opens, background tabs (no child) and file links.
 export function waitsForPopupOpener(
   details: NewBrowserTabPopupRequest,
   observed: ObservedBrowserGuestGesture | null
 ): boolean {
   return (
-    observed?.byAgent === false &&
+    observed?.fromThisDesktop === true &&
     details.disposition === 'foreground-tab' &&
     isNewBrowserTabPopupIntent(details) &&
     normalizeBrowserPopupUrl(details.url) !== null

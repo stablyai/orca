@@ -10,6 +10,7 @@ import {
 } from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   formatMegabytes,
   sendResultChunks
@@ -22,6 +23,13 @@ const MAX_ERROR_CODE_LENGTH = 128
 const MAX_ERROR_MESSAGE_LENGTH = 4096
 
 type SendRequest = NonNullable<RemoteRuntimeTransportSubscription['sendRequest']>
+
+/** Calls orcad on behalf of one forwarded command; file transfers outlive it, so it stays usable until the attachment ends. */
+export type DesktopBrowserBridgeHostChannel = {
+  attachmentId: string
+  requestId: string
+  request(method: string, params: Record<string, unknown>): Promise<unknown>
+}
 
 export type DesktopBrowserBridgeSubscribe = (callbacks: {
   onResponse(response: RuntimeRpcResponse<unknown>): void
@@ -43,7 +51,8 @@ export class DesktopBrowserBridgeConnection {
       execute(
         request: DesktopBrowserBridgeRequest,
         signal: AbortSignal,
-        hostRevoked: AbortSignal
+        hostRevoked: AbortSignal,
+        host: DesktopBrowserBridgeHostChannel
       ): Promise<DesktopBrowserBridgeOutcome>
       onReady(): void
       /** Called once, when the attachment ends for any reason other than close(). */
@@ -128,7 +137,12 @@ export class DesktopBrowserBridgeConnection {
     }
     let outcome: DesktopBrowserBridgeOutcome
     try {
-      outcome = await this.options.execute(request, AbortSignal.any(signals), this.revoked.signal)
+      outcome = await this.options.execute(
+        request,
+        AbortSignal.any(signals),
+        this.revoked.signal,
+        this.hostChannel(attachmentId, request.requestId)
+      )
     } finally {
       if (this.cancellations.get(request.requestId) === cancelled) {
         this.cancellations.delete(request.requestId)
@@ -160,6 +174,24 @@ export class DesktopBrowserBridgeConnection {
           'The desktop ran the command but could not send its result back (it may be too large, such as a full-page screenshot).'
       }
     })
+  }
+
+  private hostChannel(attachmentId: string, requestId: string): DesktopBrowserBridgeHostChannel {
+    return {
+      attachmentId,
+      requestId,
+      request: async (method, params) => {
+        const sendRequest = this.subscription?.sendRequest
+        if (this.closed || this.attachmentId !== attachmentId || !sendRequest) {
+          throw new Error('desktop_browser_bridge_transport_closed')
+        }
+        const response = await sendRequest(method, { ...params, attachmentId }, RESULT_TIMEOUT_MS)
+        if (!response.ok) {
+          throw new RemoteRuntimeClientError(response.error.code, response.error.message)
+        }
+        return response.result
+      }
+    }
   }
 
   /** False when result submission throws or the host refuses it. */

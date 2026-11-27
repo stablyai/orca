@@ -16,6 +16,7 @@ import type { GlobalSettings } from '../../shared/settings/global-settings-types
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { getBrowserPageIdleDiscard } from '../browser/guest-lifecycle/browser-page-idle-discard'
 import { canReserveBrowserPageDiscard } from '../browser/guest-lifecycle/browser-page-memory'
+import { canFreeBrowserClientPageGuest } from '../browser/client-pages/lifecycle/browser-client-page-memory-registry'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { readBrowserGuestDiscardAdmission } from '../browser/guest-lifecycle/manager/registration/browser-guest-discard-protection'
 import {
@@ -195,7 +196,7 @@ function canMemorySaverFree(pageId: string): boolean {
   return (
     !!guest &&
     readBrowserGuestDiscardAdmission(guest, true).protection === 'discardable' &&
-    canReserveBrowserPageDiscard(pageId, guest)
+    (canReserveBrowserPageDiscard(pageId, guest) || canFreeBrowserClientPageGuest(pageId, guest))
   )
 }
 

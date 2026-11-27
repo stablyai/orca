@@ -39,6 +39,11 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
       : 'unknown'
   }
 
+  /** Whether a command mark's agent is itself still in front: any other program is the shell's turn. */
+  readCommandMarkForeground(ptyId: string, agent: TuiAgent): Promise<LaunchedAgentForeground> {
+    return readExactAgentForeground(this, this.ptyController, ptyId, agent)
+  }
+
   /** The rest title's own agent is in front of a pane unchanged since the read began: its idle counts
    *  for the process now running. */
   protected async confirmReattachedRestTitle(ptyId: string, agent: TuiAgent): Promise<boolean> {

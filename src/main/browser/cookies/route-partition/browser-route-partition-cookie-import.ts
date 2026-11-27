@@ -11,7 +11,7 @@ import { importCookiesFromBrowser } from '../browser-cookie-import'
 import { importCookiesFromFile } from '../imports/import-cookie-file'
 import type { DetectedBrowser } from '../sources/browser-cookie-source-profiles'
 import { errorMessage } from '../../../../shared/errors/error-message'
-import { restoreBrowserRoutePartitionSessionCookies } from '../session-restore/browser-session-cookie-restore'
+import { restoreBrowserRoutePartitionSessionCookies } from '../session-restore/browser-session-cookie-route-restore'
 
 export type RouteCookieImportSource = {
   importInto: (partition: string) => Promise<BrowserCookieImportResult>

@@ -1,5 +1,7 @@
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../../../shared/orca-profiles/orca-cloud-team-policy'
 import { useTranslate } from '@/i18n/use-translate'
+import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { useBotSettingsAccounts, useBotSettingsComputers } from './bot-settings-computers'
 import { BotAccountGroup, BotComputerGroup } from './BotSettingsGroups'
@@ -15,15 +17,21 @@ export function BotsSettingsPane({
   const t = useTranslate()
   const computers = useBotSettingsComputers()
   const accounts = useBotSettingsAccounts(computers)
-  const enabled = settings.botsEnabled !== false
+  const blocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.bots)
+  const enabled = !blocked && settings.botsEnabled !== false
   const enableRow = (
     <SettingsSwitchRow
       label={t('settings.bots.enable', 'Enable bots')}
-      description={t(
-        'settings.bots.enableDescription',
-        'Shows bots on this computer, including bots on your servers, and lets this computer’s bots take messages and run automations. Turning this off hides them; their folders, memory and chats stay where they are.'
-      )}
+      description={
+        blocked
+          ? t('settings.bots.teamDisabled', 'Bots are turned off by your team.')
+          : t(
+              'settings.bots.enableDescription',
+              'Shows bots on this computer, including bots on your servers, and lets this computer’s bots take messages and run automations. Turning this off hides them; their folders, memory and chats stay where they are.'
+            )
+      }
       checked={enabled}
+      disabled={blocked}
       onChange={() => updateSettings({ botsEnabled: !enabled })}
     />
   )

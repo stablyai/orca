@@ -9,6 +9,9 @@ import { JOURNAL_SQL_ACCEPTED_INPUT_COLUMNS } from './journal-sql-accepted-input
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import { readJournalDomainQueueFailure } from './journal-domain-queue-failures'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
+import { JournalSqlScope } from './journal-sql-scope'
+import { JournalSqlStatusContext } from './journal-sql-status-context'
+import { readJournalSqlTurnUsageLimit } from './journal-sql-status-cuts'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -66,13 +69,25 @@ export function readJournalDomainQueuePauseContext(
     latestAcceptedTurnSequence: Number(head.latest_accepted ?? 0),
     latestPersonAcceptedSequence: Number(head.latest_person_accepted ?? 0)
   }
+  const { failedAt, turnItemId } = readJournalDomainQueueFailure(db, target)
   return createQueuePauseContext(
     {
       epoch: target.epoch,
       marks,
       ...accepted,
       latestPersonAcceptedTurnSequence: accepted.latestPersonAcceptedSequence,
-      failedAt: readJournalDomainQueueFailure(db, target),
+      failedAt,
+      ...(failedAt > 0 && turnItemId !== null
+        ? {
+            failedAtUsageLimit:
+              readJournalSqlTurnUsageLimit(
+                new JournalSqlStatusContext(
+                  new JournalSqlScope(db, target.sessionId, target.epoch)
+                ),
+                turnItemId
+              ) !== null
+          }
+        : {}),
       reopenFloor
     },
     clearMembers

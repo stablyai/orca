@@ -23,13 +23,11 @@ import {
 export async function moveWebRuntimeSessionTab(
   args: RuntimeMobileSessionTabMove & {
     worktreeId: string
-    environmentId?: string | null
+    /** The tab's owning runtime; a move never routes by the focused host. */
+    environmentId: string | null
   }
 ): Promise<boolean> {
-  const environmentId =
-    args.environmentId?.trim() ??
-    useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
-    null
+  const environmentId = args.environmentId?.trim() || null
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }

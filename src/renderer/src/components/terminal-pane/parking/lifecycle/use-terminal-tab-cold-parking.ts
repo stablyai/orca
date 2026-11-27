@@ -33,6 +33,7 @@ import { canWatcherCoverParkedTerminalTab } from '../output-watchers/parked-term
 import { captureNewlyParkedTerminalTabs } from '../capture/parked-terminal-tab-capture-episodes'
 import { createTerminalTabActivationOrder } from '../retention/terminal-tab-activation-order'
 import { buildTerminalTabColdParkCandidates } from '../retention/terminal-tab-park-candidates'
+import { isTerminalActivationSpawnSettled } from '../retention/settled-activation-spawn'
 import {
   useTerminalParkingWorkspaceInputs,
   useParkedTerminalWatcherSynchronization
@@ -177,6 +178,8 @@ export function useTerminalTabColdParking(args: {
       parkingEnabled: terminalParkingEnabled,
       nowMs,
       parkCooldownUntilMs: measureParkCooldownUntilRef.current,
+      isActivationSpawnSettled: (tabId) =>
+        isTerminalActivationSpawnSettled(useAppStore.getState(), tabId),
       restorePolicy: {
         sshParkingEnabled: terminalSshParkingEnabled,
         pairedRuntimeParkingEnvironmentIds

@@ -116,11 +116,19 @@ export class ProjectCollectionOperations {
     return getProjectHostOperations(this).getRepoForHost(id, hostId)
   }
 
+  getRepoRegistrations(id: string): readonly RepoHostTarget[] {
+    return getProjectHostOperations(this).getRepoRegistrations(id)
+  }
+
   setResolvedRepoGitUsername(
     target: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>,
     username: string
   ): boolean {
     return getProjectHostOperations(this).setResolvedRepoGitUsername(target, username)
+  }
+
+  getProjectGroup(id: string): ProjectGroup | undefined {
+    return getProjectGroupOperations(this).getProjectGroup(id)
   }
 
   getProjectGroups(): ProjectGroup[] {

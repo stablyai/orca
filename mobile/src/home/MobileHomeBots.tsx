@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import { View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -18,6 +18,19 @@ export const MobileHomeBots = memo(function MobileHomeBots(props: {
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
+  const shown = useMemo(() => props.rows.slice(0, BOT_ROWS_SHOWN), [props.rows])
+  // Only rows that would read the same name their computer; the Bots tab groups by computer.
+  const named = useMemo(
+    () =>
+      new Set(
+        shown
+          .filter((row) =>
+            shown.some((other) => other.title === row.title && other.placeKey !== row.placeKey)
+          )
+          .map((row) => row.key)
+      ),
+    [shown]
+  )
   if (props.rows.length === 0) {
     return null
   }
@@ -32,11 +45,7 @@ export const MobileHomeBots = memo(function MobileHomeBots(props: {
         first
       />
       <View style={homeListStyles.group}>
-        <MobileHomeBotRows
-          rows={props.rows.slice(0, BOT_ROWS_SHOWN)}
-          grouped
-          onOpen={props.onOpen}
-        />
+        <MobileHomeBotRows rows={shown} grouped nameComputer={named} onOpen={props.onOpen} />
       </View>
     </>
   )

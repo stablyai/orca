@@ -1,29 +1,23 @@
-import {
-  localAccountRuntimeTargetKey,
-  type LocalAccountRuntimeTarget
-} from '../../../shared/agent-accounts/local-account-runtime'
 import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
-import { RateLimitServiceAccountRefresh } from './service-account-refresh'
-import type { AntigravityAccountUsageRecorder } from '../providers/antigravity/antigravity-account-usage'
+import { RateLimitServiceTargetUsageRead } from './service-target-usage-read'
 import {
   type CodexAccountSelectionTarget,
   normalizeCodexAccountSelectionTarget
 } from '../../../shared/agent-accounts/codex/codex-selection-lane'
-import type {
-  CodexHomePathResolver,
-  KimiHomeResolver,
-  ClaudeAuthPreparationResolver,
-  OpenCodeGoRateLimitConfig,
-  MiniMaxRateLimitConfig,
-  AntigravityUsageEnabledResolver,
-  ClaudeOAuthUsageEnabledResolver,
-  MuseUsageEnabledResolver,
-  ZcodePlanRateLimitConfig,
-  GeminiCliOAuthEnabledResolver,
-  InactiveCodexAccountInfo
+import {
+  MIN_REFETCH_MS,
+  type CodexHomePathResolver,
+  type KimiHomeResolver,
+  type ClaudeAuthPreparationResolver,
+  type OpenCodeGoRateLimitConfig,
+  type MiniMaxRateLimitConfig,
+  type ClaudeOAuthUsageEnabledResolver,
+  type MuseUsageEnabledResolver,
+  type ZcodePlanRateLimitConfig,
+  type InactiveCodexAccountInfo
 } from './service-types'
 import {
   type ClaudeAccountSelectionTarget,
@@ -33,7 +27,20 @@ import type { InactiveClaudeAccount } from '../providers/claude/claude-managed-a
 import type { RateLimitState } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { NetworkProxySettings } from '../../../shared/network/network-proxy'
 
-export class RateLimitService extends RateLimitServiceAccountRefresh {
+export class RateLimitService extends RateLimitServiceTargetUsageRead {
+  private lastOwnerReturnAt = Number.NEGATIVE_INFINITY
+
+  refreshOnOwnerReturn(): Promise<void> {
+    const now = Date.now()
+    const elapsed = now - this.lastOwnerReturnAt
+    // Admit and restamp after a backward clock change.
+    if (elapsed >= 0 && elapsed < MIN_REFETCH_MS) {
+      return Promise.resolve()
+    }
+    this.lastOwnerReturnAt = now
+    return this.refreshIfWatched()
+  }
+
   setCodexHomePathResolver(resolver: CodexHomePathResolver): void {
     this.codexHomePathResolver = resolver
   }
@@ -74,10 +81,6 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
     this.zcodePlanConfigResolver = resolver
   }
 
-  setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {
-    this.geminiCliOAuthEnabledResolver = resolver
-  }
-
   setClaudeOAuthUsageEnabledResolver(resolver: ClaudeOAuthUsageEnabledResolver): void {
     this.claudeOAuthUsageEnabledResolver = resolver
   }
@@ -97,28 +100,6 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
     if (!this.lastClaudeAuthSnapshot) {
       void this.fetchClaudeOnly({ force: true })
     }
-  }
-
-  setAntigravityUsageEnabledResolver(resolver: AntigravityUsageEnabledResolver): void {
-    this.antigravityUsageEnabledResolver = resolver
-  }
-
-  setAntigravityFetchTarget(target: LocalAccountRuntimeTarget): void {
-    if (
-      localAccountRuntimeTargetKey(target) ===
-      localAccountRuntimeTargetKey(this.antigravityFetchTarget)
-    ) {
-      return
-    }
-    this.antigravityFetchTarget = { ...target }
-    this.antigravityFetchGeneration += 1
-    this.antigravityAccounts = []
-    this.activeFailureStreakByProvider.antigravity = 0
-    this.updateState({ ...this.state, antigravity: null })
-  }
-
-  setAntigravityAccountUsageRecorder(recorder: AntigravityAccountUsageRecorder): void {
-    this.antigravityAccountUsageRecorder = recorder
   }
 
   setMuseUsageEnabledResolver(resolver: MuseUsageEnabledResolver): void {
@@ -235,7 +216,7 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
         this.inactiveCodexCache,
         this.inactiveCodexFetching
       ),
-      antigravityAccounts: this.antigravityAccounts
+      antigravityAccounts: []
     }
   }
 }

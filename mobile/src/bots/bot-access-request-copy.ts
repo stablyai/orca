@@ -1,9 +1,5 @@
 // The desktop's Request access wording, from the shared table, for the phone's bot sheet.
-import {
-  botAccessPlace,
-  botAccessCopy,
-  type BotAccessHost
-} from '../../../src/shared/bots/bot-access-copy'
+import type { BotAccessHost } from '../../../src/shared/bots/bot-access-copy'
 import {
   accessRequestIdentity,
   accessRequestPerson
@@ -14,17 +10,18 @@ import { CONNECTOR_SOURCE_NAMES } from '../../../src/shared/connectors/external-
 import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
 import { normalizeMachineName } from '../../../src/shared/remote-runtime/host-metadata/machine-name'
 import type { AgentChatPermissionMode } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
-import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
-import { agentChatPermissionModeCopy } from '../../../src/shared/agent-session/options/permissions/structured-agent-session-permission-option'
 import {
   botAccessConfirm,
-  botAccessReach,
-  botReachLineText,
   botStartingPermission,
   type BotAccessConfirmRow,
   type BotAccessConnector
 } from '../../../src/shared/bots/bot-access-reach'
+import type { Translate } from '../i18n/mobile-i18n'
+import {
+  mobileBotAccessCopy,
+  mobileBotAccessNames,
+  mobileBotAccessPlace
+} from './mobile-bot-access-copy'
 
 /** What the phone knows of a bot's access. */
 export type PhoneAccessBot = {
@@ -42,25 +39,8 @@ export function phoneAccessHost(status: HostStatusReply | undefined): BotAccessH
   }
 }
 
-export function phoneBotReachLines(bot: PhoneAccessBot): { title: string; detail?: string }[] {
-  const permission = botStartingPermission(bot, null)
-  return botAccessReach({
-    agent: bot.agent,
-    permission,
-    connector: null,
-    google: bot.google === true ? null : []
-  }).map((line) =>
-    botReachLineText(line, {
-      name: bot.name,
-      agentLabel: isTuiAgent(bot.agent) ? TUI_AGENT_DISPLAY_NAMES[bot.agent] : bot.agent,
-      place: botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null }),
-      mode: (mode) => agentChatPermissionModeCopy(bot.agent, mode)
-    })
-  )
-}
-
-function accessPlace(connector: string, workspace: string | null): string {
-  return workspace ? botAccessCopy('place', { connector, workspace }) : connector
+function accessPlace(connector: string, workspace: string | null, t: Translate): string {
+  return workspace ? mobileBotAccessCopy(t, 'place', { connector, workspace }) : connector
 }
 
 /** Who the connector says they are, without a real name that only repeats their name. */
@@ -72,10 +52,10 @@ function uniqueRequestIdentity(request: ConnectorAccessRequest): string {
 }
 
 /** Under the person's name: who the connector says they are, and where they asked. */
-export function accessRequestLine(request: ConnectorAccessRequest): string {
+export function accessRequestLine(request: ConnectorAccessRequest, t: Translate): string {
   return [
     uniqueRequestIdentity(request),
-    accessPlace(CONNECTOR_SOURCE_NAMES[request.source], request.workspaceName || null)
+    accessPlace(CONNECTOR_SOURCE_NAMES[request.source], request.workspaceName || null, t)
   ]
     .filter(Boolean)
     .join(' · ')
@@ -115,11 +95,12 @@ export function accessRequestGrant(request: ConnectorAccessRequest): PhoneAccess
  *  what they reach, one line each. The bot runs on the computer, not this phone. */
 export function accessDecisionCopy(
   grant: PhoneAccessGrant,
-  bot: PhoneAccessBot
+  bot: PhoneAccessBot,
+  t: Translate
 ): {
   title: string
-  /** Whom the rows are about: the one person's first name, or "they". */
-  firstName: string
+  /** The heading over the rows: what the one person can do, or what they all can. */
+  whatTheyCanDo: string
   who: string
   warning: string
   tone: 'high' | 'medium'
@@ -133,7 +114,9 @@ export function accessDecisionCopy(
     workspace: grant.workspace
   })
   // Without a handle, the full name, since the title shows only the first.
-  const who = person ? identity || (person !== firstName ? person : '') : names.join(', ')
+  const who = person
+    ? identity || (person !== firstName ? person : '')
+    : mobileBotAccessNames(names)
   const { tone, rows } = botAccessConfirm({
     permission: botStartingPermission(bot, null),
     connector: grant.connector,
@@ -142,42 +125,50 @@ export function accessDecisionCopy(
   })
   return {
     title: firstName
-      ? botAccessCopy('titleOne', { person: firstName, name: bot.name })
-      : botAccessCopy('titleMany', { count, name: bot.name }),
-    firstName: firstName ?? 'they',
-    who: [who, accessPlace(connector, grant.workspace)].filter(Boolean).join(' · '),
-    warning: botAccessCopy(
+      ? mobileBotAccessCopy(t, 'titleOne', { person: firstName, name: bot.name })
+      : mobileBotAccessCopy(t, 'titleMany', { count, name: bot.name }),
+    // Its own line for several people: "they" inside the one-person line doesn't translate.
+    whatTheyCanDo: firstName
+      ? mobileBotAccessCopy(t, 'whatTheyCanDo', { person: firstName })
+      : t('bots.accessDecide.whatTheyCanDoMany', 'What they can do'),
+    who: [who, accessPlace(connector, grant.workspace, t)].filter(Boolean).join(' · '),
+    warning: mobileBotAccessCopy(
+      t,
       'confirmWarning',
-      botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null })
+      mobileBotAccessPlace(t, bot.accessHost ?? { kind: 'unknown', name: null })
     ),
     tone,
     rows: rows.map((row): AccessDecisionRow => {
       switch (row.kind) {
         case 'computer':
-          return { kind: row.kind, text: botAccessCopy('confirmComputer') }
+          return { kind: row.kind, text: mobileBotAccessCopy(t, 'confirmComputer') }
         case 'no-approvals':
-          return { kind: row.kind, text: botAccessCopy('confirmNoApprovals'), warn: true }
+          return { kind: row.kind, text: mobileBotAccessCopy(t, 'confirmNoApprovals'), warn: true }
         case 'may-skip-approvals':
-          return { kind: row.kind, text: botAccessCopy('confirmMaySkipApprovals'), warn: true }
+          return {
+            kind: row.kind,
+            text: mobileBotAccessCopy(t, 'confirmMaySkipApprovals'),
+            warn: true
+          }
         case 'approves':
           return {
             kind: row.kind,
             text: firstName
-              ? botAccessCopy('confirmApproveOne', { person: firstName })
-              : botAccessCopy('confirmApproveMany')
+              ? mobileBotAccessCopy(t, 'confirmApproveOne', { person: firstName })
+              : mobileBotAccessCopy(t, 'confirmApproveMany')
           }
         case 'google':
-          return { kind: row.kind, text: botAccessCopy('confirmGoogle') }
+          return { kind: row.kind, text: mobileBotAccessCopy(t, 'confirmGoogle') }
         case 'connector':
           return {
             kind: row.kind,
             connector: row.connector,
             text:
               row.connector === 'slack'
-                ? botAccessCopy('reachSlack', { name: bot.name })
+                ? mobileBotAccessCopy(t, 'reachSlack', { name: bot.name })
                 : row.connector === 'github'
-                  ? botAccessCopy('confirmGitHub')
-                  : botAccessCopy('confirmLinear')
+                  ? mobileBotAccessCopy(t, 'confirmGitHub')
+                  : mobileBotAccessCopy(t, 'confirmLinear')
           }
       }
     })
@@ -185,20 +176,32 @@ export function accessDecisionCopy(
 }
 
 /** A request answered elsewhere or gone by when the phone asks about it. */
-export const ACCESS_REQUEST_EXPIRED_LINE = 'This request was already answered or has expired.'
+export const accessRequestExpiredLine = (t: Translate): string =>
+  t('bots.accessDecide.expired', 'This request was already answered or has expired.')
 
 /** Why the host didn't save an answer. */
-export function accessDecideFailureLine(request: ConnectorAccessRequest, error: string): string {
+export function accessDecideFailureLine(
+  request: ConnectorAccessRequest,
+  error: string,
+  t: Translate
+): string {
   switch (error) {
     case 'expired':
-      return ACCESS_REQUEST_EXPIRED_LINE
+      return accessRequestExpiredLine(t)
     case 'full':
-      return botAccessCopy('full', { person: accessRequestPerson(request) })
+      return mobileBotAccessCopy(t, 'full', { person: accessRequestPerson(request) })
     case 'granted_not_added':
-      return `Access was given, but ${accessRequestPerson(request)} isn’t listed yet. Orca will add them.`
+      return t(
+        'bots.accessDecide.grantedNotAdded',
+        'Access was given, but {{person}} isn’t listed yet. Orca will add them.',
+        { person: accessRequestPerson(request) }
+      )
     case 'signed_out':
-      return 'Sign in to Orca on your computer to answer requests.'
+      return t(
+        'bots.accessDecide.signedOut',
+        'Sign in to Orca on your computer to answer requests.'
+      )
     default:
-      return botAccessCopy('decideFailed')
+      return mobileBotAccessCopy(t, 'decideFailed')
   }
 }

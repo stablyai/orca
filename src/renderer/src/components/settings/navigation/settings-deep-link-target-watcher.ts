@@ -11,7 +11,11 @@ export function watchForSettingsDeepLinkTarget(args: {
   timeoutMs?: number
   isTargetUnavailable?: () => boolean
   waitForLayout?: boolean
+  /** Also re-check on attribute changes, e.g. a mounted row revealed by dropping `hidden`. */
+  observeAttributes?: boolean
   cancelOnInteraction?: boolean
+  /** Cancel on the user's own pointer or key input only, not on the page's programmatic scroll or focus. */
+  cancelOnUserInput?: boolean
   onCancel?: () => void
 }): SettingsDeepLinkTargetWatch {
   const root = args.root ?? (typeof document === 'undefined' ? null : document.body)
@@ -23,11 +27,14 @@ export function watchForSettingsDeepLinkTarget(args: {
   let observer: MutationObserver | null = null
   let timeout: number | null = null
   let frame: number | null = null
-  const scrollPositions = new Map<Element, { top: number; left: number }>()
-  for (const element of [root, ...root.querySelectorAll('[data-settings-scroll-list]')]) {
-    scrollPositions.set(element, { top: element.scrollTop, left: element.scrollLeft })
-  }
-  const interactionEvents = ['pointerdown', 'click', 'keydown', 'input', 'focusin', 'scroll']
+  const scrollPositions = new Map<Element, { top: number; left: number }>([
+    [root, { top: root.scrollTop, left: root.scrollLeft }]
+  ])
+  const interactionEvents = args.cancelOnInteraction
+    ? ['pointerdown', 'click', 'keydown', 'input', 'focusin', 'scroll']
+    : args.cancelOnUserInput
+      ? ['pointerdown', 'keydown']
+      : []
   const finish = (): void => {
     if (settled) {
       return
@@ -93,16 +100,14 @@ export function watchForSettingsDeepLinkTarget(args: {
   observer.observe(root, {
     subtree: true,
     childList: true,
-    attributes: Boolean(args.isTargetUnavailable)
+    attributes: Boolean(args.isTargetUnavailable) || args.observeAttributes === true
   })
   timeout = window.setTimeout(() => {
     finish()
     args.onTimeout?.()
   }, args.timeoutMs ?? TARGET_WAIT_TIMEOUT_MS)
-  if (args.cancelOnInteraction) {
-    for (const name of interactionEvents) {
-      owner.addEventListener(name, onInteraction, true)
-    }
+  for (const name of interactionEvents) {
+    owner.addEventListener(name, onInteraction, true)
   }
   check()
   return { cancel: finish }

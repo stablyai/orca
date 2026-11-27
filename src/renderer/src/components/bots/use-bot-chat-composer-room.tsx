@@ -1,5 +1,5 @@
 import { useContext, useMemo, useSyncExternalStore, type ReactNode } from 'react'
-import { botRefKey, isSameBot } from '@/lib/bot-hosts'
+import { botRefKey, isSameBot, ownBotHost } from '@/lib/bot-hosts'
 import { readLiveBotHostIds, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
@@ -9,7 +9,15 @@ import {
 import type { Bot } from '../../../../shared/bot-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
-import { botMentionToken } from '../../../../shared/bots/bot-mention-context'
+import {
+  botClientMentionToken,
+  botMentionToken,
+  botMentionTokens
+} from '../../../../shared/bots/bot-mention-context'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../shared/agent-session/identity/orca-session-address-prefix'
+import { toast } from 'sonner'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { usePairedServerClientInstallation } from './use-paired-server-client-mentions'
 import {
   NativeChatBotChatTitleContext,
   NativeChatMentionEveryoneContext,
@@ -43,18 +51,26 @@ export function useBotChatComposerRoom(
   workspaceId: string | undefined,
   hostId: ExecutionHostId | null,
   /** Where the chat's host reads chat picks, its bot's own chats list under it. */
-  selfChats = false
+  selfChats = false,
+  /** The chat's session: sending a message that names an agent here in a paired server's chat
+   *  introduces it to that chat. */
+  sessionId: string | null = null
 ): NativeChatBotChatRoom | undefined {
   const t = useTranslate()
   const self = useBotForWorkspace(workspaceId ?? null)
   const bots = useBots(useBotsEnabled() && workspaceId !== undefined && hostId !== null)
+  // On a paired server whose agents can message agents here: this computer's bots list after its own.
+  const clientInstallation = usePairedServerClientInstallation(hostId)
   const listed = useMemo(() => {
     const here = bots.filter((bot) => bot.hostId === hostId)
     const own = self ? here.find((bot) => isSameBot(bot, self)) : undefined
     const others = here.filter((bot) => bot !== own)
     const first = [...(own && selfChats ? [own] : []), ...others]
-    return hostId === LOCAL_EXECUTION_HOST_ID ? [...first, ...bots.filter(isOnPairedServer)] : first
-  }, [bots, self, hostId, selfChats])
+    if (hostId === LOCAL_EXECUTION_HOST_ID) {
+      return [...first, ...bots.filter(isOnPairedServer)]
+    }
+    return clientInstallation ? [...first, ...bots.filter(isOnThisComputer)] : first
+  }, [bots, self, hostId, selfChats, clientInstallation])
   const live = useSyncExternalStore(subscribeToBotChanges, readLiveBotHostIds, readLiveBotHostIds)
   const hostLabels = useBotHostLabels(
     listed.flatMap((bot) => (bot.hostId === hostId ? [] : [bot.hostId]))
@@ -84,7 +100,11 @@ export function useBotChatComposerRoom(
             ? {
                 host: (
                   <BotMentionHostBadge
-                    label={hostLabels.get(bot.hostId)}
+                    label={
+                      isOnThisComputer(bot)
+                        ? t('bots.groups.thisComputer', 'This computer')
+                        : hostLabels.get(bot.hostId)
+                    }
                     inline
                     offline={!live.includes(bot.hostId)}
                   />
@@ -102,19 +122,48 @@ export function useBotChatComposerRoom(
         if (!bot) {
           return undefined
         }
-        return bot.hostId === hostId
-          ? botMentionToken(bot)
-          : botMentionToken(bot, undefined, botMentionServer(bot.hostId) ?? undefined)
+        if (bot.hostId === hostId) {
+          return botMentionToken(bot)
+        }
+        const server = hostId ? botMentionServer(hostId) : null
+        if (clientInstallation && server && sessionId && isOnThisComputer(bot)) {
+          return botClientMentionToken(bot, clientInstallation)
+        }
+        return botMentionToken(bot, undefined, botMentionServer(bot.hostId) ?? undefined)
+      },
+      // Sent, not picked: a draft deleted unsent introduces no one.
+      sent: (text: string) => {
+        const server = hostId ? botMentionServer(hostId) : null
+        if (!clientInstallation || !server || !sessionId) {
+          return
+        }
+        for (const mention of botMentionTokens(text)) {
+          const bot = listed.find((entry) => entry.id === mention.id && isOnThisComputer(entry))
+          if (bot && mention.client === clientInstallation) {
+            introduceToServerChat(server, sessionId, bot.id)
+          }
+        }
       },
       placeholder: t(
         'bots.chat.mentionPlaceholder',
         'Ask anything, @ to mention bots or files, / for commands'
       )
     }
-  }, [listed, purposes, self, hostId, live, hostLabels, t])
+  }, [listed, purposes, self, hostId, live, hostLabels, t, clientInstallation, sessionId])
 }
 
 const isOnPairedServer = (bot: Bot): boolean => botMentionServer(bot.hostId) !== null
+const isOnThisComputer = (bot: Bot): boolean => bot.hostId === LOCAL_EXECUTION_HOST_ID
+
+/** Sending a message that names an agent here in a paired server's chat lets that chat's agents ask
+ *  it, each ask still waiting on a person's answer; recorded on this computer only. */
+function introduceToServerChat(environmentId: string, sessionId: string, botId: string): void {
+  callRuntimeRpc(ownBotHost().target, 'pairedServerAsks.introduce', {
+    environmentId,
+    rootSession: `${ORCA_SESSION_ADDRESS_PREFIX}${sessionId}`,
+    botId
+  }).catch((error: unknown) => toast.error(error instanceof Error ? error.message : String(error)))
+}
 
 /** `@` lists the owner's bots, which render as chips, as in a group room. */
 export function BotChatRoom({
@@ -161,7 +210,12 @@ export function BotWorkspaceChatRoom({
   const hostBots = useMemo(() => bots.filter((bot) => bot.hostId === hostId), [bots, hostId])
   const ownBot = (self && hostBots.find((bot) => isSameBot(bot, self))) || null
   const picker = useBotChatPicker(hostId, hostBots, ownBot, sessionId)
-  const room = useBotChatComposerRoom(workspaceId ?? undefined, hostId, picker.selfId !== null)
+  const room = useBotChatComposerRoom(
+    workspaceId ?? undefined,
+    hostId,
+    picker.selfId !== null,
+    sessionId
+  )
   // Bots a draft names show as they are now, room or not: deleted, paused or renamed.
   const mentionTargets = useBotMentionTargets(hostId)
   const chatTitle = useBotChatMentionTitle(hostId)

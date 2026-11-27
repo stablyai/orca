@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../orchestration-db'
+import { exposeUtcTimestamp } from '../utc-timestamp'
 
 /** One row per Dispatch whose worker was observed: what it is doing now, and which of its rests the
  *  coordinator was told about. Created with the tables on open, so no version step is needed. */
@@ -103,6 +104,18 @@ export function writeWorkerPresence(
     )
 }
 
+/** The current rest is decided as no news: its report is dropped unsent. */
+export function settleWorkerRestUnreported(db: OrchestrationDb, dispatchId: string): void {
+  const row = readWorkerPresence(db, dispatchId)
+  if (row?.report) {
+    writeWorkerPresence(db, dispatchId, {
+      ...row,
+      report: null,
+      reportedGeneration: row.generation
+    })
+  }
+}
+
 /** Dispatches whose worker rests, or went away, with a report still undecided. */
 export function listUndecidedWorkerRests(db: OrchestrationDb): string[] {
   return db.db
@@ -128,4 +141,51 @@ export function hasRelayedWorkerReport(
       )
       .get(dispatchId, messageId) !== undefined
   )
+}
+
+/** Epoch ms when the worker entered its current `working` turn, if recorded. */
+export function readWorkingTurnStartedAt(
+  db: OrchestrationDb,
+  dispatchId: string
+): number | undefined {
+  const row = db.db
+    .prepare(
+      `SELECT updated_at FROM worker_presence
+        WHERE dispatch_id = ? AND presence = 'working'`
+    )
+    .get(dispatchId)
+  const updatedAt = typeof row?.updated_at === 'string' ? exposeUtcTimestamp(row.updated_at) : null
+  const parsed = updatedAt ? Date.parse(updatedAt) : Number.NaN
+  return Number.isNaN(parsed) ? undefined : parsed
+}
+
+export function readMaxMessageSequence(db: OrchestrationDb): number {
+  const row = db.db.prepare('SELECT COALESCE(MAX(sequence), 0) AS seq FROM messages').get()
+  return typeof row?.seq === 'number' ? row.seq : 0
+}
+
+export function readMaxRelaySequence(db: OrchestrationDb, dispatchId: string): number {
+  const row = db.db
+    .prepare(
+      `SELECT COALESCE(MAX(sequence), 0) AS seq FROM federation_relay_items
+        WHERE dispatch_id = ? AND direction = 'to_home'`
+    )
+    .get(dispatchId)
+  return typeof row?.seq === 'number' ? row.seq : 0
+}
+
+export function formatWorkingTurnFence(generation: number, afterSequence: number): string {
+  return `turn:${generation}:seq:${afterSequence}`
+}
+
+/** Sequence watermark recorded when the worker entered its current `working` turn. */
+export function readWorkingTurnAfterSequence(
+  db: OrchestrationDb,
+  dispatchId: string
+): number | undefined {
+  const row = db.db
+    .prepare("SELECT fence FROM worker_presence WHERE dispatch_id = ? AND presence = 'working'")
+    .get(dispatchId)
+  const match = typeof row?.fence === 'string' ? /^turn:\d+:seq:(\d+)$/.exec(row.fence) : null
+  return match ? Number(match[1]) : undefined
 }

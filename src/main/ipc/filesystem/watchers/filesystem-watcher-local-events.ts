@@ -1,4 +1,4 @@
-import { stat } from 'node:fs/promises'
+import { statWithoutArchiveLock } from '../../../filesystem/asar-transparent-fs'
 import type { Event as WatcherEvent } from '@parcel/watcher'
 import type {
   FsChangeEvent,
@@ -7,11 +7,13 @@ import type {
 import { watchBatchFlushDelayMs } from '../../../../shared/file-watch/filesystem-watch-batch-window'
 import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
 // Filter high-churn events at source; Explorer display filters only hide rows.
-import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
+import { buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
+import { WATCHER_IGNORE_DIRS } from '../../../../shared/file-watch/watcher-ignore-dirs'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
 import { subscribeViaWatcherProcess } from '../watcher-process/parcel-watcher-process'
 import { normalizeWatcherEventPath } from './filesystem-watcher-paths'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
+import { isWatcherCrashFuseFailure } from '../watcher-process/parcel-watcher-process-failure'
 import {
   retainLocalWatcherPhysicalFailure,
   trackDetachedLocalUnsubscribe
@@ -85,7 +87,7 @@ async function tryStatIsDirectory(
       if (root.listeners.size === 0) {
         return undefined
       }
-      return (await stat(filePath)).isDirectory()
+      return (await statWithoutArchiveLock(filePath)).isDirectory()
     } finally {
       release()
     }
@@ -217,7 +219,9 @@ export function scheduleLocalBatchFlush(root: WatchedRoot): void {
 export async function createLocalWatcher(
   rootKey: string,
   rootPath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  /** Receives the listeners of a root the crash fuse dropped, so they can rewatch after the cooldown. */
+  onCrashFuseFailure?: (listeners: WatchedRoot['listeners']) => void
 ): Promise<WatchedRoot> {
   const root: WatchedRoot = {
     subscription: null!,
@@ -229,6 +233,7 @@ export async function createLocalWatcher(
   try {
     // Errors can precede subscribe resolution; retain cleanup evidence to retire the orphan handle.
     let errorCleanedUp = false
+    let cleanedUpError: unknown
 
     const watcherOptions = {
       ...buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS),
@@ -259,7 +264,13 @@ export async function createLocalWatcher(
             void trackDetachedLocalUnsubscribe(rootKey, root)
           }
           errorCleanedUp = true
+          cleanedUpError = err
+          const wasInstalled = watcherLifecycleState.watchedRoots.get(rootKey) === root
           watcherLifecycleState.watchedRoots.delete(rootKey)
+          // Why installed only: an error during subscribe rejects the install, which owns its retry.
+          if (wasInstalled && isWatcherCrashFuseFailure(err)) {
+            onCrashFuseFailure?.(root.listeners)
+          }
           return
         }
 
@@ -283,7 +294,10 @@ export async function createLocalWatcher(
     // subscribe resolved after error cleanup; retire its orphaned native handle.
     if (errorCleanedUp) {
       void trackDetachedLocalUnsubscribe(rootKey, root)
-      throw new Error(`Watcher for ${rootKey} errored during subscribe`)
+      // Keep a crash-fuse failure recognizable so the install retries instead of giving up on the root.
+      throw isWatcherCrashFuseFailure(cleanedUpError)
+        ? cleanedUpError
+        : new Error(`Watcher for ${rootKey} errored during subscribe`)
     }
   } catch (err) {
     // Surface synchronous subscription failures through the caller rather than crashing main.

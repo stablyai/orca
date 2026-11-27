@@ -49,7 +49,14 @@ async function value<T>(operation: Promise<SkillCloudOperation<T>>): Promise<T> 
 export function prepareBotShare(
   bot: BotRef,
   selection: BotShareSelection,
-  options: { setupNote?: string; last?: boolean; localOnly?: boolean } = {}
+  options: {
+    setupNote?: string
+    last?: boolean
+    localOnly?: boolean
+    /** The dialog this build is for, and whether only its picks changed. */
+    skillsSession?: string
+    reuseSkills?: boolean
+  } = {}
 ): Promise<{ candidate: BotShareCandidateSummary; last?: BotSharePicks }> {
   return callBotRpc(bot, 'bots.share.prepare', { botId: bot.id, ...selection, ...options })
 }

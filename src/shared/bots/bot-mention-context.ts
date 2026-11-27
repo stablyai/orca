@@ -8,7 +8,8 @@ import {
   botSendTarget,
   type BotRosterServer
 } from '../bot-roster'
-import type { BotChatUnreachable } from './bot-chat-row'
+import type { BotChatRow, BotChatUnreachable } from './bot-chat-row'
+import { isBotGroupMemberSession } from './bot-group'
 
 /** A chat pick's link scheme; an older Orca matches only `bot:`, so it never reads one as the bot alone. */
 export const BOT_CHAT_MENTION_PREFIX = 'bot-chat:'
@@ -16,13 +17,20 @@ export const BOT_CHAT_MENTION_PREFIX = 'bot-chat:'
 // The name is escaped as markdown link text is, so no name can close the token early or carry an
 // id of its own: the id after it is always the one picked.
 const MENTION =
-  /\[Bot: ((?:\\[\\[\]]|[^\\[\]\n])+)\]\((?:bot:([\w-]+)(?:@([\w-]+))?|bot-chat:([\w-]+)\/([\w-]+))\)/g
+  /\[Bot: ((?:\\[\\[\]]|[^\\[\]\n])+)\]\((?:bot:([\w-]+)(?:@(client:)?([\w-]+))?|bot-chat:([\w-]+)\/([\w-]+))\)/g
 
 const escapeName = (name: string): string => name.replace(/[\\[\]]/g, '\\$&')
 
 /** A picked bot as its token holds it; `chatId` when one of its chats was picked, `server` (a paired
- *  server's id) when it runs on another computer. */
-export type BotMention = { name: string; id: string; chatId?: string; server?: string }
+ *  server's id) when it runs on another computer, `client` (a paired computer's installation id) when
+ *  it runs on a computer paired to this one, written `(bot:<id>@client:<installation id>)`. */
+export type BotMention = {
+  name: string
+  id: string
+  chatId?: string
+  server?: string
+  client?: string
+}
 
 /** What picking a bot, or one of its chats, puts in a workspace chat's draft; `server` names the
  *  paired server a bot on another computer runs on (its chats aren't offered). */
@@ -37,6 +45,45 @@ export function botMentionToken(
   return `[Bot: ${escapeName(bot.name)}](${target})`
 }
 
+/** A bot on a computer paired to the chat's host, named by that computer's installation id; an
+ *  older Orca matches no `@client:` token, so it stays plain link text there. */
+export function botClientMentionToken(
+  bot: Pick<Bot, 'id' | 'name'>,
+  clientInstallationId: string
+): string {
+  return `[Bot: ${escapeName(bot.name)}](${BOT_ADDRESS_PREFIX}${bot.id}@client:${clientInstallationId})`
+}
+
+/** One of a bot's chats `@` offers: it takes mail now, isn't the asking chat, and isn't a group's. */
+export function botMentionOffersChat(row: BotChatRow): boolean {
+  return !row.closed && !row.self && !isBotGroupMemberSession(row.id)
+}
+
+/** Chats whose title or second line holds every word typed, in list order; spaces separate words. */
+export function botMentionChatsMatching<Chat extends { search: string }>(
+  chats: readonly Chat[],
+  filter: string
+): readonly Chat[] {
+  const words = filter.toLowerCase().split(/\s+/).filter(Boolean)
+  if (words.length === 0) {
+    return chats
+  }
+  return chats.filter((chat) => {
+    const text = chat.search.toLowerCase()
+    return words.every((word) => text.includes(word))
+  })
+}
+
+/** A picked chat shown by its id, until something reads its title. */
+export function botChatIdLabel(chatId: string): string {
+  return `chat ${chatId.slice(0, 6)}`
+}
+
+/** How a token reads as plain text: `@<name>`, and ` › chat <id>` for one of its chats. */
+export function botMentionLabel({ name, chatId }: Pick<BotMention, 'name' | 'chatId'>): string {
+  return chatId ? `@${name} › ${botChatIdLabel(chatId)}` : `@${name}`
+}
+
 /** Each bot token in `text`: the name it shows, the id it is bound to, and its chat if one. */
 export function botMentionTokens(text: string): BotMention[] {
   return splitBotMentions(text).filter((part) => typeof part !== 'string')
@@ -48,11 +95,14 @@ export function botMentionsAt(text: string): (BotMention & { start: number; end:
     const name = found[1].replace(/\\(.)/g, '$1')
     const at = { start: found.index, end: found.index + found[0].length }
     if (!found[2]) {
-      return { name, id: found[4], chatId: found[5], ...at }
+      return { name, id: found[5], chatId: found[6], ...at }
+    }
+    if (!found[4]) {
+      return { name, id: found[2], ...at }
     }
     return found[3]
-      ? { name, id: found[2], server: found[3], ...at }
-      : { name, id: found[2], ...at }
+      ? { name, id: found[2], client: found[4], ...at }
+      : { name, id: found[2], server: found[4], ...at }
   })
 }
 
@@ -89,13 +139,27 @@ export function mentionedServerBots(text: string): { id: string; name: string; s
   return named
 }
 
+/** Bots on computers paired to this host that `text` names, once per bot and computer, in order. */
+export function mentionedClientBots(text: string): { id: string; name: string; client: string }[] {
+  const named: { id: string; name: string; client: string }[] = []
+  const seen = new Set<string>()
+  for (const { id, name, client } of botMentionTokens(text)) {
+    const key = `${id}\0${client}`
+    if (client && !seen.has(key)) {
+      seen.add(key)
+      named.push({ id, name, client })
+    }
+  }
+  return named
+}
+
 /** This host's unpaused bots `text` names, by the id each token is bound to, once per bot and chat, in order;
  *  `chatId` is null for the bot alone (its Home Chat). */
 export function mentionedBots<B extends Pick<Bot, 'id' | 'paused'>>(
   text: string,
   bots: readonly B[]
 ): { bot: B; chatId: string | null }[] {
-  const local = botMentionTokens(text).filter((mention) => !mention.server)
+  const local = botMentionTokens(text).filter((mention) => !mention.server && !mention.client)
   if (local.length === 0 || bots.length === 0) {
     return []
   }
@@ -155,13 +219,29 @@ export function botMentionContext(
     chat?: BotMentionChat
     /** The paired server a bot on another computer runs on. */
     server?: BotRosterServer
+    /** The computer paired to this host a bot runs on, by installation id; its name while connected. */
+    client?: { installationId: string; name: string | null }
   }[]
 ): string | null {
   if (bots.length === 0) {
     return null
   }
-  const lines = bots.map(({ id, name, purpose, chat, server }) => {
+  const lines = bots.map(({ id, name, purpose, chat, server, client }) => {
     const shown = inert(name)
+    if (client) {
+      // Ids only in the command: a name typed there could carry anything.
+      const computer = client.name
+        ? `${JSON.stringify(inert(client.name))}, a computer paired to this one`
+        : 'a computer paired to this one'
+      const address =
+        shown === name && !name.includes('`')
+          ? botAddressArgument(name)
+          : `${BOT_ADDRESS_PREFIX}${id}`
+      const target = /^[\w-]+$/.test(id) && /^[\w-]+$/.test(client.installationId)
+      return target
+        ? `${shown} is an agent on ${computer}. To message it, run \`orca orchestration send --on-client ${client.installationId} --to ${address} --type question|handoff --subject … --body-file …\`; that computer's owner may need to approve it first, and the send fails at once if that computer isn't connected. Don't message it unless asked.`
+        : `${shown} is an agent on ${computer}, but its mention can't be used. Tell the user.`
+    }
     // A name a code span or the block can't hold as typed is addressed by its id instead.
     const address =
       shown === name && !name.includes('`')

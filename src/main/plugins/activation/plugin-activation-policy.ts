@@ -5,14 +5,34 @@ import {
 } from '../../../shared/plugins/approval/plugin-consent-state'
 import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import type { PluginServiceOptions } from '../plugin-service-options'
+import {
+  isRequiredTeamPluginInstall,
+  teamDevelopmentPluginError
+} from '../installation/plugin-team-install-policy'
+import { requiredPluginInstallError } from '../installation/required-plugin-release-policy'
 
-export function snapshotPluginConsentLists(source: {
-  getPluginConsents: () => Record<string, string>
-  getDisabledPlugins: () => string[]
-}): PluginConsentLists {
+export function installedPluginReleasePolicyError(plugin: ValidDiscoveredPlugin): string | null {
+  return plugin.isDev
+    ? teamDevelopmentPluginError(plugin.pluginKey)
+    : requiredPluginInstallError(
+        plugin.teamPolicyInstall ?? {
+          pluginKey: plugin.pluginKey,
+          version: plugin.manifest.version
+        }
+      )
+}
+
+export function snapshotPluginConsentLists(
+  source: Pick<
+    PluginServiceOptions,
+    'getPluginConsents' | 'getDisabledPlugins' | 'getRequiredPlugins'
+  >
+): PluginConsentLists {
+  const required = source.getRequiredPlugins?.()
   return {
     pluginConsents: source.getPluginConsents(),
-    disabledPlugins: source.getDisabledPlugins()
+    disabledPlugins: source.getDisabledPlugins(),
+    ...(required?.length ? { requiredPlugins: required } : {})
   }
 }
 
@@ -21,16 +41,32 @@ export function isPluginApproved(
   plugin: ValidDiscoveredPlugin,
   lists: PluginConsentLists
 ): boolean {
-  return (
-    enabled &&
-    getPluginActivationState(plugin.pluginKey, plugin.consentFingerprint, lists) === 'approved'
+  return enabled && installedPluginActivationState(plugin, lists) === 'approved'
+}
+
+function installedPluginActivationState(
+  plugin: ValidDiscoveredPlugin,
+  lists: PluginConsentLists
+): PluginActivationState {
+  if (installedPluginReleasePolicyError(plugin)) {
+    return 'disabled'
+  }
+  return getPluginActivationState(
+    plugin.pluginKey,
+    plugin.consentFingerprint,
+    lists,
+    isRequiredTeamPluginInstall(plugin.teamPolicyInstall)
   )
 }
 
 /** The settings every plugin policy decision reads. */
 export type PluginPolicySource = Pick<
   PluginServiceOptions,
-  'isPluginSystemEnabled' | 'getPluginConsents' | 'getDisabledPlugins' | 'getPluginKillListEntry'
+  | 'isPluginSystemEnabled'
+  | 'getPluginConsents'
+  | 'getDisabledPlugins'
+  | 'getPluginKillListEntry'
+  | 'getRequiredPlugins'
 >
 
 /** Live consent state. The feature flag is an authority boundary, not only a discovery hint:
@@ -39,14 +75,10 @@ export function livePluginActivationState(
   source: PluginPolicySource,
   plugin: ValidDiscoveredPlugin
 ): PluginActivationState {
-  if (!source.isPluginSystemEnabled()) {
+  if (!source.isPluginSystemEnabled() || source.getPluginKillListEntry?.(plugin.pluginKey)) {
     return 'disabled'
   }
-  return getPluginActivationState(
-    plugin.pluginKey,
-    plugin.consentFingerprint,
-    snapshotPluginConsentLists(source)
-  )
+  return installedPluginActivationState(plugin, snapshotPluginConsentLists(source))
 }
 
 /** Why the plugin may not run despite consent: Orca's safety list. Full access needs only consent. */
@@ -55,5 +87,8 @@ export function pluginPolicyBlockError(
   pluginKey: string
 ): string | null {
   const blocked = source.getPluginKillListEntry?.(pluginKey)
-  return blocked ? `Blocked by Orca's plugin safety list: ${blocked.reason}` : null
+  if (!blocked) {
+    return null
+  }
+  return blocked.team ? blocked.reason : `Blocked by Orca's plugin safety list: ${blocked.reason}`
 }

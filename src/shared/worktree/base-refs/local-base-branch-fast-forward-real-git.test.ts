@@ -72,6 +72,8 @@ function realGit(fixture: Fixture, afterInspection?: () => Promise<void> | void)
         error ? reject(Object.assign(error, { stdout, stderr })) : resolve({ stdout })
       )
     })
+  const listWorktrees = async (repoPath: string) =>
+    parseWorktreeList((await run(['worktree', 'list', '--porcelain'], repoPath)).stdout)
   const git: LocalBaseBranchGit = {
     exec: async (args, cwd) => {
       const result = await run(args, cwd)
@@ -80,11 +82,12 @@ function realGit(fixture: Fixture, afterInspection?: () => Promise<void> | void)
       }
       return result
     },
-    listWorktrees: async (repoPath) =>
-      parseWorktreeList((await run(['worktree', 'list', '--porcelain'], repoPath)).stdout),
-    listReservedBranches: async () => new Set(),
+    readBranchUse: async (repoPath, fullRef) => ({
+      reserved: false,
+      ownerPath: (await listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)?.path
+    }),
     updateRefUnlessInUse: async (repoPath, fullRef, args) => {
-      if ((await git.listWorktrees(repoPath)).some((wt) => wt.branch === fullRef)) {
+      if ((await listWorktrees(repoPath)).some((wt) => wt.branch === fullRef)) {
         return false
       }
       await git.exec(args, repoPath)
@@ -199,6 +202,22 @@ describe('fastForwardCheckedOutLocalBaseBranch against real Git', () => {
     expect(fixture.git(['rev-parse', 'main'])).toBe(fixture.remoteOid)
     expect(await readFile(join(fixture.repoPath, 'added.txt'), 'utf8')).toBe('from upstream\n')
     expect(fixture.git(['status', '--porcelain'])).toBe('')
+  })
+
+  it('leaves a main that several checkouts share alone', async () => {
+    const fixture = await createBehindRepo()
+    const { git } = realGit(fixture)
+    const shared: LocalBaseBranchGit = {
+      ...git,
+      readBranchUse: async (repoPath, fullRef) => ({
+        ...(await git.readBranchUse(repoPath, fullRef)),
+        sharedCheckout: true
+      })
+    }
+
+    await fastForwardCheckedOutLocalBaseBranch(shared, refs(fixture))
+
+    expect(fixture.git(['rev-parse', 'main'])).toBe(fixture.localOid)
   })
 
   it('leaves a checked-out main with uncommitted edits alone', async () => {
