@@ -24679,7 +24679,6 @@
       "noEmailNotSaved": "agy からメールアドレスが返されませんでした · 未保存",
       "saveShort": "保存",
       "active": "アクティブ",
-      "runtime": "ランタイム",
       "terminalTitle": "ターミナルの agy",
       "terminalDescription": "agy 自身に保存されたアカウントを使用します。切り替えは新規 agy セッションに適用されます。",
       "addAccountHelp": "アカウントを追加するには、agy で /logout を実行して再度サインインし、ここで保存してください。",

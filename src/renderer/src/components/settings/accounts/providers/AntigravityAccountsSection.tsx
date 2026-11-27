@@ -17,6 +17,7 @@ import { AntigravityChatAuthRows } from '../../../provider-accounts/AntigravityC
 import { antigravityChatSignInBlocked } from '../../../provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import { useAntigravityChatSignInControls } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
+import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { useOnLaterChange } from './use-on-later-change'
@@ -26,6 +27,9 @@ import {
   AntigravityAgyAccountRows,
   type AntigravityAccountAction
 } from './AntigravityAgyAccountRows'
+
+// Antigravity chats run agy itself, so the row for Orca's install of it names the program.
+const AGY = TUI_AGENT_CONFIG.antigravity.detectCmd
 
 export function AntigravityAccountsSection({
   owner,
@@ -132,13 +136,13 @@ export function AntigravityAccountsSection({
     chats && chatRuntime.kind === 'active' ? (
       <ManagedRuntimeInstallRow
         observation={chatRuntime}
-        agentLabel={t('accounts.antigravity.title', 'Antigravity')}
+        agentLabel={AGY}
         signInRunning={antigravityChatSignInRunning(signIn.flow)}
       >
         {(line, actions) => (
           <div data-settings-row="" className="flex items-center justify-between gap-4 py-3">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">{t('accounts.antigravity.runtime', 'Runtime')}</p>
+              <p className="text-sm font-medium">{AGY}</p>
               <div className="mt-0.5">{line}</div>
             </div>
             <div className="flex shrink-0 items-center gap-1">{actions}</div>

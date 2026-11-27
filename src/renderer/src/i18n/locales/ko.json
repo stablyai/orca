@@ -25433,7 +25433,6 @@
       "noEmailNotSaved": "agy가 이메일을 알려주지 않음 · 저장되지 않음",
       "saveShort": "저장",
       "active": "활성",
-      "runtime": "런타임",
       "chatTitle": "Antigravity 채팅",
       "terminalTitle": "터미널의 agy",
       "terminalDescription": "agy가 저장한 자체 계정을 사용합니다. 전환하면 새 agy 세션에 적용됩니다.",

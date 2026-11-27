@@ -28,6 +28,8 @@ export type ManagedRuntimeInstallView = {
   /** A step with no percent runs (unpacking, verifying, removing, a download of unknown size), so Settings shows a spinner. */
   busy: boolean
   note: string | null
+  /** The status only says the host's own copy runs, which needs nothing from the user. */
+  ownCopy: boolean
 }
 
 export const megabytes = (bytes: number): string => (bytes / 1_000_000).toFixed(1)
@@ -45,7 +47,8 @@ const EMPTY: ManagedRuntimeInstallView = {
   reason: false,
   count: false,
   busy: false,
-  note: null
+  note: null,
+  ownCopy: false
 }
 
 function runningView(
@@ -135,6 +138,7 @@ function settledView(
     return {
       ...view(t('components.managed-runtime.externalShort', 'Uses your own copy'), null),
       error: operation?.kind === 'install' ? null : error,
+      ownCopy: true,
       spokenStatus: t('components.managed-runtime.external', 'Uses your own {{agent}}', { agent })
     }
   }

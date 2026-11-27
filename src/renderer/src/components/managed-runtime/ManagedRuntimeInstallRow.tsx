@@ -30,7 +30,7 @@ export function ManagedRuntimeInstallRow(props: {
   buttonSize?: 'xs' | 'default'
   /** False leaves out the ⋯ Reinstall/Remove menu, for rows that only prompt an install. */
   menu?: boolean
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const t = useTranslate()
   const { observation, agentLabel } = props
   // A click holds its button until the host answers, so a double click starts nothing twice.
@@ -57,9 +57,17 @@ export function ManagedRuntimeInstallRow(props: {
       .finally(() => setPending(null))
   }
   const alert = refusal ?? view.error
+  const removable = observation.removable && view.removable
+  // Nothing to report or do: still reading, or the host's own copy runs and Orca has none to remove.
+  if (
+    alert === null &&
+    view.action === null &&
+    (view.status === null || (view.ownCopy && !removable))
+  ) {
+    return null
+  }
   const button = view.prominent ? view.action : null
   const action = button ? null : view.action
-  const removable = observation.removable && view.removable
   const held = pending !== null || props.signInRunning === true
   const primary = (chosen: ManagedRuntimeInstallAction) => () =>
     chosen.kind === 'cancel'

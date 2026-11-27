@@ -1,5 +1,6 @@
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { TUI_AGENT_CONFIG } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { useTranslate } from '@/i18n/use-translate'
 import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import {
@@ -95,6 +96,8 @@ export function AgentChatRuntimeArea({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const { runtime, signInRunning } = useAgentChatRuntimeInstall(agent)
+  // Antigravity chats run agy itself, so its row names the program rather than a "runtime".
+  const program = agent === 'antigravity' ? TUI_AGENT_CONFIG.antigravity.detectCmd : null
   if (chatUnavailableOnThisDesktop(agent)) {
     return <ChatUnavailableOnWindowsNote label={label} />
   }
@@ -104,14 +107,14 @@ export function AgentChatRuntimeArea({
   return (
     <ManagedRuntimeInstallRow
       observation={runtime}
-      agentLabel={label}
+      agentLabel={program ?? label}
       signInRunning={signInRunning}
     >
       {(line, actions) => (
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium leading-none">
-              {t('settings.agents.chatRuntime', 'Chat runtime')}
+              {program ?? t('settings.agents.chatRuntime', 'Chat runtime')}
             </p>
             <div className="mt-1">{line}</div>
           </div>

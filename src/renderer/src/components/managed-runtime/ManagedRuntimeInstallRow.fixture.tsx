@@ -38,7 +38,8 @@ function installing(phase: ManagedRuntimeOperation['phase']): ManagedRuntimeInst
 function row(
   state: ManagedRuntimeInstallState,
   agentLabel = 'Antigravity',
-  width = NARROWEST_SETTINGS
+  width = NARROWEST_SETTINGS,
+  title = 'Chat runtime'
 ) {
   return defineFixture({
     width,
@@ -55,7 +56,7 @@ function row(
         {(line, actions) => (
           <div data-settings-row="" className="flex items-center justify-between gap-4 py-3">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">Chat runtime</p>
+              <p className="text-sm font-medium">{title}</p>
               <div className="mt-0.5">{line}</div>
             </div>
             <div className="flex shrink-0 items-center gap-1">{actions}</div>
@@ -71,14 +72,15 @@ export const downloading = row(installing('downloading'))
 export const downloadingWide = row(installing('downloading'), 'Antigravity', 520)
 export const unpacking = row(installing('extracting'))
 export const verifying = row(installing('verifying'))
-export const externalWithoutOrcaCopy = row({ ...base, source: 'external' })
-export const externalWithOrcaCopy = row({
+// The host's own copy runs and Orca's is left to remove; with none of Orca's the row is absent.
+const externalOrcaCopy: ManagedRuntimeInstallState = {
   ...base,
   source: 'external',
   installedVersion: '1.5.0',
   installedCurrent: true,
   canRemove: true
-})
+}
+export const externalWithOrcaCopy = row(externalOrcaCopy)
 export const installedByOrca = row({
   ...base,
   source: 'managed',
@@ -90,19 +92,6 @@ export const installedByOrca = row({
 export const notInstalled = row(base)
 export const failed = row({
   ...base,
-  operation: {
-    id: 'op-1',
-    kind: 'install',
-    phase: 'failed',
-    downloadedBytes: 0,
-    totalBytes: null,
-    error: "Couldn't reach the download server. Check your connection."
-  }
-})
-
-export const externalInstallFailed = row({
-  ...base,
-  source: 'external',
   operation: {
     id: 'op-1',
     kind: 'install',
@@ -132,6 +121,45 @@ export const updateAvailable = row({
   canRemove: true
 })
 
+// Settings → Accounts → Antigravity, under an account row so a hidden agy row shows as absent.
+function accountsRow(state: ManagedRuntimeInstallState) {
+  const inner = row(state, 'agy', 360, 'agy')
+  return defineFixture({
+    width: 360,
+    render: () => (
+      <div className="divide-y divide-border">
+        <div className="py-3">
+          <p className="text-sm font-medium">you@example.com</p>
+          <p className="text-xs text-muted-foreground">Active</p>
+        </div>
+        {inner.render()}
+      </div>
+    )
+  })
+}
+export const accountsOwnAgy = accountsRow({ ...base, source: 'external' })
+export const accountsAgyMissing = accountsRow(base)
+export const accountsOrcaCopy = accountsRow({
+  ...base,
+  source: 'managed',
+  installedVersion: '1.5.0',
+  installedCurrent: true,
+  updatesAutomatically: true,
+  canRemove: true
+})
+export const accountsInstalling = accountsRow(installing('downloading'))
+export const accountsFailed = accountsRow({
+  ...base,
+  operation: {
+    id: 'op-1',
+    kind: 'install',
+    phase: 'failed',
+    downloadedBytes: 0,
+    totalBytes: null,
+    error: "Couldn't reach the download server. Check your connection."
+  }
+})
+
 // Fixture pages share one i18n instance; run these shots last, then restart the server.
 function localized(state: ManagedRuntimeInstallState, language: string) {
   return defineFixture({
@@ -142,9 +170,9 @@ function localized(state: ManagedRuntimeInstallState, language: string) {
     }
   })
 }
-export const germanExternal = localized({ ...base, source: 'external' }, 'de')
+export const germanExternal = localized(externalOrcaCopy, 'de')
 export const germanVerifying = localized(installing('verifying'), 'de')
-export const japaneseExternal = localized({ ...base, source: 'external' }, 'ja')
+export const japaneseExternal = localized(externalOrcaCopy, 'ja')
 export const japaneseVerifying = localized(installing('verifying'), 'ja')
-export const russianExternal = localized({ ...base, source: 'external' }, 'ru')
+export const russianExternal = localized(externalOrcaCopy, 'ru')
 export const russianVerifying = localized(installing('verifying'), 'ru')
