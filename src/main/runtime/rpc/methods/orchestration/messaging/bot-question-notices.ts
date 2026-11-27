@@ -54,7 +54,8 @@ async function noticeWords(
     .catch(() => null)
   const request = state?.latestRequest
   if (request?.outcome !== 'failure') {
-    return { why: 'ended' }
+    const asking = state && state.pendingPromptIds.length > 0
+    return { why: asking ? 'asking' : 'ended' }
   }
   // The failure report reads its words after the turn ends; until then the notice says it failed.
   const failure = failures.get(live)
