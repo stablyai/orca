@@ -1,5 +1,6 @@
 import type { z } from 'zod'
 import type { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 
 export type { AcpRelayedProcess }
 import { settleAcpSessionCall } from '../protocol/acp-session-call'
@@ -17,6 +18,8 @@ import {
 } from './acp-kept-agent'
 
 const SESSION_STARTS = new Set(['session/new', 'session/load', 'session/resume'])
+/** How long a send waits for a finished replay's ack before going to the kept agent as it is. */
+const REPLAY_SETTLE_WAIT_MS = 3_000
 
 /**
  * An ACP agent kept running under the terminal daemon from before this app started. It is
@@ -107,9 +110,11 @@ export class AcpKeptSession {
     return this.relayed.freshOwed === true
   }
 
-  /** Acks what the chat has read and saved, so a finished replay is acked (unless still kept). */
+  /** Acks everything the chat was handed once its reader took it, as a hand-off does, within a
+   *  bound: a stalled stdin write or reader leaves the replay unacked rather than holding a send. */
   replaySettled(): Promise<void> {
-    return this.child.settle().catch(() => undefined)
+    const settled = this.child.settle(true, REPLAY_SETTLE_WAIT_MS).catch(() => undefined)
+    return withTimeout(settled, REPLAY_SETTLE_WAIT_MS, undefined)
   }
 
   /** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`: false until the replay is acked. */
