@@ -3,11 +3,17 @@ import type { PluginDeclarativeNode } from '../plugin-declarative-catalog'
 import { listElements } from './testing-tree'
 import { createValueControls } from './testing-value-controls'
 
-function textControl(type: 'CodeInput' | 'Input' | 'Textarea', defaultValue: string) {
+function textControl(
+  type: 'CodeInput' | 'Input' | 'Textarea',
+  defaultValue: string,
+  extra: Record<string, unknown> = {}
+) {
   const tree: PluginDeclarativeNode = {
     type: 'Stack',
     props: {},
-    children: [{ type, key: 'field', props: { label: 'Field', defaultValue }, children: [] }]
+    children: [
+      { type, key: 'field', props: { label: 'Field', defaultValue, ...extra }, children: [] }
+    ]
   }
   const element = listElements(tree).find((entry) => entry.key === 'field')
   if (!element) {
@@ -16,7 +22,8 @@ function textControl(type: 'CodeInput' | 'Input' | 'Textarea', defaultValue: str
   return element
 }
 
-const codeInput = (defaultValue: string) => textControl('CodeInput', defaultValue)
+const codeInput = (defaultValue: string, extra: Record<string, unknown> = {}) =>
+  textControl('CodeInput', defaultValue, extra)
 
 describe('typeInto', () => {
   it('types onto a CodeInput seed with its line breaks as LF, as the panel renders it', () => {
@@ -43,5 +50,33 @@ describe('typeInto', () => {
       const edits = createValueControls().typeInto(textControl(type, ''), 'a\r\nb', false)
       expect(edits.at(-1)?.value).toBe('a\r\nb')
     }
+  })
+
+  it('stops typing at maxLength, as the rendered field drops the keystroke', () => {
+    for (const type of ['CodeInput', 'Input', 'Textarea'] as const) {
+      const edits = createValueControls().typeInto(
+        textControl(type, 'to', { maxLength: 3 }),
+        'tal',
+        false
+      )
+      expect(edits.map((edit) => edit.value)).toEqual(['tot'])
+    }
+  })
+
+  it('skips a surrogate pair that does not fit in maxLength', () => {
+    const edits = createValueControls().typeInto(
+      codeInput('ab', { maxLength: 3 }),
+      '\u{1F600}c',
+      false
+    )
+    expect(edits.map((edit) => edit.value)).toEqual(['abc'])
+  })
+})
+
+describe('edit ids', () => {
+  it("start past the control's $edit acknowledgement, as the panel's do", () => {
+    const element = codeInput('', { value: 'seen', onChange: 'cb', $edit: 4 })
+    const edits = createValueControls().typeInto(element, 'x', false)
+    expect(edits).toEqual([{ value: 'seenx', id: 5 }])
   })
 })

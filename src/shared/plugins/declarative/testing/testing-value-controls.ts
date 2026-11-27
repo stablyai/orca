@@ -68,7 +68,10 @@ export function createValueControls() {
       : isControlValue(seeded)
         ? seeded
         : fallbackOf(element)
-    const state = { value, sent: 0 }
+    // The guest keeps its edit count across remounts, as the panel does: a recreated control's
+    // next edit id must pass the acknowledgement it was rendered with.
+    const acked = element.props[PLUGIN_DECLARATIVE_EDIT_PROP]
+    const state = { value, sent: typeof acked === 'number' ? acked : 0 }
     states.set(element.path, state)
     return state
   }
@@ -122,7 +125,13 @@ export function createValueControls() {
       if (replace) {
         edits.push(edit(element, value))
       }
+      // A rendered text field drops a keystroke that would pass `maxLength`, as its textarea does.
+      const maxLength =
+        typeof element.props.maxLength === 'number' ? element.props.maxLength : Infinity
       for (const character of typed) {
+        if (value.length + character.length > maxLength) {
+          continue
+        }
         value += character
         edits.push(edit(element, value))
       }
