@@ -3,6 +3,7 @@
 // never voids an answer.
 import * as z from 'zod'
 import { optionalConnectorAvatarUrl } from './connector-message-asker'
+import { lazyZodSchema } from './schema/lazy-zod-schema'
 
 /** A cloud without the discord routes answers a bare 404; the desktop reads it as Discord not offered yet. */
 export const BOT_DISCORD_OFF = 'discord_off'
@@ -43,55 +44,72 @@ export function discordBotToken(text: string): string | null {
     : null
 }
 
-export const ConnectorDiscordGuild = z.object({
-  guildId: z.string().min(1),
-  name: z.string(),
-  iconUrl: z.string().url().optional().catch(undefined)
-})
+export const ConnectorDiscordGuild = lazyZodSchema(() =>
+  z.object({
+    guildId: z.string().min(1),
+    name: z.string(),
+    iconUrl: z.string().url().optional().catch(undefined)
+  })
+)
 export type ConnectorDiscordGuild = z.infer<typeof ConnectorDiscordGuild>
 
-const DiscordReady = z.object({
-  state: z.literal('ready'),
-  applicationId: z.string().min(1),
-  botUserId: z.string().min(1),
-  botName: z.string(),
-  ownerUserId: z.string().min(1).optional().catch(undefined),
-  ownerName: z.string().optional().catch(undefined),
-  guilds: z.array(ConnectorDiscordGuild)
-})
-const DiscordBroken = z.object({
-  state: z.literal('broken'),
-  applicationId: z.string().min(1),
-  // token_revoked: paste a new token. gateway_closed, or any other: set up again.
-  reason: z.string()
-})
-export const ConnectorBotDiscordState = z.discriminatedUnion('state', [
-  z.object({ state: z.literal('not_created') }),
-  DiscordReady,
-  DiscordBroken
-])
+const DiscordReady = lazyZodSchema(() =>
+  z.object({
+    state: z.literal('ready'),
+    applicationId: z.string().min(1),
+    botUserId: z.string().min(1),
+    botName: z.string(),
+    ownerUserId: z.string().min(1).optional().catch(undefined),
+    ownerName: z.string().optional().catch(undefined),
+    guilds: z.array(ConnectorDiscordGuild)
+  })
+)
+const DiscordBroken = lazyZodSchema(() =>
+  z.object({
+    state: z.literal('broken'),
+    applicationId: z.string().min(1),
+    // token_revoked: paste a new token. gateway_closed, or any other: set up again.
+    reason: z.string()
+  })
+)
+export const ConnectorBotDiscordState = lazyZodSchema(() =>
+  z.discriminatedUnion('state', [
+    z.object({ state: z.literal('not_created') }),
+    DiscordReady,
+    DiscordBroken
+  ])
+)
 export type ConnectorBotDiscordState = z.infer<typeof ConnectorBotDiscordState>
 
-const BotId = { botId: z.string().min(1) }
+const createBotId = () => ({ botId: z.string().min(1) })
 
-export const ConnectorDiscordBots = z.object({
-  bots: z.array(
-    z.discriminatedUnion('state', [DiscordReady.extend(BotId), DiscordBroken.extend(BotId)])
-  )
-})
+export const ConnectorDiscordBots = lazyZodSchema(() =>
+  z.object({
+    bots: z.array(
+      z.discriminatedUnion('state', [
+        DiscordReady.extend(createBotId()),
+        DiscordBroken.extend(createBotId())
+      ])
+    )
+  })
+)
 export type ConnectorDiscordBots = z.infer<typeof ConnectorDiscordBots>
 export type ConnectorDiscordBot = ConnectorDiscordBots['bots'][number]
 
-export const ConnectorBotDiscordMembersResponse = z.object({
-  members: z.array(
-    z.object({ id: z.string(), name: z.string(), avatarUrl: optionalConnectorAvatarUrl })
-  ),
-  complete: z.boolean()
-})
+export const ConnectorBotDiscordMembersResponse = lazyZodSchema(() =>
+  z.object({
+    members: z.array(
+      z.object({ id: z.string(), name: z.string(), avatarUrl: optionalConnectorAvatarUrl })
+    ),
+    complete: z.boolean()
+  })
+)
 export type ConnectorBotDiscordMembersResponse = z.infer<typeof ConnectorBotDiscordMembersResponse>
 
-export const ConnectorBotDiscordGuildResponse = z.object({
-  roles: z.array(z.object({ id: z.string(), name: z.string() })),
-  channels: z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() }))
-})
+export const ConnectorBotDiscordGuildResponse = lazyZodSchema(() =>
+  z.object({
+    roles: z.array(z.object({ id: z.string(), name: z.string() })),
+    channels: z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() }))
+  })
+)
 export type ConnectorBotDiscordGuildResponse = z.infer<typeof ConnectorBotDiscordGuildResponse>
