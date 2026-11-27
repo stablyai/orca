@@ -1,5 +1,5 @@
 import { useEffectEvent, useLayoutEffect, useState, type RefObject } from 'react'
-import { NATIVE_CHAT_DOCK_ITEM_SELECTOR } from '../pane/dock/native-chat-dock-fit'
+import { nativeChatDockItems } from '../pane/dock/native-chat-dock-fit'
 
 export const NATIVE_CHAT_QUEUE_FULL_ROWS = 6
 const QUESTION_ROWS = 3
@@ -26,9 +26,9 @@ export function useNativeChatQueueRoom(
     }
     let lastCap = NATIVE_CHAT_QUEUE_FULL_ROWS
     const read = (): void => {
-      const questionOpen = Array.from(
-        dock?.querySelectorAll(NATIVE_CHAT_DOCK_ITEM_SELECTOR) ?? []
-      ).some((item) => item.matches(`${QUESTION_SELECTOR}:not([hidden])`))
+      const questionOpen = (dock ? nativeChatDockItems(dock) : []).some((item) =>
+        item.matches(`${QUESTION_SELECTOR}:not([hidden])`)
+      )
       const unit = unitRef.current?.getBoundingClientRect().height ?? 0
       const short = unit > 0 && root.clientHeight < unit * SHORT_PANE_UNITS
       const cap = short

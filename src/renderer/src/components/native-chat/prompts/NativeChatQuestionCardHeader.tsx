@@ -60,7 +60,7 @@ export function NativeChatQuestionCardHeader({
       <MessageCircleQuestionMark aria-hidden className="mt-0.5 size-3.5 shrink-0 text-primary" />
       <div
         data-native-chat-dock-floor-lines={2}
-        className="native-chat-question-card-question min-h-[1lh] min-w-[min(24ch,calc(100%-var(--spacing)*5))] flex-1 overflow-y-auto text-[length:calc(var(--text-sm)*15/13)] leading-snug font-semibold text-foreground scrollbar-sleek max-h-[4lh] [[data-native-chat-dock-fit~=card]_&]:max-h-[2lh]"
+        className="native-chat-question-card-question min-h-[1lh] min-w-[min(24ch,calc(100%-var(--spacing)*5))] flex-1 overflow-y-auto text-[length:calc(var(--text-sm)*15/13)] leading-snug font-semibold text-foreground scrollbar-sleek [[data-native-chat-dock-fit~=card]_&]:max-h-[2lh]"
       >
         <div data-native-chat-dock-content data-testid="native-chat-question-card-title">
           {question}

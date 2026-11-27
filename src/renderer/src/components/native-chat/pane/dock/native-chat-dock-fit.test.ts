@@ -126,3 +126,16 @@ it('steps up when a list scroller cannot show its first item whole', () => {
   height.client = 48
   expect(runNativeChatDockFit(root, dock)).toBe(0)
 })
+
+it('measures a card through the display: contents wrappers that slot it into the dock', () => {
+  const { root, dock } = dockOf(() => 700)
+  const card = dock.querySelector('#card')!
+  const outer = document.createElement('div')
+  const inner = document.createElement('div')
+  outer.style.display = 'contents'
+  inner.style.display = 'contents'
+  card.replaceWith(outer)
+  outer.append(inner)
+  inner.append(card)
+  expect(runNativeChatDockFit(root, dock)).toBe(0)
+})

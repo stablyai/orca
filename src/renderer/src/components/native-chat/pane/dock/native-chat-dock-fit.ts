@@ -18,7 +18,6 @@ const UNSQUEEZED_SELECTOR = '[data-native-chat-dock-unsqueezed]'
 const FLOOR_SELECTOR = '[data-native-chat-dock-floor-lines]'
 const FIRST_ITEM_SELECTOR = '[data-native-chat-dock-floor-first-item]'
 const CONTENTS_SELECTOR = '[data-native-chat-dock-contents]'
-export const NATIVE_CHAT_DOCK_ITEM_SELECTOR = `:scope > :not(${CONTENTS_SELECTOR}), :scope > ${CONTENTS_SELECTOR}:not([hidden]) > *`
 export const NATIVE_CHAT_DOCK_OBSERVED_SELECTOR =
   '[data-native-chat-dock-pinned], [data-native-chat-dock-content]'
 export const NATIVE_CHAT_DOCK_INVALIDATE_EVENT = 'native-chat-dock-invalidate'
@@ -34,6 +33,25 @@ export function invalidateNativeChatDockFit(element: Element): void {
     .closest(ROOT_SELECTOR)
     ?.querySelector(DOCK_SELECTOR)
     ?.dispatchEvent(new Event(NATIVE_CHAT_DOCK_INVALIDATE_EVENT))
+}
+
+export function nativeChatDockItems(dock: Element): Element[] {
+  const items: Element[] = []
+  const collect = (parent: Element): void => {
+    for (const child of Array.from(parent.children)) {
+      if (child.matches(CONTENTS_SELECTOR)) {
+        if (!child.hasAttribute('hidden')) {
+          collect(child)
+        }
+      } else if (getComputedStyle(child).display === 'contents') {
+        collect(child)
+      } else {
+        items.push(child)
+      }
+    }
+  }
+  collect(dock)
+  return items
 }
 
 function dockItemOf(items: ReadonlySet<Element>, element: Element): Element | null {
@@ -52,7 +70,7 @@ function isRendered(element: Element): boolean {
 export function nativeChatDockFits(dock: HTMLElement): boolean {
   const box = dock.getBoundingClientRect()
   // A display:contents wrapper keeps a collapsed prompt mounted; the card itself owns the flex box.
-  const items = new Set(dock.querySelectorAll(NATIVE_CHAT_DOCK_ITEM_SELECTOR))
+  const items = new Set(nativeChatDockItems(dock))
   for (const item of items) {
     if (isRendered(item) && item.getBoundingClientRect().bottom > box.bottom + SLACK) {
       return false
