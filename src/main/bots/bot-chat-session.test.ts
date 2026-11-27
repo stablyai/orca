@@ -374,7 +374,7 @@ describe('a Home Chat for each person', () => {
             accountId: ALICE.accountId,
             answer: 'declined'
           },
-          Date.now()
+          3
         )
       }
       expect(published).toHaveBeenCalledWith(ALICE_HOME)
