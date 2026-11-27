@@ -126,13 +126,13 @@ async function prepareForPty(
   ) {
     return { preparedCommand: command ?? null, launchConfig, blocked }
   }
-  const fallback = prepareShellNativeAgentLaunch(
-    command,
-    shell,
-    launch.images !== false && settings?.terminalInlineImages !== false
-  )
+  const images = launch.images !== false && settings?.terminalInlineImages !== false
+  const fallback = prepareShellNativeAgentLaunch(command, shell, images)
   const preparedCommand = receivingShellCheck
-    ? await renderReceivingShellLaunch(receivingShellCheck, command, fallback)
+    ? await renderReceivingShellLaunch(receivingShellCheck, command, fallback, {
+        prepareBareForSh: (bare) =>
+          prepareShellNativeAgentLaunch(bare, shell, images, { allowByName: true })
+      })
     : fallback
   return { preparedCommand, launchConfig, blocked }
 }

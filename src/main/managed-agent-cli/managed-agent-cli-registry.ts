@@ -1,7 +1,10 @@
 // Orca's agent CLI copies support native chat and its host-side integrations.
 
 import { dirname } from 'node:path'
-import type { ManagedAgentCli } from '../node-runtime/managed-runtime-release'
+import {
+  runtimeReleaseMayBePublished,
+  type ManagedAgentCli
+} from '../node-runtime/managed-runtime-release'
 import {
   CLAUDE_MANAGED_RUNTIME,
   claudeManagedExecutable,
@@ -92,6 +95,20 @@ export function isManagedAgentCli(agent: string): agent is ManagedAgentCliId {
 
 export function managedAgentCli(agent: ManagedAgentCliId): ManagedAgentCli {
   return MANAGED_AGENT_CLIS[agent]
+}
+
+export async function readManagedAgentsFromDisk(
+  dataDirectory: string,
+  include: (agent: ManagedAgentCliId) => boolean
+): Promise<ManagedAgentCliId[]> {
+  const present = await Promise.all(
+    MANAGED_AGENT_CLI_IDS.filter(include).map(async (agent) =>
+      (await runtimeReleaseMayBePublished(managedAgentCli(agent).runtime.root(dataDirectory)))
+        ? agent
+        : null
+    )
+  )
+  return present.filter((agent) => agent !== null)
 }
 
 const installedFolders = new Map<ManagedAgentCliId, string>()

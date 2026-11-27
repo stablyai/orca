@@ -53,6 +53,7 @@ export type InventorySlot = InventoryPublications & {
   wslGeneration?: number
   shellPath?: string
   retired?: true
+  onRetire?: () => void
   pending?: PendingInventory
   retry?: { after: number; generation: number | undefined }
   missRetry?: { after: number; generation: number | undefined }

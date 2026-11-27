@@ -8,7 +8,12 @@ import { getCachedWslDistros } from '../wsl/discovery/distro-catalog'
 import { resolveWslDefaultDistro } from '../wsl/discovery/wsl-default-distro'
 import { onWslDiscoveryChanged } from '../wsl/discovery/wsl-discovery-change'
 import { onRunningWslDistrosStopped } from '../wsl/discovery/wsl-running-distro-cache'
-import { getWslGuestEnvironmentGeneration } from '../wsl/execution/wsl-guest-environment'
+import {
+  forgetWslGuestEnvironmentGeneration,
+  getWslGuestEnvironmentGeneration,
+  invalidateWslGuestEnvironment,
+  trackWslGuestEnvironmentGeneration
+} from '../wsl/execution/wsl-guest-environment'
 import {
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   getTuiAgentDetectionProbeCommands
@@ -52,14 +57,15 @@ const wsl = new Map<string, InventorySlot & { registered: boolean }>()
 function retireWslInventory(key: string): void {
   const slot = wsl.get(key)
   if (slot) {
-    wsl.delete(key)
     retireInventorySlot(slot)
   }
 }
 
 onRunningWslDistrosStopped((stopped) => {
   for (const distro of stopped) {
-    retireWslInventory(distro.toLowerCase())
+    const key = distro.toLowerCase()
+    retireWslInventory(key)
+    invalidateWslGuestEnvironment(key)
   }
 })
 
@@ -74,6 +80,7 @@ onWslDiscoveryChanged(() => {
       slot.registered = true
     } else if (slot.registered) {
       retireWslInventory(key)
+      invalidateWslGuestEnvironment(key)
     }
   }
 })
@@ -143,11 +150,17 @@ export async function wslInventory(
       retireWslInventory(oldest)
     }
   }
-  const slot = {
+  const slot: InventorySlot & { registered: boolean } = {
     distro,
     stockCommands: wslStockCommands,
-    wslGeneration: generation,
-    registered: getCachedWslDistros()?.some((name) => name.toLowerCase() === key) ?? false
+    wslGeneration: trackWslGuestEnvironmentGeneration(distro),
+    registered: getCachedWslDistros()?.some((name) => name.toLowerCase() === key) ?? false,
+    onRetire: () => {
+      if (wsl.get(key) === slot) {
+        wsl.delete(key)
+        forgetWslGuestEnvironmentGeneration(key)
+      }
+    }
   }
   wsl.set(key, slot)
   return slot

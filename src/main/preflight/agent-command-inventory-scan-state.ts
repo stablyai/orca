@@ -39,6 +39,7 @@ export function finishInventoryScan(
 
 export function retireInventorySlot(slot: InventorySlot): void {
   slot.retired = true
+  slot.onRetire?.()
   const pending = slot.pending
   delete slot.pending
   if (pending) {

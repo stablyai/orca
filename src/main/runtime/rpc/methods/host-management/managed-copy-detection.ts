@@ -8,12 +8,11 @@ import {
   isManagedAgentCli,
   launchReleasesPending,
   MANAGED_AGENT_CLI_IDS,
-  managedAgentCli,
   managedAgentStandsInFor,
   noteLaunchReleasesRecorded,
+  readManagedAgentsFromDisk,
   type ManagedAgentCliId
 } from '../../../../managed-agent-cli/managed-agent-cli-registry'
-import { runtimeReleaseMayBePublished } from '../../../../node-runtime/managed-runtime-release'
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import { provideInstalledManagedAgents } from '../../../../preflight/managed-agent-detection'
 import { notifyAgentsRefreshedOnHost } from '../../../../preflight/agents-refreshed-on-host'
@@ -91,15 +90,9 @@ export function provideManagedAgentDetection(runtime: ManagedCopySettingsSource)
       if (launchReleasesPending() === null) {
         return rememberedManagedAgents(runtime)
       }
-      const dataDirectory = getProfileUserDataPath()
-      const present = await Promise.all(
-        MANAGED_AGENT_CLI_IDS.map(
-          async (agent) =>
-            managedCopyMayRun(agent, runtime) &&
-            (await runtimeReleaseMayBePublished(managedAgentCli(agent).runtime.root(dataDirectory)))
-        )
+      countedOnDisk = await readManagedAgentsFromDisk(getProfileUserDataPath(), (agent) =>
+        managedCopyMayRun(agent, runtime)
       )
-      countedOnDisk = MANAGED_AGENT_CLI_IDS.filter((_, index) => present[index])
       return countedOnDisk
     } catch (error) {
       // Without settings Orca can't tell which copies may run; detection goes on without them.

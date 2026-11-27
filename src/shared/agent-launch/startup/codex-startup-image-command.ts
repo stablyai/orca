@@ -159,8 +159,16 @@ export function withCodexDirectLaunchCommand(
 export function prepareShellNativeAgentLaunch(
   command: string,
   shell: AgentStartupShell,
-  images: boolean
+  images: boolean,
+  options?: { allowByName?: boolean; probeInShell?: boolean }
 ): string {
-  const codex = withCodexDirectLaunchCommand(command, shell, { images, probeInShell: true })
-  return codex === command ? withClaudeDirectLaunchCommand(command, shell) : codex
+  const codex = withCodexDirectLaunchCommand(
+    command,
+    shell,
+    { images, probeInShell: options?.probeInShell ?? true },
+    readCodexDirectLaunch(command, shell, options?.allowByName)
+  )
+  return codex === command
+    ? withClaudeDirectLaunchCommand(command, shell, undefined, options?.allowByName)
+    : codex
 }

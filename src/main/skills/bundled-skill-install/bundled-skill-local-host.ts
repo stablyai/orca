@@ -1,6 +1,9 @@
 import { join } from 'node:path'
 import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
-import type { SkillInstallProviderId } from '../../../shared/skills/installation/skill-install-providers'
+import {
+  isSkillInstallProviderId,
+  type SkillInstallProviderId
+} from '../../../shared/skills/installation/skill-install-providers'
 import { enableCliInventoryDirectoryReads } from '../../ipc/command-path/command-path-directory-worker-client'
 import { killActiveShellProbes } from '../../startup/shell-environment/shell-probe-lifetime'
 import {
@@ -26,7 +29,7 @@ export type BundledSkillSelection = {
   installedOnly?: boolean
 }
 
-export async function sendCliSkillAgentInventory(): Promise<void> {
+export async function sendCliSkillAgentInventory(userDataPath: string): Promise<void> {
   const stop = (): void => {
     try {
       killActiveShellProbes()
@@ -43,7 +46,11 @@ export async function sendCliSkillAgentInventory(): Promise<void> {
   enableCliInventoryDirectoryReads()
   let reply: SkillInstallProviderId[] | string
   try {
-    reply = await detectLocalSkillInstallProviders()
+    const { readManagedAgentsFromDisk } =
+      await import('../../managed-agent-cli/managed-agent-cli-registry')
+    reply = await detectLocalSkillInstallProviders(undefined, () =>
+      readManagedAgentsFromDisk(userDataPath, isSkillInstallProviderId)
+    )
   } catch (error) {
     reply = error instanceof Error ? error.message : String(error)
   }

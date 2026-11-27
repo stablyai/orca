@@ -58,7 +58,8 @@ export async function main(
     const { CLI_SKILL_AGENT_INVENTORY_ARG, sendCliSkillAgentInventory } =
       await import('./skills/cli-skill-agent-inventory.js')
     if (argv[0] === CLI_SKILL_AGENT_INVENTORY_ARG) {
-      await sendCliSkillAgentInventory()
+      const { getDefaultUserDataPath } = await import('./runtime/profile/metadata.js')
+      await sendCliSkillAgentInventory(getDefaultUserDataPath())
       return
     }
   }

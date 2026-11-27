@@ -1,3 +1,4 @@
+import { CODEX_PROBE_DONE } from '../../shell/launch/agents/codex-shell-function'
 import { buildReceivingHermesQueryCommand } from './hermes-startup-query'
 import { readLaunchPosition } from './launch-position'
 import { isFreshOmpLaunchCommand, prepareFreshOmpLaunch } from './omp-fresh-launch'
@@ -73,7 +74,8 @@ function renderBranches(check: ReceivingShellCheck, bare: string, fallback: stri
 export async function renderReceivingShellLaunch(
   check: ReceivingShellCheck,
   command: string,
-  fallback: string
+  fallback: string,
+  options?: { prepareBareForSh: (command: string) => string; codexProbeDone?: boolean }
 ): Promise<string> {
   if (check.hermesArgs) {
     const bare = buildReceivingHermesQueryCommand([check.name, ...check.hermesArgs], check.shell)
@@ -87,7 +89,15 @@ export async function renderReceivingShellLaunch(
     }
     const prefix = inner.slice(0, launch.invocationStart)
     const assignments = syntax === 'posix' ? inner.slice(launch.invocationStart, launch.start) : ''
-    const bare = assignments + check.name + inner.slice(launch.end)
+    let bare = assignments + check.name + inner.slice(launch.end)
+    if (options && check.shell === 'sh') {
+      bare = options.prepareBareForSh(bare)
+    } else if (options?.codexProbeDone) {
+      bare =
+        syntax === 'powershell'
+          ? `& { $${CODEX_PROBE_DONE} = $true; ${bare} }`
+          : `${CODEX_PROBE_DONE}=1 ${bare}`
+    }
     return prefix + renderBranches(check, bare, prepared.slice(prefix.length))
   }
   return command === fallback && isFreshOmpLaunchCommand(command)

@@ -189,9 +189,17 @@ export async function preparePtyAgentLaunch(
     prepared !== undefined &&
     (authored || launchConfig?.commandProvenance === 'generated')
   ) {
-    prepared = await prepareDirectLaunch(prepared, shell, input, env, local, images, authored)
-  }
-  if (receivingShellCheck && agentCommand !== undefined && prepared !== undefined) {
+    prepared = await prepareDirectLaunch(
+      prepared,
+      shell,
+      input,
+      env,
+      local,
+      images,
+      authored,
+      receivingShellCheck
+    )
+  } else if (receivingShellCheck && agentCommand !== undefined && prepared !== undefined) {
     prepared = await renderReceivingShellLaunch(receivingShellCheck, agentCommand, prepared)
   }
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)

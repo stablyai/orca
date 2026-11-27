@@ -17,7 +17,8 @@ const CLAUDE_SETUP_POSIX_PREFIX = /* @__PURE__ */ (() =>
 export function withClaudeDirectLaunchCommand(
   command: string,
   shell: AgentStartupShell,
-  programExpression?: string
+  programExpression?: string,
+  allowByName = false
 ): string {
   if (shell === 'cmd' || !/claude/i.test(command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS))) {
     return command
@@ -25,7 +26,7 @@ export function withClaudeDirectLaunchCommand(
   const launch = readLaunchPosition(command, shell)
   if (
     !launch ||
-    (!programExpression && !/[\\/]/.test(launch.executable)) ||
+    (!programExpression && !allowByName && !/[\\/]/.test(launch.executable)) ||
     !launchExecutableIs(launch.executable, CLAUDE_EXECUTABLE)
   ) {
     return command

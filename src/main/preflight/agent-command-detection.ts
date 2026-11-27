@@ -54,9 +54,6 @@ export async function withAgentInventoryDeadline<T>(
   timeoutMs?: number
 ): Promise<T> {
   throwIfSignalAborted(signal)
-  if (signal && timeoutMs === undefined) {
-    return operation(signal)
-  }
   const controller = new AbortController()
   const timer = setTimeout(
     () => controller.abort(new AgentInventoryDeadlineError()),

@@ -94,6 +94,16 @@ export function getWslGuestEnvironmentGeneration(distro: string | undefined): nu
   return distroGenerations.get(cacheKey(distro)) ?? defaultGeneration
 }
 
+export function trackWslGuestEnvironmentGeneration(distro: string): number {
+  const generation = ++environmentGeneration
+  distroGenerations.set(cacheKey(distro), generation)
+  return generation
+}
+
+export function forgetWslGuestEnvironmentGeneration(distro: string): void {
+  distroGenerations.delete(cacheKey(distro))
+}
+
 /** Null means "could not ask", never "has no PATH" -- callers fall back. */
 export function getWslGuestEnvironment(
   distro: string | undefined,
@@ -178,7 +188,9 @@ export function invalidateWslGuestEnvironment(distro?: string, all = false): voi
     return
   }
   const key = cacheKey(distro)
-  distroGenerations.set(key, ++environmentGeneration)
+  if (distroGenerations.has(key)) {
+    distroGenerations.set(key, ++environmentGeneration)
+  }
   inFlight.delete(key)
   resolved.delete(key)
   retryAfter.delete(key)

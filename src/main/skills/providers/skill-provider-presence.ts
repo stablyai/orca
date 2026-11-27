@@ -7,9 +7,10 @@ import { detectInstalledAgentsWithShellPathHydration } from '../../preflight/ins
 import { readInstalledManagedAgents } from '../../preflight/managed-agent-detection'
 
 export async function detectLocalSkillInstallProviders(
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  readManaged = readInstalledManagedAgents
 ): Promise<SkillInstallProviderId[]> {
   const terminal = await detectInstalledAgentsWithShellPathHydration(undefined, undefined, signal)
-  const managed = await waitForPromiseWithSignal(readInstalledManagedAgents(), signal)
+  const managed = await waitForPromiseWithSignal(readManaged(), signal)
   return [...new Set([...terminal, ...managed])].filter(isSkillInstallProviderId)
 }
