@@ -21,6 +21,8 @@ export function sanitizeRendererSettingsUpdate(
   delete sanitizedArgs.pluginConsents
   delete sanitizedArgs.disabledPlugins
   delete sanitizedArgs.pluginExternalHostGrants
+  // Only KeybindingService may change it, so live shortcut defaults never drift from the saved choice.
+  delete sanitizedArgs.searchShortcutOptIn
   // Only main's assignment writes this; other telemetry fields keep their existing handling.
   if (sanitizedArgs.telemetry && 'browserExtensionsBanner' in sanitizedArgs.telemetry) {
     const { browserExtensionsBanner: _mainOwned, ...telemetry } = sanitizedArgs.telemetry

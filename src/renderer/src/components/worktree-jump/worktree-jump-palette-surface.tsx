@@ -1,5 +1,6 @@
 import { ShortcutKeyCombo } from '../ui/ShortcutKeyCombo'
 import { WorktreeJumpPaletteTaskSearchStatus } from './tasks/worktree-jump-palette-task-search-status'
+import { useRef } from 'react'
 import type React from 'react'
 import { X } from 'lucide-react'
 import { CommandDialog, CommandEmpty, CommandInput, CommandList } from '@/components/ui/command'
@@ -14,6 +15,10 @@ import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/Wo
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import { WorktreeJumpPaletteEntry } from './rows/worktree-jump-palette-entry'
 import { FooterKey, PaletteState } from './rows/worktree-jump-palette-row-content'
+import {
+  WorktreeJumpPaletteSearchShortcutOffer,
+  type SearchShortcutAcceptRef
+} from './worktree-jump-palette-search-shortcut-offer'
 import {
   getWorktreeJumpPaletteEmptyState,
   getWorktreeJumpPaletteResultCount
@@ -35,6 +40,8 @@ export function WorktreeJumpPaletteSurface({
     (item) => item.id === controller.commandSelectedItemId
   )
   const modKey = navigator.userAgent.includes('Mac') ? '⌘' : 'Ctrl'
+  // The Search shortcut card's Switch button while it offers Mod+Enter; a selected task row keeps the chord.
+  const acceptSearchShortcutRef: SearchShortcutAcceptRef = useRef<HTMLButtonElement>(null)
   const emptyState = getWorktreeJumpPaletteEmptyState(controller, t)
   const resultCount = getWorktreeJumpPaletteResultCount(controller)
   const { scoped, botsEnabled } = controller.botScope
@@ -81,14 +88,20 @@ export function WorktreeJumpPaletteSurface({
           if (!resultsReady && (RESULT_KEYS.has(event.key) || event.ctrlKey || event.metaKey)) {
             revealResultsNow()
           }
-          if (
-            selectedTask &&
+          const modEnter =
             event.key === 'Enter' &&
             (navigator.userAgent.includes('Mac') ? event.metaKey : event.ctrlKey)
-          ) {
+          if (selectedTask && modEnter) {
             event.preventDefault()
             event.stopPropagation()
             controller.handleSelectTask(selectedTask.result, true)
+            return
+          }
+          const switchSearchShortcut = acceptSearchShortcutRef.current
+          if (modEnter && switchSearchShortcut) {
+            event.preventDefault()
+            event.stopPropagation()
+            switchSearchShortcut.click()
             return
           }
           if (
@@ -160,6 +173,10 @@ export function WorktreeJumpPaletteSurface({
         portalContainer={controller.dialogElement}
         side="bottom"
         contentClassName="w-80"
+      />
+      <WorktreeJumpPaletteSearchShortcutOffer
+        acceptShortcutRef={acceptSearchShortcutRef}
+        modEnterFree={!selectedTask}
       />
       {botsEnabled && !scoped ? (
         <span id={scopeHintId} className="sr-only">

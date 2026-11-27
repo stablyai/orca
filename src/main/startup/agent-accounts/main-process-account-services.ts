@@ -1,6 +1,8 @@
 import { installProviderAccountCatalogWarmup } from '../../providers/accounts/provider-account-catalog-warmup'
 import { createDesktopCodexSessionMigration } from '../../codex/history/backfill/desktop-codex-session-migration'
 import { KeybindingService } from '../../keybindings/keybinding-service'
+import { parseSearchShortcutChoice } from '../../../shared/keybindings/search-shortcut-opt-in'
+import { toSearchShortcutPluginOwners } from '../../../shared/keybindings/search-shortcut-plugin-owners'
 import { createProviderAccountServices } from '../../providers/accounts/provider-account-services'
 import {
   hasOpenCodeGoApiKey,
@@ -75,7 +77,14 @@ export async function initializeMainProcessAccountServices(
     legacySearchDefaults:
       (process.platform === 'darwin'
         ? store.getSettings().searchKeybindingSeed
-        : store.getSettings().nonMacSearchKeybindingSeed) === 'legacy'
+        : store.getSettings().nonMacSearchKeybindingSeed) === 'legacy',
+    readSearchShortcutChoice: () =>
+      parseSearchShortcutChoice(store.getSettings().searchShortcutOptIn),
+    persistSearchShortcutChoice: async (choice) => {
+      await store.updateSettingsAndFlush({ searchShortcutOptIn: choice })
+    },
+    getSearchShortcutPluginOwners: () =>
+      toSearchShortcutPluginOwners(core.pluginService?.contentPacks.commands.list() ?? [])
   })
   browserManager.setSettingsResolver(() => ({ keybindings: core.keybindings?.getOverrides() }))
 }
