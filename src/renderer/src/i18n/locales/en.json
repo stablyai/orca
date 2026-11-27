@@ -21950,6 +21950,8 @@
       "railLabel": "Your messages",
       "railImageMessage": "Image attachment",
       "railEmptyMessage": "Message",
+      "pinnedPromptJump": "Scroll to this prompt",
+      "pinnedPromptImage": "Image prompt",
       "railFilterPlaceholder": "Filter your messages",
       "railNoMatches": "No messages match",
       "railTickLabel": "Message {{index}} of {{count}}: {{text}}",

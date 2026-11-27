@@ -4,7 +4,7 @@ import { nativeChatTranscriptOuterClass } from './appearance/native-chat-appeara
 import { NativeChatTranscriptViewport } from './NativeChatTranscriptViewport'
 import { useNativeChatToolRunScroll as useToolRunScroll } from './viewport/scroll/native-chat-transcript-scroll-context'
 import { NativeChatTranscriptColumn } from './NativeChatTranscriptColumn'
-import { NativeChatNewRowsAnnouncement } from './viewport/new-rows/NativeChatNewRowsMarker'
+import { NativeChatTranscriptOverlays } from './viewport/NativeChatTranscriptOverlays'
 import { useNativeChatNewRowsMarker } from './viewport/new-rows/native-chat-new-rows-marker'
 import { useNativeChatRowTypography } from './viewport/virtualization/use-native-chat-row-typography'
 import { useNativeChatShownRows } from './conversation/slots/use-native-chat-shown-rows'
@@ -46,7 +46,6 @@ import { useNativeChatTranscriptScroll } from './viewport/scroll/use-native-chat
 import { useNativeChatOlderHistoryAutoload } from './viewport/history/use-native-chat-older-history-autoload'
 import { NativeChatOlderHistoryRow } from './viewport/history/NativeChatOlderHistoryRow'
 import { useNativeChatMessageRail } from './viewport/rail/use-native-chat-message-rail'
-import { NativeChatMessageRail } from './viewport/rail/NativeChatMessageRail'
 import { useNativeChatRailWake } from './viewport/rail/use-native-chat-rail-wake'
 import type { NativeChatRailOutlineEntry } from './viewport/rail/native-chat-message-rail-items'
 import {
@@ -363,6 +362,22 @@ export function NativeChatMessageList({
     onRevealDiff: navigation.revealDiff
   })
 
+  const overlays = (
+    <NativeChatTranscriptOverlays
+      rail={rail}
+      railRef={railRef}
+      scrollRef={scrollRef}
+      onSelect={navigation.selectRailItem}
+      onReaderScroll={readerInput.railWheel}
+      pendingId={navigation.pendingRailId}
+      listEnabled={isVisible}
+      transcriptKey={session.transcriptIdentity ?? session.sessionId ?? ''}
+      newRowsMarked={newRows.marker !== undefined}
+      pinnedVisible={subagentId === null}
+      readerAtEnd={readerAtEnd()}
+    />
+  )
+
   return (
     <NativeChatBotHomeScope kickoff={botHome} isVisible={isVisible}>
       <NativeChatPullRequestChangeContext.Provider value={openedPullRequests.latestChangeKey}>
@@ -376,21 +391,7 @@ export function NativeChatMessageList({
             showJump={showJump}
             onJump={jumpToLatest}
             label={scope.regionLabel}
-            overlays={
-              <>
-                <NativeChatMessageRail
-                  key={session.transcriptIdentity ?? session.sessionId}
-                  rail={rail}
-                  railRef={railRef}
-                  scrollRef={scrollRef}
-                  onSelect={navigation.selectRailItem}
-                  onReaderScroll={readerInput.railWheel}
-                  pendingId={navigation.pendingRailId}
-                  listEnabled={isVisible}
-                />
-                <NativeChatNewRowsAnnouncement marked={newRows.marker !== undefined} />
-              </>
-            }
+            overlays={overlays}
           >
             {showOlderHistory ? (
               <NativeChatOlderHistoryRow
