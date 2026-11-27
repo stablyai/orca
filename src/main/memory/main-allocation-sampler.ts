@@ -117,11 +117,15 @@ function formatFrame(frame: ProfileNode['callFrame']): string {
 function startIpcTally(): () => Map<string, ChannelTally> {
   const tally = new Map<string, ChannelTally>()
   const count = (channel: unknown, payload: unknown, calls = 1): void => {
-    const key = safeChannel(channel)
-    const entry = tally.get(key) ?? { calls: 0, bytes: 0 }
-    entry.calls += calls
-    entry.bytes += approxBytes(payload)
-    tally.set(key, entry)
+    try {
+      const key = safeChannel(channel)
+      const entry = tally.get(key) ?? { calls: 0, bytes: 0 }
+      entry.calls += calls
+      entry.bytes += approxBytes(payload)
+      tally.set(key, entry)
+    } catch {
+      // A throwing getter in a payload must never fail the IPC call itself.
+    }
   }
   const handlers: Map<unknown, unknown> | null =
     '_invokeHandlers' in ipcMain && ipcMain._invokeHandlers instanceof Map
