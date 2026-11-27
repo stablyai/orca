@@ -54,18 +54,7 @@ export function MobileNativeChatMcpPanel(props: MobileNativeChatMcpPanelProps): 
   const colors = useMobileColors()
   const t = useMobileTranslation()
   const listed = props.result?.status === 'ok' && props.servers.length > 0
-  const summary = !listed
-    ? []
-    : props.servers.some((server) => server.status === 'unreported')
-      ? [
-          {
-            text: t('chat.mcp.unreported', "{{agent}} doesn't report connection status", {
-              agent: props.agentLabel
-            }),
-            attention: false
-          }
-        ]
-      : mobileMcpTraySummary(props.servers, props.signIn, t)
+  const summary = listed ? mobileMcpTraySummary(props.servers, props.signIn, t) : []
   return (
     <View
       style={[queuedMessageStyles.box, queuedMessageStyles.composerTab]}
@@ -149,6 +138,18 @@ function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
   }
   if (servers.length === 0) {
     return <Notice text={t('chat.mcp.empty', 'No MCP servers are set up for this chat.')} />
+  }
+  if (servers.some((server) => server.status === 'unreported')) {
+    return (
+      <>
+        <Notice
+          text={t('chat.mcp.unreported', "{{agent}} doesn't report connection status.", {
+            agent: props.agentLabel
+          })}
+        />
+        <McpServerList {...props} />
+      </>
+    )
   }
   return <McpServerList {...props} />
 }
