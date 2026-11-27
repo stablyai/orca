@@ -25,7 +25,8 @@ export function ToggleButton({
   children,
   ariaExpanded
 }: {
-  active: boolean
+  /** Omit for a plain action, such as Clear. */
+  active?: boolean
   onClick: () => void
   title: string
   children: React.ReactNode
@@ -36,14 +37,9 @@ export function ToggleButton({
       <TooltipTrigger asChild>
         <Button
           type="button"
-          variant="ghost"
+          variant="muted-field-icon"
           size="icon-xs"
-          className={cn(
-            'h-auto w-auto rounded-sm p-0.5 flex-shrink-0',
-            active
-              ? 'bg-accent text-accent-foreground'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-          )}
+          className="shrink-0"
           onClick={onClick}
           aria-label={title}
           aria-pressed={active}

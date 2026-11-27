@@ -1,9 +1,21 @@
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React from 'react'
-import { Search as SearchIcon, CaseSensitive, WholeWord, Regex, X, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import {
+  Search as SearchIcon,
+  CaseSensitive,
+  WholeWord,
+  Regex,
+  X,
+  Loader2,
+  ListFilter
+} from 'lucide-react'
+import { cn } from '@/lib/class-names'
 import { ToggleButton } from './SearchResultItems'
 import { useTranslate } from '@/i18n/use-translate'
+import {
+  EXPLORER_QUERY_FIELD_CLASS,
+  EXPLORER_QUERY_INPUT_CLASS
+} from '../panel/explorer-query-field-class'
 
 export type SearchQueryRowProps = {
   inputRef: React.Ref<HTMLInputElement>
@@ -12,12 +24,16 @@ export type SearchQueryRowProps = {
   caseSensitive: boolean
   wholeWord: boolean
   useRegex: boolean
+  filtersOpen: boolean
+  /** Include/exclude patterns in effect, e.g. "src/**, !dist/**"; empty when none. */
+  filterSummary: string
   onQueryChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   onKeyDown: (e: React.KeyboardEvent) => void
   onClearSearch: () => void
   onToggleCaseSensitive: () => void
   onToggleWholeWord: () => void
   onToggleRegex: () => void
+  onToggleFilters: () => void
 }
 
 export function SearchQueryRow({
@@ -27,67 +43,100 @@ export function SearchQueryRow({
   caseSensitive,
   wholeWord,
   useRegex,
+  filtersOpen,
+  filterSummary,
   onQueryChange,
   onKeyDown,
   onClearSearch,
   onToggleCaseSensitive,
   onToggleWholeWord,
-  onToggleRegex
+  onToggleRegex,
+  onToggleFilters
 }: SearchQueryRowProps): React.JSX.Element {
   const t = useTranslate()
+  const hasFilters = filterSummary.length > 0
+  // Why: anything narrowing the results stays visible at rest so it never filters silently.
+  const pinOptions =
+    query.length > 0 || caseSensitive || wholeWord || useRegex || filtersOpen || hasFilters
+  const filtersLabel = t('fileSearch.filters.toggle', 'Toggle search details')
   return (
-    <div
-      className="flex h-8 items-center gap-1 rounded-md border border-border bg-input/50 px-2 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring"
-      data-ignore-file-explorer-keys="true"
-    >
-      <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
-      <ImeInput
-        ref={inputRef}
-        type="text"
-        data-file-search-input="true"
-        data-explorer-query-input="search"
-        className="min-w-0 flex-1 bg-transparent py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground"
-        aria-label={t('auto.components.right.sidebar.SearchQueryRow.queryLabel', 'Search files')}
-        placeholder={t('auto.components.right.sidebar.SearchHeader.693cbeadd0', 'Search')}
-        value={query}
-        onChange={onQueryChange}
-        onKeyDown={onKeyDown}
-        spellCheck={false}
-      />
-      {loading ? <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" /> : null}
-      {query ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="h-auto w-auto rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
-          aria-label={t('auto.components.right.sidebar.SearchQueryRow.clearLabel', 'Clear search')}
-          onClick={onClearSearch}
+    <div className="@container">
+      <div
+        className={cn('group/search', EXPLORER_QUERY_FIELD_CLASS)}
+        data-ignore-file-explorer-keys="true"
+      >
+        <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
+        <ImeInput
+          ref={inputRef}
+          type="text"
+          data-file-search-input="true"
+          data-explorer-query-input="search"
+          className={EXPLORER_QUERY_INPUT_CLASS}
+          aria-label={t('auto.components.right.sidebar.SearchQueryRow.queryLabel', 'Search files')}
+          placeholder={t('auto.components.right.sidebar.SearchHeader.693cbeadd0', 'Search')}
+          value={query}
+          onChange={onQueryChange}
+          onKeyDown={onKeyDown}
+          spellCheck={false}
+        />
+        {loading ? (
+          <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+        ) : null}
+        <span
+          className={cn(
+            'flex shrink-0 items-center',
+            // Why: invisible, not hidden, so revealing the options never shifts the input.
+            pinOptions
+              ? 'visible'
+              : 'invisible group-hover/search:visible group-focus-within/search:visible'
+          )}
+          onMouseDown={(event) => event.preventDefault()}
         >
-          <X className="size-3" />
-        </Button>
-      ) : null}
-      <ToggleButton
-        active={caseSensitive}
-        onClick={onToggleCaseSensitive}
-        title={t('auto.components.right.sidebar.SearchHeader.464ae3974f', 'Match Case')}
-      >
-        <CaseSensitive className="size-3.5" />
-      </ToggleButton>
-      <ToggleButton
-        active={wholeWord}
-        onClick={onToggleWholeWord}
-        title={t('auto.components.right.sidebar.SearchHeader.4567e6e0b6', 'Match Whole Word')}
-      >
-        <WholeWord className="size-3.5" />
-      </ToggleButton>
-      <ToggleButton
-        active={useRegex}
-        onClick={onToggleRegex}
-        title={t('auto.components.right.sidebar.SearchHeader.6234a5ef85', 'Use Regular Expression')}
-      >
-        <Regex className="size-3.5" />
-      </ToggleButton>
+          {query ? (
+            // Why: in a near-minimum sidebar the query needs the room; Escape still clears.
+            <span className="mr-1 flex @max-[240px]:hidden">
+              <ToggleButton
+                onClick={onClearSearch}
+                title={t('auto.components.right.sidebar.SearchQueryRow.clearLabel', 'Clear search')}
+              >
+                <X className="size-3.5" />
+              </ToggleButton>
+            </span>
+          ) : null}
+          <ToggleButton
+            active={caseSensitive}
+            onClick={onToggleCaseSensitive}
+            title={t('auto.components.right.sidebar.SearchHeader.464ae3974f', 'Match Case')}
+          >
+            <CaseSensitive className="size-3.5" />
+          </ToggleButton>
+          <ToggleButton
+            active={wholeWord}
+            onClick={onToggleWholeWord}
+            title={t('auto.components.right.sidebar.SearchHeader.4567e6e0b6', 'Match Whole Word')}
+          >
+            <WholeWord className="size-3.5" />
+          </ToggleButton>
+          <ToggleButton
+            active={useRegex}
+            onClick={onToggleRegex}
+            title={t(
+              'auto.components.right.sidebar.SearchHeader.6234a5ef85',
+              'Use Regular Expression'
+            )}
+          >
+            <Regex className="size-3.5" />
+          </ToggleButton>
+          <ToggleButton
+            active={filtersOpen || hasFilters}
+            ariaExpanded={filtersOpen}
+            onClick={onToggleFilters}
+            title={hasFilters ? `${filtersLabel} (${filterSummary})` : filtersLabel}
+          >
+            <ListFilter className="size-3.5" />
+          </ToggleButton>
+        </span>
+      </div>
     </div>
   )
 }
