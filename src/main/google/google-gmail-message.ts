@@ -124,14 +124,15 @@ function isAttachment(node: Part): boolean {
 }
 
 function mixedBodyParts(
-  children: { mimeType?: string; leaves: Part[] }[],
+  children: { mimeType?: string; parts?: Part[]; leaves: Part[] }[],
   textOf: (part: Part) => string
 ): Part[] {
-  // A related container contributes one root representation; alternative/mixed groups remain
+  // Only a direct text root makes related transparent. Explicit nested groups remain
   // independent sections even when selection leaves only one text part.
   const representations = children.map((child) =>
     child.leaves.length === 1 &&
-    ['text/plain', 'text/html', 'multipart/related'].includes(child.mimeType ?? '')
+    (['text/plain', 'text/html'].includes(child.mimeType ?? '') ||
+      (child.mimeType === 'multipart/related' && child.parts?.includes(child.leaves[0])))
       ? child.leaves[0]
       : undefined
   )
@@ -172,13 +173,19 @@ function containsCompleteBody(html: string, plain: string): boolean {
   if (!plain) {
     return false
   }
-  const at = html.indexOf(plain)
-  return (
-    at >= 0 &&
-    (!/^[\p{L}\p{M}\p{N}_]/u.test(plain) || !/[\p{L}\p{M}\p{N}_]$/u.test(html.slice(0, at))) &&
-    (!/[\p{L}\p{M}\p{N}_]$/u.test(plain) ||
-      !/^[\p{L}\p{M}\p{N}_]/u.test(html.slice(at + plain.length)))
-  )
+  const wordStart = /^[\p{L}\p{M}\p{N}_\u200c\u200d]/u
+  const wordEnd = /[\p{L}\p{M}\p{N}_\u200c\u200d]$/u
+  const startsWithWord = wordStart.test(plain)
+  const endsWithWord = wordEnd.test(plain)
+  for (let at = html.indexOf(plain); at >= 0; at = html.indexOf(plain, at + 1)) {
+    if (
+      (!startsWithWord || !wordEnd.test(html.slice(Math.max(0, at - 2), at))) &&
+      (!endsWithWord || !wordStart.test(html.slice(at + plain.length, at + plain.length + 2)))
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 /** Keep mixed sections in order; prefer plain text within each alternative. */
@@ -228,7 +235,7 @@ export function bodyText(part: Part | undefined): string {
     }
     const children = (node.parts ?? [])
       .filter((child) => !isAttachment(child))
-      .map((child) => ({ mimeType: child.mimeType, leaves: select(child) }))
+      .map((child) => ({ mimeType: child.mimeType, parts: child.parts, leaves: select(child) }))
       .filter((child) => child.leaves.length > 0 || child.mimeType?.startsWith('multipart/'))
     if (node.mimeType === 'multipart/alternative') {
       const readable = children.filter(

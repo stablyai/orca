@@ -257,6 +257,54 @@ it('keeps a richer HTML representation once when its complete adjacent plain bod
   }
 })
 
+it('finds a complete body after an earlier occurrence inside another word', () => {
+  const plain = textPart('text/plain', 'Approved')
+  const html = textPart('text/html', '<p>PreApproved policies</p><p>Approved</p><p>Footer</p>')
+  const expected = 'PreApproved policies\nApproved\nFooter'
+  expect(bodyText({ mimeType: 'multipart/mixed', parts: [plain, html] })).toBe(expected)
+  expect(bodyText({ mimeType: 'multipart/mixed', parts: [html, plain] })).toBe(expected)
+})
+
+it('keeps independent plain text when HTML joins its word with Unicode name characters', () => {
+  for (const [plain, html] of [
+    ['भारत', 'अ\u200dभारत'],
+    ['भारत', 'अ\u200cभारत'],
+    ['भारत', 'भारत\u200dअ'],
+    ['भारत', 'भारत\u200cअ'],
+    ['Build', '𐐀Build'],
+    ['Build', 'Build𐐀'],
+    ['Build', '\u0301Build']
+  ]) {
+    const parts = [textPart('text/plain', plain), textPart('text/html', `<p>${html}</p>`)]
+    expect(bodyText({ mimeType: 'multipart/mixed', parts })).toBe(`${plain}\n${html}`)
+    expect(bodyText({ mimeType: 'multipart/mixed', parts: parts.toReversed() })).toBe(
+      `${html}\n${plain}`
+    )
+  }
+})
+
+it('keeps explicit groups independent when a related container selects their single text leaf', () => {
+  for (const mimeType of ['multipart/mixed', 'multipart/alternative']) {
+    const root = {
+      mimeType,
+      headers: [{ name: 'Content-ID', value: '<body>' }],
+      parts: [textPart('text/html', '<p>Notice</p>')]
+    }
+    const plain = textPart('text/plain', 'Notice')
+    const related = {
+      mimeType: 'multipart/related',
+      headers: [{ name: 'Content-Type', value: 'multipart/related; start="<body>"' }],
+      parts: [textPart('text/html', '<p>Resource</p>'), root]
+    }
+    expect(bodyText({ mimeType: 'multipart/mixed', parts: [plain, related] })).toBe(
+      'Notice\nNotice'
+    )
+    expect(bodyText({ mimeType: 'multipart/mixed', parts: [related, plain] })).toBe(
+      'Notice\nNotice'
+    )
+  }
+})
+
 it('keeps equivalent text in independently grouped mixed sections', () => {
   expect(
     bodyText({
