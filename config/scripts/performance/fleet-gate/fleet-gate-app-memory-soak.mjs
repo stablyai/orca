@@ -355,6 +355,12 @@ export async function appMemorySoakOnce({
       await sleep(Math.max(0, tickStart + TURN_EVERY_MS - Date.now()))
     }
     Object.assign(result, counts)
+    // A soak too short to show and load every chat at least once hasn't tested the fleet.
+    if (counts.turns < SOAK_HIGH) {
+      result.incomplete.push(
+        `soak: ${String(counts.turns)} turns, fewer than one per chat (${String(SOAK_HIGH)}); run longer`
+      )
+    }
     for (const [key, missed] of [
       ['sends', counts.sendMissed],
       ['shows', counts.showMissed]
