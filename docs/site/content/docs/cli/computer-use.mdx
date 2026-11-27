@@ -138,10 +138,12 @@ For target-matched capture, when the window is minimized or on another workspace
 
 GNOME does not expose the geometry needed for target-matched capture. On GNOME Wayland, use `orca-ide computer get-app-state --app <app> --select-screenshot-window --json`
 when the user has agreed to choose a window in GNOME's sharing dialog. This requires an XDG
-ScreenCast portal with window support and GStreamer with its PipeWire, PNG, and video plugins.
+ScreenCast portal with window support, a running PipeWire session manager, and GStreamer with
+its PipeWire, PNG, and video plugins.
 Orca takes one frame and closes the sharing session. The image has
 `screenshot.scope: "user-selected-window"`: it is not verified to match `--app` or the
-accessibility tree. Do not use its pixels as action coordinates. Normal snapshots and
+accessibility tree. GNOME can pad the selected window with black pixels. Do not use the image
+pixels as action coordinates. Normal snapshots and
 `--no-screenshot` never open this window picker.
 
 ## Use it from an agent

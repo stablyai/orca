@@ -1337,6 +1337,22 @@ def capture_pipewire_frame(Gst, fd, node):
         pipeline.set_state(Gst.State.NULL)
 
 
+def pipewire_window_png(fd, node):
+    # GStreamer state changes can block on PipeWire, even before the frame timeout.
+    with tempfile.TemporaryFile() as output:
+        try:
+            result = subprocess.run(
+                [sys.executable, __file__, "--pipewire-frame", str(fd), str(node)],
+                pass_fds=(fd,), stdout=output, stderr=subprocess.DEVNULL, timeout=6, check=False
+            )
+        except subprocess.TimeoutExpired as error:
+            raise ValueError("timed out reading the PipeWire window stream") from error
+        if result.returncode != 0 or not 0 < output.tell() <= MAX_WAYLAND_PNG_BYTES:
+            raise ValueError("the PipeWire window stream returned no usable frame")
+        output.seek(0)
+        return output.read()
+
+
 def gnome_wayland_session():
     return wayland_session() and "gnome" in os.environ.get("XDG_CURRENT_DESKTOP", "").lower().split(":")
 
@@ -1380,7 +1396,7 @@ def capture_user_selected_window(request):
             )
             fd = fd_list.get(reply.unpack()[0])
             try:
-                frame = capture_pipewire_frame(Gst, fd, node)
+                frame = pipewire_window_png(fd, node)
             finally:
                 os.close(fd)
             pixbuf = decode_png(frame)
@@ -2833,4 +2849,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) == 4 and sys.argv[1] == "--pipewire-frame":
+        gi.require_version("Gst", "1.0")
+        from gi.repository import Gst
+        Gst.init(None)
+        sys.stdout.buffer.write(capture_pipewire_frame(Gst, int(sys.argv[2]), int(sys.argv[3])))
+    else:
+        main()
