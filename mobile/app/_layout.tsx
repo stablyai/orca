@@ -13,10 +13,9 @@ import { Stack, useGlobalSearchParams, usePathname } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
 import * as Notifications from 'expo-notifications'
-import { colors } from '../src/theme/mobile-theme'
 import { startMobileAppearance } from '../src/theme/mobile-appearance'
-import { themedStyleSheet } from '../src/theme/themed-styles'
-import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../src/theme/themed-styles'
+import { useMobileColorScheme, useMobileColors } from '../src/theme/use-mobile-color-scheme'
 import { OrcaLogo } from '../src/components/icons/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/connection/client-context'
 import { OrcaQueryProvider } from '../src/query/orca-query-provider'
@@ -70,6 +69,8 @@ Notifications.setNotificationHandler({
 const handledNotificationIds = new Set<string>()
 
 export default function RootLayout() {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const colorScheme = useMobileColorScheme()
   useFollowDeviceUiLocale()
   const pathname = usePathname()
@@ -230,12 +231,15 @@ export default function RootLayout() {
                 <Stack.Screen name="settings" options={{ headerShown: false }} />
                 <Stack.Screen name="appearance-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
+                <Stack.Screen name="terminal-font-settings" options={{ headerShown: false }} />
+                <Stack.Screen name="terminal-keys" options={{ headerShown: false }} />
                 <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="live-activity" options={{ headerShown: false }} />
                 <Stack.Screen name="notifications" options={{ headerShown: false }} />
                 <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
+                <Stack.Screen name="troubleshoot-issue" options={{ headerShown: false }} />
                 <Stack.Screen name="connection-log" options={{ headerShown: false }} />
                 <Stack.Screen name="about" options={{ headerShown: false }} />
                 <Stack.Screen name="h" options={{ headerShown: false }} />
@@ -261,7 +265,7 @@ export default function RootLayout() {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   root: {
     flex: 1,
     backgroundColor: colors.bgBase

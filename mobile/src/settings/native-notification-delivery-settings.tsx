@@ -9,12 +9,10 @@ import {
 } from '../notifications/delivery-policy/notification-delivery-preferences'
 import { setNotificationDeliveryPreferences } from '../notifications/push-registration'
 import { useRemotePushCapableHosts } from '../notifications/push-registration/use-remote-push-capable-hosts'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNote } from './settings-screen-frame'
 
 export function NativeNotificationDeliverySettings({ enabled }: { enabled: boolean }) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const [delivery, setDelivery] = useState(DEFAULT_NOTIFICATION_DELIVERY)
   const [loaded, setLoaded] = useState(false)
@@ -86,13 +84,15 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
   }
   return (
     <>
-      <NotificationDeliverySection
-        value={delivery}
-        disabled={!enabled || !loaded || saving}
-        onChange={(value) => void change(value)}
-      />
+      {enabled ? (
+        <NotificationDeliverySection
+          value={delivery}
+          disabled={!loaded || saving}
+          onChange={(value) => void change(value)}
+        />
+      ) : null}
       {error ? <SettingsNote error>{error}</SettingsNote> : null}
-      {support.resolved && !support.supported ? (
+      {enabled && support.resolved && !support.supported ? (
         <SettingsNote>
           {t(
             'settings.nativeNotificationDeliverySettings.updateDesktopHint',

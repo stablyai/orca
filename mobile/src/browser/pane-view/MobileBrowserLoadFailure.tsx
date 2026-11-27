@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { CircleAlert, ShieldAlert } from 'lucide-react-native'
 import type {
   BrowserCertificateFailure,
   BrowserLoadError
@@ -18,36 +19,43 @@ import {
   isBrowserNetworkLoadFailure
 } from '../../../../src/shared/browser/navigation/browser-load-failure'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { mobileBrowserPaneStyles } from './mobile-browser-pane-styles'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { MobileStateView } from '../../components/feedback/MobileStateView'
 
 type CertificateProceedState =
   | { challengeId: string; state: 'submitting' }
   | { challengeId: string; state: 'failed'; reason: MobileCertificateProceedFailure }
 
-/** The desktop failure page's words over the streamed frame, which shows only a blank page. */
-export function MobileBrowserLoadFailure({
+export type MobileBrowserLoadFailureState = {
+  title: string
+  message: string | null
+  errorName: string | null
+  certificate: boolean
+  /** Waiting for the host to load the page past its certificate warning. */
+  connecting: boolean
+  /** The certificate warning's way past; the pane offers it in ⋯, never beside Retry. */
+  proceedUnsafe: (() => void) | null
+}
+
+/** The desktop failure page's words for a failed load, and its unsafe way past a certificate warning. */
+export function useMobileBrowserLoadFailure({
   loadError,
   certificateFailure,
   browserPageId,
   certificateTrustSupported,
-  retryDisabled,
-  onRetry,
   onProceedCertificate
 }: {
-  loadError: BrowserLoadError
+  loadError: BrowserLoadError | null | undefined
   certificateFailure: BrowserCertificateFailure | null | undefined
   browserPageId: string | null
   certificateTrustSupported: boolean
-  retryDisabled: boolean
-  onRetry: () => void
   onProceedCertificate: (challengeId: string) => Promise<MobileCertificateProceedFailure | null>
-}) {
+}): MobileBrowserLoadFailureState | null {
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const [proceed, setProceed] = useState<CertificateProceedState | null>(null)
+  if (!loadError) {
+    return null
+  }
   const matchingCertificateFailure = matchBrowserCertificateFailure({
     loadError,
     certificateFailure,
@@ -76,74 +84,74 @@ export function MobileBrowserLoadFailure({
     : formatBrowserLoadFailureText(presentationLoadError, failure)
   const activeProceed =
     proceed?.challengeId === matchingCertificateFailure?.challengeId ? proceed : null
-  const submitting = activeProceed?.state === 'submitting'
-  const proceedCertificate = (challengeId: string) => {
-    if (submitting) {
-      return
-    }
-    setProceed({ challengeId, state: 'submitting' })
-    void onProceedCertificate(challengeId).then((reason) => {
-      // On success stay "Connecting…": the host reloads the page and this view goes away.
-      setProceed((current) =>
-        current?.challengeId === challengeId && reason
-          ? { challengeId, state: 'failed', reason }
-          : current
-      )
-    })
+  const connecting = activeProceed?.state === 'submitting'
+  const proceedUnsafe =
+    matchingCertificateFailure && !connecting
+      ? () => {
+          const { challengeId } = matchingCertificateFailure
+          setProceed({ challengeId, state: 'submitting' })
+          void onProceedCertificate(challengeId).then((reason) => {
+            // On success stay "Connecting…": the host reloads the page and this view goes away.
+            setProceed((current) =>
+              current?.challengeId === challengeId && reason
+                ? { challengeId, state: 'failed', reason }
+                : current
+            )
+          })
+        }
+      : null
+  return {
+    title: text.title,
+    message:
+      activeProceed?.state === 'failed'
+        ? certificateProceedFailureText(t, activeProceed.reason)
+        : text.description,
+    errorName: failure.errorName,
+    certificate: certificateError,
+    connecting,
+    proceedUnsafe
   }
+}
+
+/** A failed load in the app's state view, over the blank frame the host streams for it. */
+export function MobileBrowserLoadFailure({
+  failure,
+  retryDisabled,
+  onRetry,
+  showProceedUnsafe
+}: {
+  failure: MobileBrowserLoadFailureState
+  retryDisabled: boolean
+  onRetry: () => void
+  showProceedUnsafe: boolean
+}) {
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
   return (
-    <View pointerEvents="box-none" style={styles.page}>
-      <View pointerEvents="box-none" style={styles.column}>
-        <Text style={styles.title}>{text.title}</Text>
-        {text.description ? <Text style={styles.description}>{text.description}</Text> : null}
-        {failure.errorName ? <Text style={styles.code}>{failure.errorName}</Text> : null}
-        {activeProceed?.state === 'failed' ? (
-          <Text style={styles.proceedError}>
-            {certificateProceedFailureText(t, activeProceed.reason)}
-          </Text>
-        ) : null}
-        <View pointerEvents="box-none" style={styles.actions}>
-          <Pressable
-            accessibilityRole="button"
-            disabled={retryDisabled || submitting}
-            style={({ pressed }) => [
-              mobileBrowserPaneStyles.dialogButton,
-              mobileBrowserPaneStyles.dialogButtonPrimary,
-              pressed && mobileBrowserPaneStyles.dialogButtonPressed,
-              (retryDisabled || submitting) && mobileBrowserPaneStyles.dialogButtonDisabled
-            ]}
-            onPress={onRetry}
-          >
-            <Text
-              style={[
-                mobileBrowserPaneStyles.dialogButtonText,
-                mobileBrowserPaneStyles.dialogButtonPrimaryText
-              ]}
-            >
-              {t('browser.loadFailure.retry', 'Retry')}
-            </Text>
-          </Pressable>
-          {matchingCertificateFailure ? (
-            <Pressable
-              accessibilityRole="button"
-              disabled={submitting}
-              style={({ pressed }) => [
-                mobileBrowserPaneStyles.dialogButton,
-                styles.proceed,
-                pressed && mobileBrowserPaneStyles.dialogButtonPressed,
-                submitting && mobileBrowserPaneStyles.dialogButtonDisabled
-              ]}
-              onPress={() => proceedCertificate(matchingCertificateFailure.challengeId)}
-            >
-              <Text style={mobileBrowserPaneStyles.dialogButtonText}>
-                {submitting
-                  ? t('browser.loadFailure.connecting', 'Connecting…')
-                  : t('browser.loadFailure.proceedUnsafe', 'Proceed Anyway (Unsafe)')}
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
+    <View style={styles.page}>
+      {failure.connecting ? (
+        <MobileStateView loading title={t('browser.loadFailure.connecting', 'Connecting…')} />
+      ) : (
+        <MobileStateView
+          icon={failure.certificate ? ShieldAlert : CircleAlert}
+          title={failure.title}
+          message={failure.message}
+          details={failure.errorName}
+          action={
+            retryDisabled
+              ? null
+              : { label: t('browser.loadFailure.retry', 'Retry'), onPress: onRetry }
+          }
+          secondaryAction={
+            showProceedUnsafe && failure.proceedUnsafe
+              ? {
+                  label: t('browser.loadFailure.proceedUnsafe', 'Proceed Anyway (Unsafe)'),
+                  onPress: failure.proceedUnsafe
+                }
+              : null
+          }
+        />
+      )}
     </View>
   )
 }
@@ -215,48 +223,9 @@ function certificateProceedFailureText(
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   page: {
     ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
     backgroundColor: colors.bgBase
-  },
-  column: {
-    width: '100%',
-    maxWidth: 360,
-    gap: spacing.sm
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '600'
-  },
-  description: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    lineHeight: 20
-  },
-  code: {
-    color: colors.textMuted,
-    fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
-    marginTop: spacing.xs
-  },
-  proceedError: {
-    color: colors.statusRed,
-    fontSize: typography.metaSize,
-    lineHeight: 18,
-    marginTop: spacing.xs
-  },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.md
-  },
-  proceed: {
-    backgroundColor: 'transparent'
   }
 }))

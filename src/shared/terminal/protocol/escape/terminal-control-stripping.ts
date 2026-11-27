@@ -1,13 +1,11 @@
 const ESC = String.fromCharCode(0x1b)
 const BEL = String.fromCharCode(0x07)
+// Control strings end at their terminator; leave it for the next match or the control pass.
 const ANSI_ESCAPE_RE = new RegExp(
-  `${ESC}(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~]|\\][^${BEL}]*(?:${BEL}|${ESC}\\\\))`,
+  `${ESC}(?:\\[[0-?]*[ -/]*[@-~]|\\][^${BEL}${ESC}\\x18\\x1a\\x9c]*|[PX^_][^${ESC}\\x18\\x1a\\x9c]*|[@-Z\\\\])`,
   'g'
 )
-const INCOMPLETE_ANSI_ESCAPE_RE = new RegExp(
-  `${ESC}(?:\\[[0-?]*[ -/]*|\\][^${BEL}${ESC}]*|\\S?)?$`,
-  'g'
-)
+const INCOMPLETE_ANSI_ESCAPE_RE = new RegExp(`${ESC}(?:\\[[0-?]*[ -/]*|\\S?)?$`, 'g')
 const CONTROL_DENSITY_BLOCK_CODE_UNITS = 64
 const CONTROL_DENSITY_FALLBACK_COUNT = 32
 

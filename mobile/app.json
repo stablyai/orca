@@ -8,6 +8,9 @@
     "userInterfaceStyle": "automatic",
     "scheme": "orca",
     "newArchEnabled": true,
+    "experiments": {
+      "reactCompiler": true
+    },
     "locales": {
       "en": "./locales/en.json",
       "zh-Hans": "./locales/zh-Hans.json",

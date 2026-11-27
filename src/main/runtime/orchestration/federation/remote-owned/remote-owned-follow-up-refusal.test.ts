@@ -30,7 +30,8 @@ it('names the paired server when it refuses a follow-up for an agent it lacks', 
     link,
     taskId: 'task_0123456789ab',
     requestKey: 'k',
-    create: { spec: 'w' }
+    create: { spec: 'w' },
+    creator: { kind: 'system' }
   })
   recordRemoteStart(db, {
     conversationId: link.conversation_id,

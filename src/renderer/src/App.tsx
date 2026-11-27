@@ -41,7 +41,7 @@ import { useWindowVisibilityEffects } from './app-shell/chrome/use-window-visibi
 import { SpaceWindowStatePublisher } from './components/workspace-space/SpaceWindowStatePublisher'
 import { PlainSshTerminalPanels } from './components/plain-ssh-terminal/PlainSshTerminalPanels'
 import { PluginShotReplayMount } from './components/plugins/view/PluginShotReplayMount'
-import { AddToChatPointMenuHost } from './components/native-chat/selection-quotes/AddToChatMenu'
+import { AddToChatPointMenuHost } from './components/native-chat/selection-quotes/AddToChatPointMenuHost'
 import { installActiveWorktreeRemovalSuccessor } from './lib/workspace/activation/active-worktree-removal-successor'
 import { useAppStore } from './store'
 

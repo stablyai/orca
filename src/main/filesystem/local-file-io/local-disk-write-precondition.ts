@@ -15,7 +15,7 @@ import {
   type FileWriteResult
 } from '../../../shared/file-write/file-write-disk-precondition'
 import { readlink, realpath, stat, writeFile } from 'node:fs/promises'
-import { basename, dirname, join, normalize, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, normalize, resolve } from 'node:path'
 import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
 import { serializedParentDirectoryKey } from '../destination-serialized-local-rename'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
@@ -102,7 +102,7 @@ const editorWritesByInode = new Map<string, Promise<void>>()
 const MAX_SYMLINK_HOPS = 40
 
 /** Follow dangling-target chains without realpath; loops cannot share a proven write lock. */
-async function followSymlinks(filePath: string): Promise<string | null> {
+export async function followLocalFileSymlinks(filePath: string): Promise<string | null> {
   let current = filePath
   for (let hop = 0; hop <= MAX_SYMLINK_HOPS; hop += 1) {
     let target: string
@@ -113,14 +113,26 @@ async function followSymlinks(filePath: string): Promise<string | null> {
     }
     // Relative link targets resolve against the link's real parent.
     const linkFolder = await realpath(dirname(current)).catch(() => dirname(current))
-    current = resolve(linkFolder, target)
+    // resolve() folds `dir/..`, a trailing `/` and a trailing `/.` lexically, as Windows does.
+    const segments = target.split('/')
+    if (
+      process.platform === 'win32' ||
+      !(segments.includes('..') || ['', '.'].includes(segments.at(-1) ?? ''))
+    ) {
+      current = resolve(linkFolder, target)
+      continue
+    }
+    // POSIX follows `dir` before `..`; a missing folder keeps the raw spelling so callers see it is missing, not a lexical sibling.
+    const raw = isAbsolute(target) ? target : `${linkFolder}/${target}`
+    const folder = raw.endsWith('/') ? null : await realpath(dirname(raw)).catch(() => null)
+    current = folder === null ? raw : join(folder, basename(raw))
   }
   return null
 }
 
 /** Lock real-parent/folded-name paths after following links; folding may over-serialize, and missing targets keep a stable key. */
 async function editorWritePathKey(requestedPath: string): Promise<string | null> {
-  const filePath = await followSymlinks(requestedPath)
+  const filePath = await followLocalFileSymlinks(requestedPath)
   if (filePath === null) {
     return null
   }

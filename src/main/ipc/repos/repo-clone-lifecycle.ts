@@ -1,7 +1,6 @@
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdir } from 'node:fs/promises'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
@@ -20,6 +19,7 @@ import {
   cleanupClaimedCloneTarget,
   claimCloneTarget,
   deriveValidatedClonePath,
+  ensureCloneDestination,
   getClonePathComparisonKey,
   getSavedProjectPathKeys
 } from '../../git/repositories/cloning/repo-clone-path'
@@ -156,8 +156,7 @@ export function registerRepoCloneHandlers(
           emitRepoAdded('clone_url', true, true)
           return reused
         }
-        // Fresh installs may lack the destination used as the clone process cwd.
-        await mkdir(args.destination, { recursive: true })
+        await ensureCloneDestination(args.destination)
         claimedTarget = await claimCloneTarget(clonePath)
         // Stream progress to avoid execFile buffer limits; --progress also works without a TTY.
         try {

@@ -42,7 +42,10 @@ CREATE TABLE IF NOT EXISTS remote_placements (
   created_at         TEXT NOT NULL DEFAULT (datetime('now')),
   -- Set when every send under request_key failed before leaving this Orca, so a cancel may retire
   -- the reservation; a resend clears it first.
-  never_sent_at      TEXT
+  never_sent_at      TEXT,
+  -- Who placed it, as a local Dispatch records its creator; each Dispatch adopted for it takes these.
+  creator_orca_session_id TEXT,
+  creator_pane_key   TEXT
 );
 -- Closing a link visits only its own rows here and in remote_dispatches.
 CREATE INDEX IF NOT EXISTS idx_remote_placements_conversation ON remote_placements(conversation_id);
@@ -72,7 +75,12 @@ CREATE TABLE IF NOT EXISTS remote_dispatches (
   created_at         TEXT NOT NULL DEFAULT (datetime('now')),
   -- When this Orca recorded the server's start answer or, after that, its latest state for the
   -- Dispatch. Reports and this Orca's own stop bookkeeping leave it.
-  updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at         TEXT NOT NULL DEFAULT (datetime('now')),
+  -- Its placement's creator, so it lists under the chat or pane that started it as a local one does.
+  creator_orca_session_id TEXT,
+  creator_pane_key   TEXT,
+  -- The server's workspace the start created, when its answer named one.
+  worktree_id        TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_remote_dispatches_run ON remote_dispatches(run_id);
 CREATE INDEX IF NOT EXISTS idx_remote_dispatches_task ON remote_dispatches(task_id);

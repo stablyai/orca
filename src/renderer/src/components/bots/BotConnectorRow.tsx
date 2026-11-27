@@ -1,5 +1,4 @@
 import React, { useContext, useId } from 'react'
-import type { IntegrationCardStatusTone } from '@/components/integrations/presentation/integration-card-shell'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../shared/bot-types'
 import { BotConnectorSection } from './bot-connector-people'
@@ -23,7 +22,8 @@ import {
   RowName,
   type BotConnectorActions,
   type BotConnectorFix,
-  type BotConnectorRowFrameProps
+  type BotConnectorRowFrameProps,
+  type BotConnectorStatus
 } from './bot-connector-row-parts'
 import { BotConnectorPageRow } from './BotConnectorPageRow'
 
@@ -135,9 +135,11 @@ export function BotConnectorRow(props: {
   name: string | BotConnectorTitle
   description: React.ReactNode
   /** Null while all is well: a row shows a status only when something needs the owner. */
-  status: { label: string; tone: IntegrationCardStatusTone } | null
+  status: BotConnectorStatus | null
   checking?: boolean
   fix?: BotConnectorFix | null
+  /** First in the open row, under its header. */
+  lead?: React.ReactNode
   /** Translated, with the text to type in <code>; see BotHowToAsk. */
   howToAsk: string
   /** Who can ask the bot here, the owner aside. */
@@ -181,6 +183,7 @@ export function BotConnectorRow(props: {
       actions={{ add, addAccount: props.addAccount, link, update: props.update, remove }}
       narrowSpans={props.body !== undefined}
     >
+      {props.lead ? <div className="mt-2">{props.lead}</div> : null}
       {props.body ?? (
         <>
           <BotConnectorSection title={t('bots.connector.howToAsk', 'How to ask')}>

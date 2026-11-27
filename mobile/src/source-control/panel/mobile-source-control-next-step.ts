@@ -1,4 +1,4 @@
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
 import { resolveGitHubPRMergeMethods } from '../../../../src/shared/github/pull-requests/merge/pull-request-merge-methods'
 import { getGitHubPRPrimaryReviewer } from '../../../../src/shared/github/pull-requests/pr-reviewer-display'
@@ -57,6 +57,7 @@ export type BuildMobileNextStepBarArgs = {
   createBlocked: boolean
   /** The agent the AI buttons launch; null names it "AI". */
   agentName: string | null
+  t: Translate
   busy: {
     completingMerge: boolean
     agentLaunch: boolean
@@ -72,12 +73,12 @@ export type BuildMobileNextStepBarArgs = {
 }
 
 export function buildMobileNextStepBar(args: BuildMobileNextStepBarArgs): MobileNextStepBarView {
-  const { step, busy, handlers } = args
-  const agent = args.agentName ?? translate('sourceControl.nextStep.genericAgent', 'AI')
+  const { step, busy, handlers, t } = args
+  const agent = args.agentName ?? t('sourceControl.nextStep.genericAgent', 'AI')
   switch (step.kind) {
     case 'none':
       return args.createBlocked
-        ? createReviewButton(args.createPrAction, false)
+        ? createReviewButton(args.createPrAction, false, t)
         : { kind: 'hidden' }
     case 'commit':
       return { kind: 'composer' }
@@ -86,8 +87,8 @@ export function buildMobileNextStepBar(args: BuildMobileNextStepBarArgs): Mobile
     case 'complete_merge':
       return button({
         label: busy.completingMerge
-          ? translate('sourceControl.branchCard.completingMerge', 'Completing…')
-          : translate('sourceControl.branchCard.completeMerge', 'Complete merge'),
+          ? t('sourceControl.branchCard.completingMerge', 'Completing…')
+          : t('sourceControl.branchCard.completeMerge', 'Complete merge'),
         icon: 'complete',
         disabled: busy.ioBusy,
         loading: busy.completingMerge,
@@ -95,7 +96,7 @@ export function buildMobileNextStepBar(args: BuildMobileNextStepBarArgs): Mobile
       })
     case 'resolve_conflicts':
       return button({
-        label: translate('sourceControl.nextStep.resolveWithAgent', 'Resolve with {{agent}}', {
+        label: t('sourceControl.nextStep.resolveWithAgent', 'Resolve with {{agent}}', {
           agent
         }),
         icon: 'agent',
@@ -104,33 +105,29 @@ export function buildMobileNextStepBar(args: BuildMobileNextStepBarArgs): Mobile
         onPress: () => handlers.resolveConflicts(step.scope)
       })
     case 'create_review':
-      return createReviewButton(args.createPrAction, step.pushFirst)
+      return createReviewButton(args.createPrAction, step.pushFirst, t)
     case 'fix_checks':
       return button({
-        label: translate('sourceControl.nextStep.fixWithAgent', 'Fix with {{agent}}', { agent }),
+        label: t('sourceControl.nextStep.fixWithAgent', 'Fix with {{agent}}', { agent }),
         icon: 'agent',
         disabled: busy.agentLaunch || busy.agentUnavailable,
         loading: busy.agentLaunch,
         reason: {
-          lead: translate('sourceControl.nextStep.cantMergeYet', 'Can’t merge yet:'),
+          lead: t('sourceControl.nextStep.cantMergeYet', 'Can’t merge yet:'),
           text:
             step.failedChecks === 1
-              ? translate('sourceControl.nextStep.checksFailing_one', '{{count}} check failing', {
+              ? t('sourceControl.nextStep.checksFailing_one', '{{count}} check failing', {
                   count: step.failedChecks
                 })
-              : translate(
-                  'sourceControl.nextStep.checksFailing_other',
-                  '{{count}} checks failing',
-                  {
-                    count: step.failedChecks
-                  }
-                )
+              : t('sourceControl.nextStep.checksFailing_other', '{{count}} checks failing', {
+                  count: step.failedChecks
+                })
         },
         onPress: handlers.fixChecks
       })
     case 'merge_when_ready':
       return button({
-        label: translate('sourceControl.nextStep.mergeWhenReady', 'Merge when ready'),
+        label: t('sourceControl.nextStep.mergeWhenReady', 'Merge when ready'),
         icon: 'merge',
         tone: 'secondary',
         disabled: busy.autoMerge || busy.prMutationsBlocked,
@@ -190,14 +187,15 @@ function remoteButton(action: MobileSourceControlPrimaryAction): MobileNextStepB
 
 function createReviewButton(
   action: MobileCreatePrAction,
-  pushFirst: boolean
+  pushFirst: boolean,
+  t: Translate
 ): MobileNextStepBarView {
   return button({
     label: pushFirst
-      ? translate('sourceControl.nextStep.pushAndCreateReview', 'Push & create {{review}}', {
+      ? t('sourceControl.nextStep.pushAndCreateReview', 'Push & create {{review}}', {
           review: action.reviewLabel
         })
-      : translate('sourceControl.nextStep.createReview', 'Create {{review}}', {
+      : t('sourceControl.nextStep.createReview', 'Create {{review}}', {
           review: action.reviewLabel
         }),
     icon: 'review',
@@ -209,14 +207,14 @@ function createReviewButton(
 }
 
 function mergeButton(args: BuildMobileNextStepBarArgs, ready: boolean): MobileNextStepBarView {
-  const pr = args.pr
+  const { pr, t } = args
   if (!pr) {
     return { kind: 'hidden' }
   }
   const method = resolveGitHubPRMergeMethods(pr.mergeMethodSettings ?? null).defaultMethod
-  const merge = presentPrMerge(pr, method)
+  const merge = presentPrMerge(pr, method, t)
   return button({
-    label: ready ? merge.label : translate('sourceControl.nextStep.merge', 'Merge'),
+    label: ready ? merge.label : t('sourceControl.nextStep.merge', 'Merge'),
     icon: 'merge',
     tone: 'merge',
     disabled: !ready || args.busy.merge || args.busy.prMutationsBlocked,
@@ -230,26 +228,30 @@ function waitingReason(
   step: Extract<SourceControlNextStep, { kind: 'merge_when_ready' }>,
   args: BuildMobileNextStepBarArgs
 ): string {
+  const { t } = args
   if (step.pendingChecks > 0) {
     return step.pendingChecks === 1
-      ? translate('sourceControl.nextStep.checksRunning_one', '{{count}} check still running', {
+      ? t('sourceControl.nextStep.checksRunning_one', '{{count}} check still running', {
           count: step.pendingChecks
         })
-      : translate('sourceControl.nextStep.checksRunning_other', '{{count}} checks still running', {
+      : t('sourceControl.nextStep.checksRunning_other', '{{count}} checks still running', {
           count: step.pendingChecks
         })
   }
   if (step.mergeState === 'review_required') {
     const reviewer = args.prDetails ? getGitHubPRPrimaryReviewer(args.prDetails.item) : null
     return reviewer
-      ? translate('sourceControl.nextStep.waitingOnReviewer', 'Waiting on review from {{login}}', {
+      ? t('sourceControl.nextStep.waitingOnReviewer', 'Waiting on review from {{login}}', {
           login: reviewer.login
         })
-      : translate('sourceControl.nextStep.waitingOnReview', 'Waiting on review')
+      : t('sourceControl.nextStep.waitingOnReview', 'Waiting on review')
   }
   const pr = args.pr
   return pr
-    ? (presentPrMerge(pr, resolveGitHubPRMergeMethods(pr.mergeMethodSettings ?? null).defaultMethod)
-        .hint ?? '')
+    ? (presentPrMerge(
+        pr,
+        resolveGitHubPRMergeMethods(pr.mergeMethodSettings ?? null).defaultMethod,
+        t
+      ).hint ?? '')
     : ''
 }

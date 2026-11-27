@@ -2,6 +2,7 @@ import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-
 import { unmountedSleptLeafHandle } from '../mailbox/routing/unmounted-slept-leaf'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from '../../terminal/lifecycle/floating-session-liveness'
+import { reportHeldMailNotice } from '../workers/turn-stops/held-mail-notice-report'
 import { writeOrchestrationPointerWithSettlement } from '../mailbox/terminal-pointer/mailbox-pointer-pty-write'
 import {
   getWindowsInputRecordPasteBurstMs,
@@ -37,7 +38,22 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
       writePty: (ptyId, data) =>
         writeOrchestrationPointerWithSettlement({ ptyId, data, controller: this.ptyController }),
       getWindowsPointerEnterDelayMs: (ptyId, pointer) =>
-        this.getWindowsPointerEnterDelayMs(ptyId, pointer)
+        this.getWindowsPointerEnterDelayMs(ptyId, pointer),
+      armSubmitCheck: (handle, ptyId, pointer, isCurrent) =>
+        this.armMailNoticeSubmitCheck(handle, ptyId, pointer, isCurrent),
+      reportHeldNotice: (terminal, messageIds) => {
+        this.terminalRunFacts.noteHeldMailNotice(terminal.ptyId)
+        void reportHeldMailNotice(
+          {
+            getDb: () => this.getExistingOrchestrationDb(),
+            getProcessIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
+            readScreen: (handle) => this.readUnsubmittedWorkerScreen(handle),
+            reportDeps: this.workerTurnStopReportDeps
+          },
+          terminal,
+          messageIds
+        ).catch(() => undefined)
+      }
     }
   }
 

@@ -1,8 +1,8 @@
 import { ActivityIndicator, Pressable, Text } from 'react-native'
 import type { LucideIcon } from 'lucide-react-native'
-import { colors, feedback, pressedStyle, radii, spacing } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { feedback, pressedStyle, radii, spacing } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 
 export function PrMiniButton({
   icon: Icon,
@@ -19,7 +19,8 @@ export function PrMiniButton({
   disabled?: boolean
   bright?: boolean
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const color = bright ? colors.bgBase : colors.textPrimary
   return (
     <Pressable
@@ -45,7 +46,7 @@ export function PrMiniButton({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   button: {
     flexDirection: 'row',
     alignItems: 'center',

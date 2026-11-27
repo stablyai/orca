@@ -5,8 +5,8 @@ import type { QueryClient } from '@tanstack/react-query'
 import { ExpoRoot } from 'expo-router'
 import {
   applyMobileColorScheme,
-  colors,
   getMobileColorScheme,
+  getMobilePalette,
   subscribeMobileColorScheme
 } from '../src/theme/mobile-theme'
 import type { BridgeRpcClient } from '../src/mobile-web-shell/bridge/client-state/bridge-rpc-client-contract'
@@ -141,6 +141,7 @@ if (!container) {
 const target = document.documentElement
 // Keep <html> transparent: overlay routes show the native screen through it, and the shell paints bgBase behind the rest.
 function paintDocumentScheme(): void {
+  const colors = getMobilePalette()
   target.style.setProperty('--muted-foreground', colors.textMuted)
   target.style.setProperty('--foreground', colors.textPrimary)
   target.style.colorScheme = getMobileColorScheme()

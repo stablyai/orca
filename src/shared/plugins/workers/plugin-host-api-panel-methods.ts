@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { PLUGIN_EVENT_NAMES } from '../contributions/plugin-event-contribution'
 import { ALL_SURFACES, FRAMES_ONLY, spec } from './plugin-host-method-spec'
 import { pluginWorkspaceIdSchema } from './plugin-host-api-workspace-methods'
@@ -10,62 +11,72 @@ import {
 } from './plugin-panel-bridge-protocol'
 
 /** An agent's own session id, as it reports it; `agent.resume` takes it. */
-export const pluginAgentSessionIdSchema = z
-  .string()
-  .min(1)
-  .max(512)
-  .refine(
-    (id) => id === id.trim() && !id.startsWith('-') && !hasUnsafeProviderSessionIdChars(id),
-    'invalid session id'
-  )
+export const pluginAgentSessionIdSchema = lazyZodSchema(() =>
+  z
+    .string()
+    .min(1)
+    .max(512)
+    .refine(
+      (id) => id === id.trim() && !id.startsWith('-') && !hasUnsafeProviderSessionIdChars(id),
+      'invalid session id'
+    )
+)
 
-const pluginRequestParams = z.strictObject({
-  name: pluginBridgeNameSchema,
-  input: z.json().optional(),
-  /** How long the worker may take; it sees an aborted `signal` past it. */
-  timeoutMs: z.number().int().min(1).max(PLUGIN_PANEL_REQUEST_MAX_TIMEOUT_MS).optional()
-})
-const pluginRequestResult = z.object({ output: z.json() })
+const pluginRequestParams = lazyZodSchema(() =>
+  z.strictObject({
+    name: pluginBridgeNameSchema,
+    input: z.json().optional(),
+    /** How long the worker may take; it sees an aborted `signal` past it. */
+    timeoutMs: z.number().int().min(1).max(PLUGIN_PANEL_REQUEST_MAX_TIMEOUT_MS).optional()
+  })
+)
+const pluginRequestResult = lazyZodSchema(() => z.object({ output: z.json() }))
 
 export const PLUGIN_AGENT_LIST_LIMIT = 50
 export const PLUGIN_AGENT_TASK_TITLE_MAX = 512
-const agentsListParams = z
-  .strictObject({
-    /** A workspace by the id `workspace.list` gives, instead of the focused one (host API 1.10;
-     *  older hosts refuse it with `invalid_params`). */
-    workspaceId: pluginWorkspaceIdSchema.optional()
+const agentsListParams = lazyZodSchema(() =>
+  z
+    .strictObject({
+      /** A workspace by the id `workspace.list` gives, instead of the focused one (host API 1.10;
+       *  older hosts refuse it with `invalid_params`). */
+      workspaceId: pluginWorkspaceIdSchema.optional()
+    })
+    .optional()
+)
+const agentsListResult = lazyZodSchema(() =>
+  z.object({
+    agents: z
+      .array(
+        z.object({
+          /** Its terminal, as `workspace.readContext` and `terminal.sendText` name it; null when
+           *  Orca cannot tie the agent's pane to a terminal it lists. */
+          terminalId: z.string().min(1).max(1024).nullable(),
+          title: z.string().max(512).nullable(),
+          /** Which agent runs there (`claude`, `codex`, ...), when Orca knows. */
+          agent: z.string().max(128).nullable(),
+          state: z.enum(AGENT_STATUS_STATES),
+          /** When it entered `state`, in ms since the epoch. */
+          stateStartedAt: z.number().finite(),
+          /** The agent's own session id, which `agent.resume` takes; null when Orca has none.
+           *  Absent before host API 1.8. */
+          sessionId: pluginAgentSessionIdSchema.nullable().optional(),
+          /** The orchestration task Orca dispatched to this agent and that is still open, with its
+           *  title (`''` when the task has none); null when it runs none, including once its task
+           *  completed or failed. Absent before host API 1.9. */
+          task: z
+            .object({ title: z.string().max(PLUGIN_AGENT_TASK_TITLE_MAX) })
+            .nullable()
+            .optional()
+        })
+      )
+      .max(PLUGIN_AGENT_LIST_LIMIT)
   })
-  .optional()
-const agentsListResult = z.object({
-  agents: z
-    .array(
-      z.object({
-        /** Its terminal, as `workspace.readContext` and `terminal.sendText` name it; null when
-         *  Orca cannot tie the agent's pane to a terminal it lists. */
-        terminalId: z.string().min(1).max(1024).nullable(),
-        title: z.string().max(512).nullable(),
-        /** Which agent runs there (`claude`, `codex`, ...), when Orca knows. */
-        agent: z.string().max(128).nullable(),
-        state: z.enum(AGENT_STATUS_STATES),
-        /** When it entered `state`, in ms since the epoch. */
-        stateStartedAt: z.number().finite(),
-        /** The agent's own session id, which `agent.resume` takes; null when Orca has none.
-         *  Absent before host API 1.8. */
-        sessionId: pluginAgentSessionIdSchema.nullable().optional(),
-        /** The orchestration task Orca dispatched to this agent and that is still open, with its
-         *  title (`''` when the task has none); null when it runs none, including once its task
-         *  completed or failed. Absent before host API 1.9. */
-        task: z
-          .object({ title: z.string().max(PLUGIN_AGENT_TASK_TITLE_MAX) })
-          .nullable()
-          .optional()
-      })
-    )
-    .max(PLUGIN_AGENT_LIST_LIMIT)
-})
+)
 
-const eventsSubscribeParams = z.strictObject({ event: z.enum(PLUGIN_EVENT_NAMES) })
-const eventsSubscribeResult = z.object({ ok: z.literal(true) })
+const eventsSubscribeParams = lazyZodSchema(() =>
+  z.strictObject({ event: z.enum(PLUGIN_EVENT_NAMES) })
+)
+const eventsSubscribeResult = lazyZodSchema(() => z.object({ ok: z.literal(true) }))
 
 /** Panels and their own worker; spread into PLUGIN_HOST_API. */
 export const PLUGIN_PANEL_BRIDGE_API = {

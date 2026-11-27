@@ -93,7 +93,7 @@ export const annotateMenu = defineFixture({
   render: () => <Toolbar annotationCount={3} />,
   interact: async (frame) => {
     frame
-      .querySelector('button[aria-label="Annotate page element"]')
+      .querySelector('button[data-browser-annotate-button]')
       ?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
     await settle()
   }

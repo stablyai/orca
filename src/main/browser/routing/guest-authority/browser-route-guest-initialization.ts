@@ -2,7 +2,10 @@ import type { EventEmitter } from 'node:events'
 import type { BrowserRouteGuestLifecycleClaim } from './browser-route-page-authority'
 import type { BrowserRouteGuestState } from './browser-route-webcontents-state'
 import type { WebContents } from 'electron'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
+import {
+  normalizeBrowserNavigationUrl,
+  redactKagiSessionToken
+} from '../../../../shared/browser/navigation/browser-url'
 import {
   FIRST_LOAD_WAIT_MS,
   whenBrowserExtensionsReadyForPage
@@ -38,7 +41,7 @@ export function initializeBrowserRouteGuest(
       const normalized =
         destination === undefined ? null : normalizeBrowserNavigationUrl(destination)
       if (normalized && !normalized.startsWith('file:') && !signal.aborted && isCurrent()) {
-        resolve(normalized)
+        resolve(redactKagiSessionToken(normalized))
       } else {
         reject(new Error('browser_client_page_initialization_failed'))
       }

@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { getExplorerTreeView } from '@/store/slices/right-sidebar/right-sidebar-route'
 import type React from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
@@ -23,6 +22,7 @@ import { keybindingMatchesAction } from '../../../../../../shared/keybindings/ma
 import { translate } from '@/i18n/i18n'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { tryHandleFileExplorerDotfilesShortcut } from './file-explorer-dotfiles-shortcut'
 
 export function shouldIgnoreFileExplorerKeyTarget(target: EventTarget | null): boolean {
   return (
@@ -53,7 +53,7 @@ export function useFileExplorerKeys(opts: {
 }): void {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
-  const rightSidebarExplorerView = useAppStore(getExplorerTreeView)
+  const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const keybindings = useAppStore((s) => s.keybindings)
 
   const rowProjectionRef = useRef(opts.rowProjection)
@@ -153,9 +153,21 @@ export function useFileExplorerKeys(opts: {
         return
       }
 
-      // Undo owns the whole shell, including Radix’s scrollbar sibling outside the viewport.
+      // Undo and dotfiles toggle own the whole shell, including Radix’s scrollbar sibling outside the viewport.
       const inExplorer = focusInExplorer()
       const platform = getShortcutPlatform()
+      if (
+        inExplorer &&
+        tryHandleFileExplorerDotfilesShortcut({
+          event: e,
+          platform,
+          keybindings,
+          activeWorktreeId: activeWorktreeIdRef.current,
+          containerRef: opts.containerRef
+        })
+      ) {
+        return
+      }
       const wantUndo =
         keybindingMatchesAction('fileExplorer.undo', e, platform, keybindings) &&
         fileExplorerHasUndo()

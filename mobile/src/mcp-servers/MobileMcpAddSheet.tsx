@@ -21,8 +21,7 @@ import { useSheetPageFooter } from '../components/nav-bar/sheet-page-scroll'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { MobileMcpCustomServerPage, type McpCustomPreset } from './MobileMcpCustomServerPage'
 import { mcpServerAdd, type PhoneMcpServer } from './mcp-server-operations'
@@ -41,7 +40,7 @@ export function MobileMcpAddSheet(props: {
   onOpen: (server: PhoneMcpServer) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const [page, setPage] = useState<Page>({ kind: 'catalog' })
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<McpServerCatalogCategory | null>(null)

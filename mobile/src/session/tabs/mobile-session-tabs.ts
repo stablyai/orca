@@ -58,6 +58,7 @@ export type MobileSessionTab =
           | 'launchDraftCreatedAt'
           | 'terminalTheme'
           | 'unread'
+          | 'isPinned'
         >
       > & {
         status?: RuntimeMobileSessionTerminalClientTab['status']
@@ -65,7 +66,15 @@ export type MobileSessionTab =
       } & MobileTerminalTabPhoneFields)
   | (Pick<
       RuntimeMobileSessionAgentTab,
-      'type' | 'id' | 'title' | 'sessionId' | 'agent' | 'isActive' | 'forked' | 'unread'
+      | 'type'
+      | 'id'
+      | 'title'
+      | 'sessionId'
+      | 'agent'
+      | 'isActive'
+      | 'forked'
+      | 'unread'
+      | 'isPinned'
     > & {
       chatStatus?: RuntimeMobileSessionAgentTabStatus & MirroredEvidenceReceipt
     })
