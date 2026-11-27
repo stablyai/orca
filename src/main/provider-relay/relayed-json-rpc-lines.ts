@@ -19,8 +19,8 @@ export function jsonRpcAnswerId(line: string): number | string | null {
   const keys = new Set(properties.map((property) => property.key))
   const answer = !keys.has('method') && (keys.has('result') || keys.has('error'))
   // An id after the answer's body (valid JSON-RPC) is past the scan: it's read whole below.
-  if (complete && keys.size === properties.length && (!answer || keys.has('id'))) {
-    return answer ? answerId(properties.find((property) => property.key === 'id')?.value) : null
+  if (complete && answer && keys.size === properties.length && keys.has('id')) {
+    return answerId(properties.find((property) => property.key === 'id')?.value)
   }
   // A request or notification names its method first; only an answer cut off is scanned whole.
   if (keys.has('method')) {
@@ -32,7 +32,12 @@ export function jsonRpcAnswerId(line: string): number | string | null {
   // Cut off or with a repeated key: only a full parse reads it as the connection will.
   try {
     const message: unknown = JSON.parse(line)
-    if (typeof message !== 'object' || message === null || 'method' in message) {
+    if (
+      typeof message !== 'object' ||
+      message === null ||
+      'method' in message ||
+      !('result' in message || 'error' in message)
+    ) {
       return null
     }
     return answerId(jsonProperty(message, 'id'))

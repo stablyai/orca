@@ -80,7 +80,8 @@ export class ProviderRelayPendingRequests {
   readonly kept = new ProviderRelayKeptState()
 
   /** Held requests whose answer from the app is being written. */
-  private readonly writing = new Set<string>()
+  // Each held request whose answer is being written, by key; a re-sent one replaces it.
+  private readonly writing = new Map<string, ProviderRelayRecord>()
   /** Writes a line to the agent while no app is attached; false while one is. */
   toAgent: ((line: string) => boolean) | null = null
   /** Spooled requests already answered, resolved or replaced, so a replay never asks again. */
@@ -272,7 +273,7 @@ export class ProviderRelayPendingRequests {
         const record = key ? this.pending.get(key) : undefined
         if (key && record) {
           answered.push({ key, record })
-          this.writing.add(key)
+          this.writing.set(key, record)
         }
       }
       this.clientLinePartial = ''
@@ -299,7 +300,10 @@ export class ProviderRelayPendingRequests {
     this.toAgent?.('')
     const methods = this.kept.replyMethods
     for (const [key, record] of methods.length > 0 ? this.pending : []) {
-      const named = methods.some((method) => record.line.includes(method))
+      const named = methods.some(
+        (method) =>
+          record.line.includes(method) || record.line.includes(method.replaceAll('/', '\\/'))
+      )
       const message = named && !this.writing.has(key) ? parseObject(record.line) : null
       if (
         message &&
@@ -314,7 +318,9 @@ export class ProviderRelayPendingRequests {
   /** The answers reached the agent's stdin; a request re-sent under the same id since then stays held. */
   releaseAnswered(answered: AnsweredRequest[]): void {
     for (const { key, record } of answered) {
-      this.writing.delete(key)
+      if (this.writing.get(key) === record) {
+        this.writing.delete(key)
+      }
       if (this.pending.get(key) === record) {
         this.release(key)
       }
