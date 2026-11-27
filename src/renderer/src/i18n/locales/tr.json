@@ -583,7 +583,10 @@
         "pageChanged": "Bu sayfa içe aktarma sırasında kapandı veya profil değiştirdi. Tekrar deneyin."
       },
       "notice": {
-        "failed": "Çerezler içe aktarılamadı: {{reason}}"
+        "failed": "Çerezler içe aktarılamadı: {{reason}}",
+        "importedCount_one": "{{countLabel}} çerez içe aktarıldı",
+        "importedCount_other": "{{countLabel}} çerez içe aktarıldı",
+        "reload": "Yeniden yükle"
       },
       "routedPage": {
         "label": "Bu cihazdaki tarayıcılar",
@@ -624,17 +627,60 @@
     },
     "toolbar": {
       "annotate": "Not ekle",
-      "grab": "Tut ve kaydır",
+      "grab": "Yakala",
       "draw": "Çiz",
       "copyAllNotes": "Tüm notları kopyala",
       "clearNotes": "Notları temizle",
       "resetZoom": "Yakınlaştırmayı sıfırla",
       "resetViewport": "Görüntü alanı boyutunu sıfırla",
       "findOnPage": "Sayfada bul",
-      "profile": "Profil"
+      "profile": "Profil",
+      "annotateModeWithShortcut": "Not ekle, öğeyi yakala veya çiz ({{value0}})",
+      "annotateMode": "Not ekle, öğeyi yakala veya çiz"
     },
     "loadStall": {
       "waitingForHost": "{{host}} bekleniyor…"
+    },
+    "annotatePalette": {
+      "annotateTooltip": "Not ekle: Bir öğeye yorum yaz (A)",
+      "grabTooltip": "Yakala: Öğenin bağlamını kopyala (G)",
+      "drawTooltip": "Çiz: Ekran görüntüsünü işaretle (D)",
+      "positionLeft": "Sol",
+      "positionRight": "Sağ",
+      "positionTop": "Üst",
+      "positionMiddle": "Orta",
+      "positionBottom": "Alt",
+      "label": "Not ekleme araçları",
+      "tools": "Araç",
+      "copy": "Kopyala",
+      "copyTitle": "Seçili öğeyi kopyala",
+      "copied": "Kopyalandı",
+      "screenshot": "Ekran görüntüsü",
+      "screenshotTitle": "Seçili öğenin ekran görüntüsünü kopyala",
+      "done": "Bitti",
+      "doneTitle": "Bitti (Esc)",
+      "move": "Araç çubuğunu taşı",
+      "positionValueBothAxes": "{{side}} %{{percent}}, {{vertical}} %{{verticalPercent}}",
+      "annotateTooltipNoKey": "Not ekle: Bir öğeye yorum yaz",
+      "grabTooltipNoKey": "Yakala: Öğenin bağlamını kopyala",
+      "drawTooltipNoKey": "Çiz: Ekran görüntüsünü işaretle",
+      "moveAnywhereTooltip": "Taşımak için sürükleyin veya ok tuşlarını kullanın · sıfırlamak için çift tıklayın · altını görmek için {{key}} tuşunu basılı tutun",
+      "copyMarkup": "İşaretleme kodunu kopyala",
+      "pickFirst": "Önce bir öğe seçin",
+      "moreDrawTools": "Diğer çizim araçları",
+      "showNotes": "Notları göster",
+      "noteCountOne": "1 not",
+      "noteCount": "{{count}} not",
+      "drawingDiscarded": "Çizim atıldı",
+      "undo": "Geri al",
+      "collapseNotes": "Notları daralt",
+      "expandNotes": "Notları genişlet",
+      "clearNotes": "Notları temizle",
+      "waitingForPage": "Sayfa bekleniyor…",
+      "pageDidNotLoad": "Sayfa yüklenmedi",
+      "discardDrawing": "Çizimi at",
+      "discardDrawingTitle": "Çizimi at (Esc)",
+      "positionCenter": "Orta"
     },
     "profileCookieClear": {
       "label": "Çerezler",
@@ -654,6 +700,12 @@
       "failed": "{{host}} üzerinde {{profile}} içindeki çerezler temizlenemedi. Yeniden deneyin.",
       "failedLocal": "Bu bilgisayarda {{profile}} içindeki çerezler temizlenemedi. Yeniden deneyin.",
       "sshHostOption": "{{host}} (SSH)"
+    },
+    "grabToast": {
+      "noScreenshot": "Ekran görüntüsü yok",
+      "hoverReadFailed": "İşaretçinin üzerindeki öğe okunamadı",
+      "noHover": "İşaretçinin altında öğe yok",
+      "copyFailed": "Kopyalanamadı"
     }
   },
   "editor": {
@@ -2042,6 +2094,9 @@
       "results": "Ayar arama sonuçları",
       "noResults": "“{{value0}}” ile eşleşen ayar yok",
       "moreResults": "{{value0}} sonuç daha var · daraltmak için yazmaya devam edin"
+    },
+    "browserUse": {
+      "teamDisabled": "Ekibiniz Tarayıcı Kullanımı özelliğini kapattı."
     },
     "mcpServers": {
       "custom": {
@@ -8338,7 +8393,7 @@
           "hostKeepsWorkspaces_other": "{{host}} sunucusunu ve kimlik bilgilerini bu bilgisayardan kaldırır. Sunucudaki {{count}} çalışma alanı Orca'da kalır — uzak dosyalara dokunulmaz.",
           "hostKeepsWorkspaces_one": "{{host}} sunucusunu ve kimlik bilgilerini bu bilgisayardan kaldırır. Sunucudaki {{count}} çalışma alanı Orca'da kalır — uzak dosyalara dokunulmaz.",
           "alsoRemoveWorkspaces_other": "Bu {{count}} çalışma alanını da Orca'dan kaldır",
-          "alsoRemoveWorkspaces_one": "Bu {{count}} çalışma alanını da Orca'dan kaldır"
+          "alsoRemoveWorkspaces_one": "Bu çalışma alanını da Orca'dan kaldır"
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "Host'u yeniden adlandır",
@@ -10407,6 +10462,7 @@
           "localLink": "Yalnızca yerel bağlantı",
           "localLinkHelp": "Bu bağlantı yalnızca bu bilgisayarda çalışan bir tarayıcı veya Orca istemcisinde çalışır.",
           "noExternalAddress": "Başka bir cihaz için adres bulunamadı. Bu bilgisayarı bir LAN'a veya Tailscale'e bağlayın, yenileyin ya da Özel adres seçin.",
+          "interfaceDisconnected": "{{address}} bağlantısı kesildi. Yeniden bağlayıp yenileyin veya bağlantı oluşturmak için başka bir adres seçin.",
           "customInvalid": "Geçerli bir host, host:port, IPv6 adresi veya ws(s):// URL'si girin.",
           "thisComputer": "Bu bilgisayar",
           "whoOpens": "Bağlantıyı kim açacak",
@@ -14223,7 +14279,12 @@
             "rollbackStopIncomplete": "Tamamlanamadı: Orca mevcut sunucunun kapandığını doğrulayamadığı için önceki sürüme dönmedi. Yeniden denemeden önce ana makinede ~/.orca-remote altındaki sunucu kurulum klasöründe bulunan orcad.log dosyasını kontrol edin.",
             "failed": "Orca bu işlemi sunucuda tamamlayamadı. Yeniden deneyin.",
             "defaultServer": "Tamamlanamadı: bu sunucu yeni projeler için varsayılan ana makine. Durdurmadan önce Yeni projelerin açılacağı yer bölümünden başka bir ana makine seçin.",
-            "wslMoveRunning": "Tamamlanamadı: bu sunucuya bir proje taşınıyor. Taşıma bittiğinde Orca sunucuyu günceller."
+            "wslMoveRunning": "Tamamlanamadı: bu sunucuya bir proje taşınıyor. Taşıma bittiğinde Orca sunucuyu günceller.",
+            "recoveryRequired": "Tamamlanamadı: yarıda kesilen bir güncelleme veya durdurma işlemi bu ana makineyi kilitliyor. Orca sunuyorsa Kurtar veya Durdurmayı iptal et seçeneğini kullanın, ardından yeniden deneyin.",
+            "snapshotSpace": "Tamamlanamadı: bu ana makinede Orca'nın güncellemeden önce aldığı kopya için yer yok. Ana makinede yer açın, ardından yeniden deneyin.",
+            "policyRefused": "Tamamlanamadı: Orca bu derlemeyi bu ana makinede etkinleştirmeyecek. Ana makineyi kontrol edip yeniden güncelleyin ya da onu en son daha yeni bir Orca sürümü çalıştırdıysa önce Orca'yı güncelleyin.",
+            "hostNewer": "Tamamlanamadı: bu ana makinedeki sunucuyu en son daha yeni bir Orca sürümü çalıştırdı. Orca'yı güncelleyin, ardından yeniden deneyin.",
+            "preflightFailed": "Tamamlanamadı: yeni Orca sunucusu bu ana makinedeki başlatma denetiminden geçemedi, bu yüzden Orca ana makineyi olduğu gibi bıraktı."
           },
           "reassurance": "Her ana makinede çalışır ve kendi SSH bağlantınız üzerinden erişilir. Kodunuz ve dosyalarınız bulundukları yerde kalır. Ana makineye yalnızca Orca'nın proje, sekme ve terminal listesi taşınır."
         },
@@ -15147,7 +15208,8 @@
             "windows": "kullanım aralığının yüzdesi",
             "reset": "sıfırlamaya kalan süre, ör. 3 sa 15 dk",
             "resetAt": "sıfırlama saati, ör. 20:50",
-            "optional": "içindeki yer tutuculardan biri boşsa bu bölüm gösterilmez"
+            "optional": "içindeki yer tutuculardan biri boşsa bu bölüm gösterilmez",
+            "namedUsagePools": "adlandırılmış kullanım havuzları, ör. Cursor abonelik planı havuzları"
           }
         }
       },
@@ -19199,6 +19261,10 @@
             "devToolsDockBottom": "Alta sabitle",
             "devToolsUndock": "Ayrı pencerede aç",
             "devToolsClose": "DevTools'u kapat",
+            "499b31b84e": "Tümünü Kopyala",
+            "e852e20cea": "Kopyalandı, ekran görüntüsü almak için S'ye basın veya başka bir öğe seçin",
+            "074f0ed10b": "{{value0}} ek açıklama hazır. Başka bir öğe seçin veya tüm geri bildirimi kopyalayın.",
+            "a2164a6e5a": "{{value0}} ek açıklama hazır. Başka bir öğe seçin veya tüm geri bildirimi kopyalayın.",
             "11c5084aa2": "Ek açıklamaları temizle",
             "734e4343ec": "Tarayıcı ek açıklamalarını temizle"
           },
@@ -23068,6 +23134,7 @@
       },
       "loadEarlierFailed": "Önceki mesajlar yüklenemedi.",
       "loadEarlierRetry": "Yeniden dene",
+      "htmlViewPreviewWaiting": "Bu kod bloğu tamamlandığında önizleme açılabilir.",
       "editDeliveryNotice": "Düzenle",
       "explicitChatWslAddHost": "Windows üzerinden açılan WSL klasörlerinde sohbet kullanılamaz. Burada sohbet etmek için dağıtımı WSL ana bilgisayarı olarak ekleyin (Proje ekle → Uzak ana bilgisayar ekle → WSL dağıtımı ekle) veya ajanı terminalde açın.",
       "explicitChatWslMoveToHost": "Windows üzerinden açılan WSL klasörlerinde sohbet kullanılamaz. Sohbet etmek için projeyi bir WSL ana bilgisayarında çalıştırın veya ajanı terminalde açın.",
@@ -27566,6 +27633,7 @@
       "stop": "Durdur",
       "stopWorker": "{{value0}} öğesini durdur",
       "agent": "Ajan",
+      "progress": "İlerleme",
       "result": "Sonuç",
       "workspace": "Çalışma alanı",
       "branch": "Branch",
@@ -28412,13 +28480,15 @@
         "activity": "Etkinlik",
         "canceledNote": "İptal edildi:",
         "doneNote": "Tamamlandı:",
+        "links": "Bağlantılar",
         "showLess": "Daha az göster",
         "showMore": "Daha fazla göster",
         "showEarlier": "Öncekileri göster",
         "place": "{{index}} / {{total}}",
         "deleted": "Bu öğe silindi.",
         "loading": "Öğe yükleniyor…",
-        "subWhere": "Öğe {{number}} · {{chat}}"
+        "subWhere": "Öğe {{number}} · {{chat}}",
+        "moreLinks": "{{count}} bağlantı daha"
       },
       "activity": {
         "linked": "{{links}} bağlantılarını bağladı",

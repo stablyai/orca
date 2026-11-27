@@ -813,7 +813,7 @@
         "finishOnPage": "Açılan sayfada tamamlayın",
         "needsAuth": "Oturum açılmalı",
         "needsAuthAfterSend": "Oturum açılmalı. Burada oturum açmak için bir mesaj gönderin.",
-        "off": "Kapalı",
+        "disabled": "Devre dışı",
         "pending": "Bağlanıyor…",
         "tools_one": "{{count}} araç",
         "tools_other": "{{count}} araç",

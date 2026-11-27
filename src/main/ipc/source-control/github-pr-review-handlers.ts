@@ -1,6 +1,7 @@
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { OptionalGhAccountExpectation } from '../../../shared/rpc-contract/github/github-repo-target-params'
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import {
@@ -16,8 +17,11 @@ import {
 } from './github-repo-routing'
 import { broadcastGitHubWorkItemMutation } from './github-work-item-mutation-events'
 
-export function registerGitHubPRReviewHandlers(store: Store): void {
-  ipcMain.handle(
+export function registerGitHubPRReviewHandlers(
+  store: Store,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle(
     'gh:setPRFileViewed',
     async (
       event,
@@ -64,7 +68,7 @@ export function registerGitHubPRReviewHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:addPRReviewCommentReply',
     async (
       event,
@@ -121,7 +125,7 @@ export function registerGitHubPRReviewHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:addPRReviewComment',
     async (
       event,

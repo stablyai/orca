@@ -1,6 +1,8 @@
 import { execFileSync } from 'node:child_process'
+import { readdirSync, statSync, utimesSync } from 'node:fs'
+import path from 'node:path'
 
-/** Written once a bundle is fully built; its absence is what marks a build still in flight. */
+/** Written once a bundle is fully built and signed; the launcher only reuses bundles that have it. */
 export const DEV_BUNDLE_MARKER_FILENAME = 'orca-dev-electron-app.json'
 
 export function getDevBundleProcessTable(execFile = execFileSync) {
@@ -19,11 +21,10 @@ export function getDevBundleProcessTable(execFile = execFileSync) {
 
 // Reclaim renamed/old-version Electron.app siblings: dev only clears its own target, leaving ~270MB per stale bundle (143/38GB observed).
 
-// Age starts at mkdir, not activity: app copy/signing does not refresh parent mtime.
-// Concurrent builds beyond this hard cutoff can be deleted; 130–200s builds leave 5–10x margin.
-export const IN_PROGRESS_WINDOW_MS = 15 * 60 * 1000
+// Age restarts when the launcher checks, reuses or finishes building a bundle (touchDevBundle).
+// Covers build-to-spawn, when no process reveals the bundle; 130–200s builds leave 5–10x margin.
+const RECENT_DEV_BUNDLE_WINDOW_MS = 15 * 60 * 1000
 
-// Protect current, live and unfinished-copy bundles: no process exists to reveal an in-flight copy before its marker.
 // Search known absolute paths in raw ps text; parsing twice missed live paths. Trailing slash distinguishes dir from dir2.
 export function isDevBundleInUse(dir, processTable) {
   // Check both macOS /tmp and /private/tmp spellings or ps can hide a live bundle; extra protection is safe.
@@ -38,16 +39,34 @@ export function selectStaleDevBundleDirs({
   nowMs,
   minAgeMs = 0
 }) {
+  const protectedAgeMs = Math.max(minAgeMs, RECENT_DEV_BUNDLE_WINDOW_MS)
   return bundles
-    .filter(({ dir, hasMarker, mtimeMs }) => {
-      if (dir === currentDir || isDevBundleInUse(dir, processTable)) {
-        return false
-      }
-      if (minAgeMs > 0 && nowMs - mtimeMs < minAgeMs) {
-        return false
-      }
-      const buildInFlight = !hasMarker && nowMs - mtimeMs < IN_PROGRESS_WINDOW_MS
-      return !buildInFlight
-    })
+    .filter(
+      ({ dir, mtimeMs }) =>
+        dir !== currentDir &&
+        !isDevBundleInUse(dir, processTable) &&
+        nowMs - mtimeMs >= protectedAgeMs
+    )
     .map(({ dir }) => dir)
+}
+
+export function collectDevBundles(worktree) {
+  const root = path.join(worktree, 'out', 'electron-dev')
+  try {
+    return readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => {
+        const dir = path.join(root, entry.name)
+        return { dir, mtimeMs: statSync(dir, { throwIfNoEntry: false })?.mtimeMs ?? 0 }
+      })
+  } catch {
+    return []
+  }
+}
+
+export function touchDevBundle(dir) {
+  const now = new Date()
+  try {
+    utimesSync(dir, now, now)
+  } catch {}
 }
