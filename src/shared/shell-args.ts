@@ -1,4 +1,4 @@
-/** A command line's words, with single or double quotes keeping spaces in one word. */
+/** A command line's words, with single or double quotes keeping whitespace in one word. */
 export function parseShellArgs(input: string): string[] {
   const args: string[] = []
   let current = ''
@@ -19,7 +19,7 @@ export function parseShellArgs(input: string): string[] {
         wordStarted = true
       }
       inSingle = !inSingle
-    } else if (ch === ' ' && !inDouble && !inSingle) {
+    } else if (/\s/.test(ch) && !inDouble && !inSingle) {
       if (wordStarted) {
         args.push(current)
         current = ''
