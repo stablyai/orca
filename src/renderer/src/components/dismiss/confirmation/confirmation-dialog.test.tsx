@@ -44,6 +44,8 @@ async function open(options: Partial<ConfirmationDialogOptions> = {}): Promise<A
       ...options
     }).then((answer) => asked.answers.push(answer))
   })
+  // The dialog's surface loads on first use: the prompt is up once its buttons are.
+  await screen.findByRole('button', { name: 'Share' })
   return asked
 }
 

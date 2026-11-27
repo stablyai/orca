@@ -28333,13 +28333,10 @@
       },
       "repositoriesIn": "Repositórios em {{accounts}}",
       "whoCanAsk": {
-        "search": "Pesquisar por nome de usuário do GitHub",
         "outsiders": "Todas as outras pessoas no GitHub recebem uma resposta pública dizendo para falar com você.",
         "needsSetup": "Conclua a configuração para vincular sua conta do GitHub e depois escolha as pessoas aqui.",
         "found": "Pessoas no GitHub",
-        "noUser": "Nenhum usuário do GitHub chamado “{{query}}”",
-        "exactOnly": "O GitHub só encontra pessoas pelo nome de usuário exato.",
-        "typeUsername": "Digite um nome de usuário do GitHub"
+        "exactOnly": "O GitHub só encontra pessoas pelo nome de usuário exato."
       },
       "allRepositoriesShort": "todos os repositórios",
       "signOut": {

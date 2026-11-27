@@ -87,7 +87,8 @@ async function openedByEnter(): Promise<ReturnType<typeof user>> {
   addButton().focus()
   await keys.keyboard('{Enter}')
   await settle()
-  expect(dialog()).toBeTruthy()
+  // The confirmation's surface loads on first use.
+  await screen.findByRole('button', { name: 'Give access' })
   expect(document.activeElement).toBe(button('Cancel'))
   return keys
 }
@@ -171,7 +172,7 @@ describe('GPS-C8-02: the gesture that opened the confirmation answers neither bu
     addButton().focus()
     await keys.keyboard('[Space]')
     await settle()
-    expect(dialog()).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Give access' })).toBeTruthy()
     expect(host.update).not.toHaveBeenCalled()
   })
 
