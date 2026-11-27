@@ -3,6 +3,7 @@ import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/ru
 import { getOptionalStringFlag, getPresentStringFlag } from '../arguments/flags'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
+import { resolveBrowserPageReference } from '../tab-reference/copied-tab-reference'
 import { assertLocalCwdWorktreeSelector } from '../hosts/local-environment-selector'
 import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 import { hasStructuredSessionMarker } from '../../shared/agent-launch/environment/structured-session-marker'
@@ -94,10 +95,11 @@ async function getBrowserPageTarget(
   cwd: string,
   client: RuntimeClient
 ): Promise<BrowserCliTarget> {
-  const page = getOptionalStringFlag(flags, 'page')
-  if (!page) {
+  const pageFlag = getOptionalStringFlag(flags, 'page')
+  if (!pageFlag) {
     return { worktree: await getScopedBrowserWorktreeSelector(flags, cwd, client) }
   }
+  const page = await resolveBrowserPageReference(client, pageFlag)
 
   const explicitWorktree = getOptionalStringFlag(flags, 'worktree')
   if (!explicitWorktree || explicitWorktree === 'all') {

@@ -217,7 +217,10 @@ export function SortableTabContextMenu({
           {t('components.tab.bar.SortableTabContextMenu.allowAutoClose', 'Allow Auto-Close')}
         </ContextMenuItem>
       ) : null}
-      <CopyTabIdMenuItem menuKind="context" unifiedTabId={unifiedTabId} />
+      <CopyTabIdMenuItem
+        menuKind="context"
+        reference={{ unifiedTabId, kind: nativeChat ? 'chat' : 'terminal' }}
+      />
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => canClose && onClose(tab.id)} disabled={!canClose}>
         <X className="size-3.5" />

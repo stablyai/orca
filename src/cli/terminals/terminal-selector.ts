@@ -2,6 +2,7 @@ import type { RuntimeClient } from '../runtime/client'
 import { getPresentStringFlag } from '../arguments/flags'
 import type { WorkspaceSelectionPurpose } from '../workspace-selection/caller-host-worktree-selection'
 import { getBrowserWorktreeSelector } from '../workspace-selection/workspace-selector'
+import { resolveTerminalReference } from '../tab-reference/copied-tab-reference'
 
 export async function getTerminalHandle(
   flags: Map<string, string | boolean>,
@@ -11,7 +12,7 @@ export async function getTerminalHandle(
 ): Promise<string> {
   const explicit = getPresentStringFlag(flags, 'terminal')
   if (explicit) {
-    return explicit
+    return await resolveTerminalReference(client, explicit)
   }
   const worktree = await getBrowserWorktreeSelector(flags, cwd, client, options.purpose)
   const response = await client.call<{ handle: string }>('terminal.resolveActive', {

@@ -3,19 +3,20 @@ import { toast } from 'sonner'
 import { ContextMenuItem } from '@/components/ui/context-menu'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { formatTabReference, type TabReference } from './tab-reference'
 
 export function CopyTabIdMenuItem({
-  unifiedTabId,
+  reference,
   menuKind = 'dropdown'
 }: {
-  unifiedTabId: string
+  reference: TabReference
   menuKind?: 'dropdown' | 'context'
 }): React.JSX.Element {
   const t = useTranslate()
   const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
   const copyTabId = async (): Promise<void> => {
     try {
-      await window.api.ui.writeClipboardText(`orcaTabId: ${unifiedTabId}`)
+      await window.api.ui.writeClipboardText(formatTabReference(reference))
       toast.success(t('components.tab.bar.CopyTabIdMenuItem.copied', 'Tab ID copied'))
     } catch {
       toast.error(t('components.tab.bar.CopyTabIdMenuItem.failed', 'Could not copy tab ID'))
