@@ -1,3 +1,4 @@
+import { setFlagsFromString } from 'node:v8'
 import { afterEach, describe, expect, it } from 'vitest'
 import { MAIN_WORKER_HEAP_LIMIT_MB, spawnWorkerThread } from './worker-thread-spawn'
 import { WorkerThreadRequestQueue } from './worker-thread-request-queue'
@@ -25,13 +26,14 @@ function asMainProcess(): void {
 describe('spawnWorkerThread heap limit', () => {
   it('caps workers in main except durable writers, and leaves other processes alone', async () => {
     asMainProcess()
-    const capped = spawnWorkerThread(ECHO_OR_EXHAUST, { eval: true, name: 'orca-port-scan' })
+    const capped = spawnWorkerThread(ECHO_OR_EXHAUST, { eval: true, execArgv: [], name: 'orca-port-scan' })
     const writer = spawnWorkerThread(ECHO_OR_EXHAUST, {
       eval: true,
+      execArgv: [],
       name: 'orca-journal-sql-writer'
     })
     Object.defineProperty(process, 'type', { value: 'utility', configurable: true })
-    const utility = spawnWorkerThread(ECHO_OR_EXHAUST, { eval: true, name: 'orca-port-scan' })
+    const utility = spawnWorkerThread(ECHO_OR_EXHAUST, { eval: true, execArgv: [], name: 'orca-port-scan' })
     try {
       expect(capped.resourceLimits?.maxOldGenerationSizeMb).toBe(MAIN_WORKER_HEAP_LIMIT_MB)
       expect(writer.resourceLimits?.maxOldGenerationSizeMb).not.toBe(MAIN_WORKER_HEAP_LIMIT_MB)
@@ -43,6 +45,8 @@ describe('spawnWorkerThread heap limit', () => {
 
   it('a worker that runs out of heap fails only its own call; the next call gets a fresh worker', async () => {
     asMainProcess()
+    // A process-wide --max-old-space-size (CI's NODE_OPTIONS) overrides a worker's own limit.
+    setFlagsFromString('--max-old-space-size=0')
     let spawned = 0
     const queue = new WorkerThreadRequestQueue<
       { id: number; exhaust?: boolean },
@@ -53,6 +57,7 @@ describe('spawnWorkerThread heap limit', () => {
         // A small cap keeps the test fast; the default only changes the size.
         return spawnWorkerThread(ECHO_OR_EXHAUST, {
           eval: true,
+          execArgv: [],
           name: 'orca-port-scan',
           resourceLimits: { maxOldGenerationSizeMb: 32 }
         })
