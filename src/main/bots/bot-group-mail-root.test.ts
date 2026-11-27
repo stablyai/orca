@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BotGroup } from '../../shared/bots/bot-group'
-import { BOT_ITEM_MAIL_SENDER } from '../../shared/bots/bot-item-note-runs'
+import { BOT_ITEM_MAIL_SENDER } from '../../shared/bots/bot-item-mail-sender'
 import SyncDatabase from '../sqlite/sync-database'
 import { narrowGroupMailBatch } from './bot-group-peer-requests'
 import type { BotGroupRuntime } from './bot-group-runtime'
