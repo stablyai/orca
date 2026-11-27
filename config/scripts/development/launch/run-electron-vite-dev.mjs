@@ -247,7 +247,8 @@ function prepareMacDevElectronApp() {
     chromiumResourcePath,
     path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout'),
     path.join(appPath, 'Contents', 'MacOS', 'orca-process-footprint'),
-    path.join(appPath, 'Contents', 'MacOS', 'orca-socket-owner')
+    path.join(appPath, 'Contents', 'MacOS', 'orca-socket-owner'),
+    path.join(appPath, 'Contents', 'MacOS', 'orca-mic-active-status')
   ]
 
   function copiedAppIsUsable() {

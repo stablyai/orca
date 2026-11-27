@@ -31,11 +31,14 @@ export type NotificationDeliveryDependencies = {
   readAuthorizationStatus: () => Promise<
     'authorized' | 'denied' | 'not-determined' | 'unknown' | null
   >
+  /** Absent when the host can't report mic state; null results never suppress. */
+  readMicActiveStatus?: () => Promise<boolean | null>
   recordDeliveryOutcome: (outcome: 'delivered' | 'failed') => void
   deliverNative: (
     request: NotificationDispatchRequest,
     options: ReturnType<typeof buildNotificationOptions>,
-    settings: NotificationSettings
+    settings: NotificationSettings,
+    deliveryOptions?: { suppressSound?: boolean }
   ) => NotificationDispatchResult | Promise<NotificationDispatchResult>
   platform: NodeJS.Platform
   now: () => number
@@ -72,7 +75,8 @@ export function createNotificationDeliveryService(
     request: NotificationDispatchRequest,
     options: ReturnType<typeof buildNotificationOptions>,
     settings: NotificationSettings,
-    reservation?: NativeNotificationReservation
+    reservation?: NativeNotificationReservation,
+    suppressSound = false
   ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
     const recordIfDelivered = (result: NotificationDispatchResult): NotificationDispatchResult => {
       if (result.delivered && reservation?.isCurrent() === false) {
@@ -83,7 +87,7 @@ export function createNotificationDeliveryService(
       }
       return result
     }
-    const result = deps.deliverNative(request, options, settings)
+    const result = deps.deliverNative(request, options, settings, { suppressSound })
     return result instanceof Promise ? result.then(recordIfDelivered) : recordIfDelivered(result)
   }
 
@@ -211,14 +215,25 @@ export function createNotificationDeliveryService(
       }
 
       const reservation = deps.reserveNative?.(request)
-      const deliverNative = () =>
-        deliverNativeAndRecord(request, readNotificationOptions(), settings, reservation)
+      const deliverNative = (suppressSound = false) =>
+        deliverNativeAndRecord(
+          request,
+          readNotificationOptions(),
+          settings,
+          reservation,
+          suppressSound
+        )
+      // Only the sound is withheld on a call; the banner and its click action still deliver.
+      const micActive =
+        deps.platform === 'darwin' && settings.suppressWhileMicActive && deps.readMicActiveStatus
+          ? deps.readMicActiveStatus()
+          : Promise.resolve(null)
       try {
         // macOS swallows denied/undecided notifications; allow the renderer fallback instead.
         const result =
           deps.platform !== 'darwin'
             ? deliverNative()
-            : deps.readAuthorizationStatus().then((authorization) => {
+            : deps.readAuthorizationStatus().then(async (authorization) => {
                 if (deps.wasRead?.(request) || reservation?.isCurrent() === false) {
                   return { delivered: false, reason: 'already-read' } as const
                 }
@@ -226,7 +241,7 @@ export function createNotificationDeliveryService(
                   deps.recordDeliveryOutcome('failed')
                   return { delivered: false, reason: 'blocked-by-system' } as const
                 }
-                return deliverNative()
+                return deliverNative((await micActive) === true)
               })
         if (result instanceof Promise) {
           return result.finally(() => reservation?.release())

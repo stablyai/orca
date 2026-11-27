@@ -155,6 +155,36 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.notifications.search.suppressMicActiveTitle',
+      'Suppress sound while mic is active'
+    ),
+    description: translate(
+      'auto.components.settings.notifications.search.suppressMicActiveDescription',
+      'Skip the notification sound while the microphone is in use, like on a call.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.ca8faa40d7',
+        'notifications'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.fa60d8e4ab',
+        'suppress'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.dc7d7c07cd',
+        'sound'
+      ),
+      ...translateSearchKeyword('auto.components.settings.notifications.search.mic', 'mic'),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.microphone',
+        'microphone'
+      ),
+      ...translateSearchKeyword('auto.components.settings.notifications.search.call', 'call')
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.notifications.search.8517a2dd51',
       'Notification sound'
     ),

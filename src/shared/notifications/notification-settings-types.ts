@@ -20,6 +20,7 @@ export type NotificationSettings = {
   agentNeedsInput: boolean
   terminalBell: boolean
   suppressWhenFocused: boolean
+  suppressWhileMicActive: boolean
   customSoundId:
     | 'system'
     | 'none'
@@ -135,6 +136,8 @@ export type NotificationDispatchResult = {
     | 'blocked-by-system'
     | 'invalid-request'
     | 'already-read'
+  /** Delivered with the native and renderer custom sound withheld (mic in use). */
+  soundSuppressed?: boolean
 }
 
 export type NotificationDismissResult = {

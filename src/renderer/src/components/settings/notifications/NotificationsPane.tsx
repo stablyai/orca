@@ -14,6 +14,7 @@ import { NotificationSoundSection } from './NotificationSoundSection'
 import { PerfNoticeToggles } from './PerfNoticeToggles'
 import { sendNotificationSettingsTestNotification } from '@/components/notifications/notification-test-delivery'
 import { useTranslate } from '@/i18n/use-translate'
+import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 
 type NotificationVolumeDraftState = {
   sourceVolume: number
@@ -246,6 +247,26 @@ export function NotificationsPane({
             })
           }
         />
+
+        {isMacUserAgent() ? (
+          <NotificationSettingToggle
+            label={t(
+              'auto.components.settings.NotificationsPane.suppressMicActiveLabel',
+              'Suppress sound while mic is active'
+            )}
+            description={t(
+              'auto.components.settings.NotificationsPane.suppressMicActiveDescription',
+              'Skip the notification sound while your mic is in use, like on a call. The notification still shows.'
+            )}
+            checked={notificationSettings.suppressWhileMicActive}
+            disabled={!notificationSettings.enabled}
+            onToggle={() =>
+              void updateNotificationSettings({
+                suppressWhileMicActive: !notificationSettings.suppressWhileMicActive
+              })
+            }
+          />
+        ) : null}
 
         <PerfNoticeToggles settings={settings} updateSettings={updateSettings} />
 
