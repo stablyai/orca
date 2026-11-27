@@ -60,3 +60,24 @@ export const suggesting = defineFixture({
     document.execCommand('insertText', false, '$g')
   }
 })
+
+// The guest's view of each edit, for the real-browser spec to read.
+const record = (_callback: string, args: readonly unknown[]): void => {
+  document.documentElement.dataset.codeInputEmitted = String(args[0])
+}
+
+export const atMaxLength = defineFixture({
+  width: 360,
+  render: () => (
+    <PluginDeclarativeCodeInput
+      props={{
+        label: 'Filter',
+        defaultValue: 'to + x',
+        maxLength: 8,
+        completions: [{ label: 'total' }],
+        onChange: { $callback: 'change' }
+      }}
+      emit={record}
+    />
+  )
+})
