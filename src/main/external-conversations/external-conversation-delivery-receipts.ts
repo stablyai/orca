@@ -11,7 +11,11 @@ import { refused, type ConversationKey, type Delivery } from './external-convers
 export type DeliveryReceiptDb = OrchestrationDb
 
 const RecordedDelivery = z.discriminatedUnion('outcome', [
-  z.object({ outcome: z.literal('accepted'), inTurn: z.literal(true).optional() }),
+  z.object({
+    outcome: z.literal('accepted'),
+    inTurn: z.literal(true).optional(),
+    muted: z.literal(true).optional()
+  }),
   z.object({
     outcome: z.literal('unknown'),
     reason: z.enum(['writer_failed', 'replayed_after_restart'])

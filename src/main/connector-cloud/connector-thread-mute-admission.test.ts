@@ -51,6 +51,7 @@ const ELSEWHERE: ConnectorConversation = {
   source: 'slack',
   externalId: 'T1:C1:1800000000.000900:U0BOT'
 }
+const MUTED = { outcome: 'accepted', muted: true }
 
 let sent = 0
 const send = (conversation: ConnectorConversation, text: string, extra = {}) => ({
@@ -320,17 +321,17 @@ describe('a muted bot thread', () => {
     await threadMuteSaves(store)(ELSEWHERE, true)
     const mutedFirst = dispatch(first)
     expect(mutedFirst?.received).toBe(false)
-    expect(await mutedFirst?.done).toEqual({ outcome: 'accepted' })
-    expect(await deliver(second)).toEqual({ outcome: 'accepted' })
-    expect(await deliver(first)).toEqual({ outcome: 'accepted' })
-    expect(await deliver(second)).toEqual({ outcome: 'accepted' })
+    expect(await mutedFirst?.done).toEqual(MUTED)
+    expect(await deliver(second)).toEqual(MUTED)
+    expect(await deliver(first)).toEqual(MUTED)
+    expect(await deliver(second)).toEqual(MUTED)
     expect(turns).toEqual([])
     expect(starts).toEqual([])
 
     await closeTestStores()
     const reopened = connector(createStore())
-    expect(await reopened.deliver(first)).toEqual({ outcome: 'accepted' })
-    expect(await reopened.deliver(second)).toEqual({ outcome: 'accepted' })
+    expect(await reopened.deliver(first)).toEqual(MUTED)
+    expect(await reopened.deliver(second)).toEqual(MUTED)
     expect(reopened.turns).toEqual([])
     expect(reopened.starts).toEqual([])
 
@@ -353,9 +354,7 @@ describe('a muted bot thread', () => {
     expect(readThreadMute(store, FIRST)).toMatchObject({ muted: false })
 
     expect(await deliver(send(FIRST, 'ordinary follow-up'))).toEqual({ outcome: 'accepted' })
-    expect(await deliver(start(SECOND, 'still muted', { mentioned: false }))).toEqual({
-      outcome: 'accepted'
-    })
+    expect(await deliver(start(SECOND, 'still muted', { mentioned: false }))).toEqual(MUTED)
     expect(turns).toEqual(['ordinary follow-up'])
     expect(starts).toEqual(['please return'])
     expect(readThreadMute(store, SECOND)).toMatchObject({ muted: true })
@@ -377,10 +376,10 @@ describe('a muted bot thread', () => {
     const { deliver, starts } = connector(store)
     const quiet = start(FIRST, 'quiet', { deliveryId: 'same', mentioned: false })
 
-    expect(await deliver(quiet)).toEqual({ outcome: 'accepted' })
+    expect(await deliver(quiet)).toEqual(MUTED)
     // The equivalent pre-repair start path sees the same receipt identity after a rollback, so it
     // replays accepted instead of rejecting a legitimate retry or starting a chat.
-    expect(await deliver(quiet)).toEqual({ outcome: 'accepted' })
+    expect(await deliver(quiet)).toEqual(MUTED)
     expect(
       await deliver(start(FIRST, 'changed', { deliveryId: 'same', mentioned: false }))
     ).toEqual({ outcome: 'refused', reason: 'delivery_id_reused' })
@@ -406,8 +405,8 @@ describe('a muted bot thread', () => {
       ]
     })
 
-    expect(await deliver(quiet)).toEqual({ outcome: 'accepted', inTurn: true })
-    expect(await deliver(quiet)).toEqual({ outcome: 'accepted', inTurn: true })
+    expect(await deliver(quiet)).toEqual({ ...MUTED, inTurn: true })
+    expect(await deliver(quiet)).toEqual({ ...MUTED, inTurn: true })
     expect(starts).toEqual([])
     expect(automationsTaken).toEqual([])
 
@@ -416,9 +415,9 @@ describe('a muted bot thread', () => {
     orchestration = new OrchestrationDb(join(testState.dir, 'orchestration.db'))
     const receipts = new DeliveryReceipts(() => orchestration)
     const reopened = connector(createStore(), receipts)
-    expect(await reopened.deliver(quiet)).toEqual({ outcome: 'accepted', inTurn: true })
+    expect(await reopened.deliver(quiet)).toEqual({ ...MUTED, inTurn: true })
     expect(await receipts.recorded(FIRST, quiet.deliveryId)).toEqual({
-      outcome: 'accepted',
+      ...MUTED,
       inTurn: true
     })
     expect(reopened.starts).toEqual([])
@@ -430,8 +429,8 @@ describe('a muted bot thread', () => {
     const { deliver, turns } = connector(store)
 
     const quiet = send(FIRST, 'fyi, the build is green')
-    expect(await deliver(quiet)).toEqual({ outcome: 'accepted' })
-    expect(await deliver(quiet)).toEqual({ outcome: 'accepted' })
+    expect(await deliver(quiet)).toEqual(MUTED)
+    expect(await deliver(quiet)).toEqual(MUTED)
     // Nor do the automations it matched: the cloud is told they were taken, so it starts none.
     const automations = [
       {
@@ -442,7 +441,7 @@ describe('a muted bot thread', () => {
       }
     ]
     const matched = send(FIRST, 'deploy done', { automations })
-    const taken = { outcome: 'accepted', inTurn: true }
+    const taken = { ...MUTED, inTurn: true }
     expect(await deliver(matched)).toEqual(taken)
     expect(await deliver(matched)).toEqual(taken)
     expect(turns).toEqual([])
@@ -503,8 +502,8 @@ describe('a bot that leaves its thread', () => {
 
     const after = connector(reopened)
     const quiet = send(FIRST, 'thanks all')
-    expect(await after.deliver(quiet)).toEqual({ outcome: 'accepted' })
-    expect(await after.deliver(quiet)).toEqual({ outcome: 'accepted' })
+    expect(await after.deliver(quiet)).toEqual(MUTED)
+    expect(await after.deliver(quiet)).toEqual(MUTED)
     await after.deliver(send(SECOND, 'thanks all'))
     await after.deliver(send(ELSEWHERE, 'and here'))
     expect(after.turns).toEqual(['thanks all', 'and here'])
@@ -671,7 +670,7 @@ describe('a bot that leaves its thread', () => {
     const replied = deliver(send(FIRST, 'sounds good, thanks'))
     go()
     expect(await leaving).toEqual({ ok: true })
-    expect(await replied).toEqual({ outcome: 'accepted' })
+    expect(await replied).toEqual(MUTED)
     expect(turns).toEqual([])
   })
 
@@ -690,7 +689,7 @@ describe('a bot that leaves its thread', () => {
     const replied = deliver(send(FIRST, 'great, thanks'))
     read()
     expect(await leaving).toEqual({ ok: true })
-    expect(await replied).toEqual({ outcome: 'accepted' })
+    expect(await replied).toEqual(MUTED)
     expect(turns).toEqual([])
     journal.reading.held = Promise.resolve()
   })

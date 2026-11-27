@@ -13,7 +13,7 @@ import type { ExternalConversationHost } from '../external-conversations/externa
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import { placeLaunchTarget } from './connector-places'
 import type { ConnectorMachine } from './connector-machine'
-import { withoutAutomations } from './connector-thread-mute'
+import { mutedDeliveryResult } from './connector-thread-mute'
 import type { Delivery } from '../external-conversations/external-conversation-types'
 import type { TurnAutomations } from './connector-turn-automations'
 import { recordedInTurn } from './connector-delivery-automations'
@@ -181,7 +181,7 @@ export function dispatchDelivery(
   if (delivery.kind === 'send') {
     const heldByMute = seam.receipts.heldByMute(delivery.conversation, deliveryId, [delivery.text])
     if (heldByMute) {
-      const done = settle(async () => withoutAutomations(delivery, await heldByMute))
+      const done = settle(async () => mutedDeliveryResult(delivery, await heldByMute))
       return { deliveryId, received: false, done }
     }
   }
@@ -196,14 +196,14 @@ export function dispatchDelivery(
             deliveryId,
             'connector.start',
             [delivery.agent, startTarget, delivery.prompt],
-            async () => withoutAutomations(delivery, await handled())
+            async () => mutedDeliveryResult(delivery, await handled())
           )
         : seam.receipts.run(
             delivery.conversation,
             deliveryId,
             'connector.mute',
             [requestText(delivery)],
-            async () => withoutAutomations(delivery, await handled())
+            async () => mutedDeliveryResult(delivery, await handled())
           )
     const muted = machine.threadMute?.(delivery, record, carriedBefore)
     if (muted) {

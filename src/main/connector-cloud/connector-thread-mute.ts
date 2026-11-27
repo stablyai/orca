@@ -55,9 +55,9 @@ export function slackThreadBotUser(externalId: string): string | null {
 
 /** A request the thread's mute handled starts no turn, and so none of its automations: the cloud is told
  *  they were taken, so it never starts them on their own. */
-export function withoutAutomations(delivery: RequestDelivery, result: Delivery): Delivery {
-  return result.outcome === 'accepted' && delivery.automations?.length
-    ? { ...result, inTurn: true }
+export function mutedDeliveryResult(delivery: RequestDelivery, result: Delivery): Delivery {
+  return result.outcome === 'accepted'
+    ? { ...result, muted: true, ...(delivery.automations?.length ? { inTurn: true as const } : {}) }
     : result
 }
 

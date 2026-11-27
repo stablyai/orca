@@ -299,6 +299,7 @@ export const ConnectorDeliveryResultSchema = z.discriminatedUnion('outcome', [
   z.object({
     outcome: z.literal('accepted'),
     reopened: z.literal(true).optional(),
+    muted: z.literal(true).optional(),
     // The machine ran the automations the start or send carried, in its turn.
     inTurn: z.literal(true).optional()
   }),

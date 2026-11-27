@@ -95,7 +95,7 @@ export type ConnectorRefusal = (typeof CONNECTOR_REFUSALS)[number]
 
 /** accepted confirms the chat took the message, not that the agent acted on it. */
 export type Delivery =
-  | { outcome: 'accepted'; inTurn?: true }
+  | { outcome: 'accepted'; inTurn?: true; muted?: true }
   | { outcome: 'refused'; reason: ConnectorRefusal; failure?: ConnectorFailure }
   | {
       outcome: 'unknown'

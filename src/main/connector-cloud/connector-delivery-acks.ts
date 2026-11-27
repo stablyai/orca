@@ -144,7 +144,7 @@ export class ConnectorDeliveryAcks {
       // Only a committed admission is received; a refusal before the journal is done alone. Both
       // go in one push, so no request carries the received without its done.
       const unadmitted = this.unadmitted.delete(deliveryId)
-      const admitted = unadmitted && result.outcome === 'accepted'
+      const admitted = unadmitted && result.outcome === 'accepted' && !result.muted
       // Refused before its admission: confirmed by done alone, like onlyDone.
       if (unadmitted && !admitted) {
         this.onlyDone.add(deliveryId)
