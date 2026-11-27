@@ -239,9 +239,14 @@ export function markStructuredAgentLaunchCancelledPersisted(
   writeTombstones()
 }
 
-export function hasStructuredAgentLaunchCancellationTombstonePersisted(sessionId: string): boolean {
+export function hasStructuredAgentLaunchCancellationTombstonePersisted(
+  sessionId: string,
+  executionHostId?: ExecutionHostId
+): boolean {
   load()
-  return tombstones.has(sessionId)
+  return executionHostId === undefined
+    ? tombstones.has(sessionId)
+    : tombstones.get(sessionId) === executionHostId
 }
 
 /** The cancelled sessions a host owns: only its inventory can prove one gone. */

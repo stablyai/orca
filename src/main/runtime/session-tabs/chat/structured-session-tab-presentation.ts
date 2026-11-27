@@ -104,6 +104,16 @@ export async function closeMobileStructuredSessionPresentation(input: {
   const hostlessRaw =
     !host && (input.reason === undefined || input.reason === 'user') && input.local()
   const surface = captureInstalledStructuredSessionSurface(input.tab.sessionId, input.runtime)
+  const currentTabId = surface?.tableId
+  if (
+    host &&
+    input.local() &&
+    (isReopenedChatTabId(input.tab.id) || (currentTabId && isReopenedChatTabId(currentTabId))) &&
+    currentTabId !== input.tab.id
+  ) {
+    // The published row can still describe the tab that preceded the committed reopen.
+    throw new Error('tab_not_found')
+  }
   await closeRenderedStructuredSessionTab(input.notifier, input.tab.id, input.worktreeId)
   if (hostlessRaw) {
     if (!getStructuredAgentSessionHost() && input.local()) {
