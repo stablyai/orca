@@ -38,6 +38,9 @@ function labelledFileName(line: string): string {
   return /^(?:\/|[A-Za-z]:[\\/])/.test(line) ? lastPathSegment(line) : line
 }
 
+// One label per file: a Windows long path (32,767 chars) percent-encoded as a file URL, plus line break slack.
+const MAX_LABEL_CHARS_PER_FILE = 3 * 32_768 + 1_024
+
 /** True once `text` has more than `max` lines (split on \r\n, \r or \n), scanning no further. */
 function hasMoreLinesThan(text: string, max: number): boolean {
   let lines = 1
@@ -62,8 +65,11 @@ export function textOnlyLabelsCopiedFiles(text: string, files: readonly string[]
   if (files.length === 0) {
     return false
   }
+  // Runs on main for every file paste: reject prompt text that can't be labels before any scan, split or sort.
+  if (text.length > files.length * MAX_LABEL_CHARS_PER_FILE) {
+    return false
+  }
   const trimmed = text.trim()
-  // Runs on main for every file paste: reject long prompt text before splitting or sorting it.
   if (hasMoreLinesThan(trimmed, files.length)) {
     return false
   }
