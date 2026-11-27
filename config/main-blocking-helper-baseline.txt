@@ -562,6 +562,7 @@
 1 src/main/ipc/accounts/codex-config-sync.ts
 1 src/main/ipc/accounts/cursor-accounts.ts
 1 src/main/ipc/accounts/grok-accounts.ts
+1 src/main/ipc/accounts/lazy-codex-accounts-handlers.ts # codex account handler charge moved from register-core-handlers; module imports on first invoke, never at boot
 3 src/main/ipc/accounts/zcode-plan-credentials.ts
 1 src/main/ipc/ai-vault/ai-vault-search.ts
 1 src/main/ipc/ai-vault/ai-vault-subagent-list.ts
@@ -648,7 +649,7 @@
 1 src/main/ipc/register-core-handlers/lazy-account-and-diagnostic-ipc-handlers.ts # diagnostics charge moved from direct registration; the module imports on first invoke, so mkdirSync never runs at boot
 2 src/main/ipc/register-core-handlers/lazy-rare-ipc-handlers.ts # charges moved from register-core-handlers; handlers import on first invoke, so the blocking helpers never run at boot
 2 src/main/ipc/register-core-handlers/lazy-setup-ipc-handlers.ts # cli and shell handler charges moved from register-core-handlers; modules import on first invoke, never at boot
-9 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
+8 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
 5 src/main/ipc/repos.ts
 1 src/main/ipc/repos/local-repo-registration.ts
 1 src/main/ipc/repos/nested-repo-import-handler.ts
