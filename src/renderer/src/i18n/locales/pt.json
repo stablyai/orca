@@ -3201,7 +3201,11 @@
         "blocked": "Bloqueado"
       },
       "action": {
-        "checkHeldNow": "Verificar {{version}} agora. Sua configuração de atraso continua a mesma."
+        "checkHeldNow": "Verificar {{version}} agora. Sua configuração de atraso continua a mesma.",
+        "check": "Verificar"
+      },
+      "channel": {
+        "unknownVersion": "O Orca {{version}} não é uma versão de lançamento, então o canal não pode ser alterado aqui."
       }
     }
   },

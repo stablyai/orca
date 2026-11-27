@@ -1565,7 +1565,11 @@
         "blocked": "Bloqueado"
       },
       "action": {
-        "checkHeldNow": "Buscar {{version}} ahora. Tu ajuste de retraso no cambia."
+        "checkHeldNow": "Buscar {{version}} ahora. Tu ajuste de retraso no cambia.",
+        "check": "Buscar"
+      },
+      "channel": {
+        "unknownVersion": "Orca {{version}} no es una versión publicada, así que aquí no se puede cambiar su canal."
       }
     }
   },

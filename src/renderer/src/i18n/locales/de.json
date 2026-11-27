@@ -2290,7 +2290,11 @@
         "blocked": "Blockiert"
       },
       "action": {
-        "checkHeldNow": "Jetzt nach {{version}} suchen. Deine Verzögerungseinstellung bleibt gleich."
+        "checkHeldNow": "Jetzt nach {{version}} suchen. Deine Verzögerungseinstellung bleibt gleich.",
+        "check": "Prüfen"
+      },
+      "channel": {
+        "unknownVersion": "Orca {{version}} ist kein Release-Build, daher lässt sich der Kanal hier nicht ändern."
       }
     }
   },

@@ -1943,7 +1943,11 @@
         "blocked": "Bloqué"
       },
       "action": {
-        "checkHeldNow": "Rechercher {{version}} maintenant. Votre réglage de délai reste inchangé."
+        "checkHeldNow": "Rechercher {{version}} maintenant. Votre réglage de délai reste inchangé.",
+        "check": "Vérifier"
+      },
+      "channel": {
+        "unknownVersion": "Orca {{version}} n'est pas une version publiée, son canal ne peut donc pas être changé ici."
       }
     }
   },

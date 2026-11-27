@@ -49,14 +49,33 @@ export function ReleaseChannelSection(): React.JSX.Element {
 
   // Without the running version there is no channel to compare against; a failure shows where the
   // build list would have been, and the list's Refresh retries it.
+  // Only the newest lookup may settle, so a slow earlier one can't overwrite a retry.
+  const versionRequest = useRef(0)
+  const [versionLoading, setVersionLoading] = useState(false)
   const loadVersion = useCallback((): void => {
-    void window.api.updater.getVersion().then(
-      (version) => {
-        setLoadError(null)
-        setAppVersion(version)
-      },
-      (error: unknown) => setLoadError({ message: errorMessage(error) })
-    )
+    const request = ++versionRequest.current
+    const current = (): boolean => request === versionRequest.current
+    setVersionLoading(true)
+    void window.api.updater
+      .getVersion()
+      .then(
+        (version) => {
+          if (current()) {
+            setLoadError(null)
+            setAppVersion(version)
+          }
+        },
+        (error: unknown) => {
+          if (current()) {
+            setLoadError({ message: errorMessage(error) })
+          }
+        }
+      )
+      .finally(() => {
+        if (current()) {
+          setVersionLoading(false)
+        }
+      })
   }, [])
   useEffect(loadVersion, [loadVersion])
 
@@ -140,6 +159,18 @@ export function ReleaseChannelSection(): React.JSX.Element {
     void window.api.shell.openUrl(build.installerUrl ?? build.releaseUrl)
   }
 
+  // A version that resolved but isn't a release version leaves the picker off; say why.
+  const shownError =
+    loadError ??
+    (appVersion !== null && runningChannel === null
+      ? {
+          message: t(
+            'settings.about.channel.unknownVersion',
+            "Orca {{version}} isn't a release build, so its channel can't be changed here.",
+            { version: appVersion }
+          )
+        }
+      : null)
   const title = t('settings.about.channel.title', 'Channel')
   const platformLabel = t(
     'auto.components.settings.ReleaseChannelSection.devChannelPlatforms',
@@ -221,7 +252,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
                   'auto.components.settings.ReleaseChannelSection.refresh',
                   'Refresh build list'
                 )}
-                disabled={loading}
+                disabled={loading || versionLoading}
                 onClick={() =>
                   appVersion === null
                     ? loadVersion()
@@ -261,9 +292,9 @@ export function ReleaseChannelSection(): React.JSX.Element {
             </div>
           </div>
         </div>
-        {loadError ? (
+        {shownError ? (
           <p data-settings-row="" className="text-settings-detail text-destructive">
-            {updaterMessageText(loadError)}
+            {updaterMessageText(shownError)}
           </p>
         ) : needsManualInstall && selectedBuild ? (
           <p data-settings-row="" className="text-settings-detail text-muted-foreground">

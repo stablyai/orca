@@ -1546,7 +1546,11 @@
         "blocked": "차단됨"
       },
       "action": {
-        "checkHeldNow": "지금 {{version}}을(를) 확인합니다. 지연 설정은 그대로 유지됩니다."
+        "checkHeldNow": "지금 {{version}}을(를) 확인합니다. 지연 설정은 그대로 유지됩니다.",
+        "check": "확인"
+      },
+      "channel": {
+        "unknownVersion": "Orca {{version}}은(는) 릴리스 빌드가 아니어서 여기서 채널을 변경할 수 없습니다."
       }
     }
   },

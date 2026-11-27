@@ -99,7 +99,13 @@ export function ServerRestartButton({
         if (event.repeat && (event.key === 'Enter' || event.key === ' ')) {
           event.preventDefault()
         }
-        if (armed && event.key === 'Escape' && !event.nativeEvent.isComposing) {
+        if (
+          armed &&
+          event.key === 'Escape' &&
+          !event.nativeEvent.isComposing &&
+          // Same guard as the capture handler: a menu or dialog on top owns Esc.
+          !hasVisibleOverlay()
+        ) {
           // Revert here only; Esc must not also leave Settings.
           event.preventDefault()
           event.stopPropagation()

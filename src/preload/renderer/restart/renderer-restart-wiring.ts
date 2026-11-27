@@ -51,20 +51,20 @@ export function registerRendererRestartIpcRelays(
 
 // Windows with an install request in flight; like appRestartState.pending, it outlives any one
 // caller, so reopening Settings or clicking another surface can't start a second preparation.
-const updaterInstallsPending = new WeakSet<EventTarget>()
+const updaterInstallsInFlight = new WeakMap<EventTarget, Promise<void>>()
 
-export async function prepareAndInvokeUpdaterInstall(
+export function prepareAndInvokeUpdaterInstall(
   eventTarget: EventTarget,
   relay: Pick<UpdaterQuitAbortRelay, 'markPrepared' | 'abort'>,
   invoke: () => Promise<void>,
   awaitCheckpoint: () => Promise<void>
 ): Promise<void> {
-  // A repeat request joins the one in flight rather than failing, so it shows no error.
-  if (updaterInstallsPending.has(eventTarget)) {
-    return
+  // A repeat request shares the one in flight, so it settles (or fails) with it.
+  const inFlight = updaterInstallsInFlight.get(eventTarget)
+  if (inFlight) {
+    return inFlight
   }
-  updaterInstallsPending.add(eventTarget)
-  try {
+  const request = (async () => {
     await prepareRendererForAppRestart(eventTarget, {
       startedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
       abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
@@ -77,9 +77,11 @@ export async function prepareAndInvokeUpdaterInstall(
       relay.abort()
       throw error
     }
-  } finally {
-    updaterInstallsPending.delete(eventTarget)
-  }
+  })().finally(() => {
+    updaterInstallsInFlight.delete(eventTarget)
+  })
+  updaterInstallsInFlight.set(eventTarget, request)
+  return request
 }
 
 export async function prepareAndInvokeAppRestart<T>(

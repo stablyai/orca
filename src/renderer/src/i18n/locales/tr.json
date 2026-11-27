@@ -2290,7 +2290,11 @@
         "blocked": "Engellendi"
       },
       "action": {
-        "checkHeldNow": "{{version}} sürümünü şimdi denetle. Gecikme ayarınız aynı kalır."
+        "checkHeldNow": "{{version}} sürümünü şimdi denetle. Gecikme ayarınız aynı kalır.",
+        "check": "Denetle"
+      },
+      "channel": {
+        "unknownVersion": "Orca {{version}} bir sürüm derlemesi değil, bu yüzden kanalı burada değiştirilemez."
       }
     }
   },

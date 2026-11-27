@@ -1537,7 +1537,11 @@
         "blocked": "ブロック中"
       },
       "action": {
-        "checkHeldNow": "今すぐ {{version}} を確認します。遅延設定は変わりません。"
+        "checkHeldNow": "今すぐ {{version}} を確認します。遅延設定は変わりません。",
+        "check": "確認"
+      },
+      "channel": {
+        "unknownVersion": "Orca {{version}} はリリースビルドではないため、ここではチャネルを変更できません。"
       }
     }
   },

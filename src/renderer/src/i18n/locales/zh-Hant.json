@@ -2251,7 +2251,11 @@
         "blocked": "已封鎖"
       },
       "action": {
-        "checkHeldNow": "立即檢查 {{version}}。你的延遲設定保持不變。"
+        "checkHeldNow": "立即檢查 {{version}}。你的延遲設定保持不變。",
+        "check": "檢查"
+      },
+      "channel": {
+        "unknownVersion": "Orca {{version}} 不是正式發行版本，因此無法在此變更其通道。"
       }
     }
   },

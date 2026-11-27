@@ -1,6 +1,6 @@
 import type React from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -121,15 +121,25 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
     setRefreshFailed(false)
   }
   const currentCheck = ownedCheck?.revision === revision ? ownedCheck : null
+  // Bumped on every open and close, so a result from an earlier opening is ignored.
+  const opening = useRef(0)
+  useEffect(() => {
+    opening.current += 1
+  }, [open])
   const runRefresh = useCallback((): void => {
+    const startedIn = opening.current
     setRefreshFailed(false)
     void refresh().then(
       (check) => {
-        if (check) {
+        if (check && startedIn === opening.current) {
           setOwnedCheck(check)
         }
       },
-      () => setRefreshFailed(true)
+      () => {
+        if (startedIn === opening.current) {
+          setRefreshFailed(true)
+        }
+      }
     )
   }, [refresh])
   const needsCheck = open && currentCheck === null && !refreshFailed && !checking && !running
