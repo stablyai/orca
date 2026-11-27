@@ -186,6 +186,19 @@ it('trims an accepted suggestion to maxLength when it sets the value itself', ()
   expect(emit).toHaveBeenLastCalledWith('change', ['tot'], expect.anything())
 })
 
+it('trims an accepted suggestion with CRLF breaks to maxLength as the textarea counts them', () => {
+  const { textarea, emit } = field({
+    ...base,
+    completions: [{ label: 'total', insert: 'to\r\nxy' }],
+    defaultValue: 'to',
+    maxLength: 5
+  })
+  suggest(textarea, 2)
+  fireEvent.keyDown(textarea, { key: 'Tab' })
+  expect(textarea.value).toBe('to\nxy')
+  expect(emit).toHaveBeenLastCalledWith('change', ['to\nxy'], expect.anything())
+})
+
 it('offers every suggestion on Ctrl+Space and still replaces the typed word', () => {
   const { textarea } = field({
     ...base,

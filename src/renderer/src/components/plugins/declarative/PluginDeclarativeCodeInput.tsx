@@ -111,8 +111,10 @@ export function PluginDeclarativeCodeInput({
     element: HTMLTextAreaElement,
     from: number,
     to: number,
-    text: string
+    raw: string
   ): void => {
+    // The textarea stores any break as `\n`, so the maxLength cut and the caret count the same text.
+    const text = normalizeLineBreaks(raw)
     element.focus()
     element.setSelectionRange(from, to)
     accepting.current = true
