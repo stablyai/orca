@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/bots/bot-connectors-view'
 import { BotConnectors } from '../../../../shared/rpc-contract/bots-look-around-params'
 import { readGhSignIn } from '../../../bots/bot-local-sign-ins'
+import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
 import { getGoogleConnect } from '../../../google/google-connect'
 import { readGoogleDefaultAccount } from '../../../google/google-credential-store'
 import { botOfSession } from '../../../bots/bot-session-tabs'
@@ -77,6 +78,7 @@ export const BOT_CONNECTORS_METHOD = defineMethod({
         bot,
         {
           gh,
+          server: orcaSignInServer(runtime),
           linear: (await runtime.linearStatus()).connected,
           google: (await getGoogleConnect()?.accounts()) ?? [],
           googleApp: Boolean(await getGoogleConnect()?.client()),

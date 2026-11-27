@@ -5,14 +5,18 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { BotGitHubView } from '@/lib/bot-github-state'
 import { ghSignedOut } from '../../../../../shared/connector-bot-github-contract'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { useBotComputerLabel } from '../use-bot-host-label'
 import { BotHowToAsk, HOW_TO_ASK_ESCAPED } from '../BotHowToAsk'
 
 const GH_AUTH_LOGIN = 'gh auth login'
 
 /** The computer gh is signed out on (its name, or this computer), or null while gh is signed in. */
-export function ghSignedOutHost(view: BotGitHubView, hostName: string | null): string | null {
+export function useGhSignedOutHost(hostId: ExecutionHostId, view: BotGitHubView): string | null {
+  const t = useTranslate()
+  const computer = useBotComputerLabel(hostId)
   return view.status === 'ready' && ghSignedOut(view.github)
-    ? (hostName ?? translate('bots.github.ghSignedOut.thisComputer', 'this computer'))
+    ? (computer ?? t('bots.github.ghSignedOut.thisComputer', 'this computer'))
     : null
 }
 

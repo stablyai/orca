@@ -30,7 +30,7 @@ import { OrcaCloudSignInLine, orcaCloudSignInReason } from '../bots/orca-cloud-s
 import { useOrcaCloudNeedsSignIn } from '../bots/orca-cloud-signed-out'
 import { BotConnectorsHostNotice, useServerNoticeState } from '../bots/BotConnectorsHostNotice'
 import { useBotHostLabel } from '../bots/use-bot-host-label'
-import { GhSignedOutLine, ghSignedOutHost } from '../bots/github/GhSignedOutLine'
+import { GhSignedOutLine, useGhSignedOutHost } from '../bots/github/GhSignedOutLine'
 
 type OfferProps = {
   bot: Bot
@@ -52,7 +52,7 @@ function SlackOffer(props: OfferProps): React.JSX.Element {
 
 function GitHubOffer(props: OfferProps): React.JSX.Element {
   const view = useBotGitHub(props.bot.hostId)
-  const ghHost = ghSignedOutHost(view, useBotHostLabel(props.bot.hostId))
+  const ghHost = useGhSignedOutHost(props.bot.hostId, view)
   const removed = props.bot.github?.removedInstallationIds ?? []
   const names =
     props.bot.github && view.status === 'ready'

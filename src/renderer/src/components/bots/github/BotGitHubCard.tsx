@@ -22,7 +22,7 @@ import { useConnectorSetup } from '../ConnectorSetupDialogs'
 import { addGitHubAccount, openGitHubInstall } from '@/lib/bot-github-install-record'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { useGitHubWhoCanAsk } from './use-github-who-can-ask'
-import { GhSignedOutLine, ghSignedOutHost, ghSignedOutStatus } from './GhSignedOutLine'
+import { GhSignedOutLine, ghSignedOutStatus, useGhSignedOutHost } from './GhSignedOutLine'
 import type { BotWhoCanAskService } from '../BotWhoCanAskList'
 import { signedOutConnectorFace } from '../orca-cloud-sign-in'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
@@ -154,7 +154,8 @@ export function useGitHubCard(
       ? gitHubInstallationFace(installation, login)
       : gitHubCardFace(view, hostName)
   const people = useGitHubWhoCanAsk(bot.hostId, face.ready, installation?.installationId)
-  return { view, face, people, ghHost: ghSignedOutHost(view, hostName) }
+  const ghHost = useGhSignedOutHost(bot.hostId, view)
+  return { view, face, people, ghHost }
 }
 
 /**
