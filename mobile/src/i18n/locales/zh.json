@@ -5622,7 +5622,7 @@
       "letBotReactHelp": "每个结果都会开启一个新回合，让 {{name}} 据此采取行动",
       "time": "时间",
       "minute": "分钟",
-      "runs": "运行"
+      "runs": "运行设置"
     },
     "botEvents": {
       "label": "事件",
@@ -7182,7 +7182,7 @@
       "outfitTie": "领带",
       "outfitDetective": "侦探",
       "outfitHardHat": "安全帽",
-      "outfitReviewer": "审阅者",
+      "outfitReviewer": "评审人",
       "outfitNightShift": "夜班",
       "outfitArtist": "艺术家",
       "outfitScientist": "科学家",
@@ -7455,7 +7455,7 @@
         "stopped": "Slack 已不再接受 {{host}} 使用的令牌。"
       },
       "problem": {
-        "code": "代码",
+        "code": "错误代码",
         "computer": "电脑",
         "workspace": "工作区"
       }
@@ -7510,7 +7510,7 @@
         "connectTitle": "连接 Composio",
         "once": "只需连接一次，即可用于你的所有 bots",
         "browseAll": "浏览 Composio 应用",
-        "keyOnHost": "保存在 {{host}}；机器人永远看不到。"
+        "keyOnHost": "保存在 {{host}} 上；bots 永远看不到"
       },
       "close": "关闭",
       "couldNotSignIn": "无法登录 {{app}}",
@@ -8096,7 +8096,7 @@
         "apiOff": "已在 Google Cloud 中停用",
         "adminBlocked": "已被你公司的 Google 管理员阻止",
         "error": "无法检查",
-        "notAllowed": "你没有允许"
+        "notAllowed": "你未授权"
       },
       "headline": {
         "connected": "Google 已连接",
@@ -8121,9 +8121,9 @@
         "revoke": "移除并在 Google 撤销授权"
       },
       "reconnect": "重新连接",
-      "addAccount": "添加另一个账号",
+      "addAccount": "添加另一个账户",
       "signIn": "登录 Google",
-      "handoff": "选择你的账号，然后选择“允许”。"
+      "handoff": "选择你的账户，然后点击“允许”"
     },
     "saveFailed": "无法保存",
     "sheet": {
