@@ -25,6 +25,7 @@ export class AtomicSnapshotWriter {
   private closed = false
   private pendingWrite: Promise<void> | null = null
   private pendingSerialize: (() => string) | null = null
+  private pendingGeneration = 0
   private readonly staleTempCleanup: Promise<void>
   private inFlightAsyncTmpFile: string | null = null
 
@@ -43,6 +44,7 @@ export class AtomicSnapshotWriter {
     }
     this.writeRequested = true
     this.pendingSerialize = serialize
+    this.pendingGeneration = ++this.writeGeneration
     // drainWrites awaits before clearing pendingWrite, so this assignment wins.
     this.pendingWrite ??= this.drainWrites()
     return this.pendingWrite
@@ -64,7 +66,11 @@ export class AtomicSnapshotWriter {
         }
       }
     }
-    const { tmpFile, json, generation } = this.preparePayload(file, serialize)
+    const { tmpFile, json, generation } = this.preparePayload(
+      file,
+      serialize,
+      ++this.writeGeneration
+    )
     if (this.isUnchanged(json)) {
       // Fence older async renames even when the newest bytes are already on disk.
       this.lastCommittedGeneration = Math.max(this.lastCommittedGeneration, generation)
@@ -107,13 +113,13 @@ export class AtomicSnapshotWriter {
 
   private preparePayload(
     finalPath: string,
-    serialize: () => string
+    serialize: () => string,
+    generation: number
   ): {
     tmpFile: string
     json: string
     generation: number
   } {
-    const generation = ++this.writeGeneration
     return {
       tmpFile: durableWriteTempPath(finalPath),
       json: serialize(),
@@ -147,8 +153,9 @@ export class AtomicSnapshotWriter {
       while (this.writeRequested && !this.closed) {
         this.writeRequested = false
         const serialize = this.pendingSerialize!
+        const generation = this.pendingGeneration
         try {
-          await this.writeToDiskAsync(serialize)
+          await this.writeToDiskAsync(serialize, generation)
         } catch (error) {
           firstError ??= error
           if (!this.writeRequested) {
@@ -165,13 +172,13 @@ export class AtomicSnapshotWriter {
     }
   }
 
-  private async writeToDiskAsync(serialize: () => string): Promise<void> {
+  private async writeToDiskAsync(serialize: () => string, generation: number): Promise<void> {
     const file = this.resolveFile()
     await this.prepareDirectory(dirname(file))
-    if (this.closed) {
+    if (this.closed || this.lastCommittedGeneration >= generation) {
       return
     }
-    const { tmpFile, json, generation } = this.preparePayload(file, serialize)
+    const { tmpFile, json } = this.preparePayload(file, serialize, generation)
     if (this.isUnchanged(json)) {
       return
     }
