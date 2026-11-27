@@ -22,6 +22,7 @@ type RecordReaderStream = Pick<Readable, 'on' | 'pause' | 'resume' | 'setEncodin
 export type ProviderRecordReader = {
   pause: () => void
   resume: () => void
+  isPaused: () => boolean
 }
 
 export function createProviderRecordReader(input: {
@@ -50,6 +51,7 @@ export function createProviderRecordReader(input: {
   })
 
   return {
+    isPaused: () => paused,
     pause: () => {
       paused = true
       input.stdout.pause()

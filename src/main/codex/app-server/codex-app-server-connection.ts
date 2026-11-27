@@ -128,17 +128,21 @@ async function connectCodexAppServer(
     void managed.close()
   })
 
+  const records = batchedCodexRecordCallbacks({
+    dispatch: dispatcher.dispatch,
+    rejectOversized: dispatcher.rejectOversized,
+    onUnhandledFrame: (kind, line) => handlers.onUnhandledFrame?.(kind, line),
+    onFatal: (error) => {
+      handleUnexpectedEnd(error, true)
+      void managed.close()
+    },
+    isPaused: () => recordReader.isPaused()
+  })
   const recordReader = createProviderRecordReader({
     stdout: child.stdout,
-    ...batchedCodexRecordCallbacks({
-      dispatch: dispatcher.dispatch,
-      rejectOversized: dispatcher.rejectOversized,
-      onUnhandledFrame: (kind, line) => handlers.onUnhandledFrame?.(kind, line),
-      onFatal: (error) => {
-        handleUnexpectedEnd(error, true)
-        void managed.close()
-      }
-    })
+    onRecord: records.onRecord,
+    onRejected: records.onRejected,
+    onFatal: records.onFatal
   })
 
   function sendLine(payload: Record<string, unknown>): void {
@@ -272,7 +276,10 @@ async function connectCodexAppServer(
     respond: (id, result) => writeResponse({ id, result }),
     respondWithError: (id, code, message) => writeResponse({ id, error: { code, message } }),
     pauseReading: recordReader.pause,
-    resumeReading: recordReader.resume,
+    resumeReading: () => {
+      recordReader.resume()
+      records.resume()
+    },
     close,
     ...(relayed ? { relay: codexConnectionRelay(relayed.child, reattached, relayed.keep) } : {})
   }
