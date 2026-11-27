@@ -32,6 +32,7 @@ export type DriveFile = z.infer<typeof DriveFileSchema>
 
 // Drive ids are long; a short word is a folder's name, never an id.
 const ID = /^[A-Za-z0-9_-]{19,}$/
+const MAX_FOLDER_SEARCH_PAGES = 20
 const LINKED_ID = [
   /\/(?:document|spreadsheets|presentation|drawings|forms|file)\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]+)/,
   /\/folders\/([A-Za-z0-9_-]+)/,
@@ -121,11 +122,13 @@ export async function resolveFolder(
   )
   const matches: { id: string; name: string }[] = []
   let pageToken: string | undefined
+  let pagesRead = 0
   do {
     if (pageToken) {
       url.searchParams.set('pageToken', pageToken)
     }
     const found = await api.get('drive', url.toString(), parsePage)
+    pagesRead += 1
     if (found.incompleteSearch) {
       throw new GoogleToolError(
         `Folder search was incomplete for "${inlineName(trimmed)}". Pass the folder id.`
@@ -143,6 +146,11 @@ export async function resolveFolder(
       break
     }
     pageToken = found.nextPageToken
+    if (pageToken && pagesRead >= MAX_FOLDER_SEARCH_PAGES) {
+      throw new GoogleToolError(
+        `Folder search was incomplete for "${inlineName(trimmed)}". Pass the folder id.`
+      )
+    }
   } while (pageToken)
   const [only, ...others] = matches
   if (!only) {
