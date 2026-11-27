@@ -186,6 +186,8 @@ export async function createBrowserPageOnPairedHost(
     lease = await acquirePairedPageHost(host, worktree?.id, askDesktop)
   } catch (error) {
     if (fallback && error instanceof BrowserError && error.code === 'browser_host_unavailable') {
+      // A caller gone while the desktop was asked must not open, or move every screen to, a page.
+      signal?.throwIfAborted()
       return fallback()
     }
     throw error
