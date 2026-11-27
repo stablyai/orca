@@ -1,6 +1,7 @@
 import { installProviderAccountCatalogWarmup } from '../../providers/accounts/provider-account-catalog-warmup'
 import { createDesktopCodexSessionMigration } from '../../codex/history/backfill/desktop-codex-session-migration'
 import { KeybindingService } from '../../keybindings/keybinding-service'
+import { getUnavailableKeybindingActionIds } from '../../../shared/keybindings/keybinding-feature-gates'
 import { createProviderAccountServices } from '../../providers/accounts/provider-account-services'
 import {
   hasOpenCodeGoApiKey,
@@ -75,7 +76,8 @@ export async function initializeMainProcessAccountServices(
     legacySearchDefaults:
       (process.platform === 'darwin'
         ? store.getSettings().searchKeybindingSeed
-        : store.getSettings().nonMacSearchKeybindingSeed) === 'legacy'
+        : store.getSettings().nonMacSearchKeybindingSeed) === 'legacy',
+    getUnavailableActionIds: () => getUnavailableKeybindingActionIds(store.getSettings())
   })
   browserManager.setSettingsResolver(() => ({ keybindings: core.keybindings?.getOverrides() }))
 }

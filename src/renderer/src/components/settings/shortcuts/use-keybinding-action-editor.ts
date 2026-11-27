@@ -50,6 +50,9 @@ export function useKeybindingActionEditor() {
   const disabledTuiAgents = useAppStore(
     (state) => state.settings?.disabledTuiAgents ?? EMPTY_DISABLED_TUI_AGENTS
   )
+  const agentDashboardEnabled = useAppStore(
+    (state) => state.settings?.experimentalAgentDashboardPopout === true
+  )
   const setKeybindingOverride = useAppStore((state) => state.setKeybindingOverride)
   const resetKeybindingOverride = useAppStore((state) => state.resetKeybindingOverride)
   const pluginCommands = useEditablePluginCommands()
@@ -66,6 +69,7 @@ export function useKeybindingActionEditor() {
       buildShortcutDefinitionCatalog(
         {
           disabledTuiAgents,
+          settings: { experimentalAgentDashboardPopout: agentDashboardEnabled },
           pluginCommands,
           keybindings,
           platform,
@@ -75,6 +79,7 @@ export function useKeybindingActionEditor() {
         t
       ),
     [
+      agentDashboardEnabled,
       disabledTuiAgents,
       keybindings,
       macCapturedDigitChords,

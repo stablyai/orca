@@ -21,18 +21,22 @@ export type KeybindingServiceOptions = {
   getLegacyOverrides?: () => KeybindingOverrides | undefined
   legacyTabSwitchDefaults?: boolean
   legacySearchDefaults?: boolean
+  /** Gated actions ship unbound, so unbinding their overrides is enough to stop dispatch. */
+  getUnavailableActionIds?: () => readonly KeybindingActionId[]
 }
 
 export class KeybindingService {
   private readonly configPath: string
   private readonly platform: NodeJS.Platform
   private readonly defaultOverrides: KeybindingOverrides
+  private readonly getUnavailableActionIds: KeybindingServiceOptions['getUnavailableActionIds']
   private fallbackOverrides: KeybindingOverrides = {}
   private snapshot: KeybindingFileSnapshot | null = null
 
   constructor(options: KeybindingServiceOptions) {
     this.configPath = getUserKeybindingsPath(options.homePath)
     this.platform = options.platform ?? process.platform
+    this.getUnavailableActionIds = options.getUnavailableActionIds
     this.defaultOverrides = {
       ...(options.legacyTabSwitchDefaults ? LEGACY_TAB_SWITCH_BINDINGS : {}),
       ...(options.legacySearchDefaults ? getLegacySearchBindings(this.platform) : {})
@@ -67,8 +71,20 @@ export class KeybindingService {
     return this.snapshot
   }
 
+  /** Dispatch view: unavailable actions are unbound; the snapshot keeps them for Settings. */
   getOverrides(): KeybindingOverrides {
-    return this.getSnapshot().overrides
+    const overrides = this.getSnapshot().overrides
+    const masked = (this.getUnavailableActionIds?.() ?? []).filter(
+      (actionId) => (overrides[actionId]?.length ?? 0) > 0
+    )
+    if (masked.length === 0) {
+      return overrides
+    }
+    const dispatchable = { ...overrides }
+    for (const actionId of masked) {
+      dispatchable[actionId] = []
+    }
+    return dispatchable
   }
 
   ensureFile(): KeybindingFileSnapshot {
