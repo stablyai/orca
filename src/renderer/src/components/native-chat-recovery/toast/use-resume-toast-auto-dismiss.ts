@@ -4,7 +4,7 @@ import { subscribeWindowParkVisibility } from '@/lib/window-activity/window-park
 import { isDocumentVisibilityProvenStale } from '@/components/terminal-pane/viewport/visibility/stale-document-visibility'
 
 /** How long an all-resumed report stays on its own. */
-const RESUMED_TOAST_MS = 5000
+export const RESUMED_TOAST_MS = 8000
 
 type WindowVisibility = 'visible' | 'stale-hidden' | 'hidden'
 

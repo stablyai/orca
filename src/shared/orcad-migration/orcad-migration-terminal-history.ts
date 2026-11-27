@@ -4,6 +4,7 @@
  * installs it under the pane's derived session id, which the pane's first start then claims.
  */
 import { z } from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { MAX_PANE_KEY_LEN } from '../agent-hook-listener/listener-limits'
 import { PTY_SESSION_ID_SEPARATOR } from '../terminal/pty/lifecycle/pty-session-id-format'
 import { parsePaneKey } from '../workspace-layout/stable-pane-id'
@@ -38,20 +39,22 @@ export type OrcadMigrationTerminalHistoryDocument = {
   checkpoint: Record<string, unknown>
 }
 
-const DimensionSchema = z.number().int().min(1).max(MAX_TERMINAL_DIMENSION)
+const DimensionSchema = lazyZodSchema(() => z.number().int().min(1).max(MAX_TERMINAL_DIMENSION))
 
-const DocumentSchema = z
-  .object({
-    version: z.literal(ORCAD_MIGRATION_TERMINAL_HISTORY_VERSION),
-    paneKey: z
-      .string()
-      .refine((value) => value.length <= MAX_PANE_KEY_LEN && parsePaneKey(value) !== null),
-    cwd: z.string().refine(isOrcadMigrationTerminalRestoreHintCwd).nullable(),
-    cols: DimensionSchema,
-    rows: DimensionSchema,
-    checkpoint: z.record(z.string(), z.unknown())
-  })
-  .strict()
+const DocumentSchema = lazyZodSchema(() =>
+  z
+    .object({
+      version: z.literal(ORCAD_MIGRATION_TERMINAL_HISTORY_VERSION),
+      paneKey: z
+        .string()
+        .refine((value) => value.length <= MAX_PANE_KEY_LEN && parsePaneKey(value) !== null),
+      cwd: z.string().refine(isOrcadMigrationTerminalRestoreHintCwd).nullable(),
+      cols: DimensionSchema,
+      rows: DimensionSchema,
+      checkpoint: z.record(z.string(), z.unknown())
+    })
+    .strict()
+)
 
 export function parseOrcadMigrationTerminalHistoryText(
   text: string

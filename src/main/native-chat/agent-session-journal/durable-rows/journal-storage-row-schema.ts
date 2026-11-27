@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   AgentJournalProducerLinkageFields,
   AgentJournalTurnScopeSchema
@@ -22,7 +23,7 @@ import {
 // main's checks (scalars here are unchecked), and execution options keep their legacy meaning of
 // ignoring keys this build does not use.
 
-const value = z.unknown().optional()
+const value = lazyZodSchema(() => z.unknown().optional())
 const envelope = {
   v: value,
   epoch: value,
@@ -34,7 +35,7 @@ const envelope = {
   ...AgentJournalProducerLinkageFields
 }
 const provenance = { ownerFence: value, executionOwner: value, echoOf: value }
-const legacyOptions = z.record(z.string(), z.unknown()).optional()
+const legacyOptions = lazyZodSchema(() => z.record(z.string(), z.unknown()).optional())
 
 const itemMutation = {
   kind: z.literal('item'),
@@ -48,29 +49,35 @@ const itemMutation = {
 }
 const tombstoneMutation = { kind: z.literal('tombstone'), itemId: value, revision: value }
 
-const queuedChange = z.object({
-  op: z.literal('queued'),
-  body: storedMessageBody,
-  position: value,
-  queuedAt: z.object({ epoch: value, sequence: value }).nullable(),
-  holdReason: value,
-  options: legacyOptions,
-  attempt: value,
-  deliveryMode: value,
-  unattended: value,
-  returned: z.object({ reason: value, rejection: storedFailureFact.optional() }).optional()
-})
+const queuedChange = lazyZodSchema(() =>
+  z.object({
+    op: z.literal('queued'),
+    body: storedMessageBody,
+    position: value,
+    queuedAt: z.object({ epoch: value, sequence: value }).nullable(),
+    holdReason: value,
+    options: legacyOptions,
+    attempt: value,
+    deliveryMode: value,
+    unattended: value,
+    returned: z.object({ reason: value, rejection: storedFailureFact.optional() }).optional()
+  })
+)
 const otherQueueChanges = [
   z.object({ op: z.literal('edited'), body: storedMessageBody }),
   z.object({ op: z.literal('moved'), position: value }),
   z.object({ op: z.literal('held'), holdReason: value }),
   z.object({ op: z.literal('withdrawn') })
 ] as const
-const queueChange = z.discriminatedUnion('op', [queuedChange, ...otherQueueChanges])
-const sourceQueueChange = z.discriminatedUnion('op', [
-  queuedChange.extend({ recovers: z.string().optional() }),
-  ...otherQueueChanges
-])
+const queueChange = lazyZodSchema(() =>
+  z.discriminatedUnion('op', [queuedChange, ...otherQueueChanges])
+)
+const sourceQueueChange = lazyZodSchema(() =>
+  z.discriminatedUnion('op', [
+    queuedChange.extend({ recovers: z.string().optional() }),
+    ...otherQueueChanges
+  ])
+)
 
 const commonRows = [
   z.object({
@@ -138,15 +145,19 @@ const commonRows = [
     )
   })
 ] as const
-const storedRow = z.discriminatedUnion('kind', [
-  ...commonRows,
-  z.object({ ...envelope, kind: z.literal('queue'), messageId: value, change: queueChange })
-])
+const storedRow = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    ...commonRows,
+    z.object({ ...envelope, kind: z.literal('queue'), messageId: value, change: queueChange })
+  ])
+)
 const strictRow = strictStorage(storedRow)
-const sourceRowDeclaration = z.discriminatedUnion('kind', [
-  ...commonRows,
-  z.object({ ...envelope, kind: z.literal('queue'), messageId: value, change: sourceQueueChange })
-])
+const sourceRowDeclaration = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    ...commonRows,
+    z.object({ ...envelope, kind: z.literal('queue'), messageId: value, change: sourceQueueChange })
+  ])
+)
 const sourceRow = strictStorage(sourceRowDeclaration)
 
 /** True when an input row holds a key or union tag this build does not declare; main's reader

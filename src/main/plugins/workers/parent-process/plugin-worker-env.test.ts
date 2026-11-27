@@ -27,6 +27,16 @@ describe('buildPluginWorkerEnv', () => {
     expect(buildPluginWorkerEnv({ username: 'ada' }, 'win32').USERNAME).toBe('ada')
   })
 
+  it('passes TLS trust settings so plugins can reach servers signed by a corporate CA', () => {
+    const tls = {
+      NODE_EXTRA_CA_CERTS: '/etc/ssl/corp-ca.pem',
+      NODE_USE_SYSTEM_CA: '1',
+      SSL_CERT_FILE: '/etc/ssl/certs/ca-certificates.crt',
+      SSL_CERT_DIR: '/etc/ssl/certs'
+    }
+    expect(buildPluginWorkerEnv({ ...sessionEnv, ...tls }, 'linux')).toMatchObject(tls)
+  })
+
   it("drops Chromium's disabled: bus marker so GLib falls back to $XDG_RUNTIME_DIR/bus", () => {
     const env = buildPluginWorkerEnv(
       { ...sessionEnv, DBUS_SESSION_BUS_ADDRESS: 'disabled:' },

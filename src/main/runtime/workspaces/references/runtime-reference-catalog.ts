@@ -23,6 +23,7 @@ import {
 } from '../../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { branchSelectorMatches, runtimePathsEqual } from '../catalog/runtime-worktree-path-identity'
+import { storedNameMatcher } from '../../../../shared/text/typed-name-normalization'
 
 export function listReferenceWorkspaces(
   store: Pick<
@@ -180,7 +181,8 @@ export function selectReferenceWorkspace(
   } else if (selector.startsWith('id:')) {
     matches = workspaces.filter((row) => worktreeIdsEqual(row.id, selector.slice(3)))
   } else if (selector.startsWith('name:')) {
-    matches = workspaces.filter((row) => row.name === selector.slice(5))
+    const matchesName = storedNameMatcher(selector.slice(5))
+    matches = workspaces.filter((row) => matchesName(row.name))
   } else if (selector.startsWith('path:')) {
     const path = selector.slice(5)
     const distro = cwd ? parseWslUncPath(cwd)?.distro : undefined

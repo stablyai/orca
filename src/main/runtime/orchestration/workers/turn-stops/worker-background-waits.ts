@@ -14,12 +14,10 @@ import {
 } from '../../db/worker-presence/worker-presence-store'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
 import { resolveTerminalWorkerDispatch } from './terminal-worker-dispatch'
-import { observeWorker, reconsiderWorkerRest } from './worker-presence-report'
-import { workerBackgroundWaitDueAt } from './worker-background-wait-notice'
+import { observeWorker } from './worker-presence-report'
 import { terminalRequestError } from './terminal-request-error'
 import {
   failedLeadTurnFence,
-  workerTurnStopDispatchId,
   type WorkerTurnStop,
   type WorkerTurnStopDispatch,
   type WorkerTurnStopReportDeps
@@ -32,10 +30,6 @@ export type WorkerBackgroundWaitsDeps = WorkerTurnStopReportDeps & {
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
 }
 
-const SEND_RETRIES = 3
-
-const SEND_RETRY_MS = 60_000
-
 type PaneWorker = {
   db: OrchestrationDb
   target: WorkerTurnStopDispatch
@@ -43,14 +37,12 @@ type PaneWorker = {
 }
 
 /** A worker whose turn ended while its own background tasks still run is waiting, not stopped: its
- *  Dispatch records that rest at once, and it becomes news once, when no turn has started by the bound.
- *  One timer per waiting Dispatch, armed from the recorded turn end, so a restart re-arms the same one. */
+ *  Dispatch records that passive presence without waking the coordinator while the tasks run. */
 export class WorkerBackgroundWaits {
   /** Panes last seen waiting, by the turn end they wait from: a repeat hook post is no new fact. */
   private readonly waitingSince = new Map<string, number>()
   /** Panes last seen with a failed lead turn under live children, by that turn's end. */
   private readonly failedSince = new Map<string, number>()
-  private readonly timers = new Map<string, { dueAt: number; cancel: () => void }>()
 
   constructor(private readonly deps: WorkerBackgroundWaitsDeps) {}
 
@@ -70,42 +62,20 @@ export class WorkerBackgroundWaits {
     }
   }
 
-  /** Re-arms a recorded wait's notice, as after a restart; a wait already due is decided now. */
-  arm(db: OrchestrationDb, dispatchId: string, retries = SEND_RETRIES): void {
+  /** Restores a recorded wait's tracking across a restart, or clears it once its pane moved on. */
+  arm(db: OrchestrationDb, dispatchId: string): void {
     const recorded = recordedWait(db, dispatchId)
     if (!recorded) {
       return
     }
-    // Its pane is waiting from that turn end, so the turn that ends the wait supersedes it.
+    const row = recorded.paneKey ? this.deps.readHookRow(recorded.paneKey) : null
+    if (!rowsShowWait(row ? [row] : [], recorded)) {
+      settleWorkerRestUnreported(db, dispatchId)
+      return
+    }
     if (recorded.paneKey) {
       this.waitingSince.set(recorded.paneKey, recorded.since)
     }
-    const dueAt = workerBackgroundWaitDueAt(recorded.since)
-    if (this.timers.get(dispatchId)?.dueAt === dueAt) {
-      return
-    }
-    this.timers.get(dispatchId)?.cancel()
-    const timer = this.deps.setTimer(
-      () => {
-        this.timers.delete(dispatchId)
-        this.decide(dispatchId, retries)
-      },
-      Math.max(0, dueAt - Date.now())
-    )
-    this.timers.set(dispatchId, { dueAt, cancel: timer.cancel })
-  }
-
-  /** A notice still undecided past its bound (its send failed, or a deliberate reason holds it) is
-   *  decided again a few times, a minute apart; its own edges decide it after that. */
-  private retry(db: OrchestrationDb, dispatchId: string, retries: number): void {
-    if (!recordedWait(db, dispatchId)) {
-      return
-    }
-    const timer = this.deps.setTimer(() => {
-      this.timers.delete(dispatchId)
-      this.decide(dispatchId, retries)
-    }, SEND_RETRY_MS)
-    this.timers.set(dispatchId, { dueAt: Date.now() + SEND_RETRY_MS, cancel: timer.cancel })
   }
 
   /** A terminal worker's lead turn failed while its children keep the pane working: no all-clear will
@@ -125,7 +95,6 @@ export class WorkerBackgroundWaits {
     const fence = failedLeadTurnFence(failed.since)
     const requestError = terminalRequestError(row)
     for (const worker of workers) {
-      this.cancelNotice(workerTurnStopDispatchId(worker.target))
       observeWorker(
         worker.db,
         worker.target,
@@ -187,7 +156,6 @@ export class WorkerBackgroundWaits {
           },
           this.deps
         )
-        this.arm(worker.db, workerTurnStopDispatchId(worker.target))
       }
       return
     }
@@ -207,7 +175,6 @@ export class WorkerBackgroundWaits {
     if (row?.state === 'working' && row.mainAgent?.state !== 'done') {
       for (const worker of this.workersOf(paneKey, row)) {
         observeWorker(worker.db, worker.target, { presence: 'working' }, this.deps)
-        this.cancelNotice(workerTurnStopDispatchId(worker.target))
       }
     }
   }
@@ -245,38 +212,9 @@ export class WorkerBackgroundWaits {
           },
           this.deps
         )
-        this.cancelNotice(workerTurnStopDispatchId(worker.target))
       }
     } catch (error) {
       console.warn('[orchestration] reporting a chat background finish failed', error)
-    }
-  }
-
-  private cancelNotice(dispatchId: string): void {
-    this.timers.get(dispatchId)?.cancel()
-    this.timers.delete(dispatchId)
-  }
-
-  /** A notice falls due: the stored rest decides, so a turn, worker_done, stop or exit since supersedes
-   *  it; and its pane's row must still show this wait, whichever edge ended it unseen. A pane with no
-   *  row yet (not restored) leaves the record to decide. */
-  private decide(dispatchId: string, retries: number): void {
-    const db = this.deps.getDb()
-    const recorded = db ? recordedWait(db, dispatchId) : null
-    if (!db || !recorded) {
-      return
-    }
-    try {
-      const row = recorded.paneKey ? this.deps.readHookRow(recorded.paneKey) : null
-      if (!rowsShowWait(row ? [row] : [], recorded)) {
-        settleWorkerRestUnreported(db, dispatchId)
-        return
-      }
-      if (!reconsiderWorkerRest(db, dispatchId, this.deps) && retries > 0) {
-        this.retry(db, dispatchId, retries - 1)
-      }
-    } catch (error) {
-      console.warn('[orchestration] deciding a worker background wait failed', dispatchId, error)
     }
   }
 

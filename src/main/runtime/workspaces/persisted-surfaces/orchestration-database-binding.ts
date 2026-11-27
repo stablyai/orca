@@ -3,7 +3,9 @@ import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environm
 import { OrcaRuntimeWithPtyForegroundProcessReads } from '../../client/runtime-client-state'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
+import type { AgentActivityOrchestrationResult } from '../../../../shared/rpc-contract/agent-activity/agent-activity-params'
 import { createAgentOrchestrationChangeNotice } from './agent-orchestration-change-notice'
+import { AgentOrchestrationSnapshotRevision } from './agent-orchestration-snapshot-revision'
 
 // Keyed by runtime, not a field: the database can open while the runtime is still constructing.
 const runtimesWatchingAutoReleaseSetting = new WeakSet<object>()
@@ -19,15 +21,24 @@ export abstract class OrcaRuntimeWithOrchestrationDatabaseBinding extends OrcaRu
     this.emitClientEvent({ type: 'peerMailReturned' })
   }
 
+  private readonly agentOrchestrationSnapshot = new AgentOrchestrationSnapshotRevision(() =>
+    this.agentOrchestrationByPaneKey()
+  )
+
   // Paired desktops re-read this host's worker lineage on it, whether a chat or a terminal created the Dispatch.
   private readonly noteAgentOrchestrationChanged = createAgentOrchestrationChangeNotice(() =>
     this.emitClientEvent({ type: 'agentOrchestrationChanged' })
   )
 
+  readAgentOrchestrationSince(sinceRevision?: number): AgentActivityOrchestrationResult {
+    return this.agentOrchestrationSnapshot.since(sinceRevision)
+  }
+
   protected bindWorkerTerminalAutoRelease(db: OrchestrationDb): void {
     // A worker can settle with no agent phase change (a failed start, a release); bots re-read.
     db.workerStatusListener = (dispatchId, change) => {
       this.botDispatchChanged(dispatchId, change)
+      this.agentOrchestrationSnapshot.invalidate()
       this.noteAgentOrchestrationChanged()
     }
     db.workerTerminalAutoReleaseListener = () => {

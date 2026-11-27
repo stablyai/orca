@@ -47,10 +47,7 @@ export function getStatusBarUsageSections(
     ]
   }
   if (p.buckets?.length) {
-    // Antigravity pool names vary by account tier.
-    const buckets = p.buckets.filter(
-      (bucket) => p.provider === 'antigravity' || isCursorUsageBucket(bucket.name)
-    )
+    const buckets = p.buckets.filter((bucket) => isCursorUsageBucket(bucket.name))
     if (buckets.length > 0) {
       return buckets.map((bucket) => ({
         key: bucket.name,

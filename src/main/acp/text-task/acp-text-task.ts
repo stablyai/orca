@@ -23,6 +23,7 @@ import {
   TASK_ENV_TO_DELETE
 } from './acp-text-task-policy'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
+import { isAcpToolWork } from '../session/acp-tool-free-run'
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
 import { grokTextTaskPreservesAccount, runGrokTextTask } from '../../grok/grok-text-task'
 
@@ -153,7 +154,7 @@ export class AcpTextTasks {
             envToDelete: [...launch.envToDelete, ...TASK_ENV_TO_DELETE]
           },
           {
-            clientInfo: acpClientInfo(launch.spec, launch.version ?? null, NAMING_CLIENT_INFO),
+            clientInfo: acpClientInfo(launch.spec, NAMING_CLIENT_INFO),
             signIn: spec.signIn,
             onPermission: (request) =>
               spec.agent === 'antigravity' ? denyAcpTextTaskPermission(request) : reject(),
@@ -186,7 +187,7 @@ export class AcpTextTasks {
           return
         }
         const update = params.update
-        if (update.sessionUpdate === 'tool_call' || update.sessionUpdate === 'tool_call_update') {
+        if (isAcpToolWork(update)) {
           failed.abort(new Error('The naming agent attempted tool work'))
         }
         if (
