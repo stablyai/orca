@@ -188,24 +188,21 @@ export function NativeChatQueuedMessageCard({
       </li>
     )
   }
-  const actionable = card.hold !== 'sending'
-  // The host refuses these edits: a command would become a message, a run the owner's words.
-  const editable = actionable && !card.notEditable && onEdit !== undefined
-  const toolCount = actionable ? (editable ? 2 : 1) : 0
+  const editable = card.hold !== 'sending' && !card.notEditable && onEdit !== undefined
+  const toolCount = card.hold === 'sending' ? 0 : editable ? 2 : 1
   const toolWidth =
     toolCount === 1
       ? 'max(24px, calc(var(--spacing) * 6))'
       : 'calc(max(24px, calc(var(--spacing) * 6)) + max(24px, calc(var(--spacing) * 6)) + 1px)'
-  const toolStyle = (
+  const toolStyle:
+    | (React.CSSProperties & { '--queued-tools-mask': string; '--queued-tools-width': string })
+    | undefined =
     toolCount > 0
       ? {
           '--queued-tools-mask': queuedRowToolsMask(toolCount),
           '--queued-tools-width': toolWidth
         }
       : undefined
-  ) as
-    | (React.CSSProperties & { '--queued-tools-mask': string; '--queued-tools-width': string })
-    | undefined
   return (
     <li
       ref={drag?.rowRef}
