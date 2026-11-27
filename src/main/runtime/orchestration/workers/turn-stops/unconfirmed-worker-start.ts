@@ -8,6 +8,7 @@ import { readWorkerPresence } from '../../db/worker-presence/worker-presence-sto
 import { observeWorker } from './worker-presence-report'
 import { START_BLOCKED_FENCE } from './awaiting-worker-start-report'
 import { WORKER_AGENT_STARTING_STAGE } from '../../db/worker-dispatch/worker-awaiting-agent-stage'
+import { RETAINED_CHAT_BEFORE_BRIEF_STAGE } from '../../db/worker-dispatch/restart-cut-worker-start'
 import { SUBMIT_WITHHELD_STAGE, type UnconfirmedStartEvidence } from './unconfirmed-start-evidence'
 import { confirmUnknownWorkerStart } from './worker-working-observation'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
@@ -51,14 +52,16 @@ export function observeUnconfirmedWorkerStart(
     chat && isOrcaSessionId(chat)
       ? formatOrcaSessionAddress(canonicalOrcaSessionId(chat))
       : dispatch?.assignee_handle
-  // Only a start that handed its brief to a worker it placed here can hold it unsent; a paired
-  // server decides its own workers.
+  // An older binary could have handed over a chat brief without recording dispatch_input.
+  const attachedChat =
+    start.surface === 'chat' &&
+    (worker?.stage === 'authority_attached' || worker?.stage === RETAINED_CHAT_BEFORE_BRIEF_STAGE)
   if (
     !dispatch ||
     !from ||
     (dispatch.status !== 'pending' && dispatch.status !== 'dispatched') ||
     worker?.state !== 'start_unknown' ||
-    !BRIEF_HANDED_OVER_STAGES.has(worker.stage) ||
+    !(attachedChat || BRIEF_HANDED_OVER_STAGES.has(worker.stage)) ||
     db.getFederatedDispatch(dispatchId)
   ) {
     return

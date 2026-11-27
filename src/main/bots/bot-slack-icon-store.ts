@@ -1,0 +1,352 @@
+// The drawn Slack icons, kept in an app-owned folder (never the bot's home, which its owner controls): one
+// folder per bot, one file per look, the older looks' files let go.
+import { createHash } from 'node:crypto'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
+import { crc32, inflate } from 'node:zlib'
+import { isBotAvatarImage } from '../../shared/bot-avatar'
+import type { Bot } from '../../shared/bot-types'
+import {
+  botSlackIconFile,
+  botSlackIconLegacyLook,
+  botSlackIconLook,
+  isBotSlackIconFile
+} from '../../shared/bots/bot-slack-icon'
+import type { BotHomeFilesystem } from './bot-home'
+import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
+import { type BotSlackIconShown, BotSlackIconShownRecords } from './bot-slack-icon-shown'
+
+type LookedBot = Pick<Bot, 'id' | 'avatar' | 'avatarColor' | 'avatarOutfit'>
+
+const PNG_SIGNATURE_BYTES = 8
+
+// Every chunk whole with its checksum, image data that decodes, and nothing after the end: a write cut
+// short (a crash, a full disk) or a PNG without usable pixels reads as none, so it is drawn again.
+function hasWholeChunks(png: Uint8Array): Promise<boolean> | false {
+  const bytes = Buffer.from(png.buffer, png.byteOffset, png.byteLength)
+  let at = PNG_SIGNATURE_BYTES
+  const data: Buffer[] = []
+  while (at + 12 <= bytes.length) {
+    const length = bytes.readUInt32BE(at)
+    const end = at + 12 + length
+    if (end > bytes.length) {
+      return false
+    }
+    const type = bytes.toString('latin1', at + 4, at + 8)
+    if (crc32(bytes.subarray(at + 4, at + 8 + length)) !== bytes.readUInt32BE(at + 8 + length)) {
+      return false
+    }
+    if (type === 'IDAT') {
+      data.push(bytes.subarray(at + 8, at + 8 + length))
+    }
+    if (type === 'IEND') {
+      return end === bytes.length && pixelsInflate(bytes, data)
+    }
+    at = end
+  }
+  return false
+}
+
+// Bytes per pixel by 8-bit color type: gray, RGB, gray and alpha, RGBA. A window's canvas never writes a
+// palette, so an indexed PNG (which would need its palette checked too) is refused.
+const CHANNELS: Record<number, number> = { 0: 1, 2: 3, 4: 2, 6: 4 }
+
+// The image data decompresses, within the size its header gives, to exactly that size, row by valid row.
+const inflateAsync = promisify(inflate)
+
+// Off the main thread: zlib's pool does the inflating.
+async function pixelsInflate(png: Buffer, data: Buffer[]): Promise<boolean> {
+  const width = png.readUInt32BE(16)
+  const height = png.readUInt32BE(20)
+  const channels = CHANNELS[png[25] ?? -1]
+  if (data.length === 0 || png[24] !== 8 || png[28] !== 0 || !channels) {
+    return false
+  }
+  const size = height * (1 + width * channels)
+  try {
+    const pixels = await inflateAsync(Buffer.concat(data), { maxOutputLength: size })
+    if (pixels.length !== size) {
+      return false
+    }
+    // Each row opens with its filter, 0 to 4.
+    for (let row = 0; row < size; row += 1 + width * channels) {
+      if ((pixels[row] ?? 5) > 4) {
+        return false
+      }
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function isWholeIcon(png: Uint8Array): Promise<boolean> {
+  return isBotAvatarImage(png) && (await hasWholeChunks(png))
+}
+
+// Named by a hash of the id, so no id can name a path outside the root.
+function botFolder(root: string, botId: string): string {
+  return join(root, createHash('sha256').update(botId).digest('hex').slice(0, 32))
+}
+
+async function readIconAtLook(
+  filesystem: BotHomeFilesystem,
+  root: string,
+  botId: string,
+  look: string
+): Promise<{ look: string; png: Buffer } | null> {
+  const png = await filesystem.readBytes(join(botFolder(root, botId), botSlackIconFile(look)))
+  return png && (await isWholeIcon(png)) ? { look, png } : null
+}
+
+/** The whole icon at this bot's preferred art version. */
+export async function readBotSlackIcon(
+  filesystem: BotHomeFilesystem,
+  root: string,
+  bot: LookedBot
+): Promise<{ look: string; png: Buffer } | null> {
+  const look = botSlackIconLook(bot)
+  return look ? readIconAtLook(filesystem, root, bot.id, look) : null
+}
+
+function preferredIconLook(bot: LookedBot, requested: string): string | null {
+  const look = botSlackIconLook(bot)
+  return look && (look === requested || botSlackIconLegacyLook(look) === requested) ? look : null
+}
+
+/** Whether a window should draw `look`, and whether it is the bot's look at all (a window's newer edit
+ *  may not be saved yet, so it asks again once it is). */
+export type BotSlackIconWant = { wanted: boolean; current: boolean }
+
+export async function writeBotSlackIcon(
+  filesystem: BotHomeFilesystem,
+  root: string,
+  botId: string,
+  look: string,
+  png: Uint8Array
+): Promise<void> {
+  const folder = botFolder(root, botId)
+  const kept = botSlackIconFile(look)
+  await filesystem.makeDirectory(folder)
+  await filesystem.writeBytes(join(folder, kept), png)
+  // Best effort: a leftover older look is never read, since the look names the file.
+  try {
+    for (const name of await filesystem.listNames(folder)) {
+      if (name !== kept && isBotSlackIconFile(name)) {
+        await filesystem.removeTree(join(folder, name))
+      }
+    }
+  } catch (error) {
+    console.warn('[bots] could not remove an older Slack icon', error)
+  }
+}
+
+// Which drawing the cloud last took for the bot (the account's hash and the mascot), so a restart before a
+// new look is drawn keeps it rather than sending the mascot id's older art.
+const SHOWN_FILE = 'shown.json'
+
+export async function readBotSlackIconShown(
+  filesystem: BotHomeFilesystem,
+  root: string,
+  botId: string
+): Promise<BotSlackIconShown | null> {
+  const bytes = await filesystem.readBytes(join(botFolder(root, botId), SHOWN_FILE))
+  try {
+    const shown: unknown = bytes && JSON.parse(bytes.toString('utf8'))
+    if (
+      shown &&
+      typeof shown === 'object' &&
+      'account' in shown &&
+      'mascot' in shown &&
+      (shown.account === null || typeof shown.account === 'string') &&
+      typeof shown.mascot === 'string'
+    ) {
+      return { account: shown.account, mascot: shown.mascot }
+    }
+  } catch {
+    // Written whole or not at all; anything else unreadable reads as none, so the mascot id goes as before.
+  }
+  return null
+}
+
+export async function writeBotSlackIconShown(
+  filesystem: BotHomeFilesystem,
+  root: string,
+  botId: string,
+  shown: BotSlackIconShown | null
+): Promise<void> {
+  const folder = botFolder(root, botId)
+  if (!shown) {
+    await filesystem.removeTree(join(folder, SHOWN_FILE))
+    return
+  }
+  await filesystem.makeDirectory(folder)
+  await filesystem.replaceBytes(join(folder, SHOWN_FILE), Buffer.from(JSON.stringify(shown)))
+}
+
+/** A bot's drawn icon by id: whether one is wanted, kept, and read back for the cloud. */
+export class BotSlackIcons {
+  private readonly listeners = new Set<(botId: string) => void>()
+  // Per bot, the icon file last found whole, by its size and change time.
+  private readonly whole = new Map<string, { path: string; size: number; mtimeMs: number }>()
+  /** Which drawing the cloud last took per bot, saved in the background and once more at quit. */
+  readonly shownRecords = new BotSlackIconShownRecords({
+    read: (botId) => this.shown(botId),
+    write: (botId, shown) => this.markShown(botId, shown),
+    exists: (botId) => this.has(botId)
+  })
+
+  constructor(
+    private readonly deps: {
+      filesystem: BotHomeFilesystem
+      root: () => string
+      /** Throws for an unknown bot. */
+      bot: (botId: string) => Bot
+      /** Off, bots take no drawings and ask for none. */
+      enabled: () => boolean
+      /** The bots' write queue, so a look check and its write never interleave with an edit. */
+      serialize: <T>(work: () => Promise<T>) => Promise<T>
+    }
+  ) {}
+
+  async wanted(botId: string, look: string): Promise<BotSlackIconWant> {
+    const bot = this.deps.bot(botId)
+    const preferred = this.deps.enabled() && preferredIconLook(bot, look)
+    if (!preferred) {
+      return { wanted: false, current: false }
+    }
+    const kept =
+      (await this.hasKeptIcon(botId, preferred)) ||
+      (look !== preferred && (await this.hasKeptIcon(botId, look)))
+    return { wanted: !kept, current: true }
+  }
+
+  private async hasKeptIcon(botId: string, look: string): Promise<boolean> {
+    // A file already found whole, unchanged since, is not read and decoded again (each reconnect asks).
+    const path = join(botFolder(this.deps.root(), botId), botSlackIconFile(look))
+    const stat = await this.deps.filesystem.statFile(path)
+    const known = this.whole.get(botId)
+    if (
+      stat &&
+      known?.path === path &&
+      known.size === stat.size &&
+      known.mtimeMs === stat.mtimeMs
+    ) {
+      return true
+    }
+    const kept = stat && (await readIconAtLook(this.deps.filesystem, this.deps.root(), botId, look))
+    // A bot deleted while its icon was read keeps nothing here.
+    if (stat && kept && this.has(botId)) {
+      this.whole.set(botId, { path, size: stat.size, mtimeMs: stat.mtimeMs })
+    }
+    return Boolean(kept)
+  }
+
+  /** Keeps a window's drawing of `look`; false when the bot's look changed since, so it is dropped. */
+  async store(botId: string, look: string, png: Uint8Array): Promise<boolean> {
+    // A drawing for a look the bot no longer has is dropped before its pixels are decoded.
+    if (!this.deps.enabled() || !preferredIconLook(this.deps.bot(botId), look)) {
+      return false
+    }
+    if (!(await isWholeIcon(png))) {
+      throw new Error('bot_avatar_invalid')
+    }
+    const stored = await this.deps.serialize(async () => {
+      const bot = this.deps.bot(botId)
+      const preferred = this.deps.enabled() && preferredIconLook(bot, look)
+      if (!preferred) {
+        return 'refused'
+      }
+      const { filesystem, root } = this.deps
+      const folder = root()
+      // An older window may supply a missing icon, but it may not replace the preferred art.
+      if (
+        (await readIconAtLook(filesystem, folder, botId, preferred)) ||
+        (look !== preferred && (await readIconAtLook(filesystem, folder, botId, look)))
+      ) {
+        return 'kept'
+      }
+      await writeBotSlackIcon(filesystem, folder, botId, look, png)
+      return 'written'
+    })
+    if (stored === 'written') {
+      for (const listener of this.listeners) {
+        listener(botId)
+      }
+    }
+    return stored !== 'refused'
+  }
+
+  private has(botId: string): boolean {
+    try {
+      this.deps.bot(botId)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async read(botId: string): Promise<{ look: string; png: Buffer } | null> {
+    const bot = this.deps.bot(botId)
+    const look = botSlackIconLook(bot)
+    if (!look) {
+      return null
+    }
+    const { filesystem, root } = this.deps
+    const folder = root()
+    const icon = await readIconAtLook(filesystem, folder, botId, look)
+    const legacy = icon ? null : botSlackIconLegacyLook(look)
+    return legacy ? readIconAtLook(filesystem, folder, botId, legacy) : icon
+  }
+
+  /** The drawing the cloud last took for the bot (its account's hash and mascot), or null. */
+  shown(botId: string): Promise<BotSlackIconShown | null> {
+    return readBotSlackIconShown(this.deps.filesystem, this.deps.root(), botId)
+  }
+
+  /** What the cloud took for the bot now, written only when it changes; a deleted bot keeps nothing. A
+   *  clear always removes, since an unreadable record reads as none. */
+  async markShown(botId: string, shown: BotSlackIconShown | null): Promise<void> {
+    const before = shown && (await this.shown(botId))
+    if (
+      this.has(botId) &&
+      (!shown || before?.account !== shown.account || before?.mascot !== shown.mascot)
+    ) {
+      await writeBotSlackIconShown(this.deps.filesystem, this.deps.root(), botId, shown)
+    }
+  }
+
+  /** A deleted bot's icons go with it, after a record save of it already on its way, so none comes back. */
+  async forget(botId: string): Promise<void> {
+    this.whole.delete(botId)
+    await this.shownRecords.forget(botId)
+    await this.deps.filesystem.removeTree(botFolder(this.deps.root(), botId))
+  }
+
+  onStored(listener: (botId: string) => void): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+}
+
+/** A bot controller's icon store: its bots by id, its on switch and its write queue. */
+export function botSlackIconsOf(
+  bots: { list: () => readonly Bot[]; enabled: () => boolean },
+  deps: { filesystem: BotHomeFilesystem; slackIconsRoot: () => string },
+  serialize: <T>(work: () => Promise<T>) => Promise<T>
+): BotSlackIcons {
+  const lookup = createBotLookupIndex(() => bots.list())
+  return new BotSlackIcons({
+    filesystem: deps.filesystem,
+    root: deps.slackIconsRoot,
+    bot: (botId) => {
+      const bot = lookup.byId(botId)
+      if (!bot) {
+        throw new Error('bot_not_found')
+      }
+      return bot
+    },
+    enabled: () => bots.enabled(),
+    serialize
+  })
+}

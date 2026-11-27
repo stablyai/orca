@@ -93,6 +93,7 @@ export function MobileNativeChatView({
   onLoadEarlier,
   onSend,
   sendSurfaceId,
+  sessionId = null,
   getSendCompletionGeneration,
   getComposerEditGeneration,
   pending,
@@ -188,8 +189,8 @@ export function MobileNativeChatView({
     [offlineQueue.send, onClearSendError, jumpToTail]
   )
 
-  // A bot card's answer goes to the agent as if typed.
-  const sendFromCard = useCallback((text: string) => handleSend(text), [handleSend])
+  // A bot card's answer: a card answer on hosts that take one, else typed.
+  const sendFromCard = useMemo(() => ({ typed: handleSend, sessionId }), [handleSend, sessionId])
   const drawReplyCard = useCallback(
     (card: NativeChatDirectiveBotCard) =>
       mobileNativeChatOtherBotCard(card, {
@@ -288,15 +289,15 @@ export function MobileNativeChatView({
     offlineQueue.lockReason,
     turnIndicator?.afterStop
   )
-  // A collapsed structured question still holds the input: the agent waits on that answer alone.
-  const promptHeld = promptShown || collapsedPrompt?.holdsInput === true
   const workerApproval = useMobileNativeChatWorkerApprovalSlot(
     workerApprovals,
-    (ask ?? permission ?? question ?? collapsedPrompt) != null
+    (ask ?? permission ?? question ?? collapsedPrompt) != null,
+    onDismissSendError ? null : sendErrorMessage
   )
   const promptOwnsInput = useMobileNativeChatPromptInputOwner(
     {
-      promptShown: promptHeld || workerApproval.card !== null,
+      // A collapsed structured question still holds the input: the agent waits on that answer alone.
+      promptShown: promptShown || !!collapsedPrompt?.holdsInput || workerApproval.card !== null,
       ask,
       askRequiresTerminal,
       permission,
@@ -305,6 +306,9 @@ export function MobileNativeChatView({
     },
     inputRef
   )
+  // A failed answer shows on the open card that took the composer's place; a dismissable one stays over it.
+  const onCard = promptOwnsInput && !collapsedPrompt && !onDismissSendError
+  const [notice, banner] = onCard ? [sendErrorMessage, null] : [null, sendErrorMessage]
   const emptyStateView = emptyState ? <MobileNativeChatEmptyStateView copy={emptyState} /> : null
 
   // The queue sits above a shown prompt card in a closed box, rather than tucking into the composer.
@@ -316,7 +320,7 @@ export function MobileNativeChatView({
         waitingText={composerPlaceholder}
         hostOutage={hostOutage}
       />
-      <MobileNativeChatSendErrorBanner message={sendErrorMessage} onDismiss={onDismissSendError} />
+      <MobileNativeChatSendErrorBanner message={banner} onDismiss={onDismissSendError} />
       <MobileNativeChatQueueAbovePromptContext value={promptShown}>
         {trayContent}
         <MobileNativeChatOfflineQueue queue={offlineQueue} />
@@ -325,13 +329,11 @@ export function MobileNativeChatView({
       <MobileNativeChatPromptCard
         key={promptKey ?? undefined}
         answering={promptOwnsInput && keyboardInset > 0}
-        {...{ askPending, askSendSource }}
-        {...{ ask, askKey, onDismissAsk, onAnswerAsk }}
+        {...{ askPending, askSendSource, ask, askKey, onDismissAsk, onAnswerAsk }}
         {...{ onCancelAsk, onCancelPrompt, onCollapseAsk }}
         requiresTerminal={askRequiresTerminal}
-        onAnswerInTerminal={onAnswerInTerminal}
         {...{ permission, onRespondPermission, question, onAnswerQuestion, onCollapsePrompt }}
-        collapsedPrompt={collapsedPrompt}
+        {...{ onAnswerInTerminal, collapsedPrompt, notice }}
       />
       <View style={promptOwnsInput ? styles.hidden : undefined}>
         <MobileNativeChatDraftComposer

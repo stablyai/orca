@@ -32,6 +32,7 @@ type WorkerStartFailureArgs = {
   setup: WorkerSetupReceipt
   launch: OrchestrationWorkerLaunchReceipt
   mode: WorkerStartModeReceipt
+  warning?: string
 }
 
 /** A worker report settles the Task; that proves the start, so older callers still see 'ready'. */
@@ -60,7 +61,8 @@ function settledWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
     launch: args.launch,
     mode: args.mode,
     effects: JSON.parse(worker.effects),
-    residualResources: []
+    residualResources: [],
+    ...(args.warning ? { warning: args.warning } : {})
   }
 }
 
@@ -136,6 +138,7 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
     mode: args.mode,
     effects: JSON.parse(worker.effects) as unknown[],
     residualResources: JSON.parse(worker.residual_resources) as unknown[],
+    ...(args.warning ? { warning: args.warning } : {}),
     ...(releasable
       ? {
           recovery: `This start left a worker session open. Close it with: orca orchestration worker-release --dispatch ${args.dispatchId}`

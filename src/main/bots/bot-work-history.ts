@@ -15,6 +15,9 @@ export function summarizeBotWork(
     agent: worker?.agent ?? null,
     state: worker?.state ?? null,
     ...(row.closedAt === null && worker?.idle ? { idle: true } : {}),
+    ...(row.closedAt === null && worker?.state === 'working' && worker.progressNote
+      ? { progressNote: cleanBotWorkText(worker.progressNote) }
+      : {}),
     ...(row.closedAt === null ? {} : { closedAt: row.closedAt }),
     dispatchId: worker?.dispatchId ?? row.dispatchId,
     workspace: workspace ? cleanBotWorkText(workspace.name) : null,

@@ -94,7 +94,8 @@ export function ConflictSummaryCard({
           <GitMerge className="size-3.5" />
           {t('auto.components.right.sidebar.SourceControl.27a50fe970', 'Review conflicts')}
         </Button>
-        {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
+        {/* Rebase abort lives on the base-row strip beside Continue. */}
+        {conflictOperation === 'merge' && onAbortOperation ? (
           <Button
             type="button"
             variant="outline"
@@ -104,9 +105,7 @@ export function ConflictSummaryCard({
             onClick={() => onAbortOperation(conflictOperation)}
           >
             {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}
-            {conflictOperation === 'rebase'
-              ? t('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
-              : t('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
+            {t('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
           </Button>
         ) : null}
         {children}
@@ -204,7 +203,7 @@ export function OperationBanner({
             {t('auto.components.right.sidebar.SourceControl.f6cb48b6fe', 'Resolve with AI')}
           </Button>
         ) : null}
-        {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
+        {conflictOperation === 'merge' && onAbortOperation ? (
           <Button
             type="button"
             variant="outline"
@@ -214,9 +213,7 @@ export function OperationBanner({
             onClick={() => onAbortOperation(conflictOperation)}
           >
             {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}
-            {conflictOperation === 'rebase'
-              ? t('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
-              : t('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
+            {t('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
           </Button>
         ) : null}
         {children}

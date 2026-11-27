@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../terminal/replay/terminal-scrollback-limits'
 import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import {
@@ -12,19 +13,21 @@ export const MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS = 512
 export const MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES = 256 * 1024 * 1024
 export const ORCAD_MIGRATION_SCROLLBACK_CHUNK_BYTES = 128 * 1024
 
-export const OrcadMigrationIdentitySchema = z.string().min(1).max(256)
-export const OrcadMigrationDigestSchema = z.string().regex(/^[a-f0-9]{64}$/)
-const SnapshotRef = z.string().regex(/^v1-[a-f0-9]{32}$/)
-export const OrcadMigrationChunkBase64Schema = z
-  .string()
-  .max(Math.ceil(ORCAD_MIGRATION_SCROLLBACK_CHUNK_BYTES / 3) * 4)
-  .refine((value) => {
-    try {
-      return value.length > 0 && Buffer.from(value, 'base64').toString('base64') === value
-    } catch {
-      return false
-    }
-  })
+export const OrcadMigrationIdentitySchema = lazyZodSchema(() => z.string().min(1).max(256))
+export const OrcadMigrationDigestSchema = lazyZodSchema(() => z.string().regex(/^[a-f0-9]{64}$/))
+const SnapshotRef = lazyZodSchema(() => z.string().regex(/^v1-[a-f0-9]{32}$/))
+export const OrcadMigrationChunkBase64Schema = lazyZodSchema(() =>
+  z
+    .string()
+    .max(Math.ceil(ORCAD_MIGRATION_SCROLLBACK_CHUNK_BYTES / 3) * 4)
+    .refine((value) => {
+      try {
+        return value.length > 0 && Buffer.from(value, 'base64').toString('base64') === value
+      } catch {
+        return false
+      }
+    })
+)
 
 export type OrcadMigrationTerminalScrollbackSnapshot = {
   tabId: string
@@ -35,13 +38,15 @@ export type OrcadMigrationTerminalScrollbackSnapshot = {
 }
 
 // Not strict: an older host must ignore optional fields a newer client adds.
-export const OrcadMigrationSnapshotChunkRequestSchema = z.object({
-  migrationId: OrcadMigrationIdentitySchema,
-  manifestSha256: OrcadMigrationDigestSchema,
-  ref: SnapshotRef,
-  offset: z.number().int().nonnegative().max(MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES),
-  bytesBase64: OrcadMigrationChunkBase64Schema
-})
+export const OrcadMigrationSnapshotChunkRequestSchema = lazyZodSchema(() =>
+  z.object({
+    migrationId: OrcadMigrationIdentitySchema,
+    manifestSha256: OrcadMigrationDigestSchema,
+    ref: SnapshotRef,
+    offset: z.number().int().nonnegative().max(MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES),
+    bytesBase64: OrcadMigrationChunkBase64Schema
+  })
+)
 
 export type OrcadMigrationSnapshotChunkRequest = z.infer<
   typeof OrcadMigrationSnapshotChunkRequestSchema

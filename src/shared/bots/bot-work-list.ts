@@ -14,6 +14,8 @@ export type BotWorkerSummary = {
   state: OrchestrationSessionWorkerState | null
   /** Its Dispatch is open but its agent waits, on its coordinator or an answer. */
   idle?: boolean
+  /** Passive live progress note recorded via `orchestration task-update --note` while working. */
+  progressNote?: string | null
   dispatchId: string
   workspace: string | null
   /** The paired server it runs on. */
@@ -68,6 +70,7 @@ export function formatBotWorkerSummary(item: BotWorkerSummary, now: number): str
   return [
     `${item.id} ${who}`,
     item.idle ? 'idle' : item.state ? STATE_WORDS[item.state] : 'state unknown',
+    ...(item.state === 'working' && item.progressNote ? [item.progressNote] : []),
     ...(item.closedAt === undefined ? [] : ['history']),
     ...(where ? [where] : []),
     ...(item.pr ? [prWords(item.pr)] : []),

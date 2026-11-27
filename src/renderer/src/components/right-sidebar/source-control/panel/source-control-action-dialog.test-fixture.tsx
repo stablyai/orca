@@ -153,7 +153,7 @@ export function mountSourceDialog(
 }
 
 export async function pickDialogAgent(label: string, terminal: boolean) {
-  const trigger = screen.getByRole('button', { name: 'Select agent' })
+  const trigger = screen.getByRole('button', { name: /^Select agent/ })
   await waitFor(() => expect(trigger.hasAttribute('disabled')).toBe(false))
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
   if (!terminal) {

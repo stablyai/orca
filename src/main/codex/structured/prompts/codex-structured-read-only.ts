@@ -2,7 +2,8 @@
 // approval answered by the host from Orca's allow-list instead of asking a person nobody is watching.
 import { isPlainObject } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import {
-  lookAroundCommandAllowed,
+  codexCommandShells,
+  lookAroundShellDecision,
   type ReadOnlySessionMode,
   REPLY_ONLY_REFUSAL
 } from '../../../bots/bot-look-around-policy'
@@ -121,9 +122,10 @@ export function codexReadOnlyAnswer(
   switch (request.method) {
     case CODEX_COMMAND_APPROVAL_METHOD: {
       const command = mode === 'look-around' ? requestedCommand(request.params) : null
-      return {
-        result: { decision: command && lookAroundCommandAllowed(command) ? 'accept' : 'decline' }
-      }
+      const allowed =
+        command !== null &&
+        lookAroundShellDecision(command, codexCommandShells()).decision === 'allow'
+      return { result: { decision: allowed ? 'accept' : 'decline' } }
     }
     case CODEX_FILE_CHANGE_APPROVAL_METHOD:
       return { result: { decision: 'decline' } }

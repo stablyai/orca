@@ -14,14 +14,12 @@ export function FileExplorerScopeNotice({
   returnRoot,
   onSelectRoot,
   disabled,
-  searching,
   sparse
 }: {
   rootSelect?: FileExplorerRootSelectProps | null
   returnRoot: ExplorerRootOption | null
   onSelectRoot: (value: string) => void
   disabled: boolean
-  searching: boolean
   sparse: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
@@ -31,7 +29,7 @@ export function FileExplorerScopeNotice({
   return (
     <div className="border-b border-border">
       <div className="flex min-h-8 min-w-0 items-center gap-1 px-2">
-        {returnRoot && !searching && (
+        {returnRoot && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -52,13 +50,11 @@ export function FileExplorerScopeNotice({
             </TooltipContent>
           </Tooltip>
         )}
-        {rootSelect && !searching ? (
+        {rootSelect ? (
           <FileExplorerRootSelect {...rootSelect} />
         ) : (
           <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-            {searching
-              ? t('fileExplorer.root.searchScope', 'Search scope: workspace files')
-              : t('fileExplorer.root.sparseStatus', 'Sparse checkout')}
+            {t('fileExplorer.root.sparseStatus', 'Sparse checkout')}
           </span>
         )}
         <div className="ml-auto shrink-0">
@@ -96,8 +92,8 @@ export function FileExplorerScopeNotice({
                 </p>
                 <p className="text-muted-foreground">
                   {t(
-                    'fileExplorer.root.searchExplanation',
-                    'Names filters the folder you are viewing. Contents searches across the workspace. Files omitted by sparse checkout are not searched.'
+                    'fileExplorer.root.combinedSearchExplanation',
+                    'Search finds file names in the folder you are viewing and text across the workspace. Files omitted by sparse checkout are not searched.'
                   )}
                 </p>
               </div>

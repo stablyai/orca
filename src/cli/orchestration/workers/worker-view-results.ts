@@ -24,6 +24,8 @@ export type WorkerShowResult = {
     runId?: string
     status: string
     followUpOf?: string | null
+    progressNote?: string | null
+    progressUpdatedAt?: string | null
   } | null
   worker: {
     dispatchId?: string
@@ -38,6 +40,8 @@ export type WorkerShowResult = {
     releaseState?: string | null
     terminalHandle?: string | null
   } | null
+  /** The follow-up this worker's terminal went to. */
+  handedOnTo?: string | null
   observation?: { agentWait?: { source: string; reason?: string } | null; reason?: string }
   /** Present only for a worker a paired server runs, which this Orca's record answers. */
   server?: RemoteWorkerServer & { reachable?: boolean }

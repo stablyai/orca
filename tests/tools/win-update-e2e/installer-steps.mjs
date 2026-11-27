@@ -57,14 +57,19 @@ function findSetupExe(dir) {
 
 // Poll installed exe/version because installer exit can precede copy completion.
 // Optional isolated /D=<path> must be the final unquoted argv and spaces-free, validated upstream.
-export function silentInstall(setupExe, { timeoutMs = 180_000, installDir = null } = {}) {
+// updated: run as electron-updater's NsisUpdater does (--updated /S), minus --force-run, which would
+// launch the app with the runner's real profile; the harness relaunches it itself.
+export function silentInstall(
+  setupExe,
+  { timeoutMs = 180_000, installDir = null, updated = false } = {}
+) {
   assertWin32('silentInstall')
   if (!existsSync(setupExe)) {
     throw new Error(`Installer not found: ${setupExe}`)
   }
   // /S is the NSIS silent switch; the electron-builder oneClick installer needs
   // no other flags for a per-user install. /D, when present, MUST be last.
-  const args = ['/S']
+  const args = updated ? ['--updated', '/S'] : ['/S']
   if (installDir) {
     args.push(`/D=${String(installDir)}`)
   }
@@ -72,6 +77,9 @@ export function silentInstall(setupExe, { timeoutMs = 180_000, installDir = null
   if (proc.error) {
     throw new Error(`Failed to launch installer ${setupExe}: ${proc.error.message}`)
   }
+  console.log(
+    `[win-update-e2e] installer ${path.basename(setupExe)} ${args.join(' ')} exit=${proc.status}`
+  )
 
   // Wait for matching new version on update; the old exe’s presence does not prove copy completion.
   const targetVersion = getExeVersion(setupExe)

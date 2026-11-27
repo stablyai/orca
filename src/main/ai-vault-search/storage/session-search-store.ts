@@ -113,7 +113,7 @@ export class SessionSearchStore {
     }
   }
 
-  /** A current cursor with bytes past it, and the hash a replacement read must reproduce to append there. */
+  /** A current cursor within the file and the hash a replacement read must reproduce to append there; at EOF an unchanged reread appends nothing. */
   resumableCursor(candidate: SessionFileCandidate): SessionSearchResumableCursor | null {
     const file = candidate.file
     if (this.closed || typeof file.sizeBytes !== 'number') {
@@ -126,7 +126,7 @@ export class SessionSearchStore {
           .prepare(
             `SELECT byte_offset AS byteOffset, prefix_hash AS prefixHash FROM files
              WHERE path = ? AND state = 'current' AND prefix_hash IS NOT NULL
-             AND byte_offset > 0 AND byte_offset < ?
+             AND byte_offset > 0 AND byte_offset <= ?
              AND (? IS NULL OR (CAST(dev AS REAL) = ? AND CAST(ino AS REAL) = ?))`
           )
           .get(
