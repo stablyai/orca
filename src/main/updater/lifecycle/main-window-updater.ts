@@ -242,5 +242,3 @@ export function scheduleMainWindowAutoUpdaterSetup(
     clearDeferredSetup()
   }
 }
-
-export { registerUpdaterHandlers } from './updater-ipc-handlers'
