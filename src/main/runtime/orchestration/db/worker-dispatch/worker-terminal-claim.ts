@@ -2,13 +2,22 @@ import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 import type { DispatchContextRow } from '../orchestration-records'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { DISPATCH_CONTEXT_COLUMNS } from '../row-column-lists'
 
 // A starting Dispatch names its terminal only in its start options until its authority attaches.
 // A start stranded by a runtime restart is racing nothing, so only this runtime's starts claim.
-const STARTING_ON_TERMINAL_SQL = `SELECT d.* FROM dispatch_contexts d
-  JOIN worker_dispatches w ON w.dispatch_id = d.id
-  WHERE d.status = 'pending' AND w.state = 'starting' AND w.runtime_epoch = ?
-    AND json_extract(w.start_options, '$.terminal') = ?
+const START_TERMINAL_SQL =
+  "CASE WHEN json_valid(start_options) THEN json_extract(start_options, '$.terminal') END"
+const CLAIMS_TERMINAL_SQL = `state = 'starting' AND (${START_TERMINAL_SQL}) IS NOT NULL`
+export const STARTING_WORKER_TERMINAL_INDEX_SQL = `
+  CREATE INDEX IF NOT EXISTS idx_worker_start_terminal_claim
+    ON worker_dispatches(runtime_epoch, (${START_TERMINAL_SQL})) WHERE ${CLAIMS_TERMINAL_SQL}`
+
+const STARTING_ON_TERMINAL_SQL = `SELECT ${DISPATCH_CONTEXT_COLUMNS.map((column) => `d.${column}`).join(', ')}
+  FROM worker_dispatches w INDEXED BY idx_worker_start_terminal_claim
+  CROSS JOIN dispatch_contexts d ON d.id = w.dispatch_id
+   WHERE d.status = 'pending' AND ${CLAIMS_TERMINAL_SQL} AND w.runtime_epoch = ?
+    AND (${START_TERMINAL_SQL}) = ?
   ORDER BY d.rowid LIMIT 1`
 
 type ClaimRuntime = Pick<OrcaRuntimeService, 'getTerminalPaneKey' | 'getRuntimeId'>
@@ -35,12 +44,13 @@ export function refuseClaimedWorkerTerminal(
   handle: string | undefined,
   runtime: ClaimRuntime,
   /** A racing follow-up of the same settled Dispatch is left to `follow_up_claimed`, which steers the send into it. */
-  followUpOf: string | undefined
+  followUpOf: string | undefined,
+  knownPaneKey?: string
 ): void {
   if (!handle) {
     return
   }
-  const claim = findWorkerTerminalClaim(db, handle, runtime)
+  const claim = findWorkerTerminalClaim(db, handle, runtime, knownPaneKey)
   if (claim && !(followUpOf && claim.followUpOf === followUpOf)) {
     throw terminalBusyError(db, handle, claim)
   }
@@ -73,12 +83,13 @@ export function claimTerminalForRemoteAttach(
 function findWorkerTerminalClaim(
   db: OrchestrationDb,
   handle: string,
-  runtime: ClaimRuntime
+  runtime: ClaimRuntime,
+  knownPaneKey: string | undefined
 ): TerminalClaim | undefined {
-  const paneKey = runtime.getTerminalPaneKey(handle) ?? undefined
+  const paneKey = knownPaneKey ?? runtime.getTerminalPaneKey(handle) ?? undefined
   const local =
     db.findActiveDispatchForAssignee(handle, paneKey) ??
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: selects whole dispatch_contexts rows.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the projection matches the Dispatch row.
     (db.db.prepare(STARTING_ON_TERMINAL_SQL).get(runtime.getRuntimeId(), handle) as
       | DispatchContextRow
       | undefined)
