@@ -39,6 +39,7 @@ import {
 } from './workspace-cleanup-scan-primitives'
 import { listWorkspaceCleanupFolderWorkspaces } from './workspace-cleanup-folder-workspaces'
 import { createWorkspaceCleanupRepoRefs } from './workspace-cleanup-merge-evidence'
+import { createWorkspaceCleanupLinkedPRReader } from './workspace-cleanup-linked-review'
 import {
   createWorkspaceCleanupProgressEmitter,
   type WorkspaceCleanupScanOptions
@@ -238,7 +239,11 @@ async function scanRepoWorkspaces(
   // Stat cannot cancel: after one timeout, use persisted activity rather than queueing more work on a hung mount.
   let activityStatsUnavailable = false
   const fsActivityCache: WorkspaceCleanupFsActivityCache = new Map()
-  const repoRefs = createWorkspaceCleanupRepoRefs(repo, signal)
+  const repoRefs = createWorkspaceCleanupRepoRefs(
+    repo,
+    signal,
+    createWorkspaceCleanupLinkedPRReader(store, repo)
+  )
   const candidatesWithSkipped = await mapWorkspaceCleanupWithConcurrency(
     candidateWorktrees,
     WORKTREE_SCAN_CONCURRENCY,
