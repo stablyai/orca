@@ -89,13 +89,15 @@ export const REMOVED_WORK_LINEAGE_FIELDS = {
 
 export type RemovedWorkKind = keyof typeof REMOVED_WORK_LINEAGE_FIELDS
 
-const entryBase = { seq: z.number(), id: z.string(), removedAt: z.string() }
-const workerBase = { ...entryBase, activeAtRemoval: z.boolean() }
+const createEntryBase = () => ({ seq: z.number(), id: z.string(), removedAt: z.string() })
+const createWorkerBase = () => ({ ...createEntryBase(), activeAtRemoval: z.boolean() })
 const lineage = REMOVED_WORK_LINEAGE_FIELDS
 
 /** One listed entry: the stored record checked against its kind's fields. */
-export const RemovedWorkEntrySchema = lazyZodSchema(() =>
-  z.discriminatedUnion('kind', [
+export const RemovedWorkEntrySchema = lazyZodSchema(() => {
+  const entryBase = createEntryBase()
+  const workerBase = createWorkerBase()
+  return z.discriminatedUnion('kind', [
     z.object({ ...entryBase, kind: z.literal('task'), ...lineage.task }),
     z.object({ ...entryBase, kind: z.literal('dispatch'), ...lineage.dispatch }),
     z.object({ ...workerBase, kind: z.literal('worker'), ...lineage.worker }),
@@ -103,7 +105,7 @@ export const RemovedWorkEntrySchema = lazyZodSchema(() =>
     z.object({ ...workerBase, kind: z.literal('remote_worker'), ...lineage.remote_worker }),
     z.object({ ...workerBase, kind: z.literal('federated_worker'), ...lineage.federated_worker })
   ])
-)
+})
 
 type RemovedWorkEntryBase = { seq: number; id: string; removedAt: string }
 export type RemovedWorkEntry =

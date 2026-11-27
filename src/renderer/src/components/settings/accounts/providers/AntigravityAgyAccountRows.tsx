@@ -43,6 +43,14 @@ export function AntigravityAgyAccountRows({
         'accounts.antigravity.changed',
         'The native account changed. Select a saved account again before launching agy.'
       )
+  // A running agy on another saved account wrote its login back; the next launch restores the selection.
+  const launchesUse =
+    state?.restoresSelectionAtLaunch &&
+    state.activeAccountId &&
+    state.selectedAccountId !== state.activeAccountId &&
+    state.accounts.some((account) => account.id === state.selectedAccountId)
+      ? state.selectedAccountId
+      : null
   const terminalRows: React.ReactNode[] = []
   if (error) {
     terminalRows.push(
@@ -148,6 +156,13 @@ export function AntigravityAgyAccountRows({
         key={account.id}
         title={account.email ?? t('accounts.antigravity.saved', 'Saved Google account')}
         active={active}
+        detail={
+          account.id === launchesUse
+            ? t('accounts.antigravity.launchesUse', 'New agy launches use this account')
+            : launchesUse && active
+              ? t('accounts.antigravity.loginNow', "agy's login right now")
+              : undefined
+        }
         selectDisabled={busy}
         onSelect={() => run('Select', account.id)}
         actions={

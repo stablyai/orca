@@ -1,6 +1,7 @@
 import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { app, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import {
   TERMINAL_RENDER_DESYNC_CAPTURE_ID_PATTERN,
   type WriteTerminalRenderDesyncEvidenceArgs,
@@ -16,8 +17,10 @@ const MAX_EVIDENCE_BYTES = 96 * 1024 * 1024
 const PNG_DATA_URL_PREFIX = 'data:image/png;base64,'
 let evidenceWriteQueue = Promise.resolve()
 
-export function registerTerminalRenderDesyncEvidenceHandler(): void {
-  ipcMain.handle(
+export function registerTerminalRenderDesyncEvidenceHandler(
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle(
     'terminal:writeRenderDesyncEvidence',
     (event, args: WriteTerminalRenderDesyncEvidenceArgs) => {
       if (!isTrustedUIRenderer(event.sender)) {

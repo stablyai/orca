@@ -34,7 +34,6 @@
   "agentHistory": {
     "panel": {
       "all": "全て",
-      "emptyScope": "この範囲には過去の Agent セッションがありません。",
       "hideDetails": "詳細を非表示",
       "showDetails": "詳細を表示",
       "loading": "Agent セッションを読み込み中…",
@@ -65,14 +64,10 @@
       "untitledSession": "無題のセッション"
     },
     "sessionHistoryList": {
-      "currentWorktree": "現在のワークツリー",
       "messages_one": "{{count}} 件のメッセージ",
       "messages_other": "{{count}} 件のメッセージ",
       "resumeSession": "Agent セッションを再開",
-      "continueInCli": "CLIで続行",
-      "hidePreview": "最近のメッセージを非表示にします。",
-      "showPreview": "最近のメッセージを表示します。",
-      "you": "あなた"
+      "continueInCli": "CLIで続行"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "ホストに接続できません",
@@ -136,37 +131,19 @@
     },
     "pairConfirm": {
       "backToHome": "ホームに戻る",
-      "connectTimedOut": "{{seconds}} 秒以内に接続できませんでした。どこで処理が止まったか、下のログで確認してください。",
       "connecting": "接続中…",
-      "description": "デスクトップのペアリングリンクを開きました。確認すると、このデスクトップがホスト一覧に追加されます。",
       "pairButton": "ペアリング",
-      "pairingFailed": "ペアリングに失敗しました：{{error}}",
-      "pairingLog": "ペアリングログ",
-      "title": "このデスクトップとペアリングしますか？"
+      "pairingFailed": "ペアリングに失敗しました：{{error}}"
     },
     "pairScan": {
-      "cameraDisabledDescription": "設定でカメラへのアクセスを有効にするか、ペアリングコードを貼り付けてください。",
-      "cameraDisabledTitle": "カメラへのアクセスが無効",
-      "cameraPermissionDescription": "デスクトップの Orca に表示された QR コードをスキャンするか、ペアリングコードを貼り付けてください。",
-      "connectTimedOut": "{{seconds}} 秒以内に接続できませんでした。どこで処理が止まったか、下のログで確認してください。",
       "connecting": "接続中…",
       "invalidPairingCode": "ペアリングコードが無効です。コンピュータからコピーして、もう一度貼り付けてください。",
       "invalidQrCode": "Orca の有効な QR コードではありません",
-      "downloadQrCode": "これはダウンロード用のコードです。デスクトップのステップ2にあるペアリングコードをスキャンしてください。",
-      "openDesktopStep": "コンピュータで Orca を開く",
-      "openMobileSettingsStep": "「設定」→「モバイル」を開く",
       "openSettings": "設定を開く",
       "pairingFailed": "ペアリングに失敗しました：{{error}}",
-      "pairingLog": "ペアリングログ",
       "pasteCodeMessage": "コンピュータの QR コードの下に表示されているコードをコピーしてください。",
       "pasteCodePlaceholder": "orca://pair?code=... またはコードを貼り付け",
       "pasteCodeTitle": "ペアリングコードを貼り付け",
-      "pasteInstead": "代わりにコードを貼り付け",
-      "pastePairingCode": "ペアリングコードを貼り付け",
-      "scanCodeStep": "QR コードをスキャン",
-      "title": "デスクトップのペアリング",
-      "tryAgain": "再試行",
-      "codeNoLongerValid": "このペアリングコードは期限切れ、使用済み、または置き換え済みです。デスクトップで新しいコードを表示して、もう一度スキャンしてください。",
       "runtimeAccessLink": "このリンクは別の Orca アプリ用です。コンピュータの「設定」→「モバイル」にあるコードをスキャンするか、サーバーで orca pair --mobile を実行してください。"
     },
     "terminalSettings": {
@@ -1083,25 +1060,13 @@
     },
     "customKeyModal": {
       "add": "追加",
-      "addShortcut": "ショートカットを追加",
-      "command": "コマンド",
       "commandPlaceholder": "例：pnpm build",
       "editing": "編集",
       "function": "ファンクションキー",
       "key": "キー",
-      "label": "ラベル",
-      "labelPlaceholder": "例：ビルド",
-      "manageShortcuts": "ショートカットを管理",
-      "manageShortcutsHint": "ショートカットキーの表示・非表示・並べ替え",
-      "modifiers": "修飾キー",
-      "moreKeys": "その他のキー",
       "navigation": "ナビゲーション",
-      "pickKey": "キーを選択",
       "pressEnter": "Enter を押す",
-      "shortcutCombo": "キーの組み合わせ",
-      "shortcutComboHint": "Ctrl、Alt、Shift を使ったキーの組み合わせを作成",
-      "textMacro": "テキストマクロ",
-      "textMacroHint": "カスタムのテキストコマンドを送信"
+      "labelPlaceholder": "例：ビルド"
     },
     "dictationSetupSheet": {
       "description": "ここからモデルをダウンロードまたは選択し、ペアリング済みのコンピュータでディクテーションを有効にできます。",
@@ -1142,8 +1107,6 @@
       "tooLargeMessage": "この差分は大きすぎるため、モバイルではプレビューできません。"
     },
     "diffReviewDrawers": {
-      "addNote": "メモを追加",
-      "cancelNote": "メモの入力をキャンセル",
       "clearSentNotes": "送信済みのメモをクリア",
       "copyNotes": "メモをコピー",
       "deleteNote": "メモの削除",
@@ -1152,12 +1115,10 @@
       "discardTitle": "ファイルの変更を破棄",
       "editNote": "メモを編集",
       "fileNote": "ファイルのメモ",
-      "lineNumber": "{{lineNumber}} 行目",
       "loadingSessions": "Agent セッションを読み込み中…",
       "newAgentSession": "新規 Agent セッション",
       "openInSession": "セッションで開く",
       "reviewNote": "レビューメモ",
-      "saveLineNote": "{{lineNumber}} 行目のメモを保存",
       "sendNotes": "メモを送信",
       "sendNotesLabel": "Agent にメモを送信",
       "viewedFiles_one": "閲覧済みのファイル {{count}} 件",
@@ -1171,10 +1132,7 @@
       "discardChanges": "変更を破棄",
       "rangeLine": "{{line}} 行目",
       "rangeLines": "{{startLine}}–{{line}} 行目",
-      "sendToAgent": "{{agent}} に送信",
-      "sendToAnAgent": "Agent に送信",
       "rangePlaceholder": "ここで何を変更しますか？",
-      "commentOnGitHub": "GitHub でコメント",
       "sendUnsentNotes": "未送信のメモを送信",
       "statusUnreadable": "このホストの状態を読み取れませんでした。再試行中…",
       "terminal": "ターミナル",
@@ -1207,7 +1165,6 @@
       "title": "変更点"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "{{number}} 行目にメモを追加",
       "addedLine": "追加された行",
       "addedLineNumber": "追加された行（{{number}} 行目）",
       "contextLine": "変更のない行",
@@ -1874,9 +1831,6 @@
       "backToSession": "セッションに戻る",
       "closeFiles": "ファイル一覧を閉じる",
       "emptyState": "ファイルが見つかりません。",
-      "filterPlaceholder": "ファイルをフィルター",
-      "noMatchesHint": "検索対象は、開いたことのあるフォルダーのみです。",
-      "clearFilter": "フィルターをクリア",
       "loading": "ファイルを読み込み中…",
       "loadFailed": "ファイルを読み込めませんでした。",
       "title": "ファイル",
@@ -1890,13 +1844,8 @@
       "openFolder": "フォルダー「{{name}}」を開く",
       "previewFile": "ファイル「{{name}}」をプレビュー",
       "retryLoading": "{{path}} の読み込みを再試行",
-      "searchAll": "すべて検索",
-      "searchAllIn": "{{folder}} をすべて検索",
       "ignored": ".gitignore によって無視される",
-      "searched": "{{folder}} の {{total}} 件中 {{loaded}} 件を検索しました。",
-      "searching": "{{folder}} を検索中… {{total}} 件中 {{loaded}} 件",
-      "showMore": "さらに {{rows}} 件を表示",
-      "unavailable": "モバイルでは利用不可"
+      "showMore": "さらに {{rows}} 件を表示"
     },
     "fileExplorerRowActions": {
       "copyName": "名前をコピー",
@@ -1998,17 +1947,6 @@
       "showFor": "自動化を表示するデスクトップ",
       "toggleFailed": "{{name}} を更新できませんでした",
       "updateDesktop": "自動化を使用するには、{{desktop}} の Orca を更新してください。"
-    },
-    "emptyState": {
-      "connectedDescription": "デスクトップがここに表示されます。すべての通信はエンドツーエンドで暗号化されます。",
-      "connectedTitle": "接続完了",
-      "description": "コンピュータ上の Orca とペアリングすると、スマートフォンから Agent の状況を確認したり、任意のターミナルを操作したりして、作業を進められます。",
-      "pairDesktopButton": "デスクトップとペアリング",
-      "scanCodeBelowDescription": "下の「デスクトップとペアリング」をタップし、画面に表示された QR コードにカメラを向けてください。",
-      "openDesktopDescription": "「設定」→「モバイル」を開き、ペアリング用の QR コードを生成してください。",
-      "openDesktopTitle": "デスクトップで Orca を開く",
-      "scanCodeTitle": "コードをスキャン",
-      "title": "デスクトップに接続"
     },
     "listFooter": {
       "hostPickerTitle": "タスクを開くホスト"
@@ -2314,16 +2252,11 @@
       "waitingOnYou": "対応を待っています。"
     },
     "onboardingPage": {
-      "enableAgentNotifications": "Agent の通知を有効にする",
       "enableNotifications": "通知を有効にする",
       "keepTerminal": "ターミナルのままにする",
       "notNow": "後で",
-      "notificationsDescription": "アプリを使用していないときでも、Agent の作業が完了したときや対応待ちになったときに、このスマートフォンに通知が届きます。",
-      "notificationsDisclosure": "デスクトップで3分間操作がないと、Orca のプッシュ通知サービスを通じて配信されます。「設定」でいつでも変更できます。",
       "notificationsTitle": "Agent からの呼びかけを見逃さない",
-      "openInChatUi": "セッションをチャット UI で開く",
       "openInTerminal": "セッションをターミナルで開く",
-      "sessionViewDescription": "この端末で、対応する Agent セッションをターミナルとチャット UI のどちらで開くか選択してください。セッションタブを長押しすると表示を切り替えられます。デフォルトはいつでも「設定」→「Chat UI」で変更できます。",
       "sessionViewTitle": "セッションの表示方法は？",
       "skipNotifications": "今は通知を有効にしない",
       "useChatUi": "チャット UI を使用"
@@ -2342,7 +2275,6 @@
       "daysAgo_other": "{{count}} 日前",
       "deleteConfirmMessage": "GitHub 上のコメントを完全に削除します。",
       "editPlaceholder": "コメントを編集…",
-      "replyToComment": "コメントに返信",
       "hoursAgo_one": "{{count}} 時間前",
       "hoursAgo_other": "{{count}} 時間前",
       "justNow": "たった今",
@@ -2351,39 +2283,22 @@
       "monthsAgo_one": "{{count}} か月前",
       "monthsAgo_other": "{{count}} か月前",
       "reply": "返事",
-      "editComment": "コメントを編集",
-      "deleteComment": "コメントを削除",
-      "unresolveThread": "スレッドを未解決に戻す",
-      "resolveThread": "スレッドを解決",
       "resolve": "解決",
-      "replyPlaceholder": "返信を入力…",
       "unresolve": "未解決に戻す",
       "yearsAgo_one": "{{count}} 年前",
-      "yearsAgo_other": "{{count}} 年前",
-      "resolved": "解決済み",
-      "openOnGitHub": "GitHub でコメントを開く"
+      "yearsAgo_other": "{{count}} 年前"
     },
     "commentsSection": {
-      "all": "全て",
-      "humans": "人間",
-      "bots": "ボット",
-      "noBotComments": "ボットのコメントはありません。",
-      "noHumanComments": "ユーザーによるコメントはありません。",
       "comment": "コメント",
       "resolvedThreadSingle": "{{author}} の解決済みスレッド",
       "resolvedThreadCount": "{{author}} の解決済みスレッド（{{count}}）",
-      "resolvedCommentSingle": "{{author}} の解決済みコメント",
-      "resolvedCommentCount": "{{author}} の解決済みコメント（{{count}}）",
       "commentsLoadFailedRetry": "コメントを読み込めませんでした。",
       "description": "説明",
       "descriptionLoadFailed": "説明を読み込めませんでした。「更新」をタップして再試行してください。",
       "noComments": "コメントはまだありません。",
       "noDescription": "説明はありません。",
       "showMore": "さらに {{count}} 件を表示",
-      "addCommentPlaceholder": "コメントを追加…",
-      "title": "コメント",
-      "commentsLoadFailed": "コメントを読み込めませんでした。「更新」をタップして再試行してください。",
-      "showMoreOf": "残り {{remaining}} 件中 {{count}} 件をさらに表示"
+      "title": "コメント"
     },
     "linkPrForm": {
       "linkButton": "PR をリンク",
@@ -2489,14 +2404,6 @@
       "stateOpen": "オープン",
       "unavailable": "チェックは利用できません"
     },
-    "prCommentAudienceLabels": {
-      "all": "全て",
-      "bots": "ボット",
-      "humans": "人間",
-      "noBotComments": "ボットのコメントはありません。",
-      "noComments": "コメントはまだありません。",
-      "noHumanComments": "ユーザーによるコメントはありません。"
-    },
     "tab": {
       "updated": "更新: {{time}}",
       "moreActions": "PR のその他の操作",
@@ -2559,7 +2466,6 @@
       "failedAfter": "{{duration}} 後に失敗",
       "failed": "失敗",
       "checkActions": "{{name}} のその他の操作",
-      "rerun": "再実行",
       "copyErrorFailed": "エラーをコピーできませんでした。",
       "durationSeconds": "{{seconds}}秒",
       "durationMinutes": "{{minutes}}分 {{seconds}}秒",
@@ -2693,20 +2599,12 @@
       "messageModeLabel": "メッセージモード：入力してから送信します。キーモードに切り替える",
       "moreKeys": "その他のキーと操作",
       "showKeyboard": "キーボードを表示",
-      "dismissKeyboardHint": "現在のターミナルセッションを開いたまま、ソフトウェアキーボードを非表示にします。",
-      "switchToDesktopMode": "デスクトップモードに切り替え",
-      "switchToPhoneMode": "スマートフォンモードに切り替え",
-      "pasteFromClipboard": "クリップボードから貼り付け",
-      "paste": "貼り付け",
-      "addCustomShortcut": "カスタムショートカットを追加"
+      "pasteFromClipboard": "クリップボードから貼り付け"
     },
     "activeContent": {
-      "createTab": "タブを作成",
       "creatingTab": "作成中…",
       "fileTitle": "ファイル",
       "loadingTerminal": "ターミナルを読み込み中…",
-      "noTabs": "このセッションにはタブがありません。",
-      "retryLoadingTerminal": "ターミナルの読み込みを再試行",
       "terminalTakingLonger": "ターミナルの読み込みに予想以上の時間がかかっています。"
     },
     "agentChildRow": {
@@ -2791,25 +2689,14 @@
       "workflow": "バックグラウンドワークフロー"
     },
     "browserTabActionSheet": {
-      "forward": "進む",
-      "reload": "リロード",
       "hardReload": "ハードリロード",
       "title": "ブラウザ"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "他のタブを閉じる"
     },
-    "bulkTabClose": {
-      "confirm": "タブを閉じる",
-      "description": "選択したタブを閉じます。ピン留めしたタブは開いたままになります。",
-      "titleEditors": "すべてのエディタータブを閉じますか？",
-      "titleLeft": "左側のタブを閉じますか？",
-      "titleOthers": "他のタブを閉じますか？",
-      "titleRight": "右側のタブを閉じますか？"
-    },
     "commandDock": {
       "liveInputHint": "入力したテキストは、選択中のターミナルに直接送信されます。",
-      "tapToShowKeyboard": "タップしてキーボードを表示",
       "liveInputLabel": "ターミナルへのリアルタイム入力"
     },
     "contentRow": {
@@ -3195,7 +3082,6 @@
     },
     "sheets": {
       "browser": "ブラウザ",
-      "browserStreamingUnavailable": "このホストはブラウザタブをストリーミングできません",
       "chat": "チャット",
       "cli": "CLI",
       "cliOnly": "CLI のみ",
@@ -3212,7 +3098,6 @@
       "file": "ファイル",
       "markdown": "Markdown",
       "markdownNote": "Markdown ノート",
-      "newBrowser": "新規ブラウザ",
       "newTab": "新規タブ",
       "notesCopied": "メモをコピーしました。",
       "notesHint": "現在のメモの送信先となる Agent セッションを選択してください。",
@@ -3231,7 +3116,6 @@
       "shellWsl": "WSL",
       "terminalName": "ターミナル名",
       "unsavedMarkdown": "Markdown の未保存の変更",
-      "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。",
       "allowAutoClose": "自動終了を許可",
       "agents": "Agent",
       "renameTerminalFailed": "ターミナルの名前を変更できませんでした。{{reason}}"
@@ -3258,20 +3142,12 @@
       "switchToDesktop": "デスクトップ表示に切り替え",
       "switchToPhone": "スマートフォン表示に切り替え"
     },
-    "terminalInputActions": {
-      "attachFileHint": "長押しすると、写真の代わりにファイルを添付できます。",
-      "attachPhoto": "写真を添付",
-      "sendingImage": "画像を送信中…"
-    },
     "terminalLiveInputStatus": {
       "listening": "聞き取り中",
-      "liveInput": "リアルタイム入力",
       "preparingMic": "マイクを準備中",
       "processing": "処理中",
       "releaseMicHint": "マイクボタンから指を離すと停止",
-      "startingMic": "マイクを起動中",
-      "uploadingImage": "ホストに画像をアップロード中",
-      "uploadingImageTitle": "画像をアップロード中"
+      "startingMic": "マイクを起動中"
     },
     "terminalRecords": {
       "defaultTitle": "ターミナル"
@@ -3508,21 +3384,14 @@
       "waitMoment": "しばらくお待ちください。"
     },
     "workerAutoClose": {
-      "running": "一時的なオーケストレーションワーカー · 完了の2分後に閉じます",
-      "finished": "一時的なオーケストレーションワーカーが完了しました · {{countdown}}後に閉じます",
       "keepOpen": "開いたままにする"
     },
     "terminalLayoutSheet": {
       "title": "ターミナルのレイアウト",
       "oneTerminal": "ターミナル1つ",
-      "selected": "選択中",
       "auto": "自動",
-      "autoHint": "利用可能なスペースに合わせて分割",
       "sideBySide": "左右に並べる",
-      "sideBySideHint": "サイドバーを開いていても2列で表示",
-      "stacked": "上下に並べる",
-      "stackedHint": "画面の向きに関係なく2行で表示",
-      "selectedHint": "選択中 · {{hint}}"
+      "stacked": "上下に並べる"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "レイアウトを保存できませんでした",
@@ -3531,23 +3400,19 @@
     "terminalMoreKeys": {
       "sendKey": "{{label}}を送信",
       "paste": "貼り付け",
-      "sending": "送信中…",
       "photo": "写真",
       "file": "ファイル",
       "desktopWidth": "デスクトップ幅",
       "phoneWidth": "スマートフォン幅",
       "keys": "キー",
-      "combos": "組み合わせ",
       "yourKeys": "自分のキー",
       "deleteKeyHint": "長押ししてこのキーを削除",
-      "addCustomKey": "カスタムキーを追加",
-      "addKey": "キーを追加"
+      "addCustomKey": "カスタムキーを追加"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}、フォーカス中",
       "terminal": "ターミナル",
-      "tapToFocusPane": "{{title}}、タップしてフォーカス",
-      "inputPane": "{{title}} · 入力"
+      "tapToFocusPane": "{{title}}、タップしてフォーカス"
     },
     "structuredOpen": {
       "goneGeneric": "Agent のチャットはこのホスト上に存在しないため、ここで再度開くことはできません。",
@@ -3639,7 +3504,6 @@
     "tabBar": {
       "oneTab": "1 個のタブ",
       "tabCount": "{{count}} 個のタブ",
-      "anotherNeedsYou": "別のタブで確認が必要です",
       "actionsHint": "このタブの操作を表示します",
       "next": "次のタブ",
       "previous": "前のタブ",
@@ -3932,12 +3796,7 @@
     },
     "commitFailurePanel": {
       "fix": "修正",
-      "fixWithAi": "AI によるコミット失敗の修正",
       "hideDetails": "詳細を非表示",
-      "hideFailureDetails": "コミット失敗の詳細を非表示",
-      "showDetails": "詳細を表示",
-      "showFailureDetails": "コミット失敗の詳細を表示",
-      "summary": "コミットに失敗しました。",
       "title": "コミットに失敗しました"
     },
     "commitMessageAi": {
@@ -3957,10 +3816,7 @@
       "cancelGeneration": "コミットメッセージの生成をキャンセル",
       "commitMessageDisabled": "コミットメッセージは入力できません。ステージ済みのファイルがありません。",
       "commitMessagePlaceholder": "コミットメッセージ",
-      "emptyMessage": "ワークツリーに変更はありません。",
-      "emptyTitle": "ローカルの変更なし",
       "generateMessage": "AIでコミットメッセージを生成",
-      "reconnecting": "デスクトップに再接続中…",
       "regenerateHint": "再生成するには、メッセージをクリアしてください。"
     },
     "createPrAction": {
@@ -4102,7 +3958,6 @@
       "updateDesktop": "モバイルでソース管理を使うには、このホストの Orca を更新してください。"
     },
     "modals": {
-      "currentBranch": "現在",
       "discardButton": "破棄",
       "discardConfirmMessage": "「{{path}}」への変更を破棄しますか？この操作は取り消せません。",
       "discardTitle": "変更を破棄",
@@ -4399,13 +4254,6 @@
       "behind": "{{count}} コミット遅れ",
       "upToDate": "最新",
       "switchBranch": "{{branch}} からブランチを切り替え",
-      "mergeInProgress": "マージ進行中",
-      "rebaseInProgress": "リベース進行中",
-      "cherryPickInProgress": "チェリーピック進行中",
-      "filesNeedDecision_one": "完了するには、{{count}} 件のファイルについて選択が必要です。",
-      "filesNeedDecision_other": "完了するには、{{count}} 件のファイルについて選択が必要です。",
-      "conflictsResolved": "すべての競合が解決されました。下のバーから完了してください。",
-      "continueOnComputer": "すべての競合が解決されました。完了するには、コンピュータで続行してください。",
       "commits_one": "{{count}} 件のコミット",
       "commits_other": "{{count}} 件のコミット",
       "conflictsMayRemain": "一部のファイルが表示されていないため、競合が残っている可能性があります。コンピュータで確認してください。"
@@ -4438,24 +4286,11 @@
     "filterPickers": {
       "allTeams": "全チーム",
       "changeStatus": "ステータスを変更",
-      "fieldHidden": "カードでは非表示",
-      "fieldShown": "カードに表示",
-      "fieldsSubtitle": "アイテムカードに表示するプロジェクトのフィールドを選択してください。",
-      "fieldsTitle": "プロジェクトのフィールド",
-      "gitlabFilter": "GitLab フィルター",
-      "gitlabView": "GitLab ビュー",
-      "jiraFilter": "Jira フィルター",
-      "jiraSite": "Jira サイト",
       "statesFailed": "状態を読み込めませんでした。開き直して再試行してください。",
-      "linearFilter": "Linear フィルター",
       "linearIssue": "Linear Issue",
-      "linearWorkspace": "Linear ワークスペース",
       "loadingStates": "ステータスを読み込み中…",
-      "noFields": "このビューに表示できる追加フィールドはありません。",
       "noStates": "利用可能なステータスがありません。",
       "switchWorkspaceFailed": "ワークスペースの切り替えに失敗しました",
-      "teamsSubtitle": "「タスク」に表示するチームを選択してください。",
-      "teamsTitle": "Linear チーム",
       "teams_one": "{{count}} チーム",
       "teams_other": "{{count}} チーム"
     },
@@ -4602,9 +4437,6 @@
     "linearList": {
       "changeStatusFrom": "状態を「{{status}}」から変更"
     },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "表示項目"
-    },
     "listSurface": {
       "connectLinearButton": "Linear に接続",
       "connectLinearMessage": "「タスク」から、担当する Linear の Issue を確認して作業を開始できます。",
@@ -4658,7 +4490,6 @@
       "projectMergeRequests": "プロジェクトの MR",
       "projectMergeRequestsDescription": "リポジトリ別の MR と Issue",
       "projects": "プロジェクト",
-      "pullRequests": "PR",
       "repository": "リポジトリ",
       "repositorySortDescription": "リポジトリ別にグループ化し、アクティビティが新しい順に表示",
       "reviewRequestsDescription": "私に割り当てられたレビュー依頼",
@@ -4669,32 +4500,18 @@
     },
     "pagination": {
       "pageUnreachable": "ページ {{page}} は GitHub 検索で取得できる範囲を超えています。",
-      "loadPageFailed": "ページ {{page}} を GitHub から読み込めませんでした。",
-      "noMoreResults": "ページ {{page}} にこれ以上の結果はありません。"
+      "loadPageFailed": "ページ {{page}} を GitHub から読み込めませんでした。"
     },
     "filterSheet": {
-      "sortBy": "並べ替え",
       "issueSource": "Issue ソース",
-      "issueSourceRow": "upstream または origin",
       "view": "表示",
-      "projectView": "プロジェクトビュー",
-      "projectItems_one": "{{count}} 件のアイテム",
-      "projectItems_other": "{{count}} 件のアイテム",
-      "chooseView": "選択",
       "showOnRows": "行に表示",
-      "projectFields": "プロジェクトのフィールド",
       "workspace": "ワークスペース",
-      "linearWorkspace": "Linear ワークスペース",
       "layout": "レイアウト",
       "groupBy": "グループ化",
       "orderBy": "並び順",
-      "displayProperties": "表示プロパティ",
       "title": "フィルターと表示",
-      "done": "完了",
-      "jqlReplacesPreset": "JQL 検索中は「表示」のプリセットが置き換えられます。プリセットを選び直すには、検索をクリアしてください。"
-    },
-    "jiraViewControls": {
-      "jqlSearch": "JQL 検索"
+      "done": "完了"
     },
     "itemComments": {
       "noComments": "コメントはまだありません",
@@ -4822,42 +4639,8 @@
       "reviewers": "レビュアー",
       "viewFile": "表示"
     },
-    "providerControls": {
-      "myTodos": "自分の ToDo",
-      "reposLabel": "リポジトリ: {{repos}}",
-      "filterCount": "フィルター · {{count}}",
-      "filter": "フィルター",
-      "filterLabel": "フィルターと表示",
-      "projectMergeRequests": "プロジェクトの MR"
-    },
-    "providerItemList": {
-      "intoBranch": "{{base}} へ",
-      "kindAndStatus": "{{kind}}、{{status}}",
-      "nextPage": "次のページ",
-      "page": "{{page}} ページ",
-      "pageOfTotal": "{{page}} / {{total}} ページ",
-      "previousPage": "前のページへ",
-      "selectPage": "ページを選択、{{page}} ページ",
-      "selectPageOfTotal": "ページを選択、全 {{total}} ページ中 {{page}} ページ"
-    },
     "providerPickers": {
-      "allRepositories": "すべてのリポジトリ",
-      "githubView": "GitHub の表示",
-      "issueSources": "GitHub Issue の取得元",
-      "issueSourcesDescription": "リポジトリごとに、検索や作業の作成に使うソースを upstream または origin から選択してください。",
-      "issues": "Issue",
-      "noIssueSources": "ほかに利用できる Issue の取得元はありません。",
-      "origin": "origin",
-      "pageHint": "読み込み済みまたは利用可能な結果ページに移動します。",
-      "pageLoaded": "読み込み済み",
-      "pageNotLoaded": "以前の結果を読み込み",
-      "pageNumber": "{{page}} ページ",
-      "pages": "GitHub の結果ページ",
-      "pullRequests": "PR",
-      "queryingSource": "検索対象: {{source}}",
-      "repoDescription": "検索対象のリポジトリを選択してください。",
-      "repos": "リポジトリ",
-      "upstream": "upstream"
+      "allRepositories": "すべてのリポジトリ"
     },
     "providerViewProjection": {
       "all": "全て",
@@ -4866,7 +4649,6 @@
       "allWorkspaces": "すべてのワークスペース",
       "chooseProject": "プロジェクトを選択",
       "default": "デフォルト",
-      "defaultSubtitle": "{{subtitle}} · デフォルト",
       "issues": "Issue",
       "openState": "オープン",
       "projects": "プロジェクト",
@@ -4882,15 +4664,7 @@
     "screenChrome": {
       "newGitHubIssue": "GitHub の新規 Issue",
       "newLinearIssue": "新規 Linear Issue",
-      "refreshGitHub": "GitHub の作業を更新する",
-      "refreshGitLab": "GitLab 作業項目を更新する",
-      "refreshJira": "Jira Issue を更新する",
-      "refreshLinear": "Linear を更新",
       "title": "タスク"
-    },
-    "searchControl": {
-      "projectPlaceholder": "プロジェクトビューを検索…",
-      "providerPlaceholder": "{{provider}} のタスクを検索…"
     },
     "smartSourceModes": {
       "allStates": "全て",
@@ -5037,7 +4811,6 @@
     },
     "webviewEngineErrorState": {
       "code": "コード {{code}}",
-      "reload": "再読み込み",
       "rendererCrashed": "レンダラーがクラッシュしました",
       "status": "ステータス {{statusCode}}",
       "title": "ターミナルの読み込みに失敗しました"
@@ -5146,7 +4919,6 @@
   },
   "automations": {
     "mobile": {
-      "extraAgentArguments": "追加の Agent 引数",
       "allAutomations": "すべての自動化",
       "schedule": "スケジュール",
       "project": "プロジェクト",
@@ -5158,8 +4930,6 @@
       "cancel": "キャンセル",
       "name": "名前",
       "back": "戻る",
-      "continue": "続行",
-      "createAutomation": "オートメーションの作成",
       "automations": "自動化",
       "runs": "実行履歴",
       "refresh": "更新",
@@ -5183,41 +4953,18 @@
       "host": "ホスト",
       "pending": "保留中",
       "starting": "起動中",
-      "baseBranchOptional": "ベースブランチ（任意）",
-      "workspaceSetupScript": "ワークスペースのセットアップスクリプト",
-      "useProjectSettings": "プロジェクト設定を使用",
-      "runSetupScript": "セットアップスクリプトを実行",
-      "skipSetupScript": "セットアップスクリプトをスキップ",
       "reuseAgentSession": "Agentセッションを再利用",
-      "precheckCommandOptional": "事前チェックコマンド（任意）",
-      "precheckTimeoutSeconds": "事前チェックのタイムアウト（秒）",
-      "missedRunGraceMinutes": "実行遅延の猶予（分）",
-      "choose": "選択…",
       "runOnSchedule": "{{name}} をスケジュール実行",
       "noNextScheduledRun": "次回の実行予定はありません",
       "agent": "Agent",
-      "newWorkspacePerRun": "実行ごとに新しいワークスペース",
       "instructions": "指示",
       "runNow": "今すぐ実行",
-      "savedAgent": "{{agent}}（保存済み）",
       "chooseAProjectSetUpOnThisHost": "このホストに設定されたプロジェクトを選択してください。",
       "newAutomation": "新しい自動化",
-      "editorStep": "{{step}} / 3 · {{section}}",
-      "retryProjectLoading": "プロジェクトを再読み込み",
-      "loadingProjects": "プロジェクトを読み込み中…",
-      "projectAndHostSetup": "プロジェクトとホストの設定",
       "savedTarget": "保存済みの対象",
-      "useAnExistingWorkspace": "既存のワークスペースを使用",
-      "existingWorkspace": "既存のワークスペース",
       "savedWorkspace": "保存済みのワークスペース",
       "loadMoreWorkspaces": "ワークスペースをさらに読み込む",
-      "thisHostSWorkspaceInventoryIsIncompleteRefreshOrLoadMoreWorkspaces": "このホストのワークスペース一覧は不完全です。更新するか、さらに読み込んでください。",
-      "agentDetecting": "Agent · 検出中…",
       "installAndEnableAnAgentOnThisHostThenRetry": "このホストにAgentをインストールして有効にし、再試行してください。",
-      "hideAdvancedOptions": "詳細オプションを隠す",
-      "advancedOptions": "詳細オプション",
-      "chooseAnAgent": "Agentを選択",
-      "saveChanges": "変更を保存",
       "loadingAutomations": "自動化を読み込み中…",
       "letYourAgentsWorkOnASchedule": "Agentをスケジュールに従って実行",
       "createAnAutomationToRunATaskOnThisHost": "このホストでタスクを実行する自動化を作成します。",
@@ -5248,12 +4995,7 @@
       "scheduled": "スケジュール実行",
       "loadMoreRuns": "実行をさらに読み込む",
       "customCronOrRRULE": "カスタム Cron または RRULE",
-      "cronOrRRULE": "Cron または RRULE",
-      "minuteFromHHMM": "分（HH:MM から）",
-      "timeHHMM24Hour": "時刻（HH:MM、24 時間制）",
-      "useATimeSuchAs0900": "09:00 のような時刻を使用してください。",
       "timeZone": "タイムゾーン",
-      "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "選択したホストで実行します。予定時刻にホストを利用可能にしておいてください。",
       "pairedHost": "ペアリング済みホスト",
       "chooseHost": "{{host}} の自動化、別のホストを選択",
       "selectedServerUnavailable": "選択したサーバー（利用不可）",
@@ -5282,15 +5024,12 @@
       "unknownResult": "不明な結果",
       "notReported": "未報告",
       "searchOptions": "オプションを検索",
-      "task": "タスク",
-      "review": "確認",
       "discardChangesTitle": "変更を破棄しますか？",
       "discardChangesMessage": "この自動化への未保存の変更は失われます。",
       "discard": "破棄",
       "keepEditing": "編集を続ける",
       "on": "オン",
       "repeats": "繰り返し",
-      "newOnePerRun": "実行ごとに新規作成",
       "moreActions": "その他の操作",
       "noRunsYet": "実行はまだありません",
       "nextRunToday": "次回：今日 {{time}}",
@@ -5366,7 +5105,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Issue を検索するか JQL を入力、例: project = ABC",
         "jiraTextMatchesNotice": "テキスト一致を表示しています。Jira はこの検索を JQL として実行できませんでした。"
       },
       "editor": {
@@ -5649,7 +5387,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",

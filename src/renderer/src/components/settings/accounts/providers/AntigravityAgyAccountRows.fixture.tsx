@@ -56,3 +56,22 @@ export const selectedAccountActive = defineFixture({
       }
     })
 })
+
+const personal = { ...saved, id: 'personal', email: 'personal@example.com', subject: 'personal' }
+
+export const otherSavedAccountHoldsLogin = defineFixture({
+  width: 640,
+  render: () =>
+    rows({
+      accounts: [saved, personal],
+      activeAccountId: personal.id,
+      selectedAccountId: saved.id,
+      restoresSelectionAtLaunch: true,
+      currentAccount: {
+        email: personal.email,
+        subject: personal.subject,
+        authMethod: 'consumer',
+        identityKnown: true
+      }
+    })
+})

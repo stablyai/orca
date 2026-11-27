@@ -1,5 +1,13 @@
 import { Fragment } from 'react'
-import { Copy, ExternalLink, MoreHorizontal, Trash2 } from 'lucide-react'
+import {
+  Copy,
+  ExternalLink,
+  File,
+  FileText,
+  Image as ImageIcon,
+  MoreHorizontal,
+  Trash2
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import { Button } from '@/components/ui/button'
@@ -100,6 +108,9 @@ export function ArtifactListRow({
   const intlLocale = useIntlLocale()
   const name = artifactName(item)
   const typeLabel = artifactTypeLabel(item, t)
+  const contentType = item.artifact.sourceContentType
+  const TypeIcon =
+    contentType === 'text/html' ? FileText : contentType.startsWith('image/') ? ImageIcon : File
   const updatedLabel = formatArtifactUpdatedCompact(item.artifact.updatedAt, t, intlLocale)
   const expiryLabel = formatArtifactExpiryCompact(item.artifact.expiresAt, t, intlLocale)
   const sizeLabel = formatByteSize(item.artifact.byteSize)
@@ -133,9 +144,12 @@ export function ArtifactListRow({
             isSelected && LIST_TABLE_ROW_SELECTED_CLASS
           )}
         >
-          <span className="min-w-0 truncate font-medium" title={name}>
-            {name}
-          </span>
+          <div className="flex min-w-0 items-center gap-2">
+            <TypeIcon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 truncate font-medium" title={name}>
+              {name}
+            </span>
+          </div>
           <span className="min-w-0 truncate text-muted-foreground" title={typeLabel}>
             {typeLabel}
           </span>
@@ -152,9 +166,9 @@ export function ArtifactListRow({
             <DropdownMenuTrigger asChild>
               <Button
                 type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="size-7 text-muted-foreground"
+                variant="ghost-muted"
+                size="icon-toolbar"
+                className="justify-self-end"
                 aria-label={t('auto.components.artifacts.actions', 'Artifact actions')}
                 onClick={(event) => event.stopPropagation()}
               >

@@ -34,7 +34,6 @@
   "agentHistory": {
     "panel": {
       "all": "모두",
-      "emptyScope": "이 범위에는 이전 에이전트 세션이 없습니다.",
       "hideDetails": "세부 정보 숨기기",
       "showDetails": "세부 정보 표시",
       "loading": "에이전트 세션 로드 중…",
@@ -65,14 +64,10 @@
       "untitledSession": "제목 없는 세션"
     },
     "sessionHistoryList": {
-      "currentWorktree": "현재 워크트리",
       "messages_one": "메시지 {{count}}개",
       "messages_other": "메시지 {{count}}개",
       "resumeSession": "에이전트 세션 재개",
-      "continueInCli": "CLI에서 계속",
-      "hidePreview": "최근 메시지를 숨깁니다.",
-      "showPreview": "최근 메시지를 표시합니다.",
-      "you": "나"
+      "continueInCli": "CLI에서 계속"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "호스트에 연결할 수 없습니다.",
@@ -136,37 +131,19 @@
     },
     "pairConfirm": {
       "backToHome": "홈으로 돌아가기",
-      "connectTimedOut": "{{seconds}}초 내에 연결하지 못했습니다. 어느 단계에서 멈췄는지 아래 로그를 확인하세요.",
       "connecting": "연결 중…",
-      "description": "데스크톱의 페어링 링크를 열었습니다. 확인하면 이 데스크톱이 호스트 목록에 추가됩니다.",
       "pairButton": "페어링",
-      "pairingFailed": "페어링 실패: {{error}}",
-      "pairingLog": "페어링 로그",
-      "title": "이 데스크톱과 페어링하시겠습니까?"
+      "pairingFailed": "페어링 실패: {{error}}"
     },
     "pairScan": {
-      "cameraDisabledDescription": "설정에서 카메라 접근을 허용하거나 페어링 코드를 붙여넣으세요.",
-      "cameraDisabledTitle": "카메라 접근 비활성화",
-      "cameraPermissionDescription": "데스크톱의 Orca에 표시된 QR 코드를 스캔하거나 페어링 코드를 붙여넣으세요.",
-      "connectTimedOut": "{{seconds}}초 내에 연결하지 못했습니다. 어느 단계에서 멈췄는지 아래 로그를 확인하세요.",
       "connecting": "연결 중…",
       "invalidPairingCode": "유효한 페어링 코드가 아닙니다. 컴퓨터에서 코드를 복사해 다시 붙여넣으세요.",
       "invalidQrCode": "유효한 Orca QR 코드가 아닙니다.",
-      "downloadQrCode": "다운로드용 코드입니다. 데스크톱의 2단계에 있는 페어링 코드를 스캔하세요.",
-      "openDesktopStep": "컴퓨터에서 Orca를 실행하세요",
-      "openMobileSettingsStep": "설정 → 모바일로 이동하세요",
       "openSettings": "설정 열기",
       "pairingFailed": "페어링 실패: {{error}}",
-      "pairingLog": "페어링 로그",
       "pasteCodeMessage": "컴퓨터의 QR 코드 아래에 표시된 코드를 복사하세요.",
       "pasteCodePlaceholder": "orca://pair?code=... 또는 코드 붙여넣기",
       "pasteCodeTitle": "페어링 코드 붙여넣기",
-      "pasteInstead": "대신 코드 붙여넣기",
-      "pastePairingCode": "페어링 코드 붙여넣기",
-      "scanCodeStep": "QR 코드를 스캔하세요",
-      "title": "데스크톱과 페어링",
-      "tryAgain": "다시 시도",
-      "codeNoLongerValid": "이 페어링 코드는 만료되었거나 이미 사용되었거나 교체되었습니다. 데스크톱에서 새 코드를 표시한 후 다시 스캔하세요.",
       "runtimeAccessLink": "이 링크는 다른 Orca 앱용입니다. 컴퓨터의 설정 → 모바일에서 코드를 스캔하거나, 서버에서 orca pair --mobile을 실행하세요."
     },
     "terminalSettings": {
@@ -1344,25 +1321,13 @@
     },
     "customKeyModal": {
       "add": "추가",
-      "addShortcut": "단축키 추가",
-      "command": "명령",
       "commandPlaceholder": "예: pnpm build",
       "editing": "편집",
       "function": "기능 키",
       "key": "키",
-      "label": "레이블",
       "labelPlaceholder": "예: 빌드",
-      "manageShortcuts": "단축키 관리",
-      "manageShortcutsHint": "단축키 표시, 숨기기 및 순서 변경",
-      "modifiers": "보조 키",
-      "moreKeys": "더 많은 키",
       "navigation": "탐색",
-      "pickKey": "키 선택",
-      "pressEnter": "Enter 누르기",
-      "shortcutCombo": "단축키 조합",
-      "shortcutComboHint": "Ctrl, Alt, Shift 키 조합 만들기",
-      "textMacro": "텍스트 매크로",
-      "textMacroHint": "사용자 지정 텍스트 명령 전송"
+      "pressEnter": "Enter 누르기"
     },
     "dictationSetupSheet": {
       "description": "여기서 모델을 다운로드하거나 선택하고 페어링된 컴퓨터의 받아쓰기를 활성화할 수 있습니다.",
@@ -1403,8 +1368,6 @@
       "tooLargeMessage": "이 차이점은 너무 커서 모바일에서 미리 볼 수 없습니다."
     },
     "diffReviewDrawers": {
-      "addNote": "메모 추가",
-      "cancelNote": "메모 취소",
       "clearSentNotes": "전송한 메모 지우기",
       "copyNotes": "메모 복사",
       "deleteNote": "메모 삭제",
@@ -1413,12 +1376,10 @@
       "discardTitle": "파일 변경사항 취소",
       "editNote": "메모 편집",
       "fileNote": "파일 메모",
-      "lineNumber": "{{lineNumber}}행",
       "loadingSessions": "에이전트 세션 로드 중…",
       "newAgentSession": "새 에이전트 세션",
       "openInSession": "세션에서 열기",
       "reviewNote": "리뷰 메모",
-      "saveLineNote": "{{lineNumber}}행에 메모 저장",
       "sendNotes": "메모 보내기",
       "sendNotesLabel": "에이전트에 메모 보내기",
       "viewedFiles_one": "파일 {{count}}개 확인함",
@@ -1432,10 +1393,7 @@
       "discardChanges": "변경사항 취소",
       "rangeLine": "{{line}}행",
       "rangeLines": "{{startLine}}–{{line}}행",
-      "sendToAgent": "{{agent}}에게 보내기",
-      "sendToAnAgent": "에이전트에게 보내기",
       "rangePlaceholder": "여기를 어떻게 바꿀까요?",
-      "commentOnGitHub": "GitHub에 댓글 달기",
       "sendUnsentNotes": "미전송 메모 보내기",
       "statusUnreadable": "이 호스트의 상태를 읽지 못했습니다. 다시 시도 중…",
       "terminal": "터미널",
@@ -1468,7 +1426,6 @@
       "title": "변경 사항"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "{{number}}번 줄에 메모 추가",
       "addedLine": "추가된 줄",
       "addedLineNumber": "추가된 {{number}}번 줄",
       "contextLine": "변경 없는 줄",
@@ -2159,9 +2116,6 @@
       "backToSession": "세션으로 돌아가기",
       "closeFiles": "파일 닫기",
       "emptyState": "찾은 파일이 없습니다.",
-      "filterPlaceholder": "파일 필터",
-      "noMatchesHint": "열어 본 폴더만 검색합니다.",
-      "clearFilter": "필터 지우기",
       "loading": "파일 로드 중…",
       "loadFailed": "파일을 불러올 수 없습니다.",
       "title": "파일",
@@ -2175,13 +2129,8 @@
       "openFolder": "{{name}} 폴더 열기",
       "previewFile": "{{name}} 파일 미리보기",
       "retryLoading": "{{path}} 다시 불러오기",
-      "searchAll": "모두 검색",
-      "searchAllIn": "{{folder}} 전체 검색",
       "ignored": ".gitignore에 의해 무시됨",
-      "searched": "{{folder}}에서 {{total}}개 중 {{loaded}}개를 검색했습니다.",
-      "searching": "{{folder}} 검색 중… {{total}}개 중 {{loaded}}개",
-      "showMore": "{{rows}}개 더 보기",
-      "unavailable": "모바일에서 사용 불가"
+      "showMore": "{{rows}}개 더 보기"
     },
     "fileExplorerRowActions": {
       "copyName": "이름 복사",
@@ -2295,17 +2244,6 @@
       "showFor": "자동화를 볼 데스크톱",
       "toggleFailed": "{{name}}을(를) 업데이트할 수 없습니다",
       "updateDesktop": "자동화를 사용하려면 {{desktop}}의 Orca를 업데이트하세요."
-    },
-    "emptyState": {
-      "connectedDescription": "데스크톱이 여기에 표시됩니다. 모든 데이터는 종단 간 암호화로 보호됩니다.",
-      "connectedTitle": "연결 완료",
-      "description": "컴퓨터의 Orca와 페어링하여 에이전트 상태를 확인하고, 원하는 터미널에 접속하고, 휴대폰으로 작업을 진행하세요.",
-      "pairDesktopButton": "데스크톱 페어링",
-      "scanCodeBelowDescription": "아래 데스크톱 페어링을 탭한 다음, 화면에 표시된 QR 코드를 카메라로 비추세요.",
-      "openDesktopDescription": "설정 → 모바일에서 페어링 QR 코드를 생성하세요.",
-      "openDesktopTitle": "Orca 데스크톱 앱 열기",
-      "scanCodeTitle": "코드 스캔",
-      "title": "데스크톱을 연결하세요"
     },
     "listFooter": {
       "hostPickerTitle": "작업을 열 호스트"
@@ -2618,16 +2556,11 @@
       "waitingOnYou": "응답을 기다리고 있습니다."
     },
     "onboardingPage": {
-      "enableAgentNotifications": "에이전트 알림 켜기",
       "enableNotifications": "알림 켜기",
       "keepTerminal": "터미널 유지",
       "notNow": "나중에",
-      "notificationsDescription": "앱을 사용하지 않아도 에이전트가 작업을 마치거나 대기 중이면 이 휴대폰으로 알림을 받습니다.",
-      "notificationsDisclosure": "데스크톱을 3분 동안 사용하지 않으면 Orca 푸시 서비스를 통해 알림이 전달됩니다. 언제든지 설정에서 변경할 수 있습니다.",
       "notificationsTitle": "에이전트의 요청을 놓치지 마세요",
-      "openInChatUi": "채팅 UI에서 세션 열기",
       "openInTerminal": "터미널에서 세션 열기",
-      "sessionViewDescription": "지원되는 에이전트 세션을 이 기기에서 터미널로 열지, 채팅 UI로 열지 선택하세요. 세션 탭을 길게 눌러 보기를 전환하거나, 언제든지 설정 → 채팅 UI에서 기본값을 변경할 수 있습니다.",
       "sessionViewTitle": "세션을 어떻게 열까요?",
       "skipNotifications": "지금은 알림 설정 건너뛰기",
       "useChatUi": "채팅 UI 사용"
@@ -2657,22 +2590,9 @@
       "resolve": "해결",
       "unresolve": "해결 취소",
       "yearsAgo_one": "{{count}}년 전",
-      "yearsAgo_other": "{{count}}년 전",
-      "resolved": "해결됨",
-      "openOnGitHub": "GitHub에서 댓글 열기",
-      "replyToComment": "댓글에 답글 달기",
-      "editComment": "댓글 수정",
-      "deleteComment": "댓글 삭제",
-      "unresolveThread": "스레드 해결 취소",
-      "resolveThread": "스레드 해결",
-      "replyPlaceholder": "답글 작성…"
+      "yearsAgo_other": "{{count}}년 전"
     },
     "commentsSection": {
-      "all": "전체",
-      "humans": "사람",
-      "bots": "봇",
-      "noBotComments": "봇 댓글이 없습니다.",
-      "noHumanComments": "사람 댓글이 없습니다.",
       "comment": "댓글",
       "description": "설명",
       "descriptionLoadFailed": "설명을 불러오지 못했습니다. 새로고침을 눌러 다시 시도하세요.",
@@ -2680,13 +2600,8 @@
       "noDescription": "설명이 제공되지 않았습니다.",
       "showMore": "{{count}}개 더 보기",
       "title": "댓글",
-      "commentsLoadFailed": "댓글을 불러오지 못했습니다. 새로고침을 눌러 다시 시도하세요.",
-      "showMoreOf": "{{remaining}}개 중 {{count}}개 더 보기",
-      "addCommentPlaceholder": "댓글 추가…",
       "resolvedThreadSingle": "{{author}} 님의 해결된 스레드",
       "resolvedThreadCount": "{{author}} 님의 해결된 스레드 ({{count}})",
-      "resolvedCommentSingle": "{{author}} 님의 해결된 댓글",
-      "resolvedCommentCount": "{{author}} 님의 해결된 댓글 ({{count}})",
       "commentsLoadFailedRetry": "댓글을 불러오지 못했습니다."
     },
     "linkPrForm": {
@@ -2793,14 +2708,6 @@
       "stateOpen": "열림",
       "unavailable": "검사를 사용할 수 없습니다."
     },
-    "prCommentAudienceLabels": {
-      "all": "모두",
-      "bots": "봇",
-      "humans": "사람",
-      "noBotComments": "봇 댓글이 없습니다.",
-      "noComments": "아직 댓글이 없습니다.",
-      "noHumanComments": "사람 댓글이 없습니다."
-    },
     "prSidebarCreateEmptyState": {
       "branchRequired": "PR을 만들기 전에 브랜치를 체크아웃하세요.",
       "branchNotLinked": "{{branch}} 브랜치는 열려 있는 PR에 연결되어 있지 않습니다.",
@@ -2892,7 +2799,6 @@
       "failedAfter": "{{duration}} 후 실패",
       "failed": "실패",
       "checkActions": "{{name}} 작업 더 보기",
-      "rerun": "재실행",
       "copyErrorFailed": "오류를 복사하지 못했습니다.",
       "durationSeconds": "{{seconds}}초",
       "durationMinutes": "{{minutes}}분 {{seconds}}초",
@@ -2997,20 +2903,12 @@
       "messageModeLabel": "메시지 모드: 작성한 뒤 전송합니다. 키 모드로 전환",
       "moreKeys": "더 많은 키와 작업",
       "showKeyboard": "키보드 표시",
-      "dismissKeyboardHint": "소프트웨어 키보드를 숨기고 현재 터미널 세션을 열린 상태로 유지합니다.",
-      "switchToDesktopMode": "데스크톱 모드로 전환",
-      "switchToPhoneMode": "휴대폰 모드로 전환",
-      "pasteFromClipboard": "클립보드에서 붙여넣기",
-      "paste": "붙여넣기",
-      "addCustomShortcut": "사용자 지정 단축키 추가"
+      "pasteFromClipboard": "클립보드에서 붙여넣기"
     },
     "activeContent": {
-      "createTab": "탭 만들기",
       "creatingTab": "만드는 중…",
       "fileTitle": "파일",
       "loadingTerminal": "터미널 로드 중",
-      "noTabs": "이 세션에는 탭이 없습니다.",
-      "retryLoadingTerminal": "터미널 로드 재시도",
       "terminalTakingLonger": "터미널 준비가 예상보다 오래 걸리고 있습니다."
     },
     "agentChildRow": {
@@ -3095,25 +2993,14 @@
       "workflow": "백그라운드 워크플로"
     },
     "browserTabActionSheet": {
-      "forward": "앞으로",
-      "reload": "새로고침",
       "hardReload": "강제 새로고침",
       "title": "브라우저"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "다른 탭 닫기"
     },
-    "bulkTabClose": {
-      "confirm": "탭 닫기",
-      "description": "선택한 탭을 닫습니다. 고정된 탭은 열린 상태로 유지됩니다.",
-      "titleEditors": "모든 편집기 탭을 닫을까요?",
-      "titleLeft": "왼쪽 탭을 닫을까요?",
-      "titleOthers": "다른 탭을 닫을까요?",
-      "titleRight": "오른쪽 탭을 닫을까요?"
-    },
     "commandDock": {
       "liveInputHint": "입력한 텍스트가 활성 터미널로 바로 전송됩니다.",
-      "tapToShowKeyboard": "탭하여 키보드 표시",
       "liveInputLabel": "실시간 터미널 입력"
     },
     "contentRow": {
@@ -3501,7 +3388,6 @@
     "sheets": {
       "more": "더 보기",
       "browser": "브라우저",
-      "browserStreamingUnavailable": "이 호스트는 브라우저 탭을 스트리밍할 수 없습니다",
       "chat": "채팅",
       "cli": "CLI",
       "cliOnly": "CLI 전용",
@@ -3518,7 +3404,6 @@
       "file": "파일",
       "markdown": "Markdown",
       "markdownNote": "Markdown 노트",
-      "newBrowser": "새 브라우저",
       "newTab": "새 탭",
       "notesCopied": "메모를 복사했습니다.",
       "notesHint": "현재 메모를 보낼 에이전트 세션을 선택하세요.",
@@ -3536,7 +3421,6 @@
       "shellWsl": "WSL",
       "terminalName": "터미널 이름",
       "unsavedMarkdown": "저장되지 않은 Markdown 변경 사항",
-      "urlPrompt": "URL을 입력하세요. 비워 두면 새 탭이 열립니다.",
       "allowAutoClose": "자동 닫기 허용",
       "agents": "에이전트",
       "renameTerminalFailed": "터미널 이름을 변경하지 못했습니다. {{reason}}"
@@ -3563,20 +3447,12 @@
       "switchToDesktop": "데스크톱 모드로 전환",
       "switchToPhone": "휴대폰 모드로 전환"
     },
-    "terminalInputActions": {
-      "attachFileHint": "사진 대신 파일을 첨부하려면 길게 누르세요.",
-      "attachPhoto": "사진 첨부",
-      "sendingImage": "이미지 전송 중"
-    },
     "terminalLiveInputStatus": {
       "listening": "듣는 중",
-      "liveInput": "실시간 입력",
       "preparingMic": "마이크 준비 중",
       "processing": "처리 중",
       "releaseMicHint": "중지하려면 마이크에서 손을 떼세요",
-      "startingMic": "마이크 시작 중",
-      "uploadingImage": "호스트에 이미지 업로드 중",
-      "uploadingImageTitle": "이미지 업로드 중"
+      "startingMic": "마이크 시작 중"
     },
     "terminalRecords": {
       "defaultTitle": "터미널"
@@ -3813,21 +3689,14 @@
       "waitMoment": "잠시 기다리세요."
     },
     "workerAutoClose": {
-      "running": "임시 오케스트레이션 워커 · 완료 2분 후 닫힙니다",
-      "finished": "임시 오케스트레이션 워커 완료 · {{countdown}} 후 닫힙니다",
       "keepOpen": "열어 두기"
     },
     "terminalLayoutSheet": {
       "title": "터미널 레이아웃",
       "oneTerminal": "터미널 하나",
-      "selected": "선택됨",
       "auto": "자동",
-      "autoHint": "사용 가능한 공간에 맞게 분할",
       "sideBySide": "나란히",
-      "sideBySideHint": "사이드바를 열어도 두 열로 표시",
-      "stacked": "위아래로",
-      "stackedHint": "화면 방향에 관계없이 두 행으로 표시",
-      "selectedHint": "선택됨 · {{hint}}"
+      "stacked": "위아래로"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "레이아웃을 저장할 수 없습니다",
@@ -3836,23 +3705,19 @@
     "terminalMoreKeys": {
       "sendKey": "{{label}} 보내기",
       "paste": "붙여넣기",
-      "sending": "보내는 중…",
       "photo": "사진",
       "file": "파일",
       "desktopWidth": "데스크톱 너비",
       "phoneWidth": "휴대폰 너비",
       "keys": "키",
-      "combos": "조합",
       "yourKeys": "내 키",
       "deleteKeyHint": "길게 눌러 이 키 삭제",
-      "addCustomKey": "사용자 지정 키 추가",
-      "addKey": "키 추가"
+      "addCustomKey": "사용자 지정 키 추가"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, 포커스됨",
       "terminal": "터미널",
-      "tapToFocusPane": "{{title}}, 탭하여 포커스",
-      "inputPane": "{{title}} · 입력"
+      "tapToFocusPane": "{{title}}, 탭하여 포커스"
     },
     "structuredOpen": {
       "goneGeneric": "에이전트의 채팅이 더 이상 이 호스트에 없어 여기서 다시 열 수 없습니다.",
@@ -3944,7 +3809,6 @@
     "tabBar": {
       "oneTab": "탭 1개",
       "tabCount": "탭 {{count}}개",
-      "anotherNeedsYou": "다른 탭에서 확인이 필요합니다",
       "actionsHint": "이 탭의 작업을 표시합니다",
       "next": "다음 탭",
       "previous": "이전 탭",
@@ -4265,12 +4129,7 @@
     },
     "commitFailurePanel": {
       "fix": "수정",
-      "fixWithAi": "AI로 커밋 실패 수정",
       "hideDetails": "세부 정보 숨기기",
-      "hideFailureDetails": "커밋 실패 세부 정보 숨기기",
-      "showDetails": "세부 정보 표시",
-      "showFailureDetails": "커밋 실패 세부 정보 표시",
-      "summary": "커밋에 실패했습니다.",
       "title": "커밋 실패"
     },
     "commitMessageAi": {
@@ -4290,10 +4149,7 @@
       "cancelGeneration": "커밋 메시지 생성 취소",
       "commitMessageDisabled": "커밋 메시지 입력이 비활성화되었습니다. 스테이징된 파일이 없습니다.",
       "commitMessagePlaceholder": "커밋 메시지",
-      "emptyMessage": "워크트리에 변경 사항이 없습니다.",
-      "emptyTitle": "로컬 변경 사항 없음",
       "generateMessage": "AI로 커밋 메시지 생성",
-      "reconnecting": "데스크톱에 다시 연결 중…",
       "regenerateHint": "다시 생성하려면 메시지를 지웁니다."
     },
     "createPrAction": {
@@ -4435,7 +4291,6 @@
       "updateDesktop": "모바일에서 소스 제어를 사용하려면 이 호스트의 Orca를 업데이트하세요."
     },
     "modals": {
-      "currentBranch": "현재",
       "discardButton": "버리기",
       "discardConfirmMessage": "\"{{path}}\"의 변경 사항을 버리시겠습니까? 이 작업은 되돌릴 수 없습니다.",
       "discardTitle": "변경사항 취소",
@@ -4732,13 +4587,6 @@
       "behind": "{{count}}개 뒤처짐",
       "upToDate": "최신 상태",
       "switchBranch": "{{branch}}에서 다른 브랜치로 전환",
-      "mergeInProgress": "병합 진행 중",
-      "rebaseInProgress": "리베이스 진행 중",
-      "cherryPickInProgress": "체리픽 진행 중",
-      "filesNeedDecision_one": "완료하려면 파일 {{count}}개의 처리 방법을 정해야 합니다.",
-      "filesNeedDecision_other": "완료하려면 파일 {{count}}개의 처리 방법을 정해야 합니다.",
-      "conflictsResolved": "모든 충돌이 해결되었습니다. 하단 바에서 완료하세요.",
-      "continueOnComputer": "모든 충돌이 해결되었습니다. 완료하려면 컴퓨터에서 계속하세요.",
       "commits_one": "커밋 {{count}}개",
       "commits_other": "커밋 {{count}}개",
       "conflictsMayRemain": "일부 파일만 표시되어 충돌이 남아 있을 수 있습니다. 컴퓨터에서 확인하세요."
@@ -4762,32 +4610,18 @@
     },
     "pagination": {
       "pageUnreachable": "{{page}}페이지는 GitHub 검색에서 반환할 수 있는 범위를 벗어났습니다.",
-      "loadPageFailed": "GitHub에서 {{page}}페이지를 불러오지 못했습니다.",
-      "noMoreResults": "{{page}}페이지에 더 이상 결과가 없습니다."
+      "loadPageFailed": "GitHub에서 {{page}}페이지를 불러오지 못했습니다."
     },
     "filterSheet": {
-      "sortBy": "정렬 기준",
       "issueSource": "이슈 소스",
-      "issueSourceRow": "업스트림 또는 origin",
       "view": "보기",
-      "projectView": "프로젝트 보기",
-      "projectItems_one": "항목 {{count}}개",
-      "projectItems_other": "항목 {{count}}개",
-      "chooseView": "선택",
       "showOnRows": "행에 표시",
-      "projectFields": "프로젝트 필드",
       "workspace": "워크스페이스",
-      "linearWorkspace": "Linear 워크스페이스",
       "layout": "레이아웃",
       "groupBy": "그룹화 기준",
       "orderBy": "정렬 순서",
-      "displayProperties": "표시 속성",
       "title": "필터 및 표시",
-      "done": "완료",
-      "jqlReplacesPreset": "JQL 검색 중에는 Jira 필터가 적용되지 않습니다. 필터를 다시 선택하려면 검색을 지우세요."
-    },
-    "jiraViewControls": {
-      "jqlSearch": "JQL 검색"
+      "done": "완료"
     },
     "itemComments": {
       "noComments": "아직 댓글이 없습니다",
@@ -4824,24 +4658,11 @@
     "filterPickers": {
       "allTeams": "모든 팀",
       "changeStatus": "상태 변경",
-      "fieldHidden": "카드에서 숨김",
-      "fieldShown": "카드에 표시됨",
-      "fieldsSubtitle": "항목 카드에 표시할 프로젝트 필드를 선택하세요.",
-      "fieldsTitle": "프로젝트 필드",
-      "gitlabFilter": "GitLab 필터",
-      "gitlabView": "GitLab 보기",
-      "jiraFilter": "Jira 필터",
-      "jiraSite": "Jira 사이트",
       "statesFailed": "상태를 불러오지 못했습니다. 닫았다가 다시 열어 보세요.",
-      "linearFilter": "Linear 필터",
       "linearIssue": "Linear 이슈",
-      "linearWorkspace": "Linear 워크스페이스",
       "loadingStates": "상태 로드 중…",
-      "noFields": "이 보기에는 표시할 추가 필드가 없습니다.",
       "noStates": "사용 가능한 상태가 없습니다.",
       "switchWorkspaceFailed": "워크스페이스를 전환하지 못했습니다.",
-      "teamsSubtitle": "작업 화면에 표시할 팀을 선택하세요.",
-      "teamsTitle": "Linear 팀",
       "teams_one": "팀 {{count}}개",
       "teams_other": "팀 {{count}}개"
     },
@@ -4980,9 +4801,6 @@
     "linearList": {
       "changeStatusFrom": "상태 변경(현재: {{status}})"
     },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "표시 속성"
-    },
     "listSurface": {
       "connectLinearButton": "Linear 연결",
       "connectLinearMessage": "작업 화면에서 할당받은 Linear 이슈를 바로 살펴보고 작업을 시작하세요.",
@@ -5036,7 +4854,6 @@
       "projectMergeRequests": "프로젝트 MR",
       "projectMergeRequestsDescription": "저장소별 MR 및 이슈",
       "projects": "프로젝트",
-      "pullRequests": "PR",
       "repository": "저장소",
       "repositorySortDescription": "저장소별로 그룹화한 후 최근 활동순 정렬",
       "reviewRequestsDescription": "나에게 할당된 리뷰 요청",
@@ -5155,42 +4972,8 @@
       "reviewers": "리뷰어",
       "viewFile": "보기"
     },
-    "providerControls": {
-      "myTodos": "내 할 일",
-      "reposLabel": "저장소: {{repos}}",
-      "filterCount": "필터 · {{count}}",
-      "filter": "필터",
-      "filterLabel": "필터 및 표시",
-      "projectMergeRequests": "프로젝트 MR"
-    },
-    "providerItemList": {
-      "intoBranch": "{{base}}(으)로",
-      "kindAndStatus": "{{kind}}, {{status}}",
-      "nextPage": "다음 페이지",
-      "page": "{{page}}페이지",
-      "pageOfTotal": "{{page}} / {{total}}페이지",
-      "previousPage": "이전 페이지",
-      "selectPage": "페이지 선택, {{page}}페이지",
-      "selectPageOfTotal": "페이지 선택, 전체 {{total}}페이지 중 {{page}}페이지"
-    },
     "providerPickers": {
-      "allRepositories": "모든 저장소",
-      "githubView": "GitHub 보기",
-      "issueSources": "GitHub 이슈 소스",
-      "issueSourcesDescription": "각 저장소에서 이슈 조회와 작업 생성에 사용할 소스를 upstream과 origin 중에서 선택하세요.",
-      "issues": "이슈",
-      "noIssueSources": "사용할 수 있는 다른 이슈 소스가 없습니다.",
-      "origin": "origin",
-      "pageHint": "로드되었거나 로드 가능한 결과 페이지로 이동하세요.",
-      "pageLoaded": "로드됨",
-      "pageNotLoaded": "이전 결과를 로드합니다.",
-      "pageNumber": "{{page}}페이지",
-      "pages": "GitHub 페이지",
-      "pullRequests": "PR",
-      "queryingSource": "조회 대상: {{source}}",
-      "repoDescription": "조회할 저장소를 선택하세요.",
-      "repos": "저장소",
-      "upstream": "업스트림"
+      "allRepositories": "모든 저장소"
     },
     "providerViewProjection": {
       "all": "모두",
@@ -5199,7 +4982,6 @@
       "allWorkspaces": "모든 워크스페이스",
       "chooseProject": "프로젝트 선택",
       "default": "기본",
-      "defaultSubtitle": "{{subtitle}} · 기본",
       "issues": "이슈",
       "openState": "열림",
       "projects": "프로젝트",
@@ -5215,15 +4997,7 @@
     "screenChrome": {
       "newGitHubIssue": "새 GitHub 이슈",
       "newLinearIssue": "새 Linear 이슈",
-      "refreshGitHub": "GitHub 작업 새로 고침",
-      "refreshGitLab": "GitLab 작업 항목 새로 고침",
-      "refreshJira": "Jira 이슈 새로 고침",
-      "refreshLinear": "Linear 새로고침",
       "title": "작업"
-    },
-    "searchControl": {
-      "projectPlaceholder": "프로젝트 보기 검색…",
-      "providerPlaceholder": "{{provider}} 작업 검색…"
     },
     "smartSourceModes": {
       "allStates": "모두",
@@ -5370,7 +5144,6 @@
     },
     "webviewEngineErrorState": {
       "code": "코드 {{code}}",
-      "reload": "새로고침",
       "rendererCrashed": "렌더러 비정상 종료",
       "status": "상태 {{statusCode}}",
       "title": "터미널 로드 실패"
@@ -5479,7 +5252,6 @@
   },
   "automations": {
     "mobile": {
-      "extraAgentArguments": "추가 에이전트 인수",
       "allAutomations": "모든 자동화",
       "schedule": "일정",
       "agent": "에이전트",
@@ -5492,8 +5264,6 @@
       "cancel": "취소",
       "name": "이름",
       "back": "뒤로",
-      "continue": "계속",
-      "createAutomation": "자동화 생성",
       "automations": "자동화",
       "runs": "실행",
       "refresh": "새로고침",
@@ -5517,40 +5287,17 @@
       "host": "호스트",
       "pending": "대기 중",
       "starting": "시작 중",
-      "baseBranchOptional": "기준 브랜치(선택 사항)",
-      "workspaceSetupScript": "작업 공간 설정 스크립트",
-      "useProjectSettings": "프로젝트 설정 사용",
-      "runSetupScript": "설정 스크립트 실행",
-      "skipSetupScript": "설정 스크립트 건너뛰기",
       "reuseAgentSession": "에이전트 세션 재사용",
-      "precheckCommandOptional": "사전 검사 명령(선택 사항)",
-      "precheckTimeoutSeconds": "사전 검사 제한 시간(초)",
-      "missedRunGraceMinutes": "누락된 실행 유예(분)",
-      "choose": "선택…",
       "runOnSchedule": "{{name}} 일정에 따라 실행",
       "noNextScheduledRun": "다음 예약 실행 없음",
-      "newWorkspacePerRun": "실행마다 새 작업 공간",
       "instructions": "지침",
       "runNow": "지금 실행",
-      "savedAgent": "{{agent}}(저장됨)",
       "chooseAProjectSetUpOnThisHost": "이 호스트에 설정된 프로젝트를 선택하세요.",
       "newAutomation": "새 자동화",
-      "editorStep": "{{step}}/3 · {{section}}",
-      "retryProjectLoading": "프로젝트 다시 불러오기",
-      "loadingProjects": "프로젝트 불러오는 중…",
-      "projectAndHostSetup": "프로젝트 및 호스트 설정",
       "savedTarget": "저장된 대상",
-      "useAnExistingWorkspace": "기존 작업 공간 사용",
-      "existingWorkspace": "기존 작업 공간",
       "savedWorkspace": "저장된 작업 공간",
       "loadMoreWorkspaces": "작업 공간 더 불러오기",
-      "thisHostSWorkspaceInventoryIsIncompleteRefreshOrLoadMoreWorkspaces": "이 호스트의 작업 공간 목록이 불완전합니다. 새로 고치거나 작업 공간을 더 불러오세요.",
-      "agentDetecting": "에이전트 · 감지 중…",
       "installAndEnableAnAgentOnThisHostThenRetry": "이 호스트에 에이전트를 설치하고 활성화한 후 다시 시도하세요.",
-      "hideAdvancedOptions": "고급 옵션 숨기기",
-      "advancedOptions": "고급 옵션",
-      "chooseAnAgent": "에이전트 선택",
-      "saveChanges": "변경 사항 저장",
       "loadingAutomations": "자동화 불러오는 중…",
       "letYourAgentsWorkOnASchedule": "에이전트가 일정에 따라 작업하도록 하세요",
       "createAnAutomationToRunATaskOnThisHost": "이 호스트에서 작업을 실행할 자동화를 만드세요.",
@@ -5581,12 +5328,7 @@
       "scheduled": "예약됨",
       "loadMoreRuns": "실행 더 불러오기",
       "customCronOrRRULE": "사용자 지정 Cron 또는 RRULE",
-      "cronOrRRULE": "Cron 또는 RRULE",
-      "minuteFromHHMM": "분(HH:MM에서)",
-      "timeHHMM24Hour": "시간(HH:MM, 24시간제)",
-      "useATimeSuchAs0900": "09:00과 같은 시간을 사용하세요.",
       "timeZone": "시간대",
-      "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "선택한 호스트에서 실행됩니다. 예약된 시간에 해당 호스트를 사용할 수 있도록 하세요.",
       "pairedHost": "페어링된 호스트",
       "chooseHost": "{{host}}의 자동화, 다른 호스트 선택",
       "selectedServerUnavailable": "선택한 서버(사용 불가)",
@@ -5615,15 +5357,12 @@
       "unknownResult": "알 수 없는 결과",
       "notReported": "보고되지 않음",
       "searchOptions": "옵션 검색",
-      "task": "작업",
-      "review": "확인",
       "discardChangesTitle": "변경 사항을 버릴까요?",
       "discardChangesMessage": "이 자동화에서 저장하지 않은 변경 사항이 사라집니다.",
       "discard": "버리기",
       "keepEditing": "계속 편집",
       "on": "사용",
       "repeats": "반복",
-      "newOnePerRun": "실행마다 새 워크스페이스",
       "moreActions": "추가 작업",
       "noRunsYet": "아직 실행이 없습니다",
       "nextRunToday": "다음 실행: 오늘 {{time}}",
@@ -5740,7 +5479,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "이슈 검색 또는 JQL 입력, 예: project = ABC",
         "jiraTextMatchesNotice": "텍스트 일치 결과를 표시합니다. Jira에서 이 검색을 JQL로 실행할 수 없습니다."
       },
       "editor": {
@@ -6122,10 +5860,6 @@
     },
     "memoryHistory": {
       "tidyUp": "정리"
-    },
-    "section": {
-      "reorderTitle": "봇 순서 변경",
-      "reorder": "순서 변경…"
     },
     "link": {
       "pairTitle": "컴퓨터 페어링",

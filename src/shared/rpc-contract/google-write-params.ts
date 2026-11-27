@@ -39,7 +39,7 @@ export const GmailModifyParams = lazyZodSchema(() =>
   })
 )
 
-const EventFields = {
+const createEventFields = () => ({
   calendar: Short.optional(),
   title: z.string().max(1_024).optional(),
   start: Short.optional(),
@@ -51,12 +51,12 @@ const EventFields = {
   with: People,
   meet: z.boolean().optional(),
   notify: z.boolean().default(true)
-}
+})
 
 export const CalendarCreateParams = lazyZodSchema(() =>
   z.object({
     ...GoogleCallParams,
-    ...EventFields,
+    ...createEventFields(),
     allDay: z.boolean().optional(),
     repeat: Short.optional()
   })
@@ -65,7 +65,7 @@ export const CalendarCreateParams = lazyZodSchema(() =>
 export const CalendarUpdateParams = lazyZodSchema(() =>
   z.object({
     ...GoogleCallParams,
-    ...EventFields,
+    ...createEventFields(),
     ref: GoogleRef,
     series: z.boolean().optional(),
     without: People

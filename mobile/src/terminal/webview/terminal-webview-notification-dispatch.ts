@@ -90,6 +90,8 @@ export function dispatchTerminalWebViewNotification(
     if (scale > 0) {
       handlers.onTextScaleChange?.(scale)
     }
+  } else if (msg.type === 'scrolled-up') {
+    handlers.onScrolledUpChange?.(msg.scrolledUp === true)
   } else if (msg.type === 'mobile-clip-cancel-by-pinch') {
     console.warn('[mobile-clip] selection cancelled by pinch')
   }

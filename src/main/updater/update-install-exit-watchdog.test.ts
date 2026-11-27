@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { exit: vi.fn() } }))
 
-import { updateInstallExitTimeoutMs } from './update-install-exit-watchdog'
+import {
+  UPDATE_INSTALL_EXIT_TIMEOUT_MS,
+  updateInstallExitTimeoutMs
+} from './update-install-exit-watchdog'
 import {
   finishQuitTeardown,
   quitTeardownDeadlineMs,
@@ -27,6 +30,8 @@ describe('Windows update exit budget', () => {
     const grace = Number(/!define ORCA_UPDATE_EXIT_GRACE_MS (\d+)/.exec(check)?.[1])
     expect(grace).toBeGreaterThan(0)
     expect(grace - updateInstallExitTimeoutMs('win32')).toBeGreaterThanOrEqual(2_000)
+    // The outgoing app may be an older release whose Windows update exit took up to 20 s.
+    expect(grace - UPDATE_INSTALL_EXIT_TIMEOUT_MS).toBeGreaterThanOrEqual(2_000)
     expect(updateInstallExitTimeoutMs('darwin')).toBe(20_000)
     expect(updateInstallExitTimeoutMs('linux')).toBe(20_000)
   })

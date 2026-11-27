@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import type { OrchestrationDb } from '../orchestration-db'
 import { workerIdentity, type WorkerIdentity } from '../../workers/identity/worker-identity'
 
@@ -51,12 +52,14 @@ export function readMessageSenderDispatch(
     : workerIdentity(db, row.dispatch_id)
 }
 
-const OptionalText = z.string().nullable().catch(null)
-const StoredSenderSnapshot = z.object({
-  title: OptionalText,
-  agent: OptionalText,
-  hostLabel: OptionalText
-})
+const OptionalText = lazyZodSchema(() => z.string().nullable().catch(null))
+const StoredSenderSnapshot = lazyZodSchema(() =>
+  z.object({
+    title: OptionalText,
+    agent: OptionalText,
+    hostLabel: OptionalText
+  })
+)
 
 function parseSenderSnapshot(json: string | null): SenderSnapshot | null {
   try {

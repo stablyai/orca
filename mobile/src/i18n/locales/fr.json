@@ -34,7 +34,6 @@
   "agentHistory": {
     "panel": {
       "all": "Toutes",
-      "emptyScope": "Aucune session d'agent passée dans ce périmètre.",
       "hideDetails": "Masquer les détails",
       "showDetails": "Afficher les détails",
       "loading": "Chargement des sessions d'agent…",
@@ -66,15 +65,11 @@
       "untitledSession": "Session sans titre"
     },
     "sessionHistoryList": {
-      "currentWorktree": "worktree actuel",
       "messages_many": "{{count}} messages",
       "messages_one": "{{count}} message",
       "messages_other": "{{count}} messages",
       "resumeSession": "Reprendre la session d'agent",
-      "continueInCli": "Continuer en CLI",
-      "hidePreview": "Masque les messages récents.",
-      "showPreview": "Affiche les messages récents.",
-      "you": "Vous"
+      "continueInCli": "Continuer en CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Impossible de joindre l'hôte",
@@ -140,37 +135,19 @@
     },
     "pairConfirm": {
       "backToHome": "Retour à l'accueil",
-      "connectTimedOut": "Impossible de se connecter en {{seconds}} s — consultez le journal ci-dessous pour identifier le blocage.",
       "connecting": "Connexion…",
-      "description": "Vous avez ouvert un lien d'appairage depuis votre ordinateur. Confirmez pour l'ajouter à vos hôtes.",
       "pairButton": "Appairer",
-      "pairingFailed": "Échec de l'appairage : {{error}}",
-      "pairingLog": "Journal d'appairage",
-      "title": "Appairer cet ordinateur ?"
+      "pairingFailed": "Échec de l'appairage : {{error}}"
     },
     "pairScan": {
-      "cameraDisabledDescription": "Activez l'accès à la caméra dans les paramètres, ou collez le code d'appairage.",
-      "cameraDisabledTitle": "Accès à la caméra désactivé",
-      "cameraPermissionDescription": "Scannez le QR code affiché dans Orca sur votre ordinateur, ou collez le code d'appairage.",
-      "connectTimedOut": "Impossible de se connecter en {{seconds}} s — consultez le journal ci-dessous pour identifier le blocage.",
       "connecting": "Connexion…",
       "invalidPairingCode": "Code d'appairage invalide — copiez-le depuis votre ordinateur et collez-le à nouveau.",
       "invalidQrCode": "QR code Orca invalide",
-      "downloadQrCode": "C’est le code de téléchargement. Scannez le code d’association à l’étape 2 sur votre ordinateur.",
-      "openDesktopStep": "Ouvrez Orca sur votre ordinateur",
-      "openMobileSettingsStep": "Allez dans Paramètres → Mobile",
       "openSettings": "Ouvrir les paramètres",
       "pairingFailed": "Échec de l'appairage : {{error}}",
-      "pairingLog": "Journal d'appairage",
       "pasteCodeMessage": "Copiez le code affiché sous le QR code sur votre ordinateur.",
       "pasteCodePlaceholder": "orca://pair?code=... ou collez le code",
       "pasteCodeTitle": "Coller le code d'appairage",
-      "pasteInstead": "Coller plutôt le code",
-      "pastePairingCode": "Coller le code d'appairage",
-      "scanCodeStep": "Scannez le QR code",
-      "title": "Appairer un ordinateur",
-      "tryAgain": "Réessayer",
-      "codeNoLongerValid": "Ce code d'appairage a expiré, a déjà été utilisé ou a été remplacé. Affichez un nouveau code sur votre ordinateur et scannez à nouveau.",
       "runtimeAccessLink": "Ce lien est destiné à une autre app Orca. Scannez le code dans Paramètres → Mobile sur votre ordinateur, ou exécutez orca pair --mobile sur votre serveur."
     },
     "terminalSettings": {
@@ -1132,25 +1109,13 @@
     },
     "customKeyModal": {
       "add": "Ajouter",
-      "addShortcut": "Ajouter un raccourci",
-      "command": "Commande",
       "commandPlaceholder": "Ex. : pnpm build",
       "editing": "Édition",
       "function": "Fonction",
       "key": "Touche",
-      "label": "Libellé",
-      "labelPlaceholder": "Ex. : Compilation",
-      "manageShortcuts": "Gérer les raccourcis",
-      "manageShortcutsHint": "Afficher, masquer ou réordonner les touches de raccourci",
-      "modifiers": "Modificateurs",
-      "moreKeys": "PLUS DE TOUCHES",
       "navigation": "Navigation",
-      "pickKey": "Choisir une touche",
       "pressEnter": "Appuyer sur Entrée",
-      "shortcutCombo": "Combinaison de touches",
-      "shortcutComboHint": "Créer des combinaisons avec Ctrl, Alt et Shift",
-      "textMacro": "Macro de texte",
-      "textMacroHint": "Envoyer une commande texte personnalisée"
+      "labelPlaceholder": "Ex. : Compilation"
     },
     "dictationSetupSheet": {
       "description": "Téléchargez ou choisissez un modèle et activez la dictée sur l'ordinateur appairé, le tout depuis cet écran.",
@@ -1192,8 +1157,6 @@
       "tooLargeMessage": "Ce diff est trop volumineux pour l'aperçu sur mobile."
     },
     "diffReviewDrawers": {
-      "addNote": "Ajouter une note",
-      "cancelNote": "Annuler la note",
       "clearSentNotes": "Effacer les notes envoyées",
       "copyNotes": "Copier les notes",
       "deleteNote": "Supprimer la note",
@@ -1202,12 +1165,10 @@
       "discardTitle": "Abandonner les modifications",
       "editNote": "Modifier la note",
       "fileNote": "Note sur le fichier",
-      "lineNumber": "Ligne {{lineNumber}}",
       "loadingSessions": "Chargement des sessions d'agent…",
       "newAgentSession": "Nouvelle session d'agent",
       "openInSession": "Ouvrir dans une session",
       "reviewNote": "Note de revue",
-      "saveLineNote": "Enregistrer la note sur la ligne {{lineNumber}}",
       "sendNotes": "Envoyer les notes",
       "sendNotesLabel": "Envoyer les notes à l'agent",
       "viewedFiles_many": "{{count}} fichiers consultés",
@@ -1223,10 +1184,7 @@
       "discardChanges": "Abandonner les modifications",
       "rangeLine": "Ligne {{line}}",
       "rangeLines": "Lignes {{startLine}}–{{line}}",
-      "sendToAgent": "Envoyer à {{agent}}",
-      "sendToAnAgent": "Envoyer à un agent",
       "rangePlaceholder": "Que faut-il changer ici ?",
-      "commentOnGitHub": "Commenter sur GitHub",
       "sendUnsentNotes": "Envoyer les notes non envoyées",
       "statusUnreadable": "Impossible de lire l'état de cet hôte. Nouvelle tentative…",
       "terminal": "Terminal",
@@ -1261,7 +1219,6 @@
       "title": "Modifications"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "Ajouter une note à la ligne {{number}}",
       "addedLine": "Ligne ajoutée",
       "addedLineNumber": "Ligne {{number}} ajoutée",
       "contextLine": "Ligne de contexte",
@@ -1938,9 +1895,6 @@
       "backToSession": "Retour à la session",
       "closeFiles": "Fermer les fichiers",
       "emptyState": "Aucun fichier trouvé",
-      "filterPlaceholder": "Filtrer les fichiers",
-      "noMatchesHint": "Seuls les dossiers que vous avez ouverts sont parcourus.",
-      "clearFilter": "Effacer le filtre",
       "loading": "Chargement des fichiers…",
       "loadFailed": "Impossible de charger les fichiers",
       "title": "Fichiers",
@@ -1954,13 +1908,8 @@
       "openFolder": "Ouvrir le dossier {{name}}",
       "previewFile": "Afficher l'aperçu du fichier {{name}}",
       "retryLoading": "Réessayer de charger {{path}}",
-      "searchAll": "Tout rechercher",
-      "searchAllIn": "Rechercher dans tout {{folder}}",
       "ignored": "Ignoré par .gitignore",
-      "searched": "{{loaded}} sur {{total}} parcourus dans {{folder}}.",
-      "searching": "Recherche dans {{folder}}… {{loaded}} sur {{total}}",
-      "showMore": "Afficher {{rows}} de plus",
-      "unavailable": "Indisponible sur mobile"
+      "showMore": "Afficher {{rows}} de plus"
     },
     "fileExplorerRowActions": {
       "copyName": "Copier le nom",
@@ -2062,17 +2011,6 @@
       "showFor": "Afficher les automatisations de",
       "toggleFailed": "Impossible de mettre à jour {{name}}",
       "updateDesktop": "Mettez à jour Orca sur {{desktop}} pour utiliser les automatisations."
-    },
-    "emptyState": {
-      "connectedDescription": "Votre ordinateur apparaîtra ici. Tout est chiffré de bout en bout.",
-      "connectedTitle": "Vous êtes connecté",
-      "description": "Appairez votre téléphone à Orca sur votre ordinateur pour suivre vos agents, accéder à n'importe quel terminal et piloter votre travail depuis votre téléphone.",
-      "pairDesktopButton": "Appairer un ordinateur",
-      "scanCodeBelowDescription": "Touchez « Appairer un ordinateur » ci-dessous, puis pointez votre caméra vers le QR code affiché à l'écran.",
-      "openDesktopDescription": "Allez dans Paramètres → Mobile et générez un QR code d'appairage.",
-      "openDesktopTitle": "Ouvrir Orca sur l'ordinateur",
-      "scanCodeTitle": "Scanner le code",
-      "title": "Connectez votre ordinateur"
     },
     "listFooter": {
       "hostPickerTitle": "Ouvrir les tâches sur"
@@ -2380,16 +2318,11 @@
       "waitingOnYou": "En attente de votre intervention."
     },
     "onboardingPage": {
-      "enableAgentNotifications": "Activer les notifications des agents",
       "enableNotifications": "Activer les notifications",
       "keepTerminal": "Conserver le terminal",
       "notNow": "Pas maintenant",
-      "notificationsDescription": "Recevez une notification sur ce téléphone lorsqu'un agent a terminé ou est en attente, même si vous n'utilisez pas l'application.",
-      "notificationsDisclosure": "Envoyées via le service de notifications push d'Orca après 3 minutes d'inactivité de votre ordinateur. Modifiez ce réglage à tout moment dans les paramètres.",
       "notificationsTitle": "Soyez averti quand un agent a besoin de vous",
-      "openInChatUi": "Ouvrir les sessions dans l'interface de chat",
       "openInTerminal": "Ouvrir les sessions dans le terminal",
-      "sessionViewDescription": "Choisissez si les sessions d'agent compatibles s'ouvrent dans le terminal ou l'interface de chat sur cet appareil. Appuyez longuement sur l'onglet d'une session pour changer de vue, ou modifiez le choix par défaut à tout moment dans Paramètres → Chat UI.",
       "sessionViewTitle": "Comment ouvrir les sessions ?",
       "skipNotifications": "Ignorer les notifications pour le moment",
       "useChatUi": "Utiliser le chat"
@@ -2409,7 +2342,6 @@
       "daysAgo_other": "il y a {{count}} j",
       "deleteConfirmMessage": "Cette action supprime définitivement le commentaire sur GitHub.",
       "editPlaceholder": "Modifier le commentaire…",
-      "replyToComment": "Répondre au commentaire",
       "hoursAgo_many": "il y a {{count}} h",
       "hoursAgo_one": "il y a {{count}} h",
       "hoursAgo_other": "il y a {{count}} h",
@@ -2421,40 +2353,23 @@
       "monthsAgo_one": "il y a {{count}} mois",
       "monthsAgo_other": "il y a {{count}} mois",
       "reply": "Répondre",
-      "editComment": "Modifier le commentaire",
-      "deleteComment": "Supprimer le commentaire",
-      "unresolveThread": "Marquer le fil comme non résolu",
-      "resolveThread": "Résoudre le fil",
       "resolve": "Résoudre",
-      "replyPlaceholder": "Écrire une réponse…",
       "unresolve": "Marquer comme non résolu",
       "yearsAgo_many": "il y a {{count}} ans",
       "yearsAgo_one": "il y a {{count}} an",
-      "yearsAgo_other": "il y a {{count}} ans",
-      "resolved": "résolu",
-      "openOnGitHub": "Ouvrir le commentaire sur GitHub"
+      "yearsAgo_other": "il y a {{count}} ans"
     },
     "commentsSection": {
-      "all": "Tous",
-      "humans": "Humains",
-      "bots": "Bots",
-      "noBotComments": "Aucun commentaire de bot.",
-      "noHumanComments": "Aucun commentaire humain.",
       "comment": "Commenter",
       "resolvedThreadSingle": "Fil de {{author}} résolu",
       "resolvedThreadCount": "Fil de {{author}} résolu ({{count}})",
-      "resolvedCommentSingle": "Commentaire de {{author}} résolu",
-      "resolvedCommentCount": "Commentaire de {{author}} résolu ({{count}})",
       "commentsLoadFailedRetry": "Impossible de charger les commentaires.",
       "description": "Description",
       "descriptionLoadFailed": "Impossible de charger la description. Appuyez sur Actualiser pour réessayer.",
       "noComments": "Aucun commentaire pour le moment.",
       "noDescription": "Aucune description fournie.",
       "showMore": "Afficher {{count}} de plus",
-      "addCommentPlaceholder": "Ajouter un commentaire…",
-      "title": "Commentaires",
-      "commentsLoadFailed": "Impossible de charger les commentaires. Appuyez sur Actualiser pour réessayer.",
-      "showMoreOf": "Afficher {{count}} de plus sur {{remaining}}"
+      "title": "Commentaires"
     },
     "linkPrForm": {
       "linkButton": "Lier la pull request",
@@ -2566,14 +2481,6 @@
       "stateOpen": "Ouverte",
       "unavailable": "Checks indisponibles"
     },
-    "prCommentAudienceLabels": {
-      "all": "Tous",
-      "bots": "Bots",
-      "humans": "Humains",
-      "noBotComments": "Aucun commentaire de bot.",
-      "noComments": "Aucun commentaire pour le moment.",
-      "noHumanComments": "Aucun commentaire humain."
-    },
     "tab": {
       "updated": "mis à jour {{time}}",
       "moreActions": "Autres actions sur la pull request",
@@ -2637,7 +2544,6 @@
       "failedAfter": "Échec après {{duration}}",
       "failed": "Échec",
       "checkActions": "Plus d'actions pour {{name}}",
-      "rerun": "Relancer",
       "copyErrorFailed": "Impossible de copier l'erreur.",
       "durationSeconds": "{{seconds}} s",
       "durationMinutes": "{{minutes}} min {{seconds}} s",
@@ -2781,20 +2687,12 @@
       "messageModeLabel": "Mode message : écrivez, puis envoyez. Passer en mode touches",
       "moreKeys": "Plus de touches et d’actions",
       "showKeyboard": "Afficher le clavier",
-      "dismissKeyboardHint": "Masque le clavier virtuel et garde la session de terminal en cours ouverte.",
-      "switchToDesktopMode": "Passer en mode bureau",
-      "switchToPhoneMode": "Basculer en mode téléphone",
-      "pasteFromClipboard": "Coller depuis le presse-papiers",
-      "paste": "Coller",
-      "addCustomShortcut": "Ajouter un raccourci personnalisé"
+      "pasteFromClipboard": "Coller depuis le presse-papiers"
     },
     "activeContent": {
-      "createTab": "Créer un onglet",
       "creatingTab": "Création…",
       "fileTitle": "Fichier",
       "loadingTerminal": "Chargement du terminal",
-      "noTabs": "Aucun onglet dans cette session",
-      "retryLoadingTerminal": "Réessayer de charger le terminal",
       "terminalTakingLonger": "Le chargement du terminal prend plus de temps que prévu"
     },
     "agentChildRow": {
@@ -2895,25 +2793,14 @@
       "workflow": "Flux de travail en arrière-plan"
     },
     "browserTabActionSheet": {
-      "forward": "Suivant",
-      "reload": "Recharger",
       "hardReload": "Forcer le rechargement",
       "title": "Navigateur"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "Fermer les autres onglets"
     },
-    "bulkTabClose": {
-      "confirm": "Fermer les onglets",
-      "description": "Les onglets sélectionnés seront fermés. Les onglets épinglés resteront ouverts.",
-      "titleEditors": "Fermer tous les onglets de l’éditeur ?",
-      "titleLeft": "Fermer les onglets à gauche ?",
-      "titleOthers": "Fermer les autres onglets ?",
-      "titleRight": "Fermer les onglets à droite ?"
-    },
     "commandDock": {
       "liveInputHint": "Le texte saisi est envoyé directement au terminal actif.",
-      "tapToShowKeyboard": "Touchez pour afficher le clavier",
       "liveInputLabel": "Saisie en direct dans le terminal"
     },
     "contentRow": {
@@ -3303,7 +3190,6 @@
     },
     "sheets": {
       "browser": "Navigateur",
-      "browserStreamingUnavailable": "Cet hôte ne peut pas diffuser les onglets du navigateur",
       "chat": "Chat",
       "cli": "CLI",
       "cliOnly": "CLI uniquement",
@@ -3320,7 +3206,6 @@
       "file": "Fichier",
       "markdown": "Markdown",
       "markdownNote": "Note Markdown",
-      "newBrowser": "Nouveau navigateur",
       "newTab": "Nouvel onglet",
       "notesCopied": "Notes copiées",
       "notesHint": "Choisissez une session d'agent pour les notes actuelles.",
@@ -3339,7 +3224,6 @@
       "shellWsl": "WSL",
       "terminalName": "Nom du terminal",
       "unsavedMarkdown": "Modifications Markdown non enregistrées",
-      "urlPrompt": "Saisissez une URL ou laissez le champ vide pour un nouvel onglet.",
       "allowAutoClose": "Autoriser la fermeture automatique",
       "agents": "Agents",
       "renameTerminalFailed": "Impossible de renommer le terminal. {{reason}}"
@@ -3366,20 +3250,12 @@
       "switchToDesktop": "Passer en mode ordinateur",
       "switchToPhone": "Passer en mode téléphone"
     },
-    "terminalInputActions": {
-      "attachFileHint": "Appuyez longuement pour joindre un fichier à la place.",
-      "attachPhoto": "Joindre une photo",
-      "sendingImage": "Envoi de l'image"
-    },
     "terminalLiveInputStatus": {
       "listening": "Écoute en cours",
-      "liveInput": "Saisie en direct",
       "preparingMic": "Préparation du microphone",
       "processing": "Traitement en cours",
       "releaseMicHint": "Relâchez le micro pour arrêter",
-      "startingMic": "Démarrage du micro",
-      "uploadingImage": "Envoi de l'image à l'hôte",
-      "uploadingImageTitle": "Envoi de l'image"
+      "startingMic": "Démarrage du micro"
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
@@ -3616,21 +3492,14 @@
       "waitMoment": "Patientez un instant."
     },
     "workerAutoClose": {
-      "running": "Agent d’orchestration temporaire · Se ferme 2 minutes après la fin",
-      "finished": "Agent d’orchestration temporaire terminé · Se ferme dans {{countdown}}",
       "keepOpen": "Garder ouvert"
     },
     "terminalLayoutSheet": {
       "title": "Disposition du terminal",
       "oneTerminal": "Un terminal",
-      "selected": "Sélectionné",
       "auto": "Automatique",
-      "autoHint": "Diviser selon l’espace disponible",
       "sideBySide": "Côte à côte",
-      "sideBySideHint": "Deux colonnes, même lorsque la barre latérale est ouverte",
-      "stacked": "Empilés",
-      "stackedHint": "Deux rangées quelle que soit l’orientation",
-      "selectedHint": "Sélectionné · {{hint}}"
+      "stacked": "Empilés"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "Impossible d’enregistrer la disposition",
@@ -3639,23 +3508,19 @@
     "terminalMoreKeys": {
       "sendKey": "Envoyer {{label}}",
       "paste": "Coller",
-      "sending": "Envoi…",
       "photo": "Photo",
       "file": "Fichier",
       "desktopWidth": "Largeur bureau",
       "phoneWidth": "Largeur téléphone",
       "keys": "Touches",
-      "combos": "Combinaisons",
       "yourKeys": "Vos touches",
       "deleteKeyHint": "Appuyez longuement pour supprimer cette touche",
-      "addCustomKey": "Ajouter une touche personnalisée",
-      "addKey": "Ajouter une touche"
+      "addCustomKey": "Ajouter une touche personnalisée"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, actif",
       "terminal": "Terminal",
-      "tapToFocusPane": "{{title}}, touchez pour activer",
-      "inputPane": "{{title}} · Saisie"
+      "tapToFocusPane": "{{title}}, touchez pour activer"
     },
     "structuredOpen": {
       "goneGeneric": "Le chat de l'agent n'est plus sur cet hôte, il ne peut donc pas être rouvert ici.",
@@ -3748,7 +3613,6 @@
     "tabBar": {
       "oneTab": "1 onglet",
       "tabCount": "Onglets : {{count}}",
-      "anotherNeedsYou": "un autre onglet nécessite votre attention",
       "actionsHint": "Affiche les actions de cet onglet",
       "next": "Onglet suivant",
       "previous": "Onglet précédent",
@@ -4047,12 +3911,7 @@
     },
     "commitFailurePanel": {
       "fix": "Corriger",
-      "fixWithAi": "Corriger l'échec du commit avec l'IA",
       "hideDetails": "Masquer les détails",
-      "hideFailureDetails": "Masquer les détails de l'échec du commit",
-      "showDetails": "Afficher les détails",
-      "showFailureDetails": "Afficher les détails de l'échec du commit",
-      "summary": "Échec du commit.",
       "title": "Échec du commit"
     },
     "commitMessageAi": {
@@ -4072,10 +3931,7 @@
       "cancelGeneration": "Annuler la génération du message de commit",
       "commitMessageDisabled": "Message de commit désactivé. Aucun fichier indexé.",
       "commitMessagePlaceholder": "Message de commit",
-      "emptyMessage": "Le worktree est propre.",
-      "emptyTitle": "Aucune modification locale",
       "generateMessage": "Générer le message de commit avec l'IA",
-      "reconnecting": "Reconnexion à l'ordinateur…",
       "regenerateHint": "Effacez le message pour le régénérer."
     },
     "createPrAction": {
@@ -4229,7 +4085,6 @@
       "updateDesktop": "Mettez à jour Orca sur cet hôte pour utiliser le contrôle de code source sur mobile."
     },
     "modals": {
-      "currentBranch": "actuelle",
       "discardButton": "Abandonner",
       "discardConfirmMessage": "Abandonner les modifications de « {{path}} » ? Cette action est irréversible.",
       "discardTitle": "Abandonner la modification",
@@ -4533,14 +4388,6 @@
       "behind": "{{count}} en retard",
       "upToDate": "À jour",
       "switchBranch": "Changer de branche (actuelle : {{branch}})",
-      "mergeInProgress": "Merge en cours",
-      "rebaseInProgress": "Rebase en cours",
-      "cherryPickInProgress": "Cherry-pick en cours",
-      "filesNeedDecision_many": "{{count}} fichiers nécessitent une décision avant de pouvoir terminer.",
-      "filesNeedDecision_one": "{{count}} fichier nécessite une décision avant de pouvoir terminer.",
-      "filesNeedDecision_other": "{{count}} fichiers nécessitent une décision avant de pouvoir terminer.",
-      "conflictsResolved": "Tous les conflits sont résolus. Terminez depuis la barre ci-dessous.",
-      "continueOnComputer": "Tous les conflits sont résolus. Continuez sur votre ordinateur pour terminer.",
       "commits_many": "{{count}} commits",
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commits",
@@ -4565,33 +4412,18 @@
     },
     "pagination": {
       "pageUnreachable": "La page {{page}} dépasse la limite des résultats de recherche GitHub.",
-      "loadPageFailed": "La page {{page}} n’a pas pu être chargée depuis GitHub.",
-      "noMoreResults": "Aucun autre résultat sur la page {{page}}."
+      "loadPageFailed": "La page {{page}} n’a pas pu être chargée depuis GitHub."
     },
     "filterSheet": {
-      "sortBy": "Trier par",
       "issueSource": "Source des issues",
-      "issueSourceRow": "Upstream ou origin",
       "view": "Affichage",
-      "projectView": "Vue de projet",
-      "projectItems_many": "{{count}} éléments",
-      "projectItems_one": "{{count}} élément",
-      "projectItems_other": "{{count}} éléments",
-      "chooseView": "Choisir",
       "showOnRows": "Afficher sur les lignes",
-      "projectFields": "Champs du projet",
       "workspace": "Espace de travail",
-      "linearWorkspace": "Espace de travail Linear",
       "layout": "Disposition",
       "groupBy": "Grouper par",
       "orderBy": "Ordonner par",
-      "displayProperties": "Propriétés affichées",
       "title": "Filtre et affichage",
-      "done": "Terminé",
-      "jqlReplacesPreset": "Votre recherche JQL remplace le préréglage « Afficher ». Effacez la recherche pour en choisir un à nouveau."
-    },
-    "jiraViewControls": {
-      "jqlSearch": "Recherche JQL"
+      "done": "Terminé"
     },
     "itemComments": {
       "noComments": "Aucun commentaire pour l'instant",
@@ -4629,24 +4461,11 @@
     "filterPickers": {
       "allTeams": "Toutes les équipes",
       "changeStatus": "Changer le statut",
-      "fieldHidden": "Masqué sur les cartes",
-      "fieldShown": "Affiché sur les cartes",
-      "fieldsSubtitle": "Choisissez les champs du projet à afficher sur les cartes des éléments.",
-      "fieldsTitle": "Champs du projet",
-      "gitlabFilter": "Filtre GitLab",
-      "gitlabView": "Vue GitLab",
-      "jiraFilter": "Filtre Jira",
-      "jiraSite": "Site Jira",
       "statesFailed": "Impossible de charger les statuts. Rouvrez pour réessayer.",
-      "linearFilter": "Filtre Linear",
       "linearIssue": "Ticket Linear",
-      "linearWorkspace": "Espace de travail Linear",
       "loadingStates": "Chargement des statuts…",
-      "noFields": "Cette vue n'a aucun champ supplémentaire à afficher.",
       "noStates": "Aucun statut disponible",
       "switchWorkspaceFailed": "Impossible de changer d'espace de travail",
-      "teamsSubtitle": "Choisissez les équipes à afficher dans Tâches.",
-      "teamsTitle": "Équipes Linear",
       "teams_many": "{{count}} équipes",
       "teams_one": "{{count}} équipe",
       "teams_other": "{{count}} équipes"
@@ -4788,9 +4607,6 @@
     "linearList": {
       "changeStatusFrom": "Changer le statut actuel : {{status}}"
     },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "Propriétés affichées"
-    },
     "listSurface": {
       "connectLinearButton": "Connecter Linear",
       "connectLinearMessage": "Parcourez les issues Linear qui vous sont assignées et commencez à y travailler directement depuis Tâches.",
@@ -4844,7 +4660,6 @@
       "projectMergeRequests": "MR du projet",
       "projectMergeRequestsDescription": "Merge requests et issues par dépôt",
       "projects": "Projets",
-      "pullRequests": "PRs",
       "repository": "Dépôt",
       "repositorySortDescription": "Par dépôt, puis par activité la plus récente",
       "reviewRequestsDescription": "Demandes de revue qui vous sont assignées",
@@ -4966,42 +4781,8 @@
       "reviewers": "Reviewers",
       "viewFile": "Afficher"
     },
-    "providerControls": {
-      "myTodos": "Mes tâches à faire",
-      "reposLabel": "Dépôts : {{repos}}",
-      "filterCount": "Filtre · {{count}}",
-      "filter": "Filtre",
-      "filterLabel": "Filtre et affichage",
-      "projectMergeRequests": "MR du projet"
-    },
-    "providerItemList": {
-      "intoBranch": "vers {{base}}",
-      "kindAndStatus": "{{kind}}, {{status}}",
-      "nextPage": "Page suivante",
-      "page": "Page {{page}}",
-      "pageOfTotal": "Page {{page}} sur {{total}}",
-      "previousPage": "Page précédente",
-      "selectPage": "Sélectionner une page, page {{page}}",
-      "selectPageOfTotal": "Sélectionner une page, page {{page}} sur {{total}}"
-    },
     "providerPickers": {
-      "allRepositories": "Tous les dépôts",
-      "githubView": "Vue GitHub",
-      "issueSources": "Sources des tickets GitHub",
-      "issueSourcesDescription": "Pour chaque dépôt, choisissez upstream ou origin pour rechercher et créer des tickets.",
-      "issues": "Tickets",
-      "noIssueSources": "Aucune autre source de tickets disponible.",
-      "origin": "Origine",
-      "pageHint": "Accédez à une page de résultats chargée ou disponible.",
-      "pageLoaded": "Chargée",
-      "pageNotLoaded": "Charge des résultats plus anciens",
-      "pageNumber": "Page {{page}}",
-      "pages": "Pages GitHub",
-      "pullRequests": "Pull requests",
-      "queryingSource": "Recherche dans {{source}}",
-      "repoDescription": "Choisissez les dépôts à interroger.",
-      "repos": "Dépôts",
-      "upstream": "Upstream"
+      "allRepositories": "Tous les dépôts"
     },
     "providerViewProjection": {
       "all": "Tous",
@@ -5010,7 +4791,6 @@
       "allWorkspaces": "Tous les espaces de travail",
       "chooseProject": "Choisir le projet",
       "default": "Par défaut",
-      "defaultSubtitle": "{{subtitle}} · Par défaut",
       "issues": "Tickets",
       "openState": "Ouvert",
       "projects": "Projets",
@@ -5027,15 +4807,7 @@
     "screenChrome": {
       "newGitHubIssue": "Nouveau ticket GitHub",
       "newLinearIssue": "Nouveau ticket Linear",
-      "refreshGitHub": "Actualiser le travail GitHub",
-      "refreshGitLab": "Actualiser les éléments de travail GitLab",
-      "refreshJira": "Actualiser les tickets Jira",
-      "refreshLinear": "Actualiser Linear",
       "title": "Tâches"
-    },
-    "searchControl": {
-      "projectPlaceholder": "Rechercher dans la vue du projet…",
-      "providerPlaceholder": "Rechercher des tâches {{provider}}…"
     },
     "smartSourceModes": {
       "allStates": "Toutes",
@@ -5183,7 +4955,6 @@
     },
     "webviewEngineErrorState": {
       "code": "code {{code}}",
-      "reload": "Recharger",
       "rendererCrashed": "le moteur de rendu a planté",
       "status": "statut {{statusCode}}",
       "title": "Échec du chargement du terminal"
@@ -5295,7 +5066,6 @@
   },
   "automations": {
     "mobile": {
-      "extraAgentArguments": "Arguments supplémentaires de l'agent",
       "allAutomations": "Toutes les automatisations",
       "schedule": "Planification",
       "project": "Projet",
@@ -5307,8 +5077,6 @@
       "cancel": "Annuler",
       "name": "Nom",
       "back": "Retour",
-      "continue": "Continuer",
-      "createAutomation": "Créer une automatisation",
       "automations": "Automatisations",
       "runs": "Exécutions",
       "refresh": "Actualiser",
@@ -5331,41 +5099,18 @@
       "host": "Hôte",
       "pending": "En attente",
       "starting": "Démarrage",
-      "baseBranchOptional": "Branche de base (facultatif)",
-      "workspaceSetupScript": "Script de configuration de l’espace de travail",
-      "useProjectSettings": "Utiliser les paramètres du projet",
-      "runSetupScript": "Exécuter le script de configuration",
-      "skipSetupScript": "Ignorer le script de configuration",
       "reuseAgentSession": "Réutiliser la session de l’agent",
-      "precheckCommandOptional": "Commande de vérification préalable (facultatif)",
-      "precheckTimeoutSeconds": "Délai de vérification préalable (secondes)",
-      "missedRunGraceMinutes": "Délai de grâce des exécutions manquées (minutes)",
-      "choose": "Choisir…",
       "runOnSchedule": "Exécuter {{name}} selon le calendrier",
       "noNextScheduledRun": "Aucune prochaine exécution planifiée",
       "agent": "Agent",
-      "newWorkspacePerRun": "Nouvel espace de travail à chaque exécution",
       "instructions": "Instructions",
       "runNow": "Exécuter maintenant",
-      "savedAgent": "{{agent}} (enregistré)",
       "chooseAProjectSetUpOnThisHost": "Choisissez un projet configuré sur cet hôte.",
       "newAutomation": "Nouvelle automatisation",
-      "editorStep": "{{step}} sur 3 · {{section}}",
-      "retryProjectLoading": "Réessayer le chargement des projets",
-      "loadingProjects": "Chargement des projets…",
-      "projectAndHostSetup": "Configuration du projet et de l’hôte",
       "savedTarget": "Cible enregistrée",
-      "useAnExistingWorkspace": "Utiliser un espace de travail existant",
-      "existingWorkspace": "Espace de travail existant",
       "savedWorkspace": "Espace de travail enregistré",
       "loadMoreWorkspaces": "Charger plus d’espaces de travail",
-      "thisHostSWorkspaceInventoryIsIncompleteRefreshOrLoadMoreWorkspaces": "L’inventaire des espaces de travail de cet hôte est incomplet. Actualisez ou chargez-en davantage.",
-      "agentDetecting": "Agent · détection…",
       "installAndEnableAnAgentOnThisHostThenRetry": "Installez et activez un agent sur cet hôte, puis réessayez.",
-      "hideAdvancedOptions": "Masquer les options avancées",
-      "advancedOptions": "Options avancées",
-      "chooseAnAgent": "Choisir un agent",
-      "saveChanges": "Enregistrer les modifications",
       "loadingAutomations": "Chargement des automatisations…",
       "letYourAgentsWorkOnASchedule": "Faites travailler vos agents selon un calendrier",
       "createAnAutomationToRunATaskOnThisHost": "Créez une automatisation pour exécuter une tâche sur cet hôte.",
@@ -5397,12 +5142,7 @@
       "loadMoreRuns": "Charger plus d’exécutions",
       "customCronOrRRULE": "Cron ou RRULE personnalisé",
       "cadence": "Fréquence",
-      "cronOrRRULE": "Cron ou RRULE",
-      "minuteFromHHMM": "Minute (de HH:MM)",
-      "timeHHMM24Hour": "Heure (HH:MM, 24 heures)",
-      "useATimeSuchAs0900": "Utilisez une heure comme 09:00.",
       "timeZone": "Fuseau horaire",
-      "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "S’exécute sur l’hôte sélectionné. Gardez cet hôte disponible à l’heure prévue.",
       "pairedHost": "Hôte associé",
       "chooseHost": "Automatisations sur {{host}}, choisir un autre hôte",
       "selectedServerUnavailable": "Serveur sélectionné (indisponible)",
@@ -5431,15 +5171,12 @@
       "unknownResult": "Résultat inconnu",
       "notReported": "Non communiqué",
       "searchOptions": "Rechercher des options",
-      "task": "Tâche",
-      "review": "Vérifier",
       "discardChangesTitle": "Abandonner les modifications ?",
       "discardChangesMessage": "Les modifications non enregistrées de cette automatisation seront perdues.",
       "discard": "Abandonner",
       "keepEditing": "Continuer la modification",
       "on": "Activée",
       "repeats": "Répétition",
-      "newOnePerRun": "Nouveau à chaque exécution",
       "moreActions": "Plus d'actions",
       "noRunsYet": "Aucune exécution pour l'instant",
       "nextRunToday": "Prochaine exécution aujourd'hui à {{time}}",
@@ -5515,7 +5252,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Recherchez des issues ou saisissez du JQL, ex. project = ABC",
         "jiraTextMatchesNotice": "Résultats textuels affichés. Jira n'a pas pu exécuter cette recherche en JQL."
       },
       "editor": {
@@ -5801,7 +5537,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",

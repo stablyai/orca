@@ -13,7 +13,7 @@ import { parsePluginImageUrl } from '../images/plugin-image-url'
 
 const NEXT = PLUGIN_MANIFEST_V2_SINCE
 
-const backgroundStyleFields = {
+const createBackgroundStyleFields = () => ({
   opacity: z
     .number()
     .min(0)
@@ -34,9 +34,9 @@ const backgroundStyleFields = {
     .enum(['center', 'top', 'bottom', 'left', 'right'])
     .optional()
     .meta(pluginFieldDoc('Which edge the image anchors to. Defaults to `center`.', NEXT))
-}
+})
 
-const backgroundFields = {
+const createBackgroundFields = () => ({
   path: pluginRelativePathSchema.meta(
     pluginPathFieldDoc(`Image file in the plugin. ${PLUGIN_THEME_BACKGROUND_RULE_TEXT}`, NEXT, [
       'images/dusk.webp'
@@ -51,13 +51,13 @@ const backgroundFields = {
         ['images/dusk.mp4']
       )
     ),
-  ...backgroundStyleFields
-}
+  ...createBackgroundStyleFields()
+})
 
 /** `validate:plugin` shape: unknown keys fail authoring. */
 export const pluginThemeBackgroundSchema = lazyZodSchema(() =>
   z
-    .strictObject(backgroundFields)
+    .strictObject(createBackgroundFields())
     .meta(
       pluginFieldDoc(
         'One image painted under translucent terminals and chats (Background Opacity below 1). Never blurred.',
@@ -69,15 +69,17 @@ export const pluginThemeBackgroundSchema = lazyZodSchema(() =>
 export type PluginThemeBackgroundArtifact = z.infer<typeof pluginThemeBackgroundSchema>
 
 // Why per-field catch: a style value added later falls back to its default instead of dropping the image.
-const tolerantBackgroundSchema = lazyZodSchema(() =>
-  z.object({
-    path: backgroundFields.path,
-    videoPath: backgroundFields.videoPath.catch(undefined),
-    opacity: backgroundStyleFields.opacity.catch(undefined),
-    size: backgroundStyleFields.size.catch(undefined),
-    position: backgroundStyleFields.position.catch(undefined)
+const tolerantBackgroundSchema = lazyZodSchema(() => {
+  const styleFields = createBackgroundStyleFields()
+  const fields = createBackgroundFields()
+  return z.object({
+    path: fields.path,
+    videoPath: fields.videoPath.catch(undefined),
+    opacity: styleFields.opacity.catch(undefined),
+    size: styleFields.size.catch(undefined),
+    position: styleFields.position.catch(undefined)
   })
-)
+})
 
 /** Runtime keeps a theme whose background is malformed or newer; at worst it paints no image. */
 export function tolerantPluginThemeBackground(
@@ -97,7 +99,7 @@ export const pluginThemeBackgroundRegistrationSchema = lazyZodSchema(() =>
   z.object({
     url: installedImageUrlSchema,
     videoUrl: installedImageUrlSchema.optional().catch(undefined),
-    ...backgroundStyleFields
+    ...createBackgroundStyleFields()
   })
 )
 

@@ -24,7 +24,7 @@ export const terminalPaneLayoutNodeSchema: z.ZodType<TerminalPaneLayoutNode> = l
   )
 )
 
-export const leafStringsSchema = salvagingRecord(z.string(), z.string())
+export const leafStringsSchema = lazyZodSchema(() => salvagingRecord(z.string(), z.string()))
 
 const terminalGridSchema = lazyZodSchema(() =>
   z.object({

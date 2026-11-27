@@ -19,12 +19,12 @@ type Props = {
   line: MobileHighlightedDiffLine<MobileDiffLine>
   comments: readonly DiffComment[]
   staleCommentIds: ReadonlySet<string>
-  /** Part of the lines picked for a note. */
+  /** Part of the picked lines. */
   selected?: boolean
   /** Fits the file's longest line number, so every row's gutter lines up. */
   numberWidth: number
   /** Absent where lines take no notes, e.g. a past commit's files. */
-  onAddNote?: (lineNumber: number) => void
+  onSelectLine?: (lineNumber: number) => void
   onEditNote: (comment: DiffComment) => void
 }
 
@@ -55,13 +55,13 @@ export const MobileDiffReviewLine = memo(function MobileDiffReviewLine({
   staleCommentIds,
   selected = false,
   numberWidth,
-  onAddNote,
+  onSelectLine,
   onEditNote
 }: Props) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const lineNumber = mobileDiffLineNumber(line)
-  const canComment = onAddNote !== undefined && canCommentOnLine(line)
+  const canComment = onSelectLine !== undefined && canCommentOnLine(line)
   const ground = [
     line.kind === 'add' && styles.addedRow,
     line.kind === 'delete' && styles.deletedRow,
@@ -106,13 +106,14 @@ export const MobileDiffReviewLine = memo(function MobileDiffReviewLine({
         disabled={!canComment}
         onPress={() => {
           if (canComment && line.newLineNumber !== undefined) {
-            onAddNote?.(line.newLineNumber)
+            onSelectLine?.(line.newLineNumber)
           }
         }}
         accessibilityRole={canComment ? 'button' : 'text'}
+        accessibilityState={canComment ? { selected } : undefined}
         accessibilityLabel={
           canComment && line.newLineNumber !== undefined
-            ? t('components.diffReviewLine.addNoteOnLine', 'Add note on line {{number}}', {
+            ? t('components.diffReviewLine.selectLine', 'Select line {{number}}', {
                 number: line.newLineNumber
               })
             : accessibilityLabelForLine(line, t)
@@ -261,7 +262,7 @@ const styles = themedStyleSheet(() => ({
     paddingRight: 10
   },
   codePressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.translucentFill
   },
   codeText: {
     ...(Platform.OS === 'web' ? { whiteSpace: 'pre' as const } : {}),

@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type { Store } from '../../persistence/loading-store/store'
 import {
   diagnoseAuth,
@@ -21,32 +22,30 @@ import {
 } from './gitlab-repo-access'
 import { registerGitLabWorkItemHandlers } from './gitlab-work-item-handlers'
 
-export function registerGitLabHandlers(store: Store): void {
-  ipcMain.handle('gitlab:viewer', async () => {
+export function registerGitLabHandlers(store: Store, ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle('gitlab:viewer', async () => {
     return getAuthenticatedViewer()
   })
 
-  ipcMain.handle('gitlab:diagnoseAuth', async () => diagnoseAuth())
+  ipc.handle('gitlab:diagnoseAuth', async () => diagnoseAuth())
 
-  ipcMain.handle(
-    'gitlab:rateLimit',
-    async (_event, args?: { force?: boolean; host?: string | null }) =>
-      getRateLimit({ force: Boolean(args?.force), host: args?.host ?? null })
+  ipc.handle('gitlab:rateLimit', async (_event, args?: { force?: boolean; host?: string | null }) =>
+    getRateLimit({ force: Boolean(args?.force), host: args?.host ?? null })
   )
 
-  ipcMain.handle('gitlab:projectSlug', async (_event, args: GitLabRepoSelectorArgs) => {
+  ipc.handle('gitlab:projectSlug', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)
     return getProjectSlug(repo.path, repoConnectionId(repo), ...hostedReviewOptionArgs(store, repo))
   })
 
-  registerGitLabMergeRequestQueryHandlers(store)
-  registerGitLabIssueHandlers(store)
-  registerGitLabWorkItemHandlers(store)
-  registerGitLabMergeRequestMutationHandlers(store)
-  registerGitLabCiJobHandlers(store)
+  registerGitLabMergeRequestQueryHandlers(store, ipc)
+  registerGitLabIssueHandlers(store, ipc)
+  registerGitLabWorkItemHandlers(store, ipc)
+  registerGitLabMergeRequestMutationHandlers(store, ipc)
+  registerGitLabCiJobHandlers(store, ipc)
 
   // Todos are user-scoped; repoPath is only the registration guard.
-  ipcMain.handle('gitlab:todos', async (_event, args: GitLabRepoSelectorArgs) => {
+  ipc.handle('gitlab:todos', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)
     return listTodos(repo.path, repoConnectionId(repo), ...localGitOptionArgs(store, repo))
   })

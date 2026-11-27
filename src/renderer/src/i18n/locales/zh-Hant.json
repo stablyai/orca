@@ -6472,7 +6472,6 @@
           "c13b82793c": "管理安裝",
           "aee7b99cc6": "從連結安裝",
           "filterProvider": "按代理程式篩選",
-          "filterSource": "按來源篩選",
           "allSources": "全部",
           "clearFilters": "清除篩選",
           "closeSkills": "關閉技能",
@@ -19189,7 +19188,6 @@
           "failed": "失敗",
           "succeeded": "成功",
           "neverRan": "從未執行",
-          "filters": "篩選條件",
           "all": "全部",
           "clear": "清除篩選",
           "agent": "代理程式",
@@ -21629,6 +21627,7 @@
       "explicitChatWslMoveToHost": "無法在從 Windows 開啟的 WSL 資料夾中使用聊天。請在 WSL 主機上執行此專案以便在那裡聊天，或在終端機中開啟代理程式。",
       "explicitChatWslRunAsHost": "將 {{distro}} 作為主機執行",
       "explicitChatSsh": "無法透過 SSH 使用聊天功能。請改在終端機中開啟代理程式。",
+      "explicitChatWorkspaceAccess": "Orca 沒有開啟此工作區資料夾的權限。請檢查該資料夾的權限，然後再試一次。",
       "explicitChatUnavailable": "此工作區無法執行聊天。請檢查代理程式的安裝狀態，或在終端機中開啟代理程式。",
       "structuredSessionHostDeclined": "已在終端機中開啟 {{value0}}",
       "structuredSessionTerminalNotVisible": "Orca 已在終端機中開啟 {{value0}}，但啟動完成時無法在此處顯示。聊天草稿已保留。",
@@ -24894,7 +24893,9 @@
       "chatOtherWindow": "另一個視窗正在進行登入。",
       "chatPageDidntOpen": "頁面沒有開啟？",
       "chatPasteCode": "貼上代碼",
-      "chatPasteCodeLabel": "登入後 Google 顯示的代碼，或該頁面的網址"
+      "chatPasteCodeLabel": "登入後 Google 顯示的代碼，或該頁面的網址",
+      "launchesUse": "新啟動的 agy 將使用此帳號",
+      "loginNow": "agy 目前的登入"
     },
     "claude": {
       "added": "已新增帳戶。選擇它即可將其用於你下次啟動的 Claude。",

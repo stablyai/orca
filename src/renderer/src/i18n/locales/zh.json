@@ -6087,7 +6087,6 @@
           "c13b82793c": "管理安装",
           "aee7b99cc6": "从链接安装",
           "filterProvider": "按代理筛选",
-          "filterSource": "按来源筛选",
           "allSources": "全部",
           "clearFilters": "清除筛选",
           "closeSkills": "关闭技能",
@@ -18833,7 +18832,6 @@
           "failed": "失败",
           "succeeded": "成功",
           "neverRan": "从未运行",
-          "filters": "筛选器",
           "clear": "清除筛选器",
           "removeFilter": "移除 {{value0}} 筛选器"
         },
@@ -21182,6 +21180,7 @@
       },
       "explicitChatSsh": "SSH 下无法使用聊天，请改为在终端中打开该代理",
       "explicitChatWsl": "WSL 中无法使用聊天，请改为在终端中打开该代理",
+      "explicitChatWorkspaceAccess": "Orca 没有打开此工作区文件夹的权限，请检查该文件夹的权限后重试",
       "explicitChatUnavailable": "此工作区无法运行聊天，请检查代理安装情况，或在终端中打开它",
       "structuredSessionTerminalNotVisible": "Orca 已在终端中打开 {{value0}}，但启动完成后无法在此处显示，你的聊天草稿已保留",
       "goalControl": {
@@ -25112,7 +25111,9 @@
       "descriptionWindows": "聊天和终端中的 agy 共用 agy 的 Google 账户。切换只影响这台主机的默认 agy 凭据。聊天也可以改用 Gemini API 密钥或 gcloud 登录",
       "agentPlatform": "Google Agent Platform",
       "locationGlobal": "global",
-      "signInGoogle": "使用 Google 登录"
+      "signInGoogle": "使用 Google 登录",
+      "launchesUse": "新启动的 agy 将使用此账号",
+      "loginNow": "agy 当前的登录"
     },
     "claude": {
       "added": "已添加账户，选择它即可将其用于你下次启动的 Claude",
@@ -27996,7 +27997,7 @@
       "reports": "汇报",
       "takesOver": "接管",
       "agentsKeepRunning": "其中的智能体会继续运行",
-      "uploadDropOrPaste": "<upload>上传</upload>、拖放或粘贴图片",
+      "uploadOrPaste": "<upload>上传</upload>或粘贴",
       "purposeLabel": "身份",
       "purposePlaceholder": "它是谁，负责做什么",
       "uploadPasteOrDrop": "或上传、粘贴、拖放你自己的图片",

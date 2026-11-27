@@ -5,6 +5,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import type { usePaletteDrag } from './use-palette-drag'
+import { useAnnotatePalettePopupSide } from './annotate-palette-position-store'
 
 /** Grab's Copy and Screenshot; both act on the picked element (C and S keys still act on the hovered one). */
 export function PaletteGrabActions({
@@ -79,19 +80,22 @@ export function PaletteGrabActions({
 /** Leaves the mode. Leaving Draw with strokes drops them (with an Undo toast), so it says Discard there. */
 export function PaletteDoneButton({
   discardsDrawing,
-  onDone
+  onDone,
+  tooltipOffset
 }: {
   discardsDrawing: boolean
   onDone: () => void
+  tooltipOffset: number
 }): React.JSX.Element {
   const t = useTranslate()
+  const popupSide = useAnnotatePalettePopupSide()
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
           size="icon-xs"
           variant="ghost"
-          className="order-1 size-7 shrink-0"
+          className="order-1 size-6.5 shrink-0"
           onClick={onDone}
           aria-label={
             discardsDrawing
@@ -103,7 +107,7 @@ export function PaletteDoneButton({
           <X className="size-3.5" />
         </Button>
       </TooltipTrigger>
-      <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
+      <TooltipContent data-annotate-palette-tooltip="" side={popupSide} sideOffset={tooltipOffset}>
         {discardsDrawing
           ? t('browser.annotatePalette.discardDrawingTitle', 'Discard drawing (Esc)')
           : t('browser.annotatePalette.doneTitle', 'Done (Esc)')}
@@ -120,14 +124,17 @@ export function PaletteGrip({
   percent,
   verticalPercent,
   dragging,
-  gripProps
+  gripProps,
+  tooltipOffset
 }: {
   percent: number
   verticalPercent: number
   dragging: boolean
   gripProps: ReturnType<typeof usePaletteDrag>['gripProps']
+  tooltipOffset: number
 }): React.JSX.Element {
   const t = useTranslate()
+  const popupSide = useAnnotatePalettePopupSide()
   const altKeyLabel = getShortcutPlatform() === 'darwin' ? '⌥' : 'Alt'
   const side =
     percent < 34
@@ -158,7 +165,7 @@ export function PaletteGrip({
             { side, percent, vertical, verticalPercent }
           )}
           className={cn(
-            'order-0 flex h-7 w-6 shrink-0 touch-none items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
+            'order-0 flex h-6.5 w-6 shrink-0 touch-none items-center justify-center rounded-md text-popover-foreground/60 hover:text-popover-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
             dragging ? 'cursor-grabbing' : 'cursor-grab'
           )}
           {...gripProps}
@@ -166,7 +173,7 @@ export function PaletteGrip({
           <GripVertical className="size-3" />
         </div>
       </TooltipTrigger>
-      <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
+      <TooltipContent data-annotate-palette-tooltip="" side={popupSide} sideOffset={tooltipOffset}>
         {t(
           'browser.annotatePalette.moveAnywhereTooltip',
           'Drag or use arrow keys to move · double-click to reset · hold {{key}} to see under',

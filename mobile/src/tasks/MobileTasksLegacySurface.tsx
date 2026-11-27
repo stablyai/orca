@@ -25,34 +25,13 @@ import {
 } from './hosted-review/mobile-tasks-hosted-review'
 import { renderMobileTasksChrome } from './screen/mobile-tasks-screen-chrome'
 import { renderMobileTasksListSurface } from './task-list/mobile-tasks-list-surface'
-import {
-  mobileTasksSearchVisible,
-  renderMobileTasksSearchControl
-} from './screen/mobile-tasks-search-control'
-import { renderMobileTasksFilterSheet } from './screen/mobile-tasks-filter-sheet'
-import {
-  renderMobileTasksRepoPicker,
-  renderMobileTasksGitHubIssueSourcePicker,
-  renderMobileTasksGitHubViewPicker,
-  renderMobileTasksGitHubPresetPicker,
-  renderMobileTasksPagePicker
-} from './screen/mobile-tasks-provider-pickers'
+import { renderMobileTasksSearchControl } from './screen/mobile-tasks-search-control'
+import { MobileTasksFilterSheet } from './screen/mobile-tasks-filter-sheet'
 import {
   renderMobileTasksGitHubProjectPicker,
   renderMobileTasksGitHubProjectViewPicker
 } from './project-board/mobile-tasks-github-project-pickers'
-import {
-  renderMobileTasksGitHubProjectFieldsPicker,
-  renderMobileTasksGitLabViewPicker,
-  renderMobileTasksGitLabFilterPicker,
-  renderMobileTasksJiraFilterPicker,
-  renderMobileTasksJiraSitePicker,
-  renderMobileTasksLinearFilterPicker,
-  renderMobileTasksLinearWorkspacePicker,
-  renderMobileTasksLinearTeamPicker,
-  renderMobileTasksLinearStatusPicker
-} from './screen/mobile-tasks-filter-pickers'
-import { renderMobileTasksLinearDisplayPicker } from './task-list/mobile-tasks-list-display-pickers'
+import { renderMobileTasksLinearStatusPicker } from './providers/linear/mobile-tasks-linear-status-picker'
 import {
   renderMobileTasksCreateDrawer,
   renderMobileTasksCreateTargetPicker,
@@ -82,8 +61,7 @@ import { MobileTasksItemDetailDrawer } from './item-detail/mobile-tasks-item-det
 export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentationModel }) {
   const colorScheme = useMobileColorScheme()
   const t = useMobileTranslation()
-  const [searchBarHeight, setSearchBarHeight] = useState(0)
-  const bottomBarHeight = mobileTasksSearchVisible(model) ? searchBarHeight : 0
+  const [bottomBarHeight, setBottomBarHeight] = useState(0)
   const {
     error,
     githubMode,
@@ -204,43 +182,17 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
 
       {renderMobileTasksListSurface(model, colorScheme, bottomBarHeight)}
 
-      {renderMobileTasksSearchControl(model, setSearchBarHeight)}
+      {renderMobileTasksSearchControl(model, setBottomBarHeight)}
 
       {/* iOS refuses stacked sibling native modals; layer Tasks sheets in one Modal by zIndex. */}
       <BottomDrawerModalHost>
-        {renderMobileTasksRepoPicker(model)}
-
-        {renderMobileTasksGitHubIssueSourcePicker(model)}
-
-        {renderMobileTasksGitHubViewPicker(model)}
-
-        {renderMobileTasksGitHubPresetPicker(model)}
-
-        {renderMobileTasksPagePicker(model)}
-
         {renderMobileTasksGitHubProjectPicker(model)}
 
         {renderMobileTasksGitHubProjectViewPicker(model)}
 
-        {renderMobileTasksGitHubProjectFieldsPicker(model)}
-
-        {renderMobileTasksGitLabViewPicker(model)}
-
-        {renderMobileTasksGitLabFilterPicker(model)}
-
-        {renderMobileTasksLinearFilterPicker(model)}
-        {renderMobileTasksJiraFilterPicker(model)}
-        {renderMobileTasksJiraSitePicker(model)}
-
-        {renderMobileTasksLinearWorkspacePicker(model)}
-
-        {renderMobileTasksLinearTeamPicker(model)}
-
         {renderMobileTasksLinearStatusPicker(model)}
 
-        {renderMobileTasksLinearDisplayPicker(model)}
-
-        {renderMobileTasksFilterSheet(model)}
+        <MobileTasksFilterSheet model={model} />
 
         {renderMobileTasksCreateDrawer(model)}
 

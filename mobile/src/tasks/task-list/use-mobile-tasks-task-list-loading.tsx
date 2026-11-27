@@ -36,7 +36,6 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     effectiveRepoIds,
     serverRepoList,
     setError,
-    setGithubCurrentPage,
     setGithubPages,
     setGithubRepoSources,
     setGithubSourceErrors,
@@ -110,7 +109,6 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
           setGithubSourceErrors(snapshot.github.sourceErrors)
           setGithubSourceFallbacks(snapshot.github.sourceFallbacks)
           setGithubPages([snapshot.items])
-          setGithubCurrentPage(0)
           if (effectiveRepoIds.size > 0) {
             void countGitHubItemPages(requestClient, repos, isCurrent).then((totalPages) => {
               if (isCurrent()) {
