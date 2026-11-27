@@ -4,8 +4,13 @@ import {
   getEditorExternalWatchTargetKey,
   type EditorExternalWatchTarget
 } from './editor-external-watch-targets'
-import type { HeldWatchRoots } from './editor-external-watch-local-roots'
+import {
+  localWatchRoot,
+  watchRootStatus,
+  type HeldWatchRoots
+} from './editor-external-watch-local-roots'
 import { SymlinkWatchPlan, type SymlinkTabFolder } from './editor-external-watch-symlink-plan'
+import type { FsChangedPayload } from '../../../../../../shared/file-watch/filesystem-change-event'
 
 // Why: native recursive watches don't follow a symlinked folder, so a tab reached through one needs a watch on its own folder.
 
@@ -20,13 +25,20 @@ export class SymlinkedTabFolderWatches {
   private readonly openPaths = new Map<string, number>()
   private readonly closing = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly plan: SymlinkWatchPlan
+  private handOver: ((payload: FsChangedPayload) => void) | undefined
 
   constructor(onWatchError: (target: EditorExternalWatchTarget, error: unknown) => void) {
     this.plan = new SymlinkWatchPlan(
       (key) => this.openPaths.has(key),
       onWatchError,
-      (key) => this.stopGrace(key)
+      (key) => this.stopGrace(key),
+      (payload) => this.handOver?.(payload)
     )
+  }
+
+  /** Where the events a released watch hands back go: the pipeline its own payloads take. */
+  routeHandOversTo(handler: ((payload: FsChangedPayload) => void) | undefined): void {
+    this.handOver = handler
   }
 
   sync(
@@ -89,11 +101,16 @@ export class SymlinkedTabFolderWatches {
   }
 
   /** Workspaces whose tabs a payload from one of these folder watches belongs to. */
-  targetsFor(worktreePath: string, connectionId: string | undefined): EditorExternalWatchTarget[] {
-    if (connectionId || !this.plan.hasRoots()) {
+  targetsFor(
+    worktreePath: string,
+    connectionId: string | undefined,
+    heldWatchRoots: HeldWatchRoots
+  ): EditorExternalWatchTarget[] {
+    if (connectionId || !this.plan.hasRoutes()) {
       return []
     }
-    return this.plan.targetsFor(normalizeRuntimePathForComparison(worktreePath))
+    const unheld = watchRootStatus(heldWatchRoots, localWatchRoot(worktreePath)) === undefined
+    return this.plan.targetsFor(normalizeRuntimePathForComparison(worktreePath), unheld)
   }
 
   /** A shared watch's status may have changed (main resynced it, or another consumer retried it); re-check what it sees. */
