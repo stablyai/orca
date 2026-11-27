@@ -117,6 +117,7 @@ export function BrowserPageChromeHeader({
         onDismissDownload={nav.dismissBrowserDownload}
       />
       <BrowserPageChromeBanners
+        showGrabBanner={false}
         resourceNotice={resourceNotice}
         setResourceNotice={setResourceNotice}
         tools={{ grab, grabAnnotations, annotationSend }}
