@@ -2,7 +2,7 @@ import { useQueuedMessageEditTransport } from '../../queue/editing/use-queued-me
 import { useNativeChatViewRef } from '../../pane/ownership/native-chat-view-memory'
 import type { StructuredAgentSessionViewArgs } from './structured-agent-session-view-contract'
 import { useStructuredAgentSessionCommandMenu } from '../../composer/pickers/structured-agent-session-command-refresh'
-import { useMemo, useRef } from 'react'
+import { useMemo } from 'react'
 import { useStructuredAgentSessionSendOptions } from './delivery/use-structured-agent-session-send-options'
 import { useStructuredAgentSessionSends } from './delivery/use-structured-agent-session-sends'
 import { useStructuredAgentSessionCommandWrite } from './writes/use-structured-agent-session-command-write'
