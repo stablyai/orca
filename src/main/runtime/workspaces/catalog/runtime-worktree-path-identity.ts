@@ -83,13 +83,18 @@ function getTerminalSessionIdentityIndex(
     return cached.idByIdentity
   }
   const idByIdentity = new Map<string, string | null>()
+  const indexedIds = new Set<string>()
   for (const map of maps) {
     for (const worktreeId of Object.keys(map ?? {})) {
+      if (indexedIds.has(worktreeId)) {
+        continue
+      }
+      indexedIds.add(worktreeId)
       const key = worktreeIdentityKey(worktreeId)
       const existing = idByIdentity.get(key)
       if (existing === undefined) {
         idByIdentity.set(key, worktreeId)
-      } else if (existing !== worktreeId) {
+      } else {
         idByIdentity.set(key, null)
       }
     }
