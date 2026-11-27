@@ -10,8 +10,10 @@ import {
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
+import { isProjectSectionGroupKey } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import {
   getFolderWorkspaceRowGeometry,
+  getProjectWorktreeLeadingIndent,
   getWorktreeCardContentIndent,
   getWorktreeCardSurfaceInset,
   FLUSH_CARD_CONTENT_PULLBACK,
@@ -60,8 +62,10 @@ export function buildLineageRowProjection(
   rows: readonly RenderRow[],
   groupBy: WorktreeGroupBy,
   newCardStyle: boolean,
-  statusLane = newCardStyle
+  showStatus = true
 ) {
+  const statusLane = newCardStyle && showStatus
+  const projectWorktreeIndent = getProjectWorktreeLeadingIndent({ newCardStyle, showStatus })
   const rowIndexByKey = new Map<string, number>()
   const rowKeys: string[] = []
   const frames: LineageRowFrame[] = []
@@ -125,7 +129,8 @@ export function buildLineageRowProjection(
                 getWorktreeCardSurfaceInset({
                   isGrouped: groupBy !== 'none',
                   groupDepth: row.groupDepth
-                })
+                }) +
+                (isProjectSectionGroupKey(row.sectionKey) ? projectWorktreeIndent : 0)
             }
       frame.left = geometry.surfaceInset
       frame.contentIndent = Math.max(0, geometry.cardContentIndent)
@@ -274,10 +279,10 @@ export function useLineageRowProjection(args: {
   activeWorkspaceExecutionHostId: ExecutionHostId | null
 }) {
   const { rows, groupBy, newCardStyle, activeWorktreeId, activeWorkspaceExecutionHostId } = args
-  const statusLane = useAppStore((s) => s.worktreeCardProperties.includes('status')) && newCardStyle
+  const showStatus = useAppStore((s) => s.worktreeCardProperties.includes('status'))
   const projection = useMemo(
-    () => buildLineageRowProjection(rows, groupBy, newCardStyle, statusLane),
-    [rows, groupBy, newCardStyle, statusLane]
+    () => buildLineageRowProjection(rows, groupBy, newCardStyle, showStatus),
+    [rows, groupBy, newCardStyle, showStatus]
   )
   const firstHeaderIndex = useMemo(
     () => rows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
