@@ -35,6 +35,7 @@
     "buffer": "^6.0.3",
     "diff": "8.0.4",
     "expo": "~58.0.22",
+    "expo-alternate-app-icons": "11.0.0",
     "expo-build-properties": "^58.0.12",
     "expo-camera": "^58.0.14",
     "expo-clipboard": "^58.0.4",
