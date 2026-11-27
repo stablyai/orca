@@ -74,9 +74,8 @@ export function decodeSafariCookie(buf: Buffer): ValidatedCookie | null {
   if (buf.length < 48) {
     return null
   }
-  // Clamp untrusted record sizes to keep string reads within the buffer.
-  const size = Math.min(buf.readUInt32LE(0), buf.length)
-  if (size < 48) {
+  const size = buf.readUInt32LE(0)
+  if (size < 48 || size > buf.length) {
     return null
   }
 
@@ -96,9 +95,12 @@ export function decodeSafariCookie(buf: Buffer): ValidatedCookie | null {
   if (!name) {
     return null
   }
-  const value = readCString(buf, valueOffset, size) ?? ''
-  const path = readCString(buf, pathOffset, size) ?? '/'
-  const rawUrl = readCString(buf, urlOffset, size) ?? ''
+  const value = readCString(buf, valueOffset, size)
+  const path = readCString(buf, pathOffset, size)
+  const rawUrl = readCString(buf, urlOffset, size)
+  if (value === null || path === null || rawUrl === null) {
+    return null
+  }
 
   // The binary format stores the cookie domain in its URL field.
   const domain = rawUrl.startsWith('.') ? rawUrl : rawUrl || null
