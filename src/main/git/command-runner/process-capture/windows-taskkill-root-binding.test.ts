@@ -30,7 +30,7 @@ import {
   WORKER_CHILD_ABANDONED_CODE,
   WorkerThreadChildProcess
 } from '../../../worker-thread-child-process/worker-thread-child-process'
-import { runWindowsTaskkillOffMain } from './spawned-command-tree-kill'
+import { runWindowsTaskkill } from './spawned-command-tree-kill'
 
 let requests: WorkerThreadChildRequest['type'][]
 let killers: WorkerThreadChildProcess[]
@@ -64,9 +64,16 @@ const loseWorker = (killer: WorkerThreadChildProcess): void => {
 }
 
 describe('Windows taskkill on the process worker', () => {
+  it('starts a pid-only taskkill inline, with no queue wait before it opens the pid', () => {
+    void runWindowsTaskkill([4242], 5_000)
+
+    expect(workerSpawn).not.toHaveBeenCalled()
+    expect(nativeSpawn.mock.calls.map(([, args]) => args)).toEqual([['/pid', '4242', '/t', '/f']])
+  })
+
   it('withdraws a queued taskkill once its root exits', async () => {
     const root = liveRoot()
-    const verdict = runWindowsTaskkillOffMain([4242], 5_000, root)
+    const verdict = runWindowsTaskkill([4242], 5_000, root)
 
     root.exitCode = 0
     root.emit('exit')
@@ -81,7 +88,7 @@ describe('Windows taskkill on the process worker', () => {
 
   it('never reruns from main a lost taskkill whose root has exited', async () => {
     const root = liveRoot()
-    const verdict = runWindowsTaskkillOffMain([4242], 5_000, root)
+    const verdict = runWindowsTaskkill([4242], 5_000, root)
 
     root.exitCode = 0
     loseWorker(killers[0])
@@ -92,7 +99,7 @@ describe('Windows taskkill on the process worker', () => {
 
   it('drops a lost taskkill from the main rerun when its root exits before the rerun starts', async () => {
     const root = liveRoot()
-    const verdict = runWindowsTaskkillOffMain([4242], 5_000, root)
+    const verdict = runWindowsTaskkill([4242], 5_000, root)
 
     loseWorker(killers[0])
     root.exitCode = 0
@@ -102,8 +109,8 @@ describe('Windows taskkill on the process worker', () => {
   })
 
   it('reruns lost taskkills from main without merging different waits', async () => {
-    void runWindowsTaskkillOffMain([1111], 5_000, liveRoot())
-    void runWindowsTaskkillOffMain([2222], 2_000, liveRoot())
+    void runWindowsTaskkill([1111], 5_000, liveRoot())
+    void runWindowsTaskkill([2222], 2_000, liveRoot())
 
     loseWorker(killers[0])
     loseWorker(killers[1])

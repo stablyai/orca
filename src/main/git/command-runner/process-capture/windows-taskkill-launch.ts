@@ -57,13 +57,14 @@ export function batchTaskkill(
   return batch.run.then(({ ran, ended }) => ended && ran.has(entry))
 }
 
-/** Taskkill for live pid trees outside Git: on the process worker when it can run, rerun from main if the worker never created it. */
-export function runWindowsTaskkillOffMain(
+/** Taskkill for live pid trees outside Git. One bound to its root's handle may queue on the process worker, which withdraws it
+ * if the root exits first; a pid-only kill starts inline, since nothing could recheck its pid after a queue wait. */
+export function runWindowsTaskkill(
   pids: number[],
   waitMs: number,
   root?: TaskkillRoot
 ): Promise<boolean> {
-  return runTaskkill(pids, canSpawnOnWorkerThread(), waitMs, root)
+  return runTaskkill(pids, root !== undefined && canSpawnOnWorkerThread(), waitMs, root)
 }
 
 /** True when taskkill reported every tree ended within its wait. Never started once `root` has exited. */

@@ -8,7 +8,7 @@ import {
 } from '../../../worker-thread-child-process/worker-thread-child-process'
 import { batchTaskkill, runTaskkill } from './windows-taskkill-launch'
 
-export { runWindowsTaskkillOffMain, type TaskkillRoot } from './windows-taskkill-launch'
+export { runWindowsTaskkill, type TaskkillRoot } from './windows-taskkill-launch'
 
 const WORKER_PID_WAIT_MS = 5_000
 // One tree kill per worker child: a second could walk a reused PID after the first ended the tree. True once taskkill proved the tree ended.

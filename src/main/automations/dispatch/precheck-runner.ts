@@ -1,6 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import type { TaskkillRoot } from '../../git/command-runner/process-capture/spawned-command-tree-kill'
-import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
+import {
+  childProcessHasExited,
+  processGroupExists
+} from '@orca/process-host/process-tree-termination'
 import type { ClientChannel } from 'ssh2'
 import type { AutomationPrecheck } from '../../../shared/automations/automation-definition'
 import type { AutomationPrecheckResult } from '../../../shared/automations/history/automation-run'
@@ -163,7 +166,8 @@ function runLocalPrecheck(
         clearTimeout(timeout)
         timeout = null
       }
-      if (forceKillTimer) {
+      // A group member that ignored SIGTERM outlives the root's exit; its SIGKILL stays due until the group is gone.
+      if (forceKillTimer && !(child.pid && processGroupExists(child.pid))) {
         clearTimeout(forceKillTimer)
         forceKillTimer = null
       }
