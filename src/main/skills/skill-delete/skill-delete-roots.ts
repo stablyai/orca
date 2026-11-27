@@ -33,7 +33,13 @@ async function discoverDeletePiPackageRoots(
 ): Promise<SkillScanRoot[]> {
   const scopes = cwd
     ? [{ cwd }]
-    : [{}, ...repos.map((repo) => ({ cwd: repo.path, skipUserSettings: true }))]
+    : [
+        {},
+        ...[process.cwd(), ...repos.map((repo) => repo.path)].map((path) => ({
+          cwd: path,
+          skipUserSettings: true
+        }))
+      ]
   const groups = await Promise.all(
     scopes.map((scope) =>
       discoverPiPackageSkillSources({ homeDir: home, ignoreSkillFilters: true, ...scope }).catch(

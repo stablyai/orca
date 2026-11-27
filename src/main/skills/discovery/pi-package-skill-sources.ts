@@ -1,5 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { withTimeoutResult } from '../../../shared/concurrency/promise-timeout-fallback'
 import { stripUnsafeDisplayCharacters } from '../../../shared/text/display-text-safety'
 import { stablePathId } from './skill-discovery-classification'
 import type { SkillScanRoot } from './skill-discovery-sources'
@@ -12,6 +13,11 @@ import {
 } from './pi-package-source-path'
 
 export { resolvePiAgentDir } from './pi-package-source-path'
+
+// A package on a hung mount must not stall native discovery, which awaits this walk first.
+const PI_PACKAGE_RESOLVE_TIMEOUT_MS = 5_000
+
+type SkillRootGroup = { labelName: string; skillRoots: string[] }
 
 const PI_MANIFEST_RESOURCE_FIELDS = ['extensions', 'skills', 'prompts', 'themes'] as const
 
@@ -152,37 +158,54 @@ export async function discoverPiPackageSkillSources(args: {
     }
   }
 
-  const skillRootGroups = await Promise.all(
-    [...resolvedPackages.values()].map(async (pkg) => {
-      let activePackageRoot = pkg.packageRoot
-      if (args.isPathBlocked && (await args.isPathBlocked(activePackageRoot))) {
-        args.unavailableOut?.push(makePiPackageRoot(activePackageRoot, pkg.labelName))
-        return { labelName: pkg.labelName, skillRoots: [] }
-      }
-      if (pkg.fallbackPackageRoot) {
-        const exists = await stat(activePackageRoot).then(
-          (info) => info.isDirectory(),
-          () => false
-        )
-        if (!exists) {
-          activePackageRoot = pkg.fallbackPackageRoot
-          if (args.isPathBlocked && (await args.isPathBlocked(activePackageRoot))) {
-            args.unavailableOut?.push(makePiPackageRoot(activePackageRoot, pkg.labelName))
-            return { labelName: pkg.labelName, skillRoots: [] }
-          }
+  async function resolvePackageSkillRoots(pkg: {
+    packageRoot: string
+    fallbackPackageRoot?: string
+    labelName: string
+    skillsFilter?: string[]
+  }): Promise<SkillRootGroup> {
+    let activePackageRoot = pkg.packageRoot
+    if (args.isPathBlocked && (await args.isPathBlocked(activePackageRoot))) {
+      args.unavailableOut?.push(makePiPackageRoot(activePackageRoot, pkg.labelName))
+      return { labelName: pkg.labelName, skillRoots: [] }
+    }
+    if (pkg.fallbackPackageRoot) {
+      const exists = await stat(activePackageRoot).then(
+        (info) => info.isDirectory(),
+        () => false
+      )
+      if (!exists) {
+        activePackageRoot = pkg.fallbackPackageRoot
+        if (args.isPathBlocked && (await args.isPathBlocked(activePackageRoot))) {
+          args.unavailableOut?.push(makePiPackageRoot(activePackageRoot, pkg.labelName))
+          return { labelName: pkg.labelName, skillRoots: [] }
         }
       }
-      return {
-        labelName: pkg.labelName,
-        skillRoots: await resolveSkillRootsForPackage(
-          activePackageRoot,
-          args.ignoreSkillFilters ? undefined : pkg.skillsFilter,
-          args.signal
-        )
+    }
+    return {
+      labelName: pkg.labelName,
+      skillRoots: await resolveSkillRootsForPackage(
+        activePackageRoot,
+        args.ignoreSkillFilters ? undefined : pkg.skillsFilter,
+        args.signal
+      )
+    }
+  }
+
+  const skillRootGroups = await Promise.all(
+    [...resolvedPackages.values()].map(async (pkg) => {
+      const bounded = await withTimeoutResult<SkillRootGroup>(
+        resolvePackageSkillRoots(pkg),
+        PI_PACKAGE_RESOLVE_TIMEOUT_MS
+      )
+      args.signal?.throwIfAborted()
+      if (bounded.ok) {
+        return bounded.value
       }
+      args.unavailableOut?.push(makePiPackageRoot(pkg.packageRoot, pkg.labelName))
+      return { labelName: pkg.labelName, skillRoots: [] }
     })
   )
-
   const roots = new Map<string, SkillScanRoot>()
   for (const group of skillRootGroups) {
     for (const skillRootPath of group.skillRoots) {
