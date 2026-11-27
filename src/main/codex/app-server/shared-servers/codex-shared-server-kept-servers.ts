@@ -129,7 +129,7 @@ export class CodexKeptServers {
     if (!(await withTimeout(ready, DELETE_ATTACH_TIMEOUT_MS, false))) {
       return false
     }
-    return server.keep.releaseExpected(record.sessionId, true)
+    return server.keep.stopExpected(record.sessionId)
   }
 
   private reattachServer(

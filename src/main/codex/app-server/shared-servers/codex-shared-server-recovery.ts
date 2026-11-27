@@ -72,9 +72,9 @@ export class CodexSharedServerRecovery {
     return this.bySession.get(sessionId)?.chat ?? null
   }
 
-  /** Each expected chat's own thread, and every unresolved root. */
-  roots(): { root: string; chat: CodexRecoveredChat | null }[] {
-    return [...this.groups.values()].map(({ root, chat }) => ({ root, chat }))
+  /** The threads held for this chat now, left in place. */
+  threadsOf(sessionId: string): string[] {
+    return [...(this.bySession.get(sessionId)?.threads.keys() ?? [])]
   }
 
   /** A chat whose record names this server: its thread is held for it until it claims it. */
