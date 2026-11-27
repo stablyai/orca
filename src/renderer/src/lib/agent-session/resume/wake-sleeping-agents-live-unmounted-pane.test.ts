@@ -388,4 +388,44 @@ describe('background wake of a pane whose PTY the host still holds', () => {
     ).toBe(false)
     expect(queuedResumes()).toEqual([])
   })
+
+  it('does not mark a main-owned workspace-sleep sibling when a live record mounts the shared tab', async () => {
+    const SIBLING_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+    const SIBLING_PANE_KEY = makePaneKey('tab-live', SIBLING_LEAF_ID)
+    const base = unmountedLivePaneState()
+    const workspaceSleepSibling: SleepingAgentSessionRecord = {
+      ...liveRecord(),
+      paneKey: SIBLING_PANE_KEY,
+      providerSession: { key: 'session_id', id: 'workspace-sleep-sibling' },
+      state: 'working',
+      origin: 'worktree-sleep'
+    }
+    useAppStore.setState({
+      ...base,
+      terminalLayoutsByTabId: {
+        'tab-live': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: LEAF_ID },
+            second: { type: 'leaf', leafId: SIBLING_LEAF_ID }
+          },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: LIVE_PTY_ID }
+        }
+      },
+      sleepingAgentSessionsByPaneKey: {
+        [PANE_KEY]: liveRecord(),
+        [SIBLING_PANE_KEY]: workspaceSleepSibling
+      }
+    })
+
+    await wakeAndSettle()
+
+    const records = useAppStore.getState().sleepingAgentSessionsByPaneKey
+    expect(hasSleepingAgentWakeRequest(records[PANE_KEY]!)).toBe(true)
+    expect(hasSleepingAgentWakeRequest(records[SIBLING_PANE_KEY]!)).toBe(false)
+    expect(queuedResumes()).toEqual([])
+  })
 })

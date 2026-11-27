@@ -6,6 +6,7 @@ import {
 } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getProviderSessionClaimKey } from '../../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
+import { isWorkspaceSleepRecord } from '../../../../../shared/workspace/lifecycle/workspace-sleep'
 import { markSleepingAgentWakeRequest } from './sleeping-agent-wake-request-registry'
 
 export {
@@ -56,10 +57,11 @@ export function requestSleepingAgentWakeOnMount(
     worktreeId
   )) {
     // Explicit sleep stays asleep until its own tab opens; a sibling record's targeted wake must not
-    // wake it just because the two share a tab (#11598). A host-claimed record in a mounted tab is
-    // the same hazard: its pane reattaches, so a wake mark would only release a duplicate writer.
+    // wake it just because the two share a tab (#11598). Host-claimed records reattach, and main
+    // owns workspace-sleep records, so a tab-wide mount must not mark either for an in-place writer.
     if (
       record.restoreOnTabOpenOnly === true ||
+      isWorkspaceSleepRecord(record) ||
       skipClaimKeys?.has(getProviderSessionClaimKey(record)) === true
     ) {
       continue
