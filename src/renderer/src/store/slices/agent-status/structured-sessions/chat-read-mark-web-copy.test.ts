@@ -4,6 +4,7 @@ import { useAppStore } from '@/store/index'
 import { collectCancelledStructuredSessionIds } from '@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement'
 import * as runtimeRpc from '@/runtime/rpc/calls/runtime-rpc-call'
 import { readPairedChatTab } from '@/runtime/web-session-tabs-sync/inventory/paired-chat-tab-reply'
+import type { SessionTabsPublicationEpochHistory } from '@/runtime/web-session-tabs-sync/state'
 import {
   recordReceivedWebSessionTabsSnapshot,
   recordWebSessionTabsCensusForChatReadMarks
@@ -62,9 +63,9 @@ function load(initial: Partial<PersistedUIState>) {
     return fresh
   }
   const store = reload()
-  const records = new Map<string, object>([
-    ['w1', {}],
-    ['w2', {}]
+  const records = new Map<string, SessionTabsPublicationEpochHistory>([
+    ['w1', { current: 'epoch', retired: [] }],
+    ['w2', { current: 'epoch', retired: [] }]
   ])
   const frame = (
     worktreeId: string,

@@ -8,6 +8,7 @@ import type { WorkspaceAttentionGet, WorkspaceAttentionSet } from './workspace-a
 import { settleWorkspaceUnreadFlag } from './workspace-unread-flag'
 import { markerTabAddressId, paneKeyTabId, workspaceMarkerTabs } from './workspace-live-markers'
 import {
+  CHAT_PANE_ADDRESS_PREFIX,
   chatPaneKey,
   chatPaneKeySessionId
 } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -49,14 +50,15 @@ function findTabOwner(
   paneKey?: string
 ): { workspaceId: string; structuredPaneKey: string | null } | null {
   const sessionId = paneKey === undefined ? null : chatPaneKeySessionId(paneKey)
+  const isChatAddress = tabId.startsWith(CHAT_PANE_ADDRESS_PREFIX)
   const workspaceIds = new Set([
     ...Object.keys(state.tabsByWorktree),
     ...Object.keys(state.unifiedTabsByWorktree)
   ])
   for (const workspaceId of workspaceIds) {
-    const tab = workspaceMarkerTabs(state, workspaceId).find((candidate) =>
+    const tab = workspaceMarkerTabs(state, workspaceId, isChatAddress).find((candidate) =>
       sessionId === null
-        ? candidate.id === tabId || markerTabAddressId(candidate) === tabId
+        ? candidate.id === tabId || (isChatAddress && markerTabAddressId(candidate) === tabId)
         : candidate.sessionId === sessionId
     )
     if (tab) {

@@ -281,7 +281,7 @@ export const chatPaneKey = memoizeStringResult(
   MAX_MEMOIZED_PANE_LEAVES
 )
 
-const CHAT_PANE_ADDRESS_PREFIX = chatPaneAddressTabId('')
+export const CHAT_PANE_ADDRESS_PREFIX = chatPaneAddressTabId('')
 
 /** The session a chat's pane key addresses, or null for any other pane key. */
 export function chatPaneKeySessionId(paneKey: string): string | null {

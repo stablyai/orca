@@ -83,7 +83,11 @@ export function completionPaneKeysByTabId(
 }
 
 /** The tabs of a workspace that can own a marker. */
-export function workspaceMarkerTabs(sources: LiveMarkerSources, workspaceId: string): MarkerTab[] {
+export function workspaceMarkerTabs(
+  sources: LiveMarkerSources,
+  workspaceId: string,
+  includeRoomSessions = true
+): MarkerTab[] {
   const tabs: MarkerTab[] = (sources.tabsByWorktree?.[workspaceId] ?? []).map((tab) => ({
     id: tab.id,
     sessionId: null
@@ -91,7 +95,7 @@ export function workspaceMarkerTabs(sources: LiveMarkerSources, workspaceId: str
   for (const tab of sources.unifiedTabsByWorktree?.[workspaceId] ?? []) {
     if (tab.contentType === 'agent-session') {
       tabs.push({ id: tab.id, sessionId: tab.entityId ?? null })
-    } else if (tab.contentType === 'room' && tab.entityId) {
+    } else if (includeRoomSessions && tab.contentType === 'room' && tab.entityId) {
       // An open room owns its members' markers, so a hidden thread's reply holds the group's dot.
       tabs.push(...botGroupRoomSessions(tab.entityId))
     }

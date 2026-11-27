@@ -162,12 +162,13 @@ export class Store {
       })
       if (
         normalized.changed ||
-        readMarkCopy.recordsChanged ||
         this.runtime.loadNeedsSave ||
         adaptedProjectGroups ||
         sweptRepoIds.length > 0
       ) {
         scheduleFullProfileSave(this.domains.scheduling)
+      } else if (readMarkCopy.recordsChanged) {
+        scheduleSave(this.domains.scheduling, ['ui'])
       } else if (readMarkCopy.state !== normalized.state) {
         // Include the flag in the next selective save.
         this.runtime.dirtyProfileStateDomains?.add('ui')

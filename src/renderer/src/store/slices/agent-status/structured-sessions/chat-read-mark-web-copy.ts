@@ -23,8 +23,8 @@ type ScanChatSessions = (visit: (sessionId: string) => void) => void
 type WorkspaceReceipt = {
   runtimeId: string | undefined
   affirmsChats: boolean
-  tabs: WeakRef<readonly RuntimeMobileSessionSnapshotTab[]>
-  chatSessionIds: ReadonlySet<string>
+  candidates: ReturnType<typeof createCandidateCollector>
+  candidateTabs?: WeakRef<readonly RuntimeMobileSessionSnapshotTab[]>
 }
 type Census = {
   environmentId: string
@@ -35,7 +35,7 @@ type Census = {
 type Migration = {
   legacyIndex: LegacyIndex
   candidates: Map<string, string>
-  receipts: WeakMap<object, WorkspaceReceipt>
+  receipts: WeakMap<SessionTabsPublicationEpochHistory, WorkspaceReceipt>
   census?: Census
   writeFailed?: true
 }
@@ -120,32 +120,32 @@ export function startWebChatReadMarkCopy(
   return hasLegacyKeys(copy) ? undefined : complete(copy, hydrated, hydrated)
 }
 
-function collectCandidates(
-  copy: Migration,
-  tabs: readonly RuntimeMobileSessionSnapshotTab[],
-  previous?: WorkspaceReceipt,
-  scanChatSessions?: ScanChatSessions
-): ReadonlySet<string> {
-  if (previous?.tabs.deref() === tabs) {
-    return previous.chatSessionIds
-  }
+function createCandidateCollector(copy: Migration) {
   const chatSessionIds = new Set<string>()
   const visit = (sessionId: string): void => {
     if (chatSessionIds.has(sessionId)) {
       return
     }
     chatSessionIds.add(sessionId)
-    if (previous?.chatSessionIds.has(sessionId)) {
-      return
-    }
     const leaf = paneKeyLeaf(chatPaneKey(sessionId))
     if (CHAT_READ_MARK_FIELDS.some((field) => copy.legacyIndex[field].has(leaf))) {
       copy.candidates.set(leaf, sessionId)
     }
   }
-  if (!hasLegacyKeys(copy)) {
-    return chatSessionIds
+  return { chatSessionIds, visit }
+}
+
+function collectCandidates(
+  copy: Migration,
+  tabs: readonly RuntimeMobileSessionSnapshotTab[],
+  receipt?: WorkspaceReceipt,
+  scanChatSessions?: ScanChatSessions
+): void {
+  if (!hasLegacyKeys(copy) || receipt?.candidateTabs?.deref() === tabs) {
+    return
   }
+  const { chatSessionIds, visit } = receipt?.candidates ?? createCandidateCollector(copy)
+  const previousSize = chatSessionIds.size
   if (scanChatSessions) {
     scanChatSessions(visit)
   } else {
@@ -155,7 +155,10 @@ function collectCandidates(
       }
     }
   }
-  return chatSessionIds
+  // Remember a contributing array by reference without allocating a WeakRef on every fresh frame.
+  if (receipt && (!receipt.candidateTabs || chatSessionIds.size !== previousSize)) {
+    receipt.candidateTabs = new WeakRef(tabs)
+  }
 }
 
 function completeFromTabs(copy: Migration, state: CopyState): CopyPatch | undefined {
@@ -181,7 +184,7 @@ export function receiveWebChatReadMarkFrame(
     environmentId: string
     worktreeId: string
     runtimeId: string | undefined
-    trackingRecord: object | undefined
+    trackingRecord: SessionTabsPublicationEpochHistory | undefined
     affirmsChats: boolean
     tabs: readonly RuntimeMobileSessionSnapshotTab[]
     censusMember?: boolean
@@ -201,21 +204,16 @@ export function receiveWebChatReadMarkFrame(
     census.listed.has(worktreeId)
   const wasUncovered = affectsCoverage && census.uncovered.has(worktreeId)
   // The publisher's tracking record outlives the evictable frame receipt.
-  const previous = trackingRecord && copy.receipts.get(trackingRecord)
-  const chatSessionIds = collectCandidates(
-    copy,
-    tabs,
-    previous?.runtimeId === runtimeId ? previous : undefined,
-    frame.scanChatSessions
-  )
+  let receipt: WorkspaceReceipt | undefined
   if (trackingRecord) {
-    copy.receipts.set(trackingRecord, {
-      runtimeId,
-      affirmsChats,
-      tabs: new WeakRef(tabs),
-      chatSessionIds
-    })
+    receipt = copy.receipts.get(trackingRecord)
+    if (!receipt || receipt.runtimeId !== runtimeId) {
+      receipt = { runtimeId, affirmsChats, candidates: createCandidateCollector(copy) }
+      copy.receipts.set(trackingRecord, receipt)
+    }
+    receipt.affirmsChats = affirmsChats
   }
+  collectCandidates(copy, tabs, receipt, frame.scanChatSessions)
   if (!affectsCoverage) {
     return undefined
   }
@@ -237,7 +235,9 @@ export function receiveWebChatReadMarkCensus(
   state: CopyState,
   environmentId: string,
   runtimeId: string | undefined,
-  workspaces: Iterable<readonly [worktreeId: string, trackingRecord: object | undefined]>
+  workspaces: Iterable<
+    readonly [worktreeId: string, trackingRecord: SessionTabsPublicationEpochHistory | undefined]
+  >
 ): CopyPatch | undefined {
   if (state.chatReadMarksCopiedHere || !migration) {
     return undefined
