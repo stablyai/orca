@@ -2,14 +2,10 @@ import { STATUS_METHODS } from './host-management/status'
 import { DESKTOP_WINDOW_METHODS } from './host-management/desktop-window'
 import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs/sidebar-inputs'
 import { SIDEBAR_REPO_ICON_METHODS } from './sidebar-inputs/sidebar-repo-icons'
-import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad/orcad-terminal-census'
-import { SESSION_TERMINAL_SCROLLBACK_METHODS } from './terminal/session-terminal-scrollback'
 import { REPO_METHODS } from './projects/repo'
 import { WORKTREE_METHODS } from './workspaces/worktree'
-import { WORKTREE_AUTO_NAME_METHODS } from './workspaces/worktree-auto-name-methods'
 import { AGENT_ACTIVITY_METHODS } from './workspaces/agent-activity-methods'
 import { TERMINAL_METHODS } from './terminal/terminal'
-import { TERMINAL_ORPHAN_METHODS } from './terminal/terminal-orphan'
 import { TERMINAL_DAEMON_METHODS } from './terminal/terminal-daemon'
 import { SESSION_TAB_METHODS } from './session-tabs/session-tabs'
 import { NATIVE_CHAT_METHODS } from './native-chat/native-chat'
@@ -17,10 +13,7 @@ import { CLIENT_UI_METHODS } from './client-state/client-ui'
 import { CLIENT_EVENT_METHODS } from './client-events/client-events'
 import { HOST_CAPABILITY_METHODS } from './host-management/host-capabilities'
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from './client-events/runtime-client-capabilities'
-import { AGENT_SESSION_METHODS } from './terminal/agent-session'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-sessions/structured-agent-session'
-import { STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS } from './structured-sessions/attachments/structured-agent-session-attachments'
-import { STRUCTURED_AGENT_SESSION_VISUAL_METHODS } from './structured-sessions/attachments/structured-agent-session-visual'
 import { STRUCTURED_AGENT_SESSION_AGENTS_METHODS } from './structured-sessions/catalog/structured-agent-session-agents'
 import { AGENT_HOOK_METHODS } from './agent-hooks/agent-hooks'
 import { AGENT_LAUNCH_METHODS } from './agent-launch/agent-launch'
@@ -38,24 +31,17 @@ export { DEFAULT_LAZY_RPC_METHOD_GROUPS }
 export const EAGER_CORE_RPC_METHODS = [
   ...STATUS_METHODS,
   ...DESKTOP_WINDOW_METHODS,
-  ...ORCAD_TERMINAL_CENSUS_METHODS,
-  ...SESSION_TERMINAL_SCROLLBACK_METHODS,
   ...AGENT_HOOK_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
-  ...WORKTREE_AUTO_NAME_METHODS,
   ...AGENT_ACTIVITY_METHODS,
-  ...AGENT_SESSION_METHODS,
   ...STRUCTURED_AGENT_SESSION_METHODS,
-  ...STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS,
-  ...STRUCTURED_AGENT_SESSION_VISUAL_METHODS,
   ...STRUCTURED_AGENT_SESSION_AGENTS_METHODS,
   ...AGENT_LAUNCH_METHODS
 ] as const
 
 export const EAGER_SERVICE_RPC_METHODS = [
   ...TERMINAL_METHODS,
-  ...TERMINAL_ORPHAN_METHODS,
   ...TERMINAL_DAEMON_METHODS,
   ...SESSION_TAB_METHODS,
   ...WORKSPACE_LAYOUT_METHODS,
