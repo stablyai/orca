@@ -87,14 +87,7 @@ export class SessionMcpTools {
     if (!launch.bot && !hostRelayed) {
       return host.length === 0
         ? SessionMcpTools.none
-        : new SessionMcpTools(
-            host,
-            {},
-            {},
-            false,
-            new Set(host.map((server) => server.name)),
-            null
-          )
+        : new SessionMcpTools(host, {}, {}, false, new Set(host.map((server) => server.name)), null)
     }
     // A bot that takes the host list keeps its reach to it even while none of its servers is relayed.
     const folders: RelayFolders = {
@@ -149,10 +142,11 @@ export class SessionMcpTools {
   get appBound(): boolean {
     return (
       this.front === null &&
-      (
-      Object.keys(this.env).length > 0 ||
-      Object.keys(this.commandEnv).length > 0 ||
-      this.servers.some((server) => 'url' in server && server.headers?.authorization !== undefined))
+      (Object.keys(this.env).length > 0 ||
+        Object.keys(this.commandEnv).length > 0 ||
+        this.servers.some(
+          (server) => 'url' in server && server.headers?.authorization !== undefined
+        ))
     )
   }
 

@@ -104,7 +104,8 @@ export class SharedToolCallerStore {
     let dropped = false
     for (const stored of await file.read()) {
       const kept =
-        keptToolCallerRun(stored.sessionId) === stored.runFence && botToolRelay.kept.keeps(stored.owner)
+        keptToolCallerRun(stored.sessionId) === stored.runFence &&
+        botToolRelay.kept.keeps(stored.owner)
           ? opened(stored)
           : null
       if (kept) {
@@ -168,7 +169,11 @@ export class SharedToolCallerStore {
         changed = true
       }
     }
-    if (current && currentKey !== null && this.entries.get(currentKey)?.kept.token !== current.token) {
+    if (
+      current &&
+      currentKey !== null &&
+      this.entries.get(currentKey)?.kept.token !== current.token
+    ) {
       await this.keep(current)
       return
     }

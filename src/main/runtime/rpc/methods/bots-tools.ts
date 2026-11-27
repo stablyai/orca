@@ -139,9 +139,11 @@ export async function forgetDeletedBotTools(runtime: OrcaRuntimeService, bot: Bo
       console.warn("[bots] signing out a deleted bot's tools failed:", error)
     )
   // Whether or not its CLI could run, the bot's token and saved values go with it.
-  await botToolRelay.revoke(bot.id).catch((error: unknown) =>
-    console.warn("[bots] a deleted bot's kept tool grant could not be removed:", error)
-  )
+  await botToolRelay
+    .revoke(bot.id)
+    .catch((error: unknown) =>
+      console.warn("[bots] a deleted bot's kept tool grant could not be removed:", error)
+    )
   revokeBotToolSignIns(forgetBotToolCredentials(botHomeFolder(bot)))
 }
 

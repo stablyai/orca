@@ -71,9 +71,7 @@ function frontConnections(client: DaemonClient): () => Promise<string> {
     }
   })
   return () =>
-    ids.length > 0
-      ? Promise.resolve(ids.shift()!)
-      : new Promise((resolve) => waiters.push(resolve))
+    ids.length > 0 ? Promise.resolve(ids.shift()!) : new Promise((resolve) => waiters.push(resolve))
 }
 
 describe.skipIf(process.platform === 'win32')('tool relay front protocol', () => {

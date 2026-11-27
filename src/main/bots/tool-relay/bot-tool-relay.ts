@@ -20,7 +20,11 @@ import {
 } from '../tool-oauth/bot-tool-credential-source'
 import { RelayAdmission, type RelayCall } from './bot-tool-relay-admission'
 import { composioHeaderSource } from './bot-tool-relay-composio'
-import { MCP_HOST_LIST_RELAY_OWNER, relayToolPath, type RelayFolders } from './bot-tool-relay-grants'
+import {
+  MCP_HOST_LIST_RELAY_OWNER,
+  relayToolPath,
+  type RelayFolders
+} from './bot-tool-relay-grants'
 import { KeptRelayGrants, type RelayGrantAnswer } from './bot-tool-relay-kept-grants'
 import { header, readBody, RelayRefusal } from './bot-tool-relay-requests'
 import { answerSignInNeeded, answerUnavailable } from './bot-tool-relay-sign-in-answer'

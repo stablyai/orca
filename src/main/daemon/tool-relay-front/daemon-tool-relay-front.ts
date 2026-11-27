@@ -15,7 +15,10 @@ const RESTARTING_MESSAGE =
   'Orca is restarting, so this tool is briefly unavailable. Your session is still running. Wait a few seconds and try the tool again.'
 
 /** The 503 every answer from the front carries; the daemon never reads the request, so no id. */
-export function toolRelayRestartingAnswer(message = RESTARTING_MESSAGE, id: unknown = null): string {
+export function toolRelayRestartingAnswer(
+  message = RESTARTING_MESSAGE,
+  id: unknown = null
+): string {
   const body = JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32000, message } })
   return [
     'HTTP/1.1 503 Service Unavailable',
