@@ -13,7 +13,10 @@ import {
 import { getDefaultPersistedState } from '../../shared/orca-profiles/constants'
 import { profileStateDatabaseFile } from '../../shared/orca-profiles/profile-state-storage-paths'
 import { LoadedCohortMigrationOperations } from './loading-store/profile-loading/loaded-cohort-migrations'
-import { updateAgentHookSettingsInProfileState } from './profile-state/offline-access/profile-state-offline-settings'
+import {
+  updateAgentHookSettingsFromProfileState,
+  updateAgentHookSettingsInProfileState
+} from './profile-state/offline-access/profile-state-offline-settings'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -87,5 +90,22 @@ describe('composer details default cohort', () => {
     const cohorts = new LoadedCohortMigrationOperations({ loadNeedsSave: false })
     const created = cohorts.migrateCohortSeeds(getDefaultPersistedState('/home/me'), false)
     expect(created.settings.nativeChatComposerDetails).toBe(false)
+  })
+
+  it('starts off for a new install whose first write is the offline hooks command', async () => {
+    updateAgentHookSettingsFromProfileState(
+      {
+        dataFile: dataFile(),
+        databaseFile: profileStateDatabaseFile(testState.dir),
+        profileId: 'persistence-test'
+      },
+      true
+    )
+    const store = createStore()
+    expect(store.getSettings().agentStatusHooksEnabled).toBe(true)
+    expect(store.getSettings().nativeChatComposerDetails).toBe(false)
+    await store.flushAsync()
+    await closeTestStores()
+    expect(createStore().getSettings().nativeChatComposerDetails).toBe(false)
   })
 })

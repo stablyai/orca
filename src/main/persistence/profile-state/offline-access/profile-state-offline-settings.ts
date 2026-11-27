@@ -125,11 +125,17 @@ export function updateAgentHookSettingsFromProfileState(
     const migrated = migrateProfileStateToSqlite({
       ...location,
       expectedLegacyJson: rawJson,
-      serializedState: rawJson ?? JSON.stringify(getDefaultPersistedState(homedir()))
+      serializedState: rawJson ?? JSON.stringify(newOfflineProfileState())
     })
     migrated.authority.close()
   }
   return updateAgentHookSettingsInProfileState(location, enabled)
+}
+
+// The first GUI load would read this file as an existing profile, so seed what a new profile starts with.
+function newOfflineProfileState(): ReturnType<typeof getDefaultPersistedState> {
+  const fresh = getDefaultPersistedState(homedir())
+  return { ...fresh, settings: { ...fresh.settings, nativeChatComposerDetails: false } }
 }
 
 export function assertOfflineProfileStateMutationRuntime(): void {
