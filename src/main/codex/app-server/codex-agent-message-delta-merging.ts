@@ -1,0 +1,70 @@
+import { isProviderRecord } from '../../provider-process/provider-json-record'
+import type { ProviderRecordMerging } from '../../provider-process/provider-record-reader'
+
+const AGENT_MESSAGE_DELTA_METHOD = 'item/agentMessage/delta'
+
+type DeltaParams = { threadId: string; turnId: string; itemId: string; delta: string }
+export type HeldCodexDeltas = {
+  message: Record<string, unknown>
+  params: DeltaParams
+  parts: string[]
+  /** How a continuing line starts, as Codex writes it. */
+  linePrefix: string
+}
+
+function deltaParams(record: unknown): DeltaParams | null {
+  if (!isProviderRecord(record) || record.method !== AGENT_MESSAGE_DELTA_METHOD || 'id' in record) {
+    return null
+  }
+  const params = record.params
+  if (!isProviderRecord(params)) {
+    return null
+  }
+  const { threadId, turnId, itemId, delta, ...rest } = params
+  // Unknown fields can't be merged safely, so such a delta passes through alone.
+  return typeof threadId === 'string' &&
+    typeof turnId === 'string' &&
+    typeof itemId === 'string' &&
+    typeof delta === 'string' &&
+    Object.keys(rest).length === 0
+    ? { threadId, turnId, itemId, delta }
+    : null
+}
+
+/**
+ * Same-task batching: Codex writes most message deltas in bursts that arrive in one read, so a
+ * run of deltas for one item reaches the handlers as one, with its text joined in order.
+ */
+export const CODEX_AGENT_MESSAGE_DELTA_MERGING: ProviderRecordMerging<HeldCodexDeltas> = {
+  start: (record) => {
+    const params = deltaParams(record)
+    if (!params || !isProviderRecord(record)) {
+      return null
+    }
+    const ids = [
+      `"threadId":${JSON.stringify(params.threadId)}`,
+      `"turnId":${JSON.stringify(params.turnId)}`,
+      `"itemId":${JSON.stringify(params.itemId)}`
+    ].join(',')
+    const linePrefix = `{"method":"${AGENT_MESSAGE_DELTA_METHOD}","params":{${ids},"delta":`
+    return { message: record, params, parts: [params.delta], linePrefix }
+  },
+  continues: (held, text, start) => text.startsWith(held.linePrefix, start),
+  add: (held, record) => {
+    const params = deltaParams(record)
+    if (
+      !params ||
+      !isProviderRecord(record) ||
+      params.itemId !== held.params.itemId ||
+      params.turnId !== held.params.turnId ||
+      params.threadId !== held.params.threadId
+    ) {
+      return false
+    }
+    held.parts.push(params.delta)
+    held.message = record
+    return true
+  },
+  finish: ({ message, params, parts }) =>
+    parts.length === 1 ? message : { ...message, params: { ...params, delta: parts.join('') } }
+}

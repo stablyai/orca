@@ -37,6 +37,8 @@ export type IncrementalNdjsonFramer = {
 export type IncrementalNdjsonFramerOptions = {
   maxLineBytes?: number
   shouldPause?: () => boolean
+  /** Read before each new line, unparsed; true pauses ahead of it, as `shouldPause` does after. */
+  beforeLine?: (input: string, lineStart: number) => boolean
   /** Skips parsing lines the consumer can rule out from their text. */
   acceptLine?: (line: string) => boolean
 }
@@ -155,6 +157,14 @@ export function createIncrementalNdjsonFramer(
   const process = (input: string): void => {
     let cursor = 0
     while (cursor < input.length) {
+      if (
+        lineSegments.length === 0 &&
+        !discardingOversizedLine &&
+        options.beforeLine?.(input, cursor)
+      ) {
+        retainPausedInput(input.slice(cursor), input)
+        return
+      }
       const newlineIndex = input.indexOf('\n', cursor)
       const hasNewline = newlineIndex !== -1
       const end = hasNewline ? newlineIndex : input.length

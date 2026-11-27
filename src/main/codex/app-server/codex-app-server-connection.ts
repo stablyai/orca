@@ -15,8 +15,8 @@ import {
   CodexAppServerUnsupportedError
 } from './codex-app-server-session'
 import { createCodexAppServerRecordDispatcher } from './codex-app-server-record-dispatch'
-import { batchedCodexRecordCallbacks } from './codex-agent-message-delta-batch'
 import { createProviderRecordReader } from '../../provider-process/provider-record-reader'
+import { CODEX_AGENT_MESSAGE_DELTA_MERGING } from './codex-agent-message-delta-merging'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import { withLostProviderOutcome } from '../../provider-process/provider-process-exit-status'
 import type {
@@ -128,21 +128,27 @@ async function connectCodexAppServer(
     void managed.close()
   })
 
-  const records = batchedCodexRecordCallbacks({
-    dispatch: dispatcher.dispatch,
-    rejectOversized: dispatcher.rejectOversized,
-    onUnhandledFrame: (kind, line) => handlers.onUnhandledFrame?.(kind, line),
+  const recordReader = createProviderRecordReader({
+    stdout: child.stdout,
+    merging: CODEX_AGENT_MESSAGE_DELTA_MERGING,
+    onRecord: (parsed, line) => {
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        handlers.onUnhandledFrame?.('frame:invalid-json', line)
+        return
+      }
+      dispatcher.dispatch(parsed as Record<string, unknown>)
+    },
+    onRejected: (rejected) => {
+      if (rejected.kind === 'invalid-json') {
+        handlers.onUnhandledFrame?.('frame:invalid-json', rejected.line)
+      } else {
+        dispatcher.rejectOversized(rejected)
+      }
+    },
     onFatal: (error) => {
       handleUnexpectedEnd(error, true)
       void managed.close()
-    },
-    isPaused: () => recordReader.isPaused()
-  })
-  const recordReader = createProviderRecordReader({
-    stdout: child.stdout,
-    onRecord: records.onRecord,
-    onRejected: records.onRejected,
-    onFatal: records.onFatal
+    }
   })
 
   function sendLine(payload: Record<string, unknown>): void {
@@ -276,10 +282,7 @@ async function connectCodexAppServer(
     respond: (id, result) => writeResponse({ id, result }),
     respondWithError: (id, code, message) => writeResponse({ id, error: { code, message } }),
     pauseReading: recordReader.pause,
-    resumeReading: () => {
-      recordReader.resume()
-      records.resume()
-    },
+    resumeReading: recordReader.resume,
     close,
     ...(relayed ? { relay: codexConnectionRelay(relayed.child, reattached, relayed.keep) } : {})
   }
