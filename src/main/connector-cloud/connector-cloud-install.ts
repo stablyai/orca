@@ -180,7 +180,16 @@ export function createConnectorCloud({
           : null,
       webhookNotice: async (delivery) => webhooks.notice(delivery),
       prEvent: (delivery) => prWaker.handle(delivery.deliveryId, delivery.event),
-      shareResolved: (delivery) => resolveBotShareInvite(runtime.bots, delivery),
+      shareResolved: async (delivery) => {
+        const resolved = await resolveBotShareInvite(runtime.bots, delivery)
+        // Older builds read a device row's name: written again once the share carries a new one.
+        await runtime.botShareDevices
+          ?.syncBotShareDeviceNames()
+          .catch((error: unknown) =>
+            console.warn('[bots] share device names not rewritten:', error)
+          )
+        return resolved
+      },
       shareAccept: (delivery) =>
         acceptBotShare(
           {

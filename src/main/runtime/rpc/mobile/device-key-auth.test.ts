@@ -293,7 +293,11 @@ describe('device-key authentication (host)', () => {
     ]
     // The store as the server makes it: rows stand on the bot's share list.
     const shareStore = (dir: string, bots: () => readonly Pick<Bot, 'id' | 'shares'>[]) =>
-      new BotShareDeviceStore(dir, (grant) => botSharedWithAccount(bots(), grant))
+      new BotShareDeviceStore(
+        dir,
+        (grant) => botSharedWithAccount(bots(), grant),
+        (grant) => grant.accountId
+      )
 
     it('signs in as its one-bot grant, never as a paired device, and is cut off once removed', async () => {
       const dir = mkdtempSync(join(tmpdir(), 'orca-share-key-'))

@@ -13,6 +13,7 @@ import {
   automationActsFor,
   botHome,
   botHomeName,
+  botHomeShownName,
   botSharePersonName,
   withBotHome
 } from './bot-home-of'
@@ -177,6 +178,15 @@ describe('a teammate share stored before names', () => {
     expect(botHomeName({ shares: [...named] }, { accountId: 'acct-alice' })).toBe(
       'Alice Kim’s Home'
     )
+    // What dashboard rows and notifications show for her Home tab, whatever its saved label says.
+    const homed = (shares: readonly BotShare[]) => ({
+      chatSessionId: 'owner-home',
+      shares: shares.map((share) => ({ ...share, homeSessionId: 'alice-home' }))
+    })
+    expect(botHomeShownName(homed(stored), 'alice-home')).toBe('alice@example.com’s Home')
+    expect(botHomeShownName(homed(named), 'alice-home')).toBe('Alice Kim’s Home')
+    expect(botHomeShownName(homed(named), 'owner-home')).toBe('Home')
+    expect(botHomeShownName(homed(named), 'side-chat')).toBeNull()
     expect(withBotShareResolved(named, { ...again, name: 'Alice Kim' })).toBe(named)
     expect(withBotShareResolved(named, again)).toBe(named)
     // The teammate's sign-in email changed since they accepted: still their share, by account.

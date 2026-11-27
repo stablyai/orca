@@ -27,6 +27,8 @@ import {
 import { useAppStore } from '@/store'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { readBots } from '@/lib/bot-catalog'
+import { findBotByWorkspace } from '@/components/bots/bot-workspace'
+import { botHomeShownName } from '../../../../../../shared/bots/bot-home-of'
 import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
 import {
   botGroupRoomMembers,
@@ -112,6 +114,12 @@ function dispatchStructuredAttention(
     return
   }
   const row = state.agentStatusByPaneKey.get(paneKey)
+  // A Home goes by its person's name as their share row has it now, never the tab's saved label.
+  const tabLabel =
+    botHomeShownName(
+      findBotByWorkspace(readBots(), tab.worktreeId, tab.executionHostId),
+      tab.entityId
+    ) ?? tab.label
   const sound = readAgentAttentionNotificationSound(state.settings ?? {})
   applyAgentAttention(decision, {
     unread: state.markAgentAttentionUnread,
@@ -148,9 +156,9 @@ function dispatchStructuredAttention(
           workspaceExecutionHostId: notificationWorkspaceExecutionHostForOwner(owner),
           ...(executionHost ? { executionHost } : {}),
           paneKey: request.subjectKey ?? undefined,
-          ...getNotificationWorkspaceLabels(state, request.workspaceId, tab.label),
+          ...getNotificationWorkspaceLabels(state, request.workspaceId, tabLabel),
           notificationSourceId: notificationSourceForOwner(owner, state),
-          terminalTitle: tab.label,
+          terminalTitle: tabLabel,
           isActiveWorktree: request.workspaceIsActive,
           ...(row?.agentType ? { agentType: row.agentType } : {}),
           agentState: news.agentState,

@@ -29,6 +29,8 @@ export type BotShareDevices = {
   ) => Promise<BotShareProvisionedPhone>
   /** Ends a phone `parentDeviceId` asked for; false when it isn't one of that computer's. */
   revokeBotSharePhone: (parentDeviceId: string, deviceId: string) => Promise<boolean>
+  /** Rewrites each device row's name (kept only for older builds) after a share's name changed. */
+  syncBotShareDeviceNames: () => Promise<void>
   /** The key teammates seal held messages to: this host's pairing E2EE key, null without one. */
   getE2EEPublicKey: () => string | null
   /** One of the owner's own paired computers, as known now: not a teammate's, not revoked or unknown. */

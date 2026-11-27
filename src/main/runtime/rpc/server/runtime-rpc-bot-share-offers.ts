@@ -20,6 +20,11 @@ export class RuntimeRpcBotShareOffers extends RuntimeRpcPairing {
     return await mintBotShareOffer(this.botShareOfferDeps(), ask)
   }
 
+  /** See `BotShareDevices.syncBotShareDeviceNames`. */
+  async syncBotShareDeviceNames(): Promise<void> {
+    await this.botShareDevices?.syncLegacyNames()
+  }
+
   /** A teammate's computer asked for its phone's key: see `provisionBotSharePhone`. */
   async provisionBotSharePhone(
     parentDeviceId: string,

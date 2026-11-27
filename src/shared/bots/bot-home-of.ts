@@ -135,11 +135,13 @@ export function botSharePersonName(bot: Pick<Bot, 'shares'>, accountId: string):
   return share?.name ?? share?.email ?? accountId
 }
 
+function teammateHomeName(person: string): string {
+  return `${person}’s ${BOT_HOME_NAME}`
+}
+
 /** "Home" for the owner's; "<Name>’s Home" for a teammate's. */
 export function botHomeName(bot: Pick<Bot, 'shares'>, of: BotHomeOf): string {
-  return of === 'owner'
-    ? BOT_HOME_NAME
-    : `${botSharePersonName(bot, of.accountId)}’s ${BOT_HOME_NAME}`
+  return of === 'owner' ? BOT_HOME_NAME : teammateHomeName(botSharePersonName(bot, of.accountId))
 }
 
 /** Every name an older build may have saved on a teammate's Home ("<name>’s Home", by the name the
@@ -155,7 +157,7 @@ export function legacyTeammateHomeNames(
   const people = [share?.name, share?.email, of.accountId].filter((name): name is string =>
     Boolean(name)
   )
-  return [...new Set(people)].map((name) => `${name}’s ${BOT_HOME_NAME}`)
+  return [...new Set(people)].map(teammateHomeName)
 }
 
 /** A chat's Home as its viewer titles it: their own Home slot ("Home", whatever the host named it),
@@ -174,6 +176,14 @@ export function botHomeTitleOf(bot: HomeBot | null, sessionId: string): BotHomeT
   return of && of !== 'owner'
     ? { kind: 'teammate', name: botSharePersonName(bot, of.accountId) }
     : null
+}
+
+/** The name anything titling a chat by its tab shows for a Home (dashboard rows, notifications):
+ *  "Home" for the viewer's own, "<name>’s Home" from a teammate's share row as it is now, null for
+ *  any other chat, which keeps its own name. */
+export function botHomeShownName(bot: HomeBot | null, sessionId: string): string | null {
+  const title = botHomeTitleOf(bot, sessionId)
+  return title === null ? null : title.kind === 'own' ? BOT_HOME_NAME : teammateHomeName(title.name)
 }
 
 /** Whose Home this session is, compared by /clear root; null for any other chat. A renderer has no

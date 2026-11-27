@@ -12,7 +12,8 @@ const RELAY_HOST = 'AbCdEf0123_-xyZ9'
 function setup() {
   const store = new BotShareDeviceStore(
     mkdtempSync(join(tmpdir(), 'orca-share-offer-')),
-    () => false
+    () => false,
+    (grant) => grant.accountId
   )
   let invites = 0
   const createPairingRelay = vi.fn(async (relayDeviceId: string) => {
