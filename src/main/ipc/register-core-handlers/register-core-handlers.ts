@@ -20,7 +20,7 @@ import { registerRuntimeHandlers } from '../runtime'
 import { registerRuntimeHostHandlers } from './runtime-host-handler-registration'
 import { registerLazyEphemeralVmHandlers } from '../ephemeral-vm/lazy-ephemeral-vm-handlers'
 import { registerLazyAiVaultHandlers } from '../ai-vault/lazy-ai-vault-handlers'
-import { registerNativeChatHandlers } from '../native-chat'
+import { registerLazyNativeChatHandlers } from '../lazy-native-chat-handlers'
 import { registerNotificationHandlers } from '../notifications/notifications'
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser/browser'
 import { setTrustedBrowserRendererWebContentsId } from '../browser/browser-renderer-trust'
@@ -31,7 +31,7 @@ import {
   registerLazySkillsHandlers
 } from '../skills/lazy-skills-handlers'
 import { registerLazyWorkspacePortHandlers } from '../ports/lazy-workspace-ports-handlers'
-import { registerAutomationHandlers } from '../automations'
+import { registerLazyAutomationHandlers } from '../lazy-automations-handlers'
 import { registerLazyKeybindingHandlers } from '../lazy-keybindings-handlers'
 import { registerTelemetryHandlers } from '../telemetry'
 import { registerPluginHandlers } from '../plugins/plugins'
@@ -129,7 +129,7 @@ export async function registerCoreHandlers(
     registerLazySkillsHandlers(store, runtime)
     registerLazySkillDeleteIpcHandlers(store, runtime)
     if (automations) {
-      registerAutomationHandlers(store, automations)
+      registerLazyAutomationHandlers(store, automations)
     }
     if (keybindings) {
       registerLazyKeybindingHandlers(keybindings, () => {
@@ -177,7 +177,7 @@ export async function registerCoreHandlers(
       getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
       prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume
     })
-    registerNativeChatHandlers()
+    registerLazyNativeChatHandlers()
     registerClipboardHandlers((path) => resolveDesktopAuthorizedPath(path, store), {
       localChatAttachmentStore: async () => {
         await ensureStructuredAgentSessionHostUnlessRefused(() =>
