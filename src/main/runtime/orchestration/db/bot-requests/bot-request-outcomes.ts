@@ -4,7 +4,7 @@
 import type { MessageRow } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
 import type { BotRequestRow } from './bot-request-store'
-import { readSettledRequestMail } from '../messages/settled-request-mail'
+import { settleRequests } from '../messages/settled-request-mail'
 
 export const BOT_REQUEST_OUTCOMES = ['answered', 'posted', 'unanswered', 'dropped'] as const
 export type BotRequestOutcome = (typeof BOT_REQUEST_OUTCOMES)[number]
@@ -25,15 +25,15 @@ export function recordBotRequestOutcome(
   outcome: BotRequestOutcome,
   continues = false
 ): boolean {
-  const recorded =
-    this.db
-      .prepare('INSERT OR IGNORE INTO bot_request_outcomes (message_id, outcome) VALUES (?, ?)')
-      .run(messageId, outcome).changes > 0
-  settleAwaitedQuestion(this, messageId)
-  if (recorded && !continues) {
-    readSettledRequestMail(this, messageId)
-  }
-  return recorded
+  const settled = settleRequests(this, continues ? 'keep-unread' : 'orca', () => {
+    const recorded =
+      this.db
+        .prepare('INSERT OR IGNORE INTO bot_request_outcomes (message_id, outcome) VALUES (?, ?)')
+        .run(messageId, outcome).changes > 0
+    settleAwaitedQuestion(this, messageId)
+    return recorded ? [messageId] : []
+  })
+  return settled.length > 0
 }
 
 /** Any outcome ends what its asker may still be owed, so nothing decided later sends it again. */
@@ -53,13 +53,16 @@ export function recordBotAnswer(
   if (before === 'answered') {
     return null
   }
-  this.db
-    .prepare(
-      `INSERT INTO bot_request_outcomes (message_id, outcome) VALUES (?, 'answered')
+  settleRequests(this, 'reply', () => {
+    this.db
+      .prepare(
+        `INSERT INTO bot_request_outcomes (message_id, outcome) VALUES (?, 'answered')
        ON CONFLICT(message_id) DO UPDATE SET outcome = 'answered'`
-    )
-    .run(messageId)
-  settleAwaitedQuestion(this, messageId)
+      )
+      .run(messageId)
+    settleAwaitedQuestion(this, messageId)
+    return [messageId]
+  })
   return { posted: before === 'posted' }
 }
 

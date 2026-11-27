@@ -109,6 +109,15 @@ describe("a paired worker's question its coordinator here stopped on", () => {
     expect(db.getMessageById(id)?.read).toBe(1)
   })
 
+  it('reads it once answered there, though its pointer handover left it unread', () => {
+    const id = askedFromBox()
+    stampQuestionTakes(db, [id], { kind: 'session', sessionId: COORDINATOR })
+    recordRemoteAskAnswered(db, id)
+
+    expect(getRemoteOwnedQuestion(db, id)?.ended).toBe('answered')
+    expect(db.getMessageById(id)?.read).toBe(1)
+  })
+
   it('keeps it owed while that computer is unreachable, and sends it on its next pull', async () => {
     call.send.mockRejectedValueOnce(UNREACHABLE).mockResolvedValue({})
     const reconciler = start()

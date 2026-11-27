@@ -6,7 +6,7 @@ import type { QuestionNoticeWriter } from '../../../../orchestration/mailbox/que
 import { encodeFederatedControlMessage } from '../../../../orchestration/legacy-remote/federation-control-message'
 import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
-import { readSettledRequestMail } from '../../../../orchestration/db/messages/settled-request-mail'
+import { settleRequests } from '../../../../orchestration/db/messages/settled-request-mail'
 
 export function workerAskNoticeText(runId: string, why: string): string {
   if (why === 'withdrawn') {
@@ -34,13 +34,13 @@ export function workerAskNotices(
     if (question?.status !== 'pending' || question.told !== null) {
       return 'told'
     }
-    db.db
-      .prepare('UPDATE question_threads SET told = ? WHERE message_id = ?')
-      .run(dropped === null ? 'unanswered' : 'dropped', messageId)
     // A dropped ask stays unread: a coordinator that takes the Run later can still answer it.
-    if (dropped === null) {
-      readSettledRequestMail(db, messageId)
-    }
+    settleRequests(db, dropped === null ? 'orca' : 'keep-unread', () => {
+      db.db
+        .prepare('UPDATE question_threads SET told = ? WHERE message_id = ?')
+        .run(dropped === null ? 'unanswered' : 'dropped', messageId)
+      return [messageId]
+    })
     const body = workerAskNoticeText(question.run_id, dropped ?? 'unanswered')
     const notice = {
       from: `run:${question.run_id}`,

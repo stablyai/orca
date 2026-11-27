@@ -124,11 +124,29 @@ it('reads requests settled unread before this build, and leaves a dropped worker
   db.db
     .prepare("UPDATE question_threads SET told = 'dropped' WHERE message_id = ?")
     .run(noReader.id)
+  const closed = workerAsk(COORDINATOR)
+  db.db.prepare("UPDATE question_threads SET status = 'closed' WHERE message_id = ?").run(closed.id)
+  // A paired worker's ask, answered there.
+  const remote = db.insertMessage({
+    from: 'term_w',
+    to: `run:${told.runId}`,
+    subject: 'Question',
+    type: 'question',
+    runId: told.runId
+  }).id
+  db.db
+    .prepare(
+      `INSERT INTO remote_owned_questions (message_id, conversation_id, run_id, environment_id, dispatch_id, ended)
+       VALUES (?, 'conv', ?, 'env_box', 'ctx_box', 'answered')`
+    )
+    .run(remote, told.runId)
   db.db.pragma('user_version = 52')
   db.close()
 
   db = new OrchestrationDb(join(directory, 'orchestration.db'))
   expect(unread('term_taker')).not.toContain(handoff)
   expect(unread(`run:${told.runId}`)).not.toContain(told.id)
+  expect(unread(`run:${closed.runId}`)).not.toContain(closed.id)
+  expect(unread(`run:${told.runId}`)).not.toContain(remote)
   expect(unread(`run:${noReader.runId}`)).toContain(noReader.id)
 })

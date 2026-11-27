@@ -2,6 +2,7 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 import type { RemoteRunLinkRow } from './remote-run-links'
 import { writtenRow } from './written-row'
+import { settleRequests } from '../messages/settled-request-mail'
 
 export type RemoteDispatchRow = {
   dispatch_id: string
@@ -294,9 +295,12 @@ export function getRemoteOwnedQuestion(
 
 /** Its answer reached the worker's computer: no notice is owed, even after one went. */
 export function recordRemoteAskAnswered(db: OrchestrationDb, messageId: string): void {
-  db.db
-    .prepare(
-      `UPDATE remote_owned_questions SET ended = 'answered', awaiting = NULL WHERE message_id = ?`
-    )
-    .run(messageId)
+  settleRequests(db, 'reply', () => {
+    db.db
+      .prepare(
+        `UPDATE remote_owned_questions SET ended = 'answered', awaiting = NULL WHERE message_id = ?`
+      )
+      .run(messageId)
+    return [messageId]
+  })
 }

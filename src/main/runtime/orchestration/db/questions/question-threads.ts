@@ -4,6 +4,7 @@ import { exposeQuestionTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
 import { generateId } from '../generated-id'
 import { handHelperMailToRun } from '../messages/helper-mailbox-hand-back'
+import { settleRequests } from '../messages/settled-request-mail'
 
 export function createQuestion(
   this: OrchestrationDb,
@@ -123,7 +124,6 @@ export function answerQuestion(
         `Question ${params.messageId} is closed because its Dispatch is inactive.`
       )
     }
-    this.markAsRead([question.message_id], { kind: 'reply' })
     if (question.status === 'answered') {
       if (question.answer_body !== params.body || !question.answer_message_id) {
         throw new OrchestrationError(
@@ -153,14 +153,17 @@ export function answerQuestion(
     if (this.getFederatedDispatch(question.dispatch_id)) {
       this.markAsReadAndDelivered([message.id], { kind: 'orca' })
     }
-    this.db
-      .prepare(
-        `UPDATE question_threads
+    settleRequests(this, 'reply', () => {
+      this.db
+        .prepare(
+          `UPDATE question_threads
          SET status = 'answered', answer_message_id = ?, answer_body = ?,
              answered_by_generation = ?, answered_at = datetime('now'), awaiting = NULL
          WHERE message_id = ? AND status = 'pending'`
-      )
-      .run(message.id, params.body, generation, question.message_id)
+        )
+        .run(message.id, params.body, generation, question.message_id)
+      return [question.message_id]
+    })
     const answered = this.getQuestionRaw(question.message_id) as QuestionRow
     const storedMessage = this.getMessageById(message.id) as MessageRow
     this.db.exec('COMMIT')
@@ -209,12 +212,15 @@ export function closeQuestionsForDispatch(this: OrchestrationDb, dispatchId: str
   if (rows.length === 0) {
     return []
   }
-  this.db
-    .prepare(
-      "UPDATE question_threads SET status = 'closed', closed_at = datetime('now'), awaiting = NULL WHERE dispatch_id = ? AND status = 'pending'"
-    )
-    .run(dispatchId)
-  return rows.map((row) => row.message_id)
+  // Its asker ended, so nothing can answer it: read, so no `check` hands it over as new.
+  return settleRequests(this, 'orca', () => {
+    this.db
+      .prepare(
+        "UPDATE question_threads SET status = 'closed', closed_at = datetime('now'), awaiting = NULL WHERE dispatch_id = ? AND status = 'pending'"
+      )
+      .run(dispatchId)
+    return rows.map((row) => row.message_id)
+  })
 }
 
 export type QuestionThreadsMethods = {

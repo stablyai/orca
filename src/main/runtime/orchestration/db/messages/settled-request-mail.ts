@@ -1,27 +1,45 @@
-// A request with a recorded outcome is never handed over again as new: each outcome writer reads
-// its mail in the same write, so a handover that left it unread (a pointer) can't replay it on the
-// next `check`. Two stay unread on purpose: a worker ask dropped with no reader, which a later
-// coordinator can still answer, and a request whose chat continues after a usage limit, whose
+// A request whose settled state is written (an outcome, an answer, a notice, a close) is never handed
+// over again as new: every such write goes through `settleRequests`, which reads its mail in the same
+// transaction, so a handover that left it unread (a pointer) can't replay it on the next `check`.
+// Two stay unread on purpose, by passing 'keep-unread': a worker ask dropped with no reader, which a
+// later coordinator can still answer, and a request whose chat continues after a usage limit, whose
 // rerun still reads it.
 import type { OrchestrationDb } from '../orchestration-db'
+import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 
-export function readSettledRequestMail(db: OrchestrationDb, messageId: string): void {
-  db.markAsRead([messageId], { kind: 'orca' })
+/** Who reads the settled mail: its answer, Orca for any other ending, or no one yet. */
+export type SettledRequestRead = 'reply' | 'orca' | 'keep-unread'
+
+/** Runs `settle`, the write that settles requests and returns the ids it settled, and reads their
+ *  mail in the same transaction. */
+export function settleRequests(
+  db: OrchestrationDb,
+  read: SettledRequestRead,
+  settle: () => string[]
+): string[] {
+  return runLifecycleWriteTransaction(db.db, 'settle_requests', () => {
+    const settled = settle()
+    if (settled.length > 0 && read !== 'keep-unread') {
+      db.markAsRead(settled, { kind: read })
+    }
+    return settled
+  })
 }
 
-/** Requests settled before this rule, still unread: read once, when the schema reaches v53. */
+/** The same rule, once, for requests settled unread before it: when the schema reaches v53. */
 export function readSettledRequestMailBackfill(db: OrchestrationDb): void {
   const settled = [
     ['bot_request_outcomes', 'outcome', 'SELECT message_id FROM bot_request_outcomes'],
     [
       'question_threads',
       'told',
-      "SELECT message_id FROM question_threads WHERE told = 'unanswered'"
+      `SELECT message_id FROM question_threads
+       WHERE told = 'unanswered' OR status IN ('answered', 'closed')`
     ],
     [
       'remote_owned_questions',
       'ended',
-      "SELECT message_id FROM remote_owned_questions WHERE ended = 'unanswered'"
+      "SELECT message_id FROM remote_owned_questions WHERE ended IN ('answered', 'unanswered')"
     ]
   ] as const
   for (const [table, column, ids] of settled) {

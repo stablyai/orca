@@ -2,6 +2,7 @@ import type { MessageRow, LegacyOperationReceiptRow, QuestionRow } from '../orch
 import { OrchestrationError } from '../../orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import type { OrchestrationDb } from '../orchestration-db'
+import { settleRequests } from '../messages/settled-request-mail'
 
 export function commitLegacyReplyOperation(
   this: OrchestrationDb,
@@ -88,15 +89,17 @@ export function commitLegacyReplyOperation(
         runId: principal.run_id,
         deliveryContract: 'legacy_direct'
       })
-      this.markAsRead([question.message_id], { kind: 'reply' })
-      this.db
-        .prepare(
-          `UPDATE question_threads
+      settleRequests(this, 'reply', () => {
+        this.db
+          .prepare(
+            `UPDATE question_threads
            SET status = 'answered', answer_message_id = ?, answer_body = ?,
                answered_at = datetime('now'), awaiting = NULL
            WHERE message_id = ? AND status = 'pending'`
-        )
-        .run(message.id, params.body, question.message_id)
+          )
+          .run(message.id, params.body, question.message_id)
+        return [question.message_id]
+      })
     }
 
     const answered = this.getQuestion(params.questionId) as QuestionRow

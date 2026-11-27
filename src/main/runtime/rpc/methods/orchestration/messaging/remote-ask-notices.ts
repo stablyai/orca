@@ -11,7 +11,7 @@ import { callRemoteOwnedServer } from '../../../../orchestration/federation/remo
 import { isRemoteServerUnreachable } from '../../../../orchestration/federation/remote-owned/remote-server-unreachable'
 import { workerAskNoticeText } from './worker-ask-notices'
 import { noteQuestionEdge } from '../../../../orchestration/db/messages/question-edges'
-import { readSettledRequestMail } from '../../../../orchestration/db/messages/settled-request-mail'
+import { settleRequests } from '../../../../orchestration/db/messages/settled-request-mail'
 
 const SEND_TIMEOUT_MS = 30_000
 
@@ -28,17 +28,17 @@ export function retryRemoteAskNotices(environmentId: string): void {
 }
 
 function endRemoteAsk(db: OrchestrationDb, messageId: string, ended: 'unanswered' | 'dropped') {
-  const recorded =
+  // A dropped ask stays unread, as one asked here does.
+  settleRequests(db, ended === 'unanswered' ? 'orca' : 'keep-unread', () =>
     db.db
       .prepare(
         `UPDATE remote_owned_questions SET ended = ?, awaiting = NULL
        WHERE message_id = ? AND awaiting = 1 AND ended IS NULL`
       )
       .run(ended, messageId).changes > 0
-  // A dropped ask stays unread, as one asked here does.
-  if (recorded && ended === 'unanswered') {
-    readSettledRequestMail(db, messageId)
-  }
+      ? [messageId]
+      : []
+  )
 }
 
 export function remoteAskNotices(
