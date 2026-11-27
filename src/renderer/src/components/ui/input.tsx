@@ -43,7 +43,8 @@ const inputVariants = cva('', {
       none: '',
       trailing: 'pr-8',
       warningAndClear: 'pr-20',
-      shortcut: 'pr-16 group-focus-within/rail-search:pr-8 @max-[40rem]/rail-page:pr-8'
+      shortcut: 'pr-16 group-focus-within/rail-search:pr-8 @max-[40rem]/rail-page:pr-8',
+      shortcutAndClear: 'pr-16 @max-[40rem]/rail-page:pr-8'
     },
     focusFeedback: {
       default: '',

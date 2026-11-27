@@ -1136,6 +1136,11 @@ body[data-modal-overlay-open]
   scrollbar-gutter: stable;
 }
 
+[data-rail-page-container-gutter] {
+  /* The difference is the scrollbar's reserved width in a full-width row. */
+  --rail-page-row-end: max(0px, calc(var(--rail-page-gutter) - 100cqi + 100%));
+}
+
 .rail-page-container {
   container: rail-page / inline-size;
 }
