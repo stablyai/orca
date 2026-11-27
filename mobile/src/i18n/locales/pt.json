@@ -1491,6 +1491,9 @@
       },
       "turnDiff": {
         "partial": "Diff parcial",
+        "changed_one": "{{count}} arquivo alterado",
+        "changed_other": "{{count}} arquivos alterados",
+        "changed_many": "{{count}} arquivos alterados",
         "showMoreFiles": "Mostrar mais {{count}}"
       },
       "goal": {

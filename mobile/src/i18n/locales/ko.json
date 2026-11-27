@@ -1715,8 +1715,8 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_one": "변경된 파일 {{count}}개",
-        "changedFiles_other": "변경된 파일 {{count}}개",
+        "changed_one": "변경된 파일 {{count}}개",
+        "changed_other": "변경된 파일 {{count}}개",
         "partial": "부분적인 차이점",
         "showMoreFiles": "{{count}}개 더 보기"
       },

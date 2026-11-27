@@ -1716,8 +1716,8 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_one": "{{count}} 個已變更的檔案",
-        "changedFiles_other": "{{count}} 個已變更的檔案",
+        "changed_one": "{{count}} 個已變更的檔案",
+        "changed_other": "{{count}} 個已變更的檔案",
         "partial": "部分差異",
         "showMoreFiles": "再顯示 {{count}} 個"
       },

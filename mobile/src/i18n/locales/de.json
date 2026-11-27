@@ -1459,8 +1459,8 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_one": "{{count}} geänderte Datei",
-        "changedFiles_other": "{{count}} geänderte Dateien",
+        "changed_one": "{{count}} geänderte Datei",
+        "changed_other": "{{count}} geänderte Dateien",
         "partial": "Teilweiser Diff",
         "showMoreFiles": "{{count}} weitere anzeigen"
       },

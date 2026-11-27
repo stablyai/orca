@@ -1884,6 +1884,10 @@
       },
       "turnDiff": {
         "partial": "Показана часть изменений",
+        "changed_one": "{{count}} изменённый файл",
+        "changed_other": "{{count}} изменённых файла",
+        "changed_few": "{{count}} изменённых файла",
+        "changed_many": "{{count}} изменённых файлов",
         "showMoreFiles": "Показать ещё {{count}}"
       },
       "connectorAsker": {

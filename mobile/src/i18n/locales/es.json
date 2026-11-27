@@ -1512,9 +1512,9 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_many": "{{count}} archivos modificados",
-        "changedFiles_one": "{{count}} archivo modificado",
-        "changedFiles_other": "{{count}} archivos modificados",
+        "changed_many": "{{count}} archivos modificados",
+        "changed_one": "{{count}} archivo modificado",
+        "changed_other": "{{count}} archivos modificados",
         "partial": "Diff parcial",
         "showMoreFiles": "Mostrar {{count}} más"
       },

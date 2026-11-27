@@ -1777,6 +1777,8 @@
     "native-chat": {
       "turnDiff": {
         "partial": "部分差异",
+        "changed_one": "{{count}} 个已更改的文件",
+        "changed_other": "{{count}} 个已更改的文件",
         "showMoreFiles": "再显示 {{count}} 个"
       },
       "composer": {

@@ -1780,6 +1780,8 @@
       },
       "turnDiff": {
         "partial": "Kısmi diff",
+        "changed_one": "{{count}} dosya değişti",
+        "changed_other": "{{count}} dosya değişti",
         "showMoreFiles": "{{count}} tane daha göster"
       },
       "connectorAsker": {

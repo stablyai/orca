@@ -1454,8 +1454,8 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_one": "変更されたファイル {{count}} 個",
-        "changedFiles_other": "変更されたファイル {{count}} 個",
+        "changed_one": "変更されたファイル {{count}} 個",
+        "changed_other": "変更されたファイル {{count}} 個",
         "partial": "部分的な差分",
         "showMoreFiles": "さらに {{count}} 個を表示"
       },
