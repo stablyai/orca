@@ -32,6 +32,11 @@ export class DeviceRegistryStore {
     this.load()
   }
 
+  /** False after a failed read: the empty device list is not the paired devices. */
+  isReadable(): boolean {
+    return !this.registryUnreadable
+  }
+
   /** Fires when a save or an adopted external edit changes a listed phone or runtime grant. */
   setOnPairedDevicesChanged(listener: (() => void) | null): void {
     this.onPairedDevicesChanged = listener
