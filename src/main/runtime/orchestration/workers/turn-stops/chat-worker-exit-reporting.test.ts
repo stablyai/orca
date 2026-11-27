@@ -51,8 +51,8 @@ afterEach(async () => {
 
 async function startWorker({
   unavailableErrorRead = false,
-  usageLimits = [] as ChatWorkerUsageLimit[]
-} = {}) {
+  usageLimits = []
+}: { unavailableErrorRead?: boolean; usageLimits?: ChatWorkerUsageLimit[] } = {}) {
   const database = new OrchestrationDb(':memory:')
   db = database
   const run = database.createRun({
