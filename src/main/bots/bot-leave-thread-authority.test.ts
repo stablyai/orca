@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { storedConnectorAsker } from '../../shared/connector-message-asker'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
@@ -12,12 +13,19 @@ const REF = 'slack:T1:C1:1800000000.000100:1800000000.000200'
 
 it('grants Feishu leave authority only to the verified conversation requester, never mail or another lane', () => {
   const conversation = { source: 'feishu-local', externalId: 'lane' }
-  const asker = person('member', { messageRef: 'feishu:lane:om_one' })
+  const asker = storedConnectorAsker('feishu-local', {
+    role: 'member',
+    userId: 'ou_member',
+    messageRef: 'feishu-local:lane:om_one',
+    place: { kind: 'channel', id: 'oc_group' },
+    context: [],
+    text: 'leave'
+  })!
   expect(leaveEligibleBatch({ ...conversation, bot: {} }, asker)).toEqual({ leaveEligible: true })
   expect(
     leaveEligibleBatch(
       { ...conversation, bot: {} },
-      { ...asker, messageRef: 'feishu:other:om_one' }
+      { ...asker, messageRef: 'feishu-local:other:om_one' }
     )
   ).toEqual({})
   expect(leaveEligibleBatch({ ...conversation, bot: {} }, { ...asker, via: {} })).toEqual({})

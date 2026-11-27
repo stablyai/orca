@@ -100,7 +100,7 @@ export async function deliverFeishuMessages(
       storedImages,
       asker: {
         ...asker,
-        ...(route?.group ? { messageRef: `feishu:${key.externalId}:${row.mid}` } : {}),
+        ...(route?.group ? { messageRef: `feishu-local:${key.externalId}:${row.mid}` } : {}),
         place: route?.group
           ? { kind: 'channel' as const, id: route.chat }
           : { kind: 'direct_message' as const, id: route?.chat ?? b.chat },

@@ -28,7 +28,7 @@ export function askedInThread(
     !asker.app &&
     !asker.via &&
     (source === 'feishu-local'
-      ? asker.messageRef?.startsWith(`feishu:${externalId}:`) === true
+      ? asker.messageRef?.startsWith(`feishu-local:${externalId}:`) === true
       : source === 'slack' && slackThreadOfRef(asker.messageRef) === `${team}:${channel}:${thread}`)
   )
 }
