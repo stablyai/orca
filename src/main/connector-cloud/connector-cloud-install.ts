@@ -1,4 +1,4 @@
-import { syncSharePersonNames } from '../bots/team-share/share-person-name-sync'
+import { refreshSharePersonNames } from '../bots/team-share/share-person-name-sync'
 import { ConnectorBotPurposes } from './connector-bot-purposes'
 import type { ConnectorBotGoogle } from './connector-bot-google'
 import { CONNECTOR_CLOUD_MENTIONED_FEATURE } from '../../shared/connector-cloud-features'
@@ -184,7 +184,7 @@ export function createConnectorCloud({
       shareResolved: async (delivery) => {
         const before = runtime.bots.list().find((bot) => bot.id === delivery.botId)
         const resolved = await resolveBotShareInvite(runtime.bots, delivery)
-        await syncSharePersonNames(runtime, delivery.botId, before)
+        await refreshSharePersonNames(runtime, delivery.botId, before)
         return resolved
       },
       shareAccept: (delivery) =>

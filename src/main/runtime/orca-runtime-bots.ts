@@ -47,7 +47,7 @@ import { pairedBotRosterCache } from '../bots/paired-bot-rosters'
 import type { DispatchRowChange } from './orchestration/db/worker-status-notice'
 import type { AdmittedMessage } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import { isStructuredAttentionMuted } from './agent-session/lifecycle/structured-agent-session-mobile-attention'
-import { upkeepInstalledBotChats } from '../bots/installed-bot-chat-upkeep'
+import { backfillInstalledBotBackgroundChats } from '../bots/bot-background-chat-backfill'
 import { runtimeBotItems } from '../bots/runtime-bot-items'
 import { botItemOfReport } from '../bots/bot-item-report-fact'
 import { listeningClients } from './orchestration/federation/client-asks/client-ask-listeners'
@@ -315,9 +315,9 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     }
   }
 
-  /** Once the chat host is up: see `upkeepInstalledBotChats`. */
+  /** Gives installed bots' older background chats their rows once the chat host is up. */
   protected backfillBotBackgroundChats(): Promise<void> {
-    return upkeepInstalledBotChats(() => this.wiredBots())
+    return backfillInstalledBotBackgroundChats(() => this.wiredBots())
   }
 
   protected abstract leaveBotGroups(botId: string): Promise<void>

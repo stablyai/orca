@@ -1,3 +1,4 @@
+import { provideTeammateHomeBots } from '../runtime/agent-session/records/agent-session-record-home-names'
 import {
   type BotStore,
   persistBotStore,
@@ -80,6 +81,8 @@ export class BotController {
   constructor(private readonly deps: BotControllerDependencies) {
     this.memory = hostBotMemoryRecord(deps.filesystem)
     this.slackIcons = botSlackIconsOf(this, deps, (work) => this.serialize(work))
+    // The chat records title teammates' Homes from these bots' share rows.
+    provideTeammateHomeBots(() => this.list())
   }
 
   /** Off, bots take no conversations or runs, and nothing creates or opens one; their homes stay. */
