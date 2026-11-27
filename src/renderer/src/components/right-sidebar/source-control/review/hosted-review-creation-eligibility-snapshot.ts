@@ -25,7 +25,7 @@ function resolveUnavailableHostedReviewBranch(
     branch === 'HEAD' ||
     baseBranch === '' ||
     !supportsHostedReviewCreation(provider) ||
-    branch.toLowerCase() === baseBranch.toLowerCase()
+    branch === baseBranch
   ) {
     return null
   }

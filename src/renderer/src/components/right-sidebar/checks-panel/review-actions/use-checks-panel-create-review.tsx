@@ -131,7 +131,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
               value0: hostedReviewCreateCopy.reviewLabel
             }
           )
-        : !base || stripBaseRef(base).toLowerCase() === stripBaseRef(branch).toLowerCase()
+        : !base || stripBaseRef(base) === stripBaseRef(branch)
           ? translate(
               'auto.components.right.sidebar.SourceControl.ae743199cd',
               'Choose a different base branch before creating a {{value0}}.',

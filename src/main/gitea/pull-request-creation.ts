@@ -162,7 +162,7 @@ export async function createGiteaPullRequest(
       reason: 'base_head_title_required'
     }
   }
-  if (head.toLowerCase() === base.toLowerCase()) {
+  if (head === base) {
     return {
       ok: false,
       code: 'validation',
