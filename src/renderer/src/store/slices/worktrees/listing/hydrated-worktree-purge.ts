@@ -20,6 +20,7 @@ import { worktreeCatalogVersionKey } from './worktree-catalog-version-state'
 import type { WorktreeRefreshResult } from './worktree-refresh-result'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
 
+// Why skip, not abort like the runtime-owner guard: every repo is listed by now, so no listing will ever cover this owner; keep only its rows.
 function hasUncoveredContestedOwner(
   contestedPrimaryHostBySessionKey:
     | Readonly<Record<string, ReturnType<typeof getRepoExecutionHostId>>>
@@ -111,20 +112,26 @@ export function purgeHydratedWorktrees(
   }
   const staleIds = new Set<string>()
   const addStaleCandidate = (key: string): void => {
+    if (validIds.has(key)) {
+      return
+    }
     const scope = parseWorkspaceKey(key)
     if (scope?.type === 'folder') {
+      staleIds.add(key)
       return
     }
     const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : key
-    if (validIds.has(worktreeId)) {
-      return
-    }
     if (
+      validIds.has(worktreeId) ||
+      // Why: a WSL-moved project may keep its chats under the `worktree:` alias.
+      validIds.has(worktreeWorkspaceKey(worktreeId)) ||
       hasUncoveredContestedOwner(state.contestedPrimaryHostBySessionKey, worktreeId, coveredOwners)
     ) {
       return
     }
     staleIds.add(worktreeId)
+    // Why both: map purges match exact keys, so a `worktree:` alias would outlive its bare id.
+    staleIds.add(key)
   }
   const hydratedWorktreeMaps: readonly (Record<string, unknown> | undefined)[] = [
     state.tabsByWorktree,
