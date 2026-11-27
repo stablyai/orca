@@ -146,7 +146,12 @@ export class CodexSharedServerRecovery {
   }
 
   hold(threadId: string, frame: CodexSharedServerFrame): boolean {
-    if (this.discoveryPartial && !this.groupOf.has(threadId)) {
+    // Bounded: past the identity cap an unknown thread gets today's unrouted handling.
+    if (
+      this.discoveryPartial &&
+      !this.groupOf.has(threadId) &&
+      this.identities < this.maxIdentities
+    ) {
       this.holdUnowned(threadId)
     }
     const group = this.groupOf.get(threadId)

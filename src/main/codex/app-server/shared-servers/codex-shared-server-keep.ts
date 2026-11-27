@@ -70,6 +70,11 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
 
   /** Chats handed frames since their journal last held them all; only these are asked to save. */
   private readonly unsaved = new Set<CodexSharedServerLease>()
+  /** Chats handed frames since their last forced save: an ordinary save leaves streamed text
+   *  deferred, so only a forced one clears these. */
+  private readonly unforced = new Set<CodexSharedServerLease>()
+  /** The one retry of unresolved roots in flight; a later ask joins it. */
+  private retrying: Promise<void> | null = null
   /** Chats with frames queued (paused, held, or handed off); only these can hold the floor. */
   private readonly queued = new Set<CodexSharedServerLease>()
   /** A handed-off chat's last save; the final ack waits for it. */
@@ -77,6 +82,7 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
 
   dispatched(lease: CodexSharedServerLease): void {
     this.unsaved.add(lease)
+    this.unforced.add(lease)
   }
 
   queueChanged(lease: CodexSharedServerLease): void {
@@ -90,6 +96,7 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
   /** A chat left the server: it holds nothing for the acks any more. */
   forget(lease: CodexSharedServerLease): void {
     this.unsaved.delete(lease)
+    this.unforced.delete(lease)
     this.queued.delete(lease)
   }
 
@@ -106,8 +113,11 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
 
   durable = async (force: boolean): Promise<boolean> => {
     // A chat quit handed off is handed nothing more: its own last save stands for it.
-    const asked = [...this.unsaved].filter((lease) => !lease.handedOff)
+    const asked = [...(force ? this.unforced : this.unsaved)].filter((lease) => !lease.handedOff)
     this.unsaved.clear()
+    if (force) {
+      this.unforced.clear()
+    }
     const saved = await Promise.all([
       ...asked.map(async (lease) => {
         const ok =
@@ -115,6 +125,9 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
           (await providerRelayChatDurable(lease.sessionId, force).catch(() => false))
         if (!ok && this.server.leases.has(lease)) {
           this.unsaved.add(lease)
+          if (force) {
+            this.unforced.add(lease)
+          }
         }
         return ok
       }),
@@ -195,7 +208,15 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
   }
 
   /** Unresolved roots due a read: an owner found moves them, a top-level root lets them go. */
-  async retryUnresolved(): Promise<void> {
+  /** One retry per server at a time, so its reads stay at four however often chats open. */
+  retryUnresolved(): Promise<void> {
+    this.retrying ??= this.readUnresolved().finally(() => {
+      this.retrying = null
+    })
+    return this.retrying
+  }
+
+  private async readUnresolved(): Promise<void> {
     const connection = this.server.physicalConnection
     if (!connection || connection.closed) {
       return
