@@ -40,6 +40,14 @@ export async function routeDesktopBrowserBridgeRpc(options: {
   ) {
     return { handled: false }
   }
+  // Keep mobile-only open-url checks on this runtime so desktop bridges never hijack or break fallback.
+  if (
+    method === 'browser.openUrl' &&
+    isRecord(options.params) &&
+    options.params.onlyWhenMobileViewing === true
+  ) {
+    return { handled: false }
+  }
   // Map open-url to older desktops' tabCreate surface, preserving scope/URL/focus rules.
   const forwardedMethod = method === 'browser.openUrl' ? 'browser.tabCreate' : method
   const forwarded = isDesktopBrowserBridgeMethod(forwardedMethod)

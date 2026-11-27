@@ -28,6 +28,8 @@ import {
   composeDesktopCore,
   type DesktopCoreNative
 } from '../core-desktop/desktop-core-composition'
+import { ensureMacosTerminalOpenShimDir } from '../cli/launchers/macos-terminal-open-shim'
+import { thisAppOrcaCliLauncher } from '../cli/launchers/this-app-orca-cli-launcher'
 import type { Store } from '../persistence/loading-store/store'
 import type { RuntimeDesktopWindowStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
@@ -145,6 +147,16 @@ function desktopCoreNative(store: Store): DesktopCoreNative {
           console.warn('[browser] could not show a page popup to its client:', error)
         })
       })
+      browserManager.setServerPagePopupCloser((popup) =>
+        runtime.closeServerPagePopupForClient(popup).catch((error: unknown) => {
+          console.warn('[browser] could not return a client to its popup opener:', error)
+        })
+      )
+      browserManager.setServerPageLinkTabPresenter((link) => {
+        void runtime.showOpenedLinkTabToClient(link).catch((error: unknown) => {
+          console.warn('[browser] could not show an opened link tab to its client:', error)
+        })
+      })
       browserSessionRegistry.onProfilesChanged = () => runtime.notifyBrowserProfilesChanged()
     },
     createAgentBrowserBridge: (onTabsChanged) => {
@@ -170,10 +182,17 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   }
   // Renderers fork from zygotes that exist already, so this must land before the first window.
   await refuseRealtimeSchedulingUnderZeroRtTime()
+  const userData = app.getPath('userData')
+  if (process.platform === 'darwin') {
+    await ensureMacosTerminalOpenShimDir({
+      userDataPath: userData,
+      cliLauncher: thisAppOrcaCliLauncher(userData)
+    })
+  }
   await composeDesktopCore(state.core, {
     store,
     paths: {
-      userData: app.getPath('userData'),
+      userData,
       home: app.getPath('home'),
       isPackaged: app.isPackaged
     },

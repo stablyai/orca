@@ -110,7 +110,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     wc: Electron.WebContents,
     webContentsId: number
   ): Promise<() => void> {
-    await enablePageFocusEmulation((method, params) => wc.debugger.sendCommand(method, params))
+    await enablePageFocusEmulation((method, params) => wc.debugger.sendCommand(method, params), wc)
     if (!isEmbeddedGuest(wc)) {
       // Native focus activates and raises a popup or serve window, so only use it inside a focused one.
       // fromWebContents also returns the BaseWindow that hosts a popup's view.

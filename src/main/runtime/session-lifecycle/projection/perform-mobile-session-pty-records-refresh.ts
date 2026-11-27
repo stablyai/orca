@@ -8,6 +8,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/l
 import type { PtyControllerInventory } from '../../terminal/lifecycle/runtime-pty-controller-contract'
 import { isAgentLaunchRunningIn } from '../../../agent-launch/agent-launch-pane-attachment'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
+import { browserPopupPageWebContentsId } from '../../../browser/guest-lifecycle/popups/browser-popup-page-id'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot,
@@ -287,7 +288,7 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
         await this.serveBrowserTabs.start(worktreeId, tab.browserPageId)
       }
       // Browser rows are renderer-owned; session-tab focus preserves desktop order/group authority.
-      if (targetsHost) {
+      if (targetsHost && browserPopupPageWebContentsId(tab.browserPageId ?? '') === null) {
         this.notifier?.focusEditorTab?.(tab.id, worktreeId)
       }
     } else {

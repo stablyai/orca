@@ -1,4 +1,15 @@
 import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
+
+export const OPEN_URL_COMMAND_SPEC: CommandSpec = {
+  path: ['open-url'],
+  summary: 'Open a URL on the paired client that hosts this terminal',
+  usage:
+    'orca open-url --url <url> [--worktree <selector>] [--if-mobile-viewing] [--quiet] [--json]',
+  allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree', 'if-mobile-viewing', 'quiet'],
+  booleanFlags: ['if-mobile-viewing', 'quiet'],
+  notes: ['`orca <http(s) url>` is shorthand, so headless terminals can use orca as BROWSER.']
+}
 
 // These open, list or configure pages, so there is no one page to target.
 const NOT_PAGE_TARGETED = new Set([

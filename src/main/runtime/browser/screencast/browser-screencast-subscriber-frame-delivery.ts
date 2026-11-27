@@ -7,7 +7,7 @@ import {
 } from './remote-browser-screencast-frame-admission'
 
 // Match the frame pacer's backpressure retry interval.
-export const SCREENCAST_PENDING_FRAME_RETRY_MS = 50
+export const SCREENCAST_PENDING_FRAME_RETRY_MS = 25
 
 /** Retry the newest rejected frame: an idle page may never produce another to replace it. */
 export function deliverScreencastSubscriberFrame(

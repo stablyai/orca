@@ -17,13 +17,13 @@ export function isNewBrowserTabPopupIntent(details: NewBrowserTabPopupRequest): 
 }
 
 // A link and a featureless `window.open(url, '_blank')` arrive alike; only the created child's opener tells them apart.
-// A paired viewer can't see this desktop's child windows, so its opens stay tabs, as do unclicked opens, background tabs (no child) and file links.
+// Paired viewers receive popups as streamed tabs, so their opens wait for the opener too; unclicked opens, background tabs and file links stay tabs.
 export function waitsForPopupOpener(
   details: NewBrowserTabPopupRequest,
   observed: ObservedBrowserGuestGesture | null
 ): boolean {
   return (
-    observed?.fromThisDesktop === true &&
+    (observed?.fromThisDesktop === true || observed?.fromPairedViewer === true) &&
     details.disposition === 'foreground-tab' &&
     isNewBrowserTabPopupIntent(details) &&
     normalizeBrowserPopupUrl(details.url) !== null
@@ -73,7 +73,14 @@ function isOAuthAuthorizationUrl(rawUrl: string): boolean {
       return false
     }
     const params = url.searchParams
-    if (!params.get('client_id')?.trim() || !params.get('redirect_uri')?.trim()) {
+    if (!params.get('client_id')?.trim()) {
+      return false
+    }
+    // Google Identity Services uses ux_mode=popup without redirect_uri/response_type.
+    if (params.get('ux_mode')?.trim() === 'popup') {
+      return true
+    }
+    if (!params.get('redirect_uri')?.trim()) {
       return false
     }
     const responseTypes = params.get('response_type')?.trim().split(/\s+/) ?? []

@@ -14,14 +14,48 @@ export type ScreencastWindowHostHold = {
 
 /** A window host's pages are webviews that draw only while its window is drawn and its screen is on and unlocked. */
 export function holdScreencastWindowHost(
-  guest: { getType(): string },
+  guest: {
+    getType(): string
+    isDestroyed(): boolean
+    isOffscreen(): boolean
+    // Electron exposes these capturer methods at runtime though its WebContents d.ts omits them.
+    incrementCapturerCount?: (
+      size?: { width: number; height: number },
+      stayHidden?: boolean
+    ) => void
+    decrementCapturerCount?: (stayHidden?: boolean) => void
+  },
   host: Pick<RuntimeBrowserCommandHost, 'getAvailableAuthoritativeWindowId'>,
   onScreenLocked: (message: string) => void
 ): ScreencastWindowHostHold {
+  // Hidden native popup windows (show: false) need a stayHidden capturer lease so Chromium keeps compositing live frames.
+  let heldStayHiddenCapturer = false
+  if (
+    guest.getType() !== 'webview' &&
+    !guest.isOffscreen() &&
+    guest.incrementCapturerCount &&
+    guest.decrementCapturerCount
+  ) {
+    try {
+      guest.incrementCapturerCount(undefined, true)
+      heldStayHiddenCapturer = true
+    } catch {}
+  }
+  const releaseCapturer = (): void => {
+    if (!heldStayHiddenCapturer) {
+      return
+    }
+    heldStayHiddenCapturer = false
+    try {
+      if (!guest.isDestroyed()) {
+        guest.decrementCapturerCount?.(true)
+      }
+    } catch {}
+  }
   // Offscreen pages, including those a serve host keeps after a desktop attaches, keep their own frame clock.
   const windowId = guest.getType() === 'webview' ? host.getAvailableAuthoritativeWindowId() : null
   if (windowId === null) {
-    return { release: () => {}, noFrameMessage: () => undefined }
+    return { release: releaseCapturer, noFrameMessage: () => undefined }
   }
   const desktop = getRuntimeDesktopSurface()
   // Hidden host compositors stop producing guest frames when throttled.
@@ -30,6 +64,7 @@ export function holdScreencastWindowHost(
   const stopLockWatch = desktop.onScreenLocked?.(() => onScreenLocked(HOST_SCREEN_LOCKED_MESSAGE))
   return {
     release: () => {
+      releaseCapturer()
       releasePublication?.()
       releaseDisplay?.()
       stopLockWatch?.()

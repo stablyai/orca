@@ -1,5 +1,8 @@
 import type { CopyBrowserServerDownload } from '../../../shared/browser/downloads/browser-server-download-copy'
-import type { BrowserGuestMetadata } from '../../../shared/browser/guest-lifecycle/browser-guest-metadata'
+import type {
+  BrowserGuestMetadata,
+  OpenLinkInOrcaTabEvent
+} from '../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { BrowserSessionCookieApi } from './browser-session-cookie-api'
 import type { BrowserGuestDiscardApi } from '../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools/browser-devtools-dock'
@@ -192,9 +195,7 @@ export type BrowserApi = {
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void
-  onOpenLinkInOrcaTab: (
-    callback: (event: { browserPageId: string; url: string; activate?: boolean }) => void
-  ) => () => void
+  onOpenLinkInOrcaTab: (callback: (event: OpenLinkInOrcaTabEvent) => void) => () => void
   cancelDownload: (args: { downloadId: string }) => Promise<boolean>
   /** Copies a download a paired server saved into this computer's Downloads; `canceled` only if Cancel stopped it, rejects on failure. */
   copyServerDownload: CopyBrowserServerDownload

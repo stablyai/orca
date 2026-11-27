@@ -106,12 +106,25 @@ export function isFocusRoutedCdpInput(method: string): boolean {
   return method === 'Input.imeSetComposition'
 }
 
+const focusEmulatedGuests = new WeakSet<WebContents>()
+
 export function enablePageFocusEmulation(
-  send: (method: string, params: Record<string, unknown>) => Promise<unknown>
+  send: (method: string, params: Record<string, unknown>) => Promise<unknown>,
+  guest?: WebContents
 ): Promise<void> {
+  if (guest && focusEmulatedGuests.has(guest)) {
+    return Promise.resolve()
+  }
   // Suppress blur so restoring user focus does not close page menus; failure is tolerable.
   return send('Emulation.setFocusEmulationEnabled', { enabled: true }).then(
-    () => undefined,
+    () => {
+      if (guest) {
+        focusEmulatedGuests.add(guest)
+        guest.debugger.once('detach', () => {
+          focusEmulatedGuests.delete(guest)
+        })
+      }
+    },
     () => undefined
   )
 }

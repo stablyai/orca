@@ -15,3 +15,10 @@ export type BrowserGuestMetadata = {
   loadError: BrowserLoadError | null
   hasCertificateFailure: boolean
 }
+
+export type OpenLinkInOrcaTabEvent = {
+  browserPageId: string
+  url: string
+  activate?: boolean
+  newBrowserPageId?: string
+}

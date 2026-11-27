@@ -13,6 +13,7 @@ import {
   type MobileSessionTabCloseOptions
 } from './mobile-session-tab-close-outcome'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
+import { browserPopupPageWebContentsId } from '../../../browser/guest-lifecycle/popups/browser-popup-page-id'
 import type { RuntimeEdgeCommandSurface } from '../../construction/runtime-edge-command-controller'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { retireHeadlessMobileSessionEditorTab } from '../../session-tabs/restoration/headless-editor-tabs'
@@ -267,15 +268,14 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       await this.closeMobileSessionTerminalPane(worktreeId, tab)
       return finishCommittedClose()
     } else if (tab.type === 'browser') {
-      // Client-hosted, offscreen and renderer browser pages each own their retirement path.
-      const clientPage = tab.browserPageId
-        ? getRuntimeBrowserPageRegistry(this).getPage(tab.browserPageId)
-        : undefined
-      if (clientPage) {
-        await this.browserTabClose({
-          worktree: `id:${worktreeId}`,
-          page: clientPage.browserPageId
-        })
+      // Client-hosted, popup, offscreen and renderer browser pages each own their retirement path.
+      const pageId = tab.browserPageId
+      if (
+        pageId &&
+        (getRuntimeBrowserPageRegistry(this).getPage(pageId) ||
+          browserPopupPageWebContentsId(pageId) !== null)
+      ) {
+        await this.browserTabClose({ worktree: `id:${worktreeId}`, page: pageId })
       } else if (this.isOffscreenMobileSessionBrowserTab(snapshot, tab)) {
         await this.offscreenBrowserBackend!.closeTab(tab.browserPageId!).catch(() => {})
         this.retireRuntimeOwnedBrowserSessionTab(worktreeId, tab.browserPageId!)

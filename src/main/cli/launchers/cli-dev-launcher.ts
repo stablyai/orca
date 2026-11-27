@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 import { DEV_COMMAND_NAME, DEV_LAUNCHER_DIR } from '../installation/cli-install-constants'
+import { ensureMacosTerminalOpenShimDir } from './macos-terminal-open-shim'
 import {
   escapeWindowsBatchValue,
   isAbsoluteForPlatform
@@ -45,6 +46,13 @@ export async function ensureDevLauncher(args: {
       encoding: 'utf8',
       mode: 0o755
     })
+    if (args.platform === 'darwin') {
+      await ensureMacosTerminalOpenShimDir({
+        userDataPath: args.userDataPath,
+        cliLauncher: launcherPath,
+        platform: args.platform
+      })
+    }
   }
   return launcherPath
 }

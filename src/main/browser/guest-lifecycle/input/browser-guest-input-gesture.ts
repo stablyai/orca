@@ -1,5 +1,8 @@
 import type { WebContents } from 'electron'
-import { isAgentInjectingInput } from '../../cdp/input/agent-input-injection'
+import {
+  isAgentInjectingInput,
+  wasRecentlyInjectingInput
+} from '../../cdp/input/agent-input-injection'
 
 // Window-open details lack user activation; track browser-process input instead of page events.
 const ACTIVATING_MOUSE_TYPES: ReadonlySet<string> = new Set(['mouseDown', 'mouseUp'])
@@ -81,13 +84,34 @@ export type ObservedBrowserGuestGesture = {
   byAgent: boolean
   /** Its sender works with this desktop's windows: the user, or an agent's command on a page shown here, not a paired viewer. */
   fromThisDesktop: boolean
+  /** Its sender is a paired viewer (e.g. mobile) relaying a person's input. */
+  fromPairedViewer?: boolean
 }
 
 const domActivationsByGuest = new WeakMap<WebContents, number>()
+const syntheticGestureByGuest = new WeakMap<
+  WebContents,
+  { at: number; domGeneration: number; gesture: ObservedBrowserGuestGesture }
+>()
 
 /** A DOM-activated tap fires no guest input event; drop earlier input so the tap cannot inherit its sender. */
 export function forgetBrowserGuestInputGestures(guest: WebContents): void {
   domActivationsByGuest.set(guest, (domActivationsByGuest.get(guest) ?? 0) + 1)
+  syntheticGestureByGuest.delete(guest)
+}
+
+/** Arms a single-use gesture for a DOM-activated tap whose target.click() fires no browser mouse event. */
+export function primeSyntheticBrowserGuestGesture(
+  guest: WebContents,
+  gesture: ObservedBrowserGuestGesture,
+  at: number = Date.now()
+): void {
+  noteSessionInput(guest, at, gesture.byAgent)
+  syntheticGestureByGuest.set(guest, {
+    at,
+    domGeneration: domActivationsByGuest.get(guest) ?? 0,
+    gesture
+  })
 }
 
 export type BrowserGuestInputGesture = {
@@ -101,26 +125,38 @@ export function trackBrowserGuestInputGesture(
   {
     now = Date.now,
     onActivatingInput,
-    isAgentCommandShownHere
+    isAgentCommandShownHere,
+    isPairedViewerCommandRunning
   }: {
     now?: () => number
     onActivatingInput?: (byAgent: boolean) => void
     /** An agent's command, not a paired viewer's relayed input, is driving this page, and this desktop shows it. */
     isAgentCommandShownHere?: (guestWebContentsId: number) => boolean
+    /** A paired viewer's relayed input (not an agent's CLI) is currently driving this page. */
+    isPairedViewerCommandRunning?: (guestWebContentsId: number) => boolean
   } = {}
 ): BrowserGuestInputGesture {
   let lastGestureAt: number | null = null
   let lastGestureByAgent = false
   let lastGestureFromThisDesktop = false
+  let lastGestureFromPairedViewer = false
   let lastGestureDomActivations = 0
   let unsubscribe: (() => void) | null = null
   try {
     unsubscribe = onActivatingBrowserGuestInput(guest, () => {
       lastGestureAt = now()
+      syntheticGestureByGuest.delete(guest)
       lastGestureDomActivations = domActivationsByGuest.get(guest) ?? 0
-      lastGestureByAgent = isAgentInjectingInput(guest)
+      const activelyInjecting = isAgentInjectingInput(guest)
+      const pairedViewerEcho =
+        !activelyInjecting &&
+        wasRecentlyInjectingInput(guest) &&
+        isPairedViewerCommandRunning?.(guest.id) === true
+      lastGestureByAgent = activelyInjecting || pairedViewerEcho
       lastGestureFromThisDesktop =
         !lastGestureByAgent || isAgentCommandShownHere?.(guest.id) === true
+      lastGestureFromPairedViewer =
+        lastGestureByAgent && isPairedViewerCommandRunning?.(guest.id) === true
       noteSessionInput(guest, lastGestureAt, lastGestureByAgent)
       onActivatingInput?.(lastGestureByAgent)
     })
@@ -129,13 +165,30 @@ export function trackBrowserGuestInputGesture(
   }
   return {
     consume: () => {
+      const currentNow = now()
+      const currentGeneration = domActivationsByGuest.get(guest) ?? 0
       const observedAt = lastGestureAt
       lastGestureAt = null
-      return unsubscribe &&
+      if (
+        unsubscribe &&
         observedAt !== null &&
-        isRecentBrowserGuestInput(observedAt, now()) &&
-        lastGestureDomActivations === (domActivationsByGuest.get(guest) ?? 0)
-        ? { byAgent: lastGestureByAgent, fromThisDesktop: lastGestureFromThisDesktop }
+        isRecentBrowserGuestInput(observedAt, currentNow) &&
+        lastGestureDomActivations === currentGeneration
+      ) {
+        syntheticGestureByGuest.delete(guest)
+        return {
+          byAgent: lastGestureByAgent,
+          fromThisDesktop: lastGestureFromThisDesktop,
+          fromPairedViewer: lastGestureFromPairedViewer
+        }
+      }
+      const synthetic = syntheticGestureByGuest.get(guest)
+      syntheticGestureByGuest.delete(guest)
+      return unsubscribe &&
+        synthetic &&
+        synthetic.domGeneration === currentGeneration &&
+        isRecentBrowserGuestInput(synthetic.at, currentNow)
+        ? synthetic.gesture
         : null
     },
     dispose: () => {

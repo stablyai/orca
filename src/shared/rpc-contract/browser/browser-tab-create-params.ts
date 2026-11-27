@@ -28,6 +28,8 @@ export const BrowserTabCreateParams = lazyZodSchema(() =>
 export const BrowserOpenUrlParams = lazyZodSchema(() =>
   z.object({
     url: z.url(),
-    worktree: z.string().min(1)
+    worktree: z.string().min(1),
+    paneKey: OptionalString,
+    onlyWhenMobileViewing: z.boolean().optional()
   })
 )

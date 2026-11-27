@@ -156,6 +156,12 @@ export function mobileTouchClickExpression(
       }
       return null;
     };
+    const isEmbeddedFrame = (el) =>
+      Boolean(el && (el.tagName === 'IFRAME' || el.tagName === 'EMBED' || el.tagName === 'OBJECT'));
+    // Never steal clicks aimed at an iframe (e.g. Google Sign-In button) via an ancestor wrapper.
+    if (isEmbeddedFrame(document.elementsFromPoint(inputX, inputY)[0])) {
+      return { x: inputX, y: inputY, adjusted: false, handled: false };
+    }
     const offsets = [[0, 0]];
     for (const distance of [radius * 0.45, radius, radius * 1.35]) {
       for (const angle of [0, Math.PI / 4, Math.PI / 2, Math.PI * 3 / 4, Math.PI,
@@ -168,7 +174,9 @@ export function mobileTouchClickExpression(
       const px = inputX + dx;
       const py = inputY + dy;
       if (px < 0 || py < 0 || px > window.innerWidth || py > window.innerHeight) continue;
-      for (const el of document.elementsFromPoint(px, py)) {
+      const stack = document.elementsFromPoint(px, py);
+      if (isEmbeddedFrame(stack[0])) continue;
+      for (const el of stack) {
         const target = clickableFor(el);
         if (!target || !isUsable(target)) continue;
         const rect = target.getBoundingClientRect();

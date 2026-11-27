@@ -21,22 +21,62 @@ import { escapeTerminalControlCharacters } from '../../shared/terminal/output/te
 import { isBrowserTabSplitDirection } from '../../shared/browser/workspaces/browser-tab-split-direction'
 import { getBrowserWorktreeSelector } from '../workspace-selection/workspace-selector'
 import { getBrowserCommandTarget, getScopedBrowserWorktreeSelector } from './browser-command-target'
+import { BROWSER_OPEN_URL_MOBILE_RUNTIME_CAPABILITY } from '../../shared/browser/runtime/browser-runtime-capabilities'
+import { ORCA_SCRUB_SAFE_PANE_ENV } from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   'open-url': async ({ flags, client, cwd, json }) => {
     const url = getRequiredStringFlag(flags, 'url')
-    let result: RuntimeRpcSuccess<{ browserPageId: string }>
+    const paneKey = process.env.ORCA_PANE_KEY || process.env[ORCA_SCRUB_SAFE_PANE_ENV] || undefined
+    const onlyWhenMobileViewing = flags.has('if-mobile-viewing')
+    // Exceeds the host's 3.5s mobile-open deadline so the host cancels and cleans up before /usr/bin/open fallback runs.
+    const mobileShimTimeoutMs = 5_000
+    if (onlyWhenMobileViewing) {
+      // Older runtimes drop onlyWhenMobileViewing and would hijack desktop open; fall through cleanly.
+      const status = await client.call<RuntimeStatus>('status.get', undefined, {
+        timeoutMs: mobileShimTimeoutMs
+      })
+      if (!status.result.capabilities?.includes(BROWSER_OPEN_URL_MOBILE_RUNTIME_CAPABILITY)) {
+        process.exitCode = 2
+        return
+      }
+    }
+    // Prefer the pane's own worktree under --if-mobile-viewing so `cd` to another folder still targets mobile's workspace.
+    const envWorktree = process.env.ORCA_WORKTREE_ID
+      ? `id:${process.env.ORCA_WORKTREE_ID}`
+      : undefined
+    let result: RuntimeRpcSuccess<{ browserPageId: string | null }>
     try {
-      const worktree = await getScopedBrowserWorktreeSelector(flags, cwd, client)
-      result = await client.call<{ browserPageId: string }>(
+      const worktree =
+        (onlyWhenMobileViewing && !flags.has('worktree') ? envWorktree : undefined) ??
+        (await getScopedBrowserWorktreeSelector(flags, cwd, client)) ??
+        envWorktree
+      if (onlyWhenMobileViewing && !worktree) {
+        process.exitCode = 2
+        return
+      }
+      result = await client.call<{ browserPageId: string | null }>(
         'browser.openUrl',
-        { url, worktree },
-        { timeoutMs: 60_000 }
+        {
+          url,
+          worktree,
+          ...(paneKey ? { paneKey } : {}),
+          ...(onlyWhenMobileViewing ? { onlyWhenMobileViewing: true } : {})
+        },
+        { timeoutMs: onlyWhenMobileViewing ? mobileShimTimeoutMs : 60_000 }
       )
     } catch (error) {
-      throw withOpenUrlYourselfLine(error, url)
+      throw onlyWhenMobileViewing ? error : withOpenUrlYourselfLine(error, url)
     }
-    printResult(result, json, (v) => `Opened URL in tab ${v.browserPageId}`)
+    if (onlyWhenMobileViewing && !result.result.browserPageId) {
+      // Signal caller shims (e.g. macOS open) to fall through to the host's default browser.
+      process.exitCode = 2
+      return
+    }
+    if (!flags.has('quiet')) {
+      printResult(result, json, (v) => `Opened URL in tab ${v.browserPageId}`)
+    }
   },
   'tab list': async ({ flags, client, cwd, json }) => {
     const worktree = await getBrowserWorktreeSelector(flags, cwd, client)

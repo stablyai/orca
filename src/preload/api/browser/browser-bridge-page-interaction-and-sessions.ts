@@ -1,4 +1,5 @@
 import type { GoogleCookieClearLocalTarget } from '../../../shared/browser/cookies/browser-google-cookie-clear'
+import type { OpenLinkInOrcaTabEvent } from '../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type {
   BrowserCaptureCleanPageArgs,
   BrowserCleanPageCapture
@@ -136,13 +137,9 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.on('browser:pane-focus', listener)
     return () => ipcRenderer.removeListener('browser:pane-focus', listener)
   },
-  onOpenLinkInOrcaTab: (
-    callback: (event: { browserPageId: string; url: string; activate?: boolean }) => void
-  ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: { browserPageId: string; url: string; activate?: boolean }
-    ) => callback(data)
+  onOpenLinkInOrcaTab: (callback: (event: OpenLinkInOrcaTabEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: OpenLinkInOrcaTabEvent) =>
+      callback(data)
     ipcRenderer.on('browser:open-link-in-orca-tab', listener)
     return () => ipcRenderer.removeListener('browser:open-link-in-orca-tab', listener)
   },

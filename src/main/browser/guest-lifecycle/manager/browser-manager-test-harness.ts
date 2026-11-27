@@ -63,6 +63,8 @@ export function resetBrowserManagerState(): void {
   browserManager.setAgentLeadListener(null)
   browserManager.setOffscreenTabOpener(null)
   browserManager.setServerPagePopupPresenter(null)
+  browserManager.setServerPagePopupCloser(null)
+  browserManager.setServerPageLinkTabPresenter(null)
   browserManager.setDictationShortcutForwardingPredicate(null)
   browserManager.setSettingsResolver(() => ({}))
 }

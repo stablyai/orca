@@ -14,6 +14,7 @@ type InjectionTarget = Pick<WebContents, 'id' | 'isDestroyed' | 'setIgnoreMenuSh
   }
 }
 
+const RECENT_INJECTION_ECHO_MS = 300
 const suspensions = new WeakMap<InjectionTarget, Set<(suspended: boolean) => Promise<void>>>()
 
 async function setSuspended(target: InjectionTarget, suspended: boolean): Promise<void> {
@@ -85,10 +86,17 @@ export function registerAgentInputSuspension(
 
 const suspensionGates = new WeakMap<InjectionTarget, Promise<void>>()
 const injectionDepth = new WeakMap<InjectionTarget, number>()
+const lastInjectionEndedAt = new WeakMap<InjectionTarget, number>()
 const keyboardDepth = new WeakMap<InjectionTarget, number>()
 
 export function isAgentInjectingInput(webContents: InjectionTarget): boolean {
   return (injectionDepth.get(webContents) ?? 0) > 0
+}
+
+/** True briefly after injection finishes so delayed cross-origin iframe echoes stay attributable to paired viewers. */
+export function wasRecentlyInjectingInput(webContents: InjectionTarget): boolean {
+  const endedAt = lastInjectionEndedAt.get(webContents)
+  return endedAt !== undefined && Date.now() - endedAt <= RECENT_INJECTION_ECHO_MS
 }
 
 export async function withAgentInputInjection<T>(
@@ -121,6 +129,7 @@ export async function withAgentInputInjection<T>(
       injectionDepth.set(webContents, remaining)
     } else {
       injectionDepth.delete(webContents)
+      lastInjectionEndedAt.set(webContents, Date.now())
     }
     try {
       if (keyboard) {

@@ -53,17 +53,14 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
   ): RuntimeMobileSessionBrowserTab[] {
     const backend = this.offscreenBrowserBackend
     const rendererPageIds = this.getRendererOwnedBrowserPageIds(worktreeId)
-    // Saved tabs whose page starts on first use are listed as running ones are.
-    const serverTabs =
-      backend && this.agentBrowserBridge?.tabList
-        ? [
-            ...this.agentBrowserBridge.tabList(worktreeId).tabs.filter((tab) =>
-              // A sign-in popup a server page opened is streamed like a tab, as a desktop shows it in a window.
-              backend.ownsTab(tab.openerBrowserPageId ?? tab.browserPageId)
-            ),
-            ...this.serveBrowserTabs.listUnstarted(worktreeId)
-          ].filter((tab) => !rendererPageIds.has(tab.browserPageId))
-        : []
+    const liveTabs = this.agentBrowserBridge?.tabList?.(worktreeId).tabs ?? []
+    const unstarted = backend ? this.serveBrowserTabs.listUnstarted(worktreeId) : []
+    const serverTabs = [
+      ...liveTabs.filter(
+        (tab) => tab.openerBrowserPageId !== undefined || backend?.ownsTab(tab.browserPageId)
+      ),
+      ...unstarted
+    ].filter((tab) => !rendererPageIds.has(tab.browserPageId))
     const publishedServerTabs = serverTabs.map((tab) => {
       const navigation = this.agentBrowserBridge?.getPageNavigationState(tab.browserPageId)
       const persistedProps = this.getPersistedUnifiedSessionTabProps(

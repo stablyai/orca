@@ -80,7 +80,7 @@ export function createBrowserScreencastSnapshotCapture(
           navigationCaptureGeneration = null
         }
       })
-    }, 250)
+    }, 100)
   }
 
   const isSnapshotStale = (initialOnly: boolean, generation?: number): boolean =>

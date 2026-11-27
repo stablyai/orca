@@ -2,6 +2,7 @@ import type { BrowserScreencastResult } from '../../../../shared/browser/runtime
 import { addBrowserPagePromptViewer } from '../../../browser/guest-lifecycle/prompts/browser-page-prompt-viewers'
 import { addBrowserFileChooserViewer } from '../../../browser/guest-lifecycle/prompts/browser-file-chooser-viewers'
 import { addBrowserPrintViewer } from '../../../browser/guest-lifecycle/prompts/browser-print-viewers'
+import { addBrowserPopupViewer } from '../../../browser/guest-lifecycle/popups/browser-popup-viewer-registry'
 import {
   offerBrowserDownloadCopy,
   releaseBrowserDownloadCopy
@@ -24,6 +25,9 @@ export function startScreencastViewerEvents(
     return null
   }
   const stops: (() => void)[] = []
+  if (pairedDeviceId) {
+    stops.push(addBrowserPopupViewer(page.browserPageId, page.guestWebContentsId, pairedDeviceId))
+  }
   // Only a paired device's answers can be checked.
   if (params.pagePrompts === 1 && pairedDeviceId) {
     stops.push(

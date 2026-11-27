@@ -7,7 +7,7 @@ import type {
   PendingScreencastFrame
 } from './browser-screencast-stream-types'
 
-const BACKPRESSURE_RETRY_MS = 50
+const BACKPRESSURE_RETRY_MS = 25
 
 type BrowserScreencastFramePacerDeps = {
   /** Sends on the lane's CDP session: acks pace only the screencast they belong to. */

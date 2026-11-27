@@ -245,7 +245,7 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     return false
   }
 
-  private pageIdForGuest(guestWebContentsId: number): string {
+  protected pageIdForGuest(guestWebContentsId: number): string {
     return (
       this.tabIdByWebContentsId.get(guestWebContentsId) ?? browserPopupPageId(guestWebContentsId)
     )

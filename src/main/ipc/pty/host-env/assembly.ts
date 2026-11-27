@@ -12,6 +12,7 @@ import { wslHookRelayManager } from '../../../agent-hooks/wsl-relay/wsl-hook-rel
 import { wslInteropHealthMonitor } from '../../../wsl/execution/wsl-interop-health'
 import { piTitlebarExtensionService } from '../../../pi/managed-extensions/titlebar-extension-service'
 import { prependOrcaCliDirToChildPath } from '../../../cli/launchers/orca-cli-child-path'
+import { applyMacosTerminalOpenShimEnv } from '../../../cli/launchers/macos-terminal-open-shim'
 import { appendManagedAgentDirsToChildPath } from '../../../managed-agent-cli/managed-agent-cli-registry'
 import { resolveTerminalBrowserCommand } from './terminal-browser-command'
 import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl/wsl-managed-cli'
@@ -313,6 +314,11 @@ export function buildPtyHostEnv(
       ? getWslCliCommandName(opts.isPackaged)
       : resolveTerminalBrowserCommand(cliLauncher)
   }
+  applyMacosTerminalOpenShimEnv(baseEnv, {
+    userDataPath: opts.userDataPath,
+    cliLauncher,
+    isWsl: opts.isWsl
+  })
   // Browser-relayed and SSH-managed headless hosts both have viewers on another machine.
   applyRemoteViewerClipboardEnv(baseEnv, {
     launchAgent: opts.launchAgent,

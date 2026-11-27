@@ -30,6 +30,8 @@ export type ResolvedBrowserPageWebContents = {
   webContents: Electron.WebContents
 }
 
+export type FollowMobileBrowserTabOptions = { paneKey?: string; signal?: AbortSignal }
+
 export type RuntimeBrowserCommandHost = {
   getRuntimeId(): string
   getAgentBrowserBridge(): AgentBrowserBridge | null
@@ -68,6 +70,12 @@ export type RuntimeBrowserCommandHost = {
   readBrowserPageAnnotations?(browserPageId: string): BrowserPageAnnotation[]
   /** The tab bar's browser tabs, loaded or not, from the published session snapshot. */
   readBrowserTabBar?(worktreeId: string | undefined): BrowserTabBarEntry[]
+  hasMobileTerminalViewer?(paneKey: string, worktreeId?: string): boolean
+  followBrowserTabOnMobile?(
+    worktreeId: string,
+    browserPageId: string,
+    options?: FollowMobileBrowserTabOptions
+  ): Promise<boolean>
   retireRuntimeOwnedBrowserSessionTab?(worktreeId: string, browserPageId: string): boolean | void
   /** Persist/start only when no host window exists; hasStartable reads saved tabs either way. */
   serveBrowserTabs?: Pick<

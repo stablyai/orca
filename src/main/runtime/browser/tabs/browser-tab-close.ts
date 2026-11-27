@@ -6,6 +6,7 @@ import {
 } from '../client-pages/browser-client-page-close'
 import { BrowserError } from '../../../browser/browser-error'
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
+import { browserPopupPageWebContentsId } from '../../../browser/guest-lifecycle/popups/browser-popup-page-id'
 import { closeBrowserTabInRenderer } from './browser-tab-renderer-close'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'
@@ -99,13 +100,30 @@ export class RuntimeBrowserTabClose {
     }
 
     // Popups are windows, not renderer tabs; close them as the page's own window.close() would.
+    // Registered ordinary tabs that happen to have popup-shaped IDs keep the normal renderer close path.
     const popupPageId = tabId ?? bridge.getActivePageId(worktreeId)
     if (
       popupPageId &&
-      bridge.getRegisteredTabs(worktreeId).has(popupPageId) &&
-      (await browserManager.closePopupPage(popupPageId))
+      browserPopupPageWebContentsId(popupPageId) !== null &&
+      browserManager.getGuestWebContentsId(popupPageId) === null
     ) {
-      return { closed: true }
+      if (
+        bridge.getRegisteredTabs(worktreeId).has(popupPageId) &&
+        (await browserManager.closePopupPage(popupPageId))
+      ) {
+        return { closed: true }
+      }
+      if (
+        !browserManager.isLivePopupPage(popupPageId) &&
+        this.targets.retireGhostBrowserSessionRow(worktreeId, popupPageId)
+      ) {
+        return { closed: true }
+      }
+      const scope = worktreeId ? ' in this worktree' : ''
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Browser page ${popupPageId} was not found${scope}`
+      )
     }
 
     const authoritativeWindowId = this.host.getAvailableAuthoritativeWindowId()

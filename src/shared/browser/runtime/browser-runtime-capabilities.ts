@@ -35,6 +35,9 @@ export const BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY =
 // Older hosts drop expectUrl and would act unguarded, so the CLI refuses the flag without this.
 export const BROWSER_EXPECT_URL_RUNTIME_CAPABILITY = 'browser.expect-url.v1' as const
 
+// Older hosts drop openUrl's paneKey/onlyWhenMobileViewing and would open on a paired desktop instead of falling back.
+export const BROWSER_OPEN_URL_MOBILE_RUNTIME_CAPABILITY = 'browser.open-url-mobile.v1' as const
+
 // Older hosts publish server tabs with canGoBack/canGoForward hardcoded false, so clients keep both arrows enabled without this.
 export const BROWSER_TAB_HISTORY_STATE_RUNTIME_CAPABILITY = 'browser.tab-history-state.v1' as const
 
@@ -68,6 +71,7 @@ export const BROWSER_PAGE_PROMPTS_RUNTIME_CAPABILITY = 'browser.page-prompts.v1'
 // Headless, identity, certificate trust, page zoom, site display, stop/hard reload, find in page, profile switch, audio mute and page prompts are host-conditional, so getStatus adds them itself.
 export const BROWSER_RUNTIME_CAPABILITIES = [
   BROWSER_EXPECT_URL_RUNTIME_CAPABILITY,
+  BROWSER_OPEN_URL_MOBILE_RUNTIME_CAPABILITY,
   BROWSER_TAB_HISTORY_STATE_RUNTIME_CAPABILITY,
   BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY,
   BROWSER_PROFILE_COOKIE_CLEAR_CAPABILITY,

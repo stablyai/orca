@@ -1,17 +1,26 @@
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import {
+  HEADLESS_RUNTIME_WINDOW_ID,
+  type RuntimeMobileSessionTabsResult,
+  type RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { selectMobileSessionTab } from '../../session-tabs/layout/mobile-session-tab-selection'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as MobileSessionPublication } from '../../session-tabs/publication/session-tabs-change-publication'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as MobileSessionPreservation } from '../../session-tabs/restoration/mobile-session-publication-preservation'
 import { OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh } from './perform-mobile-session-pty-records-refresh'
 import type { BrowserSessionTabSelectionOptions } from '../../browser/tabs/browser-tab-create-publication'
-import type { ServerPagePopupPresentation } from '../../../browser/guest-lifecycle/popups/browser-popup-ownership'
 import type {
-  RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+  ServerPageLinkTabPresentation,
+  ServerPagePopupClosure,
+  ServerPagePopupPresentation
+} from '../../../browser/guest-lifecycle/popups/browser-popup-ownership'
+import { bindServerPagePopupClientRuntime } from './server-page-client-popup-follow'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
-import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
-import { navigationTargetsClients } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
+import type { FollowMobileBrowserTabOptions } from '../../browser/commands/browser-command-contracts'
+import { createMobileBrowserOpenRuntimeHost } from '../../browser/tabs/mobile-terminal-browser-open'
+import {
+  navigationTargetsClients,
+  type RuntimeNavigationTarget
+} from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import {
   activateClientSessionTabSelection,
   deriveClientSessionTabSelection,
@@ -46,6 +55,62 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
       focusesHost: false,
       caller: { clientNavigationId: popup.pairedDeviceId, navigation: 'caller', follows: true }
     })
+  }
+
+  protected abstract getPtyRecordForPaneKey(paneKey: string): { ptyId: string } | null
+  protected abstract getMobileDisplayMode(ptyId: string): 'auto' | 'desktop'
+
+  private readonly mobileTabFollowRuntime: Parameters<typeof bindServerPagePopupClientRuntime>[0] =
+    {
+      getActiveTabId: (c, id) => this.clientSessionTabSelections.getActiveTabId(c, id),
+      getStoredSnapshot: (id) => this.mobileSessionTabsByWorktree.get(id),
+      graphSyncCallbacks: this.graphSyncCallbacks,
+      getMobileSessionTabsForWorktree: (id) =>
+        this.getMobileSessionTabsForWorktree(id, undefined, { includeAgentSenders: false }),
+      applyTabNavigation: (s, t, n, c, f) =>
+        void this.applyMobileSessionTabNavigation(s, t, n, c, f)
+    }
+
+  private readonly popupClientRuntime = bindServerPagePopupClientRuntime(
+    this.mobileTabFollowRuntime
+  )
+
+  private readonly mobileBrowserOpenHost = createMobileBrowserOpenRuntimeHost({
+    ...this.mobileTabFollowRuntime,
+    getLeafPtyId: (t, l) => this.leaves.get(this.getLeafKey(t, l))?.ptyId,
+    getPanePtyId: (k) => this.getPtyRecordForPaneKey(k)?.ptyId,
+    getDisplayMode: (id) => this.getMobileDisplayMode(id),
+    getDriverKind: (id) => this.getDriver(id).kind,
+    getSubscribers: (id) => this.mobileSubscribers.get(id)?.values(),
+    getMobileListenerIds: (id) =>
+      this.selectMobileSessionTabsListeners(id)
+        .filter((s) => s.clientKind === 'mobile' && Boolean(s.clientNavigationId))
+        .map((s) => s.clientNavigationId!),
+    getClientActiveTabId: this.mobileTabFollowRuntime.getActiveTabId,
+    hasOffscreenBrowser: () =>
+      !this.hasAuthoritativeWindow() && Boolean(this.offscreenBrowserBackend),
+    hydrateHeadlessTabs: (id) => this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(id),
+    getMobileSessionSnapshot: this.mobileTabFollowRuntime.getStoredSnapshot
+  })
+
+  closeServerPagePopupForClient(popup: ServerPagePopupClosure): Promise<void> {
+    return this.popupClientRuntime.closePopup(popup)
+  }
+
+  showOpenedLinkTabToClient(link: ServerPageLinkTabPresentation): Promise<void> {
+    return this.popupClientRuntime.followLinkTab(link)
+  }
+
+  protected hasMobileTerminalViewerForPane(paneKey: string, worktreeId?: string): boolean {
+    return this.mobileBrowserOpenHost.hasMobileTerminalViewer(paneKey, worktreeId)
+  }
+
+  protected followBrowserTabOnMobile(
+    worktreeId: string,
+    browserPageId: string,
+    options?: FollowMobileBrowserTabOptions
+  ): Promise<boolean> {
+    return this.mobileBrowserOpenHost.followBrowserTabOnMobile(worktreeId, browserPageId, options)
   }
 
   protected applyMobileSessionTabNavigation(
@@ -240,33 +305,18 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
           }
         }
       : session.terminalLayoutsByTabId
+    const groups = session.tabGroups?.[worktreeId]?.map((group) =>
+      group.id === snapshot.activeGroupId ? { ...group, activeTabId: tab.parentTabId } : group
+    )
+    const activeGroupMap = snapshot.activeGroupId
+      ? { ...session.activeGroupIdByWorktree, [worktreeId]: snapshot.activeGroupId }
+      : undefined
     this.setWorkspaceSessionForWorktree(worktreeId, {
       ...session,
       activeTabId: tab.parentTabId,
-      activeTabIdByWorktree: {
-        ...session.activeTabIdByWorktree,
-        [worktreeId]: tab.parentTabId
-      },
-      ...(session.tabGroups?.[worktreeId]
-        ? {
-            tabGroups: {
-              ...session.tabGroups,
-              [worktreeId]: session.tabGroups[worktreeId].map((group) =>
-                group.id === snapshot.activeGroupId
-                  ? { ...group, activeTabId: tab.parentTabId }
-                  : group
-              )
-            }
-          }
-        : {}),
-      ...(snapshot.activeGroupId
-        ? {
-            activeGroupIdByWorktree: {
-              ...session.activeGroupIdByWorktree,
-              [worktreeId]: snapshot.activeGroupId
-            }
-          }
-        : {}),
+      activeTabIdByWorktree: { ...session.activeTabIdByWorktree, [worktreeId]: tab.parentTabId },
+      ...(groups ? { tabGroups: { ...session.tabGroups, [worktreeId]: groups } } : {}),
+      ...(activeGroupMap ? { activeGroupIdByWorktree: activeGroupMap } : {}),
       terminalLayoutsByTabId: nextLayouts
     })
   }

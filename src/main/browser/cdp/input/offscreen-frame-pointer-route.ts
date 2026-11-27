@@ -229,6 +229,22 @@ async function sendToRoute(
   )
 }
 
+export async function resolveCrossSitePointerTarget(
+  webContents: WebContents,
+  send: GuestSessionCdpSender,
+  point: Point
+): Promise<{ sessionId: string; framePoint: Point } | null> {
+  const route = await resolvePointerRoute(webContents, send, point, { pressing: true })
+  const sessionId = route.sessions.at(-1)
+  if (!sessionId) {
+    return null
+  }
+  for (const frameSessionId of route.sessions) {
+    await coverFrameSessionWithFileChooserInterception(webContents, frameSessionId)
+  }
+  return { sessionId, framePoint: toFrame(route.frames, point) }
+}
+
 /** Page-level Input.dispatchMouseEvent for an offscreen page, delivered to the frame under the pointer. */
 export async function sendOffscreenPagePointerInput(
   webContents: WebContents,

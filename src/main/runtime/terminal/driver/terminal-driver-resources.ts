@@ -6,6 +6,7 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import type { RuntimeAccountController } from '../../agent-session/environment/runtime-account-controller'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { BrowserSessionTabSelectionOptions } from '../../browser/tabs/browser-tab-create-publication'
+import type { FollowMobileBrowserTabOptions as Opts } from '../../browser/commands/browser-command-contracts'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type {
@@ -80,6 +81,8 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     browserPageId: string,
     options: BrowserSessionTabSelectionOptions
   ): Promise<void>
+  protected abstract hasMobileTerminalViewerForPane(paneKey: string, worktreeId?: string): boolean
+  protected abstract followBrowserTabOnMobile(w: string, p: string, o?: Opts): Promise<boolean>
   abstract notifyMobileSessionTabsChanged(worktreeId?: string): void
   protected abstract getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId
   protected abstract setWorkspaceSessionForWorktree(
@@ -214,6 +217,8 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
         readBrowserTabBar(this.mobileSessionTabsByWorktree, worktreeId, (id) =>
           ownsBrowserTabBarWorkspace(this.store, id)
         ),
+      hasMobileTerminalViewer: this.hasMobileTerminalViewerForPane.bind(this),
+      followBrowserTabOnMobile: this.followBrowserTabOnMobile.bind(this),
       retireRuntimeOwnedBrowserSessionTab: (worktreeId, browserPageId) =>
         this.retireRuntimeOwnedBrowserSessionTab(worktreeId, browserPageId),
       serveBrowserTabs: this.serveBrowserTabs

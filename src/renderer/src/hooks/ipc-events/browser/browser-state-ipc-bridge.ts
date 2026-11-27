@@ -231,7 +231,7 @@ export function registerBrowserStateIpcBridge(
   )
   unsubs.push(
     // Why no runtime guard: only guests in this process ask, so SSH-routed pages in a server-owned workspace open here too.
-    window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url, activate }) => {
+    window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url, activate, newBrowserPageId }) => {
       const store = useAppStore.getState()
       const sourcePage = Object.values(store.browserPagesByWorkspace)
         .flat()
@@ -246,6 +246,7 @@ export function registerBrowserStateIpcBridge(
           worktreeId: sourcePage.worktreeId,
           url,
           activate: activate ?? true,
+          browserPageId: newBrowserPageId,
           onOpened: markBrowserPageOpenedByPage
         })
         return
@@ -256,7 +257,8 @@ export function registerBrowserStateIpcBridge(
         worktreeId: sourcePage.worktreeId,
         url,
         activate: activate ?? true,
-        placement
+        placement,
+        browserPageId: newBrowserPageId
       })
       if (openedPageId) {
         markBrowserPageOpenedByPage(openedPageId)

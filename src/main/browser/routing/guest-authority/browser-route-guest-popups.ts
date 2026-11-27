@@ -1,4 +1,4 @@
-import type { Session, WebContents } from 'electron'
+import type { WebContents } from 'electron'
 import '../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import {
@@ -8,17 +8,21 @@ import {
   type NewBrowserTabPopupRequest
 } from '../../guest-lifecycle/popups/browser-popup-new-tab-intent'
 import { enforceBrowserRouteWebRtcPolicy } from '../../network/egress/browser-route-webrtc-policy'
-import { trackBrowserGuestInputGesture } from '../../guest-lifecycle/input/browser-guest-input-gesture'
-import type {
-  BrowserGuestInputGesture,
-  ObservedBrowserGuestGesture
+import {
+  trackBrowserGuestInputGesture,
+  type BrowserGuestInputGesture
 } from '../../guest-lifecycle/input/browser-guest-input-gesture'
 import {
   registerBrowserRouteGuestPopup,
   releaseBrowserRouteGuestPopup
 } from './browser-route-guest-popup-ownership'
-import { ROUTE_POPUP_WINDOW_OPTIONS } from './browser-route-guest-popup-window-options'
-import type { BrowserRouteGuestPopupWindow } from './browser-route-guest-popup-window-options'
+import {
+  ROUTE_POPUP_WINDOW_OPTIONS,
+  type BrowserRouteGuestPopupController,
+  type BrowserRouteGuestPopupDependencies,
+  type BrowserRouteGuestPopupWindow,
+  type BrowserRoutePopupRequest
+} from './browser-route-guest-popup-window-options'
 import {
   discardPopupChildWindow,
   openPopupWithOriginBar,
@@ -31,47 +35,11 @@ import {
 } from '../../guest-lifecycle/popups/presentation/browser-popup-native-window'
 import { allowPageUnload } from '../../guest-lifecycle/navigation/browser-guest-unload-policy'
 import { trackBrowserPopupUserAgentDemand } from '../../guest-lifecycle/manager/navigation/browser-guest-frame-user-agent-demand'
+import type { PopupViewerTarget } from '../../guest-lifecycle/popups/browser-viewer-popup-publication'
+
+export type { BrowserRouteGuestPopupController, BrowserRouteGuestPopupDependencies }
 
 export const MAX_BROWSER_ROUTE_GUEST_POPUPS = 4
-
-export type BrowserRouteGuestPopupDependencies = {
-  getPartitionForSession: (session: Session) => string | null
-  /** Route guests replace the manager's popup handler, so a denial is otherwise entirely silent. */
-  reportBlockedPopup?: (input: { openerWebContentsId: number; url: string }) => void
-  popupReleased?: (opener: WebContents) => void
-  /** The manager's new-tab policy; true when it answered the request. */
-  openNewTabPopup?: (
-    source: WebContents,
-    request: NewBrowserTabPopupRequest,
-    observed: ObservedBrowserGuestGesture | null,
-    childOpener?: Electron.WebFrameMain | null
-  ) => boolean
-  /** A person's own input in a popup takes its opener's page back from the agent. */
-  releaseAgentLead?: (openerWebContentsId: number) => void
-  isAgentCommandShownHere?: (webContentsId: number) => boolean
-  /** Injected input reaching this popup now is a paired viewer's, not an agent's. */
-  isPersonCommandRunning?: (webContentsId: number) => boolean
-  openPopupWindow?: (
-    options: PopupChildWindowOptions,
-    targetUrl: string,
-    prepareContent: (contents: WebContents) => boolean
-  ) => BrowserRouteGuestPopupWindow
-}
-
-export type BrowserRouteGuestPopupController = {
-  windowOpenHandler: (details?: PopupRequest) => Electron.WindowOpenHandlerResponse
-  closeAll: () => void
-  dispose: () => void
-}
-
-type PopupRequest = {
-  url?: string
-  referrer?: Electron.Referrer
-  postBody?: Electron.PostBody | null
-  disposition?: string
-  features?: string
-  frameName?: string
-}
 
 export function createBrowserRouteGuestPopupController(input: {
   opener: WebContents
@@ -84,8 +52,11 @@ export function createBrowserRouteGuestPopupController(input: {
   const popups = new Set<BrowserRouteGuestPopupWindow>()
   const gestures = new Set<BrowserGuestInputGesture>()
   const popupWebContentsIds = new Set<number>()
-  const { isAgentCommandShownHere } = input.dependencies
-  const openerGesture = trackBrowserGuestInputGesture(input.opener, { isAgentCommandShownHere })
+  const { isAgentCommandShownHere, isPersonCommandRunning } = input.dependencies
+  const openerGesture = trackBrowserGuestInputGesture(input.opener, {
+    isAgentCommandShownHere,
+    isPairedViewerCommandRunning: isPersonCommandRunning
+  })
   gestures.add(openerGesture)
   // Only disposal is permanent; navigation authority may return after reconnect.
   let disposed = false
@@ -103,7 +74,10 @@ export function createBrowserRouteGuestPopupController(input: {
     }
   }
 
-  const preparePopupContents = (contents: WebContents): boolean => {
+  const preparePopupContents = (
+    contents: WebContents,
+    viewerTarget: PopupViewerTarget
+  ): boolean => {
     let contentsPartition: string | null = null
     let popupWebContentsId = 0
     try {
@@ -125,6 +99,7 @@ export function createBrowserRouteGuestPopupController(input: {
     }
     const gesture = trackBrowserGuestInputGesture(contents, {
       isAgentCommandShownHere,
+      isPairedViewerCommandRunning: isPersonCommandRunning,
       onActivatingInput: (byAgent) => {
         if (byAgent && !input.dependencies.isPersonCommandRunning?.(contents.id)) {
           return
@@ -157,6 +132,7 @@ export function createBrowserRouteGuestPopupController(input: {
         gestures.delete(gesture)
         gesture.dispose()
       })
+      input.dependencies.popupOpened?.(input.opener, contents, viewerTarget)
     } catch {
       releasePopupOwnership(popupWebContentsId)
       gestures.delete(gesture)
@@ -196,11 +172,17 @@ export function createBrowserRouteGuestPopupController(input: {
     }
   }
 
-  const openPopup = (options: PopupChildWindowOptions, targetUrl: string): WebContents => {
+  const openPopup = (
+    options: PopupChildWindowOptions,
+    targetUrl: string,
+    viewerTarget: PopupViewerTarget
+  ): WebContents => {
     if (!options.webContents && !options.nativeWindow && !options.loadInitialUrl) {
       reportBlockedPopup(targetUrl)
     }
-    const popup = openPopupWindow(options, targetUrl, preparePopupContents)
+    const popup = openPopupWindow(options, targetUrl, (contents) =>
+      preparePopupContents(contents, viewerTarget)
+    )
     popups.add(popup)
     popup.onClosed(() => popups.delete(popup))
     if (disposed) {
@@ -212,7 +194,7 @@ export function createBrowserRouteGuestPopupController(input: {
   function buildWindowOpenHandler(
     source: WebContents,
     gesture: BrowserGuestInputGesture
-  ): (details?: PopupRequest) => Electron.WindowOpenHandlerResponse {
+  ): (details?: BrowserRoutePopupRequest) => Electron.WindowOpenHandlerResponse {
     return (details) => {
       const observed = gesture.consume()
       const normalized = normalizeBrowserPopupUrl(details?.url)
@@ -235,8 +217,15 @@ export function createBrowserRouteGuestPopupController(input: {
         }
         return { action: 'deny' }
       }
+      const viewerTarget: PopupViewerTarget = input.dependencies.resolvePopupViewerTarget?.(
+        source.id,
+        observed
+      ) ?? { shownToViewers: false, pairedDeviceId: null }
+      const shownToViewers = viewerTarget.shownToViewers
+      const showWhenAppActive = !shownToViewers && observed.byAgent
       const options = {
         ...ROUTE_POPUP_WINDOW_OPTIONS,
+        ...(shownToViewers ? { show: false } : {}),
         webPreferences: {
           ...ROUTE_POPUP_WINDOW_OPTIONS.webPreferences,
           // Inherit the opener's cookies and SOCKS route even without a Chromium opener relationship.
@@ -249,9 +238,10 @@ export function createBrowserRouteGuestPopupController(input: {
           opener: source,
           options,
           background: details?.disposition === 'background-tab',
-          showWhenAppActive: observed.byAgent,
+          showWhenAppActive,
           canPresent: () => !disposed && navigationAllowed(ORCA_BROWSER_BLANK_URL),
-          onCreated: (nativeOptions) => openPopup(nativeOptions, details?.url ?? normalized)
+          onCreated: (nativeOptions) =>
+            openPopup(nativeOptions, details?.url ?? normalized, viewerTarget)
         })
       }
       return {
@@ -278,12 +268,14 @@ export function createBrowserRouteGuestPopupController(input: {
           return openPopup(
             {
               ...options,
-              showWhenAppActive: observed.byAgent,
+              ...(shownToViewers ? { show: false } : {}),
+              showWhenAppActive,
               // Reopening a POST by URL would discard its body.
               loadInitialUrl:
                 !options.webContents && !details?.postBody && !isBlankBrowserPopupUrl(normalized)
             },
-            details?.url ?? normalized
+            details?.url ?? normalized,
+            viewerTarget
           )
         }
       }

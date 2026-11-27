@@ -16,6 +16,7 @@ import type {
   ClientHostedBrowserRow,
   ClientHostedBrowserRowsEvent
 } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
+import { browserPopupPageWebContentsId } from '../../../browser/guest-lifecycle/popups/browser-popup-page-id'
 
 export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs {
   protected abstract getListedBrowserTabsByPageId(
@@ -84,6 +85,14 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
         liveClientPage?.workspaceId === snapshot.worktree &&
         tab.placement?.kind === 'client' &&
         sameRuntimeBrowserPlacement(liveClientPage.placement, tab.placement)
+      ) {
+        return true
+      }
+      // Native popups live in main, not the renderer; preserve live ones across renderer graph merges.
+      if (
+        typeof tab.browserPageId === 'string' &&
+        browserPopupPageWebContentsId(tab.browserPageId) !== null &&
+        this.getListedBrowserTabsByPageId(snapshot.worktree).has(tab.browserPageId)
       ) {
         return true
       }
@@ -156,7 +165,11 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
     tab: RuntimeMobileSessionBrowserTab
   ): boolean {
     // A closed window's webviews are gone, so its rows need live pages like any other.
-    if (tab.placement?.kind === 'client' || !this.hasAuthoritativeWindow()) {
+    if (
+      tab.placement?.kind === 'client' ||
+      browserPopupPageWebContentsId(tab.browserPageId ?? '') !== null ||
+      !this.hasAuthoritativeWindow()
+    ) {
       return false
     }
     return !this.isHeadlessOwnedMobileBrowserTab(snapshot, tab)
@@ -249,18 +262,29 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
     this.persistClientHostedBrowserPagesForWorktree(worktreeId)
     const hasClientBrowserPages =
       getRuntimeBrowserPageRegistry(this).listPages(worktreeId).length > 0
-    if (this.offscreenBrowserBackend || hasClientBrowserPages) {
+    const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const hasPopupBrowserTabs =
+      (this.agentBrowserBridge
+        ?.tabList?.(worktreeId)
+        .tabs.some((tab) => tab.openerBrowserPageId !== undefined) ??
+        false) ||
+      (existing?.tabs.some(
+        (tab) =>
+          tab.type === 'browser' && browserPopupPageWebContentsId(tab.browserPageId ?? '') !== null
+      ) ??
+        false)
+    if (this.offscreenBrowserBackend || hasClientBrowserPages || hasPopupBrowserTabs) {
       const reconciled = this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
         worktreeId,
-        hasClientBrowserPages
+        hasClientBrowserPages || hasPopupBrowserTabs
           ? { allowAttachedWindow: true, onlyRuntimeOwnedTerminals: true }
           : undefined
       )
       // Reconcile only snapshots hydrate did not already update in place.
       if (!reconciled.has(worktreeId)) {
-        const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
-        if (existing) {
-          this.reconcileHeadlessMobileSessionBrowserTabs(worktreeId, existing)
+        const current = this.mobileSessionTabsByWorktree.get(worktreeId)
+        if (current) {
+          this.reconcileHeadlessMobileSessionBrowserTabs(worktreeId, current)
         }
       }
     }

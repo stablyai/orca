@@ -3,6 +3,8 @@ import type {
   BrowserTypeResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard/clipboard-text'
+import { iterateBrowserTextInsertionChunks } from '../../../../shared/browser/automation/browser-text-insertion-chunks'
+import { AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES } from '../protocol/agent-browser-text-argument-budget'
 import { BrowserError } from '../../browser-error'
 import { acquireElectronDebugger } from '../../cdp/debugger/electron-debugger-lease'
 import {
@@ -60,6 +62,27 @@ export abstract class AgentBrowserBridgeKeyCommands extends AgentBrowserBridgeCa
         // The helper inserts printable text without key events, which key-driven editors ignore.
         await this.pressKeysInPage(sessionName, target, typedInputSteps(input))
         return { typed: true }
+      },
+      { ensureSession: false, requireScopedTarget: true }
+    )
+  }
+
+  async keyboardInsertText(
+    text: string,
+    worktreeId?: string,
+    browserPageId?: string
+  ): Promise<unknown> {
+    await assertClipboardTextWriteWithinLimitWithYield(text)
+    return this.enqueuePageAction(
+      worktreeId,
+      browserPageId,
+      async (sessionName, target) => {
+        await this.pressKeysInPage(
+          sessionName,
+          target,
+          iterateBrowserTextInsertionChunks(text, AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES)
+        )
+        return { inserted: true }
       },
       { ensureSession: false, requireScopedTarget: true }
     )

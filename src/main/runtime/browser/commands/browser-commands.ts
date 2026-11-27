@@ -136,8 +136,10 @@ export class RuntimeBrowserCommands {
     const network = new RuntimeBrowserNetwork(targets)
     const storage = new RuntimeBrowserStorage(targets)
     const queries = new RuntimeBrowserTabQueries(host, targets, catalog)
-    const creation = new RuntimeBrowserTabCreation(host, targets)
     const close = new RuntimeBrowserTabClose(queries, host, targets)
+    const creation = new RuntimeBrowserTabCreation(host, targets, async (page, worktree) => {
+      await close.browserTabClose({ page, worktree })
+    })
     const screencasts = new RuntimeBrowserScreencasts(host, targets, catalog)
     const profiles = new RuntimeBrowserProfiles(
       host,
