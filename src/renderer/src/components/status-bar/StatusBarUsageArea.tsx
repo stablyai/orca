@@ -15,13 +15,12 @@ import { StatusBarUsageChangeNotices } from './usage/StatusBarUsageChangeNotices
 import { ClaudeSwitcherMenu } from './accounts/ClaudeSwitcherMenu'
 import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
 import { ProviderDetailsMenu } from './usage/ProviderDetailsMenu'
-import { AntigravityUsageMenu } from './usage/AntigravityUsageMenu'
 import {
   ClippedRowProviderSegment,
   ProviderSegment,
-  UsageOverflowChip,
   isUsageUrgent
 } from './usage/StatusBarProviderSegment'
+import { UsageOverflowChip } from './usage/usage-overflow-chip'
 import {
   USAGE_ROW_LEVELS,
   chooseUsageRowLayout,
@@ -44,7 +43,6 @@ export function StatusBarUsageArea({
   const t = useTranslate()
   const [usageAreaRef, usageWidths] = useUsageRowWidths()
   const {
-    antigravityAccounts,
     anyFetching,
     anyVisible,
     canSignInFromUsageRow,
@@ -85,6 +83,8 @@ export function StatusBarUsageArea({
   const shownProviders = rosterProviders.filter((p) => !usageLayout.collapsed.includes(p.provider))
   const hiddenProviders = rosterProviders.filter((p) => usageLayout.collapsed.includes(p.provider))
   const showUnitLabel = shownProviders.some((p) => usageChipShowsPercentage(p, usageMode, t))
+  // Why the setting, not usageMode: the measured gap and label must not depend on the layout choice.
+  const compactBar = statusBarUsageMode === 'compact'
 
   // Why: usage gives way first, but keeps enough width to stay clickable; its popover holds
   // every provider. Its form is chosen from widths measured off-layout (see useUsageRowWidths).
@@ -113,11 +113,16 @@ export function StatusBarUsageArea({
                 <button
                   type="button"
                   data-usage-trigger=""
-                  className="inline-flex items-center gap-3 rounded px-1 py-0.5 hover:bg-accent/70"
+                  className={cn(
+                    'inline-flex items-center rounded px-1 py-0.5 hover:bg-accent/70',
+                    compactBar ? 'gap-3.5' : 'gap-3'
+                  )}
                   aria-label={t('auto.components.status.bar.UsageRosterPanel.title', 'Usage')}
                   title={remoteOwner?.label}
                 >
-                  {showUnitLabel ? <UsageUnitLabel display={usagePercentageDisplay} /> : null}
+                  {showUnitLabel ? (
+                    <UsageUnitLabel display={usagePercentageDisplay} compact={compactBar} />
+                  ) : null}
                   {shownProviders.map((p) => (
                     <ClippedRowProviderSegment
                       key={p.provider}
@@ -125,6 +130,8 @@ export function StatusBarUsageArea({
                       compact={usageCompact}
                       display={usagePercentageDisplay}
                       mode={usageMode}
+                      barMode={statusBarUsageMode}
+                      hostLabel={remoteOwner?.label}
                     />
                   ))}
                   {hiddenProviders.length > 0 ? (
@@ -132,6 +139,7 @@ export function StatusBarUsageArea({
                       hidden={hiddenProviders}
                       providerCount={rosterProviders.length}
                       display={usagePercentageDisplay}
+                      hostLabel={remoteOwner?.label}
                     />
                   ) : null}
                 </button>
@@ -179,16 +187,6 @@ export function StatusBarUsageArea({
                           ownerUsage={ownerUsage}
                           asSubmenu
                           triggerContent={rowNode}
-                        />
-                      )
-                    }
-                    if (p.provider === 'antigravity') {
-                      return (
-                        <AntigravityUsageMenu
-                          antigravity={p}
-                          accounts={antigravityAccounts}
-                          triggerContent={rowNode}
-                          onManageAccounts={() => handleOpenProviderAccounts('antigravity')}
                         />
                       )
                     }
@@ -252,7 +250,7 @@ export function StatusBarUsageArea({
           className="pointer-events-none invisible absolute left-0 top-0 flex w-max items-center"
         >
           <span data-measure-unit="" className="inline-flex">
-            <UsageUnitLabel display={usagePercentageDisplay} />
+            <UsageUnitLabel display={usagePercentageDisplay} compact={compactBar} />
           </span>
           {rosterProviders.flatMap((p) =>
             USAGE_ROW_LEVELS.map((level, index) => (
@@ -267,7 +265,9 @@ export function StatusBarUsageArea({
                   compact={level.compact}
                   display={usagePercentageDisplay}
                   mode={levelMode(index)}
+                  barMode={statusBarUsageMode}
                   countdownActive={false}
+                  measuring
                 />
               </span>
             ))

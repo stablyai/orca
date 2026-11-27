@@ -7,7 +7,8 @@ import { MobileNativeChatQuestion } from '../session/native-chat/input/prompts/M
 import type { BotGroup } from '../../../src/shared/bots/bot-group'
 import type { PhoneBot } from './host-bots-operations'
 import type { MobileBotGroupSession } from './MobileBotGroupTurns'
-import { groupStyles as styles } from './mobile-bot-group-styles'
+import { groupStylesSheet } from './mobile-bot-group-styles'
+import { useThemedStyles } from '../theme/themed-styles'
 
 /** The room's waiting permission or question, one member's at a time, as the desktop's approval dock;
  *  "· N pending" opens the others. */
@@ -20,6 +21,7 @@ export function MobileBotGroupApprovalDock({
   bots: readonly PhoneBot[]
   sessions: ReadonlyMap<string, MobileBotGroupSession>
 }) {
+  const styles = useThemedStyles(groupStylesSheet)
   const t = useMobileTranslation()
   const [approvalBot, setApprovalBot] = useState<string | null>(null)
   const [listing, setListing] = useState(false)

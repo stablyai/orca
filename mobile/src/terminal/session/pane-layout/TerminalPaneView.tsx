@@ -1,15 +1,16 @@
 import type { TerminalFontStyle } from '../../preferences/terminal-font-style'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, StyleSheet, View, Text, Pressable } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { ParsedFileLinkLocation } from '../../../../../src/shared/file-links/file-link-location'
 import { terminalPaneKeyboardLayout } from './mobile-terminal-pane-layout'
-import { colors, spacing, pressedStyle } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
 import type { TerminalFrame, TerminalHostSettings } from '../../webview/terminal-webview-messages'
 import { TerminalWebView } from '../../webview/TerminalWebView'
+import { MobileNativeChatFloatingControls } from '../../../session/native-chat/lower-region/MobileNativeChatFloatingControls'
+import { useKeyboardPersistingTaps } from '../../../platform/keyboard/keyboard-persisting-taps'
 import type {
   TerminalKeyboardAvoidanceMetrics,
   TerminalModes,
@@ -17,6 +18,8 @@ import type {
   TerminalWebViewHandle
 } from '../../webview/terminal-webview-contract'
 import type { RuntimeMobileTerminalTheme } from '../../../../../src/shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+
+const PANE_HEADING_HEIGHT = 44
 
 type TerminalPaneViewProps = {
   handle: string
@@ -88,7 +91,7 @@ export function TerminalPaneView({
   onTextScaleChange,
   onCellBoxChange
 }: TerminalPaneViewProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   useEffect(() => () => onDocumentReleased(handle), [handle, onDocumentReleased])
   const [routeFocused, setRouteFocused] = useState(false)
@@ -105,14 +108,20 @@ export function TerminalPaneView({
     )
     return () => subscription.remove()
   }, [])
+  const webViewRef = useRef<TerminalWebViewHandle | null>(null)
   const setRef = useCallback(
     (ref: TerminalWebViewHandle | null) => {
+      webViewRef.current = ref
       onRef(handle, ref)
     },
     [handle, onRef]
   )
+  // Scrolled back through output: the chat's jump-to-latest button brings the newest lines back.
+  const [scrolledUp, setScrolledUp] = useState(false)
+  // Jumping must not take focus from the live field, or typing stops reaching the terminal.
+  const keepsKeyboard = useKeyboardPersistingTaps('always')
 
-  const [headingHeight, setHeadingHeight] = useState(28)
+  const [headingHeight, setHeadingHeight] = useState(PANE_HEADING_HEIGHT)
   const splitLayout =
     splitIndex !== undefined && splitFrame && splitFrame.height > 0
       ? terminalPaneKeyboardLayout(splitFrame, splitDirection, splitIndex, keyboardInset)
@@ -153,12 +162,8 @@ export function TerminalPaneView({
           ]}
           onLayout={(event) => setHeadingHeight(event.nativeEvent.layout.height)}
         >
-          <Text numberOfLines={1} style={styles.paneTitle}>
-            {active
-              ? t('session.terminalPaneView.inputPane', '{{title}} · Input', {
-                  title: title || t('session.terminalPaneView.terminal', 'Terminal')
-                })
-              : title || t('session.terminalPaneView.terminal', 'Terminal')}
+          <Text numberOfLines={1} style={[styles.paneTitle, active && styles.paneTitleActive]}>
+            {title || t('session.terminalPaneView.terminal', 'Terminal')}
           </Text>
         </Pressable>
       )}
@@ -199,6 +204,18 @@ export function TerminalPaneView({
             onOpenUrl={(url) => onOpenUrl(handle, url)}
             onTextScaleChange={onTextScaleChange}
             onCellBoxChange={() => onCellBoxChange(handle)}
+            onScrolledUpChange={setScrolledUp}
+          />
+        </View>
+        {/* A split pane already ends above the keyboard; a full pane sits under the lifted dock. */}
+        <View
+          ref={keepsKeyboard}
+          pointerEvents="box-none"
+          style={[styles.jumpLayer, { bottom: splitLayout ? 0 : keyboardInset }]}
+        >
+          <MobileNativeChatFloatingControls
+            showJumpToTail={visible && scrolledUp}
+            onJumpToTail={() => webViewRef.current?.scrollToBottom()}
           />
         </View>
       </View>
@@ -206,21 +223,29 @@ export function TerminalPaneView({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   terminalPane: {
     ...StyleSheet.absoluteFill
   },
   paneViewport: { flex: 1, overflow: 'hidden' },
+  // A full touch target: tapping a heading is how the other pane takes the keys.
   paneHeading: {
-    minHeight: 28,
+    minHeight: PANE_HEADING_HEIGHT,
     justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.md,
     backgroundColor: colors.bgPanel,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle
   },
   paneHeadingActive: { borderBottomColor: colors.textPrimary },
-  paneTitle: { color: colors.textSecondary, fontSize: 12 },
+  paneTitle: { color: colors.textSecondary, fontSize: typography.bodySize },
+  paneTitleActive: { color: colors.textPrimary, fontWeight: '600' },
+  jumpLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0
+  },
   terminalPaneHidden: {
     opacity: 0
   },

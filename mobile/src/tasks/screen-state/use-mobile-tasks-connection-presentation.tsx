@@ -1,11 +1,22 @@
 import type { ProviderViewProjectionModel } from '../project-board/use-mobile-tasks-provider-view-projection'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../../theme/themed-styles'
+import {
+  composerInputStylesSheet,
+  groupFieldStylesSheet
+} from '../../components/composer-input/composer-input-styles'
+import { stylesSheet } from '../mobile-tasks-legacy-styles'
 import { classifyConnection } from '../../transport/connection/connection-health'
-import { PROVIDER_EMPTY_LABELS } from '../task-list/mobile-task-view-options'
+import { providerEmptyLabel } from '../task-list/mobile-task-view-options'
 import { getTaskPresetQuery } from '../../../../src/shared/work-items/task-preset-query'
 
 export function useMobileTasksConnectionPresentation(model: ProviderViewProjectionModel) {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  const groupFieldStyles = useThemedStyles(groupFieldStylesSheet)
   const {
     appliedGithubProjectSearch,
     connState,
@@ -18,12 +29,15 @@ export function useMobileTasksConnectionPresentation(model: ProviderViewProjecti
     reconnectAttempts,
     relayRecovery
   } = model
-  const headerVerdict = classifyConnection({
-    state: connState,
-    reconnectAttempts,
-    lastConnectedAt,
-    ...relayRecovery
-  })
+  const headerVerdict = classifyConnection(
+    {
+      state: connState,
+      reconnectAttempts,
+      lastConnectedAt,
+      ...relayRecovery
+    },
+    t
+  )
   const isGithubProjectSearch = provider === 'github' && githubMode === 'project'
   // GitHub's preset text is a filter, not a search, so only a changed query counts as one.
   const hasSearch = isGithubProjectSearch
@@ -36,7 +50,7 @@ export function useMobileTasksConnectionPresentation(model: ProviderViewProjecti
       ? t('tasks.connectionPresentation.connectToHost', 'Connect to a host to load tasks')
       : hasSearch
         ? t('tasks.connectionPresentation.noMatchingTasks', 'No matching tasks')
-        : PROVIDER_EMPTY_LABELS[provider]
+        : providerEmptyLabel(t, provider)
   // Until the first read settles, an empty list is unread, not empty: keep the spinner up.
   const loading =
     model.loading || (connState === 'connected' && !model.taskListSettled && !model.error)
@@ -49,6 +63,11 @@ export function useMobileTasksConnectionPresentation(model: ProviderViewProjecti
     !(connState === 'connected' && model.error) &&
     model.items.length > 0
   return Object.assign(model, {
+    colors,
+    composerInputStyles,
+    groupFieldStyles,
+    styles,
+    t,
     headerVerdict,
     emptyLabel,
     hasSearch,

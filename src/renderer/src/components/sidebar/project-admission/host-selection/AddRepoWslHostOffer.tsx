@@ -14,6 +14,7 @@ import {
   type WslHostOffer
 } from './wsl-host-offer-actions'
 import { moveWslHostOfferProject } from '../../../wsl-move/wsl-host-offer-move'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 /** Inline in the add-project flow: run the `\\wsl.localhost` path's distro as a host instead. */
 export function AddRepoWslHostOffer({
@@ -33,25 +34,29 @@ export function AddRepoWslHostOffer({
   const accept = async (): Promise<void> => {
     setBusy('accept')
     setError(null)
-    try {
-      const refusal = await acceptWslHostOffer(offer, {
-        readWslHostsSetting: () => useAppStore.getState().settings?.experimentalWslHosts === true,
-        updateSettings: (updates) => useAppStore.getState().updateSettingsOrThrow(updates),
-        addWslHost: addWslHostDistro,
-        addLocalPath: (path, source) => {
-          onSettled()
-          return addLocalPath(path, source)
-        },
-        moveAddedProject: moveWslHostOfferProject
-      })
-      if (refusal) {
-        setError(wslHostAddRefusalMessage(refusal))
-      }
-    } catch (cause) {
-      setError(readIpcErrorDetail(cause) ?? String(cause))
-    } finally {
-      setBusy(null)
-    }
+    await runWithFinally(
+      async () => {
+        try {
+          const refusal = await acceptWslHostOffer(offer, {
+            readWslHostsSetting: () =>
+              useAppStore.getState().settings?.experimentalWslHosts === true,
+            updateSettings: (updates) => useAppStore.getState().updateSettingsOrThrow(updates),
+            addWslHost: addWslHostDistro,
+            addLocalPath: (path, source) => {
+              onSettled()
+              return addLocalPath(path, source)
+            },
+            moveAddedProject: moveWslHostOfferProject
+          })
+          if (refusal) {
+            setError(wslHostAddRefusalMessage(refusal))
+          }
+        } catch (cause) {
+          setError(readIpcErrorDetail(cause) ?? String(cause))
+        }
+      },
+      () => setBusy(null)
+    )
   }
 
   const decline = (): void => {

@@ -123,8 +123,10 @@ export class CdpPageInputCommands {
       return await this.debuggerChannel.sendDebuggerCommand(method, params, sessionId)
     }
     const send = (): Promise<unknown> =>
-      withAgentInputInjection(this.webContents, () =>
-        this.debuggerChannel.sendDebuggerCommand(method, params, sessionId)
+      withAgentInputInjection(
+        this.webContents,
+        () => this.debuggerChannel.sendDebuggerCommand(method, params, sessionId),
+        { keyboard: method === 'Input.dispatchKeyEvent' }
       )
     if (!sessionId && isFocusRoutedCdpInput(method)) {
       throw pageInputRouteUnavailableError()

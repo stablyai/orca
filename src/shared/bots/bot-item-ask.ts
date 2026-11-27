@@ -4,6 +4,7 @@
 // Hosts keep the waiting ask that pairing works out from what this file reads, writes or limits: any change
 // to it bumps WAITING_ASK_RULES (src/main/bots/bot-item-waiting-ask-keep.ts).
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { markdownPlainLine } from '../markdown/markdown-plain-line'
 import { BOT_ITEM_LIMITS, type BotItem } from './bot-items'
 
@@ -21,42 +22,48 @@ function distinct(values: readonly string[]): boolean {
   return new Set(values).size === values.length
 }
 
-const OptionSchema = z.object({
-  label: z.string().trim().min(1, 'An option needs its label.').max(L.label),
-  detail: z.string().trim().max(L.detail).optional()
-})
-
-const QuestionSchema = z
-  .object({
-    prompt: z.string().trim().min(1, 'A decision needs its question.').max(L.prompt),
-    options: z.array(OptionSchema).max(L.options, `A decision takes up to ${L.options} options.`),
-    /** Index into `options`. */
-    recommended: z.number().int().min(0).optional(),
-    /** Pick several: the phone's ask card sends every pick in one reply; desktop quick replies post one at a time. */
-    multi: z.boolean().optional()
+const OptionSchema = lazyZodSchema(() =>
+  z.object({
+    label: z.string().trim().min(1, 'An option needs its label.').max(L.label),
+    detail: z.string().trim().max(L.detail).optional()
   })
-  .refine(
-    (question) =>
-      question.recommended === undefined || question.recommended < question.options.length,
-    'The recommended option is not one of its options.'
-  )
-  .refine(
-    (question) => distinct(question.options.map((option) => option.label)),
-    'Each option of a decision needs its own label.'
-  )
+)
 
-export const BotItemAskSchema = z.object({
-  /** The agent's own words around the decisions (`--comment`). */
-  context: z.string().trim().max(BOT_ITEM_LIMITS.text).optional(),
-  questions: z
-    .array(QuestionSchema)
-    .min(1)
-    .max(L.questions, `An ask takes up to ${L.questions} decisions.`)
+const QuestionSchema = lazyZodSchema(() =>
+  z
+    .object({
+      prompt: z.string().trim().min(1, 'A decision needs its question.').max(L.prompt),
+      options: z.array(OptionSchema).max(L.options, `A decision takes up to ${L.options} options.`),
+      /** Index into `options`. */
+      recommended: z.number().int().min(0).optional(),
+      /** Pick several: the phone's ask card sends every pick in one reply; desktop quick replies post one at a time. */
+      multi: z.boolean().optional()
+    })
     .refine(
-      (questions) => distinct(questions.map((question) => question.prompt)),
-      'Each decision needs its own question.'
+      (question) =>
+        question.recommended === undefined || question.recommended < question.options.length,
+      'The recommended option is not one of its options.'
     )
-})
+    .refine(
+      (question) => distinct(question.options.map((option) => option.label)),
+      'Each option of a decision needs its own label.'
+    )
+)
+
+export const BotItemAskSchema = lazyZodSchema(() =>
+  z.object({
+    /** The agent's own words around the decisions (`--comment`). */
+    context: z.string().trim().max(BOT_ITEM_LIMITS.text).optional(),
+    questions: z
+      .array(QuestionSchema)
+      .min(1)
+      .max(L.questions, `An ask takes up to ${L.questions} decisions.`)
+      .refine(
+        (questions) => distinct(questions.map((question) => question.prompt)),
+        'Each decision needs its own question.'
+      )
+  })
+)
 
 export type BotItemAsk = z.infer<typeof BotItemAskSchema>
 

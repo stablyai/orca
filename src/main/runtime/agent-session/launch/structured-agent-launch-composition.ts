@@ -1,6 +1,6 @@
 // Compose shared admission, cwd, environment, visuals and child sealing; agent parts add only agent-specific inputs and never set cwd/sealed env.
 
-import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
+import { toolFreeSession, type ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import { SessionMcpTools } from '../../../mcp-servers/session-mcp-tools'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -91,6 +91,9 @@ export type StructuredAgentLaunchBasis = {
   permissionMode?: AgentChatPermissionChoice
   /** The session may only read: the agent's part adds its own enforcement of this mode. */
   readOnly: ReadOnlySessionMode | null
+  /** The run needs no tools (`toolFreeSession`): it gets no skills either, and a part that can't
+   *  turn tools off refuses every request and stops the run at its first tool call. */
+  toolFree: boolean
 }
 
 export type StructuredLaunchRequest = {
@@ -190,6 +193,7 @@ async function composedPart<L>(
   let environments = readEnvironments()
   const refresh = sources.refreshAfterMissingProgram
   const readOnly = sources.readOnlySession?.(record.sessionId) ?? null
+  const toolFree = toolFreeSession(readOnly)
   const basis: StructuredAgentLaunchBasis = {
     record,
     launchDirectory,
@@ -220,8 +224,10 @@ async function composedPart<L>(
         ? SessionMcpTools.none
         : sources.resolveToolServers(record, await launchDirectory())
     ),
-    linkedSkills: once(
-      async () => (await sources.resolveLinkedSkills?.(record)) ?? NO_LINKED_SKILLS
+    linkedSkills: once(async () =>
+      toolFree
+        ? NO_LINKED_SKILLS
+        : ((await sources.resolveLinkedSkills?.(record)) ?? NO_LINKED_SKILLS)
     ),
     linkedSkillsRefused: (linkedSkills) =>
       sources.reportLinkedSkills?.(record.sessionId, linkedSkills),
@@ -236,7 +242,8 @@ async function composedPart<L>(
       : {}),
     // Ask, whatever the chat chose: the agent's part answers its asks from the read-only allow-list.
     ...(readOnly ? { permissionMode: 'ask' as const } : permissionMode ? { permissionMode } : {}),
-    readOnly
+    readOnly,
+    toolFree
   }
   await sources.prepareLaunch?.(record, await launchDirectory())
   const composed = await part(basis, identity)

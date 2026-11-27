@@ -7,8 +7,10 @@ import type * as z from 'zod'
 import type { Bot } from '../../shared/bot-types'
 import { type ConnectorResult, SIGNED_OUT } from './connector-cloud-request'
 import { botSlackIconLook } from '../../shared/bots/bot-slack-icon'
+import { makeTestBot } from '../bots/bot.test-fixture'
 import { localBotHomeFilesystem } from '../bots/bot-home'
 import {
+  BotSlackIcons,
   readBotSlackIcon,
   readBotSlackIconShown,
   writeBotSlackIcon,
@@ -60,6 +62,68 @@ function shownIn(folder: string): { shownRecords: BotSlackIconShownRecords } {
     })
   }
 }
+
+it('publishes a compatible icon until the preferred drawing is available, then keeps the preferred one', async () => {
+  home = await mkdtemp(join(tmpdir(), 'bot-slack-icon-'))
+  const folder = home
+  const bot = makeTestBot({
+    avatar: 'mascot:G1',
+    avatarColor: '#ffffff',
+    avatarOutfit: 'hard-hat',
+    slack: { appId: 'A1', teamId: 'T1' }
+  })
+  const icons = new BotSlackIcons({
+    filesystem: localBotHomeFilesystem,
+    root: () => folder,
+    bot: () => bot,
+    enabled: () => true,
+    serialize: (work) => work()
+  })
+  const sent: unknown[] = []
+  const sync = new BotAvatarSync({
+    bots: {
+      enabled: () => true,
+      list: () => [bot],
+      readAvatarImage: async () => null,
+      slackIcons: icons
+    },
+    cloud: () => ({
+      knownAccount: () => 'account',
+      call: async <T extends z.ZodType>(
+        _path: string,
+        body: unknown,
+        schema: T
+      ): Promise<ConnectorResult<z.infer<T>>> => {
+        sent.push(body)
+        return { ok: true, value: schema.parse(undefined) }
+      }
+    })
+  })
+  const stop = icons.onStored((id) => sync.iconStored(id))
+  try {
+    const oldLook = 'v1-G1-ffffff-hard-hat'
+    const newLook = 'v2-G1-ffffff-hard-hat'
+    const oldPng = squarePng(512)
+    const newPng = squarePng(520)
+    expect(await icons.wanted(bot.id, oldLook)).toEqual({ current: true, wanted: true })
+    expect(await icons.store(bot.id, oldLook, oldPng)).toBe(true)
+    await vi.waitFor(() =>
+      expect(sent.at(-1)).toMatchObject({ kind: 'upload', png: oldPng.toString('base64') })
+    )
+    expect(await icons.wanted(bot.id, newLook)).toEqual({ current: true, wanted: true })
+    expect(await icons.store(bot.id, newLook, newPng)).toBe(true)
+    expect(await icons.wanted(bot.id, oldLook)).toEqual({ current: true, wanted: false })
+    expect(await icons.store(bot.id, oldLook, oldPng)).toBe(true)
+    expect(await icons.store(bot.id, 'v1-G1-plain-hard-hat', oldPng)).toBe(false)
+    await vi.waitFor(() =>
+      expect(sent.at(-1)).toMatchObject({ kind: 'upload', png: newPng.toString('base64') })
+    )
+    expect(await icons.read(bot.id)).toEqual({ look: newLook, png: newPng })
+  } finally {
+    stop()
+    await icons.shownRecords.finalSave()
+  }
+})
 
 it('sends a drawn icon only for the look the bot has now, and the mascot id only before any drawing', async () => {
   home = await mkdtemp(join(tmpdir(), 'bot-slack-icon-'))

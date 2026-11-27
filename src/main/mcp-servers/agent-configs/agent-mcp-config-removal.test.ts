@@ -214,6 +214,24 @@ describe('agent MCP config discovery and move', () => {
     expect(read('.cursor/mcp.json')).toBe(cursor)
   })
 
+  it('takes a server out of only the agents its confirm named', async () => {
+    const host: AgentMcpImportHost = {
+      context: context(),
+      userDataPath: join(home, 'orca-data'),
+      workspaceFor: async () => () => null,
+      isOrcaProject: () => false,
+      // Claude's delivery problem cleared after the confirm named Codex alone.
+      listReaches: async () => () => true
+    }
+    const row = (await listAgentMcpServers(host)).find((found) => found.name === 'github')!
+    expect(row.removesFrom).toEqual(['claude', 'codex'])
+
+    await moveAgentMcpServer(host, row.key, async () => null, ['codex'])
+
+    expect(read('.claude.json')).toBe(CLAUDE_JSON)
+    expect(read('.codex/config.toml')).not.toContain('[mcp_servers.github]')
+  })
+
   it('reads Grok’s file-wide disable list and leaves servers with tool limits in Grok', () => {
     const grok = {
       agent: 'grok' as const,

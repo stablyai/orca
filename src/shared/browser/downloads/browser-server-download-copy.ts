@@ -7,3 +7,12 @@ export type BrowserServerDownloadCopyArgs = {
   // The pairing that sent the copy id; a re-paired host must not answer for it.
   expectedEnvironmentPairingRevision?: number
 }
+
+/** Canceled only when Cancel is what stopped it; any other failure rejects with its own error. */
+export type BrowserServerDownloadCopyResult =
+  | { canceled: true }
+  | { canceled: false; destinationPath: string }
+
+export type CopyBrowserServerDownload = (
+  args: BrowserServerDownloadCopyArgs
+) => Promise<BrowserServerDownloadCopyResult>

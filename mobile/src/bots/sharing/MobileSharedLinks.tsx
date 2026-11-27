@@ -9,16 +9,17 @@ import { ListRow } from '../../components/list/ListGroup'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { mobileBotAvatarSource } from '../host-bot-row-facts'
 import type { ListedBot } from '../host-bots-operations'
 import { MobileBotAvatar } from '../MobileBotAvatar'
 import { botShareDate, botShareErrorMessage } from './bot-share-copy'
 import { listPhoneBotShares, stopPhoneBotShare } from './bot-share-operations'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 /** A link's row opens its bot's Share bot; Update link opens it too, as on the desktop. */
 export type SharedLinkOpen = { bot: ListedBot; share: BotOwnedShare }
@@ -32,6 +33,7 @@ function SharedLinkRow(props: {
   onStop: () => void
 }) {
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const anchor = useRef<HostInstance>(null)
   const [menu, setMenu] = useState(false)
   const { share, bot } = props
@@ -46,7 +48,7 @@ function SharedLinkRow(props: {
         subtitle={share.url.replace(/^https:\/\//, '')}
         subtitleMono
         subtitleLines={1}
-        value={botShareDate(share.createdAt)}
+        value={botShareDate(share.createdAt, intlLocale)}
         disabled={props.disabled}
         onPress={bot ? props.onOpen : undefined}
         accessory={
@@ -107,6 +109,7 @@ export function MobileSharedLinks(props: {
   /** Above the list: the page's header. */
   header: ReactNode
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { client } = props
   const clipboard = useClipboardWriter()

@@ -6,10 +6,8 @@ import {
 } from '../../../../src/shared/agent-usage/status-copy/usage-error-copy'
 import type { ProviderRateLimits } from '../accounts-snapshot'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-
+import { typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 // The decoded snapshot leaves usageMetadata untyped; read only the strings the copy needs.
 function readStatusCopySource(limits: ProviderRateLimits): UsageStatusCopySource {
   const metadata: unknown = limits.usageMetadata
@@ -33,7 +31,7 @@ function readStatusCopySource(limits: ProviderRateLimits): UsageStatusCopySource
 
 /** Why a provider's usage did not refresh, in desktop's words; a status, not an alarm. */
 export function UsageStatusNote({ limits }: { limits: ProviderRateLimits }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   if (!limits.error) {
     return null
@@ -63,7 +61,7 @@ export function UsageStatusNote({ limits }: { limits: ProviderRateLimits }) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   label: {
     fontSize: typography.metaSize,
     fontWeight: '500',

@@ -9,8 +9,8 @@ import {
 } from '@orca/expo-two-way-audio'
 import { ListRow } from '../components/list/ListGroup'
 import type { Translate } from '../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../i18n/ui-intl-locale'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import type { DictationEnginePreference } from '../mobile-web-shell/bridge/native-capabilities/bridge-speech-verbs'
 import { isSpeechBusyError } from '../platform/speech/native-speech'
 import { onDeviceSpeechLocale } from '../platform/speech/on-device-speech-locale'
@@ -19,14 +19,17 @@ import {
   loadDictationEnginePreference,
   saveDictationEnginePreference
 } from '../storage/dictation-engine-preference'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { SettingsSection } from './settings-screen-frame'
 
 type PhoneSpeech =
   | { status: SpeechAvailabilityStatus | 'checking' }
   | { status: 'downloading'; progress: number }
 
-function phoneStatusText(phone: PhoneSpeech | null, t: Translate): string | undefined {
+function phoneStatusText(
+  phone: PhoneSpeech | null,
+  t: Translate,
+  intlLocale: string
+): string | undefined {
   switch (phone?.status) {
     case undefined:
       return undefined
@@ -38,7 +41,7 @@ function phoneStatusText(phone: PhoneSpeech | null, t: Translate): string | unde
       return t('settings.voiceTranscribeOn.phoneNeedsDownload', 'Needs a language download')
     case 'downloading':
       return t('settings.voiceTranscribeOn.phoneDownloading', 'Downloading… {{progress}}%', {
-        progress: Math.round(phone.progress * 100).toLocaleString(getUiIntlLocale())
+        progress: Math.round(phone.progress * 100).toLocaleString(intlLocale)
       })
     case 'unsupported':
       // Covers an unsupported language and a phone or OS that can't run the recognizer.
@@ -53,12 +56,12 @@ const PHONE_SPEECH_EN_DOWNLOAD_MB: Partial<Record<typeof Platform.OS, number>> =
   android: 65
 }
 
-function downloadSizeText(t: Translate, locale: string): string | undefined {
+function downloadSizeText(t: Translate, locale: string, intlLocale: string): string | undefined {
   const size = /^en(-|$)/i.test(locale) ? PHONE_SPEECH_EN_DOWNLOAD_MB[Platform.OS] : undefined
   return size === undefined
     ? undefined
     : t('settings.voiceTranscribeOn.downloadSize', 'About {{size}} MB', {
-        size: size.toLocaleString(getUiIntlLocale())
+        size: size.toLocaleString(intlLocale)
       })
 }
 
@@ -71,8 +74,8 @@ export function voiceTranscribeOnShown(): boolean {
 
 // Where dictation is transcribed: on this phone, on the paired computer, or the phone when it can. Phone-only, so it shows without a computer.
 export function VoiceTranscribeOnSection() {
-  useMobileColorScheme()
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const [preference, setPreference] = useState<DictationEnginePreference>(
     DEFAULT_DICTATION_ENGINE_PREFERENCE
   )
@@ -125,7 +128,7 @@ export function VoiceTranscribeOnSection() {
   }
 
   const downloadTitle = t('settings.voiceTranscribeOn.download', 'Download for this phone')
-  const downloadSize = downloadSizeText(t, onDeviceSpeechLocale())
+  const downloadSize = downloadSizeText(t, onDeviceSpeechLocale(), intlLocale)
 
   const download = () => {
     if (downloadingRef.current) {
@@ -143,13 +146,9 @@ export function VoiceTranscribeOnSection() {
 
   return (
     <SettingsSection
-      first
       radioGroup
-      title={t('settings.voiceTranscribeOn.heading', 'TRANSCRIBE ON')}
-      footer={t(
-        'settings.voiceTranscribeOn.description',
-        'Speech heard on this phone stays on it. Automatic uses your computer when this phone can’t transcribe.'
-      )}
+      title={t('settings.voiceTranscribeOn.heading', 'Transcribe on')}
+      footer={t('settings.voiceTranscribeOn.footer', 'Automatic uses this phone when it can.')}
     >
       <ListRow
         key="automatic"
@@ -160,7 +159,7 @@ export function VoiceTranscribeOnSection() {
       <ListRow
         key="phone"
         title={t('settings.voiceTranscribeOn.phone', 'This phone')}
-        subtitle={phoneStatusText(phone, t)}
+        subtitle={phoneStatusText(phone, t, intlLocale)}
         selected={preference === 'phone'}
         disabled={phone?.status === 'unsupported'}
         onPress={() => choose('phone')}

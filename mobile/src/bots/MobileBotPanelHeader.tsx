@@ -6,9 +6,8 @@ import { MobileSegmentedControl } from '../components/controls/MobileSegmentedCo
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { MobileBotItemStatusIcon } from './items/MobileBotItemStatusIcon'
 
 export type PanelTab = 'items' | 'chats' | 'files'
@@ -24,7 +23,7 @@ export function MobileBotPanelHeader(props: {
   onNeedsYouOnly: () => void
   onSettings: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { needsYou } = props
   const segments = [
@@ -85,7 +84,7 @@ export function MobileBotPanelHeader(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   segmented: { marginBottom: spacing.sm },
   count: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   countText: {

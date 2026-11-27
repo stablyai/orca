@@ -21,6 +21,7 @@ export async function continueWorkerStartInBackground(
     mode: WorkerStartModeReceipt
     timeoutMs: number
     effects: WorkerEffect[]
+    warning?: string
   }
 ): Promise<unknown> {
   const { dispatchId, terminalHandle, blockedReason } = args
@@ -51,6 +52,7 @@ export async function continueWorkerStartInBackground(
     timeoutMs: args.timeoutMs,
     effects: args.effects,
     ...(screen ? { screen } : {}),
+    ...(args.warning ? { warning: args.warning } : {}),
     residualResources: [],
     nextCommands: [
       `orca orchestration worker-show --dispatch ${dispatchId} --json`,

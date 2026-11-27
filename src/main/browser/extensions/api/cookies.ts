@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import {
   BrowserExtensionApiError,
@@ -14,34 +15,40 @@ import { browserExtensionHostPatternsInSession } from '../permissions/browser-ex
 /** Each extension session has one cookie store; Chrome names the regular store "0". */
 const STORE_ID = '0'
 
-const storeIdSchema = z.string().optional()
-const getSchema = z.object({ url: z.string(), name: z.string(), storeId: storeIdSchema }).loose()
-const getAllSchema = z
-  .object({
-    url: z.string(),
-    name: z.string(),
-    domain: z.string(),
-    path: z.string(),
-    secure: z.boolean(),
-    session: z.boolean(),
-    storeId: z.string()
-  })
-  .partial()
-  .loose()
-const setSchema = z
-  .object({
-    url: z.string(),
-    name: z.string().optional(),
-    value: z.string().optional(),
-    domain: z.string().optional(),
-    path: z.string().optional(),
-    secure: z.boolean().optional(),
-    httpOnly: z.boolean().optional(),
-    sameSite: z.enum(['no_restriction', 'lax', 'strict', 'unspecified']).optional(),
-    expirationDate: z.number().optional(),
-    storeId: storeIdSchema
-  })
-  .loose()
+const storeIdSchema = lazyZodSchema(() => z.string().optional())
+const getSchema = lazyZodSchema(() =>
+  z.object({ url: z.string(), name: z.string(), storeId: storeIdSchema }).loose()
+)
+const getAllSchema = lazyZodSchema(() =>
+  z
+    .object({
+      url: z.string(),
+      name: z.string(),
+      domain: z.string(),
+      path: z.string(),
+      secure: z.boolean(),
+      session: z.boolean(),
+      storeId: z.string()
+    })
+    .partial()
+    .loose()
+)
+const setSchema = lazyZodSchema(() =>
+  z
+    .object({
+      url: z.string(),
+      name: z.string().optional(),
+      value: z.string().optional(),
+      domain: z.string().optional(),
+      path: z.string().optional(),
+      secure: z.boolean().optional(),
+      httpOnly: z.boolean().optional(),
+      sameSite: z.enum(['no_restriction', 'lax', 'strict', 'unspecified']).optional(),
+      expirationDate: z.number().optional(),
+      storeId: storeIdSchema
+    })
+    .loose()
+)
 
 /** A URL that a cookie is sent to, for host-permission checks. */
 export function cookieUrl(cookie: Pick<Electron.Cookie, 'domain' | 'path' | 'secure'>): string {

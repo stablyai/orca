@@ -14,6 +14,7 @@ import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remo
 import type { DocumentDeliveryEndpoint } from '../../../../shared/backend/document-delivery-endpoint'
 import { getRuntimeEnvironmentTransportGeneration } from '../connections/runtime-environment-transport-generation'
 import { subscribeRuntimeEnvironment } from '../requests/runtime-environment-transport-routing'
+import { registerDocumentClientEventsStream } from './shared-runtime-client-events'
 
 /** Opens one runtime subscription owned by `document`; it retires with that document. */
 export async function subscribeRuntimeEnvironmentForDocument(
@@ -102,9 +103,14 @@ export async function subscribeRuntimeEnvironmentForDocument(
             ])
           )
         : undefined
+    const sharedClientEvents =
+      args.method === 'runtime.clientEvents.subscribe'
+        ? registerDocumentClientEventsStream(environment.id, transportGeneration)
+        : undefined
     let rendererGone = document.isGone()
     let subscription: RemoteRuntimeTransportSubscription | null = null
     const disposeRendererLifetime = (): void => {
+      sharedClientEvents?.unregister()
       associationObserver?.dispose()
       rendererLifetime.dispose()
       rendererLifetime.signal.removeEventListener('abort', abortSetup)
@@ -175,12 +181,14 @@ export async function subscribeRuntimeEnvironmentForDocument(
               }
               // After the send, so recording never delays or changes what the window gets.
               if (payload.type === 'response') {
+                sharedClientEvents?.onResponse(payload.response)
                 recordLayoutFrame(environment.id, args.method, payload.response)
               }
             }
           },
           onClose: () => {
             transportClosed = true
+            sharedClientEvents?.onTransportClose()
             if (rendererGone) {
               return
             }

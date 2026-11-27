@@ -41,6 +41,8 @@ export type GoogleAccountView = {
   /** `reconnect`: Google ended this sign-in (revoked, expired, or the client was deleted). */
   status: 'connected' | 'reconnect'
   reason?: string
+  /** Google's own words for why it ended the sign-in. */
+  googleError?: string
   services: GoogleServiceReadiness[]
   checkedAt?: number
   connectedAt: number

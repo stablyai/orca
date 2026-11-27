@@ -25,6 +25,7 @@ import {
   activateStructuredAgentSessionTabOnOwner
 } from './agent-session/structured-agent-session-tab-activation'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import { cancelPendingBotThreadOpen } from './agent-session/open/bot-thread-open-lifecycle'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { appendNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
 import {
@@ -327,6 +328,7 @@ export function openBotHome(bot: Bot): boolean {
  * `draft` is added to Home's unsent message, never sent, and its composer takes focus.
  */
 export async function openBotHomeTab(bot: Bot, options?: { draft?: string }): Promise<boolean> {
+  cancelPendingBotThreadOpen()
   // Home exists before the page opens, so the page lands on it rather than on a new terminal.
   const chatSessionId = await openBotChat(bot).catch((error: unknown) => {
     console.error('Failed to open the bot chat:', error)

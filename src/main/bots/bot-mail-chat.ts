@@ -6,7 +6,7 @@ import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-sessio
 import { handOverCoordinatorChatRuns } from '../runtime/orchestration/db/runs/run-coordinator-handover'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { closeStructuredAgentSessionChild } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
-import { botChatTakingMail } from '../runtime/rpc/methods/bots-chats'
+import { botChatTakingMail, botChatTakingMailNow } from '../runtime/rpc/methods/bots-chats'
 import { runtimeBotChats } from './bot-chat-session'
 
 /** The session mail for `chatId` reaches; Home Chat once that chat takes none (a room deleted or
@@ -16,10 +16,30 @@ export async function botMailSession(
   bot: Bot,
   chatId: string
 ): Promise<string> {
-  return (
-    (await botChatTakingMail(runtime, bot, chatId))?.sessionId ??
-    (await runtimeBotChats(runtime).ensure(bot.id))
-  )
+  const original = await botChatTakingMail(runtime, bot, chatId)
+  if (original) {
+    return original.sessionId
+  }
+  const home = await runtimeBotChats(runtime).ensure(bot.id)
+  return botChatTakingMailNow(runtime, bot, home)?.sessionId ?? home
+}
+
+/** The destination still takes this mail after a claim; check and insert in the same turn. */
+export function botMailSessionStillCurrent(
+  runtime: OrcaRuntimeService,
+  botId: string,
+  chatId: string,
+  sessionId: string
+): boolean {
+  const bot = runtime.bots.list().find((entry) => entry.id === botId)
+  if (!bot) {
+    return false
+  }
+  const recipient =
+    botChatTakingMailNow(runtime, bot, chatId) ??
+    (bot.chatSessionId && botChatTakingMailNow(runtime, bot, bot.chatSessionId))
+  // The saved Home id can still name a retired chat while a reset creates its successor.
+  return !!recipient && recipient.sessionId === sessionId
 }
 
 /** Closes a room member's chat. The workers it started still report, so its Runs go to the chat

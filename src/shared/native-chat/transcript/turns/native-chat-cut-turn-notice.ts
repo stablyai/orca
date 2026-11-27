@@ -27,6 +27,14 @@ import {
 } from '../../../agent-session/lifecycle/stopping/agent-session-stop-row-identity'
 import { isStructuredAgentSessionStartFailureRow } from '../../../agent-session/failures/structured-agent-session-start-failure-row-key'
 import { hostStatesTurnScopes } from './native-chat-turn-membership'
+import {
+  noteStreamedTextRevision,
+  rowsBesideStreamedText
+} from '../../../agent-session/view/structured-agent-session-streamed-text-rows'
+import {
+  noteRevisedInPlace,
+  revisedInPlace
+} from '../../../agent-session/view/revised-in-place-lists'
 
 const CUT_TURN_NOTICE_ROW = 'cut-turn-notice:'
 
@@ -183,11 +191,20 @@ function cutTurnNotice(
   return notice
 }
 
-/** Add one provider-exit-worded notice after each unexplained cut root turn’s last row. Return the same items reference when unchanged. */
-export function withNativeChatCutTurnNotices(
+type PlacedNotices = {
+  agentName: string | undefined
+  after: ReadonlyMap<number, AgentJournalRenderItem[]>
+}
+const placedNotices = new WeakMap<readonly AgentJournalRenderItem[], PlacedNotices>()
+const noticedRows = new WeakMap<
+  readonly AgentJournalRenderItem[],
+  { placed: PlacedNotices; rows: readonly AgentJournalRenderItem[] }
+>()
+
+function cutTurnNoticesAfter(
   items: readonly AgentJournalRenderItem[],
-  context: CutTurnNoticeContext = {}
-): readonly AgentJournalRenderItem[] {
+  context: CutTurnNoticeContext
+): Map<number, AgentJournalRenderItem[]> {
   const explained = explainedCutTurns(items)
   const statesScopes = hostStatesTurnScopes(items)
   const noticesAfter = new Map<number, AgentJournalRenderItem[]>()
@@ -198,8 +215,68 @@ export function withNativeChatCutTurnNotices(
       noticesAfter.set(last, [...(noticesAfter.get(last) ?? []), notice])
     }
   })
-  if (noticesAfter.size === 0) {
+  return noticesAfter
+}
+
+/** Add one provider-exit-worded notice after each unexplained cut root turn’s last row. Return the same items reference when unchanged. */
+export function withNativeChatCutTurnNotices(
+  items: readonly AgentJournalRenderItem[],
+  context: CutTurnNoticeContext = {}
+): readonly AgentJournalRenderItem[] {
+  // Notices read no reply text, so a streaming reply's windows reuse its rows' placement.
+  const rows = rowsBesideStreamedText(items)
+  let placed = placedNotices.get(rows)
+  if (!placed || placed.agentName !== context.agentName) {
+    placed = { agentName: context.agentName, after: cutTurnNoticesAfter(rows, context) }
+    placedNotices.set(rows, placed)
+  }
+  if (placed.after.size === 0) {
     return items
   }
-  return items.flatMap((item, index) => [item, ...(noticesAfter.get(index) ?? [])])
+  const noticed = rowsWithNotices(items, placed)
+  // A text-only revision's rows stay linked to its base's, so memos over them hold while it streams.
+  if (rows !== items) {
+    noteStreamedTextRevision(noticed, rowsWithNotices(rows, placed))
+  }
+  return noticed
+}
+
+function rowsWithNotices(
+  items: readonly AgentJournalRenderItem[],
+  placed: PlacedNotices
+): readonly AgentJournalRenderItem[] {
+  const cached = noticedRows.get(items)
+  if (cached?.placed === placed) {
+    return cached.rows
+  }
+  const noticesAfter = placed.after
+  const revised = revisedInPlace(items)
+  const prior = revised && noticedRows.get(revised.from)
+  const noticed =
+    (revised &&
+      prior?.placed === placed &&
+      reviseNoticedRows(items, revised.at, prior.rows, noticesAfter)) ||
+    items.flatMap((item, index) => [item, ...(noticesAfter.get(index) ?? [])])
+  noticedRows.set(items, { placed, rows: noticed })
+  return noticed
+}
+
+/** Rows revised in place keep their notices, so each sits past the notices placed before it. */
+function reviseNoticedRows(
+  items: readonly AgentJournalRenderItem[],
+  at: readonly number[],
+  prior: readonly AgentJournalRenderItem[],
+  noticesAfter: ReadonlyMap<number, AgentJournalRenderItem[]>
+): readonly AgentJournalRenderItem[] {
+  const rows = prior.slice()
+  const positions = at.map((index) => {
+    let position = index
+    for (const [after, notices] of noticesAfter) {
+      position += after < index ? notices.length : 0
+    }
+    rows[position] = items[index]!
+    return position
+  })
+  noteRevisedInPlace(rows, prior, positions)
+  return rows
 }

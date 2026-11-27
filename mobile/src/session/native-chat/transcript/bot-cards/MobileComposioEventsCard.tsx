@@ -10,7 +10,6 @@ import { startHostBotRefresh } from '../../../../bots/host-bot-refresh'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../../../../platform/clipboard/clipboard'
 import { openExternalLink } from '../../../../platform/external-links/external-link'
-import { colors } from '../../../../theme/mobile-theme'
 import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePill'
 import { MobileBotCardActions } from './MobileBotCardFrame'
 import { copyPhoneWebhookUrl } from '../../../../bots/webhooks/mobile-webhook-url-copy'
@@ -32,6 +31,7 @@ import {
   MobileGoogleSetupNotes,
   MobileGoogleSetupReceipt
 } from './MobileGoogleSetupCardParts'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 type EventsView =
   | { status: 'loading' }
@@ -118,6 +118,7 @@ export function MobileComposioEventsCard({
 }: {
   scope: MobileComposioScope
 }): React.JSX.Element | null {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { client, card, botName, fontScale } = scope
   const { busy, error, setError, run } = useComposioCall()

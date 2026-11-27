@@ -2,19 +2,20 @@ import { useState } from 'react'
 import { Image } from 'react-native'
 import { File, FileText, Globe, SquareTerminal } from 'lucide-react-native'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import {
   mobileSessionTabAgentId,
   mobileSessionTabKindLabel,
   type MobileSessionTabRow
 } from './mobile-session-tab-rows'
 import type { MobileSessionTab } from './mobile-session-tabs'
+import type { Translate } from '../../i18n/mobile-i18n'
 
 /** A tab menu's header: the tab's mark in a tile, and what kind of tab it is under the title. */
 export function mobileSessionTabMenuHeader(
   tab: MobileSessionTab | null | undefined,
-  terminals: readonly { handle: string; agentIdentity?: string }[]
+  terminals: readonly { handle: string; agentIdentity?: string }[],
+  t: Translate
 ): { headerIcon?: React.JSX.Element; message?: string } {
   if (!tab) {
     return {}
@@ -26,7 +27,7 @@ export function mobileSessionTabMenuHeader(
         size={17}
       />
     ),
-    message: mobileSessionTabKindLabel(tab)
+    message: mobileSessionTabKindLabel(tab, t)
   }
 }
 
@@ -38,7 +39,6 @@ export function MobileSessionTabMark({
   row: Pick<MobileSessionTabRow, 'tab' | 'agentId'>
   size: number
 }) {
-  useMobileColorScheme()
   if (row.agentId) {
     return <MobileAgentIcon agentId={row.agentId} size={size} />
   }
@@ -56,6 +56,7 @@ function MobileSessionTabKindIcon({
   type: MobileSessionTabRow['tab']['type']
   size: number
 }) {
+  const colors = useMobileColors()
   const Icon =
     type === 'browser'
       ? Globe

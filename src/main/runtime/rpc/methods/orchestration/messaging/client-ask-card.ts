@@ -85,7 +85,7 @@ export function readClientAskOutcome(
   if (answer) {
     return reading('answered', answer.body)
   }
-  return question && question.awaiting === null
+  return question && question.awaiting !== 1
     ? reading('dropped', replies.at(-1)?.body)
     : reading(null)
 }

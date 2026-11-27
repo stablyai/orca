@@ -125,6 +125,7 @@ export function buildFullWorktreePurgeState(
   const {
     omitByWorktree,
     omitWorkspaceLineageByWorktree,
+    omitWorkspaceSessionKeyByWorktree,
     pruneRightSidebarTabByWorktree,
     omitByPaneKeyTabPrefix
   } = omitters
@@ -179,6 +180,9 @@ export function buildFullWorktreePurgeState(
     ),
     worktreeLineageById: omitByWorktree(s.worktreeLineageById),
     workspaceLineageByChildKey: omitWorkspaceLineageByWorktree(s.workspaceLineageByChildKey),
+    contestedPrimaryHostBySessionKey: omitWorkspaceSessionKeyByWorktree(
+      s.contestedPrimaryHostBySessionKey
+    ),
     deleteStateByWorktreeId: removeDeleteStatesForWorktreeIds(
       s.deleteStateByWorktreeId,
       worktreeIdSet

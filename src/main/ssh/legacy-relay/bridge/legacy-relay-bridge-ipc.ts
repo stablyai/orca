@@ -4,6 +4,7 @@
  */
 import { ipcMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { LEGACY_RELAY_BRIDGE_CHANNELS as CHANNELS } from '../../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import {
@@ -16,18 +17,26 @@ import {
   writeLegacyRelayPane
 } from './legacy-relay-bridge-registry'
 
-const PtyIdSchema = z.string().min(1).max(4096)
-const SizeSchema = z.number().int().positive().max(10_000)
-const PaneArgsSchema = z.object({ ptyId: PtyIdSchema })
-const DetachArgsSchema = z.object({ ptyId: PtyIdSchema, acquisitionId: z.number().int() })
-const AttachArgsSchema = z.object({ ptyId: PtyIdSchema, replayInStream: z.boolean().optional() })
-const WriteArgsSchema = z.object({ ptyId: PtyIdSchema, data: z.string() })
-const PausedArgsSchema = z.object({
-  ptyId: PtyIdSchema,
-  paused: z.boolean(),
-  replayNeeded: z.boolean().optional()
-})
-const ResizeArgsSchema = z.object({ ptyId: PtyIdSchema, cols: SizeSchema, rows: SizeSchema })
+const PtyIdSchema = lazyZodSchema(() => z.string().min(1).max(4096))
+const SizeSchema = lazyZodSchema(() => z.number().int().positive().max(10_000))
+const PaneArgsSchema = lazyZodSchema(() => z.object({ ptyId: PtyIdSchema }))
+const DetachArgsSchema = lazyZodSchema(() =>
+  z.object({ ptyId: PtyIdSchema, acquisitionId: z.number().int() })
+)
+const AttachArgsSchema = lazyZodSchema(() =>
+  z.object({ ptyId: PtyIdSchema, replayInStream: z.boolean().optional() })
+)
+const WriteArgsSchema = lazyZodSchema(() => z.object({ ptyId: PtyIdSchema, data: z.string() }))
+const PausedArgsSchema = lazyZodSchema(() =>
+  z.object({
+    ptyId: PtyIdSchema,
+    paused: z.boolean(),
+    replayNeeded: z.boolean().optional()
+  })
+)
+const ResizeArgsSchema = lazyZodSchema(() =>
+  z.object({ ptyId: PtyIdSchema, cols: SizeSchema, rows: SizeSchema })
+)
 
 export function registerLegacyRelayBridgeIpc(args: {
   runtime?: () => OrcaRuntimeService | null

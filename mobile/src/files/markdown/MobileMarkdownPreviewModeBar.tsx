@@ -3,8 +3,8 @@ import { View } from 'react-native'
 import { MobileSegmentedControl } from '../../components/controls/MobileSegmentedControl'
 import { MobileSourceCopyButton } from '../../components/code-presentation/MobileSourceCopyButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { filePreviewStyles as styles } from '../preview/mobile-file-preview-styles'
+import { filePreviewStylesSheet } from '../preview/mobile-file-preview-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 export type MarkdownPreviewMode = 'preview' | 'source'
 
@@ -37,7 +37,7 @@ export function MobileMarkdownPreviewModeBar({
   content,
   truncated
 }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(filePreviewStylesSheet)
   const t = useMobileTranslation()
   return (
     <View style={styles.modeBar}>

@@ -7,7 +7,8 @@ import {
   MobileDictationFinishingNote,
   MobileDictationRecordingMeter
 } from '../../../../dictation/MobileDictationLiveControls'
-import { mobileNativeChatComposerStyles as styles } from '../field/mobile-native-chat-composer-styles'
+import { mobileNativeChatComposerStylesSheet } from '../field/mobile-native-chat-composer-styles'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 // While dictating, the row's leading side swaps attach and the pickers for ✕ and the meter (or a kept failure), so the composer keeps its height.
 export function MobileNativeChatDictationLeading({
@@ -15,17 +16,15 @@ export function MobileNativeChatDictationLeading({
   micStarting = false,
   micProcessing = false,
   cancelRef,
-  trailing,
   children
 }: {
   micActive: boolean
   micStarting?: boolean
   micProcessing?: boolean
   cancelRef: RefObject<HostInstance | null>
-  // The context ring after the leading controls; it steps aside with them.
-  trailing: ReactNode
   children: ReactNode
 }): React.JSX.Element {
+  const styles = useThemedStyles(mobileNativeChatComposerStylesSheet)
   const live = useContext(MobileDictationLiveContext)
   if (live?.failureReason != null) {
     return (
@@ -36,12 +35,7 @@ export function MobileNativeChatDictationLeading({
     )
   }
   if (!live || (!micActive && !micProcessing)) {
-    return (
-      <>
-        <View style={styles.leadingControls}>{children}</View>
-        {trailing}
-      </>
-    )
+    return <View style={styles.leadingControls}>{children}</View>
   }
   return (
     <View style={[styles.leadingControls, styles.dictationLeading]}>

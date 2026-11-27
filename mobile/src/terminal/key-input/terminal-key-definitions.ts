@@ -1,4 +1,4 @@
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 import type { TerminalAccessoryKey, TerminalShortcutSpecialKey } from './terminal-accessory-keys'
 
 export const SPECIAL_KEY_LABELS: Record<string, string> = {
@@ -36,22 +36,7 @@ const SPECIAL_KEY_ACCESSIBILITY_LABELS: Record<string, string> = {
   tab: 'Tab',
   enter: 'Enter',
   backspace: 'Backspace',
-  get delete() {
-    return translate('terminal.keyDefinitions.forwardDelete', 'Forward delete')
-  },
   insert: 'Insert',
-  get arrowUp() {
-    return translate('terminal.keyDefinitions.arrowUp', 'Arrow up')
-  },
-  get arrowDown() {
-    return translate('terminal.keyDefinitions.arrowDown', 'Arrow down')
-  },
-  get arrowLeft() {
-    return translate('terminal.keyDefinitions.arrowLeft', 'Arrow left')
-  },
-  get arrowRight() {
-    return translate('terminal.keyDefinitions.arrowRight', 'Arrow right')
-  },
   home: 'Home',
   end: 'End',
   pageUp: 'Page up',
@@ -69,6 +54,49 @@ const SPECIAL_KEY_ACCESSIBILITY_LABELS: Record<string, string> = {
   f10: 'F10',
   f11: 'F11',
   f12: 'F12'
+}
+
+const forwardDeleteLabel = (t: Translate) =>
+  t('terminal.keyDefinitions.forwardDelete', 'Forward delete')
+
+const TRANSLATED_SPECIAL_KEY_ACCESSIBILITY_LABELS: Record<string, (t: Translate) => string> = {
+  delete: forwardDeleteLabel,
+  arrowUp: (t) => t('terminal.keyDefinitions.arrowUp', 'Arrow up'),
+  arrowDown: (t) => t('terminal.keyDefinitions.arrowDown', 'Arrow down'),
+  arrowLeft: (t) => t('terminal.keyDefinitions.arrowLeft', 'Arrow left'),
+  arrowRight: (t) => t('terminal.keyDefinitions.arrowRight', 'Arrow right')
+}
+
+export function terminalSpecialKeyAccessibilityLabel(id: string, t: Translate): string {
+  return (
+    TRANSLATED_SPECIAL_KEY_ACCESSIBILITY_LABELS[id]?.(t) ??
+    SPECIAL_KEY_ACCESSIBILITY_LABELS[id] ??
+    id
+  )
+}
+
+const TRANSLATED_ACCESSORY_KEY_ACCESSIBILITY_LABELS: Record<string, (t: Translate) => string> = {
+  delete: forwardDeleteLabel,
+  arrowUp: (t) => t('terminal.keyDefinitions.accessoryArrowUp', 'Arrow Up'),
+  arrowDown: (t) => t('terminal.keyDefinitions.accessoryArrowDown', 'Arrow Down'),
+  arrowLeft: (t) => t('terminal.keyDefinitions.accessoryArrowLeft', 'Arrow Left'),
+  arrowRight: (t) => t('terminal.keyDefinitions.accessoryArrowRight', 'Arrow Right'),
+  ctrlC: (t) => t('terminal.keyDefinitions.interruptTerminal', 'Interrupt terminal'),
+  ctrlD: (t) => t('terminal.keyDefinitions.sendEof', 'Send EOF'),
+  ctrlL: (t) => t('terminal.keyDefinitions.clearScreen', 'Clear screen'),
+  ctrlZ: (t) => t('terminal.keyDefinitions.suspendProcess', 'Suspend process'),
+  ctrlR: (t) => t('terminal.keyDefinitions.reverseSearch', 'Reverse search'),
+  ctrlA: (t) => t('terminal.keyDefinitions.startOfLine', 'Start of line'),
+  ctrlE: (t) => t('terminal.keyDefinitions.endOfLine', 'End of line'),
+  ctrlW: (t) => t('terminal.keyDefinitions.deleteWordBackward', 'Delete word backward'),
+  ctrlU: (t) => t('terminal.keyDefinitions.clearLineBeforeCursor', 'Clear line before cursor')
+}
+
+export function terminalAccessoryKeyAccessibilityLabel(
+  key: TerminalAccessoryKey,
+  t: Translate
+): string | undefined {
+  return TRANSLATED_ACCESSORY_KEY_ACCESSIBILITY_LABELS[key.id]?.(t) ?? key.accessibilityLabel
 }
 
 export const TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS: TerminalShortcutSpecialKey[] = [
@@ -101,134 +129,89 @@ export const TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS: TerminalShortcutSpecialK
   'f12'
 ].map((id) => ({
   id,
-  label: SPECIAL_KEY_LABELS[id]!,
-  get accessibilityLabel() {
-    return SPECIAL_KEY_ACCESSIBILITY_LABELS[id]!
-  }
+  label: SPECIAL_KEY_LABELS[id]!
 }))
 
 export const TERMINAL_ACCESSORY_KEY_DEFINITIONS: TerminalAccessoryKey[] = [
   { id: 'escape', label: 'Esc', bytes: '\x1b', accessibilityLabel: 'Escape' },
   { id: 'tab', label: 'Tab', bytes: '\t', accessibilityLabel: 'Tab' },
   { id: 'enter', label: 'Enter', bytes: '\r', accessibilityLabel: 'Enter' },
-  { id: 'shiftTab', label: 'Shift+Tab', bytes: '\x1b[Z', accessibilityLabel: 'Shift Tab' },
+  { id: 'shiftTab', label: '⇧Tab', bytes: '\x1b[Z', accessibilityLabel: 'Shift Tab' },
   { id: 'space', label: 'Space', bytes: ' ', accessibilityLabel: 'Space' },
   { id: 'backspace', label: '⌫', bytes: '\x7f', accessibilityLabel: 'Backspace', repeatable: true },
   {
     id: 'delete',
     label: 'Del',
     bytes: '\x1b[3~',
-    get accessibilityLabel() {
-      return SPECIAL_KEY_ACCESSIBILITY_LABELS.delete!
-    },
     repeatable: true
   },
   {
     id: 'arrowUp',
     label: '↑',
     bytes: '\x1b[A',
-    get accessibilityLabel() {
-      return translate('terminal.keyDefinitions.accessoryArrowUp', 'Arrow Up')
-    },
     repeatable: true
   },
   {
     id: 'arrowDown',
     label: '↓',
     bytes: '\x1b[B',
-    get accessibilityLabel() {
-      return translate('terminal.keyDefinitions.accessoryArrowDown', 'Arrow Down')
-    },
     repeatable: true
   },
   {
     id: 'arrowLeft',
     label: '←',
     bytes: '\x1b[D',
-    get accessibilityLabel() {
-      return translate('terminal.keyDefinitions.accessoryArrowLeft', 'Arrow Left')
-    },
     repeatable: true
   },
   {
     id: 'arrowRight',
     label: '→',
     bytes: '\x1b[C',
-    get accessibilityLabel() {
-      return translate('terminal.keyDefinitions.accessoryArrowRight', 'Arrow Right')
-    },
     repeatable: true
   },
   {
     id: 'ctrlC',
     label: 'Ctrl+C',
-    bytes: '\x03',
-    get accessibilityLabel() {
-      return translate('terminal.keyDefinitions.interruptTerminal', 'Interrupt terminal')
-    }
+    bytes: '\x03'
   },
   {
     id: 'ctrlD',
     label: 'Ctrl+D',
-    bytes: '\x04',
-    get accessibilityLabel() {
-      return translate('terminal.keyDefinitions.sendEof', 'Send EOF')
-    }
+    bytes: '\x04'
   },
   {
     id: 'ctrlL',
     label: 'Ctrl+L',
-    bytes: '\x0c',
-    get accessibilityLabel() {
-      return translate('terminal.keyDefinitions.clearScreen', 'Clear screen')
-    }
+    bytes: '\x0c'
   },
   {
     id: 'ctrlZ',
     label: 'Ctrl+Z',
-    bytes: '\x1a',
-    get accessibilityLabel() {
-      return translate('terminal.keyDefinitions.suspendProcess', 'Suspend process')
-    }
+    bytes: '\x1a'
   },
   {
     id: 'ctrlR',
     label: 'Ctrl+R',
-    bytes: '\x12',
-    get accessibilityLabel() {
-      return translate('terminal.keyDefinitions.reverseSearch', 'Reverse search')
-    }
+    bytes: '\x12'
   },
   {
     id: 'ctrlA',
     label: 'Ctrl+A',
-    bytes: '\x01',
-    get accessibilityLabel() {
-      return translate('terminal.keyDefinitions.startOfLine', 'Start of line')
-    }
+    bytes: '\x01'
   },
   {
     id: 'ctrlE',
     label: 'Ctrl+E',
-    bytes: '\x05',
-    get accessibilityLabel() {
-      return translate('terminal.keyDefinitions.endOfLine', 'End of line')
-    }
+    bytes: '\x05'
   },
   {
     id: 'ctrlW',
     label: 'Ctrl+W',
-    bytes: '\x17',
-    get accessibilityLabel() {
-      return translate('terminal.keyDefinitions.deleteWordBackward', 'Delete word backward')
-    }
+    bytes: '\x17'
   },
   {
     id: 'ctrlU',
     label: 'Ctrl+U',
-    bytes: '\x15',
-    get accessibilityLabel() {
-      return translate('terminal.keyDefinitions.clearLineBeforeCursor', 'Clear line before cursor')
-    }
+    bytes: '\x15'
   }
 ]
