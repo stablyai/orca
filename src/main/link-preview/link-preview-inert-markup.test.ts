@@ -25,10 +25,7 @@ it('reads live metadata after comments, script text and quoted tag attributes', 
 })
 
 it('uses a live charset beyond 64 KB instead of an earlier commented declaration', () => {
-  const html =
-    '<!-- <meta charset="utf-8"> -->' +
-    ' '.repeat(70 * 1024) +
-    '<meta charset="windows-1252"><title>Café</title>'
+  const html = `<!-- <meta charset="utf-8"> -->${' '.repeat(70 * 1024)}<meta charset="windows-1252"><title>Café</title>`
   expect(decodeHtmlBody(Buffer.from(html, 'latin1'), 'text/html')).toContain('<title>Café</title>')
 })
 
@@ -43,7 +40,7 @@ it('keeps XHTML empty scripts distinct from HTML raw-text scripts', () => {
     imageUrl: null,
     iconHref: '/xml.ico'
   })
-  expect(readLinkPreviewMetadata(head + '</script><title>HTML title</title>', pageUrl)).toEqual({
+  expect(readLinkPreviewMetadata(`${head}</script><title>HTML title</title>`, pageUrl)).toEqual({
     title: 'HTML title',
     description: null,
     siteName: null,
