@@ -7,6 +7,7 @@ import type {
   BrowserTabSwitchResult
 } from '../../shared/browser/runtime/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch/dispatch'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { formatTabAnnotations, formatTabList, formatTabShow } from './browser-format'
 import { printResult } from '../output/command-result-output'
 import {
@@ -15,7 +16,7 @@ import {
   getPresentStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/connection/types'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 import { isBrowserTabSplitDirection } from '../../shared/browser/workspaces/browser-tab-split-direction'
 import { getBrowserWorktreeSelector } from '../workspace-selection/workspace-selector'
 import { getBrowserCommandTarget, getScopedBrowserWorktreeSelector } from './browser-command-target'
@@ -23,12 +24,17 @@ import { getBrowserCommandTarget, getScopedBrowserWorktreeSelector } from './bro
 export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   'open-url': async ({ flags, client, cwd, json }) => {
     const url = getRequiredStringFlag(flags, 'url')
-    const worktree = await getScopedBrowserWorktreeSelector(flags, cwd, client)
-    const result = await client.call<{ browserPageId: string }>(
-      'browser.openUrl',
-      { url, worktree },
-      { timeoutMs: 60_000 }
-    )
+    let result: RuntimeRpcSuccess<{ browserPageId: string }>
+    try {
+      const worktree = await getScopedBrowserWorktreeSelector(flags, cwd, client)
+      result = await client.call<{ browserPageId: string }>(
+        'browser.openUrl',
+        { url, worktree },
+        { timeoutMs: 60_000 }
+      )
+    } catch (error) {
+      throw withOpenUrlYourselfLine(error, url)
+    }
     printResult(result, json, (v) => `Opened URL in tab ${v.browserPageId}`)
   },
   'tab list': async ({ flags, client, cwd, json }) => {
@@ -120,4 +126,19 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     })
     printResult(result, json, (v) => JSON.stringify(v, null, 2))
   }
+}
+
+// Why: BROWSER callers are often phone-only or headless sessions; when no desktop opens the page, the URL is their way on (#48645).
+function withOpenUrlYourselfLine(error: unknown, url: string): RuntimeClientError {
+  const message = `${error instanceof Error ? error.message : String(error)}\nOpen it in a browser yourself: ${url}`
+  if (error instanceof RuntimeRpcFailureError) {
+    return new RuntimeRpcFailureError({
+      ...error.response,
+      error: { ...error.response.error, message }
+    })
+  }
+  if (error instanceof RuntimeClientError) {
+    return new RuntimeClientError(error.code, message, error.data)
+  }
+  return new RuntimeClientError('runtime_error', message)
 }
