@@ -75,6 +75,13 @@ function buildUrl(
   return `${apiUrl}${path}${search ? `?${search}` : ''}`
 }
 
+function isRedirectFailure(error: unknown): boolean {
+  const cause = error instanceof Error ? error.cause : undefined
+  return [error, cause].some(
+    (candidate) => candidate instanceof Error && /redirect/i.test(candidate.message)
+  )
+}
+
 async function sendWithKey(
   url: string,
   apiKey: string,
@@ -90,10 +97,19 @@ async function sendWithKey(
       method: init?.method ?? 'GET',
       headers,
       body: init?.body === undefined ? undefined : JSON.stringify(init.body),
+      // A redirect would resend x-api-key to the new origin.
+      redirect: 'error',
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     })
-  } catch {
+  } catch (error) {
     // The raw error can carry request config; surface only the code.
+    if (isRedirectFailure(error)) {
+      throw new ItsaplanApiError(
+        'requestFailed',
+        null,
+        'The server redirected the request. Check the API URL.'
+      )
+    }
     throw new ItsaplanApiError('unreachable')
   }
 }

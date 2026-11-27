@@ -85,4 +85,25 @@ describe('itsaplanRequest', () => {
       'https://api.example.com/projects/t.K/issues?labelIds=1%2C2&limit=5'
     )
   })
+
+  it('refuses redirects so the key never follows one', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse([]))
+    setMainHttpClient({ fetch: fetchMock, proxySession: () => null })
+
+    await itsaplanRequest('/projects')
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(init.redirect).toBe('error')
+  })
+
+  it('reports a redirect as requestFailed', async () => {
+    setMainHttpClient({
+      fetch: async () => {
+        throw new TypeError('fetch failed', { cause: new Error('unexpected redirect') })
+      },
+      proxySession: () => null
+    })
+    const error = await itsaplanRequest('/projects').catch((caught: unknown) => caught)
+    expect((error as ItsaplanApiError).code).toBe('requestFailed')
+  })
 })
