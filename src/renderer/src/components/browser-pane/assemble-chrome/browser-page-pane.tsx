@@ -155,9 +155,9 @@ export function BrowserPagePane({
     guestFocus,
     inputLocked
   })
-  const markup = useBrowserPageMarkupCapture(webviewRef, browserTab.id)
   // Why: a blank tab reads as 'about:blank' or the resolved data: URL, so match both to keep the "New Browser Tab" overlay visible.
   const isBlankTab = browserTab.url === 'about:blank' || browserTab.url === ORCA_BROWSER_BLANK_URL
+  const markup = useBrowserPageMarkupCapture(webviewRef, { page: browserTab, isActive })
   const {
     grab,
     annotationSend,
@@ -184,7 +184,6 @@ export function BrowserPagePane({
     markup,
     grabState: grab.state,
     stopPicker: grabAnnotations.cancelPendingBrowserCapture,
-    isActive,
     viewportBridge,
     webviewRef
   })

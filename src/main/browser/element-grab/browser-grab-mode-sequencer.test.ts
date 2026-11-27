@@ -6,6 +6,7 @@ import {
   captureCleanBrowserPage,
   disposeGrabModeStateForPage,
   pagesWithPendingGrabWaits,
+  queuedGrabModeOperationCount,
   resetGrabModeState,
   setBrowserGrabMode
 } from './browser-grab-mode-sequencer'
@@ -223,20 +224,29 @@ it('a retired attempt skips stages not yet started but holds the queue until its
   page.run(ARM)
   await arm
 
-  // Queued behind a held head: followers retired by their viewer or deadline leave at once, holding nothing.
+  // Queued behind a head held at its readback: followers retired by their viewer, deadline or a lost document
+  // leave the queue at once, so nothing of theirs is retained while the head keeps the page.
   const head = capture(page)
-  await flush()
+  await passStages(page, false)
   const headOnly = page.listeners()
-  const byViewer = capture(page)
-  const byDeadline = capture(page, () => page.guest, Date.now() + 1_000)
-  byViewer.retire()
-  await expect(byViewer.capture).resolves.toBeNull()
-  await vi.advanceTimersByTimeAsync(1_000)
-  await expect(byDeadline.capture).resolves.toBeNull()
+  for (let retry = 0; retry < 3; retry++) {
+    const byViewer = capture(page)
+    const byDeadline = capture(page, () => page.guest, Date.now() + 1_000)
+    const byCrash = capture(page)
+    expect(queuedGrabModeOperationCount()).toBe(3)
+    byViewer.retire()
+    page.emitter.emit('render-process-gone')
+    await vi.advanceTimersByTimeAsync(1_000)
+    await expect(byViewer.capture).resolves.toBeNull()
+    await expect(byDeadline.capture).resolves.toBeNull()
+    await expect(byCrash.capture).resolves.toBeNull()
+  }
+  expect(queuedGrabModeOperationCount()).toBe(0)
   expect(page.listeners()).toBe(headOnly)
+  // The head saw the crash too, so it returns nothing; a fresh attempt after it settles captures.
+  page.readbacks.shift()!.settle(true)
+  await expect(head.capture).resolves.toBeNull()
   const retry = capture(page)
-  await passStages(page)
-  await expect(head.capture).resolves.toEqual(CAPTURE)
   await passStages(page)
   await expect(retry.capture).resolves.toEqual(CAPTURE)
   expect(pagesWithPendingGrabWaits()).toEqual([])
@@ -309,6 +319,10 @@ it('IPC: only the authorized guest the request began on, settled, gets a capture
     await expect(ipc('browser:captureCleanPage', senderId, args)).resolves.toBeNull()
   }
   page.state.loading = false
+  // Already at or past its deadline when it arrives: refused before it can supersede the pending arm.
+  await expect(
+    ipc('browser:captureCleanPage', 1, attempt({ deadlineMs: Date.now() }))
+  ).resolves.toBeNull()
   page.run(ARM)
   await expect(on).resolves.toEqual({ ok: true })
   expect(page.scripts).toHaveLength(0)
@@ -316,4 +330,12 @@ it('IPC: only the authorized guest the request began on, settled, gets a capture
   const draw = ipc('browser:captureCleanPage', 1, attempt())
   await passStages(page)
   await expect(draw).resolves.toEqual(CAPTURE)
+
+  // A far-future deadline gets the host maximum: still at its readback when that passes, it returns nothing.
+  vi.useFakeTimers()
+  const overlong = ipc('browser:captureCleanPage', 1, attempt({ deadlineMs: Date.now() + 1e9 }))
+  await passStages(page, false)
+  await vi.advanceTimersByTimeAsync(10_000)
+  page.readbacks.shift()!.settle(true)
+  await expect(overlong).resolves.toBeNull()
 })

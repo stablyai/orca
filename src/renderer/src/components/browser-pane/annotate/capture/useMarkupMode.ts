@@ -39,7 +39,8 @@ export type MarkupModeController = {
   state: MarkupModeState
   isActive: boolean
   baseImage: MarkupBaseImage | null
-  start: () => Promise<void>
+  /** `onContextReady` runs only once the page can be captured, so callers never act on a Draw that can't start. */
+  start: (onContextReady?: () => void) => Promise<void>
   cancel: () => void
   /** Drops a capture still in flight (its document or viewer is gone) without an error; a drawing stays open. */
   abandonCapture: () => void
@@ -81,51 +82,58 @@ export function useMarkupMode({
     toast.error(translate(key, fallback))
   }, [])
 
-  const start = useCallback(async () => {
-    const context = getCaptureContext()
-    if (!context) {
-      reportError(
-        'auto.components.browser-pane.markup.errorUnavailable',
-        'Screenshot markup is not available on this page.'
-      )
-      return
-    }
-    captureAbortRef.current?.abort()
-    const abort = new AbortController()
-    captureAbortRef.current = abort
-    const token = (captureTokenRef.current += 1)
-    contextRef.current = context
-    setState('capturing')
-    const isStale = (): boolean => {
-      if (captureTokenRef.current !== token) {
-        return true
+  const start = useCallback(
+    async (onContextReady?: () => void) => {
+      const context = getCaptureContext()
+      if (!context) {
+        reportError(
+          'auto.components.browser-pane.markup.errorUnavailable',
+          'Screenshot markup is not available on this page.'
+        )
+        return
       }
-      if (context.isCurrent?.() === false) {
+      onContextReady?.()
+      captureAbortRef.current?.abort()
+      const abort = new AbortController()
+      captureAbortRef.current = abort
+      const token = (captureTokenRef.current += 1)
+      contextRef.current = context
+      setState('capturing')
+      const isStale = (): boolean => {
+        if (captureTokenRef.current !== token) {
+          return true
+        }
+        if (context.isCurrent?.() === false) {
+          reset()
+          return true
+        }
+        return false
+      }
+      try {
+        const image = await captureMarkupBaseImage(context.source, abort.signal)
+        if (isStale()) {
+          return
+        }
+        if (context.source.kind === 'clean-page' && Date.now() >= context.source.deadlineMs) {
+          throw new Error('markup: the capture finished after its deadline')
+        }
+        captureAbortRef.current = null
+        setBaseImage(image)
+        setState('drawing')
+      } catch {
+        if (isStale()) {
+          return
+        }
+        // Return to idle on capture failure; no overlay exists to offer recovery.
+        reportError(
+          'auto.components.browser-pane.markup.errorCapture',
+          'Could not capture the page to draw on.'
+        )
         reset()
-        return true
       }
-      return false
-    }
-    try {
-      const image = await captureMarkupBaseImage(context.source, abort.signal)
-      if (isStale()) {
-        return
-      }
-      captureAbortRef.current = null
-      setBaseImage(image)
-      setState('drawing')
-    } catch {
-      if (isStale()) {
-        return
-      }
-      // Return to idle on capture failure; no overlay exists to offer recovery.
-      reportError(
-        'auto.components.browser-pane.markup.errorCapture',
-        'Could not capture the page to draw on.'
-      )
-      reset()
-    }
-  }, [getCaptureContext, reportError, reset])
+    },
+    [getCaptureContext, reportError, reset]
+  )
 
   const cancel = useCallback(() => {
     reset()

@@ -11,6 +11,7 @@ function stubPage() {
   const requests: { args: Record<string, unknown>; reply: (capture: unknown) => void }[] = []
   const decodes: (() => void)[] = []
   const retired: string[] = []
+  const clock = { encodeMs: 0 }
   vi.stubGlobal('window', {
     api: {
       browser: {
@@ -34,13 +35,22 @@ function stubPage() {
   vi.stubGlobal('document', {
     createElement: () => ({
       getContext: () => ({ fillRect: () => {}, drawImage: () => {} }),
-      toDataURL: () => 'data:image/png;base64,flat'
+      toDataURL: () => {
+        vi.setSystemTime(Date.now() + clock.encodeMs)
+        return 'data:image/png;base64,flat'
+      }
     })
   })
-  return { requests, decodes, retired }
+  return { requests, decodes, retired, clock }
 }
 
-const source = { kind: 'clean-page', browserPageId: 'page-1', guestId: 7 } as const
+const draw = () =>
+  ({
+    kind: 'clean-page',
+    browserPageId: 'page-1',
+    guestId: 7,
+    deadlineMs: Date.now() + 10_000
+  }) as const
 const capture = { dataUrl: 'data:image/png;base64,AA==', width: 2, height: 1 }
 const flush = async (): Promise<void> => {
   for (let i = 0; i < 5; i++) {
@@ -52,7 +62,7 @@ it('one absolute deadline and Draw giving up end the attempt at any step, retiri
   vi.useFakeTimers()
   const page = stubPage()
 
-  const drawn = captureMarkupBaseImage(source)
+  const drawn = captureMarkupBaseImage(draw())
   expect(page.requests[0].args).toMatchObject({ guestId: 7, deadlineMs: Date.now() + 10_000 })
   page.requests[0].reply(capture)
   await flush()
@@ -60,16 +70,32 @@ it('one absolute deadline and Draw giving up end the attempt at any step, retiri
   await expect(drawn).resolves.toEqual({ ...capture, dataUrl: 'data:image/png;base64,flat' })
 
   const abort = new AbortController()
-  const decoding = captureMarkupBaseImage(source, abort.signal)
+  const decoding = captureMarkupBaseImage(draw(), abort.signal)
   page.requests[1].reply(capture)
   await flush()
   abort.abort()
   await expect(decoding).rejects.toThrow()
 
-  const late = captureMarkupBaseImage(source).catch((error: unknown) => error)
+  const late = captureMarkupBaseImage(draw()).catch((error: unknown) => error)
   await vi.advanceTimersByTimeAsync(9_000)
   page.requests[2].reply(capture)
   await vi.advanceTimersByTimeAsync(1_000)
   await expect(late).resolves.toBeInstanceOf(Error)
   expect(page.retired).toEqual([page.requests[1].args.attemptId, page.requests[2].args.attemptId])
+
+  // A reply that lands after the deadline, before the overdue timer runs, starts no decode.
+  const decodesBefore = page.decodes.length
+  const overdue = captureMarkupBaseImage(draw()).catch((error: unknown) => error)
+  vi.setSystemTime(Date.now() + 10_000)
+  page.requests[3].reply(capture)
+  await expect(overdue).resolves.toBeInstanceOf(Error)
+  expect(page.decodes).toHaveLength(decodesBefore)
+
+  // An encode that runs past the deadline (no timer can fire meanwhile) returns no image.
+  page.clock.encodeMs = 10_000
+  const slowEncode = captureMarkupBaseImage(draw()).catch((error: unknown) => error)
+  page.requests[4].reply(capture)
+  await flush()
+  page.decodes.pop()!()
+  await expect(slowEncode).resolves.toBeInstanceOf(Error)
 })

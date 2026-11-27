@@ -7,6 +7,7 @@ import { useGrabMode, type GrabModeState } from '../grab/useGrabMode'
 import type { BrowserGuestAnnotationViewportBridge } from '../use-browser-guest-annotate-tools'
 import type { BrowserGuestToolsTransport } from '../browser-guest-tools-transport'
 import type { BrowserSetGrabModeResult } from '../../../../../../shared/browser/element-grab/browser-grab-types'
+import type { BrowserLoadError } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 
 const page = vi.hoisted(() => ({
   captures: [] as { finish: (ok: boolean) => void; signal?: AbortSignal }[],
@@ -31,19 +32,23 @@ function fakeWebview(): {
   webview: Electron.WebviewTag
   guestId: { current: number }
   loading: { current: boolean }
+  size: { current: number }
 } {
   const guestId = { current: 1 }
   const loading = { current: false }
+  const size = { current: 10 }
   const element = Object.assign(document.createElement('div'), {
     getWebContentsId: () => guestId.current,
     isLoadingMainFrame: () => loading.current,
-    getBoundingClientRect: () => ({ width: 10, height: 10 })
+    getBoundingClientRect: () => ({ width: size.current, height: size.current })
   })
   document.body.append(element)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Draw path reads only events, isConnected, size and the guest id.
-  return { webview: element as unknown as Electron.WebviewTag, guestId, loading }
+  return { webview: element as unknown as Electron.WebviewTag, guestId, loading, size }
 }
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Draw only checks whether a load error is set.
+const FAILED_LOAD = { code: -105 } as unknown as BrowserLoadError
 const finishCapture = (ok: boolean): Promise<void> =>
   act(async () => {
     page.captures.shift()!.finish(ok)
@@ -55,13 +60,23 @@ function renderLocalDraw(webview: Electron.WebviewTag) {
   const bridge = { invalidateDocument: vi.fn() } as unknown as BrowserGuestAnnotationViewportBridge
   const stops: string[] = []
   const hook = renderHook(
-    ({ grabState, isActive }: { grabState: GrabModeState; isActive: boolean }) => {
-      const markup = useBrowserPageMarkupCapture(webviewRef, 'page-1')
+    ({
+      grabState,
+      isActive,
+      unavailable = false
+    }: {
+      grabState: GrabModeState
+      isActive: boolean
+      unavailable?: boolean
+    }) => {
+      const markup = useBrowserPageMarkupCapture(webviewRef, {
+        page: { id: 'page-1', loadError: unavailable ? FAILED_LOAD : null },
+        isActive
+      })
       const draw = useLocalPageDraw({
         markup,
         grabState,
         stopPicker: () => stops.push('stop'),
-        isActive,
         viewportBridge: bridge,
         webviewRef
       })
@@ -80,17 +95,22 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 it('Draw stops an armed picker first; a reload, hidden pane or closed tab retires its capture silently', async () => {
-  const { webview, loading } = fakeWebview()
+  const { webview, loading, size } = fakeWebview()
   const draw = renderLocalDraw(webview)
-  draw.rerender({ grabState: 'armed', isActive: true })
-  // A page mid-load can't prove which document Draw would get, so the pick is kept and nothing is captured.
-  loading.current = true
-  draw.start()
+  // A page mid-load, without size, or behind a failure overlay can't be drawn on: the pick is kept, nothing captured.
+  for (const blocked of ['loading', 'zero-size', 'unavailable']) {
+    loading.current = blocked === 'loading'
+    size.current = blocked === 'zero-size' ? 0 : 10
+    draw.rerender({ grabState: 'armed', isActive: true, unavailable: blocked === 'unavailable' })
+    draw.start()
+  }
   expect(draw.stops).toEqual([])
   expect(page.captures).toHaveLength(0)
-  expect(page.errors).toBe(1)
+  expect(page.errors).toBe(3)
   page.errors = 0
   loading.current = false
+  size.current = 10
+  draw.rerender({ grabState: 'armed', isActive: true })
   draw.start()
   expect(draw.stops).toEqual(['stop'])
   act(() => draw.result.current.draw.viewportBridge.invalidateDocument())
@@ -116,10 +136,18 @@ it('Draw stops an armed picker first; a reload, hidden pane or closed tab retire
 it('a lost or replaced guest drops a held capture and its error, but keeps a drawing already open', async () => {
   const { webview, guestId } = fakeWebview()
   const draw = renderLocalDraw(webview)
-  draw.start()
-  act(() => void webview.dispatchEvent(new Event('render-process-gone')))
-  expect(draw.result.current.markup.state).toBe('idle')
-  await finishCapture(true)
+  // Lost in the same task the capture began in, before any effect could have run.
+  for (const [loss, ok] of [
+    ['render-process-gone', true],
+    ['destroyed', false]
+  ] as const) {
+    act(() => {
+      void draw.result.current.draw.startMarkup()
+      webview.dispatchEvent(new Event(loss))
+    })
+    expect(draw.result.current.markup.state).toBe('idle')
+    await finishCapture(ok)
+  }
 
   draw.start()
   guestId.current = 2
@@ -135,6 +163,39 @@ it('a lost or replaced guest drops a held capture and its error, but keeps a dra
   expect(draw.result.current.markup.state).toBe('drawing')
   act(() => void webview.dispatchEvent(new Event('destroyed')))
   expect(draw.result.current.markup.state).toBe('drawing')
+})
+
+it('a pane hidden in a commit publishes nothing, and a capture past its deadline fails once without drawing', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  const { webview } = fakeWebview()
+  const webviewRef = { current: webview }
+  const { result, rerender } = renderHook(
+    ({ isActive }: { isActive: boolean }) =>
+      useBrowserPageMarkupCapture(webviewRef, {
+        page: { id: 'page-1', loadError: null },
+        isActive
+      }),
+    { initialProps: { isActive: true } }
+  )
+  for (const ok of [true, false]) {
+    act(() => void result.current.start())
+    rerender({ isActive: false })
+    await finishCapture(ok)
+    expect(result.current.state).toBe('idle')
+    rerender({ isActive: true })
+  }
+  expect(page.errors).toBe(0)
+
+  act(() => void result.current.start())
+  vi.setSystemTime(Date.now() + 10_000)
+  await finishCapture(true)
+  expect(result.current.state).toBe('idle')
+  expect(page.errors).toBe(1)
+
+  act(() => void result.current.start())
+  await finishCapture(true)
+  expect(result.current.state).toBe('drawing')
+  vi.useRealTimers()
 })
 
 it('a stale enable reply sends no second off, and a superseded one starts no pick', async () => {

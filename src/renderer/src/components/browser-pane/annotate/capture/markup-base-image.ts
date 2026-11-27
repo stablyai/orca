@@ -13,10 +13,7 @@ export type MarkupCaptureSource =
   | { kind: 'webview'; webview: Electron.WebviewTag }
   | { kind: 'image'; element: HTMLImageElement }
   /** Main removes the page's picker and captures it repainted without it, serialized with every viewer's arm. */
-  | { kind: 'clean-page'; browserPageId: string; guestId: number }
-
-// A page still loading delays the teardown; past this Draw reports a failed capture instead of hanging.
-const CLEAN_PAGE_CAPTURE_DEADLINE_MS = 10_000
+  | { kind: 'clean-page'; browserPageId: string; guestId: number; deadlineMs: number }
 
 /** `signal` aborts when Draw gives up; a clean-page capture then retires its attempt in main. */
 export async function captureMarkupBaseImage(
@@ -44,20 +41,22 @@ async function captureFromWebview(webview: Electron.WebviewTag): Promise<MarkupB
 }
 
 async function captureCleanPage(
-  { browserPageId, guestId }: { browserPageId: string; guestId: number },
+  {
+    browserPageId,
+    guestId,
+    deadlineMs
+  }: { browserPageId: string; guestId: number; deadlineMs: number },
   signal: AbortSignal | undefined
 ): Promise<MarkupBaseImage> {
-  // One absolute deadline from Draw's start covers main's queue, the reply, the decode and the flatten.
-  const deadlineMs = Date.now() + CLEAN_PAGE_CAPTURE_DEADLINE_MS
   const attemptId = createNonSecureContextUuid()
   let stopWatching = (): void => {}
-  // Rejects the moment Draw gives up or the deadline passes, so no later step publishes for an ended attempt.
+  // Rejects the moment Draw gives up or its deadline passes, so no later step publishes for an ended attempt.
   const ended = new Promise<never>((_, reject) => {
     const end = (): void => {
       void window.api.browser.retireCleanCapture({ attemptId })
       reject(new Error('markup: the clean page capture ended'))
     }
-    const timer = setTimeout(end, CLEAN_PAGE_CAPTURE_DEADLINE_MS)
+    const timer = setTimeout(end, deadlineMs - Date.now())
     signal?.addEventListener('abort', end, { once: true })
     stopWatching = () => {
       clearTimeout(timer)
@@ -65,6 +64,12 @@ async function captureCleanPage(
     }
   })
   ended.catch(() => {})
+  // Timers can't fire during a long synchronous step, so the clock itself is checked at each boundary too.
+  const assertLive = (): void => {
+    if (signal?.aborted || Date.now() >= deadlineMs) {
+      throw new Error('markup: the clean page capture ended')
+    }
+  }
   try {
     const capture = await Promise.race([
       window.api.browser.captureCleanPage({ browserPageId, attemptId, guestId, deadlineMs }),
@@ -73,15 +78,12 @@ async function captureCleanPage(
     if (!capture) {
       throw new Error('markup: the page could not be captured without the picker')
     }
+    assertLive()
     const image = await Promise.race([loadImage(capture.dataUrl), ended])
-    if (signal?.aborted || Date.now() >= deadlineMs) {
-      throw new Error('markup: the clean page capture ended')
-    }
-    return {
-      dataUrl: flattenToOpaquePng(image, capture.width, capture.height),
-      width: capture.width,
-      height: capture.height
-    }
+    assertLive()
+    const dataUrl = flattenToOpaquePng(image, capture.width, capture.height)
+    assertLive()
+    return { dataUrl, width: capture.width, height: capture.height }
   } finally {
     stopWatching()
   }

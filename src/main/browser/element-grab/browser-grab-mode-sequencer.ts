@@ -6,16 +6,24 @@ import type {
 import { captureCleanGuestPage, watchGuestDocument } from './grab-clean-page-capture'
 
 const grabModeIntentByPageId = new Map<string, { generation: number; enabled: boolean }>()
-const grabModeOperationByPageId = new Map<string, Promise<void>>()
+type GrabModeQueue = { entries: (() => Promise<void>)[]; draining: boolean }
+const grabModeQueueByPageId = new Map<string, GrabModeQueue>()
 const intentChangeListenersByPageId = new Map<string, Set<() => void>>()
 const SUPERSEDED: BrowserSetGrabModeResult = { ok: true, superseded: true }
-// Bounds a clean capture from admission through its last stage, however long the queue ahead of it is.
-const CLEAN_CAPTURE_LIFETIME_MS = 10_000
 const cleanCaptureRetirementsByPageId = new Map<string, Set<() => void>>()
 
 /** Pages with a load wait or clean capture still registered; none once they settle, even for a destroyed guest. */
 export function pagesWithPendingGrabWaits(): string[] {
   return [...intentChangeListenersByPageId.keys(), ...cleanCaptureRetirementsByPageId.keys()]
+}
+
+/** Operations waiting behind a running one, across pages; a withdrawn one is no longer counted or retained. */
+export function queuedGrabModeOperationCount(): number {
+  let count = 0
+  for (const queue of grabModeQueueByPageId.values()) {
+    count += queue.entries.length
+  }
+  return count
 }
 
 function retireCleanCaptures(browserPageId: string): void {
@@ -55,19 +63,48 @@ function waitUntilArmable(browserPageId: string, guest: Electron.WebContents): P
   })
 }
 
-function queueGrabModeOperation<T>(browserPageId: string, operation: () => Promise<T>): Promise<T> {
-  const previous = grabModeOperationByPageId.get(browserPageId) ?? Promise.resolve()
-  const result = previous.then(operation)
-  const completion = result.then(
-    () => {},
-    () => {}
-  )
-  grabModeOperationByPageId.set(browserPageId, completion)
-  return result.finally(() => {
-    if (grabModeOperationByPageId.get(browserPageId) === completion) {
-      grabModeOperationByPageId.delete(browserPageId)
+async function drainGrabModeQueue(browserPageId: string, queue: GrabModeQueue): Promise<void> {
+  queue.draining = true
+  for (let run = queue.entries.shift(); run; run = queue.entries.shift()) {
+    await run()
+  }
+  queue.draining = false
+  if (grabModeQueueByPageId.get(browserPageId) === queue) {
+    grabModeQueueByPageId.delete(browserPageId)
+  }
+}
+
+/**
+ * Runs a page's grab mode operations one at a time. `withdraw` takes an operation that has not started out of
+ * the queue at once and settles it with `value`; once started, an operation keeps the page until it settles.
+ */
+function queueGrabModeOperation<T>(
+  browserPageId: string,
+  operation: () => Promise<T>
+): { result: Promise<T>; withdraw: (value: T) => boolean } {
+  const queue = grabModeQueueByPageId.get(browserPageId) ?? { entries: [], draining: false }
+  grabModeQueueByPageId.set(browserPageId, queue)
+  let settle: (value: T | Promise<T>) => void = () => {}
+  const result = new Promise<T>((resolve) => (settle = resolve))
+  const run = async (): Promise<void> => {
+    const running = Promise.resolve().then(operation)
+    settle(running)
+    await running.catch(() => {})
+  }
+  queue.entries.push(run)
+  if (!queue.draining) {
+    void drainGrabModeQueue(browserPageId, queue)
+  }
+  const withdraw = (value: T): boolean => {
+    const index = queue.entries.indexOf(run)
+    if (index === -1) {
+      return false
     }
-  })
+    queue.entries.splice(index, 1)
+    settle(value)
+    return true
+  }
+  return { result, withdraw }
 }
 
 export function resetGrabModeState(): void {
@@ -79,8 +116,8 @@ export function resetGrabModeState(): void {
   }
   cleanCaptureRetirementsByPageId.clear()
   grabModeIntentByPageId.clear()
-  // Retired registrations must not leave chains blocking new operations.
-  grabModeOperationByPageId.clear()
+  // Retired registrations must not leave queues blocking new operations; detached queues still drain.
+  grabModeQueueByPageId.clear()
 }
 
 export function disposeGrabModeStateForPage(browserPageId: string): void {
@@ -89,7 +126,7 @@ export function disposeGrabModeStateForPage(browserPageId: string): void {
   cleanCaptureRetirementsByPageId.delete(browserPageId)
   grabModeIntentByPageId.delete(browserPageId)
   // Reused page IDs must not queue behind destroyed guests.
-  grabModeOperationByPageId.delete(browserPageId)
+  grabModeQueueByPageId.delete(browserPageId)
 }
 
 function recordIntent(browserPageId: string, enabled: boolean): () => boolean {
@@ -112,12 +149,11 @@ export function captureCleanBrowserPage(
   browserPageId: string,
   guest: Electron.WebContents,
   resolveGuest: () => Electron.WebContents | null,
-  deadlineMs: number
+  /** The caller's validated cutoff: in the future and no later than the clean capture maximum. */
+  cutoffMs: number
 ): { capture: Promise<BrowserCleanPageCapture | null>; retire: () => void } {
   let retired = false
-  let started = false
-  let settleUnstarted: (capture: null) => void = () => {}
-  const unstarted = new Promise<null>((resolve) => (settleUnstarted = resolve))
+  let withdraw: (capture: null) => boolean = () => false
   const retirements = cleanCaptureRetirementsByPageId.get(browserPageId) ?? new Set()
   const dispose = (): void => {
     clearTimeout(lifetime)
@@ -132,30 +168,23 @@ export function captureCleanBrowserPage(
   }
   const retire = (): void => {
     retired = true
-    // An attempt still waiting its turn holds nothing physical, so it leaves now; a started one finishes its stage.
-    if (!started) {
+    // An attempt still waiting its turn holds nothing physical, so it leaves the queue now; a started one
+    // finishes the stage it issued.
+    if (withdraw(null)) {
       dispose()
-      settleUnstarted(null)
     }
   }
   const document = watchGuestDocument(guest, retire)
   cleanCaptureRetirementsByPageId.set(browserPageId, retirements)
   retirements.add(retire)
-  const lifetime = setTimeout(
-    retire,
-    Math.max(0, Math.min(deadlineMs - Date.now(), CLEAN_CAPTURE_LIFETIME_MS))
-  )
+  const lifetime = setTimeout(retire, cutoffMs - Date.now())
   lifetime.unref?.()
   recordIntent(browserPageId, false)
   const queued = queueGrabModeOperation(browserPageId, async () => {
-    if (retired) {
-      return null
-    }
-    started = true
     try {
       return await captureCleanGuestPage({
         guest,
-        isLive: () => !retired && Date.now() < deadlineMs && resolveGuest() === guest,
+        isLive: () => !retired && Date.now() < cutoffMs && resolveGuest() === guest,
         teardown: () => browserManager.setGrabMode(browserPageId, false, guest),
         holdPaint: () => browserManager.holdPaintForCapture(guest.id)
       })
@@ -165,7 +194,8 @@ export function captureCleanBrowserPage(
       dispose()
     }
   })
-  return { capture: Promise.race([queued, unstarted]), retire }
+  withdraw = queued.withdraw
+  return { capture: queued.result, retire }
 }
 
 /** Arms or tears down a page's picker; the latest request wins, whoever hosts the viewer. */
@@ -207,5 +237,5 @@ export async function setBrowserGrabMode(
       return SUPERSEDED
     }
     return success ? { ok: true } : { ok: false, reason: 'injection-failed' }
-  })
+  }).result
 }

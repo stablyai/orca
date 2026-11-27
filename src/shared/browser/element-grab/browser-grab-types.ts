@@ -123,6 +123,9 @@ export type BrowserSetGrabModeResult =
 /** Draw's page image, captured in main after the picker was removed and the page repainted without it. */
 export type BrowserCleanPageCapture = { dataUrl: string; width: number; height: number }
 
+/** The longest a clean capture may run, from Draw's start through publication; hosts clamp to it. */
+export const MAX_CLEAN_CAPTURE_DEADLINE_MS = 10_000
+
 /** `guestId` names the guest the request began on and `deadlineMs` is the absolute time Draw stops waiting. */
 export type BrowserCaptureCleanPageArgs = {
   browserPageId: string
