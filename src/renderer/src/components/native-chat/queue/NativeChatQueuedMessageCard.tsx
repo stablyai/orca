@@ -87,7 +87,6 @@ export function queuedMessageCardCaption(
       return null
   }
 }
-
 /** Steer's or Send's label and tooltip: Steer only into a turn that is running (`queuedMessageCardSteers`). */
 export function queuedMessageCardSendNow(
   card: Pick<QueuedMessageCard, 'hold' | 'command'>,
@@ -189,21 +188,24 @@ export function NativeChatQueuedMessageCard({
       </li>
     )
   }
-  // Nothing acts on a send still on its way: the host holds no card for it yet.
   const actionable = card.hold !== 'sending'
   // The host refuses these edits: a command would become a message, a run the owner's words.
   const editable = actionable && !card.notEditable && onEdit !== undefined
-  // Edit and Delete wait for hover or keyboard focus; Steer stays on every row.
   const toolCount = actionable ? (editable ? 2 : 1) : 0
-  const toolStyle:
-    | (React.CSSProperties & { '--queued-tools-mask': string; '--queued-tools-width': string })
-    | undefined =
+  const toolWidth =
+    toolCount === 1
+      ? 'max(24px, calc(var(--spacing) * 6))'
+      : 'calc(max(24px, calc(var(--spacing) * 6)) + max(24px, calc(var(--spacing) * 6)) + 1px)'
+  const toolStyle = (
     toolCount > 0
       ? {
           '--queued-tools-mask': queuedRowToolsMask(toolCount),
-          '--queued-tools-width': `${toolCount * 25}px`
+          '--queued-tools-width': toolWidth
         }
       : undefined
+  ) as
+    | (React.CSSProperties & { '--queued-tools-mask': string; '--queued-tools-width': string })
+    | undefined
   return (
     <li
       ref={drag?.rowRef}
