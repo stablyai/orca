@@ -55,7 +55,8 @@ const hostStatusColumnsRead = bindDeferredRpcOperation(
   })
 )
 
-const inFlight = new Set<string>()
+// Per client: the same workspace id on another host is another workspace.
+const inFlight = new WeakMap<RpcClient, Set<string>>()
 
 async function reopen(client: RpcClient, worktreeId: string): Promise<void> {
   const worktree = `id:${worktreeId}`
@@ -83,13 +84,18 @@ export function reopenDoneWorkspaceAfterChatSend(
   client: RpcClient | null,
   worktreeId: string
 ): void {
-  if (!client || !worktreeId || inFlight.has(worktreeId)) {
+  if (!client || !worktreeId) {
     return
   }
-  inFlight.add(worktreeId)
+  const pending = inFlight.get(client) ?? new Set<string>()
+  if (pending.has(worktreeId)) {
+    return
+  }
+  pending.add(worktreeId)
+  inFlight.set(client, pending)
   void reopen(client, worktreeId)
     .catch(() => {})
-    .finally(() => inFlight.delete(worktreeId))
+    .finally(() => pending.delete(worktreeId))
 }
 
 type ChatSends = Pick<
@@ -101,22 +107,8 @@ type ChatSends = Pick<
 export function useReopenDoneWorkspaceOnChatSend(
   client: RpcClient | null,
   worktreeId: string,
-  sends: {
-    send: ChatSends['handleNativeChatSend']
-    sendWithOutcome: ChatSends['handleNativeChatSendWithOutcome']
-  }
+  sendWithOutcome: ChatSends['handleNativeChatSendWithOutcome']
 ): ChatSends {
-  const { send, sendWithOutcome } = sends
-  const handleNativeChatSend = useCallback<ChatSends['handleNativeChatSend']>(
-    async (...args) => {
-      const sent = await send(...args)
-      if (sent) {
-        reopenDoneWorkspaceAfterChatSend(client, worktreeId)
-      }
-      return sent
-    },
-    [client, send, worktreeId]
-  )
   const handleNativeChatSendWithOutcome = useCallback<ChatSends['handleNativeChatSendWithOutcome']>(
     async (...args) => {
       const outcome = await sendWithOutcome(...args)
@@ -126,6 +118,11 @@ export function useReopenDoneWorkspaceOnChatSend(
       return outcome
     },
     [client, sendWithOutcome, worktreeId]
+  )
+  // Same answer as both chats' own boolean Send; reopening follows the outcome, so an unconfirmed send does not.
+  const handleNativeChatSend = useCallback<ChatSends['handleNativeChatSend']>(
+    async (text, images) => (await handleNativeChatSendWithOutcome(text, images)) !== 'rejected',
+    [handleNativeChatSendWithOutcome]
   )
   return { handleNativeChatSend, handleNativeChatSendWithOutcome }
 }

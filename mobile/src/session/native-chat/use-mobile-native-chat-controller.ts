@@ -219,7 +219,7 @@ export function useMobileNativeChatController(args: {
   const chatSends = useReopenDoneWorkspaceOnChatSend(
     client,
     worktreeId,
-    activeChatStructured ? structuredSend : terminalSend
+    (activeChatStructured ? structuredSend : terminalSend).sendWithOutcome
   )
 
   const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
