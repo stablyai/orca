@@ -86,7 +86,8 @@ export function resumeToastView(
           : failure || status || phase === 'finished'
             ? 'needs-you'
             : 'stopped'
-    return failure ? { candidate, state, failure } : { candidate, state }
+    // A failure record describes the last attempt; once a chat is resuming or resumed it is stale.
+    return failure && state === 'needs-you' ? { candidate, state, failure } : { candidate, state }
   })
   if (refused.size > 0) {
     const shown = new Set(rows.map((row) => row.candidate.sessionId))

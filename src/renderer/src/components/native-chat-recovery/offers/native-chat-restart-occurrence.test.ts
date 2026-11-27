@@ -17,9 +17,17 @@ vi.mock('../runs/native-chat-restart-continuation-chunks', () => ({
 vi.mock('../runs/native-chat-resume-run-status-watch', () => ({
   watchResumeRunStatus: () => () => {}
 }))
+const dismissed: (readonly string[] | undefined)[] = []
+let dismissReply: () => void = () => {}
 vi.mock('./native-chat-restart-host-offer', async (actual) => ({
   ...(await actual<typeof HostOffer>()),
-  readRestartHostOffer: async () => ({ candidates: offered, failed: [], available: true })
+  readRestartHostOffer: async () => ({ candidates: offered, failed: [], available: true }),
+  dismissRestartHostOffer: (_target: unknown, ids?: readonly string[]) => {
+    dismissed.push(ids)
+    return new Promise((resolve) => {
+      dismissReply = () => resolve({ candidates: [], failed: [], listedAt: 1 })
+    })
+  }
 }))
 vi.mock('./native-chat-remote-restart-offer', () => ({
   createRemoteRestartOfferLifecycle: () => ({ dispose: () => {}, observeRuntimeStatus: () => {} }),
@@ -54,6 +62,7 @@ async function occurrence() {
 
 beforeEach(() => {
   sent.length = 0
+  dismissed.length = 0
   offered = [chat('a'), chat('b'), chat('failed')]
 })
 
@@ -98,5 +107,28 @@ it('reports earlier successes after a retry settles', async () => {
     'continued',
     'continued'
   ])
+  store.dispose()
+})
+
+it('lets neither a dismissal nor a resume start while the other is in flight', async () => {
+  const store = await occurrence()
+  const resume = store.continueNativeChatRestartOffer(['failed'])
+  void store.dismissNativeChatRestartOffer(['b'])
+  expect(dismissed).toEqual([])
+  reply({
+    attempted: ['failed'],
+    continued: [{ sessionId: 'failed', outcome: 'continued' }],
+    skipped: new Set()
+  })
+  await resume
+  expect(store.getNativeChatRestartRun()?.continued).toEqual([
+    { sessionId: 'failed', outcome: 'continued' }
+  ])
+
+  const dismissal = store.dismissNativeChatRestartOffer(['b'])
+  void store.continueNativeChatRestartOffer(['a'])
+  expect(sent).toEqual([['failed']])
+  dismissReply()
+  await dismissal
   store.dispose()
 })

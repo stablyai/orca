@@ -192,7 +192,7 @@ export function createNativeChatRestartOccurrence(
   ): Promise<void> {
     // Checked before any await, so an activation while one is in flight, even in the same tick, sends nothing.
     const requested = unsentResumeIds(run, sessionIds)
-    if (!current() || requested.length === 0) {
+    if (!current() || actionsBegun !== actionsSettled || requested.length === 0) {
       return
     }
     const issued = ++actionsBegun
@@ -278,6 +278,10 @@ export function createNativeChatRestartOccurrence(
     if (target.kind !== 'local') {
       consumeNativeChatResumeOnRestartDialogRequest()
       releaseFinishedNativeChatRestartRun()
+      return
+    }
+    // One action owns the occurrence; a dismissal racing a resume would discard its reply.
+    if (actionsBegun !== actionsSettled) {
       return
     }
     actionsBegun += 1
