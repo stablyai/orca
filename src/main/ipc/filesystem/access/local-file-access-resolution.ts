@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { stat } from 'node:fs/promises'
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
@@ -39,10 +40,16 @@ export async function resolveDesktopAuthorizedPath(
   })
 }
 
-/** User-named absolute paths require no root and grant no persistent access. */
+/** User-named absolute or home-relative paths require no root and grant no persistent access. */
 function resolveUserNamedLocalPath(targetPath: string): string {
+  if (typeof targetPath !== 'string') {
+    throw new Error(USER_FILE_NEEDS_ABSOLUTE_PATH_MESSAGE)
+  }
+  if (targetPath.startsWith('~/') || targetPath.startsWith('~\\')) {
+    return resolve(homedir(), targetPath.slice(2))
+  }
   // Reject raw relative and drive-relative paths before resolve can anchor them to main's cwd.
-  if (typeof targetPath !== 'string' || !isAbsolute(targetPath)) {
+  if (!isAbsolute(targetPath)) {
     throw new Error(USER_FILE_NEEDS_ABSOLUTE_PATH_MESSAGE)
   }
   return resolve(targetPath)

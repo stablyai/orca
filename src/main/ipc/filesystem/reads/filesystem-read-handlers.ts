@@ -193,7 +193,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         access?: LocalFileAccess
         wakeWslDistro?: boolean
       }
-    ): Promise<{ size: number; isDirectory: boolean; mtime: number }> => {
+    ): Promise<{ size: number; isDirectory: boolean; mtime: number; resolvedPath?: string }> => {
       if (args.connectionId) {
         throw new SshHostNotServedError(args.connectionId)
       }
@@ -202,7 +202,13 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         async () => {
           const filePath = await resolveLocalFileRequestPath(args.filePath, args.access, store)
           const stats = await statWithoutArchiveLock(windowsFsPath(filePath))
-          return { size: stats.size, isDirectory: stats.isDirectory(), mtime: stats.mtimeMs }
+          const isHomeRelative = args.filePath.startsWith('~/') || args.filePath.startsWith('~\\')
+          return {
+            size: stats.size,
+            isDirectory: stats.isDirectory(),
+            mtime: stats.mtimeMs,
+            ...(isHomeRelative ? { resolvedPath: filePath } : {})
+          }
         },
         { wake: args.wakeWslDistro === true }
       )

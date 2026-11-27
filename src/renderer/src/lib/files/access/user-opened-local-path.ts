@@ -12,6 +12,8 @@ export type UserOpenedPathStat = {
   isDirectory: boolean
   /** The path sits in the project but resolves outside it, e.g. through a symlink. */
   escapesWorktree: boolean
+  /** Expanded absolute path when the caller passed a home-relative `~/` path. */
+  resolvedPath?: string
 }
 
 // Opening a path is a user act, so its stat may start a stopped WSL distro.
@@ -34,7 +36,30 @@ export async function statUserOpenedPath(
 ): Promise<UserOpenedPathStat> {
   if (!isInsideLocalWorktree(context, filePath)) {
     const stat = await statRuntimePath(context, filePath, userNamedFileAccess(), USER_ACT)
-    return { isDirectory: stat.isDirectory, escapesWorktree: false }
+    if (stat.resolvedPath && isInsideLocalWorktree(context, stat.resolvedPath)) {
+      try {
+        await statRuntimePath(context, stat.resolvedPath, undefined, USER_ACT)
+        return {
+          isDirectory: stat.isDirectory,
+          escapesWorktree: false,
+          resolvedPath: stat.resolvedPath
+        }
+      } catch (containedError) {
+        if (!isPathOutsideAllowedDirectoriesError(containedError)) {
+          throw containedError
+        }
+        return {
+          isDirectory: stat.isDirectory,
+          escapesWorktree: true,
+          resolvedPath: stat.resolvedPath
+        }
+      }
+    }
+    return {
+      isDirectory: stat.isDirectory,
+      escapesWorktree: false,
+      ...(stat.resolvedPath ? { resolvedPath: stat.resolvedPath } : {})
+    }
   }
   try {
     const stat = await statRuntimePath(context, filePath, undefined, USER_ACT)
