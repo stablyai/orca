@@ -1,4 +1,5 @@
-import { rm, stat, statfs, writeFile } from 'node:fs/promises'
+import { rm, stat, statfs } from 'node:fs/promises'
+import { durableWriteTempPath, writeFileDurable } from '../../../../filesystem/durable-file-write'
 
 export async function availableBytesIn(dir: string): Promise<number> {
   try {
@@ -21,9 +22,9 @@ export function removeQuietly(path: string): Promise<void> {
   return rm(path, { force: true }).catch(() => {})
 }
 
-/** True once written; a failed write is reported, never thrown. */
+/** True once written; replaced whole, so a failed write leaves the last complete text, and never throws. */
 export function writeQuietly(path: string, text: string): Promise<boolean> {
-  return writeFile(path, text).then(
+  return writeFileDurable(durableWriteTempPath(path), path, text).then(
     () => true,
     () => false
   )

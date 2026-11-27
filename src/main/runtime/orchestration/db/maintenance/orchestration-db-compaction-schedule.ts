@@ -32,9 +32,18 @@ export function copyBudgetMs(liveBytes: number, attempts: number): number {
 export async function readAttempts(
   path: string
 ): Promise<{ attempts: number; lastAttemptAt: number }> {
-  const [count, at, inFlight] = (await readFile(path, 'utf8').catch(() => ''))
-    .split(' ')
-    .map(Number)
+  let text: string
+  try {
+    text = await readFile(path, 'utf8')
+  } catch (error) {
+    // Only a missing record means no copies yet; one that can't be read holds copies off this session.
+    const missing = (error as NodeJS.ErrnoException).code === 'ENOENT'
+    return {
+      attempts: missing ? 0 : Number.POSITIVE_INFINITY,
+      lastAttemptAt: Number.NEGATIVE_INFINITY
+    }
+  }
+  const [count, at, inFlight] = text.split(' ').map(Number)
   // A copy still marked in flight never got swapped in: it counts.
   return {
     attempts: Math.max(count || 0, inFlight || 0),
