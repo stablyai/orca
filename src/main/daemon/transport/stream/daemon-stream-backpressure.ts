@@ -123,13 +123,8 @@ export class DaemonStreamBackpressure {
       }
     }
     for (const [sessionId, bytes] of bytesBySession) {
-      const paused = this.pausedAtBySession.has(sessionId)
-      if (
-        (paused || bytes >= pauseAt) &&
-        bytes > resumeAt &&
-        !this.stallReleasedSessions.has(sessionId)
-      ) {
-        if (!paused) {
+      if (bytes >= pauseAt && !this.stallReleasedSessions.has(sessionId)) {
+        if (!this.pausedAtBySession.has(sessionId)) {
           this.pausedAtBySession.set(sessionId, Date.now())
         }
         // Detach/termination may have released the session's pause since the last update.
