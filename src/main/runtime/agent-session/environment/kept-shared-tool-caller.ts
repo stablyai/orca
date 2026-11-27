@@ -31,7 +31,8 @@ export function isStoredCaller(value: unknown): value is StoredSharedToolCaller 
   )
 }
 
-export const callerKey = (entry: StoredSharedToolCaller): string => `${entry.sessionId}\n${entry.runFence}`
+export const callerKey = (entry: StoredSharedToolCaller): string =>
+  `${entry.sessionId}\n${entry.runFence}`
 
 export async function opened(entry: StoredSharedToolCaller): Promise<KeptSharedToolCaller | null> {
   try {

@@ -85,6 +85,7 @@ describe.skipIf(process.platform === 'win32')('tool relay fronts', () => {
     expect(answer).toMatch(/^HTTP\/1\.1 401 /)
   })
 
+  // 260 sequential connections through a real daemon, each a socket, hello and splice.
   it('keep-alive calls past the pipe cap never hold pipes, so cleanup still gets through', async () => {
     const port = await servedFront()
     // Each asks to keep its connection; the relay closes it after answering, freeing its pipe.
