@@ -18,7 +18,7 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     workItemsInvalidationNonce,
     selectedRepos,
     selectedReposKey: repoSelectionKey,
-    initialTaskViewPreset,
+    defaultTaskViewPreset,
     initialTaskQuery,
     taskSource,
     taskResumeApplied,
@@ -37,7 +37,7 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   const [appliedTaskSearch, setAppliedTaskSearch] = useState(initialTaskQuery)
   const taskSearchInputRef = useRef<HTMLInputElement>(null)
   const [activeTaskPreset, setActiveTaskPreset] = useState<TaskViewPresetId | null>(
-    initialTaskViewPreset
+    defaultTaskViewPreset
   )
   const [tasksLoading, setTasksLoading] = useState(false)
   // The request key the latest landing run dispatched for; a different current key means a request is owed.

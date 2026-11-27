@@ -34,11 +34,11 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
   } = model
   // Seed preset/query synchronously to avoid a throwaway initial empty-query request.
   const savedGithubPreset = useAppStore((s) => s.taskResumeState?.githubItemsPreset)
-  const initialTaskViewPreset = resolveGitHubLandingPreset(
+  const defaultTaskViewPreset = resolveGitHubLandingPreset(
     savedGithubPreset,
     settings?.defaultTaskViewPreset
   )
-  const initialTaskQuery = getTaskPresetQuery(initialTaskViewPreset)
+  const initialTaskQuery = getTaskPresetQuery(defaultTaskViewPreset)
   const preferredTaskSource = pageData.taskSource ?? defaultTaskSource
   const [taskSource, setTaskSource] = useState<TaskProvider>(
     resolveVisibleTaskProvider(preferredTaskSource, visibleTaskProviders)
@@ -178,7 +178,7 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
     }
   }, [runtimeTaskSourceHostIds])
   const nextModel = model as typeof model & {
-    initialTaskViewPreset: typeof initialTaskViewPreset
+    defaultTaskViewPreset: typeof defaultTaskViewPreset
     initialTaskQuery: typeof initialTaskQuery
     preferredTaskSource: typeof preferredTaskSource
     taskSource: typeof taskSource
@@ -192,7 +192,7 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
     hostLabelById: typeof hostLabelById
     runtimeTaskSourceHostIds: typeof runtimeTaskSourceHostIds
   }
-  nextModel.initialTaskViewPreset = initialTaskViewPreset
+  nextModel.defaultTaskViewPreset = defaultTaskViewPreset
   nextModel.initialTaskQuery = initialTaskQuery
   nextModel.preferredTaskSource = preferredTaskSource
   nextModel.taskSource = taskSource
