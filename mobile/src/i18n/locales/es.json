@@ -1044,12 +1044,8 @@
       "monitoring": "Supervisando tareas en segundo plano",
       "unverifiable": "Sin actualizaciones recientes"
     },
-    "authFailedBanner": {
-      "message": "Falló la autenticación: primero intenta volver a conectarte; si sigue fallando, vuelve a emparejar desde el escritorio."
-    },
     "authFailedBannerActions": {
-      "repair": "Volver a emparejar",
-      "webNote": "Vuelve a conectarte o elimina este host desde la app de Orca."
+      "repair": "Volver a emparejar"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "Restablecimiento ya aplicado",
@@ -1223,9 +1219,6 @@
       "sameNetworkOnlyHint": "Solo se conecta en la misma red Wi-Fi o por Tailscale. Para conectarte desde cualquier lugar, inicia sesión en tu escritorio y vuelve a emparejar",
       "unlockHint": "Desbloquea tu teléfono y toca para reintentar.",
       "worktreeAccessibilitySummary": "{{summary}}, activos: {{activeCount}}"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "Ver diagnósticos de red"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Comprobando la compatibilidad del host"
@@ -2071,7 +2064,6 @@
     },
     "hostScreenHeader": {
       "accounts": "Cuentas",
-      "backToHosts": "Volver a los hosts",
       "floatingWorkspace": "Espacio de trabajo flotante",
       "hideSidebar": "Ocultar barra lateral",
       "reconnect": "Reconectar",
@@ -2172,27 +2164,19 @@
       "exceptDefaultBranch": "Excepto la rama predeterminada",
       "filters": "Filtros",
       "groupBy": "Agrupar por",
-      "hideAutomationCreated": "Ocultar creados por automatizaciones",
-      "hideCliCreated": "Ocultar creados por el CLI",
       "hideDefaultBranch": "Ocultar rama predeterminada",
-      "hideDetachedHead": "Ocultar HEAD desacoplado",
-      "hideOtherClientWorkspaces": "Ocultar espacios de trabajo de otros clientes",
       "hideSleeping": "Ocultar en reposo",
-      "hosts": "Hosts",
       "localLinux": "Linux local",
       "localMac": "Mac local",
       "localWindows": "Windows local",
       "projectOrder": "Orden del proyecto",
       "projects": "Proyectos",
-      "savingToDesktop": "Guardando en el host",
       "show": "Mostrar",
       "showProperties": "Mostrar propiedades",
       "sortBy": "Ordenar por",
-      "syncedAcrossDevices": "Sincronizadas entre tus dispositivos",
       "done": "Listo",
       "reset": "Restablecer",
       "thisComputer": "Este equipo",
-      "waitingForDesktop": "Aún esperando respuesta del host",
       "workspaceOptions": "Opciones de espacio de trabajo"
     },
     "hostBottomBar": {
@@ -4945,8 +4929,7 @@
       "noFilterMatches": "Ningún espacio de trabajo coincide con los filtros",
       "reopen": "Vuelve a abrir para actualizar",
       "reopenDetail": "Este host muestra los espacios de trabajo en un formato que esta página aún no reconoce.",
-      "loading": "Cargando espacios de trabajo…",
-      "retryingAutomatically": "Reintentando automáticamente."
+      "loading": "Cargando espacios de trabajo…"
     },
     "workspaceListSections": {
       "all": "Todos",

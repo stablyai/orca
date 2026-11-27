@@ -1001,12 +1001,8 @@
       "monitoring": "Hintergrundaufgaben werden überwacht",
       "unverifiable": "Keine aktuelle Meldung"
     },
-    "authFailedBanner": {
-      "message": "Authentifizierung fehlgeschlagen – zuerst erneut verbinden; bei weiteren Fehlern vom Computer aus erneut koppeln."
-    },
     "authFailedBannerActions": {
-      "repair": "Erneut koppeln",
-      "webNote": "Diesen Host über die Orca-App erneut verbinden oder entfernen."
+      "repair": "Erneut koppeln"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "Zurücksetzung bereits erfolgt",
@@ -1173,9 +1169,6 @@
       "sameNetworkOnlyHint": "Verbindet sich nur im selben WLAN oder über Tailscale. Für Verbindungen von überall auf dem Desktop anmelden und erneut koppeln",
       "unlockHint": "Telefon entsperren, dann zum erneuten Versuch tippen",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} aktiv"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "Netzwerkdiagnose anzeigen"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Host-Kompatibilität wird geprüft"
@@ -2012,7 +2005,6 @@
     },
     "hostScreenHeader": {
       "accounts": "Konten",
-      "backToHosts": "Zurück zu den Hosts",
       "floatingWorkspace": "Schwebender Arbeitsbereich",
       "hideSidebar": "Seitenleiste ausblenden",
       "reconnect": "Erneut verbinden",
@@ -2112,27 +2104,19 @@
       "exceptDefaultBranch": "Außer Standard-Branch",
       "filters": "Filter",
       "groupBy": "Gruppieren nach",
-      "hideAutomationCreated": "Durch Automatisierungen erstellte ausblenden",
-      "hideCliCreated": "Per CLI erstellte ausblenden",
       "hideDefaultBranch": "Standard-Branch ausblenden",
-      "hideDetachedHead": "Losgelösten HEAD ausblenden",
-      "hideOtherClientWorkspaces": "Arbeitsbereiche anderer Clients ausblenden",
       "hideSleeping": "Ruhende Arbeitsbereiche ausblenden",
-      "hosts": "Hosts",
       "localLinux": "Lokales Linux",
       "localMac": "Lokaler Mac",
       "localWindows": "Lokales Windows",
       "projectOrder": "Projektreihenfolge",
       "projects": "Projekte",
-      "savingToDesktop": "Wird auf dem Host gespeichert",
       "show": "Anzeigen",
       "showProperties": "Eigenschaften anzeigen",
       "sortBy": "Sortieren nach",
-      "syncedAcrossDevices": "Geräteübergreifend synchronisiert",
       "done": "Fertig",
       "reset": "Leeren",
       "thisComputer": "Dieser Computer",
-      "waitingForDesktop": "Es wird noch auf den Host gewartet",
       "workspaceOptions": "Arbeitsbereichsoptionen"
     },
     "hostBottomBar": {
@@ -4804,8 +4788,7 @@
       "noFilterMatches": "Keine Arbeitsbereiche entsprechen den Filtern",
       "reopen": "Zum Aktualisieren erneut öffnen",
       "reopenDetail": "Dieser Host listet Arbeitsbereiche in einem Format auf, das diese Seite noch nicht unterstützt.",
-      "loading": "Arbeitsbereiche werden geladen…",
-      "retryingAutomatically": "Wird automatisch erneut versucht."
+      "loading": "Arbeitsbereiche werden geladen…"
     },
     "workspaceListSections": {
       "all": "Alle",

@@ -859,9 +859,10 @@
       "creatingWorkspace": "Creating workspace…"
     },
     "hostScreenHeader": {
-      "backToHosts": "Back to hosts",
       "reconnect": "Reconnect",
-      "floatingWorkspace": "Floating Workspace",
+      "offlineSince": "Offline since {{time}}",
+      "notConnected": "Not connected",
+      "floatingWorkspace": "Floating workspace",
       "hideSidebar": "Hide sidebar",
       "accounts": "Accounts",
       "tasks": "Tasks",
@@ -965,7 +966,6 @@
       "agentActivityLayout": "Agent activity layout"
     },
     "workspaceOptionsSheet": {
-      "hosts": "Hosts",
       "projects": "Projects",
       "groupBy": "Group by",
       "sortBy": "Sort by",
@@ -976,23 +976,23 @@
       "hideSleeping": "Hide sleeping",
       "exceptDefaultBranch": "Except default branch",
       "hideDefaultBranch": "Hide default branch",
-      "hideAutomationCreated": "Hide automation-created",
-      "hideCliCreated": "Hide CLI-created",
-      "hideOtherClientWorkspaces": "Hide other-client workspaces",
-      "hideDetachedHead": "Hide detached HEAD",
       "show": "Show",
       "filters": "Filters",
       "localMac": "Local Mac",
       "localWindows": "Local Windows",
       "localLinux": "Local Linux",
       "thisComputer": "This computer",
-      "waitingForDesktop": "Still waiting for the host",
-      "savingToDesktop": "Saving to the host",
       "backToOptions": "Back to Workspace options",
       "workspaceOptions": "Workspace options",
-      "syncedAcrossDevices": "Synced across your devices",
       "done": "Done",
-      "reset": "Reset"
+      "reset": "Reset",
+      "computers": "Computers",
+      "hideAutomationWorkspaces": "Hide automation workspaces",
+      "hideCliWorkspaces": "Hide CLI workspaces",
+      "hideOtherDevicesWorkspaces": "Hide other devices’ workspaces",
+      "hideNoBranch": "Hide workspaces with no branch",
+      "saving": "Saving…",
+      "stillSaving": "Still saving…"
     },
     "hostBottomBar": {
       "workspaceOptions": "Workspace options",
@@ -1160,13 +1160,15 @@
     },
     "hostWorkspaceListStates": {
       "checkHost": "Check that your computer is awake and Orca is running",
-      "loadFailed": "Could not load workspaces from this host",
+      "loadFailed": "Couldn’t load workspaces",
+      "pairingRefused": "Pairing was refused",
+      "pairAgain": "Pair again from Orca on your computer.",
+      "clearFilters": "Clear filters",
       "noFilterMatches": "No workspaces match filters",
       "empty": "No workspaces",
       "reopen": "Reopen to update",
       "reopenDetail": "This host lists workspaces in a way this page does not know yet.",
-      "loading": "Loading workspaces…",
-      "retryingAutomatically": "Retrying automatically."
+      "loading": "Loading workspaces…"
     },
     "workspaceListSections": {
       "pinned": "Pinned",
@@ -1192,12 +1194,8 @@
       "monitoring": "Monitoring background tasks",
       "unverifiable": "No recent update"
     },
-    "authFailedBanner": {
-      "message": "Authentication failed — try reconnecting first; if it keeps failing, re-pair from desktop."
-    },
     "authFailedBannerActions": {
-      "repair": "Re-pair",
-      "webNote": "Reconnect or remove this host from the Orca app."
+      "repair": "Re-pair"
     },
     "codexResetCreditAction": {
       "earnedReset": "Earned Codex rate-limit reset",
@@ -1228,9 +1226,6 @@
       "reorderHint": "Use the move up and move down actions to reorder without dragging",
       "moveUp": "Move up",
       "moveDown": "Move down"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "View network diagnostics"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Checking host compatibility"
