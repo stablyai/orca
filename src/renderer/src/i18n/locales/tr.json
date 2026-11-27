@@ -19257,12 +19257,9 @@
             "devToolsDockBottom": "Alta sabitle",
             "devToolsUndock": "Ayrı pencerede aç",
             "devToolsClose": "DevTools'u kapat",
-            "499b31b84e": "Tümünü Kopyala",
             "e852e20cea": "Kopyalandı, ekran görüntüsü almak için S'ye basın veya başka bir öğe seçin",
             "074f0ed10b": "{{value0}} ek açıklama hazır. Başka bir öğe seçin veya tüm geri bildirimi kopyalayın.",
-            "a2164a6e5a": "{{value0}} ek açıklama hazır. Başka bir öğe seçin veya tüm geri bildirimi kopyalayın.",
-            "11c5084aa2": "Ek açıklamaları temizle",
-            "734e4343ec": "Tarayıcı ek açıklamalarını temizle"
+            "a2164a6e5a": "{{value0}} ek açıklama hazır. Başka bir öğe seçin veya tüm geri bildirimi kopyalayın."
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "İptal",

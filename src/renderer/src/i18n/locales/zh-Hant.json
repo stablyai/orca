@@ -18712,9 +18712,7 @@
             "devToolsDockRight": "停駐於右側",
             "devToolsDockBottom": "停駐於底部",
             "devToolsUndock": "在獨立視窗中開啟",
-            "devToolsClose": "關閉 DevTools",
-            "11c5084aa2": "清除註解",
-            "734e4343ec": "清除瀏覽器註解"
+            "devToolsClose": "關閉 DevTools"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "取消",

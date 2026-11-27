@@ -18052,9 +18052,7 @@
             "devToolsDockRight": "右側にドッキング",
             "devToolsDockBottom": "下部にドッキング",
             "devToolsUndock": "別ウィンドウで開く",
-            "devToolsClose": "DevTools を閉じる",
-            "11c5084aa2": "注釈をクリアする",
-            "734e4343ec": "ブラウザの注釈をクリアする"
+            "devToolsClose": "DevTools を閉じる"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "キャンセル",
