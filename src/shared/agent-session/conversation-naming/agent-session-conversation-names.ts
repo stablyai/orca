@@ -128,15 +128,23 @@ export function foldAgentSessionConversationNames(
       ? event.conversationNames
       : []
   let next: Map<string, AgentSessionConversationName> | undefined
-  for (const frame of [...sessions, ...notes]) {
+  const frames = [
+    ...sessions.map((frame) => ({ frame, carriesBadge: false })),
+    ...notes.map((frame) => ({ frame, carriesBadge: true }))
+  ]
+  for (const { frame, carriesBadge } of frames) {
     const read = readNamingNote(frame)
     if (!read) {
       continue
     }
     const previous = (next ?? names).get(read.sessionId)
     // A chat's agent never changes; an older host's note just omits it.
-    const note =
+    const withAgent =
       read.agent === undefined && previous?.agent ? { ...read, agent: previous.agent } : read
+    // Only a naming note says what the badge is; a status frame keeps the one before.
+    const { badge: _unsaid, ...unbadged } = withAgent
+    const badge = carriesBadge ? read.badge : previous?.badge
+    const note = badge ? { ...unbadged, badge } : unbadged
     if (sameNamingNote(previous, note)) {
       continue
     }

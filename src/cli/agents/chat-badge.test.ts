@@ -35,10 +35,9 @@ function run(flags: Record<string, string | boolean>): Promise<void> {
   })
 }
 
-it('sends the picture inline, since a paired host cannot read the file', async () => {
-  const icon = join(dir, 'blender.png')
-  writeFileSync(icon, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
-  await run({ session: 'chat-1', icon, label: 'Linked to Blender' })
+it('sends the picture inline, read from the folder the command runs in', async () => {
+  writeFileSync(join(dir, 'blender.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+  await run({ session: 'chat-1', icon: 'blender.png', label: 'Linked to Blender' })
   expect(calls).toEqual([
     {
       method: 'agentSession.setBadge',
@@ -64,11 +63,20 @@ it('clears with --clear', async () => {
 })
 
 it.each([
-  ['a picture over the limit', 'big.png', 7000, '--icon is 7000 bytes'],
-  ['a file that is not a picture', 'notes.txt', 10, '--icon must be a .png, .webp or .svg file']
-])('refuses %s before calling the host', async (_case, name, size, message) => {
-  const icon = join(dir, name)
-  writeFileSync(icon, Buffer.alloc(size))
-  await expect(run({ session: 'chat-1', icon, label: 'Blender' })).rejects.toThrow(message)
+  ['a picture over the limit', 'big.png', 7000, 'Blender', '--icon is 7000 bytes'],
+  ['an empty picture', 'empty.png', 0, 'Blender', 'is empty'],
+  ['a file that is not a picture', 'notes.txt', 10, 'Blender', '--icon must be a .png, .webp'],
+  ['a repeated --label', 'a.png', 10, 'Blender\0Linked', 'Pass --label once'],
+  ['a label with no visible text', 'a.png', 10, '\u200B\u0007', '--label must have visible text']
+])('refuses %s before calling the host', async (_case, name, size, label, message) => {
+  writeFileSync(join(dir, name), Buffer.alloc(size))
+  await expect(run({ session: 'chat-1', icon: name, label })).rejects.toThrow(message)
+  expect(calls).toEqual([])
+})
+
+it('refuses --clear together with a picture', async () => {
+  await expect(run({ session: 'chat-1', clear: true, icon: 'a.png' })).rejects.toThrow(
+    'Pass either --clear or --icon with --label.'
+  )
   expect(calls).toEqual([])
 })

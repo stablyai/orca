@@ -1,12 +1,13 @@
 import { readFile } from 'node:fs/promises'
-import { extname } from 'node:path'
+import { extname, resolve } from 'node:path'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { getPresentStringFlag, getRequiredStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import { normalizeAgentSessionConversationName } from '../../shared/agent-session/conversation-naming/agent-session-conversation-name'
 import {
-  AGENT_SESSION_BADGE_ICON_MAX_LENGTH,
+  AGENT_SESSION_BADGE_LABEL_MAX_LENGTH,
   readAgentSessionBadge,
   type AgentSessionBadge
 } from '../../shared/agent-session/conversation-naming/agent-session-badge'
@@ -34,7 +35,7 @@ export const CHAT_HANDLERS: Record<string, CommandHandler> = {
     }
     printResult(result, json, (value) => `Renamed chat to "${value.name}".`)
   },
-  'chat badge': async ({ flags, client, json }) => {
+  'chat badge': async ({ flags, client, cwd, json }) => {
     const clear = flags.get('clear') === true
     if (clear && (flags.has('icon') || flags.has('label'))) {
       throw new RuntimeClientError(
@@ -45,7 +46,7 @@ export const CHAT_HANDLERS: Record<string, CommandHandler> = {
     const badge = clear
       ? null
       : await readBadgeFlags(
-          getRequiredStringFlag(flags, 'icon'),
+          resolve(cwd, getRequiredStringFlag(flags, 'icon')),
           getRequiredStringFlag(flags, 'label')
         )
     const sessionId = chatSessionId(flags, client.isRemote)
@@ -77,6 +78,17 @@ function chatSessionId(flags: Map<string, string | boolean>, isRemote: boolean):
 
 /** The picture is read here, where the file is, and sent inline: a paired host cannot read it. */
 async function readBadgeFlags(iconPath: string, label: string): Promise<AgentSessionBadge> {
+  // A repeated --label arrives joined with NUL; a badge has one label.
+  if (label.includes('\0')) {
+    throw new RuntimeClientError('invalid_argument', 'Pass --label once.')
+  }
+  const shownLabel = normalizeAgentSessionConversationName(label)
+  if (!shownLabel || shownLabel.length > AGENT_SESSION_BADGE_LABEL_MAX_LENGTH) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `--label must have visible text, at most ${AGENT_SESSION_BADGE_LABEL_MAX_LENGTH} characters.`
+    )
+  }
   const type = BADGE_ICON_TYPES[extname(iconPath).toLowerCase()]
   if (!type) {
     throw new RuntimeClientError('invalid_argument', '--icon must be a .png, .webp or .svg file.')
@@ -87,18 +99,15 @@ async function readBadgeFlags(iconPath: string, label: string): Promise<AgentSes
       `Could not read --icon ${iconPath}: ${error instanceof Error ? error.message : String(error)}`
     )
   })
-  const icon = `data:${type};base64,${bytes.toString('base64')}`
-  if (icon.length > AGENT_SESSION_BADGE_ICON_MAX_LENGTH) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      `--icon is ${bytes.length} bytes; a badge picture must be about 6 KB or less.`
-    )
+  if (bytes.length === 0) {
+    throw new RuntimeClientError('invalid_argument', `--icon ${iconPath} is empty.`)
   }
-  const badge = readAgentSessionBadge({ label, icon })
+  const icon = `data:${type};base64,${bytes.toString('base64')}`
+  const badge = readAgentSessionBadge({ label: shownLabel, icon })
   if (!badge) {
     throw new RuntimeClientError(
       'invalid_argument',
-      '--label must have visible text, at most 64 characters.'
+      `--icon is ${bytes.length} bytes; a badge picture must be about 6 KB or less.`
     )
   }
   return badge

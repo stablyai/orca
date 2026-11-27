@@ -1,3 +1,5 @@
+import { normalizeAgentSessionConversationName } from './agent-session-conversation-name'
+
 // A small picture another program pins on a chat (`orca chat badge`), such as the logo of an app the
 // chat is linked to. Orca ships no badge art: the caller sends the picture, so a mark it may not
 // redistribute never ships in Orca itself.
@@ -14,8 +16,6 @@ export const AGENT_SESSION_BADGE_LABEL_MAX_LENGTH = 64
 export const AGENT_SESSION_BADGE_ICON_MAX_LENGTH = 8192
 
 const BADGE_ICON_PREFIX = /^data:image\/(png|webp|svg\+xml);base64,[A-Za-z0-9+/]+={0,2}$/
-// Bidi and zero-width marks could disguise what the tooltip says.
-const INVISIBLE_FORMATTING_RE = /[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g
 
 /** The badge a host or client may keep, or undefined for anything else: unchecked wire and disk
  *  data must never put an arbitrary URL in an image source. */
@@ -28,7 +28,8 @@ export function readAgentSessionBadge(value: unknown): AgentSessionBadge | undef
   if (typeof label !== 'string' || typeof icon !== 'string') {
     return undefined
   }
-  const shownLabel = label.replace(INVISIBLE_FORMATTING_RE, '').replace(/\s+/g, ' ').trim()
+  // The chat-name rules: controls, bidi overrides and lone surrogates never reach a tooltip.
+  const shownLabel = normalizeAgentSessionConversationName(label)
   if (
     !shownLabel ||
     shownLabel.length > AGENT_SESSION_BADGE_LABEL_MAX_LENGTH ||

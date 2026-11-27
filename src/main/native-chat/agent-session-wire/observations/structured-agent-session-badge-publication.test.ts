@@ -3,6 +3,7 @@ import { agentSessionConversationView } from '../../../../shared/agent-session/l
 import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { foldAgentSessionConversationNames } from '../../../../shared/agent-session/conversation-naming/agent-session-conversation-names'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionNamingSnapshot } from './structured-agent-session-status-feed-deps'
 import type { StructuredAgentSessionStatusFeedDeps } from './structured-agent-session-status-feed-deps'
 
@@ -18,6 +19,10 @@ function published(record: AgentSessionRecord) {
   return structuredAgentSessionNamingSnapshot(deps, view.sessionId)
 }
 
+function statusFrame(record: AgentSessionRecord) {
+  return { sessionId: record.sessionId, conversationName: 'Wall review', forkedFrom: null }
+}
+
 it("carries a chat's badge to clients, and its removal", () => {
   const record = agentSessionRecordFixture()
   const badged = foldAgentSessionConversationNames(
@@ -25,6 +30,12 @@ it("carries a chat's badge to clients, and its removal", () => {
     published({ ...record, badge: BADGE })
   )
   expect(badged.get(record.sessionId)?.badge).toEqual(BADGE)
-  const cleared = foldAgentSessionConversationNames(badged, published(record))
+  // A live status frame never carries the picture, and never takes it away.
+  const ticked = foldAgentSessionConversationNames(badged, {
+    type: 'status',
+    session: { ...statusFrame(record), badge: { ...BADGE, label: 'Spoofed' } }
+  } as unknown as AgentSessionStatusEvent)
+  expect(ticked.get(record.sessionId)?.badge).toEqual(BADGE)
+  const cleared = foldAgentSessionConversationNames(ticked, published(record))
   expect(cleared.get(record.sessionId)).not.toHaveProperty('badge')
 })

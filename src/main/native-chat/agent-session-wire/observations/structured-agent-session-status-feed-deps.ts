@@ -99,7 +99,9 @@ export function structuredAgentSessionNamingSnapshot(
     sessionId: entry.sessionId,
     conversationName: entry.conversationName ?? null,
     agent: entry.provider,
-    ...structuredSummaryConversationNaming(entry, deps.namingFailure?.(entry.sessionId))
+    ...structuredSummaryConversationNaming(entry, deps.namingFailure?.(entry.sessionId)),
+    // Only naming notes carry the badge: a picture rides once per change, never on status ticks.
+    ...(entry.badge ? { badge: entry.badge } : {})
   }))
   return {
     type: 'snapshot',
