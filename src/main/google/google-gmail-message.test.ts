@@ -207,6 +207,20 @@ it('matches commented related content IDs without changing their case or throwin
     })
   ).toBe('Implicit root')
   expect(bodyText({ ...related, parts: [first, malformed] })).toBe('Implicit root')
+  for (const id of ['<root@[node(tag)]>', '<"quoted(tag)"@example.test>']) {
+    expect(
+      bodyText({
+        ...related,
+        headers: [
+          { name: 'Content-Type', value: `multipart/related; start=${JSON.stringify(id)}` }
+        ],
+        parts: [
+          first,
+          { ...root, headers: [{ name: 'Content-ID', value: `(before) ${id} (root)` }] }
+        ]
+      })
+    ).toBe('Selected root')
+  }
 })
 
 it('keeps empty multipart boundaries between equal mixed sections while ignoring attached groups', () => {

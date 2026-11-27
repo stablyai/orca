@@ -65,14 +65,15 @@ function decode(data: string | undefined): string {
   return data ? Buffer.from(data, 'base64url').toString('utf-8') : ''
 }
 
-function normalizeMimeHeader(value: string): string {
+function normalizeMimeHeader(value: string, isContentId = false): string {
   const tokens: string[] = []
   let quoted = false
   let commentDepth = 0
+  let domainLiteral = false
   for (let index = 0; index < value.length; index++) {
     const character = value[index]
-    if (character === '\\' && (quoted || commentDepth > 0)) {
-      if (quoted) {
+    if (character === '\\' && (quoted || commentDepth > 0 || domainLiteral)) {
+      if (quoted || domainLiteral) {
         tokens.push(character, value[index + 1] ?? '')
       }
       index++
@@ -83,6 +84,9 @@ function normalizeMimeHeader(value: string): string {
       if (character === ')') {
         commentDepth--
       }
+    } else if (isContentId && !quoted && (domainLiteral || character === '[')) {
+      domainLiteral = character !== ']'
+      tokens.push(character)
     } else if (!quoted && character === '(') {
       commentDepth = 1
       tokens.push(' ')
@@ -93,7 +97,7 @@ function normalizeMimeHeader(value: string): string {
       tokens.push(character)
     }
   }
-  if (commentDepth > 0) {
+  if (commentDepth > 0 || domainLiteral) {
     return ''
   }
   return tokens
@@ -189,7 +193,7 @@ export function bodyText(part: Part | undefined): string {
             child.headers?.some(
               (entry) =>
                 entry.name.toLowerCase() === 'content-id' &&
-                normalizeMimeHeader(entry.value).trim() === contentId
+                normalizeMimeHeader(entry.value, true).trim() === contentId
             )
           )
         : undefined
