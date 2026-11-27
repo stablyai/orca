@@ -18,7 +18,7 @@ type AppDrawnCaret = TerminalImeAnchor & {
 
 type ImeAnchorStyleProperty = 'top' | 'left' | 'height' | 'lineHeight'
 
-/** OS candidate placement reads the focused textarea at compositionstart; correct xterm’s stale/hidden TUI cursor after its handlers. Keep compositionupdate correction for long CJK sequences, and follow xterm renders while a composition is anchored on an app-drawn caret, measuring public .xterm-screen bounds and rechecking the last caret before rescanning and skipping unchanged inline styles to avoid layout. Return a cleanup, or null before DOM open. */
+/** OS candidate placement reads the focused textarea at compositionstart; correct xterm’s stale/hidden TUI cursor after its handlers. Keep compositionupdate correction for long CJK sequences, and follow xterm renders for the active composition so a later app-drawn caret is picked up, measuring public .xterm-screen bounds and rechecking the last caret before rescanning and skipping unchanged inline styles to avoid layout. Return a cleanup, or null before DOM open. */
 export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => void) | null {
   if (!terminal.element || !terminal.textarea) {
     return null
@@ -142,11 +142,9 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     }
     const { anchor, isRelocated } = resolveAnchor()
     applyAnchor(anchor.row, anchor.column, cells, isRelocated)
-    // xterm resets the preedit to the buffer cursor on every render; follow renders only while composing.
-    // A hidden cursor without a caret may be a repaint gap, so follow until the caret is painted.
-    if (isRelocated || !terminal.modes.showCursor) {
-      renderSubscription ??= terminal.onRender(reapplyAfterRender)
-    }
+    // xterm resets the preedit to the buffer cursor on every render; follow renders for the whole composition,
+    // since the app may hide its cursor and paint a caret after a cursor-anchored start.
+    renderSubscription ??= terminal.onRender(reapplyAfterRender)
     // xterm repositions in setTimeout(0); correct after its timer, coalescing bursts.
     if (!isRelocated) {
       if (deferredApply !== null) {
