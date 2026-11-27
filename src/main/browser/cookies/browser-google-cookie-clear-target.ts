@@ -5,7 +5,7 @@ import type {
 import type { GoogleCookieClearLocalTarget } from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import { bindRoutePartition } from './client-route/browser-client-route-cookie-import'
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
-import { getPairedRuntimeBrowserClientRouteIdentity } from '../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+import { getPairedRuntimeBrowserClientRouteIdentity } from '../client-hosts/lifecycle/paired-runtime-browser-client-host-state'
 import { clearGoogleCookiesFromPartition } from './browser-google-cookie-clear'
 import { restoreBrowserRoutePartitionSessionCookies } from './session-restore/browser-session-cookie-route-restore'
 
