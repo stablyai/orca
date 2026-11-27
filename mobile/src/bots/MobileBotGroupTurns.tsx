@@ -16,9 +16,8 @@ import {
   type BotGroupTurn,
   withBotGroupTurnAnswer
 } from '../../../src/shared/bots/bot-group'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { colors } from '../theme/mobile-theme'
-import { groupStyles as styles } from './mobile-bot-group-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
+import { groupStylesSheet } from './mobile-bot-group-styles'
 import { mobileBotAvatarSource } from './host-bot-row-facts'
 import { useMobileStructuredAgentSession } from '../session/native-chat/agent-session/use-mobile-structured-agent-session'
 import type { StructuredAgentSessionHostSupport } from '../session/native-chat/agent-session/mobile-structured-agent-session-host-support'
@@ -28,7 +27,7 @@ import { MobileNativeChatBotIdentityContext } from '../session/native-chat/mobil
 import { MobileNativeChatTurnStatus } from '../session/native-chat/transcript/messages/MobileNativeChatTurnStatus'
 import { MobileNativeChatMessage } from '../session/native-chat/transcript/messages/MobileNativeChatMessage'
 import { MobileNativeChatMessageTime } from '../session/native-chat/transcript/messages/MobileNativeChatMessageTime'
-import { styles as messageStyles } from '../session/native-chat/transcript/messages/mobile-native-chat-message-styles'
+import { stylesSheet } from '../session/native-chat/transcript/messages/mobile-native-chat-message-styles'
 import {
   nativeChatTurnFold,
   nativeChatTurnFoldRow
@@ -36,6 +35,7 @@ import {
 import { createStructuredQuestionProjection } from '../../../src/shared/native-chat/transcript/messages/structured-agent-question-projection'
 import { projectStructuredAgentStartItem } from '../../../src/shared/native-chat/transcript/messages/structured-agent-start-projection'
 import { botCodedText } from '../../../src/shared/bots/bot-failure-copy'
+import { useThemedStyles } from '../theme/themed-styles'
 
 export type MobileBotGroupSession = StructuredMobileSession & {
   groupTurnItems: ReturnType<typeof indexBotGroupJournal>
@@ -123,7 +123,9 @@ export function MobileBotGroupTurn({
   onStop: () => void
   onReply: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(groupStylesSheet)
+  const messageStyles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
   const items = useMemo(

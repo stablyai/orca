@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { UsageCacheSnapshotWriter } from '../cache/usage-cache-snapshot-writer'
@@ -9,10 +10,12 @@ type HistoryStore = Pick<UsageWorktreeSource, 'getRepos' | 'getAllWorktreeMeta'>
   onWorktreeMetaWritten: (listener: (write: { worktreeId: string }) => void) => () => void
 }
 
-const historyFileSchema = z.object({
-  schemaVersion: z.literal(1),
-  worktrees: z.array(z.tuple([z.string(), z.string()]))
-})
+const historyFileSchema = lazyZodSchema(() =>
+  z.object({
+    schemaVersion: z.literal(1),
+    worktrees: z.array(z.tuple([z.string(), z.string()]))
+  })
+)
 
 /** Remembers every worktree Orca has had, so removing one keeps its sessions in the Orca usage scope. */
 export class UsageWorktreeHistory implements UsageWorktreeSource {

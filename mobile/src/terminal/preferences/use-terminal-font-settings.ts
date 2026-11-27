@@ -3,7 +3,8 @@ import {
   loadTerminalFontStyle,
   loadTerminalTextScale,
   saveTerminalFontStyle,
-  saveTerminalTextScale
+  saveTerminalTextScale,
+  subscribeTerminalFontSettings
 } from '../../storage/preferences'
 import { terminalFontDefaults } from './terminal-font-defaults'
 import type { TerminalFontStyle } from './terminal-font-style'
@@ -41,8 +42,17 @@ export function useTerminalFontSettings(): TerminalFontSettings {
         setFontStyle(style)
       }
     })
+    // A save from another screen (Font and size over Terminal) lands here too.
+    const unsubscribe = subscribeTerminalFontSettings(defaults, (change) => {
+      if ('textScale' in change) {
+        setTextScale(change.textScale)
+      } else {
+        setFontStyle(change.fontStyle)
+      }
+    })
     return () => {
       stale = true
+      unsubscribe()
     }
   }, [defaults])
   const previewTextScale = useCallback((scale: number) => {

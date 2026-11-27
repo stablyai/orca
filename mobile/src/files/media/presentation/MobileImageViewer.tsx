@@ -11,9 +11,9 @@ import {
 } from 'react-native'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react-native'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
-import { colors, feedback, radii, spacing } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { PanZoomSize } from '../../../../../src/shared/document-preview/pan-zoom-view'
 import { MobilePanZoomImage } from './MobilePanZoomImage'
@@ -69,7 +69,8 @@ export function MobileImageViewer({
   onNext?: (() => void) | null
   onClose: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const insets = useWindowSafeAreaInsets()
   const { width, height } = useWindowDimensions()
@@ -161,6 +162,8 @@ function StepButton({
   onPress: (() => void) | null
   style: ViewStyle
 }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Pressable
       style={({ pressed }) => [
@@ -361,7 +364,7 @@ function useViewerPresence(onClose: () => void, windowWidth: number, windowHeigh
   }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   root: {
     flex: 1
   },

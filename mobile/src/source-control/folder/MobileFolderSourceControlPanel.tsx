@@ -16,14 +16,13 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { useWorkspaceRouteHandoff } from '../../navigation/workspace-route-handoff'
 import { WorkspaceExecutionScope } from '../../navigation/workspace-route'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import type { FolderListRow } from './mobile-folder-attached-worktrees'
 import { getWorktreeRowIdentity } from '../../worktree/row-presentation/worktree-host-row-identity'
 import { MobileSourceControlHeader } from '../panel/MobileSourceControlHeader'
 import { MobileSourceControlPanel } from '../MobileSourceControlPanel'
-import { styles as sourceControlStyles } from '../mobile-source-control-styles'
+import { stylesSheet } from '../mobile-source-control-styles'
 import { MobileFolderEmptyState } from './MobileFolderEmptyState'
 import { useFolderCreateFlow } from './use-folder-create-flow'
 import { MobileFolderWorktreeRow } from './MobileFolderWorktreeRow'
@@ -48,7 +47,8 @@ export function MobileFolderSourceControlPanel({
   embedded,
   onRequestClose
 }: Props) {
-  useMobileColorScheme()
+  const sourceControlStyles = useThemedStyles(stylesSheet)
+  const styles = useThemedStyles(stylesThemedSheet)
   const t = useMobileTranslation()
   const router = useWorkspaceRouteHandoff()
   const insets = useSafeAreaInsets()
@@ -218,7 +218,7 @@ export function MobileFolderSourceControlPanel({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesThemedSheet = themedStyleSheet((colors) => ({
   body: {
     flex: 1,
     backgroundColor: colors.sheetSurface

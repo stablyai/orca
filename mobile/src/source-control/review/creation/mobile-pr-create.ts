@@ -3,7 +3,7 @@ import type {
   MobileHostedReviewCreateOutcome as MobilePrCreateOutcome
 } from './mobile-hosted-review-service'
 
-import { translate } from '../../../i18n/mobile-i18n'
+import { translate, type Translate } from '../../../i18n/mobile-i18n'
 import { isHostedReviewCreateEligibilityConfirmable } from '../../../../../src/shared/source-control/hosted-review/hosted-review-create-confirmation'
 import { hostedReviewCopy } from './hosted-review-copy'
 import './mobile-hosted-review-service'
@@ -12,7 +12,7 @@ export function getMobilePrCreateSuccessWarning(
   outcome: Extract<MobilePrCreateOutcome, { ok: true }>,
   provider: MobilePrPrefill['provider']
 ): string | undefined {
-  const copy = hostedReviewCopy(provider)
+  const copy = hostedReviewCopy(provider, translate)
   if (outcome.existing) {
     return outcome.number
       ? translate(
@@ -34,8 +34,11 @@ export function getMobilePrCreateSuccessWarning(
   return undefined
 }
 
-export function getMobilePrCreateBlockMessage(prefill: MobilePrPrefill): string | null {
-  const copy = hostedReviewCopy(prefill.provider)
+export function getMobilePrCreateBlockMessage(
+  prefill: MobilePrPrefill,
+  t: Translate
+): string | null {
+  const copy = hostedReviewCopy(prefill.provider, t)
   // Hosts older than reviewLookupOutcome cannot prove no review exists, and mobile has no lookup of its own.
   const reviewLookupKnown = prefill.reviewLookupOutcome !== undefined
   if (
@@ -52,7 +55,7 @@ export function getMobilePrCreateBlockMessage(prefill: MobilePrPrefill): string 
     prefill.reviewLookupOutcome === 'unavailable' ||
     (!reviewLookupKnown && (prefill.canCreate === true || prefill.blockedReason === 'needs_push'))
   ) {
-    return translate(
+    return t(
       'sourceControl.prCreate.lookupUnconfirmed',
       'Orca could not confirm whether this branch already has a {{reviewLabel}}. Try again in a moment.',
       { reviewLabel: copy.reviewLabel }
@@ -60,65 +63,65 @@ export function getMobilePrCreateBlockMessage(prefill: MobilePrPrefill): string 
   }
   switch (prefill.blockedReason) {
     case 'dirty':
-      return translate(
+      return t(
         'sourceControl.prCreate.dirty',
         'Commit changes before creating a {{reviewLabel}}.',
         { reviewLabel: copy.reviewLabel }
       )
     case 'detached_head':
-      return translate(
+      return t(
         'sourceControl.prCreate.detachedHead',
         'Check out a branch before creating a {{reviewLabel}}.',
         { reviewLabel: copy.reviewLabel }
       )
     case 'default_branch':
-      return translate(
+      return t(
         'sourceControl.prCreate.defaultBranch',
         'Switch to a feature branch before creating a {{reviewLabel}}.',
         { reviewLabel: copy.reviewLabel }
       )
     case 'no_upstream':
-      return translate(
+      return t(
         'sourceControl.prCreate.noUpstream',
         'Publish commits before creating a {{reviewLabel}}.',
         { reviewLabel: copy.reviewLabel }
       )
     case 'needs_sync':
-      return translate(
+      return t(
         'sourceControl.prCreate.needsSync',
         'Sync this branch before creating a {{reviewLabel}}.',
         { reviewLabel: copy.reviewLabel }
       )
     case 'auth_required':
-      return translate(
+      return t(
         'sourceControl.prCreate.authRequired',
         'Authenticate before creating a {{reviewLabel}}.',
         { reviewLabel: copy.reviewLabel }
       )
     case 'unsupported_provider':
       return prefill.provider === 'gitlab'
-        ? translate(
+        ? t(
             'sourceControl.prCreate.unsupportedMergeRequests',
             'Creating merge requests is not supported for this repo.'
           )
-        : translate(
+        : t(
             'sourceControl.prCreate.unsupportedPullRequests',
             'Creating pull requests is not supported for this repo.'
           )
     case 'existing_review':
-      return translate(
+      return t(
         'sourceControl.prCreate.existingReview',
         'A {{reviewLabel}} already exists for this branch.',
         { reviewLabel: copy.reviewLabel }
       )
     case 'fork_head_unsupported':
-      return translate(
+      return t(
         'sourceControl.prCreate.forkHeadUnsupported',
         'Creating a {{reviewLabel}} from this fork is not supported.',
         { reviewLabel: copy.reviewLabel }
       )
     case 'base_not_on_remote':
-      return translate(
+      return t(
         'sourceControl.prCreate.baseNotOnRemote',
         'Push the base branch before creating a {{reviewLabel}}.',
         { reviewLabel: copy.reviewLabel }
@@ -126,14 +129,14 @@ export function getMobilePrCreateBlockMessage(prefill: MobilePrPrefill): string 
     case 'needs_push':
     case null:
     case undefined:
-      return translate(
+      return t(
         'sourceControl.prCreate.notReady',
         'This branch is not ready for a {{reviewLabel}} yet.',
         { reviewLabel: copy.reviewLabel }
       )
     default:
       // Accept future desktop blocked reasons while remaining safely blocked.
-      return translate(
+      return t(
         'sourceControl.prCreate.notReady',
         'This branch is not ready for a {{reviewLabel}} yet.',
         { reviewLabel: copy.reviewLabel }

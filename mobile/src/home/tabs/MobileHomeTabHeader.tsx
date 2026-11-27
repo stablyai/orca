@@ -2,13 +2,13 @@ import type { LucideIcon } from 'lucide-react-native'
 import { useState, type ReactNode, type Ref } from 'react'
 import { Pressable, Text, View, type HostInstance } from 'react-native'
 import Animated from 'react-native-reanimated'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 /** A Home tab's title row: the tab's name and at most two icon buttons. */
 export function MobileHomeTabHeader(props: { title: string; trailing?: ReactNode }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.bar}>
       <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
@@ -31,7 +31,8 @@ export function MobileHomeTabHeaderButton(props: {
   active?: boolean
   onPress: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const [pressed, setPressed] = useState(false)
   const Icon = props.icon
   return (
@@ -75,7 +76,7 @@ export function MobileHomeTabHeaderButton(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   bar: {
     flexDirection: 'row',
     alignItems: 'center',

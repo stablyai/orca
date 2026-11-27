@@ -2,7 +2,6 @@ import { getGitHubTaskKind } from '../../../../src/shared/work-items/task-github
 
 import type { RpcSuccess } from '../../transport/rpc/rpc-wire-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../src/shared/github/repositories/repository-identity'
-import { colors } from '../../theme/mobile-theme'
 import type {
   GitHubPreset,
   GitHubProjectRow,
@@ -10,6 +9,7 @@ import type {
   LinearFilter
 } from '../mobile-tasks-view-state-types'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'
+import type { MobilePalette } from '../../theme/mobile-theme'
 import type { JiraIssue } from '../../../../src/shared/jira/jira-types'
 import type {
   GitHubWorkItem,
@@ -103,7 +103,10 @@ export const GITHUB_PROJECT_OPTION_COLORS: Record<string, string> = {
   PINK: '#db61a2'
 }
 
-export function githubProjectOptionColor(color: string | null | undefined): string {
+export function githubProjectOptionColor(
+  color: string | null | undefined,
+  colors: MobilePalette
+): string {
   if (!color) {
     return colors.textMuted
   }

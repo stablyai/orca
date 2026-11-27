@@ -75,8 +75,12 @@ export const ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY =
  *  (`send --on-client`); replies come back by `peerMailReturn`. */
 export const ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY =
   'orchestration.client-agent-asks.v1' as const
+/** `orchestration.taskUpdate` accepts worker-only passive `--note` updates on `dispatch_contexts`. */
+export const ORCHESTRATION_TASK_UPDATE_NOTE_RUNTIME_CAPABILITY =
+  'orchestration.task-update-note.v1' as const
 
 export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
+  ORCHESTRATION_TASK_UPDATE_NOTE_RUNTIME_CAPABILITY,
   ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,

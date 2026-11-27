@@ -4,7 +4,7 @@ import { watch as watchFs } from 'node:fs'
 import { WatcherProcessFailure } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import { watchBatchFlushDelayMs } from '../../../../shared/file-watch/filesystem-watch-batch-window'
 import { watchedDirectoryDeletionCheck } from '../../../../shared/file-watch/windows-deleted-directory-watch'
-import { WATCHER_IGNORE_DIRS } from '../../../ipc/filesystem/watchers/filesystem-watcher-ignore'
+import { WATCHER_IGNORE_DIRS } from '../../../../shared/file-watch/watcher-ignore-dirs'
 
 const ignoredWatchDirectories = new Set(WATCHER_IGNORE_DIRS)
 

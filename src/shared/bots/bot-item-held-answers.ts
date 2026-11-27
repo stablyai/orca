@@ -3,6 +3,7 @@
 // them). The set is stored as one string, and the comment it posts as is built here at send time,
 // where each line's [Image #N] are numbered after the images of the lines before it.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../agent-session/agent-session-attachments'
 import {
   offsetSentImagePromptMarkers,
@@ -53,17 +54,19 @@ export function botItemHeldAnswerIsReply(
 // Bumped only with a change to what a stored line holds; anything else reads as the old text.
 const FORMAT = 2
 
-const StoredLines = z.object({
-  v: z.literal(FORMAT),
-  lines: z.array(
-    z.object({
-      question: z.string(),
-      words: z.string(),
-      images: z.array(z.string()),
-      skills: z.array(z.object({ name: z.string(), path: z.string() }))
-    })
-  )
-})
+const StoredLines = lazyZodSchema(() =>
+  z.object({
+    v: z.literal(FORMAT),
+    lines: z.array(
+      z.object({
+        question: z.string(),
+        words: z.string(),
+        images: z.array(z.string()),
+        skills: z.array(z.object({ name: z.string(), path: z.string() }))
+      })
+    )
+  })
+)
 
 type StoredLine = BotItemHeldAnswer & { question: string }
 

@@ -69,8 +69,10 @@ describe('v47-v48 bot dispatch migrations', () => {
   function expectCurrentSchema(path: string, seededTaskId?: string): void {
     const db = new OrchestrationDb(path)
     try {
-      expect(db.db.pragma('user_version', { simple: true })).toBe(51)
+      expect(db.db.pragma('user_version', { simple: true })).toBe(52)
       expect(db.hasColumn('dispatch_contexts', 'chat_lineage')).toBe(true)
+      expect(db.hasColumn('dispatch_contexts', 'progress_note')).toBe(true)
+      expect(db.hasColumn('dispatch_contexts', 'progress_updated_at')).toBe(true)
       expect(TAKE_COLUMNS.filter(([table, column]) => !db.hasColumn(table, column))).toEqual([])
       expect(db.hasColumn('dispatch_contexts', 'creator_turn_source')).toBe(true)
       expect(db.hasColumn('dispatch_contexts', 'origin_ref')).toBe(true)
@@ -115,6 +117,19 @@ describe('v47-v48 bot dispatch migrations', () => {
     }
     raw.exec('DROP TABLE peer_questions_out')
     raw.pragma('user_version = 49')
+    raw.close()
+
+    expectCurrentSchema(path, taskId)
+  })
+
+  it('adds passive progress columns when reopening a v51 database and preserves seeded rows', () => {
+    const path = dbPath()
+    const taskId = seedWithDispatch(path)
+    const raw = new Database(path)
+    for (const column of ['progress_note', 'progress_updated_at'] as const) {
+      raw.exec(`ALTER TABLE dispatch_contexts DROP COLUMN ${column}`)
+    }
+    raw.pragma('user_version = 51')
     raw.close()
 
     expectCurrentSchema(path, taskId)

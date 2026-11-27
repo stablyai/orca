@@ -6,7 +6,8 @@ import { pipeUpstreamToClient } from './remote-browser-socks-upstream'
 import { reserveBrowserTunnelOrcaListenerPort } from './browser-network-tunnel-destination-policy'
 import {
   assertSocksClientOwnerLookup,
-  createSocksClientAdmission
+  createSocksClientAdmission,
+  holdSocksClientOwnerLookup
 } from './remote-browser-socks-client-owner'
 import { parseSocksRequest, SOCKS_VERSION } from './remote-browser-socks-request'
 
@@ -34,6 +35,7 @@ export class RemoteBrowserSocksServer {
   private closePromise: Promise<void> | null = null
   private state: 'idle' | 'starting' | 'listening' | 'closing' | 'closed' = 'idle'
   private releaseTunnelReservation = (): void => {}
+  private releaseOwnerLookup = (): void => {}
   private readonly admitClient = createSocksClientAdmission()
 
   constructor(options: RemoteBrowserSocksServerOptions) {
@@ -68,9 +70,12 @@ export class RemoteBrowserSocksServer {
     return new Promise((resolve, reject) => {
       const onError = (error: Error): void => {
         this.state = 'closed'
+        this.releaseOwnerLookup()
         reject(error)
       }
       this.server.once('error', onError)
+      // Held before the first connection can arrive; closeServer releases it.
+      this.releaseOwnerLookup = holdSocksClientOwnerLookup()
       this.server.listen(0, '127.0.0.1', () => {
         this.server.off('error', onError)
         const address = this.server.address()
@@ -116,6 +121,7 @@ export class RemoteBrowserSocksServer {
       this.state = 'closed'
     } finally {
       this.releaseTunnelReservation()
+      this.releaseOwnerLookup()
     }
   }
 

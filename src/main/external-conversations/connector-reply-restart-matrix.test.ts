@@ -7,7 +7,8 @@ import type { ConnectorReplyCutJournal } from '../connector-cloud/connector-repl
 import { conversationReplyFill } from './external-conversation-reply-fill'
 
 import { connectorReplyTurnStamps } from '../../shared/agent-session/journal/journal-connector-reply-turn'
-import { replyEventsOf } from '../connector-cloud/connector-reply-outbox'
+import { ConnectorReplyOutbox, replyEventsOf } from '../connector-cloud/connector-reply-outbox'
+import type { ConnectorReplyBody } from '../connector-cloud/connector-replies'
 
 import {
   NOW,
@@ -473,6 +474,50 @@ describe('the reply names the turn that answered it', () => {
     const after = start()
     expect(await owedEvents(after.journal)).toEqual([
       expect.objectContaining({ deliveryIds: ['d1', 'd2'], outcome: 'answered', turnId: TURN_AT })
+    ])
+  })
+
+  it('a /replies post after a restart names the same turn, or the fill time when none was known', async () => {
+    const before = start()
+    for (const [id, turnStartedAt] of [
+      ['d1', TURN_AT],
+      ['d2', undefined]
+    ] as const) {
+      admit(before.db, `m-${id}`, asked(id))
+      await before.fillTurn({
+        sessionId: 'chat-1',
+        turnItemId: `item:${id}`,
+        stamps: [stampOf(id)],
+        outcome: 'success',
+        prose: 'Done.',
+        bot: false,
+        links: [],
+        ...(turnStartedAt === undefined ? {} : { turnStartedAt })
+      })
+    }
+    before.db.close()
+    const after = start()
+    const posted: ConnectorReplyBody[] = []
+    const outbox = new ConnectorReplyOutbox('account-a', () => after.journal, {
+      owed: () => {},
+      wake: () => {},
+      route: () => ({
+        outbox: false,
+        client: {
+          hostName: () => 'laptop',
+          push: () => {},
+          post: async (body) => {
+            posted.push(body)
+            return { ok: true, value: {} }
+          }
+        }
+      })
+    })
+    await outbox.drain()
+    outbox.retire()
+    expect(posted.map(({ answerDeliveryId, turnId }) => [answerDeliveryId, turnId])).toEqual([
+      ['d1', TURN_AT],
+      ['d2', NOW]
     ])
   })
 

@@ -6,7 +6,6 @@ import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
 import { isAbsolute, resolve as resolvePath } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 import { dropInheritedOrcaIdentityEnv } from '../../ipc/pty/host-env/inherited-orca-identity-env'
 import { resolveCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
 import {
@@ -19,7 +18,32 @@ import { answerUnavailable } from '../../bots/tool-relay/bot-tool-relay-sign-in-
 import { sharedMcpProcessServers, type McpCommandServer } from '../mcp-shared-process-servers'
 import { isMcpServersFeatureEnabled } from '../mcp-servers-feature'
 import { answerNoSession, answerParseError, answerSessionGone } from './shared-mcp-http-answers'
-import { SharedMcpProcess, SharedMcpStartFailed, type SharedMcpLaunch } from './shared-mcp-process'
+import type { isInitializeRequest as IsInitializeRequestFn } from '@modelcontextprotocol/sdk/types.js'
+import type { SharedMcpLaunch, SharedMcpProcess, SharedMcpStartFailed } from './shared-mcp-process'
+
+type SharedMcpRuntimeModules = {
+  isInitializeRequest: typeof IsInitializeRequestFn
+  SharedMcpProcess: typeof SharedMcpProcess
+  SharedMcpStartFailed: typeof SharedMcpStartFailed
+}
+let runtimeModulesLoader: Promise<SharedMcpRuntimeModules> | null = null
+
+function loadSharedMcpRuntimeModules(): Promise<SharedMcpRuntimeModules> {
+  runtimeModulesLoader ??= Promise.all([
+    import('@modelcontextprotocol/sdk/types.js'),
+    import('./shared-mcp-process')
+  ])
+    .then(([{ isInitializeRequest }, { SharedMcpProcess, SharedMcpStartFailed }]) => ({
+      isInitializeRequest,
+      SharedMcpProcess,
+      SharedMcpStartFailed
+    }))
+    .catch((error: unknown) => {
+      runtimeModulesLoader = null
+      throw error
+    })
+  return runtimeModulesLoader
+}
 
 /** A start that failed is answered as failed for this long, so agents retrying can't spawn in a loop. */
 const FAILED_START_MS = 10_000
@@ -127,11 +151,14 @@ export class SharedMcpProcesses {
   ): Promise<boolean> {
     const key = `${folder}\0${serverId}`
     const server = (await this.deps.servers(folder)).get(serverId)
-    let process = this.running.get(key)
     if (!server) {
-      process?.stop()
+      this.running.get(key)?.stop()
       throw new RelayRefusal(404, 'This server isn’t shared on this computer any more.')
     }
+    const { isInitializeRequest, SharedMcpProcess, SharedMcpStartFailed } =
+      await loadSharedMcpRuntimeModules()
+    // Read after the last await before start(), so concurrent first initializes share one child.
+    let process = this.running.get(key)
     const fingerprint = fingerprintOf(server)
     if (process && process.fingerprint !== fingerprint) {
       process.stop()
@@ -152,7 +179,7 @@ export class SharedMcpProcesses {
         answerUnavailable(req, res, body)
         return true
       }
-      process = this.start(key, server, fingerprint)
+      process = this.start(key, server, fingerprint, SharedMcpProcess)
     }
     try {
       return await process.handle(req, res, parsed)
@@ -215,9 +242,14 @@ export class SharedMcpProcesses {
     this.failed.delete(key)
   }
 
-  private start(key: string, server: McpCommandServer, fingerprint: string): SharedMcpProcess {
+  private start(
+    key: string,
+    server: McpCommandServer,
+    fingerprint: string,
+    ProcessClass: typeof SharedMcpProcess
+  ): SharedMcpProcess {
     this.clearFailedStart(key)
-    const process = new SharedMcpProcess(
+    const process = new ProcessClass(
       server.name,
       fingerprint,
       async () => {

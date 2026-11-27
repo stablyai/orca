@@ -7,6 +7,17 @@ import { TERMINAL_ACCESSORY_KEY_DEFINITIONS as TERMINAL_ACCESSORY_KEYS } from '.
 
 export const TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY = 'orca:terminal-accessory-layout'
 
+/** Built-in keys the phone's key row always shows, so ⋯ and its Settings list leave them out. */
+export const TERMINAL_RAIL_KEY_IDS: ReadonlySet<string> = new Set([
+  'escape',
+  'tab',
+  'arrowUp',
+  'arrowDown',
+  'arrowLeft',
+  'arrowRight',
+  'backspace'
+])
+
 export type TerminalAccessoryLayout = {
   orderedBuiltInIds: string[]
   visibleBuiltInIds: string[]
@@ -270,21 +281,4 @@ export async function saveTerminalAccessoryLayout(layout: TerminalAccessoryLayou
   const preference = createTerminalAccessoryLayoutPreference(layout)
   const value = JSON.stringify(preference)
   await persistMirrored(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY, value)
-}
-
-// Serialize read-modify-write so quick toggles land in order.
-let layoutWriteTurn: Promise<unknown> = Promise.resolve()
-
-/** Turns the Smart rail on or off, keeping the rest of the stored layout. */
-export function saveTerminalSmartRail(
-  enabled: boolean,
-  directionPadAvailable = false
-): Promise<void> {
-  const run = layoutWriteTurn.then(async () => {
-    // A failed read must not save defaults over the user's layout.
-    const layout = await readTerminalAccessoryLayout(directionPadAvailable)
-    await saveTerminalAccessoryLayout({ ...layout, smartRail: enabled })
-  })
-  layoutWriteTurn = run.catch(() => {})
-  return run
 }

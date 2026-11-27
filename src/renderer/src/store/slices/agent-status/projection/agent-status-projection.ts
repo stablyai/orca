@@ -44,6 +44,9 @@ import { KeyedChangeJournal } from '../../../../../../shared/collections/keyed-c
 export class AgentStatusProjection {
   private data = new AgentStatusProjectionState()
   private changes = new KeyedChangeJournal()
+  private worktreeJournal = new KeyedChangeJournal()
+  /** Workspaces whose rows, arrangement or summary moved, by commit; null when any may have. */
+  readonly worktreeChanges: Pick<KeyedChangeJournal, 'cursor' | 'since'> = this.worktreeJournal
   changeCursor(): number {
     return this.changes.cursor()
   }
@@ -293,6 +296,11 @@ export class AgentStatusProjection {
           ? null
           : changed
       )
+      // Cleared only once published, so a commit that threw part-way hands its workspaces to the next.
+      if (fullResync || data.touchedWorktrees.size) {
+        this.worktreeJournal.publish(fullResync ? null : new Set(data.touchedWorktrees))
+        data.touchedWorktrees.clear()
+      }
     }
   }
 }

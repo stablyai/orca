@@ -109,6 +109,7 @@
   --color-chat-focus-ring: var(--chat-focus-ring);
   --color-unread: var(--unread);
   --color-unread-inverse: var(--unread-inverse);
+  --color-unread-bell: var(--unread-bell);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -233,7 +234,7 @@
   inherits: false;
 }
 
-/* Why: only the workspace board sheet reads its right edge; don't restyle the board subtree on every resize. */
+/* Why: only the docked board sheets read their right edge; don't restyle their subtrees on every resize. */
 @property --workspace-board-right-edge {
   syntax: '*';
   inherits: false;
@@ -333,6 +334,8 @@
   --unread: var(--color-blue-500);
   /* The unread dot on an inverted surface (tips): blue-500 keeps 3:1 on both the near-black and near-white inverse. */
   --unread-inverse: var(--color-blue-500);
+  /* The amber unread bell, shared by both themes. */
+  --unread-bell: var(--color-amber-500);
   /* Keep PR-state hues stable across theme changes. */
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
@@ -782,10 +785,15 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] {
-  /* Move Sonner actions below copy to avoid squeezing long notices; align footer text after the icon. */
+  /* Move Sonner actions below copy to avoid squeezing long notices, on the copy's left edge. */
   margin-top: 2px;
-  margin-left: 26px;
+  margin-left: 0;
   margin-right: 0;
+}
+
+/* A toast with an icon starts its copy after it, so its first action does too. */
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-icon] ~ [data-button] {
+  margin-left: 26px;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] ~ [data-button] {
@@ -1112,6 +1120,81 @@ body[data-modal-overlay-open]
   /* Chromium ignores ::-webkit-scrollbar while either standard property is set. */
   scrollbar-width: auto;
   scrollbar-color: auto;
+}
+
+@utility rail-page-row-gutter {
+  padding-inline-start: var(--rail-page-gutter);
+  padding-inline-end: var(--rail-page-row-end, var(--rail-page-gutter));
+}
+
+.rail-page-scroll-region {
+  --rail-page-row-end: max(
+    0px,
+    calc(var(--rail-page-gutter) - var(--rail-page-scrollbar-width, 0px))
+  );
+  --list-table-gutter-end: var(--rail-page-row-end);
+  scrollbar-gutter: stable;
+}
+
+[data-rail-page-container-gutter] {
+  /* The difference is the scrollbar's reserved width in a full-width row. */
+  --rail-page-row-end: max(0px, calc(var(--rail-page-gutter) - 100cqi + 100%));
+}
+
+.rail-page-container {
+  container: rail-page / inline-size;
+}
+
+[data-rail-page-search] {
+  inline-size: calc(var(--spacing) * 51);
+}
+
+[data-rail-page-search-trigger],
+[data-rail-page-search-close] {
+  display: none;
+}
+
+@container rail-page (width < 40rem) {
+  [data-rail-page-search] {
+    inline-size: calc(var(--spacing) * 7);
+  }
+
+  [data-rail-page-search-trigger] {
+    display: inline-flex;
+  }
+
+  [data-rail-page-search-close] {
+    display: inline-flex;
+  }
+
+  [data-rail-page-toolbar]:has(
+      [data-rail-page-search-field]:is(:focus-within, [data-expanded='true'])
+    )
+    [data-rail-page-views] {
+    visibility: hidden;
+  }
+
+  [data-rail-page-search-field] {
+    display: none;
+    position: absolute;
+    inset-inline: var(--rail-page-gutter);
+    top: 50%;
+    z-index: 10;
+    inline-size: auto;
+    gap: calc(var(--spacing) * 1);
+    translate: 0 -50%;
+    border-radius: var(--radius-md);
+    background: var(--background);
+  }
+
+  [data-rail-page-search-field]:focus-within,
+  [data-rail-page-search-field][data-expanded='true'] {
+    display: flex;
+  }
+
+  [data-rail-page-search-hint] {
+    display: none;
+  }
 }
 
 [data-bot-search-field-only] [data-bot-sidebar-list],
@@ -2043,12 +2126,14 @@ html.native-shell .app-layout {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 18%, transparent);
 }
 
-/* Family paint owns the surface in both themes, including secondary occurrences. */
+/* Family paint owns the surface in both themes, including secondary occurrences. It snaps clear
+   because the family box has no fade, so a fading hover wash would stack on it after a click. */
 .worktree-sidebar-family-root [data-worktree-card-surface][data-worktree-card-active],
 .dark .worktree-sidebar-family-root [data-worktree-card-surface][data-worktree-card-active] {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
+  transition-property: opacity;
 }
 
 /* Lineage connectors: quiet enough to sit behind cards, strong enough to read the tree at a glance. */
@@ -2074,9 +2159,10 @@ html.native-shell .app-layout {
   --worktree-lineage-title-center: 19px;
 }
 
-/* Continuous segments must not cast a horizontal shadow at every virtual boundary. */
-[data-worktree-family-segment],
-.dark [data-worktree-family-segment] {
+/* Continuous segments must not cast a horizontal shadow at every virtual boundary.
+   A closed family is one segment covering one card, so it keeps the card's shadow. */
+[data-worktree-family-segment]:not([data-worktree-family-closed]),
+.dark [data-worktree-family-segment]:not([data-worktree-family-closed]) {
   box-shadow: none;
 }
 
@@ -2391,6 +2477,28 @@ html.native-shell .app-layout {
   animation: none;
 }
 
+/* The worker chip's running dot grid: an opacity-only wave (compositor), each cell delayed by its diagonal. */
+@keyframes worker-dock-dot-wave {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+  }
+  25% {
+    opacity: 0.9;
+  }
+}
+
+.worker-dock-dot-grid > * {
+  opacity: 0.9;
+  animation: worker-dock-dot-wave 2s ease-in-out infinite both;
+}
+
+/* Offscreen, the cells drop the wave instead of pausing it, so the reveal re-anchors their phase. */
+.worker-dock-dot-grid[data-animation-offscreen] > * {
+  animation: none;
+}
+
 /* Virtual-list rows outside the viewport (overscan included) pause only endless loops; finite animations still finish. */
 [data-row-offscreen] .animate-spin,
 [data-row-offscreen] .animate-pulse,
@@ -2403,7 +2511,8 @@ html.native-shell .app-layout {
   .agent-working-spinner,
   .loading-spinner,
   .animate-spin,
-  .animate-pulse {
+  .animate-pulse,
+  .worker-dock-dot-grid > * {
     animation: none;
   }
 }
@@ -4379,28 +4488,12 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   color: var(--muted-foreground);
 }
 
-.workspace-reference-stack-front,
-.workspace-reference-stack-ghost {
+.workspace-reference-stack-front {
   position: absolute;
   inset: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.workspace-reference-stack-front {
-  z-index: 2;
-}
-
-.workspace-reference-stack-ghost[data-depth='1'] {
-  transform: translate(-1.5px, 2px);
-  opacity: 0.45;
-  z-index: 1;
-}
-
-.workspace-reference-stack-ghost[data-depth='2'] {
-  transform: translate(-3px, 4px);
-  opacity: 0.25;
 }
 
 .workspace-reference-stack svg {
@@ -4549,4 +4642,9 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   .browser-agent-cursor-layer[data-agent-active]::before {
     animation: none;
   }
+}
+
+/* Holding Alt fades the browser annotate palette so the page under it can be picked; its own tooltips go too. */
+:root[data-browser-annotate-see-through] [data-annotate-palette-tooltip] {
+  display: none;
 }

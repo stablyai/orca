@@ -5,9 +5,9 @@ import { Globe, Lock, SquareTerminal } from 'lucide-react-native'
 import { composioLogoUrl } from '../../../src/shared/composio/composio-apps'
 import { MobileConnectorLogo } from '../bots/MobileConnectorSourceIcon'
 import { LIST_ROW_PADDING } from '../components/list/ListGroup'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { PhoneMcpServer } from './mcp-server-operations'
 import { mcpCatalogEntryOf } from './mcp-server-words'
 
@@ -19,7 +19,7 @@ export function McpServerMark({
 }: {
   server: Pick<PhoneMcpServer, 'name' | 'detail' | 'transport'>
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const app = mcpCatalogEntryOf(server)
   if (app) {
     return <McpAppLogo slug={app.id} />
@@ -29,6 +29,7 @@ export function McpServerMark({
 }
 
 export function McpAppLogo({ slug }: { slug: string }) {
+  const styles = useThemedStyles(stylesSheet)
   // Orca's own marks follow the theme; Composio's GitHub logo is black on the dark page.
   if (slug === 'github' || slug === 'linear') {
     return <MobileConnectorLogo source={slug} size={LOGO} />
@@ -38,7 +39,8 @@ export function McpAppLogo({ slug }: { slug: string }) {
 
 /** The tray's 7 pt status dot before a line: amber needs the user, red is a failure. */
 export function McpStatusDot({ tone }: { tone: 'amber' | 'red' }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View
       style={[
@@ -60,7 +62,8 @@ export function McpDetailRow({
   /** A saved secret: dots and a lock, never the value. */
   secret?: boolean
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.detail} accessible accessibilityLabel={`${label}, ${secret ? '' : value}`}>
       <Text style={styles.label} numberOfLines={1}>
@@ -76,7 +79,7 @@ export function McpDetailRow({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   logo: { width: LOGO, height: LOGO, borderRadius: radii.mark },
   // On the subtitle's first line, not the middle of a wrapped one.
   dot: { width: 7, height: 7, borderRadius: 3.5, alignSelf: 'flex-start', marginTop: 4.5 },

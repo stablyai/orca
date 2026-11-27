@@ -1,46 +1,53 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import { requiredString } from '../../../../../shared/rpc-contract/rpc-param-primitives'
 import { TerminalViewport } from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
 import { TerminalHandle } from '../../../../../shared/rpc-contract/terminal/terminal-stream-params'
 
-export const TerminalMultiplexSubscribeFrame = TerminalHandle.extend({
-  streamId: z.number().int().min(1),
-  client: z
-    .object({
-      id: requiredString('Missing client ID'),
-      type: z.enum(['mobile', 'desktop']).default('desktop')
-    })
-    .optional(),
-  viewport: TerminalViewport.optional(),
-  capabilities: z
-    .object({
-      ackOutput: z.literal(1).optional(),
-      ackOutputSourceRanges: z.literal(1).optional(),
-      desktopViewportClaims: z.literal(1).optional(),
-      outputPause: z.literal(1).optional(),
-      outputPauseDropNotice: z.literal(1).optional(),
-      // Only a view that pauses output while its pane is hidden can say it is showing the terminal.
-      paneVisibility: z.literal(1).optional(),
-      writeUnavailable: z.literal(1).optional(),
-      // Old clients quarantine input after writeUnavailable; send host-lost semantics only to clients that understand them.
-      endpointLossNotice: z.literal(1).optional(),
-      inputAck: z.literal(1).optional(),
-      outputCadence: z.literal(1).optional()
-    })
-    .optional(),
-  // Initial cadence, so a resubscribe resumes coalescing without a follow-up frame.
-  outputCadence: z.enum(['focused', 'background']).optional(),
-  // Name the client input sequence domain across stream replacement so replay deduplicates.
-  inputSessionId: z.string().min(1).max(128).optional()
-})
-
-export const TerminalMultiplexLegacyAckFrame = z
-  .object({
-    bytes: z.number().int().nonnegative()
+export const TerminalMultiplexSubscribeFrame = lazyZodSchema(() =>
+  TerminalHandle.extend({
+    streamId: z.number().int().min(1),
+    client: z
+      .object({
+        id: requiredString('Missing client ID'),
+        type: z.enum(['mobile', 'desktop']).default('desktop')
+      })
+      .optional(),
+    viewport: TerminalViewport.optional(),
+    capabilities: z
+      .object({
+        ackOutput: z.literal(1).optional(),
+        ackOutputSourceRanges: z.literal(1).optional(),
+        desktopViewportClaims: z.literal(1).optional(),
+        outputPause: z.literal(1).optional(),
+        outputPauseDropNotice: z.literal(1).optional(),
+        // Only a view that pauses output while its pane is hidden can say it is showing the terminal.
+        paneVisibility: z.literal(1).optional(),
+        writeUnavailable: z.literal(1).optional(),
+        // Old clients quarantine input after writeUnavailable; send host-lost semantics only to clients that understand them.
+        endpointLossNotice: z.literal(1).optional(),
+        inputAck: z.literal(1).optional(),
+        outputCadence: z.literal(1).optional()
+      })
+      .optional(),
+    // Initial cadence, so a resubscribe resumes coalescing without a follow-up frame.
+    outputCadence: z.enum(['focused', 'background']).optional(),
+    // Name the client input sequence domain across stream replacement so replay deduplicates.
+    inputSessionId: z.string().min(1).max(128).optional()
   })
-  .strict()
+)
 
-export const TerminalMultiplexSnapshotRequestFrame = z.object({
-  requestId: z.number().int().positive().optional(),
-  scrollbackRows: z.number().finite().optional()
-})
+export const TerminalMultiplexLegacyAckFrame = lazyZodSchema(() =>
+  z
+    .object({
+      bytes: z.number().int().nonnegative()
+    })
+    .strict()
+)
+
+export const TerminalMultiplexSnapshotRequestFrame = lazyZodSchema(() =>
+  z.object({
+    requestId: z.number().int().positive().optional(),
+    scrollbackRows: z.number().finite().optional()
+  })
+)

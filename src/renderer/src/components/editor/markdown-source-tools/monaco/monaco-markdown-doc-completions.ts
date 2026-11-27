@@ -1,10 +1,9 @@
 import type { OnMount } from '@monaco-editor/react'
 import type { IDisposable, editor } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
-import { composeQuickOpenText } from '../../../../../../shared/quick-open/quick-open-path-search'
 import {
   getMarkdownDocCompletionContext,
-  getMarkdownDocCompletionDocuments
+  getMarkdownDocCompletionMatches
 } from '../../markdown/documents/markdown-doc-completions'
 
 type MonacoApi = Parameters<OnMount>[1]
@@ -39,7 +38,7 @@ export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {
       }
 
       const documents = documentsByModel.get(model)?.documents ?? []
-      const suffix = line.slice(position.column - 1)
+      const hasClosingBrackets = line.startsWith(']]', position.column - 1)
       const range = {
         startLineNumber: position.lineNumber,
         startColumn: position.column - context.partial.length,
@@ -48,22 +47,15 @@ export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {
       }
 
       return {
-        suggestions: getMarkdownDocCompletionDocuments(documents, context.partial).map(
-          (document) => {
-            const composedName = composeQuickOpenText(document.name)
-            return {
-              label: document.name,
-              // Why: Monaco filters the typed text as is against filterText, cut at 128 characters.
-              // The stored name goes first so every match the label alone had stays; the composed
-              // name after it lets text typed composed (NFC) match a name stored decomposed (NFD).
-              filterText:
-                composedName === document.name ? document.name : `${document.name} ${composedName}`,
-              kind: monaco.languages.CompletionItemKind.File,
-              detail: document.relativePath,
-              insertText: suffix.startsWith(']]') ? document.name : `${document.name}]]`,
-              range
-            }
-          }
+        suggestions: getMarkdownDocCompletionMatches(documents, context.partial).map(
+          ({ document, filterText }) => ({
+            label: document.name,
+            filterText,
+            kind: monaco.languages.CompletionItemKind.File,
+            detail: document.relativePath,
+            insertText: hasClosingBrackets ? document.name : `${document.name}]]`,
+            range
+          })
         )
       }
     }

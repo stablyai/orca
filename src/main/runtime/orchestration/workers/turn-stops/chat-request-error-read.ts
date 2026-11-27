@@ -25,7 +25,10 @@ export async function readChatRequestError(
     await new Promise((resolve) => setTimeout(resolve, Math.min(50, remaining)))
   }
   const snapshot = await request.read()
-  if (!snapshot) {
+  if (snapshot === undefined) {
+    return unrecordedChatRequestError(request)
+  }
+  if (snapshot === null) {
     return null
   }
   const recorded = chatRequestError(snapshot, request)
@@ -33,11 +36,13 @@ export async function readChatRequestError(
     (request.death.duringStartup ||
       !recorded ||
       (recorded.kind === 'providerExited' && !recorded.detail))
-    ? unrecordedError(request)
-    : (recorded ?? { ...unrecordedError(request), detail: undefined })
+    ? unrecordedChatRequestError(request)
+    : (recorded ?? { ...unrecordedChatRequestError(request), detail: undefined })
 }
 
-function unrecordedError(request: StructuredAgentSessionRequestFailure): ChatRequestError {
+export function unrecordedChatRequestError(
+  request: StructuredAgentSessionRequestFailure
+): ChatRequestError {
   const agentName = tuiAgentDisplayName(request.agent) ?? 'The agent'
   const fact = request.death?.failure ?? agentSessionFailureFact('providerExited')
   const context = { agentName, ...request.death }

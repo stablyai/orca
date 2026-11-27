@@ -2,12 +2,12 @@ import type { DetailCommentRenderersModel } from '../item-detail/use-mobile-task
 import type { PickerOption } from '../../components/sheets/PickerModal'
 import { View } from 'react-native'
 import { useMemo } from 'react'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColorScheme, useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { GitHubRepoSources, RepoSummary } from '../mobile-tasks-provider-detail-types'
 import {
   PROJECT_VIEW_DEFAULT_SORT,
-  PROVIDER_OPTIONS,
-  SORT_OPTIONS
+  taskProviderOptions,
+  sortOptions
 } from '../task-list/mobile-tasks-options'
 import type { TaskListEntry } from '../mobile-tasks-project-workspace-types'
 import {
@@ -20,12 +20,13 @@ import {
   hasGitHubIssueSourceChoice,
   issueSourceSlug
 } from '../item-detail/mobile-tasks-reviewer-linear'
-import { styles } from '../mobile-tasks-legacy-styles'
+import { stylesSheet } from '../mobile-tasks-legacy-styles'
 import { PROVIDER_LABELS } from '../task-list/mobile-task-view-options'
 import { jiraSiteLabel } from '../providers/jira/jira-mobile-connection'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { getTaskRepoProjectKey } from '../../../../src/shared/work-items/task-repo-selection'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 function sourceCountLabel(count: number, t: Translate): string {
   return count === 1
@@ -40,7 +41,9 @@ function repoCountLabel(count: number, t: Translate): string {
 }
 
 export function useMobileTasksPickerProjection(model: DetailCommentRenderersModel) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const colors = useMobileColors()
   const colorScheme = useMobileColorScheme()
   const {
     createRepoId,
@@ -82,7 +85,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
             label: team.name,
             subtitle: team.workspaceName
           })),
-    [hostedRepos, linearTeams, provider, repoHostLabels, t]
+    [hostedRepos, linearTeams, provider, repoHostLabels, styles]
   )
   const selectedCreateRepo =
     provider === 'github' || provider === 'gitlab'
@@ -112,8 +115,9 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     [jiraConnection.sites, t]
   )
   const providerOptions = useMemo(
-    () => PROVIDER_OPTIONS.filter((option) => visibleProviders.includes(option.value)),
-    [t, visibleProviders]
+    () =>
+      taskProviderOptions(t, colors).filter((option) => visibleProviders.includes(option.value)),
+    [colors, t, visibleProviders]
   )
   // The list read one twin per project; another host's twin of it has the same remotes.
   const createRepoReadTwin =
@@ -143,6 +147,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
   const githubIssueSourceLabel =
     githubIssueSourceRows.length === 1
       ? issueSourceSlug(
+          t,
           githubIssueSourceRows[0]!.repo.issueSourcePreference === 'origin'
             ? githubIssueSourceRows[0]!.sources.prs
             : githubIssueSourceRows[0]!.sources.upstreamCandidate
@@ -165,11 +170,11 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
           <View style={[styles.pickerRepoDot, { backgroundColor: getRepoBadgeColor(repo) }]} />
         )
       })),
-    [repoHostLabels, t, workspaceRepos]
+    [repoHostLabels, workspaceRepos, styles]
   )
   const sortedItems = useMemo(
-    () => sortMobileTaskItems(items, taskSort, reposById),
-    [items, reposById, taskSort]
+    () => sortMobileTaskItems(items, taskSort, reposById, colors),
+    [colors, items, reposById, taskSort]
   )
   const displayedEntries = useMemo<TaskListEntry[]>(() => {
     if (taskSort !== 'repository') {
@@ -178,7 +183,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     const entries: TaskListEntry[] = []
     let previousRepoKey = ''
     for (const item of sortedItems) {
-      const repo = taskRepositoryMeta(item, reposById)
+      const repo = taskRepositoryMeta(item, reposById, colors)
       if (repo.key !== previousRepoKey) {
         entries.push({
           type: 'section',
@@ -191,9 +196,9 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
       entries.push({ type: 'item', key: item.key, item })
     }
     return entries
-  }, [colorScheme, reposById, sortedItems, t, taskSort])
+  }, [colors, reposById, sortedItems, taskSort])
   const sortLabel =
-    SORT_OPTIONS.find((option) => option.value === taskSort)?.label ??
+    sortOptions(t).find((option) => option.value === taskSort)?.label ??
     t('tasks.pickerProjection.updatedSort', 'Updated')
   const githubProjectFields = githubProjectTable?.selectedView.fields ?? []
   const githubProjectViewSort = githubProjectTable?.selectedView.sortByFields?.[0] ?? null
@@ -251,6 +256,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     [githubProjectViews, pendingGitHubProjectViewSelection, t]
   )
   return Object.assign(model, {
+    colorScheme,
     createTargetOptions,
     selectedCreateTarget,
     selectedCreateTargetLabel,

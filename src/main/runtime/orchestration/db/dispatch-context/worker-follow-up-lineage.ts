@@ -21,6 +21,7 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
 import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
+import { OrchestrationError } from '../../orchestration-error'
 
 /** The conversation a closed terminal worker reopens in, as the resume path takes it. */
 export type WorkerResumeSession = {
@@ -42,6 +43,20 @@ export function getFollowUpDispatch(
       `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE follow_up_of_dispatch_id = ?`
     )
     .get(dispatchId) as DispatchContextRow | undefined
+}
+
+export function assertWorkerFollowUpUnclaimed(
+  db: Pick<OrchestrationDb, 'db'>,
+  dispatchId: string
+): void {
+  const claimed = getFollowUpDispatch(db, dispatchId)
+  if (claimed) {
+    throw new OrchestrationError(
+      'follow_up_claimed',
+      `Dispatch ${dispatchId} already continues as Dispatch ${claimed.id}.`,
+      { followUpDispatchId: claimed.id }
+    )
+  }
 }
 
 /** Whether a report's task id names a Task from earlier in its Dispatch's follow-up chain, which a

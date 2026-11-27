@@ -1,4 +1,3 @@
-import { prepareQueuedMessageEditText } from '../../../../../../src/shared/native-chat/input/queued-messages/queued-message-edit-command'
 import { useEffect, useMemo, useState } from 'react'
 import {
   applyMentionSuggestion,
@@ -21,7 +20,6 @@ import {
   narrowedMenuItems,
   leadingSkillToken,
   MENU_ROWS_PER_GROUP,
-  mobileComposerCatalog,
   mobileComposerSkillTokens,
   type MobileComposerStructuredCatalog
 } from './mobile-native-chat-composer-menu'
@@ -35,6 +33,7 @@ import { rankNativeChatRoomMembers } from '../../../../../../src/shared/native-c
 import { useBotMentionField } from './mobile-native-chat-bot-mention-display'
 import { useMobileNativeChatMentionBotMenu } from './use-mobile-native-chat-mention-bot-menu'
 import type { MentionBots } from './use-mobile-native-chat-mention-bots'
+import { useMobileNativeChatComposerCatalog } from './use-mobile-native-chat-composer-catalog'
 
 const NO_COMMANDS: readonly SlashCommandSuggestion[] = []
 /** Opening the menu from the + sheet narrows it to what that row named. */
@@ -81,38 +80,14 @@ export function useMobileNativeChatComposerMenu(input: {
   const { cursor, place: placeCaret } = field
   const [menuKind, setMenuKind] = useState<MenuKind | null>(null)
 
-  const reported = structuredCatalog?.reported
-  const acceptsText = useMemo(
-    () =>
-      prepareQueuedMessageEditText(
-        agent ?? 'codex',
-        reported,
-        input.goalMode?.hostSetsGoals === true,
-        input.interactionModeSupported === true,
-        structuredCatalog?.mcpPanel === true
-      ),
-    [
-      agent,
-      reported,
-      input.goalMode?.hostSetsGoals,
-      input.interactionModeSupported,
-      structuredCatalog?.mcpPanel
-    ]
-  )
-  const commandAvailable = useMemo(
-    () => (input.editing ? (name: string) => acceptsText(`/${name}`) : undefined),
-    [input.editing, acceptsText]
-  )
-  const catalog = useMemo(
-    () =>
-      mobileComposerCatalog({
-        agent,
-        structured: structuredCatalog,
-        discovery: skillDiscovery,
-        interactionModeSupported: input.interactionModeSupported
-      }),
-    [agent, skillDiscovery, structuredCatalog, input.interactionModeSupported]
-  )
+  const { catalog, commandAvailable } = useMobileNativeChatComposerCatalog({
+    agent,
+    structuredCatalog,
+    skillDiscovery,
+    editing: input.editing,
+    interactionModeSupported: input.interactionModeSupported,
+    hostSetsGoals: input.goalMode?.hostSetsGoals
+  })
   const skillTokens = useMemo(() => mobileComposerSkillTokens(catalog), [catalog])
   const skillToken = leadingSkillToken(value, skillTokens)
   const setDraft = (next: string): void => {
@@ -306,6 +281,8 @@ export function useMobileNativeChatComposerMenu(input: {
 
   return {
     onFieldChange,
+    /** This chat's own commands, which the + sheet reads for /compact and /goal. */
+    commands: catalog.commands,
     skillToken,
     skillCount: skillTokens.size,
     rows,
