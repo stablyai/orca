@@ -89,10 +89,10 @@ function run(
       stop: async () => {
         options.events?.push('stop')
       },
-      // The thread exits a while later, as one leaving a filesystem call on a hung mount would.
+      // The thread exits only after a turn of the event loop, as one leaving a stuck call would.
       retire: async () => {
         options.events?.push('retire')
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await new Promise((resolve) => setImmediate(resolve))
         options.events?.push('exited')
       }
     }

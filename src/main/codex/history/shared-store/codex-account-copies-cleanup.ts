@@ -231,9 +231,10 @@ export async function cleanUpCodexAccountCopies(args: {
         }
       } finally {
         await hold.release()
-      }
-      if (aclKept.length > 0) {
-        await args.worker.call({ op: 'remember-acl', accountHome, copies: aclKept.splice(0) })
+        // In `finally` so a batch that deletes nothing (`continue`) still notes them.
+        if (aclKept.length > 0) {
+          await args.worker.call({ op: 'remember-acl', accountHome, copies: aclKept })
+        }
       }
     }
     // Once per home and outside the locks: empty folders only, so Codex never waits on the walk.
