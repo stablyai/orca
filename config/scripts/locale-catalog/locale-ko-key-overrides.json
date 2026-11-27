@@ -1412,9 +1412,6 @@
   "auto.components.right.sidebar.PortsPanel.c9d106547a": {
     "ko": "포워드"
   },
-  "auto.components.right.sidebar.SourceControl.11b5dd8e41": {
-    "ko": "비교 대상"
-  },
   "auto.components.right.sidebar.SourceControl.6d7f2a47e5": {
     "ko": "폴더의 변경 사항 취소"
   },
@@ -4081,9 +4078,6 @@
   },
   "auto.store.slices.repos.e649269645": {
     "ko": "선택한 호스트에 경로를 입력하려면 프로젝트 추가를 사용하세요."
-  },
-  "auto.store.slices.worktrees.903b51c2ed": {
-    "ko": "{{value0}}에서 워크스페이스를 만들었지만 {{value2}} 때문에 Orca가 로컬 {{value1}}을(를) fast-forward할 수 없습니다."
   },
   "auto.web.WebConnect.4a4c017be1": {
     "ko": "엔드포인트:"

@@ -19,7 +19,8 @@ import { getDaemonPidPath } from '../../launch/daemon-spawner'
 type Dependencies = {
   inspect: () => ReturnType<typeof inspectDaemonHostImage>
   restart: (expectedDaemonPid: number) => Promise<{ killedCount: number }>
-  listSessions: () => Promise<{ isAlive: boolean }[]>
+  /** Chat relays the daemon owns end with it too, so they count beside its sessions. */
+  listSessions: () => Promise<{ sessions: { isAlive: boolean }[]; liveRelays: number }>
   /** Include local quarantine fallbacks in the restart impact count. */
   countFallbackSessions: () => number
 }
@@ -30,7 +31,9 @@ const defaultDependencies: Dependencies = {
   restart: (expectedDaemonPid) => restartDaemon({ expectedDaemonPid }),
   listSessions: async () => {
     const provider = getDaemonProvider()
-    return provider ? getCurrentDaemonAdapter(provider).listSessions() : []
+    return provider
+      ? getCurrentDaemonAdapter(provider).listSessionsAndRelays()
+      : { sessions: [], liveRelays: 0 }
   },
   countFallbackSessions: () => {
     const provider = getDaemonProvider()
@@ -46,10 +49,9 @@ export function createSeveredDaemonController(
   return {
     countLiveSessions: async () => {
       try {
-        const daemonSessions = (await dependencies.listSessions()).filter(
-          (session) => session.isAlive
-        ).length
-        return daemonSessions + dependencies.countFallbackSessions()
+        const { sessions, liveRelays } = await dependencies.listSessions()
+        const daemonSessions = sessions.filter((session) => session.isAlive).length
+        return daemonSessions + liveRelays + dependencies.countFallbackSessions()
       } catch {
         return null
       }

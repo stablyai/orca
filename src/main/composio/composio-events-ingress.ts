@@ -4,6 +4,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { matchesWebhookCall } from '../../../cloud/packages/connector-contract/src/webhook-matcher'
 import { automationWebhookTrigger } from '../../shared/automation-event-triggers'
 import type { Automation } from '../../shared/automations/automation-definition'
@@ -14,15 +15,17 @@ import { composioKeyEnvelopeFile } from './composio-key-store'
 export const COMPOSIO_USER_PATH = 'body.metadata.user_id'
 
 export type ComposioIngress = { automationId: string; hookId: string }
-const Saved = z.object({
-  automationId: z.string().min(1),
-  hookId: z.string().min(1),
-  /** The project's signing secret is on the hook; until then its calls are refused. */
-  signed: z.boolean()
-})
+const Saved = lazyZodSchema(() =>
+  z.object({
+    automationId: z.string().min(1),
+    hookId: z.string().min(1),
+    /** The project's signing secret is on the hook; until then its calls are refused. */
+    signed: z.boolean()
+  })
+)
 export type ComposioSavedIngress = z.infer<typeof Saved>
 /** Each project's own hook, by the project's key fingerprint; the owner's setup made each one. */
-const SavedFile = z.object({ projects: z.record(z.string(), Saved) })
+const SavedFile = lazyZodSchema(() => z.object({ projects: z.record(z.string(), Saved) }))
 
 /** Where each project's ingress is saved, next to the key on the host that runs the bots. */
 export class ComposioIngressStore {
