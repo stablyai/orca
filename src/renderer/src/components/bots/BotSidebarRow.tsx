@@ -1,19 +1,12 @@
 import React, { useState } from 'react'
-import { Bell, BellOff, Pencil } from 'lucide-react'
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu'
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { HoverCardContent } from '@/components/ui/hover-card'
 import { ActivityThreadHoverCardRoot } from '@/components/activity/thread-preview/activity-thread-hover-card-root'
 import { WORKTREE_CARD_SURFACE_CLASS_NAME } from '@/components/sidebar/workspace-card/surface/worktree-card-surface'
+import { WorktreeCardNotificationsMutedBadge } from '@/components/sidebar/workspace-card/identity/WorktreeCardNotificationsMutedBadge'
 import { WorktreeTitleInlineRename } from '@/components/sidebar/workspace-card/identity/WorktreeTitleInlineRename'
 import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
-import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import { useAppStore } from '@/store'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -22,6 +15,7 @@ import {
   botAvatarBadgeCutout,
   useBotAvatarBadgeSleeping
 } from './bot-avatar-status-badge'
+import { BotSidebarRowMenuContent } from './BotRowContextMenu'
 
 /** One row of the Bots section, a bot's or a group's: picture, name and time, then its newest line. */
 export type BotSidebarRowProps = {
@@ -46,6 +40,8 @@ export type BotSidebarRowProps = {
   expanded?: boolean
   onOpen: (event: { detail: number; target: EventTarget; repeat?: boolean }) => void
   onRename: (name: string) => Promise<void>
+  beginRename?: boolean
+  onBeginRenameConsumed?: () => void
   /** How long ago its newest line happened. */
   age: string | null
   /** The second line, under the name. */
@@ -54,7 +50,7 @@ export type BotSidebarRowProps = {
    *  it shows the row's working state; otherwise the row's end shows it. */
   trailing?: React.ReactNode
   /** What the hover card shows, rendered only while it is open. */
-  hoverDetails: () => React.ReactNode
+  hoverDetails: (keyboardFocus: boolean) => React.ReactNode
   /** Rename and Mark Read/Unread lead the menu; these follow. */
   menuItems: React.ReactNode
   menuFooter: React.ReactNode
@@ -75,6 +71,8 @@ export function BotSidebarRow({
   dragHandle = false,
   onOpen,
   onRename,
+  beginRename = false,
+  onBeginRenameConsumed,
   age,
   line,
   trailing = null,
@@ -82,11 +80,10 @@ export function BotSidebarRow({
   menuItems,
   menuFooter
 }: BotSidebarRowProps): React.JSX.Element {
-  const t = useTranslate()
-  const setWorkspaceUnreadByUser = useAppStore((s) => s.setWorkspaceUnreadByUser)
   const [renameRequested, setRenameRequested] = useState(false)
+  const [renaming, setRenaming] = useState(false)
   const [hoverOpen, setHoverOpen] = useState(false)
-  const toggleUnread = (): void => setWorkspaceUnreadByUser(workspaceId, !isUnread, hostId)
+  const [keyboardFocus, setKeyboardFocus] = useState(false)
   // Working shows once, at the row's end, where every working row shows it.
   const badgeStatus = status === 'working' ? null : status
   const badge = {
@@ -135,11 +132,16 @@ export function BotSidebarRow({
               The trigger runs to the row's end, fold toggle included, so the card always opens past
               the sidebar's edge as a workspace row's does. */}
           <ActivityThreadHoverCardRoot
-            open={hoverOpen}
+            open={hoverOpen && !renaming}
+            enabled={!renaming}
             onOpenChange={setHoverOpen}
             closeDelay={120}
             trigger={
-              <div className="flex min-w-0 flex-1 gap-1 self-stretch">
+              <div
+                className="flex min-w-0 flex-1 gap-1 self-stretch"
+                onFocus={(event) => setKeyboardFocus(event.target.matches(':focus-visible'))}
+                onBlur={() => setKeyboardFocus(false)}
+              >
                 <div className="flex min-w-0 flex-1 flex-col justify-center">
                   <div className="flex min-w-0 items-center gap-1.5">
                     <WorktreeTitleInlineRename
@@ -148,14 +150,24 @@ export function BotSidebarRow({
                       dimReadTitle
                       className="text-[13px] leading-5"
                       editingClassName="flex-1"
+                      onEditingChange={(editing) => {
+                        setRenaming(editing)
+                        if (editing) {
+                          setHoverOpen(false)
+                        }
+                      }}
                       onRename={onRename}
                       // The hover card already shows the full name.
                       titleWrapper={(title) => title}
-                      beginEditing={renameRequested}
-                      onBeginEditingConsumed={() => setRenameRequested(false)}
+                      beginEditing={renameRequested || beginRename}
+                      onBeginEditingConsumed={() => {
+                        setRenameRequested(false)
+                        onBeginRenameConsumed?.()
+                      }}
                     />
+                    <WorktreeCardNotificationsMutedBadge worktreeId={workspaceId} />
                     {age ? (
-                      <span className="ml-auto shrink-0 text-xs leading-4 text-muted-foreground tabular-nums">
+                      <span className="ml-auto shrink-0 text-3xs leading-none text-muted-foreground tabular-nums">
                         {age}
                       </span>
                     ) : null}
@@ -174,23 +186,20 @@ export function BotSidebarRow({
               // Portal clicks still bubble to the row through React.
               onClick={(event) => event.stopPropagation()}
             >
-              {hoverOpen ? hoverDetails() : null}
+              {hoverOpen ? hoverDetails(keyboardFocus) : null}
             </HoverCardContent>
           </ActivityThreadHoverCardRoot>
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-52">
-        <ContextMenuItem disabled={actionsDisabled} onSelect={() => setRenameRequested(true)}>
-          <Pencil className="size-3.5" />
-          {t('bots.row.rename', 'Rename')}
-        </ContextMenuItem>
-        {menuItems}
-        <ContextMenuItem disabled={actionsDisabled} onSelect={toggleUnread}>
-          {isUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
-          {isUnread ? t('bots.row.markRead', 'Mark Read') : t('bots.row.markUnread', 'Mark Unread')}
-        </ContextMenuItem>
-        {menuFooter}
-      </ContextMenuContent>
+      <BotSidebarRowMenuContent
+        workspaceId={workspaceId}
+        hostId={hostId}
+        isUnread={isUnread}
+        actionsDisabled={actionsDisabled}
+        onRename={() => setRenameRequested(true)}
+        menuItems={menuItems}
+        menuFooter={menuFooter}
+      />
     </ContextMenu>
   )
 }

@@ -2,7 +2,8 @@
 // one turn.
 import {
   CONNECTOR_CLIENT_LIMITS,
-  ConnectorDelivery
+  ConnectorDelivery,
+  type ConnectorDeliveryResult
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
@@ -49,7 +50,10 @@ export function connectorDeliveryUnits(
     }
     const key = JSON.stringify([delivery.conversation.source, delivery.conversation.externalId])
     const batch = open.get(key)
-    const eligible = (delivery.kind === 'start' || delivery.kind === 'send') && !held(delivery)
+    // A resume runs alone: its not_failed check guards only its own turn.
+    const eligible =
+      (delivery.kind === 'start' || (delivery.kind === 'send' && !delivery.resume)) &&
+      !held(delivery)
     if (
       batch &&
       eligible &&
@@ -95,23 +99,54 @@ export function dispatchBatch(
   if (!first) {
     return late.map((delivery) => refuse(delivery.deliveryId, { outcome: 'expired' }))
   }
-  // Refused before the seam (expired, unsupported): the later ones go on their own.
-  const carried = first.received
-    ? later.map((delivery): DispatchedDelivery => ({
+  const carriedBy = (done: Promise<ConnectorDeliveryResult>) => (delivery: SendDelivery) =>
+    seam.receipts.carried(delivery.conversation, delivery.deliveryId, delivery.text, done)
+  const [next, ...after] = later
+  // `carrier`: the turn of the first send so far that went on, carrying the rest; null for none.
+  type Turn = { done: Promise<ConnectorDeliveryResult> } | null
+  function heldBatch(carrier: Promise<Turn>): DispatchedDelivery[] {
+    return later.map((delivery, index) => {
+      const before = carrier
+      const own = dispatchDelivery(
+        seam,
+        host,
+        machine,
+        delivery,
+        msLeft,
+        later.slice(index + 1),
+        outboxAccount,
+        before.then((turn) => turn !== null)
+      )
+      const ownCarries = own?.carriedLater ?? Promise.resolve(false)
+      carrier = Promise.all([before, ownCarries]).then(
+        ([turn, carries]): Turn => turn ?? (carries && own ? { done: own.done } : null)
+      )
+      return {
         deliveryId: delivery.deliveryId,
-        received: true,
-        ...(first.viaOutbox ? { viaOutbox: true as const } : {}),
-        done: seam.receipts.carried(
-          delivery.conversation,
-          delivery.deliveryId,
-          delivery.text,
-          first.done
+        received: false,
+        done: before.then((turn) =>
+          turn ? carriedBy(turn.done)(delivery) : (own?.done ?? { outcome: 'unsupported' as const })
         )
-      }))
-    : later.flatMap((delivery) => {
-        const own = dispatchDelivery(seam, host, machine, delivery, msLeft, [], outboxAccount)
-        return own ? [own] : []
-      })
+      }
+    })
+  }
+  // Held by a thread's mute: each later one takes its place now, behind the one before, then goes
+  // in the turn of the first before it that went on, or is decided itself, so a request and its
+  // follow-ups stay one turn and nothing later in the poll overtakes them.
+  const heldLater = first.carriedLater
+  const carried: DispatchedDelivery[] = heldLater
+    ? heldBatch(heldLater.then((carries) => (carries ? { done: first.done } : null)))
+    : first.received
+      ? later.map((delivery): DispatchedDelivery => ({
+          deliveryId: delivery.deliveryId,
+          received: true,
+          ...(first.viaOutbox ? { viaOutbox: true as const } : {}),
+          done: carriedBy(first.done)(delivery)
+        }))
+      : // Refused before the seam (expired, unsupported): the later ones go on as their own batch.
+        next
+        ? dispatchBatch(seam, host, machine, [next, ...after], msLeft, outboxAccount)
+        : []
   return [
     first,
     ...carried,

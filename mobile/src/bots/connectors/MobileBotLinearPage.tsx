@@ -3,7 +3,7 @@
 import { saveRemovingMembers } from '../bot-sheet-operations'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useRef, useState, type ReactNode } from 'react'
-import { Ellipsis, Plus } from 'lucide-react-native'
+import { Ellipsis, LogIn, Plus, Unlink } from 'lucide-react-native'
 import {
   botLinearWorkspaces,
   botMemberSource,
@@ -23,7 +23,7 @@ import { SettingsNote, SettingsSection } from '../../settings/settings-screen-fr
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import type { BotAccessRequests } from '../use-bot-access-requests'
-import { linearSetDefaultBot } from './bot-connector-account-operations'
+import { linearSetDefaultBot, linearUnlink } from './bot-connector-account-operations'
 import { slackCall } from './bot-slack-operations'
 import { ConnectorDefaultBotPage, useConnectorPeople } from './MobileConnectorAccountParts'
 import { connectorAccountErrorMessage, linearWorkspaceLabel } from './mobile-connector-account-copy'
@@ -44,8 +44,8 @@ export function MobileBotLinearPage(props: {
   save: (updates: BotUpdateParams['updates']) => Promise<boolean>
   removeMember: (member: BotMember) => void
   onBack: () => void
-  /** Finish setup in this workspace, or with none, add another. */
-  onSetUp: (workspaceId: string | undefined) => void
+  /** Finish setup in this workspace, or with none, add another; `signIn` opens on Linear's sign-in. */
+  onSetUp: (workspaceId: string | undefined, signIn?: boolean) => void
 }) {
   const t = useMobileTranslation()
   const { bot, workspace, linear, hostName } = props
@@ -161,6 +161,29 @@ export function MobileBotLinearPage(props: {
     )
   }
 
+  /** `reconnect`: a wrong user is fixed by signing in again as the right one, as the desktop's Reconnect. */
+  const unlink = (reconnect: boolean) => {
+    const client = props.client
+    if (!client) {
+      return
+    }
+    void slackCall(
+      () =>
+        linearUnlink.request(
+          client,
+          { workspaceId: workspace.workspaceId },
+          { failWhenDisconnected: true }
+        ),
+      linearUnlink.interpret
+    ).then((result) => {
+      if (!result.ok) {
+        props.showToast(connectorAccountErrorMessage('linear', result.error, hostName, t), 2400)
+      } else if (reconnect) {
+        props.onSetUp(workspace.workspaceId, true)
+      }
+      return linear.refresh()
+    })
+  }
   const fix =
     linear.view.status !== 'ready'
       ? null
@@ -250,7 +273,24 @@ export function MobileBotLinearPage(props: {
               icon: Plus,
               disabled: !props.online,
               onPress: () => props.onSetUp(undefined)
-            }
+            },
+            // As GitHub's page: the host's link to this workspace, for every bot on it.
+            ...(linked
+              ? [
+                  {
+                    label: t('bots.linear.account.reconnect', 'Reconnect'),
+                    icon: LogIn,
+                    disabled: !props.online,
+                    onPress: () => unlink(true)
+                  },
+                  {
+                    label: t('bots.linear.account.unlink', 'Unlink Linear account'),
+                    icon: Unlink,
+                    disabled: !props.online,
+                    onPress: () => unlink(false)
+                  }
+                ]
+              : [])
           ]
         ]}
       />

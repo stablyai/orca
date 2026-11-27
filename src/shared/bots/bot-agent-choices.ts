@@ -1,6 +1,7 @@
 // Which agents a bot can run on a host, and whether each can start; the desktop's New bot and the
 // host's own answer to a phone read it the same way.
 import {
+  agentMenuRowReady,
   agentMenuRowSupportsChat,
   type ChatUnavailableReason,
   type NewTabAgentMenuRow
@@ -40,8 +41,15 @@ function botAgentOnHost(
   return unavailable ? { agent, unavailable: unavailable.reason } : { agent }
 }
 
-/** The bot's own agent first, then every other one installed here; each unavailable one says why,
- *  as agent rows do. Only the bot's own while the menu is still learning the host. */
+/** Whether the user has `agent` here: the menu's rows already leave out agents disabled in Agent
+ *  settings, and a chat that only offers to install the agent first doesn't count. */
+function botAgentEnabledOnHost(agent: BotAgent, rows: readonly NewTabAgentMenuRow[]): boolean {
+  return rows.some((row) => row.agent === agent && !(row.kind === 'chat' && row.setup))
+}
+
+/** The bot's own agent first, then every other agent enabled here; each unavailable one says why,
+ *  as agent rows do. With none enabled, the bot's own agent as it stands here, so the list is never
+ *  empty. Only the bot's own while the menu is still learning the host. */
 export function botNewChatAgents(
   bot: Pick<Bot, 'agent'>,
   model: BotAgentMenuModel
@@ -49,20 +57,49 @@ export function botNewChatAgents(
   if (model.state === 'loading') {
     return [{ agent: bot.agent }]
   }
-  return [bot.agent, ...BOT_AGENTS.filter((agent) => agent !== bot.agent)]
+  const enabled = [bot.agent, ...BOT_AGENTS.filter((agent) => agent !== bot.agent)]
+    .filter((agent) => botAgentEnabledOnHost(agent, model.rows))
     .map((agent) => botAgentOnHost(agent, model))
-    .filter((entry) => entry.agent === bot.agent || entry.unavailable !== 'not-installed')
+    .filter((entry) => entry.unavailable !== 'not-installed')
+  return enabled.length > 0 ? enabled : [botAgentOnHost(bot.agent, model)]
 }
 
 /** The agents a bot can be set to here: the installed ones, and `current` always; empty while the
- *  menu is still learning the host. */
-export function botAgentChoices(model: BotAgentMenuModel, current?: BotAgent): BotAgent[] {
+ *  menu is still learning the host. `installedOnly` drops chats that would install their agent first,
+ *  so the first choice (a new bot's default) is never an agent the host lacks. */
+export function botAgentChoices(
+  model: BotAgentMenuModel,
+  current?: BotAgent,
+  installedOnly = false
+): BotAgent[] {
   if (model.state === 'loading') {
     return current ? [current] : []
   }
   return BOT_AGENTS.filter(
     (agent) =>
       agent === current ||
-      model.rows.some((row) => row.agent === agent && agentMenuRowSupportsChat(row))
+      model.rows.some(
+        (row) =>
+          row.agent === agent &&
+          agentMenuRowSupportsChat(row) &&
+          (!installedOnly || agentMenuRowReady(row))
+      )
   )
+}
+
+/** The host's default agent when a bot can start it there as it is now, not by installing it first:
+ *  the menu leads with chats the host runs now, so an install-first default doesn't beat a ready one. */
+export function readyBotDefaultAgent(
+  model: BotAgentMenuModel,
+  defaultAgent: string | null | undefined
+): BotAgent | undefined {
+  return botAgentChoices(model, undefined, true).find((agent) => agent === defaultAgent)
+}
+
+/** A new bot's agent from `choices`: the host's default agent when a bot can run it, else the first. */
+export function newBotAgent(
+  choices: readonly BotAgent[],
+  defaultAgent: string | null | undefined
+): BotAgent | undefined {
+  return choices.find((agent) => agent === defaultAgent) ?? choices[0]
 }

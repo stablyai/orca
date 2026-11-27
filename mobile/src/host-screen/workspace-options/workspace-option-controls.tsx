@@ -10,8 +10,7 @@ import type {
 import * as hostVisibility from '../../../../src/shared/workspace-view/workspace-host-visibility'
 import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import type { WorktreeCardProperty } from '../../../../src/shared/ui-chrome/ui-chrome-types'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { hostScreenStyles as styles } from '../host-screen-styles'
+import { hostScreenStylesSheet } from '../host-screen-styles'
 import { withoutPhoneHiddenProperties } from './phone-card-property-choices'
 import type { HostScreenController } from '../use-host-screen-controller'
 import {
@@ -28,6 +27,7 @@ import { CheckRow, ChoiceRows, SwitchRow } from './workspace-option-rows'
 import { choiceLabel, summarizeChecklist } from './workspace-option-values'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 export type WorkspaceOptionHost = { id: ExecutionHostId; label: string }
 
@@ -76,8 +76,8 @@ function hostsValue({ controller, hosts }: WorkspaceOptionProps, t: Translate): 
 }
 
 function HostsPage({ controller, hosts }: WorkspaceOptionProps) {
+  const styles = useThemedStyles(hostScreenStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const { settings, state } = controller
   const visible = state.view.filters.visibleHostIds
   const checked = new Set(
@@ -125,8 +125,8 @@ function projectsValue({ controller }: WorkspaceOptionProps, t: Translate): stri
 }
 
 function ProjectsPage({ controller }: WorkspaceOptionProps) {
+  const styles = useThemedStyles(hostScreenStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const { settings, state } = controller
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
@@ -196,7 +196,7 @@ function CardPropertyRows(props: {
   controller: HostScreenController
   choices: readonly WorkspaceViewChoice<WorktreeCardProperty>[]
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(hostScreenStylesSheet)
   const { settings, state } = props.controller
   return (
     <ListGroup style={styles.optionGroup}>
@@ -239,6 +239,7 @@ function propertiesPage(
     kind: 'page',
     value: options.value,
     Page: function PropertiesPage({ controller }) {
+      const styles = useThemedStyles(hostScreenStylesSheet)
       const t = useMobileTranslation()
       return (
         <>
@@ -300,6 +301,7 @@ export const WORKSPACE_OPTION_CONTROLS: Record<WorkspaceViewOptionKey, Workspace
     kind: 'inline',
     framed: false,
     Row: function GroupByRow({ controller }) {
+      const styles = useThemedStyles(hostScreenStylesSheet)
       const t = useMobileTranslation()
       return (
         <MobileSegmentedControl

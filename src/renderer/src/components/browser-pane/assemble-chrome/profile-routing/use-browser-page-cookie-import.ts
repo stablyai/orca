@@ -2,27 +2,40 @@ import { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/browser/workspace/ssh-workspace-browser-route-eligibility'
-import { selectWorktreeHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
+import {
+  selectExecutionHostDisplayLabel,
+  selectWorktreeHostDisplayLabel
+} from '@/runtime/hosts/display/execution-host-display-label'
+import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type {
-  BrowserSlice,
-  BrowserSshPageCookieImportRoute
+  BrowserPageCookieImportRoute,
+  BrowserSlice
 } from '@/store/slices/browser/browser-slice-contract'
 
 type BrowserPageCookieImport = Pick<
   BrowserSlice,
   'detectedBrowsers' | 'detectedBrowsersLoaded' | 'fetchDetectedBrowsers'
 > & {
-  /** Set when the page browses through an SSH host, whose jar the import fills. */
-  sshRoute: BrowserSshPageCookieImportRoute | null
+  /** The page's own jar, whatever host Settings › Browser shows. */
+  pageRoute: BrowserPageCookieImportRoute
 }
+
+/** A server's page this desktop hosts; its import fills that page's jar. */
+export type BrowserClientHostedCookieImportPage = { environmentId: string; browserPageId: string }
 
 /**
  * Where a page's cookie import lands and which browsers it offers. Pages mount only once
- * SshRoutedBrowserPageGate has verified the route, so an eligible host is the page's jar; an SSH
- * page reads this desktop's browsers even when Settings › Browser shows a paired server.
+ * SshRoutedBrowserPageGate has verified the route, so an eligible host is the page's jar. Every
+ * page imports this desktop's browsers, even when Settings › Browser shows a paired server.
  */
-export function useBrowserPageCookieImport(worktreeId: string): BrowserPageCookieImport {
+export function useBrowserPageCookieImport(
+  worktreeId: string,
+  clientHostedPage: BrowserClientHostedCookieImportPage | null = null
+): BrowserPageCookieImport {
   const sshTargetId = useAppStore((s) => {
+    if (clientHostedPage) {
+      return null
+    }
     const eligibility = resolveSshWorkspaceBrowserRouteEligibility(
       getExecutionHostIdForWorktree(s, worktreeId),
       s.settings,
@@ -30,12 +43,14 @@ export function useBrowserPageCookieImport(worktreeId: string): BrowserPageCooki
     )
     return eligibility?.eligible ? eligibility.targetId : null
   })
-  const hostLabel = useAppStore((s) =>
-    sshTargetId ? (selectWorktreeHostDisplayLabel(s, worktreeId) ?? sshTargetId) : null
-  )
-  const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
-  const detectedBrowsersLoaded = useAppStore((s) => s.detectedBrowsersLoaded)
-  const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
+  const environmentId = clientHostedPage?.environmentId ?? null
+  const browserPageId = clientHostedPage?.browserPageId ?? null
+  const hostLabel = useAppStore((s) => {
+    if (environmentId) {
+      return selectExecutionHostDisplayLabel(s, toRuntimeExecutionHostId(environmentId))
+    }
+    return sshTargetId ? (selectWorktreeHostDisplayLabel(s, worktreeId) ?? sshTargetId) : null
+  })
   const [desktopBrowsers, setDesktopBrowsers] = useState<BrowserSlice['detectedBrowsers'] | null>(
     null
   )
@@ -49,15 +64,19 @@ export function useBrowserPageCookieImport(worktreeId: string): BrowserPageCooki
       .then(setDesktopBrowsers)
       .catch(() => setDesktopBrowsers([]))
   }, [desktopBrowsers])
-  const sshRoute = useMemo(
-    () => (sshTargetId && hostLabel ? { sshTargetId, hostLabel } : null),
-    [sshTargetId, hostLabel]
-  )
-  if (!sshRoute) {
-    return { sshRoute, detectedBrowsers, detectedBrowsersLoaded, fetchDetectedBrowsers }
-  }
+  const pageRoute = useMemo((): BrowserPageCookieImportRoute => {
+    if (environmentId && browserPageId) {
+      return {
+        kind: 'client-host',
+        environmentId,
+        browserPageId,
+        hostLabel: hostLabel ?? environmentId
+      }
+    }
+    return sshTargetId && hostLabel ? { kind: 'ssh', sshTargetId, hostLabel } : { kind: 'local' }
+  }, [environmentId, browserPageId, sshTargetId, hostLabel])
   return {
-    sshRoute,
+    pageRoute,
     detectedBrowsers: desktopBrowsers ?? [],
     detectedBrowsersLoaded: desktopBrowsers !== null,
     fetchDetectedBrowsers: fetchDesktopBrowsers

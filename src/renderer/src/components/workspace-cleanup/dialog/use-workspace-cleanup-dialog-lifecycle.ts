@@ -4,6 +4,11 @@ import {
   useWorkspaceCleanupRemoval,
   type WorkspaceCleanupRemovalController
 } from '../removal/use-workspace-cleanup-removal'
+import {
+  getWorkspaceCleanupRunPhase,
+  useWorkspaceCleanupRunStore
+} from '../removal/run/workspace-cleanup-run-store'
+import { WORKSPACE_CLEANUP_RUN_VIEW_MODAL_DATA } from '../removal/run/workspace-cleanup-run-view'
 import { useWorkspaceCleanupScanLifecycle } from '../scanning/use-workspace-cleanup-scan-lifecycle'
 
 const WORKSPACE_CLEANUP_CLOSE_LINGER_MS = 300
@@ -49,6 +54,16 @@ export function useWorkspaceCleanupDialogLifecycle(): WorkspaceCleanupDialogLife
   const onFreshOpen = useCallback(() => {
     // Reopening preserves in-flight batch progress but must drop stale agent-stop confirmation.
     resetForReopen()
+    // A finished run stays until dismissed, but only the card's Show reopens it; a fresh open starts clean.
+    const { run, dismissRun } = useWorkspaceCleanupRunStore.getState()
+    if (
+      run &&
+      getWorkspaceCleanupRunPhase(run) === 'finished' &&
+      useAppStore.getState().modalData[WORKSPACE_CLEANUP_RUN_VIEW_MODAL_DATA.key] !==
+        WORKSPACE_CLEANUP_RUN_VIEW_MODAL_DATA.value
+    ) {
+      dismissRun()
+    }
     if (!removalInFlightRef.current) {
       setSelectedIds(new Set())
     }

@@ -60,6 +60,7 @@
     "../cloud/packages/connector-contract/src/webhook-matcher.ts",
     "../cloud/packages/connector-contract/src/webhook-names.ts",
     "../cloud/packages/connector-contract/src/webhook-routes.ts",
+    "../cloud/packages/connector-contract/src/wake-messages.ts",
     "../src/packages/process-host/src/__fixtures__/**/*",
     "../src/wsl-guest/**/*",
     "../src/types/**/*"

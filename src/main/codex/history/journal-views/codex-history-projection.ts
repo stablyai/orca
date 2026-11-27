@@ -37,7 +37,9 @@ export function preserveSavedHistoryPayload(
         item.status == null
           ? old
           : state === 'completed'
-            ? { kind: 'diff', path: patch.path, patch: patch.patch }
+            ? old.kind === 'diff'
+              ? old
+              : { kind: 'diff', path: patch.path, patch: patch.patch }
             : {
                 kind: 'tool-call',
                 name: 'Diff',

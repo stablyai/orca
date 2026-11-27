@@ -76,7 +76,8 @@ function watchContinuedLooksOnce(runtime: OrcaRuntimeService): void {
     })
 }
 
-/** Looks and tidy-ups ride the host's automation scheduler: its minute tick, while it runs. */
+/** Looks, tidy-ups and usage-limit waits ride the host's automation scheduler: its minute tick,
+ *  while it runs. */
 export function bindLookAroundToAutomations(
   service: Pick<AutomationService, 'onTick'>,
   runtime: OrcaRuntimeService
@@ -89,5 +90,9 @@ export function bindLookAroundToAutomations(
     void Promise.resolve()
       .then(() => runtimeTidyUpRunner(runtime).tick())
       .catch((error: unknown) => console.warn('[bots] tidy-up tick failed', error))
+    // A usage-limit wait whose reset passed with no continue scheduled ends on this minute.
+    void Promise.resolve()
+      .then(() => runtime.botItems.usageLimitTick(Date.now()))
+      .catch((error: unknown) => console.warn('[bots] usage-limit tick failed', error))
   }
 }

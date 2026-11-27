@@ -1,5 +1,6 @@
 import { parseDaemonLaunchNoteChange } from '../protocol/daemon-launch-note-protocol'
 import { handleDaemonTerminalKill } from './daemon-terminal-kill'
+import { answerShutdown, answerShutdownIfIdle } from './daemon-shutdown-requests'
 import { handleDaemonFencedTermination } from './daemon-fenced-termination'
 import { performance } from 'node:perf_hooks'
 import { setPtyOwnerHostColors } from '../../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
@@ -15,10 +16,12 @@ import type { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import { DaemonHealthRequests } from '../health/daemon-health-requests'
 import type { TerminalHistorySeedTransferRegistry } from '../history/seed-transfer/terminal-history-seed-transfer-registry'
 import type { TerminalHost } from '../terminal-host/terminal-host'
+import type { ProviderRelayHost } from '../provider-relay/provider-relay-host'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
-import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
+import { HOST_LOST_EXIT_CAUSE } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import type { DaemonRequest, GetSnapshotRequest } from '../protocol/daemon-rpc-contract'
 
-type DaemonRequestRouterOptions = {
+export type DaemonRequestRouterOptions = {
   host: TerminalHost
   connections: DaemonClientConnections
   lifecycle: DaemonServerLifecycle
@@ -30,6 +33,7 @@ type DaemonRequestRouterOptions = {
   streamDataBatcher: DaemonStreamDataBatcher
   ptySpawnHealthCheck: () => Promise<void>
   log: DaemonFileLog
+  relays: ProviderRelayHost
 }
 
 export class DaemonRequestRouter {
@@ -45,6 +49,15 @@ export class DaemonRequestRouter {
       case 'probeProviderCwd':
       case 'spawnProvider':
         throw new Error('Provider requests are answered before routing')
+      case 'relaySpawn':
+      case 'relayAttach':
+      case 'relayWrite':
+      case 'relayAck':
+      case 'relayAcks':
+      case 'relayClose':
+      case 'relayList':
+      case 'relayDetach':
+        throw new Error('Relay requests are answered before routing')
       case 'startHistorySeedTransfer': {
         if (!client?.authenticatedPairEstablished || client.streamSocket === null) {
           throw new Error('Daemon client connection is incomplete; reconnect')
@@ -169,11 +182,15 @@ export class DaemonRequestRouter {
         this.options.host[request.type](request.payload.sessionId)
         return {}
       case 'listSessions':
-        return { sessions: this.options.host.listSessions() }
+        return {
+          sessions: this.options.host.listSessions(),
+          liveRelays: this.options.relays.liveCount,
+          runningRelays: this.options.relays.runningCount
+        }
       case 'shutdownIfIdle':
-        return this.shutdownIfIdle(clientId, request.id)
+        return answerShutdownIfIdle(this.options, clientId, request.id)
       case 'getSnapshot':
-        return this.getSnapshot(request.payload.sessionId, request.payload.scrollbackRows)
+        return this.getSnapshot(request.payload)
       case 'getSize':
         return { size: this.options.host.getAppliedSize(request.payload.sessionId) }
       case 'takePendingOutput':
@@ -189,7 +206,7 @@ export class DaemonRequestRouter {
       case 'asyncIoHealth':
         return this.health.handle(request)
       case 'shutdown':
-        return this.shutdown(clientId, request.id, request.payload.killSessions)
+        return answerShutdown(this.options, clientId, request.id, request.payload.killSessions)
     }
     throw new Error(`Unknown request type: ${(request as { type: string }).type}`)
   }
@@ -205,7 +222,7 @@ export class DaemonRequestRouter {
     } catch (error) {
       this.options.attachments.clearInput(sessionId)
       if (error instanceof SessionNotFoundError) {
-        this.sendExitEvent(client, sessionId, -1)
+        this.sendSessionLostEvent(client, sessionId)
       }
       throw error
     }
@@ -222,79 +239,32 @@ export class DaemonRequestRouter {
       this.options.host.resize(sessionId, cols, rows)
     } catch (error) {
       if (error instanceof SessionNotFoundError) {
-        this.sendExitEvent(client, sessionId, -1)
+        this.sendSessionLostEvent(client, sessionId)
       }
       throw error
     }
     return {}
   }
 
-  private shutdownIfIdle(clientId: string, requestId: string): { retiring: boolean } {
-    const client = this.options.connections.get(clientId)
-    const retiring =
-      client !== undefined &&
-      client.streamSocket !== null &&
-      this.options.connections.size === 1 &&
-      this.options.admission.inFlight === 0 &&
-      this.options.host.listSessions().length === 0 &&
-      this.options.connections.hasOnlyTransportsFor(client)
-    if (retiring) {
-      this.options.lifecycle.retireAfterIdleReply(clientId, requestId, client.controlSocket)
-    }
-    return { retiring }
-  }
-
-  private async getSnapshot(sessionId: string, requestedRows: unknown): Promise<unknown> {
+  private async getSnapshot({ sessionId: id, ...opts }: GetSnapshotRequest['payload']) {
     const startedAt = performance.now()
     const scrollbackRows =
-      typeof requestedRows === 'number' && Number.isFinite(requestedRows)
-        ? Math.max(0, Math.min(50_000, Math.floor(requestedRows)))
+      typeof opts.scrollbackRows === 'number' && Number.isFinite(opts.scrollbackRows)
+        ? Math.max(0, Math.min(50_000, Math.floor(opts.scrollbackRows)))
         : undefined
-    const snapshot = await this.options.host.getSettledSnapshot(sessionId, { scrollbackRows })
+    const snapshot = await this.options.host.getSettledSnapshot(id, { ...opts, scrollbackRows })
     const snapshotMs = performance.now() - startedAt
     if (snapshotMs >= 25) {
       recordDaemonStreamBacklogEvent('slowGetSnapshot', {
-        sessionIdSuffix: sessionId.slice(-10),
+        sessionIdSuffix: id.slice(-10),
         snapshotMs: Math.round(snapshotMs)
       })
     }
     return { snapshot }
   }
 
-  private async shutdown(clientId: string, requestId: string, killSessions: boolean) {
-    this.options.log.log('shutdown', {
-      reason: 'rpc',
-      killSessions: killSessions === true
-    })
-    const serverClose = this.options.lifecycle.beginOrdinaryShutdownFence()
-    if (killSessions) {
-      try {
-        await this.options.host.dispose()
-      } catch (error) {
-        this.options.log.log('shutdown-dispose-failed', {
-          error: error instanceof Error ? error.message : String(error)
-        })
-      }
-    }
-    const controlSocket = this.options.connections.get(clientId)?.controlSocket
-    if (controlSocket) {
-      this.options.lifecycle.deferRpcShutdownUntilReply(
-        clientId,
-        requestId,
-        controlSocket,
-        serverClose
-      )
-    } else {
-      this.options.lifecycle.finishRpcShutdownWithoutReply(serverClose)
-    }
-    return {}
-  }
-
-  private sendExitEvent(
-    client: ConnectedDaemonClient | undefined,
-    sessionId: string,
-    code: number
-  ): void {
+  /** The client wrote to a session this host no longer has: nobody asked it to stop. */
+  private sendSessionLostEvent(client: ConnectedDaemonClient | undefined, sessionId: string): void {
     if (!client?.streamSocket) {
       return
     }
@@ -302,7 +272,7 @@ export class DaemonRequestRouter {
       type: 'event',
       event: 'exit',
       sessionId,
-      payload: { code }
+      payload: { code: -1, cause: HOST_LOST_EXIT_CAUSE }
     })
     this.options.streamDataBatcher.flush(client.clientId)
   }

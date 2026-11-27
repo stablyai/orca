@@ -49,7 +49,7 @@ export const FOLD_TOGGLE_CLASS =
 export const MENU_TAKES_PLACE =
   'group-hover/bot-chat:invisible group-has-[[data-chat-menu]:focus-within]/chat-end:invisible group-has-[[data-state=open]]/chat-end:invisible'
 
-const END_TEXT = 'min-w-0 truncate text-2xs whitespace-nowrap text-muted-foreground tabular-nums'
+const END_TEXT = 'min-w-0 truncate text-3xs whitespace-nowrap text-muted-foreground tabular-nums'
 
 /** The row's right edge: its time or fold summary, which the row's ⋯ takes the place of on hover,
  *  then the fold chevron, shown while folded or unfolded. Rows using it carry `group/bot-chat`. */

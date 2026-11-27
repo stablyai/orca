@@ -6,6 +6,7 @@ import {
   ManagedRuntimeCancelParams
 } from '../../../../../shared/rpc-contract/host-management/managed-runtime-install-params'
 import { ACP_LAUNCH_SPECS, acpLaunchSpecFor } from '../../../../acp/launch/acp-launch-registry'
+import type { ManagedCopySettings } from '../../../../acp/launch/acp-launch-contract'
 import {
   acpHostBackendInput,
   findHostProgram,
@@ -13,6 +14,7 @@ import {
 } from '../../../../acp/launch/acp-launch-command'
 import type { ManagedRuntimeProgram } from '../../../../../shared/agent-launch/installation/managed-runtime-install'
 import { ManagedRuntimeInstallation } from '../../../../node-runtime/managed-runtime-installation'
+import { onManagedServerUse } from '../../../../node-runtime/managed-runtime-release'
 import '../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { isAgentSessionPreSpawnError } from '../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
@@ -148,11 +150,23 @@ function acpInstallation(
     launchGate
       ? launchGate.run(() => stopStructuredAgentChats(agent, managedRuntime.label), work)
       : Promise.reject(new Error(`${managedRuntime.label} cannot be removed on this host.`))
-  // The chat host's own state root, where its launches look.
+  // The chat host's own state root, where its launches look. Its kill switch is this host's own
+  // setting, read when used: the store may not exist yet when this installation is created.
+  const updatesAllowed = (settings: ManagedCopySettings) =>
+    spec.managedRuntimeUpdatesAllowed?.(settings) !== false
   return new ManagedRuntimeInstallation(agent, managedRuntime, {
     dataDirectory,
     program: 'server',
     findExternal,
+    updatesEnabled: () => updatesAllowed(runtime.requireStore().getSettings()),
+    // Turned off while an automatic update downloads, it stops instead of finishing. Only changes the
+    // store publishes reach this; a hand edit of the settings file applies at the next check.
+    watchUpdatesEnabled: (onDisabled) =>
+      runtime.requireStore().onSettingsChanged?.((_updates, settings) => {
+        if (!updatesAllowed(settings)) {
+          onDisabled()
+        }
+      }) ?? (() => undefined),
     fence,
     revisions
   })
@@ -182,6 +196,7 @@ function agentCliInstallation(
     dataDirectory,
     program: 'cli',
     findExternal,
+    hostHasBuild: () => managedAgentCli(agent).available(),
     updatesEnabled: () => managedCopyMayRun(agent, runtime),
     onRelease: (folder) => rememberManagedAgentRelease(agent, folder),
     // No launch gate tracks these processes; stopping the agent's chats first is the closest fence.
@@ -214,6 +229,15 @@ const AUTO_UPDATE_USE_THROTTLE_MS = 10 * 60_000
 let autoUpdatesStarted = false
 const lastUseCheck = new Map<string, number>()
 
+/** Use is the signal a copy matters; the installation's own backoff decides whether it downloads. */
+function checkForUpdateOnUse(key: string): void {
+  const now = Date.now()
+  if (now - (lastUseCheck.get(key) ?? 0) >= AUTO_UPDATE_USE_THROTTLE_MS) {
+    lastUseCheck.set(key, now)
+    checkForUpdate(key)
+  }
+}
+
 function checkForUpdate(key: string): void {
   installations
     .get(key)
@@ -223,7 +247,8 @@ function checkForUpdate(key: string): void {
     })
 }
 
-/** Keep Orca's own copies current without a client ever prompting: once after launch, then as they're used. */
+/** Keep Orca's own copies current without a client ever prompting: once after launch, then as they're used.
+ *  Installs only add a release folder, so chats on the older one keep running it. */
 export function startManagedRuntimeAutoUpdates(): void {
   if (autoUpdatesStarted) {
     return
@@ -234,15 +259,11 @@ export function startManagedRuntimeAutoUpdates(): void {
     for (const key of installations.keys()) {
       checkForUpdate(key)
     }
+    // A server's download is large, so a chat started during startup never begins it early.
+    onManagedServerUse((agent) => checkForUpdateOnUse(`server:${agent}`))
   }, AUTO_UPDATE_FIRST_CHECK_MS).unref()
-  // Use is the signal a copy matters; the release lookup itself is cached for an hour.
-  onManagedAgentUse((agent) => {
-    const now = Date.now()
-    if (now - (lastUseCheck.get(agent) ?? 0) >= AUTO_UPDATE_USE_THROTTLE_MS) {
-      lastUseCheck.set(agent, now)
-      checkForUpdate(`cli:${agent}`)
-    }
-  })
+  // The release lookup itself is cached for an hour.
+  onManagedAgentUse((agent) => checkForUpdateOnUse(`cli:${agent}`))
 }
 
 export const MANAGED_RUNTIME_INSTALL_METHODS = [
@@ -287,6 +308,10 @@ export const MANAGED_RUNTIME_INSTALL_METHODS = [
     permission: 'host-admin',
     params: ManagedRuntimeAgentParams,
     handler: async ({ agent, program }, { runtime }) => {
+      // An older client names a program this host no longer has; removing another would surprise.
+      if (program && !installationPrograms(agent).includes(program)) {
+        throw new Error('That runtime is no longer used on this host.')
+      }
       const installation = await selectedInstallation(agent, runtime, program)
       installation.remove()
       return installation.status()

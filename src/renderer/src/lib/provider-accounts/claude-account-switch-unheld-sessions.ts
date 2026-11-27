@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store/index'
 import type { ClaudeHostRunningSessionsMove } from '../../../../shared/agent-accounts/managed-account-types'
 import type { ClaudeHostSelectionChange } from '../../../../shared/agent-accounts/claude/claude-pane-account-folder'
-import { collectTerminalProviderSnapshotPtyIds } from '@/components/terminal/provider-snapshots/terminal-provider-snapshot-capability'
+import { collectTerminalProviderSnapshotPtyIds } from '@/components/terminal/provider-snapshots/terminal-provider-snapshot-pty-inventory'
 
 /** This computer's host moves the running Claude terminals no tab here names (the window restarts
  *  those), such as a background agent launch in a workspace this window never opened. */

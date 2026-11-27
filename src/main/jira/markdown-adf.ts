@@ -39,7 +39,7 @@ function loadMarkdownParser(): Promise<MarkdownParser> {
   ])
     .then(([{ unified }, { default: remarkParse }, { commentMarkdownParsePlugins }]) => {
       const processor = unified().use(remarkParse).use(commentMarkdownParsePlugins)
-      return (markdown: string): MdNode => processor.runSync(processor.parse(markdown))
+      return (markdown: string): MdNode => processor.runSync(processor.parse(markdown), markdown)
     })
     .catch((error: unknown) => {
       parserLoad = null

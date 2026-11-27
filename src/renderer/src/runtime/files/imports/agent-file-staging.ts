@@ -11,6 +11,7 @@ import { resolveExactWorktreeRoute } from '@/lib/workspace/ownership/worktree-ow
 import { isTerminalDropWindowsPathLike } from '../../../../../shared/terminal/input/image-path-paste'
 import { runtimeTargetForOwnerEnvironment } from '../../rpc/targets/runtime-client-target'
 import { importExternalPathsToRuntime } from './runtime-file-import-client'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 export function resolveAgentStagingWorktreePath(
   worktreeId: string,
@@ -63,24 +64,34 @@ export type AgentFileStagingResult = {
 export async function stageClientFilesForAgent(
   target: AgentFileStagingTarget,
   sourcePaths: string[],
-  assertCurrent?: () => void
+  assertCurrent?: () => void,
+  // A page's upload keeps the files' own names: each file gets its own folder and no image is renamed.
+  { keepNames = false }: { keepNames?: boolean } = {}
 ): Promise<AgentFileStagingResult> {
   const { worktreePath } = target
   const windowsHost = isTerminalDropWindowsPathLike(worktreePath)
   const dropDir = `${worktreePath.replace(/[\\/]+$/, '')}/${DROP_STAGING_RELATIVE_DIR}`
-  const { results } = await importExternalPathsToRuntime(
-    {
-      target: runtimeTargetForOwnerEnvironment(target.runtimeEnvironmentId),
-      worktreeId: target.worktreeId,
-      worktreePath,
-      expectedExecutionHostId: target.expectedExecutionHostId,
-      expectedSshTargetId: target.expectedSshTargetId,
-      expectedSshConnectionGeneration: target.expectedSshConnectionGeneration
-    },
-    sourcePaths,
-    windowsHost ? dropDir.replace(/\//g, '\\') : dropDir,
-    { assertCurrent, nameExtensionlessImages: true }
-  )
+  const importInto = async (sources: string[], dir: string) =>
+    (
+      await importExternalPathsToRuntime(
+        {
+          target: runtimeTargetForOwnerEnvironment(target.runtimeEnvironmentId),
+          worktreeId: target.worktreeId,
+          worktreePath,
+          expectedExecutionHostId: target.expectedExecutionHostId,
+          expectedSshTargetId: target.expectedSshTargetId,
+          expectedSshConnectionGeneration: target.expectedSshConnectionGeneration
+        },
+        sources,
+        windowsHost ? dir.replace(/\//g, '\\') : dir,
+        { assertCurrent, nameExtensionlessImages: !keepNames }
+      )
+    ).results
+  const results = keepNames ? [] : await importInto(sourcePaths, dropDir)
+  // One after another: parallel imports would race to create the shared drops folder.
+  for (const source of keepNames ? sourcePaths : []) {
+    results.push(...(await importInto([source], `${dropDir}/${createNonSecureContextUuid()}`)))
+  }
   const staged: AgentFileStagingResult = { staged: [], skipped: [], failed: [] }
   for (const result of results) {
     if (result.status === 'imported') {

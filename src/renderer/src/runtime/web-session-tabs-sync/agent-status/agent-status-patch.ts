@@ -137,6 +137,9 @@ export function buildMirroredAgentStatusPatch(
             paneKey: entry.paneKey,
             worktreeId: entry.worktreeId ?? existing.worktreeId,
             tabId: entry.tabId,
+            // Lineage is host identity; paired clients nest workers by it even while they own state.
+            terminalHandle: entry.terminalHandle ?? existing.terminalHandle,
+            orchestration: entry.orchestration ?? existing.orchestration,
             providerSession:
               existing.providerSession ??
               (hostIdentityPredatesCurrentTurn ? undefined : entry.providerSession),

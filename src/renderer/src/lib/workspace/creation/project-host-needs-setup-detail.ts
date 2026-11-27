@@ -26,13 +26,25 @@ export function getNeedsSetupDetail(
 function getPendingSetupDetail(setup: ProjectHostSetup): string {
   switch (setup.setupState) {
     case 'not-set-up':
-      return 'Project tracked on this host but not set up'
+      return translate(
+        'auto.lib.projectHostSetupOptions.pendingNotSetUp',
+        'Project tracked on this host but not set up'
+      )
     case 'setting-up':
-      return 'Project setup is in progress'
+      return translate(
+        'auto.lib.projectHostSetupOptions.pendingSettingUp',
+        'Project setup is in progress'
+      )
     case 'error':
-      return 'Project setup needs attention'
+      return translate(
+        'auto.lib.projectHostSetupOptions.pendingError',
+        'Project setup needs attention'
+      )
     case 'unsupported':
-      return 'Project is unsupported on this host'
+      return translate(
+        'auto.lib.projectHostSetupOptions.pendingUnsupported',
+        'Project is unsupported on this host'
+      )
     case 'ready':
       return setup.path
   }

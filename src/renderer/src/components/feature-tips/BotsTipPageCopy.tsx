@@ -7,6 +7,7 @@ import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/di
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { BOT_AGENTS } from '../../../../shared/bot-types'
+import { finalSentenceStop } from '../../../../shared/text/sentence-joining'
 import { FeatureTipRotatingSlot } from './FeatureTipRotatingSlot'
 
 // Product names, never translated.
@@ -79,6 +80,7 @@ export const TeammatePageCopy = memo(function TeammatePageCopy({
   slotStart: number
 }): JSX.Element {
   const t = useTranslate()
+  const askInLead = t('featureTips.botsTeammate.askIn', 'Anyone can ask it in')
   const askIn = [
     {
       key: 'slack',
@@ -124,14 +126,14 @@ export const TeammatePageCopy = memo(function TeammatePageCopy({
         [
           t('featureTips.botsTeammate.teamLead', 'Part of the team.'),
           <>
-            {t('featureTips.botsTeammate.askIn', 'Anyone can ask it in')}{' '}
+            {askInLead}{' '}
             <FeatureTipRotatingSlot
               // Page 1 shown again starts its names over.
               key={slotStart}
               items={askIn}
               staticLabel={t('featureTips.botsTeammate.askInPlaces', 'Slack, GitHub or Linear')}
             />
-            .
+            {finalSentenceStop(askInLead)}
           </>
         ],
         [

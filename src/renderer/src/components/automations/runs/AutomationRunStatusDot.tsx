@@ -43,8 +43,10 @@ export function AutomationRunStatusLabel({
 }): React.JSX.Element {
   const t = useTranslate()
   const tone = getToneForAutomationRunStatus(status)
+  const label = getAutomationRunStatusLabel(status, t)
   return (
     <span
+      title={label}
       className={cn(
         'inline-flex min-w-0 shrink-0 items-center gap-1.5 whitespace-nowrap',
         tone === 'failed' ? 'text-destructive' : pill ? 'text-foreground' : 'text-muted-foreground',
@@ -54,7 +56,7 @@ export function AutomationRunStatusLabel({
       )}
     >
       <AutomationRunStatusDot status={status} />
-      {getAutomationRunStatusLabel(status, t)}
+      <span className="min-w-0 truncate">{label}</span>
     </span>
   )
 }

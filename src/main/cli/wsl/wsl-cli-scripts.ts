@@ -52,6 +52,19 @@ ${MANAGED_MARKER}
 # ORCA_WIN_LAUNCHER_B64=${encodedTarget}
 ORCA_WIN_LAUNCHER=${quotePosixShellDoubleQuotedApostrophe(windowsLauncherPath)}
 ORCA_BRIDGE_PS1=${bridgePathExpression}
+# Why: an agent that starts its MCP servers with a trimmed environment drops WSL_INTEROP, and
+# interop can't reach Windows without it; use the socket of this process's own WSL session, the
+# first ancestor that has one (another session's would carry its identity and end with it).
+if [ -z "\${WSL_INTEROP:-}" ]; then
+  ORCA_INTEROP_PID=$$
+  while [ -n "$ORCA_INTEROP_PID" ] && [ "$ORCA_INTEROP_PID" -gt 1 ] 2>/dev/null; do
+    if [ -S "/run/WSL/\${ORCA_INTEROP_PID}_interop" ]; then
+      export WSL_INTEROP="/run/WSL/\${ORCA_INTEROP_PID}_interop"
+      break
+    fi
+    ORCA_INTEROP_PID=$(awk '/^PPid:/ { print $2 }' "/proc/$ORCA_INTEROP_PID/status" 2>/dev/null || true)
+  done
+fi
 ${resolvePowerShell}
 # Why: a shell can outlive a deleted worktree; keep explicit CLI selectors and
 # help usable, and repair cwd before any WSL interop tool tries to resolve it.

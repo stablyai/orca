@@ -11,9 +11,9 @@ import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/host
 import {
   fastForwardCheckedOutLocalBaseAfterCreate,
   getLocalBaseRefUpdateSuggestionForWorktreeCreate,
-  parseRemoteTrackingLocalBaseRef,
   refreshLocalBaseRefForWorktreeCreate
 } from './worktree-base-refresh'
+import { parseRemoteTrackingLocalBaseRef } from './remote-tracking-local-base-ref'
 import { resolveWorktreeBaseCommitOid } from './worktree-base-ref-probe'
 import type {
   AddWorktreeOptions,

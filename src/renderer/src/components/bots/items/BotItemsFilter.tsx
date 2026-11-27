@@ -1,8 +1,5 @@
-// The Items filter: an icon in the header opening Needs you only; while it is on, a dot on the icon and
-// a removable chip under the header. A bot's chats are in the sidebar, so its menu lists none. A group's
-// menu adds its bots and rooms, and names the filter on the icon instead of a chip.
 import { useState } from 'react'
-import { Check, ListFilter, ListTodo, MessagesSquare, X } from 'lucide-react'
+import { ListFilter, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -30,28 +27,15 @@ export function botItemChatName(
     : (chat.title ?? t('bots.items.chatFallback', 'Chat'))
 }
 
-/** One of a group's chat choices: the whole group, one of its rooms, or all their work. */
-export type BotItemFilterScope = {
-  key: string
-  name: string
-  icon: 'group' | 'all' | null
-  chatIds: readonly string[] | null
-}
-
-/** What a group's menu adds: a Bot section, its rooms in place of chats, Clear filters, and a
+/** What a group's menu adds: a Bot section, Clear filters, and a
  *  tooltip naming the filter. */
 export type BotItemsFilterGroup = {
   bots: readonly { bot: Bot; count: number }[]
-  scopes: readonly BotItemFilterScope[]
   /** The default Clear filters goes back to. */
   cleared: BotItemFilter
   /** What the filter shows ("Bo · Needs you only"); null at the default. */
   named: string | null
 }
-
-/** Two filters' chats are the same chats. */
-export const sameChats = (a: readonly string[] | null, b: readonly string[] | null): boolean =>
-  a === b || (a !== null && b !== null && a.length === b.length && a.every((id, i) => id === b[i]))
 
 export function BotItemsFilterButton({
   items,
@@ -140,24 +124,6 @@ export function BotItemsFilterButton({
                 </DropdownMenuCheckboxItem>
               ))}
             </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>{t('bots.items.filter.chat', 'Chat')}</DropdownMenuLabel>
-            {group.scopes.map((scope) => (
-              <DropdownMenuItem
-                key={scope.key}
-                onSelect={() => onFilter({ ...filter, chatIds: scope.chatIds })}
-              >
-                {scope.icon === 'group' ? (
-                  <MessagesSquare />
-                ) : scope.icon === 'all' ? (
-                  <ListTodo />
-                ) : (
-                  <span aria-hidden className="size-4 shrink-0" />
-                )}
-                <span className="min-w-0 flex-1 truncate">{scope.name}</span>
-                {sameChats(filter.chatIds, scope.chatIds) ? <Check className="size-3" /> : null}
-              </DropdownMenuItem>
-            ))}
             <DropdownMenuSeparator />
           </>
         ) : null}

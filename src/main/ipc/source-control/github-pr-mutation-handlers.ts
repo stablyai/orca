@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type { GitHubPullRequestStateUpdate } from '../../../shared/work-items/issue-mutation-types'
 import { markPRReadyForReview } from '../../github/client/update/pr-ready'
@@ -30,8 +31,11 @@ function broadcastSuccessfulPRMutation(
   }
 }
 
-export function registerGitHubPRMutationHandlers(store: Store): void {
-  ipcMain.handle(
+export function registerGitHubPRMutationHandlers(
+  store: Store,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle(
     'gh:updatePRTitle',
     async (
       event,
@@ -51,7 +55,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:mergePR',
     async (
       event,
@@ -77,7 +81,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:setPRAutoMerge',
     async (
       event,
@@ -103,7 +107,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:updatePRState',
     async (
       event,
@@ -134,7 +138,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:markPRReadyForReview',
     async (
       event,
@@ -163,7 +167,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:rerunPRChecks',
     async (
       _event,
@@ -192,7 +196,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:requestPRReviewers',
     async (
       event,
@@ -216,7 +220,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:removePRReviewers',
     async (
       event,

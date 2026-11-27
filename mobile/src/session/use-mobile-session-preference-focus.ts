@@ -1,6 +1,7 @@
 import { useShellStorage } from '../platform/shell-storage/shell-storage'
 import { settleSessionPreferenceRead } from './session-preference-read'
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { recomputeOn } from '../hooks/recompute-on'
 import { useFocusEffect } from 'expo-router'
 import {
   loadLinkOpenMode,
@@ -35,35 +36,39 @@ export function useMobileSessionPreferenceFocus(
   const [terminalPreferencesReady, setTerminalPreferencesReady] = useState(false)
   // Reload on Settings return without dropping readiness or remounting terminal panes.
   useFocusEffect(
-    useCallback(() => {
-      let active = true
-      const scaleRevision = terminalTextScaleRevisionRef.current
-      const defaults = terminalFontDefaults()
-      void settleSessionPreferenceRead(
-        Promise.all([
-          loadTerminalTextScale(defaults.textScale),
-          loadLinkOpenMode(),
-          loadTerminalFontStyle(defaults.fontStyle)
-        ])
-      ).then((preferences) => {
-        if (active) {
-          if (preferences) {
-            const [scale, linkMode, fontStyle] = preferences
-            if (terminalTextScaleRevisionRef.current === scaleRevision) {
-              setTerminalTextScale(scale)
+    useMemo(
+      () =>
+        recomputeOn([shellStorage], () => () => {
+          let active = true
+          const scaleRevision = terminalTextScaleRevisionRef.current
+          const defaults = terminalFontDefaults()
+          void settleSessionPreferenceRead(
+            Promise.all([
+              loadTerminalTextScale(defaults.textScale),
+              loadLinkOpenMode(),
+              loadTerminalFontStyle(defaults.fontStyle)
+            ])
+          ).then((preferences) => {
+            if (active) {
+              if (preferences) {
+                const [scale, linkMode, fontStyle] = preferences
+                if (terminalTextScaleRevisionRef.current === scaleRevision) {
+                  setTerminalTextScale(scale)
+                }
+                setTerminalFontStyle((current) =>
+                  sameTerminalFontStyle(current, fontStyle) ? current : fontStyle
+                )
+                setLinkOpenMode(linkMode)
+              }
+              setTerminalPreferencesReady(true)
             }
-            setTerminalFontStyle((current) =>
-              sameTerminalFontStyle(current, fontStyle) ? current : fontStyle
-            )
-            setLinkOpenMode(linkMode)
+          })
+          return () => {
+            active = false
           }
-          setTerminalPreferencesReady(true)
-        }
-      })
-      return () => {
-        active = false
-      }
-    }, [shellStorage])
+        }),
+      [shellStorage]
+    )
   )
   // Pinch reports a whole-point size; persist it so it sticks across panes and launches and outranks a pending read.
   const commitPinchedTextScale = useCallback(

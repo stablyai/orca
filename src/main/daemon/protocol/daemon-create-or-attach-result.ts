@@ -4,6 +4,7 @@ import type { TerminalSnapshot } from './terminal-snapshot'
 import type { DaemonLaunchNote } from './daemon-launch-note-protocol'
 import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
+import type { HostTerminalUsage } from '../../../shared/terminal/runtime-policy/terminal-limit-policy'
 
 export type DaemonCreateOrAttachResult = {
   isNew: boolean
@@ -22,6 +23,8 @@ export type DaemonCreateOrAttachResult = {
   cwdReadableByDaemon?: boolean
   /** The live child can no longer take input through its PTY; older daemons omit this field. */
   inputClosed?: true
+  /** Terminals on this machine after a new spawn; older daemons omit this field. */
+  hostTerminalUsage?: HostTerminalUsage
 }
 
 export function getDaemonSessionResultMetadata(session: {

@@ -20,6 +20,7 @@ export function createGitStatusActions(
   EditorSlice,
   | 'gitStatusByWorktree'
   | 'gitStatusHeadByWorktree'
+  | 'gitRebaseIndexObservationByWorktree'
   | 'gitStatusHugeByWorktree'
   | 'gitStatusReadErrorByWorktree'
   | 'gitBranchLineTotalByWorktree'
@@ -33,6 +34,7 @@ export function createGitStatusActions(
   return {
     gitStatusByWorktree: {},
     gitStatusHeadByWorktree: {},
+    gitRebaseIndexObservationByWorktree: {},
     gitStatusHugeByWorktree: {},
     gitStatusReadErrorByWorktree: {},
     gitBranchLineTotalByWorktree: {},
@@ -186,6 +188,9 @@ export function createGitStatusActions(
         const prevStatusHead = s.gitStatusHeadByWorktree[worktreeId]
         const nextStatusHead = getKnownGitHead(status.head)
         const statusHeadUnchanged = prevStatusHead === nextStatusHead
+        const indexObservation = status.rebaseIndexObservation
+        const indexObservationUnchanged =
+          s.gitRebaseIndexObservationByWorktree?.[worktreeId] === indexObservation
 
         const prevBranchSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
         // Why: a compare request can finish after git status observed a new HEAD; reject the stale snapshot before it renders a false clean state.
@@ -205,6 +210,7 @@ export function createGitStatusActions(
           branchLineTotalUnchanged &&
           readErrorUnchanged &&
           statusHeadUnchanged &&
+          indexObservationUnchanged &&
           !shouldInvalidateBranchCompare
         ) {
           return s
@@ -263,6 +269,9 @@ export function createGitStatusActions(
           gitStatusReadErrorByWorktree: nextReadErrorMap,
           gitBranchLineTotalByWorktree: nextBranchLineTotalMap,
           gitStatusHeadByWorktree: nextStatusHeadMap,
+          gitRebaseIndexObservationByWorktree: indexObservationUnchanged
+            ? s.gitRebaseIndexObservationByWorktree
+            : { ...s.gitRebaseIndexObservationByWorktree, [worktreeId]: indexObservation },
           gitStatusByWorktree: statusUnchanged
             ? s.gitStatusByWorktree
             : { ...s.gitStatusByWorktree, [worktreeId]: nextEntries },

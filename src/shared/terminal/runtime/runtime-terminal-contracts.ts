@@ -112,6 +112,16 @@ export type RuntimeTerminalListResult = {
   hostScope?: RuntimeTerminalListHostScope
 }
 
+/** A `terminal.list` row asked for with `includePreview: false`: the host leaves `preview` out. */
+export type RuntimeTerminalSummaryWithoutPreview = Omit<RuntimeTerminalSummary, 'preview'>
+
+export type RuntimeTerminalListResultWithoutPreview = Omit<
+  RuntimeTerminalListResult,
+  'terminals'
+> & {
+  terminals: RuntimeTerminalSummaryWithoutPreview[]
+}
+
 export type RuntimeTerminalOrphanAdoptionClaim = {
   terminal: string
   ptyId: string
@@ -202,6 +212,12 @@ export type RuntimeTerminalState = 'running' | 'exited' | 'unknown'
 export type RuntimeTerminalRowMetadata = {
   wrapped: boolean
   trailingSpaces: number
+}
+
+export type RuntimeTerminalProjection = {
+  lines: string[]
+  draft?: string
+  tailRows?: RuntimeTerminalRowMetadata[]
 }
 
 export type RuntimeTerminalRead = {

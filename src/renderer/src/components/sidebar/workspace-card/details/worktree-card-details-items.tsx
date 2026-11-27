@@ -84,6 +84,7 @@ export function WorktreeCardMetaDetailsHover({
       automationProvenance={card.metaAutomationProvenance}
       cliProvenance={card.metaCliProvenance}
       bot={card.metaBot}
+      autoNameFailure={card.autoNameFailure}
       detailsAfter={card.hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
       hoverControl={card.detailsHoverControl}
       onEditIssue={affiliateListMode ? undefined : card.handleEditIssue}
@@ -140,13 +141,21 @@ export function WorktreeCardIdentityHover({
       automationProvenance={card.metaAutomationProvenance}
       cliProvenance={card.metaCliProvenance}
       bot={card.metaBot}
+      autoNameFailure={card.autoNameFailure}
       branchName={branchName}
       workspaceTitle={workspaceTitle}
       workspaceTitleRenameDisabled={card.isDeleting || affiliateListMode}
       detailsAfter={
         card.compactLine || workspacePorts.length > 0 ? (
           <>
-            {card.compactLine ? <WorktreeCardLineActivity worktreeId={worktree.id} /> : null}
+            {card.compactLine ? (
+              <WorktreeCardLineActivity
+                worktreeId={worktree.id}
+                executionHostId={worktree.hostId ?? 'local'}
+                runtimeOwnerEnvironmentId={worktree.runtimeOwnerEnvironmentId}
+                workspaceMenuEnabled={!affiliateListMode}
+              />
+            ) : null}
             {workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
           </>
         ) : null

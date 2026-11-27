@@ -28,6 +28,8 @@ import {
   cursorChatMetaUnavailable,
   readCursorChatMeta
 } from '../scanners/cursor/session-scanner-cursor-chat-meta'
+import { readCursorAcpSessionMeta } from '../scanners/cursor/session-scanner-cursor-acp-meta'
+import { isCursorAcpSessionStorePath } from '../../../shared/ai-vault/session-display/cursor-acp-session-path'
 import { rovoSessionCwd } from '../scanners/session-scanner-rovo-metadata'
 import { grokSessionCwd } from '../scanners/grok/session-scanner-grok-parser'
 import { listedKiroMetadata } from '../scanners/kiro/session-scanner-kiro-parser'
@@ -96,6 +98,10 @@ const SESSION_HEADER = head((record) => (record.type === 'session' ? record.cwd 
 const CURSOR: SessionScopeCwdSource = {
   kind: 'read',
   readCwd: async ({ file }, signal) => {
+    if (isCursorAcpSessionStorePath(file.path)) {
+      const acp = await settledRead(() => readCursorAcpSessionMeta(file.path, signal), signal)
+      return acp && { cwd: acp.cwd }
+    }
     const meta = await settledRead(() => readCursorChatMeta(file.path, signal), signal)
     if (meta) {
       return { cwd: meta.cwd }
@@ -118,7 +124,6 @@ export const AI_VAULT_SCOPE_CWD_SOURCES: Record<AiVaultAgent, SessionScopeCwdSou
   'prime-agent': SESSION_HEADER,
   openclaw: SESSION_HEADER,
   droid: head((record) => (record.type === 'session_start' ? record.cwd : undefined)),
-  gemini: { kind: 'none' },
   grok: document((content) => {
     const summary = jsonRecord(content)
     return summary ? grokSessionCwd(summary) : null

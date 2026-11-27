@@ -47,9 +47,19 @@ export function sharedPicturePng(review: BotShareReview): string | undefined {
   return review.avatarDataUrl?.slice(review.avatarDataUrl.indexOf(',') + 1)
 }
 
+function sharedMascotAvatar(review: BotShareReview) {
+  return review.bot.avatar && 'mascot' in review.bot.avatar ? review.bot.avatar : undefined
+}
+
 /** The shared mascot, when the link names one. */
 export function sharedMascot(review: BotShareReview): string | undefined {
-  return review.bot.avatar && 'mascot' in review.bot.avatar ? review.bot.avatar.mascot : undefined
+  return sharedMascotAvatar(review)?.mascot
+}
+
+/** The shared mascot's tile color and outfit. */
+export function sharedLook(review: BotShareReview): { color?: string; outfit?: string } {
+  const avatar = sharedMascotAvatar(review)
+  return { color: avatar?.color, outfit: avatar?.outfit }
 }
 
 /** What Create writes for the agent: the owner's permission, kept even on an agent that can't offer
@@ -82,7 +92,8 @@ export async function createBotFromShare(
     }
     return await createBot(hostId, {
       ...params,
-      fromShare: { reviewId, toolIds }
+      // This client sends the look it shows, so the host never fills in the shared one.
+      fromShare: { reviewId, toolIds, lookSent: true }
     })
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : ''
@@ -109,7 +120,13 @@ export async function createNewBotFromShare(
   const bot = await createBotFromShare(source, hostId, {
     name: made.name,
     ...sharedBotSetup(made.setup, made.intent),
-    ...(keepsShared ? {} : { avatar: picture.avatar, avatarColor: picture.avatarColor })
+    ...(keepsShared
+      ? {}
+      : {
+          avatar: picture.avatar,
+          avatarColor: picture.avatarColor,
+          avatarOutfit: picture.avatarOutfit
+        })
   })
   return !bot || keepsShared ? bot : picture.saveUpload(bot)
 }

@@ -1,6 +1,7 @@
 import type { DesktopBrowserBridgeRequest } from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import {
   DesktopBrowserBridgeConnection,
+  type DesktopBrowserBridgeHostChannel,
   type DesktopBrowserBridgeSubscribe
 } from './desktop-browser-bridge-connection'
 import type { DesktopBrowserBridgeOutcome } from './desktop-browser-bridge-executor'
@@ -21,7 +22,8 @@ export type DesktopBrowserBridgeManagerDeps = {
     candidate: DesktopBrowserBridgeCandidate,
     request: DesktopBrowserBridgeRequest,
     signal: AbortSignal,
-    hostRevoked: AbortSignal
+    hostRevoked: AbortSignal,
+    host: DesktopBrowserBridgeHostChannel
   ): Promise<DesktopBrowserBridgeOutcome>
   log(message: string): void
   setTimer?(run: () => void, delayMs: number): ReturnType<typeof setTimeout>
@@ -131,8 +133,8 @@ export class DesktopBrowserBridgeManager {
     }
     const connection = new DesktopBrowserBridgeConnection({
       subscribe: this.deps.subscribe(environmentId),
-      execute: (request, signal, hostRevoked) =>
-        this.deps.execute(entry.candidate, request, signal, hostRevoked),
+      execute: (request, signal, hostRevoked, host) =>
+        this.deps.execute(entry.candidate, request, signal, hostRevoked, host),
       onReady: () => {
         entry.failures = 0
         this.deps.log(`attached: host=${entry.candidate.hostLabel} env=${environmentId}`)

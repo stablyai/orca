@@ -16,6 +16,7 @@ import { AddHostSubmenuRow } from './RunTargetSubmenus'
 import RunTargetRowList from './RunTargetRowList'
 import RunTargetField from './RunTargetField'
 import { HostListOverflowNote } from '@/components/host-picker/HostListOverflowNote'
+import type { WslHostDistro } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 
 type RunTargetComboboxProps = {
   hostOptions: readonly RunTargetHostOption[]
@@ -25,8 +26,11 @@ type RunTargetComboboxProps = {
   onRecipeChange?: (recipeId: string | null) => void
   onAddRemoteServer?: () => void
   onAddSshHost?: () => void
+  /** A distro picked under Add host › WSL distro. */
+  onAddWslDistro?: (distro: WslHostDistro) => void
   onOpenChange?: (open: boolean) => void
   fieldName?: string
+  errorId?: string
   emptyMessage?: string
   /** The chosen host's name loses its middle rather than its end when it doesn't fit. */
   truncateMiddle?: boolean
@@ -44,8 +48,10 @@ export default function RunTargetCombobox({
   onRecipeChange,
   onAddRemoteServer,
   onAddSshHost,
+  onAddWslDistro,
   onOpenChange,
   fieldName,
+  errorId,
   emptyMessage,
   truncateMiddle
 }: RunTargetComboboxProps): React.JSX.Element {
@@ -53,7 +59,7 @@ export default function RunTargetCombobox({
   const [submenu, setSubmenu] = useState<'recipes' | 'add-host' | 'add-host-keyboard' | null>(null)
   const addHostOpen = submenu === 'add-host' || submenu === 'add-host-keyboard'
 
-  const hasAddHost = Boolean(onAddSshHost || onAddRemoteServer)
+  const hasAddHost = Boolean(onAddSshHost || onAddRemoteServer || onAddWslDistro)
   const deriveRowKeys = useCallback(
     (query: string): string[] =>
       buildRunTargetRows({ hostOptions, recipes, query, hasAddHost }).rows.map((row) => row.key),
@@ -176,6 +182,7 @@ export default function RunTargetCombobox({
     <Popover open={open} onOpenChange={handleOpenChange}>
       <RunTargetField
         fieldName={fieldName}
+        errorId={errorId}
         query={query}
         onQueryChange={(value) => {
           setQuery(value)
@@ -188,6 +195,7 @@ export default function RunTargetCombobox({
         committed={committed}
         isRecipe={selectedRecipe !== null}
         hostId={selectedHost?.hostId ?? null}
+        icon={selectedRecipe ? undefined : selectedHost?.icon}
         label={fieldLabel}
         detail={fieldDetail}
         listId={listId}
@@ -285,6 +293,14 @@ export default function RunTargetCombobox({
                     onAddRemoteServer: () => {
                       close()
                       onAddRemoteServer()
+                    }
+                  }
+                : {})}
+              {...(onAddWslDistro
+                ? {
+                    onAddWslDistro: (distro: WslHostDistro) => {
+                      close()
+                      onAddWslDistro(distro)
                     }
                   }
                 : {})}

@@ -11,6 +11,7 @@ import {
   botCreateOfferView,
   botProposalDetails
 } from '../../../../../../src/shared/bots/bot-create-offer-view'
+import { botTemplateText } from '../../../../../../src/shared/bots/bot-template-text'
 import {
   botCreateOfferState,
   proposalCreateParams,
@@ -22,10 +23,9 @@ import { publishHostBot, useHostBotById, useHostBotsEntry } from '../../../../bo
 import { mobileBotAvatarSource } from '../../../../bots/host-bot-row-facts'
 import { workspaceLineageRead, type PhoneBot } from '../../../../bots/host-bots-operations'
 import { MobileBotAvatar } from '../../../../bots/MobileBotAvatar'
-import { publishBotLink } from '../../../../bots/pending-bot-link'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { useRouteCapability } from '../../../../worktree/execution-hosts/use-route-capability'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
@@ -40,6 +40,7 @@ import {
   MobileBotCardFrame,
   MobileBotCardMeta
 } from './MobileBotCardFrame'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 const NO_BOTS: readonly PhoneBot[] = []
 
@@ -90,6 +91,8 @@ export function MobileBotCreateOfferCard({
   fallback: string
   fontScale: number
 }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const say = mobileBotCreateOfferSay(t)
   const host = useMobileBotCardHost()
@@ -110,7 +113,9 @@ export function MobileBotCreateOfferCard({
     )
   }
   const { proposal } = offer
-  const view = botCreateOfferView(offer, state, created, taken, say)
+  const view = botCreateOfferView(offer, state, created, taken, say, (text) =>
+    botTemplateText(text, t)
+  )
   const fromOffer = { botId: proposer.id, offerId: offer.offerId }
   // The new bot runs on its proposer's agent. One this build doesn't know isn't made directly; Edit picks one.
   const agent = isBotAgent(proposer.agent) ? proposer.agent : null
@@ -119,7 +124,9 @@ export function MobileBotCreateOfferCard({
       proposal,
       ...(agent ? { agent } : {}),
       fromOffer,
-      origin: botCreateOfferOrigin(proposal, proposer.name, say),
+      origin: botCreateOfferOrigin(proposal, proposer.name, say, (text) =>
+        botTemplateText(text, t)
+      ),
       templatePackages: takesTemplates
     })
   const fail = (caught: unknown) =>
@@ -178,7 +185,7 @@ export function MobileBotCreateOfferCard({
     >
       {open ? (
         <View style={styles.details}>
-          {botProposalDetails(proposal).map((detail) => (
+          {botProposalDetails(proposal, (text) => botTemplateText(text, t)).map((detail) => (
             <Text
               key={detail.label}
               style={[styles.detail, scaledType(typography.metaSize, fontScale)]}
@@ -237,7 +244,7 @@ export function MobileBotCreateOfferCard({
         <MobileBotCardActions>
           <MobileNativeChatNoticePill
             label={say('open')}
-            onPress={() => publishBotLink({ kind: 'bot', botId: created.id })}
+            onPress={() => host.openBotHome(created)}
           />
         </MobileBotCardActions>
       ) : null}
@@ -245,7 +252,7 @@ export function MobileBotCreateOfferCard({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   fallback: { color: colors.textMuted },
   metaLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   chevron: { marginLeft: 'auto' },

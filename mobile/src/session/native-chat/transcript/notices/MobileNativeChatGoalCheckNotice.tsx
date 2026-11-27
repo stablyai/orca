@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Text, View } from 'react-native'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, typography } from '../../../../theme/mobile-theme'
+import { typography } from '../../../../theme/mobile-theme'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
 import { MobileNativeChatNoticeDisclosure } from './MobileNativeChatNoticeDisclosure'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 export function MobileNativeChatGoalCheckNotice({
   text,
@@ -15,6 +16,7 @@ export function MobileNativeChatGoalCheckNotice({
   fontScale: number
   onLongPress?: () => void
 }): React.JSX.Element {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
   const newline = text.indexOf('\n')

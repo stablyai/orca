@@ -57,7 +57,8 @@ export type ConversationEvent =
   | (ConversationPane & { kind: 'turn-started'; at: number; deliveryId?: string })
   | (ConversationPane & {
       kind: 'turn-ended'
-      /** The ended turn's turn-started `at`; null when its start predates this watch. */
+      /** The ended turn's turn-started `at`; null when its start predates this watch. The cloud ends
+       *  its open turn when that is no newer, so a restart's end can name this start as a fence. */
       turnId: number | null
       /** Host verdict; null means none was recorded. */
       stopReason: AgentTurnOutcome | null
@@ -204,6 +205,8 @@ export class ConversationEvents {
     this.listeners.add(listener)
     // Subscribe before reading the snapshot to avoid losing intervening changes.
     const snapshot = this.snapshot()
+    // Chats closed or unlinked while nothing watched leave no turn dates behind.
+    this.chats.dates.retain(new Set(snapshot.conversations.map(({ paneKey }) => paneKey)))
     this.answered.saw(snapshot)
     listener(snapshot)
     this.chats.workers.watched(snapshot.conversations)
@@ -228,6 +231,7 @@ export class ConversationEvents {
   /** A link dropped because its chat is gone. */
   unlinked({ workspace, link }: LinkedConversation): void {
     this.shown.forgetConversation(link)
+    this.chats.dates.forget(link.paneKey)
     this.emit({ kind: 'unlinked', ...conversationPane(link, workspace.worktreeId) })
   }
 
@@ -286,7 +290,7 @@ export class ConversationEvents {
         const entry: ConversationSnapshot['conversations'][number] = {
           ...conversationPane(link, workspace.worktreeId),
           agent: link.agent,
-          working: hears && conversationWorking(row),
+          working: hears && this.chats.dates.leadWorking(link.paneKey, row),
           prompt,
           turnId: hears ? this.chats.adopt(link.paneKey) : null,
           activeAt: Math.max(link.createdAt, row?.receivedAt ?? 0),

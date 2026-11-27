@@ -1,5 +1,7 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
+  isAgentSessionQuestionAnswered,
   isValidAgentSessionQuestionAnswers,
   legacyAgentSessionQuestionAnswers
 } from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
@@ -10,43 +12,63 @@ import { AcpRpcError } from '../transport/acp-errors'
 
 export const ACP_FORM_ELICITATION_METHOD = 'elicitation/create'
 const OTHER_SUFFIXES = ['__other', '_custom', '_other'] as const
+// A choice field listing this value takes its text from `<key>_other` (Droid's AskUser).
+const OTHER_CHOICE = 'other'
 const NOT_SHOWN_ANSWER = `Not shown to the user: Orca shows at most ${MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS} questions at once. Ask again.`
 
-const choiceSchema = z.looseObject({
-  const: z.string(),
-  title: z.string().optional(),
-  description: z.string().optional()
-})
-const propertySchema = z.looseObject({
-  type: z.enum(['string', 'boolean', 'array']),
-  title: z.string().optional(),
-  description: z.string().optional(),
-  format: z.string().optional(),
-  default: z.unknown().optional(),
-  enum: z.array(z.string()).optional(),
-  oneOf: z.array(choiceSchema).optional(),
-  items: z
-    .looseObject({ enum: z.array(z.string()).optional(), anyOf: z.array(choiceSchema).optional() })
-    .optional()
-})
-const formSchema = z.object({
-  mode: z.literal('form'),
-  message: z.string(),
-  requestedSchema: z.looseObject({
-    properties: z.record(z.string(), propertySchema),
-    required: z.array(z.string()).optional()
+const choiceSchema = lazyZodSchema(() =>
+  z.looseObject({
+    const: z.string(),
+    title: z.string().optional(),
+    description: z.string().optional()
   })
-})
+)
+const propertySchema = lazyZodSchema(() =>
+  z.looseObject({
+    type: z.enum(['string', 'boolean', 'array']),
+    title: z.string().optional(),
+    description: z.string().optional(),
+    format: z.string().optional(),
+    default: z.unknown().optional(),
+    minLength: z.number().optional(),
+    enum: z.array(z.string()).optional(),
+    oneOf: z.array(choiceSchema).optional(),
+    items: z
+      .looseObject({
+        enum: z.array(z.string()).optional(),
+        anyOf: z.array(choiceSchema).optional()
+      })
+      .optional()
+  })
+)
+const formSchema = lazyZodSchema(() =>
+  z.object({
+    mode: z.literal('form'),
+    message: z.string(),
+    requestedSchema: z.looseObject({
+      properties: z.record(z.string(), propertySchema),
+      required: z.array(z.string()).optional()
+    })
+  })
+)
 
 type Choice = { value: string; label: string; description?: string }
-type Field = { key: string; otherKey?: string; choices?: Choice[]; question: AgentJournalQuestion }
+type Property = z.infer<typeof propertySchema>
+type Field = {
+  key: string
+  otherKey?: string
+  choices?: Choice[]
+  writeIn: boolean
+  question: AgentJournalQuestion
+}
 
 const unsupportedForm = () => new AcpRpcError(-32602, 'Unsupported ACP elicitation form')
 
 // A form field with no choices becomes a text answer; enums and arrays become pickable options.
 function fieldChoices(
-  property: z.infer<typeof propertySchema>,
-  hasOther: boolean
+  property: Property,
+  hasOther: boolean,
+  otherChoice: boolean
 ): Choice[] | undefined {
   if (property.type === 'boolean') {
     return [
@@ -54,7 +76,8 @@ function fieldChoices(
       { value: 'false', label: 'No' }
     ]
   }
-  const oneOf = property.type === 'array' ? property.items?.anyOf : property.oneOf
+  const listed = choiceList(property)
+  const oneOf = otherChoice ? listed?.filter((choice) => choice.const !== OTHER_CHOICE) : listed
   const values = property.type === 'array' ? property.items?.enum : property.enum
   const choices =
     oneOf?.map((choice) => ({
@@ -68,8 +91,19 @@ function fieldChoices(
   return choices
 }
 
-/** Keeps form field identity while presenting choices and text on the existing question card. */
-export function acpFormElicitationPresentation(params: unknown): AcpRequestPresentation {
+function choiceList(property: Property): z.infer<typeof choiceSchema>[] | undefined {
+  if (property.type === 'boolean') {
+    return undefined
+  }
+  return property.type === 'array' ? property.items?.anyOf : property.oneOf
+}
+
+/** Keeps form field identity while presenting choices and text on the existing question card.
+ *  With `writeIns`, a choice field also takes typed text as its value (added to an array's). */
+export function acpFormElicitationPresentation(
+  params: unknown,
+  { writeIns = false }: { writeIns?: boolean } = {}
+): AcpRequestPresentation {
   const parsed = formSchema.safeParse(params)
   if (!parsed.success) {
     throw unsupportedForm()
@@ -77,8 +111,28 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
   const { message, requestedSchema } = parsed.data
   const properties = requestedSchema.properties
   const required = new Set(requestedSchema.required)
+  const isTextCompanion = (candidate: string): boolean => {
+    const other = properties[candidate]
+    return (
+      other?.type === 'string' &&
+      !other.enum &&
+      !other.oneOf &&
+      other.format === undefined &&
+      !required.has(candidate)
+    )
+  }
   const otherKeys = new Map<string, string>()
+  const otherChoiceKeys = new Set<string>()
   for (const [key, property] of Object.entries(properties)) {
+    // Pairs even a required field: its text box stands in for the listed "other" choice.
+    if (
+      choiceList(property)?.some((choice) => choice.const === OTHER_CHOICE) &&
+      isTextCompanion(`${key}_other`)
+    ) {
+      otherKeys.set(key, `${key}_other`)
+      otherChoiceKeys.add(key)
+      continue
+    }
     if (
       required.has(key) ||
       (property.type !== 'string' && property.type !== 'array') ||
@@ -86,16 +140,7 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
     ) {
       continue
     }
-    const otherKey = OTHER_SUFFIXES.map((suffix) => key + suffix).find((candidate) => {
-      const other = properties[candidate]
-      return (
-        other?.type === 'string' &&
-        !other.enum &&
-        !other.oneOf &&
-        other.format === undefined &&
-        !required.has(candidate)
-      )
-    })
+    const otherKey = OTHER_SUFFIXES.map((suffix) => key + suffix).find(isTextCompanion)
     if (otherKey) {
       otherKeys.set(key, otherKey)
     }
@@ -108,7 +153,8 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
   const fields: Field[] = keys.slice(0, MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS).map((key, index) => {
     const property = properties[key]!
     const otherKey = otherKeys.get(key)
-    const choices = fieldChoices(property, otherKey !== undefined)
+    const choices = fieldChoices(property, otherKey !== undefined, otherChoiceKeys.has(key))
+    const writeIn = writeIns && property.type !== 'boolean'
     const id = `q${index + 1}`
     const ownText = [property.title, property.description].filter(Boolean)
     // The form message is shared context, so it opens only the first card (or stands in for a bare field).
@@ -123,11 +169,13 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
         label: choice.value === property.default ? `${choice.label} (Recommended)` : choice.label,
         ...(choice.description ? { description: choice.description } : {})
       })),
-      ...(!choices || otherKey ? { freeTextQuestionId: id } : {}),
+      ...(!choices || otherKey || writeIn ? { freeTextQuestionId: id } : {}),
+      // The form's schema lets an optional field be left out; a required one must be answered.
+      ...(required.has(key) ? {} : { skippable: true as const }),
       ...(!choices
         ? {
             freeTextInput: {
-              allowEmpty: true,
+              ...(required.has(key) && (property.minLength ?? 0) >= 1 ? {} : { allowEmpty: true }),
               ...(typeof property.default === 'string'
                 ? { multiline: true, initialValue: property.default }
                 : {}),
@@ -136,7 +184,7 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
           }
         : {})
     }
-    return { key, otherKey, choices, question }
+    return { key, otherKey, choices, writeIn, question }
   })
   const questions = fields.map((field) => field.question)
   // Clients without `questions` read the top-level fields, which can carry only one single-choice question.
@@ -161,11 +209,15 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
           ? response.answers
           : legacyAgentSessionQuestionAnswers(body, response.optionId)
       if (!answers || !isValidAgentSessionQuestionAnswers(questions, answers)) {
-        throw new AcpRpcError(-32602, 'Question answer must answer every offered question')
+        throw new AcpRpcError(-32602, 'Question answer does not match the offered questions')
       }
       const content: Record<string, string | boolean | string[]> = {}
-      for (const { key, otherKey, choices, question } of fields) {
+      for (const { key, otherKey, choices, writeIn, question } of fields) {
         const answer = answers.find((entry) => entry.questionId === question.id)!
+        // Validation admits a skip only for an optional field, which the form content leaves out.
+        if (!isAgentSessionQuestionAnswered(question, answer)) {
+          continue
+        }
         if (!choices) {
           content[key] = answer.other ?? ''
           continue
@@ -173,6 +225,12 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
         const values = answer.optionIds.map(
           (id) => choices[question.options.findIndex((option) => option.id === id)]!.value
         )
+        if (otherChoiceKeys.has(key) && answer.other?.trim()) {
+          values.push(OTHER_CHOICE)
+        }
+        if (writeIn && answer.other?.trim()) {
+          values.push(answer.other)
+        }
         if (question.multiSelect) {
           content[key] = values
         } else if (values[0] !== undefined) {
@@ -186,6 +244,9 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
         const otherKey = otherKeys.get(key)
         if (otherKey) {
           content[otherKey] = NOT_SHOWN_ANSWER
+          if (otherChoiceKeys.has(key)) {
+            content[key] = properties[key]!.type === 'array' ? [OTHER_CHOICE] : OTHER_CHOICE
+          }
         } else if (
           properties[key]!.type === 'string' &&
           !properties[key]!.enum &&

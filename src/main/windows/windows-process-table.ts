@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import type { WindowsJobObjectApi } from './windows-job-object'
 import { createProcessTableSnapshotReader } from '../../shared/process-observation/tables/process-table-snapshot-reader'
 import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { reportWindowsCommandLineRecoveryHealth } from './windows-command-line-recovery-health'
 import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
 import { WindowsProcessTableTimeoutError } from './windows-process-table-timeout-error'
+import { projectIdentityRows, toIdentityRow } from './windows-process-identity-rows'
 
 /** Shared Windows snapshots: serialized native identity/command-line views, with CIM fallback only when no usable binding exists. Both views request creation times through limited query handles; Memory stays off. See docs/reference/windows-process-enumeration.md. */
 
@@ -34,7 +36,7 @@ type NativeProcessInfo = {
 /** node-addon-api's default OnError hands the callback an Error (e.g. bad_alloc) instead of rows. */
 type NativeProcessSnapshot = NativeProcessInfo[] | Error | undefined
 
-type WindowsProcessTreeModule = {
+type WindowsProcessTreeModule = Partial<WindowsJobObjectApi> & {
   ProcessDataFlag: {
     None: number
     CommandLine: number
@@ -96,6 +98,8 @@ let cimScan: () => Promise<WindowsProcessRow[]> = readWindowsProcessRowsWithCim
 /** Present the bare addon through the same shape as the npm package. */
 function adaptAddon(addon: WindowsProcessTreeAddon): WindowsProcessTreeModule {
   return {
+    // The addon's other exports (its job functions) stay reachable through the adapter.
+    ...addon,
     ProcessDataFlag: PROCESS_DATA_FLAG,
     supportedProcessDataFlags: addon.supportedProcessDataFlags,
     getProcessCreationTime: addon.getProcessCreationTime,
@@ -160,20 +164,6 @@ type ProcessRowProjection<Row> = {
   fromNative: (row: NativeProcessInfo) => Row
   /** Only detailed rows run CIM; identity projects that same expensive scan instead of spawning another. */
   cimFallback?: () => Promise<Row[]>
-}
-
-function toIdentityRow(row: {
-  pid: number
-  ppid: number
-  name: string
-  creationTimeMs?: number
-}): WindowsProcessIdentityRow {
-  return {
-    pid: row.pid,
-    ppid: row.ppid,
-    name: row.name,
-    ...(typeof row.creationTimeMs === 'number' ? { creationTimeMs: row.creationTimeMs } : {})
-  }
 }
 
 /** Request creation time via limited query handles when supported; identity omits command lines and never reads process memory. */
@@ -281,21 +271,21 @@ const detailedReader = createProcessTableSnapshotReader<WindowsProcessRow[]>({
   now: () => Date.now()
 })
 
-/** One identity projection per CIM snapshot, so panes polling it share the array and its index. */
-const identityProjections = new WeakMap<readonly WindowsProcessRow[], WindowsProcessIdentityRow[]>()
-
 /** Without a binding, project identity from the shared CIM scan and strip command lines to preserve the row contract. */
 async function readIdentityRows(fresh: boolean): Promise<WindowsProcessIdentityRow[]> {
-  if (moduleLoader() === null) {
-    const rows = await (fresh ? detailedReader.getFreshSnapshot() : detailedReader.getSnapshot())
-    let identity = identityProjections.get(rows)
-    if (!identity) {
-      identity = rows.map(toIdentityRow)
-      identityProjections.set(rows, identity)
-    }
-    return identity
+  // Reuse a cached or in-flight detailed scan (a foreground lookup's): it already holds identity.
+  const detailed =
+    moduleLoader() === null
+      ? fresh
+        ? detailedReader.getFreshSnapshot()
+        : detailedReader.getSnapshot()
+      : fresh
+        ? null
+        : detailedReader.peekSnapshot()
+  if (!detailed) {
+    return fresh ? identityReader.getFreshSnapshot() : identityReader.getSnapshot()
   }
-  return fresh ? identityReader.getFreshSnapshot() : identityReader.getSnapshot()
+  return projectIdentityRows(await detailed)
 }
 
 /** Cached command-line snapshot, refreshed on the shared TTL. */
@@ -344,3 +334,6 @@ export function readWindowsProcessCreationTime(pid: number): number | null {
     return null
   }
 }
+
+/** The loaded addon (npm package or relay addon), for its exports beyond the process table. */
+export const windowsProcessTreeAddon = (): Partial<WindowsJobObjectApi> | null => moduleLoader()

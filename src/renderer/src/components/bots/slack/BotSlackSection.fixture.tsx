@@ -1,13 +1,11 @@
 // The Slack connector's section in the Connectors panel (350 and 280 px) and the after-install
 // dialog: Who can ask as one list, and who messages typed in Orca show as.
-import React from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
 import { publishBots } from '@/lib/bot-catalog-snapshot'
 import { refreshAccessRequests } from '@/lib/bot-access-requests'
 import type { Bot } from '../../../../../shared/bot-types'
-import { BotConnectorsSection } from '../../settings/bots/BotConnectorsSection'
-import { clickWhenShown, settle, slackOnly, stub } from '../bot-connectors-host-fixture'
+import { clickWhenShown, Panel, settle, slackOnly, stub } from '../bot-connectors-host-fixture'
 import { BotSlackSetupDialog } from './BotSlackSetupDialog'
 import portrait from '../../../component-fixtures/assets/slack-avatar.jpg'
 import { connectorAvatarSrc } from '../../../../../shared/connector-avatar-scheme'
@@ -90,18 +88,6 @@ function host(bot: Bot, options: { requests?: boolean; photo?: boolean } = {}): 
   void refreshAccessRequests()
 }
 
-// The Connectors tab at a sidebar width: its own container, as BotConnectorsPanel draws it.
-const Sidebar = ({ bot, width }: { bot: Bot; width: number }): React.JSX.Element => (
-  <ConfirmationDialogProvider>
-    <div
-      style={{ width }}
-      className="@container/connectors-panel bg-sidebar px-2 py-3 text-sidebar-foreground"
-    >
-      <BotConnectorsSection bot={bot} />
-    </div>
-  </ConfirmationDialogProvider>
-)
-
 const openRow = () =>
   clickWhenShown(
     (button) =>
@@ -131,7 +117,7 @@ const panel = (width: number, bot: Bot, extra?: () => Promise<void>, requests = 
   defineFixture({
     width: width + 40,
     setup: () => host(bot, { requests }),
-    render: () => <Sidebar bot={bot} width={width} />,
+    render: () => <Panel bot={bot} width={width} />,
     interact: async () => {
       await openRow()
       await settle(300)

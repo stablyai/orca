@@ -44,10 +44,7 @@ type CapturedInterruptBaseline = {
 function shouldFlushInterruptImmediately(
   baseline: Pick<CapturedInterruptBaseline, 'agentType' | 'intent'>
 ): boolean {
-  return (
-    requiresDoubleEscapeInterrupt(baseline.agentType, baseline.intent) ||
-    baseline.agentType === 'gemini'
-  )
+  return requiresDoubleEscapeInterrupt(baseline.agentType, baseline.intent)
 }
 
 /** Skip working-state navigation Escape requests main would refuse; waiting AskUserQuestion dismissal still reaches answer inference. */

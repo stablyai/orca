@@ -30,7 +30,7 @@ import {
 } from '../../../workspaces/removal/worktree-removal-execution-host-route'
 import { listWorktreesOnRemovalRoute } from './worktree-removal-route-listing'
 import { authorizeUnregisteredWindowsRemoval } from '../../../git/worktrees/removal/windows-worktree-removal'
-import { findRegisteredDeletableWorktree } from '../../../workspaces/removal/worktree-removal-safety'
+import { findRegisteredWorktreeReleasingDiedAddLock } from '../../../workspaces/removal/died-worktree-add-lock'
 import { removeRuntimeUnregisteredWorktree } from './runtime-unregistered-worktree-removal'
 import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/removal/local-worktree-removal-recovery'
 import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktrees/worktree-remote'
@@ -163,12 +163,12 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
           removalHostId!
         )
         const removedPushTarget = removedMeta?.pushTarget ?? removalTarget.pushTarget
-        const removalHome = resolveWorktreeRemovalHome(route)
-        const registeredWorktree = findRegisteredDeletableWorktree(
+        const registeredWorktree = await findRegisteredWorktreeReleasingDiedAddLock(
           repo!.path,
           removalTarget.path,
           registeredWorktrees,
-          removalHome
+          resolveWorktreeRemovalHome(route),
+          localWorktreeGitOptions
         )
         await authorizeUnregisteredWindowsRemoval(
           !!registeredWorktree,

@@ -31,6 +31,7 @@ export type AgentChildWorkReconcileOutcome = {
   removed: number
   /** Refusals are facts about one child, never a reason to drop the rest of the evidence. */
   rejected: { handleId: string; reason: string }[]
+  failures?: { child: AgentChildWorkRecord; providerId: string }[]
 }
 
 export type AgentChildWorkEvidenceContext = AgentChildWorkEvidenceScope & {
@@ -219,4 +220,14 @@ export function settleAgentChildWork(
     lifetime: 'current'
   })
   counted(ctx, handleId, result, 'settled')
+  if (result.accepted && outcome === 'failed') {
+    const child = ctx.store.getChild(result.childWorkId)
+    // A foreground command's failure is its transcript tool row's to show, never a kept failure.
+    if (
+      child?.outcome === 'failed' &&
+      !(child.kind === 'command' && child.residency === 'foreground')
+    ) {
+      ;(ctx.outcome.failures ??= []).push({ child, providerId: handleId })
+    }
+  }
 }

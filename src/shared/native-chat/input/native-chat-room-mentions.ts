@@ -15,7 +15,6 @@ export type NativeChatRoomMemberMatch = {
   name: string
   tier: NativeChatMentionTier
   nameHits: readonly NativeChatMentionHit[]
-  detailHits: readonly NativeChatMentionHit[]
   /** Listed but not pickable (a paused bot). */
   unavailable: boolean
 }
@@ -181,7 +180,7 @@ function matchDetail(
   query: readonly string[],
   whole: boolean,
   raw: string
-): NativeChatMentionHit[] | null {
+): boolean {
   const words = wordsOf(detail)
   const fits = (part: string, word: Word): boolean =>
     whole ? word.text === part : word.text.startsWith(part)
@@ -201,13 +200,10 @@ function matchDetail(
     }
     return false
   }
-  if (query.length > 0 && query.every((_, part) => assign(part, new Set()))) {
-    return [...partOfWord]
-      .map(([index, part]) => originalHit(words[index], 0, query[part].length, words[index].start))
-      .sort((a, b) => a.start - b.start)
-  }
-  const hit = matchUnspaced(detail, raw)
-  return hit ? [hit] : null
+  return (
+    (query.length > 0 && query.every((_, part) => assign(part, new Set()))) ||
+    matchUnspaced(detail, raw) !== null
+  )
 }
 
 /** Whether a pickable member's name matches, the only thing that keeps a query with a space open. */
@@ -271,14 +267,12 @@ export function rankNativeChatRoomMembers(
   const entry = (
     member: RankableMember,
     tier: NativeChatMentionTier,
-    nameHits: readonly NativeChatMentionHit[] = [],
-    detailHits: readonly NativeChatMentionHit[] = []
+    nameHits: readonly NativeChatMentionHit[] = []
   ): NativeChatRoomMemberMatch => ({
     name: member.name,
     value: member.key ?? member.name,
     tier,
     nameHits,
-    detailHits,
     unavailable: Boolean(member.unavailable)
   })
 
@@ -315,33 +309,13 @@ export function rankNativeChatRoomMembers(
   }
   const described: NativeChatRoomMemberMatch[] = []
   for (const member of members) {
-    const hits =
-      member.detail && !named.some((match) => match.value === (member.key ?? member.name))
-        ? matchDetail(member.detail, words, wholeDetailWords, raw)
-        : null
-    if (hits) {
-      described.push(entry(member, 4, [], hits))
+    if (
+      member.detail &&
+      !named.some((match) => match.value === (member.key ?? member.name)) &&
+      matchDetail(member.detail, words, wholeDetailWords, raw)
+    ) {
+      described.push(entry(member, 4))
     }
   }
   return { matches: [...named, ...described].sort(order), recentCount: 0 }
-}
-
-// One short lead-in word gives the hit context; a longer one would push it out of a narrow row.
-const MAX_LEAD_IN = 12
-
-/** A detail cut to start just before its first hit, so the hit stays visible. */
-export function nativeChatMentionSnippet(
-  detail: string,
-  hits: readonly NativeChatMentionHit[]
-): { text: string; hits: NativeChatMentionHit[]; clipped: boolean } {
-  const first = hits.length > 0 ? Math.min(...hits.map((hit) => hit.start)) : 0
-  const words = wordsOf(detail)
-  const index = words.findLastIndex((word) => word.start <= first)
-  const lead = index > 0 && words[index].start === first ? words[index - 1] : undefined
-  const start = lead && lead.text.length <= MAX_LEAD_IN ? lead.start : first
-  return {
-    text: detail.slice(start),
-    hits: hits.map((hit) => ({ start: hit.start - start, length: hit.length })),
-    clipped: start > 0
-  }
 }

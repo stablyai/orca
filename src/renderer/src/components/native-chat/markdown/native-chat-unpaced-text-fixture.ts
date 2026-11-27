@@ -7,6 +7,13 @@ export async function unpacedTextModule(
 ): Promise<typeof PacedTextModule> {
   return {
     ...(await importOriginal()),
-    useNativeChatPacedText: (_rowKey, text) => ({ text, revealing: false, fading: false })
+    useNativeChatPacedText: (_rowKey, text) => ({
+      text,
+      revealing: false,
+      fading: false,
+      fadeFrom: undefined,
+      fadeHold: undefined,
+      fadeAnimates: true
+    })
   }
 }

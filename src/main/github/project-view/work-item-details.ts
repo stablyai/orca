@@ -101,7 +101,7 @@ export async function getWorkItemDetailsBySlug(
       error: { type: 'not_found', message: 'Item not found.', reason: 'item_not_found' }
     }
   }
-  const details = mapWorkItemDetails(raw, args)
+  const details = await mapWorkItemDetails(raw, args)
   return { ok: true, details }
 }
 
@@ -126,10 +126,10 @@ const PULL_REQUEST_FRAGMENT = `pullRequest(number:$num) {
   }
 }`
 
-function mapWorkItemDetails(
+async function mapWorkItemDetails(
   raw: RawWorkItemContent,
   args: ProjectWorkItemDetailsBySlugArgs
-): GitHubWorkItemDetails {
+): Promise<GitHubWorkItemDetails> {
   const labels = (raw.labels?.nodes ?? [])
     .map((label) => label?.name)
     .filter((name): name is string => typeof name === 'string')
@@ -146,7 +146,7 @@ function mapWorkItemDetails(
       author: comment.author?.login ?? '',
       authorAvatarUrl: comment.author?.avatarUrl ?? '',
       body: comment.body,
-      bodyImageUrls: githubBodyImageUrls(comment.body, comment.bodyHTML),
+      bodyImageUrls: await githubBodyImageUrls(comment.body, comment.bodyHTML),
       createdAt: typeof comment.createdAt === 'string' ? comment.createdAt : '',
       url: typeof comment.url === 'string' ? comment.url : '',
       isBot: comment.author?.__typename === 'Bot'
@@ -192,7 +192,7 @@ function mapWorkItemDetails(
         args.type === 'pr' && typeof raw.baseRefName === 'string' ? raw.baseRefName : undefined
     },
     body: typeof raw.body === 'string' ? raw.body : '',
-    bodyImageUrls: githubBodyImageUrls(raw.body, raw.bodyHTML),
+    bodyImageUrls: await githubBodyImageUrls(raw.body, raw.bodyHTML),
     comments,
     participants,
     assignees,

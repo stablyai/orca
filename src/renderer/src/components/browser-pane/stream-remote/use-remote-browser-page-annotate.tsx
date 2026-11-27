@@ -121,7 +121,7 @@ export function useRemoteBrowserPageAnnotate({
         currentUrl={browserTab.url}
       />
     ),
-    // While the picker is armed it owns the pointer: hover and right presses go to the page.
+    // While the picker is armed it owns the pointer: right presses go to the page.
     pagePointerOwned: annotate.grab.state === 'armed' || annotate.grab.state === 'awaiting'
   }
 }

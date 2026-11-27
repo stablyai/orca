@@ -1,11 +1,5 @@
 import { StyleSheet } from 'react-native'
-import {
-  colors,
-  concentricRadius,
-  radii,
-  spacing,
-  typography
-} from '../../../../theme/mobile-theme'
+import { concentricRadius, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 
 // Footer buttons and the card's inner shapes follow the floating card's curve inward.
@@ -13,7 +7,7 @@ const MIN_TOUCH_TARGET = 44
 export const ASK_CARD_PADDING = spacing.md
 export const ASK_CHOICE_RADIUS = concentricRadius(radii.floating, ASK_CARD_PADDING)
 
-export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
+export const mobileNativeChatAskStylesSheet = themedStyleSheet((colors) => ({
   // Floats like the composer it replaces, with its own edge instead of a full-width rule.
   card: {
     flexShrink: 1,
@@ -70,10 +64,6 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
   other: {
     marginBottom: spacing.xs
   },
-  // The last choice row keeps the card's edge where the footer would sit.
-  choiceOnlyEnd: {
-    height: ASK_CARD_PADDING - 6
-  },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -98,6 +88,17 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
+  // A failed answer, quiet in the bar rather than a banner over the card.
+  notice: {
+    flexShrink: 1,
+    textAlign: 'center',
+    color: colors.statusRed,
+    fontSize: typography.metaSize
+  },
+  // Stays at the bar's end when nothing sits before it.
+  confirm: {
+    marginLeft: 'auto'
+  },
   next: {
     minHeight: MIN_TOUCH_TARGET,
     justifyContent: 'center',
@@ -111,6 +112,10 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
   nextSkip: {
     backgroundColor: 'transparent',
     borderColor: colors.choiceBorder
+  },
+  // Submit waits for the required question on screen to be answered.
+  nextBlocked: {
+    opacity: 0.5
   },
   nextText: {
     color: colors.bgBase,
