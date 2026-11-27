@@ -69,11 +69,11 @@ describe('spawnWorkerThread heap limit', () => {
     asMainProcess()
     // A process-wide --max-old-space-size (e.g. NODE_OPTIONS) overrides a worker's own limit; V8
     // flags are process-wide, so later files in this process get the launch value back.
-    const probeMb = 32
-    const limitBefore = await workerHeapLimitMb(probeMb)
-    setFlagsFromString('--max-old-space-size=0')
-    const youngMb = (await workerHeapLimitMb(probeMb)) - probeMb
-    const launchOldSpaceMb = limitBefore - youngMb > probeMb ? limitBefore - youngMb : 0
+    // Two caps reading the same limit means a launch flag overrides both.
+    const limitAt32 = await workerHeapLimitMb(32)
+    const launchOverrides = limitAt32 === (await workerHeapLimitMb(48))
+    // Includes the young generation until measured below: close enough if that probe fails.
+    let launchOldSpaceMb = launchOverrides ? limitAt32 : 0
     let spawned = 0
     const queue = new WorkerThreadRequestQueue<
       { id: number; exhaust?: boolean },
@@ -102,6 +102,10 @@ describe('spawnWorkerThread heap limit', () => {
       onUnavailable: () => {}
     })
     try {
+      setFlagsFromString('--max-old-space-size=0')
+      if (launchOverrides) {
+        launchOldSpaceMb = limitAt32 - ((await workerHeapLimitMb(32)) - 32)
+      }
       await expect(queue.dispatch((id) => ({ id, exhaust: true }), 30_000)).rejects.toMatchObject({
         code: 'ERR_WORKER_OUT_OF_MEMORY'
       })
