@@ -171,5 +171,16 @@ export const DEFAULT_LAZY_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] = [
       ...MOBILE_PROJECT_SECTIONS_METHODS,
       ...MOBILE_WEB_BUNDLE_METHODS
     ]
-  })
+  }),
+  prefixRpcMethodGroup(
+    ['orchestration.'],
+    async () => (await import('./orchestration/orchestration')).ORCHESTRATION_METHODS,
+    {
+      streamingNames: [
+        'orchestration.crewSubscribe',
+        'orchestration.workerApprovalsSubscribe',
+        'orchestration.workerDockSubscribe'
+      ]
+    }
+  )
 ]
