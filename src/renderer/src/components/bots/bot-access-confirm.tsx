@@ -191,9 +191,7 @@ function AccessFacts({ grant }: { grant: BotAccessConfirm }): React.JSX.Element 
                 )}
                 aria-hidden
               />
-              <span className="min-w-0 [overflow-wrap:anywhere]" title={text}>
-                {text}
-              </span>
+              <span className="min-w-0 [overflow-wrap:anywhere]">{text}</span>
             </li>
           )
         })}
