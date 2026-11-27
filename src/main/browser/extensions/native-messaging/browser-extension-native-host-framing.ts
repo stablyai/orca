@@ -10,6 +10,7 @@ export const HEADER_BYTES = 4
 export const MAX_NATIVE_HOST_MESSAGE_BYTES = 1024 * 1024
 
 const littleEndian = endianness() === 'LE'
+const utf8Decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 
 export function encodeNativeHostMessage(json: string): Buffer {
   const body = Buffer.from(json, 'utf8')
@@ -78,11 +79,12 @@ export function createNativeHostMessageReader(
         }
         // Why concat only now: a 1 MB message arrives in many chunks; joining each time is quadratic.
         const buffered = pending.length === 1 ? pending[0] : Buffer.concat(pending, pendingBytes)
-        const json = buffered.toString('utf8', HEADER_BYTES, HEADER_BYTES + size)
         const rest = buffered.subarray(HEADER_BYTES + size)
         pending = rest.length > 0 ? [rest] : []
         pendingBytes = rest.length
+        let json: string
         try {
+          json = utf8Decoder.decode(buffered.subarray(HEADER_BYTES, HEADER_BYTES + size))
           JSON.parse(json)
         } catch {
           return fail('message is not valid JSON')
