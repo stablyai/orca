@@ -1,5 +1,6 @@
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type {
+  ExpectedRuntimeSource,
   RuntimeRequestSelection,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -24,6 +25,7 @@ import { BOTS_ITEM_WAITING_CAPABILITY } from '../../../shared/bot-runtime-capabi
 import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RuntimeClientError } from './types'
+import { AGENT_REQUEST_CLI_CAPABILITIES } from '../../agents/agent-request-capabilities'
 import {
   RUNTIME_RPC_READ_STAGED_REPLY_METHOD,
   RUNTIME_RPC_STAGED_REPLY_CLIENT_CAPABILITY,
@@ -54,7 +56,22 @@ const AGENT_READ_CLIENT_CAPABILITIES = [
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY
 ] as const
 
+const AGENT_REQUEST_METHODS = new Set([
+  'session.tabs.list',
+  'agentSession.history',
+  'agentSession.currentRequests',
+  'agentSession.respondToQuestion',
+  'agentSession.respondToApproval'
+])
+const AGENT_REQUEST_CLIENT_CAPABILITIES = [
+  ...CLI_CLIENT_CAPABILITIES,
+  ...AGENT_REQUEST_CLI_CAPABILITIES
+]
+
 function clientCapabilitiesFor(method: string) {
+  if (AGENT_REQUEST_METHODS.has(method)) {
+    return AGENT_REQUEST_CLIENT_CAPABILITIES
+  }
   return method === 'agent.read' ? AGENT_READ_CLIENT_CAPABILITIES : CLI_CLIENT_CAPABILITIES
 }
 
@@ -63,7 +80,8 @@ export async function sendWebSocketRequest<TResult>(
   method: string,
   params: unknown,
   timeoutMs: number,
-  envelope?: RuntimeOrchestrationEnvelope
+  envelope?: RuntimeOrchestrationEnvelope,
+  expectedRuntimeSource?: ExpectedRuntimeSource
 ): Promise<RuntimeRpcResponse<TResult>> {
   try {
     const response = await sendRemoteRuntimeRequestOnSocket<TResult>(
@@ -76,7 +94,11 @@ export async function sendWebSocketRequest<TResult>(
       undefined,
       clientCapabilitiesFor(method),
       undefined,
-      undefined
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      expectedRuntimeSource
     )
     return await readStagedReply(connection, response, timeoutMs)
   } catch (error) {
@@ -94,7 +116,8 @@ export async function sendWebSocketRequestWithStatusPreflight<TResult>(
   timeoutMs: number,
   validateStatus: (response: RuntimeRpcResponse<RuntimeStatus>) => void,
   envelope?: RuntimeOrchestrationEnvelope,
-  requestSelection?: RuntimeRequestSelection
+  requestSelection?: RuntimeRequestSelection,
+  expectedRuntimeSource?: ExpectedRuntimeSource
 ): Promise<RuntimeRpcResponse<TResult>> {
   try {
     const response = await sendRemoteRuntimeRequestOnSocket<TResult>(
@@ -107,7 +130,11 @@ export async function sendWebSocketRequestWithStatusPreflight<TResult>(
       undefined,
       clientCapabilitiesFor(method),
       requestSelection,
-      undefined
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      expectedRuntimeSource
     )
     return await readStagedReply(connection, response, timeoutMs)
   } catch (error) {

@@ -28,6 +28,7 @@ import {
   prepareCurrentRuntimeRequest
 } from './remote-runtime-request-preparation'
 import type {
+  ExpectedRuntimeSource,
   RuntimeRequestPreparation,
   RuntimeRequestGuard,
   RuntimeRequestSelection,
@@ -52,7 +53,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   latchedHostCheck?: RemoteRuntimeClientHandshake,
   prepareGuard?: RuntimeRequestGuard,
   /** Replaces timeoutMs once the host authenticates, so only a reachable host gets a long reply wait. */
-  responseTimeoutMs?: number
+  responseTimeoutMs?: number,
+  expectedRuntimeSource?: ExpectedRuntimeSource
 ): Promise<RuntimeRpcResponse<TResult>> {
   throwIfSignalAborted(signal)
   if (!isSafeTimerDelayMs(timeoutMs) || !isSafeTimerDelayMs(responseTimeoutMs ?? timeoutMs)) {
@@ -69,7 +71,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       envelope,
       prepareRequest,
       Boolean(validateStatus),
-      Boolean(requestSelection)
+      Boolean(requestSelection),
+      expectedRuntimeSource
     )
   // Why a redial is safe: nothing but the handshake is sent before the host authenticates us.
   const attempt = (handshake: RemoteRuntimeClientHandshake) =>
@@ -82,16 +85,15 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
 
       const cleanupSocketListeners = (): void => {
         signal?.removeEventListener('abort', onAbort)
-        const socket = ws
-        if (!socket) {
+        if (!ws) {
           return
         }
-        socket.off('open', onOpen)
-        socket.off('error', onError)
-        socket.off('close', onClose)
-        socket.off('message', onMessage)
-        if (socket.readyState !== WebSocket.CLOSED) {
-          socket.on('error', ignoreSettledRemoteRuntimeSocketError)
+        ws.off('open', onOpen)
+        ws.off('error', onError)
+        ws.off('close', onClose)
+        ws.off('message', onMessage)
+        if (ws.readyState !== WebSocket.CLOSED) {
+          ws.on('error', ignoreSettledRemoteRuntimeSocketError)
         }
       }
 
@@ -159,8 +161,6 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       }
 
       const finishError = (error: Error): void => finish({ ok: false, error })
-      const finishResponse = (response: RuntimeRpcResponse<TResult>): void =>
-        finish({ ok: true, response })
 
       let preparingSend = false
       function sendRequestedRpc(status?: unknown): void {
@@ -220,7 +220,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         sendRequestedRpc,
         refreshTimeout,
         finishError,
-        finishResponse
+        finishResponse: (response) => finish({ ok: true, response })
       })
 
       signal?.addEventListener('abort', onAbort, { once: true })

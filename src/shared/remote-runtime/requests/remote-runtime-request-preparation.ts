@@ -6,6 +6,7 @@ import {
 import { prepareRemoteRuntimeRequest } from './remote-runtime-prepared-request-admission'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import type {
+  ExpectedRuntimeSource,
   RuntimeOrchestrationEnvelope,
   RuntimeRequestPreparation,
   RuntimeRequestGuard
@@ -75,7 +76,8 @@ export function prepareRuntimeSocketRequest(
   envelope: RuntimeOrchestrationEnvelope | undefined,
   prepareRequest: RuntimeRequestPreparation | undefined,
   validateStatus: boolean,
-  selectAfterStatus: boolean
+  selectAfterStatus: boolean,
+  expectedRuntimeSource?: ExpectedRuntimeSource
 ) {
   const requestId = randomUUID()
   const statusRequestId = validateStatus ? randomUUID() : null
@@ -95,7 +97,8 @@ export function prepareRuntimeSocketRequest(
             deviceToken: connection.credential.deviceToken,
             method,
             params: selected,
-            envelope: selectedEnvelope
+            envelope: selectedEnvelope,
+            expectedRuntimeSource
           }),
         selectedParams,
         envelope,

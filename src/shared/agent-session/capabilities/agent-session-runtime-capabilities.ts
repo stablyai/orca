@@ -113,6 +113,8 @@ export const AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY =
 // Question-answer params are strict: older hosts need packed optionId instead of structured answers.
 export const AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY =
   'agent-session.question-answers.v1' as const
+export const AGENT_SESSION_RESPONSE_REPLAY_ONLY_RUNTIME_CAPABILITY =
+  'agent-session.response-replay-only.v1' as const
 // Paired attachments belong on the server; refuse unsupported servers instead of passing local machine paths.
 export const AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY = 'agent-session.attachments.v1' as const
 // Why: hosts before this advertise attachments.v1 but refuse the upload methods from a phone.
@@ -204,6 +206,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_SEND_RECORDED_RUNTIME_CAPABILITY,
     AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
     AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
+    AGENT_SESSION_RESPONSE_REPLAY_ONLY_RUNTIME_CAPABILITY,
     AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY,
     AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY,
     AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY,

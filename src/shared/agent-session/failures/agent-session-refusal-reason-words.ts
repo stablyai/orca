@@ -69,6 +69,7 @@ const REASON_WORDS = {
   agent_session_operation_invalid: {
     requestMalformed: codeWords('hostFinding'),
     operationIdInvalid: codeWords('hostFinding'),
+    receiptMissing: codeWords('hostFinding'),
     messageIdReused: codeWords('hostFinding'),
     // Settled under that id, so the control's retry goes out under a new one.
     operationRefusedEarlier: codeWords('retry'),

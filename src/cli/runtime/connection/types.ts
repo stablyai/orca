@@ -1,4 +1,5 @@
 import type {
+  ExpectedRuntimeSource,
   RuntimeOrchestrationEnvelope,
   RuntimeRequestSelection,
   RuntimeRpcFailure
@@ -6,6 +7,7 @@ import type {
 import { redactOrchestrationCompatibilitySecrets } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 
 export type RuntimeCallOptions = {
+  expectedRuntimeSource?: ExpectedRuntimeSource
   timeoutMs?: number
   legacyTerminalPrompt?: true
   terminalPromptPreflight?: { runtimeId: string | null }

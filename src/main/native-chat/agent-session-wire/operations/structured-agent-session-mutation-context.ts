@@ -99,6 +99,16 @@ export function runStructuredAgentSessionMutation<TValue>(
     envelope,
     plan,
     journal: () => context.sessions.get(envelope.sessionId)?.journal,
+    readReceiptCursor: async () => {
+      const metadata = await context.deps.journalDatabase.readers.point({
+        sessionId: envelope.sessionId,
+        operation: { kind: 'metadata' }
+      })
+      if (metadata.kind !== 'metadata') {
+        throw new Error('journal reader returned no metadata')
+      }
+      return metadata.cursor
+    },
     currentWork: () =>
       hostStructuredAgentSessionCurrentWork(
         { store: context.deps.store, sessions: context.sessions },

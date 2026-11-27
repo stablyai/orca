@@ -24,6 +24,7 @@ export function promptPlan(
     },
     // Retain the resolved or previously recorded prompt answer in the receipt.
     commandReceipt: {
+      ...(params.replayOnly ? { replayOnly: acceptedPromptAnswer } : {}),
       binding: { at: 'last', kinds: ['item'], answer: 'prompt-answer' },
       result: (row) => promptAnswerReceipt(promptRowAnswer(row)),
       unwritten: (value) => promptAnswerReceipt(value)

@@ -8,6 +8,7 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/remote-runtime/protocol/protocol-version'
 import type {
+  ExpectedRuntimeSource,
   RuntimeRequestSelection,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -45,6 +46,7 @@ export class RemoteRuntimeCompatGate {
     timeoutMs: number
     envelope?: RuntimeOrchestrationEnvelope
     requestSelection?: RuntimeRequestSelection
+    expectedRuntimeSource?: ExpectedRuntimeSource
   }): Promise<RuntimeRpcResponse<TResult>> {
     // A recipe VM's server is gone while the VM sleeps; only the desktop that owns it can wake it.
     if (
@@ -69,7 +71,8 @@ export class RemoteRuntimeCompatGate {
         args.method,
         args.params,
         args.timeoutMs,
-        args.envelope
+        args.envelope,
+        args.expectedRuntimeSource
       )
     }
     return args.transport.sendWebSocketRequestWithStatusPreflight<TResult>(
@@ -89,7 +92,8 @@ export class RemoteRuntimeCompatGate {
         }
       },
       args.envelope,
-      args.requestSelection
+      args.requestSelection,
+      args.expectedRuntimeSource
     )
   }
 

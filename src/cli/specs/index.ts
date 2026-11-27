@@ -15,6 +15,7 @@ import { ENVIRONMENT_COMMAND_SPECS } from './environment'
 import { MANAGED_SERVER_COMMAND_SPECS } from './managed-server'
 import { AGENT_HOOK_COMMAND_SPECS } from './agent-hooks'
 import { AGENT_LAUNCH_COMMAND_SPECS } from './agent-launch'
+import { AGENT_REQUEST_COMMAND_SPECS } from './agent-requests'
 import { SLACK_COMMAND_SPECS } from './slack'
 import { GOOGLE_COMMAND_SPECS } from './google'
 import { GOOGLE_READ_COMMAND_SPECS } from './google-read'
@@ -65,6 +66,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...AGENT_HOOK_COMMAND_SPECS,
   ...MCP_COMMAND_SPECS,
   ...AGENT_LAUNCH_COMMAND_SPECS,
+  ...AGENT_REQUEST_COMMAND_SPECS,
   ...AGENT_CONVERSATION_COMMAND_SPECS,
   ...CHAT_COMMAND_SPECS,
   ...SLACK_COMMAND_SPECS,
