@@ -37,6 +37,11 @@ export async function acpChildKeptLaunchOutgrown(
   session: AcpStructuredChild | undefined
 ): Promise<boolean | undefined> {
   const kept = isAcpReadySession(session) ? session.connection.kept : null
+  // OMP's background work is invisible here (above), so no tools change ends its kept agent: it
+  // keeps the tools it has. Its replay is still protected.
+  if (session?.spec.agent === 'omp') {
+    return kept?.launchOutgrown === false ? false : undefined
+  }
   if (kept?.freshOwed && session?.turns?.running === false) {
     await kept.replaySettled()
   }
