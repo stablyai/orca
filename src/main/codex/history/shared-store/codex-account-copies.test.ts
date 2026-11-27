@@ -385,7 +385,8 @@ describe('trashed copies', () => {
     put(`${storeFile()}.zst`, zstdCompressSync(Buffer.from(LINE_1)))
     rmSync(storeFile())
 
-    expect(await afterGrace()).toMatchObject({ deleted: 0, restored: 1, compressed: 1 })
+    // Counted twice: by the recheck, then by this launch's verify of the restored copy.
+    expect(await afterGrace()).toMatchObject({ deleted: 0, restored: 1, compressed: 2 })
     expect(readFileSync(copy, 'utf8')).toBe(LINE_1)
   })
 
