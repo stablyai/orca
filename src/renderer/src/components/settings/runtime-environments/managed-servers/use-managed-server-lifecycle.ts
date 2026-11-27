@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   isOrcadUncountedTerminalsDeferral,
@@ -11,6 +11,11 @@ import {
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import {
+  lastVerifiedRuntimeStatus,
+  type RuntimeEnvironmentStatus
+} from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { managedServerOutcomeLabel } from './managed-server-copy'
 
 export type ManagedServerAction =
@@ -61,6 +66,10 @@ function outcomeMessage(result: Parameters<typeof managedServerOutcomeLabel>[0])
     ? managedServerOutcomeLabel(result)
     : null
 }
+
+// Kept across lost probes, so only a server that comes back as a new process changes it.
+const selectVerifiedRuntimeId = (entry: RuntimeEnvironmentStatus | undefined): string | null =>
+  lastVerifiedRuntimeStatus(entry)?.runtimeId ?? null
 
 export function useManagedServerLifecycle({
   api,
@@ -128,11 +137,27 @@ export function useManagedServerLifecycle({
     void loadStatus()
   }, [loadStatus])
 
+  // Why: an update can land outside this row (a deferred one retried on reconnect), and its
+  // restarted server must not keep showing the deferral or the old version.
+  const runtimeId = useRuntimeHostStatusSelector(environment.id, selectVerifiedRuntimeId)
+  const loadedRuntimeIdRef = useRef(runtimeId)
+  const runningRef = useRef(false)
+  useEffect(() => {
+    const previous = loadedRuntimeIdRef.current
+    loadedRuntimeIdRef.current = runtimeId
+    // First contact needs no reload: the mount load already read this server. A running
+    // action reloads when it ends, and loading now would clear its busy state early.
+    if (previous !== null && runtimeId !== null && previous !== runtimeId && !runningRef.current) {
+      void loadStatus()
+    }
+  }, [runtimeId, loadStatus])
+
   const run = async (action: ManagedServerAction): Promise<void> => {
     const pastLiveTerminals = action === 'forceUpdate' ? confirmingForceUpdate : null
     if (action === 'forceUpdate' && !pastLiveTerminals) {
       return
     }
+    runningRef.current = true
     // The build the operator saw running; Update anyway is refused if the host moved past it.
     const incumbentVersion = status?.activeVersion ?? null
     setBusy(action)
@@ -181,6 +206,7 @@ export function useManagedServerLifecycle({
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error))
     } finally {
+      runningRef.current = false
       if (mountedRef.current) {
         setBusy(null)
       }

@@ -10,6 +10,7 @@ import type {
   RemoteServerUpdatePhase
 } from '../../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
 import { getRemoteServerNewerThanClientVersion } from '../../../../../../shared/remote-runtime/host-updates/remote-server-version-skew'
+import { hasReachedAppVersion } from '../../../../../../shared/app-lifecycle/identity/app-version'
 import { getRuntimeServerConnectionLabel } from '../catalog/runtime-environment-host-details'
 
 import { getRemoteServerUpdatePhaseLabel } from '../updates/RemoteServerUpdateStatus'
@@ -24,6 +25,38 @@ const UPDATING_PHASES: ReadonlySet<RemoteServerUpdatePhase> = new Set([
 
 export function isRemoteServerUpdateInFlight(entry: RemoteServerUpdateEntry | undefined): boolean {
   return entry !== undefined && UPDATING_PHASES.has(entry.phase)
+}
+
+/**
+ * The update entry is a snapshot from the last check. A server that has since answered on another
+ * build (Update anyway, a deferred update retried on reconnect, or one installed on the host) makes
+ * it stale, so read it against the version the server reports now.
+ */
+export function reconcileRemoteServerUpdateEntry(
+  entry: RemoteServerUpdateEntry | undefined,
+  liveVersion: string | null | undefined
+): RemoteServerUpdateEntry | undefined {
+  const version = liveVersion?.trim()
+  if (
+    !entry ||
+    !version ||
+    version === entry.currentVersion ||
+    entry.phase === 'checking' ||
+    isRemoteServerUpdateInFlight(entry)
+  ) {
+    return entry
+  }
+  if (hasReachedAppVersion(version, entry.targetVersion ?? entry.clientVersion ?? null)) {
+    return {
+      ...entry,
+      phase: 'current',
+      currentVersion: version,
+      targetVersion: version,
+      error: null
+    }
+  }
+  // Still short of the target: the update state holds, but the version line must not go back in time.
+  return { ...entry, currentVersion: version }
 }
 
 export type RuntimeServerStatusInput = {
