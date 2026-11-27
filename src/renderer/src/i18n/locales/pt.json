@@ -175,9 +175,6 @@
         "planModelWithoutThinking": "O modelo \"{{model}}\" não suporta um nível de esforço de raciocínio.",
         "planThinkingLevelInvalid": "O nível de raciocínio \"{{level}}\" não é válido para {{model}}.",
         "openCodeInvalidEvents": "OpenCode retornou eventos JSON inválidos.",
-        "antigravityInvalidEvents": "Antigravity retornou eventos JSON inválidos.",
-        "antigravityInvalidResult": "Antigravity retornou um resultado inválido.",
-        "antigravityNoFinalResult": "Antigravity não retornou nenhum resultado final.",
         "kimiUnreadableOutput": "Kimi retornou uma saída que o Orca não conseguiu ler. Tente novamente.",
         "kimiSessionOccupied": "Kimi não pôde usar esta sessão porque ela está ativa em outro cliente. Pare a sessão nesse cliente ou saia dele e tente novamente.",
         "kimiInterrupted": "Kimi foi interrompido antes de concluir a geração de texto. Tente novamente.",
@@ -1500,12 +1497,6 @@
         "pageChanged": "Esta página foi fechada ou mudou de perfil durante a importação. Tente novamente."
       },
       "notice": {
-        "importedMore_one": "{{count}} cookie importado para os domínios {{domains}} (+{{more}}). Recarregue a página para usá-lo.",
-        "importedMore_other": "{{count}} cookies importados para os domínios {{domains}} (+{{more}}). Recarregue a página para usá-los.",
-        "importedMore_many": "{{count}} cookies importados para os domínios {{domains}} (+{{more}}). Recarregue a página para usá-los.",
-        "imported_one": "{{count}} cookie importado para {{domains}}. Recarregue a página para usá-lo.",
-        "imported_other": "{{count}} cookies importados para {{domains}}. Recarregue a página para usá-los.",
-        "imported_many": "{{count}} cookies importados para {{domains}}. Recarregue a página para usá-los.",
         "failed": "Não foi possível importar cookies: {{reason}}"
       },
       "routedPage": {
@@ -1621,7 +1612,6 @@
         "sshToggleDescription": "Mostra hosts SSH e hosts remotos do Orca configurados quando disponíveis.",
         "resourceUsageToggleDescription": "Mostra o Gerenciador de Recursos. Clique para ver CPU, memória, sessões, controles do daemon e varreduras de disco do espaço de trabalho.",
         "portsToggleDescription": "Mostra as portas ativas do espaço de trabalho. Clique para ver portas específicas do espaço de trabalho e listeners externos.",
-        "antigravityToggleDescription": "Mostra o uso da assinatura do Antigravity para o espaço de trabalho ativo.",
         "grokToggleDescription": "Mostra o uso de créditos da assinatura do Grok quando conectado via Grok CLI.",
         "cursorToggleDescription": "Mostrar o uso do plano Cursor quando você estiver conectado via cursor-agent ou Cursor IDE.",
         "zcodeToggleDescription": "Mostrar o uso da cota do ZCode Coding Plan.",
@@ -4447,7 +4437,6 @@
             "c0e972d726": "Cancelar",
             "3bbf140864": "Uso do MiniMax",
             "remoteServerLabel": "Servidor remoto",
-            "antigravityUsage": "Uso do Antigravity",
             "grokUsageMenu": "Uso do Grok",
             "floatingTerminalNewActivity": "{{label}}, nova atividade",
             "codexSignInSuccess": "Login realizado no Codex",
@@ -4934,16 +4923,9 @@
             "mainWorktree": "worktree principal",
             "detached": "desanexado"
           },
-          "antigravity": {
-            "unknownAccount": "Conta Google",
-            "accounts": "Contas Antigravity salvas",
-            "readAgo": "Lido {{time}}",
-            "notRead": "Uso desconhecido: ainda não consultado"
-          },
           "AccountSwitchList": {
             "used": "Usado",
             "left": "Restante",
-            "reset": "Redefinição",
             "accounts": "Contas"
           },
           "InlineUsageBars": {
@@ -5629,7 +5611,6 @@
             "d77537b580": "opencode-go",
             "a9d56852eb": "opencode",
             "7f72de7cbe": "Mostra o uso de tokens e custo do OpenCode Go na barra de status.",
-            "51b0ccd6a2": "google",
             "97957e374e": "openai",
             "8dfd676c28": "codex",
             "e9e4412545": "Mostra o uso de tokens e custo do Codex na barra de status.",
@@ -5671,8 +5652,6 @@
               "pr": "pr",
               "duplicate": "duplicado"
             },
-            "antigravityUsageDescription": "Mostra o uso da assinatura do Antigravity na barra de status.",
-            "antigravityKeyword": "antigravity",
             "e7d1b0f3a5": "Mostra o uso semanal de créditos do Grok via OAuth da Grok CLI.",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
@@ -5720,7 +5699,6 @@
             "96e32c1118": "Uso do MiniMax",
             "e8d2710689": "Uso do Muse",
             "aff6e6afdf": "Fonte do IDE",
-            "ba1f9d39a6": "Uso do Antigravity",
             "statusBarUsageFormat": {
               "title": "Formato de uso",
               "description": "Personalize, com marcadores, como o uso de cada provedor aparece na barra de status.",
@@ -11212,8 +11190,7 @@
             "windows": "porcentagem usada ou restante no período",
             "reset": "tempo até a redefinição, por exemplo, 3h 15m",
             "resetAt": "horário da redefinição, por exemplo, 20:50",
-            "optional": "omitido quando um marcador dentro do grupo está vazio",
-            "usagePools": "pools de uso nomeados, por exemplo, modelos do Antigravity"
+            "optional": "omitido quando um marcador dentro do grupo está vazio"
           }
         },
         "RepositoryRemoveProjectSection": {
@@ -18307,6 +18284,11 @@
             "waitingTitle": "Aguardando {{server}}",
             "waitingBody": "O Orca reconecta este terminal quando o servidor o oferecer de novo ou a conexão mudar. Clique em Reconectar para tentar agora.",
             "downFor": "Sem conexão há {{duration}}",
+            "cantReachTitle": "Não é possível acessar {{server}}",
+            "detailsButton": "Detalhes",
+            "tailscaleHintTitle": "Verifique o caminho do Tailscale",
+            "reconnectNowButton": "Reconectar agora",
+            "copyPingCommand": "Copiar comando",
             "tailscaleHint": "Verifique o caminho do Tailscale:",
             "fallbackServerName": "o servidor",
             "connectionLostTitle": "Reconectando a {{server}}",
@@ -23731,10 +23713,7 @@
         "notNow": "Agora não",
         "retry": "Tentar novamente",
         "dismiss": "Dispensar",
-        "openWorker": "Abrir worker",
         "remoteOwner": "Pare ou limpe isto no computador em que é executado",
-        "workspaceRemoved": "O espaço de trabalho deste worker foi removido",
-        "restore": "Mostrar no dock novamente",
         "alreadyStopped": "Já está parado",
         "cantStop": "Não é possível parar agora",
         "clearAllLabel_one": "Limpar worker com falha",
@@ -23742,11 +23721,7 @@
         "clearAllLabel_many": "Limpar todos os {{count}} workers com falha",
         "loadingWorker": "Carregando worker…",
         "resultUnavailable": "Resultado do worker indisponível",
-        "showDetails": "Mostrar detalhes",
-        "hideDetails": "Ocultar detalhes",
-        "close": "Fechar",
         "workersRegion": "Workers",
-        "doneResult": "Concluído · abrir resultado",
         "clearName": "Limpar {{name}}",
         "stopUnavailable": "Parar {{name}} · {{title}} indisponível · {{reason}}",
         "stopName": "Parar {{name}} · {{title}}",
@@ -23771,8 +23746,6 @@
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
         "workerCount_many": "{{count}} workers",
-        "stopped": "Parado",
-        "finished": "Concluído",
         "failedCount": "{{count}} com falha",
         "needsYouCount": "{{count}} aguardando você",
         "newQuestions_one": "{{count}} nova pergunta de worker aguardando você",
@@ -25596,9 +25569,6 @@
       "retry": "Tentar novamente",
       "changed": "A conta nativa mudou. Selecione uma conta salva novamente antes de iniciar o agy.",
       "refresh": "Atualizar contas",
-      "usage": "Atualizar uso",
-      "usageWithReading": "Atualizar uso ({{reading}})",
-      "usageReading": "Sessão: {{session}} · Semanal: {{weekly}}",
       "saved": "Conta Google salva",
       "remove": "Remover",
       "searchDescription": "Salve e selecione contas Google nativas do agy no host de execução.",
@@ -25618,8 +25588,6 @@
       "settingsIncomplete": "Escolha um tipo de conta Antigravity e informe seu projeto e local do Google Cloud.",
       "settingsLoadFailed": "O Orca não conseguiu carregar suas configurações de login do Antigravity. Tente novamente.",
       "settingsSaveFailed": "O Orca não conseguiu salvar suas configurações de login do Antigravity. Tente novamente.",
-      "lastReading": "{{reading}} · Lido {{time}}",
-      "noReading": "Uso desconhecido: ainda não consultado",
       "windowsChanged": "A conta padrão do host foi alterada. Selecione uma conta salva para aplicá-la novamente.",
       "fd47b5a5dd": "Contas do Antigravity",
       "personalOption": "Seu plano pessoal do Google AI",
@@ -25651,7 +25619,6 @@
       "currentNotSaved": "Login atual do agy · não salvo",
       "noEmailNotSaved": "agy não informou um e-mail · não salvo",
       "saveShort": "Salvar",
-      "readAt": "Lido {{time}}",
       "active": "Ativo",
       "runtime": "Runtime",
       "chatTitle": "Chat do Antigravity",
@@ -28213,6 +28180,7 @@
     "usageLimit": {
       "continuesAt": "Continua às {{time}}",
       "continuesShort": "Continua {{time}}",
+      "rowLine": "Limite de uso · {{time}}",
       "continuesTip": "Continua automaticamente às {{time}}",
       "hitLimit": "Limite atingido · reinicia às {{time}}",
       "hitShort": "Limite atingido",

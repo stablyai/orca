@@ -579,10 +579,6 @@
         "pageChanged": "Diese Seite wurde während des Imports geschlossen oder hat das Profil gewechselt. Versuche es erneut."
       },
       "notice": {
-        "importedMore_one": "{{count}} Cookie für {{domains}} +{{more}} weitere importiert. Zur Verwendung die Seite neu laden.",
-        "importedMore_other": "{{count}} Cookies für {{domains}} +{{more}} weitere importiert. Zur Verwendung die Seite neu laden.",
-        "imported_one": "{{count}} Cookie für {{domains}} importiert. Zur Verwendung die Seite neu laden.",
-        "imported_other": "{{count}} Cookies für {{domains}} importiert. Zur Verwendung die Seite neu laden.",
         "failed": "Cookie-Import fehlgeschlagen: {{reason}}"
       },
       "routedPage": {
@@ -839,7 +835,6 @@
         "sshToggleDescription": "Konfigurierte SSH-Hosts und entfernte Orca-Hosts anzeigen, sofern vorhanden.",
         "resourceUsageToggleDescription": "Den Ressourcenverwaltung anzeigen. Ein Klick öffnet eine Übersicht mit CPU- und Arbeitsspeichernutzung, Sitzungen, Daemon-Steuerung und Speicherplatzanalysen für Arbeitsbereiche.",
         "portsToggleDescription": "Aktive Ports der Arbeitsbereiche anzeigen. Ein Klick zeigt Ports des Arbeitsbereichs und externe lauschende Dienste an.",
-        "antigravityToggleDescription": "Nutzung des Antigravity-Abonnements für den aktiven Arbeitsbereich anzeigen.",
         "grokToggleDescription": "Credit-Verbrauch des Grok-Abonnements bei Anmeldung über Grok CLI anzeigen.",
         "cursorToggleDescription": "Nutzung des Cursor-Tarifs bei Anmeldung über cursor-agent oder Cursor IDE anzeigen.",
         "zcodeToggleDescription": "Kontingentnutzung des ZCode Coding Plan anzeigen.",
@@ -5318,6 +5313,11 @@
             "waitingTitle": "Warten auf {{server}}",
             "waitingBody": "Orca verbindet dieses Terminal erneut, sobald es vom Server wieder angeboten wird oder sich die Verbindung ändert. Erneut verbinden, um es jetzt zu versuchen.",
             "downFor": "Seit {{duration}} nicht erreichbar",
+            "cantReachTitle": "{{server}} nicht erreichbar",
+            "detailsButton": "Details",
+            "tailscaleHintTitle": "Tailscale-Pfad prüfen",
+            "reconnectNowButton": "Jetzt erneut verbinden",
+            "copyPingCommand": "Befehl kopieren",
             "tailscaleHint": "Tailscale-Pfad prüfen:",
             "fallbackServerName": "Server",
             "connectionLostTitle": "Verbindung zu {{server}} wird wiederhergestellt",
@@ -5747,7 +5747,6 @@
             "c0e972d726": "Abbrechen",
             "3bbf140864": "MiniMax-Nutzung",
             "remoteServerLabel": "Remote-Server",
-            "antigravityUsage": "Antigravity-Nutzung",
             "grokUsageMenu": "Grok-Nutzung",
             "floatingTerminalNewActivity": "{{label}}, neue Aktivität",
             "4fba7dc1e7": "{{value0}} Guthaben",
@@ -6207,16 +6206,9 @@
             "mainWorktree": "Haupt-Worktree",
             "detached": "losgelöst"
           },
-          "antigravity": {
-            "unknownAccount": "Google-Konto",
-            "accounts": "Gespeicherte Antigravity-Konten",
-            "readAgo": "Ausgelesen {{time}}",
-            "notRead": "Nutzung unbekannt: noch nicht ausgelesen"
-          },
           "AccountSwitchList": {
             "used": "Verbraucht",
             "left": "Übrig",
-            "reset": "Zurücksetzung",
             "accounts": "Konten"
           },
           "InlineUsageBars": {
@@ -11050,7 +11042,6 @@
             "d77537b580": "opencode-go",
             "a9d56852eb": "opencode",
             "7f72de7cbe": "Token-Nutzung und Kosten von OpenCode Go in der Statusleiste anzeigen.",
-            "51b0ccd6a2": "google",
             "97957e374e": "openai",
             "8dfd676c28": "codex",
             "e9e4412545": "Token-Nutzung und Kosten von Codex in der Statusleiste anzeigen.",
@@ -11092,8 +11083,6 @@
               "pr": "PR",
               "duplicate": "Duplikat"
             },
-            "antigravityUsageDescription": "Nutzung des Antigravity-Abonnements in der Statusleiste anzeigen.",
-            "antigravityKeyword": "antigravity",
             "e7d1b0f3a5": "Wöchentliche Credit-Nutzung von Grok über OAuth von Grok CLI anzeigen.",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
@@ -11147,8 +11136,7 @@
             "c29089716e": "Kimi-Nutzung",
             "96e32c1118": "MiniMax-Nutzung",
             "e8d2710689": "Muse-Nutzung",
-            "aff6e6afdf": "IDE-Schriftart",
-            "ba1f9d39a6": "Antigravity-Nutzung"
+            "aff6e6afdf": "IDE-Schriftart"
           }
         },
         "auto": {
@@ -14875,8 +14863,7 @@
             "windows": "Prozentsatz des Fensters",
             "reset": "Zeit bis zum Zurücksetzen, z. B. 3h 15m",
             "resetAt": "Uhrzeit des Zurücksetzens, z. B. 20:50",
-            "optional": "entfällt, wenn ein Platzhalter darin leer ist",
-            "usagePools": "benannte Nutzungspools, z. B. Antigravity-Modelle"
+            "optional": "entfällt, wenn ein Platzhalter darin leer ist"
           }
         },
         "RepositoryRemoveProjectSection": {
@@ -22581,21 +22568,14 @@
         "notNow": "Nicht jetzt",
         "retry": "Erneut versuchen",
         "dismiss": "Ausblenden",
-        "openWorker": "Worker öffnen",
         "remoteOwner": "Auf dem Computer stoppen oder entfernen, auf dem dies läuft",
-        "workspaceRemoved": "Der Arbeitsbereich dieses Workers wurde entfernt",
-        "restore": "Wieder im Dock anzeigen",
         "alreadyStopped": "Bereits gestoppt",
         "cantStop": "Stoppen derzeit nicht möglich",
         "clearAllLabel_one": "Fehlgeschlagenen Worker entfernen",
         "clearAllLabel_other": "Alle {{count}} fehlgeschlagenen Worker entfernen",
         "loadingWorker": "Worker wird geladen…",
         "resultUnavailable": "Worker-Ergebnis nicht verfügbar",
-        "showDetails": "Details anzeigen",
-        "hideDetails": "Details ausblenden",
-        "close": "Schließen",
         "workersRegion": "Worker",
-        "doneResult": "Erledigt · Ergebnis öffnen",
         "clearName": "{{name}} entfernen",
         "stopUnavailable": "Stoppen von {{name}} · {{title}} nicht verfügbar · {{reason}}",
         "stopName": "{{name}} · {{title}} stoppen",
@@ -22619,8 +22599,6 @@
         "task": "Aufgabe",
         "workerCount_one": "{{count}} Worker",
         "workerCount_other": "{{count}} Worker",
-        "stopped": "Gestoppt",
-        "finished": "Abgeschlossen",
         "failedCount": "{{count}} fehlgeschlagen",
         "needsYouCount": "{{count}} mit Rückfrage",
         "newQuestions_one": "{{count}} neue Worker-Frage wartet auf dich",
@@ -24623,9 +24601,6 @@
         "planModelWithoutThinking": "Modell „{{model}}“ unterstützt keine Einstellung des Denkaufwands.",
         "planThinkingLevelInvalid": "Die Denkstufe „{{level}}“ ist für {{model}} nicht gültig.",
         "openCodeInvalidEvents": "OpenCode hat ungültige JSON-Ereignisse zurückgegeben.",
-        "antigravityInvalidEvents": "Antigravity hat ungültige JSON-Ereignisse zurückgegeben.",
-        "antigravityInvalidResult": "Antigravity hat ein ungültiges Ergebnis zurückgegeben.",
-        "antigravityNoFinalResult": "Antigravity hat kein abschließendes Ergebnis zurückgegeben.",
         "kimiUnreadableOutput": "Kimi hat eine Ausgabe zurückgegeben, die Orca nicht lesen konnte. Erneut versuchen.",
         "kimiSessionOccupied": "Kimi konnte diese Sitzung nicht verwenden, da sie in einem anderen Client aktiv ist. Die Sitzung dort stoppen oder den Client beenden und erneut versuchen.",
         "kimiInterrupted": "Kimi wurde vor Abschluss der Textgenerierung unterbrochen. Erneut versuchen.",
@@ -25181,9 +25156,6 @@
       "retry": "Erneut versuchen",
       "changed": "Das native Konto hat sich geändert. Vor dem Start von agy erneut ein gespeichertes Konto auswählen.",
       "refresh": "Konten aktualisieren",
-      "usage": "Nutzung aktualisieren",
-      "usageWithReading": "Nutzung aktualisieren ({{reading}})",
-      "usageReading": "Sitzung: {{session}} · Wöchentlich: {{weekly}}",
       "saved": "Gespeichertes Google-Konto",
       "remove": "Entfernen",
       "searchDescription": "Native Google-Konten von agy auf dem Ausführungshost speichern und auswählen.",
@@ -25204,8 +25176,6 @@
       "settingsIncomplete": "Wähle einen Antigravity-Kontotyp und gib dessen Google-Cloud-Projekt und -Standort ein.",
       "settingsLoadFailed": "Orca konnte deine Antigravity-Anmeldeeinstellungen nicht laden. Versuche es erneut.",
       "settingsSaveFailed": "Orca konnte deine Antigravity-Anmeldeeinstellungen nicht speichern. Versuche es erneut.",
-      "lastReading": "{{reading}} · Ausgelesen {{time}}",
-      "noReading": "Nutzung unbekannt: noch nicht ausgelesen",
       "fd47b5a5dd": "Antigravity-Konten",
       "personalOption": "Dein persönlicher Google AI-Tarif",
       "enterpriseOption": "Lizenz deiner Organisation",
@@ -25236,7 +25206,6 @@
       "currentNotSaved": "Aktuelle agy-Anmeldung · nicht gespeichert",
       "noEmailNotSaved": "agy hat keine E-Mail-Adresse gemeldet · nicht gespeichert",
       "saveShort": "Speichern",
-      "readAt": "Ausgelesen {{time}}",
       "active": "Aktiv",
       "runtime": "Laufzeit",
       "chatTitle": "Antigravity-Chat",
@@ -27661,6 +27630,7 @@
     "usageLimit": {
       "continuesAt": "Fortsetzung um {{time}}",
       "continuesShort": "Fortsetzung {{time}}",
+      "rowLine": "Nutzungslimit · {{time}}",
       "continuesTip": "Automatische Fortsetzung um {{time}}",
       "hitLimit": "Limit erreicht · Reset {{time}}",
       "hitShort": "Limit erreicht",

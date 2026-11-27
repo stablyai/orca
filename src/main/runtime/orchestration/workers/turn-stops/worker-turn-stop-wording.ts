@@ -3,7 +3,6 @@ import { replaceDispatchCapabilities } from '../../terminal-authority/views/work
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import { describeCoordinatorAnswer, describeHelperHold } from './worker-approval-text'
 import type { WorkerTurnStop, WorkerTurnStopReason } from './worker-turn-stop-report'
-import { workerBackgroundWaitNoticeText } from './worker-background-wait-notice'
 
 // One screenful: enough to show the agent's last words or error banner without flooding the inbox.
 const LAST_OUTPUT_MAX_CHARS = 2_000
@@ -22,7 +21,9 @@ export const WORKER_STOP_SUBJECTS: Record<WorkerTurnStopReason, string> = {
 }
 
 /** The worker went away, or its start ended without it: never deliberate. */
-export function isWorkerGone(reason: WorkerTurnStopReason): boolean {
+export function isWorkerGone(
+  reason: WorkerTurnStopReason
+): reason is 'exited' | 'lost' | 'never-ready' | 'start-failed' {
   return (
     reason === 'exited' ||
     reason === 'lost' ||
@@ -96,7 +97,7 @@ export function describeStop(stop: WorkerTurnStop, context: StopContext): string
         ? `Worker ${stop.from} never became ready for task ${task}. ${cause ?? 'Orca never typed its brief.'}`
         : stop.reason === 'start-unconfirmed'
           ? stop.startSurface === 'chat'
-            ? `Your worker's brief may not have been submitted; check it. Orca sent task ${task} to worker ${stop.from}, but never saw it start the task.`
+            ? `Your worker's brief may not have been submitted. Orca never saw worker ${stop.from} start task ${task}. Check the chat before retrying.`
             : stop.startEvidence?.continuePrompt
               ? `Your worker's continue prompt may not have been submitted; check it. Orca resumed worker ${stop.from} on task ${task} after a restart and typed its continue prompt, but did not press Enter: the prompt may still be waiting.`
               : `Your worker's brief may not have been submitted; check it. Orca typed task ${task} into worker ${stop.from}, but never saw its turn start: the brief may still be waiting in its prompt.`
@@ -150,7 +151,7 @@ function describeBackgroundWait(stop: WorkerTurnStop, { task, dispatchId }: Stop
   const named = commands[0] ? ` \`${redactFailure(commands[0])}\`` : ''
   const more = commands.length > 1 ? ` (and ${commands.length - 1} more)` : ''
   return [
-    `Worker ${stop.from} has been waiting on its background task${named}${more} for ${workerBackgroundWaitNoticeText()} on task ${task}; check it or stop it.`,
+    `Worker ${stop.from} is waiting on its background task${named}${more} on task ${task}; check it or stop it.`,
     `Its turn ended${endedAt(stop.backgroundWait?.since)} and none has started since. It is still running; nothing was stopped.`,
     `Check it with your Orca CLI's \`orchestration worker-read --dispatch ${dispatchId}\`, or stop it with \`orchestration worker-stop --dispatch ${dispatchId}\`.`
   ].join('\n')

@@ -154,7 +154,7 @@ export class AcpTextTasks {
             envToDelete: [...launch.envToDelete, ...TASK_ENV_TO_DELETE]
           },
           {
-            clientInfo: acpClientInfo(launch.spec, launch.version ?? null, NAMING_CLIENT_INFO),
+            clientInfo: acpClientInfo(launch.spec, NAMING_CLIENT_INFO),
             signIn: spec.signIn,
             onPermission: (request) =>
               spec.agent === 'antigravity' ? denyAcpTextTaskPermission(request) : reject(),
