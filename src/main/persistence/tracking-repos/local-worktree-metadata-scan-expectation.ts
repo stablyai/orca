@@ -12,6 +12,7 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
+import { fingerprintString } from '../../../shared/text/string-fingerprint'
 
 type CapturedLocalRepoIdentity = Readonly<
   Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'> & {
@@ -29,7 +30,7 @@ type CapturedLocalRoutingIdentity = Readonly<{
 type MetadataRowExpectation = Readonly<{
   expectedPresent: boolean
   expectedMeta: WorktreeMeta | undefined
-  expectedSerialized: string | null | undefined
+  expectedFingerprint: string | null | undefined
   expectedInstanceId: string | undefined
   expectedHostId: WorktreeMeta['hostId']
 }>
@@ -55,12 +56,12 @@ export type NativeLocalWorktreeMetadataScanExpectation = Readonly<{
 
 type MetadataAliasEntry = readonly [alias: string, identityKeys: string[]]
 
-function serializeMetadataRow(meta: WorktreeMeta | undefined): string | null | undefined {
+function fingerprintMetadataRow(meta: WorktreeMeta | undefined): string | null | undefined {
   if (!meta) {
     return undefined
   }
   try {
-    return JSON.stringify(meta)
+    return fingerprintString(JSON.stringify(meta))
   } catch {
     return null
   }
@@ -75,7 +76,7 @@ function captureRow(
   return {
     expectedPresent,
     expectedMeta,
-    expectedSerialized: serializeMetadataRow(expectedMeta),
+    expectedFingerprint: fingerprintMetadataRow(expectedMeta),
     expectedInstanceId: expectedMeta?.instanceId,
     expectedHostId: expectedMeta?.hostId
   }
@@ -86,20 +87,34 @@ export function indexMetadataAliasesForWorktreeIds(
   worktreeIds: ReadonlySet<string>
 ): Map<string, MetadataAliasEntry[]> {
   const indexed = new Map<string, MetadataAliasEntry[]>()
-  for (const [alias, identityKeys] of Object.entries(state.worktreeIdentityAliases ?? {})) {
-    const matches = new Set<string>()
+  const aliases = state.worktreeIdentityAliases
+  if (!aliases || worktreeIds.size === 0) {
+    return indexed
+  }
+  for (const alias in aliases) {
+    if (!Object.hasOwn(aliases, alias)) {
+      continue
+    }
+    const identityKeys = aliases[alias]!
     if (worktreeIds.has(alias)) {
-      matches.add(alias)
+      const entries = indexed.get(alias)
+      if (entries) {
+        entries.push([alias, identityKeys])
+      } else {
+        indexed.set(alias, [[alias, identityKeys]])
+      }
     }
     const separator = alias.indexOf('|')
-    const suffix = separator === -1 ? alias : alias.slice(separator + 1)
-    if (worktreeIds.has(suffix)) {
-      matches.add(suffix)
-    }
-    for (const worktreeId of matches) {
-      const entries = indexed.get(worktreeId) ?? []
-      entries.push([alias, identityKeys])
-      indexed.set(worktreeId, entries)
+    if (separator !== -1) {
+      const suffix = alias.slice(separator + 1)
+      if (suffix !== alias && worktreeIds.has(suffix)) {
+        const entries = indexed.get(suffix)
+        if (entries) {
+          entries.push([alias, identityKeys])
+        } else {
+          indexed.set(suffix, [[alias, identityKeys]])
+        }
+      }
     }
   }
   return indexed
@@ -113,7 +128,12 @@ export function captureNativeLocalWorktreeMetadataScanExpectation(
   const expectedRepo = matchingRepos.length === 1 ? matchingRepos[0] : undefined
   const expectedProject = state.projects.find((project) => project.sourceRepoIds.includes(repo.id))
   const candidateIds = new Set<string>()
-  for (const [worktreeId, meta] of Object.entries(state.worktreeMeta)) {
+  const worktreeMeta = state.worktreeMeta
+  for (const worktreeId in worktreeMeta) {
+    if (!Object.hasOwn(worktreeMeta, worktreeId)) {
+      continue
+    }
+    const meta = worktreeMeta[worktreeId]!
     if (
       splitWorktreeId(worktreeId)?.repoId === repo.id &&
       (!meta.hostId || meta.hostId === LOCAL_EXECUTION_HOST_ID)
@@ -121,16 +141,19 @@ export function captureNativeLocalWorktreeMetadataScanExpectation(
       candidateIds.add(worktreeId)
     }
   }
-  for (const alias of Object.keys(state.worktreeIdentityAliases ?? {})) {
-    if (!isWorktreeHostIdentity(alias)) {
-      continue
-    }
-    const worktreeId = getWorktreeIdFromHostIdentity(alias)
-    if (
-      alias === composeWorktreeHostIdentity(LOCAL_EXECUTION_HOST_ID, worktreeId) &&
-      splitWorktreeId(worktreeId)?.repoId === repo.id
-    ) {
-      candidateIds.add(worktreeId)
+  const aliases = state.worktreeIdentityAliases
+  if (aliases) {
+    for (const alias in aliases) {
+      if (!Object.hasOwn(aliases, alias) || !isWorktreeHostIdentity(alias)) {
+        continue
+      }
+      const worktreeId = getWorktreeIdFromHostIdentity(alias)
+      if (
+        alias === composeWorktreeHostIdentity(LOCAL_EXECUTION_HOST_ID, worktreeId) &&
+        splitWorktreeId(worktreeId)?.repoId === repo.id
+      ) {
+        candidateIds.add(worktreeId)
+      }
     }
   }
   const aliasesByWorktreeId = indexMetadataAliasesForWorktreeIds(state, candidateIds)
@@ -173,8 +196,8 @@ function rowStillMatches(
   return (
     Object.hasOwn(record ?? {}, key) === expected.expectedPresent &&
     current === expected.expectedMeta &&
-    expected.expectedSerialized !== null &&
-    serializeMetadataRow(current) === expected.expectedSerialized &&
+    expected.expectedFingerprint !== null &&
+    fingerprintMetadataRow(current) === expected.expectedFingerprint &&
     current?.instanceId === expected.expectedInstanceId &&
     current?.hostId === expected.expectedHostId
   )

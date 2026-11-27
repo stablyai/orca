@@ -1,6 +1,7 @@
 import { noteEnvironmentStoreWrite } from './runtime-environment-store-write-generation'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { writeSecureJsonFileWithinLimit } from '../../secure-storage/bounded-secure-json-file'
 import {
   readEnvironmentRegistryFile,
@@ -23,44 +24,52 @@ import {
 const SIDECAR_FILE = 'orca-environment-sidecar.json'
 export const MAX_SIDECAR_FILE_BYTES = 1024 * 1024
 
-const SidecarBindingSchema = z.object({
-  createdAt: z.number().finite(),
-  pairingRevision: z.number().finite(),
-  preferredEndpointId: z.string().min(1)
-})
+const SidecarBindingSchema = lazyZodSchema(() =>
+  z.object({
+    createdAt: z.number().finite(),
+    pairingRevision: z.number().finite(),
+    preferredEndpointId: z.string().min(1)
+  })
+)
 
 const SidecarSshAccessSchema = RuntimeSshAccessLinkSchema.extend({
   endpoint: RuntimeAccessEndpointSchema
 })
 
-const SidecarEntrySchema = z.object({
-  binding: SidecarBindingSchema,
-  // The store state a two-file rebind is moving to; the entry stays current through a crash between them.
-  pendingBinding: SidecarBindingSchema.optional(),
-  // A verified link’s runtime ID until stored; differing IDs mean restart because orcad mints one each start (#32957).
-  runtimeId: z.string().min(1).optional(),
-  sshAccess: SidecarSshAccessSchema.optional(),
-  pendingSshAccessOperation: RuntimeSshAccessOperationSchema.optional(),
-  // The managed SSH deployment's tunnel, without a `kind` so older builds read it unchanged.
-  // WSL deployments live in wsl-host-deployment-store instead.
-  orcadDeployment: RuntimeSshTunnelLinkSchema.optional(),
-  // A rollback to a snapshot older than this would discard the migrated catalog.
-  orcadMigratedAt: z.string().datetime().optional(),
-  // Keeps the overlaid pairing revision monotonic after the access that raised it is removed.
-  pairingRevisionFloor: z.number().finite().optional(),
-  reconciliation: RuntimeEnvironmentReconciliationRecordSchema.optional()
-})
+const SidecarEntrySchema = lazyZodSchema(() =>
+  z.object({
+    binding: SidecarBindingSchema,
+    // The store state a two-file rebind is moving to; the entry stays current through a crash between them.
+    pendingBinding: SidecarBindingSchema.optional(),
+    // A verified link’s runtime ID until stored; differing IDs mean restart because orcad mints one each start (#32957).
+    runtimeId: z.string().min(1).optional(),
+    sshAccess: SidecarSshAccessSchema.optional(),
+    pendingSshAccessOperation: RuntimeSshAccessOperationSchema.optional(),
+    // The managed SSH deployment's tunnel, without a `kind` so older builds read it unchanged.
+    // WSL deployments live in wsl-host-deployment-store instead.
+    orcadDeployment: RuntimeSshTunnelLinkSchema.optional(),
+    // A rollback to a snapshot older than this would discard the migrated catalog.
+    orcadMigratedAt: z.string().datetime().optional(),
+    // Keeps the overlaid pairing revision monotonic after the access that raised it is removed.
+    pairingRevisionFloor: z.number().finite().optional(),
+    reconciliation: RuntimeEnvironmentReconciliationRecordSchema.optional()
+  })
+)
 
-const SidecarSchema = z.object({
-  version: z.literal(1),
-  entries: z.record(z.string().min(1), SidecarEntrySchema)
-})
+const SidecarSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    entries: z.record(z.string().min(1), SidecarEntrySchema)
+  })
+)
 
 // Entries stay opaque so one bad or newer-format entry cannot hide every server.
-const SidecarEnvelopeSchema = z.object({
-  version: z.literal(1),
-  entries: z.record(z.string(), z.unknown())
-})
+const SidecarEnvelopeSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    entries: z.record(z.string(), z.unknown())
+  })
+)
 
 export type RuntimeEnvironmentSidecarEntry = z.infer<typeof SidecarEntrySchema>
 export type RuntimeEnvironmentSidecar = z.infer<typeof SidecarSchema> & {

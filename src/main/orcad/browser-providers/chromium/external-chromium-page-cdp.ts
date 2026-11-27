@@ -1,5 +1,6 @@
 import WebSocket from 'ws'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { BrowserError } from '../../../browser/browser-error'
 import type { CdpCommandSender } from '../../../browser/cdp/debugger/cdp-command-sender'
 import type {
@@ -9,13 +10,15 @@ import type {
 import type { PageInputSession } from './external-chromium-page-input'
 
 const CDP_COMMAND_TIMEOUT_MS = 10_000
-const AgentBrowserCdpUrl = z.object({ cdpUrl: z.string() })
-const CdpReply = z.object({
-  id: z.number(),
-  result: z.unknown().optional(),
-  error: z.object({ message: z.string().optional() }).optional()
-})
-const AttachedSession = z.object({ sessionId: z.string() })
+const AgentBrowserCdpUrl = lazyZodSchema(() => z.object({ cdpUrl: z.string() }))
+const CdpReply = lazyZodSchema(() =>
+  z.object({
+    id: z.number(),
+    result: z.unknown().optional(),
+    error: z.object({ message: z.string().optional() }).optional()
+  })
+)
+const AttachedSession = lazyZodSchema(() => z.object({ sessionId: z.string() }))
 
 /**
  * agent-browser has no raw CDP verb, so commands it lacks (cookie delete by name) open a second

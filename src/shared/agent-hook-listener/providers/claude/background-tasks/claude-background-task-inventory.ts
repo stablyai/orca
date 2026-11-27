@@ -35,6 +35,20 @@ export type ClaudeBackgroundAgentTask = {
   teammate: boolean
 }
 
+// Claude keeps its artifact live-updates and presence sockets open all session and leaves them out of its own in-flight work, but hook rows drop the ambient flag.
+const CLAUDE_AMBIENT_ARTIFACT_MONITOR_PREFIXES = [
+  'live updates for artifact ',
+  'presence on artifact '
+]
+
+function isClaudeAmbientArtifactMonitor(taskType: string, description: unknown): boolean {
+  return (
+    taskType === 'monitor' &&
+    typeof description === 'string' &&
+    CLAUDE_AMBIENT_ARTIFACT_MONITOR_PREFIXES.some((prefix) => description.startsWith(prefix))
+  )
+}
+
 /** Absent/malformed inventory on older Claude builds means retain the tracked roster; never clear it. */
 export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unknown>): {
   present: boolean
@@ -80,6 +94,9 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
     if (taskType.length === 0) {
       truncated = true
       hasRunningNonAgentTask ||= !isTerminal
+      continue
+    }
+    if (isClaudeAmbientArtifactMonitor(taskType, obj.description)) {
       continue
     }
     const isAgentTask = isAgentChildWorkKind(classifyClaudeBackgroundTaskKind(taskType))

@@ -4,10 +4,19 @@ import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/a
 
 // Leave time for normal checkpoints, but do not strand the installer behind a wedged shutdown.
 export const UPDATE_INSTALL_EXIT_TIMEOUT_MS = 20_000
+// Windows' installer terminates install-folder processes after ORCA_UPDATE_EXIT_GRACE_MS (22 s,
+// config/nsis/orca-process-check.nsh); exit on our own first rather than be killed mid-write.
+export const WINDOWS_UPDATE_INSTALL_EXIT_TIMEOUT_MS = 8_000
+
+export function updateInstallExitTimeoutMs(platform: NodeJS.Platform = process.platform): number {
+  return platform === 'win32'
+    ? WINDOWS_UPDATE_INSTALL_EXIT_TIMEOUT_MS
+    : UPDATE_INSTALL_EXIT_TIMEOUT_MS
+}
 
 let exitTimer: ReturnType<typeof setTimeout> | null = null
 
-export function armUpdateInstallExitWatchdog(timeoutMs = UPDATE_INSTALL_EXIT_TIMEOUT_MS): void {
+export function armUpdateInstallExitWatchdog(timeoutMs = updateInstallExitTimeoutMs()): void {
   if (exitTimer) {
     return
   }

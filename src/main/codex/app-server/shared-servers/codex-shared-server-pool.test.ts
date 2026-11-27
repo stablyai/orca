@@ -525,18 +525,22 @@ describe('shared Codex app-servers', () => {
   })
 
   it('never shares a server with the switch off, for a custom Codex command, or on Windows', () => {
-    const opener = codexConnectionOpener({ sharedServers: () => true }, 's', {
-      customCommand: true
-    })
-    expect(opener).toBe(spawnCodexAppServerConnection)
+    const sharingOn = { sharedServers: () => true }
+    // On macOS and Linux the chat's own server is relayed on purpose; it is never a shared one.
+    for (const platform of ['linux', 'darwin', 'win32'] as const) {
+      const opener = codexConnectionOpener(sharingOn, 's', { customCommand: true }, {}, platform)
+      expect(opensSharedCodexServer(opener)).toBe(false)
+    }
     // Windows can't attribute a process to one chat, so a shared server's Stop couldn't prove it.
     const pool = () => ({ open: () => Promise.reject(new Error('shared')) })
-    expect(codexConnectionOpener({ sharedServers: () => true }, 's', {}, {}, 'win32', pool)).toBe(
+    expect(codexConnectionOpener(sharingOn, 's', {}, {}, 'win32', pool)).toBe(
       spawnCodexAppServerConnection
     )
-    expect(codexConnectionOpener({ sharedServers: () => false }, 's', {}, {}, 'linux')).toBe(
-      spawnCodexAppServerConnection
-    )
+    expect(
+      opensSharedCodexServer(
+        codexConnectionOpener({ sharedServers: () => false }, 's', {}, {}, 'linux')
+      )
+    ).toBe(false)
   })
 
   it("marks a shared opener, so a chat's recovery never signals the server it shares", () => {

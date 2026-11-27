@@ -9,9 +9,9 @@ import type { TranscriptMessageChannel } from '../transcripts/session-transcript
 import type { SkippedTranscriptRecord } from '../transcripts/session-transcript-record-budget'
 
 // Keep listed rows hot: unlimited scans must not evict their own next hits; only unlisted rows are count-bounded.
-export const MAX_UNLISTED_ENTRIES = 4096
-// Dropping heavy parser state rereads only changed files; persisted session rows survive.
-export const MAX_RESUME_ENTRIES = 4096
+export const MAX_UNLISTED_ENTRIES = 1024
+// Dropping heavy parser state rereads only changed files; persisted session rows survive in cold tier.
+export const MAX_RESUME_ENTRIES = 256
 
 export type SessionParseResumePoint = {
   state: ResumableSessionParseState

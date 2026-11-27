@@ -1,11 +1,11 @@
 // The waiting ask of several questions, every open line at once, a hairline between them. A quick reply
 // picks the line's answer (solid, with a check) and folds it to "✓ Question… → answer", which reopens
-// on click; nothing posts until Send, which posts the picks as one comment. A line answered, or sent
-// and on its way, folds the same and stays. The comment box below is the one place to type: its
-// Enter holds the words, with their images, files and skills, as the answer of the line its
-// "Replying to" names, like a pick.
+// on click: the box then answers it, and its pick again folds it back. Nothing posts until Send, which
+// posts the picks as one comment. A line answered, or sent and on its way, folds the same and stays.
+// The comment box below is the one place to type: its Enter holds the words, with their images, files
+// and skills, as the answer of the line its "Replying to" names, like a pick.
 import { Check, LoaderCircle, Pencil } from 'lucide-react'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -141,12 +141,10 @@ export function BotItemQuestionStep({
   const t = useTranslate()
   const recommended = t('bots.items.ask.recommended', 'Recommended')
   const typeAnswer = t('bots.items.ask.typeAnswer', 'Type your answer')
-  // A picked line reopened to change its pick; a new pick folds it again.
-  const [reopened, setReopened] = useState<number | null>(null)
   const targets = useRef(new Map<string, HTMLButtonElement>())
   const sendButton = useRef<HTMLButtonElement | null>(null)
   const focusNext = useRef<FocusTarget | null>(null)
-  const { picks, lines } = steps
+  const { picks, lines, reopened } = steps
   const target = (key: string) => (node: HTMLButtonElement | null) => {
     if (node) {
       targets.current.set(key, node)
@@ -186,17 +184,10 @@ export function BotItemQuestionStep({
     !shape.decisions[index]!.replies.some((reply) =>
       botItemHeldAnswerIsReply(picks[index], reply.label)
     )
+  // Its pick again keeps it and folds the line; only the pencil clears a pick.
   const choose = (index: number, label: string): void => {
-    const clearing = botItemHeldAnswerIsReply(picks[index], label)
     steps.pick(index, label)
-    if (clearing) {
-      // Cleared: the line stays open, and focus on the chip.
-      setReopened(index)
-      focusNext.current = { kind: 'chip', index, label }
-    } else {
-      setReopened(null)
-      focusNext.current = { kind: 'next', after: index }
-    }
+    focusNext.current = { kind: 'next', after: index }
   }
   const ownWords = (index: number, words: BotItemHeldAnswer | string | null): void => {
     // Your words for this line, in the box: they take over its pick, and Enter answers it. A held
@@ -252,7 +243,7 @@ export function BotItemQuestionStep({
                   onOpen={
                     pick
                       ? () => {
-                          setReopened(index)
+                          steps.reopen(index)
                           focusNext.current = { kind: 'chip', index, label: pick.words }
                         }
                       : undefined

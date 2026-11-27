@@ -26,6 +26,7 @@ import {
 import { formatFinishedReportReplyRefusal } from '../../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
+import { replySubject } from '../../../../../../shared/orchestration/mailbox/reply-subject'
 
 export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
   name: 'orchestration.reply',
@@ -179,9 +180,10 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
         from: replyFrom,
         senderDispatchId,
         to: recipient.to,
-        subject: `Re: ${original.subject}`,
+        subject: replySubject(original.subject),
         body: params.body,
         threadId: original.thread_id ?? original.id,
+        replyTo: original.id,
         runId: recipient.runId,
         // Refuses a second answer to a bot request, before the original is marked read.
         payload: botAnswerPayload(db, original, answerTurn !== null)

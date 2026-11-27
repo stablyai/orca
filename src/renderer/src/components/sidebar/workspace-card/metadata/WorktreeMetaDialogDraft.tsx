@@ -38,6 +38,7 @@ import {
   isImeOwnedKeyboardEvent,
   useImeEnterGestureOwnership
 } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
   const t = useTranslate()
@@ -114,49 +115,52 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
     }
     setSaving(true)
     setSaveError(null)
-    try {
-      const updates = {
-        ...(displayNameEdited || displayNameInput.trim() !== initial.displayName
-          ? { displayName: displayNameInput.trim() }
-          : {}),
-        ...(commentInput.trim() !== initial.comment ? { comment: commentInput.trim() } : {}),
-        ...buildWorkspaceAttachmentEdits({
-          initial: initial.items,
-          draft: items
-        })
-      }
-      const result =
-        executionHostId || suppressHostedReviewRefresh
-          ? await updateWorktreeMeta(worktreeId, updates, {
-              ...(executionHostId ? { executionHostId } : {}),
-              ...(suppressHostedReviewRefresh ? { suppressHostedReviewRefresh: true } : {})
-            })
-          : await updateWorktreeMeta(worktreeId, updates)
-      if (
-        !mountedRef.current ||
-        getWorktreeMetaDialogOwner(useAppStore.getState()) !== dialogOwner
-      ) {
-        return
-      }
-      if (!result.ok) {
+    await runWithFinally(
+      async () => {
+        const updates = {
+          ...(displayNameEdited || displayNameInput.trim() !== initial.displayName
+            ? { displayName: displayNameInput.trim() }
+            : {}),
+          ...(commentInput.trim() !== initial.comment ? { comment: commentInput.trim() } : {}),
+          ...buildWorkspaceAttachmentEdits({
+            initial: initial.items,
+            draft: items
+          })
+        }
+        const result =
+          executionHostId || suppressHostedReviewRefresh
+            ? await updateWorktreeMeta(worktreeId, updates, {
+                ...(executionHostId ? { executionHostId } : {}),
+                ...(suppressHostedReviewRefresh ? { suppressHostedReviewRefresh: true } : {})
+              })
+            : await updateWorktreeMeta(worktreeId, updates)
+        if (
+          !mountedRef.current ||
+          getWorktreeMetaDialogOwner(useAppStore.getState()) !== dialogOwner
+        ) {
+          return
+        }
+        if (!result.ok) {
+          if (mountedRef.current) {
+            setSaveError(result.error)
+          }
+          return
+        }
+        closeModal()
+        if (typeof modalData.afterSave === 'function') {
+          try {
+            void Promise.resolve(modalData.afterSave({ worktreeId, updates })).catch(console.error)
+          } catch (error) {
+            console.error(error)
+          }
+        }
+      },
+      () => {
         if (mountedRef.current) {
-          setSaveError(result.error)
-        }
-        return
-      }
-      closeModal()
-      if (typeof modalData.afterSave === 'function') {
-        try {
-          void Promise.resolve(modalData.afterSave({ worktreeId, updates })).catch(console.error)
-        } catch (error) {
-          console.error(error)
+          setSaving(false)
         }
       }
-    } finally {
-      if (mountedRef.current) {
-        setSaving(false)
-      }
-    }
+    )
   }
 
   const setCommentTextareaRef = useCallback(

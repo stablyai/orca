@@ -112,7 +112,11 @@ export const BOT_FAILURE_COPY = {
   groupImageNotStored: 'Only pasted or attached images can go in a group message.',
   groupAttachmentsUnavailable:
     "This computer can't take attachments right now. Try sending again in a moment.",
-  groupAttachFailed: "Couldn't attach the files. Try sending again in a moment."
+  groupAttachFailed: "Couldn't attach the files. Try sending again in a moment.",
+  composioKeyCantCreateSessions:
+    'This Composio key can’t create sessions. It needs {{permission}}.',
+  composioKeyNeedsPermission: 'This Composio key is missing a permission. It needs {{permission}}.',
+  composioKeyMissingPermission: 'This Composio key is missing a permission Orca needs.'
 } as const
 
 export type BotFailureCode = keyof typeof BOT_FAILURE_COPY

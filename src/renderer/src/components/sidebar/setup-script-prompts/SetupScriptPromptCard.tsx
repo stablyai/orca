@@ -33,6 +33,7 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { getRepoHostIdentity } from '../../../../../shared/repository/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 function SetupScriptPromptCard(): React.JSX.Element | null {
   const t = useTranslate()
@@ -178,104 +179,111 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
       const importedRepoHostIdentity = getRepoHostIdentity(activeRepo)
       const importedHostId = getRepoExecutionHostId(activeRepo)
       setImportingRepoHostIdentity(importedRepoHostIdentity)
-      try {
-        const importedRepoId = activeRepo.id
-        const nextSettings = buildImportedHookSettings(activeRepo, candidate, hasSharedHooks)
-        const didUpdate = await updateRepo(
-          activeRepo.id,
-          { hookSettings: nextSettings },
-          { hostId: importedHostId }
-        )
-        if (!didUpdate) {
-          track(
-            'setup_script_prompt_action',
-            buildSetupScriptPromptActionTelemetry({
-              action:
-                actionPrefix === 'save_detected_setup'
-                  ? 'save_detected_setup_failed'
-                  : 'import_failed',
-              candidate,
-              hasSharedHooks,
-              editedBeforeSave
-            })
-          )
-          if (mountedRef.current) {
-            toast.error(
-              translate(
-                'auto.components.sidebar.SetupScriptPromptCard.888b83bf78',
-                'Failed to save setup script'
+      await runWithFinally(
+        async () => {
+          try {
+            const importedRepoId = activeRepo.id
+            const nextSettings = buildImportedHookSettings(activeRepo, candidate, hasSharedHooks)
+            const didUpdate = await updateRepo(
+              activeRepo.id,
+              { hookSettings: nextSettings },
+              { hostId: importedHostId }
+            )
+            if (!didUpdate) {
+              track(
+                'setup_script_prompt_action',
+                buildSetupScriptPromptActionTelemetry({
+                  action:
+                    actionPrefix === 'save_detected_setup'
+                      ? 'save_detected_setup_failed'
+                      : 'import_failed',
+                  candidate,
+                  hasSharedHooks,
+                  editedBeforeSave
+                })
               )
+              if (mountedRef.current) {
+                toast.error(
+                  translate(
+                    'auto.components.sidebar.SetupScriptPromptCard.888b83bf78',
+                    'Failed to save setup script'
+                  )
+                )
+              }
+              return
+            }
+            track(
+              'setup_script_prompt_action',
+              buildSetupScriptPromptActionTelemetry({
+                action:
+                  actionPrefix === 'save_detected_setup'
+                    ? 'save_detected_setup_completed'
+                    : 'import_completed',
+                candidate,
+                hasSharedHooks,
+                editedBeforeSave
+              })
+            )
+            if (actionPrefix === 'save_detected_setup') {
+              if (mountedRef.current) {
+                setPromptState((current) =>
+                  markSetupScriptPromptSaved(current, importedRepoHostIdentity)
+                )
+                showSavedInProjectSettingsToast({
+                  onOpenSettings: () => openLocalCommandSettings(importedRepoId, importedHostId),
+                  description: translate(
+                    'auto.components.sidebar.SetupScriptPromptCard.a49196d538',
+                    'Runs when Orca creates a new worktree.'
+                  )
+                })
+              }
+              return
+            }
+            if (mountedRef.current) {
+              setPromptState((current) =>
+                markSetupScriptPromptSaved(current, importedRepoHostIdentity)
+              )
+              // Skipped fields were listed in the review dialog before saving; the toast only confirms.
+              showSavedInProjectSettingsToast({
+                onOpenSettings: () => openLocalCommandSettings(importedRepoId, importedHostId),
+                description: translate(
+                  'auto.components.sidebar.SetupScriptPromptCard.savedSetupCommand',
+                  'Saved the setup command.'
+                )
+              })
+            }
+          } catch (error) {
+            track(
+              'setup_script_prompt_action',
+              buildSetupScriptPromptActionTelemetry({
+                action:
+                  actionPrefix === 'save_detected_setup'
+                    ? 'save_detected_setup_failed'
+                    : 'import_failed',
+                candidate,
+                hasSharedHooks,
+                editedBeforeSave
+              })
+            )
+            console.warn('[setup-script-prompt] Failed to save setup script:', error)
+            if (mountedRef.current) {
+              toast.error(
+                translate(
+                  'auto.components.sidebar.SetupScriptPromptCard.888b83bf78',
+                  'Failed to save setup script'
+                )
+              )
+            }
+          }
+        },
+        () => {
+          if (mountedRef.current) {
+            setImportingRepoHostIdentity((current) =>
+              current === importedRepoHostIdentity ? null : current
             )
           }
-          return
         }
-        track(
-          'setup_script_prompt_action',
-          buildSetupScriptPromptActionTelemetry({
-            action:
-              actionPrefix === 'save_detected_setup'
-                ? 'save_detected_setup_completed'
-                : 'import_completed',
-            candidate,
-            hasSharedHooks,
-            editedBeforeSave
-          })
-        )
-        if (actionPrefix === 'save_detected_setup') {
-          if (mountedRef.current) {
-            setPromptState((current) =>
-              markSetupScriptPromptSaved(current, importedRepoHostIdentity)
-            )
-            showSavedInProjectSettingsToast({
-              onOpenSettings: () => openLocalCommandSettings(importedRepoId, importedHostId),
-              description: translate(
-                'auto.components.sidebar.SetupScriptPromptCard.a49196d538',
-                'Runs when Orca creates a new worktree.'
-              )
-            })
-          }
-          return
-        }
-        if (mountedRef.current) {
-          setPromptState((current) => markSetupScriptPromptSaved(current, importedRepoHostIdentity))
-          // Skipped fields were listed in the review dialog before saving; the toast only confirms.
-          showSavedInProjectSettingsToast({
-            onOpenSettings: () => openLocalCommandSettings(importedRepoId, importedHostId),
-            description: translate(
-              'auto.components.sidebar.SetupScriptPromptCard.savedSetupCommand',
-              'Saved the setup command.'
-            )
-          })
-        }
-      } catch (error) {
-        track(
-          'setup_script_prompt_action',
-          buildSetupScriptPromptActionTelemetry({
-            action:
-              actionPrefix === 'save_detected_setup'
-                ? 'save_detected_setup_failed'
-                : 'import_failed',
-            candidate,
-            hasSharedHooks,
-            editedBeforeSave
-          })
-        )
-        console.warn('[setup-script-prompt] Failed to save setup script:', error)
-        if (mountedRef.current) {
-          toast.error(
-            translate(
-              'auto.components.sidebar.SetupScriptPromptCard.888b83bf78',
-              'Failed to save setup script'
-            )
-          )
-        }
-      } finally {
-        if (mountedRef.current) {
-          setImportingRepoHostIdentity((current) =>
-            current === importedRepoHostIdentity ? null : current
-          )
-        }
-      }
+      )
     },
     [activeRepo, mountedRef, openLocalCommandSettings, updateRepo]
   )

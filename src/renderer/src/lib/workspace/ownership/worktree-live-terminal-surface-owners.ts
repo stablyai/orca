@@ -5,8 +5,8 @@ import {
 } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type {
   RuntimeTerminalListHostScope,
-  RuntimeTerminalListResult,
-  RuntimeTerminalSummary
+  RuntimeTerminalListResultWithoutPreview,
+  RuntimeTerminalSummaryWithoutPreview
 } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
@@ -31,7 +31,7 @@ const OWNER_LISTING_LIMIT = 200
 /** A host that predates `hostScope` cannot say what it answered for, so it cannot be read. */
 function isScopedTerminalListResult(
   value: unknown
-): value is RuntimeTerminalListResult & { hostScope: RuntimeTerminalListHostScope } {
+): value is RuntimeTerminalListResultWithoutPreview & { hostScope: RuntimeTerminalListHostScope } {
   if (
     !value ||
     typeof value !== 'object' ||
@@ -48,7 +48,9 @@ function isScopedTerminalListResult(
   )
 }
 
-function toSurfaceOwner(terminal: RuntimeTerminalSummary): LiveTerminalSurfaceOwner | null {
+function toSurfaceOwner(
+  terminal: RuntimeTerminalSummaryWithoutPreview
+): LiveTerminalSurfaceOwner | null {
   if (!terminal.ptyId || !terminal.tabId || terminal.tabId.includes(':')) {
     return null
   }
@@ -61,7 +63,9 @@ function toSurfaceOwner(terminal: RuntimeTerminalSummary): LiveTerminalSurfaceOw
     : null
 }
 
-function toRecordedSurface(terminal: RuntimeTerminalSummary): LiveTerminalSurfaceOwner | null {
+function toRecordedSurface(
+  terminal: RuntimeTerminalSummaryWithoutPreview
+): LiveTerminalSurfaceOwner | null {
   const pane = parsePaneKey(terminal.recordedPaneKey ?? '')
   return terminal.ptyId && pane
     ? { paneKey: makePaneKey(pane.tabId, pane.leafId), ptyId: terminal.ptyId, tabId: pane.tabId }
@@ -76,7 +80,7 @@ function ownershipPaneKey(ownership: LiveTerminalSurfaceOwnership | undefined): 
 }
 
 export function indexLiveTerminalSurfaceOwners(
-  terminals: readonly RuntimeTerminalSummary[],
+  terminals: readonly RuntimeTerminalSummaryWithoutPreview[],
   worktreeId: string
 ): Map<string, LiveTerminalSurfaceOwnership> {
   const owners = new Map<string, LiveTerminalSurfaceOwnership>()
@@ -119,6 +123,7 @@ export async function readWorktreeLiveTerminalSurfaceOwners(
       limit: OWNER_LISTING_LIMIT,
       requireFreshPtyLiveness: true,
       includeVisualLayouts: false,
+      includePreview: false,
       // Main places unshown live terminals before listing; this sweep only reads its panes.
       ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { placeUnshownLiveTerminals: true } : {})
     }

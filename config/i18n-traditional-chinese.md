@@ -2,7 +2,7 @@
 
 Traditional Chinese uses the built-in locale `zh-Hant`, labeled `繁體中文（台灣）`. Copy follows Taiwan conventions. System detection maps `zh-TW`, `zh-HK`, `zh-MO` and any `zh-Hant*` tag to `zh-Hant`. Bare `zh`, `zh-CN`, `zh-SG` and `zh-Hans*` stay on Simplified `zh`. The renderer and main process load the catalog lazily. Missing keys fall back to English, not Simplified: both i18next instances use `load: 'currentOnly'`.
 
-The catalog lives at `src/renderer/src/i18n/locales/zh-Hant.json` and is maintained by hand like every other built-in catalog. Do not regenerate it from `zh.json`, because character conversion carries over mainland terms (智慧體, 會話, 倉庫). Use `zh.json` only to check meaning.
+The catalog lives at `src/renderer/src/i18n/locales/zh-Hant.json` and is maintained by hand like every other built-in catalog. The phone app's catalog, `mobile/src/i18n/locales/zh-Hant.json`, follows the same glossary and style. Do not regenerate either from `zh.json`, because character conversion carries over mainland terms (智慧體, 會話, 倉庫). Use `zh.json` only to check meaning.
 
 ## Glossary
 
@@ -37,9 +37,20 @@ The catalog lives at `src/renderer/src/i18n/locales/zh-Hant.json` and is maintai
 | access token / model tokens    | 權杖 / token                        |
 | credential / notification      | 憑證 / 通知                         |
 | thread / schedule / emulator   | 討論串 / 排程 / 模擬器              |
+| comment / daemon               | 留言 / 常駐程式                     |
+| identity / open (verb)         | 身分 / 開啟                         |
+| collapse / fold (code, diff)   | 收合 / 摺疊                         |
+| reset / VM                     | 重設 / 虛擬機器                     |
+| environment recipe             | 環境範本                            |
+| Full Disk Access (macOS)       | 完全取用磁碟                        |
+| shared link                    | 共用連結                            |
+| read-only / timeout / header   | 唯讀 / 逾時 / 標頭                  |
+| generate / sample / DM         | 產生 / 範例 / 私訊                  |
+| connector / push with lease    | 連接器 / 使用 lease 推送            |
 
 ## Style
 
+- Address the user as 你, never 您.
 - Quote UI text with 「」, and use 『』 for nested quotes. Do not use “”.
 - Put a half-width space between CJK text and Latin letters or digits.
 - Keep product, provider, model and CLI names in their original form (Orca, Claude Code, Codex, GitHub, Git, SSH, WSL).
@@ -51,4 +62,5 @@ The catalog lives at `src/renderer/src/i18n/locales/zh-Hant.json` and is maintai
 pnpm run verify:localization-catalogs
 pnpm run verify:localization-extraction
 pnpm run verify:localization-coverage
+pnpm run verify:mobile-localization
 ```

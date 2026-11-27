@@ -1,3 +1,4 @@
+import { AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY } from '../../../../src/shared/ai-vault/contracts/ai-vault-runtime-capabilities'
 import {
   AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY,
   AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
@@ -27,6 +28,7 @@ import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../src/
 import { remoteRuntimeClientCapabilities } from '../../../../src/shared/remote-runtime/remote-runtime-client-capabilities'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../../src/shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
+import { MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/relay/mobile-desktop-relay-contract'
 import { TERMINAL_HOST_PANE_RESPAWN_CLIENT_CAPABILITY } from '../../../../src/shared/terminal/pty/lifecycle/host-pane-respawn-capability'
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilities([
@@ -58,8 +60,12 @@ export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilitie
   AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY,
   // The session view follows a tab's terminal handle, so a pane the host restarts shows its new terminal.
   TERMINAL_HOST_PANE_RESPAWN_CLIENT_CAPABILITY,
+  // Home reads relayed servers' agents on relayHostRowsChanged, so a desktop may watch those servers for it.
+  MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY,
   // Every socket this list is sent on reads frames through MobileE2EEV2PhysicalChannel, which inflates them.
-  COMPRESSED_FRAMES_CLIENT_CAPABILITY
+  COMPRESSED_FRAMES_CLIENT_CAPABILITY,
+  // Mobile History has no depth footer, so a host may list each chat once.
+  AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY
 ])
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD =

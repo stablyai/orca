@@ -26,6 +26,7 @@ import {
 import { readPdfScalePreference, writePdfScalePreference } from './pdf-scale-preference-storage'
 import { EditorCommandOwnerContext } from '../commands/editor-command-owner-context'
 import { listenForViewerZoomRequests } from '../viewer-viewport/viewer-zoom-request'
+import { runSyncWithFinally } from '@/lib/run-with-finally'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -139,14 +140,15 @@ function PdfDocumentViewer({
         findControllerRef.current = session.findController
         pdfViewerRef.current = session.viewer
         return () => {
-          try {
-            session.dispose()
-          } finally {
-            eventBusRef.current = null
-            findControllerRef.current = null
-            pdfViewerRef.current = null
-            setFindOpen(false)
-          }
+          runSyncWithFinally(
+            () => session.dispose(),
+            () => {
+              eventBusRef.current = null
+              findControllerRef.current = null
+              pdfViewerRef.current = null
+              setFindOpen(false)
+            }
+          )
           return formDraft?.detach()
         }
       }

@@ -108,21 +108,24 @@ export async function getIssueDetailsViaGraphQL(
     if (itemData?.success && itemData.data.number !== issueNumber) {
       return null
     }
-    const comments: PRComment[] = (issue.comments?.nodes ?? [])
-      .filter(
-        (comment): comment is NonNullable<typeof comment> => typeof comment?.databaseId === 'number'
-      )
-      .map((comment) => ({
-        id: comment.databaseId as number,
-        author: comment.author?.login ?? 'ghost',
-        authorAvatarUrl: comment.author?.avatarUrl ?? '',
-        body: comment.body ?? '',
-        bodyImageUrls: githubBodyImageUrls(comment.body, comment.bodyHTML),
-        createdAt: comment.createdAt ?? '',
-        url: comment.url ?? '',
-        isBot: comment.author?.__typename === 'Bot',
-        ...(comment.viewerDidAuthor === true ? { viewerDidAuthor: true } : {})
-      }))
+    const comments: PRComment[] = await Promise.all(
+      (issue.comments?.nodes ?? [])
+        .filter(
+          (comment): comment is NonNullable<typeof comment> =>
+            typeof comment?.databaseId === 'number'
+        )
+        .map(async (comment) => ({
+          id: comment.databaseId as number,
+          author: comment.author?.login ?? 'ghost',
+          authorAvatarUrl: comment.author?.avatarUrl ?? '',
+          body: comment.body ?? '',
+          bodyImageUrls: await githubBodyImageUrls(comment.body, comment.bodyHTML),
+          createdAt: comment.createdAt ?? '',
+          url: comment.url ?? '',
+          isBot: comment.author?.__typename === 'Bot',
+          ...(comment.viewerDidAuthor === true ? { viewerDidAuthor: true } : {})
+        }))
+    )
     const assigneeUsers: GitHubAssignableUser[] = (issue.assignees?.nodes ?? [])
       .filter((assignee): assignee is { login: string; avatarUrl?: string; name?: string | null } =>
         Boolean(assignee?.login)
@@ -152,7 +155,7 @@ export async function getIssueDetailsViaGraphQL(
           }
         : {}),
       body: issue.body ?? '',
-      bodyImageUrls: githubBodyImageUrls(issue.body, issue.bodyHTML),
+      bodyImageUrls: await githubBodyImageUrls(issue.body, issue.bodyHTML),
       comments,
       assignees: assigneeUsers.map((assignee) => assignee.login),
       assigneeUsers,
@@ -229,20 +232,22 @@ export async function getIssueBodyAndComments(
       }
       // A slurped (paginated) read nests one array per page; an ordinary read is one page.
       const parsedComments: RESTComment[][] | RESTComment[] = JSON.parse(commentsResult.stdout)
-      const comments = parsedComments.flat().map((comment): PRComment => ({
-        id: comment.id,
-        author: comment.user?.login ?? 'ghost',
-        authorAvatarUrl: comment.user?.avatar_url ?? '',
-        body: comment.body ?? '',
-        bodyImageUrls: githubBodyImageUrls(comment.body, comment.body_html),
-        createdAt: comment.created_at,
-        url: comment.html_url,
-        isBot: comment.user?.type === 'Bot',
-        ...viewerAuthorship(comment.user?.login, viewerLogin)
-      }))
+      const comments = await Promise.all(
+        parsedComments.flat().map(async (comment): Promise<PRComment> => ({
+          id: comment.id,
+          author: comment.user?.login ?? 'ghost',
+          authorAvatarUrl: comment.user?.avatar_url ?? '',
+          body: comment.body ?? '',
+          bodyImageUrls: await githubBodyImageUrls(comment.body, comment.body_html),
+          createdAt: comment.created_at,
+          url: comment.html_url,
+          isBot: comment.user?.type === 'Bot',
+          ...viewerAuthorship(comment.user?.login, viewerLogin)
+        }))
+      )
       const details = {
         body: issue.body ?? '',
-        bodyImageUrls: githubBodyImageUrls(issue.body, issue.body_html),
+        bodyImageUrls: await githubBodyImageUrls(issue.body, issue.body_html),
         comments,
         assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
         timelineItems

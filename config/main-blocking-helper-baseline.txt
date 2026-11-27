@@ -47,22 +47,12 @@
 3 src/main/ai-vault/scan-service/session-scanner-service-entry-path.ts
 12 src/main/ai-vault/scan-service/session-scanner-service-spawn.ts
 2 src/main/ai-vault/scanners/devin/session-scanner-devin-db.ts
-2 src/main/ai-vault/scanners/hermes/hermes-state-db-conversations.ts
-3 src/main/ai-vault/scanners/hermes/hermes-state-db-schema.ts
 1 src/main/ai-vault/scanners/hermes/session-scanner-hermes-sources.ts
-15 src/main/ai-vault/scanners/hermes/session-scanner-hermes-sqlite.ts
 1 src/main/ai-vault/scanners/omp/omp-session-root.ts
 2 src/main/ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation.ts
-15 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-dispatch.ts
-1 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-process-entry.ts
 5 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn.ts
 2 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-wsl-client.ts
-3 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-capture.ts
-2 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-list.ts
 1 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open.ts
-3 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite.ts
-1 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite-list.ts
-4 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite.ts
 1 src/main/ai-vault/session-handoff-snapshot.ts
 1 src/main/ai-vault/session-titles/session-title-resolver.ts
 4 src/main/amp/hook-service.ts
@@ -100,10 +90,10 @@
 3 src/main/bots/bot-tool-secret-scrub.ts
 3 src/main/bots/bot-tools-claude.ts # claudeOwnServerNames: one read of the account config for its user and per-folder servers, once per chat launch that has host servers
 21 src/main/bots/bot-tools-file.ts # +1 changeBotToolEntries: the same tools-file write changeBotToolServers now wraps, adding per-server extra keys; +1 botOwnTools and changeSnapshot: one credential store read per list and write instead of one per row
-1 src/main/bots/bot-tools-snapshot.ts # moved from bot-tools-file.ts with the snapshot read of the credential store
 14 src/main/bots/bot-tools-host.ts # +1 botOwnTools and botToolCredentialsReader: one credential store read per tools list and check instead of one per row
 4 src/main/bots/bot-tools-removal.ts
 5 src/main/bots/bot-tools-sign-in.ts
+1 src/main/bots/bot-tools-snapshot.ts # moved from bot-tools-file.ts with the snapshot read of the credential store
 2 src/main/bots/bot-work-runtime.ts
 1 src/main/bots/sharing/bot-share-client.ts
 1 src/main/bots/sharing/bot-share-picks-store.ts
@@ -262,7 +252,7 @@
 19 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-auth-migration.ts
 2 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-config-compatibility.ts
 2 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
-11 src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts # Codex launch prep from #43365 already merged; unblocks main, async follow-up owed
+9 src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts # Codex launch prep from #43365 already merged; unblocks main, async follow-up owed
 9 src/main/codex-accounts/runtime-home/routing/runtime-home-service-launch.ts
 8 src/main/codex-accounts/runtime-home/routing/runtime-home-service-managed-home.ts
 1 src/main/codex-accounts/runtime-home/runtime-home-service-paths.ts
@@ -287,6 +277,7 @@
 2 src/main/codex/configuration/homes/codex-runtime-home-launch-preparation.ts # +1: the deferred config mirror now runs here from data (it was a closure built in runtime-home-service-*); main runs it only when the trust worker did not
 1 src/main/codex/configuration/homes/codex-stale-pane-accounts.ts
 9 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
+2 src/main/codex/configuration/settings/codex-config-guest-carry-forward.ts # writeFileAtomicallyIfUnchanged, writeCodexSettingsBaseline: one-time migration of kept values per WSL home, run by the guest helper inside the distro
 1 src/main/codex/configuration/settings/codex-config-mirror-merge.ts
 3 src/main/codex/configuration/settings/codex-config-mirror-source.ts # moved from codex-config-mirror.ts with the system-config preparation helpers; no new calls
 27 src/main/codex/configuration/settings/codex-config-mirror.ts
@@ -294,7 +285,7 @@
 1 src/main/codex/configuration/settings/codex-config-runtime-owned-values.ts
 1 src/main/codex/configuration/settings/codex-native-source-check.ts # retireCodexNativeSourceMark, only after the background ~/.codex check finds it now leads into a WSL distro (never on clean passes)
 5 src/main/codex/configuration/settings/config-settings-baseline.ts # same one sync write, now temp file plus rename so a cut-off write keeps the old baseline; +2 retireCodexNativeSourceMark: one baseline read plus a compare-and-swap write, only after a background check finds a trusted native ~/.codex now leads into a WSL distro
-10 src/main/codex/configuration/settings/config-settings-promotion.ts # +1 resolvesIntoWslShare: realpath.native of a drive root only on Windows for a drive-letter target in a write-back or held-back pass (#45247); +1 recoverInterruptedGuardedFileOperation of the baseline, only when it reads absent (fresh home, or a quit while retiring the native mark)
+11 src/main/codex/configuration/settings/config-settings-promotion.ts # +1 resolvesIntoWslShare: realpath.native of a drive root only on Windows for a drive-letter target in a write-back or held-back pass (#45247); +1 recoverInterruptedGuardedFileOperation of the baseline, only when it reads absent (fresh home, or a quit while retiring the native mark); +1 migrateGuestCarryForward, which writes only once per WSL home whose baseline still holds kept values from a one-way build (runs inside the distro)
 1 src/main/codex/configuration/settings/config-sync-stall.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 1 src/main/codex/configuration/shared-server/codex-shared-server-fix.ts
@@ -517,7 +508,7 @@
 3 src/main/git/command-runner/git-exec-file.ts
 4 src/main/git/command-runner/host-routing/git-command-resolution.ts
 1 src/main/git/command-runner/host-routing/wsl-aware-spawn.ts
-5 src/main/git/command-runner/host-routing/wsl-command-resolution.ts
+4 src/main/git/command-runner/host-routing/wsl-command-resolution.ts
 2 src/main/git/command-runner/host-routing/wsl-drive-checkout-git-routing.ts
 2 src/main/git/command-runner/host-routing/wsl-git-read-environment.ts
 9 src/main/git/command-runner/host-routing/wsl-windows-checkout-git-probe.ts
@@ -561,13 +552,13 @@
 4 src/main/hang-watchdog/renderer-hang-records.ts
 4 src/main/hermes/hermes-acp-launch-spec.ts
 4 src/main/hermes/hermes-default-home.ts
-15 src/main/hermes/hermes-home-filesystem.ts
+10 src/main/hermes/hermes-home-filesystem.ts
 2 src/main/hermes/hermes-transcript-import.ts
 27 src/main/hermes/hook-service.ts
 2 src/main/host/deferred-secret-protection-report.ts
 1 src/main/host/electron-speech-services.ts
 1 src/main/host/secret-protection-report.ts
-13 src/main/index.ts
+11 src/main/index.ts
 2 src/main/ipc/accounts/codex-accounts.ts
 1 src/main/ipc/accounts/codex-config-sync.ts
 1 src/main/ipc/accounts/cursor-accounts.ts
@@ -652,8 +643,9 @@
 1 src/main/ipc/pty/runtime/spawn-options.ts
 1 src/main/ipc/pty/spawn/spawn-begin.ts
 1 src/main/ipc/pty/spawn/spawn-options-assembly.ts
-17 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
-1 src/main/ipc/register-core-handlers/runtime-host-handler-registration.ts
+1 src/main/ipc/register-core-handlers/lazy-account-and-diagnostic-ipc-handlers.ts # diagnostics charge moved from direct registration; the module imports on first invoke, so mkdirSync never runs at boot
+2 src/main/ipc/register-core-handlers/lazy-rare-ipc-handlers.ts # charges moved from register-core-handlers; handlers import on first invoke, so the blocking helpers never run at boot
+13 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
 5 src/main/ipc/repos.ts
 1 src/main/ipc/repos/local-repo-registration.ts
 1 src/main/ipc/repos/nested-repo-import-handler.ts
@@ -806,12 +798,8 @@
 1 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
 2 src/main/native-chat/transcript-filesystem/wsl-transcript-fs-access.ts
 2 src/main/native-chat/transcript-history/codex/codex-rollout-history-source.ts
-7 src/main/native-chat/transcript-history/hermes/transcript-hermes-sqlite.ts
 3 src/main/native-chat/transcript-history/opencode/transcript-opencode-database.ts
-7 src/main/native-chat/transcript-history/opencode/transcript-opencode-sqlite-query.ts
 2 src/main/native-chat/transcript-history/opencode/transcript-opencode.ts
-2 src/main/native-chat/transcript-history/opencode/transcript-opencode2-fork-coverage.ts
-2 src/main/native-chat/transcript-history/opencode/transcript-opencode2-sqlite.ts
 1 src/main/network/macos-tailscale-dns-diagnostic.ts
 3 src/main/node-runtime/managed-runtime-installation.ts
 1 src/main/node-runtime/managed-runtime-release-install.ts
@@ -1044,7 +1032,7 @@
 1 src/main/ports/local-workspace-port-scanner.ts
 1 src/main/ports/port-scan-command-client.ts
 3 src/main/preflight/agent-command-detection.ts
-2 src/main/preflight/agent-detection.ts # glab auth env = the same cached /proc/mounts read the exec helper does by default
+1 src/main/preflight/agent-detection.ts
 1 src/main/preflight/installed-agent-detection.ts
 1 src/main/project-groups/nested-repo-discovery.ts
 2 src/main/provider-process/managed-provider-process.ts
@@ -1092,7 +1080,6 @@
 3 src/main/pty/shell-startup/zsh-wrapper-dir-ownership.ts
 2 src/main/qoder/workspace-trust.ts
 3 src/main/qwen-code/workspace-trust.ts # Qwen fresh-launch trust (#43989): sync read-modify-write like qoder/workspace-trust.ts so concurrent launches and the sync Qwen hook install cannot lose entries
-1 src/main/rate-limits/providers/antigravity/antigravity-usage-fetcher.ts
 1 src/main/rate-limits/providers/claude/claude-active-usage-fetch.ts
 5 src/main/rate-limits/providers/claude/claude-oauth-credentials.ts
 8 src/main/rate-limits/providers/codex/codex-fetcher.ts
