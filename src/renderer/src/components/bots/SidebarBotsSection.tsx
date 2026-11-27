@@ -14,6 +14,7 @@ import { updateBot, useBotHomeWorkspaces, useBots } from '@/lib/bot-catalog'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/class-names'
+import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../../shared/execution-host/execution-host'
 import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 import {
   folderWorkspaceKey,
@@ -40,6 +41,7 @@ import { BotCollapsedPreview, useBotPreviewFacts } from './BotCollapsedPreview'
 import { summarizeBotPreview } from '../../../../shared/bots/bot-collapsed-preview'
 import { BotSidebarSearchButton, BotSidebarSearchHost } from './BotSidebarSearch'
 import { useBotCollapseAll } from './use-bot-collapse-all'
+import { useBotSidebarHostFilter } from './use-bot-sidebar-host-filter'
 import { useBotSidebarSearch } from './use-bot-sidebar-search'
 import { BotsCollapseAllButton } from './BotsCollapseAllButton'
 import { useBotsSidebarReveal } from './bots-sidebar-reveal'
@@ -58,6 +60,9 @@ export function SidebarBotsSection({
 }): React.JSX.Element {
   const t = useTranslate()
   const bots = useBots()
+  const hostFilter = useBotSidebarHostFilter()
+  const hostScope = hostFilter.scope
+  const hostFiltered = hostScope !== ALL_EXECUTION_HOSTS_SCOPE
   const savedCollapsed = useAppStore((s) => s.collapsedGroups.has(BOTS_GROUP_KEY))
   const toggleCollapsedGroup = useAppStore((s) => s.toggleCollapsedGroup)
   const activeWorkspaceId = useAppStore((s) =>
@@ -86,14 +91,35 @@ export function SidebarBotsSection({
     () => getHostKeyedBotSidebarEntries(bots, groups, folderWorkspaces),
     [bots, groups, folderWorkspaces]
   )
-  const entries = useBotSidebarArrangement(savedEntries)
+  const scopedEntries = useMemo(
+    () =>
+      hostScope === ALL_EXECUTION_HOSTS_SCOPE
+        ? savedEntries
+        : savedEntries.filter(
+            (entry) => (entry.kind === 'bot' ? entry.bot.hostId : entry.group.hostId) === hostScope
+          ),
+    [hostScope, savedEntries]
+  )
+  const scopedBots = useMemo(
+    () =>
+      hostScope === ALL_EXECUTION_HOSTS_SCOPE
+        ? bots
+        : bots.filter((bot) => bot.hostId === hostScope),
+    [bots, hostScope]
+  )
+  const entries = useBotSidebarArrangement(scopedEntries)
   const listRef = useRef<HTMLDivElement>(null)
   // Search shows the list in place and nothing drags while it is open. Its toggle lives only in the
   // unfolded header, so a search always starts unfolded.
   const search = useBotSidebarSearch({ listRef, savedEntries, onOpenBot })
   const searchOpen = search.open
-  // Only the saved order can be dragged, as for workspaces.
-  const draggable = useAppStore((s) => s.botSidebarView.sortBy === 'manual') && !searchOpen
+  const { supersede } = search
+  useLayoutEffect(() => {
+    supersede()
+  }, [hostScope, supersede])
+  // A filtered list cannot safely rewrite the shared manual order.
+  const draggable =
+    useAppStore((s) => s.botSidebarView.sortBy === 'manual') && !searchOpen && !hostFiltered
   const rows = useMemo(
     () => entries.flatMap((entry) => (entry.kind === 'bot' ? [entry] : [])),
     [entries]
@@ -106,7 +132,7 @@ export function SidebarBotsSection({
   if (collapsed && newMenuOpen) {
     setNewMenuOpen(false)
   }
-  const collapseAll = useBotCollapseAll(entries, savedEntries)
+  const collapseAll = useBotCollapseAll(entries, scopedEntries)
   const facts = useBotPreviewFacts(rows)
   const preview = summarizeBotPreview(facts)
   // Bots reorder through the project-group header drag: one root bucket, each bot's order saved on its host.
@@ -233,7 +259,9 @@ export function SidebarBotsSection({
                   onToggle={search.toggleOpen}
                 />
               ) : null}
-              {hasEntries ? <BotSidebarOptionsMenu /> : null}
+              {hasEntries || hostFilter.pairedHosts.length > 0 ? (
+                <BotSidebarOptionsMenu hostFilter={hostFilter.webClient ? null : hostFilter} />
+              ) : null}
               <BotSidebarNewMenu
                 open={newMenuOpen}
                 onOpenChange={setNewMenuOpen}
@@ -246,13 +274,21 @@ export function SidebarBotsSection({
           )
         }
       />
+      <div role="status" aria-live="polite" className="sr-only">
+        {hostFilter.removed
+          ? t(
+              'auto.components.automations.hostNotice.removed',
+              'The selected host is no longer available. Showing all hosts.'
+            )
+          : ''}
+      </div>
       <BotSidebarSearchHost
         open={searchOpen}
         regionRef={search.regionRef}
         panel={{
           entries,
-          allEntries: savedEntries,
-          bots,
+          allEntries: scopedEntries,
+          bots: scopedBots,
           onSelect: search.select,
           onSupersede: search.supersede,
           onCancel: search.cancel
@@ -269,17 +305,17 @@ export function SidebarBotsSection({
             )}
           >
             {/* A room kept after its last bot went still lists, so it can be opened or deleted. */}
-            {savedEntries.length > 0 && entries.length === 0 ? (
-              collapsed ? null : (
+            {collapsed ? null : entries.length === 0 ? (
+              scopedEntries.length > 0 || hostFiltered ? (
                 <div className="px-4 text-xs text-muted-foreground">
-                  {t('bots.options.allHidden', 'All bots are paused and hidden.')}
+                  {scopedEntries.length > 0
+                    ? t('bots.options.allHidden', 'All bots are paused and hidden.')
+                    : t('bots.options.noBotsOnHost', 'No bots to show on this host.')}
                 </div>
-              )
-            ) : entries.length === 0 ? (
-              collapsed ? null : (
+              ) : (
                 <SidebarBotsEmptyState onNewBot={openNewBot} />
               )
-            ) : collapsed ? null : (
+            ) : (
               <>
                 <BotSidebarVirtualRows
                   entries={entries}
@@ -301,7 +337,7 @@ export function SidebarBotsSection({
                         <BotGroupRow
                           group={entry.group}
                           home={entry.home}
-                          members={botGroupMemberBots(entry.group, bots)}
+                          members={botGroupMemberBots(entry.group, scopedBots)}
                           isActive={activeGroupId === entry.group.id}
                           onOpen={onOpenBot}
                           onManageMembers={() => setEditingGroup(entry.group)}

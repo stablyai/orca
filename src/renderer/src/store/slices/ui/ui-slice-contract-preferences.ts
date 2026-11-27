@@ -29,6 +29,7 @@ import type { PersistedUIWriteBaseline } from './persisted-ui-write-baseline'
 import type { UISliceCore } from './ui-slice-contract-core'
 import type { BotSidebarView } from '../../../../../shared/bots/bot-sidebar-view'
 import type { BotChatFold } from '../../../../../shared/bots/bot-chat-tree'
+import type { ExecutionHostScope } from '../../../../../shared/execution-host/execution-host'
 
 export type UISlicePreferences = {
   gitGraphFiltersByWorktree?: PersistedUIState['gitGraphFiltersByWorktree']
@@ -65,6 +66,9 @@ export type UISlicePreferences = {
   setHideBotCreatedWorkspaces: (v: boolean) => void
   botSidebarView: BotSidebarView
   setBotSidebarView: (patch: Partial<BotSidebarView>) => void
+  /** Session-only so opening Settings does not clear the Bots host filter. */
+  botSidebarHostFilter: { scope: ExecutionHostScope; removed: boolean }
+  setBotSidebarHostFilter: (filter: UISlicePreferences['botSidebarHostFilter']) => void
   botChatFolds: Record<string, BotChatFold>
   /** A chat's manual fold, shared by Activity and the sidebar; undefined while it folds by default. */
   botChatFold: (hostId: string, botId: string, chatId: string) => BotChatFold | undefined

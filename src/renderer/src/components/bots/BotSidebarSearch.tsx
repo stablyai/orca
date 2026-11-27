@@ -61,7 +61,7 @@ export function BotSidebarSearchButton({
 type SearchPanelProps = {
   /** The entries the list shows, in its order. */
   entries: readonly BotSearchEntry[]
-  /** Every entry, filters ignored, to tell about hidden paused bots that match. */
+  /** Entries on the selected host scope, including paused bots hidden from the list. */
   allEntries: readonly BotSearchEntry[]
   bots: readonly Bot[]
   /** Opens a result; the section's search session closes the search and shows its row. */
