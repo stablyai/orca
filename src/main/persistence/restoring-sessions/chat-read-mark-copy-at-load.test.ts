@@ -3,9 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
+import * as writeScheduling from '../loading-store/profile-writing/write-scheduling'
 import {
   closeTestStores,
   createSqliteTestStore,
+  readPersistedState,
+  workspaceRepos,
   writePersistedStateJson
 } from '../persistence-test-harness'
 
@@ -24,19 +27,23 @@ vi.mock('electron', () => ({
 }))
 
 const { Store } = await import('../loading-store/store')
-afterEach(() => closeTestStores())
+afterEach(async () => {
+  vi.restoreAllMocks()
+  await closeTestStores()
+})
 
 const LEAF = '2b8ea975-8113-41ae-a25c-feb50cbe084a'
 const TAB_KEY = `agent-chat-tab-v1-abc:${LEAF}`
 const CONVERSATION_KEY = `structured-agent-session-sess-2:${LEAF}`
 const WORKTREE = 'repo::/a|b'
 
-function load(ui: Record<string, unknown>) {
+function seed(ui: Record<string, unknown>): string {
   const dataFile = join(
     realpathSync(mkdtempSync(join(tmpdir(), 'orca-read-mark-copy-'))),
     'state.json'
   )
   const state = getDefaultPersistedState(tmpdir())
+  state.repos = workspaceRepos(WORKTREE)
   state.ui = { ...state.ui, ...ui }
   state.workspaceSession = {
     ...state.workspaceSession,
@@ -58,13 +65,31 @@ function load(ui: Record<string, unknown>) {
     }
   }
   writePersistedStateJson(dataFile, JSON.stringify(state))
-  return createSqliteTestStore(Store, { dataFile }).getUI()
+  return dataFile
 }
 
-it('copies a reopened chat tab’s saved acknowledgement to its conversation key once, keeping the original', () => {
-  const ui = load({ acknowledgedAgentsByPaneKey: { [TAB_KEY]: 100 } })
+function load(ui: Record<string, unknown>) {
+  return createSqliteTestStore(Store, { dataFile: seed(ui) }).getUI()
+}
+
+it('copies a reopened chat tab’s saved acknowledgement with a selective UI save', async () => {
+  const dataFile = seed({
+    acknowledgedAgentsByPaneKey: { [TAB_KEY]: 100 },
+    _chatReadMarksCopiedToConversationKeys: true
+  })
+  createSqliteTestStore(Store, { dataFile }).flushOrThrow()
+  await closeTestStores()
+  const normalized = readPersistedState(dataFile)
+  delete normalized.ui._chatReadMarksCopiedToConversationKeys
+  writePersistedStateJson(dataFile, JSON.stringify(normalized))
+
+  const selectiveSave = vi.spyOn(writeScheduling, 'scheduleSave')
+  const fullSave = vi.spyOn(writeScheduling, 'scheduleFullProfileSave')
+  const ui = createSqliteTestStore(Store, { dataFile }).getUI()
   expect(ui.acknowledgedAgentsByPaneKey).toEqual({ [TAB_KEY]: 100, [CONVERSATION_KEY]: 100 })
   expect(ui._chatReadMarksCopiedToConversationKeys).toBe(true)
+  expect(selectiveSave).toHaveBeenCalledExactlyOnceWith(expect.anything(), ['ui'])
+  expect(fullSave).not.toHaveBeenCalled()
 })
 
 it('takes the newer acknowledgement and preserves the existing cutoff and manual-unread mark', () => {

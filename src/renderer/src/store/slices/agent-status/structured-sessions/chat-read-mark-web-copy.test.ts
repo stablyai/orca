@@ -274,7 +274,7 @@ it('shares the tab walk on a fresh array and releases the receipt and fallback a
   const marks = load({ manuallyUnreadTurnsByPaneKey: { [OLD]: 70 } })
   const unmatchedTab = { ...CHAT_TAB, id: 'another-tab', sessionId: 'another-session' }
   let rowsRead = 0
-  const tabs = [unmatchedTab]
+  const tabs = [unmatchedTab, { ...unmatchedTab, id: 'duplicate-chat-tab' }]
   Object.defineProperty(tabs, 0, {
     get: () => {
       rowsRead += 1

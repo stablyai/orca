@@ -1,7 +1,4 @@
-import {
-  chatPaneKey,
-  chatPaneKeySessionId
-} from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKeySessionId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { SessionTabsPublicationEpochHistory } from '@/runtime/web-session-tabs-sync/state'
 import {
@@ -17,14 +14,17 @@ import {
 } from '../../ui/persisted-ui-write-baseline'
 import type { AppState } from '../../../types'
 import { indexLegacyKeys, paneKeyLeaf } from './chat-read-mark-legacy-index'
+import {
+  collectReplyCandidates,
+  createWorkspaceCandidateCollector,
+  type LegacyIndex,
+  type ScanChatSessions
+} from './chat-read-mark-web-candidates'
 
-type LegacyIndex = Record<ChatReadMarkField, Map<string, string[]>>
-type ScanChatSessions = (visit: (sessionId: string) => void) => void
 type WorkspaceReceipt = {
   runtimeId: string | undefined
   affirmsChats: boolean
-  candidates: ReturnType<typeof createCandidateCollector>
-  candidateTabs?: WeakRef<readonly RuntimeMobileSessionSnapshotTab[]>
+  collectCandidates: ReturnType<typeof createWorkspaceCandidateCollector>
 }
 type Census = {
   environmentId: string
@@ -120,47 +120,6 @@ export function startWebChatReadMarkCopy(
   return hasLegacyKeys(copy) ? undefined : complete(copy, hydrated, hydrated)
 }
 
-function createCandidateCollector(copy: Migration) {
-  const chatSessionIds = new Set<string>()
-  const visit = (sessionId: string): void => {
-    if (chatSessionIds.has(sessionId)) {
-      return
-    }
-    chatSessionIds.add(sessionId)
-    const leaf = paneKeyLeaf(chatPaneKey(sessionId))
-    if (CHAT_READ_MARK_FIELDS.some((field) => copy.legacyIndex[field].has(leaf))) {
-      copy.candidates.set(leaf, sessionId)
-    }
-  }
-  return { chatSessionIds, visit }
-}
-
-function collectCandidates(
-  copy: Migration,
-  tabs: readonly RuntimeMobileSessionSnapshotTab[],
-  receipt?: WorkspaceReceipt,
-  scanChatSessions?: ScanChatSessions
-): void {
-  if (!hasLegacyKeys(copy) || receipt?.candidateTabs?.deref() === tabs) {
-    return
-  }
-  const { chatSessionIds, visit } = receipt?.candidates ?? createCandidateCollector(copy)
-  const previousSize = chatSessionIds.size
-  if (scanChatSessions) {
-    scanChatSessions(visit)
-  } else {
-    for (const tab of tabs) {
-      if (tab.type === 'agent-session') {
-        visit(tab.sessionId)
-      }
-    }
-  }
-  // Remember a contributing array by reference without allocating a WeakRef on every fresh frame.
-  if (receipt && (!receipt.candidateTabs || chatSessionIds.size !== previousSize)) {
-    receipt.candidateTabs = new WeakRef(tabs)
-  }
-}
-
 function completeFromTabs(copy: Migration, state: CopyState): CopyPatch | undefined {
   const { persistedUIWriteBaseline: baseline } = state
   if (!baseline) {
@@ -208,12 +167,22 @@ export function receiveWebChatReadMarkFrame(
   if (trackingRecord) {
     receipt = copy.receipts.get(trackingRecord)
     if (!receipt || receipt.runtimeId !== runtimeId) {
-      receipt = { runtimeId, affirmsChats, candidates: createCandidateCollector(copy) }
+      receipt = {
+        runtimeId,
+        affirmsChats,
+        collectCandidates: createWorkspaceCandidateCollector(copy)
+      }
       copy.receipts.set(trackingRecord, receipt)
     }
     receipt.affirmsChats = affirmsChats
   }
-  collectCandidates(copy, tabs, receipt, frame.scanChatSessions)
+  if (hasLegacyKeys(copy)) {
+    if (receipt) {
+      receipt.collectCandidates(tabs, frame.scanChatSessions)
+    } else {
+      collectReplyCandidates(copy, tabs, frame.scanChatSessions)
+    }
+  }
   if (!affectsCoverage) {
     return undefined
   }
@@ -268,8 +237,8 @@ export function receiveWebChatReadMarkCandidates(
   state: Pick<AppState, 'chatReadMarksCopiedHere'>,
   tabs: readonly RuntimeMobileSessionSnapshotTab[]
 ): void {
-  if (!state.chatReadMarksCopiedHere && migration) {
-    collectCandidates(migration, tabs)
+  if (!state.chatReadMarksCopiedHere && migration && hasLegacyKeys(migration)) {
+    collectReplyCandidates(migration, tabs)
   }
 }
 
