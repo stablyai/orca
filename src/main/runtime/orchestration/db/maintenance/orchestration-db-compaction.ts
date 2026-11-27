@@ -123,7 +123,8 @@ export class OrchestrationDbCompaction {
       this.attempts = count || 0
       this.lastAttemptAt = at || Number.NEGATIVE_INFINITY
     }
-    if (!this.isEnabled()) {
+    // Stopped during the reads above, or not compacting here.
+    if (this.stopped || !this.isEnabled()) {
       return
     }
     const state = readFileState(this.orchestrationDb.db)
@@ -131,9 +132,6 @@ export class OrchestrationDbCompaction {
       this.finished = true
       this.closeObserver()
       await removeQuietly(this.attemptsPath)
-      return
-    }
-    if (this.stopped) {
       return
     }
     this.observer ??= new Database(this.filename, { readonly: true, fileMustExist: true })
@@ -175,17 +173,21 @@ export class OrchestrationDbCompaction {
     }
     // Drained off main first, so a valid copy leaves quit's checkpoint on main nothing to copy. A drained WAL
     // keeps its size, which quit would read as pending work, so a large one is truncated too, though only
-    // then: that takes the writer lock for a moment. It moves the stamp, so it comes first.
+    // then: that takes the writer lock for a moment, and moves the stamp (a passive drain doesn't).
+    const beforeDrain = this.stamp()
     const walBytes = (await sizeOf(`${this.filename}-wal`)) ?? 0
     const drained =
       walBytes === 0 ||
       (await this.runChild(undefined, MIN_COPY_BUDGET_MS, walBytes > MAX_WAL_BYTES))
-    // A reader pinning frames would leave work for main at quit, or a WAL quit refuses: no copy in vain.
-    if (!drained || ((await sizeOf(`${this.filename}-wal`)) ?? 0) > MAX_WAL_BYTES || this.stopped) {
-      return
-    }
     // Read before the child takes its snapshot, so any later commit moves the stamp.
     const stamp = this.stamp()
+    const walAfter = (await sizeOf(`${this.filename}-wal`)) ?? 0
+    // No copy in vain: a reader pinned frames, quit would refuse the WAL, or a commit since the drain left
+    // frames for main to copy at quit (only a truncation, which empties the WAL, may move the stamp).
+    const settled = walAfter === 0 || (walAfter <= MAX_WAL_BYTES && stamp === beforeDrain)
+    if (!drained || !settled || this.stopped) {
+      return
+    }
     // Doubled with each attempt, so a disk slower than assumed still finishes one in the end.
     const budgetMs = Math.min(
       Math.max(MIN_COPY_BUDGET_MS, Math.round(state.liveBytes / SLOW_COPY_BYTES_PER_MS)) *
