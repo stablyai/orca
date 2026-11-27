@@ -1289,7 +1289,6 @@
 1 src/main/runtime/workspaces/lineage/runtime-worktree-lineage-controller.ts
 4 src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-registration-removal.ts
-2 src/main/runtime/workspaces/removal/workspace-removal.ts
 1 src/main/runtime/workspaces/workspace-removal-target.ts
 1 src/main/server/serve-pairing-readiness.ts
 2 src/main/skills/cloud/skill-cloud-auth.ts
