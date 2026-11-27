@@ -289,8 +289,11 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
         delegatedMobileDevices:
           device.scope === 'runtime'
             ? {
-                sync: (phones) =>
-                  this.syncDelegatedMobileDevices(device.deviceId, phones, connectionId)
+                sync: (phones, clientInstanceId) =>
+                  this.syncDelegatedMobileDevices(device.deviceId, phones, {
+                    connectionId,
+                    clientInstanceId
+                  })
               }
             : undefined,
         signal: abortRegistration?.signal,
