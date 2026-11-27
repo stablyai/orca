@@ -224,10 +224,11 @@ function safeChannel(channel: unknown): string {
 
 /** Strings, buffers and arrays only: listing a large object's keys costs O(keys) before any budget applies. */
 export function approxBytes(value: unknown): number {
+  // Only array index reads spend budget; each queued value is then read once, so the cap bounds both.
   let budget = SIZE_WALK_BUDGET
   let bytes = 0
   const pending: unknown[] = [value]
-  while (pending.length > 0 && budget-- > 0) {
+  while (pending.length > 0) {
     const item = pending.pop()
     if (typeof item === 'string') {
       bytes += item.length
@@ -238,8 +239,8 @@ export function approxBytes(value: unknown): number {
     } else if (item instanceof ArrayBuffer) {
       bytes += item.byteLength
     } else if (Array.isArray(item)) {
-      // Every index read costs budget, holes and skipped getters included, so no array can loop past the cap.
-      for (let index = 0; index < item.length && budget > pending.length; index += 1, budget -= 1) {
+      // Holes and skipped getters cost budget too, so no array can loop past the cap.
+      for (let index = 0; index < item.length && budget > 0; index += 1, budget -= 1) {
         // A caller-owned array (a send or invoke result) may have getters; reading one could change what is sent.
         const slot = Object.getOwnPropertyDescriptor(item, index)
         if (slot && 'value' in slot) {

@@ -39,3 +39,8 @@ it('sizes arrays without running their getters', () => {
   expect(approxBytes(payload)).toBe(4)
   expect(reads).toBe(0)
 })
+
+it('counts a large buffer at the front of an array that fills the size budget', () => {
+  const payload: unknown[] = [new Uint8Array(1024 * 1024), ...Array.from({ length: 1999 }, () => 1)]
+  expect(approxBytes(payload)).toBe(1024 * 1024 + 1999 * 8)
+})
