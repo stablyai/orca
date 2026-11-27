@@ -188,18 +188,19 @@ it.each([
 })
 
 describe('acquireFolderContextSlot', () => {
-  it('serializes slots for one file and releases only when told', async () => {
-    const events: string[] = []
+  it('serializes slots for one file until the holder releases', async () => {
+    let secondAcquired = false
     const first = await acquireFolderContextSlot(dir, 'AGENTS.md')
-    const secondStarted = acquireFolderContextSlot(dir, 'AGENTS.md').then((release) => {
-      events.push('second-acquired')
+    const second = acquireFolderContextSlot(dir, 'AGENTS.md').then((release) => {
+      secondAcquired = true
       return release
     })
-    await Promise.resolve()
-    expect(events).toEqual([])
+    // Let the second call's realpath settle; it must still be waiting on the held slot.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(secondAcquired).toBe(false)
     first()
-    const secondRelease = await secondStarted
-    expect(events).toEqual(['second-acquired'])
+    const secondRelease = await second
+    expect(secondAcquired).toBe(true)
     secondRelease()
   })
 

@@ -63,6 +63,9 @@ export type AcpInstructionsDelivery = {
   /** Every start of the agent gives it the current text, a reopened conversation included;
    *  otherwise a reopened one keeps the text it began with. */
   eachStart: boolean
+  /** Run the launch hook even with no standing instructions, for agents that read a folder file
+   *  at every open and must serialize against other opens regardless of text. */
+  runsWithoutText?: true
   launch: AcpInstructionsLaunchInput
 }
 
@@ -253,26 +256,35 @@ export const deliverCopilotInstructions = givenEachStart(async ({ text, folder, 
 
 // Vibe builds its system prompt from AGENTS.md files at session open (walk-up from the cwd plus
 // $VIBE_HOME/AGENTS.md) and keeps it with the session; new_session discards extra kwargs, so
-// sessionMeta cannot carry the text. The per-file slot is held until the open returns, so two
-// chats starting in one folder cannot read each other's instructions.
-export const deliverVibeInstructions = keptWithSession(async ({ text }) => ({
-  aroundSessionOpen: async (cwd) => {
-    const release = await acquireFolderContextSlot(cwd, 'AGENTS.md')
-    try {
-      await writeFolderContextFile(cwd, 'AGENTS.md', 'Mistral Vibe', text)
-    } catch (error) {
-      release()
-      throw error
-    }
-    return async () => {
+// sessionMeta cannot carry the text. Every open takes the per-file slot — even one with no text —
+// and holds it until the open returns, so two chats starting in one folder cannot read each
+// other's instructions.
+export const deliverVibeInstructions: AcpInstructionsDelivery = {
+  eachStart: false,
+  runsWithoutText: true,
+  launch: async ({ text }) => ({
+    aroundSessionOpen: async (cwd) => {
+      const release = await acquireFolderContextSlot(cwd, 'AGENTS.md')
       try {
-        await removeFolderContextFile(cwd, 'AGENTS.md', 'Mistral Vibe')
-      } finally {
+        if (text) {
+          await writeFolderContextFile(cwd, 'AGENTS.md', 'Mistral Vibe', text)
+        }
+      } catch (error) {
         release()
+        throw error
+      }
+      return async () => {
+        try {
+          if (text) {
+            await removeFolderContextFile(cwd, 'AGENTS.md', 'Mistral Vibe')
+          }
+        } finally {
+          release()
+        }
       }
     }
-  }
-}))
+  })
+}
 
 async function instructionsRoot(dataDirectory: string, sessionId: string): Promise<string> {
   const root = join(dataDirectory, 'acp-instructions')
@@ -363,14 +375,14 @@ export async function acpLaunchInstructions(
   }
 ): Promise<AcpInstructionsLaunch | null> {
   const { text } = input
-  if (!text) {
+  if (!text && !spec.instructions?.runsWithoutText) {
     return null
   }
   const delivered = await spec.instructions?.launch({
-    text,
+    text: text ?? '',
     env: input.env,
     cwd: input.cwd,
-    file: () => writeAcpInstructionsFile(dataDirectory, input.sessionId, text),
+    file: () => writeAcpInstructionsFile(dataDirectory, input.sessionId, text ?? ''),
     folder: (path, content) =>
       writeAcpInstructionsFolder(dataDirectory, input.sessionId, path, content),
     emptyFolder: () => makeAcpInstructionsFolder(dataDirectory, input.sessionId),
