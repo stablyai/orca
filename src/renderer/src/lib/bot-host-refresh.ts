@@ -162,7 +162,7 @@ function readWhenNeedsYouGoesStale(hostId: ExecutionHostId, state: HostRefresh):
 const BOT_LIST_KINDS: readonly BotChangeKind[] = ['bot', 'automations', 'settings']
 
 /** Re-reads a host's list on its notices. An items notice carries the host's Needs you counts, so it
- *  reads nothing; an older host's reads the list. */
+ *  reads nothing; an older host's, or a shared agent's (whose counts are the owner's), reads the list. */
 export function followBotHostNotices(): () => void {
   return onBotsChanged(
     (hostId, scope) => {
