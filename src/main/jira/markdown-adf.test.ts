@@ -207,6 +207,35 @@ it('keeps Jira smart links active and ordinary hard breaks readable', () => {
   ).toBe('https://example.com/a_b?x=1&y=2\nnext line')
 })
 
+it('renders inline Jira dates as UTC calendar dates and skips unusable timestamps', () => {
+  const date = (timestamp: string) => ({ type: 'date', attrs: { timestamp } })
+  expect(
+    adfToMarkdownText({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Ship on ' },
+            date('1690344879000'),
+            { type: 'text', text: '.' }
+          ]
+        },
+        {
+          type: 'paragraph',
+          content: [
+            date('0'),
+            { type: 'text', text: ' / ' },
+            date('-86400000'),
+            { type: 'text', text: ' /' },
+            date('9'.repeat(20))
+          ]
+        }
+      ]
+    })
+  ).toBe('Ship on 2023-07-26.\n\n1970-01-01 / 1969-12-31 /')
+})
+
 it('retains reference destinations used by inert source fallbacks', async () => {
   const doc = await markdownToAdf(
     '[local][doc] ![plot][img]\n\n[doc]: ../readme.md\n[img]: ../plot.png'

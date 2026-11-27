@@ -207,6 +207,14 @@ export function adfInlineNodes(
       result.push(inTable ? { type: 'html', value: '<br>' } : { type: 'break' })
     } else if (node.type === 'media' || node.type === 'mediaInline') {
       result.push({ type: 'jiraMedia', value: renderMedia(node) })
+    } else if (node.type === 'date') {
+      const timestamp = adfString(adfRecord(node.attrs).timestamp).trim()
+      if (/^-?\d+$/.test(timestamp)) {
+        const date = new Date(Number(timestamp))
+        if (Number.isFinite(date.getTime())) {
+          result.push({ type: 'text', value: date.toISOString().split('T')[0] })
+        }
+      }
     } else {
       const attrs = adfRecord(node.attrs)
       const text = adfString(attrs.text) || adfString(attrs.shortName) || adfString(attrs.url)
