@@ -32,6 +32,7 @@ process.stdout.write('grandchild:' + grandchild.pid + '\\n')
 grandchild.unref()
 `
 
+// Waits out the precheck's own 5 s timeout, after a real shell and node launch.
 it('settles a timed-out precheck whose exited root left descendants holding its pipes', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-precheck-'))
   directories.push(directory)

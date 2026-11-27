@@ -29,6 +29,7 @@ const closed = (child: ReturnType<typeof host.spawn>) =>
     child.once('close', (code: number | null) => resolve({ spawned, code }))
   })
 
+// Runs real launches through the worker, and process creation can take seconds on Windows.
 it('withdraws a queued launch whose flag was set, with no cancel ever sent', async () => {
   const marker = join(entry.directory, 'launched')
   const ahead = [1, 2, 3].map(() => host.spawn({ program: process.execPath, args: ['-e', ''] }))
