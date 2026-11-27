@@ -5180,7 +5180,8 @@
       "apiToken": "API 令牌",
       "storageHint": "你的令牌存储在此主机上，并在其系统支持时加密。",
       "createToken": "创建 API 令牌",
-      "failed": "连接失败"
+      "failed": "连接失败",
+      "serverNeedsUpdate": "此服务器需要先更新 Orca。请改为在 Orca 桌面版中连接 Jira。"
     }
   },
   "terminal": {

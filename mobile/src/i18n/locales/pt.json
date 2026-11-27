@@ -5124,7 +5124,8 @@
       "apiToken": "Token de API",
       "storageHint": "Seu token fica armazenado neste host, criptografado quando o sistema operacional permite.",
       "createToken": "Criar um token de API",
-      "failed": "Falha na conexão"
+      "failed": "Falha na conexão",
+      "serverNeedsUpdate": "Este servidor precisa de uma atualização do Orca primeiro. Conecte o Jira pelo Orca para desktop."
     }
   },
   "terminal": {

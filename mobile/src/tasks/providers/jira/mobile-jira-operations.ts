@@ -8,6 +8,9 @@ import {
 } from './jira-reply-schema'
 import { taskMutationEnvelopeSchema } from '../../task-provider-entity-reply-schema'
 
+/** The tracker host's own phone allowlist lacks jira.connect (an older server behind this desktop). */
+export class JiraConnectRefusedError extends Error {}
+
 // Accepted replies may still fail in-band with the host's message (bad token, bad site URL).
 export const jiraAccountConnect = bindDeferredRpcOperation(
   defineRpcOperation({

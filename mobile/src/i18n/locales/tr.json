@@ -5315,7 +5315,8 @@
       "apiToken": "API belirteci",
       "storageHint": "Belirtecin bu ana bilgisayarda saklanır, işletim sistemi destekliyorsa şifrelenir.",
       "createToken": "API belirteci oluştur",
-      "failed": "Bağlantı başarısız"
+      "failed": "Bağlantı başarısız",
+      "serverNeedsUpdate": "Bu sunucunun önce Orca güncellemesi alması gerekiyor. Bunun yerine Jira’yı Orca masaüstünden bağla."
     }
   },
   "terminal": {

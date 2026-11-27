@@ -4976,7 +4976,8 @@
       "apiToken": "API 토큰",
       "storageHint": "토큰은 이 호스트에 저장되며 OS가 지원하면 암호화됩니다.",
       "createToken": "API 토큰 만들기",
-      "failed": "연결 실패"
+      "failed": "연결 실패",
+      "serverNeedsUpdate": "이 서버는 먼저 Orca 업데이트가 필요합니다. 대신 Orca 데스크톱에서 Jira를 연결하세요."
     }
   },
   "terminal": {

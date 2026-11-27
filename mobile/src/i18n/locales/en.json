@@ -5428,7 +5428,8 @@
       "apiToken": "API token",
       "storageHint": "Your token is stored on this host, encrypted where its OS supports it.",
       "createToken": "Create an API token",
-      "failed": "Connection failed"
+      "failed": "Connection failed",
+      "serverNeedsUpdate": "This server needs an Orca update first. Connect Jira in Orca desktop instead."
     }
   },
   "terminal": {

@@ -4975,7 +4975,8 @@
       "apiToken": "API-Token",
       "storageHint": "Dein Token wird auf diesem Host gespeichert und verschlüsselt, sofern das Betriebssystem es unterstützt.",
       "createToken": "API-Token erstellen",
-      "failed": "Verbindung fehlgeschlagen"
+      "failed": "Verbindung fehlgeschlagen",
+      "serverNeedsUpdate": "Dieser Server braucht zuerst ein Orca-Update. Verbinde Jira stattdessen in Orca Desktop."
     }
   },
   "terminal": {

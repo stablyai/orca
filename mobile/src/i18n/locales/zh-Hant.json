@@ -4970,7 +4970,8 @@
       "apiToken": "API 權杖",
       "storageHint": "你的權杖儲存在此主機上，並在其系統支援時加密。",
       "createToken": "建立 API 權杖",
-      "failed": "連線失敗"
+      "failed": "連線失敗",
+      "serverNeedsUpdate": "此伺服器需要先更新 Orca。請改為在 Orca 桌面版中連接 Jira。"
     }
   },
   "terminal": {

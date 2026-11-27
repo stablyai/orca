@@ -4967,7 +4967,8 @@
       "apiToken": "API トークン",
       "storageHint": "トークンはこのホストに保存され、OS が対応していれば暗号化されます。",
       "createToken": "API トークンを作成",
-      "failed": "接続に失敗しました"
+      "failed": "接続に失敗しました",
+      "serverNeedsUpdate": "このサーバーは先に Orca の更新が必要です。代わりに Orca デスクトップで Jira を接続してください。"
     }
   },
   "terminal": {

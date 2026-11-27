@@ -5,7 +5,10 @@ import {
   readJiraConnection,
   reconcileJiraConnection
 } from '../providers/jira/jira-mobile-connection'
-import { jiraAccountConnect } from '../providers/jira/mobile-jira-operations'
+import {
+  JiraConnectRefusedError,
+  jiraAccountConnect
+} from '../providers/jira/mobile-jira-operations'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   PER_REPO_FETCH_LIMIT,
@@ -91,18 +94,20 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     tasksSupported
   } = model
   // Mobile needs explicit status refreshes to observe desktop connection changes.
-  const refreshJiraConnection = useCallback(async (): Promise<void> => {
-    if (!client || connState !== 'connected' || !tasksSupported) {
-      return
-    }
-    const requestId = ++jiraStatusRequestIdRef.current
-    const next = await readJiraConnection(
-      await trackerAccountClient(jiraAccountBindingRef.current, client)
-    )
-    if (clientRef.current === client && jiraStatusRequestIdRef.current === requestId) {
-      setJiraConnection((current) => reconcileJiraConnection(current, next))
-    }
-  }, [client, clientRef, connState, tasksSupported, setJiraConnection, jiraStatusRequestIdRef])
+  // Untagged like the issue lists, so both follow the same host; only a fresh connect reads its own.
+  const refreshJiraConnection = useCallback(
+    async (statusClient?: RpcClient): Promise<void> => {
+      if (!client || connState !== 'connected' || !tasksSupported) {
+        return
+      }
+      const requestId = ++jiraStatusRequestIdRef.current
+      const next = await readJiraConnection(statusClient ?? client)
+      if (clientRef.current === client && jiraStatusRequestIdRef.current === requestId) {
+        setJiraConnection((current) => reconcileJiraConnection(current, next))
+      }
+    },
+    [client, clientRef, connState, tasksSupported, setJiraConnection, jiraStatusRequestIdRef]
+  )
 
   // Throws the host's message (bad token, bad site URL) for the setup sheet to show.
   const connectJiraAccount = useCallback(
@@ -111,14 +116,17 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
         throw new Error('Not connected to this host')
       }
       const target = await trackerAccountClient(jiraAccountBindingRef.current, client)
-      const result = jiraAccountConnect.interpret(
-        await jiraAccountConnect.request(target, { ...args, authType: 'cloud' })
-      )
+      const reply = await jiraAccountConnect.request(target, { ...args, authType: 'cloud' })
+      // An older tracker server refuses phone setup even when this desktop allows it.
+      if (!reply.ok && reply.error.code === 'forbidden') {
+        throw new JiraConnectRefusedError()
+      }
+      const result = jiraAccountConnect.interpret(reply)
       if (result.ok === false) {
         throw new Error(result.error ?? 'Failed to connect Jira')
       }
       // The token is saved; a failed status read is a screen error, not a failed connect.
-      await refreshJiraConnection().catch((err: unknown) => {
+      await refreshJiraConnection(target).catch((err: unknown) => {
         setError(err instanceof Error ? err.message : 'Failed to read Jira status')
       })
     },

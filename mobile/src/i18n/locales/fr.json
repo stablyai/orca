@@ -5118,7 +5118,8 @@
       "apiToken": "Jeton d’API",
       "storageHint": "Votre jeton est stocké sur cet hôte, chiffré si son système le permet.",
       "createToken": "Créer un jeton d’API",
-      "failed": "Échec de la connexion"
+      "failed": "Échec de la connexion",
+      "serverNeedsUpdate": "Ce serveur doit d’abord être mis à jour vers une version récente d’Orca. Connectez plutôt Jira depuis Orca sur ordinateur."
     }
   },
   "terminal": {

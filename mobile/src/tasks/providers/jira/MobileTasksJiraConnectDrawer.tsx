@@ -10,6 +10,7 @@ import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
 import { SettingsNote, SettingsSection } from '../../../settings/settings-screen-frame'
 import { openExternalLink } from '../../../platform/external-links/external-link'
 import { useThemedStyles } from '../../../theme/themed-styles'
+import { JiraConnectRefusedError } from './mobile-jira-operations'
 
 const EMPTY_DRAFT = { siteUrl: '', email: '', apiToken: '' }
 
@@ -62,9 +63,14 @@ function MobileTasksJiraConnectDrawer({ model }: { model: ConnectionPresentation
       setShowJiraConnect(false)
     } catch (err) {
       setError(
-        err instanceof Error && err.message
-          ? err.message
-          : t('tasks.jiraConnect.failed', 'Connection failed')
+        err instanceof JiraConnectRefusedError
+          ? t(
+              'tasks.jiraConnect.serverNeedsUpdate',
+              'This server needs an Orca update first. Connect Jira in Orca desktop instead.'
+            )
+          : err instanceof Error && err.message
+            ? err.message
+            : t('tasks.jiraConnect.failed', 'Connection failed')
       )
     } finally {
       setConnecting(false)
