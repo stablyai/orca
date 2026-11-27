@@ -99,6 +99,11 @@ function revealLocation(worktreeId: string, history: History, location: Location
           })
           history.restoring = undefined
         }
+      },
+      onDropped: () => {
+        if (history.restoring === location) {
+          history.restoring = undefined
+        }
       }
     }
   )
@@ -211,7 +216,9 @@ export function installMonacoLocationHistory(
             const current = useAppStore.getState()
             const opened = current.openFiles.find((candidate) => candidate.id === shown?.fileId)
             if (!shown || !opened || current.getActiveTab(worktreeId)?.id !== shown.viewStateId) {
-              history.index = previousIndex
+              // Why: a stale entry would keep winning Back and hide older valid locations.
+              history.entries.splice(index, 1)
+              history.index = index < previousIndex ? previousIndex - 1 : previousIndex
               history.restoring = undefined
               return
             }

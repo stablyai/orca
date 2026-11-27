@@ -26,7 +26,12 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     group: 'Editors',
     scope: 'editor',
     searchKeywords: ['editor', 'navigation', 'history', 'cursor', 'back', 'previous'],
-    defaultBindings: platformBindings(['Alt+ArrowLeft'])
+    // Why: Option+Arrow is macOS word navigation; mirror VS Code's Ctrl+- there.
+    defaultBindings: {
+      darwin: ['Ctrl+Minus'],
+      linux: ['Alt+ArrowLeft'],
+      win32: ['Alt+ArrowLeft']
+    }
   },
   {
     id: 'editor.navigateForward',
@@ -34,7 +39,11 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     group: 'Editors',
     scope: 'editor',
     searchKeywords: ['editor', 'navigation', 'history', 'cursor', 'forward', 'next'],
-    defaultBindings: platformBindings(['Alt+ArrowRight'])
+    defaultBindings: {
+      darwin: ['Ctrl+Shift+Minus'],
+      linux: ['Alt+ArrowRight'],
+      win32: ['Alt+ArrowRight']
+    }
   },
   {
     id: 'terminal.expandPane',
