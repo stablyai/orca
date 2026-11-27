@@ -35,6 +35,7 @@ export class AcpStructuredOptions {
     private readonly dialect: Pick<
       AcpDialect,
       | 'modelEfforts'
+      | 'additionalModels'
       | 'familyEfforts'
       | 'withheldCommands'
       | 'chatModelIds'

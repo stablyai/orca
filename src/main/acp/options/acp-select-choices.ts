@@ -3,6 +3,7 @@ import {
   SessionConfigSelectOptionSchema,
   type SessionConfigOption,
   type SessionConfigSelectOption,
+  type ModelInfo,
   type SessionModelState
 } from '../generated/acp-protocol.generated'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
@@ -26,22 +27,33 @@ export function acpSelectChoices(option: SelectOption): SessionConfigSelectOptio
   return choices
 }
 
-/** The model select's choices, or the legacy model list when the agent offers no select. */
+function modelInfoChoice(model: ModelInfo) {
+  return {
+    id: model.modelId,
+    label: model.name,
+    ...(model.description ? { description: model.description } : {})
+  }
+}
+
+/** The model select's choices, supplemented only for dialects with an incomplete selector. */
 export function acpListedModels(
   modelOption: SelectOption | null,
-  models: SessionModelState | null
+  models: SessionModelState | null,
+  additionalModels?: AcpDialect['additionalModels']
 ): { id: string; label: string; description?: string }[] {
-  return modelOption
-    ? acpSelectChoices(modelOption).map((choice) => ({
-        id: choice.value,
-        label: choice.name,
-        ...(choice.description ? { description: choice.description } : {})
-      }))
-    : (models?.availableModels.map((model) => ({
-        id: model.modelId,
-        label: model.name,
-        ...(model.description ? { description: model.description } : {})
-      })) ?? [])
+  if (!modelOption) {
+    return models?.availableModels.map(modelInfoChoice) ?? []
+  }
+  const choices = acpSelectChoices(modelOption).map((choice) => ({
+    id: choice.value,
+    label: choice.name,
+    ...(choice.description ? { description: choice.description } : {})
+  }))
+  if (!models || !additionalModels) {
+    return choices
+  }
+  const configured = new Set(choices.map(({ id }) => id))
+  return [...choices, ...additionalModels(configured, models.availableModels).map(modelInfoChoice)]
 }
 
 /** The options with a mode the agent reported apart from them; null when it lists no mode select. */

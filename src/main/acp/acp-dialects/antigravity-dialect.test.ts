@@ -1,6 +1,8 @@
 import { expect, it } from 'vitest'
-import { antigravityListedFamilySelection } from './antigravity-dialect'
+import { ANTIGRAVITY_ACP_DIALECT, antigravityListedFamilySelection } from './antigravity-dialect'
 import { parseAgyModelListing } from '../../antigravity/antigravity-model-listing'
+import { AcpStructuredOptions } from '../options/acp-structured-options'
+import { setupAcpSession } from '../protocol/acp-session-setup'
 
 // `agy models` 1.5.14: gemini-3.5-flash is a model itself, so its levels stay their own rows.
 const LISTED = parseAgyModelListing(
@@ -38,4 +40,55 @@ it('keeps a listed level id even when its family row offers that level', () => {
   expect(
     antigravityListedFamilySelection({ model: 'gemini-3.5-flash-medium', effort: 'medium' }, live)
   ).toBeNull()
+})
+
+it('keeps models advertised by session/new when the config selector lists only Gemini', async () => {
+  const started = await setupAcpSession(
+    { protocolVersion: 1 },
+    { cwd: '/workspace', mcpServers: [] },
+    async (_method, _params, schema) =>
+      schema.parse({
+        sessionId: 'session',
+        _meta: { antigravity: {} },
+        models: {
+          currentModelId: 'gemini-4-neon-high',
+          availableModels: [
+            { modelId: 'gemini-4-neon-high', name: 'Gemini 4 Neon (High)' },
+            { modelId: 'gemini-4-neon-xhigh', name: 'Gemini 4 Neon (XHigh)' },
+            { modelId: 'claude-opus-5-5-low', name: 'Claude Opus 5.5 (Low)' },
+            { modelId: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B (Medium)' }
+          ]
+        },
+        configOptions: [
+          {
+            id: 'model',
+            name: 'Model',
+            type: 'select',
+            category: 'model',
+            currentValue: 'gemini-4-neon',
+            options: [{ value: 'gemini-4-neon', name: 'Gemini 4 Neon' }]
+          },
+          {
+            id: 'thought_level',
+            name: 'Reasoning Effort',
+            type: 'select',
+            category: 'thought_level',
+            currentValue: 'high',
+            options: [
+              { value: 'high', name: 'High' },
+              { value: 'xhigh', name: 'XHigh' }
+            ]
+          }
+        ]
+      })
+  )
+  const options = new AcpStructuredOptions(ANTIGRAVITY_ACP_DIALECT)
+  options.adoptSession(started.response, 'new')
+  expect(
+    options.read().models.map(({ id, efforts }) => [id, efforts.map(({ value }) => value)])
+  ).toEqual([
+    ['gemini-4-neon', ['high', 'xhigh']],
+    ['claude-opus-5-5-low', []],
+    ['gpt-oss-120b-medium', []]
+  ])
 })

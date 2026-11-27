@@ -1,4 +1,5 @@
 import { createClaudeCatalogOptions } from '../../../agent-session/options/catalog-providers/agent-session-option-catalog-claude-codex'
+import { antigravityCatalogModels } from '../../../agent-session/options/catalog-providers/agent-session-option-catalog-antigravity'
 import {
   getAgentSessionOptionCatalog,
   mergeCatalogModels,
@@ -34,6 +35,9 @@ export function catalogModelsFromModelDiscovery(
       result.catalogOrigin !== 'probe')
   ) {
     return null
+  }
+  if (agent === 'antigravity') {
+    return antigravityCatalogModels(result.models)
   }
   return result.models.map((model) => ({
     id: model.id,

@@ -195,12 +195,13 @@ function resolveModelOptionLaunch(
     !modelOverridden
   )
 
+  let launchModelId: string | undefined
   // Why: a repeated model flag can prevent the CLI from starting.
   if (modelId && appliesModel && catalog.modelApply.launchArgs) {
-    const composedModelId = catalog.composeModelValue
+    launchModelId = catalog.composeModelValue
       ? catalog.composeModelValue(modelId, modelValues)
       : modelId
-    args.push(...catalog.modelApply.launchArgs(composedModelId))
+    args.push(...catalog.modelApply.launchArgs(launchModelId))
     appliedValues.model = modelId
   }
   for (const option of modelOptions) {
@@ -227,7 +228,7 @@ function resolveModelOptionLaunch(
     if (effective && !readAgentChoiceSettings(effective.value)) {
       continue
     }
-    const compiled = option.apply.launchArgs(value, originalArgs)
+    const compiled = option.apply.launchArgs(value, originalArgs, launchModelId)
     args.push(...compiled)
     appliedValues[option.id] = value
   }

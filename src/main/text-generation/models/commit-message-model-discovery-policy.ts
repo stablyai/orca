@@ -4,6 +4,7 @@ import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../codex-cli/codex-r
 import type { CommandTemplateBackslash } from '../../../shared/source-control/ai/generation/commit-message-prompt'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import { planAgentBinary } from '../../../shared/agent-launch/startup/agent-command-plan'
+import { STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV } from '../../../shared/agent-launch/startup/agent-startup-update-prompt'
 import type { AgentModelProbeSpec } from '../../../shared/agent-session/options/model-catalog/agent-model-probe-spec'
 import { formatAgentCliFailureMessage } from '../failures/source-control-agent-failure'
 import type { DiscoverCommitMessageModelsResult } from '../source-control-text-generation-types'
@@ -105,6 +106,10 @@ export function planModelDiscovery(
       : spec.id === 'claude'
         ? buildClaudeModelListArgs(strictMcp, command.prefixArgs)
         : modelDiscovery.args
+  const env =
+    spec.id === 'antigravity'
+      ? { ...command.env, ...STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV.antigravity }
+      : command.env
   return {
     ok: true,
     plan: {
@@ -112,7 +117,7 @@ export function planModelDiscovery(
       args: [...command.prefixArgs, ...args],
       stdinPayload: 'stdinPayload' in modelDiscovery ? (modelDiscovery.stdinPayload ?? null) : null,
       label: spec.label,
-      ...(command.env ? { env: command.env } : {})
+      ...(env ? { env } : {})
     }
   }
 }

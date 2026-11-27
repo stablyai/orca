@@ -184,14 +184,16 @@ export function agentPickerUsesComposerModelMenu(
 }
 
 export function agentPickerModelFromCatalogModel(model: CatalogModel): AgentPickerModel {
+  const effort = model.options.find((option) => option.id === 'effort')?.kind
   return {
     id: model.id,
     label: model.label,
     description: model.description,
     isDefault: model.isDefault === true,
-    efforts: model.options.flatMap((option) =>
-      option.id === 'effort' && option.kind.type === 'select' ? option.kind.choices : []
-    )
+    efforts: effort?.type === 'select' ? effort.choices : [],
+    ...(effort?.type === 'select' && effort.defaultIsCliDefault
+      ? { defaultEffort: effort.defaultValue }
+      : {})
   }
 }
 
