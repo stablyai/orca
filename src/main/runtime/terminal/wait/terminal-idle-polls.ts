@@ -4,20 +4,10 @@ import type {
   RuntimeTerminalWaitBlockedReason
 } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
-import {
-  buildPtyTerminalWaitBlockedResult,
-  buildPtyTerminalWaitResult
-} from './terminal-wait-results'
-import { buildTerminalWaitText } from './terminal-wait-tail-state'
-import { settlesForMidTurnInput } from './terminal-delivery-refusal'
-import { evaluateTuiIdle, type QuietForegroundLane, type TuiIdleVerdict } from './tui-idle-evidence'
-import {
-  outputClockOf,
-  ptyTuiIdleEvidence,
-  type TuiIdleEvidenceSource
-} from './tui-idle-evidence-source'
+import type { TuiIdleVerdict } from './tui-idle-evidence'
+import { outputClockOf, type TuiIdleEvidenceSource } from './tui-idle-evidence-source'
+import { sampleTerminalIdlePoll, type IdlePollSample } from './terminal-idle-poll-sample'
 
-import { isQuietForQuiescence } from './quiet-foreground-quiescence'
 import { ReattachedRestTitleReads } from './reattached-rest-title'
 
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -47,17 +37,6 @@ type IdlePollEntry = {
   foregroundPollInFlight: boolean
   screenReadInFlight: boolean
   recheckTimer?: ReturnType<typeof setTimeout>
-}
-
-/** One reading of a waiter's pane, and the results it would settle with. */
-type IdlePollSample = {
-  verdict: TuiIdleVerdict
-  /** A mid-turn agent that takes input settles a waiter that accepts it. */
-  takesInputNow: boolean
-  ptyId: string
-  ready(): RuntimeTerminalWait
-  blocked(reason: RuntimeTerminalWaitBlockedReason): RuntimeTerminalWait
-  isQuiet(lane: QuietForegroundLane): boolean
 }
 
 /** A foreground read pinned to the quiet stretch it was taken in; output moving on retires it. */
@@ -143,25 +122,7 @@ export class RuntimeTerminalIdlePolls {
   }
 
   private sample(entry: IdlePollEntry): IdlePollSample {
-    const { handle } = entry.waiter
-    // PTY records mutate in place, so this captured reference remains live.
-    const { pty } = entry
-    const readWaitText = () =>
-      buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-    const evidence = ptyTuiIdleEvidence(this.evidenceSource, pty, readWaitText)
-    const verdict = evaluateTuiIdle({ ...evidence, launchReadiness: entry.waiter.launchReadiness })
-    return {
-      verdict,
-      takesInputNow:
-        !!entry.waiter.acceptsMidTurnInput && settlesForMidTurnInput(verdict, pty.ptyId, this.deps),
-      ptyId: pty.ptyId,
-      ready: () => buildPtyTerminalWaitResult(handle, 'tui-idle', pty),
-      blocked: (reason) => buildPtyTerminalWaitBlockedResult(handle, 'tui-idle', pty, reason),
-      isQuiet: (lane) =>
-        isQuietForQuiescence(outputClockOf(this.deps, pty), this.deps.quiescenceMs, lane, () =>
-          this.deps.hasCommandPainted(pty.ptyId)
-        )
-    }
+    return sampleTerminalIdlePoll(entry.waiter, entry.pty, this.deps, this.evidenceSource)
   }
 
   private async tick(entry: IdlePollEntry): Promise<void> {
@@ -170,15 +131,10 @@ export class RuntimeTerminalIdlePolls {
     }
     let startedForegroundPoll = false
     try {
-      const sample = this.sample(entry)
-      const { verdict, ptyId } = sample
-      if (verdict.kind === 'blocked') {
-        this.settle(entry, sample.blocked(verdict.reason))
-        return
-      }
-      // Strong readiness outranks unscoped dialog wording elsewhere on the screen.
-      if (verdict.kind === 'ready-strong' || sample.takesInputNow) {
-        this.settle(entry, sample.ready())
+      let sample = this.sample(entry)
+      let { verdict } = sample
+      const { ptyId } = sample
+      if (this.settleImmediateEvidence(entry, sample)) {
         return
       }
       this.armRecheck(entry, verdict)
@@ -194,11 +150,24 @@ export class RuntimeTerminalIdlePolls {
       if (entry.screenReadInFlight) {
         return
       }
+      const screenOutputClock = outputClockOf(this.deps, entry.pty)
       const screenRead = this.readScreenBlockedReason(entry, ptyId)
       // Why await only a real read: a pane with no screen model keeps its tick synchronous.
       const screenBlockedReason = screenRead ? await screenRead : null
       if (!this.entries.has(entry)) {
         return
+      }
+      if (screenRead) {
+        // A provider read may outlive the quiet screen it inspected or a new working report.
+        if (outputClockOf(this.deps, entry.pty) !== screenOutputClock) {
+          return
+        }
+        sample = this.sample(entry)
+        verdict = sample.verdict
+        if (this.settleImmediateEvidence(entry, sample) || verdict.kind === 'working') {
+          return
+        }
+        this.armRecheck(entry, verdict)
       }
       if (screenBlockedReason) {
         this.settle(entry, sample.blocked(screenBlockedReason))
@@ -221,6 +190,7 @@ export class RuntimeTerminalIdlePolls {
       // Why quiet before the read too: a streaming or not-yet-painted pane cannot settle, so it
       // must not pay a process inspection every tick for a whole turn.
       if (!entry.foregroundPollInFlight && sample.isQuiet(lane)) {
+        const foregroundOutputClock = outputClockOf(this.deps, entry.pty)
         const foregroundRead = this.deps.getForegroundProcess(ptyId)
         if (!foregroundRead) {
           return
@@ -228,8 +198,21 @@ export class RuntimeTerminalIdlePolls {
         entry.foregroundPollInFlight = true
         startedForegroundPoll = true
         const foreground = await foregroundRead
-        if (foreground && !isShellProcess(foreground) && sample.isQuiet(lane)) {
-          this.settle(entry, sample.ready())
+        if (
+          !this.entries.has(entry) ||
+          outputClockOf(this.deps, entry.pty) !== foregroundOutputClock
+        ) {
+          return
+        }
+        const current = this.sample(entry)
+        if (
+          foreground &&
+          !isShellProcess(foreground) &&
+          current.verdict.kind === 'pending' &&
+          current.verdict.quietForeground !== 'closed' &&
+          current.isQuiet(current.verdict.quietForeground)
+        ) {
+          this.settle(entry, current.ready())
         }
       }
     } catch {
@@ -239,6 +222,20 @@ export class RuntimeTerminalIdlePolls {
         entry.foregroundPollInFlight = false
       }
     }
+  }
+
+  private settleImmediateEvidence(entry: IdlePollEntry, sample: IdlePollSample): boolean {
+    const { verdict } = sample
+    if (verdict.kind === 'blocked') {
+      this.settle(entry, sample.blocked(verdict.reason))
+      return true
+    }
+    // Strong readiness outranks unscoped dialog wording elsewhere on the screen.
+    if (verdict.kind === 'ready-strong' || sample.takesInputNow) {
+      this.settle(entry, sample.ready())
+      return true
+    }
+    return false
   }
 
   /** A closed lane normally settles on evidence alone. A pane identified only by its retained
