@@ -26,13 +26,12 @@ import { useMobileNativeChatComposerMenu } from './menus/use-mobile-native-chat-
 import { useMobileNativeChatMentionBots } from './menus/use-mobile-native-chat-mention-bots'
 import { shownDictationPreview } from './menus/mobile-native-chat-bot-mention-display'
 import { mobileNativeChatComposerStyles as styles } from './field/mobile-native-chat-composer-styles'
-import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
+import { MobileNativeChatComposerActionRow } from './field/MobileNativeChatComposerActionRow'
 import { MobileNativeChatComposerSendSlot } from './delivery/MobileNativeChatComposerSendSlot'
 import { MobileNativeChatEditActions } from './field/MobileNativeChatEditActions'
 import { useMobileNativeChatContextRing } from './commands/MobileNativeChatContextUsageRing'
 import type { MobileNativeChatSendIntent } from './delivery/mobile-native-chat-send'
 import { MobileNativeChatComposerMic } from './dictation/MobileNativeChatComposerMic'
-import { MobileNativeChatDictationLeading } from './dictation/MobileNativeChatDictationLeading'
 import { useMobileNativeChatComposerGoalMode } from './commands/use-mobile-native-chat-composer-goal-mode'
 import { useMobileNativeChatOrcaCommands } from './commands/use-mobile-native-chat-orca-commands'
 import { MobileNativeChatComposerPlanChip } from './commands/MobileNativeChatComposerPlanChip'
@@ -320,45 +319,46 @@ export function MobileNativeChatComposer({
             // The lock gates sending; the draft survives and rides the next send.
             textAlignVertical="top"
           />
-          <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
-            <MobileNativeChatDictationLeading
-              {...{ micActive, micStarting, micProcessing, cancelRef, trailing: contextRing.ring }}
-              stackOnNarrowWidth={
-                sessionOptions != null && (structured !== null || !!onAttachImage)
-              }
-              attachAndModel={
-                <>
-                  <MobileNativeChatComposerAttachButton
-                    onAttachImage={onAttachImage}
-                    onAttachFiles={structured?.onAttachFiles}
-                    structured={structured !== null}
-                    isAttaching={isAttaching}
-                    disabled={disabled || offline}
-                    menu={menu}
-                  />
-                  {sessionOptions ? (
-                    <MobileNativeChatSessionOptionPickers
-                      {...sessionOptions}
-                      agent={agent}
-                      sendInFlight={sending || isAttaching}
-                      presentation={picker}
-                      onNavigate={(page) => setPicker((current) => current && { ...current, page })}
-                      onDrawerOpen={(page) => setPicker({ page, refocus: focused })}
-                      onDrawerAfterClose={() => {
-                        if (picker?.refocus) {
-                          fieldRef.current?.focus()
-                        }
-                        setPicker(null)
-                      }}
-                    />
-                  ) : null}
-                </>
-              }
-            >
-              {roomReplies}
-              <MobileNativeChatComposerPlanChip options={sessionOptions} inputRef={fieldRef} />
-              {goal.chip}
-            </MobileNativeChatDictationLeading>
+          <MobileNativeChatComposerActionRow
+            {...{ micActive, micStarting, micProcessing, cancelRef, trailing: contextRing.ring }}
+            optionSnapshot={sessionOptions?.controller.snapshot}
+            hasMic={!!onMicPress}
+            attachment={
+              <MobileNativeChatComposerAttachButton
+                onAttachImage={onAttachImage}
+                onAttachFiles={structured?.onAttachFiles}
+                structured={structured !== null}
+                isAttaching={isAttaching}
+                disabled={disabled || offline}
+                menu={menu}
+              />
+            }
+            modelPicker={
+              sessionOptions ? (
+                <MobileNativeChatSessionOptionPickers
+                  {...sessionOptions}
+                  agent={agent}
+                  sendInFlight={sending || isAttaching}
+                  presentation={picker}
+                  onNavigate={(page) => setPicker((current) => current && { ...current, page })}
+                  onDrawerOpen={(page) => setPicker({ page, refocus: focused })}
+                  onDrawerAfterClose={() => {
+                    if (picker?.refocus) {
+                      fieldRef.current?.focus()
+                    }
+                    setPicker(null)
+                  }}
+                />
+              ) : null
+            }
+            leadingExtras={
+              <>
+                {roomReplies}
+                <MobileNativeChatComposerPlanChip options={sessionOptions} inputRef={fieldRef} />
+                {goal.chip}
+              </>
+            }
+          >
             {onMicPress ? (
               <MobileNativeChatComposerMic
                 {...{ onMicPress, micActive, micStarting, micProcessing, dictationMode }}
@@ -395,7 +395,7 @@ export function MobileNativeChatComposer({
                 onSend={(intent, keepFocus) => void handleSend(intent, keepFocus)}
               />
             )}
-          </View>
+          </MobileNativeChatComposerActionRow>
         </View>
         {editSession ? null : <MobileSlackMirrorItem />}
       </View>

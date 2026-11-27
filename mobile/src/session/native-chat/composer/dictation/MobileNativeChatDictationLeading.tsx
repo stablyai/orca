@@ -1,5 +1,5 @@
-import { useCallback, useContext, useState, type ReactNode, type RefObject } from 'react'
-import { View, type HostInstance, type LayoutChangeEvent } from 'react-native'
+import { useContext, type ReactNode, type RefObject } from 'react'
+import { View, type HostInstance } from 'react-native'
 import { MobileDictationLiveContext } from '../../../../dictation/mobile-dictation-live-context'
 import {
   MobileDictationCancelButton,
@@ -7,10 +7,7 @@ import {
   MobileDictationFinishingNote,
   MobileDictationRecordingMeter
 } from '../../../../dictation/MobileDictationLiveControls'
-import {
-  COMPOSER_ATTACH_AND_MODEL_MIN_WIDTH,
-  mobileNativeChatComposerStyles as styles
-} from '../field/mobile-native-chat-composer-styles'
+import { mobileNativeChatComposerStyles as styles } from '../field/mobile-native-chat-composer-styles'
 
 // While dictating, the row's leading side swaps attach and the pickers for ✕ and the meter (or a kept failure), so the composer keeps its height.
 export function MobileNativeChatDictationLeading({
@@ -19,8 +16,9 @@ export function MobileNativeChatDictationLeading({
   micProcessing = false,
   cancelRef,
   trailing,
-  attachAndModel,
-  stackOnNarrowWidth,
+  attachment,
+  modelPicker,
+  modelOnOwnRow,
   children
 }: {
   micActive: boolean
@@ -29,15 +27,12 @@ export function MobileNativeChatDictationLeading({
   cancelRef: RefObject<HostInstance | null>
   // The context ring after the leading controls; it steps aside with them.
   trailing: ReactNode
-  attachAndModel?: ReactNode
-  stackOnNarrowWidth?: boolean
+  attachment?: ReactNode
+  modelPicker?: ReactNode
+  modelOnOwnRow?: boolean
   children: ReactNode
 }): React.JSX.Element {
   const live = useContext(MobileDictationLiveContext)
-  const [narrow, setNarrow] = useState(false)
-  const onLayout = useCallback((event: LayoutChangeEvent) => {
-    setNarrow(event.nativeEvent.layout.width < COMPOSER_ATTACH_AND_MODEL_MIN_WIDTH)
-  }, [])
   if (live?.failureReason != null) {
     return (
       <View style={[styles.leadingControls, styles.dictationLeading]}>
@@ -49,15 +44,12 @@ export function MobileNativeChatDictationLeading({
   if (!live || (!micActive && !micProcessing)) {
     return (
       <>
-        <View style={styles.leadingControls} onLayout={stackOnNarrowWidth ? onLayout : undefined}>
-          {attachAndModel ? (
-            <View
-              style={[
-                styles.attachAndModel,
-                stackOnNarrowWidth && narrow && styles.stackedAttachAndModel
-              ]}
-            >
-              {attachAndModel}
+        {modelOnOwnRow && modelPicker ? <View style={styles.modelRow}>{modelPicker}</View> : null}
+        <View style={styles.leadingControls}>
+          {attachment || (!modelOnOwnRow && modelPicker) ? (
+            <View style={styles.attachAndModel}>
+              {attachment}
+              {modelOnOwnRow ? null : modelPicker}
             </View>
           ) : null}
           {children}

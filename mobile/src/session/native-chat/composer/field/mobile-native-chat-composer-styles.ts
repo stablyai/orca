@@ -34,9 +34,10 @@ export const mobileNativeChatComposerStyles = themedStyleSheet(() => ({
     maxWidth: '100%',
     gap: spacing.sm
   },
-  stackedAttachAndModel: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
+  wrappedActionRow: {
+    flexWrap: 'wrap'
+  },
+  modelRow: {
     width: '100%'
   },
   // One line while dictating: a long computer name truncates instead of wrapping and growing the composer.

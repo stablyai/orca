@@ -146,9 +146,11 @@ export function MobileNativeChatSessionOptionPickers({
     !model && permissionChoice ? permissionModeIcon(permissionChoice.value) : undefined
   const segmentOptions = options.filter(showsSessionOptionAsSegments)
   const rowOptions = options.filter((descriptor) => !segmentOptions.includes(descriptor))
-  const primary = model
+  const modelLabel = model
     ? nativeChatModelPillLabel(model, say)
     : mobileSessionOptionSummaryValue(home)
+  const primary =
+    model && agent === 'hermes' ? modelLabel.replace(/^(.+?) · (.+)$/u, '$2 · $1') : modelLabel
   const permissionDeferred = permission ? mobileDeferredPermissionSummary(permission)?.full : null
   const secondary = (model && nativeChatOptionValuesLabel(options, say)) || null
   // The model pill shows permission only as a warning tint, so its name carries a deferred pick.
@@ -187,9 +189,7 @@ export function MobileNativeChatSessionOptionPickers({
   return (
     <View style={styles.pillSlot}>
       <ModelPill
-        primary={
-          model && agent === 'hermes' ? primary.replace(/^(.+?) · (.+)$/u, '$2 · $1') : primary
-        }
+        primary={primary}
         secondary={secondary}
         warning={permissionColor !== undefined}
         icon={permissionIcon}
