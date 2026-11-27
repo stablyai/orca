@@ -1,62 +1,24 @@
 // @vitest-environment happy-dom
+// Message box chips and the marked images Annotate adds to them.
 import { createElement } from 'react'
-import { act, fireEvent, render, renderHook, screen } from '@testing-library/react'
-import { expect, it, vi } from 'vitest'
-import {
-  markNativeChatNotedImageEditing,
-  useNativeChatNotesOriginal
-} from './native-chat-chip-notes'
-import {
-  appendToNativeChatComposerDraft,
-  readNativeChatComposerDraft
-} from '../../drafts/native-chat-composer-draft-store'
+import { fireEvent, render, renderHook, screen } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
 import { useNativeChatGeneratedImageAttach } from '../../paste/use-native-chat-generated-image-attach'
 import { NativeChatImageAttachmentPreview } from '../../attachments/chips/NativeChatImageAttachmentPreview'
-import {
-  readNativeChatAttachmentNotes,
-  setNativeChatAttachmentNotes
-} from './native-chat-attachment-notes'
 
-const load = vi.hoisted(() => ({ loadLocalImageSrc: vi.fn() }))
 vi.mock('@/components/editor/document-images/useLocalImageSrc', () => ({
   useLocalImageSrc: () => undefined,
-  loadLocalImageSrc: load.loadLocalImageSrc
+  loadLocalImageSrc: vi.fn()
 }))
 
-const NOTES = {
-  mediaName: 'dashboard.png',
-  source: { path: '/tmp/dashboard.png' },
-  kind: 'image' as const,
-  offset: 0,
-  notes: []
-}
+const UNAVAILABLE = 'Notes can’t be drawn on this image.'
+const annotate = (): HTMLElement => screen.getByRole('button', { name: /Annotate/ })
 
-it('a reopened marked chip waits for its original, then reports when it can’t be read (F1)', async () => {
-  let settle: (url: string | null) => void = () => {}
-  load.loadLocalImageSrc.mockReturnValue(
-    new Promise<string | null>((resolve) => {
-      settle = resolve
-    })
-  )
-  const { result } = renderHook(() => useNativeChatNotesOriginal(NOTES, true, undefined))
-  // Neither ready nor failed: the viewer must not open on the marked copy yet.
-  expect(result.current).toEqual({ src: undefined, failed: false })
-  await act(async () => settle(null))
-  expect(result.current.failed).toBe(true)
+afterEach(() => {
+  document.body.replaceChildren()
 })
 
-it('a reopened marked chip whose notes are on a URL, with no file to read, opens view-only', () => {
-  const { result } = renderHook(() =>
-    useNativeChatNotesOriginal(
-      { ...NOTES, source: { url: 'https://example.test/a.png' } },
-      true,
-      undefined
-    )
-  )
-  expect(result.current).toEqual({ src: undefined, failed: true })
-})
-
-it('reads a drawn image’s bytes before it starts a chip, so a failed read leaves none (F19)', async () => {
+it('reads a drawn image’s bytes before it starts a chip, so a failed read leaves none', async () => {
   const startImageChip = vi.fn(() => ({ id: 'pending-1', reveal: () => {} }))
   const saveClipboardImage = vi.fn(async () => true)
   const { result } = renderHook(() =>
@@ -72,56 +34,17 @@ it('reads a drawn image’s bytes before it starts a chip, so a failed read leav
   expect(startImageChip).not.toHaveBeenCalled()
 })
 
-it('a marked chip opens its viewer only once the clean original is read or known missing (F1)', async () => {
-  let settle: (url: string | null) => void = () => {}
-  load.loadLocalImageSrc.mockReturnValue(
-    new Promise<string | null>((resolve) => {
-      settle = resolve
-    })
-  )
-  setNativeChatAttachmentNotes('agent-session:chip', 'img-1', {
-    ...NOTES,
-    notes: [{ id: 'n1', number: 1, text: 'Align', mark: { kind: 'pin', x: 0.5, y: 0.5 } }]
-  })
+it('a chip in a chat’s message box can be annotated', () => {
   render(
     createElement(NativeChatImageAttachmentPreview, {
-      attachment: { id: 'img-1', path: '/tmp/marked.png' },
-      notesScopeKey: 'agent-session:chip',
-      onRemove: () => {}
+      attachment: { id: 'chip-1', path: '/tmp/shot.png', previewUrl: 'data:image/png;base64,' },
+      notesScopeKey: 'agent-session:chips',
+      onRemove: vi.fn()
     })
   )
-  fireEvent.click(screen.getByRole('button', { name: /View image/ }))
-  // Opening on the marked copy first would seed the viewer without its notes.
-  expect(screen.queryByRole('dialog')).toBeNull()
-  await act(async () => settle(null))
-  expect(screen.getByRole('dialog')).toBeTruthy()
-})
-
-it('a marked chip another viewer is editing can’t be removed from under it', () => {
-  const scope = 'agent-session:chip-remove'
-  appendToNativeChatComposerDraft(scope, {
-    text: '',
-    images: [{ id: 'chip-1', path: '/tmp/marked.png' }]
-  })
-  setNativeChatAttachmentNotes(scope, 'chip-1', {
-    ...NOTES,
-    notes: [{ id: 'n1', number: 1, text: 'keep me', mark: { kind: 'pin', x: 0.5, y: 0.5 } }]
-  })
-  // Another viewer (here, as another window's would be) has the chip open.
-  const end = markNativeChatNotedImageEditing(scope, 'chip-1')
-  const onRemove = vi.fn()
-  render(
-    createElement(NativeChatImageAttachmentPreview, {
-      attachment: { id: 'chip-1', path: '/tmp/marked.png' },
-      notesScopeKey: scope,
-      onRemove
-    })
-  )
-  fireEvent.click(screen.getByRole('button', { name: 'Remove attachment' }))
-  expect(onRemove).not.toHaveBeenCalled()
-  expect(readNativeChatComposerDraft(scope).images.map(({ id }) => id)).toEqual(['chip-1'])
-  expect(readNativeChatAttachmentNotes(scope, 'chip-1')?.notes[0]?.text).toBe('keep me')
-  end()
+  fireEvent.click(screen.getByTitle('shot.png'))
+  // Annotate waits for the image to load, but nothing makes it unavailable.
+  expect(annotate().getAttribute('title')).not.toBe(UNAVAILABLE)
 })
 
 it('a chip outside a chat’s message box (an item comment, the browser strip) opens view-only', () => {
@@ -133,7 +56,5 @@ it('a chip outside a chat’s message box (an item comment, the browser strip) o
     })
   )
   fireEvent.click(screen.getByTitle('shot.png'))
-  expect(screen.getByRole('button', { name: /Annotate/ }).getAttribute('title')).toBe(
-    'Notes can’t be drawn on this image.'
-  )
+  expect(annotate().getAttribute('title')).toBe(UNAVAILABLE)
 })

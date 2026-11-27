@@ -143,6 +143,11 @@ export function NativeChatMediaNotesPanel({
             <Button type="button" variant="media-paper-ghost" size="xs" onClick={editor.undo}>
               {t('components.native-chat.notes.undo', 'Undo')}
             </Button>
+          ) : status.kind === 'error' && status.discard ? (
+            // Closes without these notes: the only way they are dropped.
+            <Button type="button" variant="media-paper-ghost" size="xs" onClick={status.discard}>
+              {t('components.native-chat.notes.discard', 'Discard')}
+            </Button>
           ) : null}
         </div>
       ) : null}

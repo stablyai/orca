@@ -13,7 +13,8 @@ export type NativeChatNotesConfirm = { reason: 'close' | 'done' | 'replace' | 'c
 export type NativeChatNotesStatus =
   | { kind: 'removed'; count: number }
   | { kind: 'frame-limit' }
-  | { kind: 'error'; message: string }
+  /** `discard`: Close's way out when the notes can't go to the message box (closes without them). */
+  | { kind: 'error'; message: string; discard?: () => void }
 
 /** Undo steps kept per viewer. */
 const HISTORY_MAX = 50

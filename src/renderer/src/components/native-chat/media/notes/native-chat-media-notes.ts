@@ -7,6 +7,9 @@ export type NativeChatNoteMark =
   | { kind: 'pin'; x: number; y: number }
   | { kind: 'box'; x: number; y: number; width: number; height: number }
 
+/** Where the media being annotated comes from: a file (on this computer or a paired one), or a URL. */
+export type NativeChatNotesSource = { path?: string; url?: string; connectionId?: string }
+
 export type NativeChatMediaNote = {
   id: string
   /** 1-based; continues after marks already drawn into a sent copy. */

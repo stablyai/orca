@@ -14,8 +14,11 @@ import {
   NativeChatNotesSendButton as SendButton
 } from './NativeChatMediaViewerChrome'
 import { useNativeChatNotesEditor } from './use-native-chat-notes-editor'
-import { nativeChatNoteTimesNeedTenths, type NativeChatMediaNote } from './native-chat-media-notes'
-import type { NativeChatNotesSource } from './native-chat-attachment-notes'
+import {
+  nativeChatNoteTimesNeedTenths,
+  type NativeChatMediaNote,
+  type NativeChatNotesSource
+} from './native-chat-media-notes'
 import { useNativeChatNotesDelivery } from './use-native-chat-notes-delivery'
 import { nativeChatAnnotateReason } from './native-chat-notes-reasons'
 import { useNativeChatMediaViewerNarrow } from './use-native-chat-media-viewer-narrow'
@@ -38,15 +41,10 @@ export type NativeChatMediaViewerProps = {
   source: NativeChatNotesSource
   /** An element inside the chat, used to find its message box. */
   opener: React.RefObject<Element | null>
-  /** Reopening a marked image: its notes, editable again on the original. */
+  /** Notes the viewer opens with, ready to place more. */
   initialNotes?: readonly NativeChatMediaNote[]
+  /** Numbering goes on after this: notes already drawn into an image being annotated again. */
   offset?: number
-  /** The marked images a hand-off attached; a returned function undoes what the caller replaced. */
-  onAttached?: (ids: string[]) => (() => boolean | void) | void | false
-  /** A reopened marked image whose notes were all deleted on close; returns its Undo. */
-  onCleared?: () => () => boolean
-  /** The draft image these notes replace (a chip opened from the message box). */
-  replacesAttachmentId?: string
   fallback?: React.ReactNode
   /** False for web images: drawing them would need a cross-origin read, so they are view-only. */
   annotatable?: boolean
@@ -84,13 +82,9 @@ function ViewerBody({
   onOpenChange,
   src,
   title,
-  source,
   opener,
   initialNotes,
   offset = 0,
-  onAttached,
-  onCleared,
-  replacesAttachmentId,
   fallback,
   annotatable = true,
   startAnnotating = false,
@@ -140,12 +134,6 @@ function ViewerBody({
     loaded,
     editor,
     title,
-    source,
-    offset,
-    initialNotes,
-    onAttached,
-    onCleared,
-    replacesAttachmentId,
     onOpenChange,
     showPanel,
     onRestored: resumeAnnotating

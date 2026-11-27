@@ -11,8 +11,6 @@ import {
   persistNativeChatComposerDraft
 } from './native-chat-composer-draft-persistence'
 import { releaseNativeChatStagedFiles } from './native-chat-draft-attachment-staging'
-import { clearNativeChatAttachmentNotesWhere } from '../media/notes/native-chat-attachment-notes'
-import { clearNativeChatHeldNotesWhere } from '../media/notes/native-chat-held-notes'
 import type {
   StoredNativeChatComposerDraft,
   NativeChatComposerDraftOwner
@@ -23,12 +21,6 @@ export function deleteNativeChatComposerDraftsWhere(
 ): void {
   deleteLoadingNativeChatComposerDraftsWhere(matches)
   retireNativeChatComposerSubmissionsWhere(matches)
-  // A draft moved elsewhere keeps its notes until the destination is saved (see the persistence's
-  // deferred removals), so a restart that recovers this draft recovers them too.
-  const notesGo = (scope: string): boolean =>
-    !keepsMovedNativeChatDraftNotes(scope) && matches(scope, records.get(scope))
-  clearNativeChatAttachmentNotesWhere(notesGo)
-  clearNativeChatHeldNotesWhere(notesGo)
   for (const scope of new Set([...records.keys(), ...scopeListeners.keys()])) {
     const draft = records.get(scope)
     if (matches(scope, draft)) {
@@ -44,7 +36,6 @@ export function deleteNativeChatComposerDraftsWhere(
 }
 
 import { currentDraftScope } from './native-chat-launch-draft-source'
-import { keepsMovedNativeChatDraftNotes } from './native-chat-moved-draft-release'
 import {
   STRUCTURED_AGENT_SESSION_DRAFT_SCOPE_PREFIX,
   nativeChatDraftScopeTabId

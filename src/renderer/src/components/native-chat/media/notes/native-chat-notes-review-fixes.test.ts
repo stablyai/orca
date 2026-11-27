@@ -4,27 +4,17 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { translate } from '@/i18n/i18n'
 import { nativeChatNotesImageName } from './native-chat-media-notes'
 import {
-  dismissNativeChatNotesNoticeFor,
   NATIVE_CHAT_NOTES_UNDO_MS,
   resetNativeChatNotesNoticesForTests,
   showNativeChatNotesNotice,
   useNativeChatNotesNotice
 } from './native-chat-notes-notice'
-import {
-  nativeChatAnnotateReason,
-  nativeChatNotesBlockedReason,
-  nativeChatNotesKeptText
-} from './native-chat-notes-reasons'
-import {
-  markNativeChatNotedImageEditing,
-  nativeChatDraftHasEditingImage
-} from './native-chat-chip-notes'
+import { nativeChatAnnotateReason, nativeChatNotesBlockedReason } from './native-chat-notes-reasons'
 import { handleNativeChatMediaViewportKey } from './native-chat-media-viewport-keys'
 import {
   useNativeChatMediaViewerFocus,
   type NativeChatMediaViewerFocusSession
 } from './use-native-chat-media-viewer-focus'
-import { appendToNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { clearNativeChatComposerDraftsForTests } from '../../drafts/native-chat-draft-reset'
 
 const SCOPE = 'agent-session:review'
@@ -45,7 +35,7 @@ it('names a copy of a marked copy by generation, never -notes-notes', () => {
 it('an Undo line lasts eight seconds, and an expired or replaced line undoes nothing', () => {
   vi.useFakeTimers()
   const undo = vi.fn()
-  showNativeChatNotesNotice(SCOPE, { text: '2 notes removed', undo })
+  showNativeChatNotesNotice(SCOPE, { text: '2 notes added to your message', undo })
   const { result, rerender } = renderHook(() => useNativeChatNotesNotice(SCOPE))
   const stale = result.current?.action?.onClick
   expect(stale).toBeDefined()
@@ -57,40 +47,12 @@ it('an Undo line lasts eight seconds, and an expired or replaced line undoes not
   expect(undo).not.toHaveBeenCalled()
 })
 
-it('reopening a marked image ends the Undo of the line that announced it, and only that line', () => {
-  const undo = vi.fn()
-  showNativeChatNotesNotice(SCOPE, { text: '1 note added', undo, ids: ['img-1'] })
-  dismissNativeChatNotesNoticeFor(SCOPE, 'img-2')
-  const { result } = renderHook(() => useNativeChatNotesNotice(SCOPE))
-  expect(result.current).not.toBeNull()
-  dismissNativeChatNotesNoticeFor(SCOPE, 'img-1')
-  const { result: after } = renderHook(() => useNativeChatNotesNotice(SCOPE))
-  expect(after.current).toBeNull()
-})
-
-it('a reopened marked image counts as being edited only while it is in the draft', () => {
-  appendToNativeChatComposerDraft(SCOPE, {
-    text: '',
-    images: [{ id: 'img-1', path: '/tmp/a.png' }]
-  })
-  expect(nativeChatDraftHasEditingImage(SCOPE)).toBe(false)
-  const done = markNativeChatNotedImageEditing(SCOPE, 'img-1')
-  expect(nativeChatDraftHasEditingImage(SCOPE)).toBe(true)
-  // Replaced by its edited copy: the old id has left the draft.
-  const other = markNativeChatNotedImageEditing(SCOPE, 'gone')
-  done()
-  expect(nativeChatDraftHasEditingImage(SCOPE)).toBe(false)
-  other()
-})
-
 it('says why notes wait, by what the message box is doing', () => {
-  const reasons = (['unavailable', 'editing', 'goal', 'command'] as const).map((blocked) => [
-    nativeChatNotesBlockedReason(translate, blocked),
-    nativeChatNotesKeptText(translate, blocked, 'a.png')
-  ])
-  expect(new Set(reasons.map(([send]) => send)).size).toBe(4)
-  expect(new Set(reasons.map(([kept]) => kept)).size).toBe(4)
-  expect(reasons[2][1]).toContain('goal')
+  const reasons = (['unavailable', 'editing', 'goal', 'command'] as const).map((blocked) =>
+    nativeChatNotesBlockedReason(translate, blocked)
+  )
+  expect(new Set(reasons).size).toBe(4)
+  expect(reasons[2]).toContain('goal')
 })
 
 it('makes images over 33 megapixels view-only, with a reason', () => {

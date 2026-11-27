@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 // Viewer Send through its real delivery hook, with the marked copy's chip put in the message box the
-// way the message box does it: Send goes ahead whenever only that chip changed the words.
+// way the message box does it: Send goes ahead whenever only that chip and its notes text changed
+// the words.
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest'
 import {
@@ -18,8 +19,6 @@ import { registerNativeChatComposerDestination } from '../../composer/focus/nati
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
 import type { NativeChatComposerInput } from '../../composer/editor/native-chat-composer-input'
 import { insertImageReferences } from '../../composer/editor/native-chat-composer-image-references'
-import { resetNativeChatAttachmentNotesForTests } from './native-chat-attachment-notes'
-import { resetNativeChatHeldNotesForTests } from './native-chat-held-notes'
 import { useNativeChatNotesEditor } from './use-native-chat-notes-editor'
 import { useNativeChatNotesDelivery } from './use-native-chat-notes-delivery'
 import type { NativeChatMediaNote } from './native-chat-media-notes'
@@ -32,8 +31,8 @@ const SCOPE = 'agent-session:approval'
 const NOTES: NativeChatMediaNote[] = [
   { id: 'n1', number: 1, text: 'look here', mark: { kind: 'pin', x: 0.5, y: 0.5 } }
 ]
+const NOTES_TEXT = 'Notes on a.png (numbered marks in the attached image):\n1. look here'
 const LOADED = { size: { width: 10, height: 10 }, image: new Image() }
-const SOURCE = { path: '/a.png' }
 const noop = (): void => {}
 
 /** A message box editor with its caret at the end of the draft, writing to the draft as it types. */
@@ -92,10 +91,6 @@ async function sendFromViewer(opener: { current: Element | null }): Promise<void
       loaded: LOADED,
       editor: useNativeChatNotesEditor({ notes: NOTES }),
       title: 'a.png',
-      source: SOURCE,
-      offset: 0,
-      initialNotes: undefined,
-      onAttached: undefined,
       onOpenChange: noop,
       showPanel: noop,
       onRestored: noop
@@ -109,8 +104,6 @@ async function sendFromViewer(opener: { current: Element | null }): Promise<void
 beforeEach(async () => {
   localStorage.clear()
   clearNativeChatComposerDraftsForTests()
-  resetNativeChatAttachmentNotesForTests()
-  resetNativeChatHeldNotesForTests()
   setNativeChatComposerDraftStorageForTests(createMemoryNativeChatComposerDraftStorage())
   await hydrateNativeChatComposerDrafts()
 })
@@ -122,7 +115,9 @@ it('Send goes ahead when the message ends in a space the chip reused', async () 
   updateNativeChatComposerDraft(SCOPE, { text: 'please check ' }, 'immediate')
   const { submit, opener } = chat(editorAtEnd)
   await sendFromViewer(opener)
-  expect(readNativeChatComposerDraft(SCOPE).text).toBe('please check [Image](orca-image:marked) ')
+  expect(readNativeChatComposerDraft(SCOPE).text).toBe(
+    `please check [Image](orca-image:marked)\n\n${NOTES_TEXT}`
+  )
   expect(submit).toHaveBeenCalledTimes(1)
 })
 
@@ -130,7 +125,9 @@ it('Send goes ahead when the message box has no editor and the chip goes after t
   updateNativeChatComposerDraft(SCOPE, { text: 'please check ' }, 'immediate')
   const { submit, opener } = chat(() => null)
   await sendFromViewer(opener)
-  expect(readNativeChatComposerDraft(SCOPE).text).toBe('please check\n\n[Image](orca-image:marked)')
+  expect(readNativeChatComposerDraft(SCOPE).text).toBe(
+    `please check\n\n[Image](orca-image:marked)\n\n${NOTES_TEXT}`
+  )
   expect(submit).toHaveBeenCalledTimes(1)
 })
 

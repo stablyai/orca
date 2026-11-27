@@ -5,26 +5,6 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/document-images/useLocalImageSrc'
 import { NativeChatMediaViewer } from '../../media/notes/NativeChatMediaViewer'
-import { useNativeChatAttachmentNotes } from '../../media/notes/native-chat-attachment-notes'
-import {
-  markNativeChatNotedImageEditing,
-  nativeChatNotedImageBeingEdited,
-  replaceNativeChatNotedImage,
-  restoreNativeChatCleanImage,
-  takeNativeChatNotedImage,
-  useNativeChatNotesOriginal
-} from '../../media/notes/native-chat-chip-notes'
-import {
-  dismissNativeChatNotesNoticeFor,
-  nativeChatNotesRetryingUndo,
-  showNativeChatNotesNotice
-} from '../../media/notes/native-chat-notes-notice'
-import { undoRemoveFailedText } from '../../media/notes/native-chat-notes-reasons'
-import { nativeChatNotesImageName } from '../../media/notes/native-chat-media-notes'
-import {
-  nativeChatNotesMediaKey,
-  useNativeChatHeldNotesCount
-} from '../../media/notes/native-chat-held-notes'
 import {
   copyableNativeChatImageSrc,
   keepPreviewOpenForChatMenu
@@ -44,10 +24,10 @@ type Props = {
   number?: number
   /** The paired server the chat runs on; a file stored there is read back through it. */
   hostEnvironmentId?: string
-  /** The draft holding this chip, whose marked images keep their notes. */
+  /** The message box draft holding this chip. Set, Annotate puts a marked copy and its notes there;
+   *  outside a chat's message box (an item comment, the browser's annotation strip) it only views. */
   notesScopeKey?: string
-  /** Absent where the image only shows, as an answer held to send later does: then it is view-only,
-   *  with no Remove and no notes to add. */
+  /** Absent where the image only shows, as an answer held to send later does. */
   onRemove?: (id: string) => void
 }
 
@@ -174,8 +154,6 @@ function NativeChatImageThumbnail({
 }: Props): React.JSX.Element {
   const t = useTranslate()
   const [isOpen, setIsOpen] = useState(false)
-  // A marked image's notes reopen editable on the media they were made on.
-  const notes = useNativeChatAttachmentNotes(notesScopeKey ?? '', attachment.id)
   const [isNearViewport, setIsNearViewport] = useState(false)
   const thumbnailRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -227,12 +205,7 @@ function NativeChatImageThumbnail({
   // Use the immediate clipboard preview for thumbnails and prefer the stored file for full-size viewing.
   const thumbnailSrc = attachment.previewUrl ?? localSrc
   const fullSizeSrc = localSrc ?? attachment.previewUrl
-  // Reopened, a marked image is edited on its clean original; the viewer waits until that is read.
-  const original = useNativeChatNotesOriginal(notes, isOpen, hostReadContext)
-  // A marked image is named for the media its notes are on, not as a generic pasted image.
-  const filename = notes
-    ? nativeChatNotesImageName(notes.mediaName, undefined)
-    : attachmentLabel(attachment.path, t)
+  const filename = attachmentLabel(attachment.path, t)
   const pendingLabel = attachment.pendingName
     ? t('components.native-chat.composer.uploadingFile', 'Uploading {{name}}…', {
         name: attachment.pendingName
@@ -245,58 +218,6 @@ function NativeChatImageThumbnail({
   const KindIcon = isFile ? FileText : ImageIcon
   // The thumbnail may be the downscaled clipboard preview; copy only the file.
   const copySrc = copyableNativeChatImageSrc(localSrc)
-  // Notes kept for this image while the message box held a command mark it too.
-  const plainSource = {
-    path: attachment.path,
-    ...(attachment.connectionId ? { connectionId: attachment.connectionId } : {})
-  }
-  const keptCount = useNativeChatHeldNotesCount(
-    notesScopeKey,
-    attachment.path ? nativeChatNotesMediaKey(plainSource) : undefined
-  )
-  const notesLabel = notes
-    ? t('components.native-chat.notes.chipCount', '{{count}} notes', {
-        defaultValue_one: '{{count}} note',
-        count: notes.notes.length
-      })
-    : keptCount > 0
-      ? t('components.native-chat.notes.kept', 'Notes kept')
-      : null
-  // Reopened in the viewer: these notes are being edited and are replaced when it closes.
-  const editing = isOpen && notes !== null
-  useEffect(() => {
-    if (!editing || !notesScopeKey) {
-      return undefined
-    }
-    // Reopened, the group is no longer the one its "added" line can undo, and it sits out Send.
-    dismissNativeChatNotesNoticeFor(notesScopeKey, attachment.id)
-    return markNativeChatNotedImageEditing(notesScopeKey, attachment.id)
-  }, [attachment.id, editing, notesScopeKey])
-  const remove = (): void => {
-    if (!notes || !notesScopeKey) {
-      onRemove?.(attachment.id)
-      return
-    }
-    // Removing it would close another viewer's edit of it (here or in another window) under it.
-    if (nativeChatNotedImageBeingEdited(notesScopeKey, attachment.id)) {
-      showNativeChatNotesNotice(notesScopeKey, {
-        text: t(
-          'components.native-chat.notes.removeWhileEditing',
-          'Finish editing elsewhere first.'
-        )
-      })
-      return
-    }
-    // Its words stay saved until the draft without it is, so a restart never finds it without them.
-    const putBack = takeNativeChatNotedImage(notesScopeKey, attachment.id, true)
-    showNativeChatNotesNotice(notesScopeKey, {
-      text: t('components.native-chat.notes.notesRemoved', '{{count}} notes removed', {
-        defaultValue_one: '{{count}} note removed',
-        count: notes.notes.length
-      }),
-      undo: nativeChatNotesRetryingUndo(notesScopeKey, putBack, undoRemoveFailedText(t))
-    })
-  }
 
   return (
     <>
@@ -307,13 +228,12 @@ function NativeChatImageThumbnail({
             number,
             isPending
               ? pendingLabel
-              : `${t('components.native-chat.composer.viewAttachment', 'View image')}: ${label}${notesLabel ? `, ${notesLabel}` : ''}`,
+              : `${t('components.native-chat.composer.viewAttachment', 'View image')}: ${label}`,
             t
           )}
           aria-busy={isPending}
           title={label}
           data-native-chat-copy-image-src={copySrc}
-          data-native-chat-attachment-id={attachment.id}
           onClick={() => setIsOpen(true)}
           className="flex size-full items-center justify-center overflow-hidden rounded-md border border-border bg-chat-canvas transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
@@ -321,7 +241,7 @@ function NativeChatImageThumbnail({
             <img
               src={thumbnailSrc}
               alt={label}
-              className={`size-full object-cover${isPending || editing ? ' opacity-50' : ''}`}
+              className={`size-full object-cover${isPending ? ' opacity-50' : ''}`}
             />
           ) : isPending ? (
             <span className="flex max-w-full flex-col items-center gap-1 px-1">
@@ -342,43 +262,20 @@ function NativeChatImageThumbnail({
           </span>
         ) : null}
         <ImageNumberBadge number={number} />
-        {notesLabel ? (
-          <span
-            title={notesLabel}
-            className="pointer-events-none absolute inset-x-0.5 bottom-0.5 truncate rounded bg-background/90 px-1 text-center text-2xs font-medium text-foreground tabular-nums"
-          >
-            {editing ? t('components.native-chat.notes.editing', 'Editing…') : notesLabel}
-          </span>
-        ) : null}
-        {onRemove ? <RemoveAttachmentButton onRemove={remove} /> : null}
+        {onRemove ? <RemoveAttachmentButton onRemove={() => onRemove(attachment.id)} /> : null}
       </div>
       <NativeChatMediaViewer
-        open={isOpen && (!notes || Boolean(original.src) || original.failed)}
+        open={isOpen}
         onOpenChange={setIsOpen}
-        key={notes ? (original.src ? 'original' : 'marked') : 'plain'}
-        src={(notes ? original.src : null) ?? fullSizeSrc ?? null}
-        title={notes?.mediaName ?? label}
-        source={notes?.source ?? plainSource}
+        src={fullSizeSrc ?? null}
+        title={label}
+        source={{
+          path: attachment.path,
+          ...(attachment.connectionId ? { connectionId: attachment.connectionId } : {})
+        }}
         opener={thumbnailRef}
-        initialNotes={notes && original.src ? notes.notes : undefined}
-        // Numbering goes on from the copy these notes were first drawn on.
-        offset={notes?.offset}
-        // Notes go to a chat's message box: a chip outside one (an item comment, the browser's
-        // annotation strip) only views. Without its clean original a marked image can only be
-        // viewed too: new marks would land on old ones.
-        annotatable={Boolean(onRemove && notesScopeKey) && (!notes || Boolean(original.src))}
-        replacesAttachmentId={attachment.id}
-        // The marked image takes this chip's place; Undo puts this chip and its notes back.
-        onAttached={
-          notesScopeKey && onRemove
-            ? () => replaceNativeChatNotedImage(notesScopeKey, attachment.id)
-            : undefined
-        }
-        onCleared={
-          notes && notesScopeKey && onRemove
-            ? () => restoreNativeChatCleanImage(notesScopeKey, attachment.id, notes)
-            : undefined
-        }
+        // Notes go into this chat's message box as a marked copy and text; elsewhere it only views.
+        annotatable={Boolean(onRemove && notesScopeKey)}
         onInteractOutside={keepPreviewOpenForChatMenu}
         copySrc={copySrc}
         fallback={

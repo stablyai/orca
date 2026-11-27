@@ -82,10 +82,7 @@ export function installNativeChatDraftRecord(
 export const dirtyScopes = new Set<string>()
 export const unconfirmed = new Map<string, UnconfirmedDraftChange>()
 /** Source deletions wait for a write containing the moved draft, including later retries. */
-export const deferredRemovals = new Map<
-  string,
-  { destinationScope: string; savedAt: number; notesPending?: boolean }
->()
+export const deferredRemovals = new Map<string, { destinationScope: string; savedAt: number }>()
 // Drafts whose last write storage refused; shown so the user knows they are held in memory only.
 export const refusedScopes = new Set<string>()
 export type DraftImageCheck = {

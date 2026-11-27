@@ -2,11 +2,10 @@ import { useSyncExternalStore } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatComposerNotice } from '../../composer/controls/native-chat-composer-notice'
 
-// The one line a chat's message box shows about notes just added, kept or removed, with its Undo.
-// In the message box rather than a corner toast, so it sits beside what it talks about.
+// The one line a chat's message box shows about notes just added, with its Undo. In the message
+// box rather than a corner toast, so it sits beside what it talks about.
 
-/** `ids`: the draft images the line is about. */
-type NotesNotice = { text: string; undo?: () => void; ids?: readonly string[] }
+type NotesNotice = { text: string; undo?: () => void }
 
 /** A line with Undo goes after this long, and its Undo with it. */
 export const NATIVE_CHAT_NOTES_UNDO_MS = 8000
@@ -31,20 +30,6 @@ export function showNativeChatNotesNotice(scopeKey: string, notice: NotesNotice)
   return dismiss
 }
 
-/** Undo for a line whose `putBack` can fail: failing, it says so in `failed`, with Undo again. */
-export function nativeChatNotesRetryingUndo(
-  scopeKey: string,
-  putBack: () => boolean,
-  failed: string
-): () => void {
-  const undo = (): void => {
-    if (!putBack()) {
-      showNativeChatNotesNotice(scopeKey, { text: failed, undo })
-    }
-  }
-  return undo
-}
-
 /** Removes the line, only while it is still `notice` when given, so a newer line survives. */
 export function dismissNativeChatNotesNotice(scopeKey: string, notice?: NotesNotice): void {
   if (notice && notices.get(scopeKey) !== notice) {
@@ -52,14 +37,6 @@ export function dismissNativeChatNotesNotice(scopeKey: string, notice?: NotesNot
   }
   if (notices.delete(scopeKey)) {
     notify(scopeKey)
-  }
-}
-
-/** Removes the line about this draft image: reopening it for editing ends that line's Undo. */
-export function dismissNativeChatNotesNoticeFor(scopeKey: string, id: string): void {
-  const notice = notices.get(scopeKey)
-  if (notice?.ids?.includes(id)) {
-    dismissNativeChatNotesNotice(scopeKey, notice)
   }
 }
 

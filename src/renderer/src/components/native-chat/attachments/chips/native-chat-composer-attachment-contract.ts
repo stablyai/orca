@@ -30,8 +30,7 @@ export type NativeChatComposerAttachments = {
     connectionId?: string | null,
     options?: NativeChatResolvedPathOptions
   ) => void
-  /** Every image leaves the draft except `keep`, in one write. */
-  clearImageAttachments: (keep?: readonly string[]) => void
+  clearImageAttachments: () => void
   flushPendingAttachments: () => void
   removeImageAttachment: (id: string) => void
   /** `serverOwned`: an image the paste saved on the remote target's own server, not a client file. */

@@ -1,6 +1,5 @@
 import { useNativeChatComposerEditSession } from '../queue/editing/use-native-chat-composer-edit-session'
-import { clearNativeChatImagesKeepingNoted } from '../media/notes/native-chat-attachment-notes'
-import { useNativeChatComposerNotice as useComposerNotice } from './controls/use-native-chat-composer-notice'
+import { useNativeChatComposerNotice } from './controls/use-native-chat-composer-notice'
 import { useNativeChatMobileHoldNotice } from '../host-access/use-native-chat-mobile-hold-notice'
 import { forwardRef, useCallback, useState, useRef } from 'react'
 import { useNativeChatComposerInterrupt } from './submit/use-native-chat-composer-interrupt'
@@ -90,7 +89,11 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       structuredTransport ? null : targetPtyId,
       canSend
     )
-    const { notices, setNotice } = useComposerNotice(chatNotices, holdNotice, draftScopeKey)
+    const { notices, setNotice } = useNativeChatComposerNotice(
+      chatNotices,
+      holdNotice,
+      draftScopeKey
+    )
     const { textareaRef } = useNativeChatComposerAppMenuSelection(imeEnterGesture.isComposing)
     const recall = useNativeChatComposerRecall({
       draft,
@@ -247,15 +250,12 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setDraft,
       setCaret,
       clearSkillOrigin,
-      // A picked command sends no images; marked ones keep their notes for the next message.
-      clearImageAttachments: () =>
-        clearNativeChatImagesKeepingNoted(draftScopeKey, clearImageAttachments),
+      clearImageAttachments,
       setNotice
     }
     const sendPty = useNativeChatPtyComposerSend({
       draftScopeKey,
       ...ptyCommandRouting,
-      clearImageAttachments,
       draft,
       imageAttachments,
       launchDraft: launchSeed?.launchDraft,

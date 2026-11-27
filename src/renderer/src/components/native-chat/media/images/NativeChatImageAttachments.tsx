@@ -10,13 +10,10 @@ import {
 } from './native-chat-captured-image'
 import { NativeChatMediaViewer } from '../notes/NativeChatMediaViewer'
 import { nominateNativeChatMediaViewerTile } from '../notes/use-native-chat-media-viewer-focus'
-import { nativeChatSentNotesNumberMax } from '../notes/native-chat-media-notes'
 import {
-  nativeChatNotesMediaKey,
-  useNativeChatHeldNotesCount
-} from '../notes/native-chat-held-notes'
-import type { NativeChatNotesSource } from '../notes/native-chat-attachment-notes'
-import { nativeChatNotesScopeKey } from '../notes/native-chat-notes-handoff'
+  nativeChatSentNotesNumberMax,
+  type NativeChatNotesSource
+} from '../notes/native-chat-media-notes'
 import {
   getLocalImageCacheKey,
   useLocalImageSrc
@@ -113,14 +110,6 @@ export function NativeChatImageTile({
   const { source, displaySrc, external } = useTranscriptImageSrc(block, runtimeContext, near)
   const label = nativeChatImageLabel(block)
   const viewImageLabel = t('components.native-chat.composer.viewAttachment', 'View image')
-  // Notes kept for this image in this chat (the message box held a command) show on the tile.
-  const [scopeKey, setScopeKey] = useState<string | undefined>()
-  useLayoutEffect(() => setScopeKey(nativeChatNotesScopeKey(ref.current)), [])
-  const keptCount = useNativeChatHeldNotesCount(
-    scopeKey,
-    nativeChatNotesMediaKey(notesSource(block, runtimeContext)) || undefined
-  )
-  const keptLabel = keptCount > 0 ? t('components.native-chat.notes.kept', 'Notes kept') : null
 
   useEffect(() => {
     const element = ref.current
@@ -160,7 +149,7 @@ export function NativeChatImageTile({
     <div ref={ref} className={cn('relative shrink-0', className)}>
       <button
         type="button"
-        aria-label={`${viewImageLabel}: ${label}${keptLabel ? `, ${keptLabel}` : ''}`}
+        aria-label={`${viewImageLabel}: ${label}`}
         title={label}
         data-native-chat-copy-image-src={copyableNativeChatImageSrc(displaySrc)}
         onClick={onOpen}
@@ -174,11 +163,6 @@ export function NativeChatImageTile({
           className={imageClassName}
         />
       </button>
-      {keptLabel ? (
-        <span className="pointer-events-none absolute inset-x-0.5 bottom-0.5 truncate rounded bg-background/90 px-1 text-center text-2xs font-medium text-foreground">
-          {keptLabel}
-        </span>
-      ) : null}
     </div>
   )
 }
