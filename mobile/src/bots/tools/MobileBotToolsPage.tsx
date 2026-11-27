@@ -32,6 +32,7 @@ import {
 } from './bot-tool-words'
 import { MobileBotAddToolPage } from './MobileBotAddToolPage'
 import { MobileBotEditToolPage } from './MobileBotEditToolPage'
+import { MobileBotHostMcpServersRow } from './MobileBotHostMcpServersRow'
 import { MobileBotToolPage } from './MobileBotToolPage'
 import { useBotToolsPage, type PhoneBotTools } from './use-bot-tools-page'
 
@@ -184,6 +185,7 @@ export function MobileBotToolsPage(props: {
     )
   }
   const inherited = page.tools?.inherited ?? []
+  const hostMcp = page.tools?.hostMcpServers
   return (
     <>
       <SheetHeader
@@ -191,10 +193,22 @@ export function MobileBotToolsPage(props: {
         onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
       />
       {banner}
+      {hostMcp !== undefined ? (
+        <SettingsSection first separatorInset={LIST_LEADING_INSET}>
+          <MobileBotHostMcpServersRow
+            client={props.client}
+            botId={props.bot.id}
+            enabled={hostMcp}
+            online={props.online}
+            onChanged={() => void page.reread()}
+            showToast={props.showToast}
+          />
+        </SettingsSection>
+      ) : null}
       {/* Offline, Add and the failed read only repeat what the banner says. */}
       {own.length > 0 || props.online ? (
         <SettingsSection
-          first
+          first={hostMcp === undefined}
           separatorInset={LIST_LEADING_INSET}
           footer={
             page.error && props.online ? <SettingsNote error>{page.error}</SettingsNote> : undefined

@@ -93,12 +93,22 @@ function renderCode(node: Code, key: number, ctx: MarkdownBlockContext): ReactNo
 function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: number): ReactNode {
   const nested = mobileMarkdownNestedBlocks(node, depth)
   const itemText: ParagraphText = { style: ctx.listText, selectable: true }
+  // Numbers end on one edge, in a column as wide as the longest, so every item's text starts together.
+  const lastNumber = (node.start ?? 1) + node.children.length - 1
+  const numbers = node.ordered
+    ? {
+        minWidth:
+          (String(lastNumber).length + 1) * 0.6 * styles.listMarker.fontSize * ctx.textScale,
+        textAlign: 'right' as const,
+        fontVariant: ['tabular-nums' as const]
+      }
+    : null
   return (
     <View key={key} style={styles.list}>
       {node.children.map((item, itemIndex) => (
         <View key={itemIndex} style={styles.listItem}>
           {item.checked == null ? (
-            <NativeText style={ctx.listMarker}>
+            <NativeText style={[ctx.listMarker, numbers]}>
               {node.ordered ? `${item.data?.value ?? (node.start ?? 1) + itemIndex}.` : '•'}
             </NativeText>
           ) : (
@@ -236,7 +246,7 @@ function renderBlock(
             onPress={() => openMarkdownHref(only.url, ctx)}
             onLongPress={ctx.rowLongPress}
           >
-            <NativeText style={styles.link}>
+            <NativeText style={[styles.paragraph, styles.link]}>
               {only.alt || translate('components.markdownBlocks.openImage', 'Open image')}
             </NativeText>
             <NativeText style={styles.imageCaption} numberOfLines={1}>
@@ -269,7 +279,7 @@ function renderBlock(
               ctx.lineSpacing
             ),
             ctx.fontFamily ? { fontFamily: ctx.fontFamily } : null,
-            ctx.tone.text
+            ctx.tone.heading ?? ctx.tone.text
           ]}
         >
           {renderInline(node.children, ctx)}

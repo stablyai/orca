@@ -108,7 +108,6 @@ export function StatusBarUsageEmptyCta({
                 </span>
                 <ClaudeIcon size={13} />
                 <OpenAIIcon size={13} />
-                <AgentIcon agent="antigravity" size={13} />
                 <OpenCodeGoIcon size={13} />
                 <AgentIcon agent="kimi" size={13} />
               </div>

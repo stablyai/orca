@@ -18,6 +18,9 @@ import {
 import { useMobileBotOfferAnswer } from './bot-cards/use-mobile-bot-offer-answer'
 import { MobileNativeChatNoticePill } from './notices/MobileNativeChatNoticePill'
 import { MobileConnectorLogo } from '../../../bots/MobileConnectorSourceIcon'
+import { MobileGhSignedOutLine } from '../../../bots/connectors/MobileGhSignedOutLine'
+import { usePhoneGitHubAccount } from '../../../bots/connectors/use-phone-connector-account'
+import { ghSignedOut } from '../../../../../src/shared/connector-bot-github-contract'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, typography } from '../../../theme/mobile-theme'
@@ -119,6 +122,15 @@ export function MobileNativeChatConnectorOfferRow({
   const host = useMobileBotCardHost()
   const cloudStatus = useHostBotsEntry(host?.hostKey ?? null)?.connectorStatus
   const paused = connected && offer.source !== 'google' && cloudStatus === 'signed-out'
+  // The host's GitHub read, shared with its Connectors pages, says whether its gh is signed in.
+  const github = usePhoneGitHubAccount(
+    host?.client ?? null,
+    host?.hostKey ?? '',
+    connected && offer.source === 'github',
+    0
+  )
+  const ghOut =
+    offer.source === 'github' && github.view.status === 'ready' && ghSignedOut(github.view.value)
   const panel = useBotPanelOpener(offer.botId)
   const openSetup = panel ? () => panel.open({ settings: connectPage(offer.source, bot) }) : null
   // As the desktop: an offer naming another workspace of a source the bot has adds that workspace.
@@ -157,6 +169,9 @@ export function MobileNativeChatConnectorOfferRow({
               {t('bots.connectorOffer.connected', 'Connected')}
             </Text>
           </View>
+          {ghOut && host ? (
+            <MobileGhSignedOutLine host={host.hostLabel} card={{ fontScale }} />
+          ) : null}
           {/* As the desktop card's add action. */}
           {offer.addAccess && offer.source !== 'google' ? (
             openSetup ? (

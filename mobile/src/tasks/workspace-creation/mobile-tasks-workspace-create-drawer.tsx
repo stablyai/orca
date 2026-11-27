@@ -71,7 +71,7 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
         <View>
           <View style={styles.header}>
             <SheetHeader
-              title={translate('tasks.workspaceCreateDrawer.title', 'Create Workspace')}
+              title={translate('tasks.workspaceCreateDrawer.createWorkspace', 'Create workspace')}
               subtitle={workspaceCreateDraft.item.title}
               leading={{ label: translate('common.cancel', 'Cancel'), onPress: closeDrawer }}
             />
@@ -126,8 +126,7 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
           ) : null}
 
           <SectionHeader
-            title={translate('tasks.workspaceCreateDrawer.workspaceName', 'Workspace Name')}
-            trailing={translate('tasks.workspaceCreateDrawer.optionalLabel', 'Optional')}
+            title={translate('tasks.workspaceCreateDrawer.nameSection', 'Workspace name')}
           />
           <MobileWorkspaceNameInput
             value={workspaceNameDraft}
@@ -183,10 +182,10 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                   ? translate('tasks.workspaceCreateDrawer.detectingAgents', 'Detecting agents...')
                   : workspaceCreateRequiresSshConnection
                     ? translate(
-                        'tasks.workspaceCreateDrawer.connectRepository',
-                        'Connect Repository'
+                        'tasks.workspaceCreateDrawer.connectRepositoryAction',
+                        'Connect repository'
                       )
-                    : translate('tasks.workspaceCreateDrawer.title', 'Create Workspace')
+                    : translate('tasks.workspaceCreateDrawer.createWorkspace', 'Create workspace')
               }
               busy={creating}
               disabled={

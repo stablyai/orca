@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react-native'
+import { Check, ChevronLeft, ChevronRight, MessageSquare, Plus, X } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { MobileDiffReviewQueueItem } from '../diff-state/mobile-diff-review-queue'
@@ -7,6 +7,7 @@ import { colors, spacing } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
 import { canMarkMobileDiffReviewItemViewed } from './MobileDiffReviewFileSummary'
+import type { LineRange } from './MobileDiffReviewLines'
 
 type Props = {
   busyAction: string | null
@@ -14,6 +15,10 @@ type Props = {
   onMarkViewed: () => void
   onStageAndOpenNext: () => void
   onMoveFile: (direction: 'next' | 'previous') => void
+  /** Picked lines turn the bar into their one next step. */
+  selection: LineRange | null
+  onComment: (range: LineRange) => void
+  onClearSelection: () => void
 }
 
 export function MobileDiffReviewFooter({
@@ -21,7 +26,10 @@ export function MobileDiffReviewFooter({
   item,
   onMarkViewed,
   onStageAndOpenNext,
-  onMoveFile
+  onMoveFile,
+  selection,
+  onComment,
+  onClearSelection
 }: Props) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -50,6 +58,46 @@ export function MobileDiffReviewFooter({
           onPress: onMarkViewed
         }
   const PrimaryIcon = primary.icon
+  if (selection) {
+    const label =
+      selection.startLine === selection.line
+        ? t('components.diffReviewFooter.commentOnLine', 'Comment on line {{line}}', {
+            line: selection.line
+          })
+        : t(
+            'components.diffReviewFooter.commentOnLines',
+            'Comment on lines {{startLine}}–{{line}}',
+            {
+              startLine: selection.startLine,
+              line: selection.line
+            }
+          )
+    return (
+      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}>
+        <View style={styles.footerRow}>
+          <Pressable
+            style={({ pressed }) => [styles.navButton, pressed && styles.buttonPressed]}
+            onPress={onClearSelection}
+            accessibilityRole="button"
+            accessibilityLabel={t('components.diffReviewFooter.clearSelection', 'Clear selection')}
+          >
+            <X size={20} color={colors.textPrimary} strokeWidth={2.2} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+            onPress={() => onComment(selection)}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+          >
+            <MessageSquare size={17} color={colors.bgBase} strokeWidth={2.2} />
+            <Text style={styles.primaryButtonText} numberOfLines={1}>
+              {label}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    )
+  }
   return (
     <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}>
       <View style={styles.footerRow}>

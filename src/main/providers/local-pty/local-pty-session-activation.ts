@@ -129,6 +129,9 @@ export function activateLocalPtySession(args: {
     onEmission: emitIngressData
   })
   startupIngressByPty.set(id, startupIngress)
+  if (spawn.startupNotice && spawn.command) {
+    startupIngress.accept(spawn.startupNotice)
+  }
 
   const readiness = createLocalPtyShellReadinessSession({
     id,

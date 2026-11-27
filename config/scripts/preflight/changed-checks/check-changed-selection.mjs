@@ -76,6 +76,12 @@ const RATCHET_INPUTS = {
     'config/oxlint-plugins/app-store-performance.mjs',
     'config/oxlint-whole-hot-map-ratchet.json'
   ],
+  'check-zod-prefer-lazy-ratchet.mjs': [
+    'src/main/',
+    'src/shared/',
+    'config/oxlint-plugins/zod-prefer-lazy-schema.mjs',
+    'config/oxlint-zod-prefer-lazy-ratchet.json'
+  ],
   'check-workspace-record-read-ratchet.mjs': ['src/renderer/src/'],
   'check-worktree-id-composer-ratchet.mjs': ['src/', 'mobile/src/']
 }

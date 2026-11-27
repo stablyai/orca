@@ -7,6 +7,7 @@ import {
   List,
   MoreHorizontal,
   PanelLeftClose,
+  Server,
   SquareTerminal,
   UserCircle
 } from 'lucide-react-native'
@@ -28,30 +29,72 @@ import {
   verdictDisplayLabel,
   type ConnectionVerdict
 } from '../transport/connection/connection-health'
+import { useHostOfflineBanner } from '../components/host-connection/HostOfflineBanner'
+import { formatOfflineAsOfTime } from '../components/host-connection/offline-as-of-time'
 import type { HostScreenController } from './use-host-screen-controller'
 import { HostSharedLinksSheet } from './host-shared-links-sheet'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host/execution-host'
+import { MCP_SERVERS_RUNTIME_CAPABILITY } from '../../../src/shared/mcp-servers/mcp-servers'
+import { useRouteCapability } from '../worktree/execution-hosts/use-route-capability'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
   return isConnectionOutage(v) || v.kind === 'auth-failed'
 }
 
-// The host's status line: under the page title at the top, and under the bar title once scrolled.
-export function HostConnectionStatus({ controller }: { controller: HostScreenController }) {
+/** The computer's one status line: under the page title, and under the bar title once scrolled.
+ *  Offline, it says since when, and the page title's copy offers the one Reconnect. */
+export function HostConnectionStatus({
+  controller,
+  withReconnect = false
+}: {
+  controller: HostScreenController
+  /** The page title's line, which has room for Reconnect; the bar's stays one quiet line. */
+  withReconnect?: boolean
+}) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const { connectionVerdict, connState, forceReconnectHost, hostId, hostDisplay, lastConnectedAt } =
-    controller
+  const { client, catalog, connectionVerdict, connState, hostDisplay, lastConnectedAt } = controller
   // Why: a drop healed in a few seconds must not flash the host dot amber.
   const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
   const calmed = presentedConnState !== connState && !isErrorVerdict(connectionVerdict)
-  const statusText = isErrorVerdict(connectionVerdict)
-    ? verdictDisplayLabel(connectionVerdict)
-    : presentedConnState === 'connected'
-      ? (hostDisplay.machineLine ??
-        hostDisplay.descriptorLine ??
-        t('connection.connectionHealth.connected', 'Connected'))
-      : connectionVerdict.label
+  const outage = isConnectionOutage(connectionVerdict)
+  // When the shown rows were last live: the drop this document saw, else when they were read.
+  const offlineAsOf =
+    useHostOfflineBanner({
+      client,
+      connState,
+      lastConnectedAt,
+      outage,
+      forceReconnect: null,
+      hasData: true,
+      asOf: catalog.readAt
+    })?.asOf ?? null
+  // A relay's own reason (sign in, computer off) says more than a time.
+  const offlineSince =
+    outage && !connectionVerdict.detail && offlineAsOf !== null
+      ? t('hostScreen.hostScreenHeader.offlineSince', 'Offline since {{time}}', {
+          time: formatOfflineAsOfTime(offlineAsOf)
+        })
+      : null
+  const statusText =
+    offlineSince !== null
+      ? outage && connectionVerdict.hint
+        ? verdictDisplayLabel({ ...connectionVerdict, label: offlineSince })
+        : offlineSince
+      : connectionVerdict.kind === 'auth-failed'
+        ? t('hostScreen.hostScreenHeader.notConnected', 'Not connected')
+        : isErrorVerdict(connectionVerdict)
+          ? verdictDisplayLabel(connectionVerdict)
+          : presentedConnState === 'connected'
+            ? (hostDisplay.machineLine ??
+              hostDisplay.descriptorLine ??
+              t('connection.connectionHealth.connected', 'Connected'))
+            : connectionVerdict.label
+  // A list with nothing to show offers Reconnect in its own body instead.
+  const shownRows = controller.feed
+    ? controller.sectionsResult.sections.length
+    : controller.displayWorktrees.length
+  const reconnect = withReconnect && outage && shownRows > 0 ? controller.reconnect : null
   return (
     <>
       {calmed ? (
@@ -60,14 +103,12 @@ export function HostConnectionStatus({ controller }: { controller: HostScreenCon
         <StatusDot state={connState} verdict={connectionVerdict} />
       )}
       <NavBarSubtitleText>{statusText}</NavBarSubtitleText>
-      {/* auth-failed has its own banner; the page cannot re-dial the connection the shell owns. */}
-      {isConnectionOutage(connectionVerdict) && hostId && forceReconnectHost !== null ? (
+      {reconnect ? (
         <Pressable
-          style={({ pressed }) => pressed && pressedStyle}
-          onPress={() => void forceReconnectHost(hostId)}
+          style={({ pressed }) => [styles.reconnect, pressed && pressedStyle]}
+          onPress={reconnect}
           accessibilityRole="button"
-          accessibilityLabel={t('hostScreen.hostScreenHeader.reconnect', 'Reconnect')}
-          hitSlop={8}
+          hitSlop={RECONNECT_HIT_SLOP}
         >
           <Text style={styles.reconnectText}>
             {t('hostScreen.hostScreenHeader.reconnect', 'Reconnect')}
@@ -77,6 +118,9 @@ export function HostConnectionStatus({ controller }: { controller: HostScreenCon
     </>
   )
 }
+
+// Grows Reconnect's 14 pt line to a 44 pt target without moving the title.
+const RECONNECT_HIT_SLOP = { top: 15, bottom: 15, left: 12, right: 12 } as const
 
 export function HostScreenHeader({
   controller,
@@ -107,6 +151,8 @@ export function HostScreenHeader({
   )
   const showRefreshLine = useRefreshHint(controller.catalog.revalidating)
   const disconnected = connState !== 'connected'
+  // Only while the host's MCP servers switch is on; a host that hasn't answered yet lists nothing.
+  const mcpServers = useRouteCapability(MCP_SERVERS_RUNTIME_CAPABILITY)
   const hostPath = `/h/${encodeURIComponent(hostId)}`
 
   const navigationGroup: ActionSheetAction[] = [
@@ -134,6 +180,18 @@ export function HostScreenHeader({
       closeBeforePress: true,
       onPress: () => actions.navigateFromHostList(`${hostPath}/accounts`)
     },
+    ...(mcpServers
+      ? [
+          {
+            id: 'mcp-servers',
+            label: t('hostScreen.hostScreenHeader.mcpServers', 'MCP servers'),
+            icon: Server,
+            disabled: disconnected,
+            closeBeforePress: true,
+            onPress: () => actions.navigateFromHostList(`${hostPath}/mcp`)
+          }
+        ]
+      : []),
     ...(listsBots
       ? [
           {
@@ -150,7 +208,7 @@ export function HostScreenHeader({
       ? [
           {
             id: 'floating-workspace',
-            label: t('hostScreen.hostScreenHeader.floatingWorkspace', 'Floating Workspace'),
+            label: t('hostScreen.hostScreenHeader.floatingWorkspace', 'Floating workspace'),
             icon: SquareTerminal,
             disabled: disconnected,
             closeBeforePress: true,
@@ -171,7 +229,7 @@ export function HostScreenHeader({
           <>
             <NavBarButton
               icon={ChevronLeft}
-              accessibilityLabel={t('hostScreen.hostScreenHeader.backToHosts', 'Back to hosts')}
+              accessibilityLabel={t('common.back', 'Back')}
               onPress={actions.leaveHost}
             />
             {embedded && onHideSidebar ? (
@@ -216,9 +274,15 @@ export function HostScreenHeader({
 }
 
 const styles = themedStyleSheet(() => ({
+  // Right-aligned on the subtitle line, like a section's link.
+  reconnect: {
+    marginLeft: 'auto'
+  },
+  // Held to the subtitle's line so the title block keeps its height when Reconnect appears.
   reconnectText: {
-    color: colors.textPrimary,
-    fontSize: 12,
+    color: colors.accentBlue,
+    fontSize: 13,
+    lineHeight: 14,
     fontWeight: '600'
   }
 }))

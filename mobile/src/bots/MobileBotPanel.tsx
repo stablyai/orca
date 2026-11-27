@@ -142,6 +142,7 @@ export function MobileBotPanel(props: {
 
   const items = usePhoneBotItems({
     client: props.client,
+    hostKey: props.hostKey,
     botId: bot.id,
     chatIds: null,
     showing: visible,

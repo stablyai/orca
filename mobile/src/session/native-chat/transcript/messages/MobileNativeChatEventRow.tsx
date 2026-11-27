@@ -2,13 +2,7 @@ import type { ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronRight, X } from 'lucide-react-native'
 import { AGENT_WORKING_COLOR, WorkingRing } from '../../../../agents/presentation/AgentStateDot'
-import {
-  colors,
-  getMobileColorScheme,
-  radii,
-  spacing,
-  typography
-} from '../../../../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileNativeChatDisclosure } from '../viewport/mobile-native-chat-disclosure-store'
@@ -210,8 +204,8 @@ const styles = themedStyleSheet(() => ({
     paddingBottom: spacing.sm,
     gap: spacing.xs,
     borderRadius: radii.tile,
-    // The quietest fill each scheme has, as the desktop's comment fill.
-    backgroundColor: getMobileColorScheme() === 'dark' ? colors.bgPanel : colors.bgRaised
+    // The quietest fill that still reads on the chat canvas, as the desktop's comment fill.
+    backgroundColor: colors.bgRaised
   },
   mark: { width: ICON, height: ICON, alignItems: 'center', justifyContent: 'center' },
   badge: {
@@ -223,7 +217,7 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.bgBase
+    backgroundColor: colors.chatCanvas
   },
   spinner: { width: 7, height: 7, borderRadius: radii.pill, borderWidth: 1.5 },
   failed: {

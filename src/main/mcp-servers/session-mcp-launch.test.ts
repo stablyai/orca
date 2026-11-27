@@ -5,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secure-storage/secret-store'
 import { useBotToolCredentialsRoot } from '../bots/bot-tool-credentials'
 import { changeBotToolEntries, writeBotToolServers } from '../bots/bot-tools-file'
-import { sessionMcpLaunchTools } from './session-mcp-launch'
+import { setMcpServerAgentEnabled } from './mcp-host-list'
+import {
+  sessionLaunchToolsChanged,
+  sessionLaunchToolsOutdated,
+  sessionMcpLaunchTools
+} from './session-mcp-launch'
 
 const dirs: string[] = []
 const tempDir = (prefix: string): string => {
@@ -69,6 +74,7 @@ describe('the MCP servers a chat launches with', () => {
     })
     expect(chat.tools.servers).toEqual([])
     expect(chat.tools.env).toEqual({})
+    expect(chat.launched).toBeNull()
 
     const bot = await sessionMcpLaunchTools(
       { id: 'scout', hostMcpServers: true },
@@ -81,6 +87,7 @@ describe('the MCP servers a chat launches with', () => {
     )
     expect(bot.tools.servers).toEqual([{ name: 'notion', command: 'npx', args: ['bot-notion'] }])
     expect(bot.tools.env).toEqual({ ORCA_BOT_TOOLS_TOKEN: 'the-token' })
+    expect(bot.launched?.host).toBeNull()
   })
 
   it('gives each session the servers on for its agent and workspace, and a bot its own first', async () => {
@@ -146,5 +153,32 @@ describe('the MCP servers a chat launches with', () => {
     ])
     expect(opted.tools.servers[0]).toEqual(own)
     expect(opted.tools.env).toEqual({ ORCA_BOT_TOOLS_TOKEN: 'the-token' })
+  })
+
+  it('restarts a running chat only when a server it got, or would get now, changes', async () => {
+    process.env.ORCA_MCP_SERVERS = '1'
+    const hostFolder = await hostList()
+    const { launched } = await sessionMcpLaunchTools(null, session('claude', 'repo-2::/d'), '/d', {
+      relay,
+      hostFolder
+    })
+    if (!launched) {
+      throw new Error('a chat that got host servers records what it launched with')
+    }
+    // The agent's own notion won the name, so the chat took linear and sentry only.
+    const delivered = new Set(['linear', 'sentry'])
+
+    // postgres is on only in repo-1, and notion was never this chat's: neither edit restarts it.
+    await setMcpServerAgentEnabled('id-postgres-1', 'claude', false, hostFolder)
+    await setMcpServerAgentEnabled('id-notion-1', 'claude', false, hostFolder)
+    expect(sessionLaunchToolsOutdated(launched)).toBe(true)
+    expect(await sessionLaunchToolsChanged(launched, delivered)).toBe(false)
+    expect(sessionLaunchToolsOutdated(launched)).toBe(false)
+    // An agent that ignores a session's servers never restarts for the list.
+    await setMcpServerAgentEnabled('id-linear-1', 'claude', false, hostFolder)
+    const ignoring = { ...launched, host: launched.host && { ...launched.host } }
+    expect(await sessionLaunchToolsChanged(ignoring, 'ignored')).toBe(false)
+
+    expect(await sessionLaunchToolsChanged(launched, delivered)).toBe(true)
   })
 })

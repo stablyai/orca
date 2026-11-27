@@ -71,6 +71,8 @@ export function BotAutomationEditor(props: {
   present: PresentAutomationSheet
   /** Filled while open, so the page's tab and host switches ask before dropping its edits. */
   leaveGuard?: AutomationLeaveSlot
+  /** In a sheet of its own: Cancel instead of Back, and told while edits or a save are pending. */
+  sheet?: { onChanged: (changed: boolean) => void }
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -123,6 +125,10 @@ export function BotAutomationEditor(props: {
   const events = saved ? savedTriggers(saved) : []
   const changed = saved !== null && draft !== null && botAutomationChanged(saved, draft)
   const disabled = busy || !props.online || !draft
+  const onChanged = props.sheet?.onChanged
+  useEffect(() => {
+    onChanged?.(changed || busy)
+  }, [changed, busy, onChanged])
   const askInChat = props.onAskInChat
   const leave = (then: () => void) =>
     changed
@@ -202,10 +208,20 @@ export function BotAutomationEditor(props: {
     <SheetHeader
       title={t('automations.mobile.editAutomation', 'Edit automation')}
       subtitle={bot?.name}
-      onBack={{
-        label: t('automations.mobile.back', 'Back'),
-        onPress: () => leave(props.onBack)
-      }}
+      {...(props.sheet
+        ? {
+            leading: {
+              label: t('automations.mobile.cancel', 'Cancel'),
+              onPress: () => leave(props.onBack),
+              disabled: busy
+            }
+          }
+        : {
+            onBack: {
+              label: t('automations.mobile.back', 'Back'),
+              onPress: () => leave(props.onBack)
+            }
+          })}
       trailing={{
         label: t('common.save', 'Save'),
         onPress: () => void save(),

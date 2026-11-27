@@ -78,6 +78,15 @@ export class AgentSessionAttachmentStore {
     if (!this.options.hasSession(args.sessionId)) {
       throw new Error('This chat is not on this host')
     }
+    return this.stageUpload(args)
+  }
+
+  /** Only after the caller has verified the destination on this host. */
+  async stageUpload(args: {
+    callerKey: string
+    name: string
+    byteLength: number
+  }): Promise<{ uploadId: string }> {
     const name = sanitizeAgentSessionAttachmentName(args.name)
     const uploadId = this.uploads.create((id) => ({
       callerKey: args.callerKey,

@@ -36,7 +36,7 @@ export async function handOverWhenReady(
     launchedAt: number
     receipt: Pick<
       Parameters<typeof continueWorkerStartInBackground>[0],
-      'runId' | 'taskId' | 'launch' | 'mode'
+      'runId' | 'taskId' | 'launch' | 'mode' | 'warning'
     >
     handOver: (deliveryDeadline?: number) => Promise<unknown>
     bindTerminal: () => void
@@ -156,6 +156,22 @@ async function awaitPlacedWorkerReadiness(
     await settleReadinessWait(args, wait)
   }
   return null
+}
+
+/** A reused slept agent resumes in place first, so readiness, authority and custody are its woken
+ *  process's; returns the stopped process whose custody passes to the resume. */
+export async function wakeReusedSleptAgent(
+  runtime: OrcaRuntimeService,
+  placed: Pick<PlacedWorkerReadiness, 'structuredSession'> & { terminalHandle: string },
+  workerChat: unknown,
+  timeoutMs: number
+): Promise<string | null> {
+  if (placed.structuredSession || workerChat) {
+    return null
+  }
+  const incarnation = runtime.sleptAgentProcessIncarnation(placed.terminalHandle)
+  await runtime.wakeSleptAgentHandle(placed.terminalHandle, { timeoutMs })
+  return incarnation
 }
 
 /** Records the wait's Setup outcome; one that left the worker unready fails the start. */

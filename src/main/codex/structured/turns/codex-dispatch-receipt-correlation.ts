@@ -8,6 +8,9 @@ export type CodexExpectedDispatchReceipt = {
   via: AgentJournalTurnJoin
   turnId?: string
   key: string | null
+  /** A turn start's turns already running when it was written: Codex may steer it into one, and
+   *  an echo in one of them joined that turn, which another send opened. */
+  runningTurnIds?: readonly string[]
 }
 
 function compareKey(content: unknown): string | null {
@@ -48,19 +51,62 @@ export function createCodexDispatchReceiptCorrelation(
   >()
   const seenReceipts = new Map<string, string | null>()
   const turnKey = (threadId: string, turnId: string) => JSON.stringify([threadId, turnId])
+  // Each turn's first armed send echoed into it: the one that opened it.
+  const firstEchoes = new Map<string, string>()
+  // How each echoed send was taken, kept past its settling: a repeated echo (Codex sends the item's
+  // start and completion) after a failed first write reads the same join.
+  const echoedJoins = new Map<string, AgentJournalTurnJoin>()
+  const sentVia = (id: string, echoTurnId?: string): AgentJournalTurnJoin | null => {
+    const entry = armed.get(id)
+    const via = entry?.turn?.via ?? entry?.expected?.via ?? null
+    // Echoed into a turn that was already running when the start was written: it joined it.
+    return via === 'start' &&
+      echoTurnId !== undefined &&
+      entry?.expected?.runningTurnIds?.includes(echoTurnId)
+      ? 'steer'
+      : via
+  }
   return {
-    sentVia: (id: string): AgentJournalTurnJoin | null =>
-      armed.get(id)?.turn?.via ?? armed.get(id)?.expected?.via ?? null,
+    sentVia,
+    /** How a send was taken, read at its echo into a turn: a start echoed into a turn an earlier
+     *  send's echo already opened joined it (`steer`), even when Orca never learned that turn's id
+     *  (its start's reply timed out). Records the turn's first echoed send. */
+    echoedVia: (id: string, threadId: string, turnId: string): AgentJournalTurnJoin | null => {
+      const key = turnKey(threadId, turnId)
+      const first = firstEchoes.get(key)
+      if (first === undefined) {
+        firstEchoes.set(key, id)
+        if (firstEchoes.size > MAX_CODEX_PENDING_DISPATCH_ECHOES) {
+          firstEchoes.delete(firstEchoes.keys().next().value ?? '')
+        }
+      }
+      const via = sentVia(id, turnId) ?? echoedJoins.get(id) ?? null
+      const taken = via === 'start' && first !== undefined && first !== id ? 'steer' : via
+      if (taken !== null) {
+        echoedJoins.set(id, taken)
+        if (echoedJoins.size > MAX_CODEX_PENDING_DISPATCH_ECHOES) {
+          echoedJoins.delete(echoedJoins.keys().next().value ?? '')
+        }
+      }
+      return taken
+    },
     expect: (
       id: string,
       threadId: string,
       via: AgentJournalTurnJoin,
       input: readonly Record<string, unknown>[],
-      turnId?: string
+      turnId?: string,
+      runningTurnIds?: readonly string[]
     ) => {
       const entry = armed.get(id)
       if (entry) {
-        entry.expected = { threadId, via, key: compareKey(input), ...(turnId ? { turnId } : {}) }
+        entry.expected = {
+          threadId,
+          via,
+          key: compareKey(input),
+          ...(turnId ? { turnId } : {}),
+          ...(runningTurnIds?.length ? { runningTurnIds } : {})
+        }
       }
     },
     receipt: (
@@ -128,6 +174,8 @@ export function createCodexDispatchReceiptCorrelation(
     clear: () => {
       receipts.clear()
       seenReceipts.clear()
+      firstEchoes.clear()
+      echoedJoins.clear()
     }
   }
 }

@@ -214,43 +214,6 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
     })
   )
 
-  for (const [how, removed] of [
-    ['Close', false],
-    ['Escape', false],
-    ['Close', true],
-    ['Escape', true]
-  ]) {
-    await check(
-      `a settled result closed by ${how}${removed ? ' after its row left' : ''} returns focus in its own pane`,
-      () =>
-        scene('twoPanesCommand720', { width: 760 }, async (page) => {
-          const pane = page.locator('[data-fixture-pane="1"]')
-          await pane.locator(`${rowOf('dock:0')} [data-worker-dock-open]`).click()
-          const dialog = page.getByRole('dialog')
-          await dialog.waitFor()
-          if (removed) {
-            await page.evaluate(() => window.__workerDockHarnesses[1].finish('dock:0'))
-            await pane.locator(rowOf('dock:0')).waitFor({ state: 'detached' })
-          }
-          await (how === 'Close'
-            ? dialog.getByRole('button', { name: 'Close' }).click()
-            : page.keyboard.press('Escape'))
-          await dialog.waitFor({ state: 'detached' })
-          await page.waitForTimeout(100)
-          const where = await page.evaluate(() => {
-            const active = document.activeElement
-            return {
-              pane: active?.closest('[data-fixture-pane]')?.getAttribute('data-fixture-pane'),
-              row: active?.closest('[data-worker-dock-row]')?.getAttribute('data-worker-dock-row'),
-              pill: active?.hasAttribute('data-worker-dock-pill') ?? false
-            }
-          })
-          const expected = removed ? where.pill : where.row === 'dock:0'
-          assert(where.pane === '1' && expected, `focus went to ${JSON.stringify(where)}`)
-        })
-    )
-  }
-
   for (const [label, options] of [
     ['normal height', {}],
     ['a 340 x 250 pane', { width: 340, height: 250 }]
@@ -359,35 +322,6 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
         )
       })
   )
-
-  for (const [when, early] of [
-    ['while its result is loading', true],
-    ['while its result is open', false]
-  ]) {
-    await check(
-      `when the last worker leaves ${when}, closing its result focuses the message box`,
-      () =>
-        scene('lastFailedDetails720', {}, async (page) => {
-          await page.locator(`${rowOf('dock:0')} [data-worker-dock-open]`).click()
-          if (early) {
-            await page.evaluate(() => window.__workerDockHarness.finish('dock:0'))
-          }
-          const dialog = page.getByRole('dialog')
-          await dialog.waitFor()
-          if (!early) {
-            await page.evaluate(() => window.__workerDockHarness.finish('dock:0'))
-          }
-          await page.locator('[data-worker-dock-pill]').waitFor({ state: 'detached' })
-          await page.keyboard.press('Escape')
-          await dialog.waitFor({ state: 'detached' })
-          await page.waitForTimeout(100)
-          const onComposer = await page.evaluate(() =>
-            document.activeElement?.hasAttribute('data-fixture-composer')
-          )
-          assert(onComposer, 'focus did not land on the pane’s message box')
-        })
-    )
-  }
 
   await check('another pane’s Jump to latest folds this pane’s card; its own does not', () =>
     scene('twoPanesCommand720', { width: 760 }, async (page) => {

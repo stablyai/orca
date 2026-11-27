@@ -1,6 +1,7 @@
 // The card a bot shows with `orca bot create --offer`: a new bot it proposes. Nothing is created until the
 // owner presses Create bot (or creates it from Edit); the card then reads Created, from the bots there are.
-import { useRef, useState } from 'react'
+import { Suspense, useRef, useState } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { ChevronDown, ChevronUp, Pencil } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -12,8 +13,11 @@ import { BOTS_TEMPLATES_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtim
 import { BotAvatar, BotAvatarTile } from '../bots/BotAvatar'
 import { BOT_MASCOT_URLS } from '../bots/bot-mascots'
 import { botErrorMessage } from '../bots/bot-presentation'
-import { NewBotDialog } from '../bots/NewBotDialog'
 import { isBotMascotId } from '../../../../shared/bot-avatar'
+
+const LazyNewBotDialog = lazy(() =>
+  import('../bots/NewBotDialog').then((module) => ({ default: module.NewBotDialog }))
+)
 import type { Bot } from '../../../../shared/bot-types'
 import {
   botCreateOfferState,
@@ -277,7 +281,7 @@ function OfferCard({
           className="-mx-1 flex w-[calc(100%+0.5rem)] min-w-0 items-start justify-between gap-2 rounded-md px-1 text-left text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="min-w-0">
-            <span className="block">{view.purpose}</span>
+            <span className={open ? 'block' : 'line-clamp-2'}>{view.purpose}</span>
             {view.takeover ? <span className="block">{view.takeover}</span> : null}
             {view.open?.note ? <span className="block">{view.open.note}</span> : null}
           </span>
@@ -288,16 +292,18 @@ function OfferCard({
         </NativeChatExpandable>
       </NativeChatCardFrame>
       {editing ? (
-        <NewBotDialog
-          open
-          onOpenChange={setEditing}
-          proposal={proposal}
-          fromOffer={fromOffer}
-          offerHostId={proposer.hostId}
-          origin={botCreateOfferOrigin(proposal, proposer.name, say, (text) =>
-            botTemplateText(text, t)
-          )}
-        />
+        <Suspense fallback={null}>
+          <LazyNewBotDialog
+            open
+            onOpenChange={setEditing}
+            proposal={proposal}
+            fromOffer={fromOffer}
+            offerHostId={proposer.hostId}
+            origin={botCreateOfferOrigin(proposal, proposer.name, say, (text) =>
+              botTemplateText(text, t)
+            )}
+          />
+        </Suspense>
       ) : null}
     </div>
   )

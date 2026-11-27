@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useHostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
 import { View } from 'react-native'
-import { GitBranch, RefreshCw } from 'lucide-react-native'
+import { GitBranch } from 'lucide-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   MobileLoadErrorState,
@@ -21,6 +21,7 @@ import {
   resolveMobileSourceControlReviewInputs
 } from './workflows/mobile-source-control-primary-action'
 import { MobileSourceControlModals } from './panel/MobileSourceControlModals'
+import { useMobileSourceControlChangesMenu } from './panel/use-mobile-source-control-changes-menu'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { MobileSourceControlHubCommitsPage } from './panel/MobileSourceControlHubCommitsPage'
 import { MobileSourceControlNextStepBar } from './panel/MobileSourceControlNextStepBar'
@@ -199,23 +200,14 @@ export function MobileSourceControlPanel({
     prController,
     includeDetails: activeTab === 'pr'
   })
-  // Changes: the rarer git actions, then Refresh, then Force push last and red.
-  const changesMenuGroups = useMemo(
-    () => [
-      ...gitMenu.groups,
-      [
-        {
-          id: 'refresh',
-          label: t('sourceControl.header.refresh', 'Refresh source control'),
-          icon: RefreshCw,
-          disabled: ioBusy,
-          onPress: onRefresh
-        }
-      ],
-      ...(gitMenu.forcePush ? [[{ ...gitMenu.forcePush, destructive: true }]] : [])
-    ],
-    [gitMenu, ioBusy, onRefresh, t]
-  )
+  // Changes: the git actions that apply, then Refresh, then Force push and Abort last and red.
+  const { groups: changesMenuGroups, abortConfirm } = useMobileSourceControlChangesMenu({
+    gitMenu,
+    busyAction,
+    conflictOperation: state.status?.conflictOperation,
+    onRefresh,
+    abortConflictOperation: state.abortConflictOperation
+  })
   const hostConnection = useHostConnectionInputs(hostId)
   const { prTab, prMenuGroups, branchCompare } = useMobileSourceControlPrTab({
     state,
@@ -392,6 +384,7 @@ export function MobileSourceControlPanel({
         }
       />
       <MobileSourceControlModals state={state} />
+      {abortConfirm}
       <MobilePrTabSheets tab={prTab} />
     </View>
   )

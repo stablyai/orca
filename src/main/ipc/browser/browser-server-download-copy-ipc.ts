@@ -1,8 +1,10 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import {
   cancelBrowserServerDownloadCopy,
   copyBrowserServerDownloadHere
 } from '../../browser/downloads/browser-server-download-copy'
+import type { BrowserServerDownloadCopyResult } from '../../../shared/browser/downloads/browser-server-download-copy'
 import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
@@ -14,10 +16,12 @@ function requiredString(value: unknown, label: string): string {
 }
 
 /** Save to this computer, on a streamed page's download toast: only Orca's own window starts one. */
-export function registerBrowserServerDownloadCopyHandlers(): void {
-  ipcMain.removeHandler('browser:copyServerDownload')
-  ipcMain.removeHandler('browser:cancelServerDownloadCopy')
-  ipcMain.handle(
+export function registerBrowserServerDownloadCopyHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  if (ipc === ipcMain) {
+    ipcMain.removeHandler('browser:copyServerDownload')
+    ipcMain.removeHandler('browser:cancelServerDownloadCopy')
+  }
+  ipc.handle(
     'browser:copyServerDownload',
     async (
       event,
@@ -27,7 +31,7 @@ export function registerBrowserServerDownloadCopyHandlers(): void {
         filename?: unknown
         expectedEnvironmentPairingRevision?: unknown
       }
-    ): Promise<{ destinationPath: string }> => {
+    ): Promise<BrowserServerDownloadCopyResult> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         throw new Error('Not allowed.')
       }
@@ -50,7 +54,7 @@ export function registerBrowserServerDownloadCopyHandlers(): void {
       }
     }
   )
-  ipcMain.handle('browser:cancelServerDownloadCopy', (event, args: { copyId?: unknown }) => {
+  ipc.handle('browser:cancelServerDownloadCopy', (event, args: { copyId?: unknown }) => {
     if (!isTrustedBrowserRenderer(event.sender) || typeof args?.copyId !== 'string') {
       return false
     }

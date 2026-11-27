@@ -57,6 +57,32 @@ function writeFile(root: string, relativePath: string, content: string): string 
 }
 
 describe('loadUserSshConfig', () => {
+  it('preserves literal backslashes in quoted identity paths', () => {
+    const home = makeHome()
+    writeFile(
+      home,
+      '.ssh/config',
+      String.raw`Host windows-key
+  IdentityFile "C:\Users\Test User\.ssh\id_ed25519"
+  IdentityAgent "/tmp/agent\socket"
+Host escaped-key
+  IdentityFile "/keys/a\"b\\c\'d"
+Host unquoted-key
+  IdentityFile C:\Users\My\ Keys\\id_ed25519
+`
+    )
+
+    expect(loadUserSshConfig()).toEqual([
+      {
+        host: 'windows-key',
+        identityFile: String.raw`C:\Users\Test User\.ssh\id_ed25519`,
+        identityAgent: String.raw`/tmp/agent\socket`
+      },
+      { host: 'escaped-key', identityFile: String.raw`/keys/a"b\c'd` },
+      { host: 'unquoted-key', identityFile: String.raw`C:\Users\My Keys\id_ed25519` }
+    ])
+  })
+
   it('supports OrbStack includes, Include= syntax, quoted paths, and multiple pathnames', () => {
     const home = makeHome()
     writeFile(

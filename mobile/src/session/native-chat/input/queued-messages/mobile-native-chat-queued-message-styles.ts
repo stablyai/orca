@@ -24,7 +24,7 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
   },
   box: {
     paddingBottom: COMPOSER_TUCK,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     borderTopLeftRadius: radii.surface,
     borderTopRightRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
@@ -188,7 +188,8 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
     gap: spacing.xs,
     paddingHorizontal: 11,
     borderRadius: radii.pill,
-    backgroundColor: colors.cardPillFill,
+    // Translucent, so it still reads on the queue box's chatPanel, which dark lifts to cardPillFill's grey.
+    backgroundColor: colors.translucentFill,
     flexShrink: 0
   },
   steerLabel: {

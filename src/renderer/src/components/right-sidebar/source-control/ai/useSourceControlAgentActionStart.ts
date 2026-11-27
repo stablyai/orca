@@ -20,6 +20,7 @@ import {
   type RunSourceControlAgentActionStartArgs
 } from './runSourceControlAgentActionStart'
 import { buildSourceControlAgentConnectionErrorPlan } from './source-control-agent-action-dialog-support'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 type UseSourceControlAgentActionStartArgs = {
   open: boolean
@@ -182,57 +183,60 @@ export function useSourceControlAgentActionStart({
       const attempt = { controller: new AbortController(), accepted: false }
       attemptRef.current = attempt
       setPhase('preparing')
-      try {
-        const submitted = prepareRecipe ? prepareRecipe(selectedAgent) : recipe
-        const nextPlan = buildPlan(nextAgents, submitted)
-        if (nextPlan.status === 'error') {
-          setDeliveryPlan(nextPlan)
-          return false
-        }
-        setDeliveryPlan(nextPlan)
-        return await runSourceControlAgentActionStart({
-          selectedAgent,
-          trimmedCommandInput,
-          launchChoice,
-          recipe: submitted,
-          saveTargetValue: saveLaunchRecipe ? saveTargetValue : 'none',
-          actionId,
-          repoId,
-          agentLaunchPreferences,
-          repo,
-          worktreeId,
-          groupId,
-          placementWorkspaceId,
-          initialCwd,
-          promptDelivery,
-          launchPlatform,
-          launchSource,
-          recoveryContext,
-          signal: attempt.controller.signal,
-          onCreateAccepted: () => {
-            if (attemptRef.current === attempt) {
-              attempt.accepted = true
-              setPhase('accepted')
-            }
-          },
-          onStart,
-          onSaveAgentDefault,
-          onLaunchAccepted,
-          onLaunchAborted,
-          onLaunched,
-          onClose: () => {
-            if (attemptRef.current === attempt && !attempt.controller.signal.aborted) {
-              resetDeliveryPlan()
-              onClose()
-            }
+      return runWithFinally(
+        async () => {
+          const submitted = prepareRecipe ? prepareRecipe(selectedAgent) : recipe
+          const nextPlan = buildPlan(nextAgents, submitted)
+          if (nextPlan.status === 'error') {
+            setDeliveryPlan(nextPlan)
+            return false
           }
-        })
-      } finally {
-        if (attemptRef.current === attempt) {
-          attemptRef.current = null
-          setPhase('idle')
+          setDeliveryPlan(nextPlan)
+          return await runSourceControlAgentActionStart({
+            selectedAgent,
+            trimmedCommandInput,
+            launchChoice,
+            recipe: submitted,
+            saveTargetValue: saveLaunchRecipe ? saveTargetValue : 'none',
+            actionId,
+            repoId,
+            agentLaunchPreferences,
+            repo,
+            worktreeId,
+            groupId,
+            placementWorkspaceId,
+            initialCwd,
+            promptDelivery,
+            launchPlatform,
+            launchSource,
+            recoveryContext,
+            signal: attempt.controller.signal,
+            onCreateAccepted: () => {
+              if (attemptRef.current === attempt) {
+                attempt.accepted = true
+                setPhase('accepted')
+              }
+            },
+            onStart,
+            onSaveAgentDefault,
+            onLaunchAccepted,
+            onLaunchAborted,
+            onLaunched,
+            onClose: () => {
+              if (attemptRef.current === attempt && !attempt.controller.signal.aborted) {
+                resetDeliveryPlan()
+                onClose()
+              }
+            }
+          })
+        },
+        () => {
+          if (attemptRef.current === attempt) {
+            attemptRef.current = null
+            setPhase('idle')
+          }
         }
-      }
+      )
     },
     [
       actionId,

@@ -43,7 +43,8 @@ export const CONNECTOR_PATHS = {
   // DELETE `${links}/<source>/<workspace id>/<user id>` unlinks one of its own: 204, or 404 not_linked.
   links: '/v1/connector/links',
   // A teammate's Orca, for bots shared with its account (share-messages.ts): GET `${shares}/mine`; POST
-  // `…/<share id>/accept` (202 queued); POST and GET `…/<share id>/messages` hold a message and read held states.
+  // `…/<share id>/accept` (202 queued) and `…/<share id>/decline` (200 declined); POST and GET
+  // `…/<share id>/messages` hold a message and read held states.
   // The messages routes also take a phone's `Bearer <share credential>` in place of a connector token.
   shares: '/v1/shares'
 } as const

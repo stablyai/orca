@@ -1,6 +1,6 @@
 import type { AgentGroupSummary } from '@/store/slices/agent-status/projection/agent-row-display-model'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
-import React, { useCallback, useRef } from 'react'
+import React, { useCallback, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import { IconStack } from '@/components/IconStack'
@@ -48,12 +48,12 @@ export function CompactAgentExpansion({
   contentClassName,
   children
 }: CompactAgentExpansionProps): React.JSX.Element {
-  const hasRenderedChildrenRef = useRef(expanded)
-  if (expanded) {
-    // Retain opened content for collapse animation without an extra effect-driven expansion render.
-    hasRenderedChildrenRef.current = true
+  // Retain opened content for collapse animation without an extra effect-driven expansion render.
+  const [hasRenderedChildren, setHasRenderedChildren] = useState(expanded)
+  if (expanded && !hasRenderedChildren) {
+    setHasRenderedChildren(true)
   }
-  const shouldRenderChildren = expanded || hasRenderedChildrenRef.current
+  const shouldRenderChildren = expanded || hasRenderedChildren
 
   return (
     <div

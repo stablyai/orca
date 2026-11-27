@@ -19,6 +19,7 @@ import { SshUnrestoredPortRow } from './ssh-unrestored-port-row'
 import { SshDetectedPortRow } from './ssh-detected-port-row'
 import { SshPortForwardDialog, type PortForwardDialogState } from './ssh-port-forward-dialog'
 import type { PortForwardOwner } from './port-forward-owner'
+import { openForwardedUrlInSystemBrowser } from '@/lib/workspace-ports/forwarded-url-system-browser-open'
 import { portForwardKey, portForwardRemoteHost } from './port-forward-remote-host'
 
 const NO_UNRESTORED: readonly UnrestoredPortForward[] = []
@@ -88,6 +89,7 @@ export function SshPortsPanel({
     [owner]
   )
 
+  const activeWorktreeId = activeWorktree?.id
   const handleOpenForwardInBrowser = useCallback(
     (entry: PortForwardEntry, event?: React.MouseEvent<HTMLButtonElement>) => {
       const url = browserUrlForPortForwardEntry(entry)
@@ -98,10 +100,10 @@ export function SshPortsPanel({
           isMac: navigator.userAgent.includes('Mac')
         })
       ) {
-        void window.api.shell.openUrl(url)
+        void openForwardedUrlInSystemBrowser(url, entry, 'ssh')
         return
       }
-      if (!activeWorktree?.id) {
+      if (!activeWorktreeId) {
         toast.error(
           translate(
             'auto.components.right.sidebar.PortsPanel.409afcc145',
@@ -111,14 +113,14 @@ export function SshPortsPanel({
         return
       }
       void openWorkspaceBrowserTab({
-        workspaceId: activeWorktree.id,
+        workspaceId: activeWorktreeId,
         url,
         intent: { kind: 'url' }
       }).catch((error) => {
         toast.error(error instanceof Error ? error.message : String(error))
       })
     },
-    [activeWorktree?.id, settings]
+    [activeWorktreeId, settings]
   )
 
   const handleDialogClose = useCallback(() => {

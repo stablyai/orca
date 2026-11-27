@@ -1,8 +1,7 @@
 import {
   followTerminalRows,
   keepsTerminalPaneVisible,
-  withReplacedTerminalHandles,
-  type TerminalRowHandles
+  withReplacedTerminalHandles
 } from '../../terminal/session/pane-layout/mobile-terminal-pane-layout'
 import { orphanedMarkdownDraftTabs } from '../../files/session-documents/orphaned-markdown-draft-tabs'
 import {
@@ -23,6 +22,7 @@ import {
 import {
   applyClosedTabTombstones,
   confirmsMirroredTabSelection,
+  keepChatsHostCannotRead,
   useSessionSnapshotGate
 } from './session-tab-snapshot-gate'
 import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-health'
@@ -54,6 +54,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     appliedSessionTabsRevisionRef,
     closedTabTombstonesRef,
     closingTerminalTabsRef,
+    terminalRowHandlesRef,
     setTerminalsLoaded,
     setActiveHandle,
     setActiveSessionTabId,
@@ -77,18 +78,18 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
   } = scope
   const draftOwnershipRef = useRef<DraftTabOwnership | null>(null)
   const acceptSessionSnapshot = useSessionSnapshotGate()
-  const terminalRowHandlesRef = useRef<TerminalRowHandles>(new Map())
   const applySessionTabs = useCallback(
     (result: SessionTabsResult): SessionTabsApplyOutcome<MobileSessionTab> => {
       const diagnostics = terminalDiagnosticsRef.current
       if (!acceptSessionSnapshot(result, appliedSnapshotMarkerRef.current)) {
         return { accepted: false }
       }
+      const hostTabs = keepChatsHostCannotRead(result, sessionTabsRef.current)
       const applicationRevision = ++appliedSessionTabsRevisionRef.current
       const now = Date.now()
       let nextTabs = withRememberedNativeChatIdentity(
         withSessionTabStatusReceipts(
-          applyClosedTabTombstones(result.tabs, closedTabTombstonesRef.current, now),
+          applyClosedTabTombstones(hostTabs, closedTabTombstonesRef.current, now),
           sessionTabsRef.current,
           now
         ),

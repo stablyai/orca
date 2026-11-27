@@ -21,6 +21,7 @@ import {
 } from '../../../../src/shared/bot-types'
 import {
   GITHUB_BOT_MENTION,
+  ghSignedOut,
   gitHubLinkedAccounts,
   type ConnectorGitHubInstallation
 } from '../../../../src/shared/connector-bot-github-contract'
@@ -47,6 +48,7 @@ import {
 } from './MobileConnectorAccountParts'
 import { connectorAccountErrorMessage } from './mobile-connector-account-copy'
 import type { PhoneGitHubView } from './use-phone-connector-account'
+import { MobileGhSignedOutLine } from './MobileGhSignedOutLine'
 
 export function MobileBotGitHubPage(props: {
   client: RpcClient | null
@@ -300,6 +302,7 @@ export function MobileBotGitHubPage(props: {
           { mention: GITHUB_BOT_MENTION, handle: bot.folder }
         )}
       </SettingsNote>
+      {ghSignedOut(state) ? <MobileGhSignedOutLine host={hostName} /> : null}
       {github.view.status === 'failed' ? (
         <SettingsNote error>
           {connectorAccountErrorMessage('github', github.view.error, hostName, t)}

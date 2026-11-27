@@ -39,7 +39,7 @@ import { MobileBotAvatar } from './MobileBotAvatar'
 import { MobileBotImportHero } from './MobileBotImportHero'
 import { MobileBotExportFolderPage, type ExportFolder } from './MobileBotExportFolderPage'
 import { MobileBotImportExportSteps } from './MobileBotImportExportSteps'
-import { groupFieldStyles } from './MobileNewBotPickers'
+import { groupFieldStyles } from '../components/composer-input/composer-input-styles'
 
 export type BotImportFrom = NonNullable<BotCreateParams['importFrom']>
 

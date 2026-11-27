@@ -18,6 +18,7 @@ import type { PanZoomSize } from '../../../../../src/shared/document-preview/pan
 import { MobilePanZoomImage } from './MobilePanZoomImage'
 import { REDUCED_MOTION_FADE_MS, SHEET_CURVE } from '../../../components/motion/sheet-motion-values'
 import { useReducedMotionEnabled } from '../../../platform/accessibility/use-reduced-motion'
+import { useBackClaim } from '../../../navigation/use-back-claim'
 
 const VIEWER_EASING = Easing.bezier(...SHEET_CURVE)
 const VIEWER_OPEN_MS = 250
@@ -59,6 +60,11 @@ export function MobileImageViewer({
   const t = useMobileTranslation()
   const insets = useWindowSafeAreaInsets()
   const { style, stageStyle, close } = useViewerPresence(onClose)
+  // In the web shell, system Back reaches the shell's claim stack, not this Modal: without a claim it closes the sheet underneath.
+  useBackClaim(() => {
+    close()
+    return true
+  })
   return (
     <Modal visible transparent animationType="none" onRequestClose={close}>
       <Animated.View style={[styles.backdrop, style]}>

@@ -270,16 +270,11 @@ function WaitNoteSheet({
   return (
     <BottomDrawer visible={items !== null} onClose={onClose}>
       <TextInputSheetContent
-        title={
-          count > 1
-            ? t('bots.items.wait.titleMany', 'What are {{count}} items waiting on?', { count })
-            : t('bots.items.wait.titleOne', 'What is {{title}} waiting on?', { title })
-        }
+        title={t('bots.items.wait.placeholder', 'Waiting on')}
+        subtitle={count === 1 ? title : t('bots.items.wait.count', '{{count}} items', { count })}
         value={note}
         onChangeText={(text) => setNote(text.slice(0, BOT_ITEM_LIMITS.wait))}
         placeholder={t('bots.items.wait.placeholder', 'Waiting on')}
-        cancelLabel={t('bots.items.wait.keep', 'Cancel')}
-        submitLabel={t('bots.items.wait.confirm', 'Set Waiting')}
         busy={busy}
         submitBlocked={!online}
         notice={
@@ -288,8 +283,8 @@ function WaitNoteSheet({
             : {
                 icon: WifiOff,
                 text: t(
-                  'bots.items.wait.offline',
-                  '{{host}} is offline. What you typed is kept; Set Waiting works again when it’s back.',
+                  'bots.items.wait.offlineSave',
+                  '{{host}} is offline. What you typed is kept; Save works again when it’s back.',
                   { host: hostName }
                 )
               }

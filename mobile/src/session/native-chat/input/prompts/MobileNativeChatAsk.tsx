@@ -28,10 +28,15 @@ import { MobilePendingButton } from '../../../../components/controls/MobilePendi
 import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
 import { MobileNativeChatQuestionText } from '../../transcript/message-content/MobileNativeChatQuestionText'
 import { useMobileNativeChatAskAutoAdvance } from './use-mobile-native-chat-ask-auto-advance'
+import {
+  useMobileNativeChatAskAnswers,
+  type MobileNativeChatAskDrafts
+} from './use-mobile-native-chat-ask-answers'
 import { MobileNativeChatAskOptionRow } from './MobileNativeChatAskOptionRow'
 import { MobileNativeChatOptionPreviewSheet } from '../session-options/MobileNativeChatOptionPreviewSheet'
 import { mobileNativeChatAskStyles as styles } from './MobileNativeChatAsk.styles'
 import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-scroll'
+import { composerInputStyles } from '../../../../components/composer-input/composer-input-styles'
 
 type Props = {
   prompt: AskPrompt
@@ -51,6 +56,8 @@ type Props = {
   notice?: string | null
   /** Each question's identity: when the prompt drops one (answered elsewhere), the rest keep their picks. */
   questionKeys?: readonly string[]
+  /** Unsent picks and typed words kept by question key, so a card that closes opens with them. */
+  drafts?: MobileNativeChatAskDrafts
 }
 
 function confirmLabels(t: Translate) {
@@ -75,7 +82,8 @@ export function MobileNativeChatAsk({
   allowOther,
   freeTextInputs,
   notice,
-  questionKeys
+  questionKeys,
+  drafts
 }: Props): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -84,10 +92,8 @@ export function MobileNativeChatAsk({
   const [viewedOption, setViewedOption] = useState<number | null>(null)
   // Which footer control started the in-flight operation, so its busy state lands there.
   const [busyControl, setBusyControl] = useState<'confirm' | 'cancel'>('confirm')
-  const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
-  const [otherText, setOtherText] = useState<string[]>(() =>
-    prompt.questions.map((_, qi) => freeTextInputs?.[qi]?.initialValue ?? '')
-  )
+  const [[selections, setSelections], [otherText, setOtherText], { setPicks, setOther, seeds }] =
+    useMobileNativeChatAskAnswers(prompt, freeTextInputs, questionKeys, drafts)
   const [operation, setOperation] = useState<NativeChatAnswerOperation | null>(null)
   const operationRef = useRef<NativeChatAnswerOperation | null>(null)
   const operationId = operation?.clientMessageId
@@ -126,8 +132,8 @@ export function MobileNativeChatAsk({
     // A pending auto-advance holds the old lines' picks.
     autoAdvance.cancel()
     setShownKeys(questionKeys)
-    setSelections(carry(selections, () => []))
-    setOtherText(carry(otherText, (qi) => freeTextInputs?.[qi]?.initialValue ?? ''))
+    setSelections(carry(selections, (qi) => [...(seeds[qi]?.picks ?? [])]))
+    setOtherText(carry(otherText, (qi) => seeds[qi]?.other ?? ''))
     const at = questionKeys.indexOf(shownKeys[index]!)
     setIndex(Math.max(0, at))
     if (at === -1) {
@@ -158,25 +164,20 @@ export function MobileNativeChatAsk({
       return
     }
     const cur = selections[qi] ?? []
+    // A single-select's choice tapped again stays chosen; only multi-select untoggles.
+    if (!multi && cur.includes(optIndex)) {
+      return
+    }
     // Preview choices wait for Submit so inspecting alternatives never commits an answer.
     const keep = optIndex !== OTHER && askQuestionShowsPreviews(prompt.questions[qi])
-    const picked = !cur.includes(optIndex)
     const next = selections.map((s, i) =>
-      i === qi ? toggleAskOption(cur, optIndex, multi, keep || choosing) : s
+      i === qi ? toggleAskOption(cur, optIndex, multi, choosing) : s
     )
-    setSelections(next)
+    setPicks(qi, next)
     autoAdvance.cancel()
-    if (picked && !multi && optIndex !== OTHER && !keep) {
+    if (!multi && optIndex !== OTHER && !keep) {
       autoAdvance.schedule(() => void advance(next))
     }
-  }
-
-  const setOther = (qi: number, value: string): void => {
-    setOtherText((prev) => {
-      const next = [...prev]
-      next[qi] = value
-      return next
-    })
   }
 
   // Pass the new selection explicitly because setState has not committed it yet.
@@ -370,7 +371,7 @@ export function MobileNativeChatAsk({
           <MessageBox
             inputRef={inputRef}
             onFocus={revealReply}
-            style={styles.other}
+            style={[composerInputStyles.filledFill, styles.other]}
             value={otherText[index] ?? ''}
             onChangeText={(v) => setOther(index, v)}
             placeholder={

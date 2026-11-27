@@ -85,7 +85,7 @@ export function WorkspaceDeleteConfirmSheet(props: {
       <View style={styles.confirmContent}>
         <Text style={styles.confirmTitle}>
           {isFolder
-            ? t('hostScreen.deleteConfirm.removeTitle', 'Remove Workspace')
+            ? t('hostScreen.deleteConfirm.removeTitle', 'Remove workspace')
             : t('common.delete', 'Delete')}
         </Text>
         <Text style={styles.confirmMessage}>

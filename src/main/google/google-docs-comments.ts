@@ -1,6 +1,7 @@
 // A doc's open comments, as `orca docs read` shows them: each clipped, and only as many as fit
 // beside a full page of text.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { DocsComment } from '../../shared/google/google-files-types'
 import { parseGoogleJson, type GoogleApi } from './google-api-client'
 import { allDrives, DRIVE } from './google-drive-files'
@@ -9,28 +10,30 @@ import { allDrives, DRIVE } from './google-drive-files'
 const COMMENTS_BUDGET_CHARS = 3_000
 const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}…` : text)
 
-const CommentsSchema = z.object({
-  comments: z
-    .array(
-      z.object({
-        content: z.string().default(''),
-        resolved: z.boolean().optional(),
-        deleted: z.boolean().optional(),
-        author: z.object({ displayName: z.string().optional() }).optional(),
-        quotedFileContent: z.object({ value: z.string().optional() }).optional(),
-        replies: z
-          .array(
-            z.object({
-              content: z.string().default(''),
-              deleted: z.boolean().optional(),
-              author: z.object({ displayName: z.string().optional() }).optional()
-            })
-          )
-          .default([])
-      })
-    )
-    .default([])
-})
+const CommentsSchema = lazyZodSchema(() =>
+  z.object({
+    comments: z
+      .array(
+        z.object({
+          content: z.string().default(''),
+          resolved: z.boolean().optional(),
+          deleted: z.boolean().optional(),
+          author: z.object({ displayName: z.string().optional() }).optional(),
+          quotedFileContent: z.object({ value: z.string().optional() }).optional(),
+          replies: z
+            .array(
+              z.object({
+                content: z.string().default(''),
+                deleted: z.boolean().optional(),
+                author: z.object({ displayName: z.string().optional() }).optional()
+              })
+            )
+            .default([])
+        })
+      )
+      .default([])
+  })
+)
 
 export async function openComments(api: GoogleApi, id: string): Promise<DocsComment[]> {
   const url = allDrives(new URL(`${DRIVE}/files/${encodeURIComponent(id)}/comments`))

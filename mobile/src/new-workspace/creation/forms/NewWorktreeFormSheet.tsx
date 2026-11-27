@@ -72,10 +72,8 @@ export function NewWorktreeFormSheet(props: {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const gated = props.sshGate.requiresConnection
-  // Desktop's rule: a git project makes a worktree, a folder project a plain workspace.
-  const title = props.selectedRepoIsGit
-    ? t('components.newWorktreeFormSheet.createWorktree', 'Create worktree')
-    : t('components.newWorktreeFormSheet.createWorkspace', 'Create workspace')
+  // One name with the + that opens it; the project row says whether it makes a worktree.
+  const title = t('components.newWorktreeFormSheet.newWorkspace', 'New workspace')
   const agentLabel = gated
     ? t('components.newWorktreeFormSheet.connectTargetFirst', 'Connect target first')
     : props.selectedAgent.label
@@ -179,7 +177,9 @@ export function NewWorktreeFormSheet(props: {
           <View style={styles.footer}>
             <SheetPrimaryButton
               label={
-                gated ? t('components.newWorktreeFormSheet.connectTarget', 'Connect target') : title
+                gated
+                  ? t('components.newWorktreeFormSheet.connectTarget', 'Connect target')
+                  : t('components.newWorktreeFormSheet.create', 'Create')
               }
               busy={props.creating}
               disabled={!props.canCreate}

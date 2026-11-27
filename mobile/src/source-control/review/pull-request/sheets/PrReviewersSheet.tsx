@@ -15,6 +15,7 @@ import {
 import { useReviewerPeople } from './use-reviewer-people'
 import { SheetHeader } from '../../../../components/nav-bar/SheetHeader'
 import { ListGroup, ListRow } from '../../../../components/list/ListGroup'
+import { composerInputStyles } from '../../../../components/composer-input/composer-input-styles'
 import { TextField } from '../../../../components/composer-input/TextField'
 import { livePrDetails, readyPrData, type MobilePrTab } from '../use-mobile-pr-tab'
 import type { PrTabSheetRequest } from '../pr-tab-requests'
@@ -146,6 +147,7 @@ export function PrReviewersSheet({
       <View style={sheetStyles.body}>
         <TextField
           leading={<Search size={16} color={colors.textMuted} />}
+          style={composerInputStyles.filledField}
           value={query}
           onChangeText={setQuery}
           placeholder={t('pullRequest.reviewersSheet.addReviewer', 'Add a reviewer')}

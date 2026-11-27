@@ -184,8 +184,8 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     resolveDroppedPathsForAgent: async () => ({ resolvedPaths: [], skipped: [], failed: [] }),
     uploadPathsToAgentSessionAttachments: uploadBrowserFilesToWebAgentSessionAttachments,
     // Why: the paired web client watches nothing, so there is no symlinked folder to add a watch for.
-    hasSymlinkBelowRoot: () => Promise.resolve(false),
-    watchWorktree: () => Promise.resolve(),
+    findSymlinkBelowRoot: () => Promise.resolve(null),
+    watchWorktree: () => Promise.resolve(undefined),
     unwatchWorktree: () => Promise.resolve(),
     onFsChanged: () => noopUnsubscribe
   }

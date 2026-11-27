@@ -140,7 +140,13 @@ export function EditorContent({
       activeFile.diffSource === 'combined-commit')
 
   if (activeFile.mode === 'git-graph') {
-    return <GitGraphTab key={activeFile.worktreeId} worktreeId={activeFile.worktreeId} />
+    return (
+      <GitGraphTab
+        key={activeFile.worktreeId}
+        worktreeId={activeFile.worktreeId}
+        tabId={viewStateScopeId}
+      />
+    )
   }
 
   if (activeFile.mode === 'check-details') {
