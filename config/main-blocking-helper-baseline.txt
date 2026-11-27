@@ -547,7 +547,7 @@
 17 src/main/grok/hook-service.ts
 1 src/main/hang-watchdog/hang-detection-marker.ts
 1 src/main/hang-watchdog/main-thread-hang-watchdog.ts
-6 src/main/hang-watchdog/previous-hang-detection.ts
+5 src/main/hang-watchdog/previous-hang-detection.ts
 4 src/main/hang-watchdog/renderer-hang-records.ts
 4 src/main/hermes/hermes-acp-launch-spec.ts
 4 src/main/hermes/hermes-default-home.ts
