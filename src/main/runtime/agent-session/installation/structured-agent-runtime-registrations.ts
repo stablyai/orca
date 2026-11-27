@@ -36,6 +36,7 @@ import {
 } from '../launch/structured-agent-launch-composition'
 import {
   STRUCTURED_AGENT_RUNTIME_CATALOG,
+  customStructuredAgentRuntimeCatalog,
   type StructuredAgentRuntimeCatalogEntry
 } from './structured-agent-runtime-metadata'
 import type {
@@ -262,12 +263,33 @@ function registrationWithAdapter(
 export const STRUCTURED_AGENT_RUNTIME_REGISTRATIONS: readonly StructuredAgentRuntimeRegistration[] =
   STRUCTURED_AGENT_RUNTIME_CATALOG.map(registrationWithAdapter)
 
+const customRegistrations = new WeakMap<
+  StructuredAgentRuntimeCatalogEntry,
+  StructuredAgentRuntimeRegistration
+>()
+
+/** The built-in agents, then the host's custom ACP agents. */
+export function structuredAgentRuntimeRegistrations(): readonly StructuredAgentRuntimeRegistration[] {
+  const custom = customStructuredAgentRuntimeCatalog().map((entry) => {
+    const known = customRegistrations.get(entry)
+    if (known) {
+      return known
+    }
+    const registration = registrationWithAdapter(entry)
+    customRegistrations.set(entry, registration)
+    return registration
+  })
+  return custom.length === 0
+    ? STRUCTURED_AGENT_RUNTIME_REGISTRATIONS
+    : [...STRUCTURED_AGENT_RUNTIME_REGISTRATIONS, ...custom]
+}
+
 /** The registration of `agent`; null for an agent this runtime does not drive. */
 export function structuredAgentRuntimeRegistration(
   agent: string
 ): StructuredAgentRuntimeRegistration | null {
   return (
-    STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.find(({ definition }) => definition.agent === agent) ??
+    structuredAgentRuntimeRegistrations().find(({ definition }) => definition.agent === agent) ??
     null
   )
 }

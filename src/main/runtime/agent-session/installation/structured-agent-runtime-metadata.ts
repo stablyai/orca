@@ -1,6 +1,7 @@
 import { agentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { applyStructuredCodexWorkspaceTrust } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
 import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
+import { customAcpLaunchSpecs } from '../../../acp/launch/custom-acp-launch-spec'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
 import {
@@ -199,22 +200,46 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
         )
     }
   },
-  ...ACP_LAUNCH_SPECS.map((spec): StructuredAgentRuntimeCatalogEntry => ({
-    kind: 'acp',
-    metadata: acpMetadata(spec),
-    spec
-  }))
+  ...ACP_LAUNCH_SPECS.map(acpCatalogEntry)
 ]
 
+function acpCatalogEntry(spec: AcpLaunchSpec): StructuredAgentRuntimeCatalogEntry {
+  return { kind: 'acp', metadata: acpMetadata(spec), spec }
+}
+
+/** The built-in agents; `structuredAgentRuntimeMetadataList` adds the host's custom ACP agents. */
 export const STRUCTURED_AGENT_RUNTIME_METADATA: readonly StructuredAgentRuntimeMetadata[] =
   STRUCTURED_AGENT_RUNTIME_CATALOG.map(({ metadata }) => metadata)
+
+let customCatalog: {
+  specs: readonly AcpLaunchSpec[]
+  entries: readonly StructuredAgentRuntimeCatalogEntry[]
+} = { specs: [], entries: [] }
+
+/** The host's custom ACP agents, built once per adopted list so their metadata keeps its identity. */
+export function customStructuredAgentRuntimeCatalog(): readonly StructuredAgentRuntimeCatalogEntry[] {
+  const specs = customAcpLaunchSpecs()
+  if (customCatalog.specs !== specs) {
+    customCatalog = { specs, entries: specs.map(acpCatalogEntry) }
+  }
+  return customCatalog.entries
+}
+
+/** Every agent this host runs chats with: the built-in ones, then its custom ACP agents. */
+export function structuredAgentRuntimeMetadataList(): readonly StructuredAgentRuntimeMetadata[] {
+  const custom = customStructuredAgentRuntimeCatalog()
+  return custom.length === 0
+    ? STRUCTURED_AGENT_RUNTIME_METADATA
+    : [...STRUCTURED_AGENT_RUNTIME_METADATA, ...custom.map(({ metadata }) => metadata)]
+}
 
 /** The metadata of `agent`, without constructing its adapter or installing the host. */
 export function structuredAgentRuntimeMetadata(
   agent: string
 ): StructuredAgentRuntimeMetadata | null {
   return (
-    STRUCTURED_AGENT_RUNTIME_METADATA.find(({ definition }) => definition.agent === agent) ?? null
+    structuredAgentRuntimeMetadataList().find(({ definition }) => definition.agent === agent) ??
+    null
   )
 }
 

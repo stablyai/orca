@@ -2,6 +2,8 @@
 
 import { delimiter, isAbsolute } from 'node:path'
 import { resolveCliCommandAsync } from '../../../shared/shell/command-resolution/node-cli-command-async-resolution'
+import { resolveCliCommand as resolveProgramOnPath } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   isManagedAgentCopyPath,
   managedAgentCommandFor
@@ -43,9 +45,15 @@ export function resolveAcpLaunchCommand(
     .join(delimiter)
   const settings = spec.ignoreAgentCommandSetting ? {} : (options.commandSettings ?? {})
   const managedCopy = spec.managedCopyAllowed?.(options.commandSettings ?? {}) !== false
+  const { agent } = spec
+  // A custom agent's command is the user's own: no Command setting or managed copy stands in for it.
+  if (!isTuiAgent(agent)) {
+    const find = options.resolveCommand ?? resolveProgramOnPath
+    return { command: find(spec.command, { pathEnv, homePath }), prefixArgs: [] }
+  }
   const resolve = (searchPath: string) =>
     resolveStructuredAgentCommand(
-      spec.agent,
+      agent,
       settings,
       { pathEnv: searchPath, homePath },
       {
@@ -55,7 +63,7 @@ export function resolveAcpLaunchCommand(
       }
     )
   const { managedRuntime } = spec
-  if (!managedRuntime || hasExplicitTuiLaunchCommand(settings, spec.agent)) {
+  if (!managedRuntime || hasExplicitTuiLaunchCommand(settings, agent)) {
     return resolve(pathEnv)
   }
   const pin = managedRuntime.pin()

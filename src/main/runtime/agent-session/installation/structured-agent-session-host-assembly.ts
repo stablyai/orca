@@ -22,7 +22,7 @@ import {
 } from '../ownership/structured-agent-session-owner-probe'
 import { installProviderRelayDurability } from '../../../provider-relay/app-provider-relays'
 import type { StructuredAgentAdapterContext } from './structured-agent-runtime-registration-types'
-import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from './structured-agent-runtime-registrations'
+import { structuredAgentRuntimeRegistrations } from './structured-agent-runtime-registrations'
 import { createStructuredAgentSessionLifecycleDelivery } from '../lifecycle/structured-agent-session-lifecycle-delivery'
 import { createStructuredAgentSessionDispatchFollowUps } from '../lifecycle/structured-agent-session-dispatch-followups'
 import type { CatalogOwner } from '../model-catalog/structured-agent-model-catalog-wiring'
@@ -59,7 +59,7 @@ export async function installOnJournal(
     }),
     host: () => host
   }
-  const registrations = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(
+  const registrations = structuredAgentRuntimeRegistrations().map(
     ({ definition, createAdapter }) => ({ definition, adapter: createAdapter(context) })
   )
   const agents = new StructuredAgentRegistry(registrations)

@@ -9,8 +9,10 @@ import {
   AGENT_SESSION_AVAILABILITY_METHOD,
   type AgentSessionAvailabilityFrame
 } from '../../../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
-import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../../../../agent-session/installation/structured-agent-runtime-metadata'
+import { structuredAgentRuntimeMetadataList } from '../../../../agent-session/installation/structured-agent-runtime-metadata'
 import { defineMethod, defineStreamingMethod } from '../../../core'
+import { isCustomAcpAgentId } from '../../../../../../shared/agent-launch/custom-acp/custom-acp-agents'
+import { acpAgentName } from '../../../../../acp/session/acp-structured-agent-definitions'
 import { isMcpServersFeatureEnabled } from '../../../../../mcp-servers/mcp-servers-feature'
 import { requireStructuredCapability } from '../creation/structured-agent-session-gate'
 import {
@@ -33,17 +35,20 @@ export const STRUCTURED_AGENT_SESSION_AGENTS_METHODS = [
     handler: async (_params, ctx): Promise<AgentSessionAgentsResult> => {
       requireStructuredCapability(ctx)
       return {
-        agents: STRUCTURED_AGENT_RUNTIME_METADATA.filter(({ definition }) =>
-          clientReadsStructuredSessionAgent(ctx, definition.agent)
-        ).map(({ definition }) => ({
-          agent: definition.agent,
-          capabilities: {
-            ...definition.capabilities,
-            // Orca lists the servers of an agent with no `/mcp` of its own.
-            ...(isMcpServersFeatureEnabled() ? { mcpServers: true } : {})
-          },
-          ...(definition.managedRuntime?.() ? { managedRuntime: true as const } : {})
-        }))
+        agents: structuredAgentRuntimeMetadataList()
+          .filter(({ definition }) => clientReadsStructuredSessionAgent(ctx, definition.agent))
+          .map(({ definition }) => ({
+            agent: definition.agent,
+            capabilities: {
+              ...definition.capabilities,
+              // Orca lists the servers of an agent with no `/mcp` of its own.
+              ...(isMcpServersFeatureEnabled() ? { mcpServers: true } : {})
+            },
+            ...(definition.managedRuntime?.() ? { managedRuntime: true as const } : {}),
+            ...(isCustomAcpAgentId(definition.agent)
+              ? { name: acpAgentName(definition.agent) }
+              : {})
+          }))
       }
     }
   }),

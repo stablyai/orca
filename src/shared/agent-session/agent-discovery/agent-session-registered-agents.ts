@@ -14,6 +14,8 @@ export type AgentSessionRegisteredAgent = {
   capabilities: AgentSessionCapabilities
   /** Host-provided program needs no installed CLI; older hosts omit this and require CLI detection. */
   managedRuntime?: true
+  /** A custom ACP agent's own name; built-in agents are named by the client's catalog. */
+  name?: string
 }
 
 export type AgentSessionAgentsResult = {
@@ -49,7 +51,8 @@ const registeredAgentSchema = lazyZodSchema(() =>
         .default('orca')
     }),
     // A false from a host reads as absent, so the row keeps the detection-based offer.
-    managedRuntime: z.literal(true).optional().catch(undefined)
+    managedRuntime: z.literal(true).optional().catch(undefined),
+    name: z.string().min(1).max(80).optional().catch(undefined)
   })
 )
 

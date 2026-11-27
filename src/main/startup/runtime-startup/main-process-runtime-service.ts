@@ -55,6 +55,7 @@ import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { installLegacyJournalRetirementReporting } from '../../native-chat/agent-session-journal/journal-legacy-retirement-reporting'
 import { providePairedDesktopComputerName } from '../../ipc/runtime-environments/connections/paired-desktop-account-declaration'
+import { adoptCustomAcpAgents } from '../../acp/launch/custom-acp-launch-spec'
 
 export type DesktopRuntimeServiceDeps = {
   store: Store
@@ -78,6 +79,8 @@ export function initializeMainProcessRuntime(
   installLegacyJournalRetirementReporting()
   // Process-scope subscription covers desktop, headless serve and fleet status.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
+  // Before the runtime installs its chat agents: they are fixed for this run of the host.
+  adoptCustomAcpAgents(store.getSettings().customAcpAgents)
   const runtime = new OrcaRuntimeService(store, stats, {
     getSetupTerminalTitle: () => translateMain('worktree.setupTerminalTitle', 'Setup'),
     ...agentHookRuntimeDeps(agentHookServer, observedPaneIdentities, () => store.getSettings()),

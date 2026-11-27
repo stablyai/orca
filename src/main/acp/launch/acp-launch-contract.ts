@@ -4,6 +4,7 @@ import type { AcpHistoryTurnIdentity } from '../history/acp-history-replay'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import type { AcpAccountBinding } from './acp-account-binding'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { CustomAcpAgentId } from '../../../shared/agent-launch/custom-acp/custom-acp-agents'
 import type { AgentChatPermissionMode } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { ManagedRuntime } from '../../node-runtime/managed-runtime-release'
 import type { AcpSkillRootsLoader } from './acp-skill-roots'
@@ -25,7 +26,9 @@ import type {
 } from '../generated/acp-protocol.generated'
 
 export type AcpLaunchSpec = {
-  agent: TuiAgent
+  agent: TuiAgent | CustomAcpAgentId
+  /** A custom agent's own name; built-in agents use their catalog name. */
+  name?: string
   command: string
   /** The terminal agent's Command setting may name a different program than this chat server. */
   ignoreAgentCommandSetting?: true

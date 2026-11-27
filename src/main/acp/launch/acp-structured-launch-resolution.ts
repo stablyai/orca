@@ -1,3 +1,4 @@
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   antigravityChatAuthEnvironment,
   launchAntigravityChatAuth
@@ -220,7 +221,8 @@ export function acpStructuredLaunchPart(
       roots.length > 0,
       deps.probeVersion
     )
-    if (launchVersion.status === 'tooOld') {
+    // Only built-in agents declare minimum versions.
+    if (launchVersion.status === 'tooOld' && isTuiAgent(spec.agent)) {
       throw AgentCliInstallationError.tooOld(spec.agent, launchVersion)
     }
     const inherited = deps.inheritedEnv ?? process.env

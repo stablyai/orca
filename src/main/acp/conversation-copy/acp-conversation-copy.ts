@@ -1,3 +1,4 @@
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { agentConversationCopyRefusal } from '../../native-chat/conversation-adoption/agent-conversation-copy-error'
 import type { StructuredAgentSessionConversationCopyInput } from '../../native-chat/agent-session-wire/providers/structured-agent-session-conversation-copy-input'
 import { readOpenCodeForkCoverageViaWorker } from '../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
@@ -222,7 +223,8 @@ async function assertCopyCliVersion(
   const { command, prefixArgs, cwd, env } = launch
   const checking = checkAcpLaunchVersion(spec, { command, prefixArgs, cwd, env }, false)
   const version = await waitForPromiseWithSignal(checking, signal)
-  if (version.status === 'tooOld') {
+  // Only built-in agents declare minimum versions.
+  if (version.status === 'tooOld' && isTuiAgent(spec.agent)) {
     throw AgentCliInstallationError.tooOld(spec.agent, version)
   }
 }

@@ -22,7 +22,7 @@ import type { StructuredAgentRegistry } from '../../../native-chat/agent-session
 import { agentDrivesSession } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
 import { createStructuredAgentEnvironmentResolvers } from '../environment/structured-agent-shell-environment'
 import {
-  STRUCTURED_AGENT_RUNTIME_METADATA,
+  structuredAgentRuntimeMetadataList,
   structuredAgentRuntimeMetadata
 } from '../installation/structured-agent-runtime-metadata'
 
@@ -155,7 +155,7 @@ async function constructCatalogOwner(
   await attachAgentModelCatalogPersistenceOnce(deps.stateDirectory)
   const environment = createStructuredAgentEnvironmentResolvers(deps)
   const unbind = environment.bindCatalogSources(
-    STRUCTURED_AGENT_RUNTIME_METADATA.map(({ definition }) => definition.agent)
+    structuredAgentRuntimeMetadataList().map(({ definition }) => definition.agent)
   )
   let access: SessionAccess | null = null
   let stopped = false
@@ -167,7 +167,7 @@ async function constructCatalogOwner(
       deps,
       environment,
       agents,
-      registrations: STRUCTURED_AGENT_RUNTIME_METADATA,
+      registrations: structuredAgentRuntimeMetadataList(),
       host: () => access?.host ?? null,
       store: {
         getConversation: (id) => access?.store.getConversation(id) ?? null,

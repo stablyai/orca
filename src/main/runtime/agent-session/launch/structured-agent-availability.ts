@@ -16,7 +16,7 @@ import {
   type LaunchEnvironmentSettings
 } from './structured-agent-launch-support'
 import {
-  STRUCTURED_AGENT_RUNTIME_METADATA,
+  structuredAgentRuntimeMetadataList,
   structuredAgentRuntimeMetadata
 } from '../installation/structured-agent-runtime-metadata'
 import type { StructuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-registration-types'
@@ -153,7 +153,7 @@ export function installStructuredAgentAvailability(
       .catch(() => undefined)
       .then(() =>
         Promise.all(
-          STRUCTURED_AGENT_RUNTIME_METADATA.map(
+          structuredAgentRuntimeMetadataList().map(
             async (agent): Promise<AgentSessionAgentAvailability> => ({
               ...(await observeHostAgent(agent, runtime)),
               chatProgram: await observeChatProgram(agent, runtime)

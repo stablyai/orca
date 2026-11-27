@@ -32,6 +32,7 @@ import { restoreOrcadTerminalAuthority } from '../orcad/host-runtime/orcad-resto
 import { installOrcadFeatureReadiness } from '../runtime/rpc/startup/orcad-readiness'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { installOrcadConnectorHost, installOrcadRelayAndAccount } from '../orcad/orcad-orca-account'
+import { adoptCustomAcpAgents } from '../acp/launch/custom-acp-launch-spec'
 
 export async function activateBackendRuntime(
   host: BackendCoreHost,
@@ -164,6 +165,8 @@ export async function activateBackendRuntime(
   const { createOrcadPairedEnvironmentOptions } =
     await import('../orcad/host-runtime/orcad-paired-environment-options')
   const pairedEnvironments = createOrcadPairedEnvironmentOptions()
+  // Before the runtime installs its chat agents: they are fixed for this run of the host.
+  adoptCustomAcpAgents(profileStore.getSettings().customAcpAgents)
   const runtime = new OrcaRuntimeService(profileStore, stats, {
     legacyStructuredSessionTabIds: chatJournal.open.legacySessionTabIds,
     // Persistent signatures let restarted runtimes adopt PTYs owned before restart.

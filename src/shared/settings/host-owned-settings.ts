@@ -1,6 +1,7 @@
 import * as z from 'zod'
 import type { GlobalSettings } from './global-settings-types'
 import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../native-chat/settings/native-chat-idle-stop'
+import { CustomAcpAgentsSchema } from '../agent-launch/custom-acp/custom-acp-agents'
 
 /** Settings a host reads for its own work, so Settings edits them on the host its picker names. */
 const HostOwnedSettingsSchema = z.object({
@@ -20,7 +21,8 @@ const HostOwnedSettingsSchema = z.object({
   agentDefaultSurface: z.enum(['chat', 'terminal']),
   // Retired with Orca's Antigravity server; still accepted so older clients' updates don't fail.
   antigravityGoogleSignIn: z.enum(['auto', 'agy', 'orca']),
-  antigravityServerAutoUpdateEnabled: z.boolean()
+  antigravityServerAutoUpdateEnabled: z.boolean(),
+  customAcpAgents: CustomAcpAgentsSchema
 } satisfies { [K in keyof GlobalSettings]?: z.ZodType<NonNullable<GlobalSettings[K]>> })
 
 export type HostOwnedSettings = z.output<typeof HostOwnedSettingsSchema>
@@ -41,7 +43,8 @@ const HOST_OWNED_SETTING_FALLBACKS: HostOwnedSettings = {
   nativeChatShellEnvironmentVariables: [],
   agentDefaultSurface: 'terminal',
   antigravityGoogleSignIn: 'auto',
-  antigravityServerAutoUpdateEnabled: true
+  antigravityServerAutoUpdateEnabled: true,
+  customAcpAgents: []
 }
 
 export const HOST_OWNED_SETTING_KEYS = HostOwnedSettingsSchema.keyof().options

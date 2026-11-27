@@ -45,6 +45,7 @@ import { DEVIN_LAUNCH_SPEC } from '../../devin/devin-acp-launch-spec'
 import { CODEBUDDY_LAUNCH_SPEC } from '../../codebuddy/codebuddy-acp-launch-spec'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { OPENCODE_MINIMUM_VERSIONS, OPENCODE2_MINIMUM_VERSIONS } from './acp-minimum-versions'
+import { customAcpLaunchSpecs } from './custom-acp-launch-spec'
 
 const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'grok',
@@ -190,5 +191,9 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {
-  return ACP_LAUNCH_SPECS.find((spec) => spec.agent === agent) ?? null
+  return (
+    ACP_LAUNCH_SPECS.find((spec) => spec.agent === agent) ??
+    customAcpLaunchSpecs().find((spec) => spec.agent === agent) ??
+    null
+  )
 }
