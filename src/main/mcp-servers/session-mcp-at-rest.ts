@@ -75,7 +75,18 @@ async function knownRows(
       : process.env
   const config = await agentOwnMcpConfig(launch.agent, env, await launch.cwd())
   const orca = await orcaRows(launch, new Set(config.names), new Set(config.bridged), status)
-  return [...orca, ...config.own.map((entry) => ownRow(launch.agent, entry, status))]
+  // One row per file entry, Orca's own bridges left out (they show under Orca).
+  const own = new Map<string, AgentSessionMcpServer>()
+  for (const entry of config.entries) {
+    if (!config.orcaOwned.has(entry.name)) {
+      const disabled = entry.disabled || config.folderDisabled.has(entry.name)
+      own.set(
+        `${entry.scope}\0${entry.projectPath ?? ''}\0${entry.name}`,
+        ownRow(launch.agent, entry, disabled ? 'disabled' : status)
+      )
+    }
+  }
+  return [...orca, ...own.values()]
 }
 
 /**
@@ -90,9 +101,10 @@ async function orcaRows(
   status: RowStatus = 'not-started'
 ): Promise<AgentSessionMcpServer[]> {
   const delivered = launch.running ? sessionHostMcpDelivered(launch.sessionId) : undefined
-  // Its settings refuse them, or it ignores a session's servers.
+  // Its settings refuse them, it ignores a session's servers, or its launch got none.
   if (
     delivered === 'ignored' ||
+    (delivered?.size === 0 && bridged.size === 0) ||
     isMcpAgentBlocked(launch.agent) ||
     acpLaunchSpecFor(launch.agent)?.botToolsOff
   ) {
@@ -101,14 +113,18 @@ async function orcaRows(
   const folder = mcpHostListFolder()
   const key = mcpServerWorkspaceKeyOf(launch.workspaceId)
   const { servers } = await mcpServersForLaunch(launch.agent, { key }, folder)
+  // A running agent keeps what it launched with until it restarts, whatever the list says now.
+  const names = delivered
+    ? [...new Set([...delivered, ...bridged])]
+    : servers.flatMap(({ name }) => (!taken.has(name) || bridged.has(name) ? [name] : []))
+  const shown = new Set(names)
+  // Sign-ins read for the rows shown only: each one opens a sealed entry.
   const signIns = new Map(
     botOwnTools(
-      servers.filter(({ name }) => !taken.has(name) || bridged.has(name)),
+      servers.filter(({ name }) => shown.has(name)),
       folder
     ).map(({ name, signIn }) => [name, signIn])
   )
-  // A running agent keeps what it launched with until it restarts, whatever the list says now.
-  const names = delivered ? [...new Set([...delivered, ...bridged])] : [...signIns.keys()]
   return names.map((name) => {
     const signIn = signIns.get(name)
     return row(
@@ -121,13 +137,13 @@ async function orcaRows(
 
 function ownRow(
   agent: string,
-  { name, scope, projectPath, disabled }: AgentMcpConfigName,
-  status: RowStatus
+  { name, scope, projectPath }: AgentMcpConfigName,
+  status: AgentSessionMcpServerStatus
 ): AgentSessionMcpServer {
   // Claude keeps a folder's own servers in its user file: its `/mcp` calls them local.
   const source =
     scope === 'project' ? 'project' : agent === 'claude' && projectPath ? 'local' : 'user'
-  return row(name, source, disabled ? 'disabled' : status)
+  return row(name, source, status)
 }
 
 const row = (

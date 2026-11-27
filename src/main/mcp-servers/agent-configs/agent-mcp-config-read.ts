@@ -5,6 +5,7 @@ import { parse as parseJsonc, type ParseError } from 'jsonc-parser'
 import { parse as parseToml } from 'smol-toml'
 import {
   agentMcpConfigEntry,
+  agentMcpConfigEntryDisabled,
   agentMcpServerMergeKey,
   isOrcaOwnedAgentMcpServer,
   type AgentMcpConfigEntry
@@ -200,6 +201,8 @@ export async function readAgentMcpServerNames(
 ): Promise<{
   names: AgentMcpConfigName[]
   servers: AgentMcpConfigServer[]
+  /** Names a read folder's block switches off whatever file defines them (Claude's `/mcp disable`). */
+  folderDisabled: ReadonlySet<string>
 }> {
   const locations = await agentMcpConfigLocations(agent, context, options.projectPath)
   const read = await Promise.all(
@@ -210,25 +213,34 @@ export async function readAgentMcpServerNames(
         if (text !== null) {
           warnUnparsed(location)
         }
-        return { names: [], servers: [] }
+        return { names: [], servers: [], folderDisabled: [] }
       }
       const blocks = agentMcpServerBlocks(location, parsed, options.skipProject ?? (() => false))
       return {
         names: blocks.flatMap((block) =>
-          Object.keys(record(valueAtKeyPath(parsed, block.path)) ?? {}).map((name) => ({
-            name,
-            scope: location.scope,
-            ...(block.projectPath ? { projectPath: block.projectPath } : {}),
-            disabled: block.disabledNames?.has(name) ?? false
-          }))
+          Object.entries(record(valueAtKeyPath(parsed, block.path)) ?? {}).map(([name, raw]) => {
+            const entry = record(raw)
+            return {
+              name,
+              scope: location.scope,
+              ...(block.projectPath ? { projectPath: block.projectPath } : {}),
+              disabled:
+                (block.disabledNames?.has(name) ?? false) ||
+                (entry !== null && agentMcpConfigEntryDisabled(entry, block.dialect))
+            }
+          })
         ),
-        servers: serversInBlocks(location, parsed, blocks, true)
+        servers: serversInBlocks(location, parsed, blocks, true),
+        folderDisabled: blocks.flatMap((block) =>
+          block.projectPath ? [...(block.disabledNames ?? [])] : []
+        )
       }
     })
   )
   return {
     names: read.flatMap((location) => location.names),
-    servers: read.flatMap((location) => location.servers)
+    servers: read.flatMap((location) => location.servers),
+    folderDisabled: new Set(read.flatMap((location) => location.folderDisabled))
   }
 }
 
