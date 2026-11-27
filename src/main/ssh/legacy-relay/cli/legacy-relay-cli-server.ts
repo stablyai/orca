@@ -13,7 +13,7 @@ import { DESKTOP_BROWSER_BRIDGE_SETTING_LABEL } from '../../../../shared/browser
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { RpcResponse } from '../../../runtime/rpc/core'
 import { RpcDispatcher } from '../../../runtime/rpc/dispatcher'
-import { ALL_RPC_METHODS } from '../../../runtime/rpc/methods/rpc-method-registry'
+import { EAGER_RPC_METHODS } from '../../../runtime/rpc/methods/eager-rpc-method-registry'
 import {
   assertLegacyRelayCliScope,
   resolveLegacyRelayCliCaller,
@@ -79,7 +79,7 @@ function dispatcherFor(runtime: OrcaRuntimeService): RpcDispatcher {
     dispatcher = new RpcDispatcher({
       runtime,
       // Restrict registration too, so upstream scope bugs cannot invoke unrelated methods.
-      methods: ALL_RPC_METHODS.filter((method) => METHODS.has(method.name)),
+      methods: EAGER_RPC_METHODS.filter((method) => METHODS.has(method.name)),
       callerScope: { kind: 'runtime-paired', grants: [] }
     })
     dispatchers.set(runtime, dispatcher)

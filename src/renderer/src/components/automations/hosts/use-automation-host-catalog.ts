@@ -54,6 +54,8 @@ export type AutomationHostCatalogView = {
   catalog: AutomationHostCatalog
   entries: readonly AutomationHostCatalogEntry[]
   resolution: AutomationHostFilterResolution
+  /** The server this client's local transport reaches (a paired web client); null on a desktop. */
+  desktopAliasEnvironmentId: string | null
   rows: AutomationHostListRows
   loadCounts: AutomationHostLoadCounts
   selectHost: (filter: AutomationHostFilter) => void
@@ -257,6 +259,7 @@ export function useAutomationHostCatalog(
     catalog,
     entries: catalog.entries,
     resolution,
+    desktopAliasEnvironmentId: sourceState.desktopAliasEnvironmentId ?? null,
     rows,
     loadCounts: useMemo(() => automationHostLoadCounts(catalog), [catalog]),
     selectHost: setAutomationHostFilter,

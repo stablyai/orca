@@ -83,6 +83,7 @@ export function prepareLocalWorkerStart(args: {
     agent: params.agent,
     model: params.model,
     effort: params.effort,
+    inheritedLaunchPreferences: params.inheritedLaunchPreferences,
     missingAgentMessage: 'A configured --agent is required when worker-start creates a terminal.'
   })
 }
@@ -140,6 +141,7 @@ function resolveWorkerStartAgent(args: {
   agent?: string
   model?: string
   effort?: string
+  inheritedLaunchPreferences?: boolean
   missingAgentMessage: string
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
   const agent = args.agent
@@ -168,7 +170,8 @@ function resolveWorkerStartAgent(args: {
         openCodeModelLaunchSupported: args.openCodeModelLaunchSupported,
         createsWorktree: args.createsWorktree,
         model: args.model,
-        effort: args.effort
+        effort: args.effort,
+        inheritedLaunchPreferences: args.inheritedLaunchPreferences
       })
     }
   }

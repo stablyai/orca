@@ -3,9 +3,9 @@ import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } fro
 import { Check, ChevronDown, ChevronRight } from 'lucide-react-native'
 import { DisclosureChevron } from './DisclosureChevron'
 import { triggerSelection } from '../../platform/haptics/haptics'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export const LIST_ROW_PADDING = spacing.lg
 export const LIST_LEADING_SLOT = 24
@@ -20,7 +20,7 @@ type ListGroupProps = {
 
 /** Rows on one rounded surface with hairlines between them; the group draws the separators, never the rows. */
 export function ListGroup({ children, separatorInset = LIST_ROW_PADDING, style }: ListGroupProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const rows = Children.toArray(children).filter(isValidElement)
   return (
     <View style={[styles.group, style]}>
@@ -34,7 +34,7 @@ export function ListGroup({ children, separatorInset = LIST_ROW_PADDING, style }
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   group: {
     borderRadius: radii.surface,
     backgroundColor: colors.sheetGroup,
@@ -69,7 +69,8 @@ export function SectionHeader({
   onToggle,
   first = false
 }: SectionHeaderProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const sectionHeaderStyles = useThemedStyles(sectionHeaderStylesSheet)
   const label = (
     <>
       {icon}
@@ -110,7 +111,7 @@ export function SectionHeader({
   )
 }
 
-const sectionHeaderStyles = themedStyleSheet(() => ({
+const sectionHeaderStylesSheet = themedStyleSheet((colors) => ({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -138,6 +139,8 @@ type ListRowProps = {
   subtitleColor?: string
   /** A status after the subtitle on its line, in its tone's colour: "Daily at 9 AM · Needs sign-in". */
   subtitleNote?: { text: string; color: string }
+  /** A status before the subtitle, in its tone's colour, kept when a long subtitle cuts: "Checks failed · acme-web #482". */
+  subtitleLead?: { text: string; color: string }
   /** A muted mark in a fixed-width column before the title, e.g. a step's number. */
   marker?: string
   /** A muted mark inline before the title, e.g. an item's `#35`, so titles keep one start. */
@@ -152,6 +155,8 @@ type ListRowProps = {
   leading?: ReactNode
   /** The current value in grey, e.g. "This computer". */
   value?: string
+  /** A value that is a status, e.g. "2 failing", in its tone's colour. */
+  valueColor?: string
   /** A small mark before the value, e.g. an agent's logo. */
   valueIcon?: ReactNode
   /** Anything after the value: a switch, a badge, a spinner. */
@@ -185,6 +190,7 @@ export function ListRow({
   subtitleMono = false,
   subtitleColor,
   subtitleNote,
+  subtitleLead,
   marker,
   titlePrefix,
   subtitleLines = 2,
@@ -192,6 +198,7 @@ export function ListRow({
   detail,
   leading,
   value,
+  valueColor,
   valueIcon,
   accessory,
   navigates = false,
@@ -208,7 +215,8 @@ export function ListRow({
   accessibilityRole,
   testID
 }: ListRowProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const listRowStyles = useThemedStyles(listRowStylesSheet)
   const inertState = { disabled: disabled || busy, ...(busy && { busy }) }
   const rowStyle = [
     listRowStyles.row,
@@ -242,6 +250,12 @@ export function ListRow({
             ]}
             numberOfLines={subtitleLines}
           >
+            {subtitleLead ? (
+              <>
+                <Text style={{ color: subtitleLead.color }}>{subtitleLead.text}</Text>
+                {' · '}
+              </>
+            ) : null}
             {subtitle}
             {subtitleNote ? (
               <Text style={{ color: subtitleNote.color }}>{` · ${subtitleNote.text}`}</Text>
@@ -267,7 +281,10 @@ export function ListRow({
       )}
       {value !== undefined ? (
         <WithIcon icon={valueIcon} shrink>
-          <Text style={listRowStyles.value} numberOfLines={1}>
+          <Text
+            style={[listRowStyles.value, valueColor !== undefined && { color: valueColor }]}
+            numberOfLines={1}
+          >
             {value}
           </Text>
         </WithIcon>
@@ -321,6 +338,7 @@ function WithIcon({
   shrink?: boolean
   children: ReactNode
 }) {
+  const listRowStyles = useThemedStyles(listRowStylesSheet)
   if (icon === undefined || icon === null) {
     return <>{children}</>
   }
@@ -332,7 +350,7 @@ function WithIcon({
   )
 }
 
-const listRowStyles = themedStyleSheet(() => ({
+const listRowStylesSheet = themedStyleSheet((colors) => ({
   row: {
     minHeight: 48,
     flexDirection: 'row',

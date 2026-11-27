@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { recomputeOn } from '../../../../hooks/recompute-on'
 import { mobileStructuredSessionStatusFeed } from '../../agent-session/mobile-structured-session-status-feed'
 import { projectRuntimePermission } from '../../../../../../src/shared/agent-session/options/permissions/structured-agent-session-permission-option'
 import { useMobileStructuredSelectionController } from './use-mobile-structured-selection-controller'
@@ -82,15 +83,19 @@ export function useMobileStructuredOptionState(args: {
       })
   )
   const chatKey = JSON.stringify([agent, sessionId])
-  const reader = useMemo(() => {
-    const retained = readers.get(chatKey)
-    if (retained) {
-      return retained
-    }
-    const created = createStructuredAgentSessionOptionsReadOwner(firstFrame())
-    readers.set(chatKey, created)
-    return created
-  }, [readers, chatKey, agent, optionCatalog])
+  const reader = useMemo(
+    () =>
+      recomputeOn([agent, optionCatalog], () => {
+        const retained = readers.get(chatKey)
+        if (retained) {
+          return retained
+        }
+        const created = createStructuredAgentSessionOptionsReadOwner(firstFrame())
+        readers.set(chatKey, created)
+        return created
+      }),
+    [readers, chatKey, agent, optionCatalog]
+  )
   useEffect(() => () => reader.markAway(), [reader])
   // An older fence's report is stale from the render its fence changes in, before re-attach clears it.
   const projectRuntimeReports = <

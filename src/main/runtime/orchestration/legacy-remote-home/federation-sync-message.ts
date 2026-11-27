@@ -16,6 +16,8 @@ export type RelayedMessage = {
   type: MessageType
   priority: MessagePriority
   threadId: string | null
+  /** The message a reply answers; an older worker's Orca omits it. */
+  replyTo?: string
   payload: string | null
 }
 
@@ -49,6 +51,7 @@ export function parseRelayedMessage(payload: string): RelayedMessage {
     priority:
       message.priority === 'high' || message.priority === 'urgent' ? message.priority : 'normal',
     threadId: typeof message.threadId === 'string' ? message.threadId : null,
+    ...(typeof message.replyTo === 'string' ? { replyTo: message.replyTo } : {}),
     payload: typeof message.payload === 'string' ? message.payload : null
   }
 }

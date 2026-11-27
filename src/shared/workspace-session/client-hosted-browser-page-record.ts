@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../browser/browser-metadata-redaction'
 import { z } from 'zod'
 import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
@@ -44,15 +45,17 @@ const identity = lazyZodSchema(() => z.string().min(1).max(256))
 
 export const persistedClientHostedBrowserPageSchema: z.ZodType<PersistedClientHostedBrowserPage> =
   lazyZodSchema(() =>
-    z.object({
-      // Reject unknown row versions entirely; salvagingArray preserves valid siblings without partially trusting newer semantics.
-      v: z.literal(CLIENT_HOSTED_BROWSER_PAGE_RECORD_VERSION),
-      browserPageId: identity,
-      workspaceId: identity,
-      browserProfileId: identity,
-      url: z.string(),
-      title: z.string().max(4096),
-      pairedDeviceId: identity,
-      savedAt: z.number().int().nonnegative()
-    })
+    z
+      .object({
+        // Reject unknown row versions entirely; salvagingArray preserves valid siblings without partially trusting newer semantics.
+        v: z.literal(CLIENT_HOSTED_BROWSER_PAGE_RECORD_VERSION),
+        browserPageId: identity,
+        workspaceId: identity,
+        browserProfileId: identity,
+        url: z.string(),
+        title: z.string().max(4096),
+        pairedDeviceId: identity,
+        savedAt: z.number().int().nonnegative()
+      })
+      .transform(redactBrowserMetadata)
   )

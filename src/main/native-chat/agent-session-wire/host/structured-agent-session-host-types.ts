@@ -141,7 +141,10 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
     /** Defaults to provider exit without details. */
     failure?: SubmissionRejectionFact
     duringStartup: boolean
+    /** A kept agent that had ended before its acquisition: queued sends never reached it. */
+    endedBeforeAcquire?: true
     startedFor?: string
+    observedAt?: number
     /** Order exit against acceptance; requested closes retain their original Stop boundary. */
     endedAt: AgentJournalCursor
   }
@@ -325,6 +328,8 @@ export type StructuredAgentSessionConversationLifetime = ReturnType<
 
 export type StructuredAgentSessionConversationDelivery = {
   loop: StructuredAgentSessionDeliveryLoop
+  /** The chat closed: a run it waited on stops being asked about for it. */
+  closed: (sessionId: string) => void
   open: (
     sessionId: string,
     options?: StructuredAgentSessionConversationOpenOptions

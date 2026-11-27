@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { isQualifiedPluginKey } from '../../../shared/plugins/frames/plugin-tab-key'
 import type { PluginService } from '../../plugins/plugin-service'
 import {
@@ -7,11 +8,13 @@ import {
   writePluginDeclaredSetting
 } from '../../plugins/storage/plugin-declared-settings'
 
-const pluginKeySchema = z.string().refine(isQualifiedPluginKey, 'invalid plugin key')
-const readArgsSchema = z.object({ pluginKey: pluginKeySchema }).strict()
-const writeArgsSchema = z
-  .object({ pluginKey: pluginKeySchema, key: z.string().min(1).max(64), value: z.json() })
-  .strict()
+const pluginKeySchema = lazyZodSchema(() =>
+  z.string().refine(isQualifiedPluginKey, 'invalid plugin key')
+)
+const readArgsSchema = lazyZodSchema(() => z.object({ pluginKey: pluginKeySchema }).strict())
+const writeArgsSchema = lazyZodSchema(() =>
+  z.object({ pluginKey: pluginKeySchema, key: z.string().min(1).max(64), value: z.json() }).strict()
+)
 
 /** The plugin settings Orca's Settings page shows and edits (`contributes.settings`). */
 export function registerPluginSettingsHandlers(pluginService: PluginService): void {

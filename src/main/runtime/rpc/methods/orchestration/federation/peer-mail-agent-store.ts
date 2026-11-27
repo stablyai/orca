@@ -14,7 +14,14 @@ export async function storePeerMailForAgent<R>(
   runtime: OrcaRuntimeService,
   params: Pick<
     z.infer<typeof PeerMailDeliverParams>,
-    'conversationId' | 'messageId' | 'senderLabel' | 'subject' | 'type' | 'priority' | 'threadId'
+    | 'conversationId'
+    | 'messageId'
+    | 'senderLabel'
+    | 'subject'
+    | 'type'
+    | 'priority'
+    | 'threadId'
+    | 'replyTo'
   > & {
     to: string
     body: string | undefined
@@ -80,6 +87,7 @@ export async function storePeerMailForAgent<R>(
       type: params.type,
       priority: params.priority,
       threadId: params.threadId,
+      replyTo: params.replyTo,
       runId: recipient.runId,
       answerSenderSnapshot: params.senderSnapshot
     }

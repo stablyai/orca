@@ -50,12 +50,16 @@ export class SharedMcpResourceSubscriptions {
       this.pending.set(uri, sent)
       return sent.then(
         (result) => {
-          this.pending.delete(uri)
+          if (this.pending.get(uri) === sent) {
+            this.pending.delete(uri)
+          }
           return result
         },
         (error: unknown) => {
           // The child holds nothing, so neither does anyone who joined while it was asked.
-          this.pending.delete(uri)
+          if (this.pending.get(uri) === sent) {
+            this.pending.delete(uri)
+          }
           if (this.byUri.get(uri) === holders) {
             this.byUri.delete(uri)
           }

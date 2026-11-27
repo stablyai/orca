@@ -1,5 +1,6 @@
 // The JSON header carries the unhashed worktree ID needed for history GC; raw history follows.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from '../../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import { hashWorktreeId } from '../../../pty/history/terminal-history-id'
 
@@ -13,11 +14,13 @@ export const ORCAD_MIGRATION_SHELL_HISTORY_VERSION = 1
 export const ORCAD_MIGRATION_SHELL_HISTORY_HEADER_SCAN_BYTES = 16 * 1024
 const NEWLINE = 0x0a
 
-const HeaderSchema = z.object({
-  version: z.literal(ORCAD_MIGRATION_SHELL_HISTORY_VERSION),
-  worktreeId: z.string().min(1),
-  loginShell: z.literal(true).optional()
-})
+const HeaderSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(ORCAD_MIGRATION_SHELL_HISTORY_VERSION),
+    worktreeId: z.string().min(1),
+    loginShell: z.literal(true).optional()
+  })
+)
 
 export const MAX_ORCAD_MIGRATION_SHELL_HISTORY_BYTES =
   ORCAD_MIGRATION_BLOB_KIND_CONTRACTS['shell-history'].maxBytes

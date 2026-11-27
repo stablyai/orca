@@ -102,7 +102,9 @@ export type StructuredAgentLaunchCheck = {
   resolveLaunch: (
     env: Record<string, string>,
     commandSettings: StructuredAgentCommandSettings
-  ) => { command: string; prefixArgs: string[]; env: Record<string, string> }
+  ) =>
+    | { command: string; prefixArgs: string[]; env: Record<string, string> }
+    | Promise<{ command: string; prefixArgs: string[]; env: Record<string, string> }>
   /** The ascending releases that binary's `--version` must reach; see `agentCliMinimumVersion`. */
   minimumVersions: readonly string[]
   /** Arguments before `--version`. */

@@ -41,7 +41,7 @@ export function ensureDocumentStyle(host: HTMLElement) {
   style.id = STYLE_ELEMENT_ID
   style.dataset.scheme = scheme
   style.textContent = scopeDocumentStyleToHost(
-    richMarkdownEditorStyle(),
+    richMarkdownEditorStyle(scheme),
     `.${RICH_MARKDOWN_HOST_CLASS}`
   )
   if (!existing) {
@@ -81,10 +81,7 @@ function startDocumentOrGiveTheHostBack(host: HTMLElement, hooks: RichMarkdownWe
       // Use page modal: both shells lack prompt delegate and return null, so Link/Image otherwise do nothing.
       promptForUrl: hooks.promptForUrl,
 
-      loadImageSource: hooks.loadImageSource,
-
-      // Omit inset source: document and screen read same visualViewport formula, and reporting twice double-lifts screen bar.
-      keyboardInsetSource: () => null
+      loadImageSource: hooks.loadImageSource
     })
   } catch (error) {
     host.innerHTML = ''

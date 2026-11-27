@@ -22,11 +22,12 @@ import type { BotChatTreeWorker } from '../../../../src/shared/bots/bot-chat-tre
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { MobileEdgeFade } from '../../components/list/MobileEdgeFade'
 import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MobileNativeChatFloatingControls } from '../../session/native-chat/lower-region/MobileNativeChatFloatingControls'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import type { BotItemQuestionStepsSend } from '../../../../src/shared/bots/use-bot-item-question-steps'
@@ -95,8 +96,10 @@ export function MobileBotItemPage({
   /** The docked box's height, so a toast sits just above it. */
   onCommentBoxHeight: (height: number) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const view = usePhoneBotItemView({ client, uid, reads })
   const now = useNow(60_000)
   const lastEventId = view.events.at(-1)?.id ?? ''
@@ -266,7 +269,7 @@ export function MobileBotItemPage({
                     accessory={
                       <Text style={styles.valueText}>
                         {t('bots.items.snooze.rowUntil', 'until {{when}}', {
-                          when: formatPhoneSnoozeTime(item.snoozedUntil, now)
+                          when: formatPhoneSnoozeTime(item.snoozedUntil, now, intlLocale)
                         })}
                       </Text>
                     }
@@ -376,7 +379,7 @@ export function MobileBotItemPage({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   page: { flex: 1, backgroundColor: colors.sheetSurface },
   hidden: { display: 'none' },
   // As chat caps its card: the activity stays in view and a tall card scrolls inside.

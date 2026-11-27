@@ -52,9 +52,7 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
       const env = { ...shellEnv, ...spec.env }
       const options = { commandSettings, dataDirectory: getProfileUserDataPath() }
       return {
-        ...(spec.bundledProgram
-          ? await spec.bundledProgram(env)
-          : resolveAcpLaunchCommand(spec, env, options)),
+        ...(await resolveAcpLaunchCommand(spec, env, options)),
         env
       }
     },
@@ -96,9 +94,9 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
     ...(minimumVersions
       ? {
           launchCheck: {
-            resolveLaunch: (shellEnv, commandSettings) => {
+            resolveLaunch: async (shellEnv, commandSettings) => {
               const env = { ...shellEnv, ...spec.env }
-              const invocation = resolveAcpLaunchCommand(spec, env, {
+              const invocation = await resolveAcpLaunchCommand(spec, env, {
                 commandSettings,
                 dataDirectory: null
               })

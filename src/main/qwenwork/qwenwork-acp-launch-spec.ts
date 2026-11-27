@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { GENERIC_ACP_DIALECT } from '../acp/acp-dialects/acp-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
@@ -10,9 +11,11 @@ import {
 } from './qwenwork-desktop-engine'
 import { loadWindowsSecurityAsync } from '../../shared/secure-storage/windows-security-addon'
 
-const desktopModelCatalog = z.object({
-  models: z.array(z.object({ id: z.string(), label: z.string(), isDefault: z.boolean() }))
-})
+const desktopModelCatalog = lazyZodSchema(() =>
+  z.object({
+    models: z.array(z.object({ id: z.string(), label: z.string(), isDefault: z.boolean() }))
+  })
+)
 
 export const QWENWORK_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'qwenwork',

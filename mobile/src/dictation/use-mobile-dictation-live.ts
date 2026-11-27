@@ -1,3 +1,4 @@
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
@@ -18,8 +19,9 @@ export function useMobileDictationLive(
   }, [cancel])
   const stableCancel = useCallback(() => cancelLatest.current(), [])
   const computerName = useDictationComputerName(hostId)
+  const t = useMobileTranslation()
   const { meter, engine, failure, retry } = dictation
-  const failureReason = failure === null ? null : dictationFailureReason(failure)
+  const failureReason = failure === null ? null : dictationFailureReason(failure, t)
   return useMemo(
     () => ({
       meter,

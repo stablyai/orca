@@ -8,9 +8,9 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { withoutNativeChatVisualDirectiveLines } from '../../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
-import { colors, spacing, pressedStyle } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { spacing, pressedStyle } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import {
   agentDisplayForkedLead,
   agentDisplayLabel,
@@ -50,7 +50,8 @@ function WorktreeAgentRowComponent({
   onLongPress,
   trailing
 }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const dotState = childRow?.displayState ?? agentDotState(agent, now)
   // Visuals render only in transcript; row keeps surrounding prose and treats visual-only reply as empty.
@@ -59,10 +60,11 @@ function WorktreeAgentRowComponent({
     reply
       ? { ...agent, lastAssistantMessage: withoutNativeChatVisualDirectiveLines(reply) }
       : agent,
-    now
+    now,
+    t
   )
   const forkedLead = agentDisplayForkedLead(agent, label)
-  const childText = childRow ? mobileAgentChildRowText(childRow, now) : null
+  const childText = childRow ? mobileAgentChildRowText(childRow, now, t) : null
   const timeAt = childRow ? childRow.firstObservedAt : agentRowTimeAt(agent)
   // Like desktop, a silent row reports how long since its last update, not when its turn began.
   const ts =
@@ -70,7 +72,7 @@ function WorktreeAgentRowComponent({
       ? ''
       : !childRow && dotState === 'unverifiable'
         ? agentNoUpdateLabel(agent, now)
-        : formatTimeAgo(timeAt, now)
+        : formatTimeAgo(timeAt, now, t)
 
   const content = (
     <View style={[styles.row, { paddingLeft: depth * AGENT_ROW_INDENT_PER_DEPTH }]}>
@@ -84,7 +86,7 @@ function WorktreeAgentRowComponent({
         numberOfLines={1}
         accessibilityLabel={
           !childText && forkedLead
-            ? `${mobileForkAccessibleName(forkedLead.name)}${forkedLead.rest}`
+            ? `${mobileForkAccessibleName(forkedLead.name, t)}${forkedLead.rest}`
             : undefined
         }
       >
@@ -135,7 +137,7 @@ function WorktreeAgentRowComponent({
 
 export const WorktreeAgentRow = memo(WorktreeAgentRowComponent)
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',

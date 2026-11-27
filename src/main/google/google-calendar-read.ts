@@ -16,6 +16,8 @@ import { addDays, windowBound, zonedDate, zonedMidnight } from './google-time-zo
 
 export const CALENDAR = 'https://www.googleapis.com/calendar/v3'
 const LIST_MAX = 250
+// 20 pages of 250: up to 5,000 calendars.
+const MAX_CALENDAR_LIST_PAGES = 20
 
 const CalendarEntrySchema = lazyZodSchema(() =>
   z.object({
@@ -29,7 +31,10 @@ const CalendarEntrySchema = lazyZodSchema(() =>
 )
 export type CalendarEntry = z.infer<typeof CalendarEntrySchema>
 const CalendarListSchema = lazyZodSchema(() =>
-  z.object({ items: z.array(CalendarEntrySchema).default([]) })
+  z.object({
+    items: z.array(CalendarEntrySchema).default([]),
+    nextPageToken: z.string().optional()
+  })
 )
 
 const When = lazyZodSchema(() =>
@@ -147,8 +152,27 @@ export async function pickCalendar(
 }
 
 async function listCalendarEntries(api: GoogleApi): Promise<CalendarEntry[]> {
-  const url = `${CALENDAR}/users/me/calendarList?maxResults=${LIST_MAX}`
-  return (await api.get('calendar', url, parseGoogleJson(CalendarListSchema))).items
+  const url = new URL(`${CALENDAR}/users/me/calendarList`)
+  url.searchParams.set('maxResults', String(LIST_MAX))
+  const entries: CalendarEntry[] = []
+  let pageToken: string | undefined
+  for (let pageIndex = 0; pageIndex < MAX_CALENDAR_LIST_PAGES; pageIndex++) {
+    if (pageToken) {
+      url.searchParams.set('pageToken', pageToken)
+    }
+    const page = await api.get('calendar', url.toString(), parseGoogleJson(CalendarListSchema))
+    entries.push(...page.items)
+    pageToken = page.nextPageToken
+    if (!pageToken) {
+      break
+    }
+  }
+  if (pageToken) {
+    throw new GoogleToolError(
+      `The calendar list exceeds the ${MAX_CALENDAR_LIST_PAGES}-page limit, so the listing is incomplete. Pass a calendar id instead of a name.`
+    )
+  }
+  return entries
 }
 
 export function eventSummary(calendarId: string, event: CalendarEvent): CalendarEventSummary {

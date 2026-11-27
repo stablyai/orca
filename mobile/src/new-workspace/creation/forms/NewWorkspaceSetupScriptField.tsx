@@ -1,11 +1,11 @@
 import { Text, View } from 'react-native'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../../../src/shared/worktree/create-types'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
 import { ListGroup, ListRow } from '../../../components/list/ListGroup'
-import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
+import { newWorktreeFormStylesSheet } from './new-worktree-form-styles'
 import type { SetupRunPolicy } from './new-worktree-modal-types'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 export function NewWorkspaceSetupScriptField({
   command,
@@ -29,7 +29,7 @@ export function NewWorkspaceSetupScriptField({
   waitForSetup: boolean | null
   onWaitForSetupChange: (wait: boolean) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(newWorktreeFormStylesSheet)
   const t = useMobileTranslation()
   const runLabel = t('components.newWorkspaceSetupScriptField.runSetup', 'Run setup')
   const waitLabel = t(

@@ -1,15 +1,17 @@
 import type { ReactElement, ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ShieldAlert, type LucideIcon } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { ChevronDown, ShieldAlert, type LucideIcon } from 'lucide-react-native'
+import { pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { COMPOSER_CONTROL_SIZE } from '../../../../components/composer-input/composer-input-styles'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { LIST_ROW_PADDING, ListRow } from '../../../../components/list/ListGroup'
 import {
   sessionOptionValueMarker,
   type SessionOptionDescriptor,
+  type SessionOptionSelectChoice,
   type SessionOptionValue
 } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
 import {
@@ -21,18 +23,30 @@ import {
   loneFastTier,
   speedButtonTiers
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-speed-tiers'
-import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
+import { mobileNativeChatSessionOptionSay } from './native-chat-session-option-copy'
 import { orderEffortLevels } from '../../../../../../src/shared/agent-session/options/view/effort-level-order'
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
 
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return <Text style={styles.caption}>{children}</Text>
 }
 
+export function SessionOptionLockCaption(): React.JSX.Element {
+  const t = useMobileTranslation()
+  return (
+    <SessionOptionCaption>
+      {t(
+        'chat.sessionOptionPickers.settingsLocked',
+        'Model settings unlock when this turn finishes.'
+      )}
+    </SessionOptionCaption>
+  )
+}
+
+/** One target for the chat's options: the model's name (or a value), with Full access's shield. */
 export function ModelPill({
   primary,
-  secondary,
   warning,
   icon: Icon,
   leading,
@@ -41,7 +55,6 @@ export function ModelPill({
   onPress
 }: {
   primary: string
-  secondary: string | null
   warning: boolean
   icon?: LucideIcon
   /** Shown before the label, unlike `icon`, which replaces it. */
@@ -50,7 +63,8 @@ export function ModelPill({
   disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   // A held pick's clock never hides the full-access warning.
   const PillIcon = Icon ?? (warning ? ShieldAlert : leading)
   return (
@@ -71,18 +85,22 @@ export function ModelPill({
         />
       ) : null}
       {!Icon ? (
-        <Text style={styles.pillText} numberOfLines={1} ellipsizeMode="tail">
-          <Text style={[styles.pillPrimary, disabled && styles.pillTextDisabled]}>{primary}</Text>
-          {secondary ? <Text style={styles.pillSecondary}>{`  ${secondary}`}</Text> : null}
+        <Text
+          style={[styles.pillText, disabled && styles.pillTextDisabled]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {primary}
         </Text>
       ) : null}
+      <ChevronDown size={14} color={colors.textMuted} strokeWidth={2.2} />
     </Pressable>
   )
 }
 
 /** A trailing value in a colour of its own, as Full access reads in amber. */
 function TintedValue({ value, color }: { value: string; color: string }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Text style={[styles.value, { color }]} numberOfLines={1}>
       {value}
@@ -131,15 +149,20 @@ export function SessionOptionSummaryRow({
   )
 }
 
-type DescriptorRowsProps = {
-  descriptor: SessionOptionDescriptor
+type MoreChoices = { shown: boolean; onToggle: () => void }
+
+type SelectRowProps = {
   disabled: boolean
   onSetOption: (value: SessionOptionValue) => void
-  onInvokeAction: () => void
   /** A leading mark per choice, as each permission mode has its icon. */
   choiceLeading?: (value: string) => ReactNode
   /** Whether search-only choices are revealed; without it they stay off the list. */
-  moreChoices?: { shown: boolean; onToggle: () => void }
+  moreChoices?: MoreChoices
+}
+
+type DescriptorRowsProps = SelectRowProps & {
+  descriptor: SessionOptionDescriptor
+  onInvokeAction: () => void
 }
 
 /** A Fast-only speed, which toggles on one row like Claude's Fast mode. */
@@ -168,6 +191,7 @@ export function descriptorRowElements(
   }: DescriptorRowsProps,
   t: Translate
 ): ReactElement[] {
+  const say = mobileNativeChatSessionOptionSay(t)
   const locked = disabled || !descriptor.settable
   // Why: flip-only and agent-picker options are actions, not values or radio choices.
   if (descriptor.action) {
@@ -216,48 +240,80 @@ export function descriptorRowElements(
       />
     ]
   }
-  // A provider fallback is what runs, so the saved model stays pickable.
-  const currentValue = descriptor.fallbackModel ?? descriptor.kind.currentValue
-  const choices =
-    descriptor.category === 'thought_level'
-      ? orderEffortLevels(descriptor.kind.choices)
-      : descriptor.kind.choices
-  const choiceRow = (choice: (typeof choices)[number]) => (
-    <ListRow
-      key={choice.value}
-      title={nativeChatSessionChoiceLabel(choice, say, descriptor.id)}
-      subtitle={choice.description}
-      leading={choiceLeading ? (choiceLeading(choice.value) ?? null) : undefined}
-      selected={choice.value === currentValue}
-      disabled={locked}
-      onPress={() => onSetOption(choice.value)}
-    />
+  return browsedSelectItems(descriptor, moreChoices).map((item) =>
+    selectItemRow(descriptor, item, { disabled, onSetOption, choiceLeading, moreChoices }, t)
   )
-  // No search here, so search-only rows stay out; folded ones follow a More models toggle.
+}
+
+const MORE_CHOICES = 'more-choices'
+/** A row of a select's list: one of its choices, or the More models toggle. */
+export type SelectListItem = SessionOptionSelectChoice | typeof MORE_CHOICES
+
+export function selectListItemKey(item: SelectListItem): string {
+  return item === MORE_CHOICES ? MORE_CHOICES : item.value
+}
+
+/** A select's list while browsing: search-only choices stay out; folded ones follow a More models toggle. */
+export function browsedSelectItems(
+  descriptor: SessionOptionDescriptor,
+  moreChoices?: MoreChoices
+): SelectListItem[] {
+  const { kind } = descriptor
+  if (kind.type !== 'select') {
+    return []
+  }
+  // A provider fallback is what runs, so the saved model stays pickable.
+  const currentValue = descriptor.fallbackModel ?? kind.currentValue
+  const choices =
+    descriptor.category === 'thought_level' ? orderEffortLevels(kind.choices) : kind.choices
   const listed = choices.filter(
     (choice) =>
-      !choice.hidden ||
-      choice.value === currentValue ||
-      choice.value === descriptor.kind.currentValue
+      !choice.hidden || choice.value === currentValue || choice.value === kind.currentValue
   )
   const more = moreChoices ? listed.filter((choice) => choice.legacy) : []
-  return [
-    ...listed.filter((choice) => !choice.legacy).map(choiceRow),
-    ...(more.length > 0 && moreChoices
-      ? [
-          ...(moreChoices.shown ? more.map(choiceRow) : []),
-          <ListRow
-            key="more-choices"
-            title={
-              moreChoices.shown
-                ? t('chat.sessionOptionRows.fewerModels', 'Fewer models')
-                : t('chat.sessionOptionRows.moreModels', 'More models')
-            }
-            onPress={moreChoices.onToggle}
-          />
-        ]
-      : [])
-  ]
+  const folded: SelectListItem[] =
+    more.length > 0 && moreChoices ? [...(moreChoices.shown ? more : []), MORE_CHOICES] : []
+  return [...listed.filter((choice) => !choice.legacy), ...folded]
+}
+
+/** One row of a select's list: a choice, checked when it is the one running, or the More models toggle. */
+export function selectItemRow(
+  descriptor: SessionOptionDescriptor,
+  item: SelectListItem,
+  { disabled, onSetOption, choiceLeading, moreChoices }: SelectRowProps,
+  t: Translate
+): ReactElement {
+  if (item === MORE_CHOICES) {
+    return (
+      <ListRow
+        key={MORE_CHOICES}
+        title={
+          moreChoices?.shown
+            ? t('chat.sessionOptionRows.fewerModels', 'Fewer models')
+            : t('chat.sessionOptionRows.moreModels', 'More models')
+        }
+        onPress={moreChoices?.onToggle}
+      />
+    )
+  }
+  const { kind } = descriptor
+  // An unreported effort marks nothing, rather than reading as a confirmed choice.
+  const marked =
+    kind.type !== 'select' ||
+    (descriptor.category === 'thought_level' && descriptor.valueSource === 'unknown')
+      ? undefined
+      : (descriptor.fallbackModel ?? kind.currentValue)
+  return (
+    <ListRow
+      key={item.value}
+      title={nativeChatSessionChoiceLabel(item, mobileNativeChatSessionOptionSay(t), descriptor.id)}
+      subtitle={item.description}
+      leading={choiceLeading ? (choiceLeading(item.value) ?? null) : undefined}
+      selected={item.value === marked}
+      disabled={disabled || !descriptor.settable}
+      onPress={() => onSetOption(item.value)}
+    />
+  )
 }
 
 export function DescriptorRows(props: DescriptorRowsProps): React.JSX.Element {
@@ -265,34 +321,28 @@ export function DescriptorRows(props: DescriptorRowsProps): React.JSX.Element {
   return <>{descriptorRowElements(props, t)}</>
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.xs,
     maxWidth: '100%',
-    height: 38,
-    paddingHorizontal: 14,
+    height: COMPOSER_CONTROL_SIZE,
+    paddingLeft: 14,
+    paddingRight: 10,
     borderRadius: radii.pill,
     backgroundColor: colors.composerControl
   },
   pillText: {
     flexShrink: 1,
-    fontSize: typography.bodySize
-  },
-  pillPrimary: {
     color: colors.textPrimary,
+    fontSize: typography.bodySize,
     fontWeight: '500'
-  },
-  pillSecondary: {
-    color: colors.textMuted
   },
   pillTextDisabled: {
     color: colors.textMuted
   },
-  pressed: {
-    opacity: 0.7
-  },
+  pressed: pressedStyle,
   // A footnote under its group, lined up with the row text.
   caption: {
     color: colors.textMuted,

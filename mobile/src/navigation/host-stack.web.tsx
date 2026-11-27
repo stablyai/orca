@@ -2,9 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from '
 import { StyleSheet, View } from 'react-native'
 import { Navigator, usePathname } from 'expo-router'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { HOST_STACK_SCREENS, type HostStackAnimation } from './host-stack-screens'
 import { isOverlayPageRoute } from '../new-workspace/overlay-page-route'
 import { runStackMotion } from './host-stack-motion.web'
@@ -19,12 +17,12 @@ import {
 
 // Expo native-stack’s web view ignores animation and switches display; reuse StackRouter with a view that retains popped screens through their exit slide.
 export function HostStack({ animation }: { animation: HostStackAnimation }) {
-  useMobileTranslation()
+  const t = useMobileTranslation()
   useReportedPageLocation()
   return (
     <Navigator>
       {HOST_STACK_SCREENS.map(({ name, title }) => (
-        <Navigator.Screen key={name} name={name} options={{ title }} />
+        <Navigator.Screen key={name} name={name} options={{ title: title(t) }} />
       ))}
       <HostStackContent animation={animation} />
     </Navigator>
@@ -78,7 +76,7 @@ function transitionBetween(previous: Shown, next: Routes): Transition | null {
 }
 
 function HostStackView({ animation }: { animation: HostStackAnimation }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const { state, descriptors } = Navigator.useContext()
   const { routes } = state
   const [shown, setShown] = useState<Shown>({ routes, descriptors, transition: null })
@@ -127,8 +125,7 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
 
   return (
     // Render descriptors bare like NavigatorSlot; NavigationContent cannot run in this view-only rerender.
-    // Disable taps mid-slide so repeated row taps cannot push duplicate screens.
-    <View style={styles.stack} pointerEvents={transition ? 'none' : 'auto'}>
+    <View style={styles.stack}>
       {drawn.map((route) => {
         const leaving = transition?.kind === 'pop' && route.key === transition.leaving.key
         const descriptor = leaving ? transition.descriptors[route.key] : descriptors[route.key]
@@ -144,6 +141,9 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
           </StackScreen>
         )
       })}
+      {/* Cover taps mid-slide so repeated row taps cannot push duplicate screens. Not pointer-events none:
+          iOS WebKit never lets an iframe that loads under it scroll by touch (a pushed HTML preview). */}
+      {transition ? <View style={styles.tapShield} testID="host-stack-tap-shield" /> : null}
     </View>
   )
 }
@@ -161,7 +161,7 @@ function StackScreen({
   onPainted: (() => void) | null
   children: ReactNode
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const transparent = isOverlayPageRoute(usePathname())
   const reportToDocument = useRouteScreenPaintReporter()
   // Pass the screen's paint on to the document's one report, and learn it here too while the stack waits for it.
@@ -192,7 +192,7 @@ function StackScreen({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   stack: {
     flex: 1,
     overflow: 'hidden'
@@ -203,6 +203,11 @@ const styles = themedStyleSheet(() => ({
   },
   transparent: {
     backgroundColor: 'transparent'
+  },
+  tapShield: {
+    ...StyleSheet.absoluteFill,
+    // Above the screens even if one ever sets its own z-index.
+    zIndex: 1
   },
   hidden: {
     display: 'none'

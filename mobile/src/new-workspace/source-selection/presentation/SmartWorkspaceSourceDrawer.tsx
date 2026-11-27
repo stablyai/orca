@@ -26,16 +26,17 @@ import type { MrStateFilter } from '../mobile-composer-source-types'
 import { lookupGitHubItemByOwnerRepo, type PasteRepoCandidate } from '../smart-source-paste-intent'
 import { useSmartWorkspaceSource } from '../use-smart-workspace-source'
 import type { MobileComposerSource } from '../use-mobile-composer-source'
-import { colors, pressedStyle } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../../../theme/mobile-theme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
-import { smartWorkspaceSourceDrawerStyles as styles } from './smart-workspace-source-drawer-styles'
+import { smartWorkspaceSourceDrawerStylesSheet } from './smart-workspace-source-drawer-styles'
 import { TextField } from '../../../components/composer-input/TextField'
 import { SmartSourceModeIcon } from './SmartSourceModeIcon'
 import { SmartWorkspaceSourceRow } from './SmartWorkspaceSourceRow'
 import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
 import { runAfterInteractions } from '../../../platform/after-interactions'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 // Delay focus like MobileSearchField: native autoFocus may not raise keyboard during drawer animation.
 const SOURCE_INPUT_FOCUS_DELAY_MS = 120
@@ -71,7 +72,8 @@ export function SmartWorkspaceSourceDrawer({
   onRepoChange,
   onClose
 }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(smartWorkspaceSourceDrawerStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const availableModes = useMemo(() => resolveAvailableSmartModes(availability), [availability])
   const [mode, setMode] = useState<SmartNameMode>(() => resolveDefaultSmartMode(availability))
@@ -329,7 +331,7 @@ export function SmartWorkspaceSourceDrawer({
                     onPress={() => setMrStateFilter(option.id)}
                   >
                     <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                      {option.label}
+                      {option.label(t)}
                     </Text>
                   </Pressable>
                 )
@@ -353,7 +355,7 @@ export function SmartWorkspaceSourceDrawer({
                 >
                   <SmartSourceModeIcon icon={option.icon} color={tint} />
                   <Text style={[styles.tabText, selected && styles.tabTextSelected]}>
-                    {option.label}
+                    {option.label(t)}
                   </Text>
                 </Pressable>
               )
@@ -383,6 +385,6 @@ export function SmartWorkspaceSourceDrawer({
 }
 
 function SourceRowSeparator() {
-  useMobileColorScheme()
+  const styles = useThemedStyles(smartWorkspaceSourceDrawerStylesSheet)
   return <View style={styles.separator} />
 }
