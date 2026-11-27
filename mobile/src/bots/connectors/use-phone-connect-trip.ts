@@ -11,7 +11,6 @@ import {
   useState,
   type RefObject
 } from 'react'
-import { saveMobileBrowserViewMode } from '../../browser/pane-view/mobile-browser-view-mode-state'
 import { sessionBrowserTabCreate } from '../../browser/tab-navigation/mobile-session-browser-operations'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { connectCancel } from './bot-connector-account-operations'
@@ -161,9 +160,6 @@ export function usePhoneConnectTrips(
             end({ status: 'failed', error: CONNECT_NOT_ROUTED })
           }
           return
-        }
-        if (opened.browserPageId) {
-          saveMobileBrowserViewMode(worktreeId, opened.browserPageId, 'mobile')
         }
         if (current()) {
           const page = { url, browserPageId: opened.browserPageId ?? null }

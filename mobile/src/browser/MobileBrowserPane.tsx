@@ -8,7 +8,8 @@ import type { BrowserScreencastFrameMetadata } from './screencast/browser-screen
 import type { MobileBrowserViewMode } from './screencast/browser-screencast-request-parameters'
 import {
   getInitialMobileBrowserViewMode,
-  saveMobileBrowserViewMode
+  saveMobileBrowserViewMode,
+  usePhoneOpenedBrowserPage
 } from './pane-view/mobile-browser-view-mode-state'
 import type {
   BrowserTouchLayout,
@@ -198,9 +199,10 @@ export function MobileBrowserPane({
     resetBrowserZoomState()
   }, [resetBrowserZoomState, tab.browserPageId, tab.url])
 
+  const phoneOpened = usePhoneOpenedBrowserPage(worktreeId, tab.browserPageId)
   useEffect(() => {
     setBrowserViewMode(getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url))
-  }, [tab.browserPageId, tab.url, worktreeId])
+  }, [phoneOpened, tab.browserPageId, tab.url, worktreeId])
 
   const binaryScreencastGranted = useBrowserBinaryScreencastGrant()
 
