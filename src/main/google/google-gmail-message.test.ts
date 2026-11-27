@@ -45,6 +45,41 @@ it('keeps mixed body sections while selecting each nested alternative and exclud
   expect(bodyText(message)).toBe('First section\nSecond section')
 })
 
+it('ignores disposition comments when excluding attachments without changing related roots', () => {
+  const body = textPart('text/plain', 'Body')
+  for (const disposition of [
+    '(export) attachment',
+    '(export (archive)) ATTACHMENT (payload); filename=""',
+    '(escaped \\( label) attachment',
+    'attachment(export)'
+  ]) {
+    const attached: Part = {
+      ...textPart('text/plain', 'Attached note'),
+      filename: '',
+      headers: [{ name: 'Content-Disposition', value: disposition }]
+    }
+    expect(bodyText({ mimeType: 'multipart/alternative', parts: [body, attached] })).toBe('Body')
+    expect(bodyText({ mimeType: 'multipart/mixed', parts: [body, attached] })).toBe('Body')
+    expect(bodyText({ mimeType: 'multipart/related', parts: [attached, body] })).toBe(
+      'Attached note'
+    )
+  }
+  expect(
+    bodyText({
+      mimeType: 'multipart/alternative',
+      parts: [
+        body,
+        {
+          ...textPart('text/plain', 'Inline note'),
+          headers: [
+            { name: 'Content-Disposition', value: '(export) inline; filename="attachment (note)"' }
+          ]
+        }
+      ]
+    })
+  ).toBe('Inline note')
+})
+
 it('does not let related CID resources replace the preferred plain body', () => {
   const root: Part = {
     ...textPart('text/html', '<p>HTML body</p>'),
