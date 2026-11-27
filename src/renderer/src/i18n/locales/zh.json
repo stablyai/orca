@@ -3298,9 +3298,9 @@
         "connectHost": "连接",
         "addHost": "添加主机",
         "addSshHost": "添加 SSH 主机",
-        "addSshHostHint": "通过 SSH 使用现有机器",
+        "addSshHostHint": "通过 SSH 连接",
         "addRemoteOrcaServer": "添加远程 Orca 服务器",
-        "addRemoteOrcaServerHint": "配对另一个 Orca 运行时",
+        "addRemoteOrcaServerHint": "另一台电脑上的 Orca",
         "hostConnectionFailed": "连接失败",
         "defaultBranchUpdateFailed": "无法更新项目的默认分支，请重试",
         "setLocation": "设置项目位置",
@@ -4832,6 +4832,11 @@
             "waitingTitle": "正在等待 {{server}}",
             "waitingBody": "服务器重新提供此终端或网络连接变化时，Orca 会重新连接它。点击“重新连接”可立即重试",
             "downFor": "已断开 {{duration}}",
+            "cantReachTitle": "无法连接 {{server}}",
+            "detailsButton": "详情",
+            "tailscaleHintTitle": "检查 Tailscale 链路",
+            "reconnectNowButton": "立即重新连接",
+            "copyPingCommand": "复制命令",
             "tailscaleHint": "检查 Tailscale 链路：",
             "fallbackServerName": "服务器",
             "connectionLostTitle": "正在重新连接 {{server}}",
@@ -7565,8 +7570,8 @@
           "addSshHost": "添加 SSH 主机",
           "addRemoteServer": "添加远程服务器",
           "addRemoteHost": "添加远程主机",
-          "addSshHostDetail": "通过 SSH 使用现有机器",
-          "addRemoteServerDetail": "与另一台电脑上运行的 Orca 配对",
+          "addSshHostDetail": "通过 SSH 连接到机器",
+          "addRemoteServerDetail": "另一台电脑的 Orca，无需 SSH",
           "addRemoteHostDetail": "SSH 主机或 Orca 服务器",
           "addWslHost": "添加 WSL 发行版",
           "addWslHostDetail": "在 WSL 2 发行版内运行 Orca 服务器，实验性",
@@ -7685,7 +7690,7 @@
           "serverSaveFailed": "添加远程服务器失败",
           "serverTitle": "添加远程服务器",
           "sshTitle": "添加 SSH 主机",
-          "serverDescription": "与另一台电脑上运行的 Orca 配对",
+          "serverDescription": "与同一网络中另一台电脑上的 Orca 配对",
           "serverRunsAsYou": "此设备将能够在此服务器上以你的身份运行命令",
           "sshDescription": "添加一台可通过 SSH 登录并持久保存的机器",
           "serverSshTitle": "向 {{server}} 添加 SSH 主机",
@@ -14399,7 +14404,8 @@
             "741ff8a0d2": "推送并创建 {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "选择一个工作区来浏览文件"
+            "79b1537dd3": "选择一个工作区来浏览文件",
+            "2f4483d6c4": "没有文件匹配此筛选条件"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "新建文件夹",
@@ -14442,6 +14448,7 @@
             "31b4c3195d": "更多文件管理器操作",
             "d95e30fe28": "刷新文件管理器",
             "6026b16950": "全部折叠",
+            "c1f3f3ec70": "搜索文件内容",
             "openInApp": "在 {{app}} 中打开"
           },
           "FileExplorerTreeStatus": {
@@ -14554,6 +14561,17 @@
             "localPortInUse": "端口 {{port}} 已被占用。请选择其他本地端口",
             "localPortRequiresPrivileges": "端口 {{port}} 需要提升权限。请使用本地端口 ≥ 1024"
           },
+          "Search": {
+            "1abfb25a66": "输入要在文件中搜索的内容",
+            "d56d140747": "按 Enter 进行搜索",
+            "98c8435e36": "选择要搜索的工作区",
+            "dcc294f28d": "(结果被截断)",
+            "resultsInFiles": "{{files}}中共 {{results}}",
+            "resultCount_one": "{{count}} 个结果",
+            "resultCount_other": "{{count}} 个结果",
+            "fileCount_one": "{{count}} 个文件",
+            "fileCount_other": "{{count}} 个文件"
+          },
           "SearchFilters": {
             "01e4671ccf": "例如 *.min.js、dist/**",
             "0a6412a895": "要排除的文件",
@@ -14563,9 +14581,11 @@
           "SearchHeader": {
             "6234a5ef85": "使用正则表达式",
             "4567e6e0b6": "匹配整个单词",
-            "464ae3974f": "区分大小写"
+            "464ae3974f": "区分大小写",
+            "693cbeadd0": "搜索"
           },
           "SearchQueryRow": {
+            "queryLabel": "搜索文件",
             "clearLabel": "清除搜索"
           },
           "SearchResultItems": {
@@ -14739,7 +14759,6 @@
             "c8e4a1f902": "筛选器：{{value0}}",
             "b3c8f1a902": "按文件名筛选",
             "d4f8c2a901": "清除并关闭筛选器",
-            "4b4a7de138": "在浏览器中打开审查页面",
             "createPrIntentCommitBlockedSummary": "提交被阻止：{{value0}} 修复问题后重试创建 PR",
             "pushRecovery": {
               "4b37ae99b0": "启动默认 AI 代理修复此推送失败",
@@ -15691,6 +15710,16 @@
             "description": "\"{{value0}}\"将被删除，删除后，也将无法通过 {{value1}} 自身的命令行恢复",
             "remoteDescription": "“{{value0}}”将从 {{value2}} 删除。删除后，也无法再从 {{value1}} 自己的命令行恢复",
             "confirm": "删除"
+          },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "查找文件",
+            "4d5a6b2a49": "清除文件筛选器",
+            "7a9fb1e6aa": "内容"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "名称",
+            "b3c8f1a902": "按名称筛选文件",
+            "f8a2c4d1e0": "资源管理器搜索模式"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "此提交没有文件更改"
@@ -18262,8 +18291,6 @@
             "fa6ea61de3": "取消",
             "c2ef0359b9": "复制内容",
             "f2d0c22d67": "删除注释 {{value0}}",
-            "11c5084aa2": "清晰的注释",
-            "734e4343ec": "清除浏览器注释",
             "95af781091": "向代理发送反馈",
             "ac39b9366b": "发送",
             "366bf5d62c": "新标签",
@@ -18296,21 +18323,14 @@
             "143204e423": "改变",
             "d51ef37351": "复制",
             "6f4ab3592b": "已复制",
-            "499b31b84e": "全部复制",
             "168350ae6a": "单击或悬停一个元素，然后按 C 进行复制或按 S 进行屏幕截图",
-            "e852e20cea": "已复制 — 按 S 进行屏幕截图，或选择另一个元素",
             "777b5bc4ec": "单击一个元素可为代理添加反馈",
             "b733a91bd9": "为所选元素添加反馈",
             "4328a0a062": "抓取失败：{{value0}}",
             "759f32af29": "正在下载",
             "4300f38145": "从 {{value0}}{{value1}} 下载",
-            "cc4a071d3a": "注释页面元素 ({{value0}})",
             "572046436a": "远程浏览器",
             "b313a7275b": "打开远程浏览器",
-            "ea6af700da": "{{value0}} 条注释",
-            "c13693fe27": "{{value0}} 条注释",
-            "074f0ed10b": "{{value0}} 条注释已准备好，请选择另一个元素或复制所有反馈",
-            "a2164a6e5a": "{{value0}} 条注释已准备好，请选择另一个元素或复制所有反馈",
             "9f6f2e8c19": "下载文件路径不可用",
             "0c79b7634d": "无法打开下载的文件，它可能已被移动或删除",
             "397d9dc923": "无法显示下载的文件，它可能已被移动或删除",
@@ -18341,7 +18361,9 @@
             "devToolsDockRight": "停靠到右侧",
             "devToolsDockBottom": "停靠到底部",
             "devToolsUndock": "在单独窗口中打开",
-            "devToolsClose": "关闭 DevTools"
+            "devToolsClose": "关闭 DevTools",
+            "11c5084aa2": "清晰的注释",
+            "734e4343ec": "清除浏览器注释"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "取消",
@@ -18427,8 +18449,6 @@
                     "c16f932cb3": "保存",
                     "024467ceac": "取消",
                     "449d2c2629": "注释意图",
-                    "38d320108c": "折叠注释",
-                    "9f209891a7": "展开注释",
                     "includePageDetails": "包含页面详情",
                     "copyFeedback": "复制反馈",
                     "copyFeedbackWithPageDetails": "复制反馈及页面详情"
@@ -21496,20 +21516,13 @@
         "notNow": "暂不",
         "retry": "重试",
         "dismiss": "关闭",
-        "openWorker": "打开工作者",
         "remoteOwner": "请在运行它的计算机上停止或清除",
-        "workspaceRemoved": "此工作者的工作区已被移除",
-        "restore": "重新在停靠栏中显示",
         "alreadyStopped": "已停止",
         "cantStop": "暂时无法停止",
         "clearAllLabel_other": "清除 {{count}} 个失败的工作者",
         "loadingWorker": "正在加载工作者…",
         "resultUnavailable": "工作者结果不可用",
-        "showDetails": "显示详情",
-        "hideDetails": "隐藏详情",
-        "close": "关闭",
         "workersRegion": "工作者",
-        "doneResult": "已完成 · 打开结果",
         "clearName": "清除 {{name}}",
         "stopUnavailable": "无法停止 {{name}} · {{title}} · {{reason}}",
         "stopName": "停止 {{name}} · {{title}}",
@@ -21532,8 +21545,6 @@
         "monitor": "监控任务",
         "task": "任务",
         "workerCount_other": "{{count}} 个工作者",
-        "stopped": "已停止",
-        "finished": "已完成",
         "failedCount": "{{count}} 个失败",
         "needsYouCount": "{{count}} 个等待你处理",
         "newQuestions_other": "{{count}} 个新的工作者问题等待你回答",
@@ -24888,10 +24899,13 @@
       "label": "文件浏览器根目录",
       "full": "仓库根目录",
       "back": "返回 {{path}}",
+      "searchScope": "搜索范围：工作区文件",
       "retry": "重试",
       "sparseStatus": "稀疏检出",
       "scopeDetails": "关于稀疏检出范围",
       "scopeExplanation": "文件夹选择器只改变显示范围，不会改变检出的文件，仓库根目录视图也会显示根目录和上级文件夹中已检出的文件",
+      "searchExplanation": "“名称”筛选当前查看的文件夹，“内容”搜索整个工作区，稀疏检出排除的文件不会被搜索",
+      "findInFolder": "在 {{path}} 中查找",
       "folderLoadError": "无法加载此文件夹：",
       "emptyFolder": "此文件夹中没有文件"
     },
@@ -25296,7 +25310,8 @@
     "filters": {
       "toggle": "切换搜索详情",
       "active": "{{count}} 个已启用"
-    }
+    },
+    "noResults": "没有结果。请尝试其他搜索或调整筛选条件"
   },
   "csv": {
     "detectingDelimiter": "正在检测分隔符…",

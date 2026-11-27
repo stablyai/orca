@@ -3087,9 +3087,9 @@
         "connectHost": "Connect",
         "addHost": "Add host",
         "addSshHost": "Add SSH host",
-        "addSshHostHint": "Utilice una máquina existente sobre SSH",
+        "addSshHostHint": "Conectar por SSH",
         "addRemoteOrcaServer": "Agregar servidor remoto Orca",
-        "addRemoteOrcaServerHint": "Emparejar otro tiempo de ejecución Orca",
+        "addRemoteOrcaServerHint": "Orca en otro equipo",
         "hostConnectionFailed": "Connection failed",
         "defaultBranchUpdateFailed": "No se pudo actualizar la rama predeterminada del proyecto. Inténtalo de nuevo.",
         "setLocation": "Establecer ubicación del proyecto",
@@ -4657,6 +4657,11 @@
             "waitingTitle": "Esperando a {{server}}",
             "waitingBody": "Orca reconectará este terminal cuando el servidor vuelva a ofrecerlo o cambie la conexión. Pulsa Reconectar para intentarlo ahora.",
             "downFor": "Sin conexión desde hace {{duration}}",
+            "cantReachTitle": "No se puede conectar con {{server}}",
+            "detailsButton": "Detalles",
+            "tailscaleHintTitle": "Comprueba la ruta de Tailscale",
+            "reconnectNowButton": "Reconectar ahora",
+            "copyPingCommand": "Copiar comando",
             "tailscaleHint": "Comprueba la ruta de Tailscale:",
             "fallbackServerName": "el servidor",
             "connectionLostTitle": "Reconectando con {{server}}",
@@ -7559,8 +7564,8 @@
           "addSshHost": "Agregar host SSH",
           "addRemoteServer": "Agregar servidor remoto",
           "addRemoteHost": "Agregar host remoto",
-          "addSshHostDetail": "Usa una máquina existente mediante SSH.",
-          "addRemoteServerDetail": "Empareja con Orca ejecutándose en otro equipo.",
+          "addSshHostDetail": "Conectarse a una máquina por SSH.",
+          "addRemoteServerDetail": "Orca en otro equipo, sin SSH.",
           "addRemoteHostDetail": "Host SSH o servidor Orca",
           "addWslHost": "Agregar distro WSL",
           "addWslHostDetail": "Ejecuta un servidor Orca dentro de una distro WSL 2. Experimental.",
@@ -7689,7 +7694,7 @@
           "serverSaveFailed": "No se pudo agregar el servidor remoto.",
           "serverTitle": "Agregar servidor remoto",
           "sshTitle": "Agregar host SSH",
-          "serverDescription": "Empareja con Orca ejecutándose en otro equipo.",
+          "serverDescription": "Emparejar con Orca en otro equipo de la misma red.",
           "serverRunsAsYou": "Este dispositivo podrá ejecutar comandos como tú en este servidor.",
           "sshDescription": "Agrega una máquina persistente donde puedas iniciar sesión por SSH.",
           "serverSshTitle": "Añadir host SSH a {{server}}",
@@ -14468,7 +14473,8 @@
             "741ff8a0d2": "Hacer push y crear {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "Selecciona un espacio de trabajo para explorar archivos"
+            "79b1537dd3": "Selecciona un espacio de trabajo para explorar archivos",
+            "2f4483d6c4": "No hay archivos que coincidan con este filtro"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "Nueva carpeta",
@@ -14511,6 +14517,7 @@
             "31b4c3195d": "Más acciones del explorador",
             "d95e30fe28": "Actualizar explorador",
             "6026b16950": "Contraer todo",
+            "c1f3f3ec70": "Buscar en el contenido de los archivos",
             "openInApp": "Abrir en {{app}}"
           },
           "FileExplorerTreeStatus": {
@@ -14623,6 +14630,19 @@
             "localPortInUse": "El puerto {{port}} ya está en uso. Elige otro puerto local.",
             "localPortRequiresPrivileges": "El puerto {{port}} requiere privilegios elevados. Usa un puerto local ≥ 1024."
           },
+          "Search": {
+            "1abfb25a66": "Escriba para buscar en archivos",
+            "d56d140747": "Presione Enter para buscar",
+            "98c8435e36": "Seleccione un espacio de trabajo para buscar",
+            "dcc294f28d": "(resultados truncados)",
+            "resultsInFiles": "{{results}} en {{files}}",
+            "resultCount_one": "{{count}} resultado",
+            "resultCount_other": "{{count}} resultados",
+            "resultCount_many": "{{count}} resultados",
+            "fileCount_one": "{{count}} archivo",
+            "fileCount_other": "{{count}} archivos",
+            "fileCount_many": "{{count}} archivos"
+          },
           "SearchFilters": {
             "01e4671ccf": "archivos a excluir (por ejemplo, *.min.js, dist/**)",
             "0a6412a895": "Archivos para excluir",
@@ -14632,9 +14652,11 @@
           "SearchHeader": {
             "6234a5ef85": "Usar expresión regular",
             "4567e6e0b6": "Coincidir palabra completa",
-            "464ae3974f": "Distinguir mayúsculas y minúsculas"
+            "464ae3974f": "Distinguir mayúsculas y minúsculas",
+            "693cbeadd0": "Buscar"
           },
           "SearchQueryRow": {
+            "queryLabel": "Buscar archivos",
             "clearLabel": "Borrar búsqueda"
           },
           "SearchResultItems": {
@@ -14808,7 +14830,6 @@
             "c8e4a1f902": "Filtro: {{value0}}",
             "b3c8f1a902": "Filtrar archivos por nombre",
             "d4f8c2a901": "Limpiar y cerrar filtro",
-            "4b4a7de138": "Abrir página de revisión en el navegador",
             "createPrIntentCommitBlockedSummary": "Commit bloqueado: {{value0}} Corrige el issue y reintenta crear PR.",
             "pushRecovery": {
               "4b37ae99b0": "Iniciar el agente de AI predeterminado para corregir este fallo de push",
@@ -15823,6 +15844,16 @@
             "description": "\"{{value0}}\" se eliminará. Una vez eliminada, tampoco podrá reanudarse desde la línea de comandos propia de {{value1}}.",
             "remoteDescription": "\"{{value0}}\" se eliminará de {{value2}}. Una vez eliminada, tampoco se podrá reanudar desde la línea de comandos de {{value1}}.",
             "confirm": "Eliminar"
+          },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "Buscar archivos",
+            "4d5a6b2a49": "Borrar filtro de archivos",
+            "7a9fb1e6aa": "Contenido"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "Nombres",
+            "b3c8f1a902": "Filtrar archivos por nombre",
+            "f8a2c4d1e0": "Modo de búsqueda del explorador"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "No hay cambios de archivos en este commit"
@@ -18454,8 +18485,6 @@
             "fa6ea61de3": "Cancelar",
             "c2ef0359b9": "Copiar contenido",
             "f2d0c22d67": "Eliminar anotación {{value0}}",
-            "11c5084aa2": "Borrar anotaciones",
-            "734e4343ec": "Borrar anotaciones del navegador",
             "95af781091": "Enviar comentarios a un agente",
             "ac39b9366b": "Enviar",
             "366bf5d62c": "Nueva pestaña",
@@ -18488,21 +18517,14 @@
             "143204e423": "Cambiar",
             "d51ef37351": "Copiar",
             "6f4ab3592b": "Copiado",
-            "499b31b84e": "Copiar todo",
             "168350ae6a": "Haz clic o pon el cursor sobre un elemento, luego presiona C para copiar o S para hacer una captura de pantalla.",
-            "e852e20cea": "Copiado — presiona S para hacer una captura de pantalla o selecciona otro elemento",
             "777b5bc4ec": "Haz clic en un elemento para agregar comentarios para el agente.",
             "b733a91bd9": "Agrega comentarios para el elemento seleccionado.",
             "4328a0a062": "Captura fallida: {{value0}}",
             "759f32af29": "Descargando",
             "4300f38145": "Descargando desde {{value0}}{{value1}}",
-            "cc4a071d3a": "Anotar elemento de la página ({{value0}})",
             "572046436a": "Navegador remoto",
             "b313a7275b": "Abrir navegador remoto",
-            "ea6af700da": "{{value0}} anotación",
-            "c13693fe27": "{{value0}} anotaciones",
-            "074f0ed10b": "{{value0}} anotación lista. Seleccione otro elemento o copie todos los comentarios.",
-            "a2164a6e5a": "{{value0}} anotaciones listas. Seleccione otro elemento o copie todos los comentarios.",
             "9f6f2e8c19": "La ruta del archivo descargado no está disponible.",
             "0c79b7634d": "No se pudo abrir el archivo descargado. Puede haberse movido o eliminado.",
             "397d9dc923": "No se pudo mostrar el archivo descargado. Puede haberse movido o eliminado.",
@@ -18514,7 +18536,9 @@
             "09a9489aa5": "Mostrar",
             "2a4c4b8e1f": "Copiar",
             "b71dc3d930": "Reconectar",
-            "fileUrlUnsupported": "Esta pestaña del navegador no puede abrir archivos locales. Usa \"Abrir vista previa al lado\" en el archivo."
+            "fileUrlUnsupported": "Esta pestaña del navegador no puede abrir archivos locales. Usa \"Abrir vista previa al lado\" en el archivo.",
+            "11c5084aa2": "Borrar anotaciones",
+            "734e4343ec": "Borrar anotaciones del navegador"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancelar",
@@ -18597,8 +18621,6 @@
                     "c16f932cb3": "Ahorrar",
                     "09a7c1df70": "Editar anotación {{value0}}",
                     "449d2c2629": "Intención de la anotación",
-                    "38d320108c": "Contraer anotaciones",
-                    "9f209891a7": "Expandir anotaciones",
                     "includePageDetails": "Incluir detalles de la página",
                     "copyFeedback": "Copiar comentarios",
                     "copyFeedbackWithPageDetails": "Copiar comentarios con detalles de la página"
@@ -22144,10 +22166,7 @@
         "notNow": "Ahora no",
         "retry": "Reintentar",
         "dismiss": "Descartar",
-        "openWorker": "Abrir trabajador",
         "remoteOwner": "Detenlo o bórralo desde el equipo en el que se ejecuta",
-        "workspaceRemoved": "Se eliminó el espacio de trabajo de este trabajador",
-        "restore": "Volver a mostrar en el panel",
         "alreadyStopped": "Ya detenido",
         "cantStop": "No se puede detener ahora",
         "clearAllLabel_one": "Borrar el trabajador con error",
@@ -22155,11 +22174,7 @@
         "clearAllLabel_many": "Borrar los {{count}} trabajadores con error",
         "loadingWorker": "Cargando trabajador…",
         "resultUnavailable": "Resultado del trabajador no disponible",
-        "showDetails": "Mostrar detalles",
-        "hideDetails": "Ocultar detalles",
-        "close": "Cerrar",
         "workersRegion": "Trabajadores",
-        "doneResult": "Terminado · abrir resultado",
         "clearName": "Borrar {{name}}",
         "stopUnavailable": "Detener {{name}} · {{title}} no disponible · {{reason}}",
         "stopName": "Detener {{name}} · {{title}}",
@@ -22184,8 +22199,6 @@
         "workerCount_one": "{{count}} trabajador",
         "workerCount_other": "{{count}} trabajadores",
         "workerCount_many": "{{count}} trabajadores",
-        "stopped": "Detenido",
-        "finished": "Terminado",
         "failedCount": "{{count}} con error",
         "needsYouCount": "Esperando tu respuesta: {{count}}",
         "newQuestions_one": "{{count}} pregunta nueva de un trabajador espera tu respuesta",
@@ -24523,10 +24536,13 @@
       "label": "Raíz del explorador",
       "full": "Raíz del repositorio",
       "back": "Volver a {{path}}",
+      "searchScope": "Ámbito: archivos del espacio de trabajo",
       "retry": "Reintentar",
       "sparseStatus": "Checkout disperso",
       "scopeDetails": "Acerca del alcance del checkout disperso",
       "scopeExplanation": "El selector de carpetas cambia lo que ves, no los archivos del checkout. La raíz del repositorio incluye los archivos presentes en la raíz y en las carpetas superiores.",
+      "searchExplanation": "Nombres filtra la carpeta que estás viendo. Contenido busca en todo el espacio de trabajo. No se buscan los archivos omitidos por el checkout disperso.",
+      "findInFolder": "Buscar en {{path}}",
       "folderLoadError": "No se pudo cargar esta carpeta:",
       "emptyFolder": "No hay archivos en esta carpeta"
     },
@@ -25726,7 +25742,8 @@
     "filters": {
       "toggle": "Mostrar u ocultar detalles de búsqueda",
       "active": "{{count}} activos"
-    }
+    },
+    "noResults": "No hay resultados. Prueba otra búsqueda o ajusta los filtros."
   },
   "resourceManager": {
     "pty": {

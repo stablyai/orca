@@ -17,6 +17,7 @@ export function openClientHostedUrlBesideBrowserPage(args: {
   worktreeId: string
   url: string
   activate: boolean
+  browserPageId?: string
   onOpened?: (pageId: string) => void
 }): void {
   const store = useAppStore.getState()
@@ -40,6 +41,7 @@ export function openClientHostedUrlBesideBrowserPage(args: {
   void createWebRuntimeSessionBrowserTabOnHost(
     {
       worktreeId: args.worktreeId,
+      ...(args.browserPageId ? { browserPageId: args.browserPageId } : {}),
       url: args.url,
       ...(profileId ? { profileId } : {}),
       ...(sourceUnifiedTab ? { clientAfterTabId: sourceUnifiedTab.id } : {}),

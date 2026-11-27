@@ -15,6 +15,7 @@ export const dispatchOf = (value: unknown): string | undefined =>
 /** Progress writes change one shown row's stage or liveness, never who a crew shows: patched, not rebuilt. */
 export const progressMutations: ReadonlySet<keyof OrchestrationDb> = new Set([
   'recordWorkerStage',
+  'recordWorkerProgress',
   'markWorkerDispatchReady',
   'recordAttemptObservation'
 ])

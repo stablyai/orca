@@ -238,7 +238,6 @@
       "browser-pane": {
         "markup": {
           "errorAttach": "Could not attach the markup screenshot.",
-          "errorCapture": "Could not capture the page to draw on.",
           "errorUnavailable": "Screenshot markup is not available on this page."
         }
       },
@@ -430,6 +429,12 @@
           "BulkActionBar": {
             "selectedCount_one": "{{count}} selected",
             "selectedCount_other": "{{count}} selected"
+          },
+          "Search": {
+            "fileCount_one": "{{count}} file",
+            "fileCount_other": "{{count}} files",
+            "resultCount_one": "{{count}} result",
+            "resultCount_other": "{{count}} results"
           },
           "SourceControl": {
             "branchFilesChangedVsBase_one": "{{count}} file changed vs {{ref}}",

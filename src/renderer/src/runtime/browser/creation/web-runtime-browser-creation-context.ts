@@ -39,6 +39,7 @@ export type WebRuntimeBrowserCreationFailureInfo = {
 
 export type CreateWebRuntimeSessionBrowserTabArgs = {
   worktreeId: string
+  browserPageId?: string
   isCurrentRequest?: () => boolean
   onMaterialized?: (remotePageId: string) => void
   environmentId?: string | null
@@ -86,7 +87,7 @@ export function createWebRuntimeBrowserCreationContext(
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
   const shouldFocusOnCreate = args.focusOnCreate !== false
-  const provisionalPageId = createBrowserUuid()
+  const provisionalPageId = args.browserPageId ?? createBrowserUuid()
   const advertisedCapabilities =
     readRuntimeStatuses()?.get(environmentId)?.status?.capabilities ?? []
   const hostSupportsKnownPageId = advertisedCapabilities.includes(

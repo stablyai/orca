@@ -3683,9 +3683,9 @@
         "setLocationTooltip": "選擇一個資料夾或將此專案複製到 {{host}} 上。",
         "addHost": "新增主機",
         "addSshHost": "新增 SSH 主機",
-        "addSshHostHint": "透過 SSH 使用現有機器",
+        "addSshHostHint": "透過 SSH 連線",
         "addRemoteOrcaServer": "新增遠端 Orca 伺服器",
-        "addRemoteOrcaServerHint": "配對另一個 Orca 執行環境",
+        "addRemoteOrcaServerHint": "另一台電腦上的 Orca",
         "hostConnectionFailed": "連線失敗",
         "connect": "連線",
         "reconnect": "重新連線",
@@ -5254,6 +5254,11 @@
             "waitingTitle": "正在等待 {{server}}",
             "waitingBody": "伺服器再次提供此終端機或連線狀態變更時，Orca 會重新連接此終端機。點選「重新連線」可立即重試。",
             "downFor": "已中斷連線 {{duration}}",
+            "cantReachTitle": "無法連線至 {{server}}",
+            "detailsButton": "詳細資訊",
+            "tailscaleHintTitle": "檢查 Tailscale 連線路徑",
+            "reconnectNowButton": "立即重新連線",
+            "copyPingCommand": "複製指令",
             "tailscaleHint": "檢查 Tailscale 連線路徑：",
             "fallbackServerName": "伺服器",
             "connectionLostTitle": "正在重新連線至 {{server}}",
@@ -6972,8 +6977,8 @@
           "addSshHost": "新增 SSH 主機",
           "addRemoteServer": "新增遠端伺服器",
           "addRemoteHost": "新增遠端主機",
-          "addSshHostDetail": "透過 SSH 使用現有機器。",
-          "addRemoteServerDetail": "與另一台電腦上執行的 Orca 配對。",
+          "addSshHostDetail": "透過 SSH 連線到機器。",
+          "addRemoteServerDetail": "另一台電腦的 Orca，不需 SSH。",
           "addRemoteHostDetail": "SSH 主機或 Orca 伺服器",
           "addWslHost": "新增 WSL 發行版",
           "addWslHostDetail": "在 WSL 2 發行版內執行 Orca 伺服器。實驗性。",
@@ -8057,7 +8062,7 @@
           "serverSaveFailed": "新增遠端伺服器失敗。",
           "serverTitle": "新增遠端伺服器",
           "sshTitle": "新增 SSH 主機",
-          "serverDescription": "與另一台電腦上執行的 Orca 配對。",
+          "serverDescription": "與同一網路中另一台電腦上的 Orca 配對。",
           "serverRunsAsYou": "此裝置將能夠在此伺服器上以你的身分執行命令。",
           "sshDescription": "新增一台可透過 SSH 登入的常設主機。",
           "serverSshTitle": "向 {{server}} 新增 SSH 主機",
@@ -14796,7 +14801,8 @@
             "741ff8a0d2": "推送並建立 {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "選擇一個工作區來瀏覽檔案"
+            "79b1537dd3": "選擇一個工作區來瀏覽檔案",
+            "2f4483d6c4": "沒有檔案符合此篩選條件"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "新增資料夾",
@@ -14839,6 +14845,7 @@
             "31b4c3195d": "更多檔案管理員操作",
             "d95e30fe28": "重新整理檔案管理員",
             "6026b16950": "全部收合",
+            "c1f3f3ec70": "搜尋檔案內容",
             "openInApp": "在 {{app}} 中開啟"
           },
           "FileExplorerTreeStatus": {
@@ -14951,6 +14958,17 @@
             "localPortInUse": "連接埠 {{port}} 已被使用。請選擇其他本機連接埠。",
             "localPortRequiresPrivileges": "連接埠 {{port}} 需要提升權限。請使用本機連接埠 ≥ 1024。"
           },
+          "Search": {
+            "1abfb25a66": "輸入要在檔案中搜尋的內容",
+            "d56d140747": "按 Enter 進行搜尋",
+            "98c8435e36": "選擇要搜尋的工作區",
+            "dcc294f28d": "（結果被截斷）",
+            "resultsInFiles": "{{files}} 中有 {{results}}",
+            "resultCount_one": "{{count}} 筆結果",
+            "resultCount_other": "{{count}} 筆結果",
+            "fileCount_one": "{{count}} 個檔案",
+            "fileCount_other": "{{count}} 個檔案"
+          },
           "SearchFilters": {
             "01e4671ccf": "例如 *.min.js、dist/**",
             "0a6412a895": "要排除的檔案",
@@ -14960,9 +14978,11 @@
           "SearchHeader": {
             "6234a5ef85": "使用正規表示式",
             "4567e6e0b6": "符合整個字詞",
-            "464ae3974f": "區分大小寫"
+            "464ae3974f": "區分大小寫",
+            "693cbeadd0": "搜尋"
           },
           "SearchQueryRow": {
+            "queryLabel": "搜尋檔案",
             "clearLabel": "清除搜尋"
           },
           "SearchResultItems": {
@@ -15136,7 +15156,6 @@
             "c8e4a1f902": "篩選器：{{value0}}",
             "b3c8f1a902": "按檔名篩選",
             "d4f8c2a901": "清除並關閉篩選器",
-            "4b4a7de138": "在瀏覽器中開啟審查頁面",
             "createPrIntentCommitBlockedSummary": "提交被阻止：{{value0}} 修復問題後重試建立 PR。",
             "pushRecovery": {
               "4b37ae99b0": "啟動預設 AI 代理程式修復此推送失敗",
@@ -16088,6 +16107,16 @@
             "description": "「{{value0}}」將被刪除。刪除後，也將無法透過 {{value1}} 自身的命令列恢復。",
             "remoteDescription": "「{{value0}}」將從 {{value2}} 刪除。刪除後，也將無法透過 {{value1}} 自身的命令列恢復。",
             "confirm": "刪除"
+          },
+          "FileExplorerNameFilter": {
+            "26fb73c6e3": "查詢檔案",
+            "4d5a6b2a49": "清除檔案篩選器",
+            "7a9fb1e6aa": "內容"
+          },
+          "FileExplorerViewSwitch": {
+            "c4e9a2b713": "名稱",
+            "b3c8f1a902": "按名稱篩選檔案",
+            "f8a2c4d1e0": "檔案總管搜尋模式"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "此提交沒有檔案變更"
@@ -18659,8 +18688,6 @@
             "fa6ea61de3": "取消",
             "c2ef0359b9": "複製內容",
             "f2d0c22d67": "刪除註解 {{value0}}",
-            "11c5084aa2": "清除註解",
-            "734e4343ec": "清除瀏覽器註解",
             "95af781091": "向代理程式傳送回饋",
             "ac39b9366b": "傳送",
             "366bf5d62c": "新分頁",
@@ -18694,21 +18721,14 @@
             "b71dc3d930": "重新連線",
             "d51ef37351": "複製",
             "6f4ab3592b": "已複製",
-            "499b31b84e": "全部複製",
             "168350ae6a": "按一下元素或將游標停留在元素上，然後按 C 進行複製或按 S 進行螢幕截圖。",
-            "e852e20cea": "已複製 — 按 S 進行螢幕截圖，或選擇另一個元素",
             "777b5bc4ec": "點選元素，為代理程式新增回饋。",
             "b733a91bd9": "為所選元素新增回饋。",
             "4328a0a062": "擷取失敗：{{value0}}",
             "759f32af29": "正在下載",
             "4300f38145": "從 {{value0}}{{value1}} 下載",
-            "cc4a071d3a": "註解頁面元素 ({{value0}})",
             "572046436a": "遠端瀏覽器",
             "b313a7275b": "開啟遠端瀏覽器",
-            "ea6af700da": "{{value0}} 條註解",
-            "c13693fe27": "{{value0}} 條註解",
-            "074f0ed10b": "{{value0}} 條註解已準備好。請選擇另一個元素或複製所有回饋。",
-            "a2164a6e5a": "{{value0}} 條註解已準備好。請選擇另一個元素或複製所有回饋。",
             "9f6f2e8c19": "下載檔案路徑不可用。",
             "0c79b7634d": "無法開啟下載的檔案。它可能已被移動或刪除。",
             "397d9dc923": "無法顯示下載的檔案。它可能已被移動或刪除。",
@@ -18738,7 +18758,9 @@
             "devToolsDockRight": "停駐於右側",
             "devToolsDockBottom": "停駐於底部",
             "devToolsUndock": "在獨立視窗中開啟",
-            "devToolsClose": "關閉 DevTools"
+            "devToolsClose": "關閉 DevTools",
+            "11c5084aa2": "清除註解",
+            "734e4343ec": "清除瀏覽器註解"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "取消",
@@ -18824,8 +18846,6 @@
                     "c16f932cb3": "儲存",
                     "024467ceac": "取消",
                     "449d2c2629": "註解意圖",
-                    "38d320108c": "收合註解",
-                    "9f209891a7": "展開註解",
                     "includePageDetails": "包含頁面詳細資料",
                     "copyFeedback": "複製回饋",
                     "copyFeedbackWithPageDetails": "複製回饋及頁面詳細資料"
@@ -22262,20 +22282,13 @@
         "notNow": "稍後再說",
         "retry": "重試",
         "dismiss": "關閉",
-        "openWorker": "開啟工作者",
         "remoteOwner": "請在執行它的電腦上停止或清除",
-        "workspaceRemoved": "此工作者的工作區已被移除",
-        "restore": "重新顯示於停駐區",
         "alreadyStopped": "已停止",
         "cantStop": "目前無法停止",
         "clearAllLabel_other": "清除全部 {{count}} 個失敗的工作者",
         "loadingWorker": "正在載入工作者…",
         "resultUnavailable": "無法取得工作者結果",
-        "showDetails": "顯示詳細資訊",
-        "hideDetails": "隱藏詳細資訊",
-        "close": "關閉",
         "workersRegion": "工作者",
-        "doneResult": "完成 · 開啟結果",
         "clearName": "清除 {{name}}",
         "stopUnavailable": "停止 {{name}} · {{title}} 無法使用 · {{reason}}",
         "stopName": "停止 {{name}} · {{title}}",
@@ -22298,8 +22311,6 @@
         "monitor": "監控項目",
         "task": "任務",
         "workerCount_other": "{{count}} 個工作者",
-        "stopped": "已停止",
-        "finished": "已完成",
         "failedCount": "{{count}} 個失敗",
         "needsYouCount": "{{count}} 個等待你處理",
         "newQuestions_other": "{{count}} 個新的工作者問題等待你回覆",
@@ -24752,29 +24763,20 @@
       "label": "檔案瀏覽器根目錄",
       "full": "存放庫根目錄",
       "back": "返回 {{path}}",
+      "searchScope": "搜尋範圍：工作區檔案",
       "retry": "重試",
       "sparseStatus": "稀疏檢出",
       "scopeDetails": "關於稀疏檢出範圍",
       "scopeExplanation": "資料夾選擇器只改變顯示範圍，不會改變檢出的檔案。存放庫根目錄檢視也會顯示根目錄和上層資料夾中已檢出的檔案。",
+      "searchExplanation": "「名稱」篩選目前檢視的資料夾。「內容」搜尋整個工作區。稀疏檢出排除的檔案不會被搜尋。",
+      "findInFolder": "在 {{path}} 中查詢",
       "folderLoadError": "無法載入此資料夾：",
-      "emptyFolder": "此資料夾中沒有檔案",
-      "combinedSearchExplanation": "搜尋會比對你正在檢視的資料夾中的檔案名稱，以及整個工作區中的文字。稀疏檢出略過的檔案不會被搜尋。"
+      "emptyFolder": "此資料夾中沒有檔案"
     },
     "trashFailed": {
       "titleRecycleBin": "無法將「{{name}}」移至資源回收筒。要永久刪除嗎？",
       "titleTrash": "無法將「{{name}}」移至垃圾桶。要永久刪除嗎？",
       "description": "此操作無法復原。"
-    },
-    "combinedSearch": {
-      "text": "文字",
-      "filesIn": "{{path}} 中的檔案",
-      "files": "檔案",
-      "showAll": "顯示全部 {{count}} 個",
-      "noResults": "沒有結果",
-      "placeholder": "搜尋",
-      "placeholderScoped": "搜尋 {{path}}",
-      "textInWorkspace": "工作區中的文字",
-      "refine": "符合項目過多"
     }
   },
   "sparsePreset": {
@@ -25039,7 +25041,7 @@
       "toggle": "顯示或隱藏搜尋詳細設定",
       "active": "已啟用 {{count}} 個"
     },
-    "unavailable": "此處無法使用"
+    "noResults": "沒有結果。請嘗試其他搜尋內容或調整篩選條件。"
   },
   "workspaceDeletion": {
     "preferenceSaveFailed": "無法儲存刪除偏好設定",

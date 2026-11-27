@@ -169,6 +169,7 @@ function Panel(scenario: Scenario) {
   const summary = summaryFor(scenario)
   const lines = scenario.lines === undefined ? { added: 1530, removed: 145 } : scenario.lines
   const branchLineTotal: GitBranchLineTotal | null = lines ? { ...lines, mergeBase: 'm1' } : null
+  const graphSupport = { support: scenario.graphSupported ?? true, recheck: () => {} }
   const panelActions = {
     sourceControlViewMode: 'list' as const,
     viewModeToggleDisabled: false,
@@ -177,7 +178,9 @@ function Panel(scenario: Scenario) {
     onRefreshBranchCompare: () => {},
     branchCompareRefreshDisabled: false,
     diffCommentCount: 2,
-    onExpandNotes: () => {}
+    onExpandNotes: () => {},
+    onOpenGitGraph: () => {},
+    gitGraphDisabled: graphSupport.support !== true
   }
   const filter = {
     filterQuery,
@@ -185,7 +188,6 @@ function Panel(scenario: Scenario) {
     onFilterQueryChange: setFilterQuery,
     onFilterExpandedChange: setFilterExpanded
   }
-  const graphSupport = { support: scenario.graphSupported ?? true, recheck: () => {} }
   const review = scenario.review === undefined ? 'create' : scenario.review
   const model = {
     branchEntries: FILES.map((entry) => ({ ...entry, added: 40, removed: 4 })),
@@ -406,12 +408,18 @@ export const commitScope = defineFixture({
     />
   )
 })
+function openOverflowMenu(frame: HTMLElement): void {
+  frame
+    .querySelector('button[aria-label="More source control actions"]')
+    ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+}
 export const overflowOpen = defineFixture({
   width: panelWidth(264),
   render: () => <Panel behind={45} />,
-  interact: (frame) => {
-    frame
-      .querySelector('button[aria-label="More source control actions"]')
-      ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-  }
+  interact: openOverflowMenu
+})
+export const overflowOpenGraphUnsupported = defineFixture({
+  width: panelWidth(264),
+  render: () => <Panel behind={45} graphSupported={false} />,
+  interact: openOverflowMenu
 })

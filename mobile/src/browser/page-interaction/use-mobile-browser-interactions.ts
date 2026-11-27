@@ -125,6 +125,7 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
         clearLongPressTimer()
         pinchRef.current = pinch
         panRef.current = null
+        scrollingRef.current = false
         startPointRef.current = null
         return
       }
@@ -164,6 +165,24 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
     [clearLongPressTimer, frameGeometry, mapTouchPoint, onToast, sendPointerClick]
   )
 
+  const flushWheelDelta = useCallback(
+    (event: GestureResponderEvent, gesture: PanResponderGestureState, at: number) => {
+      const deltaX = gesture.dx - lastWheelRef.current.dx
+      const deltaY = gesture.dy - lastWheelRef.current.dy
+      if (Math.abs(deltaX) + Math.abs(deltaY) < 8) {
+        return
+      }
+      const touch = readLocalTouchPoint(event.nativeEvent)
+      const point = touch ? mapTouchPoint(touch.x, touch.y) : null
+      if (!point) {
+        return
+      }
+      lastWheelRef.current = { dx: gesture.dx, dy: gesture.dy, at }
+      sendWheel(point, deltaX, deltaY, wheelGestureIdRef.current)
+    },
+    [mapTouchPoint, sendWheel]
+  )
+
   const handleResponderMove = useCallback(
     (event: GestureResponderEvent, gesture: PanResponderGestureState) => {
       if (gestureCancelledRef.current) {
@@ -176,6 +195,7 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
         clearLongPressTimer()
         pinchRef.current = startedPinch
         panRef.current = null
+        scrollingRef.current = false
         startPointRef.current = null
       }
       const activePinch = pinchRef.current
@@ -229,28 +249,15 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
       if (now - lastWheelRef.current.at < WHEEL_INTERVAL_MS) {
         return
       }
-      const deltaX = gesture.dx - lastWheelRef.current.dx
-      const deltaY = gesture.dy - lastWheelRef.current.dy
-      if (Math.abs(deltaX) + Math.abs(deltaY) < 8) {
-        return
-      }
-      const currentPoint = readLocalTouchPoint(event.nativeEvent)
-      if (!currentPoint) {
-        return
-      }
-      const point = mapTouchPoint(currentPoint.x, currentPoint.y)
-      if (!point) {
-        return
-      }
-      lastWheelRef.current = { dx: gesture.dx, dy: gesture.dy, at: now }
-      sendWheel(point, deltaX, deltaY, wheelGestureIdRef.current)
+      flushWheelDelta(event, gesture, now)
     },
-    [clearLongPressTimer, frameGeometry, mapTouchPoint, sendWheel]
+    [clearLongPressTimer, flushWheelDelta, frameGeometry]
   )
 
   const handleResponderRelease = useCallback(
     (event: GestureResponderEvent, gesture: PanResponderGestureState) => {
       clearLongPressTimer()
+      const wasPinching = pinchRef.current !== null
       const wasPanning = panRef.current !== null
       pinchRef.current = null
       panRef.current = null
@@ -258,17 +265,8 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
       startPointRef.current = null
       const wasScrolling = scrollingRef.current
       scrollingRef.current = false
-      if (wasScrolling && !wasPanning) {
-        const deltaX = gesture.dx - lastWheelRef.current.dx
-        const deltaY = gesture.dy - lastWheelRef.current.dy
-        if (Math.abs(deltaX) + Math.abs(deltaY) >= 8) {
-          const release = readLocalTouchPoint(event.nativeEvent)
-          const point = release ? mapTouchPoint(release.x, release.y) : null
-          if (point) {
-            lastWheelRef.current = { dx: gesture.dx, dy: gesture.dy, at: Date.now() }
-            sendWheel(point, deltaX, deltaY, wheelGestureIdRef.current)
-          }
-        }
+      if (wasScrolling && !wasPanning && !wasPinching) {
+        flushWheelDelta(event, gesture, Date.now())
         return
       }
       if (!start || rightClickSentRef.current || wasScrolling) {
@@ -284,7 +282,7 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
         }
       }
     },
-    [clearLongPressTimer, mapTouchPoint, sendPointerClick, sendWheel]
+    [clearLongPressTimer, flushWheelDelta, mapTouchPoint, sendPointerClick]
   )
 
   const panResponder = useMemo(

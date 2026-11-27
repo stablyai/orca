@@ -1,6 +1,7 @@
 import {
-  readGitReviewBranchSources,
-  type GitReviewBranchSource
+  createGitReviewBranchSourceResolver,
+  type GitReviewBranchSource,
+  type GitReviewBranchSourceResolver
 } from '../../../../shared/git/remotes/git-review-branch-source'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { readLocalGitConfigSignature } from '../../repositories/local-git-config-signature'
@@ -16,7 +17,7 @@ import {
   parseTrackedUpstreamBranch,
   getCacheableTrackedUpstreamSnapshot,
   doesTrackedUpstreamCacheConfigSignatureMatch,
-  getTrackedUpstreamBranchCacheKey,
+  resolveTrackedUpstreamBranchCacheKey,
   type TrackedUpstreamBranch,
   type TrackedUpstreamSnapshotProbeResult
 } from './tracked-upstream-cache'
@@ -52,7 +53,8 @@ export async function getReviewBranchSource(
     true,
     force
   )
-  const source = snapshot.reviewSources?.get(branchName)
+  const source =
+    snapshot.reviewSourceResolver?.(branchName) ?? snapshot.reviewSources?.get(branchName)
   if (snapshot.probeFailed || !source || source instanceof Error) {
     throw new Error('Cannot establish the branch review source')
   }
@@ -67,12 +69,21 @@ async function getTrackedUpstreamSnapshot(
   includeReviewSources = false,
   force = false
 ): Promise<TrackedUpstreamSnapshotProbeResult> {
-  const cacheKey = getTrackedUpstreamBranchCacheKey(repoPath, connectionId, localGitOptions)
+  const cacheKey = await resolveTrackedUpstreamBranchCacheKey(
+    repoPath,
+    connectionId,
+    localGitOptions
+  )
   const serves = (
-    value: Pick<TrackedUpstreamSnapshotProbeResult, 'upstreamsByBranchName' | 'reviewSources'>
+    value: Pick<
+      TrackedUpstreamSnapshotProbeResult,
+      'upstreamsByBranchName' | 'reviewSources' | 'reviewSourceResolver'
+    >
   ): boolean =>
     value.upstreamsByBranchName.has(branchName) &&
-    (!includeReviewSources || value.reviewSources?.has(branchName) === true)
+    (!includeReviewSources ||
+      value.reviewSourceResolver !== undefined ||
+      value.reviewSources?.has(branchName) === true)
   const cached = trackedUpstreamSnapshotCache.get(cacheKey)
   if (
     cached &&
@@ -117,9 +128,14 @@ async function getTrackedUpstreamSnapshot(
     const result = await probe
     if (result.cacheable && trackedUpstreamSnapshotGenerations.get(cacheKey) === generation) {
       trackedUpstreamSnapshotCache.set(cacheKey, {
-        ...(result.gitConfigSignature ? { gitConfigSignature: result.gitConfigSignature } : {}),
+        ...(result.gitConfigSignature
+          ? { gitConfigSignature: result.gitConfigSignature, gitConfigSignatureRepoPath: repoPath }
+          : {}),
         upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
         ...(result.reviewSources ? { reviewSources: result.reviewSources } : {}),
+        ...(result.reviewSourceResolver
+          ? { reviewSourceResolver: result.reviewSourceResolver }
+          : {}),
         expiresAt: Date.now() + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
       })
       pruneTrackedUpstreamSnapshotCache(Date.now())
@@ -155,16 +171,15 @@ export async function probeTrackedUpstreamSnapshot(
     connectionId,
     localGitOptions
   )
-  let reviewSources: Map<string, GitReviewBranchSource | Error> | undefined
+  let reviewSourceResolver: GitReviewBranchSourceResolver | undefined
   if (reviewBranchName && !probeFailed) {
     try {
       requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
       if (!upstreamsByBranchName.has(reviewBranchName)) {
         upstreamsByBranchName.set(reviewBranchName, null)
       }
-      reviewSources = await readGitReviewBranchSources(
-        (args) => gitExecFileAsync(args, { cwd: repoPath, ...localGitOptions }),
-        upstreamsByBranchName.keys()
+      reviewSourceResolver = await createGitReviewBranchSourceResolver((args) =>
+        gitExecFileAsync(args, { cwd: repoPath, ...localGitOptions })
       )
     } catch {
       probeFailed = true
@@ -186,7 +201,7 @@ export async function probeTrackedUpstreamSnapshot(
     probeFailed,
     ...(gitConfigSignature ? { gitConfigSignature } : {}),
     upstreamsByBranchName,
-    ...(reviewSources ? { reviewSources } : {})
+    ...(reviewSourceResolver ? { reviewSourceResolver } : {})
   }
 }
 

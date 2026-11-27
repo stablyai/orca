@@ -36,7 +36,48 @@ export async function resolveCrossSiteMobileTouchClick(
   if (!target) {
     return null
   }
-  // Recheck admission and expected URL immediately before activation (after focus emulation awaits).
+  // Step 1: non-activating hit-test so a timeout or non-matching target (e.g. canvas) safely falls back to CDP.
+  const probed = await settle(
+    sendFrameSessionInput(webContents, sendRaw, target.sessionId, 'Runtime.evaluate', {
+      expression: mobileTouchClickExpression(
+        target.framePoint.x,
+        target.framePoint.y,
+        radius,
+        false
+      ),
+      userGesture: false,
+      returnByValue: true,
+      silent: true
+    })
+  )
+  if (probed.outcome !== 'ok') {
+    return {
+      x,
+      y,
+      adjusted: false,
+      handled: false,
+      frameSessionId: target.sessionId,
+      framePoint: target.framePoint
+    }
+  }
+  const probeRecord = readRecord(probed.value, 'result')
+  const parsed = readClickPoint(probeRecord?.value, {
+    x: target.framePoint.x,
+    y: target.framePoint.y,
+    adjusted: false,
+    handled: false
+  })
+  if (!allowDomActivation || !parsed.adjusted) {
+    return {
+      x: x + (parsed.x - target.framePoint.x),
+      y: y + (parsed.y - target.framePoint.y),
+      adjusted: parsed.adjusted,
+      handled: false,
+      frameSessionId: target.sessionId,
+      framePoint: { x: parsed.x, y: parsed.y }
+    }
+  }
+  // Step 2: clickable target confirmed; recheck admission and expected URL immediately before activation.
   let guardError: unknown = null
   const sendGuarded: GuestSessionCdpSender = (method, params, sessionId) => {
     if (method === 'Runtime.evaluate') {
@@ -50,14 +91,9 @@ export async function resolveCrossSiteMobileTouchClick(
     }
     return sendRaw(method, params, sessionId)
   }
-  const evaluated = await settle(
+  const activated = await settle(
     sendFrameSessionInput(webContents, sendGuarded, target.sessionId, 'Runtime.evaluate', {
-      expression: mobileTouchClickExpression(
-        target.framePoint.x,
-        target.framePoint.y,
-        radius,
-        allowDomActivation
-      ),
+      expression: mobileTouchClickExpression(parsed.x, parsed.y, radius, true),
       userGesture: true,
       returnByValue: true,
       silent: true
@@ -66,33 +102,33 @@ export async function resolveCrossSiteMobileTouchClick(
   if (guardError !== null) {
     throw guardError
   }
-  if (evaluated.outcome === 'timeout') {
-    // An activating evaluate is already in flight and cannot be cancelled; avoid a duplicate fallback click.
+  if (activated.outcome === 'timeout') {
+    // Activation was started for a confirmed target and cannot be cancelled; avoid a duplicate fallback click.
     return {
-      x,
-      y,
-      adjusted: false,
-      handled: allowDomActivation,
+      x: x + (parsed.x - target.framePoint.x),
+      y: y + (parsed.y - target.framePoint.y),
+      adjusted: true,
+      handled: true,
       frameSessionId: target.sessionId,
-      framePoint: target.framePoint
+      framePoint: { x: parsed.x, y: parsed.y }
     }
   }
-  if (evaluated.outcome !== 'ok') {
+  if (activated.outcome !== 'ok') {
     return null
   }
-  const resultRecord = readRecord(evaluated.value, 'result')
-  const parsed = readClickPoint(resultRecord?.value, {
-    x: target.framePoint.x,
-    y: target.framePoint.y,
-    adjusted: false,
+  const resultRecord = readRecord(activated.value, 'result')
+  const activatedPoint = readClickPoint(resultRecord?.value, {
+    x: parsed.x,
+    y: parsed.y,
+    adjusted: true,
     handled: false
   })
   return {
-    x: x + (parsed.x - target.framePoint.x),
-    y: y + (parsed.y - target.framePoint.y),
-    adjusted: parsed.adjusted,
-    handled: parsed.handled,
+    x: x + (activatedPoint.x - target.framePoint.x),
+    y: y + (activatedPoint.y - target.framePoint.y),
+    adjusted: activatedPoint.adjusted,
+    handled: activatedPoint.handled,
     frameSessionId: target.sessionId,
-    framePoint: { x: parsed.x, y: parsed.y }
+    framePoint: { x: activatedPoint.x, y: activatedPoint.y }
   }
 }

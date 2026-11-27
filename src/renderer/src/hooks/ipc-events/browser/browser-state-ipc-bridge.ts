@@ -246,6 +246,7 @@ export function registerBrowserStateIpcBridge(
           worktreeId: sourcePage.worktreeId,
           url,
           activate: activate ?? true,
+          browserPageId: newBrowserPageId,
           onOpened: markBrowserPageOpenedByPage
         })
         return
