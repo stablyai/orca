@@ -7694,7 +7694,7 @@
           "serverSaveFailed": "No se pudo agregar el servidor remoto.",
           "serverTitle": "Agregar servidor remoto",
           "sshTitle": "Agregar host SSH",
-          "serverDescription": "Emparejar con Orca en otro equipo.",
+          "serverDescription": "Emparejar con Orca en otro equipo de la misma red.",
           "serverRunsAsYou": "Este dispositivo podrá ejecutar comandos como tú en este servidor.",
           "sshDescription": "Agrega una máquina persistente donde puedas iniciar sesión por SSH.",
           "serverSshTitle": "Añadir host SSH a {{server}}",

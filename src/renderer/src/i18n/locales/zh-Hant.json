@@ -8062,7 +8062,7 @@
           "serverSaveFailed": "新增遠端伺服器失敗。",
           "serverTitle": "新增遠端伺服器",
           "sshTitle": "新增 SSH 主機",
-          "serverDescription": "與另一台電腦上的 Orca 配對。",
+          "serverDescription": "與同一網路中另一台電腦上的 Orca 配對。",
           "serverRunsAsYou": "此裝置將能夠在此伺服器上以你的身分執行命令。",
           "sshDescription": "新增一台可透過 SSH 登入的常設主機。",
           "serverSshTitle": "向 {{server}} 新增 SSH 主機",

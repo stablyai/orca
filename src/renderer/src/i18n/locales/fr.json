@@ -7358,7 +7358,7 @@
           "serverSaveFailed": "Échec de l'ajout du serveur distant.",
           "serverTitle": "Ajouter un serveur distant",
           "sshTitle": "Ajouter un hôte SSH",
-          "serverDescription": "Se jumeler avec Orca sur un autre ordinateur.",
+          "serverDescription": "Se jumeler avec Orca sur un autre ordinateur du même réseau.",
           "serverRunsAsYou": "Cet appareil pourra exécuter des commandes en votre nom sur ce serveur.",
           "sshDescription": "Ajoutez une machine permanente sur laquelle vous pouvez vous connecter en SSH.",
           "serverSshTitle": "Ajouter un hôte SSH à {{server}}",

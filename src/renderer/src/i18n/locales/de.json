@@ -8212,7 +8212,7 @@
           "serverSaveFailed": "Entfernter Server konnte nicht hinzugefügt werden.",
           "serverTitle": "Entfernten Server hinzufügen",
           "sshTitle": "SSH-Host hinzufügen",
-          "serverDescription": "Mit Orca auf einem anderen Computer koppeln.",
+          "serverDescription": "Mit Orca auf einem anderen Computer im selben Netzwerk koppeln.",
           "serverRunsAsYou": "Dieses Gerät kann auf diesem Server Befehle mit deinem Benutzerkonto ausführen.",
           "sshDescription": "Einen dauerhaft eingerichteten Rechner mit SSH-Zugang hinzufügen.",
           "serverSshTitle": "SSH-Host zu {{server}} hinzufügen",

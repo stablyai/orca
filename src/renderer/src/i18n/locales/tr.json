@@ -8474,7 +8474,7 @@
           "serverSaveFailed": "Uzak sunucu eklenemedi.",
           "serverTitle": "Uzak sunucu ekle",
           "sshTitle": "SSH sunucusu ekle",
-          "serverDescription": "Başka bir bilgisayardaki Orca ile eşleştirin.",
+          "serverDescription": "Aynı ağdaki başka bir bilgisayardaki Orca ile eşleştirin.",
           "serverRunsAsYou": "Bu cihaz, bu sunucuda sizin adınıza komut çalıştırabilecek.",
           "sshDescription": "SSH üzerinden oturum açabileceğiniz kalıcı bir makine ekleyin.",
           "serverSshTitle": "{{server}} sunucusuna SSH sunucusu ekle",

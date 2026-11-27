@@ -7431,7 +7431,7 @@
           "serverSaveFailed": "リモートサーバーの追加に失敗しました。",
           "serverTitle": "リモートサーバーを追加する",
           "sshTitle": "SSH ホストを追加",
-          "serverDescription": "別のコンピュータの Orca とペアリングします。",
+          "serverDescription": "同じネットワーク上の別のコンピュータの Orca とペアリングします。",
           "serverRunsAsYou": "このデバイスは、このサーバー上であなたとしてコマンドを実行できるようになります。",
           "sshDescription": "SSH でログインできる永続的なマシンを追加します。",
           "serverSshTitle": "{{server}} に SSH ホストを追加",

@@ -7690,7 +7690,7 @@
           "serverSaveFailed": "添加远程服务器失败",
           "serverTitle": "添加远程服务器",
           "sshTitle": "添加 SSH 主机",
-          "serverDescription": "与另一台电脑上的 Orca 配对",
+          "serverDescription": "与同一网络中另一台电脑上的 Orca 配对",
           "serverRunsAsYou": "此设备将能够在此服务器上以你的身份运行命令",
           "sshDescription": "添加一台可通过 SSH 登录并持久保存的机器",
           "serverSshTitle": "向 {{server}} 添加 SSH 主机",
