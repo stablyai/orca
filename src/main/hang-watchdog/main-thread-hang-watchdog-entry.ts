@@ -157,6 +157,7 @@ export function runWatchdog(
       powerEvents,
       initialSleepAssociated,
       ...(kind === 'heartbeat-stall' ? { workerSends: recentWorkerSends(now) } : {}),
+      ...(config.processMetadata ? { appVersion: config.processMetadata.appVersion } : {}),
       ...(options.tier ? { tier: options.tier } : {}),
       ...(options.recovered ? { selfRecovered: true } : {})
     }
@@ -214,8 +215,15 @@ export function runWatchdog(
       openReceiptWindow(id)
       reportRecovered(id, unresponsiveMs, endedAt)
     },
-    onStallEndedBySleep: () => {
+    onStallEndedBySleep: (gapMs) => {
+      const stall = activeStallId ? find(activeStallId) : undefined
       activeStallId = null
+      // Marks the stall as ended by the machine, so next launch does not treat it as an unrecovered hang.
+      if (stall && !stall.watchdogGap) {
+        update(stall.id, {
+          watchdogGap: { observedAt: Date.now(), durationMs: gapMs, snapshot: captureHangSnapshot() }
+        })
+      }
     },
     onStallMissed: (durationMs, startedAt) => {
       const endedAt = Date.now()

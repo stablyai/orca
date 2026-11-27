@@ -62,6 +62,8 @@ export type HangObservation = {
   tier?: 'stall' | 'hang'
   /** When a stall-tier record crossed the hang timeout; durationMs keeps the stall-detection age. */
   escalatedAt?: number
+  /** Build that stalled, so a report filed after an update names the right version. */
+  appVersion?: string
 }
 /** Pre-tier records are hangs: the watchdog used to observe nothing shorter than its timeout. */
 export function isHangTierObservation(record: HangObservation): boolean {

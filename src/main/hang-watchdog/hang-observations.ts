@@ -154,6 +154,9 @@ function parseObservation(value: unknown): HangObservation | null {
         }
       : {}),
     ...(workerSends ? { workerSends } : {}),
+    ...(typeof data.appVersion === 'string' && /^[\w.+-]{1,80}$/.test(data.appVersion)
+      ? { appVersion: data.appVersion }
+      : {}),
     ...parseHangTierFields(data)
   }
 }

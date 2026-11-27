@@ -117,7 +117,17 @@ export function initializeMainProcessObservers(store: Store): void {
     packaged: app.isPackaged,
     platform: process.platform
   })
-  state.hangDetection = reportPreviousHangDetection(getCanonicalUserDataPath())
+  const previousHang = reportPreviousHangDetection(getCanonicalUserDataPath())
+  state.hangDetection = previousHang.marker
+  const { unrecoveredStall } = previousHang
+  if (unrecoveredStall && state.crashReports) {
+    const store = state.crashReports
+    void import('../hang-watchdog/unrecovered-stall-report')
+      .then(({ importUnrecoveredStallReport }) =>
+        importUnrecoveredStallReport(store, unrecoveredStall)
+      )
+      .catch((error) => console.warn('[hang-watchdog] Failed to record unrecovered stall:', error))
+  }
   if (state.hangDetection) {
     const marker = state.hangDetection
     const report = (details: NativeHangTelemetry): void => {

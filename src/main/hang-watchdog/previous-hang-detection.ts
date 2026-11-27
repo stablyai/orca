@@ -145,15 +145,37 @@ function observationDetails(record: HangObservation, omitted: number): CrashRepo
   return details
 }
 
-export function reportPreviousHangDetection(userDataPath: string): HangDetectionMarker | null {
+/** The previous run ended (force quit, kill, crash) during this stall: heartbeats never resumed and no sleep or gap explains it. */
+export function findUnrecoveredStall(
+  observations: readonly HangObservation[]
+): HangObservation | null {
+  const record = observations.findLast((item) => item.kind === 'heartbeat-stall')
+  if (
+    !record ||
+    record.selfRecovered ||
+    record.resolution ||
+    record.watchdogGap ||
+    record.powerEvents.some((item) => item.event === 'suspend')
+  ) {
+    return null
+  }
+  return record
+}
+
+export type PreviousHangDetection = {
+  marker: HangDetectionMarker | null
+  unrecoveredStall: HangObservation | null
+}
+
+export function reportPreviousHangDetection(userDataPath: string): PreviousHangDetection {
   reportPreviousRendererHangs(userDataPath)
   if (!resolveObservabilityConsent().localFileEnabled || !hasActiveTraceSink()) {
-    return null
+    return { marker: null, unrecoveredStall: null }
   }
   const marker = consumeHangDetectionMarker(previousMarkerPath(userDataPath))
   const collection = asHangObservations(marker)
   if (!collection) {
-    return null
+    return { marker: null, unrecoveredStall: null }
   }
   for (const record of collection.observations) {
     recordDurableCrashBreadcrumb(
@@ -165,5 +187,8 @@ export function reportPreviousHangDetection(userDataPath: string): HangDetection
       observationDetails(record, collection.omitted)
     )
   }
-  return latestHangMarker(collection)
+  return {
+    marker: latestHangMarker(collection),
+    unrecoveredStall: findUnrecoveredStall(collection.observations)
+  }
 }
