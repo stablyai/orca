@@ -59,8 +59,14 @@ it('reports glab from the default distro when no workspace names a runtime, as c
     runPreflightCheck(false, {
       projectRuntime: {
         status: 'resolved',
-        runtime: { kind: 'windows' }
-      } as never
+        runtime: {
+          kind: 'windows-host',
+          hostPlatform: 'win32',
+          projectId: 'p',
+          reason: 'project-override',
+          cacheKey: 'p'
+        }
+      }
     })
   ).resolves.toMatchObject({ glab: { installed: false } })
   // A stopped default distro is never booted for a background read; the answer is redone once it runs.
