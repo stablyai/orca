@@ -276,9 +276,12 @@ export async function launchRelayedAcpAgent(
       kept: relayed.child.attachResult?.kept?.map((line) => line.name) ?? null
     })
     // Ended like any agent the host had to stop: the chat's turn settles and its next message
-    // starts the agent again, reopening the session (with catch-up) as today.
-    if (relayed.child.exited === null) {
-      await relayed.managed.close().catch(() => undefined)
+    // starts the agent again, reopening the session (with catch-up) as today. A live one whose end
+    // the daemon didn't prove goes back to it, so the next open retries the close instead of
+    // finding it attached with no reader.
+    const closed = await relayed.managed.close().catch(() => null)
+    if (closed?.root !== 'exited' && !relayed.child.attachResult?.exit) {
+      await relayed.keep?.().catch(() => undefined)
     }
     return refuse(new Error('agent_kept_running_unrestorable'))
   }
