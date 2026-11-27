@@ -106,6 +106,14 @@ export function sharedBotHostFor(target: RuntimeClientTarget): SharedBotHostView
     : null
 }
 
+/** `sharedBotHostFor` once main has first answered, so a share not listed yet is never read as none. */
+export async function answeredSharedBotHostFor(
+  target: RuntimeClientTarget
+): Promise<SharedBotHostView | null> {
+  await firstAnswer
+  return sharedBotHostFor(target)
+}
+
 /** Whether `environmentId` may be a shared agent's host: one listed, or any before main has said which
  *  are. A paired web window keeps no shares of its own. */
 export function maybeSharedBotHost(environmentId: string): boolean {

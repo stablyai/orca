@@ -19,26 +19,44 @@ export type SharedHost = {
   relay: RuntimeRelayCredentialStore
 }
 
-/** The desktop's kept shares: each one's host, their environment ids, and when they are loaded. */
+/** A process's kept shares: each one's host, their environment ids, and when they are loaded. */
 export type SharedHostRegistry = {
   host: (environmentId: string) => SharedHost | null
   environmentIds: () => readonly string[]
   ready: () => Promise<void>
 }
 
+/** A process that never holds shares (a headless host's own profile). */
+export const NO_SHARED_HOSTS: SharedHostRegistry = {
+  host: () => null,
+  environmentIds: () => [],
+  ready: () => Promise.resolve()
+}
+
 let hosts: SharedHostRegistry | null = null
+// Not Promise.withResolvers: shared code also runs on the phone's older WebKit.
+let markRegistered = (): void => {}
+let registered = new Promise<void>((resolve) => (markRegistered = resolve))
 // The runtime each host last answered from, kept as a paired server's store keeps it: tab streams are
 // fenced on it, and a host that restarted answers from a new one.
 const answeredRuntimeIds = new Map<string, string>()
 
-/** Set once by the desktop's shared-agents owner; null elsewhere, and in tests that end. */
+/** Set once by each process: the desktop's and `orca serve`'s kept shares, or NO_SHARED_HOSTS. Null
+ *  only in tests that end. */
 export function setSharedHosts(registry: SharedHostRegistry | null) {
   hosts = registry
   answeredRuntimeIds.clear()
+  if (registry) {
+    markRegistered()
+  } else {
+    registered = new Promise<void>((resolve) => (markRegistered = resolve))
+  }
 }
 
-/** Once the kept shares are loaded, so a share not read yet is never taken for one that ended. */
+/** The one gate every reader of shared hosts passes: once this process said which shares it keeps
+ *  and loaded them, so a share not read yet is never taken for one that ended. */
 export async function sharedHostsReady(): Promise<void> {
+  await registered
   await hosts?.ready().catch(() => undefined)
 }
 

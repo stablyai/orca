@@ -2,7 +2,7 @@
 // paired computers do. The teammate's side lists and resolves the shared host through its real
 // transport; each call reaches the host's dispatcher as the share's device, so the host admits it by
 // the teammate rules a live share link stamps.
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -15,8 +15,11 @@ import { BOTS_SHARE_WORKSPACES_CAPABILITY } from '../../../../../../shared/bot-r
 import { setAppEnvironment } from '../../../../../../shared/app-lifecycle/app-environment'
 import {
   setSharedHosts,
+  sharedHostsReady,
   type SharedHost
 } from '../../../../../../shared/remote-runtime/pairing/shared-host-keys'
+import nacl from 'tweetnacl'
+import { OrcaRuntimeRpcServer } from '../../../server/runtime-rpc'
 import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { createOrchestrationEnvironmentTransport } from '../../../../../ipc/runtime-environments/requests/orchestration-environment-transport'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -39,6 +42,7 @@ import { PAIRED_SERVER_ASKS_METHODS } from '../../paired-server-asks/paired-serv
 import { makeTestBot } from '../../../../../bots/bot.test-fixture'
 import { turnActsForOwner } from '../../../../../bots/bot-request-asker'
 import type * as RecipientRouting from '../messaging/recipient-routing'
+import type * as SharedHostKeys from '../../../../../../shared/remote-runtime/pairing/shared-host-keys'
 import {
   DOCS_CHAT,
   journals,
@@ -55,6 +59,11 @@ vi.mock(
     federationRelayRetryDelayMs: () => 0
   })
 )
+// The one gate every reader of shared hosts passes, watched so a test can see a reader wait on it.
+vi.mock('../../../../../../shared/remote-runtime/pairing/shared-host-keys', async (original) => {
+  const actual = await original<typeof SharedHostKeys>()
+  return { ...actual, sharedHostsReady: vi.fn(actual.sharedHostsReady) }
+})
 vi.mock('../../../../hosts/platform-probe/host-descriptor', async (original) => ({
   ...(await original<object>()),
   getPublishedHostDescriptor: () => ({ installationId: 'install_dana' })
@@ -86,6 +95,8 @@ const SHARED_ENVIRONMENT = 'env-shared-ranger'
 // On the owner's computer: Ranger's chat that asks, and Dana's Home of Ranger.
 const RANGER_ASKS = `orca_session_id:${RANGER_THREAD}`
 const DANA_HOME_OF_RANGER = `orca_session_id:${RANGER_CHAT}`
+// An agent on the owner's computer that no share names.
+const OTHER_AGENT = 'orca_session_id:55555555-5555-4555-8555-555555555555'
 // On Dana's computer: her own bot's Home.
 const DOCS_HOME = `orca_session_id:${DOCS_CHAT}`
 const DANA_AS_MEMBER = {
@@ -182,6 +193,9 @@ describe("a teammate's bots and the agent shared with them", () => {
   let kept: string[]
   let loaded: boolean
   let sharesLoaded: Promise<void>
+  let shareReads: number
+  // The owner's RPC server, once a test needs its share devices; a device it no longer keeps is refused.
+  let ownerServer: OrcaRuntimeRpcServer | null
 
   function openSide(
     name: string,
@@ -208,6 +222,9 @@ describe("a teammate's bots and the agent shared with them", () => {
     rawParams: unknown
   ): Promise<RuntimeRpcResponse<unknown>> {
     const shareDevice = SHARES[selector]!.device
+    if (ownerServer && !ownerServer.getBotShareDevices()?.get(shareDevice.deviceId)) {
+      return { id: method, ok: false, error: { code: 'unauthorized', message: 'Not shared' } }
+    }
     const params = { ...z.record(z.string(), z.unknown()).parse(rawParams ?? {}) }
     if (method === 'orchestration.peerMailPull') {
       // Short waits, so a test sees the loop's next pull.
@@ -262,14 +279,12 @@ describe("a teammate's bots and the agent shared with them", () => {
       getAppMetrics: () => []
     })
     kept = [SHARED_ENVIRONMENT]
+    SHARES[SHARED_ENVIRONMENT] = share('ranger', 'share-device-dana', 'Ranger')
     sharesLoaded = Promise.resolve()
     loaded = true
-    setSharedHosts({
-      host: (environmentId) =>
-        loaded && kept.includes(environmentId) ? SHARES[environmentId]!.host : null,
-      environmentIds: () => (loaded ? kept : []),
-      ready: () => sharesLoaded
-    })
+    shareReads = 0
+    ownerServer = null
+    registerKeptShares()
     withChat.mockReset()
     // Each person's Home of Ranger: the owner's and Dana's.
     withChat.mockImplementation((botId, of, work) =>
@@ -293,7 +308,21 @@ describe("a teammate's bots and the agent shared with them", () => {
     })
   })
 
-  afterEach(() => {
+  /** Dana's desktop says which shares it keeps, as its shared-agents owner does at startup. */
+  function registerKeptShares(): void {
+    setSharedHosts({
+      host: (environmentId) =>
+        loaded && kept.includes(environmentId) ? SHARES[environmentId]!.host : null,
+      environmentIds: () => (loaded ? kept : []),
+      ready: () => {
+        shareReads += 1
+        return sharesLoaded
+      }
+    })
+  }
+
+  afterEach(async () => {
+    await ownerServer?.stop()
     dana.runtime.stopOrchestrationFederationRelay()
     owner.runtime.stopOrchestrationFederationRelay()
     dana.db.close()
@@ -456,10 +485,10 @@ describe("a teammate's bots and the agent shared with them", () => {
     loaded = false
     let finishLoading = () => {}
     sharesLoaded = new Promise((resolve) => (finishLoading = resolve))
-    const resolving = vi.spyOn(dana.runtime, 'resolveOrchestrationWorkerServer')
+    const reads = shareReads
     dana.runtime.ensureOrchestrationFederationRelay()
-    await vi.waitFor(() => expect(resolving).toHaveBeenCalled())
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    // The pull loop waits on the shares' load before reading any share as present or gone.
+    await vi.waitFor(() => expect(shareReads).toBeGreaterThan(reads))
     loaded = true
     finishLoading()
 
@@ -498,5 +527,74 @@ describe("a teammate's bots and the agent shared with them", () => {
       })
     ).rejects.toThrow()
     expect(listeningClients(owner.runtime, 'install_dana')).toEqual([])
+  })
+
+  it('waits for this computer to say which shares it keeps, never reading a share as removed before', async () => {
+    const server = await dana.runtime.resolveOrchestrationWorkerServer(SHARED_ENVIRONMENT)
+    allowServer(dana.db, {
+      serverKey: server.peerFingerprint,
+      environmentId: SHARED_ENVIRONMENT,
+      botId: 'docs'
+    })
+    // The pull loops start before the shared-agents owner registers (and `orca serve` never would).
+    setSharedHosts(null)
+    const gate = vi.mocked(sharedHostsReady)
+    gate.mockClear()
+    dana.runtime.ensureOrchestrationFederationRelay()
+    await vi.waitFor(() => expect(gate).toHaveBeenCalled())
+    let opened = false
+    void gate.mock.results[0]!.value.then(() => (opened = true))
+    // A zero-delay yield: a gate that were open would have settled by now.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(opened).toBe(false)
+
+    registerKeptShares()
+    await vi.waitFor(() => expect(listeningClients(owner.runtime, 'install_dana')).toHaveLength(1))
+    expect(isServerAllowed(dana.db, server.peerFingerprint, 'docs')).toBe(true)
+  })
+
+  it("never lets another agent ask over a shared agent's link", async () => {
+    await call('pairedServerAsks.allow', { environmentId: SHARED_ENVIRONMENT, botId: 'docs' })
+    dana.runtime.ensureOrchestrationFederationRelay()
+    await vi.waitFor(() => expect(listeningClients(owner.runtime, 'install_dana')).toHaveLength(1))
+
+    // An agent of the owner's that isn't shared with Dana: her Always for Ranger isn't for it.
+    await expect(ask('Anything?', OTHER_AGENT)).rejects.toThrow('offline')
+    await ask('Review this PR?')
+    await vi.waitFor(() => expect(dana.db.getUnreadMessages(DOCS_HOME)).toHaveLength(1))
+  })
+
+  it('ends a revoked share like a removed paired computer, telling its askers nothing new', async () => {
+    mkdirSync(join(dir, 'owner-rpc'))
+    ownerServer = new OrcaRuntimeRpcServer({
+      runtime: owner.runtime,
+      userDataPath: join(dir, 'owner-rpc'),
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    await ownerServer.start()
+    const device = await ownerServer.getBotShareDevices()!.add({
+      botId: 'ranger',
+      accountId: DANA,
+      scope: 'runtime',
+      devicePublicKeyB64: Buffer.from(nacl.sign.keyPair().publicKey).toString('base64')
+    })
+    SHARES[SHARED_ENVIRONMENT] = share('ranger', device.deviceId, 'Ranger')
+    await call('pairedServerAsks.introduce', {
+      environmentId: SHARED_ENVIRONMENT,
+      rootSession: RANGER_ASKS,
+      botId: 'docs'
+    })
+    dana.runtime.ensureOrchestrationFederationRelay()
+    await vi.waitFor(() => expect(listeningClients(owner.runtime, 'install_dana')).toHaveLength(1))
+    await ask('Review this PR?')
+    await vi.waitFor(async () => expect(await cards()).toHaveLength(1))
+
+    expect(await ownerServer.revokeBotShareDevices('ranger', DANA)).toBe(true)
+
+    expect(listeningClients(owner.runtime, 'install_dana')).toEqual([])
+    await expect(ask('And this one?')).rejects.toThrow('offline')
+    // The asking chat shows what it showed before: no notice about the revoke.
+    expect(owner.db.getUnreadMessages(RANGER_ASKS)).toEqual([])
   })
 })

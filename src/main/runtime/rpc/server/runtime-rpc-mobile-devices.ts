@@ -79,10 +79,8 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
         await store.remove(device.deviceId)
         this.runtime.forgetClientNavigationState(device.deviceId)
         if (device.scope === 'runtime') {
-          // As for a paired computer: asks the agents sent it over this share will not be answered.
-          const bot = this.runtime.bots.list().find((entry) => entry.id === device.botId)
-          const name = botSharePersonName(bot ?? {}, device.accountId)
-          settleRemovedPairedClient(this.runtime, { deviceId: device.deviceId, name })
+          // As a removed paired computer, but its askers are told nothing new.
+          settleRemovedPairedClient(this.runtime, { deviceId: device.deviceId, name: null })
         }
       }
       return true

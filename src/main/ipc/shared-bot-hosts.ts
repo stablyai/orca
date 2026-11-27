@@ -14,6 +14,7 @@ import {
 } from '../bots/shared-with-me/shared-bot-host-failures'
 import { setSharedHostsOwner } from './runtime-environments/requests/runtime-environment-shared-hosts'
 import { setSharedHosts } from '../../shared/remote-runtime/pairing/shared-host-keys'
+import { keptSharedHostRegistry } from '../bots/shared-with-me/shared-bot-host-key'
 import {
   removeOldSharedBotHomes,
   type SharedBotHomeCleanupDeps
@@ -79,13 +80,13 @@ export function registerSharedBotHostsHandlers(args: {
   ipcMain.handle('sharedBotHosts:decline', (_event, raw: unknown) =>
     hosts.decline(ShareArgs.parse(raw).shareId)
   )
-  setSharedHosts({
-    host: (environmentId) => hosts.sharedHost(environmentId),
-    // Those whose host has made its offer, as `host` answers them.
-    environmentIds: () =>
-      hosts.listed().flatMap((entry) => (entry.offer ? [entry.environmentId] : [])),
-    ready: () => hosts.ready()
-  })
+  setSharedHosts(
+    keptSharedHostRegistry(
+      hosts.store,
+      () => hosts.listed(),
+      () => hosts.ready()
+    )
+  )
   setSharedHostsOwner(hosts)
   // Started after it, so no refresh rewrites a share while its old home is removed.
   hosts.start(

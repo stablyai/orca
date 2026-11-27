@@ -28,8 +28,7 @@ import { CloudSharesSupport, type SharedBotsCloud } from './shared-bots-cloud'
 import { SharedBotOfferWaits } from './shared-bot-offer-waits'
 import { SharedBotPhoneGrants } from './shared-bot-phone-grants'
 import { SharedBotReadPace, type SharedBotReadPaceDeps } from './shared-bot-read-pace'
-import type { SharedHost } from '../../../shared/remote-runtime/pairing/shared-host-keys'
-import { hasRelayCredential, sharedHostOfEntry } from './shared-bot-host-key'
+import { hasRelayCredential } from './shared-bot-host-key'
 
 // How long a call on a dropped link waits for the share list to say whether it was a revoke.
 const SHARES_LIST_WAIT_MS = 5000
@@ -351,12 +350,6 @@ export class SharedBotHosts {
       this.links.set(entry.shareId, link)
     }
     return link
-  }
-
-  /** A kept share's host as a paired server reaches it (shared-host-keys.ts); null before its offer. */
-  sharedHost(environmentId: string): SharedHost | null {
-    const entry = this.entryFor(environmentId)
-    return entry ? sharedHostOfEntry(this.store, entry) : null
   }
 
   private publish(): void {

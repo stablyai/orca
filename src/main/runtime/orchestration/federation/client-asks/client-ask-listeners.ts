@@ -132,17 +132,20 @@ export function forgetClientAskDevice(owner: ClientAskListenerOwner, deviceId: s
   }
 }
 
-/** The one listening computer a selector names; refused when none is connected or two share it. A
- *  teammate's computer that pulls over several shares takes an agent's asks over that agent's own. */
+/** The one listening computer a selector names for the asking agent; refused when none is connected
+ *  or two share it. A teammate's computer listens once per agent shared with it, and each of those
+ *  pulls carries only its own agent's asks: preferred for that agent, never for any other. */
 export function requireListeningClient(
   owner: ClientAskListenerOwner,
   selector: string,
   nothingDone: string,
   askingBotId: string | null
 ): ClientAskListener {
-  const named = listeningClients(owner, selector)
-  const ownShare = named.filter((listener) => listener.sharedBotId === (askingBotId ?? undefined))
-  const listening = named.length > 1 && ownShare.length === 1 ? ownShare : named
+  const reachable = listeningClients(owner, selector).filter(
+    (listener) => listener.sharedBotId === undefined || listener.sharedBotId === askingBotId
+  )
+  const ownShare = reachable.filter((listener) => listener.sharedBotId !== undefined)
+  const listening = ownShare.length === 1 ? ownShare : reachable
   if (listening.length > 1) {
     throw new OrchestrationError(
       'invalid_argument',
