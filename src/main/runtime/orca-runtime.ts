@@ -1,4 +1,4 @@
-import { announceAgentCliUpdatesFinished } from '../agent-cli-update/agent-cli-update-service'
+import { announceAgentCliUpdatesFinished } from '../agent-cli-update/agent-cli-update-events'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import { chatMailPlace } from '../external-conversations/external-conversation-links'
 import * as botGroups from '../bots/bot-group-runtime'
