@@ -845,6 +845,267 @@
       "action": "Zitieren",
       "hint": "Fügt den markierten Text als Zitat in die Nachricht ein"
     },
+    "botCards": {
+      "request": {
+        "pairedComputer": "Gekoppelter Computer",
+        "notConnected": "Nicht verbunden",
+        "declined": "Abgelehnt",
+        "waitingOn": "Wartet auf Genehmigung auf {{computer}}"
+      },
+      "offer": {
+        "openBot": "{{name}} öffnen",
+        "notNow": "Nicht jetzt",
+        "heading": "Neuer Bot"
+      },
+      "toolAdded": {
+        "added": "Hinzugefügt"
+      },
+      "memory": {
+        "openMemory": "Gedächtnis öffnen"
+      },
+      "google": {
+        "ended": "Diese Google-Einrichtung wurde beendet.",
+        "receipt": {
+          "change": "Ändern",
+          "dismissed": "✓ Verworfen",
+          "imported": "✓ Du hast die Datei deines Teams hinzugefügt",
+          "chose": "✓ Gewählt: {{what}}",
+          "signedInAs": "✓ Angemeldet als {{email}}",
+          "signedIn": "✓ Angemeldet",
+          "done": "✓ Erledigt",
+          "takeOver": "✓ {{bot}} übernimmt ab hier",
+          "stopped": "Einrichtung gestoppt"
+        },
+        "heading": "Google verbinden",
+        "path": {
+          "title": "Wie sollen wir es einrichten?",
+          "why": "Du erstellst deine eigene Google-App, damit deine Anmeldung auf deinem Computer bleibt.",
+          "doIt": "Für mich erledigen",
+          "guideHere": "Mich hier anleiten",
+          "guideBrowser": "Mich im Browser anleiten",
+          "doItNote": "{{bot}} klickt sich durch",
+          "guideHereNote": "Du klickst, in Orca",
+          "guideBrowserNote": "Du klickst, in deinem Browser"
+        },
+        "notNow": "Nicht jetzt",
+        "progress": {
+          "heading": "Google wird eingerichtet",
+          "done": "Erledigt",
+          "waiting": "Wartet auf dich",
+          "working": "In Arbeit",
+          "stopped": "Gestoppt",
+          "doneCount": "{{count}} Schritte erledigt",
+          "more": "+ {{count}} weitere Schritte"
+        },
+        "account": {
+          "title": "Welches Google-Konto soll ich verwenden?",
+          "personal": "Privates Konto",
+          "work": "Arbeitskonto",
+          "note": "Jede Google-Cloud-Seite öffnet sich mit dem Konto, das du auswählst."
+        },
+        "services": {
+          "title": "Welche Google-Dienste soll ich verwenden?",
+          "note": "Mit jedem davon kann ich Personen anhand ihres Namens finden. Du kannst später weitere hinzufügen."
+        },
+        "continue": "Fortfahren",
+        "connect": {
+          "titleAccount": "Anmelden, um {{email}} zu verbinden",
+          "title": "Anmelden, um zu verbinden",
+          "onComputer": "Melde dich in Orca auf deinem Computer bei Google an.",
+          "signIn": "Bei Google anmelden"
+        },
+        "movedDown": "Weiter unten fortgesetzt.",
+        "connected": {
+          "heading": "Google verbunden",
+          "canUse": "{{bot}} kann {{services}} verwenden."
+        },
+        "copied": "Kopiert. Sende es an deinen Google-Administrator.",
+        "action": {
+          "onComputer": "Für „{{action}}“ nutze Orca auf deinem Computer.",
+          "makeNewKey": "Neuen Schlüssel erstellen",
+          "importKey": "Schlüsseldatei importieren",
+          "allow": "{{services}} erlauben",
+          "signInAgain": "Erneut anmelden",
+          "continueWithout": "Ohne sie fortfahren",
+          "keep": "{{email}} behalten",
+          "signInAs": "Als {{email}} anmelden",
+          "turnOn": "Aktivieren",
+          "copyForAdmin": "Für deinen Administrator kopieren",
+          "checkAgain": "Erneut prüfen",
+          "continue": "Fortfahren",
+          "startOver": "Neu beginnen"
+        },
+        "otherAccount": "Konto wechseln",
+        "letMe": "Das mache ich selbst",
+        "step": {
+          "headingCount": "Du bist dran · {{n}} von {{total}}",
+          "watching": "Beobachtet die Seite",
+          "onComputer": "Erledige das in Google Cloud auf deinem Computer.",
+          "account": "Bei Google anmelden",
+          "project": "Projekt erstellen",
+          "apis": "{{services}} aktivieren",
+          "branding": "Googles Anmeldebildschirm einrichten",
+          "links": "Links deiner App hinzufügen",
+          "publish": "App veröffentlichen",
+          "client": "Schlüssel der App erstellen",
+          "connect": "Verbinden und prüfen"
+        },
+        "done": "Fertig",
+        "takeOver": "Ab hier übernehmen",
+        "choice": {
+          "gmail": "Gmail",
+          "calendar": "Kalender",
+          "files": "Drive, Docs und Tabellen",
+          "gmailDescription": "E-Mails suchen und lesen, Entwürfe schreiben, senden, wenn du es sagst",
+          "calendarDescription": "Termine ansehen, erstellen und verschieben",
+          "filesDescription": "Dateien finden, lesen und bearbeiten"
+        },
+        "notes": {
+          "project": {
+            "account": "Prüfe, ob oben rechts das gewünschte Konto ausgewählt ist.",
+            "create": "Klicke auf <b>Erstellen</b>. Der Name spielt keine Rolle."
+          },
+          "apis": {
+            "project": "Prüfe, ob oben das Projekt ausgewählt ist, das du gerade erstellt hast.",
+            "enable": "Klicke auf <b>Weiter</b> und dann auf <b>Aktivieren</b>."
+          },
+          "branding": {
+            "start": "Klicke auf <b>Jetzt starten</b>.",
+            "name": "App-Name <b>Orca</b> und deine E-Mail-Adresse als Support-E-Mail.",
+            "external": "Zielgruppe: <b>Extern</b>.",
+            "internal": "Zielgruppe: <b>Intern</b>.",
+            "either": "Zielgruppe: <b>Extern</b> für ein Gmail-Konto, <b>Intern</b> für ein Arbeitskonto.",
+            "contact": "Deine E-Mail-Adresse als Kontakt-E-Mail.",
+            "agree": "Setze ein Häkchen bei <b>Ich akzeptiere die Richtlinie zu Nutzerdaten für Google API-Dienste</b> und klicke dann auf <b>Erstellen</b>."
+          },
+          "links": {
+            "domain": "Füge unter <b>App-Domain</b> die Links zur Startseite und zur Datenschutzerklärung ein.",
+            "authorized": "Füge unter <b>Autorisierte Domains</b> die Domain hinzu.",
+            "save": "Klicke auf <b>Speichern</b>."
+          },
+          "publish": {
+            "publish": "Klicke auf <b>App veröffentlichen</b> und dann auf <b>Bestätigen</b>.",
+            "why": "Mit einer veröffentlichten App bleibst du länger als 7 Tage angemeldet."
+          },
+          "client": {
+            "type": "Anwendungstyp: <b>Desktop-Anwendung</b>, dann <b>Erstellen</b>.",
+            "agent": "Wenn du <b>Diesen Client für einen KI-basierten Agenten verwenden</b> siehst, setze dort ein Häkchen.",
+            "download": "Klicke auf <b>JSON herunterladen</b>. Orca speichert den Schlüssel."
+          }
+        },
+        "blocker": {
+          "stoppedWhy": "Einrichtung gestoppt: {{reason}}",
+          "stopped": "Einrichtung gestoppt.",
+          "paused": "Die Einrichtung wurde bei „{{step}}“ pausiert. Alles Bisherige ist gespeichert.",
+          "yourTurn": "Du bist dran: {{step}}.",
+          "noKey": "Orca braucht zuerst den Schlüssel der App.",
+          "keyGone": "Der Schlüssel dieser App funktioniert nicht mehr: Er wurde in Google Cloud entfernt.",
+          "keyOtherProject": "Der gespeicherte Schlüssel gehört zum Projekt {{keyProject}}, nicht zu {{project}}.",
+          "otherAccount": "Du hast dich als {{signedIn}} angemeldet; diese Einrichtung war für {{wanted}}.",
+          "signedOut": "Die Anmeldung für {{email}} wurde beendet.",
+          "needsPermission": "Fast geschafft: Erlaube {{services}}. Google zeigt für jeden Dienst ein Kästchen; setze bei allen ein Häkchen.",
+          "apiOff": "In Google Cloud deaktiviert: {{services}}.",
+          "adminBlocked": "Der Google-Administrator deines Unternehmens hat {{services}} blockiert.",
+          "checkFailed": "Orca konnte {{services}} nicht prüfen."
+        },
+        "ownerStep": "Schritt {{step}} von 3",
+        "adminRequest": "Bitte markiere diese Google-App in der Admin-Konsole als „Vertrauenswürdig“ (Sicherheit › API-Steuerung › Zugriff von Drittanbieter-Apps verwalten): {{clientId}}"
+      },
+      "importDone": {
+        "heading": "Import abgeschlossen",
+        "title": "{{name}} wurde aus {{app}} übernommen",
+        "open": "Öffnen",
+        "stayed": "In {{app}} verblieben: {{things}}. In {{app}} wurde nichts geändert.",
+        "unchanged": "In {{app}} wurde nichts geändert.",
+        "paused": "Automatisierungen sind pausiert, damit nichts doppelt läuft. Aktiviere sie wieder, sobald der alte Bot in {{app}} ausgeschaltet ist.",
+        "soulOnComputer": "Öffne Seele und Gedächtnis in Orca auf deinem Computer."
+      },
+      "importPlan": {
+        "comes": "Wird übernommen",
+        "changed": "Wird mit Änderungen übernommen",
+        "already": "Bereits vorhanden",
+        "stays": "Bleibt in {{app}}",
+        "fromAgain": "Erneut aus {{app}}",
+        "from": "Aus {{app}}",
+        "selected": "{{chosen}} von {{total}} ausgewählt · Schlüssel und Anmeldedaten werden nie kopiert",
+        "importOne": "1 Element importieren",
+        "importMany": "{{count}} Elemente importieren",
+        "askedOne": "Import von 1 Element angefordert",
+        "askedMany": "Import von {{count}} Elementen angefordert"
+      },
+      "composio": {
+        "heading": "Composio",
+        "step": "Schritt {{index}} von {{total}}",
+        "setUpTitle": "{{app}} braucht eine einmalige Einrichtung in Composio",
+        "setUpDeveloperApp": "Erstelle auf der Entwicklerseite von {{app}} eine Entwickler-App. Die {{app}}-Seite von Composio zeigt, wie es geht.",
+        "setUpAuthConfig": "Öffne in Composio „Auth Configs“, lege eine für {{app}} an und füge die Schlüssel deiner Entwickler-App ein.",
+        "setUpCheckAgain": "Komm hierher zurück und wähle „Erneut prüfen“.",
+        "setUpNotYet": "Composio hat noch keine Auth Config für {{app}}.",
+        "openAuthConfigs": "Auth Configs öffnen",
+        "appGuide": "{{app}}-Seite",
+        "checkAgain": "Erneut prüfen",
+        "connectTitle": "{{app}} verbinden",
+        "connecting": "Wartet, bis du die Anmeldung in deinem Browser abschließt",
+        "connectKeyNote": "Öffnet Composio, um deinen {{app}}-API-Schlüssel einzugeben. Composio speichert ihn, nicht Orca.",
+        "connectNote": "Öffnet die Anmeldung von {{app}} über Composio in deinem Browser. Composio speichert diese Anmeldung, nicht Orca.",
+        "signInOnComposio": "Melde dich auf der Seite von Composio bei {{app}} an.",
+        "openAgain": "Erneut öffnen",
+        "cancel": "Abbrechen",
+        "keyFirst": "Füge zuerst deinen Composio-Schlüssel hinzu.",
+        "connect": "{{app}} verbinden",
+        "byHandCopy": "Kopiere die Adresse von {{bot}}.",
+        "byHandPaste": "Öffne in Composio die Einstellungen deines Projekts, dann Webhooks, und füge sie dort ein.",
+        "byHandOpen": "Composio öffnen",
+        "byHandDone": "Fertig",
+        "byHandDoneNote": "Orca aktiviert dann {{trigger}} und speichert das Signatur-Secret von Composio.",
+        "eventsTitle": "{{bot}} bei {{trigger}} von Composio aufrufen lassen",
+        "eventsReplaceNote": "Dein Composio-Projekt sendet seine Ereignisse bereits an eine andere Adresse. Mit dieser Einrichtung gehen sie stattdessen hierher, und die andere Adresse erhält sie nicht mehr.",
+        "eventsOneAddressNote": "Orca aktiviert {{trigger}} für deine Anmeldung. Die Ereignisse deines Composio-Projekts kommen an einer einzigen Adresse bei Orca an, und jedes geht an den Bot, für den es bestimmt ist.",
+        "eventsDone": "✓ Eingerichtet",
+        "eventsChosenByHand": "Wird in Composio erledigt",
+        "eventsReplace": "Ersetzen und einrichten",
+        "eventsSetUp": "Einrichten",
+        "eventsByHand": "Manuelle Einrichtung",
+        "keyAdded": "✓ Schlüssel hinzugefügt",
+        "declined": "Verworfen",
+        "keyRejectedTitle": "Composio-Schlüssel ersetzen",
+        "keyTitle": "Composio-Schlüssel hinzufügen",
+        "keyRejectedNote": "Composio akzeptiert den gespeicherten Schlüssel nicht mehr. Erstelle in Composio unter Settings, API Keys einen neuen.",
+        "keyLabel": "Composio-API-Schlüssel",
+        "keyPlaceholder": "Schlüssel einfügen",
+        "keyPurposeOnHost": "Mit deinem Composio-Projektschlüssel können die Bots auf {{host}} die Apps nutzen, die du dort verbindest. Er bleibt auf {{host}}; Bots sehen ihn nie.",
+        "keyPurpose": "Mit deinem Composio-Projektschlüssel können deine Bots die Apps nutzen, die du dort verbindest. Er bleibt auf deinem Computer; Bots sehen ihn nie.",
+        "checking": "Wird geprüft…",
+        "replaceKey": "Schlüssel ersetzen",
+        "addKey": "Schlüssel hinzufügen",
+        "getKey": "Schlüssel holen",
+        "dismiss": "Verwerfen",
+        "goneHeading": "Einrichtung erforderlich",
+        "ready": "Bereit",
+        "goneTitle": "{{bot}} kann {{app}} gerade nicht verwenden",
+        "readyTitle": "{{bot}} kann jetzt {{app}} verwenden",
+        "goneDetail": "Richte es über die Werkzeuge des Bots erneut ein.",
+        "readyAs": "Als {{label}}. Deine App-Anmeldungen werden von Composio verwaltet.",
+        "custody": "Deine App-Anmeldungen werden von Composio verwaltet.",
+        "browseOnComputer": "Durchsuche weitere Apps über die Werkzeuge des Bots in Orca auf deinem Computer.",
+        "browse": "Weitere Apps durchsuchen"
+      },
+      "webhookSetup": {
+        "heading": "Webhook einrichten",
+        "on": "Ein",
+        "hint": "Diese URL in deinem Dienst als Ziel eintragen",
+        "gettingUrl": "URL wird abgerufen…",
+        "keyAndSecret": "Schlüssel und Signatur-Secret",
+        "headerKey": "Header-Schlüssel",
+        "copy": "Kopieren",
+        "signingSecret": "Signatur-Secret",
+        "noSecret": "Keines",
+        "sampleCall": "Beispielaufruf",
+        "sampleNote": "Startet einen echten Lauf",
+        "send": "Senden",
+        "copiedReceipt": "✓ URL kopiert"
+      }
+    },
     "eventRow": {
       "running": "Wird ausgeführt",
       "failed": "Fehlgeschlagen"
@@ -1435,7 +1696,24 @@
       },
       "composer": {
         "planMode": "Planen",
-        "exitPlanMode": "Planungsmodus verlassen"
+        "exitPlanMode": "Planungsmodus verlassen",
+        "botChats": "Chats",
+        "backToBots": "Zurück zu den Bots",
+        "loadingBotChats": "Chats von {{name}} werden geladen…",
+        "noOtherChats": "Keine anderen Chats",
+        "noMatchingChats": "Keine passenden Chats",
+        "retryChats": "Erneut versuchen",
+        "permissionAsk": "Genehmigung anfordern",
+        "permissionAcceptEdits": "Änderungen akzeptieren",
+        "permissionAuto": "Genehmigen lassen",
+        "permissionFullAccess": "Vollzugriff",
+        "permissionAskDescription": "Fragt vor Änderungen und Befehlen, die in den Einstellungen nicht erlaubt sind",
+        "permissionAskSharedDescription": "Fragt vor Änderungen oder Befehlen, die nicht bereits erlaubt sind",
+        "permissionAcceptEditsAntigravityDescription": "Genehmigt Dateiänderungen; fragt bei allem anderen nach",
+        "permissionAcceptEditsDescription": "Genehmigt Dateiänderungen und Dateibefehle; fragt bei allem anderen nach",
+        "permissionAutoDescription": "Prüft Genehmigungsanfragen stellvertretend",
+        "permissionFullAccessCodexDescription": "Fragt nie nach; kann jede Datei bearbeiten und das Netzwerk nutzen",
+        "permissionFullAccessDescription": "Fragt nie vor Änderungen oder Befehlen"
       },
       "goal": {
         "sentAsGoal": "Als Ziel gesendet"
@@ -1450,8 +1728,15 @@
         "open": "In {{source}} öffnen",
         "noAccess": "kein Zugriff",
         "earlierMessages_one": "{{count}} frühere Nachricht im Thread",
-        "earlierMessages_other": "{{count}} frühere Nachrichten im Thread"
+        "earlierMessages_other": "{{count}} frühere Nachrichten im Thread",
+        "via": "{{name}} über {{bot}}"
       },
+      "slackMirror": {
+        "retry": "Erneut versuchen",
+        "switch": "Diesen Chat in Slack posten",
+        "delete": "Aus Slack löschen"
+      },
+      "dismissDeliveryNotice": "Ausblenden",
       "typedBy": {
         "anotherComputer": "anderer Computer",
         "fromVia": "Von {{name}} · Computer: {{computer}}",
@@ -1919,6 +2204,18 @@
     "activeAgents": {
       "heading": "Aktiv",
       "seeAll": "Alle Agenten anzeigen"
+    },
+    "bots": {
+      "waits": {
+        "questions_one": "Frage",
+        "questions_other": "{{count}} Fragen",
+        "access_one": "Zugriffsanfrage",
+        "access_other": "{{count}} Zugriffsanfragen",
+        "workers_one": "Worker",
+        "workers_other": "{{count}} Worker",
+        "items_one": "Eintrag",
+        "items_other": "{{count}} Einträge"
+      }
     }
   },
   "hooks": {
@@ -1972,6 +2269,7 @@
       "tasks": "Aufgaben",
       "moreActions": "Weitere Aktionen",
       "automations": "Automatisierungen",
+      "sharedLinks": "Geteilte Links",
       "mcpServers": "MCP-Server"
     },
     "deleteConfirm": {
@@ -2805,6 +3103,7 @@
       "terminalTitle": "Terminal",
       "terminalLayout": "Terminal-Layout",
       "sourceControl": "Quellcodeverwaltung",
+      "itemsNeedYou": "Einträge, {{count}} brauchen dich",
       "quickCommands": "Schnellbefehle",
       "items": "Einträge",
       "textSize": "Textgröße"
@@ -3561,8 +3860,36 @@
       "downloadSize": "Etwa {{size}} MB",
       "phoneChecking": "Wird geprüft…"
     },
+    "bots": {
+      "slackStatus": {
+        "notInstalled": "Nicht installiert",
+        "unknown": "Prüfung nicht möglich",
+        "updateNeeded": "Update erforderlich",
+        "waiting": "Wartet auf Installation"
+      },
+      "addConnector": "Konnektor hinzufügen",
+      "connectors": "Konnektoren",
+      "retry": "Erneut versuchen",
+      "memoryHistory": {
+        "today": "Heute",
+        "yesterday": "Gestern",
+        "undoAction": "Rückgängig",
+        "nothingToUndo": "Nichts mehr rückgängig zu machen: Diese Zeilen wurden inzwischen geändert.",
+        "empty": "Noch keine Änderungen."
+      },
+      "githubStatus": {
+        "notInstalled": "Orca nicht installiert",
+        "unlinked": "Nicht verknüpft"
+      },
+      "linearStatus": {
+        "unlinked": "Nicht verknüpft",
+        "notInstalled": "Orca nicht installiert"
+      }
+    },
     "sharedLinks": {
-      "bots": "Bots"
+      "title": "Geteilte Links",
+      "bots": "Bots",
+      "description": "Links, die du veröffentlicht hast."
     }
   },
   "sourceControl": {
@@ -4886,9 +5213,50 @@
       },
       "wslDistroStopped": "Die WSL-Distribution {{distro}} ist gestoppt, daher hat dieser geplante Lauf sie nicht gestartet. Starte die Distribution oder nutze „Jetzt ausführen“; spätere Läufe finden statt, solange sie läuft.",
       "botsOff": "Bots sind in den Einstellungen ausgeschaltet, daher hat Orca diesen Lauf übersprungen.",
+      "botsOffByTeam": "Bots sind von deinem Team ausgeschaltet, daher hat Orca diese Ausführung übersprungen.",
       "botMissing": "Der Bot, als der diese Automatisierung läuft, existiert nicht mehr.",
       "botFolderMissing": "Der Ordner des Bots ist nicht mehr verfügbar.",
       "botPaused": "{{bot}} ist pausiert, daher hat Orca diesen Lauf übersprungen."
+    },
+    "botTarget": {
+      "fieldLabel": "Bot oder Projekt",
+      "option": "Bot · {{name}}",
+      "deletedBot": "Gelöschter Bot",
+      "prompt": "Was soll getan werden?",
+      "promptMissing": "Gib ein, was getan werden soll.",
+      "when": "Wann",
+      "noSchedule": "Nur bei Ereignissen",
+      "never": "Nie",
+      "onEvents": "Wenn etwas passiert…",
+      "runsIn": "Läuft in",
+      "runsInNew": "Jedes Mal eine neue Unterhaltung",
+      "chat": "Chat von {{name}}",
+      "runsInUntitledChat": "Ein unbenannter Chat",
+      "agent": "Agent",
+      "agentSameAsBot": "Wie {{name}}",
+      "agentInChat": "Agent dieses Chats",
+      "resultsTo": "Ergebnisse senden an",
+      "resultsToThread": "Den Thread des Ereignisses",
+      "resultsToChannel": "Einen Kanal",
+      "resultsToLinear": "Ein Linear-Issue",
+      "resultsToNone": "Nirgendwohin",
+      "channelPlaceholder": "#kanal oder ein Slack-Link",
+      "channelLabel": "Kanal",
+      "linearIssuePlaceholder": "Issue-Schlüssel (z. B. ENG-123) oder ein Linear-Link",
+      "linearIssueLabel": "Linear-Issue",
+      "channelMissing": "Gib den Kanal ein, an den die Ergebnisse gesendet werden sollen.",
+      "linearIssueInvalid": "Gib das Linear-Issue ein, an das die Ergebnisse gesendet werden sollen, z. B. ENG-123.",
+      "letBotReact": "{{name}} reagieren lassen",
+      "letBotReactHelp": "Jedes Ergebnis startet eine Runde, damit {{name}} darauf reagieren kann.",
+      "time": "Uhrzeit",
+      "minute": "Minute",
+      "runs": "Ausführung"
+    },
+    "botEvents": {
+      "label": "Ereignisse",
+      "editInChat": "Im Chat bearbeiten",
+      "editDraft": "Ändere die Automatisierung „{{name}}“: ",
+      "addDraft": "Ändere die Automatisierung „{{name}}“ so, dass sie auch ausgeführt wird, wenn "
     },
     "eventsWontFire": "Läuft nur nach Zeitplan: braucht den {{connectors}}-Connector",
     "wontFire": "Läuft nicht: braucht den {{connectors}}-Connector"
@@ -5281,9 +5649,36 @@
       "newThreadTab": "Neuer Thread",
       "newThreadHint": "beginnt neu",
       "newThread": "Neuer Thread in {{name}}",
+      "peerReadItems": "{{bot}} hat ein Update zu seinen Einträgen gelesen",
+      "remoteReplied": "Auf {{computer}} geantwortet",
+      "remoteNotice": "Auf {{computer}} nicht geantwortet",
+      "remoteNotSent": "Nicht an {{computer}} gesendet",
+      "remoteUnknown": "Zustellung unbekannt",
+      "remoteStopped": "Hier gestoppt",
+      "remoteSending": "Anfrage an {{computer}} wird gesendet…",
+      "remoteAsked": "Auf {{computer}} gefragt",
+      "remoteMayAnswer": "Antwortet möglicherweise noch auf {{computer}}.",
+      "remoteShortened": "Gekürzt. Die vollständige Antwort ist auf {{computer}}.",
+      "needsLocalBot": "Diese Gruppe braucht mindestens einen Bot auf diesem Computer.",
+      "remoteOnComputer": "Füge Bots von anderen Computern in Orca auf {{host}} hinzu oder entferne sie.",
       "handoffsPaused": "Nach {{count}} Übergaben pausiert. Antworte, um fortzufahren.",
       "stopCouldNotBeConfirmed": "Das Stoppen konnte nicht bestätigt werden.",
-      "notStarted": "Nicht gestartet"
+      "notStarted": "Nicht gestartet",
+      "workingCount_one": "{{count}} arbeitet",
+      "workingCount_other": "{{count}} arbeiten",
+      "workingCount": "{{count}} arbeiten",
+      "memberCount_one": "{{count}} Bot",
+      "memberCount_other": "{{count}} Bots",
+      "memberCount": "{{count}} Bots",
+      "moreCount_one": "{{count}} weiterer",
+      "moreCount_other": "{{count}} weitere",
+      "moreCount": "{{count}} weitere",
+      "andNames": "{{names}} und {{last}}",
+      "membersHere_one": "{{names}} ist hier.",
+      "membersHere_other": "{{names}} sind hier.",
+      "membersHere": "{{names}} sind hier.",
+      "starting": "Wird gestartet…",
+      "peerReadReplyFrom": "{{reader}} hat die Antwort von {{peer}} gelesen"
     },
     "templates": {
       "title": "Bot-Vorlagen",
@@ -5350,6 +5745,96 @@
     "needs": {
       "chat": "Dein Chat mit {{name}}",
       "access": "{{person}} hat um Zugriff gebeten"
+    },
+    "access": {
+      "titleOne": "{{person}} Zugriff auf {{name}} geben?",
+      "titleMany": "{{count}} Personen Zugriff auf {{name}} geben?",
+      "place": "{{connector}} ({{workspace}})",
+      "confirmWarning": "Sie handeln auf {{computer}} in deinem Namen.",
+      "confirmComputer": "Befehle ausführen und Dateien ändern",
+      "confirmNoApprovals": "Handelt, ohne vorher zu fragen",
+      "confirmMaySkipApprovals": "Kann handeln, ohne vorher zu fragen",
+      "confirmApproveOne": "{{person}} kann die Anfragen des Bots genehmigen",
+      "confirmApproveMany": "Sie können seine Anfragen genehmigen",
+      "confirmGoogle": "Dein Google-Konto verwenden",
+      "confirmGitHub": "Auf GitHub in deinem Namen kommentieren und pushen",
+      "confirmLinear": "Linear-Issues in deinem Namen aktualisieren",
+      "descriptionOne": "{{person}} kann {{name}} dann in {{place}} fragen und darüber auf {{computer}} in deinem Namen arbeiten: Befehle ausführen, Dateien öffnen und ändern, deine verbundenen Konten nutzen und seine Anfragen genehmigen.",
+      "account": "{{connector}}-Konto der Person: {{identity}}",
+      "yourAccess": "Ihre Anfragen nutzen deinen Zugriff, nicht ihren eigenen. Sie können {{name}} um alles bitten, was er {{there}} tun kann.",
+      "removeAnyTime": "Du kannst sie jederzeit aus „Wer fragen darf“ entfernen.",
+      "thisComputer": "diesem Computer",
+      "here": "hier",
+      "thisServer": "diesem Server",
+      "executionComputer": "dem Computer, auf dem dieser Agent läuft",
+      "there": "dort",
+      "confirm": "Zugriff geben",
+      "heading": "Zugriffsanfragen",
+      "decline": "Ablehnen",
+      "review": "Prüfen…",
+      "full": "Entferne jemanden, bevor du {{person}} hinzufügst.",
+      "decideFailed": "Deine Antwort konnte nicht gespeichert werden. Versuche es erneut.",
+      "whoCanAsk": "Wer {{name}} fragen darf",
+      "summaryOnlyYou": "Nur du kannst {{name}} fragen.",
+      "summaryOne": "Du und {{person}} könnt {{name}} fragen.",
+      "summarySome": "Du, {{people}} und {{last}} könnt {{name}} fragen.",
+      "summaryMany": "Du und {{count}} weitere Personen könnt {{name}} fragen.",
+      "controlNone": "Alle, die du hinzufügst, können mit {{name}} auf {{computer}} in deinem Namen arbeiten: Befehle ausführen, Dateien öffnen und ändern und deine verbundenen Konten nutzen.",
+      "controlOne": "{{person}} kann mit {{name}} auf {{computer}} in deinem Namen arbeiten: Befehle ausführen, Dateien öffnen und ändern und deine verbundenen Konten nutzen.",
+      "controlMany": "Sie können mit {{name}} auf {{computer}} in deinem Namen arbeiten: Befehle ausführen, Dateien öffnen und ändern und deine verbundenen Konten nutzen.",
+      "reachHeading": "Worauf {{name}} zugreifen kann",
+      "reachComputer": "Deine Dateien, Befehle und Konten auf {{computer}}",
+      "reachComputerDetail": "In deinem Namen, so weit die Berechtigung unten es erlaubt.",
+      "reachPermission": "Neue Unterhaltungen starten im Modus „{{mode}}“",
+      "reachPermissionUnknown": "Neue Unterhaltungen starten mit deiner Chat-Berechtigungseinstellung",
+      "permissionFellBack": "{{agent}} hat keinen Modus „{{mode}}“, daher verwendet {{name}} „Genehmigung anfordern“.",
+      "codexAsk": "Codex-Sandbox: schreibgeschützt, bis eine Anfrage genehmigt wird.",
+      "codexOwnSandbox": "Codex verwendet seine konfigurierte Sandbox.",
+      "codexNoSandbox": "Keine Codex-Sandbox.",
+      "whoeverAskedApproves": "Fragt er nach, kann genehmigen, wer die Anfrage gestellt hat.",
+      "reachLinear": "Linear-Issues in deinem Namen kommentieren, aktualisieren und erstellen",
+      "reachSlack": "Als {{name}} in Slack posten",
+      "reachGitHub": "Auf GitHub in deinem Namen kommentieren, Reviews abgeben und pushen",
+      "reachGoogleEmail": "Deine E-Mails lesen und senden",
+      "reachGoogleCalendar": "Deinen Kalender verwenden",
+      "reachGoogleDrive": "Deine Drive-Dateien verwenden",
+      "reachGoogleDocs": "Deine Docs lesen und bearbeiten",
+      "reachGoogleSheets": "Deine Sheets lesen und bearbeiten",
+      "reachGoogleUnknown": "Dein Google-Konto, so weit du es bei der Anmeldung erlaubt hast",
+      "trust": "Füge nur Personen hinzu, denen du an deiner Tastatur vertrauen würdest.",
+      "adviceHeading": "Bevor du teilst",
+      "fixOnlyMe": "{{name}} nur für dich behalten",
+      "fixOnlyMeDetail": "Entfernt die Personen, die du hier hinzugefügt hast.",
+      "fixOnlyMeAction": "Nur mich behalten",
+      "fixGoogle": "Google für {{name}} deaktivieren",
+      "fixGoogleDetail": "Für alle, auch für dich, ab seiner nächsten Google-Anfrage.",
+      "fixGoogleAction": "Deaktivieren",
+      "fixGoogleDone": "Google ist für {{name}} deaktiviert.",
+      "fixAsk": "Neue Unterhaltungen im Modus „Genehmigung anfordern“ starten",
+      "fixAskDetail": "{{name}} fragt bei mehr Arbeitsschritten vorher nach. Wer den Bot gefragt hat, kann weiterhin genehmigen. Bereits offene Unterhaltungen behalten ihre Berechtigung.",
+      "fixAskDetailCodex": "Codex arbeitet dann schreibgeschützt, bis eine Anfrage genehmigt wird. Wer den Bot gefragt hat, kann weiterhin genehmigen. Bereits offene Unterhaltungen behalten ihre Berechtigung.",
+      "fixAskAction": "Wechseln",
+      "fixOnlyMeConfirm": "{{name}} nur für dich behalten?",
+      "fixOnlyMeConfirmDetail": "{{name}} kann von {{people}} nicht mehr gefragt werden. Wenn du wieder Zugriff gibst, wirst du zuerst gefragt.",
+      "fixAskConfirm": "Neue Unterhaltungen im Modus „Genehmigung anfordern“ starten?",
+      "fixOnlyMeFailed": "Entfernen von {{names}} fehlgeschlagen. Versuche es erneut.",
+      "fixAskDone": "Neue Unterhaltungen starten im Modus „Genehmigung anfordern“.",
+      "undo": "Rückgängig",
+      "separateBot": "Ein separater Bot für das Team bekommt eine eigene Berechtigung, einen eigenen Google-Schalter und eigene Werkzeuge. Er läuft weiterhin auf {{computer}} in deinem Namen.",
+      "newBot": "Neuer Bot…",
+      "whatTheyCanDo": "Was {{person}} tun kann",
+      "reject": "Ablehnen",
+      "controlBrief": "Sie können hier in deinem Namen handeln.",
+      "controlBriefIfAdded": "Alle, die du hinzufügst, können hier in deinem Namen handeln.",
+      "controlBriefOnHost": "Sie können auf {{computer}} in deinem Namen handeln.",
+      "controlBriefIfAddedOnHost": "Alle, die du hinzufügst, können auf {{computer}} in deinem Namen handeln.",
+      "yourComputer": "deinem Computer"
+    },
+    "accessDecide": {
+      "expired": "Diese Anfrage wurde bereits beantwortet oder ist abgelaufen.",
+      "grantedNotAdded": "Der Zugriff wurde gegeben, aber {{person}} ist noch nicht aufgeführt. Orca fügt die Person hinzu.",
+      "signedOut": "Melde dich auf deinem Computer bei Orca an, um Anfragen zu beantworten.",
+      "whatTheyCanDoMany": "Was sie tun können"
     },
     "waits": {
       "cancel": "Abbrechen",
@@ -5817,6 +6302,13 @@
       "groupRemoteUnreachable": "{{host}} war nicht erreichbar. {{detail}}",
       "groupRemoteUnreachableRetry": "{{host}} war nicht erreichbar. {{detail}} Poste erneut, um es noch einmal zu versuchen."
     },
+    "pairedServers": {
+      "heading": "Gekoppelte Server",
+      "remove": "Entfernen",
+      "removeServer": "{{server}} entfernen",
+      "unnamed": "Gekoppelter Server",
+      "footer": "Agenten dieser Server können ohne deine Genehmigung fragen."
+    },
     "automations": {
       "paused": "Pausiert",
       "newDraft": "Richte eine Automatisierung ein, die "
@@ -5884,7 +6376,155 @@
       }
     },
     "share": {
-      "signInOtherSite": "Der Computer hat einen Anmeldelink für eine andere Website gesendet, daher wurde er nicht geöffnet."
+      "receive": {
+        "fromLink": "Aus einem Link",
+        "pasteDescription": "Füge einen Link ein, den jemand geteilt hat.",
+        "ask": "Genehmigung anfordern",
+        "askDetail": "Vorausgewählt für Bots aus einem Link",
+        "full": "Vollzugriff",
+        "fullDetail": "Führt Befehle ohne Rückfrage aus",
+        "chatsDetail": "Startet mit deiner Chat-Berechtigungseinstellung",
+        "origin": "Aus dem Link von {{who}}",
+        "originAnonymous": "Aus einem geteilten Link",
+        "back": "Zurück",
+        "continue": "Weiter",
+        "linkPlaceholder": "https://app.orca.dev/bots/share/…",
+        "link": "Link",
+        "paste": "Einfügen",
+        "have": "Du hast diesen Bot bereits",
+        "haveDetail": "{{name}} · erstellt am {{date}}",
+        "open": "Öffnen",
+        "stopped": "Dieser Link funktioniert nicht mehr",
+        "stoppedDetail": "Bitte die Person, die ihn geteilt hat, um einen neuen.",
+        "sharedBot": "Geteilter Bot"
+      },
+      "binaryFile": "Kein Text, daher nicht angezeigt.",
+      "linkCopied": "Link kopiert",
+      "copyFailed": "Link konnte nicht kopiert werden",
+      "previewChanged": "Die Vorschau hat sich geändert. Prüfe sie vor dem Veröffentlichen.",
+      "movedHere": "Dieser Link wurde an anderer Stelle aktualisiert.",
+      "shareBot": "Bot teilen…",
+      "countOf": "{{picked}} von {{all}}",
+      "removeSecret": "Entferne das Secret, um zu veröffentlichen",
+      "title": "Bot teilen",
+      "noPurpose": "Noch kein Zweck",
+      "linkStatusUnavailable": "Der geteilte Link konnte nicht geprüft werden",
+      "updatedJustNow": "Gerade eben aktualisiert",
+      "publishedJustNow": "Gerade eben veröffentlicht",
+      "description": "Alle mit dem Link können eine Kopie erstellen.",
+      "updatedAt": "Aktualisiert am {{date}}",
+      "upToDate": "Aktuell",
+      "changedSince": "Bot seitdem geändert",
+      "copy": "Kopieren",
+      "copyLink": "Link kopieren",
+      "secretFoundTitle": "Secret gefunden",
+      "secretWhere": "{{flag}} in {{where}}, Zeile {{line}}",
+      "view": "Anzeigen",
+      "nextUpdate": "Nächste Aktualisierung",
+      "sameLink": "Verwendet denselben Link. Bereits erstellte Kopien bleiben unverändert.",
+      "none": "Keine",
+      "soul": "Seele",
+      "skills": "Skills",
+      "automations": "Automatisierungen",
+      "tools": "Werkzeuge",
+      "includeMemory": "Gedächtnis einschließen",
+      "notIncluded": "Nicht enthalten",
+      "setupNote": "Einrichtungshinweis",
+      "add": "Hinzufügen",
+      "safetyCheck": "Sicherheitsprüfung",
+      "done": "Fertig",
+      "waitingSignIn": "Warten auf die Anmeldung im Browser",
+      "signInFor": "Meldet {{host}} bei Orca an.",
+      "cancelSignIn": "Anmeldung abbrechen",
+      "signIn": "Melde dich bei Orca an, um zu teilen.",
+      "signInToPublish": "Zum Veröffentlichen anmelden",
+      "reload": "Neu laden",
+      "updateLink": "Link aktualisieren",
+      "publishLink": "Link veröffentlichen",
+      "previewFile": "Vorschau von {{name}}",
+      "outsideSkillWith": "Von außerhalb von {{project}} · {{description}}",
+      "outsideSkill": "Von außerhalb von {{project}}",
+      "duplicateSkill": "Gleicher Name, in {{folder}} · nicht geteilt",
+      "all": "Alle",
+      "memoryLimit": "Bis zu {{count}} Dateien",
+      "flagOnLine": "{{flag}} in Zeile {{line}}",
+      "memory": "Gedächtnis",
+      "review": {
+        "notIncluded": "Nicht enthalten",
+        "reviewAgain": "Erneut überprüfen",
+        "accounts": "Zu verbindende Konten",
+        "leftOut": "Ausgelassen",
+        "none": "Keine",
+        "byline": "{{who}} · {{date}} · Nicht geprüft",
+        "someone": "Jemand",
+        "oneNote": "1 Notiz",
+        "notes": "{{count}} Notizen",
+        "updated": "{{who}} hat diesen Bot aktualisiert. Prüfe ihn erneut.",
+        "theSharer": "Die teilende Person",
+        "createBot": "Bot erstellen…",
+        "contact": "Verbindung zu {{host}} erlauben",
+        "files": "{{count}} Dateien",
+        "flagLine": "{{flag}}, Zeile {{line}}",
+        "off": "Aus",
+        "suggested": "Vorgeschlagen · {{when}}",
+        "memoryIndex": "Sein Gedächtnisindex, mit den geteilten Notizen",
+        "flagIn": "{{flag}} in {{where}}"
+      },
+      "lines": "{{count}} Zeilen",
+      "backToSharing": "Zurück zu „Teilen“",
+      "backToLinks": "Zurück zu „Geteilte Links“",
+      "manageLinks": "Links verwalten",
+      "notShared": "Nicht geteilt",
+      "loadingLinks": "Geteilte Links werden geladen…",
+      "isShared": "{{name}} ist geteilt",
+      "stopSharing": "Teilen beenden",
+      "stopTitle": "Teilen von {{name}} beenden?",
+      "stopDescription": "Der Link funktioniert dann nicht mehr.",
+      "stopping": "Wird beendet…",
+      "stopped": "Teilen von {{name}} beendet",
+      "moreActions": "Weitere Aktionen für {{name}}",
+      "noLinks": "Keine Bot-Links. Teile einen Bot über seine Einstellungen.",
+      "error": {
+        "blocked": "In den zu teilenden Inhalten wurde ein Secret gefunden. Entferne es und versuche es erneut.",
+        "noteSecret": "Der Einrichtungshinweis scheint ein Secret zu enthalten. Entferne es und versuche es erneut.",
+        "expired": "Diese Vorschau zum Teilen ist abgelaufen. Öffne „Bot teilen“ erneut.",
+        "prepareAgain": "Dieser Bot wurde inzwischen in einem anderen Fenster geteilt. Öffne „Bot teilen“ erneut.",
+        "stopped": "Dieser Link wurde deaktiviert. Veröffentliche erneut, um einen neuen Link zu erstellen.",
+        "moved": "Dieser Link wurde an anderer Stelle aktualisiert. Öffne „Bot teilen“ erneut, um ihn zu sehen.",
+        "unavailable": "Orca Cloud nimmt noch keine geteilten Bots an.",
+        "avatarRefused": "Orca Cloud hat das Bild des Bots abgelehnt. Wähle ein anderes Bild und versuche es erneut.",
+        "tooLarge": "Dieser Bot ist zu groß zum Teilen. Lass einen Teil des Gedächtnisses oder einige Skills weg und versuche es erneut."
+      },
+      "reconnect": "Melde dich erneut bei Orca an, um zu teilen.",
+      "flag": {
+        "secret": "Secret",
+        "pipeToShell": "Führt ein heruntergeladenes Skript aus",
+        "sudo": "Läuft als Administrator",
+        "sendsFile": "Sendet eine Datei",
+        "hiddenUnicode": "Versteckte Zeichen",
+        "runnable": "Ausführbare Datei"
+      },
+      "secretFound": "1 Secret gefunden",
+      "secretsFound": "{{count}} Secrets gefunden",
+      "oneWarning": "1 Warnung",
+      "warnings": "{{count}} Warnungen",
+      "nothingFound": "Nichts gefunden",
+      "whereLine": "{{where}}, Zeile {{line}}",
+      "oneLine": "1 Zeile",
+      "webhookNotShared": "Webhook · nicht geteilt",
+      "commandNotShared": "Befehl · nicht geteilt",
+      "fileLinkNotShared": "Enthält einen symbolischen oder harten Link · nicht geteilt",
+      "tooLargeNotShared": "Zu groß · nicht geteilt",
+      "unreadableNotShared": "Nicht lesbar · nicht geteilt",
+      "overLimitNotShared": "Über dem Skill-Limit · nicht geteilt",
+      "linkNoLongerAvailable": "Dieser geteilte Link ist nicht mehr verfügbar.",
+      "signInOtherSite": "Der Computer hat einen Anmeldelink für eine andere Website gesendet, daher wurde er nicht geöffnet.",
+      "original": {
+        "sharedBy": "Geteilt von {{who}}",
+        "viewOriginal": "Original anzeigen",
+        "originalGone": "Nicht mehr verfügbar"
+      },
+      "sameLinkShort": "Bereits erstellte Kopien bleiben unverändert."
     },
     "settingsPage": {
       "off": "Aus",
@@ -5892,6 +6532,25 @@
       "today": "heute",
       "yesterday": "gestern",
       "lastTidied": "zuletzt aufgeräumt {{when}}"
+    },
+    "whoCanAsk": {
+      "cap": "Hier sind höchstens {{count}} Personen möglich.",
+      "addPeople": "Personen hinzufügen",
+      "addFailed": "Hinzufügen von {{names}} fehlgeschlagen.",
+      "fullBot": "Niemand wurde hinzugefügt: Mit {{names}} würde die Grenze von {{count}} Personen pro Bot überschritten.",
+      "fullWorkspace": "Niemand wurde hinzugefügt: Mit {{names}} würde die Grenze von {{count}} Personen für diesen Workspace überschritten.",
+      "retry": "Erneut versuchen",
+      "searching": "Suche läuft…",
+      "cancel": "Abbrechen",
+      "selectedHeading": "Ausgewählt",
+      "incomplete": "Nicht alle sind aufgeführt. Suche nach Namen, um jemanden zu finden.",
+      "searchIn": "Personen in {{workspace}} suchen",
+      "peopleIn": "Personen in {{workspace}}",
+      "noOneNamed": "Niemand namens „{{query}}“ in {{workspace}}",
+      "needsSlack": "Füge {{name}} zuerst zu Slack hinzu, um Personen aus deinem Workspace auszuwählen.",
+      "noMatchDetail": "Mitglieder, Gäste und Personen aus anderen Organisationen im Slack von {{workspace}} können hinzugefügt werden. Alle anderen erhalten einen privaten Hinweis, dich zu fragen.",
+      "add": "Hinzufügen",
+      "allAdded": "Sie können bereits fragen"
     },
     "usageLimit": {
       "continuesAt": "Fortsetzung um {{time}}",
@@ -5911,6 +6570,17 @@
   "sidebar": {
     "cardSlot": {
       "working": "In Arbeit"
+    }
+  },
+  "chats": {
+    "delete": {
+      "title": "Diesen Chat löschen?",
+      "descriptionHost": "Er wird dauerhaft von {{host}} gelöscht. Dies kann nicht rückgängig gemacht werden.",
+      "action": "Löschen",
+      "failed": "Der Chat konnte nicht gelöscht werden",
+      "groupRoom": "Der Chat eines Gruppenraums kann nicht gelöscht werden",
+      "home": "Der Home-Chat eines verwalteten Agenten kann nicht gelöscht werden",
+      "workerOwed": "Eine Orchestrierung wartet noch auf diesen Chat"
     }
   },
   "mcpServers": {
@@ -5996,6 +6666,7 @@
     "agentFilesMessage": "Orca legt deine MCP-Server in den Einstellungsdateien der Agenten ab. Deine eigenen Einträge bleiben, wie sie sind.",
     "allow": "Zulassen",
     "removeTitle": "{{name}} entfernen?",
+    "removeMessageSavedData": "Sitzungen, die ihn verwenden, verlieren möglicherweise sofort den Zugriff. Dabei können gespeicherte Header, Umgebungsvariablen oder die Anmeldung dafür gelöscht werden. In diesem Fall musst du sie eventuell erneut eingeben oder dich erneut anmelden, um den Zugriff wiederherzustellen.",
     "remove": "Entfernen",
     "moveTitle": "{{name}} nach Orca verschieben?",
     "moveMessage": "Orca entfernt ihn aus den Einstellungen von {{agents}} und legt eine Sicherungskopie an.",
