@@ -206,8 +206,8 @@ export async function downloadGmailAttachment(
     parseGoogleJson(MessageSchema)
   )
   const part = attachmentsOf(message).find((entry) => entry.ref === ref.trim())
-  const attachmentId = findPart(message.payload, partId)?.body?.attachmentId
-  if (!part || !attachmentId) {
+  const body = findPart(message.payload, partId)?.body
+  if (!part || !body) {
     throw new GoogleToolError('That message has no such attachment.')
   }
   if ((part.size ?? 0) > TOOL_DOWNLOAD_MAX_BYTES) {
@@ -215,10 +215,14 @@ export async function downloadGmailAttachment(
       `${part.name} is larger than ${formatMegabytes(TOOL_DOWNLOAD_MAX_BYTES)}, more than Orca hands an agent at once; open it in Gmail.`
     )
   }
-  const body = await api.get(
-    'gmail',
-    `${GMAIL}/messages/${messageId}/attachments/${attachmentId}`,
-    parseGoogleJson(AttachmentSchema)
-  )
-  return { ...part, data: Buffer.from(body.data, 'base64url').toString('base64') }
+  const data = body.attachmentId
+    ? (
+        await api.get(
+          'gmail',
+          `${GMAIL}/messages/${messageId}/attachments/${body.attachmentId}`,
+          parseGoogleJson(AttachmentSchema)
+        )
+      ).data
+    : (body.data ?? '')
+  return { ...part, data: Buffer.from(data, 'base64url').toString('base64') }
 }
