@@ -334,19 +334,17 @@ function MobileNativeChatMessageImpl({
                 />
               ) : null}
               {isUser ? (
-                <>
-                  {proseRows(drawnProse.filter(Chat.isImageRefBlock))}
-                  <MobileNativeChatUserMessageFold
-                    text={deriveNativeChatRowContent(message.blocks).markdown}
-                    fontScale={fontScale}
-                    open={userMessageOpen === true}
-                    onToggle={() => onToggleUserMessage?.(message.id)}
-                    recovery={recovery}
-                    status={showFull}
-                  >
-                    {proseRows(drawnProse.filter((block) => !Chat.isImageRefBlock(block)))}
-                  </MobileNativeChatUserMessageFold>
-                </>
+                <MobileNativeChatUserMessageFold
+                  attachments={proseRows(drawnProse.filter(Chat.isImageRefBlock))}
+                  text={deriveNativeChatRowContent(message.blocks).markdown}
+                  fontScale={fontScale}
+                  open={userMessageOpen === true}
+                  onToggle={() => onToggleUserMessage?.(message.id)}
+                  recovery={recovery}
+                  status={showFull}
+                >
+                  {proseRows(drawnProse.filter((block) => !Chat.isImageRefBlock(block)))}
+                </MobileNativeChatUserMessageFold>
               ) : (
                 <MobileNativeChatAnswerProse
                   rowKey={message.id}

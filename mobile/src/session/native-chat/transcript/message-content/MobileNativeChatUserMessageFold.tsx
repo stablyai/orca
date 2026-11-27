@@ -19,6 +19,7 @@ export function MobileNativeChatUserMessageFold({
   onToggle,
   recovery,
   status,
+  attachments,
   children
 }: {
   text: string
@@ -28,6 +29,8 @@ export function MobileNativeChatUserMessageFold({
   onToggle: () => void
   recovery?: ReturnType<typeof useMobileNativeChatFullMessage>['recovery']
   status?: React.ReactNode
+  /** Image attachments, drawn above the text and never folded with it. */
+  attachments?: React.ReactNode[]
   children: React.ReactNode
 }): React.JSX.Element {
   useMobileColorScheme()
@@ -44,6 +47,7 @@ export function MobileNativeChatUserMessageFold({
   const folds = longText && (height === null || height >= clip - 1)
   return (
     <>
+      {attachments?.length ? <View style={styles.attachments}>{attachments}</View> : null}
       {longText ? (
         <View style={folds && !open ? { maxHeight: clip, overflow: 'hidden' } : undefined}>
           <View onLayout={(event) => setHeight(event.nativeEvent.layout.height)}>{children}</View>
@@ -79,6 +83,11 @@ export function MobileNativeChatUserMessageFold({
 }
 
 const styles = themedStyleSheet(() => ({
+  attachments: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
   toggle: {
     alignSelf: 'flex-end',
     paddingTop: spacing.xs
