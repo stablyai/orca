@@ -19,6 +19,7 @@ export type SidebarRevealNoneReason =
   | 'archived'
   | 'bots-off'
   | 'bot-hidden'
+  | 'bot-manually-hidden'
 
 type WorkerRef = Pick<Worktree, 'id' | 'hostId'>
 
@@ -52,6 +53,7 @@ export type SidebarRevealOwner = {
   home: Pick<FolderWorkspace, 'id' | 'connectionId' | 'executionHostId'>
   /** Left out of the list by Bot options (paused and hidden). */
   hidden: boolean
+  manuallyHidden?: boolean
   hostDown: boolean
 }
 
@@ -104,7 +106,7 @@ export type SidebarWorkspaceOwnerInputs = {
 export type SidebarWorkspaceOwner =
   | { section: 'projects' }
   | Omit<SidebarBotsRevealTarget, 'chatId'>
-  | { section: 'none'; reason: 'bots-off' | 'bot-hidden' }
+  | { section: 'none'; reason: 'bots-off' | 'bot-hidden' | 'bot-manually-hidden' }
 
 function ownerOfHome(
   owners: readonly SidebarRevealOwner[],
@@ -159,6 +161,9 @@ export function resolveSidebarWorkspaceOwner(
     if (!input.botsEnabled) {
       return { section: 'none', reason: 'bots-off' }
     }
+    if (home.manuallyHidden) {
+      return { section: 'none', reason: 'bot-manually-hidden' }
+    }
     if (home.hidden) {
       return { section: 'none', reason: 'bot-hidden' }
     }
@@ -173,6 +178,9 @@ export function resolveSidebarWorkspaceOwner(
     return { section: 'projects' }
   }
   const owner = input.owners.find((candidate) => candidate.entryKey === worker.entryKey)
+  if (owner?.manuallyHidden) {
+    return { section: 'none', reason: 'bot-manually-hidden' }
+  }
   if (!owner || owner.hidden) {
     return { section: 'none', reason: 'bot-hidden' }
   }

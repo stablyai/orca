@@ -23,6 +23,8 @@ type MainOwnedUIState =
   | 'starNagAgentValueMomentAppVersion'
   // Desktop-local replay queue: a paired client must not overwrite it.
   | 'pendingRuntimeRepoRemovals'
+  // Each desktop or browser hides bots from its own catalog.
+  | 'hiddenBotSidebarKeys'
   // The moved-to-WSL list exists only on the desktop that moved the projects.
   | 'wslMovedSectionCollapsed'
   | 'hiddenWslMovedProjectKeys'

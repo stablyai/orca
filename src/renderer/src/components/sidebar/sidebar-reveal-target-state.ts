@@ -127,11 +127,13 @@ function ownerInputs(
   const botsEnabled = state.settings?.botsEnabled !== false
   const hideBotCreatedWorkspaces = state.hideBotCreatedWorkspaces !== false
   const hidePausedBots = state.botSidebarView?.hidePausedBots === true
+  const hiddenBotKeys = state.showHiddenBots ? null : new Set(state.hiddenBotSidebarKeys)
   const owners: SidebarRevealOwner[] = entries.map((entry) => ({
     kind: entry.kind,
     entryKey: entry.entryKey,
     home: entry.home,
     hidden: hidePausedBots && entry.paused,
+    manuallyHidden: entry.kind === 'bot' && hiddenBotKeys?.has(entry.entryKey) === true,
     hostDown: readBotHostState(entry.hostId) === 'offline'
   }))
   return {
