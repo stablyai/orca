@@ -3,17 +3,20 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host/exec
 import { MobileNewBotSheet } from '../bots/MobileNewBotSheet'
 import { newBotComputers } from '../bots/new-bot-computers'
 import { useOpenBotHome } from '../bots/use-open-bot-home'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { newBotTargetClient } from './new-bot-target-client'
 import type { HostScreenController } from './use-host-screen-controller'
 
 /** The Bots header's New bot, made on the computer Runs on picks, then its Home opens as a bot row's does. */
 export function HostNewBotSheet({ controller }: { controller: HostScreenController }) {
   const openBotHome = useOpenBotHome()
+  const t = useMobileTranslation()
   const { bots, client, hostCapabilities, hostId, newBot, state } = controller
   const servers = state.serverWorkspaces.hosts
   const computers = useMemo(
-    () => newBotComputers({ desktopLabel: state.hostName, listings: bots, serverHosts: servers }),
-    [state.hostName, bots, servers]
+    () =>
+      newBotComputers({ desktopLabel: state.hostName, listings: bots, serverHosts: servers, t }),
+    [state.hostName, bots, servers, t]
   )
   const botsOn = (target: string) =>
     bots.flatMap((listing) =>

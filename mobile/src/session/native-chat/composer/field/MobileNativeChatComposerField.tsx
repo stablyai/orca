@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
 import {
-  mobileNativeChatComposerSkillStyles as styles,
+  mobileNativeChatComposerSkillStylesSheet,
   type MobileNativeChatComposerFieldProps
 } from './mobile-native-chat-composer-field-skill'
 import { MobileNativeChatComposerFieldCopy } from './MobileNativeChatComposerFieldCopy'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { composerInputStyles } from '../../../../components/composer-input/composer-input-styles'
+import { composerInputStylesSheet } from '../../../../components/composer-input/composer-input-styles'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 export function MobileNativeChatComposerField({
   value,
@@ -18,7 +18,8 @@ export function MobileNativeChatComposerField({
   onWebPaste: _onWebPaste,
   ...props
 }: MobileNativeChatComposerFieldProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(mobileNativeChatComposerSkillStylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
   const [fieldHeight, setFieldHeight] = useState(0)
   // Keep one tree so a skill or dictation coming and going cannot remount the field and drop focus.
   return (

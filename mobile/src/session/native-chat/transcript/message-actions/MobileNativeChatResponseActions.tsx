@@ -3,9 +3,9 @@ import { Pressable, View } from 'react-native'
 import { Ellipsis } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { MobileSourceCopyButton } from '../../../../components/code-presentation/MobileSourceCopyButton'
-import { colors, pressedStyle, spacing } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { pressedStyle, spacing } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 
@@ -17,7 +17,8 @@ export function MobileNativeChatResponseActions({
   message: NativeChatMessage
   copyText: string
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { openActions } = useContext(MobileNativeChatRowOverlaysContext)
   return (
@@ -42,7 +43,7 @@ export function MobileNativeChatResponseActions({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   // Two 44 pt targets side by side: 24 pt boxes, 10 pt slop each, so they never overlap.
   actions: {
     flexDirection: 'row',

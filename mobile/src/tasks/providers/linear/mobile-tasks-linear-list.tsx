@@ -1,16 +1,14 @@
 import type { ConnectionPresentationModel } from '../../screen-state/use-mobile-tasks-connection-presentation'
-import { translate } from '../../../i18n/mobile-i18n'
 import { View, Text, ScrollView, Pressable, FlatList } from 'react-native'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { SectionHeader } from '../../../components/list/ListGroup'
 import { MobileTaskRow, MobileTaskRowSeparator } from '../../task-list/mobile-task-row'
-import { colors, spacing, type MobileColorScheme, pressedStyle } from '../../../theme/mobile-theme'
+import { spacing, type MobileColorScheme, pressedStyle } from '../../../theme/mobile-theme'
 import { ChevronDown } from 'lucide-react-native'
 import {
   ignoreKeptRowPress,
   renderMobileTasksListState
 } from '../../task-list/mobile-tasks-list-state'
-import { styles } from '../../mobile-tasks-legacy-styles'
 import { createLinearTask } from '../../item-detail/mobile-tasks-item-mapping'
 import type { TaskItem } from '../../mobile-tasks-project-workspace-types'
 import { linearIssueSecondaryParts } from '../../item-detail/mobile-tasks-reviewer-linear'
@@ -21,6 +19,7 @@ export function renderMobileTasksLinearList(
   bottomBarHeight: number
 ) {
   const {
+    colors,
     effectiveLinearDisplayProperties,
     insets,
     linearBoardSections,
@@ -31,8 +30,11 @@ export function renderMobileTasksLinearList(
     mutatingStatus,
     refreshTasks,
     refreshing,
+    styles,
+    t,
     taskUiReady
   } = model
+  const listStyles = listStylesSheet.resolve(colorScheme)
   // The last list, kept before Tasks is ready, is read-only.
   const setActionItem = taskUiReady ? model.setActionItem : ignoreKeptRowPress
   const setLinearStatusPickerItem = taskUiReady
@@ -86,7 +88,7 @@ export function renderMobileTasksLinearList(
                     ]}
                     disabled={mutatingStatus}
                     accessibilityRole="button"
-                    accessibilityLabel={translate(
+                    accessibilityLabel={t(
                       'tasks.linearList.changeStatusFrom',
                       'Change status from {{status}}',
                       {
@@ -177,6 +179,6 @@ export function renderMobileTasksLinearList(
   )
 }
 
-const listStyles = themedStyleSheet(() => ({
+const listStylesSheet = themedStyleSheet(() => ({
   heading: { marginHorizontal: spacing.lg }
 }))

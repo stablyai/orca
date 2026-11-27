@@ -17,9 +17,8 @@ import {
 } from '../../key-input/terminal-custom-keys'
 import { DragReorderList } from '../../../components/reorder/DragReorderList'
 import { useSerializedStoredState } from '../../../storage/use-serialized-stored-state'
-import { colors } from '../../../theme/mobile-theme'
-import { styles } from './terminal-shortcut-settings-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { stylesSheet } from './terminal-shortcut-settings-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import '../../key-input/terminal-accessory-keys'
 import { TERMINAL_ACCESSORY_KEY_DEFINITIONS as TERMINAL_ACCESSORY_KEYS } from '../../key-input/terminal-key-definitions'
@@ -33,6 +32,7 @@ import {
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
 import { customKeyBytes, keyName, withVisibleOrder } from './terminal-key-row-entries'
 import { SmartRailRow } from '../../../components/list/SmartRailRow'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 // Absolutely positioned DragReorderList rows require one fixed height per list.
 const KEY_ROW_HEIGHT = 48
@@ -56,7 +56,8 @@ export function TerminalShortcutSettings({
   scrollContentHeight,
   onDragActiveChange
 }: Props): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const hasPad = useDirectionPadAvailable()
   const defaultLayout = useCallback(() => getDefaultTerminalAccessoryLayout(hasPad), [hasPad])

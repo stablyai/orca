@@ -9,15 +9,15 @@ import Animated, {
 import { useRouter } from 'expo-router'
 import { ArrowUpDown } from 'lucide-react-native'
 import { spacing } from '../src/theme/mobile-theme'
-import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
 import { NavBarButton } from '../src/components/nav-bar/NavBarButton'
 import { setDragReorderScrollEnabled } from '../src/components/reorder/drag-reorder-scroll-lock'
 import { TerminalShortcutSettings } from '../src/terminal/shortcuts/settings/TerminalShortcutSettings'
-import { SettingsNavBar, settingsScreenStyles } from '../src/settings/settings-screen-frame'
+import { SettingsNavBar, settingsScreenStylesSheet } from '../src/settings/settings-screen-frame'
+import { useThemedStyles } from '../src/theme/themed-styles'
 
 export default function TerminalKeysScreen() {
-  useMobileColorScheme()
+  const settingsScreenStyles = useThemedStyles(settingsScreenStylesSheet)
   const t = useMobileTranslation()
   const router = useRouter()
   const insets = useSafeAreaInsets()

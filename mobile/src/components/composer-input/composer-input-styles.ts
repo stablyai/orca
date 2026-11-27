@@ -1,4 +1,4 @@
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { feedback, radii, spacing, typography, type MobilePalette } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
 /** Round controls on an action row: attach, mic, Send/Stop. */
@@ -50,7 +50,7 @@ const labelControl = {
 
 // A field on its own is a group of one: the group's fill and radius, no edge, so it matches the rows around it.
 // A function, so the fill is read per theme inside the themed sheet.
-const groupOfOne = () =>
+const groupOfOne = (colors: MobilePalette) =>
   ({
     borderWidth: 0,
     borderRadius: radii.surface,
@@ -61,7 +61,7 @@ const groupOfOne = () =>
 const noOwnRing = { outlineWidth: 0 } as const
 
 // The chat composer's look, shared by every text input so they cannot drift apart; plain fields are grouped rows.
-export const composerInputStyles = themedStyleSheet(() => ({
+export const composerInputStylesSheet = themedStyleSheet((colors) => ({
   box: {
     borderWidth: 1,
     borderColor: colors.composerBorder,
@@ -70,11 +70,11 @@ export const composerInputStyles = themedStyleSheet(() => ({
     borderRadius: radii.floating
   },
   formBox: {
-    ...groupOfOne(),
+    ...groupOfOne(colors),
     ...FIELD_ROWS_PADDING
   },
   fieldInput: {
-    ...groupOfOne(),
+    ...groupOfOne(colors),
     ...noOwnRing,
     fontSize: COMPOSER_TEXT_SIZE,
     color: colors.textPrimary
@@ -152,7 +152,7 @@ export const composerInputStyles = themedStyleSheet(() => ({
     opacity: feedback.pressedOpacity
   },
   field: {
-    ...groupOfOne(),
+    ...groupOfOne(colors),
     minHeight: FIELD_ROW_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
@@ -208,7 +208,7 @@ const unframed = {
   backgroundColor: 'transparent'
 } as const
 
-export const groupFieldStyles = themedStyleSheet(() => ({
+export const groupFieldStylesSheet = themedStyleSheet((colors) => ({
   line: { ...unframed, minHeight: FIELD_ROW_HEIGHT, paddingHorizontal: FIELD_ROW_INSET },
   lines: { ...unframed, ...FIELD_ROWS_PADDING },
   // A form's first group under its SheetHeader.

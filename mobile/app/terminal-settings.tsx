@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useWindowDimensions, View } from 'react-native'
 import { useRouter } from 'expo-router'
-import { colors, spacing } from '../src/theme/mobile-theme'
-import { themedStyleSheet } from '../src/theme/themed-styles'
-import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
+import { spacing } from '../src/theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../src/theme/themed-styles'
+import { useMobileColors } from '../src/theme/use-mobile-color-scheme'
 import type { Translate } from '../src/i18n/mobile-i18n'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
 import { loadHosts, peekHosts } from '../src/host-catalog/host-store'
@@ -108,7 +108,7 @@ function HostFitRow({
   ms: number | null | undefined
   onPress: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const display = useHostDisplay(host)
   // An offline computer can't take the choice, so it says so instead of opening a picker.
@@ -124,7 +124,7 @@ function HostFitRow({
 }
 
 export default function TerminalSettingsScreen() {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const router = useRouter()
   const [hosts, setHosts] = useState<HostProfile[]>(() => peekHosts() ?? [])
@@ -268,6 +268,6 @@ export default function TerminalSettingsScreen() {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   preview: { marginBottom: spacing.lg }
 }))

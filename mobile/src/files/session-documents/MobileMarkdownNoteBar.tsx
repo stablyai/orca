@@ -1,9 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MobilePendingButton } from '../../components/controls/MobilePendingButton'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export type MobileMarkdownNoteBarAction = {
   label: string
@@ -23,7 +23,8 @@ export type MobileMarkdownNoteBarProps = {
 
 /** The note's next step at its foot, shown while the keyboard is down: Source Control's next-step bar values. */
 export function MobileMarkdownNoteBar({ reason, quiet, primary }: MobileMarkdownNoteBarProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const insets = useSafeAreaInsets()
   const ink = primary?.secondary ? colors.textPrimary : colors.bgBase
   // With no quiet action, the reason takes the leading slot beside the button.
@@ -84,7 +85,7 @@ export function MobileMarkdownNoteBar({ reason, quiet, primary }: MobileMarkdown
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   bar: {
     gap: spacing.sm,
     paddingTop: spacing.sm,

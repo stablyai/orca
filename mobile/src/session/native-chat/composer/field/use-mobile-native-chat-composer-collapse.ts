@@ -9,8 +9,9 @@ import { COMPOSER_CONTROL_SIZE } from '../../../../components/composer-input/com
 import {
   COMPOSER_BOX_EDGE,
   COMPOSER_PILL_GAP,
-  mobileNativeChatComposerStyles as styles
+  mobileNativeChatComposerStylesSheet as stylesSheet
 } from './mobile-native-chat-composer-styles'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 const EASE_MS = 200
 const FADE_MS = 150
@@ -25,6 +26,7 @@ type Phase = 'rest' | 'start' | 'run'
  * toggle mid-way heads to the new height from wherever the box is.
  */
 export function useMobileNativeChatComposerCollapse(collapsed: boolean) {
+  const styles = useThemedStyles(stylesSheet)
   const reducedMotion = useReducedMotionEnabled() === true
   const edges = 2 * COMPOSER_BOX_EDGE
   // The pill's field stops short of the send slot, which holds the mic, or the mic and Stop.

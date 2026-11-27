@@ -6,7 +6,7 @@ import Animated, {
   useSharedValue,
   withTiming
 } from 'react-native-reanimated'
-import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
+import { composerInputStylesSheet } from '../components/composer-input/composer-input-styles'
 import { TextField } from '../components/composer-input/TextField'
 import { MobileTerminalLiveInputStatus } from '../terminal/session/input-controls/MobileTerminalLiveInputStatus'
 import {
@@ -17,8 +17,8 @@ import { MobileSessionAccessoryKeys } from '../terminal/session/accessory-keys/M
 import { MobileTerminalMoreKeysSheet } from '../terminal/session/accessory-keys/MobileTerminalMoreKeysSheet'
 import { sessionCommandDockShown } from './mobile-session-command-dock-shown'
 import { useSessionTerminalKeyRail } from '../terminal/session/accessory-keys/use-session-terminal-key-rail'
-import { terminalDockStyles as dockStyles } from '../terminal/session/accessory-keys/terminal-dock-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { terminalDockStylesSheet } from '../terminal/session/accessory-keys/terminal-dock-styles'
+import { useThemedStyles } from '../theme/themed-styles'
 import { SHEET_CURVE } from '../components/motion/sheet-motion-values'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -32,7 +32,8 @@ const IOS_KEYBOARD_MOTION_MS = 250
 
 // The key row above one live field: every letter typed goes straight to the terminal, shell or agent.
 export function MobileSessionCommandDock({ controller }: { controller: MobileSessionController }) {
-  useMobileColorScheme()
+  const inputStyles = useThemedStyles(composerInputStylesSheet)
+  const dockStyles = useThemedStyles(terminalDockStylesSheet)
   const rail = useSessionTerminalKeyRail(controller)
   const live = useContext(MobileDictationLiveContext)
   const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
@@ -133,6 +134,8 @@ function LiveInputField({
   controller: MobileSessionController
   trailing: ReactNode
 }) {
+  const inputStyles = useThemedStyles(composerInputStylesSheet)
+  const dockStyles = useThemedStyles(terminalDockStylesSheet)
   const t = useMobileTranslation()
   const {
     liveInputCapture,

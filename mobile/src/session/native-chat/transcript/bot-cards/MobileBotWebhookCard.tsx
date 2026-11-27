@@ -17,17 +17,18 @@ import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../../../../platform/clipboard/clipboard'
 import { useNow } from '../../../../hooks/use-now'
 import { commentRelativeTime } from '../../../../source-control/review/pull-request/comments/pr-comment-relative-time'
-import { colors, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { MobileNativeChatBotIdentityContext } from '../../mobile-native-chat-bot-identity'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
 import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePill'
-import { toolStyles } from '../tool-results/mobile-native-chat-tool-styles'
+import { toolStylesSheet } from '../tool-results/mobile-native-chat-tool-styles'
 import { mobileWebhookCardSay } from './mobile-bot-card-copy'
 import { useMobileBotCardHost } from './mobile-bot-card-host'
 import { webhookCardRead } from './mobile-bot-card-operations'
 import { copyPhoneWebhookUrl } from '../../../../bots/webhooks/mobile-webhook-url-copy'
 import { MobileBotCardActions, MobileBotCardFrame, MobileBotCardMeta } from './MobileBotCardFrame'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 const URL_KEY_MASK = '••••••••'
 
@@ -71,6 +72,9 @@ export function MobileBotWebhookCard({
   directive: NativeChatBotCardValues['webhook']
   fontScale?: number
 }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const toolStyles = useThemedStyles(toolStylesSheet)
   const t = useMobileTranslation()
   const say = mobileWebhookCardSay(t)
   const host = useMobileBotCardHost()
@@ -175,6 +179,6 @@ export function MobileBotWebhookCard({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   line: { color: colors.textPrimary }
 }))

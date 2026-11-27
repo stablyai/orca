@@ -1,9 +1,9 @@
 import { ArrowUpFromLine, X } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 
 export function AppUpdateCard(props: {
   version: string
@@ -11,7 +11,8 @@ export function AppUpdateCard(props: {
   onDismiss: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const title = t('home.appUpdateCard.title', 'Orca {{version}} is available', {
     version: props.version
   })
@@ -52,7 +53,7 @@ export function AppUpdateCard(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   card: {
     flexDirection: 'row',
     alignItems: 'center',

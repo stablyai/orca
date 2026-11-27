@@ -1,9 +1,8 @@
 import type { LucideIcon } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MobilePendingButton } from '../controls/MobilePendingButton'
-import { sheetPrimaryButtonStyles } from './SheetPrimaryButton'
+import { sheetPrimaryButtonStylesSheet } from './SheetPrimaryButton'
 
 /** The quiet choice under a SheetPrimaryButton, e.g. "Paste code" under "Scan code", or Cancel. */
 export function SheetSecondaryButton({
@@ -21,7 +20,9 @@ export function SheetSecondaryButton({
   icon?: LucideIcon
   accessibilityLabel?: string
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const sheetPrimaryButtonStyles = useThemedStyles(sheetPrimaryButtonStylesSheet)
   return (
     <MobilePendingButton
       label={label}
@@ -37,7 +38,7 @@ export function SheetSecondaryButton({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   button: { height: 44, backgroundColor: 'transparent' },
   label: { color: colors.textSecondary, fontSize: 15, fontWeight: '500' }
 }))

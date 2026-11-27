@@ -7,17 +7,17 @@ import {
   type ViewStyle,
   type TextInputInstance
 } from 'react-native'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useTextInputContentHeight } from '../../platform/text-input/text-input-content-height'
 import { ComposerSendButton } from './ComposerSendButton'
 import {
-  composerInputStyles as styles,
+  composerInputStylesSheet as stylesSheet,
   FORM_MESSAGE_MIN_HEIGHT,
   linesHeight,
   MESSAGE_MAX_HEIGHT,
   MESSAGE_MIN_HEIGHT
 } from './composer-input-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type MessageBoxProps = Omit<
   TextInputProps,
@@ -62,7 +62,8 @@ export function MessageBox({
   multiline = true,
   ...inputProps
 }: MessageBoxProps): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const ownRef = useRef<TextInputInstance>(null)
   const ref = inputRef ?? ownRef
   const contentHeight = useTextInputContentHeight(ref, value)

@@ -1,5 +1,6 @@
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { Translate } from '../i18n/mobile-i18n'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import {
   automationRunEventSourceKey,
   sayAutomationRunEnglish
@@ -31,7 +32,8 @@ import { canOpenAutomationRunAgent } from './automation-run-agent'
 import type { MobileAutomationRun } from './automation-reply-schema'
 import type { AutomationRunObservation } from './use-automation-runs'
 import { useFullAutomationRun } from './use-full-automation-run'
-import { automationStyles as styles } from './automation-styles'
+import { automationStylesSheet as stylesSheet } from './automation-styles'
+import { useThemedStyles } from '../theme/themed-styles'
 
 export function AutomationRunDetails(props: {
   run: MobileAutomationRun
@@ -46,8 +48,9 @@ export function AutomationRunDetails(props: {
   toast: string | null
   onBack: () => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   useBackClaim(() => {
     props.onBack()
     return true
@@ -60,7 +63,7 @@ export function AutomationRunDetails(props: {
     history.scope
   )
   const run = full.run
-  const runError = automationRunErrorText(run)
+  const runError = automationRunErrorText(run, t)
   const [opening, setOpening] = useState(false)
   const [barHeight, setBarHeight] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -161,10 +164,10 @@ export function AutomationRunDetails(props: {
   const captured = run.outputSnapshot
     ? run.outputSnapshot.truncated
       ? t('automations.mobile.capturedTruncated', 'Captured {{date}} · Output truncated by host', {
-          date: automationDate(run.outputSnapshot.capturedAt)
+          date: automationDate(run.outputSnapshot.capturedAt, t, intlLocale)
         })
       : t('automations.mobile.capturedDate', 'Captured {{date}}', {
-          date: automationDate(run.outputSnapshot.capturedAt)
+          date: automationDate(run.outputSnapshot.capturedAt, t, intlLocale)
         })
     : null
   // A run that failed before any output says why once, under its facts.
@@ -193,16 +196,16 @@ export function AutomationRunDetails(props: {
         >
           <ListRow
             title={t('automations.mobile.status', 'Status')}
-            value={automationRunStatusLabel(run.status)}
+            value={automationRunStatusLabel(run.status, t)}
           />
           <ListRow
             title={t('automations.mobile.scheduledFor', 'Scheduled for')}
-            value={automationDate(run.scheduledFor)}
+            value={automationDate(run.scheduledFor, t, intlLocale)}
           />
           {run.startedAt !== null ? (
             <ListRow
               title={t('automations.mobile.started', 'Started')}
-              value={automationDate(run.startedAt)}
+              value={automationDate(run.startedAt, t, intlLocale)}
             />
           ) : null}
           <ListRow title={t('automations.mobile.trigger', 'Trigger')} value={trigger} />
@@ -261,10 +264,11 @@ export function AutomationRunDetails(props: {
 export function automationRunBar(
   run: MobileAutomationRun,
   onBack: () => void,
-  showToast: (message: string) => void
+  showToast: (message: string) => void,
+  t: Translate
 ): AutomationHeaderBar {
   return {
-    page: { title: run.title, subtitle: automationRunStatusLabel(run.status), onBack },
+    page: { title: run.title, subtitle: automationRunStatusLabel(run.status, t), onBack },
     trailing: <AutomationRunMenu runId={run.id} showToast={showToast} />
   }
 }

@@ -10,9 +10,9 @@ import {
   Plus,
   Terminal
 } from 'lucide-react-native'
-import { colors, spacing } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { spacing } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { BottomDrawer } from '../../../../components/bottom-drawer/BottomDrawer'
 import { SheetHeader } from '../../../../components/nav-bar/SheetHeader'
@@ -20,7 +20,7 @@ import { LIST_LEADING_INSET, ListGroup, ListRow } from '../../../../components/l
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
-  composerInputStyles as inputStyles
+  composerInputStylesSheet as inputStylesSheet
 } from '../../../../components/composer-input/composer-input-styles'
 
 /** Plan mode as the + sheet's switch; absent where the chat has none. */
@@ -58,6 +58,8 @@ export function MobileNativeChatComposerAttachButton({
   /** Enters goal mode; absent while it is on or where the chat has none. */
   onGoal?: (() => void) | undefined
 }): React.JSX.Element | null {
+  const inputStyles = useThemedStyles(inputStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const [attachOpen, setAttachOpen] = useState(false)
   // A terminal-backed chat has only photos to add, so its + opens the library at once.
@@ -121,7 +123,8 @@ function AddToMessageSheet({
   plan: MobileNativeChatPlanSwitch | undefined
   onGoal: (() => void) | undefined
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const [planPending, setPlanPending] = useState<boolean | null>(null)
   // Pickers wait for the sheet to go: iOS cannot present them over its Modal.
@@ -228,6 +231,6 @@ function AddToMessageSheet({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   group: { marginTop: spacing.lg }
 }))

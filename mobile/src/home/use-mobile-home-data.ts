@@ -23,6 +23,7 @@ import {
   NO_HOST_LIST_INPUT
 } from '../host-screen/catalog/host-list-queries'
 import { useNow } from '../hooks/use-now'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
@@ -66,6 +67,7 @@ const homeQueryOptions = <TData>(
 export function useMobileHomeData() {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const t = useMobileTranslation()
   const [hostCatalog, setHostCatalog] = useState<HostCatalogEntry[]>([])
   // Until the catalog read lands, an empty list says nothing; a paired user must not see first-run.
   const [hostCatalogLoaded, setHostCatalogLoaded] = useState(false)
@@ -274,9 +276,10 @@ export function useMobileHomeData() {
       homeUnreachableHostIds(
         hosts,
         { autoConnectHostIds, hostAttempts, hostConnections, hostLastConnected, hostStates },
-        now
+        now,
+        t
       ).join('\n'),
-    [hosts, autoConnectHostIds, hostAttempts, hostConnections, hostLastConnected, hostStates, now]
+    [hosts, autoConnectHostIds, hostAttempts, hostConnections, hostLastConnected, hostStates, now, t]
   )
   const unreachableHosts = useMemo(
     () => new Set(unreachableKey ? unreachableKey.split('\n') : []),

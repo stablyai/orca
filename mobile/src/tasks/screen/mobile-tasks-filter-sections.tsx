@@ -5,17 +5,17 @@ import { openExternalLink } from '../../platform/external-links/external-link'
 import type { PickerOption } from '../../components/sheets/PickerModal'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import {
-  GITLAB_FILTER_OPTIONS,
-  GITLAB_VIEW_OPTIONS,
-  LINEAR_FILTER_OPTIONS,
-  LINEAR_GROUP_OPTIONS,
-  LINEAR_ORDER_OPTIONS,
-  LINEAR_VIEW_OPTIONS,
+  gitlabFilterOptions,
+  gitlabViewOptions,
+  linearFilterOptions,
+  linearGroupOptions,
+  linearOrderOptions,
+  linearViewOptions,
   PROJECT_VIEW_DEFAULT_SORT
 } from '../task-list/mobile-tasks-options'
-import { JIRA_FILTER_OPTIONS } from '../task-list/mobile-task-view-options'
+import { jiraFilterOptions } from '../task-list/mobile-task-view-options'
 import { cycleMobileTasksGitHubProjectSort } from '../project-board/mobile-tasks-github-project-pickers'
 import {
   selectMobileTasksGitHubPreset,
@@ -40,6 +40,7 @@ export function ChoiceSection<T extends string>(props: {
   withSubtitles?: boolean
   onLongSelect?: (value: T) => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <>
@@ -80,6 +81,7 @@ function DrillGroup({
   rows: readonly (DrillRow | false)[]
   pager: OptionPagerControls<MobileTasksFilterPageKey>
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const shown = rows.filter((row): row is DrillRow => row !== false)
   if (shown.length === 0) {
     return null
@@ -154,6 +156,7 @@ export function GitHubProjectSections({
   model: ConnectionPresentationModel
   pager: OptionPagerControls<MobileTasksFilterPageKey>
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { activeGitHubProjectView, githubProjectTable, selectedGitHubProjectViewUrl } = model
   return (
@@ -212,14 +215,14 @@ export function GitLabSections({
     <>
       <ChoiceSection
         title={t('tasks.filterSheet.show', 'Show')}
-        options={GITLAB_VIEW_OPTIONS}
+        options={gitlabViewOptions(t)}
         selected={model.gitlabView}
         onSelect={(view) => selectMobileTasksGitLabView(model, view)}
       />
       {model.gitlabView === 'project' ? (
         <ChoiceSection
           title={t('tasks.filterSheet.which', 'Which')}
-          options={GITLAB_FILTER_OPTIONS}
+          options={gitlabFilterOptions(t)}
           selected={model.gitlabFilter}
           onSelect={model.setGitlabFilter}
         />
@@ -251,7 +254,7 @@ export function LinearSections({
     <>
       <ChoiceSection
         title={t('tasks.filterSheet.which', 'Which')}
-        options={LINEAR_FILTER_OPTIONS}
+        options={linearFilterOptions(t)}
         selected={model.linearFilter}
         onSelect={(filter) => selectMobileTasksLinearFilter(model, filter)}
       />
@@ -278,17 +281,17 @@ export function LinearSections({
           {
             page: 'linearLayout',
             title: t('tasks.filterSheet.layout', 'Layout'),
-            value: optionLabel(LINEAR_VIEW_OPTIONS, model.linearViewMode)
+            value: optionLabel(linearViewOptions(t), model.linearViewMode)
           },
           {
             page: 'linearGroup',
             title: t('tasks.filterSheet.groupBy', 'Group by'),
-            value: optionLabel(LINEAR_GROUP_OPTIONS, model.linearGroupBy)
+            value: optionLabel(linearGroupOptions(t), model.linearGroupBy)
           },
           {
             page: 'linearOrder',
             title: t('tasks.filterSheet.orderBy', 'Order by'),
-            value: optionLabel(LINEAR_ORDER_OPTIONS, model.linearOrderBy)
+            value: optionLabel(linearOrderOptions(t), model.linearOrderBy)
           },
           { page: 'linearDisplay', title: t('tasks.filterSheet.showOnRows', 'Show on rows') }
         ]}
@@ -315,7 +318,7 @@ export function JiraSections({
             ? t('tasks.filterSheet.whichAfterSearch', 'Which (clear the search to change)')
             : t('tasks.filterSheet.which', 'Which')
         }
-        options={JIRA_FILTER_OPTIONS.map((option) => ({
+        options={jiraFilterOptions(t).map((option) => ({
           ...option,
           disabled: searchReplacesPreset
         }))}
@@ -337,7 +340,7 @@ export function JiraSections({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   group: { marginBottom: spacing.md },
   drillGroup: { marginTop: spacing.xs }
 }))

@@ -6,9 +6,9 @@ import { ActionSheetContent } from '../../../../components/sheets/ActionSheetMod
 import { BottomDrawer } from '../../../../components/bottom-drawer/BottomDrawer'
 import { useClipboardWriter } from '../../../../platform/clipboard/clipboard'
 import { useWindowSafeAreaInsets } from '../../../../layout/side-safe-area'
-import { colors, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { mobileNativeChatDisplayCopyText } from '../messages/mobile-native-chat-display-copy'
@@ -127,7 +127,8 @@ function SelectTextScreen({
   text: string
   onClose: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const insets = useWindowSafeAreaInsets()
   return (
@@ -167,7 +168,7 @@ function SelectTextScreen({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bgBase },
   header: {
     flexDirection: 'row',

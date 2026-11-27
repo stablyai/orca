@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { MONO_SIZE, scaledType } from '../messages/mobile-native-chat-message-styles'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 
@@ -14,7 +14,7 @@ export function toolType(fontScale: number) {
 /** One tool line's height: a 20 pt line with 6 pt above and below. */
 export const TOOL_ROW_HEIGHT = 32
 
-export const toolStyles = themedStyleSheet(() => ({
+export const toolStylesSheet = themedStyleSheet((colors) => ({
   run: {
     marginTop: spacing.xs
   },

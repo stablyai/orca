@@ -1,9 +1,9 @@
 import { useRef, type ReactNode } from 'react'
 import { ActivityIndicator, Pressable, View, Text } from 'react-native'
 import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../bottom-drawer/BottomDrawer'
 import { LIST_LEADING_INSET, LIST_ROW_PADDING, ListGroup, ListRow } from '../list/ListGroup'
 
@@ -82,7 +82,8 @@ export function ActionSheetContent({
   cancelLabel,
   onClose
 }: ContentProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const groups = (
     actions.some((action) => action.group !== undefined)
       ? groupActions(actions)
@@ -255,7 +256,7 @@ export function ActionSheetModal({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   header: {
     paddingHorizontal: LIST_ROW_PADDING,
     paddingBottom: spacing.sm

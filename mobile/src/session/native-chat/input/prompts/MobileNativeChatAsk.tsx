@@ -18,9 +18,9 @@ import {
   askUnansweredRequired,
   toggleAskOption
 } from '../../../../../../src/shared/native-chat/input/questions/native-chat-ask-card-rules'
-import { colors, pressedStyle } from '../../../../theme/mobile-theme'
+import { pressedStyle } from '../../../../theme/mobile-theme'
 import { triggerSelection } from '../../../../platform/haptics/haptics'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MessageBox } from '../../../../components/composer-input/MessageBox'
@@ -34,9 +34,10 @@ import {
 } from './use-mobile-native-chat-ask-answers'
 import { MobileNativeChatAskOptionRow } from './MobileNativeChatAskOptionRow'
 import { MobileNativeChatOptionPreviewSheet } from '../session-options/MobileNativeChatOptionPreviewSheet'
-import { mobileNativeChatAskStyles as styles } from './MobileNativeChatAsk.styles'
+import { mobileNativeChatAskStylesSheet as stylesSheet } from './MobileNativeChatAsk.styles'
 import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-scroll'
-import { composerInputStyles } from '../../../../components/composer-input/composer-input-styles'
+import { composerInputStylesSheet } from '../../../../components/composer-input/composer-input-styles'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 type Props = {
   prompt: AskPrompt
@@ -85,7 +86,9 @@ export function MobileNativeChatAsk({
   questionKeys,
   drafts
 }: Props): React.JSX.Element | null {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { scrollRef, inputRef, revealReply, onViewportLayout } = useMobileNativeChatReplyScroll()
   const [index, setIndex] = useState(0)

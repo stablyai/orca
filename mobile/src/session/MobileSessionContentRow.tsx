@@ -5,18 +5,20 @@ import { SessionDockColumn } from './SessionDockColumn'
 import { SidebarPageDragContext } from './tabs/sidebar-page-drag'
 import { useSidebarContentSwipe } from './tabs/use-sidebar-content-swipe'
 import { dismissMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
-import { colors, pressedStyle } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../theme/mobile-theme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { styles } from './mobile-session-styles'
+import { stylesSheet } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { MobileSessionCommandDock } from './MobileSessionCommandDock'
 import { MobileDictationLiveContext } from '../dictation/mobile-dictation-live-context'
 import { useMobileDictationLive } from '../dictation/use-mobile-dictation-live'
+import { useThemedStyles } from '../theme/themed-styles'
 
 export function MobileSessionContentRow({ controller }: { controller: MobileSessionController }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const {
     hostId,

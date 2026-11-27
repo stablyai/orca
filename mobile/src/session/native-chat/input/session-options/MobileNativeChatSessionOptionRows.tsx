@@ -1,10 +1,10 @@
 import type { ReactElement, ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronDown, ShieldAlert, type LucideIcon } from 'lucide-react-native'
-import { colors, pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { COMPOSER_CONTROL_SIZE } from '../../../../components/composer-input/composer-input-styles'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { LIST_ROW_PADDING, ListRow } from '../../../../components/list/ListGroup'
@@ -28,7 +28,7 @@ import { orderEffortLevels } from '../../../../../../src/shared/agent-session/op
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
 
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return <Text style={styles.caption}>{children}</Text>
 }
 
@@ -51,7 +51,8 @@ export function ModelPill({
   disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   // A held pick's clock never hides the full-access warning.
   const PillIcon = Icon ?? (warning ? ShieldAlert : leading)
   return (
@@ -87,7 +88,7 @@ export function ModelPill({
 
 /** A trailing value in a colour of its own, as Full access reads in amber. */
 function TintedValue({ value, color }: { value: string; color: string }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Text style={[styles.value, { color }]} numberOfLines={1}>
       {value}
@@ -307,7 +308,7 @@ export function DescriptorRows(props: DescriptorRowsProps): React.JSX.Element {
   return <>{descriptorRowElements(props, t)}</>
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -20,7 +20,7 @@ import { useMobileDiffReviewOverflowActions } from './use-mobile-diff-review-ove
 import { MobilePRSidebar } from '../pull-request/MobilePRSidebar'
 import { RightDrawer } from '../../../components/right-drawer/RightDrawer'
 import {
-  mobilePrSidebarStyles,
+  mobilePrSidebarStylesSheet,
   PR_SIDEBAR_DOCK_WIDTH
 } from '../pull-request/mobile-pr-sidebar-styles'
 import {
@@ -30,8 +30,8 @@ import {
 } from '../pull-request/mobile-pr-sidebar-presentation'
 import { mobileDiffReviewPositionLabel } from '../diff-state/mobile-diff-review-screen-model'
 import { getRuntimePathBasename } from '../../../../../src/shared/file-access/cross-platform-path'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { mobileDiffReviewStylesSheet } from './mobile-diff-review-screen-styles'
+import { useThemedStyles } from '../../../theme/themed-styles'
 import type { HostConnectionInputs } from '../../../transport/connection/client-context-connection-metrics'
 
 type Props = {
@@ -41,7 +41,8 @@ type Props = {
 }
 
 export function MobileDiffReviewScreenView({ controller, hostConnection, onBack }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(mobileDiffReviewStylesSheet)
+  const mobilePrSidebarStyles = useThemedStyles(mobilePrSidebarStylesSheet)
   const t = useMobileTranslation()
   const { isWideLayout } = useResponsiveLayout()
   const insets = useSafeAreaInsets()
@@ -130,12 +131,15 @@ export function MobileDiffReviewScreenView({ controller, hostConnection, onBack 
           fileName={item ? getRuntimePathBasename(item.filePath) : null}
           subtitle={
             item
-              ? mobileDiffReviewPositionLabel({
-                  scope: item.scope,
-                  position: controller.currentIndex + 1,
-                  count: controller.filteredQueue.length,
-                  viewedCount: controller.reviewedCount
-                })
+              ? mobileDiffReviewPositionLabel(
+                  {
+                    scope: item.scope,
+                    position: controller.currentIndex + 1,
+                    count: controller.filteredQueue.length,
+                    viewedCount: controller.reviewedCount
+                  },
+                  t
+                )
               : ''
           }
           onBack={onBack}

@@ -1,7 +1,7 @@
 import { themedStyleSheet } from '../../theme/themed-styles'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
 
-export const mobileTasksChromeStyles = themedStyleSheet(() => ({
+export const mobileTasksChromeStylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase

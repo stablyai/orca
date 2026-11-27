@@ -3,15 +3,14 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { CircleAlert, SearchX, WifiOff, type LucideIcon } from 'lucide-react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import {
-  colors,
   feedback,
   radii,
   spacing,
   typography,
   pressedStyle
 } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { describeLoadError } from './load-error-description'
 
 // (44 - 32) / 2: the button's real touch target reaches 44 pt.
@@ -51,7 +50,8 @@ export function MobileStateView({
   bottomInset = 0,
   children
 }: MobileStateViewProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   return (
     <View style={[styles.state, { paddingBottom: spacing.xl + bottomInset }]}>
       {loading ? (
@@ -85,7 +85,7 @@ export function MobileStateButton({
   inRow = false,
   accessibilityLabel
 }: MobileStateAction & { disabled?: boolean; inRow?: boolean; accessibilityLabel?: string }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const a11y = {
     onPress,
     disabled,
@@ -129,6 +129,7 @@ export function MobileStateButton({
 }
 
 function MobileStateDetails({ details }: { details: string }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [open, setOpen] = useState(false)
   return (
@@ -245,7 +246,7 @@ export function MobileNoMatchState({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   children: {
     alignSelf: 'stretch',
     marginTop: spacing.md

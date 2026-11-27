@@ -24,7 +24,7 @@ import { useBackClaim } from '../../navigation/use-back-claim'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import type { PhoneWebhook } from './mobile-webhook-operations'
 
@@ -135,6 +135,7 @@ export function MobileBotWebhookSecret(props: {
    *  false when the host refused. */
   onSave: (adapter: WebhookAdapterId, secret: string | null) => Promise<string | null | false>
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
   const [adapter, setAdapter] = useState<WebhookAdapterId>(props.hook.adapter ?? 'standard')
@@ -337,6 +338,6 @@ function SenderPicker(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   gap: { marginTop: spacing.lg }
 }))

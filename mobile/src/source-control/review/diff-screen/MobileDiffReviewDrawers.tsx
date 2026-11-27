@@ -2,8 +2,7 @@ import { useMemo, useState } from 'react'
 import { KeyboardAvoidingView, Pressable, Text, View } from 'react-native'
 import { Copy, Plus, Send } from 'lucide-react-native'
 import { getRuntimePathBasename } from '../../../../../src/shared/file-access/cross-platform-path'
-import { colors } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { sendSheetMessage } from './mobile-diff-review-send-copy'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { ActionSheetAction } from '../../../components/sheets/ActionSheetModal'
@@ -13,11 +12,12 @@ import { KeyedBottomDrawer } from '../../../components/bottom-drawer/keyed-botto
 import type { ComposerState, SendSheetState } from '../diff-state/mobile-diff-review-screen-model'
 import { reviewSheetKey, type ReviewSheet } from '../diff-actions/mobile-diff-review-sheets'
 import type { useMobileDiffReviewController } from '../use-mobile-diff-review-controller'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { mobileDiffReviewStylesSheet } from './mobile-diff-review-screen-styles'
 import { TextField } from '../../../components/composer-input/TextField'
 import { ListGroup, ListRow } from '../../../components/list/ListGroup'
 import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
-import { prSheetStyles } from '../pull-request/pr-tab-styles'
+import { prSheetStylesSheet } from '../pull-request/pr-tab-styles'
+import { useThemedStyles } from '../../../theme/themed-styles'
 import { hostOs } from '../../../platform/host-os'
 import { MobileDiffReviewFilesSheet } from './MobileDiffReviewFilesSheet'
 import { MobileDiffReviewRangeSheet } from './MobileDiffReviewRangeSheet'
@@ -83,11 +83,14 @@ function ReviewSheetContent({ controller, sheet }: Props & { sheet: ReviewSheet 
         <MobileDiffReviewFilesSheet
           queue={controller.filteredQueue}
           currentKey={controller.currentItem?.key ?? null}
-          subtitle={mobileDiffReviewFilesSubtitle({
-            scope: controller.currentItem?.scope ?? null,
-            count: controller.filteredQueue.length,
-            viewedCount: controller.reviewedCount
-          })}
+          subtitle={mobileDiffReviewFilesSubtitle(
+            {
+              scope: controller.currentItem?.scope ?? null,
+              count: controller.filteredQueue.length,
+              viewedCount: controller.reviewedCount
+            },
+            t
+          )}
           onSelect={(item) => {
             controller.selectItem(item)
             controller.closeSheet('files')
@@ -177,7 +180,8 @@ function useSendActions(
 }
 
 function NoteComposerContent({ controller, composer }: Props & { composer: ComposerState }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(mobileDiffReviewStylesSheet)
+  const prSheetStyles = useThemedStyles(prSheetStylesSheet)
   const t = useMobileTranslation()
   const [busy, setBusy] = useState(false)
   const run = (action: () => Promise<void>) => {
@@ -232,7 +236,8 @@ function NoteComposerContent({ controller, composer }: Props & { composer: Compo
 }
 
 function CompletionContent({ controller }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(mobileDiffReviewStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const fileCount = controller.filteredQueue.length
   const count = controller.screenState.kind === 'ready' ? controller.screenState.comments.length : 0

@@ -2,9 +2,9 @@ import type { ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronRight, X } from 'lucide-react-native'
 import { AGENT_WORKING_COLOR, WorkingRing } from '../../../../agents/presentation/AgentStateDot'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileNativeChatDisclosure } from '../viewport/mobile-native-chat-disclosure-store'
 import { useMobileNativeChatMessageTimeLabel } from './MobileNativeChatMessageTime'
 import { scaledType } from './mobile-native-chat-message-styles'
@@ -29,7 +29,8 @@ function MobileNativeChatEventIcon({
   children: ReactNode
   badge?: MobileNativeChatEventBadge | null
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   return (
     <View style={styles.mark}>
       {children}
@@ -89,7 +90,8 @@ export function MobileNativeChatEventRow({
   subtitle?: ReactNode
   testID?: string
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const state =
     badge === 'running'
@@ -163,11 +165,11 @@ export function MobileNativeChatEventRow({
 
 /** The name in a row's words. */
 export function MobileNativeChatEventName({ children }: { children: ReactNode }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return <Text style={styles.name}>{children}</Text>
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     position: 'relative',
     flexDirection: 'row',

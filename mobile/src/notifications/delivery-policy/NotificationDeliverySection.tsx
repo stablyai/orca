@@ -2,7 +2,6 @@ import { ListRow } from '../../components/list/ListGroup'
 import { MobileSwitch } from '../../components/controls/MobileSwitch'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { SettingsSection } from '../../settings/settings-screen-frame'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { NotificationDeliveryPreferences } from './notification-delivery-preferences'
 
 type Props = {
@@ -13,7 +12,6 @@ type Props = {
 
 export function NotificationDeliverySection({ value, disabled, onChange }: Props) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const row = (key: keyof NotificationDeliveryPreferences, label: string, hint?: string) => (
     <ListRow
       key={key}

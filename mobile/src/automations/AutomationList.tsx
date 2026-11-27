@@ -1,13 +1,13 @@
 import { automationOrphanIssueText } from './automation-orphan-issue-copy'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { translate } from '../i18n/mobile-i18n'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { CalendarClock } from 'lucide-react-native'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
 import { MobileStateView } from '../components/feedback/MobileStateView'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { ListGroup, ListRow } from '../components/list/ListGroup'
-import { colors } from '../theme/mobile-theme'
 import { automationScheduleText } from './automation-schedule-label'
 import type { MobileAutomationRow } from './automation-reply-schema'
 
@@ -20,8 +20,9 @@ export function AutomationList(props: {
   onOpen: (row: MobileAutomationRow) => void
   onToggle: (row: MobileAutomationRow, enabled: boolean) => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   if (!props.loaded) {
     return (
       <MobileStateView
@@ -34,8 +35,8 @@ export function AutomationList(props: {
     return (
       <MobileStateView
         icon={CalendarClock}
-        title={automationsEmptyTitle()}
-        message={automationsEmptyMessage()}
+        title={automationsEmptyTitle(t)}
+        message={automationsEmptyMessage(t)}
         action={
           props.disabled
             ? null
@@ -51,7 +52,12 @@ export function AutomationList(props: {
     <ListGroup>
       {props.rows.map((row) => {
         const { automation } = row
-        const { subtitle, orphan } = automationRowSubtitle(row, props.projectName(automation))
+        const { subtitle, orphan } = automationRowSubtitle(
+          row,
+          props.projectName(automation),
+          t,
+          intlLocale
+        )
         return (
           <ListRow
             key={automation.id}
@@ -86,18 +92,22 @@ export function AutomationList(props: {
 /** A row's one line: its schedule and project, or what broke its owner. Shared with Home's tab. */
 export function automationRowSubtitle(
   row: MobileAutomationRow,
-  project: string | undefined
+  project: string | undefined,
+  t: Translate,
+  intlLocale: string
 ): { subtitle: string; orphan: boolean } {
   const { automation, item } = row
   return item.selector.kind === 'orphan'
     ? { subtitle: automationOrphanIssueText(item.selector.issue), orphan: true }
     : {
-        subtitle: [automationScheduleText(automation), project].filter(Boolean).join(' · '),
+        subtitle: [automationScheduleText(automation, t, intlLocale), project]
+          .filter(Boolean)
+          .join(' · '),
         orphan: false
       }
 }
 
-export const automationsEmptyTitle = () =>
-  translate('automations.mobile.noAutomations', 'No automations yet')
-export const automationsEmptyMessage = () =>
-  translate('automations.mobile.noAutomationsHint', 'Schedule an agent to work on this computer.')
+export const automationsEmptyTitle = (t: Translate) =>
+  t('automations.mobile.noAutomations', 'No automations yet')
+export const automationsEmptyMessage = (t: Translate) =>
+  t('automations.mobile.noAutomationsHint', 'Schedule an agent to work on this computer.')

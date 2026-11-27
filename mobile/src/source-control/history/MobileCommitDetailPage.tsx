@@ -13,10 +13,11 @@ import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
-import { colors, pressedStyle, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { pressedStyle, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
 import { translate } from '../../i18n/mobile-i18n'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { openExternalLink } from '../../platform/external-links/external-link'
@@ -69,7 +70,8 @@ export function MobileCommitDetailPage({
   onBack,
   onOpenFile
 }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
   const moreRef = useRef<HostInstance>(null)
@@ -77,7 +79,11 @@ export function MobileCommitDetailPage({
   const [files, setFiles] = useState<FilesState>({ files: null, error: null })
   const [filesReload, setFilesReload] = useState(0)
   const [webUrl, setWebUrl] = useState<string | null>(null)
-  const detail = useMemo(() => buildMobileCommitDetail(commit), [commit, t])
+  const locale = useMobileUiLocale()
+  const detail = useMemo(
+    () => buildMobileCommitDetail(commit, t, intlLocaleFor(locale)),
+    [commit, t, locale]
+  )
   const connected = client !== null && connState === 'connected'
 
   useEffect(() => {
@@ -295,7 +301,8 @@ function CommitFileRow({
   file: MobileGitChangedFile
   onOpen?: (filePath: string) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const status = file.status ?? 'modified'
   const { name, dir } = splitPath(file.path)
   return (
@@ -306,7 +313,7 @@ function CommitFileRow({
       accessibilityRole={onOpen ? 'button' : undefined}
       accessibilityLabel={file.path}
     >
-      <Text style={[styles.fileStatus, { color: statusColor(status) }]}>
+      <Text style={[styles.fileStatus, { color: statusColor(status, colors) }]}>
         {STATUS_LABELS[status]}
       </Text>
       <View style={styles.fileMain}>
@@ -327,7 +334,7 @@ function CommitFileRow({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   page: { flex: 1, backgroundColor: colors.bgBase },
   content: {},
   subject: {

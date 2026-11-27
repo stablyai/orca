@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, feedback, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { feedback, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 
 export const TEXT_SIZE = 17
@@ -11,7 +11,7 @@ export function scaledType(size: number, fontScale: number, leading = 6) {
 }
 export const MONO_SIZE = 12
 
-export const styles = themedStyleSheet(() => ({
+export const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm

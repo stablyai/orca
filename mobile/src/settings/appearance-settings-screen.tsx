@@ -1,6 +1,5 @@
 import { useRouter } from 'expo-router'
 import { ListRow } from '../components/list/ListGroup'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   setMobileAppearancePreference,
   useMobileAppearancePreference,
@@ -34,7 +33,6 @@ function usageDisplayOptions(t: Translate): { value: UsagePercentageDisplay; lab
 }
 
 export default function AppearanceSettingsScreen() {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const router = useRouter()
   const preference = useMobileAppearancePreference()

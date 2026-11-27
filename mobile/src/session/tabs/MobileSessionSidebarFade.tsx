@@ -1,12 +1,12 @@
 import { View } from 'react-native'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
-import { colors, getMobileColorScheme } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColorScheme, useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 /** Rows scroll out under the New tab pill through a fade to the sidebar's ground, as BottomSearchBar's do. */
 export function SidebarFade({ height }: { height: number }) {
-  useMobileColorScheme()
-  const ground = getMobileColorScheme() === 'dark' ? colors.bgPanel : colors.bgRaised
+  const scheme = useMobileColorScheme()
+  const colors = useMobileColors()
+  const ground = scheme === 'dark' ? colors.bgPanel : colors.bgRaised
   return (
     <View
       pointerEvents="none"

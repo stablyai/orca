@@ -4,7 +4,6 @@ import { Clock } from 'lucide-react-native'
 import { BottomDrawer } from '../../../../components/bottom-drawer/BottomDrawer'
 import { ListGroup, LIST_LEADING_INSET, SectionHeader } from '../../../../components/list/ListGroup'
 import { SheetHeader } from '../../../../components/nav-bar/SheetHeader'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { translate, type Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { useMoreModelsShown } from './use-more-models-shown'
@@ -24,7 +23,7 @@ import {
   nativeChatSessionOptionDisabledReason,
   nativeChatSessionOptionLabel
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
-import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
+import { mobileNativeChatSessionOptionSay } from './native-chat-session-option-copy'
 import {
   mobileDeferredPermissionSummary,
   mobileSessionOptionSummaryValue
@@ -44,11 +43,13 @@ import {
   permissionModeIcon
 } from './mobile-native-chat-permission-mode-icons'
 import type { MobileNativeChatSessionOptionsController } from './use-mobile-native-chat-session-options'
-import { sessionOptionPickerStyles as styles } from './mobile-native-chat-session-option-picker-styles'
+import { sessionOptionPickerStylesSheet as stylesSheet } from './mobile-native-chat-session-option-picker-styles'
 import {
   MobileNativeChatContextSection,
   type MobileNativeChatContext
 } from '../../composer/commands/MobileNativeChatContextUsage'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 export type MobileNativeChatPickerPresentation = { page: string | null; refocus: boolean }
 
@@ -90,8 +91,10 @@ export function MobileNativeChatSessionOptionPickers({
   onDrawerOpen,
   onDrawerAfterClose
 }: MobileNativeChatSessionOptionPickersProps & PresentationProps): React.JSX.Element | null {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
+  const say = mobileNativeChatSessionOptionSay(t)
   const open = presentation?.page != null
   const wasOpen = useRef(false)
   useEffect(() => {
@@ -168,13 +171,15 @@ export function MobileNativeChatSessionOptionPickers({
     busy || (isWorking && locksMidTurn(descriptor))
   const reason = nativeChatSessionOptionDisabledReason(activeDescriptor?.disabledReason, say)
   const permissionChoice = selectedChoice(permission)
-  const permissionColor = permissionChoiceColor(permissionChoice?.value)
+  const permissionColor = permissionChoiceColor(colors, permissionChoice?.value)
   const permissionIcon =
     !model && permissionChoice ? permissionModeIcon(permissionChoice.value) : undefined
   const primary = model
     ? nativeChatModelPillLabel(model, say)
-    : mobileSessionOptionSummaryValue((permission ?? options[0])!)
-  const permissionDeferred = permission ? mobileDeferredPermissionSummary(permission)?.full : null
+    : mobileSessionOptionSummaryValue((permission ?? options[0])!, t)
+  const permissionDeferred = permission
+    ? mobileDeferredPermissionSummary(permission, t)?.full
+    : null
   const secondary = (model && nativeChatOptionValuesLabel(options, say)) || null
   // The pill shows only the model; its spoken name still carries effort and a deferred pick.
   const modelValue = [primary, secondary, model && permissionDeferred].filter(Boolean).join(' ')
@@ -297,7 +302,9 @@ export function MobileNativeChatSessionOptionPickers({
                         onSetOption: (value) => applyOption(activeDescriptor, value),
                         onInvokeAction: () => invokeAction(activeDescriptor),
                         ...(activeDescriptor === model ? { moreChoices: moreModels } : {}),
-                        ...(permissionView ? { choiceLeading: permissionChoiceLeading } : {})
+                        ...(permissionView
+                          ? { choiceLeading: (value: string) => permissionChoiceLeading(colors, value) }
+                          : {})
                       },
                       t
                     )}
@@ -339,7 +346,7 @@ export function MobileNativeChatSessionOptionPickers({
                           disabled: locked(permission),
                           onSetOption: (value) => applyOption(permission, value),
                           onInvokeAction: () => invokeAction(permission),
-                          choiceLeading: permissionChoiceLeading
+                          choiceLeading: (value: string) => permissionChoiceLeading(colors, value)
                         },
                         t
                       )}
@@ -389,6 +396,7 @@ function optionRow(
   onNavigate: (page: string) => void,
   t: Translate
 ): React.JSX.Element[] {
+  const say = mobileNativeChatSessionOptionSay(t)
   const disabled = locked(descriptor) || !descriptor.settable
   if (showsSessionOptionAsSwitch(descriptor)) {
     return descriptorRowElements(
@@ -408,7 +416,7 @@ function optionRow(
       value={
         descriptor.category === 'model'
           ? nativeChatModelPillLabel(descriptor, say)
-          : mobileSessionOptionSummaryValue(descriptor)
+          : mobileSessionOptionSummaryValue(descriptor, t)
       }
       subtitle={
         sessionOptionDispatchUnconfirmed(descriptor)

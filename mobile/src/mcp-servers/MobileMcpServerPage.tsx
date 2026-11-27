@@ -12,9 +12,8 @@ import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
 import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
-import { colors, pressedStyle } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   mcpServerDetailsRead,
@@ -42,7 +41,7 @@ export function MobileMcpServerPage(props: {
   onSignIn: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const { server, actions, list } = props
   const title = mcpServerTitle(server)
   const details = useServerDetails(props.client, server)
@@ -277,6 +276,6 @@ function useServerDetails(client: RpcClient | null, server: PhoneMcpServer): Bot
   return signsIn ? null : details
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   turnAllOn: { fontSize: 13, fontWeight: '600', color: colors.textPrimary }
 }))

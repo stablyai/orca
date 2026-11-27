@@ -20,13 +20,13 @@ import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
 import { useSerializedStoredState } from '../../storage/use-serialized-stored-state'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { HostProfile } from '../../host-catalog/host-profile'
 import { useHostDisplay } from '../../host-descriptors/use-host-display'
 import { formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
-import { homeListStyles } from '../home-list-styles'
+import { homeListStylesSheet } from '../home-list-styles'
 import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import type { MobileHomeData } from '../use-mobile-home-data'
 import { MobileHomeAgentsBottomBar } from './MobileHomeAgentsBottomBar'
@@ -45,7 +45,8 @@ export function MobileHomeAgentsTab(props: {
   onNewWorkspace?: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const { data } = props
   const hosts = data.sortedHosts
@@ -256,6 +257,7 @@ function AgentListSectionHeading(props: {
   /** The Done heading's "Clear": the same as Clear finished. */
   onClear?: () => void
 }) {
+  const homeListStyles = useThemedStyles(homeListStylesSheet)
   const t = useMobileTranslation()
   const { section } = props
   const desktop = useHostDisplay(props.host).title
@@ -275,7 +277,7 @@ function AgentListSectionHeading(props: {
       ? null
       : props.now - seen.at < 60_000
         ? null
-        : formatTimeAgo(seen.at, props.now)
+        : formatTimeAgo(seen.at, props.now, t)
   const aside = seen
     ? seen.offline
       ? seen.at === undefined
@@ -305,7 +307,7 @@ function AgentsEmpty(props: { title: string; message?: string }) {
   return <MobileHomeTabEmpty icon={SquareTerminal} {...props} />
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   content: { paddingHorizontal: spacing.lg },
   connecting: { alignItems: 'center', paddingVertical: spacing.xl, marginTop: 32 }
 }))

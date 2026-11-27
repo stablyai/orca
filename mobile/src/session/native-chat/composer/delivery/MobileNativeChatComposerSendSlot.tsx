@@ -1,6 +1,6 @@
 import type { ReactNode, RefObject } from 'react'
 import { View, type TextInputInstance } from 'react-native'
-import { mobileNativeChatComposerStyles as styles } from '../field/mobile-native-chat-composer-styles'
+import { mobileNativeChatComposerStylesSheet as stylesSheet } from '../field/mobile-native-chat-composer-styles'
 import { isStructuredAgentSessionHostCommand } from '../../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { agentSessionInteractionCommand } from '../../../../../../src/shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type { NativeChatSendFollowUp } from '../../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
@@ -18,6 +18,7 @@ import {
 import type { MobileNativeChatSteerHead } from '../menus/use-mobile-native-chat-composer-tray'
 import { useMobileNativeChatSteerChordPreview } from '../field/use-mobile-native-chat-steer-chord-preview'
 import { useMobileNativeChatDictationFailed } from '../dictation/MobileNativeChatDictationLeading'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 /** Send's slot outside a queued edit: the mic until there is something to send, then Send; Stop where
  *  Send can't deliver, with the mic beside it; or what a held Cmd/Ctrl would do. */
@@ -66,6 +67,7 @@ export function MobileNativeChatComposerSendSlot({
   /** The slot's width, which the idle pill's field stops short of. */
   onWidth: (width: number) => void
 }): React.JSX.Element | null {
+  const styles = useThemedStyles(stylesSheet)
   const dictationFailed = useMobileNativeChatDictationFailed()
   const steerChord = useMobileNativeChatSteerChordPreview({
     fieldRef,

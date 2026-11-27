@@ -6,7 +6,7 @@ import type { MobileNativeChatNoticeView } from './mobile-native-chat-notice-con
 import { nativeChatOrcaStopSay } from './native-chat-orca-stop-copy'
 import { nativeChatRestartNoteText } from './native-chat-restart-note-copy'
 import { nativeChatUsageLimitText } from './native-chat-usage-limit-copy'
-import { sayMobileAgentSessionFailure } from '../../agent-session/agent-session-failure-copy'
+import { mobileAgentSessionFailureSay } from '../../agent-session/agent-session-failure-copy'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 
 // The phone always reads its Orca host as remote.
@@ -45,6 +45,6 @@ export function noticeLineText(
         )
       : undefined
   return failure && surface
-    ? agentSessionFailureSentence(failure, surface, context, sayMobileAgentSessionFailure)
+    ? agentSessionFailureSentence(failure, surface, context, mobileAgentSessionFailureSay(t))
     : (nativeChatRestartNoteText(notice.text, t) ?? notice.text)
 }

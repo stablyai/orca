@@ -4,8 +4,8 @@ import { MobileSearchField } from '../../../../components/controls/MobileSearchF
 import { MobileNoMatchState } from '../../../../components/feedback/MobileStateView'
 import { LIST_ROW_PADDING } from '../../../../components/list/ListGroup'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, radii, spacing } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { radii, spacing } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import type {
   SessionOptionDescriptor,
@@ -51,6 +51,7 @@ export function MobileNativeChatModelSearchList({
   moreChoices: { shown: boolean; onToggle: () => void }
   onSetOption: (value: SessionOptionValue) => void
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   const colorScheme = useMobileColorScheme()
   const t = useMobileTranslation()
   const [query, setQuery] = useState('')
@@ -118,11 +119,11 @@ export function MobileNativeChatModelSearchList({
 }
 
 function RowSeparator(): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return <View style={styles.separator} />
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   search: {
     marginBottom: spacing.sm
   },

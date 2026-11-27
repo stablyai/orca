@@ -4,17 +4,16 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useEffect } from 'react'
 import { View } from 'react-native'
 import { spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import type { PickerOption } from '../../components/sheets/PickerModal'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import {
-  LINEAR_DISPLAY_OPTIONS,
-  LINEAR_GROUP_OPTIONS,
-  LINEAR_ORDER_OPTIONS,
-  LINEAR_VIEW_OPTIONS,
-  SORT_OPTIONS
+  linearDisplayOptions,
+  linearGroupOptions,
+  linearOrderOptions,
+  linearViewOptions,
+  sortOptions
 } from '../task-list/mobile-tasks-options'
 import {
   repositoryCount,
@@ -78,6 +77,7 @@ function ChoiceRows<T extends string>(props: {
   selected: string
   onSelect: (value: T) => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <ListGroup style={styles.group}>
       {props.options.map((option) => (
@@ -96,6 +96,7 @@ function ChoiceRows<T extends string>(props: {
 type CheckRow = { key: string; title: string; subtitle?: string; checked: boolean }
 
 function CheckRows(props: { rows: readonly CheckRow[]; onToggle: (key: string) => void }) {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <ListGroup style={styles.group}>
       {props.rows.map((row) => (
@@ -159,13 +160,13 @@ function IssueSourcePage({ model }: { model: ConnectionPresentationModel }) {
               {
                 value: 'upstream' as const,
                 label: t('tasks.providerPickers.upstreamSource', 'Upstream · {{slug}}', {
-                  slug: issueSourceSlug(sources.upstreamCandidate)
+                  slug: issueSourceSlug(t, sources.upstreamCandidate)
                 })
               },
               {
                 value: 'origin' as const,
                 label: t('tasks.providerPickers.originSource', 'Origin · {{slug}}', {
-                  slug: issueSourceSlug(sources.prs)
+                  slug: issueSourceSlug(t, sources.prs)
                 })
               }
             ]}
@@ -224,6 +225,7 @@ function LinearTeamsPage({ model }: { model: ConnectionPresentationModel }) {
 }
 
 function ProjectPage({ model }: { model: ConnectionPresentationModel }) {
+  const styles = useThemedStyles(stylesSheet)
   const { loadGitHubProjects, setGithubProjectError, setShowFilterSheet } = model
   // The catalog loads only while a picker is open; this page is that picker inside the sheet.
   useEffect(() => {
@@ -240,7 +242,7 @@ function ProjectPage({ model }: { model: ConnectionPresentationModel }) {
 }
 
 function toggleLinearDisplayProperty(model: ConnectionPresentationModel, key: string) {
-  const property = LINEAR_DISPLAY_OPTIONS.find((option) => option.value === key)?.value
+  const property = linearDisplayOptions(model.t).find((option) => option.value === key)?.value
   if (!property) {
     return
   }
@@ -265,12 +267,17 @@ function FilterPageBody({
   model: ConnectionPresentationModel
   page: MobileTasksFilterPageKey
 }) {
+  const t = useMobileTranslation()
   switch (page) {
     case 'repos':
       return <ReposPage model={model} />
     case 'sort':
       return (
-        <ChoiceRows options={SORT_OPTIONS} selected={model.taskSort} onSelect={model.setTaskSort} />
+        <ChoiceRows
+          options={sortOptions(t)}
+          selected={model.taskSort}
+          onSelect={model.setTaskSort}
+        />
       )
     case 'issueSource':
       return <IssueSourcePage model={model} />
@@ -308,7 +315,7 @@ function FilterPageBody({
     case 'linearLayout':
       return (
         <ChoiceRows
-          options={LINEAR_VIEW_OPTIONS}
+          options={linearViewOptions(t)}
           selected={model.linearViewMode}
           onSelect={model.setLinearViewMode}
         />
@@ -316,7 +323,7 @@ function FilterPageBody({
     case 'linearGroup':
       return (
         <ChoiceRows
-          options={LINEAR_GROUP_OPTIONS}
+          options={linearGroupOptions(t)}
           selected={model.linearGroupBy}
           onSelect={model.setLinearGroupBy}
         />
@@ -324,7 +331,7 @@ function FilterPageBody({
     case 'linearOrder':
       return (
         <ChoiceRows
-          options={LINEAR_ORDER_OPTIONS}
+          options={linearOrderOptions(t)}
           selected={model.linearOrderBy}
           onSelect={model.setLinearOrderBy}
         />
@@ -332,7 +339,7 @@ function FilterPageBody({
     case 'linearDisplay':
       return (
         <CheckRows
-          rows={LINEAR_DISPLAY_OPTIONS.map((property) => ({
+          rows={linearDisplayOptions(t).map((property) => ({
             key: property.value,
             title: property.label,
             checked: model.effectiveLinearDisplayProperties.has(property.value)
@@ -367,7 +374,6 @@ export function MobileTasksFilterPage({
   done: { label: string; onPress: () => void }
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
   return (
     <>
       <SheetHeader
@@ -383,7 +389,7 @@ export function MobileTasksFilterPage({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   group: { marginBottom: spacing.md },
   body: { gap: spacing.sm }
 }))

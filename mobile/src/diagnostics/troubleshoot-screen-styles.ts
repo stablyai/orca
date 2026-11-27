@@ -1,8 +1,8 @@
-import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
+import { feedback, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { LIST_ROW_PADDING } from '../components/list/ListGroup'
 
-export const troubleshootScreenStyles = themedStyleSheet(() => ({
+export const troubleshootScreenStylesSheet = themedStyleSheet((colors) => ({
   scroll: {
     flex: 1
   },

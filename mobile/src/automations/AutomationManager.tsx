@@ -1,6 +1,5 @@
 import { useAutomationSetupConsent } from './use-automation-setup-consent'
 import { OrcaHookTrustDrawer } from '../components/hook-trust/OrcaHookTrustDrawer'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useAutomationRuns, type AutomationRunScope } from './use-automation-runs'
 import { useState, type ReactNode } from 'react'
 import { useAutomationCreateAttempt } from './use-automation-create-attempt'
@@ -39,8 +38,11 @@ import { automationUpdateParams, type AutomationDraft } from './automation-draft
 import type { AutomationTargets } from './automation-target-inventory'
 import { useAutomationCatalog, useStartOnAutomation } from './use-automation-catalog'
 import { dropAutomationEditorDraft } from './automation-editor-draft-row'
-import { automationStyles as styles } from './automation-styles'
+import { automationStylesSheet as stylesSheet } from './automation-styles'
 import { useAutomationProjectNames } from './use-automation-project-names'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
+import { useThemedStyles } from '../theme/themed-styles'
 
 type AutomationView =
   | { kind: 'list' }
@@ -66,7 +68,9 @@ export function AutomationManager(props: {
   /** Filled while the editor is open, so tab and host switches ask before dropping its edits. */
   leaveGuard?: AutomationLeaveSlot
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const catalog = useAutomationCatalog(props.hostId, props.client, props.executionHost)
   const [view, setView] = useState<AutomationView>({ kind: 'list' })
   // Kept while the sheet slides away, so it leaves with what it showed.
@@ -268,14 +272,20 @@ export function AutomationManager(props: {
     openEditor({})
   }
   const bar: AutomationHeaderBar = row
-    ? automationDetailBar(row, allAutomations, {
-        disabled,
-        onEdit: () => edit(row),
-        onRuns: () => allRuns(row.automation.id),
-        onDelete: () => remove(row)
-      })
+    ? automationDetailBar(
+        row,
+        allAutomations,
+        {
+          disabled,
+          onEdit: () => edit(row),
+          onRuns: () => allRuns(row.automation.id),
+          onDelete: () => remove(row)
+        },
+        t,
+        intlLocale
+      )
     : view.kind === 'run'
-      ? automationRunBar(history.selected ?? view.run, () => setView(view.back), toast.showToast)
+      ? automationRunBar(history.selected ?? view.run, () => setView(view.back), toast.showToast, t)
       : view.kind === 'list'
         ? {
             trailing: (

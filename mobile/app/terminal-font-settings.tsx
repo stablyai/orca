@@ -3,8 +3,7 @@ import { useWindowDimensions, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { useRouter } from 'expo-router'
 import { spacing } from '../src/theme/mobile-theme'
-import { themedStyleSheet } from '../src/theme/themed-styles'
-import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../src/theme/themed-styles'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
 import { ListRow } from '../src/components/list/ListGroup'
 import { useTerminalFontSettings } from '../src/terminal/preferences/use-terminal-font-settings'
@@ -16,11 +15,12 @@ import { TerminalFontPreview } from '../src/terminal/preferences/settings/Termin
 import {
   SettingsScreen,
   SettingsSection,
-  settingsScreenStyles
+  settingsScreenStylesSheet
 } from '../src/settings/settings-screen-frame'
 
 export default function TerminalFontSettingsScreen() {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const settingsScreenStyles = useThemedStyles(settingsScreenStylesSheet)
   const t = useMobileTranslation()
   const router = useRouter()
   const fontSettings = useTerminalFontSettings()
@@ -65,6 +65,6 @@ export default function TerminalFontSettingsScreen() {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   preview: { marginBottom: spacing.lg }
 }))
