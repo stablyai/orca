@@ -314,7 +314,6 @@
 1 src/shared/rpc-contract/session-tabs/session-terminal-scrollback-params.ts
 2 src/shared/rpc-contract/structured-agent-session/agent-session-attachment-params.ts
 2 src/shared/rpc-contract/structured-agent-session/structured-agent-session-create-tab-params.ts
-29 src/shared/rpc-contract/structured-agent-session/structured-agent-session-params.ts
 2 src/shared/rpc-contract/workspace-layout/workspace-layout-sleep-wake-params.ts
 9 src/shared/rpc-contract/workspaces/folder-workspace-params.ts
 2 src/shared/settings/host-owned-settings.ts
@@ -335,7 +334,6 @@
 3 src/shared/telemetry/schemas/telemetry-agent-dashboard-event-schemas.ts
 2 src/shared/telemetry/schemas/telemetry-codex-history-move-event-schemas.ts
 1 src/shared/telemetry/schemas/telemetry-codex-legacy-history-event-schemas.ts
-19 src/shared/telemetry/schemas/telemetry-daemon-event-schemas.ts
 5 src/shared/telemetry/schemas/telemetry-onboarding-foundation-schemas.ts
 4 src/shared/telemetry/schemas/telemetry-onboarding-language-schemas.ts
 2 src/shared/telemetry/schemas/telemetry-plugin-event-schemas.ts

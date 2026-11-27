@@ -954,33 +954,35 @@ import { ReadVisualParams } from './structured-agent-session/agent-session-visua
 import { SkipAsyncQuestionsParams } from './structured-agent-session/skip-async-questions-params'
 import { AutoReviewApprovalParams } from './structured-agent-session/structured-agent-session-auto-review-params'
 import { ContinueInterruptedParams } from './structured-agent-session/structured-agent-session-continue-params'
+import {
+  AttachParams,
+  CancelParams,
+  CreateParams,
+  CreateSupportParams,
+  OptionsParams,
+  QueuedMessageActionParams,
+  QueuedMessagesResumeParams,
+  RespondParams,
+  SendParams,
+  SetOptionParams
+} from './structured-agent-session/structured-agent-session-core-params'
 import { ContinuationContextParams } from './structured-agent-session/structured-agent-session-identifiers'
 import { AgentSessionMcpParams } from './structured-agent-session/structured-agent-session-mcp-params'
 import {
   AcknowledgeAttentionParams,
   AgentsParams,
-  AttachParams,
   AvailabilityParams,
-  CancelParams,
   ConversationCommandParams,
-  CreateParams,
-  CreateSupportParams,
   HandoffStatusParams,
   HistoryParams,
   HoldParams,
   ItemParams,
   ModelCatalogParams,
-  OptionsParams,
-  QueuedMessageActionParams,
-  QueuedMessagesResumeParams,
-  RespondParams,
   RestartLaunchSettledParams,
   RestartResumableParams,
   RestartResumeParams,
   RevealParams,
   RewindParams,
-  SendParams,
-  SetOptionParams,
   SleepWorkspaceParams,
   SubscribeTurnCompletionsParams,
   ThreadGoalParams,
