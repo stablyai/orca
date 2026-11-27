@@ -12,7 +12,13 @@ import { defineRpcOperation, runRpcOperation } from '../rpc/rpc-operation'
 import type { RpcClient } from '../rpc/rpc-client-contract'
 import type { RpcResponse } from '../rpc/rpc-wire-types'
 
-type CapabilityRequest = (method: string, params: unknown) => Promise<RpcResponse>
+type CapabilityRequest = (
+  method: string,
+  params: unknown,
+  timeoutMs: number
+) => Promise<RpcResponse>
+
+const CAPABILITY_ADVISORY_TIMEOUT_MS = 5_000
 
 // Only an unsent advisory proves the socket unusable; timeout/drop/refusal mean capabilities unavailable and must still allow connection.
 export async function settleMobileRuntimeCapabilities(
@@ -27,7 +33,8 @@ export async function settleMobileRuntimeCapabilities(
     try {
       response = await sendRequest(
         MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD,
-        mobileRuntimeClientCapabilityUpdateParams(sent)
+        mobileRuntimeClientCapabilityUpdateParams(sent),
+        CAPABILITY_ADVISORY_TIMEOUT_MS
       )
     } catch (error) {
       if (!isRpcDeliveryUnknown(error)) {

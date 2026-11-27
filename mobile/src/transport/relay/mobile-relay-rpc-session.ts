@@ -217,11 +217,13 @@ export function connectMobileRelayRpcSession(args: {
       lastConnectedAt = Date.now()
       // Why: an unanswered advisory must not keep a slow relay from ever reaching connected.
       await settleMobileRuntimeCapabilities(
-        (method, params) => sendRpc(method, params, requestTimeoutMs, true),
+        (m, p, timeout) => sendRpc(m, p, Math.min(requestTimeoutMs, timeout), true),
         args.hostId
       )
-      livenessWatchdog.start(livenessIdentity)
-      publishState('connected')
+      if (!closed) {
+        livenessWatchdog.start(livenessIdentity)
+        publishState('connected')
+      }
     } catch (error) {
       fail(asError(error))
     }
