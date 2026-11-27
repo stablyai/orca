@@ -24,6 +24,13 @@ describe('Markdown image carousel', () => {
   it('falls back to source for non-image content or a blocked URL', () => {
     expect(parseMarkdownImageCarousel(`${slides}\nOther content`)).toBeNull()
     expect(parseMarkdownImageCarousel('![Invalid](javascript:alert(1))')).toBeNull()
+    expect(parseMarkdownImageCarousel('![Invalid](unsupported&colon;image.png)')).toBeNull()
+  })
+
+  it('decodes Markdown character references in image attributes', () => {
+    expect(parseMarkdownImageCarousel('![A &amp; B](./a&amp;b.png "A &amp; B")')).toEqual([
+      { src: './a&b.png', alt: 'A & B', title: 'A & B' }
+    ])
   })
 
   it('serializes the Antigravity fence and slide separator after rich parsing', () => {

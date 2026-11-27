@@ -3,14 +3,20 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { MarkdownCarouselImage } from './markdown-image-carousel'
+import {
+  markdownImageCarouselExports,
+  type MarkdownCarouselImageContext
+} from './markdown-image-carousel-export'
 
 export function MarkdownImageCarousel({
   images,
+  imageContext,
   renderImage,
   'data-source-line': sourceLine,
   'data-source-end-line': sourceEndLine
 }: {
   images: [MarkdownCarouselImage, ...MarkdownCarouselImage[]]
+  imageContext: MarkdownCarouselImageContext
   renderImage: (image: MarkdownCarouselImage, className: string) => ReactNode
   'data-source-line'?: number
   'data-source-end-line'?: number
@@ -22,6 +28,12 @@ export function MarkdownImageCarousel({
 
   return (
     <div
+      ref={(element) => {
+        if (element) {
+          markdownImageCarouselExports.set(element, { images, imageContext })
+        }
+      }}
+      data-orca-image-carousel="true"
       role="group"
       aria-label={t('auto.components.editor.MarkdownImageCarousel.label', 'Image carousel')}
       data-source-line={sourceLine}

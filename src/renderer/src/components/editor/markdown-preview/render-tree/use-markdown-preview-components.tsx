@@ -52,10 +52,11 @@ function MarkdownPreviewPre({
   node,
   children,
   renderImage,
+  imageContext,
   ...props
 }: React.ComponentPropsWithoutRef<'pre'> &
   ExtraProps &
-  Pick<React.ComponentProps<typeof MarkdownImageCarousel>, 'renderImage'>) {
+  Pick<React.ComponentProps<typeof MarkdownImageCarousel>, 'renderImage' | 'imageContext'>) {
   const { wrapAnnotatedBlock } = useMarkdownPreviewAnnotations()
   const code = node?.children.find((child) => child.type === 'element' && child.tagName === 'code')
   const classes =
@@ -70,7 +71,11 @@ function MarkdownPreviewPre({
     'pre',
     node,
     images ? (
-      <MarkdownImageCarousel images={images} renderImage={renderImage} />
+      <MarkdownImageCarousel
+        images={images}
+        imageContext={imageContext}
+        renderImage={renderImage}
+      />
     ) : (
       <CodeBlockCopyButton {...props} wrapInPre={!classes.some(hasMermaidCodeClass)}>
         {children}
@@ -221,6 +226,7 @@ export function useMarkdownPreviewComponents({
   return useMemo(() => {
     // Why: preview images come from document text, so main limits them to the document's roots.
     const imageAccess = documentResourceAccess(filePath)
+    const imageContext = { filePath, runtimeContext: imageRuntimeContext }
     const linkContext = {
       isMac,
       sourceOwner,
@@ -288,6 +294,7 @@ export function useMarkdownPreviewComponents({
       pre: (props) => (
         <MarkdownPreviewPre
           {...props}
+          imageContext={imageContext}
           renderImage={(image, className) => <MarkdownImg {...image} className={className} />}
         />
       ),

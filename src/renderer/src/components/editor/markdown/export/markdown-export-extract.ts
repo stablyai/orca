@@ -1,5 +1,7 @@
 import { useAppStore } from '@/store/index'
+import { encodeBase64Bytes } from '@/lib/base64-bytes'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
+import { expandMarkdownImageCarouselsForExport } from '../../document-images/markdown-image-carousel-export'
 import { buildMarkdownExportHtml } from './markdown-export-html'
 
 export type MarkdownExportPayload = {
@@ -57,6 +59,7 @@ export async function getActiveMarkdownExportPayload({
   }
 
   const clone = subtree.cloneNode(true) as Element
+  await expandMarkdownImageCarouselsForExport(subtree, clone, readBlobImageAsDataUrl)
   for (const selector of UI_ONLY_SELECTORS) {
     for (const node of clone.querySelectorAll(selector)) {
       node.remove()
@@ -96,18 +99,9 @@ async function readBlobImageAsDataUrl(src: string): Promise<string> {
     }
     const blob = await response.blob()
     const bytes = new Uint8Array(await blob.arrayBuffer())
-    return `data:${blob.type || 'application/octet-stream'};base64,${bytesToBase64(bytes)}`
+    return `data:${blob.type || 'application/octet-stream'};base64,${encodeBase64Bytes(bytes)}`
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`Failed to inline image for PDF export: ${message}`)
   }
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = ''
-  const chunkSize = 0x8000
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize))
-  }
-  return btoa(binary)
 }

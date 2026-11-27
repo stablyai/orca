@@ -1,34 +1,32 @@
-import { Lexer } from 'marked'
+import remarkParse from 'remark-parse'
+import { unified } from 'unified'
 import { isWindowsAbsolutePathLike } from '../../../../../shared/file-access/cross-platform-path'
 import { markdownPreviewUrlTransform } from '../markdown-preview/links/markdown-preview-url-transform'
 
 export type MarkdownCarouselImage = { src: string; alt: string; title?: string }
+
+const parser = unified().use(remarkParse)
 
 export function parseMarkdownImageCarousel(
   source: string
 ): [MarkdownCarouselImage, ...MarkdownCarouselImage[]] | null {
   const images: MarkdownCarouselImage[] = []
   for (const slide of source.split(/^[ \t]*<!-- slide -->[ \t]*\r?$/m)) {
-    const [token, extra] = Lexer.lexInline(slide.trim())
-    if (
-      extra ||
-      token?.type !== 'image' ||
-      typeof token.href !== 'string' ||
-      typeof token.text !== 'string'
-    ) {
+    const [paragraph, extraBlock] = parser.parse(slide.trim()).children
+    if (extraBlock || paragraph?.type !== 'paragraph') {
       return null
     }
-    const src = isWindowsAbsolutePathLike(token.href)
-      ? token.href
-      : markdownPreviewUrlTransform(token.href, 'src')
+    const [image, extraInline] = paragraph.children
+    if (extraInline || image?.type !== 'image') {
+      return null
+    }
+    const src = isWindowsAbsolutePathLike(image.url)
+      ? image.url
+      : markdownPreviewUrlTransform(image.url, 'src')
     if (!src) {
       return null
     }
-    images.push({
-      src,
-      alt: token.text,
-      title: typeof token.title === 'string' ? token.title : undefined
-    })
+    images.push({ src, alt: image.alt ?? '', title: image.title ?? undefined })
   }
   const [first, ...rest] = images
   return first ? [first, ...rest] : null

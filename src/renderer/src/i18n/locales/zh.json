@@ -17255,7 +17255,7 @@
           "cellCount_other": "{{count}} 个单元格"
         },
         "MarkdownImageCarousel": {
-          "label": "图片轮播"
+          "label": "图集"
         },
         "MarkdownPreview": {
           "e4683f70c4": "取消",

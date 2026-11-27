@@ -27,9 +27,7 @@ import { basename } from '@/lib/path'
 export function getLocalImageCacheKey(
   absolutePath: string,
   connectionId?: string | null,
-  runtimeContext?: Omit<RuntimeFileOperationArgs, 'connectionId'> & {
-    connectionId?: string | null
-  },
+  runtimeContext?: LocalImageRuntimeContext,
   access?: LocalFileAccess
 ): string {
   const runtimeEnvironmentId = runtimeContext
@@ -56,7 +54,7 @@ function isExternalUrl(src: string): boolean {
   return /^(?:https?|data|blob):/i.test(src)
 }
 
-type LocalImageRuntimeContext = Omit<RuntimeFileOperationArgs, 'connectionId'> & {
+export type LocalImageRuntimeContext = Omit<RuntimeFileOperationArgs, 'connectionId'> & {
   connectionId?: string | null
 }
 
@@ -188,9 +186,7 @@ export async function loadLocalImageSrc(
   rawSrc: string,
   filePath: string,
   connectionId?: string | null,
-  runtimeContext?:
-    | (Omit<RuntimeFileOperationArgs, 'connectionId'> & { connectionId?: string | null })
-    | null,
+  runtimeContext?: LocalImageRuntimeContext | null,
   access?: LocalFileAccess
 ): Promise<string | null> {
   if (readBrowserAttachmentFile(rawSrc)) {
@@ -245,9 +241,7 @@ function logLocalImageReadFailure(
 export function loadLocalImageAbsolutePath(
   absolutePath: string,
   connectionId?: string | null,
-  runtimeContext?:
-    | (Omit<RuntimeFileOperationArgs, 'connectionId'> & { connectionId?: string | null })
-    | null,
+  runtimeContext?: LocalImageRuntimeContext | null,
   access?: LocalFileAccess
 ): Promise<string | null> {
   if (runtimeContext === null) {
