@@ -6,7 +6,6 @@ import type { AcpDialect, AcpRequestPresentation, AcpTurnEnding } from './acp-di
 const APPROVAL_NAME = /^Requesting (?:approval|permission) to (.+)$/iu
 const REQUEST_MAX_CHARS = 512
 
-// Vibe sends permission requests as session/request_permission requests.
 function approvalRequest(method: string, params: unknown): AcpRequestPresentation | undefined {
   const request =
     method === 'session/request_permission' ? readAcpPermissionRequest(params, () => {}) : null

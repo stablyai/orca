@@ -133,8 +133,10 @@ export function isTurnEndEvent(source: AgentHookSource, eventName: unknown): boo
     case 'pi':
     case 'omp':
     case 'prime-agent':
-    case 'mistral-vibe':
       // Why: their done events are status snapshots or milestones that can repeat within one turn.
+      return false
+    case 'mistral-vibe':
+      // TODO: Vibe uses ACP; map its events when known
       return false
   }
 }

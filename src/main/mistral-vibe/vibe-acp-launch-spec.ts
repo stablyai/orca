@@ -34,9 +34,7 @@ export const VIBE_ACP_LAUNCH_SPEC: AcpLaunchSpec = {
     join(homePath, '.vibe', 'bin')
   ],
   minimumVersions: ['3.1.0'],
-  // Vibe has its own permission modes; map Orca's modes to vibe's.
-  // vibe-acp modes: ask, accept-edits, smart-approve, auto-approve
-  // Orca modes: ask, accept-edits, auto, full-access
+  // vibe-acp's own modes (ask, accept-edits, smart-approve, auto-approve), mapped from Orca's.
   permissionModeConfig: {
     values: {
       ask: 'ask',
@@ -45,8 +43,7 @@ export const VIBE_ACP_LAUNCH_SPEC: AcpLaunchSpec = {
       'full-access': 'auto-approve'
     }
   },
-  // Model discovery: vibe-acp does not expose a standalone models endpoint.
-  // We list via a disposable session (same as Claude/Codex v1).
+  // vibe-acp lists its models only as a session's model config option.
   modelDiscovery: { kind: 'session', listingNamesConfiguredModel: false },
   instructions: deliverVibeInstructions,
   compaction: true,
@@ -56,6 +53,6 @@ export const VIBE_ACP_LAUNCH_SPEC: AcpLaunchSpec = {
   sessionHistory: VIBE_SESSION_HISTORY,
   // vibe-acp runs headless and connects only the client's MCP servers, none of its own.
   ownMcpServers: async () => [],
-  // Vibe pty launcher uses the unified harness; every session lands in history.
+  // No sessionCapabilities.delete advertised: a naming task's session would land in the user's Vibe history.
   keepsEverySession: true
 }
