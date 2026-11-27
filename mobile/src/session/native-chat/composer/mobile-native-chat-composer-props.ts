@@ -4,12 +4,17 @@ import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared
 import type { NativeChatContextUsageSummary } from '../../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { ComposerRoomMention } from './menus/MobileNativeChatComposerMenu'
 import type { MobileNativeChatSessionOptionPickersProps } from '../input/session-options/MobileNativeChatSessionOptionPickers'
+import type { PendingNativeChatFile } from './attachments/mobile-native-chat-file-attachment'
 import type { PendingNativeChatImage } from './attachments/mobile-native-chat-image-attachment'
 import type { MobilePastedImages } from './attachments/mobile-native-chat-composer-paste'
 import type { MobileNativeChatSendIntent } from './delivery/mobile-native-chat-send'
 import type { MobileNativeChatMicProps } from './dictation/MobileNativeChatComposerMic'
 import type { MobileNativeChatStructuredComposer } from './commands/mobile-native-chat-structured-composer'
 import type { MobileNativeChatSteerHead } from './menus/use-mobile-native-chat-composer-tray'
+
+export const NO_FILE_PATHS: string[] = []
+export const NO_ATTACHMENTS: PendingNativeChatImage[] = []
+export const NO_FILES: PendingNativeChatFile[] = []
 
 export type MobileNativeChatComposerProps = MobileNativeChatMicProps & {
   roomReplies?: React.ReactNode

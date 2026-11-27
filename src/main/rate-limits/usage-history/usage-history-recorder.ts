@@ -135,14 +135,17 @@ export class UsageHistoryRecorder {
     return pruneEndedUsageHistory(shown, now)
   }
 
-  /** Writes now instead of after the save delay; used when the service stops. */
-  flush(): Promise<void> {
-    if (!this.saveTimer) {
-      return this.saving ?? Promise.resolve()
+  /** Writes now instead of after the save delay; used when the service stops.
+   *  Waits for the file so a reading that arrived while it was loading is kept with the saved samples. */
+  async flush(): Promise<void> {
+    await this.loaded
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer)
+      this.saveTimer = null
+      await this.save()
+      return
     }
-    clearTimeout(this.saveTimer)
-    this.saveTimer = null
-    return this.save()
+    await this.saving
   }
 
   /** A version 1 file kept no accounts: its series belong to whichever login is read first. */
