@@ -1,3 +1,4 @@
+import { PanelLeftClose } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -14,12 +15,13 @@ const bar = 'block shrink-0 rounded bg-muted-foreground/15'
 const fade = 'animate-in fade-in-0 fill-mode-backwards delay-150 motion-reduce:animate-none'
 
 // Fixed shapes: never sized to the PR and never fake file names.
+// Why: row columns mirror combined-diff-file-tree-row (directory: 8 px pad, chevron + folder; file: 32 px pad, icon).
 const TREE_ROWS = [
-  { indent: 'pl-3', width: 'w-16' },
-  { indent: 'pl-6', width: 'w-24' },
-  { indent: 'pl-6', width: 'w-20' },
-  { indent: 'pl-3', width: 'w-14' },
-  { indent: 'pl-6', width: 'w-28' }
+  { directory: true, width: 'w-12' },
+  { directory: false, width: 'w-24' },
+  { directory: false, width: 'w-20' },
+  { directory: true, width: 'w-16' },
+  { directory: false, width: 'w-28' }
 ]
 const SECTIONS = [
   { path: 'w-2/5', lines: ['w-3/5', 'w-2/5', 'w-1/2', 'w-1/3', 'w-2/5', 'w-1/4'] },
@@ -62,7 +64,9 @@ export function PRFilesLoading(): React.JSX.Element {
             <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
               {t('auto.components.editor.CombinedDiffFileTree.481e63ca52', 'Files')}
             </div>
-            <span className="size-6 shrink-0" />
+            <span className="flex size-6 shrink-0 items-center justify-center">
+              <PanelLeftClose className="size-3.5" />
+            </span>
           </div>
           <div className="flex items-center gap-2 border-b border-border px-2 py-2">
             <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md border border-input pl-2">
@@ -72,25 +76,39 @@ export function PRFilesLoading(): React.JSX.Element {
             <span className="size-8 shrink-0 rounded-md border border-input" />
           </div>
           <div className="py-1">
-            {TREE_ROWS.map((row, index) => (
-              <div key={index} className={cn('flex h-6 items-center gap-1 pr-3', row.indent)}>
-                <span className={cn(bar, 'size-3.5')} />
-                <span className={cn(bar, 'h-2', row.width)} />
-              </div>
-            ))}
+            {TREE_ROWS.map((row, index) =>
+              row.directory ? (
+                <div key={index} className="flex h-6 items-center gap-1 pr-3 pl-2">
+                  <span className={cn(bar, 'size-3')} />
+                  <span className={cn(bar, 'size-3')} />
+                  <span className={cn(bar, 'h-2', row.width)} />
+                </div>
+              ) : (
+                <div key={index} className="flex h-6 items-center gap-1 pr-3 pl-8">
+                  <span className={cn(bar, 'size-3.5')} />
+                  <span className={cn(bar, 'h-2', row.width)} />
+                </div>
+              )
+            )}
           </div>
         </aside>
         <div className="min-w-0 flex-1 overflow-hidden">
           {SECTIONS.map((section, index) => (
             <div key={index} className="border-b border-border">
-              <div className="flex h-7 items-center gap-2 px-3">
-                <span className={cn(bar, 'h-2 min-w-8 shrink', section.path)} />
-                {/* Why: the loaded header ends with line stats, the Viewed checkbox, open-on-GitHub and the chevron. */}
-                <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                  <span className={cn(bar, 'mr-1.5 h-2 w-8')} />
-                  <span className={cn(bar, 'size-3.5')} />
-                  <span className={cn(bar, 'h-2 w-9')} />
-                  <span className={cn(bar, 'ml-1.5 size-3.5')} />
+              {/* Why: mirrors DiffSectionHeader: path and stats share the flex-1 span, then Viewed (h-6), open and chevron. */}
+              <div className="flex h-9 items-center px-3">
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className={cn(bar, 'h-2 min-w-8 shrink', section.path)} />
+                  <span className={cn(bar, 'ml-auto h-2 w-8')} />
+                </span>
+                <span className="ml-2 flex shrink-0 items-center gap-1">
+                  <span className="flex h-6 items-center gap-1.5 px-1.5">
+                    <span className={cn(bar, 'size-4 rounded-sm')} />
+                    <span className={cn(bar, 'h-2 w-9')} />
+                  </span>
+                  <span className="p-0.5">
+                    <span className={cn(bar, 'size-3.5')} />
+                  </span>
                   <span className={cn(bar, 'size-3.5')} />
                 </span>
               </div>
