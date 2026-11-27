@@ -56,7 +56,8 @@ export function useNativeChatReadingPosition({
   readerAtEnd,
   messageIdAt,
   waitingMessageIdAt,
-  jumpTo
+  jumpTo,
+  onGiveUp
 }: {
   /** One per transcript: a session's main list and each subagent's list read separately. */
   positionKey: string
@@ -72,6 +73,8 @@ export function useNativeChatReadingPosition({
     position: NativeChatReadingPosition,
     settled: (result: HistoryJumpResult) => void
   ) => void
+  /** History never became readable this reveal (every try superseded): the view opens as it would unbookmarked. */
+  onGiveUp: () => void
 }): () => boolean {
   const tab = useContext(NativeChatViewTabContext)
   const key = `reading-position:${positionKey}`
@@ -80,9 +83,9 @@ export function useNativeChatReadingPosition({
   const freshMountRef = useRef(true)
   // The restore in flight; an effect replay (StrictMode, a hide mid-restore) keeps the bookmark and retries it.
   const restoringRef = useRef<NativeChatReadingPosition | null>(null)
-  const latest = useRef({ readerAtEnd, jumpTo, messageIdAt, waitingMessageIdAt })
+  const latest = useRef({ readerAtEnd, jumpTo, messageIdAt, waitingMessageIdAt, onGiveUp })
   useLayoutEffect(() => {
-    latest.current = { readerAtEnd, jumpTo, messageIdAt, waitingMessageIdAt }
+    latest.current = { readerAtEnd, jumpTo, messageIdAt, waitingMessageIdAt, onGiveUp }
   })
   // Leaving reads the rows while they are still laid out, before a hide takes them off the page.
   useLayoutEffect(() => {
@@ -135,8 +138,11 @@ export function useNativeChatReadingPosition({
             return
           }
           restoringRef.current = null
-          if (result === 'failed') {
+          if (result === 'failed' || result === 'superseded') {
             // History didn't load; the bookmark stays for the next reveal.
+            if (result === 'superseded') {
+              latest.current.onGiveUp()
+            }
             return
           }
           // Landed, gone, or the reader moved on: the bookmark has done its job.

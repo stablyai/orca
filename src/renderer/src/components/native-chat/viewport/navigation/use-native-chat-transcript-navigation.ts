@@ -238,7 +238,12 @@ export function useNativeChatNavigation({
           }
         }
         settled(result)
-      })
+      }),
+    onGiveUp: () => {
+      if (subagentId !== null) {
+        startHistoryJump({ kind: 'subagent', agentId: subagentId })
+      }
+    }
   })
   useEffect(() => {
     // A returning reader's own row lies past the subagent's spawn, so its restore pages far enough.
