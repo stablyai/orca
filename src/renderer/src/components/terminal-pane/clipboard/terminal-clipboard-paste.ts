@@ -13,6 +13,8 @@ type SaveClipboardImageAsTempFile = (args?: {
 }) => Promise<string | null>
 
 export type TerminalClipboardCopiedFiles = {
+  /** Asked only when the clipboard read skipped its image check. */
+  hasImage: () => Promise<boolean | null>
   /** Reports its own failures, like a drop. */
   paste: (paths: string[]) => Promise<void>
 }
@@ -85,7 +87,9 @@ export async function pasteTerminalClipboard({
   if (
     copiedFiles &&
     copiedFilePaths.length > 0 &&
-    (text ? textOnlyLabelsCopiedFiles(text, copiedFilePaths) : !content.hasImage)
+    (text
+      ? textOnlyLabelsCopiedFiles(text, copiedFilePaths)
+      : !(content.hasImage ?? (await copiedFiles.hasImage().catch(() => false))))
   ) {
     await copiedFiles.paste(copiedFilePaths)
     return { status: 'pasted', kind: 'file-paths' }

@@ -19,6 +19,7 @@ export function createTerminalClipboardCopiedFiles(
 ): TerminalClipboardCopiedFiles {
   const { managerRef, paneTransportsRef, ...destination } = args
   return {
+    hasImage: window.api.ui.clipboardHasImage,
     paste: async (paths) => {
       const manager = managerRef.current
       if (!manager) {
