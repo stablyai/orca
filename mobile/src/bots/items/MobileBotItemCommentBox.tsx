@@ -35,9 +35,9 @@ import {
   focusMobileNativeChatTextDestination
 } from '../../session/native-chat/composer/drafts/mobile-native-chat-draft-inputs'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { colors, pressedStyle, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { pressedStyle, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { BotItemCommentMicContext } from './bot-item-comment-mic'
 import { MobileBotItemReplyQuote } from './MobileBotItemReplyQuote'
 import { useBotDraftImages } from '../use-bot-draft-images'
@@ -95,7 +95,8 @@ export function MobileBotItemCommentBox({
   /** The field, which the page focuses for a quote. */
   fieldRef: RefObject<TextInputInstance | null>
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const mic = useContext(BotItemCommentMicContext)
   const key = botItemCommentDraftKey(hostId, item.uid)
@@ -342,7 +343,6 @@ export function MobileBotItemCommentBox({
             micStarting={mic.micStarting}
             micProcessing={mic.micProcessing}
             cancelRef={cancelRef}
-            trailing={null}
           >
             {null}
           </MobileNativeChatDictationLeading>
@@ -360,7 +360,7 @@ export function MobileBotItemCommentBox({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   box: {
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,

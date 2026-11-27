@@ -1,9 +1,9 @@
 import { memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View, type HostInstance } from 'react-native'
 import { Maximize2 } from 'lucide-react-native'
-import { colors, radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
+import { useMobileColorScheme, useMobileColors } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { readableMermaidFlowchartSvg } from '../../../../src/shared/document-preview/mermaid-flowchart-contrast'
 import {
   readSvgIntrinsicSize,
@@ -23,6 +23,8 @@ export type MermaidDiagramProps = {
 // No separate sandbox process: mermaid strict mode sanitizes serialized SVG via DOMPurify before insertion; hostile fixtures run on both engines in mobile-web-app-mermaid-render.test.mjs.
 // Source is a JS string argument, never inline-script interpolation.
 export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: MermaidDiagramProps) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const colorScheme = useMobileColorScheme()
   const hostRef = useRef<HostInstance>(null)
   // Remember failing source, not flag, so next source need not clear failure through effect.
@@ -46,7 +48,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
     void (async () => {
       try {
         const mermaid = await loadPageMermaid()
-        mermaid.initialize(mermaidDiagramConfig(colorScheme))
+        mermaid.initialize(mermaidDiagramConfig(colorScheme, colors))
         const { svg } = await mermaid.render(id, source)
         if (disposed) {
           return
@@ -71,7 +73,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
       // React owns container, not mermaid contents; clear prior diagram on source change.
       host.replaceChildren()
     }
-  }, [colorScheme, id, source])
+  }, [colorScheme, id, source, colors])
 
   if (failed) {
     return (
@@ -124,7 +126,8 @@ function ExpandedDiagram({ svg, onClose }: { svg: string; onClose: () => void })
 
 /** The frame and label, so a diagram and its fallback sit in the same box. */
 function MermaidFrame({ children, onExpand }: { children: ReactNode; onExpand?: () => void }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const expandLabel = t('components.mermaidDiagram.expand', 'Expand diagram')
   return (
@@ -149,7 +152,7 @@ function MermaidFrame({ children, onExpand }: { children: ReactNode; onExpand?: 
 }
 
 // No rule reaches the SVG: mermaid emits it with `width="100%"` and its own natural `max-width`.
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   frame: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,

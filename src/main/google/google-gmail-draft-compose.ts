@@ -11,7 +11,7 @@ import {
   ThreadSchema,
   type Message
 } from './google-gmail-message'
-import { downloadGmailAttachment, GMAIL } from './google-gmail-read'
+import { downloadGmailAttachment, GMAIL, GMAIL_CALLS_AT_ONCE, inBatches } from './google-gmail-read'
 import { parseGmailRef } from './google-gmail-ref'
 import { addressOf, type MimeAttachment, type MimeDraft } from './gmail-mime-message'
 import { splitAddresses } from '../../shared/google/email-address-list'
@@ -98,16 +98,14 @@ async function savedAttachments(api: GoogleApi, message: Message): Promise<MimeA
       `Its attachments are over ${formatMegabytes(TOOL_DOWNLOAD_MAX_BYTES)} together; forward it from Gmail.`
     )
   }
-  return Promise.all(
-    files.map(async (file) => {
-      const got = await downloadGmailAttachment(api, file.ref)
-      return {
-        name: got.name,
-        ...(got.type ? { type: got.type } : {}),
-        data: Buffer.from(got.data, 'base64')
-      }
-    })
-  )
+  return inBatches(files, GMAIL_CALLS_AT_ONCE, async (file) => {
+    const got = await downloadGmailAttachment(api, file.ref)
+    return {
+      name: got.name,
+      ...(got.type ? { type: got.type } : {}),
+      data: Buffer.from(got.data, 'base64')
+    }
+  })
 }
 
 export type Composed = { mime: MimeDraft; threadId?: string; kind: GmailDraftView['kind'] }

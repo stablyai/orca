@@ -1,11 +1,5 @@
 import { StyleSheet } from 'react-native'
-import {
-  colors,
-  concentricRadius,
-  radii,
-  spacing,
-  typography
-} from '../../../../theme/mobile-theme'
+import { concentricRadius, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 
 // Footer buttons and the card's inner shapes follow the floating card's curve inward.
@@ -13,7 +7,7 @@ const MIN_TOUCH_TARGET = 44
 export const ASK_CARD_PADDING = spacing.md
 export const ASK_CHOICE_RADIUS = concentricRadius(radii.floating, ASK_CARD_PADDING)
 
-export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
+export const mobileNativeChatAskStylesSheet = themedStyleSheet((colors) => ({
   // Floats like the composer it replaces, with its own edge instead of a full-width rule.
   card: {
     flexShrink: 1,

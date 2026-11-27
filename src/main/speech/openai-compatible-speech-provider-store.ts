@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { createEncryptedApiKeyFileStore } from '../credentials/encrypted-api-key-file-store'
 import { savedCredentialUnreadable } from '../credentials/saved-credential-readability'
 import type {
@@ -22,11 +23,14 @@ export const hasOpenAiCompatibleSpeechProvider = store.has
 export const clearOpenAiCompatibleSpeechProvider = store.clear
 export const openAiCompatibleSpeechProviderEnvelopeFile = store.envelopeFile
 
-const providerSchema = z.object({
-  baseUrl: z.string().catch(''),
-  model: z.string().catch(''),
-  apiKey: z.string().catch('')
-}) satisfies z.ZodType<OpenAiCompatibleSpeechProvider>
+const providerSchema = lazyZodSchema(
+  () =>
+    z.object({
+      baseUrl: z.string().catch(''),
+      model: z.string().catch(''),
+      apiKey: z.string().catch('')
+    }) satisfies z.ZodType<OpenAiCompatibleSpeechProvider>
+)
 
 export async function readOpenAiCompatibleSpeechProvider(): Promise<OpenAiCompatibleSpeechProvider | null> {
   // The store caches what it read; another process (desktop vs orca serve) may have removed the file since.

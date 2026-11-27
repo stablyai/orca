@@ -25,6 +25,7 @@ import {
   tryRetainHiddenPanesWebgl,
   type HiddenWebglRetentionOwner
 } from './terminal-webgl-hidden-retention'
+import { restoreDomRendererIfMissing } from './terminal-hidden-dom-renderer'
 
 export function setPaneGpuRenderingState(
   panes: Map<number, ManagedPaneInternal>,
@@ -109,6 +110,9 @@ export function resumePaneRendering(
       continue
     }
     reattachWebglIfNeeded(pane)
+    if (!pane.webglAddon) {
+      restoreDomRendererIfMissing(pane.terminal)
+    }
   }
 }
 

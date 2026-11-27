@@ -8,10 +8,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { hostStackHostRoute } from '../../navigation/host-stack-navigation'
 import { useRouteHandoff } from '../../navigation/route-handoff'
 import { openExternalLink } from '../../platform/external-links/external-link'
-import { colors } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 // Catch-all routes have no renderer on either side; show an escape screen instead of Expo’s unusable sitemap.
 // Replace this dead end via route handoff so page navigation reaches the shell. Encode host ids with hostStackHostRoute; missing ids return to app root because /h/ has no child screen.
 export function PageRouteUnavailableScreen({
@@ -22,7 +19,7 @@ export function PageRouteUnavailableScreen({
   /** `update`: neither this app nor the host's page has the screen; either side may be behind. */
   reason?: 'update' | 'unreachable-server'
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const router = useRouteHandoff()
   const update = useMobileUpdateLink()
@@ -81,6 +78,6 @@ export function PageRouteUnavailableScreen({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   root: { flex: 1, backgroundColor: colors.bgBase }
 }))

@@ -1,9 +1,8 @@
 import { Pressable, Text, View } from 'react-native'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 
 const AGENT_GRID_COLUMNS = 3
@@ -19,7 +18,7 @@ export function MobileAgentTileGrid({
   showCliOnly: boolean
   onPick: (option: MobileNewTabAgentOption) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   // Short last rows keep empty slots so every tile stays a third of the row wide.
   const rows: { options: MobileNewTabAgentOption[]; emptySlots: string[] }[] = []
@@ -68,7 +67,7 @@ export function MobileAgentTileGrid({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   grid: { gap: spacing.sm },
   gridRow: { flexDirection: 'row', gap: spacing.sm },
   tile: {

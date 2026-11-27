@@ -1,5 +1,6 @@
 // What Composio's answers can mean to Orca, each as its own error so callers can tell them apart.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 
 /** Composio refused the key: deleted, regenerated, or not a project key. */
@@ -95,9 +96,11 @@ export function isComposioLimit(status: number, slug?: string, message?: string)
   )
 }
 
-const ErrorBody = z.object({
-  error: z.object({ message: z.string().optional(), slug: z.string().optional() })
-})
+const ErrorBody = lazyZodSchema(() =>
+  z.object({
+    error: z.object({ message: z.string().optional(), slug: z.string().optional() })
+  })
+)
 
 export const composioErrorOf = (json: unknown) => ErrorBody.safeParse(json).data?.error
 

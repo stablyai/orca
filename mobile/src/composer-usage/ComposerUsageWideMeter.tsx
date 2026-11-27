@@ -1,7 +1,7 @@
 import { Pressable, Text } from 'react-native'
 import { composerInputStyles } from '../components/composer-input/composer-input-styles'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { ComposerUsageMeterReadout } from './composer-usage-meter-readout'
 import { ComposerUsageTrack } from './ComposerUsageTrack'
 
@@ -28,6 +28,8 @@ export function ComposerUsageWideMeter({
   color: string
   onPress: () => void
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -64,6 +66,8 @@ export function ComposerUsageWideMeasure({
   onResetWidth: (width: number) => void
   onPercentWidth: (width: number) => void
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
+
   return (
     <>
       <Text
@@ -82,7 +86,7 @@ export function ComposerUsageWideMeasure({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   meter: {
     flexDirection: 'row',
     alignItems: 'center',

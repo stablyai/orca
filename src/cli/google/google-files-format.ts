@@ -109,15 +109,18 @@ function commentBlock(comment: DocsComment, index: number): string {
 
 export function formatDocsRead(view: DocsReadView): string {
   const hidden = view.part && view.part.from > 0 ? 0 : view.openComments - view.comments.length
+  const atLeast = view.moreComments ? '+' : ''
   const commentLines =
     view.part && view.part.from > 0
       ? []
-      : view.openComments === 0
+      : view.openComments === 0 && !view.moreComments
         ? ['[Orca: no open comments]']
         : [
-            `[Orca: ${view.openComments} open comment${view.openComments === 1 ? '' : 's'}]`,
+            `[Orca: ${view.openComments}${atLeast} open comment${view.openComments === 1 && !atLeast ? '' : 's'}]`,
             ...view.comments.map(commentBlock),
-            ...(hidden > 0 ? [`[Orca: ${hidden} more not shown; they are in the doc]`] : [])
+            ...(hidden > 0
+              ? [`[Orca: ${hidden}${atLeast} more not shown; they are in the doc]`]
+              : [])
           ]
   return [
     capToolOutput(

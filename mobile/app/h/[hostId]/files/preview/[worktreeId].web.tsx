@@ -1,10 +1,12 @@
 import { withWorkspaceRoute } from '../../../../../src/navigation/workspace-route'
 import { useLocalSearchParams } from 'expo-router'
+import { useMobileTranslation } from '../../../../../src/i18n/use-mobile-translation'
 import { MobileFilePreviewScreen } from '../../../../../src/files/MobileFilePreviewScreen'
 import { normalizeMobileFilePreviewRouteParams } from '../../../../../src/files/preview/mobile-file-preview-route'
 
 // Render screen directly: native sibling imports a shell module that throws in browsers, and manifest imports every route.
 export default withWorkspaceRoute(function MobileFilePreviewRoute() {
+  const t = useMobileTranslation()
   const params = useLocalSearchParams<{
     hostId?: string | string[]
     worktreeId?: string | string[]
@@ -22,5 +24,5 @@ export default withWorkspaceRoute(function MobileFilePreviewRoute() {
     name?: string | string[]
     worktreeName?: string | string[]
   }>()
-  return <MobileFilePreviewScreen route={normalizeMobileFilePreviewRouteParams(params)} />
+  return <MobileFilePreviewScreen route={normalizeMobileFilePreviewRouteParams(params, t)} />
 })

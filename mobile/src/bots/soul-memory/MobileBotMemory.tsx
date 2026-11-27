@@ -21,12 +21,12 @@ import {
 } from '../../components/list/ListGroup'
 import { SwipeRowActions } from '../../components/list/SwipeRowActions'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import { SettingsEmptyRow, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import { botMemoryEdit, botMemoryForget } from './bot-memory-operations'
@@ -43,16 +43,20 @@ export type MemoryActions = {
   showToast: (message: string) => void
 }
 
-function shortDate(date: string): string {
+function shortDate(date: string, intlLocale: string): string {
   const [year, month, day] = date.split('-').map(Number)
-  return new Intl.DateTimeFormat(getUiIntlLocale(), { month: 'short', day: 'numeric' }).format(
+  return new Intl.DateTimeFormat(intlLocale, { month: 'short', day: 'numeric' }).format(
     new Date(year, month - 1, day)
   )
 }
 
-function factMeta(t: ReturnType<typeof useMobileTranslation>, fact: BotMemoryFact) {
+function factMeta(
+  t: ReturnType<typeof useMobileTranslation>,
+  intlLocale: string,
+  fact: BotMemoryFact
+) {
   const parts = [
-    fact.date ? shortDate(fact.date) : null,
+    fact.date ? shortDate(fact.date, intlLocale) : null,
     fact.source
       ? t('bots.memory.source', 'From {{source}}', {
           source: botMemorySourceLink(fact.source).text
@@ -72,6 +76,7 @@ export function MobileBotMemoryEditPage(props: {
   actions: MemoryActions
   onClose: () => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { actions, botId, fact } = props
   const [draft, setDraft] = useState(fact.text)
@@ -148,6 +153,7 @@ function TopicFiles(props: {
   topics: BotMemoryTopics
   onOpenFile: ((path: string) => void) | null
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { topics, archive } = props.topics
   const fileIcon = <FileText size={18} color={colors.textSecondary} strokeWidth={2} />
@@ -179,7 +185,10 @@ function Facts(
     onOpenFile: ((path: string) => void) | null
   } & QuickAdd
 ) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { botId, actions, quickAdd, setQuickAdd } = props
   const facts = parseBotMemoryFacts(props.text)
   const lines = countBotMemoryLines(props.text)
@@ -284,7 +293,7 @@ function Facts(
               <ListRow
                 title={fact.text}
                 wrapTitle
-                subtitle={factMeta(t, fact)}
+                subtitle={factMeta(t, intlLocale, fact)}
                 disabled={props.disabled}
                 busy={actions.busy}
                 onPress={guardPress(() => props.onEdit(fact))}
@@ -315,7 +324,7 @@ export function MobileBotMemoryBody(
     onEdit: (fact: BotMemoryFact) => void
   }
 ) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [tab, setTab] = useState<'facts' | 'history'>('facts')
   const facts = parseBotMemoryFacts(props.text)
@@ -353,7 +362,7 @@ export function MobileBotMemoryBody(
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   tabs: { marginTop: spacing.sm },
   count: { color: colors.textSecondary, fontWeight: '500' },
   quickAdd: { marginTop: spacing.md },

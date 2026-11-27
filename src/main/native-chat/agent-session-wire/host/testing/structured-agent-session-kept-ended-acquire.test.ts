@@ -64,3 +64,32 @@ it('hands a send queued on an ended kept agent to a fresh agent once, after its 
   expect(rig.starts).toHaveBeenCalledTimes(2)
   expect((await rig.submission(id))?.rejection).toBeUndefined()
 })
+
+it('records no failed start when the ended kept agent closes while it opens', async () => {
+  rig = await createQueuedMessageTestRig({
+    endedBeforeAcquire: 'during-startup',
+    restartable: true
+  })
+  const session = () => rig.host.collaboratorsForTests().sessions.get(SESSION)
+  const { id, result } = rig.send('after the restart')
+  await result
+  await eventually(() => expect(session()?.child?.generation).toBe(KEPT_ENDED_GENERATION))
+  // Its connection closed while it opened; the process exit follows.
+  await rig.host.handleAdapterEvent({
+    type: 'ended',
+    sessionId: SESSION,
+    cause: 'unexpected-exit',
+    reason: 'kept agent had exited',
+    fence: session()!.child!.fence,
+    acquisitionGeneration: KEPT_ENDED_GENERATION,
+    observedAt: HOST_TEST_NOW,
+    startupUnanswered: true,
+    endedBeforeAcquire: true
+  })
+  await eventually(async () => expect((await rig.submission(id))?.handedOverAt).toBeDefined())
+  expect(rig.starts).toHaveBeenCalledTimes(2)
+  expect(rig.dispatch).toHaveBeenCalledTimes(1)
+  const page = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+  const rows = page.ok ? page.page.items.map((item) => item.body.kind) : []
+  expect(rows).not.toContain('status')
+})

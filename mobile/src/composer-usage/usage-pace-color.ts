@@ -1,5 +1,5 @@
 import { usageBandColor } from '../accounts/usage/UsageBar'
-import { colors } from '../theme/mobile-theme'
+import { getMobilePalette } from '../theme/mobile-theme'
 import type { UsagePace } from './usage-window-pace'
 
 /** How a window is burning against an even pace; `over` would hit the limit before it resets. */
@@ -27,6 +27,7 @@ export function usagePaceTone(pace: UsagePace): UsagePaceTone {
  * reached before reset (or is). Without a pace (no reset time) it falls back to the used-level band.
  */
 export function usagePaceColor(pace: UsagePace, usedPercent: number | null): string {
+  const colors = getMobilePalette()
   switch (usagePaceTone(pace)) {
     case 'under':
     case 'on-pace':
@@ -36,6 +37,6 @@ export function usagePaceColor(pace: UsagePace, usedPercent: number | null): str
     case 'over':
       return colors.statusRed
     case 'unpaced':
-      return usageBandColor(usedPercent)
+      return usageBandColor(usedPercent, colors)
   }
 }

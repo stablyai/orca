@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { colors } from '../theme/mobile-theme'
+import { getMobilePalette } from '../theme/mobile-theme'
+
+const colors = getMobilePalette()
 import { usagePaceColor, usagePaceTone } from './usage-pace-color'
 
 vi.mock('../accounts/usage/UsageBar', () => ({

@@ -24,8 +24,8 @@ import { MobileAgentIcon } from '../../../../components/icons/MobileAgentIcon'
 import { MobileSourceCopyButton } from '../../../../components/code-presentation/MobileSourceCopyButton'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../../i18n/mobile-i18n'
-import { colors, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import {
   MobileAgentMessageOpenContext,
   useMobileAgentMessageName,
@@ -36,6 +36,7 @@ import {
   MobileNativeChatEventName,
   MobileNativeChatEventRow
 } from '../messages/MobileNativeChatEventRow'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 type Sender = AgentMessageSource['senders'][number]
 
@@ -131,6 +132,7 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   onLongPress,
   status
 }: AgentMessageCardProps) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const prose = useNativeChatProseText(fontScale)
   // A sender's status change redraws the row; the body's text and first line are read once per body.
@@ -314,6 +316,8 @@ function OpenSender({
   /** The name stands alone for who received it; German says "an Eule". */
   recipient?: boolean
 }): React.JSX.Element | null {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const open = useContext(MobileAgentMessageOpenContext)
   const name = useMobileAgentMessageName(sender)
@@ -348,6 +352,7 @@ function SenderMark({
 }: {
   agentType: ReturnType<typeof useMobileAgentMessageView>['agentType']
 }) {
+  const colors = useMobileColors()
   return agentType ? (
     <MobileAgentIcon agentId={agentType} size={14} />
   ) : (
@@ -355,7 +360,7 @@ function SenderMark({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   copy: { alignSelf: 'flex-start' },
   waiting: { opacity: 0.7 },
   waitingActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

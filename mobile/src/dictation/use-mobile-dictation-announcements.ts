@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
 import { useAccessibilityAnnouncer } from '../platform/accessibility/accessibility-announcer'
@@ -102,7 +103,7 @@ export function useMobileDictationAnnouncements(
 
   useEffect(() => {
     if (failure) {
-      say(dictationAnnounceCopy.stoppedKept(dictationKeptFailureCause(failure)))
+      say(dictationAnnounceCopy.stoppedKept(dictationKeptFailureCause(failure, translate)))
     }
   }, [failure, say])
 

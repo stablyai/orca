@@ -1,7 +1,7 @@
 import { themedStyleSheet } from '../../theme/themed-styles'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
 
-export const mobileTasksWorkspaceReviewStyles = themedStyleSheet(() => ({
+export const mobileTasksWorkspaceReviewStylesSheet = themedStyleSheet((colors) => ({
   workspaceCreateForm: {
     gap: 0
   },

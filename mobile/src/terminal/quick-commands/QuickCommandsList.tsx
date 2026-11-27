@@ -1,9 +1,10 @@
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native'
 import { Check, Plus, Search } from 'lucide-react-native'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
+import { composerInputStylesSheet } from '../../components/composer-input/composer-input-styles'
 import { TextField } from '../../components/composer-input/TextField'
 import { MOBILE_AGENT_CATALOG } from '../../agents/mobile-agent-catalog'
 import type { TerminalQuickCommand } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
@@ -48,7 +49,9 @@ export function QuickCommandsList({
   onDelete,
   onAdd
 }: ListProps) {
-  useMobileColorScheme()
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const hasVisible = repoCommands.length + globalCommands.length > 0
   // Why: keep an active filter clearable if a delete or paired desktop edit
@@ -59,6 +62,7 @@ export function QuickCommandsList({
       {showSearch ? (
         <TextField
           leading={<Search size={16} color={colors.textMuted} />}
+          style={composerInputStyles.filledField}
           value={query}
           onChangeText={onQueryChange}
           placeholder={t('session.quickCommandsList.searchPlaceholder', 'Search quick commands...')}
@@ -144,7 +148,7 @@ function QuickCommandGroup({
   onDelete: (command: TerminalQuickCommand) => void
   disabled: boolean
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View>
       <Text style={styles.groupLabel}>{label}</Text>
@@ -172,7 +176,8 @@ export function QuickCommandAgentPicker({
   selected: TuiAgent | null
   onSelect: (agent: TuiAgent) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.group}>
       {QUICK_COMMAND_SUPPORTED_AGENTS.map((agent, index) => (
@@ -198,7 +203,7 @@ export function QuickCommandAgentPicker({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   pressed: { backgroundColor: colors.borderSubtle },
   disabled: { opacity: 0.45 },
   listBody: { gap: spacing.sm, paddingBottom: spacing.sm },

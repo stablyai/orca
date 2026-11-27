@@ -4,9 +4,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CircleAlert, Laptop, Smartphone } from 'lucide-react-native'
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import {
   MobileDictationGrapes,
   MobileDictationTimer,
@@ -23,7 +23,7 @@ import {
   dictationSpokenDuration
 } from './mobile-dictation-controls-copy'
 import { dictationAwayCopy } from './mobile-dictation-away-copy'
-import { composerInputStyles } from '../components/composer-input/composer-input-styles'
+import { composerInputStylesSheet } from '../components/composer-input/composer-input-styles'
 import { MobileDictationStatusAnnouncement } from './MobileDictationStatusAnnouncement'
 import {
   useMobileDictationHost,
@@ -44,24 +44,27 @@ function PillStatus({
   dictation: UseMobileDictationResult
   elapsedSeconds: number
 }) {
+  const colors = useMobileColors()
+  const t = useMobileTranslation()
+  const styles = useThemedStyles(stylesSheet)
   if (dictation.failure) {
     return (
       <Text style={styles.sub} numberOfLines={1}>
-        {`${dictationFailureReason(dictation.failure)} · ${dictationControlsCopy.recordingKept()}`}
+        {`${dictationFailureReason(dictation.failure, t)} · ${dictationControlsCopy.recordingKept(t)}`}
       </Text>
     )
   }
   if (!dictation.isRecording) {
     return (
       <Text style={styles.sub} numberOfLines={1}>
-        {dictation.isStarting ? dictationAwayCopy.starting() : dictationAwayCopy.finishing()}
+        {dictation.isStarting ? dictationAwayCopy.starting(t) : dictationAwayCopy.finishing(t)}
       </Text>
     )
   }
   return (
     <View style={styles.subRow}>
       <View style={styles.recDot} />
-      <Text style={styles.sub}>{dictationAwayCopy.listening()}</Text>
+      <Text style={styles.sub}>{dictationAwayCopy.listening(t)}</Text>
       <Text style={styles.sub}>·</Text>
       <MobileDictationTimer elapsedSeconds={elapsedSeconds} />
       {dictation.engine ? (
@@ -88,6 +91,10 @@ function MobileDictationPill({
   onOpen: () => void
   onStop: () => void
 }) {
+  const colors = useMobileColors()
+  const t = useMobileTranslation()
+  const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
   // Subscribed only while the pill shows, so a hidden pill never re-renders on the dictation's ticks.
   const dictation = useMobileDictationHostLive(useMobileDictationHost())
   const { elapsedSeconds } = useMobileDictationElapsed(dictation.meter)
@@ -100,10 +107,10 @@ function MobileDictationPill({
         accessibilityRole="button"
         accessibilityLabel={
           failed
-            ? `${dictationAwayCopy.stopped()}, ${title}`
-            : dictationAwayCopy.label(title, dictationSpokenDuration(elapsedSeconds))
+            ? `${dictationAwayCopy.stopped(t)}, ${title}`
+            : dictationAwayCopy.label(title, dictationSpokenDuration(elapsedSeconds, t), t)
         }
-        accessibilityHint={dictationAwayCopy.hint()}
+        accessibilityHint={dictationAwayCopy.hint(t)}
       >
         {failed ? (
           <CircleAlert size={18} color={colors.statusRed} strokeWidth={2.2} />
@@ -112,7 +119,7 @@ function MobileDictationPill({
         )}
         <View style={styles.titles}>
           <Text style={styles.title} numberOfLines={1}>
-            {failed ? dictationAwayCopy.stopped() : title}
+            {failed ? dictationAwayCopy.stopped(t) : title}
           </Text>
           <PillStatus dictation={dictation} elapsedSeconds={elapsedSeconds} />
         </View>
@@ -125,8 +132,8 @@ function MobileDictationPill({
           accessibilityRole="button"
           accessibilityLabel={
             dictation.isProcessing
-              ? dictationControlsCopy.finishing()
-              : dictationControlsCopy.stop()
+              ? dictationControlsCopy.finishing(t)
+              : dictationControlsCopy.stop(t)
           }
           aria-busy={dictation.isStarting || dictation.isProcessing}
           disabled={dictation.isProcessing}
@@ -157,6 +164,8 @@ function MobileDictationToast({
   onDone: () => void
   bottom: number
 }) {
+  const t = useMobileTranslation()
+  const styles = useThemedStyles(stylesSheet)
   useEffect(() => {
     if (!toast) {
       return
@@ -181,7 +190,7 @@ function MobileDictationToast({
                 toast.open?.()
               }}
             >
-              <Text style={styles.toastAction}>{dictationAwayCopy.open()}</Text>
+              <Text style={styles.toastAction}>{dictationAwayCopy.open(t)}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -192,8 +201,7 @@ function MobileDictationToast({
 
 // Floats over every screen of the host document, above the bottom inset.
 export function MobileDictationPillLayer(): React.JSX.Element | null {
-  useMobileColorScheme()
-  useMobileTranslation()
+  const styles = useThemedStyles(stylesSheet)
   const insets = useSafeAreaInsets()
   const { stop } = useMobileDictationHost()
   const pill = useContext(MobileDictationPillContext)
@@ -221,7 +229,7 @@ export function MobileDictationPillLayer(): React.JSX.Element | null {
 
 const PILL_HEIGHT = 56
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   // Above every screen's own floating controls, below drawers and the host's pending cover (1000).
   layer: {
     position: 'absolute',
@@ -240,12 +248,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.sm,
     paddingLeft: spacing.lg,
-    paddingRight: spacing.sm,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8
+    paddingRight: spacing.sm
   },
   body: {
     flex: 1,

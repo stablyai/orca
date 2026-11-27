@@ -49,7 +49,6 @@ export function diffReviewActionMountAdapters(
         filePath: FILE,
         status: 'modified' as const,
         title: 'app.ts',
-        subtitle: 'src',
         canStage: true,
         canUnstage: false,
         canDiscard: true,

@@ -10,10 +10,8 @@ import {
 } from 'react-native'
 import { triggerSelection } from '../../platform/haptics/haptics'
 import { resolveTabStripScrollOffset } from './tab-strip-scroll'
-import { colors, concentricRadius, feedback, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-
+import { concentricRadius, feedback, radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 export type MobileSegment<Value extends string> = {
   value: Value
   label: string
@@ -48,7 +46,7 @@ type Props<Value extends string> = {
 
 /** A pick-one pill control; each segment reads as a radio button, or as a tab with `tabs`. */
 export function MobileSegmentedControl<Value extends string>(props: Props<Value>) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const [trackWidth, setTrackWidth] = useState(0)
   const scrollRef = useRef<ScrollViewInstance>(null)
   const scrollX = useRef(0)
@@ -198,7 +196,7 @@ function segmentSpan(
   return span && { ...span, contentWidth: left + TRACK_INSET }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   segmented: {
     flexDirection: 'row',
     alignItems: 'center',
