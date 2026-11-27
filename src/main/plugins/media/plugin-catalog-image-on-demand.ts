@@ -12,13 +12,18 @@ import type { PluginCatalogRepositoryStore } from '../catalog/plugin-catalog-rep
 import type { PluginMarketplaceTeamPolicy } from '../catalog/plugin-marketplace-team-policy'
 import {
   snapshotRepositorySlot,
-  type CatalogRepositorySlot,
   type PluginMarketplaceCachedSnapshot,
   type PluginMarketplaceRegisteredSource,
   type PluginMarketplaceStore
 } from '../catalog/plugin-marketplace-store'
 import type { PluginImageCache } from './plugin-image-cache'
-import { CatalogSnapshotImages, catalogImageKey } from './plugin-catalog-snapshot-images'
+import {
+  CatalogSnapshotImages,
+  catalogImageKey,
+  verifiedImagesAt,
+  type VerifiedImages
+} from './plugin-catalog-snapshot-images'
+import { warmCatalogImages } from './plugin-catalog-image-warmup'
 import type { CheckedPluginImage } from './plugin-image-read'
 
 const IMAGE_BATCH_SIZE = 6
@@ -35,15 +40,8 @@ type PendingImage = {
   subscribers: Set<(asset: CheckedPluginImage | null) => void>
 }
 
-type Verified = {
-  commit: string
-  slot: CatalogRepositorySlot
-  keys: Set<string>
-  writing: Map<string, CheckedPluginImage>
-}
-
 export class PluginCatalogImageOnDemand {
-  private readonly verified = new WeakMap<PluginMarketplaceRegisteredSource, Verified>()
+  private readonly verified = new WeakMap<PluginMarketplaceRegisteredSource, VerifiedImages>()
   private readonly snapshots: CatalogSnapshotImages
   private readonly pending = new WeakMap<
     PluginMarketplaceCachedSnapshot,
@@ -57,8 +55,13 @@ export class PluginCatalogImageOnDemand {
       cache: PluginImageCache
       store: PluginMarketplaceStore
       repositories: Pick<PluginCatalogRepositoryStore, 'readImages' | 'listImages'>
+      /** Lists loaded snapshots' artwork and warms published ones'; the app turns this on. */
+      prefetch?: boolean
     }
   ) {
+    if (options.prefetch) {
+      options.store.observeSnapshots = (snapshot, published) => this.prefetch(snapshot, published)
+    }
     this.snapshots = new CatalogSnapshotImages((snapshot, paths) =>
       options.repositories.listImages(snapshot.sourceId, () => {
         const source = options.policy.findEffectiveSource(options.store, snapshot.sourceId)
@@ -71,6 +74,31 @@ export class PluginCatalogImageOnDemand {
           : null
       })
     )
+  }
+
+  private prefetch(snapshot: PluginMarketplaceCachedSnapshot, published: boolean): void {
+    const source = this.options.policy.findEffectiveSource(this.options.store, snapshot.sourceId)
+    if (!source || this.currentSnapshot(source) !== snapshot) {
+      return
+    }
+    if (!published) {
+      void this.snapshots.listing(snapshot)
+      return
+    }
+    const signal = new AbortController().signal
+    void warmCatalogImages({
+      snapshots: this.snapshots,
+      snapshot,
+      isCurrent: () => this.currentSnapshot(source) === snapshot,
+      read: (kind, image) =>
+        this.readFromSnapshot(
+          source,
+          snapshot,
+          catalogImageKey(kind, image),
+          { ...image, kind },
+          signal
+        )
+    }).catch(() => undefined)
   }
 
   async read(reference: CatalogReference, signal: AbortSignal): Promise<CheckedPluginImage | null> {
@@ -116,20 +144,6 @@ export class PluginCatalogImageOnDemand {
     return this.snapshots.declares(snapshot, key)
   }
 
-  private verifiedAt(
-    source: PluginMarketplaceRegisteredSource,
-    snapshot: PluginMarketplaceCachedSnapshot
-  ): Verified {
-    const commit = snapshot.marketplaceCommit
-    const slot = snapshotRepositorySlot(snapshot)
-    let verified = this.verified.get(source)
-    if (verified?.commit !== commit || verified.slot !== slot) {
-      verified = { commit, slot, keys: new Set(), writing: new Map() }
-      this.verified.set(source, verified)
-    }
-    return verified
-  }
-
   private async readFromSnapshot(
     source: PluginMarketplaceRegisteredSource,
     snapshot: PluginMarketplaceCachedSnapshot,
@@ -157,7 +171,7 @@ export class PluginCatalogImageOnDemand {
       const cache = this.options.cache.get(image.sha256).catch(() => null)
       const proven = await this.snapshots.provenCached(snapshot, image.path, cache)
       if (proven && !signal.aborted && validateCatalogImage(proven.bytes, image, image.kind)) {
-        this.verifiedAt(source, snapshot).keys.add(key)
+        verifiedImagesAt(this.verified, source, snapshot).keys.add(key)
         return proven
       }
     }
@@ -273,7 +287,7 @@ export class PluginCatalogImageOnDemand {
         const info = readPluginImageHeader(bytes)
         if (typeof info !== 'string' && validateCatalogImage(bytes, job.image, job.kind)) {
           const asset = { bytes, mimeType: PLUGIN_IMAGE_MIME[info.format] }
-          const verified = this.verifiedAt(job.source, snapshot)
+          const verified = verifiedImagesAt(this.verified, job.source, snapshot)
           verified.keys.add(job.key)
           const { writing } = verified
           writing.set(job.key, asset)

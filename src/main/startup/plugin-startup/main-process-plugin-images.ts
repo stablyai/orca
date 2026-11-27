@@ -24,7 +24,8 @@ export function createMainProcessPluginImages(
     cache: imageCache,
     store,
     repositories,
-    policy: new PluginMarketplaceTeamPolicy(getActiveTeamCapabilities)
+    policy: new PluginMarketplaceTeamPolicy(getActiveTeamCapabilities),
+    prefetch: true
   })
   installPluginImageProtocolHandler({
     cache: imageCache,

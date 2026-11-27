@@ -63,6 +63,8 @@ export function marketplaceSourceId(source: PluginMarketplaceGitSource): string 
 }
 
 export class PluginMarketplaceStore {
+  /** Sees each snapshot as it becomes current: `published` by a write, otherwise loaded from disk. */
+  observeSnapshots?: (snapshot: PluginMarketplaceCachedSnapshot, published: boolean) => void
   private readonly sourcesPath: string
   private readonly seededDefaultsPath: string
   private readonly snapshotDirectory: string
@@ -207,6 +209,7 @@ export class PluginMarketplaceStore {
     await mkdir(this.snapshotDirectory, { recursive: true })
     await writePluginFileAtomically(path, text)
     this.snapshots.set(input.source.id, { read: Promise.resolve(snapshot), value: snapshot })
+    this.observeSnapshots?.(snapshot, true)
     return snapshot
   }
 
@@ -223,7 +226,13 @@ export class PluginMarketplaceStore {
         this.snapshotPath(parsedId),
         this.legacySnapshotPath(parsedId)
       ).then(
-        (value) => (pending.value = value),
+        (value) => {
+          pending.value = value
+          if (value && this.snapshots.get(parsedId) === pending) {
+            this.observeSnapshots?.(value, false)
+          }
+          return value
+        },
         (error: unknown) => {
           if (this.snapshots.get(parsedId) === pending) {
             this.snapshots.delete(parsedId)

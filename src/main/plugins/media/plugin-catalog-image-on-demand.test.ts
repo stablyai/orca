@@ -97,12 +97,13 @@ async function imageCatalog(
     const request = select()
     return request ? listImages(id, request) : null
   })
-  const start = () => {
+  const start = (prefetch?: { store: PluginMarketplaceStore }) => {
     const resolver = new PluginCatalogImageOnDemand({
       cache,
-      store,
+      store: prefetch?.store ?? store,
       repositories: { readImages: admit, listImages: list },
-      policy: new PluginMarketplaceTeamPolicy(options.getCapabilities)
+      policy: new PluginMarketplaceTeamPolicy(options.getCapabilities),
+      prefetch: !!prefetch
     })
     const handler = createPluginImageRequestHandler({
       cache,
@@ -580,6 +581,38 @@ describe('on-demand catalog image protocol', () => {
     expect((await f.handler(f.request())).status).toBe(404)
     expect(f.readImages).toHaveBeenCalledTimes(2)
     expect(f.listImages.mock.lastCall?.[1].commit).toBe('d'.repeat(40))
+  })
+
+  it('warms published artwork before its first request', async () => {
+    const f = await imageCatalog()
+    f.listImages.mockResolvedValue(
+      new Map([[f.image.path, { object: 'f'.repeat(40), size: f.bytes.byteLength }]])
+    )
+    const warmed = f.start({ store: f.store })
+    await f.store.writeSnapshot({
+      source: f.source,
+      marketplaceCommit: 'd'.repeat(40),
+      marketplace: f.marketplace
+    })
+    await vi.waitFor(() => expect(f.readImages).toHaveBeenCalledTimes(1))
+    expect(f.readImages.mock.lastCall?.[1]).toMatchObject({ commit: 'd'.repeat(40) })
+    await settleImageCacheWrites()
+
+    const response = await warmed.handler(f.request({ commit: 'd'.repeat(40) }))
+    expect(response.status).toBe(200)
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(f.bytes)
+    expect(f.readImages).toHaveBeenCalledTimes(1)
+  })
+
+  it('lists a snapshot loaded from disk without reading its artwork', async () => {
+    const f = await imageCatalog()
+    const reloaded = new PluginMarketplaceStore(f.root)
+    f.start({ store: reloaded })
+    await reloaded.listSources()
+    await reloaded.readSnapshot(f.source.id)
+    await vi.waitFor(() => expect(f.listImages).toHaveBeenCalledTimes(1))
+    expect(f.listImages.mock.lastCall?.[1]).toMatchObject({ commit: 'c'.repeat(40) })
+    expect(f.readImages).not.toHaveBeenCalled()
   })
 
   it('rejects incomplete catalog locations while preserving locationless previews', async () => {

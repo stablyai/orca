@@ -2,9 +2,15 @@ import { createHash } from 'node:crypto'
 import type { PluginImageKind } from '../../../shared/plugins/images/plugin-image-fields'
 import type { ListedBlob } from '../catalog/plugin-catalog-blob-reader'
 import type { CatalogImage } from '../catalog/plugin-catalog-image-extraction'
-import type { PluginMarketplaceCachedSnapshot } from '../catalog/plugin-marketplace-store'
+import {
+  snapshotRepositorySlot,
+  type CatalogRepositorySlot,
+  type PluginMarketplaceCachedSnapshot
+} from '../catalog/plugin-marketplace-store'
+import type { CheckedPluginImage } from './plugin-image-read'
 
-type Declarations = { keys: Set<string>; paths: Set<string> }
+type DeclaredImage = { kind: PluginImageKind; image: CatalogImage }
+type Declarations = { keys: Set<string>; paths: Set<string>; images: DeclaredImage[] }
 type Listing = {
   read: Promise<Map<string, ListedBlob> | null>
   value?: Map<string, ListedBlob>
@@ -24,6 +30,30 @@ function gitBlobId(bytes: Uint8Array): string {
   return createHash('sha1').update(`blob ${bytes.byteLength}\0`).update(bytes).digest('hex')
 }
 
+/** Keys a source proved at one commit and slot; `writing` holds bytes until their cache write ends. */
+export type VerifiedImages = {
+  commit: string
+  slot: CatalogRepositorySlot
+  keys: Set<string>
+  writing: Map<string, CheckedPluginImage>
+}
+
+/** The source's proofs at the snapshot's commit and slot, started afresh when either changed. */
+export function verifiedImagesAt<Source extends object>(
+  verified: WeakMap<Source, VerifiedImages>,
+  source: Source,
+  snapshot: PluginMarketplaceCachedSnapshot
+): VerifiedImages {
+  const commit = snapshot.marketplaceCommit
+  const slot = snapshotRepositorySlot(snapshot)
+  let proven = verified.get(source)
+  if (proven?.commit !== commit || proven.slot !== slot) {
+    proven = { commit, slot, keys: new Set(), writing: new Map() }
+    verified.set(source, proven)
+  }
+  return proven
+}
+
 /** What each published snapshot declares, and one shared listing of its image paths. */
 export class CatalogSnapshotImages {
   private readonly declarations = new WeakMap<PluginMarketplaceCachedSnapshot, Declarations>()
@@ -38,6 +68,11 @@ export class CatalogSnapshotImages {
 
   declares(snapshot: PluginMarketplaceCachedSnapshot, key: string): boolean {
     return this.declared(snapshot).keys.has(key)
+  }
+
+  /** Each declared use once, icons and covers before screenshots, which only detail pages show. */
+  images(snapshot: PluginMarketplaceCachedSnapshot): readonly DeclaredImage[] {
+    return this.declared(snapshot).images
   }
 
   /** The finished listing, if any; a batch read uses it to skip its own listing. */
@@ -84,11 +119,14 @@ export class CatalogSnapshotImages {
     if (known) {
       return known
     }
-    const declarations: Declarations = { keys: new Set(), paths: new Set() }
+    const declarations: Declarations = { keys: new Set(), paths: new Set(), images: [] }
+    const screenshots: DeclaredImage[] = []
     const add = (kind: PluginImageKind, image: CatalogImage | undefined): void => {
-      if (image) {
-        declarations.keys.add(catalogImageKey(kind, image))
+      const key = image && catalogImageKey(kind, image)
+      if (image && key && !declarations.keys.has(key)) {
+        declarations.keys.add(key)
         declarations.paths.add(image.path)
+        ;(kind === 'screenshot' ? screenshots : declarations.images).push({ kind, image })
       }
     }
     for (const entry of snapshot.marketplace.plugins) {
@@ -103,6 +141,7 @@ export class CatalogSnapshotImages {
         }
       }
     }
+    declarations.images.push(...screenshots)
     this.declarations.set(snapshot, declarations)
     return declarations
   }
