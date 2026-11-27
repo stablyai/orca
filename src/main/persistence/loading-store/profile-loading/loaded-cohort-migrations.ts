@@ -36,6 +36,14 @@ export class LoadedCohortMigrationOperations {
         }
       }
     }
+    if (typeof state.settings?.nativeChatMarkNewMessages !== 'boolean') {
+      this.runtime.loadNeedsSave = true
+      // Why not a default: writers that spread defaults into saved settings would turn existing profiles off.
+      state = {
+        ...state,
+        settings: { ...state.settings, nativeChatMarkNewMessages: existingProfile }
+      }
+    }
     if (state.settings?.claudeCodeThemeSyncOffer === undefined) {
       this.runtime.loadNeedsSave = true
       // Why every profile: settings.json is global, so even a fresh profile must not restyle Claude Code unasked.
@@ -128,22 +136,6 @@ export class LoadedCohortMigrationOperations {
     }
     this.runtime.loadNeedsSave = true
     return { ...state, settings: { ...state.settings, experimentalNewWorktreeCardStyle: false } }
-  }
-
-  /** The New messages line starts off for new profiles; profiles saved before without a choice keep it on. */
-  seedNativeChatMarkNewMessages(state: PersistedState, savedProfile: unknown): PersistedState {
-    const saved =
-      isRecord(savedProfile) && isRecord(savedProfile.settings) ? savedProfile.settings : undefined
-    if (typeof saved?.nativeChatMarkNewMessages === 'boolean') {
-      return state
-    }
-    // Why not a default: writers that spread defaults into saved settings would turn existing profiles off.
-    const isNewProfile = !isRecord(savedProfile) || isTelemetryOnlyProfile(savedProfile)
-    this.runtime.loadNeedsSave = true
-    return {
-      ...state,
-      settings: { ...state.settings, nativeChatMarkNewMessages: !isNewProfile }
-    }
   }
 
   /** App rail defaults on for new profiles; profiles saved before without a choice keep it off. */

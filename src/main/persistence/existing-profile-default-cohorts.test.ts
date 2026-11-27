@@ -7,12 +7,18 @@ import {
   closeTestStores,
   createStore,
   dataFile,
+  readPersistedState,
   testState,
   writeDataFile,
   writePersistedStateJson
 } from './persistence-test-harness'
 import { profileStateDatabaseFile } from '../../shared/orca-profiles/profile-state-storage-paths'
-import { updateAgentHookSettingsInProfileState } from './profile-state/offline-access/profile-state-offline-settings'
+import {
+  updateAgentHookSettingsFromProfileState,
+  updateAgentHookSettingsInProfileState
+} from './profile-state/offline-access/profile-state-offline-settings'
+import { initializeNewOrcaProfileState } from '../orca-profiles/storage/new-profile-state'
+import { getOrcaProfileDataFile } from '../orca-profiles/profile-storage-paths'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -113,5 +119,23 @@ describe('existing-profile default cohorts', () => {
     const settings = createStore().getSettings()
     expect(settings.agentStatusHooksEnabled).toBe(true)
     expect(nativeChatMarksNewMessages(settings)).toBe(true)
+  })
+
+  it('starts New messages off for profiles created before their first load', async () => {
+    initializeNewOrcaProfileState('created', undefined, testState.dir)
+    expect(
+      readPersistedState(getOrcaProfileDataFile('created', testState.dir), 'created').settings
+        .nativeChatMarkNewMessages
+    ).toBe(false)
+
+    updateAgentHookSettingsFromProfileState(
+      {
+        dataFile: dataFile(),
+        databaseFile: profileStateDatabaseFile(testState.dir),
+        profileId: 'persistence-test'
+      },
+      true
+    )
+    expect(nativeChatMarksNewMessages(createStore().getSettings())).toBe(false)
   })
 })
