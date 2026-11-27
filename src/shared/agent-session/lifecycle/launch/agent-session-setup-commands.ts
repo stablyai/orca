@@ -120,6 +120,11 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     slashCommand: '/login',
     installCommand: 'npm install -g @tencent-ai/codebuddy-code'
   },
+  {
+    agent: 'dsh',
+    loginCommand: ['dsh-tui'],
+    installCommand: 'npm install -g @deepseek-ai/dsh @deepseek-harness-tui/dsh-tui'
+  },
   // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
   {
     agent: 'antigravity',
