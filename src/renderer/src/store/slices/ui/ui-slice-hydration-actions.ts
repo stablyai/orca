@@ -64,8 +64,8 @@ import { sanitizeActivityBarArrangement } from './ui-slice-hydration-activity-ba
 import { hydrateWorkspaceFilters } from './ui-slice-hydration-workspace-filters'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
-  isWebChatReadMarkCopyPending,
-  startWebChatReadMarkCopy
+  startWebChatReadMarkCopy,
+  shouldUseWebChatReadMarkFallback
 } from '../agent-status/structured-sessions/chat-read-mark-web-copy'
 import {
   applyWebChatReadMarkEdits,
@@ -280,7 +280,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
               hydrated.chatReadMarksCopiedHere = true
               nextWriteBaseline = copied.persistedUIWriteBaseline
             }
-          } else if (isWebChatReadMarkCopyPending()) {
+          } else if (shouldUseWebChatReadMarkFallback()) {
             hydrated.chatReadMarksCopiedHere = false
             nextWriteBaseline.chatReadMarksCopiedHere = false
           }

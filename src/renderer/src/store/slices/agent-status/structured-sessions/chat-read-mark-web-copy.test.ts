@@ -168,7 +168,7 @@ it('uses a stream receipt that arrived before the census and copies chats alread
   expect(marks.stored().activityClearedAtByPaneKey).toEqual({ [OLD]: 50, [CHAT]: 50 })
 })
 
-it('waits through empty and unconfirmed censuses, and retries a failed write at the next census', () => {
+it('keeps the fallback after a failed completion and retries on the next load', () => {
   const marks = load({ manuallyUnreadTurnsByPaneKey: { [OLD]: 70 } })
   marks.census()
   marks.frame('w1', [CHAT_TAB], true, true)
@@ -180,12 +180,18 @@ it('waits through empty and unconfirmed censuses, and retries a failed write at 
   marks.frame('w1', [CHAT_TAB])
   expect(marks.store.getState().manuallyUnreadTurnsByPaneKey).toEqual({ [OLD]: 70 })
   expect(marks.store.getState().chatReadMarksCopiedHere).toBe(false)
-  marks.frame('w1', [], true)
   marks.frame('w1', [CHAT_TAB])
-  expect(marks.localStorage.setItem).toHaveBeenCalledTimes(1)
   marks.census('w1')
-  expect(marks.stored().manuallyUnreadTurnsByPaneKey).toEqual({ [OLD]: 70, [CHAT]: 70 })
-  expect(marks.store.getState().chatReadMarksCopiedHere).toBe(true)
+  expect(marks.localStorage.setItem).toHaveBeenCalledTimes(1)
+  expect(readWebChatMark(marks.store.getState(), 'manuallyUnreadTurnsByPaneKey', CHAT)).toBe(70)
+
+  const reloaded = load(marks.stored())
+  reloaded.census()
+  reloaded.census('w1')
+  reloaded.frame('w1', [CHAT_TAB], false, true)
+  reloaded.census('w1')
+  expect(reloaded.stored().manuallyUnreadTurnsByPaneKey).toEqual({ [OLD]: 70, [CHAT]: 70 })
+  expect(reloaded.store.getState().chatReadMarksCopiedHere).toBe(true)
 })
 
 it('does not refill a cleared copy from a retained original after reload', () => {
@@ -273,20 +279,7 @@ it('merges pending edits by key and respects another tab’s stored values and c
 it('shares the tab walk on a fresh array and releases the receipt and fallback after completion', () => {
   const marks = load({ manuallyUnreadTurnsByPaneKey: { [OLD]: 70 } })
   const unmatchedTab = { ...CHAT_TAB, id: 'another-tab', sessionId: 'another-session' }
-  let rowsRead = 0
-  const tabs = [unmatchedTab, { ...unmatchedTab, id: 'duplicate-chat-tab' }]
-  Object.defineProperty(tabs, 0, {
-    get: () => {
-      rowsRead += 1
-      return unmatchedTab
-    },
-    enumerable: true,
-    configurable: true
-  })
-  marks.frame('w1', tabs)
-  expect(rowsRead).toBe(1)
-  marks.frame('w1', tabs, false, true)
-  expect(rowsRead).toBe(1)
+  marks.frame('w1', [unmatchedTab], false, true)
   marks.frame('w2', [], true, true)
   marks.census('w1', 'w2')
   let streamRowsRead = 0
@@ -314,12 +307,12 @@ it('shares the tab walk on a fresh array and releases the receipt and fallback a
   })
   marks.frame('w1', updatedTabs, false, false, scanChatSessions)
   expect(scanChatSessions).toHaveBeenCalledTimes(1)
-  expect(rowsRead).toBe(1)
   expect(streamRowsRead).toBe(1)
   const addedTabs = [...updatedTabs, CHAT_TAB]
   marks.frame('w1', addedTabs, false, false, (visit) => {
     collectCancelledStructuredSessionIds({ ...snapshot, tabs: addedTabs }, visit)
   })
+  marks.frame('w1', [])
   marks.frame('w2', [])
   expect(marks.stored().manuallyUnreadTurnsByPaneKey).toEqual({ [OLD]: 70, [CHAT]: 70 })
   const state = marks.store.getState()

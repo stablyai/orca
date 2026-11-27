@@ -1,11 +1,13 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { UI_STORAGE_KEY } from '@/web/preload-api/web-storage'
+import { structuredAgentSessionPaneLeaf } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { RuntimeMobileSessionAgentTab } from '../../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
-import { createSessionTabsTabDeltaDecoder } from '../../../../../../shared/remote-runtime/session-graph/session-tabs-tab-delta'
 import { createUIStore, makePersistedUI } from '../../ui/ui-slice-test-harness'
 import * as legacyIndex from './chat-read-mark-legacy-index'
 import {
+  forgetWebChatReadMarkCensus,
   isWebChatReadMarkCopyPending,
+  readWebChatMark,
   receiveWebChatReadMarkCensus,
   receiveWebChatReadMarkFrame
 } from './chat-read-mark-web-copy'
@@ -17,7 +19,6 @@ const CONVERSATION_KEY = `structured-agent-session-sess-2:${LEAF}`
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
-  vi.useRealTimers()
 })
 
 function chatTab(sessionId: string): RuntimeMobileSessionAgentTab {
@@ -32,23 +33,27 @@ function chatTab(sessionId: string): RuntimeMobileSessionAgentTab {
 }
 
 function startPendingCopy() {
-  vi.useFakeTimers()
+  const buildIndex = vi.spyOn(legacyIndex, 'indexLegacyKeys')
   const ui = { manuallyUnreadTurnsByPaneKey: { [LEGACY_KEY]: 70 } }
   let storedUI = JSON.stringify(ui)
-  let storageAvailable = false
   const setItem = vi.fn((_key: string, value: string) => {
-    if (!storageAvailable) {
-      throw new Error('Storage quota reached')
-    }
     storedUI = value
   })
   vi.stubGlobal('window', {
     __ORCA_WEB_CLIENT__: true,
+    api: { ui: { set: vi.fn().mockResolvedValue(undefined) } },
     localStorage: { getItem: (key: string) => (key === UI_STORAGE_KEY ? storedUI : null), setItem }
   })
   const store = createUIStore()
   store.setState({ unifiedTabsByWorktree: {} })
   store.getState().hydratePersistedUI(makePersistedUI(ui), 'startup')
+  const indexed = buildIndex.mock.results[0]
+  if (indexed?.type !== 'return') {
+    throw new Error('Expected a legacy read-mark index')
+  }
+  const hasLeaf = vi.spyOn(indexed.value, 'has')
+  const getAliases = vi.spyOn(indexed.value, 'get')
+  const leafLookups = () => hasLeaf.mock.calls.length + getAliases.mock.calls.length
 
   const trackingRecord = { current: 'epoch', retired: [] }
   const frame = {
@@ -58,143 +63,93 @@ function startPendingCopy() {
     trackingRecord,
     affirmsChats: true
   }
-  const receive = (
-    tabs: readonly RuntimeMobileSessionAgentTab[],
-    scanChatSessions?: Parameters<typeof receiveWebChatReadMarkFrame>[1]['scanChatSessions']
-  ) => receiveWebChatReadMarkFrame(store.getState(), { ...frame, tabs, scanChatSessions })
-  const census = () => {
-    const copied = receiveWebChatReadMarkCensus(store.getState(), 'paired', 'runtime', [
-      ['w1', trackingRecord]
-    ])
+  const receive = (tabs: readonly RuntimeMobileSessionAgentTab[]) =>
+    receiveWebChatReadMarkFrame(store.getState(), { ...frame, tabs })
+  const census = (uncovered = false) => {
+    const copied = receiveWebChatReadMarkCensus(
+      store.getState(),
+      'paired',
+      'runtime',
+      uncovered ? [['w1', trackingRecord], ['w2', undefined]] : [['w1', trackingRecord]]
+    )
     if (copied) {
       store.setState(copied)
     }
   }
-  return {
-    receive,
-    census,
-    setItem,
-    store,
-    recoverStorage: () => {
-      storageAvailable = true
-    }
-  }
+  return { receive, census, leafLookups, setItem, store }
 }
 
-function expectNoMembershipInserts(receive: () => void): void {
-  const add = vi.spyOn(Set.prototype, 'add')
-  const set = vi.spyOn(Map.prototype, 'set')
-  receive()
-  const inserts = add.mock.calls.length + set.mock.calls.length
-  add.mockRestore()
-  set.mockRestore()
-  expect(inserts).toBe(0)
+function expectStopped({ receive, leafLookups, store }: ReturnType<typeof startPendingCopy>): void {
+  const lookupsBefore = leafLookups()
+  receive([chatTab('sess-2')])
+  expect(leafLookups()).toBe(lookupsBefore)
+  const state = store.getState()
+  const workspaces = vi.fn(() => [][Symbol.iterator]())
+  expect(
+    receiveWebChatReadMarkCensus(state, 'paired', 'runtime', { [Symbol.iterator]: workspaces })
+  ).toBeUndefined()
+  expect(workspaces).not.toHaveBeenCalled()
+  expect(isWebChatReadMarkCopyPending()).toBe(false)
+  expect(state.chatReadMarksCopiedHere).toBe(false)
+  expect(readWebChatMark(state, 'manuallyUnreadTurnsByPaneKey', CONVERSATION_KEY)).toBe(70)
 }
 
-// PR #45250: decoded frames repeated candidate work while a read-mark copy was pending.
-it.each([100, 1000])('skips candidate work for %i chats with unchanged membership', (count) => {
-  const index = vi.spyOn(legacyIndex, 'indexLegacyKeys')
-  const { receive, census, setItem } = startPendingCopy()
-  const probes = index.mock.results.flatMap((result) =>
-    result.type === 'return' ? [vi.spyOn(result.value, 'has')] : []
-  )
-  expect(probes).toHaveLength(2)
-
-  const tabs = Array.from({ length: count }, (_, id) => chatTab(`copy-perf-chat-${id}`))
-  const decoder = createSessionTabsTabDeltaDecoder()
-  decoder.decode({ type: 'snapshot', worktree: 'w1', tabsRevision: 1, tabs })
-  receive(tabs)
-  expect(setItem).not.toHaveBeenCalled()
-  expect(probes.map((probe) => probe.mock.calls.length)).toEqual([count, count])
-
-  const refs = tabs.map((_, index) => index)
-  for (const baseRevision of [1, 2]) {
-    const decoded = decoder.decode({
-      type: 'updated',
-      worktree: 'w1',
-      tabsRevision: baseRevision + 1,
-      tabsDelta: { baseRevision, tabs: refs }
-    })
-    if (!decoded.ok || !decoded.result || typeof decoded.result !== 'object') {
-      throw new Error('Expected a decoded tab frame')
-    }
-    if (!('tabs' in decoded.result) || !Array.isArray(decoded.result.tabs)) {
-      throw new Error('Expected decoded tabs')
-    }
-    expect(decoded.result.tabs).not.toBe(tabs)
-
-    const decodedTabs: unknown[] = decoded.result.tabs
-    if (
-      decodedTabs.length !== tabs.length ||
-      !decodedTabs.every(
-        (tab, index): tab is RuntimeMobileSessionAgentTab => tab !== undefined && tab === tabs[index]
-      )
-    ) {
-      throw new Error('Expected the decoder to reuse every chat row')
-    }
-    const scan = vi.fn((visit: (sessionId: string) => void) => {
-      for (const tab of decodedTabs) {
-        visit(tab.sessionId)
-      }
-    })
-    for (const probe of probes) {
-      probe.mockClear()
-    }
-    expectNoMembershipInserts(() => receive(decodedTabs, scan))
-    expect(scan).not.toHaveBeenCalled()
-    for (const probe of probes) {
-      expect(probe).not.toHaveBeenCalled()
-    }
-
-    census()
-    expect(setItem).toHaveBeenCalledTimes(baseRevision)
+it.each([100, 1000])('looks up each of %i chat rows once and inserts nothing', (count) => {
+  const { receive, leafLookups } = startPendingCopy()
+  const tabs = Array.from({ length: count }, (_, id) => ({
+    ...chatTab(`copy-perf-chat-${Math.floor(id / 2)}`),
+    id: `copy-perf-tab-${id}`
+  }))
+  for (const tab of tabs) {
+    structuredAgentSessionPaneLeaf(tab.sessionId)
   }
-
-  for (const probe of probes) {
-    probe.mockClear()
-  }
-  const retitled = tabs.map((tab) => ({ ...tab, title: 'Updated chat' }))
-  expectNoMembershipInserts(() => receive(retitled))
-  for (const probe of probes) {
-    expect(probe).not.toHaveBeenCalled()
+  for (const frame of [tabs, tabs, [...tabs]]) {
+    const lookupsBefore = leafLookups()
+    const add = vi.spyOn(Set.prototype, 'add')
+    const set = vi.spyOn(Map.prototype, 'set')
+    receive(frame)
+    const inserts = add.mock.calls.length + set.mock.calls.length
+    add.mockRestore()
+    set.mockRestore()
+    expect(leafLookups() - lookupsBefore).toBe(count)
+    expect(inserts).toBe(0)
   }
 })
 
-// PR #45250: failed storage writes let a workspace retain IDs for every closed chat.
-it.each([100, 1000])('bounds membership through %i opens and closes', (count) => {
-  const { receive, census, setItem, store, recoverStorage } = startPendingCopy()
-  const kept = chatTab('copy-perf-kept-open')
-  const duplicate = { ...kept, id: 'copy-perf-duplicate-tab' }
-  receive([kept])
-  census()
-  expect(setItem).toHaveBeenCalledTimes(1)
+it('does zero frame lookups at the original deadline after reconnect', () => {
+  const clock = vi.spyOn(performance, 'now').mockReturnValue(10_000)
+  const copy = startPendingCopy()
+  copy.census(true)
+  clock.mockReturnValue(129_999)
+  forgetWebChatReadMarkCensus('paired')
+  copy.receive([chatTab('pending-before-deadline')])
+  expect(copy.leafLookups()).toBe(1)
 
-  const expectMembershipSize = (other: RuntimeMobileSessionAgentTab, size: number): void => {
-    const get = vi.spyOn(Map.prototype, 'get')
-    receive([{ ...kept }, other])
-    const lookup = get.mock.calls.findIndex(([sessionId]) => sessionId === kept.sessionId)
-    const membership = get.mock.contexts[lookup]
-    get.mockRestore()
-    expect(membership instanceof Map ? membership.size : undefined).toBe(size)
-  }
+  clock.mockReturnValue(130_000)
+  expectStopped(copy)
+  expect(copy.setItem).not.toHaveBeenCalled()
+})
 
-  for (let id = 0; id < count; id++) {
-    const opened = chatTab(`copy-perf-churn-${id}`)
-    receive([kept, opened])
-    expectMembershipSize(opened, 2)
-    receive([kept, duplicate])
-    expectMembershipSize(duplicate, 1)
-  }
-
-  receive([kept, chatTab('sess-2')])
-  receive([kept])
-  expect(setItem).toHaveBeenCalledTimes(1)
-  recoverStorage()
-  census()
-  expect(setItem).toHaveBeenCalledTimes(2)
-  expect(store.getState().manuallyUnreadTurnsByPaneKey).toEqual({
-    [LEGACY_KEY]: 70,
-    [CONVERSATION_KEY]: 70
+it('does zero frame lookups after a failed completion write', () => {
+  const copy = startPendingCopy()
+  copy.setItem.mockImplementationOnce(() => {
+    throw new Error('Storage quota reached')
   })
-  expect(isWebChatReadMarkCopyPending()).toBe(false)
+  copy.receive([chatTab('pending-before-write')])
+  copy.census()
+
+  expectStopped(copy)
+  expect(copy.setItem).toHaveBeenCalledTimes(1)
+})
+
+it('does zero frame lookups after the third incomplete census', () => {
+  const copy = startPendingCopy()
+  copy.census(true)
+  copy.census(true)
+  copy.receive([chatTab('pending-after-two-censuses')])
+  expect(copy.leafLookups()).toBe(1)
+  copy.census(true)
+
+  expectStopped(copy)
+  expect(copy.setItem).not.toHaveBeenCalled()
 })
