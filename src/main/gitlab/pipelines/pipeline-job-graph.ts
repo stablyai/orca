@@ -7,6 +7,7 @@ import {
 } from '../requests/gitlab-paginated-list'
 import type { LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
 import type { ProjectRef } from '../projects/project-ref-parser'
+import { isSameGitLabProjectRef } from '../../../shared/gitlab/gitlab-project-ref'
 
 // Child CI jobs live under bridge pipelines, not the parent pipeline's jobs endpoint.
 
@@ -45,10 +46,15 @@ type GitLabRawBridge = {
   } | null
 }
 
-function mapPipelineJob(raw: GitLabRawJob, pipelineId: number): GitLabPipelineJob {
+function mapPipelineJob(
+  raw: GitLabRawJob,
+  pipelineId: number,
+  projectRef: ProjectRef | undefined
+): GitLabPipelineJob {
   return {
     id: raw.id ?? 0,
     pipelineId,
+    ...(projectRef ? { projectRef } : {}),
     name: raw.name ?? '',
     stage: raw.stage ?? '',
     status: raw.status ?? '',
@@ -83,7 +89,8 @@ async function fetchPipelineJobList(
   pipelineId: number,
   connectionId: string | null | undefined,
   localGitOptions: LocalGitExecOptions,
-  signal: AbortSignal
+  signal: AbortSignal,
+  jobProjectRef?: ProjectRef
 ): Promise<GitLabPipelineJob[]> {
   const jobs = await fetchAllGitLabPages<GitLabRawJob>(
     repoPath,
@@ -93,7 +100,7 @@ async function fetchPipelineJobList(
     localGitOptions,
     signal
   )
-  return jobs.map((job) => mapPipelineJob(job, pipelineId))
+  return jobs.map((job) => mapPipelineJob(job, pipelineId, jobProjectRef))
 }
 
 async function fetchPipelineBridges(
@@ -226,7 +233,8 @@ export async function fetchPipelineJobs(
         target.pipelineId,
         connectionId,
         localGitOptions,
-        graphFailed.signal
+        graphFailed.signal,
+        isSameGitLabProjectRef(target.projectRef, projectRef) ? undefined : target.projectRef
       ).catch(tolerateUnreadable([] as GitLabPipelineJob[]))
   )
 

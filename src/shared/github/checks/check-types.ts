@@ -1,3 +1,5 @@
+import type { GitLabProjectRef } from '../../gitlab/gitlab-types'
+
 export type PRCheckDetail = {
   name: string
   status: 'queued' | 'in_progress' | 'completed'
@@ -23,6 +25,7 @@ export type PRCheckDetail = {
   workflowRunId?: number
   // GitLab trace retrieval requires numeric job id, so carry it through the Checks row.
   gitlabJobId?: number
+  gitlabJobProjectRef?: GitLabProjectRef
   gitlabAllowedFailure?: boolean
 }
 
