@@ -3,6 +3,7 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { credentialFileExists, inCredentialFileOrder } from '../../credentials/credential-file-io'
 import {
   CredentialDecryptionError,
@@ -81,13 +82,15 @@ export async function hasStoredToken(serverId: string): Promise<boolean> {
   return tokenFileCache.has(serverId)
 }
 
-const serverSchema = z.object({
-  id: z.string().regex(/^[a-zA-Z0-9_-]+$/),
-  baseUrl: z.string(),
-  apiBaseUrl: z.string(),
-  displayName: z.string(),
-  account: z.string().nullable().optional()
-})
+const serverSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string().regex(/^[a-zA-Z0-9_-]+$/),
+    baseUrl: z.string(),
+    apiBaseUrl: z.string(),
+    displayName: z.string(),
+    account: z.string().nullable().optional()
+  })
+)
 
 function normalizeServer(input: unknown): GiteaServer | null {
   const parsed = serverSchema.safeParse(input)
