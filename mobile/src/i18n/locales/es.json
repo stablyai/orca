@@ -2175,27 +2175,19 @@
       "exceptDefaultBranch": "Excepto la rama predeterminada",
       "filters": "Filtros",
       "groupBy": "Agrupar por",
-      "hideAutomationCreated": "Ocultar creados por automatizaciones",
-      "hideCliCreated": "Ocultar creados por el CLI",
       "hideDefaultBranch": "Ocultar rama predeterminada",
-      "hideDetachedHead": "Ocultar HEAD desacoplado",
-      "hideOtherClientWorkspaces": "Ocultar espacios de trabajo de otros clientes",
       "hideSleeping": "Ocultar en reposo",
-      "hosts": "Hosts",
       "localLinux": "Linux local",
       "localMac": "Mac local",
       "localWindows": "Windows local",
       "projectOrder": "Orden del proyecto",
       "projects": "Proyectos",
-      "savingToDesktop": "Guardando en el host",
       "show": "Mostrar",
       "showProperties": "Mostrar propiedades",
       "sortBy": "Ordenar por",
-      "syncedAcrossDevices": "Sincronizadas entre tus dispositivos",
       "done": "Listo",
       "reset": "Restablecer",
       "thisComputer": "Este equipo",
-      "waitingForDesktop": "Aún esperando respuesta del host",
       "workspaceOptions": "Opciones de espacio de trabajo"
     },
     "hostBottomBar": {
@@ -4950,8 +4942,7 @@
       "noFilterMatches": "Ningún espacio de trabajo coincide con los filtros",
       "reopen": "Vuelve a abrir para actualizar",
       "reopenDetail": "Este host muestra los espacios de trabajo en un formato que esta página aún no reconoce.",
-      "loading": "Cargando espacios de trabajo…",
-      "retryingAutomatically": "Reintentando automáticamente."
+      "loading": "Cargando espacios de trabajo…"
     },
     "workspaceListSections": {
       "all": "Todos",

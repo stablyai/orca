@@ -2110,27 +2110,19 @@
       "exceptDefaultBranch": "デフォルトのブランチを除く",
       "filters": "フィルター",
       "groupBy": "グループ化",
-      "hideAutomationCreated": "自動化で作成されたワークスペースを非表示",
-      "hideCliCreated": "CLI が作成したものを非表示",
       "hideDefaultBranch": "デフォルトのブランチを非表示にする",
-      "hideDetachedHead": "分離 HEAD を非表示",
-      "hideOtherClientWorkspaces": "他のクライアントのワークスペースを非表示にする",
       "hideSleeping": "スリープ中を非表示",
-      "hosts": "ホスト",
       "localLinux": "ローカル Linux",
       "localMac": "ローカル Mac",
       "localWindows": "ローカル Windows",
       "projectOrder": "プロジェクトの順序",
       "projects": "プロジェクト",
-      "savingToDesktop": "ホストに保存中",
       "show": "表示",
       "showProperties": "プロパティを表示する",
       "sortBy": "並べ替え",
-      "syncedAcrossDevices": "デバイス間で同期されます",
       "done": "完了",
       "reset": "リセット",
       "thisComputer": "このコンピュータ",
-      "waitingForDesktop": "まだホストの応答を待っています",
       "workspaceOptions": "ワークスペースのオプション"
     },
     "hostBottomBar": {
@@ -4804,8 +4796,7 @@
       "noFilterMatches": "フィルターに一致するワークスペースがありません",
       "reopen": "開き直して更新",
       "reopenDetail": "このページは、このホストのワークスペース一覧の形式にまだ対応していません。",
-      "loading": "ワークスペースを読み込み中…",
-      "retryingAutomatically": "自動的に再試行しています。"
+      "loading": "ワークスペースを読み込み中…"
     },
     "workspaceListSections": {
       "all": "全て",

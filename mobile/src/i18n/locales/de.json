@@ -2115,27 +2115,19 @@
       "exceptDefaultBranch": "Außer Standard-Branch",
       "filters": "Filter",
       "groupBy": "Gruppieren nach",
-      "hideAutomationCreated": "Durch Automatisierungen erstellte ausblenden",
-      "hideCliCreated": "Per CLI erstellte ausblenden",
       "hideDefaultBranch": "Standard-Branch ausblenden",
-      "hideDetachedHead": "Losgelösten HEAD ausblenden",
-      "hideOtherClientWorkspaces": "Arbeitsbereiche anderer Clients ausblenden",
       "hideSleeping": "Ruhende Arbeitsbereiche ausblenden",
-      "hosts": "Hosts",
       "localLinux": "Lokales Linux",
       "localMac": "Lokaler Mac",
       "localWindows": "Lokales Windows",
       "projectOrder": "Projektreihenfolge",
       "projects": "Projekte",
-      "savingToDesktop": "Wird auf dem Host gespeichert",
       "show": "Anzeigen",
       "showProperties": "Eigenschaften anzeigen",
       "sortBy": "Sortieren nach",
-      "syncedAcrossDevices": "Geräteübergreifend synchronisiert",
       "done": "Fertig",
       "reset": "Leeren",
       "thisComputer": "Dieser Computer",
-      "waitingForDesktop": "Es wird noch auf den Host gewartet",
       "workspaceOptions": "Arbeitsbereichsoptionen"
     },
     "hostBottomBar": {
@@ -4809,8 +4801,7 @@
       "noFilterMatches": "Keine Arbeitsbereiche entsprechen den Filtern",
       "reopen": "Zum Aktualisieren erneut öffnen",
       "reopenDetail": "Dieser Host listet Arbeitsbereiche in einem Format auf, das diese Seite noch nicht unterstützt.",
-      "loading": "Arbeitsbereiche werden geladen…",
-      "retryingAutomatically": "Wird automatisch erneut versucht."
+      "loading": "Arbeitsbereiche werden geladen…"
     },
     "workspaceListSections": {
       "all": "Alle",

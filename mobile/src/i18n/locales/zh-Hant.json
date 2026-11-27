@@ -2405,27 +2405,19 @@
       "exceptDefaultBranch": "預設分支除外",
       "filters": "篩選條件",
       "groupBy": "分組依據",
-      "hideAutomationCreated": "隱藏自動化建立的工作區",
-      "hideCliCreated": "隱藏 CLI 建立的工作區",
       "hideDefaultBranch": "隱藏預設分支",
-      "hideDetachedHead": "隱藏分離 HEAD",
-      "hideOtherClientWorkspaces": "隱藏其他用戶端工作區",
       "hideSleeping": "隱藏休眠項",
-      "hosts": "主機",
       "localLinux": "本機 Linux",
       "localMac": "本機 Mac",
       "localWindows": "本機 Windows",
       "projectOrder": "專案排序",
       "projects": "專案",
-      "savingToDesktop": "正在儲存至主機",
       "show": "顯示",
       "showProperties": "顯示屬性",
       "sortBy": "排序方式",
-      "syncedAcrossDevices": "已在你的裝置間同步",
       "done": "完成",
       "reset": "重設",
       "thisComputer": "本機",
-      "waitingForDesktop": "仍在等待主機回應",
       "workspaceOptions": "工作區選項"
     },
     "hostBottomBar": {
@@ -5128,8 +5120,7 @@
       "noFilterMatches": "沒有符合篩選條件的工作區",
       "reopen": "重新開啟以更新",
       "reopenDetail": "此頁面尚不支援這台主機列出工作區的方式。",
-      "loading": "正在載入工作區…",
-      "retryingAutomatically": "正在自動重試。"
+      "loading": "正在載入工作區…"
     },
     "workspaceListSections": {
       "all": "全部",

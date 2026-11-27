@@ -47,17 +47,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     backgroundColor: colors.borderSubtle,
     marginLeft: WORKTREE_ROW_LAYOUT.textInset
   },
-  filterModalSubtitle: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  },
-  optionPending: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm
-  },
   optionSectionGap: {
     height: spacing.xs
   },

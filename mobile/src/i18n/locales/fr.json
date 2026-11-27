@@ -2175,27 +2175,19 @@
       "exceptDefaultBranch": "Sauf la branche par défaut",
       "filters": "Filtres",
       "groupBy": "Grouper par",
-      "hideAutomationCreated": "Masquer ceux créés par l'automatisation",
-      "hideCliCreated": "Masquer ceux créés par le CLI",
       "hideDefaultBranch": "Masquer la branche par défaut",
-      "hideDetachedHead": "Masquer les HEAD détachés",
-      "hideOtherClientWorkspaces": "Masquer les espaces de travail d'autres clients",
       "hideSleeping": "Masquer les espaces en veille",
-      "hosts": "Hôtes",
       "localLinux": "Linux local",
       "localMac": "Mac local",
       "localWindows": "Windows local",
       "projectOrder": "Ordre des projets",
       "projects": "Projets",
-      "savingToDesktop": "Enregistrement sur l'hôte",
       "show": "Afficher",
       "showProperties": "Afficher les propriétés",
       "sortBy": "Trier par",
-      "syncedAcrossDevices": "Synchronisées sur vos appareils",
       "done": "Terminé",
       "reset": "Réinitialiser",
       "thisComputer": "Cet ordinateur",
-      "waitingForDesktop": "Toujours en attente de l'hôte",
       "workspaceOptions": "Options des espaces de travail"
     },
     "hostBottomBar": {
@@ -4950,8 +4942,7 @@
       "noFilterMatches": "Aucun espace de travail ne correspond aux filtres",
       "reopen": "Rouvrir pour mettre à jour",
       "reopenDetail": "Cet hôte fournit une liste d'espaces de travail dans un format que cette page ne reconnaît pas encore.",
-      "loading": "Chargement des espaces de travail…",
-      "retryingAutomatically": "Nouvelle tentative automatique."
+      "loading": "Chargement des espaces de travail…"
     },
     "workspaceListSections": {
       "all": "Tous",

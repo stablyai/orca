@@ -2414,27 +2414,19 @@
       "exceptDefaultBranch": "기본 브랜치는 제외",
       "filters": "필터",
       "groupBy": "그룹화 기준",
-      "hideAutomationCreated": "자동화로 생성된 워크스페이스 숨기기",
-      "hideCliCreated": "CLI로 생성된 워크스페이스 숨기기",
       "hideDefaultBranch": "기본 브랜치 숨기기",
-      "hideDetachedHead": "분리된 HEAD 숨기기",
-      "hideOtherClientWorkspaces": "다른 클라이언트 워크스페이스 숨기기",
       "hideSleeping": "절전 중인 항목 숨기기",
-      "hosts": "호스트",
       "localLinux": "로컬 Linux",
       "localMac": "로컬 Mac",
       "localWindows": "로컬 Windows",
       "projectOrder": "프로젝트 순서",
       "projects": "프로젝트",
-      "savingToDesktop": "호스트에 저장 중",
       "show": "표시",
       "showProperties": "속성 표시",
       "sortBy": "정렬 기준",
-      "syncedAcrossDevices": "기기 간 동기화됨",
       "done": "완료",
       "reset": "재설정",
       "thisComputer": "이 컴퓨터",
-      "waitingForDesktop": "아직 호스트 응답을 기다리는 중",
       "workspaceOptions": "워크스페이스 옵션"
     },
     "hostBottomBar": {
@@ -5137,8 +5129,7 @@
       "noFilterMatches": "필터에 맞는 워크스페이스가 없습니다.",
       "reopen": "업데이트하려면 다시 여세요",
       "reopenDetail": "이 페이지는 아직 이 호스트의 워크스페이스 목록 형식을 지원하지 않습니다.",
-      "loading": "워크스페이스를 불러오는 중…",
-      "retryingAutomatically": "자동으로 다시 시도하는 중입니다."
+      "loading": "워크스페이스를 불러오는 중…"
     },
     "workspaceListSections": {
       "all": "모두",
