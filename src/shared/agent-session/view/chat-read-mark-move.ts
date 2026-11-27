@@ -16,7 +16,7 @@ export type ChatReadMarkField =
   | 'manuallyUnreadTurnsByPaneKey'
 
 export type ChatReadMarks = Record<ChatReadMarkField, Record<string, number>>
-export type ChatReadMarkAliases = Partial<Record<ChatReadMarkField, string[]>>
+export type ChatReadMarkAliases = Partial<Record<ChatReadMarkField, Set<string>>>
 export type LegacyChatReadMarkIndex = Map<string, ChatReadMarkAliases>
 export type ChatReadMarkMatches = Map<string, string | null>
 
@@ -51,8 +51,8 @@ export function indexLegacyChatReadMarks(marks: Partial<ChatReadMarks>): LegacyC
         aliases = {}
         index.set(leaf, aliases)
       }
-      const keys = (aliases[field] ??= [])
-      keys.push(key)
+      const keys = (aliases[field] ??= new Set<string>())
+      keys.add(key)
     }
   }
   return index
@@ -92,7 +92,7 @@ export function recordCanonicalChatReadMarkMatches(
 export function resolveChatReadMark(
   record: Readonly<Record<string, number>>,
   key: string,
-  aliases: readonly string[],
+  aliases: ReadonlySet<string>,
   currentTurn?: number
 ): number | undefined {
   let mark: number | undefined
@@ -114,7 +114,7 @@ export function resolveChatReadMark(
 export function setChatReadMark(
   record: Record<string, number>,
   key: string,
-  aliases: readonly string[],
+  aliases: ReadonlySet<string>,
   value: number | undefined
 ): void {
   for (const alias of aliases) {
@@ -127,14 +127,26 @@ export function setChatReadMark(
   }
 }
 
+export function someChatReadMarkAlias(
+  aliases: ReadonlySet<string> | undefined,
+  matches: (alias: string) => boolean
+): boolean {
+  for (const alias of aliases ?? []) {
+    if (matches(alias)) {
+      return true
+    }
+  }
+  return false
+}
+
 export function moveChatReadMark(
   record: Record<string, number>,
   key: string,
-  aliases: readonly string[],
+  aliases: ReadonlySet<string>,
   currentTurn?: number,
   movedAliases?: Map<string, string>
 ): boolean {
-  if (!aliases.some((alias) => Object.hasOwn(record, alias))) {
+  if (!someChatReadMarkAlias(aliases, (alias) => Object.hasOwn(record, alias))) {
     return false
   }
   const value = resolveChatReadMark(record, key, aliases, currentTurn)

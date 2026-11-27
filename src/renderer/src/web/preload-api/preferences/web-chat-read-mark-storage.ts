@@ -2,6 +2,7 @@ import {
   moveChatReadMark,
   orderMovedChatReadMarks,
   setChatReadMark,
+  someChatReadMarkAlias,
   type ChatReadMarks
 } from '../../../../../shared/agent-session/view/chat-read-mark-move'
 import { readPaneKeyTimestampRecord } from '../../../../../shared/agent-session/view/pane-key-timestamp-record'
@@ -106,7 +107,7 @@ export function rebaseWebChatReadMarks(
       if (
         current &&
         (current[key] !== baseline[field][key] ||
-          aliases.some((alias) => current[alias] !== baseline[field][alias]))
+          someChatReadMarkAlias(aliases, (alias) => current[alias] !== baseline[field][alias]))
       ) {
         setChatReadMark(record, key, aliases, current[key])
       } else if (moveKeys?.has(key)) {

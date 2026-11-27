@@ -70,7 +70,8 @@ export function capWebChatReadMarkRecord(
       }
       // A pending leaf can share a cap slot before a receipt verifies its destination.
       const match = matches.get(leaf)
-      const subject = match === undefined && isStablePaneId(leaf) ? keys[0] : match
+      const [firstKey] = keys
+      const subject = match === undefined && isStablePaneId(leaf) ? firstKey : match
       for (const key of keys) {
         pendingSubjects.set(key, subject ?? key)
       }
@@ -118,11 +119,14 @@ export function adoptChatReadMarkAliases(marks: Partial<ChatReadMarks>): void {
   for (const [leaf, aliases] of legacyIndex) {
     for (const field of CHAT_READ_MARK_FIELDS) {
       const record = marks[field]
-      if (record && aliases[field]) {
-        const retained = aliases[field].filter((key) => Object.hasOwn(record, key))
-        if (retained.length > 0) {
-          aliases[field] = retained
-        } else {
+      const keys = aliases[field]
+      if (record && keys) {
+        for (const key of keys) {
+          if (!Object.hasOwn(record, key)) {
+            keys.delete(key)
+          }
+        }
+        if (keys.size === 0) {
           delete aliases[field]
         }
       }
@@ -140,7 +144,7 @@ export function adoptChatReadMarkAliases(marks: Partial<ChatReadMarks>): void {
 export function aliasesAtChatReadMarkLeaf(
   field: ChatReadMarkField,
   leaf: string
-): readonly string[] {
+): Iterable<string> {
   return legacyIndex.get(leaf)?.[field] ?? []
 }
 
@@ -149,7 +153,7 @@ export function knownChatReadMarkKey(field: ChatReadMarkField, alias: string): s
     return undefined
   }
   const leaf = paneKeyLeaf(alias)
-  if (legacyIndex.get(leaf)?.[field]?.includes(alias)) {
+  if (legacyIndex.get(leaf)?.[field]?.has(alias)) {
     return matches.get(leaf) ?? undefined
   }
   return undefined
@@ -158,7 +162,7 @@ export function knownChatReadMarkKey(field: ChatReadMarkField, alias: string): s
 export function chatReadMarkAliases(
   field: ChatReadMarkField,
   key: string
-): readonly string[] | undefined {
+): ReadonlySet<string> | undefined {
   if (legacyIndex.size === 0 || !key.startsWith(CHAT_PANE_ADDRESS_PREFIX)) {
     return undefined
   }
@@ -175,7 +179,7 @@ export function chatReadMarkAliases(
   return sessionId !== null && isAgentSessionId(sessionId) ? aliases : undefined
 }
 
-function aliasesForChatReadMarkEdit(field: ChatReadMarkField, key: string): readonly string[] {
+function aliasesForChatReadMarkEdit(field: ChatReadMarkField, key: string): Iterable<string> {
   const aliases = chatReadMarkAliases(field, key)
   if (aliases) {
     const sessionId = chatPaneKeySessionId(key)

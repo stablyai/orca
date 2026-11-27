@@ -4,6 +4,7 @@ import {
 } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   CHAT_READ_MARK_FIELDS,
+  someChatReadMarkAlias,
   type ChatReadMarks
 } from '../../../../../../shared/agent-session/view/chat-read-mark-move'
 import {
@@ -27,7 +28,9 @@ function hasChatReadMark(marks: ChatReadMarks, key: string): boolean {
     CHAT_READ_MARK_FIELDS.some(
       (field) =>
         Object.hasOwn(marks[field], key) ||
-        chatReadMarkAliases(field, key)?.some((alias) => Object.hasOwn(marks[field], alias))
+        someChatReadMarkAlias(chatReadMarkAliases(field, key), (alias) =>
+          Object.hasOwn(marks[field], alias)
+        )
     )
   )
 }

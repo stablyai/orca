@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { paneKeyLeaf } from '../../../../../../shared/agent-session/view/chat-read-mark-move'
 import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { startOnScreenAttentionScan } from '@/attention/on-screen-attention-scan'
 import { useAppStore } from '@/store/index'
 import { makeSnapshot } from '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import { recordReceivedWebSessionTabsSnapshots } from '@/runtime/web-session-tabs-sync/tracking/session-tabs-receipts'
 import { makePersistedUI } from '../../ui/ui-slice-test-harness'
+import { acceptedAgentStatuses } from '../status-ownership/accepted-agent-statuses'
+import { chatReadMarkAliases } from './chat-read-mark-aliases'
 import { browserChatMarks, CHAT, OLD, TAB } from './chat-read-mark-web-test-fixture'
 
 beforeEach(() => {
@@ -15,6 +18,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 it('skips storage on a miss and stops walking receipts once the index empties', () => {
@@ -144,4 +148,103 @@ it('moves an entire bootstrap inventory before capping and publishes the marks o
   } finally {
     unsubscribe()
   }
+})
+
+// PR #45250: a foreground lapse searched the entire alias bucket for each off-screen old key.
+it.each([
+  [100, false, 100],
+  [1000, false, 1000],
+  [1000, true, 0]
+])('bounds foreground lapse with %i old keys (chat visible: %s)', (count, chatVisible, lookups) => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  const leafId = '2b8ea975-8113-41ae-a25c-feb50cbe084a'
+  const terminals: Record<string, number> = {}
+  for (let index = 0; index < 500; index++) {
+    terminals[`terminal-${index}:${leafId}`] = 3000 + index
+  }
+  const legacy: Record<string, number> = {}
+  const leaf = paneKeyLeaf(CHAT)
+  for (let index = 0; index < count; index++) {
+    legacy[`agent-chat-tab-v1-old-${index}:${leaf}`] = index + 1
+  }
+  const protections = { ...terminals, [CHAT]: 2000, ...legacy }
+  const marks = browserChatMarks({ manuallyUnreadTurnsByPaneKey: protections })
+  marks.localStorage.setItem.mockImplementationOnce(() => {
+    throw new Error('Storage quota reached')
+  })
+  const agentStatusByPaneKey = acceptedAgentStatuses([
+    [
+      CHAT,
+      {
+        paneKey: CHAT,
+        state: 'done',
+        prompt: '',
+        stateStartedAt: 1,
+        updatedAt: 1,
+        stateHistory: []
+      }
+    ]
+  ])
+  useAppStore.setState({ agentStatusByPaneKey })
+  useAppStore.getState().hydratePersistedUI(
+    makePersistedUI({ manuallyUnreadTurnsByPaneKey: protections }),
+    'startup'
+  )
+  expect(marks.localStorage.setItem).toHaveBeenCalledTimes(1)
+  expect(useAppStore.getState().manuallyUnreadTurnsByPaneKey).toEqual({ ...terminals, ...legacy })
+
+  const worktreeId = 'repo::/foreground'
+  const groupId = 'viewed-group'
+  const tabId = chatVisible ? TAB.id : 'visible-terminal'
+  const clear = vi.fn(useAppStore.getState().clearManuallyUnreadTurns)
+  useAppStore.setState({
+    activeView: 'terminal',
+    activeWorktreeId: worktreeId,
+    groupsByWorktree: {
+      [worktreeId]: [{ id: groupId, worktreeId, activeTabId: tabId, tabOrder: [tabId] }]
+    },
+    unifiedTabsByWorktree: {
+      [worktreeId]: [
+        {
+          id: tabId,
+          entityId: chatVisible ? TAB.sessionId : tabId,
+          groupId,
+          worktreeId,
+          contentType: chatVisible ? 'agent-session' : 'terminal',
+          agentSessionAgent: chatVisible ? 'codex' : undefined,
+          label: 'Viewed tab',
+          customLabel: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 0
+        }
+      ]
+    },
+    terminalLayoutsByTabId: {
+      'visible-terminal': {
+        root: { type: 'leaf', leafId },
+        activeLeafId: leafId,
+        expandedLeafId: null
+      }
+    },
+    clearManuallyUnreadTurns: clear
+  })
+  vi.stubGlobal('document', { visibilityState: 'visible', hasFocus: () => true })
+
+  const bucket = chatReadMarkAliases('manuallyUnreadTurnsByPaneKey', CHAT)
+  const membership = bucket instanceof Set ? vi.spyOn(bucket, 'has') : undefined
+  const stop = startOnScreenAttentionScan(useAppStore, {
+    readDesktopAway: null,
+    subscribeStructuredViews: () => () => {},
+    subscribePresenceSignals: () => () => {}
+  })
+  stop()
+
+  const terminalKeys = Object.keys(terminals)
+  expect(membership?.mock.calls.length ?? 0).toBe(lookups)
+  expect(clear).toHaveBeenCalledExactlyOnceWith(
+    chatVisible ? terminalKeys : [...terminalKeys, CHAT]
+  )
+  expect(useAppStore.getState().manuallyUnreadTurnsByPaneKey).toEqual(chatVisible ? legacy : {})
+  expect(useAppStore.getState().acknowledgedAgentsByPaneKey[CHAT]).toBeUndefined()
 })
