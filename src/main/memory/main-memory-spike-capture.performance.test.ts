@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 vi.mock('../worker-threads/worker-thread-diagnostics', () => ({
   readWorkerThreadMemoryData: async () => ({ workers: 0 })
 }))
+vi.mock('./main-allocation-sampler', () => ({ sampleMainAllocations: async () => ({}) }))
 
 import {
   PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS,
@@ -65,7 +66,7 @@ it('compares against the sample from two late-firing ticks ago', async () => {
   observeMainMemorySample(1150, 4 * MINUTE + 1)
   observeMainMemorySample(1300, 5 * MINUTE + 3)
   await settle()
-  expect(records).toHaveLength(1)
+  expect(records).toHaveLength(2)
   expect(records[0].attributes).toMatchObject({
     baselineFootprintMB: 1000,
     baselineAgeMs: 120_003,
@@ -81,7 +82,7 @@ it('writes one record for a spike and none for another within the hour', async (
   observeMainMemorySample(800, 6 * MINUTE)
   observeMainMemorySample(1500, 7 * MINUTE)
   await settle()
-  expect(records).toHaveLength(1)
+  expect(records).toHaveLength(2)
   expect(counts).toHaveBeenCalledTimes(1)
   expect(records[0].name).toBe('memory.main-spike')
   expect(records[0].attributes).toMatchObject({
@@ -97,7 +98,7 @@ it('writes one record for a spike and none for another within the hour', async (
   observeMainMemorySample(800, 66 * MINUTE)
   observeMainMemorySample(1200, 67 * MINUTE)
   await settle()
-  expect(records).toHaveLength(2)
+  expect(records).toHaveLength(4)
 })
 
 it('reads no footprint while tracing is off', async () => {

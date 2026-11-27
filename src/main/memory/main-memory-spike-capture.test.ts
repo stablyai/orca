@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 vi.mock('../worker-threads/worker-thread-diagnostics', () => ({
   readWorkerThreadMemoryData: async () => ({ workers: 0 })
 }))
+vi.mock('./main-allocation-sampler', () => ({ sampleMainAllocations: async () => ({}) }))
 
 import {
   PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS,
@@ -47,7 +48,10 @@ it('catches a footprint spike that lasts about a minute on the host-memory tick'
     await new Promise((resolve) => setImmediate(resolve))
   }
   await new Promise((resolve) => setImmediate(resolve))
-  expect(records.map((record) => record.name)).toEqual(['memory.main-spike'])
+  expect(records.map((record) => record.name)).toEqual([
+    'memory.main-spike',
+    'memory.main-spike.allocations'
+  ])
   expect(records[0].attributes).toMatchObject({
     baselineFootprintMB: 693,
     baseline_v8UsedHeapMB: expect.any(Number),
