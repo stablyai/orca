@@ -25,6 +25,8 @@ const RELEASE_WAIT_MS = 60_000
 const SAMPLE_WINDOW_MS = 60_000
 const SAMPLE_EVERY_MS = 5_000
 const IDLE_WAIT_MS = 300_000
+const SHOW_WAIT_MS = 5_000
+const SHOW_POLL_MS = 200
 const IDLE_POLL_MS = 10_000
 // More misses than this means the workload didn't run, so the reading isn't judged.
 const MAX_MISSED_SHARE = 0.05
@@ -45,67 +47,137 @@ function linuxProcessMb(pid) {
   }
 }
 
-/**
- * Orca's own processes Electron doesn't list: Node children (the terminal daemon that hosts chat relays, the
- * plugin host, the session scanner) running the Electron binary, and each chat's native provider supervisor.
- * Only descendants of main or the copy's daemon count; agents, shells and git are left out.
- */
-function linuxUnlistedOrcaProcesses(mainPid, daemonPids, listed) {
-  const exe = (pid) => {
+// A process that vanished mid-read; any other read error leaves the census unsure.
+const GONE = new Set(['ENOENT', 'ESRCH'])
+
+/** The /proc reads the census needs; a test swaps in a fake table to inject faults. */
+export const linuxProc = {
+  pids: () =>
+    fs
+      .readdirSync('/proc')
+      .filter((entry) => /^\d+$/.test(entry))
+      .map(Number),
+  /** Parent, state and start time, or null once the process is gone. */
+  stat: (pid) => {
+    let text
+    try {
+      text = fs.readFileSync(`/proc/${String(pid)}/stat`, 'utf8')
+    } catch (error) {
+      if (GONE.has(error?.code)) {
+        return null
+      }
+      throw error
+    }
+    // The command name can hold spaces and parens, so fields are read after its closing paren.
+    const fields = text.slice(text.lastIndexOf(')') + 2).split(' ')
+    return { state: fields[0], ppid: Number(fields[1]), start: fields[19] }
+  },
+  /** The executable's path, or null once the process is gone. */
+  exe: (pid) => {
     try {
       return fs.readlinkSync(`/proc/${String(pid)}/exe`)
-    } catch {
-      return null
+    } catch (error) {
+      if (GONE.has(error?.code)) {
+        return null
+      }
+      throw error
     }
   }
-  const electronExe = exe(mainPid)
-  const children = new Map()
-  for (const entry of fs.readdirSync('/proc')) {
-    if (!/^\d+$/.test(entry)) {
-      continue
+}
+
+export class CensusUnsure extends Error {}
+
+/**
+ * Orca's own processes Electron doesn't list: Node children (the terminal daemon that hosts chat relays, the
+ * plugin host, the session scanner) running the Electron binary, and each chat's native provider processes
+ * (the supervisor, and the watcher it forks under the agent). The walk goes through every descendant of main
+ * and the copy's daemon but counts only those two kinds, so agents, shells and git are left out.
+ * It remembers every process it has counted: one still running but no longer found, or any read error on a
+ * live descendant, makes the census unsure (CensusUnsure) instead of quietly leaving its memory out.
+ */
+export class LinuxOrcaCensus {
+  constructor(proc = linuxProc) {
+    this.proc = proc
+    this.known = new Map()
+  }
+
+  live(pid) {
+    const stat = this.proc.stat(pid)
+    return stat !== null && stat.state !== 'Z' ? stat : null
+  }
+
+  discover(mainPid, daemonPids, listed) {
+    const electronExe = this.live(mainPid) ? this.proc.exe(mainPid) : null
+    if (!electronExe) {
+      throw new CensusUnsure(`main ${String(mainPid)} is not readable`)
     }
-    try {
-      // The command name can hold spaces and parens, so the parent pid is read after its closing paren.
-      const stat = fs.readFileSync(`/proc/${entry}/stat`, 'utf8')
-      const ppid = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1])
-      const siblings = children.get(ppid)
+    const children = new Map()
+    const stats = new Map()
+    for (const pid of this.proc.pids()) {
+      const stat = this.proc.stat(pid)
+      if (stat === null) {
+        continue
+      }
+      stats.set(pid, stat)
+      const siblings = children.get(stat.ppid)
       if (siblings) {
-        siblings.push(Number(entry))
+        siblings.push(pid)
       } else {
-        children.set(ppid, [Number(entry)])
+        children.set(stat.ppid, [pid])
       }
-    } catch {}
-  }
-  const kindOf = (pid) => {
-    const path = exe(pid)
-    if (path === null) {
-      return null
     }
-    if (path === electronExe) {
-      return 'Node'
-    }
-    return path.split('/').pop().startsWith('orca-provider-exec') ? 'ProviderExec' : null
-  }
-  const found = new Map(daemonPids.map((pid) => [pid, 'Node']))
-  const queue = [mainPid, ...daemonPids]
-  while (queue.length > 0) {
-    for (const child of children.get(queue.shift()) ?? []) {
-      const kind = found.has(child) ? null : kindOf(child)
-      if (kind) {
-        found.set(child, kind)
+    const found = new Map(daemonPids.map((pid) => [pid, 'Node']))
+    const seen = new Set([mainPid, ...daemonPids])
+    const queue = [mainPid, ...daemonPids]
+    for (let next = 0; next < queue.length; next += 1) {
+      for (const child of children.get(queue[next]) ?? []) {
+        if (seen.has(child)) {
+          continue
+        }
+        seen.add(child)
         queue.push(child)
+        if (stats.get(child)?.state === 'Z') {
+          continue
+        }
+        const path = this.proc.exe(child)
+        const kind =
+          path === null
+            ? null
+            : path === electronExe
+              ? 'Node'
+              : path.split('/').pop().startsWith('orca-provider-exec')
+                ? 'ProviderExec'
+                : null
+        if (kind) {
+          found.set(child, kind)
+        }
       }
     }
+    for (const [pid, start] of this.known) {
+      if (found.has(pid) || listed.has(pid)) {
+        continue
+      }
+      if (this.live(pid)?.start === start) {
+        throw new CensusUnsure(`Orca process ${String(pid)} is still running but was not found`)
+      }
+      this.known.delete(pid)
+    }
+    for (const pid of found.keys()) {
+      const stat = stats.get(pid) ?? this.live(pid)
+      if (stat) {
+        this.known.set(pid, stat.start)
+      }
+    }
+    return [...found].filter(([pid]) => !listed.has(pid)).map(([pid, type]) => ({ pid, type }))
   }
-  return [...found].filter(([pid]) => !listed.has(pid)).map(([pid, type]) => ({ pid, type }))
 }
 
 /**
  * Every Orca process (main, renderers, GPU, utility, and on Linux its Node children and provider supervisors) after a GC and a
  * memory-pressure signal, as the lowest total of 12 samples over a minute, with that sample's split by type.
- * A sample with an unreadable process is dropped rather than counted low.
+ * A sample with an unreadable process or an unsure census is dropped rather than counted low.
  */
-async function sampleAppMb(electronApp, page, userDataDir) {
+async function sampleAppMb(electronApp, page, userDataDir, census) {
   const cdp = await page.context().newCDPSession(page)
   try {
     await cdp.send('HeapProfiler.collectGarbage')
@@ -116,6 +188,7 @@ async function sampleAppMb(electronApp, page, userDataDir) {
   await sleep(RELEASE_WAIT_MS)
   let lowest = null
   let dropped = 0
+  const unsure = []
   const deadline = Date.now() + SAMPLE_WINDOW_MS
   while (Date.now() < deadline) {
     const { mainPid, metrics } = await electronApp.evaluate(({ app }) => ({
@@ -127,14 +200,22 @@ async function sampleAppMb(electronApp, page, userDataDir) {
       }))
     }))
     const processes = metrics.map(({ pid, type, workingSetKb }) => ({ pid, type, workingSetKb }))
-    if (process.platform === 'linux') {
+    let unreadable = false
+    if (census) {
       const listed = new Set(processes.map(({ pid }) => pid))
-      processes.push(...linuxUnlistedOrcaProcesses(mainPid, readDaemonPids(userDataDir), listed))
+      try {
+        processes.push(...census.discover(mainPid, readDaemonPids(userDataDir), listed))
+      } catch (error) {
+        if (!(error instanceof CensusUnsure) && !(error?.code && !GONE.has(error.code))) {
+          throw error
+        }
+        unsure.push(String(error.message))
+        unreadable = true
+      }
     }
     const byType = {}
     let total = 0
-    let unreadable = false
-    for (const entry of processes) {
+    for (const entry of unreadable ? [] : processes) {
       const mb =
         process.platform === 'linux' ? linuxProcessMb(entry.pid) : entry.workingSetKb / 1024
       if (mb === null) {
@@ -158,12 +239,22 @@ async function sampleAppMb(electronApp, page, userDataDir) {
     }
     await sleep(SAMPLE_EVERY_MS)
   }
-  return lowest === null ? null : { ...lowest, droppedSamples: dropped }
+  return lowest === null
+    ? null
+    : {
+        ...lowest,
+        droppedSamples: dropped,
+        ...(unsure.length ? { unsure: unsure.slice(0, 3) } : {})
+      }
 }
 
-/** Shows the chat's workspace and its tab, as a click in the sidebar and tab strip does; true only once it is in front. */
-async function showChat(page, { sessionId, worktreeId }) {
-  return page.evaluate(
+/**
+ * Shows the chat's workspace and its tab, as a click in the sidebar and tab strip does. True only once that chat's
+ * composer is laid out on screen: store state alone would still read shown after the workbench crashed into its
+ * error fallback, which unmounts every chat and frees what they hold.
+ */
+export async function showChat(page, { sessionId, worktreeId }, waitMs = SHOW_WAIT_MS) {
+  const selected = await page.evaluate(
     ({ session, worktree }) => {
       const state = window.__store.getState()
       // A seed saved on Tasks or Settings would keep every workspace hidden.
@@ -191,6 +282,25 @@ async function showChat(page, { sessionId, worktreeId }) {
     },
     { session: sessionId, worktree: worktreeId }
   )
+  if (!selected) {
+    return false
+  }
+  const deadline = Date.now() + waitMs
+  for (;;) {
+    const mounted = await page.evaluate(
+      (session) =>
+        [...document.querySelectorAll('[data-native-chat-composer-scope]')].some(
+          (element) =>
+            element.getAttribute('data-native-chat-composer-scope')?.endsWith(session) &&
+            element.getClientRects().length > 0
+        ),
+      sessionId
+    )
+    if (mounted || Date.now() >= deadline) {
+      return mounted
+    }
+    await sleep(SHOW_POLL_MS)
+  }
 }
 
 /** A follow-up user turn through the same mutation envelope the composer sends. */
@@ -270,6 +380,8 @@ export async function appMemorySoakOnce({
   copyProfile(seedDir, userDataDir)
   const stub = writeClaudeStub(path.join(runDir, 'stub'), repoRoot)
   const label = `soak-${arm}-${sha.slice(0, 11)}`
+  // One census for the whole soak, so a process counted at the baseline can't silently drop out later.
+  const census = process.platform === 'linux' ? new LinuxOrcaCensus() : null
   const copy = await launchCopy({
     buildDir,
     runDir,
@@ -330,7 +442,7 @@ export async function appMemorySoakOnce({
     const pageOrigin = () => copy.page.evaluate(() => performance.timeOrigin)
     const checkpoint = async (name) => {
       await sleep(options.chatSettleMs)
-      const reading = await sampleAppMb(copy.app, copy.page, userDataDir)
+      const reading = await sampleAppMb(copy.app, copy.page, userDataDir, census)
       const origin = await pageOrigin()
       result.checkpoints.push({ name, at: Date.now(), origin, ...reading })
       console.log(`[fleet-gate] ${label} ${name}: ${JSON.stringify(reading)}`)
