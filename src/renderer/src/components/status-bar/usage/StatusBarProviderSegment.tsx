@@ -29,6 +29,7 @@ import {
 import { getTightestUsageSection, getUsageHeadlineSection } from './usage-headline-sections'
 import { formatBareUsagePercentage } from './usage-percentage-label'
 import { formatUsageChipTitle } from './usage-chip-title'
+import { formatLocalizedResetDuration } from './usage-reset-caption'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, useIntlLocale, type Translate } from '@/i18n/use-translate'
 import { getStatusBarUsageSections } from '../composition/status-bar-usage-sections'
@@ -266,6 +267,7 @@ export function ProviderSegment({
   measuring = false
 }: ProviderSegmentProps): React.JSX.Element {
   const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const provider = p?.provider ?? 'claude'
   const usageFormat = useAppStore((state) => state.statusBarUsageFormat)
   const template = resolveStatusBarUsageTemplate(usageFormat, provider)
@@ -280,14 +282,18 @@ export function ProviderSegment({
     : null
   const sections = getStatusBarUsageSections(p, mode, t)
   const showLabels = mode === 'verbose' || !compact
+  const compactBar = barMode === 'compact'
+  const compactResetAt =
+    compactBar && mode === 'compact' && !compact && !template && usageFormat?.compactResetCountdown
+      ? sections[0]?.window.resetsAt
+      : undefined
   // Why: gate only the clock, never the label, so visibility can't change width and re-trigger itself.
   const now = useResetCountdownClock(
     countdownActive && template && p
       ? [p.session?.resetsAt, p.weekly?.resetsAt, p.fableWeekly?.resetsAt, p.monthly?.resetsAt]
-      : []
+      : [countdownActive ? compactResetAt : undefined]
   )
-
-  const compactBar = barMode === 'compact'
+  const resetCountdown = formatLocalizedResetDuration(compactResetAt, now, intlLocale)
 
   // Why static: unfocused windows never poll, so a pending chip's pulse would redraw the compositor indefinitely.
   if (!p || p.status === 'idle' || (p.status === 'fetching' && !tightest)) {
@@ -366,6 +372,9 @@ export function ProviderSegment({
               labelFirst={section.labelFirst}
               compact={compactBar}
             />
+            {resetCountdown ? (
+              <span className="tabular-nums text-muted-foreground">{resetCountdown}</span>
+            ) : null}
           </React.Fragment>
         ))
       )}

@@ -1,4 +1,5 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
+import { setRendererUiLanguage } from '@/i18n/i18n'
 import type {
   ProviderRateLimits,
   RateLimitWindow
@@ -52,9 +53,11 @@ const ROWS: { label: string; providers: ProviderRateLimits[] }[] = [
   { label: 'Fable only', providers: [FABLE_ONLY] }
 ]
 
-function levelsFixture(mode: StatusBarUsageMode) {
+function levelsFixture(mode: StatusBarUsageMode, compactResetCountdown = false) {
   return defineFixture({
     width: 960,
+    store: { statusBarUsageFormat: { template: '', compactResetCountdown } },
+    interact: () => setRendererUiLanguage('en'),
     render: () => (
       <div className="flex flex-col gap-2 bg-background p-3 text-xs">
         {ROWS.flatMap((row) =>
@@ -84,3 +87,4 @@ function levelsFixture(mode: StatusBarUsageMode) {
 
 export const detailed = levelsFixture('verbose')
 export const compact = levelsFixture('compact')
+export const compactWithResetCountdown = levelsFixture('compact', true)
