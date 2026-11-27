@@ -19951,8 +19951,10 @@
         "resumedOne": "재개됨: {{name}}",
         "resumedMany_one": "재개됨: 에이전트 {{count}}개",
         "resumedMany_other": "재개됨: 에이전트 {{count}}개",
-        "needYou_one": "{{count}}개는 확인이 필요합니다",
-        "needYou_other": "{{count}}개는 확인이 필요합니다"
+        "needYou_one": "{{count}}개 확인 필요",
+        "needYou_other": "{{count}}개 확인 필요",
+        "resumedCount_one": "재개됨: {{count}}개",
+        "resumedCount_other": "재개됨: {{count}}개"
       },
       "RunTargetCombobox": {
         "noWslDistros": "WSL 배포판을 찾을 수 없음",

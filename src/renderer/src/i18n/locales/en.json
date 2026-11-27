@@ -20971,7 +20971,9 @@
         "resumedMany_one": "Resumed {{count}} agent",
         "resumedMany_other": "Resumed {{count}} agents",
         "needYou_one": "{{count}} needs you",
-        "needYou_other": "{{count}} need you"
+        "needYou_other": "{{count}} need you",
+        "resumedCount_one": "Resumed {{count}}",
+        "resumedCount_other": "Resumed {{count}}"
       },
       "RunTargetCombobox": {
         "noWslDistros": "No WSL distros found",

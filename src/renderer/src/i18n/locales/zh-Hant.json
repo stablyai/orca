@@ -20370,7 +20370,8 @@
         "failedSome_other": "無法恢復：{{total}} 個中的 {{count}} 個",
         "resumedOne": "已恢復 {{name}}",
         "resumedMany_other": "已恢復 {{count}} 個聊天",
-        "needYou_other": "{{count}} 個需要你處理"
+        "needYou_other": "{{count}} 個需要你處理",
+        "resumedCount_other": "已恢復 {{count}} 個"
       },
       "RunTargetCombobox": {
         "noWslDistros": "找不到 WSL 發行版",

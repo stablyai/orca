@@ -10,9 +10,10 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { markNativeChatLaunchResumeDecided } from './native-chat-launch-resume-decision'
 import {
-  beginResumeRun,
+  nextResumeRun,
   resumeRunInFlight,
   resumeRunPendingIds,
+  unsentResumeIds,
   withoutResumeRunSessions,
   type ResumeRun,
   type ResumeRunStarter
@@ -188,7 +189,8 @@ export function createNativeChatRestartOccurrence(
     startedBy: ResumeRunStarter = 'user',
     took?: NativeChatRestartOffer['candidates']
   ): Promise<void> {
-    const requested = [...new Set(sessionIds)]
+    // Checked before any await, so a second activation in the same tick sends nothing.
+    const requested = unsentResumeIds(run, sessionIds)
     if (!current() || requested.length === 0) {
       return
     }
@@ -196,7 +198,8 @@ export function createNativeChatRestartOccurrence(
     const actionCurrent = () => current() && actionsBegun === issued
     forgetUnsentResumes(requested)
     const rows = new Map([...offer.candidates, ...offer.failed].map((row) => [row.sessionId, row]))
-    let actionRun = beginResumeRun(
+    let actionRun = nextResumeRun(
+      run,
       took ?? requested.flatMap((sessionId) => rows.get(sessionId) ?? []),
       Date.now(),
       startedBy

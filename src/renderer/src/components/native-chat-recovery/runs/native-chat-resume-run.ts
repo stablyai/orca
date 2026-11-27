@@ -18,6 +18,8 @@ export type ResumeRun = Readonly<{
   inFlight: boolean
   continued?: readonly RestartContinuationOutcome[]
   finishedViewShown?: boolean
+  /** Chats earlier runs resumed that this one does not retry, so a retry keeps them in the report. */
+  resumedBefore?: readonly ResumeCandidate[]
 }>
 
 function progressRank(status: ResumeRunHostStatus | undefined): number {
@@ -97,6 +99,48 @@ export function beginResumeRun(
   }
 }
 
+/** A retry replaces the run; what earlier runs already resumed stays reported unless retried. */
+export function nextResumeRun(
+  previous: ResumeRun | null,
+  candidates: readonly ResumeCandidate[],
+  now: number,
+  startedBy: ResumeRunStarter
+): ResumeRun {
+  const next = beginResumeRun(candidates, now, startedBy)
+  if (!previous) {
+    return next
+  }
+  const retried = new Set(candidates.map((candidate) => candidate.sessionId))
+  const continued = new Set(
+    previous.inFlight
+      ? []
+      : previous.continued
+          ?.filter((entry) => entry.outcome === 'continued')
+          .map((entry) => entry.sessionId)
+  )
+  const carried = new Map<string, ResumeCandidate>()
+  for (const candidate of [
+    ...(previous.resumedBefore ?? []),
+    ...previous.entries
+      .map((entry) => entry.candidate)
+      .filter((candidate) => continued.has(candidate.sessionId))
+  ]) {
+    if (!retried.has(candidate.sessionId)) {
+      carried.set(candidate.sessionId, candidate)
+    }
+  }
+  return carried.size > 0 ? { ...next, resumedBefore: [...carried.values()] } : next
+}
+
+/** What a new action may send: a chat an action is already resuming is never sent twice. */
+export function unsentResumeIds(
+  run: ResumeRun | null,
+  sessionIds: readonly string[]
+): readonly string[] {
+  const pending = new Set(resumeRunPendingIds(run))
+  return [...new Set(sessionIds)].filter((sessionId) => !pending.has(sessionId))
+}
+
 const NONE: readonly string[] = []
 /** Keep the selection protected until the action's authoritative reply has been published. */
 export function resumeRunPendingIds(run: ResumeRun | null): readonly string[] {
@@ -113,12 +157,16 @@ export function withoutResumeRunSessions(
   }
   const dismissed = new Set(sessionIds)
   const entries = run.entries.filter((entry) => !dismissed.has(entry.candidate.sessionId))
-  if (entries.length === 0) {
+  const resumedBefore = run.resumedBefore?.filter(
+    (candidate) => !dismissed.has(candidate.sessionId)
+  )
+  if (entries.length === 0 && !resumedBefore?.length) {
     return null
   }
   return {
     ...run,
     entries,
-    continued: run.continued?.filter((entry) => !dismissed.has(entry.sessionId))
+    continued: run.continued?.filter((entry) => !dismissed.has(entry.sessionId)),
+    ...(resumedBefore ? { resumedBefore } : {})
   }
 }

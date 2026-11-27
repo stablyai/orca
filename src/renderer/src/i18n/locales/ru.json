@@ -21559,7 +21559,11 @@
         "needYou_one": "{{count}} ждёт вас",
         "needYou_few": "{{count}} ждут вас",
         "needYou_many": "{{count}} ждут вас",
-        "needYou_other": "{{count}} ждут вас"
+        "needYou_other": "{{count}} ждут вас",
+        "resumedCount_one": "Продолжено: {{count}}",
+        "resumedCount_few": "Продолжено: {{count}}",
+        "resumedCount_many": "Продолжено: {{count}}",
+        "resumedCount_other": "Продолжено: {{count}}"
       },
       "RunTargetCombobox": {
         "noWslDistros": "Дистрибутивы WSL не найдены",

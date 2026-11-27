@@ -20235,7 +20235,10 @@
         "resumedMany_other": "Reanudados: {{count}} agentes",
         "needYou_one": "{{count}} te necesita",
         "needYou_many": "{{count}} te necesitan",
-        "needYou_other": "{{count}} te necesitan"
+        "needYou_other": "{{count}} te necesitan",
+        "resumedCount_one": "Reanudado: {{count}}",
+        "resumedCount_many": "Reanudados: {{count}}",
+        "resumedCount_other": "Reanudados: {{count}}"
       },
       "RunTargetCombobox": {
         "noWslDistros": "No se encontraron distribuciones WSL",

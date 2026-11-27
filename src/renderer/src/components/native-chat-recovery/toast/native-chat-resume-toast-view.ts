@@ -97,6 +97,14 @@ export function resumeToastView(
       }
     }
   }
+  // A retry replaced the run; what earlier runs resumed is still part of the report.
+  const reported = new Set(rows.map((row) => row.candidate.sessionId))
+  for (const candidate of run?.resumedBefore ?? []) {
+    if (!reported.has(candidate.sessionId)) {
+      reported.add(candidate.sessionId)
+      rows.push({ candidate, state: 'resumed' })
+    }
+  }
   rows.sort((a, b) => ORDER[a.state] - ORDER[b.state])
   const count = (state: ResumeToastRowState) => rows.filter((row) => row.state === state).length
   const needsYou = count('needs-you')
