@@ -21,7 +21,7 @@ import { ORCAD_BUNDLED_LAUNCHER_ENV } from '../runtime-launch/orcad-bundled-runt
 import { resolveOrcadExitCode } from '../serve-startup/orcad-exit-code'
 import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../../shared/app-lifecycle/launch/single-instance-exit-code'
 import { recordAgentSessionRuntimeEnd } from '../../runtime/agent-session/records/agent-session-runtime-end-record'
-import type { collectLocalSavedStructuredAgentSessionIds } from '../../runtime/agent-session/lifecycle/saved-structured-agent-session-restoration'
+import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import type { AgentSessionRecordStoreStartupOpen } from '../../runtime/agent-session/records/local-agent-session-record-store-startup-open'
 import { ORCAD_SHUTDOWN_DEADLINE_MS } from './managed-stop/orcad-stop-deadlines'
 import { holdOrcadTerminalAdmissionUntilExit } from './managed-stop/orcad-stop-terminal-admission'
@@ -117,19 +117,25 @@ export function installOrcadShutdownSignals(
 
 /** Starts the saved-chat writer from the profile's tab snapshot; `serving` releases maintenance. */
 export async function startOrcadAgentSessionRecordStoreOpen(
-  profileStore: Parameters<typeof collectLocalSavedStructuredAgentSessionIds>[0]
+  profileStore: Pick<RuntimeStore, 'getWorkspaceSession' | 'getBots'> | null
 ): Promise<{
   open: AgentSessionRecordStoreStartupOpen
   maintenanceAfter: Promise<void>
   serving: (runtime: Parameters<typeof agentSessionRecordStoreHostServing>[0]) => void
 }> {
-  const { startLocalAgentSessionRecordStoreOpen } =
+  const { startLocalAgentSessionRecordStoreOpen, localAgentSessionRecordStoreLocation } =
     await import('../../runtime/agent-session/records/local-agent-session-record-store-startup-open')
   const { collectLocalSavedStructuredAgentSessionIds: collectIds } =
     await import('../../runtime/agent-session/lifecycle/saved-structured-agent-session-restoration')
   const serving = Promise.withResolvers<void>()
   return {
-    open: startLocalAgentSessionRecordStoreOpen(collectIds(profileStore), serving.promise),
+    open: startLocalAgentSessionRecordStoreOpen(
+      localAgentSessionRecordStoreLocation(
+        collectIds(profileStore),
+        () => profileStore?.getBots?.() ?? []
+      ),
+      serving.promise
+    ),
     maintenanceAfter: serving.promise,
     serving: (runtime) => {
       serving.resolve()

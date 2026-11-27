@@ -21,7 +21,6 @@ import { BotShareNameChanges } from './bot-share-name-changes'
 import { retitleTeammateHomes } from './bot-view-change-publication'
 import { createBotChatTreeIndex } from './bot-chat-tree-index'
 import { readBotChatInputs } from './bot-chat-tree-base'
-import { provideTeammateHomeBots } from '../runtime/agent-session/records/agent-session-record-home-names'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredAgentSessionNamingSnapshot } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-feed-deps'
 import { answerBotShare, resolveBotShareInvite } from './bot-team-share-deliveries'
@@ -66,14 +65,24 @@ describe('a Home Chat for each person', () => {
   let rig: QueuedMessageTestRig | undefined
   afterEach(async () => {
     setStructuredAgentSessionHost(null)
-    provideTeammateHomeBots(null)
     await rig?.dispose()
     rig = undefined
   })
 
-  /** `aliceHomeName`: what an older build saved on Alice's Home; null for none, as this one saves. */
-  async function setup(aliceHomeName: string | null = null) {
-    rig = await createQueuedMessageTestRig()
+  /** `aliceHomeName`: what an older build saved on Alice's Home; null for none, as this one saves.
+   *  `loaded`: whether the runtime's bots are readable yet when the record store first reads. */
+  async function setup(aliceHomeName: string | null = null, loaded = true) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Home owner reads only these fields.
+    let bot = {
+      id: 'bot-1',
+      agent: 'codex',
+      chatSessionId: HOST_TEST_SESSION,
+      folderWorkspaceId: 'home',
+      shares: [share(ALICE.accountId, 'Alice', ALICE_HOME), share(BO.accountId, 'Bo', BO_HOME)]
+    } as Bot
+    let bots = loaded ? [bot] : []
+    // The record store reads the runtime's bots for teammates' Home titles, as its openers pass them.
+    rig = await createQueuedMessageTestRig({ teammateHomeBots: () => bots })
     const current = rig
     // The rig's host names nothing; names go through the record store's own write rule.
     const host: StructuredAgentSessionHost = Object.create(current.host)
@@ -102,17 +111,6 @@ describe('a Home Chat for each person', () => {
     if (aliceHomeName) {
       await host.setUserConversationName(ALICE_HOME, aliceHomeName, 'rename')
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Home owner reads only these fields.
-    let bot = {
-      id: 'bot-1',
-      agent: 'codex',
-      chatSessionId: HOST_TEST_SESSION,
-      folderWorkspaceId: 'home',
-      shares: [share(ALICE.accountId, 'Alice', ALICE_HOME), share(BO.accountId, 'Bo', BO_HOME)]
-    } as Bot
-    // The runtime's bots, whose share rows the record store titles teammates' Homes by, and the one
-    // share-names signal, wired as publishBotViewChanges wires it.
-    provideTeammateHomeBots(() => [bot])
     const shareNames = new BotShareNameChanges()
     const retitled = vi.fn()
     shareNames.listen((change) =>
@@ -123,8 +121,9 @@ describe('a Home Chat for each person', () => {
     )
     // Every bot write, as BotController.update and setHome save it.
     const save = (next: Bot) => {
-      const before = bot
+      const before = bots.find((entry) => entry.id === next.id) ?? { ...next, shares: [] }
       bot = next
+      bots = [next]
       shareNames.saved(before, next)
     }
     const created: { sessionId: string; of: BotHomeOf }[] = []
@@ -156,6 +155,8 @@ describe('a Home Chat for each person', () => {
       showTab,
       retitled,
       bot: () => bot,
+      // The bots becoming readable, through the save that signals their share rows' titles.
+      load: () => save(bot),
       // BotController.update, as share deliveries write through it.
       bots: {
         list: () => [bot],
@@ -338,6 +339,17 @@ describe('a Home Chat for each person', () => {
       'Alice Kim’s Home'
     )
     expect(raw(ALICE_HOME)?.conversationName).toBeUndefined()
+  })
+
+  it('titles a Home read before the bots load once they load, through the share-names signal', async () => {
+    const { bot, host, retitled, load } = await setup(null, false)
+    setStructuredAgentSessionHost(host)
+    const published = vi.spyOn(host, 'publishConversationName').mockImplementation(() => {})
+    expect(rig!.store.getConversation(ALICE_HOME)?.conversationName).not.toBe('Alice’s Home')
+    load()
+    expect(published).toHaveBeenCalledWith(ALICE_HOME)
+    expect(retitled).toHaveBeenCalledWith('folder:home', ALICE_HOME)
+    expect(await shown(bot)).toEqual(everywhere('Alice’s Home'))
   })
 
   it.each(['removed', 'declined'] as const)(

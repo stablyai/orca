@@ -1,7 +1,7 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
@@ -9,7 +9,7 @@ import {
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionDatabase } from './agent-session-record-store-test-harness'
-import { provideTeammateHomeBots } from './agent-session-record-home-names'
+import type { TeammateHomeBots } from './agent-session-record-home-names'
 import { agentSessionRecordShownName } from './agent-session-record-shown-name'
 
 const ROOT = 'home-root'
@@ -20,7 +20,7 @@ function record(sessionId: string, fields: Partial<AgentSessionRecord> = {}): Ag
 }
 
 // Alice's Home, continued by a /clear into NEXT, as a store loads it from disk.
-async function openStore(): Promise<AgentSessionRecordStore> {
+async function openStore(teammateHomeBots: TeammateHomeBots): Promise<AgentSessionRecordStore> {
   const root = record(ROOT, {
     conversationCommand: {
       command: 'clear',
@@ -44,16 +44,14 @@ async function openStore(): Promise<AgentSessionRecordStore> {
       sessionTabs: null
     },
     hostId: 'local',
-    legacySessionTabIds: []
+    legacySessionTabIds: [],
+    teammateHomeBots
   })
 }
 
 describe('a teammate’s Home titled at the record store’s reads', () => {
-  afterEach(() => provideTeammateHomeBots(null))
-
   it('titles the chat a /clear continued the Home into, and a fork of it, by the share row', async () => {
-    const store = await openStore()
-    provideTeammateHomeBots(() => [
+    const store = await openStore(() => [
       {
         chatSessionId: 'owner-home',
         shares: [

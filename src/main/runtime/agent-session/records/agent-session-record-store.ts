@@ -1,5 +1,4 @@
-import { recordHomeTitles } from './agent-session-record-home-names'
-import { AgentSessionClearedFromIndex } from './agent-session-cleared-from-index'
+import { recordHomeTitles, type TeammateHomeBots } from './agent-session-record-home-names'
 import type * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import type { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from '../ownership/agent-session-permission-backfill'
@@ -76,7 +75,8 @@ export class AgentSessionRecordStore extends AgentSessionRecordForgets {
     transactions: AgentSessionStoreTransactions,
     readonly hostId: string,
     journalDatabase: JournalSqlDatabase,
-    deletedChats: readonly DeletedChat[]
+    deletedChats: readonly DeletedChat[],
+    private readonly teammateHomeBots: TeammateHomeBots
   ) {
     super(transactions, journalDatabase, deletedChats)
     const founding = createAgentSessionFoundingStore(transactions)
@@ -104,6 +104,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordForgets {
     hostId: string
     legacySessionTabIds: readonly string[]
     deletedChats?: readonly DeletedChat[]
+    teammateHomeBots: TeammateHomeBots
   }): AgentSessionRecordStore {
     const transactions = new AgentSessionStoreTransactions(
       args.journalDatabase,
@@ -115,7 +116,8 @@ export class AgentSessionRecordStore extends AgentSessionRecordForgets {
       transactions,
       args.hostId,
       args.journalDatabase,
-      args.deletedChats ?? []
+      args.deletedChats ?? [],
+      args.teammateHomeBots
     )
   }
 
@@ -131,15 +133,12 @@ export class AgentSessionRecordStore extends AgentSessionRecordForgets {
   backfillChatPermissionModes = (ranWithFullAccess: (provider: string) => boolean): Promise<void> =>
     backfillAgentSessionPermissionModes(this.transactions, ranWithFullAccess)
 
-  private readonly clearedFrom = new AgentSessionClearedFromIndex({
-    conversations: () => listAgentSessionConversations(this.state),
-    lineage: () => this.transactions.lineageRevision()
-  })
   // Reads hand out a teammate's Home titled (agent-session-record-home-names.ts); writes never see it.
-  private readonly titles = recordHomeTitles({
-    rootOf: this.clearedFrom.rootOf,
-    lineage: () => this.transactions.lineageRevision()
-  })
+  private readonly titles = recordHomeTitles(
+    () => listAgentSessionConversations(this.state),
+    () => this.transactions.lineageRevision(),
+    () => this.teammateHomeBots()
+  )
   getRecord = (sessionId: string): AgentSessionRecord | null =>
     this.titles.one(this.state.records.get(sessionId) ?? null)
   getConversation = (id: string) => this.titles.one(getAgentSessionConversation(this.state, id))
@@ -153,7 +152,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordForgets {
     this.titles.all(this.transactions.keyIndexes.conversations(this.state, keys, key))
   senderIdentityRevision = (): number => this.transactions.senderIdentityRevision
   connectorReplies = () => new JournalSqlConnectorReplies(this.journalDatabase)
-  listClearedFrom = (sessionId: string): string[] => this.clearedFrom.clearedFrom(sessionId)
+  listClearedFrom = (sessionId: string): string[] => this.titles.clearedFrom(sessionId)
   lineageRevision = (): object => this.transactions.lineageRevision()
   providerAliasOwner = (nativeId: string): string | null =>
     this.transactions.keyIndexes.providerAliasOwner(this.state, nativeId)

@@ -3,6 +3,8 @@
 // (their email until a name arrives), and nothing ever writes it. A name the owner gave the Home wins.
 // Everything else that shows a Home reads the store; a census test keeps it that way.
 import type { Bot } from '../../../../shared/bot-types'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import { AgentSessionClearedFromIndex } from './agent-session-cleared-from-index'
 import { botHomeName, botHomes, legacyTeammateHomeNames } from '../../../../shared/bots/bot-home-of'
 
 type NamedRecord = { sessionId: string; conversationName?: string; conversationNameSource?: 'user' }
@@ -10,28 +12,15 @@ type NamedRecord = { sessionId: string; conversationName?: string; conversationN
 /** A teammate Home's title, and the names Orca saved on one in older builds (not the owner's). */
 type TeammateHome = { name: string; orcaNames: ReadonlySet<string> }
 
-const NO_BOTS: readonly Pick<Bot, 'chatSessionId' | 'shares'>[] = []
-let readBots: (() => readonly Pick<Bot, 'chatSessionId' | 'shares'>[]) | null = null
+/** The bots whose share rows title their teammates' Homes: the store's own dependency, handed to it
+ *  by whoever opens it (agent-session-record-store-slot.ts). */
+export type TeammateHomeBots = () => readonly Pick<Bot, 'chatSessionId' | 'shares'>[]
 
-/** The runtime's bots, whose share rows name their teammates' Homes. */
-export function provideTeammateHomeBots(
-  bots: (() => readonly Pick<Bot, 'chatSessionId' | 'shares'>[]) | null
-): void {
-  readBots = bots
-}
-
-let kept: { bots: object; lineage: object; homes: ReadonlyMap<string, TeammateHome> } | null = null
-
-/** Each teammate Home's title by its /clear root; rebuilt only when the bots or the store's /clear
- *  lineage (`lineage`) change, so a hot record read costs a lookup. */
-export function teammateHomesByRoot(
-  rootOf: (sessionId: string) => string,
-  lineage: object
+/** Each teammate Home's title by its /clear root. */
+function teammateHomesByRoot(
+  bots: readonly Pick<Bot, 'chatSessionId' | 'shares'>[],
+  rootOf: (sessionId: string) => string
 ): ReadonlyMap<string, TeammateHome> {
-  const bots = readBots?.() ?? NO_BOTS
-  if (kept?.bots === bots && kept.lineage === lineage) {
-    return kept.homes
-  }
   const homes = new Map<string, TeammateHome>()
   for (const bot of bots) {
     for (const home of botHomes(bot)) {
@@ -43,7 +32,6 @@ export function teammateHomesByRoot(
       }
     }
   }
-  kept = { bots, lineage, homes }
   return homes
 }
 
@@ -89,18 +77,32 @@ export function teammateHomeTitlesBySession(
   )
 }
 
-/** A store's reads as readers see them: each teammate Home titled, by `rootOf` (its /clear root). */
-export function recordHomeTitles(source: {
-  rootOf: (sessionId: string) => string
-  lineage: () => object
-}) {
-  const homes = () => teammateHomesByRoot(source.rootOf, source.lineage())
+/** A store's reads as readers see them: each teammate Home titled, matched by its /clear root. The
+ *  titles are rebuilt only when the bots or the /clear lineage change, so a hot read is one lookup. */
+export function recordHomeTitles(
+  conversations: () => readonly Pick<
+    AgentSessionConversationView,
+    'sessionId' | 'conversationCommand'
+  >[],
+  lineage: () => object,
+  bots: TeammateHomeBots
+) {
+  const cleared = new AgentSessionClearedFromIndex({ conversations, lineage })
+  let kept: { bots: object; lineage: object; homes: ReadonlyMap<string, TeammateHome> } | null =
+    null
+  const homes = () => {
+    const now = { bots: bots(), lineage: lineage() }
+    if (kept?.bots !== now.bots || kept.lineage !== now.lineage) {
+      kept = { ...now, homes: teammateHomesByRoot(now.bots, cleared.rootOf) }
+    }
+    return kept.homes
+  }
   const all = <R extends NamedRecord>(records: R[]): R[] => {
     const titled = homes()
     return titled.size === 0
       ? records
       : records.map((record) =>
-          withTeammateHomeName(record, titled.get(source.rootOf(record.sessionId)))
+          withTeammateHomeName(record, titled.get(cleared.rootOf(record.sessionId)))
         )
   }
   return {
@@ -108,6 +110,7 @@ export function recordHomeTitles(source: {
     one: <R extends NamedRecord>(record: R | null): R | null =>
       record ? (all([record])[0] ?? null) : null,
     /** Titled as a teammate's Home: Orca never names it from its content. */
-    isHome: (sessionId: string): boolean => homes().has(source.rootOf(sessionId))
+    isHome: (sessionId: string): boolean => homes().has(cleared.rootOf(sessionId)),
+    clearedFrom: cleared.clearedFrom
   }
 }

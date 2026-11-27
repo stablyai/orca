@@ -2,7 +2,6 @@
 // Home titles, which the chat records work out from the bots' share rows.
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { publishBotSidebarViewChanges } from '../runtime/client/settings/runtime-workspace-view-change-events'
-import { provideTeammateHomeBots } from '../runtime/agent-session/records/agent-session-record-home-names'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   conversationRecordReader,
@@ -21,7 +20,6 @@ export function publishBotViewChanges(
   runtime: BotViewRuntime
 ): void {
   publishBotSidebarViewChanges(store, () => runtime.notifyBotsChanged({ kinds: ['bot'] }))
-  provideTeammateHomeBots(() => runtime.bots.list())
   runtime.bots.shareNames.listen((change) => retitleTeammateHomes(runtime, change))
 }
 
