@@ -129,8 +129,8 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
   async activateMobileSessionTab(
     worktreeSelector: string,
     tabId: string,
-    leafId?: string,
-    opts: MobileSessionTabActivationOptions = {}
+    leafId: string | undefined,
+    opts: MobileSessionTabActivationOptions
   ): Promise<RuntimeMobileSessionTabActivationResult> {
     const navigation = opts.navigation ?? (opts.notifyClients === false ? 'caller' : 'all')
     const targetsHost = navigationTargetsHost(navigation)
@@ -141,7 +141,7 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
     await this.refreshMobileSessionPtyRecords(worktreeId)
     // Why: the renderer can publish the host's spelling while inventory refresh is pending.
     worktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ?? worktreeId
-    const owner = this.tabOwnerOfClient(opts.clientNavigationId, worktreeId)
+    const owner = this.homeTabListOf(opts.person, worktreeId)
     if (isTeammateTabList(owner)) {
       return this.activatePersonSessionTab(owner, worktreeId, tabId, opts)
     }

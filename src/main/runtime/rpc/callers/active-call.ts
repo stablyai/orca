@@ -16,8 +16,7 @@ export function runWithActiveRpcCaller<T>(
   caller: RpcCallerIdentity | undefined,
   run: () => T,
   claimedAgentSessionId?: string,
-  clientInstanceId?: string,
-  scope?: { kind: string; botId?: string; accountId?: string }
+  clientInstanceId?: string
 ): T {
   // Only this host's CLI can name a chat here; as in the handoff card, other callers act for a person.
   const agentSessionId =
@@ -26,7 +25,7 @@ export function runWithActiveRpcCaller<T>(
       : undefined
   return activeCall.run(
     { caller, agentSessionId, ...(clientInstanceId ? { clientInstanceId } : {}) },
-    () => runWithActiveTeammate(scope, run)
+    run
   )
 }
 
@@ -42,27 +41,6 @@ export function getActiveRpcClientInstanceId(): string | undefined {
 /** The chat whose agent sent this call, as its CLI claims it: display attribution, never authority. */
 export function getActiveRpcAgentSessionId(): string | undefined {
   return activeCall.getStore()?.agentSessionId
-}
-
-// The share a teammate's call is admitted as, for the tab store and host window, which decide by it
-// (teammate-rules.ts, rule 4); kept apart from the caller identity so it reaches streams too.
-const activeTeammate = new AsyncLocalStorage<{ botId: string; accountId: string } | null>()
-
-export function runWithActiveTeammate<T>(
-  scope: { kind: string; botId?: string; accountId?: string } | undefined,
-  run: () => T
-): T {
-  return activeTeammate.run(
-    scope?.kind === 'bot-share' && scope.botId !== undefined && scope.accountId !== undefined
-      ? { botId: scope.botId, accountId: scope.accountId }
-      : null,
-    run
-  )
-}
-
-/** The teammate whose admitted call this code runs under; null for everyone else. */
-export function getActiveTeammate(): { botId: string; accountId: string } | null {
-  return activeTeammate.getStore() ?? null
 }
 
 /** Re-enters this call later, for work a queue runs from inside another caller's call. */

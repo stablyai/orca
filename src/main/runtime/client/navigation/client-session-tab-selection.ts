@@ -11,6 +11,7 @@ import type { StoredClientSessionTabSelection } from './client-session-tab-close
 import { normalizePersistedMobileClientTabSelections } from './client-session-tab-selection-persistence'
 import {
   isTeammateTabList,
+  TEAMMATE_MOVED_HOMES_ROW,
   type TabOwner,
   type TeammateTabListKey
 } from '../../../bots/team-share/teammate-rules'
@@ -57,7 +58,10 @@ export class ClientSessionTabSelectionStore {
       normalizePersistedMobileClientTabSelections(persisted)
     )) {
       // A teammate's own tab list, not a device: `PersonSessionTabLists` reads it.
-      if (isTeammateTabList(clientNavigationId)) {
+      if (
+        isTeammateTabList(clientNavigationId) ||
+        clientNavigationId === TEAMMATE_MOVED_HOMES_ROW
+      ) {
         continue
       }
       const statesByWorktree = this.getStatesByWorktree(clientNavigationId)

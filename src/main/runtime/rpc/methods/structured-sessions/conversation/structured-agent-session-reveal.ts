@@ -1,4 +1,5 @@
 import { assertBotLinkOpenAuthority } from '../../../../../bots/bot-link-open-authority'
+import { callerTabPerson } from '../../../../../bots/team-share/teammate-rules'
 import { holdAgentSessionPublicationFence } from '../../../../agent-session/agent-session-publication-fence'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { StructuredWorkspaceUnavailable } from '../../../../session-tabs/chat/structured-workspace-authority'
@@ -125,6 +126,7 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
           }
         }
         await ctx.runtime.publishStructuredAgentSessionTab({
+          person: callerTabPerson(ctx.callerScope),
           workspaceAuthority: {
             writerFence: publicationFence?.fence,
             check,

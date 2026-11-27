@@ -202,7 +202,11 @@ export async function createAcknowledgedTabRetirementFixture(bound = false) {
     hasTab: () =>
       store.getWorkspaceSession().tabsByWorktree[ACK_WORKTREE].some((tab) => tab.id === ACK_TAB),
     close: (options: { force?: boolean } = {}) =>
-      runtime.closeMobileSessionTab(`id:${ACK_WORKTREE}`, ACK_TAB, { reason: 'user', ...options }),
+      runtime.closeMobileSessionTab(`id:${ACK_WORKTREE}`, ACK_TAB, {
+        person: 'owner',
+        reason: 'user',
+        ...options
+      }),
     /** The app-quit flush; it finalizes persistence, so dispose must not flush again. */
     quit: () => (finalFlush ??= store.flushFinalOrThrowAsync()),
     dispose: async () => {

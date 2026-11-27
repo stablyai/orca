@@ -27,14 +27,16 @@ const NamedWorkspace = lazyZodSchema(() =>
   })
 )
 
-/** `worktree` as a call names it, at the top level or in a launch's `target`. */
-function namedWorktree(params: unknown): string | null {
+/** The workspace a call names: `worktree`, or a launch `target`'s (a target that makes a new
+ *  workspace names one too); null when it names none and the host's window would pick it. */
+function namedWorktree(params: unknown): string | 'new' | null {
   const named = NamedWorkspace.safeParse(params).data
-  return named?.worktree ?? named?.target?.worktree ?? null
+  return named?.worktree ?? named?.target?.worktree ?? (named?.target ? 'new' : null)
 }
 
 /** Rule 4: in their own Home a teammate's list holds their chats, so nothing they call opens, moves or
- *  reshapes a tab of the host's list there. */
+ *  reshapes a tab of the host's list there; and a teammate never opens one in whatever workspace the
+ *  host's window shows, so a call naming none is refused. */
 async function writesHostTabsInOwnHome(
   context: RpcContext,
   scope: BotShareCallerScope,
@@ -45,7 +47,9 @@ async function writesHostTabsInOwnHome(
     return false
   }
   const named = namedWorktree(params)
-  return named !== null && (await context.runtime.namesTeammateHome(named, scope))
+  return (
+    named === null || (named !== 'new' && (await context.runtime.namesTeammateHome(named, scope)))
+  )
 }
 
 export async function admitTeammateCall<A extends Admitted>(

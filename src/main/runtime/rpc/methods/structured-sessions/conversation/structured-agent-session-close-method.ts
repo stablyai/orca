@@ -1,4 +1,5 @@
 import { defineMethod } from '../../../core'
+import { callerTabPerson } from '../../../../../bots/team-share/teammate-rules'
 import { OptionsParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
 import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
@@ -35,7 +36,13 @@ export const STRUCTURED_AGENT_SESSION_CLOSE_METHOD = defineMethod({
       )
     }
     const host = requireStructuredCleanupHost(ctx)
-    if (ctx.runtime.closeActiveTeammateChatTab(params.sessionId)) {
+    // The caller's close: a teammate's in their own Home closes their tab only.
+    if (
+      ctx.runtime.closePersonChatTab({
+        person: callerTabPerson(ctx.callerScope),
+        sessionId: params.sessionId
+      })
+    ) {
       if (!keepRunning) {
         await host.close(params.sessionId, 'user-close')
       }

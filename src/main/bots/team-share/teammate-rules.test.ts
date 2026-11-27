@@ -150,37 +150,47 @@ describe('a teammate’s own Home tab list (rule 4)', () => {
     }
   })
 
-  it('gives the host’s tab list and window one write point each, which every writer goes through', () => {
-    const src = join(import.meta.dirname, '../../..')
-    const files = readdirSync(join(src, 'main'), { recursive: true, encoding: 'utf8' }).filter(
-      (file) =>
-        file.endsWith('.ts') && !/\.test\.|test-fixture|test-support|test-harness/.test(file)
+  it('names the person of every Home tab write from the caller’s scope or the chat’s stamp', () => {
+    const src = join(import.meta.dirname, '../..')
+    const files = readdirSync(src, { recursive: true, encoding: 'utf8' })
+      .filter(
+        (file) => file.endsWith('.ts') && !/\.test\.|fixture|test-support|test-harness/.test(file)
+      )
+      .map((file) => ({
+        file: file.replaceAll('\\', '/'),
+        text: readFileSync(join(src, file), 'utf8')
+      }))
+    // The Home tab write API: each takes the person (`person` or `personOf`) as a required field.
+    const writes =
+      /\b(publishStructuredAgentSessionTab|activateMobileSessionTab|closeMobileSessionTab|refuseUnattributedMobileSessionTabClose|closePersonChatTab|commitStructuredAgentSessionCreate)\(/g
+    // Sources: the caller's scope at a handler, a chat's stamp, the host's own state; or the field
+    // of a function that took one of those (its own callers are in this census too).
+    const source =
+      /^(callerTabPerson\(\w+\.callerScope\)|callerTabPerson\(callerScope\)|\(?\w*\)? => callerTabPerson\(ctx\.callerScope\)|(\w+\.)?runtime\.chatTabPerson\(|(\(\w+\) => )?args\.runtime\.chatTabPerson\(|HOST_STATE_PERSON|args\.personOf\(|input\.person|options\.person|opts\.person|caller\.person)/
+    const calls = files.flatMap(({ file, text }) =>
+      [...text.matchAll(writes)].flatMap((match) => {
+        const at = match.index + match[0].length
+        // A declaration (`name(` after `async`, a method head) names no person.
+        const head = text.slice(text.lastIndexOf('\n', match.index) + 1, match.index)
+        if (/^\s*(async |protected |private |public )*$/.test(head) || /function\s+$/.test(head)) {
+          return []
+        }
+        let depth = 1
+        let end = at
+        while (depth > 0 && end < text.length) {
+          depth += text[end] === '(' ? 1 : text[end] === ')' ? -1 : 0
+          end += 1
+        }
+        const call = text.slice(at, end)
+        const named = /\bperson(?:Of)?: ([^,\n}]+)/.exec(call)?.[1]?.trim() ?? '(none)'
+        return [{ at: `${file} ${match[1]}`, named }]
+      })
     )
-    const matching = (pattern: RegExp) =>
-      files
-        .filter((file) => pattern.test(readFileSync(join(src, 'main', file), 'utf8')))
-        .map((file) => file.replaceAll('\\', '/'))
-        .sort()
-    // The one store, made once, never swapped, its admission installed once: no writer gets around it.
-    expect(matching(/new MobileSessionSnapshotsByWorktree\(/)).toEqual([
-      'runtime/construction/runtime-identity-state.ts'
-    ])
-    expect(matching(/mobileSessionTabsByWorktree\s*=[^=>]/)).toEqual([
-      'runtime/construction/runtime-identity-state.ts'
-    ])
-    expect(matching(/\.admitWritesBy\(/)).toEqual([
-      'runtime/session-tabs/person/person-session-tab-publication.ts'
-    ])
-    // The window: the notifier is held only as the guard wraps it, and renderer requests pass the
-    // surface's admission (a channel the guard does not name is refused to a teammate).
-    expect(matching(/this\.notifier\s*=[^=]/)).toEqual([
-      'runtime/client/events/runtime-notifier-binding.ts'
-    ])
-    expect(
-      readFileSync(join(src, 'main/runtime/client/events/runtime-notifier-binding.ts'), 'utf8')
-    ).toMatch(/this\.notifier = notifier\s*\?\s*guardNotifierForTeammates\(/)
-    expect(matching(/\.requestRenderer</).filter((file) => !file.startsWith('runtime/'))).toEqual(
-      []
-    )
+    expect(calls.length).toBeGreaterThan(10)
+    expect(calls.filter((call) => !source.test(call.named))).toEqual([])
+    // No ambient person: no async-context scope, and no write point that throws on one.
+    const ambient =
+      /getActiveTeammate|runWithActiveTeammate|TeammateHostTabWriteError|admitWritesBy/
+    expect(files.filter(({ text }) => ambient.test(text)).map(({ file }) => file)).toEqual([])
   })
 })

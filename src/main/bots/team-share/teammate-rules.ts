@@ -9,21 +9,19 @@
 //     Home and its workers' worktrees): `filtered` methods, through `withTeammateLists` or their
 //     handlers (`TEAMMATE_HANDLER_FILTERED`, teammate-workspace-view.ts).
 //  3. Host window. Nothing a teammate calls opens, focuses or drives the host's own window:
-//     `reachesHostWindow` refuses by each reachable method's `hostWindow` class, and the window's two
-//     entry points (the notifier and renderer requests, teammate-host-window-guard.ts) refuse a
-//     teammate's call outside a shared workspace.
+//     `reachesHostWindow` refuses by each reachable method's `hostWindow` class, and a host-list call
+//     naming no workspace (the window would pick one) is refused at admission. A teammate person's
+//     chat tab write never reaches the window. Worker workspaces are as for anyone.
 //  4. Tabs. Each person on the host has their own tab list in the agent's Home; every other workspace
-//     has one list, shared by everyone who can reach it. `tabOwnerOf` names the list, and the tab store
-//     reads and writes only that list:
-//       - 'owner': the agent's Home, for the host's window and the owner's devices;
-//       - `teammate:<botId>:<accountId>`: that bot's Home, for that teammate's devices;
-//       - 'shared': every other workspace, for anyone (worker workspaces stay one list).
-//     A teammate's Home list holds chats. Every session.tabs read, stream, activate and close, and
-//     every chat tab write (reveal, create, Fork, restore, publish, close: `homeTabs.person`), goes to
-//     the list `tabOwnerOf` names. The host's list has one write point (MobileSessionSnapshotsByWorktree),
-//     which throws on a teammate's call that changes its tabs outside a shared workspace
-//     (host-tab-list-admission.ts), whichever writer made it; `homeTabs.hostList` methods are refused
-//     earlier, at admission, when they name the teammate's Home. `homeTabs.none` touch no list.
+//     has one list, shared by everyone who can reach it. Every Home tab write names its person
+//     (`TabPerson`) as data, never from ambient state: a user action the caller's
+//     (`callerTabPerson`, read from the request's scope at the handler), a system write about a chat
+//     the chat's stamp (`chatTabPerson`: whom it acts for, written once when it starts), the host's
+//     own terminals and saved tabs `HOST_STATE_PERSON`. `homeTabListOf` names the list it lands in:
+//     a teammate's own in their agent's Home, the host's everywhere else, so the owner's list only
+//     ever takes owner writes. A teammate's Home list holds chats; `homeTabs.hostList` methods are
+//     refused at admission when they name the teammate's Home. Reads and streams use the device's
+//     list (`tabOwnerOf`). The census test checks every write's person source.
 //  5. Name and asker. A teammate is named by their share row's `name`, and every chat or turn they start
 //     acts for them (`botShareAsker`).
 import classes from '../../runtime/rpc/callers/teammate-method-classes.json'
@@ -33,6 +31,7 @@ import {
   RUNTIME_NAVIGATION_TARGETS
 } from '../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { Bot } from '../../../shared/bot-types'
+import type { RpcCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 
@@ -152,6 +151,9 @@ export function isTeammateTabList(owner: string): owner is TeammateTabListKey {
   return owner.startsWith('teammate:')
 }
 
+/** The saved row of Homes whose older-build host tabs were moved to their teammates' lists. */
+export const TEAMMATE_MOVED_HOMES_ROW = 'teammate-moves'
+
 /** Whose tab list a caller reads and writes in a workspace; see rule 4. `teammate` is null for the
  *  host's window, the owner's devices, the CLI and anyone else who is not a share's teammate. */
 export function tabOwnerOf(
@@ -164,6 +166,36 @@ export function tabOwnerOf(
     return 'shared'
   }
   return teammate && teammate.botId === home.id ? teammateTabListKey(teammate) : 'owner'
+}
+
+/** Who a Home tab write is for. It is always named by the writer, from one of two sources:
+ *  - a user action: the caller's scope, read at the RPC handler (`callerTabPerson`);
+ *  - a system write about a chat: the chat's stamp, whom it was created for
+ *    (`chatTabPerson`, read from its acts-for record, which is written once when the chat starts).
+ *  A host terminal's or the host's saved tabs are the owner's (`HOST_STATE_PERSON`). */
+export type TabPerson = 'owner' | TeammateTabListKey
+
+/** The writes the host's own state makes: its terminals, its saved tabs. */
+export const HOST_STATE_PERSON: TabPerson = 'owner'
+
+export function callerTabPerson(scope: RpcCallerScope | undefined): TabPerson {
+  return scope?.kind === 'bot-share' ? teammateTabListKey(scope) : 'owner'
+}
+
+/** The list a person's write lands in: their own in their agent's Home, the host's (the owner's,
+ *  or a worker workspace's one shared list) everywhere else. */
+export function homeTabListOf(
+  person: TabPerson,
+  worktreeId: string,
+  bots: readonly Pick<Bot, 'id' | 'folderWorkspaceId'>[]
+): 'host' | TeammateTabListKey {
+  if (person === 'owner') {
+    return 'host'
+  }
+  const home = bots.find((bot) => folderWorkspaceKey(bot.folderWorkspaceId) === worktreeId)
+  return home && person.startsWith(teammateTabListKey({ botId: home.id, accountId: '' }))
+    ? person
+    : 'host'
 }
 
 const HOME_TAB_HOST_LIST: ReadonlySet<string> = new Set(classes.homeTabs.hostList)

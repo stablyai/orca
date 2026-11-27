@@ -61,31 +61,10 @@ const inertDesktopSurface: RuntimeDesktopSurface = {
   requestRenderer: () => Promise.reject(new Error('No renderer window available'))
 }
 
-let admitRendererRequest: (request: RendererRequest) => void = () => {}
-
-function admittingRequests(surface: RuntimeDesktopSurface): RuntimeDesktopSurface {
-  return {
-    ...surface,
-    requestRenderer: (windowId, request) => {
-      try {
-        admitRendererRequest(request)
-      } catch (error) {
-        return Promise.reject(error)
-      }
-      return surface.requestRenderer(windowId, request)
-    }
-  }
-}
-
-let current: RuntimeDesktopSurface = admittingRequests(inertDesktopSurface)
+let current: RuntimeDesktopSurface = inertDesktopSurface
 
 export function setRuntimeDesktopSurface(surface: RuntimeDesktopSurface | null): void {
-  current = admittingRequests(surface ?? inertDesktopSurface)
-}
-
-/** Installed by the runtime: who may open, focus or close a host window tab (teammate-rules.ts, rule 4). */
-export function admitRendererRequestsBy(admit: (request: RendererRequest) => void): void {
-  admitRendererRequest = admit
+  current = surface ?? inertDesktopSurface
 }
 
 export function getRuntimeDesktopSurface(): RuntimeDesktopSurface {

@@ -9,7 +9,11 @@ import type {
   PersistedMobileClientTabSelection,
   PersistedMobileClientTabSelections
 } from '../../../../shared/orca-profiles/persisted-state-types'
-import { isTeammateTabList, type TeammateTabListKey } from '../../../bots/team-share/teammate-rules'
+import {
+  isTeammateTabList,
+  TEAMMATE_MOVED_HOMES_ROW,
+  type TeammateTabListKey
+} from '../../../bots/team-share/teammate-rules'
 import { getHeadlessMobileSessionGroupId } from '../../terminal/surface/mobile-session-layout-projection'
 
 /** What a person's chat tab shows, read from the chat's record; null when it is gone. */
@@ -33,6 +37,7 @@ export class PersonSessionTabLists {
   // Renderers order frames within one epoch, so versions only climb, across lists too.
   private clock = 0
   private readonly epoch = `person:${Date.now().toString(36)}`
+  private readonly movedHomes = new Set<string>()
 
   constructor(private readonly persist: () => void) {}
 
@@ -151,8 +156,24 @@ export class PersonSessionTabLists {
     this.persist()
   }
 
+  /** Whether a Home's older-build tabs were already moved; they move once, so a tab the owner opens
+   *  later in their own list is never taken for one. */
+  movedHome(worktreeId: string): boolean {
+    return this.movedHomes.has(worktreeId)
+  }
+
+  markHomeMoved(worktreeId: string): void {
+    if (!this.movedHomes.has(worktreeId)) {
+      this.movedHomes.add(worktreeId)
+      this.persist()
+    }
+  }
+
   /** Saved rows ride beside the devices' selections, one row per person; see `serialize`. */
   hydrate(persisted: PersistedMobileClientTabSelections): void {
+    Object.keys(persisted[TEAMMATE_MOVED_HOMES_ROW] ?? {}).forEach((home) =>
+      this.movedHomes.add(home)
+    )
     for (const [key, rows] of Object.entries(persisted)) {
       if (!isTeammateTabList(key)) {
         continue
@@ -185,6 +206,14 @@ export class PersonSessionTabLists {
         }
       }
       persisted[person] = rows
+    }
+    if (this.movedHomes.size > 0) {
+      persisted[TEAMMATE_MOVED_HOMES_ROW] = Object.fromEntries(
+        [...this.movedHomes].map((home) => [
+          home,
+          { activeTabId: null, activeGroupId: null, activeTabIdByGroupId: {} }
+        ])
+      )
     }
     return persisted
   }

@@ -1,4 +1,3 @@
-import { runWithActiveTeammate } from './callers/active-call'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import type { RpcContext, RpcRequest } from './core'
@@ -20,12 +19,6 @@ export function rpcCallContext(
 ): RpcContext {
   const scoped = pinned ? { ...options, callerScope: pinned } : options
   return rpcContextFromTransport(runtime, request, scoped, caller, params)
-}
-
-/** Runs a stream's handler as its caller's share, for the tab store and host window (rule 4);
- *  a unary call gets it with its caller (`runWithActiveRpcCaller`). */
-export function runInCallerScope<T>(context: RpcContext, run: (context: RpcContext) => T): T {
-  return runWithActiveTeammate(context.callerScope, () => run(context))
 }
 
 /** A unary call's context, refused before any routing when a bot's look-around or tidy-up run may not make it. */

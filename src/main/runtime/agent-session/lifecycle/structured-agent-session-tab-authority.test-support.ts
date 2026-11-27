@@ -238,6 +238,7 @@ export async function createC(
     ...(first ? { firstMessage: first } : {}),
     publishTab: () =>
       rig.runtime.publishStructuredAgentSessionTab({
+        person: 'owner',
         workspaceId: rig.workspace,
         sessionId: C,
         agent: 'codex',
@@ -246,7 +247,8 @@ export async function createC(
       })
   })
 }
-export async function physicalReload(rig: AuthorityRig) {
+/** `restore: false` leaves the restore to the first call that needs it, as a host's cold start does. */
+export async function physicalReload(rig: AuthorityRig, options: { restore?: false } = {}) {
   await chatTabCommandsSettled()
   await stopStructuredAgentSessionRuntime()
   rig.profile.flushOrThrow()
@@ -254,7 +256,9 @@ export async function physicalReload(rig: AuthorityRig) {
   await closeTestJournalHostDatabases()
   const profile = createStore()
   const fresh = await openAuthorityRuntime({ ...rig, profile }, new AuthorityRuntime(profile))
-  await fresh.runtime.restoreStructuredAgentSessionTabs()
+  if (options.restore !== false) {
+    await fresh.runtime.restoreStructuredAgentSessionTabs()
+  }
   await chatTabCommandsSettled()
   return fresh
 }

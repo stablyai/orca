@@ -1,4 +1,5 @@
 import { withSpan } from '../../../../observability/tracer'
+import { callerTabPerson } from '../../../../bots/team-share/teammate-rules'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { defineMethod } from '../../core'
@@ -50,7 +51,10 @@ export const SESSION_TAB_CLOSE_METHODS = [
             const result = await context.runtime.refuseUnattributedMobileSessionTabClose(
               params.worktree,
               params.tabId,
-              context.pairedDeviceId
+              {
+                person: callerTabPerson(context.callerScope),
+                clientNavigationId: context.pairedDeviceId
+              }
             )
             span.setAttribute('decision', `refused-${result.refusalReason ?? 'missing-intent'}`)
             return result
@@ -59,6 +63,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
             params.worktree,
             params.tabId,
             {
+              person: callerTabPerson(context.callerScope),
               reason: 'user',
               // Only explicit reasons prove confirmation; legacy reasonless closes do not.
               ...(params.force && params.reason !== undefined ? { force: true } : {}),
@@ -127,6 +132,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
             params.worktree,
             params.tabId,
             {
+              person: callerTabPerson(context.callerScope),
               reason: params.reason,
               expectedPublicationEpoch: params.publicationEpoch,
               expectedTerminalHandle: params.terminal,

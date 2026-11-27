@@ -23,7 +23,7 @@ import {
 export async function moveTeammateHostTabs(
   runtime: BotConversationActsForSources & StructuredSessionSurfaceRuntime,
   bots: readonly Pick<Bot, 'id' | 'folderWorkspaceId'>[],
-  lists: Pick<PersonSessionTabLists, 'open'>
+  lists: Pick<PersonSessionTabLists, 'open' | 'movedHome' | 'markHomeMoved'>
 ): Promise<{ person: TeammateTabListKey; worktreeId: string }[]> {
   const host = getStructuredAgentSessionHost()
   if (!host || host.deps.store.readOnly) {
@@ -31,8 +31,12 @@ export async function moveTeammateHostTabs(
   }
   const moved = new Map<string, { person: TeammateTabListKey; worktreeId: string }>()
   const rootOf = createChatOrcaSessionIdResolver()
+  // Once per Home: after that, every tab in the host's list there is one the owner opened.
   const botOfHome = new Map<string, (typeof bots)[number]>(
-    bots.map((bot) => [folderWorkspaceKey(bot.folderWorkspaceId), bot])
+    bots.flatMap((bot) => {
+      const home = folderWorkspaceKey(bot.folderWorkspaceId)
+      return lists.movedHome(home) ? [] : [[home, bot] as const]
+    })
   )
   for (const { sessionId, location } of host.deps.store.listConversations()) {
     const bot = botOfHome.get(location.workspaceId)
@@ -59,5 +63,6 @@ export async function moveTeammateHostTabs(
     const surface = captureStructuredSessionSurface(host, sessionId, runtime)
     await retireCapturedStructuredSessionSurface(host, sessionId, surface, runtime, true)
   }
+  botOfHome.forEach((_bot, home) => lists.markHomeMoved(home))
   return [...moved.values()]
 }

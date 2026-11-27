@@ -1,19 +1,52 @@
-// The writes to a teammate's own list in their Home (teammate-rules.ts, rule 4): a chat tab opened,
-// activated, closed or retitled there lands in their list and reaches only their devices.
+// The writes to a person's own list in an agent's Home (teammate-rules.ts, rule 4). Every write names
+// its person (`TabPerson`): a user action the caller's, a system write the chat's stamp
+// (`chatTabPerson`). A teammate person's chat tab, opened, activated, closed or retitled there,
+// lands in their list and reaches only their devices; an owner person's goes to the host's list.
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
+  homeTabListOf,
   isTeammateTabList,
-  tabOwnerOf,
+  teammateTabListKey,
+  type TabPerson,
   type TeammateTabListKey
 } from '../../../bots/team-share/teammate-rules'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+import { botHomeOfChat } from '../../../bots/bot-conversation-acts-for'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { getActiveTeammate } from '../../rpc/callers/active-call'
 import { resolveChatTabActivation } from '../chat/agent-session-tab-identity'
 import type { StructuredSessionTabPublicationInput } from '../chat/structured-session-tab-publication'
 import { personChatTabId } from './person-session-tab-lists'
-import { OrcaRuntimeWithPersonSessionTabs, type OwnList } from './person-session-tab-publication'
+import { OrcaRuntimeWithPersonSessionTabs } from './person-session-tab-publication'
+
+/** A chat tab write: the publication, and the person it is for. */
+export type PersonChatTabPublication = StructuredSessionTabPublicationInput & { person: TabPerson }
 
 export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeWithPersonSessionTabs {
+  abstract listAutomationRuns(): AutomationRun[]
+  abstract showAutomation(id: string): Automation
+
+  /** The chat's stamp: whom it was created for. A chat in an agent's Home that acts for one of its
+   *  teammates alone is theirs (their Home Chat, a New chat they started); every other chat is the
+   *  owner's. Read from the acts-for record, written once when the chat starts. */
+  chatTabPerson(sessionId: string): TabPerson {
+    const workspaceId =
+      getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)?.location.workspaceId
+    const bot = this.store
+      ?.getBots?.()
+      .find((entry) => folderWorkspaceKey(entry.folderWorkspaceId) === workspaceId)
+    const of = bot ? botHomeOfChat(this, bot, sessionId) : 'owner'
+    return of === 'owner'
+      ? 'owner'
+      : teammateTabListKey({ botId: bot!.id, accountId: of.accountId })
+  }
+
+  /** The list a person's write lands in, in this workspace. */
+  protected homeTabListOf(person: TabPerson, worktreeId: string): 'host' | TeammateTabListKey {
+    return homeTabListOf(person, worktreeId, this.store?.getBots?.() ?? [])
+  }
+
   /** A teammate's own list changed: every device of theirs listening redraws it. */
   protected publishPersonSessionTabs(person: TeammateTabListKey, worktreeId: string): void {
     void this.createMobileSessionTabsDelivery(person)(
@@ -37,15 +70,10 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
     }
   }
 
-  /** The chat tab write (reveal, create, Fork, publish) for the active RPC caller's list: true when it
-   *  was a teammate's own list, which then holds the tab; false leaves it to the host's list. */
-  protected async publishCallerPersonChatTab(
-    input: StructuredSessionTabPublicationInput
-  ): Promise<boolean> {
-    const teammate = getActiveTeammate()
-    const owner = teammate
-      ? tabOwnerOf(input.workspaceId, teammate, this.store?.getBots?.() ?? [])
-      : 'shared'
+  /** The chat tab write (reveal, create, Fork, publish) for the person it names: true when that is a
+   *  teammate's own list, which then holds the tab; false leaves it to the host's list. */
+  protected async publishPersonChatTab(input: PersonChatTabPublication): Promise<boolean> {
+    const owner = this.homeTabListOf(input.person, input.workspaceId)
     if (!isTeammateTabList(owner)) {
       return false
     }
@@ -106,26 +134,17 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
     return projected
   }
 
-  /** The active teammate's own list in a chat's workspace; null when the call writes the host's. */
-  protected activeTeammateListOfChat(sessionId: string): OwnList | null {
-    const teammate = getActiveTeammate()
-    const worktreeId =
-      getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)?.location.workspaceId
-    const owner =
-      teammate && worktreeId
-        ? tabOwnerOf(worktreeId, teammate, this.store?.getBots?.() ?? [])
-        : null
-    return owner && worktreeId && isTeammateTabList(owner) ? { person: owner, worktreeId } : null
-  }
-
-  /** A teammate's close of a chat in their own Home closes their tab only; the host's list and
-   *  window keep theirs. False leaves the close to the host's list. */
-  closeActiveTeammateChatTab(sessionId: string): boolean {
-    const own = this.activeTeammateListOfChat(sessionId)
-    if (own) {
-      this.closePersonSessionTab(own.person, own.worktreeId, personChatTabId(sessionId))
+  /** A person's close of a chat: a teammate's in their own Home closes their tab only, and the host's
+   *  list and window keep theirs. False leaves the close to the host's list. */
+  closePersonChatTab(input: { person: TabPerson; sessionId: string }): boolean {
+    const worktreeId = getStructuredAgentSessionHost()?.deps.store.getConversation(input.sessionId)
+      ?.location.workspaceId
+    const owner = worktreeId ? this.homeTabListOf(input.person, worktreeId) : 'host'
+    if (!worktreeId || !isTeammateTabList(owner)) {
+      return false
     }
-    return own !== null
+    this.closePersonSessionTab(owner, worktreeId, personChatTabId(input.sessionId))
+    return true
   }
 
   /** Closes a tab of a teammate's own list, if it is there. The chat keeps running, as a closed tab's

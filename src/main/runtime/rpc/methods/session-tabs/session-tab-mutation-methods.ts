@@ -1,4 +1,5 @@
 import { assertBotLinkOpenAuthority } from '../../../../bots/bot-link-open-authority'
+import { callerTabPerson } from '../../../../bots/team-share/teammate-rules'
 import { resolveRuntimeNavigationTarget } from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { resolveChatTabActivation } from '../../../session-tabs/chat/agent-session-tab-identity'
 import { commitLeafMoveAndRekey } from '../../../../ipc/pty/ipc/leaf-move'
@@ -24,7 +25,10 @@ export const SESSION_TAB_MUTATION_METHODS = [
     permission: 'workspace',
     share: 'not-shared',
     params: BotLinkActivateTab,
-    handler: async (params, { runtime, clientKind, pairedDeviceId, clientCapabilities }) => {
+    handler: async (
+      params,
+      { runtime, clientKind, pairedDeviceId, clientCapabilities, callerScope }
+    ) => {
       const botLinkTarget = params.botLinkTarget
       const inventory = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
         includeAgentSenders: false
@@ -40,6 +44,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
         assertProjectedSessionTabVisible(visible, tabId)
       }
       const result = await runtime.activateMobileSessionTab(params.worktree, tabId, params.leafId, {
+        person: callerTabPerson(callerScope),
         ...(botLinkTarget
           ? {
               beforeActivate: (target: { sessionId?: string; worktreeId: string }) => {

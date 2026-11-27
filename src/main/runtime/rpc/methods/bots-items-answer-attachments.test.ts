@@ -139,6 +139,7 @@ it('claims an item answer for the chat it actually mails and replays the same an
       getOrchestrationDb: () => mail,
       ensureStructuredAgentSessionHost: async () => {},
       publishStructuredAgentSessionTab: async () => {},
+      chatTabPerson: () => 'owner',
       notifyMessageArrived: () => {},
       lookAround: { botOfLook: () => null, botOfTidyUp: () => null },
       bots: { list: () => [bot], assertEnabled: () => {} },

@@ -125,7 +125,7 @@ export function placedWorkerParty(
 export async function reopenWorkerChat(
   runtime: Pick<
     OrcaRuntimeService,
-    'ensureStructuredAgentSessionHost' | 'publishStructuredAgentSessionTab'
+    'ensureStructuredAgentSessionHost' | 'publishStructuredAgentSessionTab' | 'chatTabPerson'
   >,
   db: OrchestrationDb,
   handle: string,
@@ -163,7 +163,7 @@ export async function reopenWorkerChat(
 
 /** Recheck the exact chat and its placement just before claiming the follow-up. */
 export function prepareRetainedWorkerChat(
-  runtime: Pick<OrcaRuntimeService, 'publishStructuredAgentSessionTab'>,
+  runtime: Pick<OrcaRuntimeService, 'publishStructuredAgentSessionTab' | 'chatTabPerson'>,
   db: OrchestrationDb,
   selected: RetainedWorkerTerminal,
   worktreeId: string | undefined,

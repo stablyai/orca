@@ -13,6 +13,7 @@ import {
   savedIds,
   type AuthorityRig
 } from '../../runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
+import { showBotSessionTab } from '../bot-session-tab-show'
 import { chatTabCommandsSettled } from '../../runtime/terminal/layout/session-layout-apply.test-fixture'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
@@ -26,9 +27,7 @@ import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime/
 import { makeTestBot } from '../bot.test-fixture'
 import { structuredAgentSessionCreateFingerprint } from '../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
-import { runWithActiveTeammate } from '../../runtime/rpc/callers/active-call'
 import { setRuntimeDesktopSurface } from '../../runtime/construction/runtime-desktop-surface'
-import type { RuntimeNotifier } from '../../runtime/client/events/runtime-notifier-contract'
 
 const TEAMMATE = { botId: 'bot-1', accountId: 'usr_mate' }
 const SCOPE: BotShareCallerScope = {
@@ -400,6 +399,8 @@ it('moves a teammate’s tab an older build saved in the owner’s list to their
   await r.reveal('owner-desk', O)
   expect(await r.hostChats()).toEqual([C, O])
 
+  // The upgrade's first start, which has not moved this Home's tabs yet.
+  r.runtime['personSessionTabs']['movedHomes'].clear()
   await r.runtime['backfillBotBackgroundChats']()
   await chatTabCommandsSettled()
   expect(await r.hostChats()).toEqual([O])
@@ -413,6 +414,10 @@ it('moves a teammate’s tab an older build saved in the owner’s list to their
   const fresh = await rig({ opened: await physicalReload(r) })
   expect(sessions(await fresh.list('mate-desk'))).toEqual([C])
   expect(await fresh.hostChats()).toEqual([O])
+  // Moved once: a teammate's chat the owner opens later stays in the owner's list, restarts too.
+  await fresh.reveal('owner-phone', B)
+  await fresh.runtime['backfillBotBackgroundChats']()
+  expect(await fresh.hostChats()).toEqual([O, B])
 })
 
 it('lists a teammate’s chats in the owner’s chat list under their name; the owner opening one changes only the owner’s list', async () => {
@@ -579,43 +584,105 @@ it('never opens a tab in the host’s window for a teammate’s terminal with no
   }
 })
 
-it('throws on any teammate write of the host’s list or window in their Home, at the one write point', async () => {
-  const r = await rig({ home: 'other' })
+it('shows a teammate’s chat the agent publishes during its turn in their list, never the owner’s', async () => {
+  const r = await rig()
+  const bot = r.runtime.bots.list()[0]!
+  // The agent's own publish (a turn's, a request's): no one called, so the chat's stamp decides.
+  await showBotSessionTab(r.runtime, bot, C)
+  await chatTabCommandsSettled()
+
+  expect(sessions(await r.list('mate-phone'))).toEqual([C])
+  expect(await r.hostChats()).toEqual([])
+  // The owner's own chat goes to the owner's list.
+  await showBotSessionTab(r.runtime, bot, O)
+  expect(await r.hostChats()).toEqual([O])
+  expect(sessions(await r.list('mate-phone'))).toEqual([C])
+})
+
+it('publishes an owner’s turn after a teammate’s call to the owner’s list alone', async () => {
+  const r = await rig()
+  const bot = r.runtime.bots.list()[0]!
+  // Work a teammate's call starts that runs later (a provider child, a host timer): the owner's
+  // chat's turn publishes from it.
+  let later: Promise<void> | undefined
+  const ensure = r.runtime.ensureStructuredAgentSessionHost.bind(r.runtime)
+  vi.spyOn(r.runtime, 'ensureStructuredAgentSessionHost').mockImplementationOnce(async () => {
+    later = new Promise<void>((resolve) => setTimeout(resolve, 0)).then(() =>
+      showBotSessionTab(r.runtime, bot, O)
+    )
+    return ensure()
+  })
+  vi.stubEnv('ORCA_USER_DATA_PATH', root)
+  await r.call('mate-desk', 'bots.session.start', { botId: TEAMMATE.botId })
+  await later
+  await chatTabCommandsSettled()
+
+  expect(await r.hostChats()).toEqual([O])
+  expect(sessions(await r.list('mate-desk'))).not.toContain(O)
+})
+
+it('restores the owner’s Home on a cold start a teammate’s first call begins, beside their own list', async () => {
+  const r = await rig()
   await r.reveal('owner-desk', O)
-  const focused: string[] = []
-  const notifier: RuntimeNotifier = {
+  await r.reveal('mate-desk', C)
+
+  const fresh = await rig({ opened: await physicalReload(r, { restore: false }) })
+  // The teammate's list is the first call after the restart: it starts the host's restore.
+  expect(sessions(await fresh.list('mate-desk'))).toEqual([C])
+  expect(await fresh.hostChats()).toEqual([O])
+  expect(sessions(await fresh.list('owner-desk'))).toEqual([O])
+})
+
+it('leaves the owner’s list as it was when a teammate starts a new Home Chat', async () => {
+  const r = await rig()
+  const Opened = z.object({ sessionId: z.string() })
+  vi.stubEnv('ORCA_USER_DATA_PATH', root)
+  const home = Opened.parse(
+    await r.call('mate-desk', 'bots.chat.open', { botId: TEAMMATE.botId })
+  ).sessionId
+  // The owner opens the teammate's Home Chat in the owner's own list.
+  await r.reveal('owner-desk', home)
+  await r.reveal('mate-desk', home)
+  const before = await r.list('owner-desk')
+
+  const reset = Opened.parse(
+    await r.call('mate-desk', 'bots.chat.reset', { botId: TEAMMATE.botId })
+  ).sessionId
+  await chatTabCommandsSettled()
+
+  expect(reset).not.toBe(home)
+  expect(sessions(await r.list('owner-desk'))).toEqual(sessions(before))
+  expect(await r.hostChats()).toEqual([home])
+  expect(sessions(await r.list('mate-desk'))).not.toContain(home)
+})
+
+it('renames a teammate’s terminal in a worker workspace through the host window, as for anyone', async () => {
+  const r = await rig({ home: 'other' })
+  const renamed: string[] = []
+  r.runtime.setNotifier({
     worktreesChanged: vi.fn(),
     reposChanged: vi.fn(),
     activateWorktree: vi.fn(),
     createTerminal: vi.fn(),
     splitTerminal: vi.fn(),
-    renameTerminal: vi.fn(),
+    renameTerminal: (tabId) => void renamed.push(tabId),
+    focusTerminal: vi.fn(),
     closeTerminal: vi.fn(),
     terminalFitOverrideChanged: vi.fn(),
-    terminalDriverChanged: vi.fn(),
-    focusTerminal: (_tab, worktreeId) => void focused.push(worktreeId)
-  }
-  r.runtime.setNotifier(notifier)
-  const store = r.runtime.mobileSessionTabsByWorktree
-  const worker = store.get(r.workspace)!
-  const homeList = { ...worker, worktree: r.home }
-  // The owner's own write of their Home's list, as the host's window publishes it.
-  store.set(r.home, homeList)
-
-  runWithActiveTeammate(SCOPE, () => {
-    // Every writer reaches the list through the store: a teammate's call adding, dropping or
-    // activating a tab of their Home's host list fails, with no person list named.
-    expect(() => store.set(r.home, { ...homeList, tabs: [] })).toThrow('teammate_host_tab_write')
-    expect(() => store.delete(r.home)).toThrow('teammate_host_tab_write')
-    // A refresh that changes no tab is the host's own bookkeeping.
-    store.set(r.home, { ...homeList, snapshotVersion: homeList.snapshotVersion + 1 })
-    expect(() => r.runtime['notifier']?.focusTerminal('tab-1', r.home)).toThrow(
-      'teammate_host_tab_write'
-    )
-    // Their worker workspace's one shared list and window tabs stay theirs to change.
-    store.set(r.workspace, { ...worker, snapshotVersion: worker.snapshotVersion + 1 })
-    r.runtime['notifier']?.focusTerminal('tab-1', r.workspace)
+    terminalDriverChanged: vi.fn()
   })
-  expect(focused).toEqual([r.workspace])
-  r.runtime.setNotifier(null)
+  // A live terminal the window has not published a tab row for yet.
+  const tabId = '33333333-3333-4333-8333-333333333333'
+  r.runtime.registerPty('pty-worker', r.workspace, null, {
+    tabId,
+    leafId: '44444444-4444-4444-8444-444444444444',
+    terminalHandle: 'term_worker'
+  })
+  try {
+    await r.call('mate-desk', 'terminal.rename', { terminal: 'term_worker', title: 'Build' })
+    expect(renamed).toEqual([tabId])
+  } finally {
+    await r.runtime.onPtyExit('pty-worker', 0)
+    r.runtime.setNotifier(null)
+  }
 })

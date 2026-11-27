@@ -24,12 +24,6 @@ import {
 } from '../../client/navigation/client-session-tab-selection'
 import { OrcaRuntimeWithRuntimeId } from '../../construction/runtime-identity-state'
 import { PersonSessionTabLists } from './person-session-tab-lists'
-import { activeCallMayTouchHostTabs, hostTabListWriteAdmission } from './host-tab-list-admission'
-import { admitRendererRequestsBy } from '../../construction/runtime-desktop-surface'
-import {
-  hostWindowLookups,
-  rendererRequestAdmission
-} from '../../client/events/teammate-host-window-guard'
 import {
   structuredConversationForked,
   titleStructuredConversationTabs
@@ -107,13 +101,6 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
       this.botShareDevices || tabOwnerOf(worktreeId, null, bots()) === 'shared'
         ? this.tabOwnerOfClient(client, worktreeId)
         : null
-    )
-    this.mobileSessionTabsByWorktree.admitWritesBy(hostTabListWriteAdmission(bots))
-    admitRendererRequestsBy(
-      rendererRequestAdmission(
-        (worktreeId) => activeCallMayTouchHostTabs(worktreeId, bots),
-        hostWindowLookups(this.mobileSessionTabsByWorktree)
-      )
     )
   }
 

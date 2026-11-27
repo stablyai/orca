@@ -24,6 +24,8 @@ export type StructuredSessionSurfaceRuntime = Pick<
   | 'captureStructuredAgentSessionPresentation'
   | 'retireStructuredAgentSessionTabFromSnapshot'
   | 'removeCapturedStructuredSessionSavedTabs'
+  | 'chatTabPerson'
+  | 'closePersonChatTab'
 >
 
 export type StructuredSessionSurface = {
@@ -107,7 +109,7 @@ export async function closeStructuredAgentSessionChild(
         'The structured session is still attached after close.'
     }
   }
-  await retireCapturedStructuredSessionSurface(host, sessionId, surface, options.runtime)
+  await retireClosedChatTabs(host, sessionId, surface, options.runtime)
   return {
     stopped: true,
     closeAttempted: true,
@@ -132,7 +134,7 @@ async function settleCancelledStart(
     if (!structuredSessionCloseSettled(sessionId)) {
       return false
     }
-    await retireCapturedStructuredSessionSurface(host, sessionId, surface, runtime)
+    await retireClosedChatTabs(host, sessionId, surface, runtime)
     return true
   } catch (error) {
     host.deps.logger.warn('settling a cancelled start failed', {
@@ -196,6 +198,21 @@ export function structuredSessionSurfaceIsCurrent(
   } catch {
     return false
   }
+}
+
+/** A system close's tabs (rule 4, teammate-rules.ts): for whom the chat was created, read from its
+ *  stamp. A teammate's chat in their Home closes in their own list only; the host's list and
+ *  window keep whatever the owner opened. */
+async function retireClosedChatTabs(
+  host: StructuredAgentSessionHost,
+  sessionId: string,
+  surface: StructuredSessionSurface | null,
+  runtime: StructuredSessionSurfaceRuntime | undefined
+): Promise<void> {
+  if (runtime?.closePersonChatTab({ person: runtime.chatTabPerson(sessionId), sessionId })) {
+    return
+  }
+  await retireCapturedStructuredSessionSurface(host, sessionId, surface, runtime)
 }
 
 /** Bookkeeping cannot invalidate native proof or reach a surface created after admission.

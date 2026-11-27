@@ -47,13 +47,13 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
   async closeMobileSessionTab(
     worktreeSelector: string,
     tabId: string,
-    options: MobileSessionTabCloseOptions = {}
+    options: MobileSessionTabCloseOptions
   ): Promise<MobileSessionTabCloseOutcome> {
     const graphFence = options.clientNavigationId ? this.captureRendererGraphFence() : undefined
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
-    const owner = this.tabOwnerOfClient(options.clientNavigationId, worktreeId)
+    const owner = this.homeTabListOf(options.person, worktreeId)
     if (isTeammateTabList(owner)) {
       // Closed already, or now: a teammate's own list is theirs alone to close from.
       this.closePersonSessionTab(owner, worktreeId, tabId)
