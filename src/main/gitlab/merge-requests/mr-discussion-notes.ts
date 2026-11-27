@@ -17,7 +17,15 @@ type GitLabRawNote = {
   system?: boolean
   resolvable?: boolean
   resolved?: boolean
-  position?: { new_path?: string; new_line?: number; old_line?: number } | null
+  position?: {
+    new_path?: string
+    new_line?: number
+    old_line?: number
+    line_range?: {
+      start?: { type?: string; new_line?: number }
+      end?: { type?: string; new_line?: number }
+    }
+  } | null
 }
 
 export type GitLabRawDiscussion = {
@@ -37,6 +45,18 @@ function flattenDiscussions(
       if (note.system === true) {
         continue
       }
+      const range = note.position?.line_range
+      const startLine = range?.start?.new_line
+      const endLine = range?.end?.new_line
+      const hasNewRange =
+        range?.start?.type !== 'old' &&
+        range?.end?.type !== 'old' &&
+        typeof startLine === 'number' &&
+        typeof endLine === 'number' &&
+        Number.isSafeInteger(startLine) &&
+        Number.isSafeInteger(endLine) &&
+        startLine > 0 &&
+        endLine >= startLine
       out.push({
         id: note.id ?? 0,
         author: note.author?.username ?? 'unknown',
@@ -49,7 +69,11 @@ function flattenDiscussions(
         ...(discussion.id ? { threadId: discussion.id } : {}),
         ...(note.resolvable === true ? { isResolved: note.resolved === true } : {}),
         ...(note.position?.new_path ? { path: note.position.new_path } : {}),
-        ...(typeof note.position?.new_line === 'number' ? { line: note.position.new_line } : {})
+        ...(hasNewRange
+          ? { line: endLine, startLine }
+          : typeof note.position?.new_line === 'number'
+            ? { line: note.position.new_line }
+            : {})
       })
     }
   }
