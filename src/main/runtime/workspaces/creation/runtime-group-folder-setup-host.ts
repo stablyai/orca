@@ -104,6 +104,8 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
     }
     return {
       canSpawn: Boolean(this.ptyController?.spawn),
+      prepareStartupDraft: (created, setup, text) =>
+        this.prepareWorktreeStartupDraft(created, setup, text),
       provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
       createTerminal: (selector, options) =>
         worktree

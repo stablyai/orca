@@ -1,3 +1,5 @@
+import { dirname } from 'node:path'
+import { migrateLegacyStartupDrafts } from '../worktree-metadata/legacy-startup-draft-migration'
 import { homedir } from 'node:os'
 import { normalizeProxyUrl } from '../../../../shared/network/network-proxy'
 import { normalizeKagiSessionLink } from '../../../../shared/browser/navigation/browser-url'
@@ -48,6 +50,7 @@ type LoadedProfileState = PersistedState & {
 type LoadedStateParsingOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'dataFile'
+  | 'writesFrozen'
   | 'githubCacheDirty'
   | 'githubCacheLegacyFileHash'
   | 'githubCachePersistenceDisabled'
@@ -236,6 +239,13 @@ export class LoadedStateParsingOperations {
     result = folderScopeConnectionMigration.state
 
     if (normalizeWorktreeLinkedItemMetadata(result)) {
+      this.runtime.loadNeedsSave = true
+    }
+
+    if (
+      !this.runtime.writesFrozen &&
+      migrateLegacyStartupDrafts(result, dirname(this.runtime.dataFile))
+    ) {
       this.runtime.loadNeedsSave = true
     }
 

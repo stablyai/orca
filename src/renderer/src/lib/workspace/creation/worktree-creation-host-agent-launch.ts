@@ -51,16 +51,23 @@ export function windowStartupAfterCreate(
   agent: TuiAgent | null
   terminalOptions: CreationTerminalOptions
   startupDraftDeferred: boolean
+  backendSpawned: boolean
 } {
   const backendSpawned = Boolean(result.startupTerminal?.spawned || result.startupTerminal?.handle)
   const plan = planWindowStartup(request, result, backendSpawned)
+  const startupDraftDeferred = Boolean(
+    !result.startupDraftReceipt &&
+    request.launchDraftPrompt &&
+    result.startupTerminal?.handle &&
+    result.startupTerminal.spawned === false
+  )
   return {
     ...plan,
-    startupDraftDeferred: Boolean(
-      request.launchDraftPrompt &&
-      result.startupTerminal?.handle &&
-      result.startupTerminal.spawned === false
-    ),
+    startupDraftDeferred,
+    backendSpawned:
+      result.startupTerminal?.spawned === true ||
+      Boolean(result.startupDraftReceipt && result.startupTerminal?.handle) ||
+      startupDraftDeferred,
     terminalOptions: {
       worktreeCreationId: creationId,
       ...(plan.startup ? { createNewTerminalForStartup: true } : {}),
@@ -102,7 +109,16 @@ function planWindowStartup(
 
 export function worktreeCreationAgentLaunchOptions(
   request: WorktreeCreationRequest
-): Pick<CreateWorktreeCallOptions, 'creationAgentLaunch' | 'legacyStartup'> {
+): Pick<
+  CreateWorktreeCallOptions,
+  'creationAgentLaunch' | 'legacyStartup' | 'startupPromptForRecovery'
+> {
+  const startupPromptForRecovery =
+    request.agentLaunchRoute !== 'structured-native-chat' &&
+    request.agent &&
+    request.startupPlan?.launchConfig.commandProvenance !== 'authored'
+      ? (request.launchDraftPrompt ?? request.quickPrompt)
+      : undefined
   if (
     request.agentLaunchRoute === 'structured-native-chat' ||
     request.ephemeralVmCheckoutMode === 'provisioned-root' ||
@@ -110,10 +126,11 @@ export function worktreeCreationAgentLaunchOptions(
     !request.agent ||
     (request.launchInputs === undefined && !request.launchDraftPrompt)
   ) {
-    return {}
+    return { startupPromptForRecovery }
   }
   const intent = request.creationStartup
   return {
+    startupPromptForRecovery,
     creationAgentLaunch: {
       agent: request.agent,
       prompt: request.quickPrompt,

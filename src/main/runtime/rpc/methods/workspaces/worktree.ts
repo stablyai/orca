@@ -27,12 +27,12 @@ import {
   WorktreePreviewNestedRemoval,
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
-  WorktreeRunApprovedSetup,
   WorktreeShow,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams,
   WorktreeResolveCallerParent
 } from '../../../../../shared/rpc-contract/workspaces/worktree-params'
+import { WORKTREE_SETUP_METHODS } from './worktree-setup-methods'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
 import { waitsForWorktreeRemoval } from '../../workspace-client-views/worktree-removal-marker-projection'
@@ -40,10 +40,10 @@ import { queueWorkspaceDelete } from '../../../workspaces/lifecycle/workspace-li
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
 import { WORKSPACE_CLEANUP_SCAN_METHOD } from './workspace-cleanup-scan-method'
 import { WORKTREE_SET_METHOD } from './worktree-set-method'
-import { runApprovedCreatedWorktreeSetup } from '../../../workspaces/creation/created-worktree-approved-setup'
 
 export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
+  ...WORKTREE_SETUP_METHODS,
   defineMethod({
     name: 'worktree.teardownMissingTerminals',
     permission: 'workspace',
@@ -54,15 +54,6 @@ export const WORKTREE_METHODS = [
         params.worktreeIds,
         params.connectionId
       )
-  }),
-  defineMethod({
-    name: 'worktree.runApprovedSetup',
-    permission: 'workspace',
-    params: WorktreeRunApprovedSetup,
-    handler: async (params, { runtime }) =>
-      runApprovedCreatedWorktreeSetup(runtime, params.worktree, params.approvedSetupHash, {
-        wslUserAct: true
-      })
   }),
   defineMethod({
     name: 'worktree.lineageList',

@@ -156,7 +156,7 @@ export type PendingWorktreeCreation = {
   /** Resolved before checkout publication so passive activation can defer its initial surface. */
   worktreeId?: string
   phase: WorktreeCreationPhase
-  status: 'creating' | 'error'
+  status: 'creating' | 'error' | 'settling-startup'
   startedAt: number
   // Remote/runtime targets without phase events need one indeterminate spinner, never a checklist stuck at step one.
   indeterminate: boolean
@@ -261,6 +261,7 @@ export function findPendingLinkedWorkItemCreationId(
   const match = Object.values(pendingCreations).find((entry) => {
     const pending = entry.request
     return (
+      entry.status !== 'settling-startup' &&
       pending.repoId === request.repoId &&
       pending.linkedIssue === request.linkedIssue &&
       pending.linkedPR === request.linkedPR &&

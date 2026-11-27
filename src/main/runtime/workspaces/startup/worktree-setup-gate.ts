@@ -10,7 +10,7 @@ export function waitForWorktreeSetupGate(
   host: WorktreeStartupReadinessHost,
   ptyId: string,
   signal: AbortSignal,
-  onBlocked?: () => void
+  onOutcome?: (outcome: 'started' | 'blocked' | 'failed' | 'unknown') => void
 ): Promise<boolean | undefined> {
   if (signal.aborted) {
     return Promise.resolve(undefined)
@@ -18,30 +18,34 @@ export function waitForWorktreeSetupGate(
   return new Promise((resolve) => {
     const gate = createSetupWaitGate(true)
     let unsubscribe: (() => void) | undefined
-    const finish = (ready: boolean | undefined): void => {
+    let finished = false
+    const finish = (outcome: 'started' | 'blocked' | 'failed' | 'unknown'): void => {
+      if (finished) {
+        return
+      }
+      finished = true
       clearTimeout(timer)
       unsubscribe?.()
       signal.removeEventListener('abort', abort)
-      resolve(ready)
+      resolve(outcome === 'unknown' ? undefined : outcome === 'started')
+      onOutcome?.(outcome)
     }
-    const abort = (): void => finish(undefined)
+    const abort = (): void => finish('unknown')
     const timer = setTimeout(abort, SETUP_WAIT_GATE_MAX_MS)
+    timer.unref()
     const observe = (data: string): void => {
       const { phase, blocked } = gate.observe(data)
       if (phase === 'started' || phase === 'failed') {
-        finish(phase === 'started')
-        if (blocked && onBlocked) {
-          void Promise.resolve()
-            .then(onBlocked)
-            .catch(() =>
-              console.warn('[worktree-create] could not retain the blocked startup draft')
-            )
-        }
+        finish(blocked ? 'blocked' : phase)
       }
     }
     signal.addEventListener('abort', abort, { once: true })
     unsubscribe = host.subscribeToData(ptyId, observe)
-    observe(host.readRecentOutput(ptyId) ?? '')
+    if (finished) {
+      unsubscribe()
+    } else {
+      observe(host.readRecentOutput(ptyId) ?? '')
+    }
   })
 }
 

@@ -22,6 +22,7 @@ export type FolderWorkspaceCreateInput = {
   startupAgent?: TuiAgent
   startupPrompt?: string
   startupDraft?: string
+  startupPromptForRecovery?: string
   afterPublication?: number
   startupAgentArgs?: string | null
   startupSessionOptions?: Record<string, string>
@@ -33,5 +34,10 @@ export type FolderWorkspaceCreateResult = {
   folderWorkspace: FolderWorkspace
 } & Pick<
   CreateWorktreeResult,
-  'setup' | 'setupReceipt' | 'startupTerminal' | 'warning' | 'setupTrustMismatch'
+  | 'setup'
+  | 'setupReceipt'
+  | 'startupTerminal'
+  | 'startupDraftReceipt'
+  | 'warning'
+  | 'setupTrustMismatch'
 >

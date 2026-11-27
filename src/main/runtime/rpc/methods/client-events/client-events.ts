@@ -35,7 +35,8 @@ export const CLIENT_EVENT_METHODS = [
             // Only a desktop keeps an agent CLI update list; a phone would search its query cache for nothing.
             // Phones keep no desktop sidebar lineage either, so a Dispatch write is noise there.
             if (
-              (event.type === 'agentCliUpdateFinished' ||
+              (event.type === 'worktreeStartupDraftsChanged' ||
+                event.type === 'agentCliUpdateFinished' ||
                 event.type === 'agentOrchestrationChanged') &&
               clientKind === 'mobile'
             ) {
@@ -98,6 +99,12 @@ export const CLIENT_EVENT_METHODS = [
         for (const event of runtime.getNativeChatLaunchDraftResolutionClientEventSnapshot?.() ??
           []) {
           emit(event)
+        }
+        if (clientKind !== 'mobile') {
+          emit({
+            type: 'worktreeStartupDraftsChanged',
+            drafts: runtime.listWorktreeStartupDrafts?.() ?? []
+          })
         }
         const sshStates = listRegisteredSshTargets().flatMap((target) => {
           const state = getPublicSshState(getRegisteredSshState(target.id) ?? null)

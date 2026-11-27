@@ -37,7 +37,6 @@ const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:cancelListDetected',
   'worktrees:scanStartingWslDistro',
   'worktrees:create',
-  'worktrees:readBlockedStartupDraft',
   'worktrees:adoptProvisionedRoot',
   'worktrees:runApprovedSetup',
   'worktrees:prefetchCreateBase',

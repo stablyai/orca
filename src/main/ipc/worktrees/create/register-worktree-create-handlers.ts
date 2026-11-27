@@ -26,12 +26,7 @@ import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
 import { createFolderWorkspace } from './folder-workspace-creation'
 import { findExactRepoOwner, isCapturedRepoCurrent } from '../listing/worktree-host-ownership'
 import { requireWorktreeCreateRoute } from '../../../workspaces/creation/worktree-create-execution-host-route'
-import {
-  getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID
-} from '../../../../shared/execution-host/execution-host'
-import { isTrustedUIRenderer } from '../../ui'
-import { splitWorktreeId } from '../../../../shared/worktree/id'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { workspaceLifecycleKey } from '../../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { beginWorkspaceCreateTelemetry } from '../../../workspaces/creation/workspace-create-telemetry'
@@ -42,19 +37,6 @@ import { createdWorktreeLifecycleIdentity } from '../../../runtime/workspaces/li
 
 export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, options } = context
-
-  ipcMain.handle('worktrees:readBlockedStartupDraft', (event, worktreeId: unknown) => {
-    if (
-      typeof worktreeId !== 'string' ||
-      !splitWorktreeId(worktreeId) ||
-      !isTrustedUIRenderer(event.sender)
-    ) {
-      return null
-    }
-    return (
-      store.getWorktreeMetaForHost(worktreeId, LOCAL_EXECUTION_HOST_ID)?.blockedStartupDraft ?? null
-    )
-  })
 
   ipcMain.handle(
     'worktrees:create',
@@ -89,6 +71,14 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
             if (isFolderRepo(repo)) {
               // Folder creation registers metadata; its setup prep checks ownership itself.
               result = await createFolderWorkspace(createArgs, repo, store)
+              const startupDraftReceipt = runtime.prepareWorktreeStartupDraft?.(
+                result.worktree,
+                result.setup,
+                createArgs.startupPromptForRecovery
+              )
+              if (startupDraftReceipt) {
+                result.startupDraftReceipt = startupDraftReceipt
+              }
             } else {
               // Resolve executionHostId-only SSH ownership before any local Git operation.
               const createRoute = requireWorktreeCreateRoute(repo)

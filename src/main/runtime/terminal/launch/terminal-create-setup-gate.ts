@@ -1,9 +1,9 @@
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   RuntimeTerminalCreate,
   SETUP_AGENT_GATE
 } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { recordAgentStartTelemetry } from '../../../ipc/pty/pane/spawn-telemetry'
-import { waitForWorktreeSetupGate } from '../../workspaces/startup/worktree-setup-gate'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { OrcaRuntimeWithTerminalCreateDeduplication } from './terminal-create-deduplication'
 import type { TerminalCreateOptions } from './terminal-create-options'
@@ -20,11 +20,13 @@ export abstract class OrcaRuntimeWithCreateTerminalSetupGate extends OrcaRuntime
     opts: TerminalCreateOptions,
     gatedStartup: string | undefined
   ): RuntimeTerminalCreate[typeof SETUP_AGENT_GATE] {
-    const record = (command: string | undefined): void => {
-      this.watchLaunchedAgent(pty, recordTerminalLaunchMetadata(pty, result, launch, command))
+    const record = (command: string | undefined): TuiAgent | null => {
+      const agent = recordTerminalLaunchMetadata(pty, result, launch, command)
+      this.watchLaunchedAgent(pty, agent)
       if (!launch.adoptedStablePane) {
         this.rememberSavedTerminalLaunchResult(result.id, result)
       }
+      return agent
     }
     if (
       !gatedStartup ||
@@ -32,16 +34,17 @@ export abstract class OrcaRuntimeWithCreateTerminalSetupGate extends OrcaRuntime
       result.agentProgramBlocked ||
       result.agentResumeRefused
     ) {
-      record(opts.command)
-      return gatedStartup ? { started: Promise.resolve(false), blocked: true } : undefined
+      const agent = record(opts.command)
+      if (gatedStartup) {
+        return { started: this.observeStartupDraftGate(pty.ptyId, true), blocked: true }
+      }
+      if (agent) {
+        this.observeVerifiedReplacementLaunch(pty.ptyId, agent)
+      }
+      return undefined
     }
     const signal = this.getPtyLifecycleSignal(pty.ptyId)
-    const gate = waitForWorktreeSetupGate(
-      this.getWorktreeStartupReadinessHost(),
-      pty.ptyId,
-      signal,
-      opts.onSetupAgentBlocked
-    )
+    const gate = this.observeStartupDraftGate(pty.ptyId)
     void gate
       .then((started) => {
         if (started && !signal.aborted) {

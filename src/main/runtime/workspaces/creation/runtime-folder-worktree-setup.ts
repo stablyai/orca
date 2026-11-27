@@ -88,7 +88,12 @@ export async function startRuntimeFolderWorktreeSetupTerminals(args: {
   promisedAgentChat?: boolean
   draftPaste?: WorktreeStartupDraftPaste
   terminals: RuntimeLocalWorktreeTerminalPorts
-}): Promise<Pick<CreateWorktreeResult, 'setup' | 'setupReceipt' | 'startupTerminal' | 'warning'>> {
+}): Promise<
+  Pick<
+    CreateWorktreeResult,
+    'setup' | 'setupReceipt' | 'startupTerminal' | 'startupDraftReceipt' | 'warning'
+  >
+> {
   const { request, prepared } = args
   const started = await startRuntimeLocalWorktreeTerminals({
     request,
@@ -105,6 +110,7 @@ export async function startRuntimeFolderWorktreeSetupTerminals(args: {
     ports: args.terminals
   })
   return {
+    ...(started.startupDraftReceipt ? { startupDraftReceipt: started.startupDraftReceipt } : {}),
     ...(started.returnedSetup ? { setup: started.returnedSetup } : {}),
     ...(request.awaitTerminalProvisioning
       ? {

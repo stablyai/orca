@@ -15,12 +15,14 @@ import { requestAgentLaunchTabPublishFromRenderer } from './renderer-relays/agen
 import { requestAgentPaneActivityFromRenderer } from './renderer-relays/agent-pane-activity-relay'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { registerRendererDocumentNavigation } from './security/renderer-document-navigation'
-import { createRuntimeRendererNotificationSender } from './renderer-relays/runtime-renderer-notification-sender'
+import {
+  createRuntimeRendererNotificationSender,
+  forwardRuntimeClientNotice
+} from './renderer-relays/runtime-renderer-notification-sender'
 import { requestSessionTabCloseFromRenderer } from './renderer-relays/session-tab-close-request-relay'
 import { requestTerminalPaneMoveFromRenderer } from './renderer-relays/terminal-pane-move-request-relay'
 import { revealTerminalPaneInWindow } from './renderer-relays/terminal-pane-reveal-relay'
 import { requestTerminalTabCloseFromRenderer } from './renderer-relays/terminal-tab-close-request-relay'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import type { AgentListVerdictUpdate } from '../../shared/agent-status/presentation/agent-list-status'
 import { addFanoutListener } from '../runtime/events/event-listener-fanout'
 
@@ -255,13 +257,7 @@ export function registerRuntimeWindowLifecycle(
     claudeAccountSelected: (change) => send('claudeAccounts:selectedElsewhere', change)
   })
   const detachClientNotices = runtime.onClientEvent(
-    (event) => {
-      if (event.type === 'linearLinkedIssueUpdated') {
-        send('linear:linkedIssueUpdated', event)
-      } else if (ORCA_SIDEBAR_INPUTS_IS_MAIN && event.type === 'sidebarInputsChanged') {
-        send('runtime:sidebarInputsChanged', event)
-      }
-    },
+    (event) => forwardRuntimeClientNotice(send, event),
     { consumesTerminalSideEffects: false }
   )
   // Only this window's live document speaks for the Agents list; a gone one leaves no verdicts behind.

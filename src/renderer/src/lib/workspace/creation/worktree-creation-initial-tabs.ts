@@ -60,7 +60,9 @@ export function prepareCreatedWorktreeActivation({
             ...(windowStartup.startup ? { startup: windowStartup.startup } : {}),
             ...(request.issueCommand ? { issueCommand: request.issueCommand } : {}),
             ...windowStartup.terminalOptions,
-            ...(setupIsOnlySurface ? { providesInitialSurface: true } : {})
+            ...(setupIsOnlySurface || result.setup?.rendererOwnsGatedStartup
+              ? { providesInitialSurface: true }
+              : {})
           })
     }
   }

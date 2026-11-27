@@ -23,7 +23,7 @@ import {
   buildPosixSetupAgentRecheck
 } from './setup-agent-program'
 
-const SETUP_AGENT_RECHECK_TIMEOUT_SECONDS = 10
+export const SETUP_AGENT_RECHECK_TIMEOUT_SECONDS = 10
 
 export const SETUP_AGENT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 export const SETUP_WAIT_MESSAGE = 'Waiting for setup to finish before starting agent...'

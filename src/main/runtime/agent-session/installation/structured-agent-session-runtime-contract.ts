@@ -102,6 +102,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** Every structured-session status projection, for host-side reactions such as the first-work
    *  workspace rename that CLI agents get from their hooks. */
   onSessionStatusChanged?: StructuredAgentSessionHostDeps['onSessionStatusChanged']
+  onProviderStarted?: StructuredAgentSessionHostDeps['onProviderStarted']
   readWorkerDockPresence?: StructuredAgentSessionHostDeps['readWorkerDockPresence']
   conversationNaming?: StructuredAgentSessionHostDeps['conversationNaming']
   /** See `StructuredAgentSessionHostDeps.turnContext`. */

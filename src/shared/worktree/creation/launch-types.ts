@@ -16,6 +16,8 @@ export type WorktreeSetupLaunch = {
   shell?: SetupRunnerShell
   command?: string
   waitForAgentStartup?: boolean
+  /** The host returned Setup so the creating window can pair it with its startup terminal. */
+  rendererOwnsGatedStartup?: true
 }
 
 export type WorktreeStartupLaunch = {

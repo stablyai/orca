@@ -130,6 +130,7 @@ export function buildManagedWorktreeCreateArgs(
       ? { startupLaunchPreferences: params.startupLaunchPreferences }
       : {}),
     startupDraft: params.startupDraft,
+    startupPromptForRecovery: params.startupPromptForRecovery,
     ...(params.afterPublication === undefined ? {} : { afterPublication: params.afterPublication }),
     lineage: {
       parentWorkspace: params.parentWorkspace,

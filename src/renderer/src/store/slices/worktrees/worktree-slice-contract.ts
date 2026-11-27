@@ -189,7 +189,7 @@ export type WorktreeSlice = {
     creationId: string,
     patch: {
       phase?: WorktreeCreationPhase
-      status?: 'creating' | 'error'
+      status?: PendingWorktreeCreation['status']
       startedAt?: number
       error?: string
       loaderVisible?: boolean

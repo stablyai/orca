@@ -1,3 +1,4 @@
+import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import type { TerminalOutputCadence } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
@@ -52,7 +53,10 @@ import type {
   RuntimeCreateAgentSessionResult,
   RuntimeEnsureAgentSessionResult
 } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import type { TabActivationIntent } from '../../../../../../shared/workspace-layout/tab-groups/tab-activation-intent'
 import type { RuntimeMobileSessionTerminalClientTab } from '../../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
@@ -3712,7 +3716,12 @@ export function createRemoteRuntimePtyTransport(
         presentation: 'background' as const,
         ...(activate === true ? { activate: true } : {})
       }
-      const freshLaunch = !resumeProviderSessionToSend ? opts.freshAgentLaunch : undefined
+      const waitForSetup =
+        launchConfigToSend?.commandProvenance === 'generated' &&
+        Boolean(envToSend?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]) &&
+        parseExecutionHostId(authoritativeExecutionHostId)?.kind !== 'ssh'
+      const freshLaunch =
+        !resumeProviderSessionToSend && !waitForSetup ? opts.freshAgentLaunch : undefined
       const promptStatus = freshLaunch
         ? lastVerifiedRuntimeStatus(readRuntimeStatuses().get(createEnvironmentId))
         : null
@@ -3871,7 +3880,7 @@ export function createRemoteRuntimePtyTransport(
         : undefined
       const created = replayLaunch
         ? await replayLaunch(connectLifecycleEpoch)
-        : launchAgentToSend
+        : launchAgentToSend && !waitForSetup
           ? agentSessionRequiresHostAuthorityReplay
             ? await hostAuthorityCreate()
             : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
