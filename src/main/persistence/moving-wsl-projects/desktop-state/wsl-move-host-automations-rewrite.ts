@@ -5,7 +5,10 @@
  */
 import type { WslMoveCutover } from '../../../../shared/wsl-move/wsl-move-cutover'
 import type { WslMoveUnfinished } from '../../../../shared/wsl-move/wsl-move-driver-types'
-import { listWslMoveCutovers } from '../cutover-recovery/wsl-move-cutover-journal'
+import {
+  listWslMoveCutovers,
+  writeWslMoveCutover
+} from '../cutover-recovery/wsl-move-cutover-journal'
 import {
   runWslMoveHostAutomationsTurn,
   untilWslMoveTurnAborted
@@ -21,12 +24,44 @@ export type WslMoveHostAutomations = {
   /**
    * Idempotent; throws unless the host answered for every one. An automation the host no longer
    * has, already has on, or that changed there since the move (the user's own choice) is done.
+   * Calls `onSettled` for each confirmed id so a timed-out turn resumes with only the rest.
    */
   enable: (
     environmentId: string,
     automations: readonly WslMoveMovedAutomation[],
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onSettled?: (automationId: string) => void
   ) => Promise<void>
+}
+
+function recordReenabledAutomations(
+  userDataPath: string,
+  migrationId: string,
+  settled: readonly string[]
+): void {
+  if (settled.length === 0) {
+    return
+  }
+  try {
+    const current = listWslMoveCutovers(userDataPath).find(
+      (entry) => entry.migrationId === migrationId
+    )
+    if (!current || current.phase !== 'destination-committed') {
+      return
+    }
+    const recorded = current.reenabledAutomationIds ?? []
+    const added = [...new Set(settled)].filter((id) => !recorded.includes(id))
+    if (added.length === 0) {
+      return
+    }
+    writeWslMoveCutover(userDataPath, {
+      ...current,
+      reenabledAutomationIds: [...recorded, ...added],
+      updatedAt: new Date().toISOString()
+    })
+  } catch (error) {
+    console.warn('[wsl-move] Could not record confirmed host automations:', error)
+  }
 }
 
 export function registerWslMoveHostAutomationsStore(
@@ -42,7 +77,7 @@ export function registerWslMoveHostAutomationsStore(
         const cutover = listWslMoveCutovers(userDataPath).find(
           (entry) => entry.migrationId === planned.migrationId
         )
-        const ids = cutover?.automationsToReenable ?? []
+        const ids = cutover ? wslMoveAutomationsPending(cutover) : []
         if (!cutover || ids.length === 0) {
           return
         }
@@ -52,15 +87,29 @@ export function registerWslMoveHostAutomationsStore(
             row.updatedAt
           ])
         )
-        // Past the deadline the step stays unledgered and the next pass retries it.
-        await untilWslMoveTurnAborted(
-          host.enable(
-            cutover.destinationEnvironmentId,
-            ids.map((id) => ({ id, updatedAt: carried.get(id) ?? null })),
+        let active = true
+        const settled: string[] = []
+        // Past the deadline the step stays unledgered, but confirmed ids are saved so the next pass skips them.
+        try {
+          await untilWslMoveTurnAborted(
+            host.enable(
+              cutover.destinationEnvironmentId,
+              ids.map((id) => ({ id, updatedAt: carried.get(id) ?? null })),
+              signal,
+              (id) => {
+                if (active) {
+                  settled.push(id)
+                }
+              }
+            ),
             signal
-          ),
-          signal
-        )
+          )
+        } catch (error) {
+          active = false
+          recordReenabledAutomations(userDataPath, cutover.migrationId, settled)
+          throw error
+        }
+        active = false
       }),
     // Nothing to flush here: the write is the host's.
     flush: () => {}
@@ -69,13 +118,20 @@ export function registerWslMoveHostAutomationsStore(
 
 /** What the host has not confirmed yet: the record's automations until its ledger entry lands. */
 export function wslMoveAutomationsPending(
-  cutover: Pick<WslMoveCutover, 'phase' | 'rewrittenStores' | 'automationsToReenable'>
+  cutover: Pick<
+    WslMoveCutover,
+    'phase' | 'rewrittenStores' | 'automationsToReenable' | 'reenabledAutomationIds'
+  >
 ): string[] {
   const ids = cutover.automationsToReenable ?? []
-  return cutover.phase === 'destination-committed' &&
-    !cutover.rewrittenStores.includes(WSL_MOVE_HOST_AUTOMATIONS_STORE_ID)
-    ? [...ids]
-    : []
+  if (
+    cutover.phase !== 'destination-committed' ||
+    cutover.rewrittenStores.includes(WSL_MOVE_HOST_AUTOMATIONS_STORE_ID)
+  ) {
+    return []
+  }
+  const done = new Set(cutover.reenabledAutomationIds ?? [])
+  return ids.filter((id) => !done.has(id))
 }
 
 /** Committed moves whose host steps are not all confirmed, for the notice the UI shows. */

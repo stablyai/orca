@@ -89,19 +89,24 @@ export function computeUsageWindowStats(
 }
 
 export type UsageChartModel = {
+  /** The x-axis: the recorded history, at least six hours, ending now. */
   startsAt: number
   endsAt: number
   /** Samples inside the window, oldest first, values as the display counts them. */
   points: { at: number; value: number }[]
-  /** The even-burn line's ends, in the same display terms; null without a reset time. */
+  /** The even-burn line's values at `startsAt` and `endsAt`; null without a reset time. */
   pace: { from: number; to: number } | null
   now: number
 }
 
 // Two readings make a line; a lone point says nothing about the trend.
 export const MIN_CHART_SAMPLES = 2
+// Two close readings stretched edge to edge would exaggerate a small step.
+const MIN_CHART_SPAN_MS = 6 * HOUR_MS
 
-/** The chart's domain and series, or null while history is too thin to draw. */
+/** The chart's domain and series, or null while history is too thin to draw. Spanning the whole
+ *  window left a few hours of history as a sliver beside an empty future, so the axis zooms to
+ *  the history (never less than six hours, or the window when shorter) and ends at now. */
 export function buildUsageChartModel(
   window: UsagePaceWindow,
   samples: readonly UsageHistorySample[],
@@ -109,21 +114,29 @@ export function buildUsageChartModel(
   display: 'used' | 'remaining'
 ): UsageChartModel | null {
   const windowMs = window.windowMinutes * 60_000
-  const startsAt = window.resetsAt != null ? window.resetsAt - windowMs : (samples[0]?.at ?? now)
-  const endsAt = window.resetsAt ?? now
+  const windowStart = window.resetsAt != null ? window.resetsAt - windowMs : null
   const shown = (used: number): number =>
     display === 'remaining' ? 100 - clampPercent(used) : clampPercent(used)
   const points = samples
-    .filter((sample) => sample.at >= startsAt && sample.at <= Math.max(now, endsAt))
+    .filter((sample) => (windowStart === null || sample.at >= windowStart) && sample.at <= now)
     .map((sample) => ({ at: sample.at, value: shown(sample.usedPercent) }))
-  if (points.length < MIN_CHART_SAMPLES || endsAt <= startsAt) {
+  const first = points[0]
+  if (points.length < MIN_CHART_SAMPLES || !first) {
     return null
   }
+  const minSpanMs = windowMs > 0 ? Math.min(windowMs, MIN_CHART_SPAN_MS) : MIN_CHART_SPAN_MS
+  const startsAt = Math.max(windowStart ?? first.at, Math.min(first.at, now - minSpanMs))
+  const endsAt = now
+  if (endsAt <= startsAt) {
+    return null
+  }
+  const evenBurn = (at: number): number =>
+    windowStart === null ? 0 : shown(((at - windowStart) / windowMs) * 100)
   return {
     startsAt,
     endsAt,
     points,
-    pace: window.resetsAt != null ? { from: shown(0), to: shown(100) } : null,
-    now: Math.min(Math.max(now, startsAt), endsAt)
+    pace: windowStart !== null ? { from: evenBurn(startsAt), to: evenBurn(endsAt) } : null,
+    now
   }
 }

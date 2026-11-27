@@ -10,7 +10,6 @@ import type {
   AgentHookInstallState,
   AgentHookInstallStatus
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { buildManagedCommandHook } from '../agent-hooks/installation/configuration/hook-config-schema'
 import { readHooksJson } from '../agent-hooks/installation/configuration/hooks-json-read'
 import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
 import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
@@ -47,7 +46,6 @@ import {
   getManagedScriptPath,
   getPosixManagedScriptFileName,
   getRemoteConfigPath,
-  getRemoteManagedEventCommand,
   getStatusLineInstallMarkerPath,
   getStatusLineScriptFileName,
   getStatusLineScriptPath,
@@ -57,7 +55,7 @@ import {
   type ClaudeCompatibleHookSettings
 } from './hooks/hook-settings'
 import { claudeAcceptsExecFormHooks } from './cli-capabilities/claude-hook-event-versions'
-import { getManagedEventHook } from './hooks/claude-managed-event-hook'
+import { getManagedEventHook, getPosixManagedEventHook } from './hooks/claude-managed-event-hook'
 import {
   getClaudeManagedHookPlan,
   OPENCLAUDE_MANAGED_HOOK_PLAN,
@@ -260,8 +258,7 @@ export class ClaudeHookService {
       // Settings resolve HOME at runtime; SFTP writes to the discovered remote home.
       const nextConfig = applyManagedHooks(
         config,
-        (eventName) =>
-          buildManagedCommandHook(getRemoteManagedEventCommand(eventName, remoteScriptPath)),
+        (eventName) => getPosixManagedEventHook(eventName, remoteScriptPath),
         remoteScriptFileName,
         this.managedHookPlan(options),
         true

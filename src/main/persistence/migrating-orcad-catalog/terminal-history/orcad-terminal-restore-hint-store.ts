@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { durableWriteTempPath, writeFileDurableSync } from '../../../filesystem/durable-file-write'
 import {
   MAX_ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS,
@@ -39,20 +40,22 @@ type TerminalRestoreHintStoreDocument = {
 
 const MIGRATION_KEY = /^[a-f0-9]{32}$/
 
-const StoreDocumentSchema = z.object({
-  version: z.literal(STORE_VERSION),
-  hints: z.array(
-    z.object({
-      paneKey: z.string().refine(isOrcadMigrationTerminalRestoreHintPaneKey),
-      cwd: z.string().refine(isOrcadMigrationTerminalRestoreHintCwd),
-      worktreeId: z.string().min(1),
-      migrationKey: z.string().regex(MIGRATION_KEY),
-      migrationId: z.string().min(1),
-      installedAt: z.number().int().nonnegative()
-    })
-  ),
-  installedMigrationKeys: z.array(z.string().regex(MIGRATION_KEY))
-})
+const StoreDocumentSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(STORE_VERSION),
+    hints: z.array(
+      z.object({
+        paneKey: z.string().refine(isOrcadMigrationTerminalRestoreHintPaneKey),
+        cwd: z.string().refine(isOrcadMigrationTerminalRestoreHintCwd),
+        worktreeId: z.string().min(1),
+        migrationKey: z.string().regex(MIGRATION_KEY),
+        migrationId: z.string().min(1),
+        installedAt: z.number().int().nonnegative()
+      })
+    ),
+    installedMigrationKeys: z.array(z.string().regex(MIGRATION_KEY))
+  })
+)
 
 export class OrcadTerminalRestoreHintStore {
   private readonly directory: string

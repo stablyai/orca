@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   isSettledBackgroundTaskState,
@@ -8,40 +9,52 @@ import type { NativeChatBackgroundTaskBlock } from '../../../shared/native-chat/
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpBackgroundTaskUpdate, AcpDialectNotification } from './acp-dialect'
 
-const taskSchema = z.object({
-  task_id: z.string().min(1),
-  command: z.string().optional(),
-  description: z.string().nullish(),
-  monitor_description: z.string().nullish(),
-  display_command: z.string().nullish(),
-  output_file: z.string().optional(),
-  summary: z.string().optional(),
-  error: z.string().optional(),
-  output: z.string().optional(),
-  kind: z.string().optional(),
-  task_type: z.string().optional(),
-  exit_code: z.number().int().nullish(),
-  signal: z.union([z.string(), z.number()]).nullish(),
-  explicitly_killed: z.boolean().optional()
-})
-const backgroundedSchema = taskSchema.extend({
-  sessionUpdate: z.literal('task_backgrounded'),
-  tool_call_id: z.string().optional()
-})
-const completedSchema = z.object({
-  sessionUpdate: z.literal('task_completed'),
-  task_snapshot: taskSchema
-})
-const startedOutputSchema = taskSchema.extend({ type: z.literal('BackgroundTaskStarted') })
-const taskResultSchema = taskSchema.extend({
-  status: z.string().optional(),
-  outcome: z.string().optional()
-})
-const resultOutputSchema = z.object({
-  type: z.enum(['TaskOutput', 'KillTask']),
-  Result: taskResultSchema.optional(),
-  MultiResult: z.object({ results: z.array(taskResultSchema) }).optional()
-})
+const taskSchema = lazyZodSchema(() =>
+  z.object({
+    task_id: z.string().min(1),
+    command: z.string().optional(),
+    description: z.string().nullish(),
+    monitor_description: z.string().nullish(),
+    display_command: z.string().nullish(),
+    output_file: z.string().optional(),
+    summary: z.string().optional(),
+    error: z.string().optional(),
+    output: z.string().optional(),
+    kind: z.string().optional(),
+    task_type: z.string().optional(),
+    exit_code: z.number().int().nullish(),
+    signal: z.union([z.string(), z.number()]).nullish(),
+    explicitly_killed: z.boolean().optional()
+  })
+)
+const backgroundedSchema = lazyZodSchema(() =>
+  taskSchema.extend({
+    sessionUpdate: z.literal('task_backgrounded'),
+    tool_call_id: z.string().optional()
+  })
+)
+const completedSchema = lazyZodSchema(() =>
+  z.object({
+    sessionUpdate: z.literal('task_completed'),
+    task_snapshot: taskSchema
+  })
+)
+const startedOutputSchema = lazyZodSchema(() =>
+  taskSchema.extend({ type: z.literal('BackgroundTaskStarted') })
+)
+const taskResultSchema = lazyZodSchema(() =>
+  taskSchema.extend({
+    status: z.string().optional(),
+    outcome: z.string().optional()
+  })
+)
+const resultOutputSchema = lazyZodSchema(() =>
+  z.object({
+    type: z.enum(['TaskOutput', 'KillTask']),
+    Result: taskResultSchema.optional(),
+    MultiResult: z.object({ results: z.array(taskResultSchema) }).optional()
+  })
+)
 type GrokTask = z.infer<typeof taskSchema>
 export type GrokTaskResult = z.infer<typeof taskResultSchema>
 const MONITOR_COMMAND = /^\[monitor[:\]]/
@@ -125,12 +138,14 @@ function snapshot(
   }
 }
 
-const taskInputSchema = z.object({
-  description: z.string().optional(),
-  command: z.string().optional(),
-  task_id: z.string().trim().min(1).optional(),
-  task_ids: z.array(z.string().trim().min(1)).optional()
-})
+const taskInputSchema = lazyZodSchema(() =>
+  z.object({
+    description: z.string().optional(),
+    command: z.string().optional(),
+    task_id: z.string().trim().min(1).optional(),
+    task_ids: z.array(z.string().trim().min(1)).optional()
+  })
+)
 
 export function grokToolBackgroundTasks(
   update: ToolCallUpdate,
