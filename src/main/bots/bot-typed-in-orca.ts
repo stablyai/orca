@@ -90,8 +90,8 @@ export function typedOnAnotherDevice(item: Pick<AgentJournalRenderItem, 'body'>)
   )
 }
 
-/** Who typed a message in a shared bot's chat, as the host stamped it: the owner at the host's own
- *  window, or a teammate the bot is shared with (their share device's account); null for anyone else
+/** Who typed a message in a shared agent's chat, as the host stamped it: the owner at the host's own
+ *  window, or a teammate the agent is shared with (their share device's account); null for anyone else
  *  and for messages from before stamps. The one reading of a message's typist for whom it asks as. */
 export function botMessageTypist(
   bot: Pick<Bot, 'shares'> | null,

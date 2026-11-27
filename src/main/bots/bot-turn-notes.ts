@@ -27,7 +27,7 @@ export type BotTurnNoteSources = {
   activeWork: (botId: string, scope: BotActiveWorkScope) => Promise<BotActiveWorkSection>
   /** How many of the chat's turns have ended; rejects when the journal can't say. */
   endedTurns: (sessionId: string) => Promise<number>
-  /** The bot, for who typed a turn's message (`botMessageTypist`). */
+  /** The agent, for who typed a turn's message (`botMessageTypist`). */
   bot: (botId: string) => Pick<Bot, 'shares'> | null
 }
 

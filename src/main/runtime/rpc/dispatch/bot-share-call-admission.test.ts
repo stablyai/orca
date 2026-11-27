@@ -501,8 +501,8 @@ describe('the share guard', () => {
     expect(listed!.bots[0]!.shares).toBeUndefined()
   })
 
-  // A trusted teammate reaches every chat of the shared bot, whoever it is for; never another bot's.
-  it('admits reads and actions in every chat of the shared bot, and none of another bot', async () => {
+  // A trusted teammate reaches every chat of the shared agent, whoever it is for; never another agent's.
+  it('admits reads and actions in every chat of the shared agent, and none of another agent', async () => {
     const history = (sessionId: string) =>
       call('agentSession.history', { sessionId, direction: 'tail' })
     const approve = (sessionId: string) =>
@@ -528,7 +528,7 @@ describe('the share guard', () => {
     expect(errorCode(await approve(ids.alicesOtherBotChat))).toBe('not_found')
   })
 
-  it('reads and sets the model only on a chat of the shared bot, never the host’s catalog without one', async () => {
+  it('reads and sets the model only on a chat of the shared agent, never the host’s catalog without one', async () => {
     expect(errorCode(await call('agentSession.modelCatalog', { agent: 'claude' }))).toBe(
       'not_found'
     )
@@ -629,7 +629,7 @@ describe('the share guard', () => {
     )
   })
 
-  it('stages an upload for any chat of the shared bot, so it can’t probe another bot’s', async () => {
+  it('stages an upload for any chat of the shared agent, so it can’t probe another agent’s', async () => {
     const upload = (sessionId: string) =>
       call('agentSessionAttachment.uploadStart', { sessionId, name: 'a.txt', byteLength: 1 })
     expect(errorCode(await upload(ids.alicesChat))).toBeNull()
@@ -638,7 +638,7 @@ describe('the share guard', () => {
   })
 
   // A stored file's upload id is claimed by the chats whose messages carry it (the journal's claims).
-  it('previews a stored attachment only when a chat of the shared bot claims it, right after a restart too', async () => {
+  it('previews a stored attachment only when a chat of the shared agent claims it, right after a restart too', async () => {
     const root = join(directory, 'attachments')
     const theirs = join(root, '11111111-1111-4111-8111-111111111111', 'a.png')
     const owners = join(root, '22222222-2222-4222-8222-222222222222', 'b.png')
@@ -667,7 +667,7 @@ describe('the share guard', () => {
   })
 
   // A composer chip's thumbnail reads the file back before any message claims it.
-  it('previews an unsent upload to a chat of the shared bot, and none to another bot’s', async () => {
+  it('previews an unsent upload to a chat of the shared agent, and none to another agent’s', async () => {
     const store = new AgentSessionAttachmentStore(join(directory, 'attachments'), {
       hasSession: () => true,
       claimingSessions: async () => []
@@ -706,7 +706,7 @@ describe('the share guard', () => {
     expect(errorCode(await call('bots.chats.seen', undefined))).toBe('forbidden')
   })
 
-  it('streams a teammate the status of every chat of the shared bot alone', async () => {
+  it('streams a teammate the status of every chat of the shared agent alone', async () => {
     const theirs = SESSIONS.filter((session) => session.bot === SHARED).map((session) => session.id)
     expect(await streamStatus()).toEqual([
       ...theirs.map((id) => `snapshot:${id}`),

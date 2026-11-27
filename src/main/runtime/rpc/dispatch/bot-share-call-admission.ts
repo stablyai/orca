@@ -1,5 +1,5 @@
 // The share guard, run once per call after its params parse: a teammate's call may name only the shared
-// bot and its chats, whoever they are for. Anything else answers not found, so another agent's chat never shows.
+// agent and its chats, whoever they are for. Anything else answers not found, so another agent's chat never shows.
 import { getAgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcMethodShare } from '../../../../shared/bots/bot-share-rpc-methods'

@@ -1,4 +1,4 @@
-// A teammate's chats on a shared bot: they reach every one of its chats (teammate-rules.ts, rule 1);
+// A teammate's chats on a shared agent: they reach every one of its chats (teammate-rules.ts, rule 1);
 // whose a chat is (whom it acts for) decides only how it lists, never whether they may read it.
 import type { BotRequestPerson } from '../../../shared/bots/bot-acts-for'
 import { actsForOwner, shareOwnsChat } from '../../../shared/bots/bot-acts-for'
@@ -66,7 +66,7 @@ export function botShareChatIsTheirs(
   }
 }
 
-/** Whether a teammate reaches a session: any chat of the shared bot, whoever it is for (rule 1). */
+/** Whether a teammate reaches a session: any chat of the shared agent, whoever it is for (rule 1). */
 export function botShareReachesSession(
   sources: Pick<OrcaRuntimeService, 'bots'>,
   scope: BotShareCallerScope,

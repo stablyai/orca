@@ -15,7 +15,7 @@ import type { RpcContext } from '../core'
 import { NO_HOME_CHAT_ID } from '../../../../shared/bots/bot-chat-tree-model'
 import { botHomePlaceholderId } from '../../../../shared/bots/bot-home-of'
 
-/** Who reads a bot's chats: the owner, or a teammate, who reaches every chat as the owner does
+/** Who reads an agent's chats: the owner, or a teammate, who reaches every chat as the owner does
  *  (teammate-rules.ts, rule 1); only Homes and read marks read differently. */
 function chatTreeViewerOf(
   context: Pick<RpcContext, 'callerScope'>

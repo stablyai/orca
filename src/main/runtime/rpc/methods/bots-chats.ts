@@ -42,7 +42,7 @@ const BOT_CHATS_METHOD = defineMethod({
   handler: async (params, context) => {
     const { runtime } = context
     const { bot, caller } = namedOrCallerBot(params, context)
-    // With the bot named, the claim only marks which row is the asking chat, so a paired client's
+    // With the agent named, the claim only marks which row is the asking chat, so a paired client's
     // counts; a teammate's client asks from none (they reach every chat, rule 1).
     const asking = botShareScopeOf(context)
       ? undefined

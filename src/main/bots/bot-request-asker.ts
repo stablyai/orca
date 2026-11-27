@@ -90,7 +90,7 @@ export type BotActingTurnLookups = {
   conversationWorkspaceId: string | null
   /** A teammate's name by account id, for a run made for them; trust reads only the id. */
   personName?: (accountId: string) => string | null
-  /** The bot whose chat this is, for who typed a message (`botMessageTypist`). */
+  /** The shared agent whose chat this is, for who typed a message (`botMessageTypist`). */
   bot?: Pick<Bot, 'shares'> | null
 }
 
@@ -151,7 +151,7 @@ function readItem(body: AgentJournalItemBody, lookups: BotActingTurnLookups): It
   if (body.origin === 'connector' && !body.memorySource) {
     return { kind: 'asker', asker: { kind: 'unknown' }, ...(wokenAt ? { wokenAt } : {}) }
   }
-  // A teammate typing in any chat of the bot (the owner's included) asks as themself.
+  // A teammate typing in any chat of the agent (the owner's included) asks as themself.
   const typist = body.memorySource ? null : botMessageTypist(lookups.bot ?? null, body.typedBy)
   if (typist && typist !== 'owner') {
     return { kind: 'asker', asker: typist }
