@@ -110,20 +110,27 @@ export function useCombinedSearch({
     updateActiveSearchState
   })
 
-  const { deferredResults, deferredIsLive, textRows, textError, textNotice, textPending } =
-    useCombinedTextResults({
-      query,
-      forcedShortQuery,
-      searchState,
-      collapsedFiles,
-      isCurrentOwner
-    })
+  const {
+    deferredResults,
+    deferredIsLive,
+    textRows,
+    textError,
+    textNotice,
+    textPending,
+    textSettled
+  } = useCombinedTextResults({
+    query,
+    forcedShortQuery,
+    searchState,
+    collapsedFiles,
+    isCurrentOwner
+  })
   const hasQuery = query.trim().length > 0
-  // The notice holds while each pause's rerun is pending; dropping it then would re-announce it on
-  // every keystroke. A scan that settles without it clears it. A remount (workspace or owner change)
-  // starts fresh.
+  // The notice holds for the search session, through each pause's pending rerun and short edits;
+  // dropping it then would re-announce it. Only a scan that settles without it, an empty query, or a
+  // remount (workspace or owner change) clears it.
   const [sessionNotice, setSessionNotice] = useState('')
-  const nextSessionNotice = hasQuery ? (textNotice ?? (textPending ? sessionNotice : '')) : ''
+  const nextSessionNotice = hasQuery ? (textNotice ?? (textSettled ? '' : sessionNotice)) : ''
   if (nextSessionNotice !== sessionNotice) {
     setSessionNotice(nextSessionNotice)
   }

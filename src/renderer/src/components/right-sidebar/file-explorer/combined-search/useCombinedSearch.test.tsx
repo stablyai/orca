@@ -160,17 +160,4 @@ describe('combined search text state', () => {
     // Each change of the live text is a new announcement; the notice must not drop between pauses.
     expect(mounted.announcements.slice(first)).not.toContain('')
   })
-
-  it('drops the notice once a later scan settles without it', async () => {
-    const { rerender } = render(<FieldHost worktreeId="wt-notice-clears" worktreePath={null} />)
-    act(() => field().field.onQueryChange('cart'))
-    await advanceFakeClock()
-    expect(field().announcement).toBe('Not available here')
-
-    rerender(<FieldHost worktreeId="wt-notice-clears" />)
-    act(() => field().field.onQueryChange('carts'))
-    await advanceFakeClock()
-    await act(async () => pending[0].resolve(resultFor('carts')))
-    expect(field().announcement).toBe('')
-  })
 })

@@ -7,8 +7,7 @@ import { act, render } from '@testing-library/react'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
-import { makeRemoteWorktree } from '../../../file-actions/quick-open/quick-open-file-list-test-harness'
+import { seedLocalWorktree } from '../../../file-actions/quick-open/quick-open-file-list-test-harness'
 import { useFileExplorerNameFilter } from '../panel/use-file-explorer-name-filter'
 import {
   advanceFakeClock,
@@ -23,25 +22,6 @@ import { useCombinedSearch } from './useCombinedSearch'
 
 const noop = (): void => {}
 const NO_DRAFT = { text: '', allowShort: false, seeded: false }
-
-function seedLocalWorktree(): void {
-  useAppStore.setState({
-    settings: getDefaultSettings('/home/test'),
-    repos: [{ id: 'repo-1', path: '/repo', displayName: 'repo', badgeColor: '#000', addedAt: 1 }],
-    worktreesByRepo: {
-      'repo-1': [
-        {
-          ...makeRemoteWorktree(),
-          id: 'wt-1',
-          repoId: 'repo-1',
-          hostId: undefined,
-          runtimeOwnerEnvironmentId: undefined,
-          path: '/repo'
-        }
-      ]
-    }
-  })
-}
 
 /** The Files pane's two halves: the real name listing feeding the combined search. */
 function NamesAndTextHost(): null {

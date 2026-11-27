@@ -92,6 +92,26 @@ export function seedRemoteWorktree(): void {
   })
 }
 
+/** One local repo whose worktree lists through `window.api.fs.listFiles`. */
+export function seedLocalWorktree(): void {
+  useAppStore.setState({
+    settings: getDefaultSettings('/home/test'),
+    repos: [{ id: 'repo-1', path: '/repo', displayName: 'repo', badgeColor: '#000', addedAt: 1 }],
+    worktreesByRepo: {
+      'repo-1': [
+        {
+          ...makeRemoteWorktree(),
+          id: 'wt-1',
+          repoId: 'repo-1',
+          hostId: undefined,
+          runtimeOwnerEnvironmentId: undefined,
+          path: '/repo'
+        }
+      ]
+    }
+  })
+}
+
 export function HookProbe({
   enabled,
   states,

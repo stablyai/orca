@@ -41,6 +41,8 @@ export type RuntimeFileListState = {
   operationOwner?: FileExplorerOperationOwner
 }
 
+const DISABLED_REQUEST_KEY = 'disabled'
+
 /** Files settled for one request key; local listings key without the query, so they answer every query. */
 type RuntimeFileListing = {
   requestKey: string
@@ -137,7 +139,9 @@ export function useRuntimeFileListForWorktree({
   useEffect(() => {
     if (!enabled) {
       setCappedLocalListing(null)
-      setLoadingRequest({ requestKey, loading: false })
+      // Why: a local listing's key ignores the query, so recording it here would make the first
+      // enabled render report settled before its request starts.
+      setLoadingRequest({ requestKey: DISABLED_REQUEST_KEY, loading: false })
       setListedOperationOwner({ kind: 'unresolved' })
       return
     }

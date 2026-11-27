@@ -62,5 +62,16 @@ export function useCombinedTextResults({
       (storedResults === null && !searchState?.error) ||
       deferredLagging)
 
-  return { deferredResults, deferredIsLive, textRows, textError, textNotice, textPending }
+  // A scan for the live query has settled; a short query runs none, so it never counts.
+  const textSettled = textQueryActive && !textPending
+
+  return {
+    deferredResults,
+    deferredIsLive,
+    textRows,
+    textError,
+    textNotice,
+    textPending,
+    textSettled
+  }
 }
