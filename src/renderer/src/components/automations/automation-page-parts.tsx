@@ -61,8 +61,11 @@ export function formatAutomationNextRun(
   t: Translate = translate,
   intlLocale?: string
 ): string {
-  if (value && value <= now) {
-    return t('bots.upcoming.dueNow', 'Due now')
+  if (value && value < now) {
+    return t(
+      'auto.components.automations.automationPageParts.scheduledTimePassed',
+      'Scheduled time passed'
+    )
   }
   return (
     formatAutomationRelativeTime(value, now, t, intlLocale) ??

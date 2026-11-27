@@ -16395,6 +16395,7 @@
           "orphanEntryLabel": "Automações antigas não atribuídas"
         },
         "automationPageParts": {
+          "scheduledTimePassed": "Horário agendado ultrapassado",
           "never": "Nunca",
           "now": "agora mesmo",
           "runStatusPending": "Na fila",

@@ -18954,6 +18954,7 @@
           "orphanEntryLabel": "未分配的旧版自动化"
         },
         "automationPageParts": {
+          "scheduledTimePassed": "计划时间已过",
           "never": "从未",
           "now": "刚刚",
           "runStatusPending": "已排队",
