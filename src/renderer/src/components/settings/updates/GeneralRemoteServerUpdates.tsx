@@ -52,6 +52,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const actionRef = useRef<HTMLDivElement>(null)
   // Set while keyboard focus is in the header action; a removed button leaves it set.
   const actionHadFocus = useRef(false)
+  const actionFocusGeneration = useRef(0)
   const [snapshot, setSnapshot] = useState<Snapshot>({ phase: 'owed' })
   const refreshSnapshot = useCallback(
     (options?: UpdateCheckOptions): void => {
@@ -120,21 +121,39 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
     setArmed(null)
   }
 
-  const hasEligible = entries.some(isEligible)
-  // The header action swaps buttons when servers become eligible or updates start or finish. If
-  // that unmounted the focused button, land on Servers instead of dropping focus to the page.
-  useLayoutEffect(() => {
+  // The header action changes under focus: buttons are replaced when servers become eligible or
+  // updates start, disabled while a check runs, or hidden by the narrow layout. Whenever that
+  // strands keyboard focus (on the page, a hidden button or a disabled one), land on Servers.
+  const hasEntries = entries.length > 0
+  const rescueActionFocus = useCallback((): void => {
     const container = actionRef.current
-    if (!container || !actionHadFocus.current) {
+    if (!container) {
       return
     }
     const active = container.ownerDocument.activeElement
-    if (active && active !== container.ownerDocument.body) {
+    const dropped = actionHadFocus.current && (!active || active === container.ownerDocument.body)
+    const stranded =
+      active instanceof HTMLButtonElement &&
+      container.contains(active) &&
+      (active.disabled || active.getClientRects().length === 0)
+    if (dropped || stranded) {
+      actionHadFocus.current = false
+      toggleRef.current?.focus()
+    }
+  }, [])
+  // No deps: a cheap check after every commit, since any re-render can replace the action.
+  useLayoutEffect(rescueActionFocus)
+  useEffect(() => {
+    const container = actionRef.current
+    if (!container) {
       return
     }
-    actionHadFocus.current = false
-    toggleRef.current?.focus()
-  }, [hasEligible, running])
+    // Container queries hide buttons on resize without a re-render.
+    const observer = new ResizeObserver(rescueActionFocus)
+    observer.observe(container)
+    return () => observer.disconnect()
+    // The action mounts only once there are servers to show.
+  }, [rescueActionFocus, hasEntries])
 
   if (entries.length === 0) {
     return null
@@ -303,6 +322,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
             className="flex min-h-8 items-center"
             onFocus={() => {
               actionHadFocus.current = true
+              actionFocusGeneration.current += 1
             }}
             onBlur={(event) => {
               // Keep the flag only when the focused button itself was removed, so focus can be
@@ -312,8 +332,10 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
                 actionHadFocus.current = false
                 return
               }
+              // A later focus inside the action owns the flag; this deferred check must not clear it.
+              const generation = actionFocusGeneration.current
               requestAnimationFrame(() => {
-                if (blurred.isConnected) {
+                if (blurred.isConnected && generation === actionFocusGeneration.current) {
                   actionHadFocus.current = false
                 }
               })

@@ -12665,7 +12665,8 @@
           "liveTabs": "{{value0}}つのライブタブ",
           "livePaneOne": "1つのライブペイン",
           "livePanes": "{{value0}}つのライブペイン",
-          "dca6780b3a": "リモート Orca サーバーを更新"
+          "dca6780b3a": "リモート Orca サーバーを更新",
+          "refreshFailed": "ペアリング済みサーバーを確認できませんでした。"
         },
         "RemoteServerUpdateStatus": {
           "checking": "確認中…",

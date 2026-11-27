@@ -13539,7 +13539,8 @@
           "liveTabs": "{{value0}} aktive Tabs",
           "livePaneOne": "1 aktiver Bereich",
           "livePanes": "{{value0}} aktive Bereiche",
-          "dca6780b3a": "Entfernte Orca-Server aktualisieren"
+          "dca6780b3a": "Entfernte Orca-Server aktualisieren",
+          "refreshFailed": "Gekoppelte Server konnten nicht geprüft werden."
         },
         "RemoteServerUpdateStatus": {
           "checking": "Wird geprüft…",

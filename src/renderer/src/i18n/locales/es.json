@@ -12970,7 +12970,8 @@
           "liveTabs": "{{value0}} pestañas activas",
           "livePaneOne": "1 panel activo",
           "livePanes": "{{value0}} paneles activos",
-          "dca6780b3a": "Actualizar servidores remotos Orca"
+          "dca6780b3a": "Actualizar servidores remotos Orca",
+          "refreshFailed": "No se pudieron comprobar los servidores vinculados."
         },
         "RemoteServerUpdateStatus": {
           "checking": "Checking…",

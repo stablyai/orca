@@ -17,6 +17,7 @@ import { formatUpdateDelayDate } from './update-delay-copy'
 import type { UpdateStatusLine, UpdateStatusRowModel } from './update-status-row-model'
 import { UpdateStatusDetails } from './UpdateStatusDetails'
 import { detailsText } from './update-status-details-text'
+import { runUpdateCheck } from './run-update-check'
 
 // Intl formatter caches key on option identity, so this must be a module constant.
 const PERCENT_FORMAT: Intl.NumberFormatOptions = { style: 'percent', maximumFractionDigits: 0 }
@@ -255,9 +256,7 @@ export function UpdateStatusRow({
                       aria-label={t('settings.about.action.checkForUpdates', 'Check for updates')}
                       disabled={model.secondaryCheck.disabled}
                       // Modifier clicks pick a one-off release track, not a saved setting.
-                      onClick={(event) =>
-                        void window.api.updater.check(getUpdateCheckClickOptions(event))
-                      }
+                      onClick={(event) => runUpdateCheck(getUpdateCheckClickOptions(event))}
                     >
                       <RefreshCw />
                     </Button>
@@ -309,7 +308,7 @@ function UpdateStatusAction({
           // A disabled Check (a stuck macOS staging) can't take modifier clicks, so it drops the hint.
           title={disabled ? undefined : getUpdateCheckHint()}
           // Modifier clicks pick a one-off release track, not a saved setting.
-          onClick={(event) => void window.api.updater.check(getUpdateCheckClickOptions(event))}
+          onClick={(event) => runUpdateCheck(getUpdateCheckClickOptions(event))}
         >
           <span className="relative inline-grid place-items-center">
             <span className={busy ? 'opacity-0' : undefined}>
@@ -331,7 +330,7 @@ function UpdateStatusAction({
             'settings.updateDelay.skipDelayOnceHint',
             'Check for this release now. Your delay setting stays the same.'
           )}
-          onClick={() => void window.api.updater.check({ ignoreUpdateDelay: true })}
+          onClick={() => runUpdateCheck({ ignoreUpdateDelay: true })}
         >
           {t('settings.about.action.skipDelay', 'Skip delay')}
         </Button>

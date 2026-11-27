@@ -188,9 +188,9 @@ function getPrimaryModel(
       // Check.
       const action = canRetryInstall
         ? act('retry-install')
-        : status.retryable === false
+        : status.retryable === false || stuck
           ? act('check', false, stuck)
-          : act('retry-check', false, stuck)
+          : act('retry-check')
       if (status.installBlock) {
         return {
           line: { kind: 'install-blocked' },

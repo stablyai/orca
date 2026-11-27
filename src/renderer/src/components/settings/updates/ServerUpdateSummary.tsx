@@ -164,7 +164,12 @@ export function ServerUpdateSummary({
 }): React.JSX.Element {
   const t = useTranslate()
   if (armed) {
-    return <span className="text-status-warning-text">{getSessionsMayDropLabel(t)}</span>
+    // Wraps inside the summary's one-line slot, so a longer translation is never cut.
+    return (
+      <span className="whitespace-normal break-words text-status-warning-text">
+        {getSessionsMayDropLabel(t)}
+      </span>
+    )
   }
   const updating = entries.filter((entry) => UPDATING_PHASES.has(entry.phase)).length
   if (updating > 0) {

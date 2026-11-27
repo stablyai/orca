@@ -13379,7 +13379,8 @@
           "liveTabs": "{{value0}} 個使用中的分頁",
           "livePaneOne": "1 個使用中的窗格",
           "livePanes": "{{value0}} 個使用中的窗格",
-          "dca6780b3a": "更新遠端 Orca 伺服器"
+          "dca6780b3a": "更新遠端 Orca 伺服器",
+          "refreshFailed": "無法檢查已配對的伺服器。"
         },
         "RemoteServerUpdateStatus": {
           "checking": "檢查中…",

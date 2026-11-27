@@ -12781,7 +12781,8 @@
           "liveTabs": "{{value0}}개 활성 탭",
           "livePaneOne": "1개 활성 창",
           "livePanes": "{{value0}}개 활성 창",
-          "dca6780b3a": "원격 Orca 서버 업데이트"
+          "dca6780b3a": "원격 Orca 서버 업데이트",
+          "refreshFailed": "페어링된 서버를 확인할 수 없습니다."
         },
         "RemoteServerUpdateStatus": {
           "checking": "확인 중…",

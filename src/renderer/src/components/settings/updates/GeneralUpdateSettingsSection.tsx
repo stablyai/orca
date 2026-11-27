@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
@@ -57,6 +57,7 @@ export function GeneralUpdateSettingsSection({
   )
   // Hide channel switching behind Option/Alt-click because it can downgrade to unvetted builds.
   const [channelSwitcherRevealed, setChannelSwitcherRevealed] = useState(false)
+  const restartInFlight = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -71,18 +72,29 @@ export function GeneralUpdateSettingsSection({
   }, [])
 
   const handleRestartToUpdate = (): void => {
-    void window.api.updater.quitAndInstall().catch((error: unknown) => {
-      setFailedRestartTarget(installTarget)
-      if (!updateStatus.installOnQuit) {
-        toast.error(
-          t(
-            'auto.components.UpdateCard.restartToInstallFailed',
-            'Could not restart to install the update.'
-          ),
-          { description: error instanceof Error ? error.message : String(error) }
-        )
-      }
-    })
+    // One restart at a time: a second click while the first is in flight would race it.
+    if (restartInFlight.current) {
+      return
+    }
+    restartInFlight.current = true
+    void window.api.updater
+      .quitAndInstall()
+      .catch((error: unknown) => {
+        setFailedRestartTarget(installTarget)
+        // Read the status now, not when the click happened: macOS may have staged it meanwhile.
+        if (!useAppStore.getState().updateStatus.installOnQuit) {
+          toast.error(
+            t(
+              'auto.components.UpdateCard.restartToInstallFailed',
+              'Could not restart to install the update.'
+            ),
+            { description: error instanceof Error ? error.message : String(error) }
+          )
+        }
+      })
+      .finally(() => {
+        restartInFlight.current = false
+      })
   }
 
   const handleDownload = (): void => {

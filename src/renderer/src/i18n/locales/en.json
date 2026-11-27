@@ -13593,7 +13593,8 @@
           "liveTabs": "{{value0}} live tabs",
           "livePaneOne": "1 live pane",
           "livePanes": "{{value0}} live panes",
-          "dca6780b3a": "Update remote Orca servers"
+          "dca6780b3a": "Update remote Orca servers",
+          "refreshFailed": "Could not check paired servers."
         },
         "RemoteServerUpdateStatus": {
           "checking": "Checking…",

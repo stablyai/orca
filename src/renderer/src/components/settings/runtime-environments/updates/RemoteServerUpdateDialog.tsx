@@ -1,6 +1,6 @@
 import type React from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -108,11 +108,20 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
           value0: liveLeafCount
         })
 
+  // A failed refresh leaves the previous targets on screen; they stay visible but can't be updated
+  // until a retry succeeds.
+  const [refreshFailed, setRefreshFailed] = useState(false)
+  const runRefresh = useCallback((): void => {
+    void refresh().then(
+      () => setRefreshFailed(false),
+      () => setRefreshFailed(true)
+    )
+  }, [refresh])
   useEffect(() => {
     if (open) {
-      void refresh()
+      runRefresh()
     }
-  }, [open, refresh])
+  }, [open, runRefresh])
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -169,7 +178,7 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
                 <ServerUpdateRow
                   key={entry.environmentId}
                   entry={entry}
-                  disabled={running || checking}
+                  disabled={running || checking || refreshFailed}
                   onUpdate={() => void start([entry.environmentId])}
                 />
               ))}
@@ -185,6 +194,16 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
               'Checking paired servers…'
             )}
           </div>
+        ) : refreshFailed ? (
+          <p className="text-xs text-destructive">
+            {t(
+              'auto.components.settings.RemoteServerUpdateDialog.refreshFailed',
+              'Could not check paired servers.'
+            )}{' '}
+            <Button type="button" variant="link" size="inlineInherit" onClick={runRefresh}>
+              {t('auto.components.settings.RemoteServerUpdateDialog.retry', 'Retry')}
+            </Button>
+          </p>
         ) : allCurrent ? (
           <p className="text-xs text-muted-foreground">
             {t(
@@ -201,7 +220,7 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
               size="sm"
               autoFocus={eligible.length > 0}
               onClick={() => void start()}
-              disabled={checking || running}
+              disabled={checking || running || refreshFailed}
             >
               {t(
                 'auto.components.settings.RemoteServerUpdateDialog.updateAll',

@@ -71,7 +71,7 @@ describe('getUpdateStatusRowModel', () => {
     ).toEqual(['failed', 'check', false, 'message'])
     expect(row({ state: 'error', message: 'stuck', messageCode: 'macStagingTimeout' })).toEqual([
       'failed',
-      'retry-check',
+      'check',
       true,
       'message'
     ])

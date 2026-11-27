@@ -8990,7 +8990,8 @@
           "liveTabs": "{{value0}} abas ativas",
           "livePaneOne": "1 painel ativo",
           "livePanes": "{{value0}} painéis ativos",
-          "dca6780b3a": "Atualizar Servidores Orca Remotos"
+          "dca6780b3a": "Atualizar Servidores Orca Remotos",
+          "refreshFailed": "Não foi possível verificar os servidores pareados."
         },
         "PluginInstallDialog": {
           "localRequired": "Digite o caminho da pasta do plugin.",

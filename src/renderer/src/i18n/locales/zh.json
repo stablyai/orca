@@ -12667,7 +12667,8 @@
           "liveTabs": "{{value0}} 个活动标签页",
           "livePaneOne": "1 个活动窗格",
           "livePanes": "{{value0}} 个活动窗格",
-          "dca6780b3a": "更新远程 Orca 服务器"
+          "dca6780b3a": "更新远程 Orca 服务器",
+          "refreshFailed": "无法检查已配对的服务器。"
         },
         "RemoteServerUpdateStatus": {
           "checking": "检查中…",

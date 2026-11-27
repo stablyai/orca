@@ -13542,7 +13542,8 @@
           "liveTabs": "{{value0}} canlı sekme",
           "livePaneOne": "1 canlı bölme",
           "livePanes": "{{value0}} canlı bölme",
-          "dca6780b3a": "Uzak Orca Sunucularını Güncelle"
+          "dca6780b3a": "Uzak Orca Sunucularını Güncelle",
+          "refreshFailed": "Eşleştirilmiş sunucular kontrol edilemedi."
         },
         "RemoteServerUpdateStatus": {
           "checking": "Kontrol ediliyor…",

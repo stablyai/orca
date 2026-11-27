@@ -13320,7 +13320,8 @@
           "liveTabs": "{{value0}} onglets actifs",
           "livePaneOne": "1 volet actif",
           "livePanes": "{{value0}} volets actifs",
-          "dca6780b3a": "Mettre à jour les serveurs distants Orca"
+          "dca6780b3a": "Mettre à jour les serveurs distants Orca",
+          "refreshFailed": "Impossible de vérifier les serveurs associés."
         },
         "RemoteServerUpdateStatus": {
           "checking": "Vérification…",
