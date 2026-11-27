@@ -2,11 +2,9 @@
 # Lower after a fix: pnpm check:react-compiler-compat-ratchet --prune. Regenerate (compiler bump, reviewed exception): --update
 5 src/renderer/src/app-shell/chrome/TitlebarLeftControls.tsx
 3 src/renderer/src/app-shell/startup/use-app-startup-hydration.ts
-1 src/renderer/src/components/activity/terminal-portal/activity-terminal-portal-status.ts
 1 src/renderer/src/components/activity/thread-list/activity-thread-list-pane.tsx
 1 src/renderer/src/components/activity/thread-list/use-activity-thread-action-bindings.ts
 1 src/renderer/src/components/agent-session-continuation/AgentSessionContinuationDialog.tsx
-2 src/renderer/src/components/agent/AgentLaunchPickerMenu.tsx
 1 src/renderer/src/components/agent/AgentLaunchPickerMenuRow.tsx
 1 src/renderer/src/components/agent/AgentSettingsDialog.tsx
 2 src/renderer/src/components/agent/agent-launch-picker-drafts.ts
@@ -213,7 +211,6 @@
 8 src/renderer/src/components/native-chat/attachments/chips/use-native-chat-composer-attachments.ts
 2 src/renderer/src/components/native-chat/attachments/intake/use-native-chat-resolved-path-attachments.ts
 2 src/renderer/src/components/native-chat/composer/controls/NativeChatComposerToolbar.tsx
-1 src/renderer/src/components/native-chat/composer/editor/NativeChatComposerField.tsx
 9 src/renderer/src/components/native-chat/composer/editor/NativeChatPromptEditor.tsx
 1 src/renderer/src/components/native-chat/composer/editor/use-native-chat-composer-keydown.ts
 2 src/renderer/src/components/native-chat/composer/pickers/NativeChatAutocompleteMenus.tsx
@@ -313,7 +310,7 @@
 1 src/renderer/src/components/right-sidebar/ai-vault/panel/AiVaultPanel.tsx
 2 src/renderer/src/components/right-sidebar/ai-vault/scanning/AiVaultScanProgressStrip.tsx
 1 src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-association-observation.ts
-8 src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-session-refresh.ts
+6 src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-session-refresh.ts
 1 src/renderer/src/components/right-sidebar/ai-vault/search/AiVaultPanelSearch.tsx
 1 src/renderer/src/components/right-sidebar/ai-vault/search/use-ai-vault-search.ts
 2 src/renderer/src/components/right-sidebar/ai-vault/session-actions/ai-vault-session-delete-action.ts
@@ -421,14 +418,13 @@
 1 src/renderer/src/components/settings/navigation/use-settings-navigation-model.ts
 1 src/renderer/src/components/settings/navigation/useSettingsNavigationMetadata.ts
 1 src/renderer/src/components/settings/notifications/NotificationSoundSection.tsx
-2 src/renderer/src/components/settings/page/use-settings-interaction-controller.ts
+1 src/renderer/src/components/settings/page/use-settings-interaction-controller.ts
 6 src/renderer/src/components/settings/privacy/PrivacyDiagnosticsSection.tsx
 1 src/renderer/src/components/settings/privacy/PrivacyPane.tsx
 1 src/renderer/src/components/settings/quick-commands/QuickCommandsPane.tsx
 1 src/renderer/src/components/settings/repository/RepositoryFormatterSection.tsx
 3 src/renderer/src/components/settings/repository/RepositoryJiraProjectSection.tsx
 3 src/renderer/src/components/settings/repository/hosts/RepositoryHostSetupActions.tsx
-2 src/renderer/src/components/settings/repository/identity/RepositoryIconPicker.tsx
 2 src/renderer/src/components/settings/repository/source-control/RepositoryForkSyncSection.tsx
 2 src/renderer/src/components/settings/repository/source-control/RepositoryGitHubAccountSection.tsx
 9 src/renderer/src/components/settings/repository/source-control/repository-source-control-ai-global-ux.ts
@@ -446,7 +442,6 @@
 1 src/renderer/src/components/settings/session-history/SessionSearchAdvancedSection.tsx
 1 src/renderer/src/components/settings/shortcuts/ShortcutRecorderButton.tsx
 2 src/renderer/src/components/settings/source-control/AutoRenameBranchFromWorkSetting.tsx
-1 src/renderer/src/components/settings/source-control/CommitMessageAiPane.tsx
 1 src/renderer/src/components/settings/source-control/source-control-action-recipe-draft-state.ts
 1 src/renderer/src/components/settings/ssh/SshPane.tsx
 1 src/renderer/src/components/settings/ssh/server-actions/SshHostDeltaMoveDialog.tsx
@@ -654,13 +649,11 @@
 1 src/renderer/src/components/terminal-pane/mobile-driver/TerminalPaneMobileDriverPortals.tsx
 1 src/renderer/src/components/terminal-pane/mounting/use-terminal-pane-mount-lifecycle.ts
 1 src/renderer/src/components/terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking.ts
-1 src/renderer/src/components/terminal-pane/parking/retention/terminal-pending-startup-park-presence.ts
 1 src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/recovery/TerminalPaneRecoveryPortals.tsx
 2 src/renderer/src/components/terminal-pane/session-fork/TerminalAgentSessionForkDialog.tsx
 1 src/renderer/src/components/terminal-pane/titles/use-terminal-pane-title-state.ts
 2 src/renderer/src/components/terminal-pane/viewport/visibility/use-terminal-pane-process-visibility.ts
 1 src/renderer/src/components/terminal-pane/viewport/visibility/use-terminal-scroll-visibility-memory.ts
-2 src/renderer/src/components/terminal-pane/viewport/visibility/use-terminal-window-wake-recovery.ts
 1 src/renderer/src/components/terminal-quick-commands/TerminalQuickCommandAdvancedSection.tsx
 9 src/renderer/src/components/terminal-quick-commands/TerminalQuickCommandDialog.tsx
 1 src/renderer/src/components/terminal/keyboard-shortcuts/use-terminal-keyboard-shortcuts.ts
@@ -694,11 +687,8 @@
 6 src/renderer/src/hooks/skills/discovery/useInstalledAgentSkills.ts
 4 src/renderer/src/hooks/skills/freshness/useSkillFreshness.ts
 1 src/renderer/src/hooks/skills/installation/use-bundled-skill-install.ts
-1 src/renderer/src/components/dictation/use-audio-capture.ts
-2 src/renderer/src/lib/work-items/github/useGitHubTaskItems.ts
 2 src/renderer/src/hooks/useImmediateMutation.ts
 1 src/renderer/src/lib/agent-session/launch/inventory/host-chat-program-acquisition.ts
-2 src/renderer/src/lib/agent-session/launch/inventory/useDetectedAgents.ts
 2 src/renderer/src/lib/connector-setup-open.ts
 1 src/renderer/src/lib/files/search/quick-open-file-history.ts
 1 src/renderer/src/lib/list-interaction/use-windowed-command-virtualizer.ts
