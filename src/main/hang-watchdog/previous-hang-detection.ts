@@ -5,6 +5,7 @@ import { resolveObservabilityConsent } from '../observability'
 import { hasActiveTraceSink } from '../observability/tracer'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { hangCaptureDetails } from './hang-capture-details'
+import { findUnrecoveredStall } from './unrecovered-stall-selection'
 import {
   consumeHangDetectionMarker,
   hangDetectionMarkerPath,
@@ -145,32 +146,6 @@ function observationDetails(record: HangObservation, omitted: number): CrashRepo
     details[`completed${index}_endedAt`] = span.completedAt
   }
   return details
-}
-
-/** The previous run ended (force quit, kill, crash) during this stall: heartbeats never resumed and no sleep or gap explains it. */
-export function findUnrecoveredStall(
-  observations: readonly HangObservation[]
-): HangObservation | null {
-  // Last stall per run: a later launch's recovered stall must not hide an earlier run's unrecovered one.
-  const lastPerRun = new Map<number, HangObservation>()
-  for (const item of observations) {
-    if (item.kind === 'heartbeat-stall') {
-      lastPerRun.set(item.parentPid, item)
-    }
-  }
-  const record = [...lastPerRun.values()].findLast(
-    (item) => !item.selfRecovered && !item.resolution && !item.watchdogGap
-  )
-  if (
-    !record ||
-    record.selfRecovered ||
-    record.resolution ||
-    record.watchdogGap ||
-    record.powerEvents.some((item) => item.event === 'suspend')
-  ) {
-    return null
-  }
-  return record
 }
 
 export type PreviousHangDetection = {
