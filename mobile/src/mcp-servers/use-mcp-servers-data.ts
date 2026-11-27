@@ -116,19 +116,26 @@ export function useMcpServersData(hostId: string, client: RpcClient | null, enab
 
   const { refetch: refetchList } = list
   const { refetch: refetchDiscovered } = discovered
-  const { refetch: refetchAgents, isError: agentsFailed } = agents
+  const { refetch: refetchAgents } = agents
   // A host without the capability is never asked, even on focus.
   const reread = useCallback(() => {
     if (enabled) {
       // Joins a read already out (the mount's, or the host's notice) instead of sending another.
       void refetchList({ cancelRefetch: false })
       void refetchDiscovered({ cancelRefetch: false })
-      // A failed read (a stopped WSL distro) is retried; a held list keeps its long cache.
-      if (agentsFailed) {
+      // A failed read (a stopped WSL distro) is retried on focus; a held list keeps its long cache.
+      // Read here, not as a dependency, so the error itself cannot re-run this focus callback.
+      const agentsKey = hostQueryKey(
+        hostId,
+        agentsQuery.family,
+        HOST_LIST_TARGET,
+        NO_HOST_LIST_INPUT
+      )
+      if (queryClient.getQueryState(agentsKey)?.status === 'error') {
         void refetchAgents({ cancelRefetch: false })
       }
     }
-  }, [enabled, refetchList, refetchDiscovered, agentsFailed, refetchAgents])
+  }, [enabled, refetchList, refetchDiscovered, queryClient, hostId, refetchAgents])
   useFocusEffect(reread)
 
   /** A change's answer shows at once; the re-read after it catches what else changed. */

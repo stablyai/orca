@@ -31,12 +31,7 @@ export function useMcpServerAgents(target: RuntimeClientTarget): TuiAgent[] | nu
     () =>
       environmentId === null
         ? { kind: 'local' as const }
-        : // Servers apply to the agents in the host's configured Windows Agent runtime.
-          {
-            kind: 'runtime' as const,
-            environmentId,
-            hostScope: 'configured-windows-runtime' as const
-          },
+        : { kind: 'runtime' as const, environmentId },
     [environmentId]
   )
   const { detectedIds } = useDetectedAgents(detection, 'all')

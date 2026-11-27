@@ -1,7 +1,6 @@
 import { getRuntimeEnvironmentStatus } from '@/runtime/rpc/compatibility/runtime-compatibility-probe'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/preflight-runtime-capabilities'
-import type { RuntimeAgentHostScope } from './runtime-agent-inventory-key'
 
 export class RuntimeAgentDetectionNeedsServerUpdateError extends Error {
   constructor() {
@@ -20,15 +19,11 @@ export type NestedSshAgentDetection<T> = {
 export function callRuntimeAgentDetection<T>(
   environmentId: string,
   worktreeId: string | null | undefined,
-  call: (
-    params: { worktreeId: string } | { configuredWindowsRuntime: true } | undefined
-  ) => Promise<T>,
-  nestedSsh?: NestedSshAgentDetection<T>,
-  hostScope?: RuntimeAgentHostScope
+  call: (params: { worktreeId: string } | undefined) => Promise<T>,
+  nestedSsh?: NestedSshAgentDetection<T>
 ): Promise<T> {
   if (!worktreeId) {
-    // Older hosts drop the unknown flag and answer for the native host, as before.
-    return call(hostScope ? { configuredWindowsRuntime: true } : undefined)
+    return call(undefined)
   }
   const capability = PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY
   return runtimeEnvironmentSupportsCapability(environmentId, capability).then(async (supported) => {

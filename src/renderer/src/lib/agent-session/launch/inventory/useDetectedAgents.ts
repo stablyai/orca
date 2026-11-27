@@ -5,10 +5,7 @@ import { useRuntimeHostStatusViewSelector } from '@/store/slices/runtime-status/
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import { runtimeHostContactForEntry } from '../../../../../../shared/remote-runtime/host-status/runtime-host-contact'
-import {
-  getRuntimeAgentInventoryKey,
-  type RuntimeAgentHostScope
-} from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { observedAgentTargetsForGroup } from './observed-agent-targets'
 
@@ -31,12 +28,7 @@ export type AgentDetectionTarget =
   | { kind: 'local'; worktreeId?: string | null; contextKey?: string }
   | { kind: 'ssh'; connectionId: string }
   // worktreeId: the host resolves that workspace's runtime; absent means the host default.
-  | {
-      kind: 'runtime'
-      environmentId: string
-      worktreeId?: string | null
-      hostScope?: RuntimeAgentHostScope
-    }
+  | { kind: 'runtime'; environmentId: string; worktreeId?: string | null }
 
 function normalizeAgentDetectionTarget(
   target: AgentDetectionTarget | string | null | undefined
@@ -83,11 +75,10 @@ export function useDetectedAgents(
         : null
   const localWorktreeId = target?.kind === 'local' ? target.worktreeId : undefined
   const runtimeWorktreeId = target?.kind === 'runtime' ? target.worktreeId : undefined
-  const runtimeHostScope = target?.kind === 'runtime' ? target.hostScope : undefined
   // Records for a runtime host are per workspace; ssh/local records keep their own keys.
   const recordKey =
     targetKind === 'runtime' && targetId
-      ? getRuntimeAgentInventoryKey(targetId, runtimeWorktreeId, runtimeHostScope)
+      ? getRuntimeAgentInventoryKey(targetId, runtimeWorktreeId)
       : targetId
   const includeDisabled = inventory === 'all'
   const completeLocalContextKey = useAppStateValue((s) =>
@@ -197,7 +188,6 @@ export function useDetectedAgents(
     const state = useAppStore.getState()
     if (targetKind === 'runtime' && targetId) {
       return state.refreshRuntimeDetectedAgents(targetId, runtimeWorktreeId, {
-        hostScope: runtimeHostScope,
         userInitiated: true
       })
     }
@@ -211,15 +201,7 @@ export function useDetectedAgents(
           userInitiated: true
         })
       : state.refreshDetectedAgents(localWorktreeId, { wakeWslDistro: true, userInitiated: true })
-  }, [
-    includeDisabled,
-    isUnknown,
-    localWorktreeId,
-    runtimeWorktreeId,
-    runtimeHostScope,
-    targetKind,
-    targetId
-  ])
+  }, [includeDisabled, isUnknown, localWorktreeId, runtimeWorktreeId, targetKind, targetId])
 
   useEffect(() => {
     if (!viewActive || isUnknown) {
@@ -247,21 +229,20 @@ export function useDetectedAgents(
         void state.ensureRemoteDetectedAgents(targetId)
       }
     } else if (targetKind === 'runtime' && targetId) {
-      const runtimeScope = { hostScope: runtimeHostScope }
       const failedWhileOffline =
         runtimeContactEpoch === 'down' &&
         recordKey !== null &&
         state.runtimeAgentInventoryOutcome(recordKey) === 'failed'
       if (detectedIds === null) {
         if (!failedWhileOffline) {
-          void state.ensureRuntimeDetectedAgents(targetId, runtimeWorktreeId, runtimeScope)
+          void state.ensureRuntimeDetectedAgents(targetId, runtimeWorktreeId)
         }
       } else if (isNewRemoteTarget && detectedIds.length > 0) {
         // Refresh once when a new launch surface observes a host; cached inventory may predate installs.
-        void state.refreshRuntimeDetectedAgents(targetId, runtimeWorktreeId, runtimeScope)
+        void state.refreshRuntimeDetectedAgents(targetId, runtimeWorktreeId)
       } else if (isNewRemoteTarget) {
         // Empty results are intentionally retryable through the normal probe.
-        void state.ensureRuntimeDetectedAgents(targetId, runtimeWorktreeId, runtimeScope)
+        void state.ensureRuntimeDetectedAgents(targetId, runtimeWorktreeId)
       }
     } else {
       if (detectedIds === null && !localProbePending) {
@@ -286,7 +267,6 @@ export function useDetectedAgents(
     localProbePending,
     localWorktreeId,
     runtimeWorktreeId,
-    runtimeHostScope,
     localContextKey
   ])
 
