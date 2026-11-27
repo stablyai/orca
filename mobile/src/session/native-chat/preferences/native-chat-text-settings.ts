@@ -9,11 +9,8 @@ import { serifFontFamily } from '../../../theme/mobile-serif-font'
 import { CHAT_PROSE_SCALE } from '../transcript/messages/mobile-native-chat-message-styles'
 
 export const NATIVE_CHAT_TEXT_KEY = 'orca:nativeChatText'
-// Saves before serif became the default wrote `font: 'system'` with any size change; only a save marked
-// with this version means the reader picked System. An unmarked one (an older build, or a pinch on a page
-// an older host served) keeps the font storage last held.
+// Tag new writes with v: 2 so upstream pages that still gate System on this version honor them too.
 const SETTINGS_VERSION = 2
-let storedFont: NativeChatFont | null = null
 
 export type NativeChatFont = 'system' | 'serif' | 'mono'
 export type NativeChatLineSpacing = 'compact' | 'default' | 'relaxed'
@@ -68,17 +65,12 @@ function parseSettings(raw: string | null): NativeChatTextSettings | null {
   }
   const size = 'size' in parsed ? parsed.size : undefined
   const font = 'font' in parsed ? parsed.font : undefined
-  const pickedSystem = 'v' in parsed && parsed.v === SETTINGS_VERSION
   const lineSpacing = 'lineSpacing' in parsed ? parsed.lineSpacing : undefined
   const fallback = defaultNativeChatTextSettings()
   return {
     size: typeof size === 'number' ? clampNativeChatTextSize(size) : fallback.size,
-    font:
-      font === 'serif' || font === 'mono' || (font === 'system' && pickedSystem)
-        ? font
-        : font === 'system' && storedFont !== null
-          ? storedFont
-          : fallback.font,
+    // Honor saved System from pre-#49443 native apps (which omit `v: 2`) instead of forcing serif.
+    font: font === 'system' || font === 'serif' || font === 'mono' ? font : fallback.font,
     lineSpacing:
       lineSpacing === 'compact' || lineSpacing === 'default' || lineSpacing === 'relaxed'
         ? lineSpacing
@@ -153,9 +145,7 @@ subscribeMirroredKey(NATIVE_CHAT_TEXT_KEY, (raw, source) => {
 })
 
 function adoptStored(raw: string | null): void {
-  const settings = parseSettings(raw)
-  storedFont = settings?.font ?? null
-  adopt(settings)
+  adopt(parseSettings(raw))
 }
 // Read on load: a page's chat chunk loads after its storage arrives, so the first frame has the saved size.
 // An edit waits for this read, so it never merges into the defaults and overwrites what was saved.
@@ -169,16 +159,12 @@ function persist(settings: NativeChatTextSettings | null): Promise<void> {
   const change = changeCount
   adopt(settings)
   // Queue writes so a slower earlier save cannot land after a newer one.
-  const write = writes
-    .then(() =>
-      persistMirrored(
-        NATIVE_CHAT_TEXT_KEY,
-        settings === null ? null : JSON.stringify({ ...settings, v: SETTINGS_VERSION })
-      )
+  const write = writes.then(() =>
+    persistMirrored(
+      NATIVE_CHAT_TEXT_KEY,
+      settings === null ? null : JSON.stringify({ ...settings, v: SETTINGS_VERSION })
     )
-    .then(() => {
-      storedFont = settings?.font ?? null
-    })
+  )
   // A failed save shows what storage still holds, unless a newer change is on its way.
   writes = write.catch(() => {
     if (changeCount === change) {
