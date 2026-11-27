@@ -10,6 +10,7 @@ const LANGUAGE_ENTRIES: readonly LanguageEntry[] = [
   ['', 'auto.components.editor.RichMarkdownCodeBlock.13822cdfda', 'Plain text'],
   ['bash', 'auto.components.editor.RichMarkdownCodeBlock.4227cf50fe', 'Bash'],
   ['c', null, 'C'],
+  ['carousel', null, 'carousel'],
   ['cpp', 'auto.components.editor.RichMarkdownCodeBlock.4daed43ae3', 'C++'],
   ['css', 'auto.components.editor.RichMarkdownCodeBlock.026653f21f', 'CSS'],
   ['diff', 'auto.components.editor.RichMarkdownCodeBlock.bf6ee5caaa', 'Diff'],
