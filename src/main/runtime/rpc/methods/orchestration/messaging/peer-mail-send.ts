@@ -24,6 +24,10 @@ import {
   forgetPeerQuestionOut,
   recordPeerQuestionOut
 } from '../../../../orchestration/federation/peer-mail/peer-questions-out'
+import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { requestAskersOf } from '../../../../../bots/bot-request-askers-of'
+import { orchestrationCallerIdentity } from '../runs/run-scope'
+import { readActingSender } from './bot-recipient'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -65,6 +69,22 @@ export async function sendPeerMail(args: {
   const toBot =
     parseBotAddress(to) !== null || params.chat !== undefined || params.item !== undefined
   const server = await requirePeerMailServer(runtime, params.on, toBot, type)
+  // Who the sending turn acts for, as a local send records it, so the receiver never reads it as the owner's alone.
+  const acting = toBot
+    ? await readActingSender(
+        runtime,
+        runtime.getOrchestrationDb(),
+        sessionCallerOf(args.orchestrationCaller)?.sessionId,
+        {
+          sender: orchestrationCallerIdentity(runtime, {
+            handle: caller.address,
+            paneKey: caller.paneKey,
+            session: args.orchestrationCaller
+          })
+        },
+        null
+      )
+    : null
   const conversation = runtime.getOrchestrationDb().openHomePeerMailConversation({
     environmentId: server.environmentId,
     peerFingerprint: peerMailPairing(server),
@@ -111,7 +131,8 @@ export async function sendPeerMail(args: {
       chat: params.chat,
       item: params.item,
       attachments,
-      sender: peerMailSender(runtime, caller.address)
+      sender: peerMailSender(runtime, caller.address),
+      ...(acting ? { askers: requestAskersOf(acting.turn) } : {})
     })
     warnings.push(...held)
   } catch (error) {

@@ -17,6 +17,7 @@ import {
 } from '../../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { makeTestBot } from '../../../../../bots/bot.test-fixture'
+import { turnActsForOwner } from '../../../../../bots/bot-request-asker'
 import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -212,22 +213,47 @@ describe('agent mail between paired Orca servers', () => {
     return side.db.getUnreadMessages(handle)
   }
 
-  function receivingBotHome(held = false): string[] {
-    const sessionId = CHAT_ON_B.slice('orca_session_id:'.length)
-    const bot = makeTestBot({ name: 'Docs', agent: 'claude', chatSessionId: sessionId })
+  function botChat(name: string, sessionId: string) {
+    const bot = makeTestBot({ name, agent: 'claude', chatSessionId: sessionId })
     const saved = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
     const record = agentSessionConversationView({
       ...saved,
       location: { ...saved.location, workspaceId: folderWorkspaceKey(bot.folderWorkspaceId) }
     })
+    return { bot, record }
+  }
+
+  /** `sending`: a bot on A whose chat's running turn opened with this message. */
+  function receivingBotHome(held = false, sending?: { opener: unknown }): string[] {
+    const sessionId = CHAT_ON_B.slice('orca_session_id:'.length)
+    const { bot, record } = botChat('Docs', sessionId)
+    const senderId = CHAT_ON_A.slice('orca_session_id:'.length)
+    const sender = botChat('Scout', senderId)
+    const items = sending
+      ? [
+          { itemId: 'u1', revision: 1, sequence: 1, observedAt: 1, body: sending.opener },
+          {
+            itemId: 't1',
+            revision: 1,
+            sequence: 2,
+            observedAt: 2,
+            body: { kind: 'turn', turnId: 'p1', state: 'running', userItemId: 'u1' }
+          }
+        ]
+      : []
     const notes: string[] = []
     const host = {
       deps: {
         store: {
-          getConversation: (id: string) => (id === sessionId ? record : null),
+          getConversation: (id: string) =>
+            id === sessionId ? record : sending && id === senderId ? sender.record : null,
           listConversations: () => [record]
         }
       },
+      journalReads: async () => ({
+        promptItem: async () => items[0] ?? null,
+        operationWindow: async () => ({ complete: true, snapshot: { items, submissions: [] } })
+      }),
       conversation: async () => ({
         journal: { queuedMessages: { failureHolds: async () => held } }
       }),
@@ -243,7 +269,34 @@ describe('agent mail between paired Orca servers', () => {
     vi.spyOn(b.runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
     vi.spyOn(b.runtime, 'publishStructuredAgentSessionTab').mockResolvedValue()
     vi.spyOn(b.runtime, 'notifyMessageArrived').mockImplementation(() => {})
+    if (sending) {
+      vi.spyOn(a.runtime.bots, 'list').mockReturnValue([sender.bot])
+      vi.spyOn(a.runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
+    }
     return notes
+  }
+
+  async function botAsksAcross(opener: unknown) {
+    receivingBotHome(false, { opener })
+    const send = ORCHESTRATION_METHODS.find((method) => method.name === 'orchestration.send')!
+    const sessionId = CHAT_ON_A.slice('orca_session_id:'.length)
+    const context = {
+      runtime: a.runtime,
+      orchestrationCaller: {
+        address: CHAT_ON_A,
+        terminalHandle: null,
+        orcaSessionId: sessionId,
+        sessionId,
+        paneKey: null
+      }
+    }
+    await send.handler(
+      { from: CHAT_ON_A, on: 'devB', to: 'bot:Docs', subject: 'Review it', type: 'question' },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
+      context as unknown as RpcContext
+    )
+    const [message] = mailFor(b, CHAT_ON_B)
+    return JSON.parse(b.db.getBotRequest(message!.id)!.record)
   }
 
   async function requestFromPeer(sender: PeerMailSender | undefined, machine: string) {
@@ -308,6 +361,63 @@ describe('agent mail between paired Orca servers', () => {
     await vi.waitFor(() =>
       expect(mailFor(a, CHAT_ON_A)).toMatchObject([{ body: 'Looks good.', to_handle: CHAT_ON_A }])
     )
+  })
+
+  it("holds a teammate's turn on A to the teammate on B, never to the owner alone", async () => {
+    const record = await botAsksAcross({
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'ask Docs to review' }],
+      origin: 'connector',
+      asker: {
+        source: 'slack',
+        userId: 'U_DANA',
+        name: 'Dana',
+        role: 'member',
+        place: { kind: 'public_channel', id: 'C1' }
+      }
+    })
+    const dana = { kind: 'person', source: 'slack', userId: 'U_DANA', name: 'Dana', role: 'member' }
+    expect(record.askers).toMatchObject([{ kind: 'owner' }, dana])
+    expect(record.askedBy).toMatchObject([{ kind: 'owner' }, dana])
+    expect(turnActsForOwner({ askers: record.askers })).toBe(false)
+  })
+
+  it("keeps the owner's own turn on A the owner's on B", async () => {
+    const record = await botAsksAcross({
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'ask Docs to review' }],
+      typedBy: { by: 'host' }
+    })
+    expect(record.askers).toEqual([{ kind: 'owner' }])
+    expect(turnActsForOwner({ askers: record.askers })).toBe(true)
+  })
+
+  it('reads an asker it does not know as someone it cannot name, and ignores fields it does not know', async () => {
+    receivingBotHome()
+    const { conversation_id } = a.db.openHomePeerMailConversation({
+      environmentId: 'env_b',
+      peerFingerprint: 'fingerprint_b',
+      localParty: CHAT_ON_A,
+      localPaneKey: null
+    })
+    const result = await transport.call('devB', 'orchestration.peerMailDeliver', {
+      conversationId: conversation_id,
+      messageId: 'msg_aaaaaaaaaaaa',
+      to: 'bot:Docs',
+      senderLabel: `${CHAT_ON_A} on Laptop`,
+      subject: 'Review the sidebar',
+      type: 'question',
+      askers: [{ kind: 'owner' }, { kind: 'team', id: 'T9' }],
+      // A field from a newer Orca, as an older one reads `askers`.
+      fromLaterOrca: { depth: 2 }
+    })
+    expect(result).toMatchObject({ ok: true })
+    const [message] = mailFor(b, CHAT_ON_B)
+    const record = JSON.parse(b.db.getBotRequest(message!.id)!.record)
+    expect(record.askers).toEqual([{ kind: 'owner' }, { kind: 'unknown' }])
+    expect(turnActsForOwner({ askers: record.askers })).toBe(false)
   })
 
   it.each([
