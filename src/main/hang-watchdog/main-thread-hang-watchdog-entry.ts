@@ -217,20 +217,8 @@ export function runWatchdog(
       openReceiptWindow(id)
       reportRecovered(id, unresponsiveMs, endedAt)
     },
-    onEpisodeEndedBySleep: () => {
+    onStallEndedBySleep: () => {
       activeStallId = null
-    },
-    onEpisodeRecoveredAfterSleep: (unresponsiveMs) => {
-      const record = activeStallId ? find(activeStallId) : undefined
-      activeStallId = null
-      if (!record) {
-        return
-      }
-      // No resolution snapshot: its wall time would count the sleep as silence.
-      update(record.id, { selfRecovered: true })
-      openReceiptWindow(record.id)
-      const endedAt = record.detectedAt - record.durationMs + unresponsiveMs
-      reportRecovered(record.id, unresponsiveMs, endedAt)
     },
     onStallMissed: (durationMs, startedAt) => {
       const endedAt = Date.now()
@@ -275,9 +263,6 @@ export function runWatchdog(
         sleepPeriod = { suspend: receipt, resumeAt: null }
       } else if (receipt.event === 'resume' && sleepPeriod) {
         sleepPeriod.resumeAt = receipt.observedAt
-      }
-      if (receipt.event === 'suspend' || receipt.event === 'resume') {
-        loop.recordPowerEvent(receipt.event)
       }
       if (
         receiptWindow &&

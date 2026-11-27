@@ -11,17 +11,13 @@ export type HangWatchdogDetectionLoopConfig = {
   onHangResolved: (unresponsiveMs: number) => void
   /** Heartbeats resumed after a stall no tick saw; its evidence can only be gathered afterwards. */
   onStallMissed?: (unresponsiveMs: number, startedAt: number) => void
-  /** A new episode began after a sleep interrupted the last one, which main never answered. */
-  onEpisodeEndedBySleep?: () => void
-  /** Main answered after a sleep interrupted an episode; the silence stops at the sleep. */
-  onEpisodeRecoveredAfterSleep?: (unresponsiveMs: number) => void
+  /** A sleep interrupted a detected stall; its silence after this point belongs to the machine. */
+  onStallEndedBySleep?: () => void
   onWatchdogGap?: (gapMs: number, startedAt: number) => void
 }
 
 export type HangWatchdogDetectionLoop = {
   recordHeartbeat: () => void
-  /** Main relayed a suspend or resume, so it answered then; silence after a suspend is the machine's until main answers again. */
-  recordPowerEvent: (event: 'suspend' | 'resume') => void
   tick: () => void
 }
 
@@ -36,59 +32,27 @@ export function createHangWatchdogDetectionLoop(
   let detected: 'stall' | 'hang' | null = null
   // A heartbeat received while the tick was overdue came after the wake; the overdue tick keeps it.
   let wokeHeartbeat = false
-  // A sleep shorter than sleepGapMs leaves no tick gap, so after a suspend only main's next answer restarts the clock.
-  let awaitingWake = false
-  // Silence before a sleep that interrupted a detected episode, until main answers or a new episode begins.
-  let sleptEpisodeMs: number | null = null
-  const interruptBySleep = (sleptAt: number): void => {
-    sleptEpisodeMs = Math.max(0, sleptAt - lastHeartbeatAt)
-    detected = null
-  }
-  const resolveSleptEpisode = (): void => {
-    if (sleptEpisodeMs !== null) {
-      config.onEpisodeRecoveredAfterSleep?.(sleptEpisodeMs)
-      sleptEpisodeMs = null
-    }
-  }
   return {
     recordHeartbeat: () => {
       const now = config.now()
       const silentMs = now - lastHeartbeatAt
-      if (detected && now - lastTickAt > sleepGapMs) {
+      if (detected === 'stall' && now - lastTickAt > sleepGapMs) {
         // Woke before the overdue tick: report and consume its gap first, in the tick's order, so it attaches to this stall.
         const tickGap = now - lastTickAt
         if (tickGap > config.timeoutMs) {
           config.onWatchdogGap?.(tickGap, lastTickAt)
         }
-        interruptBySleep(lastTickAt)
         lastTickAt = now
-        resolveSleptEpisode()
+        detected = null
+        config.onStallEndedBySleep?.()
       } else if (detected) {
         detected = null
         config.onHangResolved(silentMs)
-      } else if (
-        !awaitingWake &&
-        stallMs !== null &&
-        silentMs > stallMs &&
-        now - lastTickAt <= sleepGapMs
-      ) {
+      } else if (stallMs !== null && silentMs > stallMs && now - lastTickAt <= sleepGapMs) {
         // A tick-gap reset already moved lastHeartbeatAt past any sleep, so this silence was main's.
         config.onStallMissed?.(silentMs, lastHeartbeatAt)
       }
-      resolveSleptEpisode()
       wokeHeartbeat ||= now - lastTickAt > sleepGapMs
-      awaitingWake = false
-      lastHeartbeatAt = now
-    },
-    recordPowerEvent: (event) => {
-      const now = config.now()
-      if (detected) {
-        // Only a responsive main relays power events, so the episode ended here.
-        detected = null
-        config.onHangResolved(now - lastHeartbeatAt)
-      }
-      resolveSleptEpisode()
-      awaitingWake = event === 'suspend'
       lastHeartbeatAt = now
     },
     tick: () => {
@@ -101,34 +65,21 @@ export function createHangWatchdogDetectionLoop(
         if (tickGap > config.timeoutMs) {
           config.onWatchdogGap?.(tickGap, now - tickGap)
         }
-        if (detected) {
-          interruptBySleep(now - tickGap)
+        if (detected === 'stall') {
+          detected = null
+          config.onStallEndedBySleep?.()
         }
         // A wake heartbeat older than a sleep gap predates another sleep; it no longer marks main's start.
         if (!detected && !(wokeHeartbeat && now - lastHeartbeatAt <= sleepGapMs)) {
           lastHeartbeatAt = now
         }
         wokeHeartbeat = false
-        // The tick saw the sleep, so the silence after the wake is main's again.
-        awaitingWake = false
         return
       }
       if (detected === 'hang') {
         return
       }
-      if (awaitingWake) {
-        if (now - lastHeartbeatAt <= config.timeoutMs + sleepGapMs) {
-          return
-        }
-        // Main never answered: count it unresponsive, less the longest sleep a tick cannot see.
-        awaitingWake = false
-        lastHeartbeatAt += sleepGapMs
-      }
       const unresponsiveMs = now - lastHeartbeatAt
-      if (sleptEpisodeMs !== null && !detected && unresponsiveMs > (stallMs ?? config.timeoutMs)) {
-        sleptEpisodeMs = null
-        config.onEpisodeEndedBySleep?.()
-      }
       if (unresponsiveMs > config.timeoutMs) {
         detected = 'hang'
         config.onHangDetected(unresponsiveMs)
