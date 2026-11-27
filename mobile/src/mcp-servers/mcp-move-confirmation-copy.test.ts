@@ -18,17 +18,32 @@ function callerDefault(): string {
   const match = /'mcpServers\.moveMessage',\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/.exec(actions)
   expect(match).not.toBeNull()
   const literal = match![1]!
-  return literal.startsWith('"')
-    ? (JSON.parse(literal) as string)
-    : (JSON.parse(
-        `"${literal.slice(1, -1).replaceAll("\\'", "'").replaceAll('"', '\\"')}"`
-      ) as string)
+  return parseString(
+    literal.startsWith('"')
+      ? literal
+      : `"${literal.slice(1, -1).replaceAll("\\'", "'").replaceAll('"', '\\"')}"`
+  )
 }
+
+/** A JSON string literal's value, refusing anything that isn't a string. */
+function parseString(json: string): string {
+  const value: unknown = JSON.parse(json)
+  if (typeof value !== 'string') {
+    throw new Error(`not a string literal: ${json}`)
+  }
+  return value
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+const leaf = (catalog: unknown, key: string): unknown =>
+  key.split('.').reduce<unknown>((node, part) => (isRecord(node) ? node[part] : undefined), catalog)
 
 describe('phone Move confirmation copy', () => {
   it('caller default and en.json carry the reviewed text', () => {
     expect(callerDefault()).toBe(TEXT)
-    expect((en as { mcpServers: Record<string, unknown> }).mcpServers.moveMessage).toBe(TEXT)
+    expect(leaf(en, KEY)).toBe(TEXT)
     expect(Buffer.byteLength(TEXT, 'utf8')).toBe(205)
     expect(TEXT.match(/\{\{[^}]+\}\}/g)).toEqual(['{{agents}}'])
     expect(TEXT).not.toContain('’')
@@ -36,9 +51,7 @@ describe('phone Move confirmation copy', () => {
 
   it('English shows the caller default, with the agents filled in', async () => {
     // Not in the boot bundle, so English resolves the call site's default (the missing-resource path).
-    expect(
-      (enRuntimeRequired as { mcpServers?: Record<string, unknown> }).mcpServers?.moveMessage
-    ).toBeUndefined()
+    expect(leaf(enRuntimeRequired, KEY)).toBeUndefined()
     const agents = 'Claude Code, Codex, and Cursor'
     const expected = TEXT.replace('{{agents}}', agents)
     expect(translate(KEY, callerDefault(), { agents })).toBe(expected)

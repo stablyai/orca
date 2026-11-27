@@ -13,7 +13,7 @@ const sent: { method: string; params: unknown }[] = []
 const client: RpcClient = {
   sendRequest: async (method: string, params?: unknown): Promise<RpcResponse> => {
     sent.push({ method, params })
-    return { id: '1', ok: false, error: { code: 'synthetic', message: 'synthetic' } } as RpcResponse
+    return { id: '1', ok: false, error: { code: 'synthetic', message: 'synthetic' } }
   },
   subscribe: () => () => {},
   updateTerminalSubscriptionViewport: () => {},
@@ -39,18 +39,17 @@ function Harness() {
   return null
 }
 
-const entry = (removesFrom?: string[]): PhoneDiscoveredMcpServer =>
-  ({
-    key: 'alpha-key',
-    name: 'alpha',
-    detail: 'https://alpha.example.test/mcp',
-    transport: 'http',
-    agents: ['codex', 'cursor'],
-    ...(removesFrom ? { removesFrom } : {}),
-    files: [],
-    projectNames: [],
-    movable: true
-  }) as PhoneDiscoveredMcpServer
+const entry = (removesFrom?: string[]): PhoneDiscoveredMcpServer => ({
+  key: 'alpha-key',
+  name: 'alpha',
+  detail: 'https://alpha.example.test/mcp',
+  transport: 'http',
+  agents: ['codex', 'cursor'],
+  ...(removesFrom ? { removesFrom } : {}),
+  files: [],
+  projectNames: [],
+  movable: true
+})
 
 const settle = () =>
   act(async () => {

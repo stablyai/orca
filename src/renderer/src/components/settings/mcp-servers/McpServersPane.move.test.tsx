@@ -10,7 +10,7 @@ import { ConfirmationDialogProvider } from '@/components/dismiss/confirmation/co
 import { McpServersPane } from './McpServersPane'
 
 type Pending = { method: string; params: Record<string, unknown>; settle: (ok: boolean) => void }
-const rpc = vi.hoisted(() => ({ calls: [] as Pending[] }))
+const rpc = vi.hoisted((): { calls: Pending[] } => ({ calls: [] }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (_target: unknown, method: string, params: Record<string, unknown>) =>
     new Promise((resolve, reject) => {
@@ -25,7 +25,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
     })
 }))
 
-const discovered = vi.hoisted(() => ({ servers: [] as DiscoveredMcpServer[] }))
+const discovered = vi.hoisted((): { servers: DiscoveredMcpServer[] } => ({ servers: [] }))
 vi.mock('./use-mcp-servers', () => ({
   useStableMcpTarget: (target: unknown) => target,
   useMcpServers: () => ({

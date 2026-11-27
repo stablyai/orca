@@ -25,15 +25,27 @@ function callerDefault(key: string): string {
   ).exec(pane)
   expect(match, `${key} default`).not.toBeNull()
   const literal = match![1]!
-  return literal.startsWith('"')
-    ? (JSON.parse(literal) as string)
-    : (JSON.parse(
-        `"${literal.slice(1, -1).replaceAll("\\'", "'").replaceAll('"', '\\"')}"`
-      ) as string)
+  return parseString(
+    literal.startsWith('"')
+      ? literal
+      : `"${literal.slice(1, -1).replaceAll("\\'", "'").replaceAll('"', '\\"')}"`
+  )
 }
 
+/** A JSON string literal's value, refusing anything that isn't a string. */
+function parseString(json: string): string {
+  const value: unknown = JSON.parse(json)
+  if (typeof value !== 'string') {
+    throw new Error(`not a string literal: ${json}`)
+  }
+  return value
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
 const leaf = (catalog: unknown, key: string): unknown =>
-  key.split('.').reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], catalog)
+  key.split('.').reduce<unknown>((node, part) => (isRecord(node) ? node[part] : undefined), catalog)
 
 describe('desktop Move confirmation copy', () => {
   it.each(COPY)('%s: caller default and en.json carry the reviewed text', (key, text, bytes) => {

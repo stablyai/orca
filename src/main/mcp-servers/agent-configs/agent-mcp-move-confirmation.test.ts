@@ -9,24 +9,27 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setMcpAgentFileAllowed } from '../mcp-host-list'
 import { addMcpServers } from '../mcp-host-list-add'
+import { mcpAgentFileEntryName } from '../agent-files/mcp-agent-file-entry'
 import { McpAgentFileLedger } from '../agent-files/mcp-agent-file-ledger'
 import { syncMcpAgentFiles } from '../agent-files/mcp-agent-file-sync'
 import { AgentMcpConfigEditError } from './agent-mcp-config-removal'
+import type * as AgentMcpConfigRemoval from './agent-mcp-config-removal'
 import {
   listAgentMcpServers,
   moveAgentMcpServer,
   type AgentMcpImportHost
 } from './agent-mcp-import'
 
-const spy = vi.hoisted(() => ({
+type Spy = {
   /** Each file Move asked the removal step to edit, in order. */
-  removalPaths: [] as string[],
+  removalPaths: string[]
   /** A file whose backup copy fails, so its edit must not happen. */
-  failBackupOf: null as string | null
-}))
+  failBackupOf: string | null
+}
+const spy = vi.hoisted((): Spy => ({ removalPaths: [], failBackupOf: null }))
 
 vi.mock('./agent-mcp-config-removal', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./agent-mcp-config-removal')>()
+  const actual = await importOriginal<typeof AgentMcpConfigRemoval>()
   return {
     ...actual,
     removeAgentMcpServerEntries: (
@@ -288,7 +291,8 @@ describe('Move and a later consented agent-file sync', () => {
     await setMcpAgentFileAllowed('cursor', true, folder)
     await sync()
     const afterPriorSync = read(B)
-    expect(afterPriorSync).toMatch(/"postgres-orca-[0-9a-f]+"/)
+    // The entry name production writes: <server>-<data folder>-<hash>.
+    expect(afterPriorSync).toContain(`"${mcpAgentFileEntryName('postgres', userDataPath)}"`)
     spy.removalPaths = []
 
     // Sync held (never run) for the whole Move: only Move's own edit reaches B.
@@ -307,7 +311,7 @@ describe('Move and a later consented agent-file sync', () => {
       folder
     )
     await sync()
-    expect(read(B)).toMatch(/"context7-orca-[0-9a-f]+"/)
+    expect(read(B)).toContain(`"${mcpAgentFileEntryName('context7', userDataPath)}"`)
     expect(read(`${B}.bak`)).toBe(afterMove)
     expect(existsSync(join(folder, '.orca', 'agent-files-ledger.json'))).toBe(true)
   })
