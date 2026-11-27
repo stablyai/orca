@@ -581,8 +581,19 @@ it('throws on any teammate write of the host’s list or window in their Home, a
   const r = await rig({ home: 'other' })
   await r.reveal('owner-desk', O)
   const focused: string[] = []
-  const notifier = { focusTerminal: (_tab: string, worktreeId: string) => focused.push(worktreeId) }
-  r.runtime.setNotifier(notifier as unknown as RuntimeNotifier)
+  const notifier: RuntimeNotifier = {
+    worktreesChanged: vi.fn(),
+    reposChanged: vi.fn(),
+    activateWorktree: vi.fn(),
+    createTerminal: vi.fn(),
+    splitTerminal: vi.fn(),
+    renameTerminal: vi.fn(),
+    closeTerminal: vi.fn(),
+    terminalFitOverrideChanged: vi.fn(),
+    terminalDriverChanged: vi.fn(),
+    focusTerminal: (_tab, worktreeId) => void focused.push(worktreeId)
+  }
+  r.runtime.setNotifier(notifier)
   const store = r.runtime.mobileSessionTabsByWorktree
   const worker = store.get(r.workspace)!
   const homeList = { ...worker, worktree: r.home }

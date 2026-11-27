@@ -15,9 +15,7 @@ import { withTeammateLists } from './teammate-workspace-lists'
 type Admitted = { method: RpcMethod | RpcStreamingMethod; params: unknown }
 
 function namedObject(params: unknown, key: string): unknown {
-  return typeof params === 'object' && params !== null && key in params
-    ? (params as Record<string, unknown>)[key]
-    : null
+  return typeof params === 'object' && params !== null ? Reflect.get(params, key) : null
 }
 
 /** `worktree` as a call names it, at the top level or in a launch's `target`. */
