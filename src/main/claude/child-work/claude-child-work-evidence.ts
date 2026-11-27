@@ -8,7 +8,14 @@ import type {
   AgentChildWorkEvidence,
   AgentChildWorkLiveObservation
 } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
-import { taskText, taskUsageTotalTokens } from '../background-tasks/claude-background-task-frames'
+import {
+  liveClaudeTaskRunState,
+  record,
+  taskAliasId,
+  taskId,
+  taskText,
+  taskUsageTotalTokens
+} from '../background-tasks/claude-background-task-frames'
 import type { ClaudeSession } from '../structured/claude-structured-session-state'
 import type { ClaudeStructuredSessionEvent } from '../structured/lifecycle/claude-structured-session-event'
 import { deriveToolInputPreview } from '../../../shared/agent-hook-listener/tool-input-preview'
@@ -37,6 +44,23 @@ export type DecodedClaudeTask = {
   parentTaskId?: string
   /** Runs `orca orchestration check --wait`: waiting on worker agents, so agent work. */
   awaitsAgents?: true
+}
+
+/** One roster entry the decoder settles against: its run id, whether it reads live, and its raw record. */
+export type ClaudeRosterEntry = { id: string; live: boolean; task: Record<string, unknown> }
+
+/** `background_tasks_changed` tasks as entries; a malformed entry is skipped rather than read as an ending. */
+export function claudeRosterEntries(tasks: readonly unknown[]): ClaudeRosterEntry[] {
+  return tasks.flatMap((entry) => {
+    const task = record(entry)
+    const id = task && taskId(task)
+    return task && id ? [{ id, live: liveClaudeTaskRunState(task.status) !== null, task }] : []
+  })
+}
+
+/** The alias id a roster entry's spawn call uses, for parent lookups. */
+export function claudeRosterAliasId(task: Record<string, unknown>): string | undefined {
+  return taskAliasId(task.tool_use_id)
 }
 
 export function claudeChildWorkObservation(
