@@ -9,12 +9,16 @@ import {
 import type { PluginCapabilityKind } from '../capabilities/plugin-capabilities'
 import { PLUGIN_EDITOR_TYPOGRAPHY_SINCE } from '../workers/plugin-host-api-editor-typography'
 
+export const PLUGIN_AGENT_ATTENTION_SINCE = '1.4.281'
+export const PLUGIN_AGENT_ATTENTION_HOST_API_MINOR = 11
+
 /** Domain events a plugin can subscribe to in v0. Closed set: server-side
  *  filtering means plugins only ever receive what they subscribed to. */
 export const PLUGIN_EVENT_NAMES = [
   'workspace.created',
   'workspace.removed',
   'agent.status.changed',
+  'agent.attention',
   'workspace.changed',
   'editor.typography.changed'
 ] as const
@@ -27,6 +31,7 @@ export const PLUGIN_EVENT_SINCE: Record<PluginEventName, string> = {
   'workspace.created': PLUGIN_MANIFEST_V2_SINCE,
   'workspace.removed': PLUGIN_MANIFEST_V2_SINCE,
   'agent.status.changed': PLUGIN_SCHEMA_SINCE_V1,
+  'agent.attention': PLUGIN_AGENT_ATTENTION_SINCE,
   'workspace.changed': PLUGIN_PANEL_BRIDGE_SINCE,
   'editor.typography.changed': PLUGIN_EDITOR_TYPOGRAPHY_SINCE
 }
@@ -43,6 +48,7 @@ export const PLUGIN_EVENT_CAPABILITY: Record<PluginEventName, PluginCapabilityKi
   'workspace.created': 'workspace:read',
   'workspace.removed': 'workspace:read',
   'agent.status.changed': 'agent:read',
+  'agent.attention': 'agent:read',
   'workspace.changed': 'workspace:read',
   'editor.typography.changed': null
 }

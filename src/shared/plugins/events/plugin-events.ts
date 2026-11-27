@@ -96,10 +96,24 @@ export const workspaceChangedPayloadSchema = lazyZodSchema(() =>
   })
 )
 
+export const agentAttentionPayloadSchema = lazyZodSchema(() =>
+  z.object({
+    workspaceId: z.string().min(1).max(2048).nullable(),
+    paneKey: z.string().min(1).max(2048).optional(),
+    sessionId: pluginAgentSessionIdSchema.optional(),
+    executionHost: z.string().min(1).max(2048).optional(),
+    surface: z.enum(['terminal', 'agent-session']),
+    reason: z.enum(['needs-input', 'turn-ended']),
+    outcome: z.enum(AGENT_TURN_OUTCOMES).optional(),
+    automation: z.literal(true).optional()
+  })
+)
+
 export const PLUGIN_EVENT_PAYLOAD_SCHEMAS = {
   'workspace.created': workspaceCreatedPayloadSchema,
   'workspace.removed': workspaceRemovedPayloadSchema,
   'agent.status.changed': agentStatusChangedPayloadSchema,
+  'agent.attention': agentAttentionPayloadSchema,
   'workspace.changed': workspaceChangedPayloadSchema,
   'editor.typography.changed': pluginEditorTypographySchema
 } satisfies Record<PluginEventName, z.ZodType>
@@ -112,6 +126,8 @@ export const PLUGIN_EVENT_SUMMARIES: Record<PluginEventName, string> = {
     'A worktree workspace was removed; `workspaceListId` (host API 1.7) is the id `workspace.list` gave it.',
   'agent.status.changed':
     'An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, `workspaceListId` (host API 1.7) is the id `workspace.list` gives that workspace, `terminalId` names its terminal when Orca lists it, and `sessionId` (host API 1.8) is what `agent.resume` takes.',
+  'agent.attention':
+    'A terminal or chat reached the desktop notification decision (host API 1.11). Follows Orca’s attention, mute, focus and cooldown rules. It can replace native banners when desktop notification switches are off. `sessionId` identifies a structured chat when known, `executionHost` identifies a paired runtime, and `automation` marks a terminal pane matched to an active automation run on this Orca.',
   'workspace.changed':
     'The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers, its `workspaceId` included. Each new subscriber first gets the current context.',
   'editor.typography.changed':

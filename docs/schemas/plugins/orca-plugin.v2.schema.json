@@ -208,9 +208,9 @@
         },
         "events": {
           "default": [],
-          "description": "Events delivered to the plugin worker. At most 5.",
+          "description": "Events delivered to the plugin worker. At most 6.",
           "x-orca-since": "1.4.160",
-          "maxItems": 5,
+          "maxItems": 6,
           "type": "array",
           "items": {
             "$ref": "#/$defs/EventContribution"
@@ -773,6 +773,7 @@
             "workspace.created",
             "workspace.removed",
             "agent.status.changed",
+            "agent.attention",
             "workspace.changed",
             "editor.typography.changed"
           ],
@@ -782,6 +783,7 @@
             "workspace.created": "1.4.245",
             "workspace.removed": "1.4.245",
             "agent.status.changed": "1.4.160",
+            "agent.attention": "1.4.281",
             "workspace.changed": "1.4.246",
             "editor.typography.changed": "1.4.257"
           }
