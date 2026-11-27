@@ -38,7 +38,7 @@ export function matchGitRemoteKeyParts(
   if (identity.host === target.host) {
     return true
   }
-  return isUnresolvedSshHostAlias(identity.host) ? 'unknown' : false
+  return !identity.host.startsWith('[') && isUnresolvedSshHostAlias(identity.host) ? 'unknown' : false
 }
 
 type GitRemoteEntry = {
