@@ -108,7 +108,11 @@ async function setup() {
 
 /** A terminal the previous app version opened on the older generation, left running at quit. */
 async function seedOlderTerminal(legacy: Generation, sessionId: string): Promise<void> {
-  const client = new DaemonClient({ socketPath: legacy.socketPath, tokenPath: legacy.tokenPath })
+  const client = new DaemonClient({
+    socketPath: legacy.socketPath,
+    tokenPath: legacy.tokenPath,
+    protocolVersion: legacy.protocolVersion
+  })
   await client.ensureConnected()
   await client.request('createOrAttach', { sessionId, cols: 80, rows: 24 })
   client.disconnect()
