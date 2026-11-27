@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { TerminalRestoringPlaceholder } from '../mounting/TerminalRestoringPlaceholder'
 import { TerminalCrewPortals } from '../../orchestration-crew/TerminalCrewPortals'
 import { terminalPaneMenuAgentIdProps } from '../context-menu/terminal-pane-menu-agent-session-actions'
@@ -140,6 +141,10 @@ export function TerminalPaneSurface({
     worktreeId,
     activePaneRuntimeEnvironmentId
   )
+  const [hasOpenedSearch, setHasOpenedSearch] = useState(searchOpen)
+  if (searchOpen && !hasOpenedSearch) {
+    setHasOpenedSearch(true)
+  }
 
   return (
     <>
@@ -232,16 +237,17 @@ export function TerminalPaneSurface({
         : null}
       <TerminalPaneProcessExitPortals controller={controller} />
       <TerminalPaneSshReconnectPortals controller={controller} />
-      <DaemonActionDialog api={daemonActions} />
-      {isActive && (
+      {daemonActions.pending && <DaemonActionDialog api={daemonActions} />}
+      {isActive && sessionStateSaveFailureMessage !== null && (
         <TerminalSessionStateSaveFailureDialog
-          open={sessionStateSaveFailureMessage !== null}
-          failureMessage={sessionStateSaveFailureMessage ?? ''}
+          open
+          failureMessage={sessionStateSaveFailureMessage}
           onDismiss={() => setSessionStateSaveFailureMessage(null)}
           onOpenSpaceAnalyzer={openDiskSpaceAnalyzer}
         />
       )}
       {activePane?.container &&
+        (searchOpen || hasOpenedSearch) &&
         createPortal(
           <TerminalSearch
             isOpen={searchOpen}
@@ -254,95 +260,90 @@ export function TerminalPaneSurface({
         )}
       <SessionRestoredBannerPortals panes={managedPanes} paneIds={sessionRestoredBannerPaneIds} />
       <TerminalPaneNativeChatPortal controller={controller} />
-      <TerminalContextMenu
-        open={Boolean(terminalManager) && contextMenu.open}
-        onOpenChange={contextMenu.setOpen}
-        onRestoreTerminalFocus={contextMenu.onRestoreTerminalFocus}
-        menuPoint={contextMenu.point}
-        menuOpenedAtRef={contextMenu.menuOpenedAtRef}
-        canClosePane={canCloseTerminalPane({
-          paneCount: contextMenu.paneCount,
-          showSplitButton,
-          isTabPinned
-        })}
-        closePaneLabel={terminalPaneCloseLabel(contextMenu.paneCount, t)}
-        canExpandPane={contextMenu.paneCount > 1}
-        canEqualizePaneSizes={contextMenu.paneCount > 1 && expandedPaneId === null}
-        menuPaneIsExpanded={
-          contextMenu.menuPaneId !== null && contextMenu.menuPaneId === expandedPaneId
-        }
-        onCopy={() => void contextMenu.onCopy()}
-        addToChat={
-          contextMenu.open
-            ? terminalPaneMenuAddToChat(contextMenu.menuPane, tabId, worktreeId)
-            : null
-        }
-        onSelectAll={contextMenu.onSelectAll}
-        onPaste={() => void contextMenu.onPaste()}
-        onSplitRight={contextMenu.onSplitRight}
-        onSplitDown={contextMenu.onSplitDown}
-        keybindings={keybindings}
-        onEqualizePaneSizes={contextMenu.onEqualizePaneSizes}
-        onClosePane={contextMenu.onClosePane}
-        onClearScreen={contextMenu.onClearScreen}
-        onResetTerminal={contextMenu.onResetTerminal}
-        canContinueAgentSessionInNewSession={contextMenuCanContinueInNewSession}
-        onContinueAgentSessionInNewSession={contextMenu.onContinueAgentSessionInNewSession}
-        onForkAgentSession={() => void contextMenu.onForkAgentSession()}
-        canToggleNativeChat={contextMenuCanToggleChat}
-        isNativeChatView={contextMenuIsChatView}
-        onToggleNativeChat={handleContextMenuToggleNativeChat}
-        onCopyAgentSessionContext={() => void contextMenu.onCopyAgentSessionContext()}
-        quickCommandHosts={visibleQuickCommandHosts}
-        quickCommandHostLoadFailed={quickCommandHostLoadFailed}
-        quickCommandHostOwnershipPending={quickCommandHostOwnershipPending}
-        quickCommandRepoLabel={quickCommandRepoLabel}
-        onQuickCommand={contextMenu.onQuickCommand}
-        onAddQuickCommand={(hostId) =>
-          quickCommandRepoId
-            ? openQuickCommandEditor({ type: 'repo', repoId: quickCommandRepoId }, hostId)
-            : openQuickCommandEditor({ type: 'global' }, hostId)
-        }
-        onToggleExpand={contextMenu.onToggleExpand}
-        onSetTitle={contextMenu.onSetTitle}
-        onClearPaneTitle={contextMenu.onClearPaneTitle}
-        canClearPaneTitle={menuPaneHasCustomTitle}
-        onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
-        onCopyPaneId={contextMenu.onCopyPaneId}
-        {...terminalPaneMenuAgentIdProps(contextMenu, menuAgentIds)}
-      />
-      <LinkActionPopover
-        request={terminalManager ? terminalLinkActionRequest : null}
-        onClose={closeTerminalLinkActions}
-      />
-      {quickCommandEditorOpen ? (
+      {Boolean(terminalManager) && (isActive || contextMenu.open) ? (
+        <TerminalContextMenu
+          open={contextMenu.open}
+          onOpenChange={contextMenu.setOpen}
+          onRestoreTerminalFocus={contextMenu.onRestoreTerminalFocus}
+          menuPoint={contextMenu.point}
+          menuOpenedAtRef={contextMenu.menuOpenedAtRef}
+          canClosePane={canCloseTerminalPane({
+            paneCount: contextMenu.paneCount,
+            showSplitButton,
+            isTabPinned
+          })}
+          closePaneLabel={terminalPaneCloseLabel(contextMenu.paneCount, t)}
+          canExpandPane={contextMenu.paneCount > 1}
+          canEqualizePaneSizes={contextMenu.paneCount > 1 && expandedPaneId === null}
+          menuPaneIsExpanded={
+            contextMenu.menuPaneId !== null && contextMenu.menuPaneId === expandedPaneId
+          }
+          onCopy={() => void contextMenu.onCopy()}
+          addToChat={
+            contextMenu.open
+              ? terminalPaneMenuAddToChat(contextMenu.menuPane, tabId, worktreeId)
+              : null
+          }
+          onSelectAll={contextMenu.onSelectAll}
+          onPaste={() => void contextMenu.onPaste()}
+          onSplitRight={contextMenu.onSplitRight}
+          onSplitDown={contextMenu.onSplitDown}
+          keybindings={keybindings}
+          onEqualizePaneSizes={contextMenu.onEqualizePaneSizes}
+          onClosePane={contextMenu.onClosePane}
+          onClearScreen={contextMenu.onClearScreen}
+          onResetTerminal={contextMenu.onResetTerminal}
+          canContinueAgentSessionInNewSession={contextMenuCanContinueInNewSession}
+          onContinueAgentSessionInNewSession={contextMenu.onContinueAgentSessionInNewSession}
+          onForkAgentSession={() => void contextMenu.onForkAgentSession()}
+          canToggleNativeChat={contextMenuCanToggleChat}
+          isNativeChatView={contextMenuIsChatView}
+          onToggleNativeChat={handleContextMenuToggleNativeChat}
+          onCopyAgentSessionContext={() => void contextMenu.onCopyAgentSessionContext()}
+          quickCommandHosts={visibleQuickCommandHosts}
+          quickCommandHostLoadFailed={quickCommandHostLoadFailed}
+          quickCommandHostOwnershipPending={quickCommandHostOwnershipPending}
+          quickCommandRepoLabel={quickCommandRepoLabel}
+          onQuickCommand={contextMenu.onQuickCommand}
+          onAddQuickCommand={(hostId) =>
+            quickCommandRepoId
+              ? openQuickCommandEditor({ type: 'repo', repoId: quickCommandRepoId }, hostId)
+              : openQuickCommandEditor({ type: 'global' }, hostId)
+          }
+          onToggleExpand={contextMenu.onToggleExpand}
+          onSetTitle={contextMenu.onSetTitle}
+          onClearPaneTitle={contextMenu.onClearPaneTitle}
+          canClearPaneTitle={menuPaneHasCustomTitle}
+          onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
+          onCopyPaneId={contextMenu.onCopyPaneId}
+          {...terminalPaneMenuAgentIdProps(contextMenu, menuAgentIds)}
+        />
+      ) : null}
+      {terminalManager && terminalLinkActionRequest && (
+        <LinkActionPopover request={terminalLinkActionRequest} onClose={closeTerminalLinkActions} />
+      )}
+      {quickCommandEditorOpen && (
         <TerminalQuickCommandEditorDialog
           command={quickCommandDraft}
           hostId={quickCommandEditorHostId}
           onOpenChange={setQuickCommandEditorOpen}
           onSave={saveQuickCommand}
         />
-      ) : null}
-      <TerminalAgentSessionForkDialog
-        open={agentSessionFork !== null}
-        fork={agentSessionFork}
-        onOpenChange={(open) => {
-          if (!open) {
-            setAgentSessionFork(null)
-          }
-        }}
-      />
-      {agentSessionContinuation ? (
+      )}
+      {agentSessionFork && (
+        <TerminalAgentSessionForkDialog
+          open
+          fork={agentSessionFork}
+          onOpenChange={(open) => !open && setAgentSessionFork(null)}
+        />
+      )}
+      {agentSessionContinuation && (
         <AgentSessionContinuationDialog
           open
           request={agentSessionContinuation}
-          onOpenChange={(open) => {
-            if (!open) {
-              setAgentSessionContinuation(null)
-            }
-          }}
+          onOpenChange={(open) => !open && setAgentSessionContinuation(null)}
         />
-      ) : null}
+      )}
       <TerminalPaneHeaderOverlay
         tabId={tabId}
         worktreeId={worktreeId}
