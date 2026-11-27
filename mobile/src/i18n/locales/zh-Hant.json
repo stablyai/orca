@@ -6425,7 +6425,7 @@
       "tidyUpBadTopic": "上次整理指定了 Orca 無法寫入的主題檔案，因此沒有任何變化。",
       "tidyUpTooLong": "上次整理的 MEMORY.md 超過 {{max}} 行且沒有變短，因此沒有任何變化。",
       "tidyUpTooManyRemoved": "上次整理一次刪去了太多行，因此沒有任何變化。",
-      "tidyUpTooManyAdded": "上次整理一次新增了超過 {{max}} 行新行，因此沒有任何變化。",
+      "tidyUpTooManyAdded": "上次整理一次讓 MEMORY.md 增加了超過 {{max}} 行新行，因此沒有任何變化。",
       "tidyUpNotCopied": "上次整理歸檔了一行 MEMORY.md 中沒有的內容；新資訊應寫進 MEMORY.md，因此沒有任何變化。",
       "tidyUpTooManyFiled": "上次整理一次歸檔了超過 {{max}} 行，因此沒有任何變化。",
       "tidyUpChanged": "上次整理期間 MEMORY.md 發生了變化，因此沒有任何變化。",

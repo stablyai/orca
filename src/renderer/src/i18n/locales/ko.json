@@ -28488,7 +28488,7 @@
       "tidyUpBadTopic": "마지막 정리가 Orca가 쓸 수 없는 주제 파일을 지정해 아무것도 바뀌지 않았습니다.",
       "tidyUpTooLong": "마지막 정리의 MEMORY.md가 {{max}}줄을 넘고 더 짧아지지 않아 아무것도 바뀌지 않았습니다.",
       "tidyUpTooManyRemoved": "마지막 정리가 한 번에 너무 많은 줄을 빼서 아무것도 바뀌지 않았습니다.",
-      "tidyUpTooManyAdded": "마지막 정리가 새 줄을 한 번에 {{max}}줄 넘게 추가해서 아무것도 바뀌지 않았습니다.",
+      "tidyUpTooManyAdded": "마지막 정리에서 MEMORY.md가 한 번에 {{max}}줄 넘게 늘어서 아무것도 바뀌지 않았습니다.",
       "tidyUpNotCopied": "마지막 정리가 MEMORY.md에 없는 줄을 옮겼습니다. 새 사실은 MEMORY.md에 들어가므로 아무것도 바뀌지 않았습니다.",
       "tidyUpTooManyFiled": "마지막 정리가 한 번에 {{max}}줄 넘게 옮겨 아무것도 바뀌지 않았습니다.",
       "tidyUpChanged": "마지막 정리 중에 MEMORY.md가 바뀌어 아무것도 바뀌지 않았습니다.",

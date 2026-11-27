@@ -7880,7 +7880,7 @@
       "tidyUpBadTopic": "Son toparlama, Orca'nın yazamadığı bir konu dosyası belirtti, bu yüzden hiçbir şey değişmedi.",
       "tidyUpTooLong": "Son toparlamanın MEMORY.md dosyası {{max}} satırı aştı ve kısalmadı, bu yüzden hiçbir şey değişmedi.",
       "tidyUpTooManyRemoved": "Son toparlama aynı anda çok fazla satır çıkardı, bu yüzden hiçbir şey değişmedi.",
-      "tidyUpTooManyAdded": "Son toparlama aynı anda {{max}} satırdan fazla yeni satır ekledi, bu yüzden hiçbir şey değişmedi.",
+      "tidyUpTooManyAdded": "Son toparlama MEMORY.md dosyasını aynı anda {{max}} satırdan fazla büyüttü, bu yüzden hiçbir şey değişmedi.",
       "tidyUpNotCopied": "Son toparlama MEMORY.md'de olmayan bir satırı dosyaladı; yeni bilgiler MEMORY.md'ye girer, bu yüzden hiçbir şey değişmedi.",
       "tidyUpTooManyFiled": "Son toparlama aynı anda {{max}} satırdan fazlasını dosyaladı, bu yüzden hiçbir şey değişmedi.",
       "tidyUpChanged": "Son toparlama sırasında MEMORY.md değişti, bu yüzden hiçbir şey değişmedi.",

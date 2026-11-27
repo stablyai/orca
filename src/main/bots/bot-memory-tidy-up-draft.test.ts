@@ -92,6 +92,12 @@ describe('what a tidy-up is told about the limits it is checked against', () => 
   it('states the lines a run may file, which the draft check enforces', () => {
     expect(prompt()).toContain(`At most ${TIDY_UP_MAX_FILED} lines a night`)
   })
+
+  it('says a deferred fact is not read again, since through moves past its chat', () => {
+    // A run that applies sets through to its start, so a fact it did not add is not offered
+    // again by next night's read.
+    expect(prompt()).toContain('add the newest facts first')
+  })
 })
 
 describe('a tidy-up that adds more new lines than it may', () => {
