@@ -12,6 +12,7 @@ const INTL_LOCALE: Record<SupportedUiLocale, string> = {
   pt: 'pt-BR',
   ru: 'ru',
   tr: 'tr',
+  vi: 'vi',
   zh: 'zh-Hans',
   'zh-Hant': 'zh-Hant'
 }

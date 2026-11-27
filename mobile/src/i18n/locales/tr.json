@@ -4054,7 +4054,8 @@
       "language": {
         "description": "Sistem seçeneği bu cihazın dilini kullanır. İzin istekleri her zaman cihazın dilinde gösterilir.",
         "heading": "DİL",
-        "systemWithCurrent": "Sistem ({{language}})"
+        "systemWithCurrent": "Sistem ({{language}})",
+        "vietnamese": "Tiếng Việt"
       },
       "theme": {
         "dark": "Koyu",

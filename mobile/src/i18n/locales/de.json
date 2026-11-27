@@ -3560,7 +3560,8 @@
       "language": {
         "description": "„System“ übernimmt die Gerätesprache. Berechtigungsabfragen verwenden immer die Gerätesprache.",
         "heading": "SPRACHE",
-        "systemWithCurrent": "System ({{language}})"
+        "systemWithCurrent": "System ({{language}})",
+        "vietnamese": "Tiếng Việt"
       },
       "theme": {
         "dark": "Dunkel",
