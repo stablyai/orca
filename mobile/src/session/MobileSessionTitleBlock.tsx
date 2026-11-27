@@ -39,56 +39,69 @@ export function MobileSessionTitleBlock({
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const subtitleRow = (
+    <>
+      {status ? <StatusDot state={status.state} verdict={status.verdict} /> : null}
+      <Text style={styles.subtitle} numberOfLines={1}>
+        {subtitle}
+      </Text>
+    </>
+  )
+  // Reconnect is a sibling of the title action: screen readers drop a control nested in another.
   return (
-    <Pressable
-      style={({ pressed }) => [styles.block, pressed && onPress && pressedStyle]}
-      onPress={onPress}
-      disabled={!onPress}
-      accessibilityRole={onPress ? 'button' : 'header'}
-      accessibilityLabel={accessibilityLabel}
-      accessibilityHint={
-        onPress ? t('session.tabBar.actionsHint', 'Shows actions for this tab') : undefined
-      }
-    >
-      <View style={styles.titleRow}>
-        {leading ? <View style={styles.leading}>{leading}</View> : null}
-        {forked ? (
-          <Text style={styles.title} numberOfLines={1}>
-            <MobileForkMarkedName name={title} />
-          </Text>
-        ) : isPathTitle(title) ? (
-          <View style={styles.pathTitle}>
-            <TailClippedText style={styles.title}>{title}</TailClippedText>
-          </View>
-        ) : (
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
-          </Text>
-        )}
-      </View>
+    <View style={styles.block}>
       <Pressable
-        style={({ pressed }) => [styles.subtitleRow, pressed && pressedStyle]}
-        disabled={!showConnectionRetry}
-        onPress={onRetry}
-        accessibilityRole={showConnectionRetry ? 'button' : undefined}
-        accessibilityLabel={
-          showConnectionRetry
-            ? t('session.header.reconnectToDesktop', 'Reconnect to desktop')
-            : undefined
+        style={({ pressed }) => [
+          styles.titleAction,
+          !showConnectionRetry && styles.titleActionFull,
+          pressed && onPress && pressedStyle
+        ]}
+        onPress={onPress}
+        disabled={!onPress}
+        accessibilityRole={onPress ? 'button' : 'header'}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityHint={
+          onPress ? t('session.tabBar.actionsHint', 'Shows actions for this tab') : undefined
         }
       >
-        {status ? <StatusDot state={status.state} verdict={status.verdict} /> : null}
-        <Text style={styles.subtitle} numberOfLines={1}>
-          {subtitle}
-        </Text>
+        <View style={styles.titleRow}>
+          {leading ? <View style={styles.leading}>{leading}</View> : null}
+          {forked ? (
+            <Text style={styles.title} numberOfLines={1}>
+              <MobileForkMarkedName name={title} />
+            </Text>
+          ) : isPathTitle(title) ? (
+            <View style={styles.pathTitle}>
+              <TailClippedText style={styles.title}>{title}</TailClippedText>
+            </View>
+          ) : (
+            <Text style={styles.title} numberOfLines={1}>
+              {title}
+            </Text>
+          )}
+        </View>
+        {showConnectionRetry ? null : <View style={styles.subtitleRow}>{subtitleRow}</View>}
       </Pressable>
-    </Pressable>
+      {showConnectionRetry ? (
+        <Pressable
+          style={({ pressed }) => [styles.subtitleRow, pressed && pressedStyle]}
+          onPress={onRetry}
+          accessibilityRole="button"
+          accessibilityLabel={t('session.header.reconnectToDesktop', 'Reconnect to desktop')}
+        >
+          {subtitleRow}
+        </Pressable>
+      ) : null}
+    </View>
   )
 }
 
 // NavBar's title and subtitle, so the session bar reads like every other screen's.
 const styles = themedStyleSheet(() => ({
   block: { maxWidth: '100%', minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  titleAction: { maxWidth: '100%', alignItems: 'center' },
+  // Without a reconnect row the title action keeps the whole 44 pt bar.
+  titleActionFull: { minHeight: 44, justifyContent: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%' },
   // Keeps web SVGs from shrinking before the title ellipsizes.
   leading: { flexShrink: 0 },
