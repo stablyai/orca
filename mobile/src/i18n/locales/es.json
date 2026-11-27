@@ -1768,7 +1768,9 @@
         "permissionAcceptEditsDescription": "Aprueba ediciones y comandos de archivos; pregunta por lo demás",
         "permissionAutoDescription": "Revisa las solicitudes de aprobación por ti",
         "permissionFullAccessCodexDescription": "Nunca pregunta; puede editar cualquier archivo y usar la red",
-        "permissionFullAccessDescription": "Nunca pregunta antes de ediciones o comandos"
+        "permissionFullAccessDescription": "Nunca pregunta antes de ediciones o comandos",
+        "permissionAgentSettings": "Configuración de {{agent}}",
+        "permissionFromAgentSettings": "{{mode}}, según la configuración de {{agent}}"
       },
       "goal": {
         "sentAsGoal": "Enviado como objetivo"
@@ -3957,9 +3959,6 @@
       "title": "Voz",
       "toggleMode": "Alternar",
       "updateFailed": "No se pudo actualizar"
-    },
-    "agents": {
-      "permissionOwnAll": "Configuración propia de los agentes"
     },
     "voiceTranscribeOn": {
       "heading": "Transcribir en",
