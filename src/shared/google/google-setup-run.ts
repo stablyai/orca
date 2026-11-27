@@ -3,6 +3,7 @@
 // `orca bot google-setup`; the setup cards draw from it, so they show the same on every client and
 // after a restart.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { GOOGLE_SERVICE_CHOICES } from './google-scopes'
 
 /** The setup's steps, in order. */
@@ -49,61 +50,67 @@ export type GoogleSetupStepStatus = (typeof GOOGLE_SETUP_STEP_STATUSES)[number]
 
 const Text = (max: number) => z.string().min(1).max(max)
 
-export const GoogleSetupStepStateSchema = z.object({
-  status: z.enum(GOOGLE_SETUP_STEP_STATUSES),
-  /** Who did it, once done: the bot or the person. */
-  by: z.enum(['bot', 'user']).optional(),
-  /** Epoch ms of the last change. */
-  at: z.number().optional(),
-  /** What the person needs to do, or what went wrong, in the bot's words. */
-  note: Text(500).optional()
-})
+export const GoogleSetupStepStateSchema = lazyZodSchema(() =>
+  z.object({
+    status: z.enum(GOOGLE_SETUP_STEP_STATUSES),
+    /** Who did it, once done: the bot or the person. */
+    by: z.enum(['bot', 'user']).optional(),
+    /** Epoch ms of the last change. */
+    at: z.number().optional(),
+    /** What the person needs to do, or what went wrong, in the bot's words. */
+    note: Text(500).optional()
+  })
+)
 export type GoogleSetupStepState = z.infer<typeof GoogleSetupStepStateSchema>
 
 /** An owner's answer to one card, recorded so the card locks to it on every client. */
-export const GoogleSetupAnswerSchema = z.object({
-  /** The choice ids, in the card's own words ("gmail", "do-it-for-me", "dana@acme.com"). */
-  values: z.array(Text(320)).max(20),
-  at: z.number(),
-  /** Typed in chat and recorded by the bot, rather than clicked on the card. */
-  typed: z.literal(true).optional()
-})
+export const GoogleSetupAnswerSchema = lazyZodSchema(() =>
+  z.object({
+    /** The choice ids, in the card's own words ("gmail", "do-it-for-me", "dana@acme.com"). */
+    values: z.array(Text(320)).max(20),
+    at: z.number(),
+    /** Typed in chat and recorded by the bot, rather than clicked on the card. */
+    typed: z.literal(true).optional()
+  })
+)
 export type GoogleSetupAnswer = z.infer<typeof GoogleSetupAnswerSchema>
 
 /** Card ids answers are recorded under: `google-setup/<card>`. */
 export const GOOGLE_SETUP_CARDS = ['path', 'account', 'kind', 'services', 'step'] as const
 export type GoogleSetupCard = (typeof GOOGLE_SETUP_CARDS)[number]
 
-export const GoogleSetupRunSchema = z.object({
-  id: Text(80),
-  botId: Text(200),
-  state: z.enum(['running', 'done', 'failed', 'cancelled']),
-  mode: z.enum(GOOGLE_SETUP_RUN_MODES),
-  /** "Let me do this one": the person does this one step, whatever the mode. */
-  personStep: z.enum(GOOGLE_SETUP_STEPS).optional(),
-  steps: z.partialRecord(z.enum(GOOGLE_SETUP_STEPS), GoogleSetupStepStateSchema),
-  account: Text(320).optional(),
-  /** The Google accounts signed in on the setup page, as the bot read them; two or more get a pick card. */
-  accounts: z.array(Text(320)).max(10).optional(),
-  kind: z.enum(['work', 'personal']).optional(),
-  services: z.array(z.enum(GOOGLE_SERVICE_CHOICES)).optional(),
-  projectId: Text(120).optional(),
-  /** Started over an app already on this computer: only a key saved after the start is this setup's. */
-  newApp: z.literal(true).optional(),
-  /** The browser page the setup runs in; while the person clicks, the bot only reads it. */
-  browserPageId: Text(200).optional(),
-  answers: z.partialRecord(z.enum(GOOGLE_SETUP_CARDS), GoogleSetupAnswerSchema).default({}),
-  lastError: Text(500).optional(),
-  /** Orca saw the key fail to arrive (a refused download, or done refused for want of it); the
-   *  owner's card then offers Make a new key and Import a key file. */
-  keyMissed: z.object({ at: z.number(), reason: Text(500).optional() }).optional(),
-  /** The newest copy Orca wrote of each card (by `googleSetupCardKey`), so only it acts. */
-  cardCopies: z.record(z.string(), z.number().int().nonnegative()).optional(),
-  startedAt: z.number(),
-  updatedAt: z.number(),
-  /** Raised on every change, so a card re-reads only when it moved. */
-  revision: z.number().int().nonnegative()
-})
+export const GoogleSetupRunSchema = lazyZodSchema(() =>
+  z.object({
+    id: Text(80),
+    botId: Text(200),
+    state: z.enum(['running', 'done', 'failed', 'cancelled']),
+    mode: z.enum(GOOGLE_SETUP_RUN_MODES),
+    /** "Let me do this one": the person does this one step, whatever the mode. */
+    personStep: z.enum(GOOGLE_SETUP_STEPS).optional(),
+    steps: z.partialRecord(z.enum(GOOGLE_SETUP_STEPS), GoogleSetupStepStateSchema),
+    account: Text(320).optional(),
+    /** The Google accounts signed in on the setup page, as the bot read them; two or more get a pick card. */
+    accounts: z.array(Text(320)).max(10).optional(),
+    kind: z.enum(['work', 'personal']).optional(),
+    services: z.array(z.enum(GOOGLE_SERVICE_CHOICES)).optional(),
+    projectId: Text(120).optional(),
+    /** Started over an app already on this computer: only a key saved after the start is this setup's. */
+    newApp: z.literal(true).optional(),
+    /** The browser page the setup runs in; while the person clicks, the bot only reads it. */
+    browserPageId: Text(200).optional(),
+    answers: z.partialRecord(z.enum(GOOGLE_SETUP_CARDS), GoogleSetupAnswerSchema).default({}),
+    lastError: Text(500).optional(),
+    /** Orca saw the key fail to arrive (a refused download, or done refused for want of it); the
+     *  owner's card then offers Make a new key and Import a key file. */
+    keyMissed: z.object({ at: z.number(), reason: Text(500).optional() }).optional(),
+    /** The newest copy Orca wrote of each card (by `googleSetupCardKey`), so only it acts. */
+    cardCopies: z.record(z.string(), z.number().int().nonnegative()).optional(),
+    startedAt: z.number(),
+    updatedAt: z.number(),
+    /** Raised on every change, so a card re-reads only when it moved. */
+    revision: z.number().int().nonnegative()
+  })
+)
 export type GoogleSetupRun = z.infer<typeof GoogleSetupRunSchema>
 
 /** Whether the run is still under way: anything that moves it, or offers to stop it, asks this. */
