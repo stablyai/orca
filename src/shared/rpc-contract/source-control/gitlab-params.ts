@@ -30,6 +30,10 @@ export const GitLabProjectRef = lazyZodSchema(() =>
     .nullish()
 )
 
+export const ProjectMetadata = lazyZodSchema(() =>
+  RepoSelector.extend({ projectRef: GitLabProjectRef })
+)
+
 export const WorkItemsList = lazyZodSchema(() =>
   RepoSelector.extend({
     state: z.enum(['opened', 'merged', 'closed', 'all']).optional(),

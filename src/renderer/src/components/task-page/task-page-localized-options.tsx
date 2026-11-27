@@ -21,7 +21,7 @@ import type { TaskProvider } from '../../../../shared/work-items/task-providers'
 import type { TaskViewPresetId } from '../../../../shared/ui-chrome/ui-chrome-types'
 
 export type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
-export type GitLabIssueFilter = 'opened' | 'assigned-to-me'
+export type GitLabIssueFilter = 'opened' | 'closed' | 'assigned-to-me'
 
 export type TaskQueryPreset = {
   id: TaskViewPresetId
@@ -80,6 +80,7 @@ export const getGitLabMRInvolvementFilters = createLocalizedCatalog(
 export const getGitLabIssueFilters = createLocalizedCatalog(
   (): { id: GitLabIssueFilter; label: string }[] => [
     { id: 'opened', label: translate('auto.components.TaskPage.606a85c774', 'Open') },
+    { id: 'closed', label: translate('auto.components.TaskPage.d09bf34db7', 'Closed') },
     {
       id: 'assigned-to-me',
       label: translate('auto.components.TaskPage.94f0339621', 'Assigned to me')

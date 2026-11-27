@@ -1,11 +1,12 @@
 import { ipcRenderer } from 'electron'
-import type { GitLabMRInvolvement } from '../../../shared/gitlab/gitlab-types'
+import type { GitLabMRInvolvement, GitLabProjectRef } from '../../../shared/gitlab/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 
 type GitLabRepoSelectorArgs = {
   repoPath: string
   repoId?: string | null
   sourceContext?: TaskSourceContext | null
+  projectRef?: GitLabProjectRef | null
 }
 
 export const glApi = {

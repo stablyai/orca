@@ -30,6 +30,7 @@ export type GitLabRepoSelectorArgs = {
   sourceContext?: TaskSourceContext | null
   /** Desktop IPC-only owner guard; web adapters remove it before runtime RPC. */
   repoOwnerExecutionHostId?: string
+  projectRef?: GitLabProjectRef | null
 }
 
 export type GitLabApi = {
