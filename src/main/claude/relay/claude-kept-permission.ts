@@ -3,7 +3,10 @@ import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-sess
 import type { ClaudeSession } from '../structured/claude-structured-session-state'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { claudePermissionModeFor } from '../structured/launch/claude-structured-permission-options'
-import { claudeInPlan } from '../structured/permissions/claude-full-access-refusal'
+import {
+  claudeInPlan,
+  claudeModeUnreported
+} from '../structured/permissions/claude-full-access-refusal'
 import { claudeLeavingPlanOnApproval } from '../structured/permissions/claude-plan-approval-mode'
 import {
   claimClaudePermissionModeRequest,
@@ -168,15 +171,24 @@ export function noteKeptClaudeReattach(session: ClaudeSession): void {
   session.keptModeOwed = launched
 }
 
-/** Before a kept agent's first message: its owed mode, unless it is in Plan (leaving Plan writes it). */
+/** Before a kept agent's message: its owed mode, kept owed until written (a failed write owes Ask),
+ *  except in Plan, which leaving writes. The chat's saved Plan stands in for the mode only until
+ *  Claude reports one, so a stale launch-time Plan never drops an owed Ask. */
 export async function applyKeptClaudeModeOwed(
   session: ClaudeSession,
   timeoutMs: number | undefined
 ): Promise<void> {
   const owed = session.keptModeOwed
-  session.keptModeOwed = undefined
-  if (isBuildMode(owed) && !claudeInPlan(session) && session.savedPlan !== true) {
-    await applyPick(session, owed, timeoutMs)
+  if (!isBuildMode(owed)) {
+    session.keptModeOwed = undefined
+    return
+  }
+  if (claudeInPlan(session) || (session.savedPlan === true && claudeModeUnreported(session))) {
+    return
+  }
+  await applyPick(session, owed, timeoutMs)
+  if (session.keptModeOwed === owed) {
+    session.keptModeOwed = undefined
   }
 }
 
