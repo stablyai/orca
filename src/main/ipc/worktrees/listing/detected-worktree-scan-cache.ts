@@ -32,14 +32,7 @@ import {
   readWorktreeCatalog
 } from '../../../workspaces/catalog/repo-worktree-catalog-owner'
 import { resolveWorktreeScanRuntime } from '../../../runtime/workspaces/catalog/runtime-worktree-scan-cache'
-import {
-  startSharedRepoWorktreeAdminFingerprintProbe,
-  warnWorktreeAdminFingerprintUnknownOnce
-} from '../../../runtime/workspaces/catalog/repo-worktree-admin-fingerprint'
-import {
-  WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
-  WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
-} from '../../../runtime/workspaces/catalog/worktree-scan-admin-budget'
+import { createLocalAdminFingerprintVerifier } from '../../../runtime/workspaces/catalog/repo-worktree-admin-fingerprint'
 import {
   claimWorktreeCatalogHygiene,
   needsWorktreeCatalogHygieneClaim,
@@ -113,16 +106,10 @@ export async function listDetectedGitWorktrees(
       }
     }
   }
-  // Share the local admin-fingerprint verifier with runtime readers so unchanged repos do not rerun
-  // `git worktree list` past the 5 s window or publish null fingerprints that break runtime verification.
-  const verifier = !localWorktreeGitOptions.wslDistro
-    ? {
-        ceilingMs: WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS,
-        timeoutMs: WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
-        probe: () => startSharedRepoWorktreeAdminFingerprintProbe(repo.id, repo.path),
-        onUnknown: (reason: string) => warnWorktreeAdminFingerprintUnknownOnce(repo.id, reason)
-      }
-    : undefined
+  // WSL execution cannot be described by local admin reads; elsewhere unchanged repos skip `git worktree list`.
+  const verifier = localWorktreeGitOptions.wslDistro
+    ? undefined
+    : createLocalAdminFingerprintVerifier(repo)
   const { observation, superseded } = await readWorktreeCatalog(
     repo,
     runtimeKey,

@@ -1,50 +1,42 @@
+import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import * as fsPromises from 'node:fs/promises'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  _resetSharedWorktreeAdminFingerprintProbesForTests,
-  readRepoWorktreeAdminFingerprint,
-  startSharedRepoWorktreeAdminFingerprintProbe
-} from './repo-worktree-admin-fingerprint'
-
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof fsPromises>()
-  return {
-    ...actual,
-    readFile: vi.fn((...args: Parameters<typeof actual.readFile>) => actual.readFile(...args))
-  }
-})
+import { afterEach, describe, expect, it } from 'vitest'
+import { readRepoWorktreeAdminFingerprint } from './repo-worktree-admin-fingerprint'
 
 let tempDir = ''
 
-function createGitRepoFixture(): { repoDir: string; gitDir: string; linkedAdminDir: string } {
+function makeTempDir(): string {
   tempDir = mkdtempSync(path.join(tmpdir(), 'orca-admin-fp-'))
-  const repoDir = path.join(tempDir, 'repo')
-  const gitDir = path.join(repoDir, '.git')
-  const linkedWorktreeDir = path.join(tempDir, 'wt-a')
-  const linkedAdminDir = path.join(gitDir, 'worktrees', 'wt-a')
-  mkdirSync(path.join(gitDir, 'refs', 'heads'), { recursive: true })
-  mkdirSync(linkedAdminDir, { recursive: true })
-  mkdirSync(linkedWorktreeDir, { recursive: true })
-  writeFileSync(path.join(gitDir, 'HEAD'), 'ref: refs/heads/main\n')
-  writeFileSync(
-    path.join(gitDir, 'refs', 'heads', 'main'),
-    '1111111111111111111111111111111111111111\n'
-  )
-  writeFileSync(
-    path.join(gitDir, 'refs', 'heads', 'feature'),
-    '2222222222222222222222222222222222222222\n'
-  )
-  writeFileSync(path.join(linkedAdminDir, 'gitdir'), `${path.join(linkedWorktreeDir, '.git')}\n`)
-  writeFileSync(path.join(linkedAdminDir, 'HEAD'), 'ref: refs/heads/feature\n')
-  return { repoDir, gitDir, linkedAdminDir }
+  return tempDir
 }
 
+function git(cwd: string, ...args: string[]): void {
+  execFileSync(
+    'git',
+    ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', ...args],
+    {
+      cwd,
+      stdio: 'ignore'
+    }
+  )
+}
+
+// Reftable needs git >= 2.45; older CI images skip rather than fail.
+const supportsReftable = (() => {
+  const probeDir = mkdtempSync(path.join(tmpdir(), 'orca-reftable-probe-'))
+  try {
+    git(probeDir, 'init', '-q', '--ref-format=reftable')
+    return true
+  } catch {
+    return false
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true })
+  }
+})()
+
 afterEach(() => {
-  vi.clearAllMocks()
-  _resetSharedWorktreeAdminFingerprintProbesForTests()
   if (tempDir) {
     rmSync(tempDir, { recursive: true, force: true })
     tempDir = ''
@@ -52,56 +44,42 @@ afterEach(() => {
 })
 
 describe('repo worktree admin fingerprint', () => {
-  it('skips linked headDir lookups for shared refs and avoids double-reading packed main refs', async () => {
-    const { repoDir, gitDir, linkedAdminDir } = createGitRepoFixture()
-    // Remove loose main ref to simulate a packed ref on the main checkout.
-    rmSync(path.join(gitDir, 'refs', 'heads', 'main'))
-    const readFileMock = vi.mocked(fsPromises.readFile)
-    readFileMock.mockClear()
-
-    const fp = await readRepoWorktreeAdminFingerprint(repoDir)
-    expect(fp).not.toBeNull()
-
-    const readPaths = readFileMock.mock.calls.map(([target]) => String(target))
-    // Must not attempt guaranteed-ENOENT read of refs/heads/feature inside .git/worktrees/wt-a.
-    expect(readPaths).not.toContain(path.join(linkedAdminDir, 'refs', 'heads', 'feature'))
-    expect(readPaths).toContain(path.join(gitDir, 'refs', 'heads', 'feature'))
-    // Packed main ref must be checked at most once in commonDir.
-    const mainRefReads = readPaths.filter((p) => p === path.join(gitDir, 'refs', 'heads', 'main'))
-    expect(mainRefReads).toHaveLength(1)
-  })
-
-  it('still reads per-worktree refs from the linked worktree admin directory', async () => {
-    const { repoDir, linkedAdminDir } = createGitRepoFixture()
+  it('reads per-worktree refs from the linked worktree admin directory', async () => {
+    const repoDir = path.join(makeTempDir(), 'repo')
+    const linkedAdminDir = path.join(repoDir, '.git', 'worktrees', 'wt-a')
     mkdirSync(path.join(linkedAdminDir, 'refs', 'worktree'), { recursive: true })
+    mkdirSync(path.join(tempDir, 'wt-a'))
+    writeFileSync(path.join(repoDir, '.git', 'HEAD'), 'ref: refs/heads/main\n')
+    writeFileSync(path.join(linkedAdminDir, 'gitdir'), `${path.join(tempDir, 'wt-a', '.git')}\n`)
     writeFileSync(path.join(linkedAdminDir, 'HEAD'), 'ref: refs/worktree/custom\n')
-    writeFileSync(
-      path.join(linkedAdminDir, 'refs', 'worktree', 'custom'),
-      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'
-    )
+    const customRef = path.join(linkedAdminDir, 'refs', 'worktree', 'custom')
+    writeFileSync(customRef, `${'a'.repeat(40)}\n`)
 
-    const fp1 = await readRepoWorktreeAdminFingerprint(repoDir)
-    writeFileSync(
-      path.join(linkedAdminDir, 'refs', 'worktree', 'custom'),
-      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n'
-    )
-    const fp2 = await readRepoWorktreeAdminFingerprint(repoDir)
+    const before = await readRepoWorktreeAdminFingerprint(repoDir)
+    writeFileSync(customRef, `${'b'.repeat(40)}\n`)
+    const after = await readRepoWorktreeAdminFingerprint(repoDir)
 
-    expect(fp1).not.toBeNull()
-    expect(fp2).not.toBeNull()
-    expect(fp2).not.toBe(fp1)
+    expect(before).not.toBeNull()
+    expect(after).not.toBe(before)
   })
 
-  it('coalesces concurrent shared probes per repo into in-flight', async () => {
-    const { repoDir } = createGitRepoFixture()
-    const first = startSharedRepoWorktreeAdminFingerprintProbe('repo-1', repoDir)
-    expect(first).not.toBe('in-flight')
-    const second = startSharedRepoWorktreeAdminFingerprintProbe('repo-1', repoDir)
-    expect(second).toBe('in-flight')
+  it.skipIf(!supportsReftable)(
+    'detects a linked worktree HEAD move in a reftable repo',
+    async () => {
+      const repoDir = path.join(makeTempDir(), 'repo')
+      const linkedDir = path.join(tempDir, 'wt')
+      git(tempDir, 'init', '-q', '--ref-format=reftable', '-b', 'main', repoDir)
+      git(repoDir, 'commit', '-q', '--allow-empty', '-m', 'init')
+      git(repoDir, 'branch', 'feature')
+      git(repoDir, 'worktree', 'add', '-q', linkedDir, 'feature')
 
-    expect(await (first as Promise<string | null>)).not.toBeNull()
-    const third = startSharedRepoWorktreeAdminFingerprintProbe('repo-1', repoDir)
-    expect(third).not.toBe('in-flight')
-    expect(await (third as Promise<string | null>)).not.toBeNull()
-  })
+      const before = await readRepoWorktreeAdminFingerprint(repoDir)
+      // Only the linked worktree's own reftable stack changes; its HEAD file stays a fixed stub.
+      git(linkedDir, 'checkout', '-q', '--detach')
+      const after = await readRepoWorktreeAdminFingerprint(repoDir)
+
+      expect(before).not.toBeNull()
+      expect(after).not.toBe(before)
+    }
+  )
 })

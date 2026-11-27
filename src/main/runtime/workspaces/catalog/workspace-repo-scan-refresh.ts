@@ -5,15 +5,9 @@ import {
   resolveWorktreeScanCacheTtlMs,
   resolveWorktreeScanRuntime
 } from './runtime-worktree-scan-cache'
-import {
-  WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
-  WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
-} from './worktree-scan-admin-budget'
+import { WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS } from './worktree-scan-admin-budget'
 import { getLocalProjectWorktreeGitOptionsForRuntime } from '../../../workspaces/execution-host/project-runtime-git-options'
-import {
-  startSharedRepoWorktreeAdminFingerprintProbe,
-  warnWorktreeAdminFingerprintUnknownOnce
-} from './repo-worktree-admin-fingerprint'
+import { createLocalAdminFingerprintVerifier } from './repo-worktree-admin-fingerprint'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { scanLocalRepoWorktreesForResolution } from './repo-worktree-resolution-scan'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
@@ -72,12 +66,7 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     // WSL execution cannot be described by local admin reads; a TTL at the ceiling could never reuse a probe.
     const verifier =
       ttlMs < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS && !gitOptions.wslDistro
-        ? {
-            ceilingMs: WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS,
-            timeoutMs: WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
-            probe: () => this.startRepoWorktreeAdminFingerprintProbe(repo),
-            onUnknown: (reason: string) => warnWorktreeAdminFingerprintUnknownOnce(repo.id, reason)
-          }
+        ? createLocalAdminFingerprintVerifier(repo)
         : undefined
     const store = this.store
     const { observation, superseded } = await readWorktreeCatalog(
@@ -118,13 +107,6 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     const result = runtimeResultForObservation(observation)
     // Mutations kept overtaking scans: publish the rows as non-authoritative, never as current truth.
     return superseded && result.ok ? { ok: false, worktrees: result.worktrees } : result
-  }
-
-  /** Allow one outstanding filesystem probe per repo: timeouts do not cancel readdir/stat, so repeated probes could exhaust libuv on wedged mounts. */
-  protected startRepoWorktreeAdminFingerprintProbe(
-    repo: Repo
-  ): Promise<string | null> | 'in-flight' {
-    return startSharedRepoWorktreeAdminFingerprintProbe(repo.id, repo.path)
   }
 
   protected listStoredWorktreesForResolution(repo: Repo): GitWorktreeInfo[] {

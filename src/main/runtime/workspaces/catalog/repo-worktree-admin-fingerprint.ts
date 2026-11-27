@@ -2,7 +2,16 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { resolveGitCommonDirectory } from '../../../../shared/git/metadata/git-common-directory'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
-import { WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS } from './worktree-scan-admin-budget'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type {
+  WorktreeAdminProbeResult,
+  WorktreeCatalogVerifier
+} from '../../../workspaces/catalog/repo-worktree-catalog-observation'
+import {
+  WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
+  WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
+} from './worktree-scan-admin-budget'
 
 // NUL can appear in neither a path nor a Git ref, so field boundaries stay unambiguous.
 const FIELD_SEPARATOR = '\u0000'
@@ -10,28 +19,46 @@ const MISSING = '-'
 // Bound per-repo filesystem probes so hundreds of worktrees cannot flood the polling threadpool.
 const LINKED_WORKTREE_PROBE_CONCURRENCY = 8
 
-const inFlightAdminFingerprintProbes = new Set<string>()
+const inFlightAdminFingerprintProbes = new Map<string, Promise<WorktreeAdminProbeResult>>()
 const lastFingerprintUnknownWarnAt = new Map<string, number>()
 
-/** Allow one outstanding filesystem probe per repo across both runtime and desktop catalog readers:
- * timeouts do not cancel readdir/stat, so repeated probes could exhaust libuv on wedged mounts. */
-export function startSharedRepoWorktreeAdminFingerprintProbe(
+/** Local-admin verifier shared by desktop and runtime catalog readers of one repo. */
+export function createLocalAdminFingerprintVerifier(
+  repo: Pick<Repo, 'id' | 'path'>
+): WorktreeCatalogVerifier {
+  return {
+    ceilingMs: WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS,
+    probe: () => startSharedRepoWorktreeAdminFingerprintProbe(repo.id, repo.path),
+    onUnknown: (reason) => warnWorktreeAdminFingerprintUnknownOnce(repo.id, reason)
+  }
+}
+
+/** One outstanding probe per repo, joined by every reader: timeouts do not cancel readdir/stat, so
+ * repeated probes could exhaust libuv on wedged mounts. Joiners share its budget instead of restarting it. */
+function startSharedRepoWorktreeAdminFingerprintProbe(
   repoId: string,
   repoPath: string
-): Promise<string | null> | 'in-flight' {
-  if (inFlightAdminFingerprintProbes.has(repoId)) {
-    return 'in-flight'
+): Promise<WorktreeAdminProbeResult> {
+  const pending = inFlightAdminFingerprintProbes.get(repoId)
+  if (pending) {
+    return pending
   }
-  inFlightAdminFingerprintProbes.add(repoId)
-  return readRepoWorktreeAdminFingerprint(repoPath)
-    .catch(() => null)
+  const probe = readRepoWorktreeAdminFingerprint(repoPath)
+    .then((fingerprint) => ({ fingerprint }))
     .finally(() => {
       inFlightAdminFingerprintProbes.delete(repoId)
     })
+  const bounded = withTimeout<WorktreeAdminProbeResult>(
+    probe,
+    WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
+    'timeout'
+  )
+  inFlightAdminFingerprintProbes.set(repoId, bounded)
+  return bounded
 }
 
 // Why once per reconcile window: a wedged mount answers "unknown" on every poll.
-export function warnWorktreeAdminFingerprintUnknownOnce(repoId: string, reason: string): void {
+function warnWorktreeAdminFingerprintUnknownOnce(repoId: string, reason: string): void {
   const now = Date.now()
   const last = lastFingerprintUnknownWarnAt.get(repoId)
   if (last !== undefined && now - last < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS) {
@@ -45,11 +72,6 @@ export function warnWorktreeAdminFingerprintUnknownOnce(repoId: string, reason: 
       reason
     }
   )
-}
-
-export function _resetSharedWorktreeAdminFingerprintProbesForTests(): void {
-  inFlightAdminFingerprintProbes.clear()
-  lastFingerprintUnknownWarnAt.clear()
 }
 
 /** Fingerprint local Git admin state without a subprocess; null requires a real scan.
@@ -72,7 +94,7 @@ export async function readRepoWorktreeAdminFingerprint(repoPath: string): Promis
     const linked = await mapWithConcurrency(
       names,
       LINKED_WORKTREE_PROBE_CONCURRENCY,
-      async (name) => await readLinkedWorktreeStamp(commonDir, adminDir, name)
+      async (name) => await readLinkedWorktreeStamp(commonDir, adminDir, name, reftable !== MISSING)
     )
     return [mainHead, mainExists, packedRefs, reftable, String(names.length), ...linked].join(
       FIELD_SEPARATOR
@@ -85,18 +107,28 @@ export async function readRepoWorktreeAdminFingerprint(repoPath: string): Promis
 async function readLinkedWorktreeStamp(
   commonDir: string,
   adminDir: string,
-  name: string
+  name: string,
+  reftable: boolean
 ): Promise<string> {
   const entryDir = path.join(adminDir, name)
   // `gitdir` holds "<worktree>/.git"; its contents follow `git worktree move` and `git worktree repair`.
   const gitdirTarget = await readTrimmedFile(path.join(entryDir, 'gitdir'))
-  const [head, locked, worktreeExists] = await Promise.all([
+  const [head, locked, worktreeExists, worktreeRefs] = await Promise.all([
     readHeadStamp(commonDir, entryDir),
     readFileStamp(path.join(entryDir, 'locked')),
     // Deleting a worktree directory outside Orca flips its `prunable` row without touching the admin dir.
-    gitdirTarget ? readExistenceStamp(path.dirname(gitdirTarget)) : Promise.resolve(MISSING)
+    gitdirTarget ? readExistenceStamp(path.dirname(gitdirTarget)) : Promise.resolve(MISSING),
+    // Reftable keeps a linked HEAD in its own stack (HEAD file is a fixed stub); every update renames tables.
+    reftable ? readTrimmedFile(path.join(entryDir, 'reftable', 'tables.list')) : null
   ])
-  return [name, gitdirTarget ?? MISSING, head, locked, worktreeExists].join(FIELD_SEPARATOR)
+  return [
+    name,
+    gitdirTarget ?? MISSING,
+    head,
+    locked,
+    worktreeExists,
+    worktreeRefs ?? MISSING
+  ].join(FIELD_SEPARATOR)
 }
 
 /** Include symbolic HEAD's referenced tip; commits can move that ref without changing HEAD itself. */
