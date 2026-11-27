@@ -13,6 +13,7 @@ import {
   isTextEntryElement,
   refreshTerminalImeInputContext
 } from '../ime/terminal-ime-input-context-refresh'
+import { runSyncWithFinally } from '@/lib/run-with-finally'
 
 export function useRegularTerminalInputFocus({
   containerRef
@@ -40,21 +41,25 @@ export function useRegularTerminalInputFocus({
       if (!isXtermHelperTextarea(event.target)) {
         return
       }
+      const target = event.target
       syncFocused(true)
       // Why: macOS keeps the input context of the field or browser page focus came from (#23864).
       const pageFocusWasLost = consumePageFocusLossForTerminalIme()
       if (
         pageFocusWasLost ||
-        (isTextEntryElement(event.relatedTarget) && event.relatedTarget !== event.target)
+        (isTextEntryElement(event.relatedTarget) && event.relatedTarget !== target)
       ) {
         refreshingImeInputContext = true
-        try {
-          refreshTerminalImeInputContext(event.target, {
-            onRefocusSkipped: (active) => syncFocusAfterFailedReclaim(active, syncFocused)
-          })
-        } finally {
-          refreshingImeInputContext = false
-        }
+        runSyncWithFinally(
+          () => {
+            refreshTerminalImeInputContext(target, {
+              onRefocusSkipped: (active) => syncFocusAfterFailedReclaim(active, syncFocused)
+            })
+          },
+          () => {
+            refreshingImeInputContext = false
+          }
+        )
       }
     }
     const onFocusOut = (event: FocusEvent): void => {

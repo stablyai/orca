@@ -8,6 +8,6 @@ export const TERMINAL_DOCUMENT_MARKUP = `<div id="terminal-container">
   <div id="sel-handle-end" class="sel-handle end"></div>
   <div id="sel-menu">
     <button id="sel-menu-copy">Copy</button>
-    <button id="sel-menu-all">Select All</button>
+    <button id="sel-menu-all">Select all</button>
   </div>
 </div>`

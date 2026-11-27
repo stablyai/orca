@@ -14,6 +14,7 @@ import { probeGitAvailability } from '../../git/command-runner/host-routing/git-
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
 import {
+  ensureCloneDestination,
   getClonePathComparisonKey,
   getSavedProjectPathKeys
 } from '../../git/repositories/cloning/repo-clone-path'
@@ -116,7 +117,7 @@ export function registerRepoCreationHandlers(
       let targetExists = false
       try {
         // Fresh installs may lack the default project parent.
-        await mkdir(parentPath, { recursive: true })
+        await ensureCloneDestination(parentPath)
         await access(targetPath)
         targetExists = true
       } catch (err) {

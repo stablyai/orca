@@ -8,6 +8,7 @@ import {
   useState,
   useSyncExternalStore
 } from 'react'
+import { recomputeOn } from '@/lib/recompute-on'
 import { sameAgentPickerSetupSource as sameSource } from './agent-launch-picker-setup-source'
 import {
   agentPickerDraft,
@@ -86,7 +87,7 @@ export function useAgentPickerSetup({
   open: boolean
 }) {
   const currentSurface = surface ?? initial?.surface
-  const [, publish] = useReducer((version: number) => version + 1, 0)
+  const [version, publish] = useReducer((value: number) => value + 1, 0)
   const key = JSON.stringify([entry.draftTarget?.key, entry.agent, draftId])
   const launchKey = nativeChatLaunchPromptDraftScopeKey(
     entry.worktreeId ?? '',
@@ -124,7 +125,7 @@ export function useAgentPickerSetup({
         : () => {},
     [mode, open, launchKey]
   )
-  useSyncExternalStore(subscribe, () => read()?.draft)
+  const subscribedDraft = useSyncExternalStore(subscribe, () => read()?.draft)
   // The last pick the form took while this panel is open, carried into a record its scope reset recreates.
   const [picked, setPicked] = useState<AgentPickerDraft>()
   const matches = useCallback(
@@ -145,8 +146,8 @@ export function useAgentPickerSetup({
     [draftScope, key, launchKey, slot, mode, entry.ownerKey, currentSurface]
   )
   const live = useRef<typeof lifetime | undefined>(undefined)
-  const collection = sessionDrafts.get(draftScope)
-  const retained = read()
+  const collection = recomputeOn([version], () => sessionDrafts.get(draftScope))
+  const retained = recomputeOn([subscribedDraft, version], read)
   const acquire = useCallback(
     (authored?: AgentPickerDraft) => {
       let record = read()

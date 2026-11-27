@@ -76,7 +76,7 @@ export async function dispatchMobileStructuredCommand(input: {
     ...input.controller,
     runConversationCommand: async (command, instructions) => {
       const held = (hold: Parameters<typeof heldConversationCommandParts>[1]) =>
-        mobileAgentSessionWriteNoticeText(heldConversationCommandParts(command, hold))
+        mobileAgentSessionWriteNoticeText(heldConversationCommandParts(command, hold), translate)
       // A command on its way is the agent's work in flight.
       if (input.pending.current) {
         return { accepted: false, error: held('working') }

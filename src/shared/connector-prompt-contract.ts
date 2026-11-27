@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { lazyZodSchema } from './schema/lazy-zod-schema'
 import type { PendingPrompt } from './agent-status/contracts/agent-pending-prompt'
 
 /** Who raised a bot link's prompt, sent only to a cloud that lists prompts.audience. 'conversation':
@@ -23,7 +24,7 @@ export type ConnectorAnswer =
   | { text: string; optionId?: never }
 
 export const ConnectorAnswerFields = {
-  promptId: z.string().min(1),
-  optionId: z.string().min(1).optional(),
-  text: z.string().min(1).max(4000).optional()
+  promptId: lazyZodSchema(() => z.string().min(1)),
+  optionId: lazyZodSchema(() => z.string().min(1).optional()),
+  text: lazyZodSchema(() => z.string().min(1).max(4000).optional())
 }

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useId, useRef, useState } from 'react'
 import { Trans } from 'react-i18next'
 import { ImageUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,7 @@ import { PICKABLE_BOT_MASCOT_IDS, type BotMascotId } from '../../../../shared/bo
 import type { BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { BOT_AVATAR_ACCEPT } from './bot-avatar-intake'
 import { useBotMascotTileLooks, type BotMascotTileLook } from './bot-mascot-look'
-import { BotPictureLook } from './BotPictureLook'
+import { BotOutfitBadge, BotPictureLook } from './BotPictureLook'
 import { BotPictureIntakeLine, LineAction } from './BotPictureIntakeLine'
 import {
   useBotAvatarIntakeHost,
@@ -225,6 +225,9 @@ export function BotPicturePicker({
   }
   const { line } = intake
   const dropping = line.kind === 'drop'
+  const outfitsId = useId()
+  const [outfitsOpen, setOutfitsOpen] = useState(false)
+  const dressable = Boolean(onOutfitChange) && !generating && pictureTakesLook(value, custom)
   const select = (key: PictureFaceKey | undefined): void => {
     // Choosing a picture is the newest action, so one still being read is dropped. Browsing onto an
     // empty Generate face chooses nothing, and a picture still being read lands as usual.
@@ -267,10 +270,7 @@ export function BotPicturePicker({
         <span>
           <Trans
             i18n={i18n}
-            defaults={t(
-              'bots.new.uploadDropOrPaste',
-              '<upload>Upload</upload>, drop, or paste an image'
-            )}
+            defaults={t('bots.new.uploadOrPaste', '<upload>Upload</upload> or paste')}
             components={{ upload: <LineAction onClick={() => fileRef.current?.click()} /> }}
           />
         </span>
@@ -324,6 +324,15 @@ export function BotPicturePicker({
                     total: PICKABLE_BOT_MASCOT_IDS.length
                   })
           }
+          badge={
+            dressable && !dropping ? (
+              <BotOutfitBadge
+                open={outfitsOpen}
+                controls={outfitsId}
+                onOpenChange={setOutfitsOpen}
+              />
+            ) : null
+          }
           onIndexChange={(index) => select(order[index])}
         />
         {/* On Generate the description field takes the swatches' place; the rows cross-fade. */}
@@ -340,6 +349,8 @@ export function BotPicturePicker({
                 onColorChange={onColorChange}
                 outfit={outfit}
                 onOutfitChange={onOutfitChange}
+                outfitsOpen={outfitsOpen}
+                outfitsId={outfitsId}
               />
             </BotPictureRowFold>
           ) : null}

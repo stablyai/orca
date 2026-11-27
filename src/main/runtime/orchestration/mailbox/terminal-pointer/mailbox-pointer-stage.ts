@@ -98,6 +98,7 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
       flight,
       expectedTarget,
       settlement,
+      pointer,
       args.enterDelayMs(pointer)
     )
   }
@@ -126,6 +127,7 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
   flight: OrchestrationMailboxDeliveryFlight,
   expectedTarget: OrchestrationMailboxPointerSubmitTarget,
   settlement: Extract<WriteSettlement, { outcome: 'accepted' | 'refused' }>,
+  pointer: string,
   enterDelayMs: number
 ): void {
   let delayedSettle = false
@@ -152,6 +154,8 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           isLeafPtyProvenAbsent: args.deps.isLeafPtyProvenAbsent,
           isPtyAwaitingUserInput: args.deps.isPtyAwaitingUserInput,
           writePty: args.deps.writePty,
+          armSubmitCheck: args.deps.armSubmitCheck,
+          reportHeldNotice: args.deps.reportHeldNotice,
           settle: args.settle,
           redrive: args.redrive
         },
@@ -159,6 +163,7 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           mailboxHandle: args.mailboxHandle,
           messages: args.messages,
           newestSequence: args.newestSequence,
+          pointer,
           ptyId,
           flight,
           expectedTarget

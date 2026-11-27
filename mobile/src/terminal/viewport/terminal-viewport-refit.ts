@@ -233,7 +233,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
       invalidateViewports()
       scheduleViewportRefit({ heightOriginated: true })
     },
-    [viewportMeasuredRef, scheduleViewportRefit]
+    [invalidateViewports, scheduleViewportRefit]
   )
   // Notify imperatively so layout churn cannot rerender the whole session.
   const notifyTerminalFrameHeight = useCallback(
@@ -258,7 +258,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
       invalidateViewports()
       scheduleViewportRefit()
     },
-    [activeHandleRef, viewportMeasuredRef, scheduleViewportRefit]
+    [activeHandleRef, invalidateViewports, scheduleViewportRefit]
   )
 
   useEffect(() => {

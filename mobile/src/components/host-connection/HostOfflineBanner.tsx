@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { CloudOff } from 'lucide-react-native'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import { LoadingSpinner } from '../feedback/LoadingSpinner'
 import { LIST_ROW_PADDING } from '../list/ListGroup'
-import { colors, pressedStyle, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { pressedStyle, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useCalmConnectionState } from '../../transport/connection/calm-connection-state'
 import { formatOfflineAsOfTime } from './offline-as-of-time'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -84,8 +84,10 @@ export function HostOfflineBanner({
   asOf: number | null
   onRetry: (() => void) | null
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const locale = useMobileUiLocale()
   return (
     <View style={styles.line} accessibilityLiveRegion="polite">
       {offline ? (
@@ -104,7 +106,7 @@ export function HostOfflineBanner({
         {asOf !== null ? (
           <Text style={styles.detail} numberOfLines={1}>
             {t('components.hostOfflineBanner.asOf', 'As of {{time}}', {
-              time: formatOfflineAsOfTime(asOf)
+              time: formatOfflineAsOfTime(asOf, t, locale)
             })}
           </Text>
         ) : null}
@@ -127,7 +129,7 @@ const RETRY_HIT_SLOP = { top: 8, bottom: 8 }
 // The text keeps Retry's height so the line doesn't jump when Retry comes and goes.
 const LINE_CONTENT_HEIGHT = 32
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   line: {
     flexDirection: 'row',
     alignItems: 'center',

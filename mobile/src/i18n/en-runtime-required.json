@@ -16,12 +16,6 @@
     }
   },
   "agents": {
-    "desktops": {
-      "agents_one": "{{count}} agent",
-      "agents_other": "{{count}} agents",
-      "needsYou_one": "{{count}} needs you",
-      "needsYou_other": "{{count}} need you"
-    },
     "list": {
       "workers_one": "{{count}} worker",
       "workers_other": "{{count}} workers"
@@ -116,6 +110,12 @@
     }
   },
   "automations": {
+    "mobile": {
+      "catchUpHours_one": "Within {{count}} hour",
+      "catchUpHours_other": "Within {{count}} hours",
+      "catchUpMinutes_one": "Within {{count}} minute",
+      "catchUpMinutes_other": "Within {{count}} minutes"
+    },
     "orphanIssues": {
       "hostReselection": "Edit this automation and reselect its host before running it.",
       "malformed": "Its stored host record is incomplete.",
@@ -313,6 +313,9 @@
       "commentImageNotStored": "Only pasted or attached images can go on a comment.",
       "commentImagesTooLarge": "These images add up to {{totalMb}} MB. A comment takes up to {{maxMb}} MB.",
       "commentImagesTooMany": "Comments take up to {{max}} images.",
+      "composioKeyCantCreateSessions": "This Composio key can’t create sessions. It needs {{permission}}.",
+      "composioKeyMissingPermission": "This Composio key is missing a permission Orca needs.",
+      "composioKeyNeedsPermission": "This Composio key is missing a permission. It needs {{permission}}.",
       "googleAccountsChanged": "Its Google accounts changed since you opened them. Check them and save again.",
       "groupAttachFailed": "Couldn't attach the files. Try sending again in a moment.",
       "groupAttachmentsUnavailable": "This computer can't take attachments right now. Try sending again in a moment.",
@@ -1065,8 +1068,8 @@
         "earlierMessages_other": "{{count}} earlier messages in the thread"
       },
       "turnDiff": {
-        "changedFiles_one": "{{count}} changed file",
-        "changedFiles_other": "{{count}} changed files"
+        "changed_one": "Changed {{count}} file",
+        "changed_other": "Changed {{count}} files"
       },
       "workerDock": {
         "taskCount_one": "{{count}} task",
@@ -1084,6 +1087,12 @@
     "worktreeListRow": {
       "children_one": "{{count}} child",
       "children_other": "{{count}} children"
+    }
+  },
+  "diagnostics": {
+    "troubleshootView": {
+      "problems_one": "{{count}} problem",
+      "problems_other": "{{count}} problems"
     }
   },
   "dictation": {
@@ -1230,6 +1239,12 @@
       "stateWorkingCount_one": "{{value0}} working",
       "stateWorkingCount_other": "{{value0}} working"
     },
+    "bulkTabClose": {
+      "confirm_one": "Close {{count}} tab",
+      "confirm_other": "Close {{count}} tabs",
+      "titleOthers_one": "Close {{count}} other tab?",
+      "titleOthers_other": "Close {{count}} other tabs?"
+    },
     "diffReviewScreenModel": {
       "commitFiles_one": "{{count}} file",
       "commitFiles_other": "{{count}} files",
@@ -1260,7 +1275,15 @@
       "images_one": "{{count}} image",
       "images_other": "{{count}} images"
     },
+    "tabBar": {
+      "needYou_one": "{{count}} needs you",
+      "needYou_other": "{{count}} need you"
+    },
     "tabsSheet": {
+      "closeFinishedTitle_one": "Close {{count}} finished tab?",
+      "closeFinishedTitle_other": "Close {{count}} finished tabs?",
+      "closeFinished_one": "Close {{count}} finished tab",
+      "closeFinished_other": "Close {{count}} finished tabs",
       "panes_one": "{{count}} pane",
       "panes_other": "{{count}} panes"
     }
@@ -1288,9 +1311,7 @@
     },
     "changesHeader": {
       "commits_one": "{{count}} commit",
-      "commits_other": "{{count}} commits",
-      "filesNeedDecision_one": "{{count}} file needs a decision before you can finish.",
-      "filesNeedDecision_other": "{{count}} files need a decision before you can finish."
+      "commits_other": "{{count}} commits"
     },
     "commitDetail": {
       "files_one": "{{count}} file",
@@ -1353,16 +1374,12 @@
       "teams_other": "{{count}} teams"
     },
     "filterSheet": {
-      "projectItems_one": "{{count}} item",
-      "projectItems_other": "{{count}} items"
+      "done": "Done",
+      "title": "Filter & display"
     },
     "githubProjectList": {
       "moreFields_one": "+{{count}} field",
       "moreFields_other": "+{{count}} fields"
-    },
-    "itemDetailContent": {
-      "pipelineJobs_one": "{{count}} jobs",
-      "pipelineJobs_other": "{{count}} jobs"
     },
     "pickerProjection": {
       "repos_one": "{{count}} repo",

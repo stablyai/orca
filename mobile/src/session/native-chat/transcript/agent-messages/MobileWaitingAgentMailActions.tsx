@@ -6,10 +6,9 @@ import {
 import { Pressable, Text, View } from 'react-native'
 import { CornerDownRight, Pencil, Send, Trash2 } from 'lucide-react-native'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { queuedMessageStyles } from '../../input/queued-messages/mobile-native-chat-queued-message-styles'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
+import { queuedMessageStylesSheet } from '../../input/queued-messages/mobile-native-chat-queued-message-styles'
 import type { MobileQueuedCardActions } from '../../input/queued-messages/mobile-queued-card-actions'
 import type { MobileQueuedMessageEdit } from '../../input/queued-messages/use-mobile-structured-queued-message-controls'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
@@ -51,7 +50,9 @@ export function MobileWaitingAgentMailActions({
 }: {
   queuedMessageId: string
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const queuedMessageStyles = useThemedStyles(queuedMessageStylesSheet)
   const t = useMobileTranslation()
   const actions = useContext(MobileWaitingAgentMailContext)
   const store = actions?.editable ?? NOT_EDITABLE
@@ -132,7 +133,7 @@ export function MobileWaitingAgentMailActions({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   actions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   // The queue cards' greyed-out look while an action is on its way.
   disabled: { opacity: 0.5 },

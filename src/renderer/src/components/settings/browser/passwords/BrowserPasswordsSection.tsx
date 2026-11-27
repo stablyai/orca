@@ -197,7 +197,7 @@ function BrowserPasswordsProfile({
       title: t('common.delete', 'Delete'),
       description: t(
         'settings.browser.passwords.deleteAllConfirmDescription',
-        'Every saved password in the {{profile}} profile is permanently deleted. This can’t be undone.',
+        'All saved passwords, notes, and never-save sites in the {{profile}} profile will be permanently deleted. This can’t be undone.',
         { profile: profileLabel }
       ),
       confirmLabel: t('common.delete', 'Delete'),

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import {
   resolveFolderWorkspaceHost,
@@ -12,28 +13,35 @@ import type { OrcadServerRepository } from './orcad-server-repositories'
 /** Include groups because they can supply a folder's host. */
 export type OrcadServerFolderCatalog = Omit<FolderHostCatalog, 'repos'>
 
-const HostFields = { connectionId: z.string().nullish(), executionHostId: z.string().nullish() }
-
-const ServerFolderWorkspacesSchema = z.object({
-  folderWorkspaces: z.array(
-    z.object({
-      id: z.string().min(1),
-      folderPath: z.string().min(1),
-      projectGroupId: z.string().min(1),
-      ...HostFields
-    })
-  )
+const hostFields = () => ({
+  connectionId: z.string().nullish(),
+  executionHostId: z.string().nullish()
 })
 
-const ServerProjectGroupsSchema = z.object({
-  groups: z.array(
-    z.object({
-      id: z.string().min(1),
-      parentGroupId: z.string().nullish(),
-      ...HostFields
-    })
-  )
-})
+const ServerFolderWorkspacesSchema = lazyZodSchema(() =>
+  z.object({
+    folderWorkspaces: z.array(
+      z.object({
+        id: z.string().min(1),
+        folderPath: z.string().min(1),
+        projectGroupId: z.string().min(1),
+        ...hostFields()
+      })
+    )
+  })
+)
+
+const ServerProjectGroupsSchema = lazyZodSchema(() =>
+  z.object({
+    groups: z.array(
+      z.object({
+        id: z.string().min(1),
+        parentGroupId: z.string().nullish(),
+        ...hostFields()
+      })
+    )
+  })
+)
 
 export async function listRemoteOrcadFolderCatalog(
   pairingCode: string,

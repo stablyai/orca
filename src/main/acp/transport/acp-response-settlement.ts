@@ -6,6 +6,8 @@ export type AcpRequestOptions<T = unknown> = {
    *  unanswered control cannot end the connection. Default withdraws the write. */
   onTimeout?: 'withdraw' | 'cancel'
   settle: (response: AcpResponse) => T
+  /** Told the request's id as it is assigned, before it is written. */
+  onId?: (id: number) => void
 }
 
 export type AcpPendingResponse = {

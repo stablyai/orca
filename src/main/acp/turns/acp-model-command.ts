@@ -42,9 +42,9 @@ async function applyAcpModelCommand(
   if (!command) {
     throw new Error(`${bound.agent} has no model command`)
   }
-  // The command is a prompt, so a steer still interrupts the running answer before it is sent.
+  // The model command needs the active prompt to end, not its own preparing steer to release.
   if (session.turns.running) {
-    await session.turns.whenIdle(bound.signal)
+    await session.turns.whenIdle(bound.signal, 'prompt')
   }
   throwIfWithdrawn()
   const { options } = session

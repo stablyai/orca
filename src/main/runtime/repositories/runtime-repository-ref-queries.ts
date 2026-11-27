@@ -10,14 +10,7 @@ import {
   getRepoSearchRefsProbeLimit,
   isRepoSearchRefsRequestLimit
 } from '../../../shared/git/refs/repo-search-limits'
-import { getDefaultBaseRefAsync as getBaseRefDefault } from '../../git/refs/resolution/repo-default-base-ref'
-import { getRemoteCount } from '../../git/remotes/repo-remote-queries'
-import { searchRemoteRefPage } from '../../git/refs/resolution/repo-remote-ref-search'
-import { searchBaseRefDetails } from '../../git/refs/resolution/repo-base-ref-search'
-import {
-  toGitShortRefSelectors,
-  type RepoSearchRefSelectorForm
-} from '../../git/refs/resolution/legacy-ref-selectors'
+import type { RepoSearchRefSelectorForm } from '../../git/refs/resolution/legacy-ref-selectors'
 import { getRepoRoutingConnectionId } from '../../../shared/execution-host/execution-host'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 
@@ -48,11 +41,19 @@ export class RuntimeRepositoryRefQueries {
     }
     const includeQualifiedRefs = selectorForm !== 'unqualified'
     const forClient = async (rows: BaseRefSearchResult[]): Promise<BaseRefSearchResult[]> =>
-      selectorForm === 'git-short' ? toGitShortRefSelectors(repo.path, rows, signal) : rows
+      selectorForm === 'git-short'
+        ? (await import('../../git/refs/resolution/legacy-ref-selectors')).toGitShortRefSelectors(
+            repo.path,
+            rows,
+            signal
+          )
+        : rows
     if (namespace === 'remote') {
       if (getRepoRoutingConnectionId(repo)) {
         throw new Error('This project is not served by this host.')
       }
+      const { searchRemoteRefPage } =
+        await import('../../git/refs/resolution/repo-remote-ref-search')
       const page = await searchRemoteRefPage(repo.path, query, effectiveLimit, includeQualifiedRefs)
       const refDetails = await forClient(page.refDetails)
       return { ...page, refDetails, refs: refDetails.map((row) => row.refName), namespace }
@@ -60,7 +61,9 @@ export class RuntimeRepositoryRefQueries {
     // Unserved SSH hosts report no refs; never search local files for them.
     const refDetails = getRepoRoutingConnectionId(repo)
       ? []
-      : await searchBaseRefDetails(repo.path, query, probeLimit, includeQualifiedRefs)
+      : await (
+          await import('../../git/refs/resolution/repo-base-ref-search')
+        ).searchBaseRefDetails(repo.path, query, probeLimit, includeQualifiedRefs)
     const page = await forClient(refDetails.slice(0, effectiveLimit))
     return {
       refs: page.map((entry) => entry.refName),
@@ -84,6 +87,10 @@ export class RuntimeRepositoryRefQueries {
       // Optional, so older clients read plain unknown; newer ones re-ask while it is set.
       return { defaultBaseRef: null, remoteCount: 0, refusedWslDistro: blocked.distro }
     }
+    const [{ getDefaultBaseRefAsync: getBaseRefDefault }, { getRemoteCount }] = await Promise.all([
+      import('../../git/refs/resolution/repo-default-base-ref'),
+      import('../../git/remotes/repo-remote-queries')
+    ])
     const [defaultBaseRef, remoteCount] = await Promise.all([
       getBaseRefDefault(repo.path),
       getRemoteCount(repo.path)

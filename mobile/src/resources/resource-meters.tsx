@@ -2,14 +2,15 @@ import { Text, View } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
 import { usageBandColor } from '../accounts/usage/UsageBar'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { RING_SIZE, styles } from './mobile-resources-screen-styles'
+import { useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
+import { RING_SIZE, resourcesScreenStyles } from './mobile-resources-screen-styles'
 
 const RING_STROKE = 7
 
 export function CpuRing({ percent }: { percent: number | null }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(resourcesScreenStyles)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const radius = (RING_SIZE - RING_STROKE) / 2
   const circumference = 2 * Math.PI * radius
@@ -34,7 +35,7 @@ export function CpuRing({ percent }: { percent: number | null }) {
             cx={RING_SIZE / 2}
             cy={RING_SIZE / 2}
             r={radius}
-            stroke={usageBandColor(percent)}
+            stroke={usageBandColor(percent, colors)}
             strokeWidth={RING_STROKE}
             fill="none"
             strokeDasharray={[(percent / 100) * circumference, circumference]}
@@ -57,7 +58,8 @@ export function CpuRing({ percent }: { percent: number | null }) {
 }
 
 export function CpuSparkline({ samples }: { samples: readonly number[] }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(resourcesScreenStyles)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   if (samples.length === 0) {
     return null
@@ -79,7 +81,7 @@ export function CpuSparkline({ samples }: { samples: readonly number[] }) {
                 styles.sparkFill,
                 {
                   height: `${clampPercent(value)}%`,
-                  backgroundColor: usageBandColor(value)
+                  backgroundColor: usageBandColor(value, colors)
                 }
               ]}
             />
@@ -91,7 +93,8 @@ export function CpuSparkline({ samples }: { samples: readonly number[] }) {
 }
 
 export function CoreBars({ cores }: { cores: readonly { percent: number | null }[] }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(resourcesScreenStyles)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   if (cores.length === 0) {
     return null
@@ -113,7 +116,7 @@ export function CoreBars({ cores }: { cores: readonly { percent: number | null }
                   styles.coreFill,
                   {
                     width: `${core.percent === null ? 0 : clampPercent(core.percent)}%`,
-                    backgroundColor: usageBandColor(core.percent)
+                    backgroundColor: usageBandColor(core.percent, colors)
                   }
                 ]}
               />
@@ -130,9 +133,11 @@ export function CoreBars({ cores }: { cores: readonly { percent: number | null }
 }
 
 function BandLegend({ percent, label }: { percent: number; label: string }) {
+  const styles = useThemedStyles(resourcesScreenStyles)
+  const colors = useMobileColors()
   return (
     <View style={styles.legendItem}>
-      <View style={[styles.legendSwatch, { backgroundColor: usageBandColor(percent) }]} />
+      <View style={[styles.legendSwatch, { backgroundColor: usageBandColor(percent, colors) }]} />
       <Text style={styles.meta}>{label}</Text>
     </View>
   )
@@ -151,7 +156,8 @@ export function ResourceMeter({
   accessibilityLabel: string
   quiet?: boolean
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(resourcesScreenStyles)
+  const colors = useMobileColors()
   const rounded = Math.round(clampPercent(usedPercent))
   return (
     <View
@@ -169,7 +175,7 @@ export function ResourceMeter({
           <View
             style={[
               styles.fill,
-              { width: `${rounded}%`, backgroundColor: usageBandColor(rounded) }
+              { width: `${rounded}%`, backgroundColor: usageBandColor(rounded, colors) }
             ]}
           />
         </View>

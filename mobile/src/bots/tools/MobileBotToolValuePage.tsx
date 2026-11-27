@@ -8,7 +8,7 @@ import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 
 export type ToolValueField = {
@@ -33,6 +33,7 @@ export function MobileBotToolValuePage(props: {
   onCancel: () => void
   onDone: (values: string[]) => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [values, setValues] = useState(props.initial)
   const [shown, setShown] = useState(false)
@@ -104,6 +105,6 @@ export function MobileBotToolValuePage(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   fields: { marginTop: spacing.sm, gap: spacing.sm }
 }))

@@ -5,6 +5,7 @@ import {
 import { SESSION_SEARCH_LIMIT_MAX } from '../../../shared/ai-vault/search/ai-vault-search-limit'
 import type { AiVaultSearchHit } from '../../../shared/ai-vault/search/ai-vault-search-types'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 /** Legacy entries refetch c and skip e; carried entries replay p, then read c without an offset. */
 export type MergedSearchCursorEntry = {
@@ -23,22 +24,24 @@ export type MergedSearchCursor = {
   hosts: Record<string, MergedSearchCursorEntry>
 }
 
-const mergedCursorPayloadSchema = z.object({
-  v: z.literal(2).optional(),
-  k: z.string().max(128).optional(),
-  l: z.number().int().positive(),
-  s: z.enum(['relevance', 'newest']),
-  h: z.record(
-    z.string().min(1),
-    z.object({
-      c: z.string().nullable(),
-      e: z.number().int().nonnegative(),
-      g: z.number().int().nonnegative(),
-      p: z.array(AiVaultSearchHitSchema).max(SESSION_SEARCH_LIMIT_MAX).optional(),
-      t: AiVaultSearchTruncationSchema.optional()
-    })
-  )
-})
+const mergedCursorPayloadSchema = lazyZodSchema(() =>
+  z.object({
+    v: z.literal(2).optional(),
+    k: z.string().max(128).optional(),
+    l: z.number().int().positive(),
+    s: z.enum(['relevance', 'newest']),
+    h: z.record(
+      z.string().min(1),
+      z.object({
+        c: z.string().nullable(),
+        e: z.number().int().nonnegative(),
+        g: z.number().int().nonnegative(),
+        p: z.array(AiVaultSearchHitSchema).max(SESSION_SEARCH_LIMIT_MAX).optional(),
+        t: AiVaultSearchTruncationSchema.optional()
+      })
+    )
+  })
+)
 
 export function encodeMergedSearchCursor(cursor: MergedSearchCursor): string {
   const payload = { v: 2, k: cursor.key, l: cursor.limit, s: cursor.sort, h: cursor.hosts }

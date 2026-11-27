@@ -5,8 +5,8 @@ import { ListGroup } from '../components/list/ListGroup'
 import { SectionHeader } from '../components/list/SectionHeader'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { styles } from './mobile-resources-screen-styles'
+import { useThemedStyles } from '../theme/themed-styles'
+import { resourcesScreenStyles } from './mobile-resources-screen-styles'
 import { CoreBars, CpuRing, CpuSparkline, ResourceMeter } from './resource-meters'
 
 export function ResourcesSections({
@@ -18,7 +18,7 @@ export function ResourcesSections({
   cpuHistory: readonly number[]
   now: number
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(resourcesScreenStyles)
   const t = useMobileTranslation()
   const roundedCpu =
     snapshot.cpu.percent === null ? null : Math.round(clampPercent(snapshot.cpu.percent))

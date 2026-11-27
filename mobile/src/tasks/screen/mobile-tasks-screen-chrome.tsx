@@ -1,70 +1,25 @@
-import type { ReactNode } from 'react'
+import { useRef, useState } from 'react'
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { NavBar } from '../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
-import { MobileSegmentedControl } from '../../components/controls/MobileSegmentedControl'
+import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
 import { View } from 'react-native'
-import { ChevronLeft, RefreshCw } from 'lucide-react-native'
+import { ChevronLeft, Ellipsis, RefreshCw } from 'lucide-react-native'
 import { StatusDot } from '../../components/feedback/StatusDot'
 import { MobileTasksHostSubtitle } from './mobile-tasks-host-subtitle'
-import { styles } from '../mobile-tasks-legacy-styles'
-import { renderMobileTasksProviderControls } from './mobile-tasks-provider-controls'
-import { selectMobileTasksProvider } from './mobile-tasks-provider-pickers'
-import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useRefreshHint } from '../../query/refresh-hint'
 
-function refreshLabels(t: Translate) {
-  return {
-    github: t('tasks.screenChrome.refreshGitHub', 'Refresh GitHub work'),
-    gitlab: t('tasks.screenChrome.refreshGitLab', 'Refresh GitLab work items'),
-    linear: t('tasks.screenChrome.refreshLinear', 'Refresh Linear'),
-    jira: t('tasks.screenChrome.refreshJira', 'Refresh Jira issues')
-  }
-}
-
-// Bar, then the source switch, then one row of scope chips; search and New task sit at the bottom.
+// Back, Tasks and ⋯ only: filters live in the bar's filter sheet, search at the bottom.
 export function renderMobileTasksChrome(model: ConnectionPresentationModel) {
-  const { provider, providerOptions, setTaskCopyFeedbackRootRef, taskUiReady } = model
   return (
-    <View ref={setTaskCopyFeedbackRootRef} style={styles.topChrome}>
-      <MobileTasksStatusBar
-        model={model}
-        accessory={
-          <>
-            {providerOptions.length > 1 ? (
-              <MobileSegmentedControl
-                segments={providerOptions}
-                selected={provider}
-                onSelect={(next) => {
-                  if (next !== provider) {
-                    selectMobileTasksProvider(model, next)
-                  }
-                }}
-                disabled={!taskUiReady}
-                fill
-                testIDPrefix="mobile-tasks-provider-"
-                // Hold the row's space but hide the default sources until the desktop says which exist, so chips never reflow.
-                style={[styles.providerSwitch, !taskUiReady && { opacity: 0 }]}
-              />
-            ) : null}
-
-            {renderMobileTasksProviderControls(model)}
-          </>
-        }
-      />
+    <View ref={model.setTaskCopyFeedbackRootRef} style={model.styles.topChrome}>
+      <MobileTasksNavBar model={model} />
     </View>
   )
 }
 
-// These pages have no pull-to-refresh, so Refresh stays in the bar.
-export function MobileTasksStatusBar({
-  model,
-  accessory
-}: {
-  model: ConnectionPresentationModel
-  accessory: ReactNode
-}) {
+function MobileTasksNavBar({ model }: { model: ConnectionPresentationModel }) {
   const {
     connState,
     githubMode,
@@ -82,38 +37,57 @@ export function MobileTasksStatusBar({
   } = model
   const t = useMobileTranslation()
   const showRefreshLine = useRefreshHint(revalidating)
+  const menuAnchor = useRef(null)
+  const [menuOpen, setMenuOpen] = useState(false)
   return (
-    <NavBar
-      leading={
-        <NavBarButton
-          icon={ChevronLeft}
-          onPress={() => router.back()}
-          accessibilityLabel={t('common.back', 'Back')}
-        />
-      }
-      title={t('tasks.screenChrome.title', 'Tasks')}
-      subtitle={
-        <>
-          <StatusDot state={connState} verdict={headerVerdict} />
-          <MobileTasksHostSubtitle hostId={hostId} />
-        </>
-      }
-      trailing={
-        <NavBarButton
-          icon={RefreshCw}
-          accessibilityLabel={refreshLabels(t)[provider]}
-          disabled={!taskUiReady || loading || refreshing || githubProjectLoading}
-          onPress={() => {
-            if (provider === 'github' && githubMode === 'project') {
-              refreshGitHubProject()
-              return
+    <>
+      <NavBar
+        leading={
+          <NavBarButton
+            icon={ChevronLeft}
+            onPress={() => router.back()}
+            accessibilityLabel={t('common.back', 'Back')}
+          />
+        }
+        title={t('tasks.screenChrome.title', 'Tasks')}
+        subtitle={
+          <>
+            <StatusDot state={connState} verdict={headerVerdict} />
+            <MobileTasksHostSubtitle hostId={hostId} />
+          </>
+        }
+        trailing={
+          <NavBarButton
+            ref={menuAnchor}
+            icon={Ellipsis}
+            accessibilityLabel={t('tasks.screenChrome.more', 'More')}
+            onPress={() => setMenuOpen(true)}
+          />
+        }
+        refreshing={showRefreshLine}
+      />
+      <PullDownMenu
+        visible={menuOpen}
+        anchorRef={menuAnchor}
+        onClose={() => setMenuOpen(false)}
+        groups={[
+          [
+            {
+              label: t('common.refresh', 'Refresh'),
+              icon: RefreshCw,
+              // The page's lists can't be pulled to refresh in the WebView, so this is the way to re-read.
+              disabled: !taskUiReady || loading || refreshing || githubProjectLoading,
+              onPress: () => {
+                if (provider === 'github' && githubMode === 'project') {
+                  refreshGitHubProject()
+                  return
+                }
+                refreshTasks()
+              }
             }
-            refreshTasks()
-          }}
-        />
-      }
-      accessory={accessory}
-      refreshing={showRefreshLine}
-    />
+          ]
+        ]}
+      />
+    </>
   )
 }

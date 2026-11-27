@@ -14,8 +14,9 @@ import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useRouteHandoff } from '../navigation/route-handoff'
-import { colors, spacing } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useHostClient } from '../transport/connection/host-client-hooks'
 import { startRuntimeStatusProbe } from '../transport/connection/runtime-status-probe'
 import {
@@ -23,14 +24,15 @@ import {
   hostResourcesPollDelayMs,
   hostResourcesRefusalStopsPolling
 } from './host-resources-polling'
-import { styles } from './mobile-resources-screen-styles'
+import { resourcesScreenStyles } from './mobile-resources-screen-styles'
 import { ResourcesSections } from './resource-sections'
 
 type Capability = 'unknown' | 'present' | 'absent' | 'unreadable'
 type SampleProblem = 'unreadable' | 'failed'
 
 export function MobileResourcesScreen() {
-  useMobileColorScheme()
+  const styles = useThemedStyles(resourcesScreenStyles)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()

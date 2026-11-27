@@ -4,11 +4,10 @@
 // the automation's creator; what the event says is content, marked so on any request it sends on.
 import type { Bot } from '../../shared/bot-types'
 import {
-  googleBotConnectState,
+  botGoogleConnectState,
   type GoogleBotConnectState
 } from '../../shared/google/google-bot-connect-state'
 import { getGoogleConnect } from '../google/google-connect'
-import { botGoogleAccess, botMayUseGoogleAccount } from '../../shared/google/google-bot-accounts'
 import { BOT_TOKEN_ENDED, botOfToken } from './bot-of-caller'
 
 /** Null when the bot may use Google; else the one sentence to act on. A non-bot caller is the owner. */
@@ -40,12 +39,9 @@ export async function hostGoogleBotState(
   bot: Pick<Bot, 'google' | 'googleAccounts'>
 ): Promise<GoogleBotConnectState> {
   const connect = getGoogleConnect()
-  const access = botGoogleAccess(bot)
-  return googleBotConnectState({
-    allowed: bot.google === true,
+  const { allowed, host } = botGoogleConnectState(bot, {
     client: (await connect?.client()) ?? null,
-    accounts: ((await connect?.accounts()) ?? []).filter((account) =>
-      botMayUseGoogleAccount(access, account.email)
-    )
+    accounts: (await connect?.accounts()) ?? []
   })
+  return { allowed, host }
 }

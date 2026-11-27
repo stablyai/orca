@@ -18,9 +18,8 @@ import { TransientToast, useTransientToast } from '../components/feedback/Transi
 import { MobileFileExplorerPanel } from '../files/explorer/MobileFileExplorerPanel'
 import { useNow } from '../hooks/use-now'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { MobileBotActivityTab } from './MobileBotActivityTab'
 import { MobileBotSettingsTab } from './MobileBotSettingsTab'
@@ -89,7 +88,7 @@ export function MobileBotPanel(props: {
   /** A Connect's sign-in sheet, in this host so it and the panel swap in one beat. */
   signIn?: ReactNode
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const visible = props.open !== null
   const { bot } = props.routeBot
@@ -142,6 +141,7 @@ export function MobileBotPanel(props: {
 
   const items = usePhoneBotItems({
     client: props.client,
+    hostKey: props.hostKey,
     botId: bot.id,
     chatIds: null,
     showing: visible,
@@ -403,7 +403,7 @@ export function MobileBotPanel(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   root: { flex: 1 },
   page: { flex: 1, backgroundColor: colors.sheetSurface },
   scroll: { flex: 1 },

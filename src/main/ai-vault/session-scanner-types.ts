@@ -170,6 +170,8 @@ export type SessionAccumulator = {
   // The earliest retained preview is no longer the opening turn.
   previewMessagesTruncated: boolean
   antigravityOpeningPrompt?: AiVaultSession['antigravityOpeningPrompt'] | null
+  // Tokens of the last Copilot shutdown that wrote accountingSnapshot; the next such one repeats them.
+  copilotCumulativeShutdownTokens?: number
   firstUserPrompt: string | null
   lastUserPrompt: string | null
   // Recoverable signal for a zero-turn transcript (see AiVaultSession).

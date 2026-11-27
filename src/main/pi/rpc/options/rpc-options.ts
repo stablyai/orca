@@ -8,6 +8,7 @@ import {
 
 import { withLiveCatalogListing } from '../../../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { PI_THINKING_LEVELS } from '../../../../shared/agent-session/options/reconciliation/structured-agent-session-effective-effort'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import type { AgentSessionCommandsResult } from '../../../../shared/agent-session/agent-session-wire'
@@ -17,15 +18,17 @@ import { piRpcStateSchema } from '../rpc-protocol'
 const stateSchema = piRpcStateSchema.safeExtend({
   model: modelSchema.nullish()
 })
-const commandsSchema = z.object({
-  commands: z.array(
-    z.object({
-      name: z.string().min(1),
-      description: z.string().optional(),
-      source: z.string().optional()
-    })
-  )
-})
+const commandsSchema = lazyZodSchema(() =>
+  z.object({
+    commands: z.array(
+      z.object({
+        name: z.string().min(1),
+        description: z.string().optional(),
+        source: z.string().optional()
+      })
+    )
+  })
+)
 
 export async function readPiRpcSessionOptions(
   rpc: PiRpcRequester,

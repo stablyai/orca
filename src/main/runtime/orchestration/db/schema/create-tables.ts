@@ -7,6 +7,7 @@ import { BOT_REQUEST_SCHEMA_SQL } from '../bot-requests/bot-request-store'
 import { BOT_REQUEST_OUTCOME_SCHEMA_SQL } from '../bot-requests/bot-request-outcomes'
 import { BOT_CONVERSATION_ACTS_FOR_SCHEMA_SQL } from '../bot-requests/bot-conversation-acts-for-store'
 import { BOT_RUN_RESEND_SCHEMA_SQL } from '../bot-requests/bot-run-resend-store'
+import { MAIL_WAKE_ATTEMPT_SCHEMA_SQL } from '../messages/mail-wake-attempt-store'
 import { REMOTE_OWNED_SCHEMA_SQL } from '../remote-owned/remote-owned-schema-sql'
 import { PEER_RUN_SCHEMA_SQL } from '../peer-runs/peer-run-queue-sql'
 import { WORKER_PRESENCE_SCHEMA_SQL } from '../worker-presence/worker-presence-store'
@@ -15,7 +16,7 @@ import { WORKER_BOUND_TERMINAL_SCHEMA_SQL } from '../worker-terminal/worker-boun
 
 export function createTables(this: OrchestrationDb): void {
   this.db.exec(
-    `${createCoreTablesSql()}\n${createGraphTablesSql()}\n${REMOVED_WORK_SCHEMA_SQL}\n${BOT_REQUEST_SCHEMA_SQL}\n${BOT_REQUEST_OUTCOME_SCHEMA_SQL}\n${BOT_CONVERSATION_ACTS_FOR_SCHEMA_SQL}\n${BOT_RUN_RESEND_SCHEMA_SQL}\n${REMOTE_OWNED_SCHEMA_SQL}\n${PEER_RUN_SCHEMA_SQL}\n${WORKER_PRESENCE_SCHEMA_SQL}\n${PAIRED_SERVER_ASKS_SCHEMA_SQL}\n${WORKER_BOUND_TERMINAL_SCHEMA_SQL}`
+    `${createCoreTablesSql()}\n${createGraphTablesSql()}\n${REMOVED_WORK_SCHEMA_SQL}\n${BOT_REQUEST_SCHEMA_SQL}\n${BOT_REQUEST_OUTCOME_SCHEMA_SQL}\n${BOT_CONVERSATION_ACTS_FOR_SCHEMA_SQL}\n${BOT_RUN_RESEND_SCHEMA_SQL}\n${MAIL_WAKE_ATTEMPT_SCHEMA_SQL}\n${REMOTE_OWNED_SCHEMA_SQL}\n${PEER_RUN_SCHEMA_SQL}\n${WORKER_PRESENCE_SCHEMA_SQL}\n${PAIRED_SERVER_ASKS_SCHEMA_SQL}\n${WORKER_BOUND_TERMINAL_SCHEMA_SQL}`
   )
   // Unreleased builds saved each send's fence as NOT NULL; nothing reads it, and new rows carry none.
   if (this.hasColumn('structured_mail_sends', 'fence')) {
@@ -38,6 +39,24 @@ export function createTables(this: OrchestrationDb): void {
       'ALTER TABLE remote_dispatches ADD COLUMN task_settled_here INTEGER NOT NULL DEFAULT 0'
     )
   }
+  for (const [table, column] of [
+    ['remote_placements', 'creator_orca_session_id'],
+    ['remote_placements', 'creator_pane_key'],
+    ['remote_dispatches', 'creator_orca_session_id'],
+    ['remote_dispatches', 'creator_pane_key'],
+    ['remote_dispatches', 'worktree_id']
+  ] as const) {
+    if (!this.hasColumn(table, column)) {
+      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`)
+    }
+  }
+  // After the columns exist: a chat's tree finds its remote Dispatches as it finds its local ones.
+  this.db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_remote_dispatches_creator_session
+      ON remote_dispatches(creator_orca_session_id);
+    CREATE INDEX IF NOT EXISTS idx_remote_dispatches_creator_pane
+      ON remote_dispatches(creator_pane_key);
+  `)
   this.createMailboxDeliveryIndexesIfPossible()
   this.db.exec(DERIVED_DELIVERY_SCHEMA_SQL)
 }

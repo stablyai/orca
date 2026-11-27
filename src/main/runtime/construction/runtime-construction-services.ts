@@ -38,7 +38,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../shared/executio
 import type { RuntimeWorktreeScanResult } from '../workspaces/catalog/repo-worktree-resolution-scan'
 import type { ProcessedAgentStatusChunk } from '../../../shared/agent-status/transport/agent-status-osc'
 import type { RuntimeTerminalAgentPresenceOptions } from '../terminal/query/runtime-terminal-agent-presence'
-import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/workers/launch/orchestration-cli-command'
+import type { OrchestrationCliTarget } from '../orchestration/workers/launch/orchestration-cli-command'
 import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox/routing/mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-submit'
 import type { OrchestrationPointerPty } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-delivery-contract'
@@ -84,6 +84,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   ): Calls.SyncOrchestrationFederatedDispatchResult
   abstract retireStructuredAgentSessionTabFromSnapshot(sessionId: string): boolean
   abstract forgetStructuredSessionMail(sessionId: string): void
+  abstract sleptAgentHandleForPane(paneKey: string | null | undefined): string | null
   abstract getLocalProvider(): IPtyProvider | null
   abstract removeWorktreeMetadataAndHistory(
     ...args: Calls.RemoveWorktreeMetadataAndHistoryArgs
@@ -116,6 +117,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   ): TuiIdleHookTurn | null
   protected abstract readLiveTerminalScreenLines(ptyId: string | null | undefined): string[] | null
   protected abstract readCaughtUpRuledScreen(ptyId: string): RuledScreen | null
+  protected abstract readCaughtUpComposerTypedText(ptyId: string): string | null
   protected abstract readScreenClearingBlockedTailForPty(ptyId: string): string | null
   protected abstract isAgentSettledForDelivery(ptyId: string): boolean
   protected abstract readRuledScreen(ptyId: string | null | undefined): RuledScreen | null
@@ -262,9 +264,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   protected abstract isLeafPtyProvenAbsent(ptyId: string): Promise<boolean>
   protected abstract checkDeliverySettledAndArmRecheck(ptyId: string): boolean
   protected abstract isPtyAwaitingUserInput(ptyId: string): boolean
-  abstract getTerminalOrchestrationCliCommand(
-    handle: string
-  ): ReturnType<typeof resolveTerminalOrchestrationCliCommand>
+  abstract getTerminalOrchestrationCliTarget(handle: string): OrchestrationCliTarget
   protected abstract resolveOrchestrationPointerSubmitTarget(
     ptyId: string
   ): OrchestrationMailboxPointerSubmitTarget | null

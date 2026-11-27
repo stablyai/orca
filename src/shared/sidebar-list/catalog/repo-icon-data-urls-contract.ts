@@ -1,14 +1,17 @@
 import * as z from 'zod'
 import { getRepoExecutionHostId } from '../../execution-host/execution-host'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 /** Longest data URL one icon may reply with. */
 export const MAX_REPO_ICON_DATA_URL_BYTES = 16 * 1024
 /** Bounds a reply to 256 KiB by construction: each id answers with at most one capped icon. */
 export const MAX_REPO_ICON_IDS_PER_READ = 16
 
-export const RepoIconDataUrlsParams = z.object({
-  ids: z.array(z.string().min(1).max(64)).max(MAX_REPO_ICON_IDS_PER_READ)
-})
+export const RepoIconDataUrlsParams = lazyZodSchema(() =>
+  z.object({
+    ids: z.array(z.string().min(1).max(64)).max(MAX_REPO_ICON_IDS_PER_READ)
+  })
+)
 
 /** Return one icon per requested ID in order; null means missing/over-budget and lets clients draw fallbacks. */
 export type RepoIconDataUrlsReply = {
