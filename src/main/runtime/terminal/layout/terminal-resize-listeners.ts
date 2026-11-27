@@ -60,6 +60,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       handles?: readonly string[]
       requireFreshPtyLiveness?: boolean
       includeVisualLayouts?: boolean
+      alternateScreenGridPreviews?: boolean
     } = {}
   ): Promise<RuntimeTerminalListResult> {
     return this.terminalList.list(worktreeSelector, limit, opts)

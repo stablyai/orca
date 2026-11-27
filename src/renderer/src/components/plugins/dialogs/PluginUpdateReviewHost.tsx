@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import {
   closePluginUpdateReviewDialog,
   usePluginUpdateReviewDialogStore
@@ -9,10 +10,30 @@ import {
   resolvePluginUpdateReviews,
   usePluginUpdateReviewNoticesStore
 } from '@/store/plugins/updates/plugin-update-review-toast'
-import { pluginListEntryFromInstalled, type PluginListEntry } from '../list/plugin-list-entries'
-import { PluginUpdateReviewToast } from '../review/PluginUpdateReviewToast'
+import type { PluginListEntry } from '../list/plugin-list-entries'
 import { useOrcaVersion } from '../state/use-plugin-page-navigation'
-import { PluginUpdateAllDialog } from './PluginUpdateAllDialog'
+
+const PluginUpdateReviewToast = lazy(() =>
+  import('../review/PluginUpdateReviewToast').then((module) => ({
+    default: module.PluginUpdateReviewToast
+  }))
+)
+const PluginUpdateAllDialog = lazy(() =>
+  import('./PluginUpdateAllDialog').then((module) => ({
+    default: module.PluginUpdateAllDialog
+  }))
+)
+
+async function loadPluginUpdateEntries(pluginKeys: readonly string[]): Promise<PluginListEntry[]> {
+  const [{ pluginListEntryFromInstalled }, plugins] = await Promise.all([
+    import('../list/plugin-list-entries'),
+    window.api.plugins.list()
+  ])
+  const wanted = new Set(pluginKeys)
+  return plugins
+    .filter((plugin) => wanted.has(plugin.pluginKey))
+    .map((plugin) => pluginListEntryFromInstalled(plugin))
+}
 
 const TOAST_ID = 'plugin-update-review'
 
@@ -34,12 +55,14 @@ function useHeldUpdateToast(): void {
       }
       toast.custom(
         () => (
-          <PluginUpdateReviewToast
-            key={pluginUpdateReviewNoticesKey(notices)}
-            notices={notices}
-            onResolved={resolvePluginUpdateReviews}
-            onResize={show}
-          />
+          <Suspense fallback={null}>
+            <PluginUpdateReviewToast
+              key={pluginUpdateReviewNoticesKey(notices)}
+              notices={notices}
+              onResolved={resolvePluginUpdateReviews}
+              onResize={show}
+            />
+          </Suspense>
         ),
         {
           id: TOAST_ID,
@@ -74,16 +97,11 @@ export function PluginUpdateReviewHost(): React.JSX.Element | null {
       return
     }
     let stale = false
-    void window.api.plugins
-      .list()
-      .then((plugins) => {
+    void loadPluginUpdateEntries(request.pluginKeys)
+      .then((entries) => {
         if (stale) {
           return
         }
-        const wanted = new Set(request.pluginKeys)
-        const entries = plugins
-          .filter((plugin) => wanted.has(plugin.pluginKey))
-          .map((plugin) => pluginListEntryFromInstalled(plugin))
         // Why close when empty: the plugins were removed since the toast, so nothing is left to review.
         if (entries.length === 0) {
           closePluginUpdateReviewDialog()
@@ -105,14 +123,16 @@ export function PluginUpdateReviewHost(): React.JSX.Element | null {
     return null
   }
   return (
-    <PluginUpdateAllDialog
-      key={request.id}
-      open
-      entries={loaded.entries}
-      orcaVersion={orcaVersion}
-      onClose={closePluginUpdateReviewDialog}
-      // Why nothing to reload: main's install events refresh what the rest of Orca shows.
-      onUpdated={async () => undefined}
-    />
+    <Suspense fallback={null}>
+      <PluginUpdateAllDialog
+        key={request.id}
+        open
+        entries={loaded.entries}
+        orcaVersion={orcaVersion}
+        onClose={closePluginUpdateReviewDialog}
+        // Why nothing to reload: main's install events refresh what the rest of Orca shows.
+        onUpdated={async () => undefined}
+      />
+    </Suspense>
   )
 }

@@ -16,12 +16,14 @@ const coordinate = lazyZodSchema(() => z.number().finite().min(0).max(MAX_COORDI
 const point = lazyZodSchema(() => z.tuple([coordinate, coordinate]))
 
 const EDITOR_ACT_SCHEMAS = {
-  click: z.strictObject({ click: point }),
-  drag: z.strictObject({ drag: z.tuple([point, point]) }),
-  key: z.strictObject({
-    key: z.string().min(1).max(32),
-    modifiers: z.array(z.enum(KEY_MODIFIERS)).max(KEY_MODIFIERS.length).optional()
-  })
+  click: lazyZodSchema(() => z.strictObject({ click: point })),
+  drag: lazyZodSchema(() => z.strictObject({ drag: z.tuple([point, point]) })),
+  key: lazyZodSchema(() =>
+    z.strictObject({
+      key: z.string().min(1).max(32),
+      modifiers: z.array(z.enum(KEY_MODIFIERS)).max(KEY_MODIFIERS.length).optional()
+    })
+  )
 }
 
 export const pluginEditorShotActSchema = lazyZodSchema(() =>

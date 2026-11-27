@@ -1,4 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { scrcpyVideoRegistry } from '../../emulator/scrcpy-video-registry'
 import {
   sendScrcpyHidKey,
@@ -42,9 +43,11 @@ function parseScrcpyKeyboardInput(value: unknown): ScrcpyKeyboardInput | null {
 
 // Live Android pane typing and paste go to the same scrcpy control socket as the pane's touches
 // (emulator-scrcpy-touch.ts); keys can wait up to a paste's settle time while touches go at once.
-export function registerEmulatorScrcpyKeyboardHandler(): void {
-  ipcMain.removeHandler('emulator:scrcpyKeyboard')
-  ipcMain.handle('emulator:scrcpyKeyboard', async (event, value: unknown): Promise<boolean> => {
+export function registerEmulatorScrcpyKeyboardHandler(ipc: IpcHandleRegistrar = ipcMain): void {
+  if (ipc === ipcMain) {
+    ipcMain.removeHandler('emulator:scrcpyKeyboard')
+  }
+  ipc.handle('emulator:scrcpyKeyboard', async (event, value: unknown): Promise<boolean> => {
     const input = parseScrcpyKeyboardInput(value)
     if (!BrowserWindow.fromWebContents(event.sender) || !input) {
       return false

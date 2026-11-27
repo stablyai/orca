@@ -66,11 +66,11 @@ export const onboardingFeatureSetupFeatureSchema = lazyZodSchema(() =>
   z.enum(['browser_use', 'computer_use', 'orchestration', 'linear_tickets'])
 )
 export const onboardingFeatureSetupSelectionSchema = {
-  browser_use: z.boolean(),
-  computer_use: z.boolean(),
-  linear_tickets: z.boolean(),
-  orchestration: z.boolean(),
-  selected_count: z.number().int().min(0).max(3)
+  browser_use: lazyZodSchema(() => z.boolean()),
+  computer_use: lazyZodSchema(() => z.boolean()),
+  linear_tickets: lazyZodSchema(() => z.boolean()),
+  orchestration: lazyZodSchema(() => z.boolean()),
+  selected_count: lazyZodSchema(() => z.number().int().min(0).max(3))
 } as const
 export type OnboardingFeatureSetupSelectionTelemetry = {
   browser_use: boolean

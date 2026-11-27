@@ -8,6 +8,7 @@ import {
   GRAB_SECRET_PATTERNS
 } from '../../../shared/browser/element-grab/browser-grab-types'
 import { isSafeDisplayText } from '../../../shared/text/display-text-safety'
+import { redactKagiSessionToken } from '../../../shared/browser/navigation/browser-url'
 import { resolveDocPreviewUrlFilePath } from '../document-preview/doc-preview-grant-registry'
 
 const SAFE_GRAB_URL_PROTOCOLS = new Set(['http:', 'https:', 'file:'])
@@ -146,7 +147,7 @@ export function clampGrabPayload(raw: unknown, documentUrl = ''): BrowserGrabPay
   return {
     page: {
       sanitizedUrl: pageUrl,
-      title: safeStr(page.title, 500),
+      title: safeStr(typeof page.title === 'string' ? redactKagiSessionToken(page.title) : '', 500),
       viewportWidth: safeNum(page.viewportWidth),
       viewportHeight: safeNum(page.viewportHeight),
       scrollX: safeNum(page.scrollX),

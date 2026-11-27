@@ -297,7 +297,12 @@ export class JournalSqlReaderPool {
       this.slots.push(slot)
     }
     if (this.slots.length > MIN_WARM_JOURNAL_SQL_READERS) {
-      this.burstShrink.schedule()
+      // Only burst-slot usage extends the burst TTL; steady warm-slot reads must not starve excess reader retirement.
+      if (this.slots.indexOf(slot!) >= MIN_WARM_JOURNAL_SQL_READERS) {
+        this.burstShrink.schedule()
+      } else {
+        this.burstShrink.ensureScheduled()
+      }
     }
     return slot!
   }

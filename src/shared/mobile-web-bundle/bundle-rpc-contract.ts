@@ -65,33 +65,35 @@ export const MobileWebBundleManifestResultSchema = lazyZodSchema(() =>
     .strict()
 )
 
-const windowParamsFields = {
+const createWindowParamsFields = () => ({
   buildId: z.string().regex(SHA256_PATTERN),
   path: MobileWebBundleAssetPathSchema,
   offset: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
-}
+})
 
 /** Host validates offset alignment against advertised chunkBytes, which may be smaller than the constant; no fixed multipleOf. */
 export const MobileWebBundleChunkParamsSchema = lazyZodSchema(() =>
-  z.object(windowParamsFields).strict()
+  z.object(createWindowParamsFields()).strict()
 )
 
 /** The chunk params exactly, on the `rangeBytes` grid the manifest reply advertised (over the brotli copy for brotliRange). */
 export const MobileWebBundleRangeParamsSchema = MobileWebBundleChunkParamsSchema
 
 /** What every chunk or range reply restates about the window it answers. */
-const windowHeaderFields = {
-  ...windowParamsFields,
+const createWindowHeaderFields = () => ({
+  ...createWindowParamsFields(),
   /** Whole-asset size, paired with sha256 for reassembly; never the window size. */
   assetByteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES),
   sha256: z.string().regex(SHA256_PATTERN),
   eof: z.boolean()
-}
+})
 
 /** Strict, so a later `contentEncoding` is only a Rule 1 optional-field addition for clients whose
  *  own reply readers are not strict. */
 export const MobileWebBundleChunkResultSchema = lazyZodSchema(() =>
-  z.object({ ...windowHeaderFields, dataBase64: z.string().max(MAX_DATA_BASE64_LENGTH) }).strict()
+  z
+    .object({ ...createWindowHeaderFields(), dataBase64: z.string().max(MAX_DATA_BASE64_LENGTH) })
+    .strict()
 )
 
 /** A chunk result plus the encoding of `dataBase64`, whose decoded length is
@@ -99,7 +101,7 @@ export const MobileWebBundleChunkResultSchema = lazyZodSchema(() =>
 export const MobileWebBundleRangeResultSchema = lazyZodSchema(() =>
   z
     .object({
-      ...windowHeaderFields,
+      ...createWindowHeaderFields(),
       encoding: z.enum(MOBILE_WEB_BUNDLE_RANGE_ENCODINGS),
       dataBase64: z.string().max(MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH)
     })
@@ -111,7 +113,7 @@ export const MobileWebBundleRangeResultSchema = lazyZodSchema(() =>
 export const MobileWebBundleBrotliRangeResultSchema = lazyZodSchema(() =>
   z
     .object({
-      ...windowHeaderFields,
+      ...createWindowHeaderFields(),
       dataBase64: z.string().max(MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH)
     })
     .strict()

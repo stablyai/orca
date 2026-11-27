@@ -1,5 +1,5 @@
-// A turn that starts on its own posts nothing to its thread, so the bot posts itself: a worker start
-// names the thread only when Orca proves the start came from it.
+// A turn that starts on its own posts nothing to its thread or DM, so the bot posts itself: a worker
+// start names the place only when Orca proves the start came from it, in a chat of that place's own.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { origin } = vi.hoisted(() => ({ origin: vi.fn() }))
@@ -16,6 +16,7 @@ const OTHER_CHAT = '66666666-6666-4666-8666-666666666666'
 const THREAD = 'T1:C1:1712.000100:UBOT'
 const DM = 'T1:D0X:D0X:UBOT'
 const DM_THREAD = 'T1:D0X:1712.000200:UBOT'
+const CHANNEL = 'T1:C1:C1:UBOT'
 
 let target: Record<string, unknown> | null = null
 // A connector message opened or joined the running turn, as the host's delivery mark records it.
@@ -77,7 +78,7 @@ describe('a turn that started on its own can tell the thread its work came from'
     expect(await placeFor(CHAT)).toEqual({ place: null })
     delivered = true
     // A turn that answers no delivery of this thread, an origin elsewhere, another chat asking, or
-    // the bot's Chat (many DMs, a later stage): nothing.
+    // the bot's Chat (many conversations): nothing.
     target = chatOn(THREAD, { answers: false })
     expect(await placeFor(CHAT)).toEqual({ place: null })
     target = chatOn(THREAD)
@@ -87,13 +88,28 @@ describe('a turn that started on its own can tell the thread its work came from'
     expect(await placeFor(CHAT, OTHER_CHAT)).toEqual({ place: null })
     target = chatOn(THREAD, { kind: 'bot-chat' })
     expect(await placeFor(CHAT)).toEqual({ place: null })
-    // A DM, in the bot's Chat or a chat of its own: a later stage.
+    // A channel with no thread is no place a reply could answer.
+    target = chatOn(CHANNEL)
+    expect(await placeFor(CHAT)).toEqual({ place: null })
+  })
+
+  it("names a DM's own chat, and a thread's inside a DM, on the same proofs; never the bot's Chat", async () => {
     origin.mockResolvedValue({ source: 'slack', placeId: 'D0X' })
-    for (const kind of ['bot-chat', 'bot']) {
-      target = chatOn(DM, { kind })
+    for (const dm of [DM, DM_THREAD]) {
+      target = chatOn(dm)
+      expect(await placeFor(CHAT)).toEqual({ place: `the thread ${dm}` })
+      target = chatOn(dm, { kind: 'bot-chat' })
       expect(await placeFor(CHAT)).toEqual({ place: null })
+      target = chatOn(dm, { answers: false })
+      expect(await placeFor(CHAT)).toEqual({ place: null })
+      target = chatOn(dm)
+      delivered = false
+      expect(await placeFor(CHAT)).toEqual({ place: null })
+      delivered = true
     }
-    target = chatOn(DM_THREAD)
+    // Its work started in another DM: nothing.
+    origin.mockResolvedValue({ source: 'slack', placeId: 'D0Y' })
+    target = chatOn(DM)
     expect(await placeFor(CHAT)).toEqual({ place: null })
   })
 })

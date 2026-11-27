@@ -14,6 +14,7 @@ import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
 import type { SourceControlStatusRefresh } from '../sync/use-status-refresh'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 /** Explicit targets keep Create PR commits on their starting worktree after navigation. */
 export function useSourceControlCommitAction({
@@ -85,52 +86,57 @@ export function useSourceControlCommitAction({
         return false
       }
       operationStore.setState({ isCommitting: true, commitError: null })
-      try {
-        const commitResult = await commitRuntimeGit(
-          {
-            // Route commits through workspace ownership rather than focused runtime.
-            target: requireGitOwnerTarget(target.target),
-            worktreeId: target.worktreeId,
-            worktreePath: target.worktreePath,
-            connectionId: target.connectionId
-          },
-          message
-        )
-        if (!commitResult.success) {
-          operationStore.setState({ commitError: commitResult.error ?? 'Commit failed' })
-          return false
-        }
+      return runWithFinally(
+        async () => {
+          try {
+            const commitResult = await commitRuntimeGit(
+              {
+                // Route commits through workspace ownership rather than focused runtime.
+                target: requireGitOwnerTarget(target.target),
+                worktreeId: target.worktreeId,
+                worktreePath: target.worktreePath,
+                connectionId: target.connectionId
+              },
+              message
+            )
+            if (!commitResult.success) {
+              operationStore.setState({ commitError: commitResult.error ?? 'Commit failed' })
+              return false
+            }
 
-        // Clear only an unchanged submitted draft so typing during commit cannot lose new edits.
-        updateCommitDraft((current) => (current.trim() !== message ? current : ''))
-        operationStore.setState({ commitError: null })
-        if (!options?.target) {
-          void refreshActiveGitStatusAfterMutation()
+            // Clear only an unchanged submitted draft so typing during commit cannot lose new edits.
+            updateCommitDraft((current) => (current.trim() !== message ? current : ''))
+            operationStore.setState({ commitError: null })
+            if (!options?.target) {
+              void refreshActiveGitStatusAfterMutation()
+            }
+            // Set compare loading immediately so No changes cannot flash before the post-commit comparison arrives.
+            if (!options?.target && compareBaseRef) {
+              beginGitBranchCompareRequest(
+                target.worktreeId,
+                `${target.worktreeId}:${compareBaseRef}:${Date.now()}:post-commit`,
+                compareBaseRef
+              )
+            }
+            if (!options?.target) {
+              void refreshBranchCompareRef.current()
+              window.dispatchEvent(
+                new CustomEvent(GIT_GRAPH_REFRESH_EVENT, { detail: target.worktreeId })
+              )
+              void refreshGitHistoryRef.current()
+            }
+            return true
+          } catch (error) {
+            operationStore.setState({
+              commitError: error instanceof Error ? error.message : 'Commit failed'
+            })
+            return false
+          }
+        },
+        () => {
+          operationStore.setState({ isCommitting: false })
         }
-        // Set compare loading immediately so No changes cannot flash before the post-commit comparison arrives.
-        if (!options?.target && compareBaseRef) {
-          beginGitBranchCompareRequest(
-            target.worktreeId,
-            `${target.worktreeId}:${compareBaseRef}:${Date.now()}:post-commit`,
-            compareBaseRef
-          )
-        }
-        if (!options?.target) {
-          void refreshBranchCompareRef.current()
-          window.dispatchEvent(
-            new CustomEvent(GIT_GRAPH_REFRESH_EVENT, { detail: target.worktreeId })
-          )
-          void refreshGitHistoryRef.current()
-        }
-        return true
-      } catch (error) {
-        operationStore.setState({
-          commitError: error instanceof Error ? error.message : 'Commit failed'
-        })
-        return false
-      } finally {
-        operationStore.setState({ isCommitting: false })
-      }
+      )
     },
     [
       scope,
@@ -159,19 +165,23 @@ export function useSourceControlCommitAction({
       return
     }
     operationStore.setState({ isCommitting: true })
-    let result: { success: boolean; error?: string }
-    try {
-      result = await completeRuntimeGitMerge({
-        target: requireGitOwnerTarget(activeRepoTarget),
-        worktreeId: activeWorktreeId,
-        worktreePath,
-        connectionId: sourceControlConnectionId(scope, activeWorktreeId)
-      })
-    } catch (error) {
-      result = { success: false, error: error instanceof Error ? error.message : undefined }
-    } finally {
-      operationStore.setState({ isCommitting: false })
-    }
+    const result = await runWithFinally<{ success: boolean; error?: string }>(
+      async () => {
+        try {
+          return await completeRuntimeGitMerge({
+            target: requireGitOwnerTarget(activeRepoTarget),
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId: sourceControlConnectionId(scope, activeWorktreeId)
+          })
+        } catch (error) {
+          return { success: false, error: error instanceof Error ? error.message : undefined }
+        }
+      },
+      () => {
+        operationStore.setState({ isCommitting: false })
+      }
+    )
     void refreshActiveGitStatusAfterMutation()
     if (!result.success) {
       // The commit area and its inline error stay hidden while the merge is paused.

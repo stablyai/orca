@@ -113,6 +113,8 @@ export function MarkdownPreviewSurface({
   const frontMatter = useMemo(() => extractFrontMatter(displayedContent), [displayedContent])
   const frontMatterInner = useMemo(() => markdownFrontMatterInner(frontMatter), [frontMatter])
 
+  const { navigateToTableOfContentsItem, setRootRef } = viewport
+
   return (
     <div className="markdown-preview-shell">
       {showTableOfContents ? (
@@ -126,11 +128,11 @@ export function MarkdownPreviewSurface({
               : tableOfContentsItems
           }
           onClose={onCloseTableOfContents ?? (() => {})}
-          onNavigate={viewport.navigateToTableOfContentsItem}
+          onNavigate={navigateToTableOfContentsItem}
         />
       ) : null}
       <div
-        ref={viewport.setRootRef}
+        ref={setRootRef}
         tabIndex={0}
         style={{
           fontSize: `${editorFontSize}px`,
