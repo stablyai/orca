@@ -74,7 +74,12 @@ async function lockForeignWorktreeEntries(
     const owned = await writeFile(lockFile, PRUNE_GUARD_LOCK_REASON, { flag: 'wx' }).then(
       () => true,
       // An existing lock is the user's, unless a crash left one of ours behind.
-      async () => (await readFile(lockFile, 'utf8').catch(() => '')) === PRUNE_GUARD_LOCK_REASON
+      (error: unknown) => {
+        if (errorCode(error) !== 'EEXIST') {
+          throw error
+        }
+        return readFile(lockFile, 'utf8').then((text) => text === PRUNE_GUARD_LOCK_REASON)
+      }
     )
     if (owned) {
       locked.push(lockFile)
@@ -83,21 +88,44 @@ async function lockForeignWorktreeEntries(
   return locked
 }
 
-/** Each linked worktree's admin entry and its `gitdir` link; none when the folder is missing. */
+/**
+ * Each linked worktree's admin entry and its `gitdir` link; none when the folder is missing.
+ * Throws when a record cannot be read: a listing that failed must not read as "nothing to guard",
+ * because `prune` deletes exactly the entries this read exists to find.
+ */
 export async function readWorktreeLinks(
   adminRoot: string
 ): Promise<{ entry: string; link: string }[]> {
-  const entries = (await readdir(adminRoot).catch(() => [])).map((name) => join(adminRoot, name))
+  const entries = (await readdir(adminRoot).catch((error: unknown) => {
+    if (isMissing(error)) {
+      return []
+    }
+    throw error
+  })).map((name) => join(adminRoot, name))
   const links = await Promise.all(
     entries.map(async (entry) => ({
       entry,
       link: await readFile(join(entry, 'gitdir'), 'utf8').then(
         (text) => text.trim(),
-        () => ''
+        (error: unknown) => {
+          // A stray file or an entry with no `gitdir`: Git prunes it either way.
+          if (isMissing(error) || errorCode(error) === 'ENOTDIR') {
+            return ''
+          }
+          throw error
+        }
       )
     }))
   )
   return links.filter(({ link }) => link)
+}
+
+function errorCode(error: unknown): unknown {
+  return error instanceof Error && 'code' in error ? error.code : undefined
+}
+
+function isMissing(error: unknown): boolean {
+  return errorCode(error) === 'ENOENT'
 }
 
 /**
