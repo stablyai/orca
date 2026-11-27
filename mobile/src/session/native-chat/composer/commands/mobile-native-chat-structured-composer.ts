@@ -1,3 +1,4 @@
+import type { MobilePickedFileSource } from '../../../../platform/media-picking/media-picker-contract'
 import type { MobileComposerStructuredCatalog } from '../menus/mobile-native-chat-composer-menu'
 import type { PendingNativeChatFile } from '../attachments/mobile-native-chat-file-attachment'
 import type { MobileStructuredThreadGoal } from '../../input/tasks/use-mobile-structured-thread-goal'
@@ -8,7 +9,7 @@ export type MobileNativeChatStructuredComposer = {
   catalog: MobileComposerStructuredCatalog
   onSlashMenuOpen: () => void
   onSlashMenuDemand?: (open: boolean) => void
-  onAttachFiles?: () => void
+  onAttachFiles?: (from: MobilePickedFileSource) => void
   /** Set when the host keeps phone files, so a long paste becomes a "Pasted text" file. */
   onAttachPastedText?: (text: string) => void
   // An uploading attachment must hold Send.

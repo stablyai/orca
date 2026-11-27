@@ -366,13 +366,11 @@ function MobileNativeChatOverlayContent({
                           ? (paste) => void images.attachImage(paste)
                           : undefined
                       }
+                      onAttachFiles={images.attachFiles}
                       attachments={images.attachments}
                       onRemoveAttachment={images.removeAttachment}
                       isAttaching={images.isAttaching}
-                      onMicPress={onMicPress}
-                      micActive={micActive}
-                      micStarting={micStarting}
-                      micProcessing={micProcessing}
+                      {...{ onMicPress, micActive, micStarting, micProcessing }}
                       dictationMode={dictationMode}
                       onMicPressIn={onMicPressIn}
                       onMicPressOut={onMicPressOut}

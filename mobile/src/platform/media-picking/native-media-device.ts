@@ -102,6 +102,15 @@ export function nativeMediaDeviceDeps(registry: MediaHandleRegistry): NativeMedi
         ...(multiple ? { selectionLimit: limit, orderedSelection: true } : {}),
         ...agentReadableLibraryImageOptions()
       }),
+    // Compatible would transcode every video before it could be staged.
+    launchVideos: ({ multiple, limit }) =>
+      ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['videos'],
+        allowsMultipleSelection: multiple,
+        ...(multiple ? { selectionLimit: limit } : {}),
+        preferredAssetRepresentationMode:
+          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current
+      }),
     // DocumentPicker has no selection cap; enforce remaining room again before staging and minting.
     launchFiles: ({ multiple }) =>
       DocumentPicker.getDocumentAsync({ type: '*/*', multiple, copyToCacheDirectory: true }),

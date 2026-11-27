@@ -23,6 +23,9 @@ export type PickedMobileFile = {
   readonly readBytes: () => AsyncIterable<Uint8Array>
 }
 
+// Videos come from the photo library, which the Files app cannot reach on iOS; both stream like any file.
+export type MobilePickedFileSource = 'files' | 'videos'
+
 // Files stream to the host's chunked upload, so they share its ceiling rather than the in-memory image one.
 export const MOBILE_PICKED_FILE_MAX_BYTES = AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES
 
@@ -44,5 +47,5 @@ export class ImageLibraryPermissionError extends Error {
 export type MediaPicker = {
   pickImage: (source: MobileImageSource) => Promise<PickedMobileImage | null>
   pickImages: (source: MobileImageSource) => AsyncIterable<PickedMobileImage>
-  pickFiles: () => AsyncIterable<PickedMobileFile>
+  pickFiles: (from?: MobilePickedFileSource) => AsyncIterable<PickedMobileFile>
 }

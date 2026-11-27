@@ -3425,7 +3425,9 @@
       "files": "Dosyalar",
       "photos": "Fotoğraflar",
       "skills": "Beceriler",
-      "workspaceFile": "Çalışma alanı dosyası"
+      "workspaceFile": "Çalışma alanı dosyası",
+      "videos": "Videolar",
+      "videoSource": "Fotoğraf arşivinden"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "Daralt"

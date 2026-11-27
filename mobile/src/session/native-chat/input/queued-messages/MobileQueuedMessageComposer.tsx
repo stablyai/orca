@@ -114,7 +114,7 @@ export function MobileQueuedMessageComposer({
             ? {
                 ...context.structured,
                 files: files.files,
-                onAttachFiles: () => void files.attachFiles(),
+                onAttachFiles: (from) => void files.attachFiles(from),
                 onAttachPastedText: context.structured.onAttachPastedText
                   ? (files.attachPastedText ?? undefined)
                   : undefined,

@@ -55,6 +55,14 @@ export const STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS = [
         const { store, callerKey } = await requireStore(ctx)
         return store.stageUpload({ callerKey, name: params.name, byteLength: params.byteLength })
       }
+      if ('terminal' in params) {
+        // A terminal-backed chat's file lands in the same store; the agent reads it by path.
+        if (!ctx.runtime.resolveLeafForHandle(params.terminal)?.ptyId) {
+          throw new Error('This terminal is not on this host')
+        }
+        const { store, callerKey } = await requireStore(ctx)
+        return store.stageUpload({ callerKey, name: params.name, byteLength: params.byteLength })
+      }
       const { store, callerKey } = await requireStore(ctx)
       return store.startUpload({ callerKey, ...params })
     }

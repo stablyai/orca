@@ -16,6 +16,7 @@ import {
   MobileFileTooLargeError,
   type MediaPicker,
   type MobileImageSource,
+  type MobilePickedFileSource,
   type PickedMobileFile,
   type PickedMobileImage
 } from './media-picker-contract'
@@ -75,9 +76,12 @@ async function* readPicked(
   }
 }
 
-async function pickFileItems(verbs: NativeVerbs): Promise<readonly BridgeMediaItem[]> {
+async function pickFileItems(
+  verbs: NativeVerbs,
+  from: MobilePickedFileSource
+): Promise<readonly BridgeMediaItem[]> {
   try {
-    return await verbs.pickMedia('files', true)
+    return await verbs.pickMedia(from, true)
   } catch (error) {
     throw error instanceof NativeVerbError && error.reason === 'native_media_too_large'
       ? new MobileFileTooLargeError(null)
@@ -132,9 +136,9 @@ export function useMediaPicker(): MediaPicker {
           yield* readPicked(verbs, await verbs.pickMedia(source, true), source)
         }
       }),
-      pickFiles: () => ({
+      pickFiles: (from = 'files') => ({
         [Symbol.asyncIterator]: async function* () {
-          yield* readPickedFiles(verbs, await pickFileItems(verbs))
+          yield* readPickedFiles(verbs, await pickFileItems(verbs, from))
         }
       })
     }),

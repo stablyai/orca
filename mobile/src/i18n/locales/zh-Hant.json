@@ -2852,7 +2852,9 @@
       "files": "檔案",
       "photos": "照片",
       "skills": "技能",
-      "workspaceFile": "工作區檔案"
+      "workspaceFile": "工作區檔案",
+      "videos": "影片",
+      "videoSource": "來自你的照片圖庫"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "收合"

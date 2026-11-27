@@ -20,7 +20,9 @@ const EXTENSION_BY_MIME: Readonly<Record<string, string>> = {
   'image/vnd.microsoft.icon': 'ico',
   'image/gif': 'gif',
   'image/webp': 'webp',
-  'image/heic': 'heic'
+  'image/heic': 'heic',
+  'video/quicktime': 'mov',
+  'video/mp4': 'mp4'
 }
 
 export function mobileFileExtensionForMime(mime: string): string {

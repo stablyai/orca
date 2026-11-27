@@ -3056,7 +3056,9 @@
       "files": "파일",
       "photos": "사진",
       "skills": "스킬",
-      "workspaceFile": "워크스페이스 파일"
+      "workspaceFile": "워크스페이스 파일",
+      "videos": "동영상",
+      "videoSource": "사진 보관함에서"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "접기"

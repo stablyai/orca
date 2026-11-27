@@ -2755,7 +2755,9 @@
       "workspaceFile": "Workspace file",
       "skills": "Skills",
       "availableSkills": "{{count}} available",
-      "commands": "Commands"
+      "commands": "Commands",
+      "videos": "Videos",
+      "videoSource": "From your photo library"
     },
     "nativeChatCliFork": {
       "resumeInNewCli": "Resume in New CLI"

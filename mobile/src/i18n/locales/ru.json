@@ -3639,7 +3639,9 @@
       "files": "Файлы",
       "photos": "Фото",
       "skills": "Навыки",
-      "workspaceFile": "Файл рабочего пространства"
+      "workspaceFile": "Файл рабочего пространства",
+      "videos": "Видео",
+      "videoSource": "Из медиатеки"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "Свернуть"

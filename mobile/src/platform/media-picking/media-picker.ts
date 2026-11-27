@@ -9,7 +9,7 @@ import type { MediaPicker } from './media-picker-contract'
 const devicePicker: MediaPicker = {
   pickImage: (source) => pickMobileImage(source),
   pickImages: (source) => pickMobileImages(source),
-  pickFiles: () => pickMobileFiles()
+  pickFiles: (from) => pickMobileFiles(from)
 }
 
 export function useMediaPicker(): MediaPicker {

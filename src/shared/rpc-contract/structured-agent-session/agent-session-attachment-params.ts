@@ -22,7 +22,8 @@ const AttachmentUploadFile = {
 export const AttachmentUploadStartParams = lazyZodSchema(() =>
   z.union([
     z.strictObject({ sessionId: SessionId, ...AttachmentUploadFile }),
-    z.strictObject({ item: z.uuid(), ...AttachmentUploadFile })
+    z.strictObject({ item: z.uuid(), ...AttachmentUploadFile }),
+    z.strictObject({ terminal: z.string().min(1).max(256), ...AttachmentUploadFile })
   ])
 )
 

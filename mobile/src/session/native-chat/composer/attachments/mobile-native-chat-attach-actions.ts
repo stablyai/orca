@@ -1,4 +1,4 @@
-import { AtSign, Image, Package, Paperclip, Terminal } from 'lucide-react-native'
+import { AtSign, Film, Image, Package, Paperclip, Terminal } from 'lucide-react-native'
 import type { ActionSheetAction } from '../../../../components/sheets/ActionSheetModal'
 import { translate } from '../../../../i18n/mobile-i18n'
 
@@ -6,6 +6,10 @@ import { translate } from '../../../../i18n/mobile-i18n'
 export function mobileNativeChatAttachActions(args: {
   onPhotos: (() => void) | undefined
   onFiles: (() => void) | undefined
+  /** Library videos stream like files, so the row shows wherever Files does. */
+  onVideos: (() => void) | undefined
+  /** Workspace files, skills and commands reach only a structured chat. */
+  structured: boolean
   onWorkspaceFile: () => void
   onSkills: () => void
   onCommands: () => void
@@ -30,6 +34,19 @@ export function mobileNativeChatAttachActions(args: {
       closeBeforePress: true,
       onPress: args.onFiles
     })
+  }
+  if (args.onVideos) {
+    actions.push({
+      id: 'videos',
+      label: translate('session.nativeChatAttachActions.videos', 'Videos'),
+      hint: translate('session.nativeChatAttachActions.videoSource', 'From your photo library'),
+      icon: Film,
+      closeBeforePress: true,
+      onPress: args.onVideos
+    })
+  }
+  if (!args.structured) {
+    return actions
   }
   actions.push(
     {
