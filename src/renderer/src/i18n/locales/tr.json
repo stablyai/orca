@@ -1099,6 +1099,12 @@
           "browse": "Chrome Web Store",
           "openFailed": "Chrome Web Store'a göz atmak için bir çalışma alanı açın."
         },
+        "failure": {
+          "supportDisabled": "Ayarlar › Tarayıcı › Uzantılar bölümünden tarayıcı uzantılarını açın",
+          "invalidWebStoreInput": "Bir Chrome Web Mağazası bağlantısı veya 32 harfli uzantı kimliği yapıştırın",
+          "profileUnavailable": "Tarayıcı profili uzantılar için kullanılamıyor",
+          "alreadyAdded": "{{name}} zaten eklendi"
+        },
         "enabledToggleLabel": "Tarayıcı uzantılarını aç veya kapat"
       },
       "passwords": {
@@ -3541,6 +3547,9 @@
       }
     },
     "components": {
+      "railPage": {
+        "closeSearch": "Aramayı kapat"
+      },
       "hostPicker": {
         "searchHosts": "Sunucu ara…",
         "noHostsMatch": "Eşleşen sunucu yok.",
@@ -4281,6 +4290,8 @@
         "8c967b4d15": "Daha sonra"
       },
       "TaskPage": {
+        "issueFilterState": "Durum",
+        "issueFilterPreset": "Ön ayar",
         "ff69a30681": "İptal",
         "8ff6fdc368": "Oluşturuluyor…",
         "919a20dd5b": "{{value0}} girin",
@@ -13566,7 +13577,12 @@
             "terminalRun": "SSH dahil terminalinizde komut çalıştır",
             "terminalRead": "SSH terminalleri dahil terminal çıktılarını oku",
             "workspaceWrite": "Çalışma alanlarını ve dosyaları aç, yerleşik komutları çalıştır",
-            "agentLaunch": "SSH dahil çalışma alanlarında ajan başlat"
+            "agentLaunch": "SSH dahil çalışma alanlarında ajan başlat",
+            "appearanceWrite": "Masaüstü uygulaması, düzenleyici ve terminal renklerini yayımla ve seç",
+            "workspaceCreate": "Projelerinizde yerel olarak ve SSH üzerinden çalışma alanları (yeni Git branch'leri ve worktree'leri) oluşturur; projenin kurulum betiği ayarlarında belirtildiği şekilde çalışır",
+            "automationRead": "Otomasyonlarınızın adlarını, istemlerini, ajanlarını, projelerini, çalışma alanlarını ve zamanlamalarını okur",
+            "automationWrite": "Eklenti çalışmıyorken bile projelerinizde zamanlanmış ajanlar başlatan otomasyonlar oluşturur, bunları değiştirir veya siler (Orca, eklentinin oluşturmadığı otomasyonlarda ve ek ajan ayarlarına sahip bir otomasyonun çalıştıracağı şeyi değiştirmeden önce size sorar)",
+            "historyRead": "Bu bilgisayarda Orca'nın desteklediği kodlama ajanlarının geçmiş dosyalarından geçmiş ajan oturumlarınızın listesini okur; Windows'ta çalışan WSL dağıtımları buna dahildir (SSH veya diğer makineler, Antigravity IDE konuşmaları ve alt ajan dökümleri dahil değildir): her oturumun başlığı (çoğunlukla ilk iletinin başlangıcı), ajanı, çalışma alanı, branch'i, zamanları ve ileti ile token sayıları; konuşmanın kendisini hiçbir zaman okumaz"
           },
           "decisionFailed": "İzin kararı kaydedilemedi. Tekrar deneyin.",
           "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, kayıtlı oturum bilgilerinizi ve SSH anahtarlarınızı kullanabilir, ağı kullanabilir, başka programlar çalıştırabilir ve terminalleriniz ile ajanlarınız dahil Orca'yı kontrol edebilir.",
@@ -22142,6 +22158,7 @@
           "task": "Görev"
         },
         "unnamedRecipient": "bir ajan",
+        "recipientName": "{{name}}",
         "event": {
           "followedUp": "Takip mesajı gönderildi",
           "update": "Güncelleme",
@@ -23113,6 +23130,7 @@
         "readFailed": "Yüklenemedi",
         "retry": "Yeniden dene",
         "empty": "Bu sohbet için ayarlanmış sunucu yok",
+        "unreported": "{{agent}} bağlantı durumunu bildirmiyor",
         "cancel": "İptal",
         "reconnect": "Yeniden bağlan",
         "toggle": "{{name}} kullan",
@@ -25341,6 +25359,8 @@
     "antigravityChatToCli": "Sohbet → CLI"
   },
   "common": {
+    "new": "Yeni",
+    "search": "Ara",
     "retry": "Yeniden dene",
     "cancel": "İptal",
     "delete": "Sil",
@@ -26241,7 +26261,9 @@
     "statusFilters": {
       "loadFailed": "Jira durum filtreleri yüklenemedi.",
       "saveFailed": "Jira durum filtreleri kaydedilemedi.",
+      "unavailable": "Bu görünüm için henüz kullanılabilir durum yok.",
       "manualQuery": "Durum filtreleri hazır görünümlere uygulanır. Kullanmak için aramayı temizleyin.",
+      "favouriteActive": "Durum filtrelerini kullanmak için Jira favorisindeki seçimi temizleyin veya bir ön ayar görünümü seçin.",
       "label": "Jira sorunlarını duruma göre filtrele",
       "clear": "Durumları temizle",
       "jql": "Durum filtresi JQL'i",
@@ -26545,6 +26567,7 @@
       "fileExplorerCopyPath": "Dosya yolunu kopyala",
       "fileExplorerCopyRelativePath": "Göreli dosya yolunu kopyala",
       "fileExplorerDelete": "Dosyayı sil",
+      "fileExplorerToggleDotfiles": "Gizli dosyaları göster/gizle",
       "terminalCopySelection": "Terminaldeki seçimi kopyala",
       "terminalSelectAll": "Terminaldeki tüm metni seç",
       "terminalPaste": "Terminale yapıştır",
@@ -26612,7 +26635,8 @@
       "botItemNext": "Sonraki öğe",
       "tabNewBrowserSplitRight": "Sağdaki yeni bölmede tarayıcı sekmesi aç",
       "5468defe61": "Tüm projeleri daralt veya genişlet",
-      "botItemBack": "Öğelere dön"
+      "botItemBack": "Öğelere dön",
+      "pageSearch": "Bu sayfada ara"
     },
     "group": {
       "global": "Genel",
@@ -29180,7 +29204,8 @@
         "members": "Üyeler",
         "membersCount": "Üye sayısı: {{count}}",
         "noMembers": "Bu grupta bot yok"
-      }
+      },
+      "renameThreadNeedsHostUpdate": "İleti dizilerini yeniden adlandırmak için {{host}} üzerindeki Orca'yı güncelleyin."
     },
     "host": {
       "botWorkspaceUnavailable": "Bu ajanın çalışma alanı şu anda burada kullanılamıyor, bu yüzden sayfa orada açılamıyor.",
@@ -30491,7 +30516,13 @@
       },
       "repositoriesIn": "{{accounts}} hesaplarındaki repository'ler",
       "repositoryCount_one": "{{accounts}} hesaplarında {{count}} repository",
-      "repositoryCount_other": "{{accounts}} hesaplarında {{count}} repository"
+      "repositoryCount_other": "{{accounts}} hesaplarında {{count}} repository",
+      "ghSignedOut": {
+        "thisComputer": "bu bilgisayar",
+        "status": "{{host}} üzerindeki gh oturumu kapalı",
+        "line": "{{host}} üzerindeki gh oturumu kapalı. Orada <code>gh auth login</code> komutunu çalıştırın.",
+        "copy": "{{text}} komutunu kopyala"
+      }
     },
     "accessRequest": {
       "toast": "{{person}}, {{name}} botuna erişim istedi",
