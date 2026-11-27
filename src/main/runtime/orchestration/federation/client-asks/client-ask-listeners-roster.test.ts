@@ -5,7 +5,13 @@ import { allowServer } from '../../db/federation/paired-server-asks-store'
 import { pairedServerPullParams } from '../paired-server-asks/paired-server-asks-loop'
 import type { PairedServerAsks } from '../paired-server-asks/paired-server-asks-pull'
 import { PAIRED_CLIENT_BOTS_MAX } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
-import { clientAskPullStarted, connectedClientRosters } from './client-ask-listeners'
+import {
+  CLIENT_INSTALLATIONS_PER_DEVICE,
+  CLIENT_ROSTER_LIVE_MS,
+  clientAskPullEnded,
+  clientAskPullStarted,
+  connectedClientRosters
+} from './client-ask-listeners'
 
 // A server's runtime as the listeners key it; nothing here reads its database.
 const serverOwner = () => ({
@@ -74,7 +80,7 @@ describe("the computers a server's bot list names", () => {
     const owner = serverOwner()
     pullAs(owner, 'device_a', {
       installationId: UUID_A,
-      name: '\u001b[0m',
+      name: '\u0000\u0007',
       bots: [
         { id: 'docs', name: 'Docs' },
         { id: 'bad id', name: 'Bad' }
@@ -91,6 +97,67 @@ describe("the computers a server's bot list names", () => {
     expect(askable([makeTestBot({ id: 'docs', name: 'Docs' })])?.bots).toEqual([
       { id: 'docs', name: 'Docs' }
     ])
+  })
+
+  it('stops listing a computer, and the bots it named, once it has not pulled for a minute', () => {
+    const owner = serverOwner()
+    const started = clientAskPullStarted(
+      owner,
+      { deviceId: 'device_a', fingerprint: 'fp_a' },
+      { session: 's', installationId: UUID_A, name: 'Mac', bots: [{ id: 'docs', name: 'Docs' }] },
+      1_000
+    )!
+    expect(connectedClientRosters(owner, 1_000 + CLIENT_ROSTER_LIVE_MS)).toHaveLength(1)
+
+    // Its pull was answered later, and then it went silent (crashed, or its network dropped).
+    clientAskPullEnded(owner, started, 'answered', 20_000)
+    expect(connectedClientRosters(owner, 20_000 + CLIENT_ROSTER_LIVE_MS)).toHaveLength(1)
+    expect(connectedClientRosters(owner, 20_001 + CLIENT_ROSTER_LIVE_MS)).toEqual([])
+  })
+
+  it("never lets an older session's ended pull touch a newer session", () => {
+    const owner = serverOwner()
+    const caller = { deviceId: 'device_a', fingerprint: 'fp_a' }
+    const old = clientAskPullStarted(
+      owner,
+      caller,
+      { session: 'old', installationId: UUID_A, name: 'Mac' },
+      1_000
+    )!
+    clientAskPullStarted(
+      owner,
+      caller,
+      { session: 'new', installationId: UUID_A, name: 'Mac' },
+      2_000
+    )
+    clientAskPullEnded(owner, old, 'caller_gone', 3_000)
+    clientAskPullEnded(owner, old, 'answered', 90_000)
+
+    expect(connectedClientRosters(owner, 2_000 + CLIENT_ROSTER_LIVE_MS)).toHaveLength(1)
+    expect(connectedClientRosters(owner, 2_001 + CLIENT_ROSTER_LIVE_MS)).toEqual([])
+  })
+
+  it('keeps a bounded number of installations per paired device, dropping its least recently seen', () => {
+    const owner = serverOwner()
+    for (let index = 0; index <= CLIENT_INSTALLATIONS_PER_DEVICE; index += 1) {
+      clientAskPullStarted(
+        owner,
+        { deviceId: 'device_a', fingerprint: 'fp_a' },
+        { session: `s${index}`, installationId: `install_${index}`, name: `Mac ${index}` },
+        1_000 + index
+      )
+    }
+    clientAskPullStarted(
+      owner,
+      { deviceId: 'device_b', fingerprint: 'fp_b' },
+      { session: 'sb', installationId: 'install_b', name: 'Other Mac' },
+      1_500
+    )
+
+    const listed = connectedClientRosters(owner, 2_000).map((client) => client.onClient)
+    expect(listed).toHaveLength(CLIENT_INSTALLATIONS_PER_DEVICE + 1)
+    expect(listed).not.toContain('install_0')
+    expect(listed).toContain('install_b')
   })
 
   it('says when the computer allows more bots than one pull names', () => {

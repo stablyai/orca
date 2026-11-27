@@ -1,6 +1,8 @@
 // Which paired computers are taking asks from this Orca's agents right now. A computer listens from
 // its first pull in a session until a pull's caller goes away or it leaves; an answered pull keeps it,
-// since it pulls again at once. Nothing is timed, and a server restart starts with none.
+// since it pulls again at once. Routing is never timed, and a server restart starts with none; only
+// `orca bot list` lists just the computers seen within the last minute, so one that crashed or lost its
+// network between pulls, leaving no pull to end, stops being shown as connected.
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrchestrationError } from '../../orchestration-error'
@@ -19,9 +21,19 @@ export type ClientAskListener = {
   bots: { id: string; name: string }[]
   /** It allows more than it could name. */
   moreBots?: true
+  /** When a pull of its last started or was answered, in ms. */
+  seenAt: number
 }
 
 export type ClientAskPull = { key: string; session: string }
+
+/** How recently a computer must have pulled for `orca bot list` to show it: over twice the longest
+ *  pull's wait, so one pulling steadily is never missed between pulls. */
+export const CLIENT_ROSTER_LIVE_MS = 60_000
+
+/** The most installations one paired device keeps listening at once; its least recently seen goes
+ *  first. A real computer has one, a few copies at most, so a device naming more can't grow this. */
+export const CLIENT_INSTALLATIONS_PER_DEVICE = 8
 
 /** The runtime whose server the computers listen on; a test's runtimes keep separate listeners. */
 export type ClientAskListenerOwner = Pick<OrcaRuntimeService, 'getOrchestrationDb'>
@@ -48,7 +60,8 @@ const keyOf = (deviceId: string, installationId: string): string => `${deviceId}
 export function clientAskPullStarted(
   owner: ClientAskListenerOwner,
   caller: { deviceId: string; fingerprint: string },
-  pull: z.infer<typeof PeerMailClientAsksPull>
+  pull: z.infer<typeof PeerMailClientAsksPull>,
+  now: number = Date.now()
 ): ClientAskPull | null {
   const listeners = listenersOf(owner)
   const key = keyOf(caller.deviceId, pull.installationId)
@@ -90,8 +103,21 @@ export function clientAskPullStarted(
     fingerprint: caller.fingerprint,
     session: pull.session,
     bots: pull.bots ?? [],
-    ...(pull.moreBots ? { moreBots: true as const } : {})
+    ...(pull.moreBots ? { moreBots: true as const } : {}),
+    seenAt: now
   })
+  const ofDevice = [...listeners].filter(
+    ([other, listener]) => other !== key && listener.deviceId === caller.deviceId
+  )
+  if (ofDevice.length >= CLIENT_INSTALLATIONS_PER_DEVICE) {
+    ofDevice.sort(([, a], [, b]) => a.seenAt - b.seenAt)
+    for (const [other] of ofDevice.slice(
+      0,
+      ofDevice.length - CLIENT_INSTALLATIONS_PER_DEVICE + 1
+    )) {
+      listeners.delete(other)
+    }
+  }
   return { key, session: pull.session }
 }
 
@@ -99,12 +125,18 @@ export function clientAskPullStarted(
 export function clientAskPullEnded(
   owner: ClientAskListenerOwner,
   pull: ClientAskPull,
-  outcome: 'answered' | 'caller_gone'
+  outcome: 'answered' | 'caller_gone',
+  now: number = Date.now()
 ): void {
   const listeners = listenersOf(owner)
   const current = listeners.get(pull.key)
-  if (outcome === 'caller_gone' && current?.session === pull.session) {
+  if (current?.session !== pull.session) {
+    return
+  }
+  if (outcome === 'caller_gone') {
     listeners.delete(pull.key)
+  } else {
+    current.seenAt = now
   }
 }
 
@@ -124,14 +156,35 @@ export function listeningClients(
 // claims is never printed where a server's agent reads it as text or a command.
 const PLAIN_ID = /^[\w-]{1,100}$/
 
-/** Every computer listening now, as this Orca's own `orca bot list` names it: by its installation id,
- *  which `--on-client` takes, with the agents there it said this Orca's agents may ask without a card.
- *  Only a computer that id reaches alone is listed, so a listed command never comes back ambiguous;
- *  ids of another shape are left out, and names, which came from that computer, stay one line. */
-export function connectedClientRosters(owner: ClientAskListenerOwner): BotRosterClient[] {
-  return [...listenersOf(owner).values()].flatMap((listener) =>
+/** Every computer seen within the last minute, as this Orca's own `orca bot list` names it: by its
+ *  installation id, which `--on-client` takes, with the agents there it said this Orca's agents may ask
+ *  without a card. Only a computer that id reaches alone (as `listeningClients` would match it) is
+ *  listed, so a listed command never comes back ambiguous; ids of another shape are left out, and
+ *  names, which came from that computer, stay one line. One pass over the listeners. */
+export function connectedClientRosters(
+  owner: ClientAskListenerOwner,
+  now: number = Date.now()
+): BotRosterClient[] {
+  const listeners = [...listenersOf(owner).values()]
+  // How many listeners a selector matches, by id or by name, counting one matching both once.
+  const byId = new Map<string, number>()
+  const byName = new Map<string, number>()
+  const byBoth = new Map<string, number>()
+  const count = (map: Map<string, number>, key: string) => map.set(key, (map.get(key) ?? 0) + 1)
+  for (const listener of listeners) {
+    const name = listener.name.trim().toLowerCase()
+    count(byId, listener.installationId)
+    count(byName, name)
+    if (name === listener.installationId.toLowerCase()) {
+      count(byBoth, listener.installationId)
+    }
+  }
+  const matches = (id: string) =>
+    (byId.get(id) ?? 0) + (byName.get(id.toLowerCase()) ?? 0) - (byBoth.get(id) ?? 0)
+  return listeners.flatMap((listener) =>
+    now - listener.seenAt <= CLIENT_ROSTER_LIVE_MS &&
     PLAIN_ID.test(listener.installationId) &&
-    listeningClients(owner, listener.installationId).length === 1
+    matches(listener.installationId) === 1
       ? [
           {
             name: toSafeDisplayLine(listener.name) || listener.installationId,
