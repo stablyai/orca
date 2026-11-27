@@ -1871,9 +1871,6 @@
       "backToSession": "Zurück zur Sitzung",
       "closeFiles": "Dateien schließen",
       "emptyState": "Keine Dateien gefunden",
-      "filterPlaceholder": "Dateien filtern",
-      "noMatchesHint": "Nur bereits geöffnete Ordner werden durchsucht.",
-      "clearFilter": "Filter zurücksetzen",
       "loading": "Dateien werden geladen…",
       "loadFailed": "Dateien konnten nicht geladen werden.",
       "title": "Dateien",
@@ -1887,13 +1884,8 @@
       "openFolder": "Ordner {{name}} öffnen",
       "previewFile": "Vorschau der Datei {{name}} anzeigen",
       "retryLoading": "{{path}} erneut laden",
-      "searchAll": "Alle durchsuchen",
-      "searchAllIn": "Ganz {{folder}} durchsuchen",
       "ignored": "Durch .gitignore ignoriert",
-      "searched": "{{loaded}} von {{total}} in {{folder}} durchsucht.",
-      "searching": "{{folder}} wird durchsucht… {{loaded}} von {{total}}",
-      "showMore": "{{rows}} weitere anzeigen",
-      "unavailable": "Auf Mobilgeräten nicht verfügbar"
+      "showMore": "{{rows}} weitere anzeigen"
     },
     "fileExplorerRowActions": {
       "copyName": "Namen kopieren",

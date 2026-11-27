@@ -2151,9 +2151,6 @@
       "backToSession": "세션으로 돌아가기",
       "closeFiles": "파일 닫기",
       "emptyState": "찾은 파일이 없습니다.",
-      "filterPlaceholder": "파일 필터",
-      "noMatchesHint": "열어 본 폴더만 검색합니다.",
-      "clearFilter": "필터 지우기",
       "loading": "파일 로드 중…",
       "loadFailed": "파일을 불러올 수 없습니다.",
       "title": "파일",
@@ -2167,13 +2164,8 @@
       "openFolder": "{{name}} 폴더 열기",
       "previewFile": "{{name}} 파일 미리보기",
       "retryLoading": "{{path}} 다시 불러오기",
-      "searchAll": "모두 검색",
-      "searchAllIn": "{{folder}} 전체 검색",
       "ignored": ".gitignore에 의해 무시됨",
-      "searched": "{{folder}}에서 {{total}}개 중 {{loaded}}개를 검색했습니다.",
-      "searching": "{{folder}} 검색 중… {{total}}개 중 {{loaded}}개",
-      "showMore": "{{rows}}개 더 보기",
-      "unavailable": "모바일에서 사용 불가"
+      "showMore": "{{rows}}개 더 보기"
     },
     "fileExplorerRowActions": {
       "copyName": "이름 복사",

@@ -2152,9 +2152,6 @@
       "backToSession": "返回工作階段",
       "closeFiles": "關閉檔案",
       "emptyState": "找不到檔案",
-      "filterPlaceholder": "篩選檔案",
-      "noMatchesHint": "只會搜尋你開啟過的資料夾。",
-      "clearFilter": "清除篩選",
       "loading": "正在載入檔案…",
       "loadFailed": "無法載入檔案",
       "title": "檔案",
@@ -2168,13 +2165,8 @@
       "openFolder": "開啟資料夾 {{name}}",
       "previewFile": "預覽檔案 {{name}}",
       "retryLoading": "重新嘗試載入 {{path}}",
-      "searchAll": "全部搜尋",
-      "searchAllIn": "搜尋整個 {{folder}}",
       "ignored": "被 .gitignore 忽略",
-      "searched": "已在 {{folder}} 中搜尋 {{total}} 項中的 {{loaded}} 項。",
-      "searching": "正在搜尋 {{folder}}… {{loaded}} / {{total}}",
-      "showMore": "再顯示 {{rows}} 項",
-      "unavailable": "行動版無法使用"
+      "showMore": "再顯示 {{rows}} 項"
     },
     "fileExplorerRowActions": {
       "copyName": "複製名稱",
