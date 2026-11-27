@@ -226,22 +226,15 @@
     },
     "paneView": {
       "forward": "Vorwärts",
-      "keyboardPlaceholder": "Text auf der Seite eingeben…",
       "reload": "Neu laden",
-      "sendText": "Text an den Browser senden",
       "dialogTitleWithOrigin": "{{origin}} meldet",
       "dialogTitleNoOrigin": "Diese Seite meldet",
-      "dialogAnswer": "Antwort",
       "stop": "Stoppen",
       "reconnect": "Erneut verbinden"
     },
-    "pointerModifiers": {
-      "clickModifier": "{{key}} als Klick-Modifikator"
-    },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "Übertragung nicht bestätigt – vor erneutem Versuch Seite prüfen",
-      "dialogAnswerFailed": "Die Antwort hat die Seite nicht erreicht.",
-      "sent": "Gesendet"
+      "dialogAnswerFailed": "Die Antwort hat die Seite nicht erreicht."
     },
     "stream": {
       "updateApp": "Die Orca-App aktualisieren, um Browser-Tabs hier zu streamen.",
@@ -250,10 +243,6 @@
       "pageUnavailable": "Browserseite ist noch nicht verfügbar.",
       "timedOut": "Zeitüberschreitung beim Browser-Stream.",
       "stopped": "Stream gestoppt"
-    },
-    "viewModeSwitch": {
-      "mobileView": "Mobile Ansicht der Website anzeigen",
-      "webView": "Desktop-Ansicht der Website anzeigen"
     },
     "loadFailure": {
       "retry": "Erneut versuchen",
