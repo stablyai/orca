@@ -15,20 +15,26 @@ function target(readShell: () => Promise<boolean>) {
   })
 }
 
+/** Delivers each batch in its own turn; a re-probe re-enters delivery as production does. */
 async function probe(
   readShell: () => Promise<boolean>,
-  mailboxes: string[]
+  batches: string[][]
 ): Promise<[string, boolean][]> {
   vi.useFakeTimers()
   try {
     const delivery = target(readShell)
     const redelivered: [string, boolean][] = []
-    for (const mailbox of mailboxes) {
-      expect(
-        delivery.deferForTerminalProbe('pty-1', mailbox, false, (probed, reprobe) =>
-          redelivered.push([probed, reprobe])
-        )
-      ).toBe(true)
+    const deliver = (mailbox: string): void => {
+      delivery.deferForTerminalProbe('pty-1', mailbox, false, (probed, reprobe) => {
+        redelivered.push([probed, reprobe])
+        if (reprobe) {
+          deliver(probed)
+        }
+      })
+    }
+    for (const batch of batches) {
+      batch.forEach(deliver)
+      await Promise.resolve()
     }
     await vi.runAllTimersAsync()
     return redelivered
@@ -39,16 +45,16 @@ async function probe(
 
 describe('deferForTerminalProbe', () => {
   // An exited agent's status outlives it; typing then runs the pointer in the shell and consumes the mail.
-  it('holds mail while a shell is in front of the exited agent', async () => {
-    expect(await probe(async () => true, ['term_a'])).toEqual([])
+  it('holds every mailbox of a terminal while a shell is in front of the exited agent', async () => {
+    expect(await probe(async () => true, [['term_a', 'run:r1']])).toEqual([])
   })
 
   it('types once the agent itself is in front', async () => {
-    expect(await probe(async () => false, ['term_a'])).toEqual([['term_a', false]])
+    expect(await probe(async () => false, [['term_a']])).toEqual([['term_a', false]])
   })
 
-  it('probes again when a delivery joined a probe that then read a shell', async () => {
-    expect(await probe(async () => true, ['term_a', 'run:r1'])).toEqual([
+  it('probes again, once, for a delivery that arrived while a shell was being read', async () => {
+    expect(await probe(async () => true, [['term_a'], ['run:r1']])).toEqual([
       ['term_a', true],
       ['run:r1', true]
     ])
