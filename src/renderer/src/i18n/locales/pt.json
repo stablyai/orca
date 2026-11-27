@@ -22493,7 +22493,6 @@
       "railTickLabel": "Mensagem {{index}} de {{count}}: {{text}}",
       "railMatchCount": "{{count}} de {{total}}",
       "question": {
-        "step": "Etapa {{value0}}",
         "otherPlaceholder": "Digite sua resposta",
         "cancel": "Cancelar",
         "send": "Enviar",
@@ -22505,12 +22504,11 @@
         "recommended": "Recomendado",
         "stepOf": "{{value0}} de {{value1}}",
         "answered": "Respondida",
-        "title": "Pergunta",
         "previous": "Pergunta anterior",
         "nextQuestion": "Próxima pergunta",
         "back": "Voltar",
         "skipAndSubmit": "Pular e enviar",
-        "stepLabel": "{{value0}}, {{value1}} de {{value2}}: {{value3}}"
+        "questionStepLabel": "{{value0}}, {{value1}} de {{value2}}"
       },
       "ask": {
         "awaiting": "Aguardando entrada do usuário:",

@@ -31,10 +31,18 @@ import { documentResourceAccess } from '@/lib/files/access/local-file-access'
 import { MarkdownGitHubCallout } from '@/components/comment-markdown/markdown-github-callout'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { readGitHubCalloutKind } from '../../../../../../shared/github/markdown/github-callouts'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 function hasMermaidCodeClass(value: unknown): boolean {
   return typeof value === 'string' && /language-mermaid/.test(value)
+}
+
+function mermaidLinkHref(event: React.MouseEvent): string | undefined {
+  const link = event.target instanceof Element ? event.target.closest('a') : null
+  if (!link || !event.currentTarget.contains(link)) {
+    return undefined
+  }
+  return link.getAttribute('href') ?? link.getAttribute('xlink:href') ?? undefined
 }
 
 function annotatedHeading(
@@ -186,6 +194,7 @@ export function useMarkdownPreviewComponents({
     openMarkdownPreview,
     setMarkdownViewMode
   } = foundation
+  const t = useTranslate()
   const { scrollToAnchor } = viewport
   const expandMermaidDiagram = useMermaidDiagramExpand()
   // Why: saving a review note rewrites the worktree rows. Links read them at click time so that
@@ -207,6 +216,20 @@ export function useMarkdownPreviewComponents({
       setMarkdownViewMode,
       scrollToAnchor
     }
+    const linkAction = (event: React.MouseEvent, href: string | undefined) => ({
+      event,
+      href,
+      filePath,
+      context: { ...linkContext, ...readWorktreeRouting() }
+    })
+    const guardMermaidMiddleButton = (event: React.MouseEvent): void => {
+      if (
+        event.button === 1 &&
+        isMarkdownPreviewExternalHttpHref(mermaidLinkHref(event), filePath)
+      ) {
+        preventMiddleButtonDefault(event)
+      }
+    }
 
     return {
       ...annotatedBlockComponents,
@@ -217,14 +240,11 @@ export function useMarkdownPreviewComponents({
           const resolvedDocument = resolution.status === 'resolved' ? resolution.document : null
           const title =
             resolution.status === 'ambiguous'
-              ? translate(
+              ? t(
                   'auto.components.editor.MarkdownPreview.docLinkAmbiguous',
                   'Document link is ambiguous'
                 )
-              : translate(
-                  'auto.components.editor.MarkdownPreview.docLinkNotFound',
-                  'Document not found'
-                )
+              : t('auto.components.editor.MarkdownPreview.docLinkNotFound', 'Document not found')
 
           const handleDocLinkClick = (event: React.MouseEvent<HTMLAnchorElement>): void => {
             event.preventDefault()
@@ -261,23 +281,10 @@ export function useMarkdownPreviewComponents({
             onMouseUp={isMiddleClickable ? preventMiddleButtonDefault : undefined}
             onAuxClick={
               isMiddleClickable
-                ? (event) =>
-                    handleMarkdownPreviewLinkAuxClick({
-                      event,
-                      href,
-                      filePath,
-                      context: { ...linkContext, ...readWorktreeRouting() }
-                    })
+                ? (event) => handleMarkdownPreviewLinkAuxClick(linkAction(event, href))
                 : undefined
             }
-            onClick={(event) =>
-              void handleMarkdownPreviewLinkClick({
-                event,
-                href,
-                filePath,
-                context: { ...linkContext, ...readWorktreeRouting() }
-              })
-            }
+            onClick={(event) => void handleMarkdownPreviewLinkClick(linkAction(event, href))}
             style={{ cursor: 'pointer' }}
           >
             {children}
@@ -317,11 +324,27 @@ export function useMarkdownPreviewComponents({
       code: ({ className, children, ...props }) => {
         if (hasMermaidCodeClass(className)) {
           return (
-            <MermaidBlock
-              content={String(children).trimEnd()}
-              isDark={isDark}
-              onExpand={expandMermaidDiagram}
-            />
+            <div
+              onClickCapture={(event) => {
+                const href = mermaidLinkHref(event)
+                if (href) {
+                  // Handle the SVG link before the diagram's click-to-expand handler.
+                  event.stopPropagation()
+                  void handleMarkdownPreviewLinkClick(linkAction(event, href))
+                }
+              }}
+              onMouseDown={guardMermaidMiddleButton}
+              onMouseUp={guardMermaidMiddleButton}
+              onAuxClick={(event) =>
+                handleMarkdownPreviewLinkAuxClick(linkAction(event, mermaidLinkHref(event)))
+              }
+            >
+              <MermaidBlock
+                content={String(children).trimEnd()}
+                isDark={isDark}
+                onExpand={expandMermaidDiagram}
+              />
+            </div>
           )
         }
         return (
@@ -348,6 +371,7 @@ export function useMarkdownPreviewComponents({
     sourceOwner,
     resolvedSourceRuntimeEnvironmentId,
     sourceRoutingWorktreeId,
+    t,
     worktreeRoot
   ])
 }

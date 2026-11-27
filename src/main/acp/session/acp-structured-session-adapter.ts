@@ -14,7 +14,7 @@ import type {
 import { rejectedAcpDispatch } from '../turns/acp-dispatch-rejection'
 import type { AcpStructuredSession } from './acp-structured-session-contract'
 
-import { applyAcpMessageOptions } from '../turns/acp-message-execution-options'
+import { applyAcpMessageOptions, mailModelCommand } from '../turns/acp-message-execution-options'
 import { AgentSessionOptionRejectedError } from '../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import * as stop from '../turns/acp-structured-stop'
 import { acpDispatchPrompt } from '../turns/acp-prompt-content'
@@ -36,7 +36,7 @@ import {
   closeAcpChildSessions,
   stopAcpChildren
 } from '../turns/acp-structured-child-stop'
-import { ACP_UNKNOWN_WORK, acpRelayOpenWork } from '../process/acp-relay-work-markers'
+import { acpChildRelayOpenWork } from './acp-child-relay-open-work'
 import * as childState from './children/acp-structured-child'
 import { AcpStructuredChildren } from './children/acp-structured-child-lifecycle'
 import { AcpConversationCopies } from '../conversation-copy/acp-conversation-copies'
@@ -45,12 +45,15 @@ import { supportsAcpStructuredLocation } from './acp-structured-location-support
 import { acpAcquireFailure } from './start/acp-startup-outcome'
 import { openAcpStart } from './start/acp-structured-start-open'
 import { admitStructuredAgentSessionInput } from '../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
+import { orchestrationMailNotice } from '../../../shared/agent-session/journal/agent-session-message-source'
 
 export class AcpStructuredSessionAdapter implements SessionAdapter {
   readonly atRestCommands: AcpStructuredSessionAdapterDeps['atRestCommands']
   private readonly children: AcpStructuredChildren
   private readonly copies: AcpConversationCopies
   private readonly textTasks: AcpTextTasks
+  /** Mail still preparing holds the steering slot, so the host keeps the next one unprepared. */
+  private readonly preparingMail = new WeakMap<AcpStructuredSession, number>()
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {
     this.atRestCommands = deps.atRestCommands
     this.children = new AcpStructuredChildren(deps)
@@ -112,6 +115,22 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       return rejectedAcpDispatch(lost)
     }
     const session = this.live(input.sessionId)
+    if (orchestrationMailNotice(input.body.from) === null) {
+      return this.dispatchTo(session, input, false)
+    }
+    this.preparingMail.set(session, (this.preparingMail.get(session) ?? 0) + 1)
+    try {
+      return await this.dispatchTo(session, input, true)
+    } finally {
+      this.preparingMail.set(session, (this.preparingMail.get(session) ?? 1) - 1)
+    }
+  }
+
+  private async dispatchTo(
+    session: AcpStructuredSession,
+    input: Parameters<SessionAdapter['dispatch']>[0],
+    mail: boolean
+  ): Promise<DispatchOutcome> {
     const prompt = await acpDispatchPrompt(input.body, session)
     if (!Array.isArray(prompt)) {
       return { state: 'rejected', ...prompt }
@@ -131,7 +150,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
         () =>
           this.children.sessions.get(input.sessionId) === session && session.journalClosed === null,
         signal,
-        fallback.command
+        mailModelCommand(fallback.command, mail && session.turns.steersMail, session.turns)
       )
       if (!optionsApplied) {
         return rejectedAcpDispatch(session)
@@ -143,11 +162,14 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       await input.beforeDispatch?.()
       input.signal?.throwIfAborted()
       const commit = fallback.admitting(() =>
-        session.turns.dispatch({
-          clientMessageId: input.clientMessageId,
-          prompt,
-          requestedAt: input.requestedAt ?? this.now()
-        })
+        session.turns.dispatch(
+          {
+            clientMessageId: input.clientMessageId,
+            prompt,
+            requestedAt: input.requestedAt ?? this.now()
+          },
+          mail ? 'mail' : 'cancel'
+        )
       )
       await admitStructuredAgentSessionInput(input.admitFreshInput, commit)
       // Admission precedes provider confirmation of the send.
@@ -191,10 +213,9 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     SessionAdapter['permissionModeRequiresAcquisition']
   > = (sessionId, mode) => {
     const session = this.children.sessions.get(sessionId)
-    if (!childState.isAcpReadySession(session)) {
-      return undefined
-    }
-    return !acpKeptModeTakesLive(session, mode) && acpRunningPermission(session) !== mode
+    return childState.isAcpReadySession(session)
+      ? !acpKeptModeTakesLive(session, mode) && acpRunningPermission(session) !== mode
+      : undefined
   }
 
   runningPermissionMode: NonNullable<SessionAdapter['runningPermissionMode']> = (sessionId) => {
@@ -252,6 +273,18 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return session ? childState.isAcpReadySession(session) && session.turns.running : false
   }
 
+  steeringMode: SessionAdapter['steeringMode'] = (sessionId) => {
+    const session = this.children.sessions.get(sessionId)
+    // One mail at a time: the host keeps later mail until a held steer settles.
+    return childState.isAcpReadySession(session) &&
+      session.turns.running &&
+      session.turns.steersMail &&
+      !session.turns.holdsSteers &&
+      !this.preparingMail.get(session)
+      ? 'inject'
+      : 'queue'
+  }
+
   confirmIdle: NonNullable<SessionAdapter['confirmIdle']> = (sessionId) => {
     const session = this.children.sessions.get(sessionId)
     // OMP cannot prove that a finished parent has no background work or pending results.
@@ -260,32 +293,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       : undefined
   }
 
-  /** The open work a detached agent's idle stop counts. OMP's, like its open-app idle, is unknown.
-   *  So is Droid's once it may have started a subagent (in this launch, or as an earlier one said):
-   *  those outlive their closed calls with no line the daemon reads, so it is carried as work
-   *  nothing ends. A turn the agent began itself has no end the daemon reads, so its running calls
-   *  count, each until its final status, as the open app keeps them running past the turn's quiet end. */
-  relayOpenWork = (sessionId: string): Record<string, string[][]> | null => {
-    const session = this.children.sessions.get(sessionId)
-    const translator = session?.lane?.translator
-    if (!translator || session.spec.agent === 'omp') {
-      return null
-    }
-    const work = acpRelayOpenWork({
-      tasks: [
-        ...translator.backgroundTasks.runningIds,
-        ...(translator.agentTurnCalls()?.ids() ?? [])
-      ],
-      subagents: translator.subagents.openIds
-    })
-    const droidUnknown =
-      session.spec.agent === 'droid' &&
-      (session.turns?.running !== false ||
-        session.lane?.openTurnId !== null ||
-        translator.subagents.anyStarted ||
-        (session.connection.kept?.openWork(ACP_UNKNOWN_WORK).length ?? 0) > 0)
-    return droidUnknown ? { ...work, [ACP_UNKNOWN_WORK]: [['subagent']] } : work
-  }
+  relayOpenWork = (id: string) => acpChildRelayOpenWork(this.children.sessions.get(id))
 
   endedBeforeAcquire = (sessionId: string, generation: string): boolean =>
     this.children.endedBeforeAcquire.get(sessionId) === generation

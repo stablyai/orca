@@ -104,6 +104,7 @@ export async function settleAcpPermissionTransition(
     !session.ended &&
     !session.closeRequested &&
     !session.turns.running &&
+    !session.turns.holdsSteers &&
     session.lane.openTurnId === null
   )
 }

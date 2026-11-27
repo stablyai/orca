@@ -508,7 +508,7 @@
 3 src/main/git/command-runner/git-exec-file.ts
 4 src/main/git/command-runner/host-routing/git-command-resolution.ts
 1 src/main/git/command-runner/host-routing/wsl-aware-spawn.ts
-5 src/main/git/command-runner/host-routing/wsl-command-resolution.ts
+4 src/main/git/command-runner/host-routing/wsl-command-resolution.ts
 2 src/main/git/command-runner/host-routing/wsl-drive-checkout-git-routing.ts
 2 src/main/git/command-runner/host-routing/wsl-git-read-environment.ts
 9 src/main/git/command-runner/host-routing/wsl-windows-checkout-git-probe.ts
@@ -1031,7 +1031,7 @@
 1 src/main/ports/local-workspace-port-scanner.ts
 1 src/main/ports/port-scan-command-client.ts
 3 src/main/preflight/agent-command-detection.ts
-2 src/main/preflight/agent-detection.ts # glab auth env = the same cached /proc/mounts read the exec helper does by default
+1 src/main/preflight/agent-detection.ts
 1 src/main/preflight/installed-agent-detection.ts
 1 src/main/project-groups/nested-repo-discovery.ts
 2 src/main/provider-process/managed-provider-process.ts

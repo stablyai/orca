@@ -20827,7 +20827,6 @@
         "expand": "펼치기"
       },
       "question": {
-        "step": "{{value0}} 단계",
         "otherPlaceholder": "답변을 입력하세요",
         "cancel": "취소",
         "send": "제출",
@@ -20839,12 +20838,11 @@
         "recommended": "추천",
         "stepOf": "{{value0}}/{{value1}}",
         "answered": "답변함",
-        "title": "질문",
         "previous": "이전 질문",
         "nextQuestion": "다음 질문",
         "back": "뒤로",
         "skipAndSubmit": "건너뛰고 제출",
-        "stepLabel": "{{value0}}, {{value1}}/{{value2}}: {{value3}}"
+        "questionStepLabel": "{{value0}}, {{value1}}/{{value2}}"
       },
       "approval": {
         "needsNewerOrca": "이 요청에는 최신 버전의 Orca가 필요합니다.",

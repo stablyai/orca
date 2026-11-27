@@ -6,6 +6,7 @@ import { wrapRemoteCommandForPosixShell } from '../remote-exec/ssh-posix-command
 import type { SshExecOptions } from '../connection/ssh-exec-options'
 import { buildSshArgs, type SystemSshBuildArgsOptions } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
+import { terminateSystemSsh } from './system-ssh-termination'
 
 type SystemSshProcess = {
   stdin: NodeJS.WritableStream
@@ -121,11 +122,7 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
   mutableChannel._process = proc
   mutableChannel.close = () => {
     mutableChannel._closeRequested = true
-    try {
-      proc.kill('SIGTERM')
-    } catch {
-      // Process may already be dead
-    }
+    terminateSystemSsh(proc)
   }
 
   const cleanupProcessListeners = (): void => {

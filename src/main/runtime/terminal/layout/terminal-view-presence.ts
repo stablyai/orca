@@ -125,7 +125,7 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
   /** Input waits, bounded, for main's in-flight re-attach after an endpoint loss instead of being refused. */
   protected async waitForPtyEndpointReattach(
     ptyId: string | undefined,
-    signal?: AbortSignal
+    { signal, arrivedAt }: { signal?: AbortSignal; arrivedAt?: number }
   ): Promise<void> {
     const reattach =
       ptyId === undefined ? undefined : this.mainDaemonAttachments.pendingReattach(ptyId)
@@ -133,7 +133,12 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
       return
     }
     const generation = this.getPtyLifecycleGeneration(ptyId)
-    await this.settleEndpointReattach(ptyId, reattach, signal)
+    // From arrival or the re-attach's start, whichever is later: frames queued behind one stuck re-attach share its bound.
+    const waitFrom = Math.max(
+      arrivedAt ?? performance.now(),
+      this.mainDaemonAttachments.reattachPendingSince(ptyId) ?? 0
+    )
+    await this.settleEndpointReattach(ptyId, reattach, waitFrom, signal)
     if (signal?.aborted) {
       // A cancelled send must not be written once the terminal is back.
       throw new Error('request_aborted')
@@ -147,9 +152,10 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
   private async settleEndpointReattach(
     ptyId: string,
     first: Promise<boolean>,
+    waitFrom: number,
     signal?: AbortSignal
   ): Promise<void> {
-    const deadline = performance.now() + ENDPOINT_REATTACH_INPUT_WAIT_MS
+    const deadline = waitFrom + ENDPOINT_REATTACH_INPUT_WAIT_MS
     // A further loss mid-attach starts another attempt; keep waiting within the same bound.
     let reattach: Promise<boolean> | undefined = first
     while (reattach) {

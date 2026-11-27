@@ -1,23 +1,28 @@
-/** Callers waiting for the running prompt to end; Stop or an abort releases one early. */
+/** Callers waiting for the turn to go idle; an abort releases one early. */
 export class AcpTurnIdleWaiters {
   private readonly waiters = new Set<() => void>()
 
-  wait(signal?: AbortSignal): Promise<void> {
-    return new Promise((resolve) => {
-      const wake = (): void => {
-        this.waiters.delete(wake)
-        signal?.removeEventListener('abort', wake)
-        resolve()
+  /** Resolves at the first wake `idle()` agrees with, or on abort. */
+  wait(idle: () => boolean, signal?: AbortSignal): Promise<void> {
+    const { promise, resolve } = Promise.withResolvers<void>()
+    const finish = (): void => {
+      this.waiters.delete(wake)
+      signal?.removeEventListener('abort', finish)
+      resolve()
+    }
+    const wake = (): void => {
+      if (idle()) {
+        finish()
       }
-      this.waiters.add(wake)
-      signal?.addEventListener('abort', wake, { once: true })
-    })
+    }
+    this.waiters.add(wake)
+    signal?.addEventListener('abort', finish, { once: true })
+    return promise
   }
 
   wake(): void {
     for (const wake of this.waiters) {
       wake()
     }
-    this.waiters.clear()
   }
 }
