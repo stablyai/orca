@@ -1,18 +1,23 @@
 import { PassThrough } from 'node:stream'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 
-const frameSchema = z.object({
-  jsonrpc: z.literal('2.0'),
-  id: z.union([z.string(), z.number(), z.null()]).optional(),
-  method: z.string().optional(),
-  params: z.unknown().optional(),
-  result: z.unknown().optional(),
-  error: z
-    .object({ code: z.number(), message: z.string(), data: z.unknown().optional() })
-    .optional()
-})
+const frameSchema = lazyZodSchema(() =>
+  z.object({
+    jsonrpc: z.literal('2.0'),
+    id: z.union([z.string(), z.number(), z.null()]).optional(),
+    method: z.string().optional(),
+    params: z.unknown().optional(),
+    result: z.unknown().optional(),
+    error: z
+      .object({ code: z.number(), message: z.string(), data: z.unknown().optional() })
+      .optional()
+  })
+)
 export type FakeFrame = z.infer<typeof frameSchema>
-const setConfigOptionSchema = z.object({ configId: z.string(), value: z.string() })
+const setConfigOptionSchema = lazyZodSchema(() =>
+  z.object({ configId: z.string(), value: z.string() })
+)
 type Handler = (frame: FakeFrame) => void
 
 export class AcpScriptedAgent {

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   outcomeFormat1Stored,
   outcomeFormat1StoredScalars,
@@ -17,29 +18,33 @@ import {
 
 export const JOURNAL_OUTCOME_FORMAT_3 = 3
 
-const storedCard = outcomeFormat1Stored['queue.cards']._def.items[1].extend({
-  deliveryMode: z.enum(['queue', 'steer']).optional(),
-  unattended: z.boolean().optional()
-})
-const strictCard = strictStorage(storedCard)
-export const outcomeFormat3Card = z.custom<QueuedMessageRow>(
-  (value) => strictCard.safeParse(value).success
+const storedCard = lazyZodSchema(() =>
+  outcomeFormat1Stored['queue.cards']._def.items[1].extend({
+    deliveryMode: z.enum(['queue', 'steer']).optional(),
+    unattended: z.boolean().optional()
+  })
 )
-const card = strictStorage(z.tuple([z.string(), storedCard]))
+const strictCard = strictStorage(storedCard)
+export const outcomeFormat3Card = lazyZodSchema(() =>
+  z.custom<QueuedMessageRow>((value) => strictCard.safeParse(value).success)
+)
+const card = strictStorage(lazyZodSchema(() => z.tuple([z.string(), storedCard])))
 
-const storedStop = outcomeFormat1StoredScalars.shape.queuePauseMarks.shape.latestStop.unwrap()
-const storedPauseMarks = outcomeFormat1StoredScalars.shape.queuePauseMarks.extend({
-  manualStop: storedStop
-    .extend({ event: storedStop.shape.event.extend({ reason: z.literal('user-stop') }) })
-    .nullable()
-    .optional()
+const storedPauseMarks = lazyZodSchema(() => {
+  const storedStop = outcomeFormat1StoredScalars.shape.queuePauseMarks.shape.latestStop.unwrap()
+  return outcomeFormat1StoredScalars.shape.queuePauseMarks.extend({
+    manualStop: storedStop
+      .extend({ event: storedStop.shape.event.extend({ reason: z.literal('user-stop') }) })
+      .nullable()
+      .optional()
+  })
 })
 const pauseMarks = strictStorage(storedPauseMarks)
-export const outcomeFormat3PauseMarks = z.custom<JournalReducerState['queuePauseMarks']>(
-  (value) => pauseMarks.safeParse(value).success
+export const outcomeFormat3PauseMarks = lazyZodSchema(() =>
+  z.custom<JournalReducerState['queuePauseMarks']>((value) => pauseMarks.safeParse(value).success)
 )
 const completeScalars = strictStorage(
-  outcomeFormat1StoredScalars.extend({ queuePauseMarks: storedPauseMarks })
+  lazyZodSchema(() => outcomeFormat1StoredScalars.extend({ queuePauseMarks: storedPauseMarks }))
 )
 
 /** Complete current scalars are checked in their own format before the frozen field decoder applies them. */

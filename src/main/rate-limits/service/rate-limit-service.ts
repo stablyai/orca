@@ -1,7 +1,3 @@
-import {
-  localAccountRuntimeTargetKey,
-  type LocalAccountRuntimeTarget
-} from '../../../shared/agent-accounts/local-account-runtime'
 import type { BrowserWindow } from 'electron'
 import {
   USAGE_PROVIDER_KEYS,
@@ -11,7 +7,6 @@ import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
 import { RateLimitServiceTargetUsageRead } from './service-target-usage-read'
-import type { AntigravityAccountUsageRecorder } from '../providers/antigravity/antigravity-account-usage'
 import {
   type CodexAccountSelectionTarget,
   normalizeCodexAccountSelectionTarget
@@ -23,7 +18,6 @@ import {
   type ClaudeAuthPreparationResolver,
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
-  type AntigravityUsageEnabledResolver,
   type ClaudeOAuthUsageEnabledResolver,
   type MuseUsageEnabledResolver,
   type ZcodePlanRateLimitConfig,
@@ -131,28 +125,6 @@ export class RateLimitService extends RateLimitServiceTargetUsageRead {
     if (!this.lastClaudeAuthSnapshot) {
       void this.fetchClaudeOnly({ force: true })
     }
-  }
-
-  setAntigravityUsageEnabledResolver(resolver: AntigravityUsageEnabledResolver): void {
-    this.antigravityUsageEnabledResolver = resolver
-  }
-
-  setAntigravityFetchTarget(target: LocalAccountRuntimeTarget): void {
-    if (
-      localAccountRuntimeTargetKey(target) ===
-      localAccountRuntimeTargetKey(this.antigravityFetchTarget)
-    ) {
-      return
-    }
-    this.antigravityFetchTarget = { ...target }
-    this.antigravityFetchGeneration += 1
-    this.antigravityAccounts = []
-    this.activeFailureStreakByProvider.antigravity = 0
-    this.updateState({ ...this.state, antigravity: null })
-  }
-
-  setAntigravityAccountUsageRecorder(recorder: AntigravityAccountUsageRecorder): void {
-    this.antigravityAccountUsageRecorder = recorder
   }
 
   setMuseUsageEnabledResolver(resolver: MuseUsageEnabledResolver): void {
@@ -281,7 +253,7 @@ export class RateLimitService extends RateLimitServiceTargetUsageRead {
         this.inactiveCodexCache,
         this.inactiveCodexFetching
       ),
-      antigravityAccounts: this.antigravityAccounts,
+      antigravityAccounts: [],
       usageHistory: this.usageHistory?.snapshot()
     }
   }

@@ -199,6 +199,7 @@ patchedDependencies:
   prosemirror-view@1.42.3: 3340ccbcc4e3302f3ae1c0eda3911015966add2e7e0df76abd89fbef4f3902f7
   serve-sim@0.1.47: 35fbf11ff1b4c94f4b1253d9922fed45f9f170bd7f19d4a0999df7c8c2316bc0
   sprintf-js@1.1.3: 05316a8b01f155fe19a1e0cb4042c81d43d798a76755c407684e1199a18b1e08
+  ssh2@1.17.0: def1408158978a9387f38303972030c1962519b7ce563dbf4ca376deb3a308bf
   vitest@5.1.0: 957d1d635d13350266bce54094e8197e86da1931a62d0caf7d5339c72040d9d9
   ws@8.22.0: 9393e04dd9a90b01eb7aa35fcd5b1431b5038ce999fbbd82651136193ba51f14
 
@@ -271,7 +272,7 @@ importers:
         version: 1.9.1
       ssh2:
         specifier: ^1.17.0
-        version: 1.17.0
+        version: 1.17.0(patch_hash=def1408158978a9387f38303972030c1962519b7ce563dbf4ca376deb3a308bf)
       stream-chain:
         specifier: 4.2.6
         version: 4.2.6
@@ -15284,7 +15285,7 @@ snapshots:
   sprintf-js@1.1.3(patch_hash=05316a8b01f155fe19a1e0cb4042c81d43d798a76755c407684e1199a18b1e08):
     optional: true
 
-  ssh2@1.17.0:
+  ssh2@1.17.0(patch_hash=def1408158978a9387f38303972030c1962519b7ce563dbf4ca376deb3a308bf):
     dependencies:
       asn1: 0.2.6
       bcrypt-pbkdf: 1.0.2

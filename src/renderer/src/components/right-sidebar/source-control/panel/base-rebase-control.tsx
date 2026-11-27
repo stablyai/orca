@@ -1,5 +1,5 @@
 import React, { useId, useLayoutEffect, useRef, useState } from 'react'
-import { GitPullRequestArrow, Loader2, TriangleAlert } from 'lucide-react'
+import { Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -7,12 +7,10 @@ import type { BaseRebaseState, RebaseContinueState } from './base-rebase-state'
 
 export type BaseRebaseActions = {
   state: BaseRebaseState
-  isRebasing: boolean
   isAbortingRebase: boolean
   isContinuingRebase: boolean
   isRetryingRebaseInspect: boolean
   hasGitOwner: boolean
-  onRebase: () => void
   onAbortRebase: () => void
   onContinueRebase: () => void
   onRetryRebaseInspect: () => void
@@ -71,66 +69,6 @@ function ReasonButton({
         </span>
       ) : null}
     </>
-  )
-}
-
-export function BaseRebaseTrailing({
-  actions
-}: {
-  actions: BaseRebaseActions
-}): React.JSX.Element | null {
-  const t = useTranslate()
-  const { state } = actions
-  if (state.kind === 'up_to_date') {
-    return (
-      <span className="shrink-0 text-muted-foreground/70">
-        {t('auto.components.right.sidebar.SourceControl.baseUpToDate', 'Up to date')}
-      </span>
-    )
-  }
-  if (state.kind !== 'behind') {
-    return null
-  }
-  const label = t(
-    'auto.components.right.sidebar.source.control.dropdown.items.rebaseOntoNamedBase',
-    'Rebase onto {{base}}',
-    {
-      base: state.baseLabel
-    }
-  )
-  const reason = actions.isRebasing
-    ? null
-    : state.blockedBy === 'dirty'
-      ? t(
-          'auto.components.right.sidebar.source.control.dropdown.items.rebaseCommitOrStashFirst',
-          'Commit or stash changes first'
-        )
-      : state.blockedBy === 'busy'
-        ? t(
-            'auto.components.right.sidebar.SourceControl.rebaseOperationInProgress',
-            'Wait for the current Git operation to finish'
-          )
-        : null
-  const unavailable = actions.isRebasing || state.blockedBy !== null
-  return (
-    <ReasonButton
-      variant="outline"
-      size="xs"
-      unavailable={unavailable}
-      reason={reason}
-      aria-label={label}
-      aria-busy={actions.isRebasing || undefined}
-      title={unavailable ? undefined : label}
-      onPress={actions.onRebase}
-    >
-      {actions.isRebasing ? (
-        <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-      ) : (
-        // Narrow panels keep the word and drop the icon.
-        <GitPullRequestArrow className="size-3 @max-[16rem]:hidden" aria-hidden="true" />
-      )}
-      {t('auto.components.right.sidebar.SourceControl.rebaseButton', 'Rebase')}
-    </ReasonButton>
   )
 }
 

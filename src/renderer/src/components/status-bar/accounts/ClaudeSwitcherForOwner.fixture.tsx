@@ -34,6 +34,8 @@ type FixtureOptions = {
   signInAgain?: boolean
   /** Press the card's Sign in button and hold the sign-in open. */
   busy?: boolean
+  /** Highlight a signed-out row from its label side or from its Sign in. */
+  highlight?: 'row' | 'signIn'
 }
 const SIGN_IN_AGAIN_EMAILS: Record<string, string> = {
   selected: 'alex@example.com',
@@ -44,7 +46,7 @@ const SIGN_IN_AGAIN_EMAILS: Record<string, string> = {
 function fixture(
   width = 520,
   wsl = false,
-  { signInAgain = false, busy = false }: FixtureOptions = {}
+  { signInAgain = false, busy = false, highlight }: FixtureOptions = {}
 ) {
   const account = (
     id: string,
@@ -125,6 +127,17 @@ function fixture(
       frame
         .querySelector<HTMLButtonElement>('button[aria-label]')
         ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+      if (highlight) {
+        await new Promise((resolve) => setTimeout(resolve, 300))
+        const signIn = [
+          ...document.querySelectorAll<HTMLElement>('[role="menu"] [aria-label^="Sign in:"]')
+        ].at(-1)
+        const row = signIn?.parentElement?.parentElement
+        ;(highlight === 'row'
+          ? row?.querySelector<HTMLElement>('[role="menuitem"]')
+          : signIn
+        )?.focus()
+      }
       if (!busy) {
         return
       }
@@ -140,3 +153,6 @@ export const narrow = fixture(360)
 export const wsl = fixture(520, true)
 export const signInAgain = fixture(520, false, { signInAgain: true })
 export const signInAgainBusy = fixture(520, false, { signInAgain: true, busy: true })
+export const signedOutRowHover = fixture(520, false, { signInAgain: true, highlight: 'row' })
+export const signedOutSignInHover = fixture(520, false, { signInAgain: true, highlight: 'signIn' })
+export const narrowSignedOutRowHover = fixture(300, false, { signInAgain: true, highlight: 'row' })
