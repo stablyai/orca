@@ -5,11 +5,11 @@ import {
   captureCleanBrowserPage,
   isCurrentBrowserGrabRequest,
   disposeGrabModeStateForPage,
-  resetGrabModeState as resetSharedGrabModeState
+  resetGrabModeState
 } from '../../browser/element-grab/browser-grab-mode-sequencer'
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
-import { onDocPreviewGrantRevoked } from '../../browser/document-preview/doc-preview-grant-registry'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import { waitForNextTabRegistration } from './browser-tab-registration-wait'
 import type {
@@ -35,35 +35,27 @@ import type {
 } from '../../../shared/browser/element-grab/browser-grab-clean-capture'
 
 const GRAB_REGISTRATION_WAIT_MS = 1_000
-export { disposeGrabModeStateForPage }
-export function resetGrabModeState(): void {
-  disposePreviewGrantSubscription?.()
-  disposePreviewGrantSubscription = null
-  resetSharedGrabModeState()
-}
+// The doc-preview grant-revocation subscription lives in lazy-browser-grab-and-dictation-ipc:
+// runtime grab commands populate the shared grab state before this module ever loads.
+export { disposeGrabModeStateForPage, resetGrabModeState }
 
-let disposePreviewGrantSubscription: (() => void) | null = null
+export function registerBrowserGrabHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  if (ipc === ipcMain) {
+    for (const channel of [
+      'browser:setGrabMode',
+      'browser:awaitGrabSelection',
+      'browser:cancelGrab',
+      'browser:setGrabLabelAvoidArea',
+      'browser:grabPickedElementPresent',
+      'browser:captureSelectionScreenshot',
+      'browser:extractHoverPayload',
+      'browser:captureCleanPage'
+    ]) {
+      ipcMain.removeHandler(channel)
+    }
+  }
 
-function subscribeToPreviewGrantRevocation(): void {
-  disposePreviewGrantSubscription?.()
-  disposePreviewGrantSubscription = onDocPreviewGrantRevoked((grant) => {
-    browserManager.cancelGrabOp(grant.browserPageId, 'evicted')
-    disposeGrabModeStateForPage(grant.browserPageId)
-  })
-}
-
-export function registerBrowserGrabHandlers(): void {
-  subscribeToPreviewGrantRevocation()
-  ipcMain.removeHandler('browser:setGrabMode')
-  ipcMain.removeHandler('browser:awaitGrabSelection')
-  ipcMain.removeHandler('browser:cancelGrab')
-  ipcMain.removeHandler('browser:setGrabLabelAvoidArea')
-  ipcMain.removeHandler('browser:grabPickedElementPresent')
-  ipcMain.removeHandler('browser:captureSelectionScreenshot')
-  ipcMain.removeHandler('browser:extractHoverPayload')
-  ipcMain.removeHandler('browser:captureCleanPage')
-
-  ipcMain.handle(
+  ipc.handle(
     'browser:setGrabMode',
     async (event, args: BrowserSetGrabModeArgs): Promise<BrowserSetGrabModeResult> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
@@ -103,7 +95,7 @@ export function registerBrowserGrabHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'browser:captureCleanPage',
     async (event, args: BrowserCaptureCleanPageArgs): Promise<BrowserCleanPageCapture | null> => {
       if (
@@ -123,7 +115,7 @@ export function registerBrowserGrabHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'browser:awaitGrabSelection',
     async (event, args: BrowserAwaitGrabSelectionArgs): Promise<BrowserGrabResult> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
@@ -147,7 +139,7 @@ export function registerBrowserGrabHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'browser:setGrabLabelAvoidArea',
     async (event, args: BrowserSetGrabLabelAvoidAreaArgs): Promise<boolean> => {
       if (!isTrustedBrowserRenderer(event.sender) || typeof args?.browserPageId !== 'string') {
@@ -161,7 +153,7 @@ export function registerBrowserGrabHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'browser:grabPickedElementPresent',
     async (event, args: BrowserGrabPickedElementPresentArgs): Promise<boolean | null> => {
       if (
@@ -184,7 +176,7 @@ export function registerBrowserGrabHandlers(): void {
     }
   )
 
-  ipcMain.handle('browser:cancelGrab', (event, args: BrowserCancelGrabArgs): boolean => {
+  ipc.handle('browser:cancelGrab', (event, args: BrowserCancelGrabArgs): boolean => {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return false
     }
@@ -196,7 +188,7 @@ export function registerBrowserGrabHandlers(): void {
     )
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'browser:captureSelectionScreenshot',
     async (
       event,
@@ -226,7 +218,7 @@ export function registerBrowserGrabHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'browser:extractHoverPayload',
     async (event, args: BrowserExtractHoverArgs): Promise<BrowserExtractHoverResult> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
