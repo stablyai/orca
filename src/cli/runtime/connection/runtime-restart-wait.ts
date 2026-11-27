@@ -77,6 +77,10 @@ export class RuntimeRestartWait {
       return false
     }
     this.restart = restart
+    // The Windows installer waits on, then kills, processes running from the install folder, as this CLI does.
+    if (restart.reason === 'update' && process.platform === 'win32') {
+      return false
+    }
     this.deadline ??= now + this.budgetMs
     const remaining = this.deadline - now
     if (remaining <= 0) {
