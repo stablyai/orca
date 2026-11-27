@@ -35,8 +35,8 @@ function sealingStore(): SecretStore | null {
   const kind = store.describeSealing?.().kind
   // A host key is itself a file whose privacy can't be proven everywhere (macOS ACLs), and a mock
   // keychain (a test switch) seals with a fixed password, so only the real OS keychain seals this.
-  const mockKeychain = process.argv.includes('--use-mock-keychain')
-  return store.isEncryptionAvailable() && kind === 'os-keychain' && !mockKeychain ? store : null
+  const real = kind === 'os-keychain' && store.mockKeychain?.() !== true
+  return store.isEncryptionAvailable() && real ? store : null
 }
 
 /** The kept secret, or null when there is none; throws when it can't be unsealed or is malformed. */
