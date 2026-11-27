@@ -54,13 +54,18 @@ export function RailPageSearch({
   }, [focusTarget, inputRef])
   React.useLayoutEffect(() => {
     if (expanded) {
+      if (disabled) {
+        selectOnOpen.current = false
+        setExpanded(false)
+        return
+      }
       inputRef.current?.focus({ preventScroll: true })
       if (selectOnOpen.current) {
         inputRef.current?.select()
         selectOnOpen.current = false
       }
     }
-  }, [expanded, inputRef])
+  }, [disabled, expanded, inputRef])
 
   const combos = useShortcutKeyComboDetails('page.search')
   const showHint = shortcutEnabled && !webClient && !hasValue && combos.length > 0

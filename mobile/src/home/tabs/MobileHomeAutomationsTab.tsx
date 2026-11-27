@@ -11,6 +11,8 @@ import { automationUpdateWrite } from '../../automations/automation-operations'
 import type { MobileAutomationRow } from '../../automations/automation-reply-schema'
 import { useAutomationCatalog } from '../../automations/use-automation-catalog'
 import { useAutomationRuns } from '../../automations/use-automation-runs'
+import { useAutomationProjectNames } from '../../automations/use-automation-project-names'
+import { automationsEmptyMessage, automationsEmptyTitle } from '../../automations/AutomationList'
 import { describeLoadError } from '../../components/feedback/load-error-description'
 import { useNow } from '../../hooks/use-now'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -101,6 +103,7 @@ function HostAutomations(props: {
   const enabled = useOptimisticEnabled(catalog)
   const reducedMotion = useReducedMotionEnabled() === true
   const now = useNow(60_000)
+  const projectName = useAutomationProjectNames(props.host.id, client, true)
   const emptyTitle = t('home.automationsTab.emptyTitle', 'Schedule agent work')
 
   if (!catalog.loaded) {
@@ -146,12 +149,7 @@ function HostAutomations(props: {
     )
   }
   if (catalog.rows.length === 0) {
-    return (
-      <AutomationsEmpty
-        title={t('home.automationsTab.noAutomations', 'No automations yet')}
-        message={t('home.automationsTab.createHint', 'Tap + to schedule an agent.')}
-      />
-    )
+    return <AutomationsEmpty title={automationsEmptyTitle()} message={automationsEmptyMessage()} />
   }
   const runs = history.runs.slice(0, RECENT_RUN_LIMIT)
   return (
@@ -167,6 +165,7 @@ function HostAutomations(props: {
             {index > 0 ? <View style={[list.separator, list.fullSeparator]} /> : null}
             <MobileHomeAutomationRow
               row={row}
+              project={projectName(row.automation)}
               enabled={enabled.valueOf(row)}
               disabled={!catalog.connected}
               onToggle={(value) => void enabled.toggle(row, value)}

@@ -955,6 +955,7 @@
         "handedOff": "Передано получателю:"
       },
       "unnamedRecipient": "агент",
+      "recipientName": "{{name}}",
       "event": {
         "followedUp": "Дополнение отправлено",
         "update": "Обновление",
@@ -2325,12 +2326,8 @@
     },
     "automationsTab": {
       "connectDesktop": "Подключите {{desktop}}, чтобы просматривать и запускать автоматизации.",
-      "createHint": "Нажмите +, чтобы запланировать агента.",
       "emptyTitle": "Планируйте работу агентов",
-      "lastStatus": "Последний: {{status}}",
       "newAutomation": "Новая автоматизация",
-      "noAutomations": "Автоматизаций пока нет",
-      "paused": "Приостановлена",
       "scheduled": "По расписанию",
       "showFor": "Показать автоматизации для",
       "toggleFailed": "Не удалось обновить {{name}}",
@@ -5453,7 +5450,6 @@
       "skipped": "Пропущено",
       "started": "Начало",
       "trigger": "Триггер",
-      "run": "Запуск",
       "output": "Вывод",
       "noOutput": "Нет доступного содержимого вывода.",
       "loadingRuns": "Загрузка запусков…",
@@ -5479,10 +5475,6 @@
       "loadMoreWorkspaces": "Загрузить ещё рабочие области",
       "installAndEnableAnAgentOnThisHostThenRetry": "Установите и включите агента на этом хосте, затем повторите попытку.",
       "loadingAutomations": "Загрузка автоматизаций…",
-      "letYourAgentsWorkOnASchedule": "Пусть агенты работают по расписанию",
-      "createAnAutomationToRunATaskOnThisHost": "Создайте автоматизацию для выполнения задачи на этом хосте.",
-      "nextDate": "Следующий: {{date}}",
-      "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Подключитесь к хосту заново для обновления или изменений. Сохранённая информация доступна ниже.",
       "recentRuns": "Недавние запуски",
       "outcome": "Результат",
       "allOutcomes": "Все результаты",
@@ -5491,14 +5483,9 @@
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Не удалось проверить исходную панель агента. Подключитесь заново и повторите попытку.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "Исходную панель агента больше нельзя открыть. Сохранённый вывод остаётся здесь.",
       "allRuns": "Все запуски",
-      "thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow": "Запуска больше нет в сохранённой истории хоста. Последняя сохранённая информация остаётся ниже.",
       "scheduledFor": "Запланировано на",
-      "notCreated": "Не создано",
-      "projectHost": "Хост проекта",
-      "notRecorded": "Не записано",
       "capturedTruncated": "Сохранено: {{date}} · Вывод усечён хостом",
       "capturedDate": "Сохранено: {{date}}",
-      "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "Исходная панель агента недоступна. Сохранённый вывод остаётся здесь.",
       "openAgent": "Открыть агента",
       "retryHistory": "Повторить загрузку истории",
       "fullOutputUnavailable": "Не удалось загрузить полный вывод.",
@@ -6809,7 +6796,8 @@
       "questions": "Вопросов: {{count}}",
       "pairedAsk": "{{from}} хочет написать {{name}}",
       "connectorFix": "Войти или исправить",
-      "signInApps": "Войдите в приложения: {{count}}"
+      "signInApps": "Войдите в приложения: {{count}}",
+      "listSeparator": ", "
     },
     "waits": {
       "cancel": "Отмена",
@@ -7144,6 +7132,7 @@
       "emptyArgument": "Пусто",
       "valueNew": "Новое значение",
       "valueSaved": "Сохранено",
+      "hostMcpServers": "Ваши MCP-серверы",
       "edit": "Редактировать",
       "save": "Сохранить",
       "args": "Аргументы",
@@ -7157,8 +7146,10 @@
       "editTitle": "Изменить инструмент",
       "reading": "Чтение сведений об инструменте…",
       "url": "URL сервера",
+      "urlPlaceholder": "https://example.com/mcp",
       "headers": "Заголовки",
       "executable": "Исполняемый файл",
+      "commandPlaceholder": "npx",
       "addArg": "Добавить аргумент",
       "env": "Переменные окружения",
       "addHeader": "Добавить заголовок",
@@ -7383,6 +7374,9 @@
       "groupMailNeverStarted": "Это письмо так и не запустило ход.",
       "groupRemoteUnreachable": "Не удалось связаться с {{host}}. {{detail}}",
       "groupRemoteUnreachableRetry": "Не удалось связаться с {{host}}. {{detail}} Опубликуйте ещё раз, чтобы повторить попытку.",
+      "composioKeyCantCreateSessions": "Этот ключ Composio не может создавать сессии. Требуется разрешение {{permission}}.",
+      "composioKeyNeedsPermission": "У этого ключа Composio нет нужного разрешения. Требуется {{permission}}.",
+      "composioKeyMissingPermission": "У этого ключа Composio нет разрешения, которое нужно Orca.",
       "googleAccountsChanged": "Его учётные записи Google изменились с тех пор, как вы их открыли. Проверьте их и сохраните снова."
     },
     "automations": {
@@ -7501,6 +7495,7 @@
         "full": "Полный доступ",
         "back": "Назад",
         "continue": "Продолжить",
+        "linkPlaceholder": "https://app.orca.dev/bots/share/…",
         "link": "Ссылка",
         "paste": "Вставить",
         "open": "Открыть",
@@ -8118,7 +8113,8 @@
         "handoffPick": "Выберите рабочее пространство и нажмите Authorize.",
         "signIn": "Войти в Linear",
         "pickSubtitle": "Выберите рабочее пространство, в котором работает {{name}}"
-      }
+      },
+      "address": "linear.app/{{urlKey}}"
     },
     "github": {
       "setup": {
@@ -8175,7 +8171,11 @@
         "signIn": "Войти в GitHub",
         "pickSubtitle": "Выберите репозитории, в которых он может работать"
       },
-      "allRepositoriesShort": "все репозитории"
+      "allRepositoriesShort": "все репозитории",
+      "ghSignedOut": {
+        "line": "В gh на {{host}} не выполнен вход. Выполните там gh auth login.",
+        "copy": "Скопировать {{text}}"
+      }
     },
     "connect": {
       "account": "Учётная запись",
@@ -8336,6 +8336,7 @@
       }
     },
     "connector": {
+      "titleSeparator": " · ",
       "actions": "Действия {{name}}",
       "removeFrom": "Убрать из {{place}}…"
     },
@@ -8531,6 +8532,7 @@
     "agentFilesMessage": "Orca будет хранить ваши серверы MCP в файлах настроек агентов. Ваши собственные записи останутся без изменений.",
     "allow": "Разрешить",
     "removeTitle": "Удалить {{name}}?",
+    "removeMessageSavedData": "Сессии, использующие его, могут сразу потерять доступ. При этом могут быть удалены сохранённые для него заголовки, переменные окружения или данные входа. В таком случае, чтобы вернуть доступ, может потребоваться ввести их заново или войти снова.",
     "remove": "Удалить",
     "moveTitle": "Перенести {{name}} в Orca?",
     "moveMessage": "Orca удалит его из настроек {{agents}} и сохранит резервную копию.",

@@ -2816,6 +2816,9 @@
       }
     },
     "components": {
+      "railPage": {
+        "closeSearch": "关闭搜索"
+      },
       "hostPicker": {
         "searchHosts": "搜索主机…",
         "noHostsMatch": "没有匹配的主机",
@@ -4232,19 +4235,13 @@
           "ea3416d646": "负责人",
           "b1d9fdea08": "标签",
           "24754c44ad": "作者",
-          "764a0b4ce1": "状态",
-          "f0cf6dd591": "关",
-          "1e9b5244f2": "开",
           "b930de7194": "仅草稿",
-          "e0002f1eba": "已选择",
-          "2b2f019091": "任意状态",
           "0fd3249e2e": "已关闭",
           "d78b60b5c2": "开放",
           "bd162b7d5a": "合并",
           "draft": "草稿",
           "labelCount_other": "{{count}} 个标签",
           "authorCount_other": "{{count}} 位作者",
-          "allStates": "全部",
           "filterPullRequests": "筛选 PR",
           "filterIssues": "筛选议题",
           "filterOrTypeLogin": "筛选或输入登录名...",
@@ -4841,11 +4838,6 @@
             "waitingTitle": "正在等待 {{server}}",
             "waitingBody": "服务器重新提供此终端或网络连接变化时，Orca 会重新连接它。点击“重新连接”可立即重试",
             "downFor": "已断开 {{duration}}",
-            "cantReachTitle": "无法连接 {{server}}",
-            "detailsButton": "详情",
-            "tailscaleHintTitle": "检查 Tailscale 链路",
-            "reconnectNowButton": "立即重新连接",
-            "copyPingCommand": "复制命令",
             "tailscaleHint": "检查 Tailscale 链路：",
             "fallbackServerName": "服务器",
             "connectionLostTitle": "正在重新连接 {{server}}",
@@ -17686,7 +17678,7 @@
           "stepsFailedOfTotal_other": "{{failed}} / {{count}} 个步骤失败"
         },
         "ExternalFileChangeBanner": {
-          "7c41e90d12": "你有未保存的修改时，磁盘上的文件发生了更改。覆盖会替换磁盘上较新的内容",
+          "7c41e90d12": "你有未保存的修改时，磁盘上的文件发生了更改，覆盖会替换磁盘上较新的内容",
           "3fa2b8d417": "从磁盘重新加载",
           "a95d02c644": "保留我的编辑",
           "overwrite": "覆盖",
@@ -18827,6 +18819,7 @@
           "926e785e4d": "搜索智能体...",
           "491043ee45": "没有智能体符合你的搜索",
           "agent": "智能体",
+          "bot": "Bot",
           "lastRun": "上次运行",
           "all": "全部",
           "failed": "失败",
@@ -19435,7 +19428,6 @@
       "linear-issue-attribute-filter-dropdowns": {
         "removeFilter": "移除 {{value0}} 筛选器",
         "teamRequired": "选择一个团队以加载此工作区的状态、负责人和标签",
-        "filters": "筛选器",
         "allWorkspacesTitle": "选择一个工作区",
         "allWorkspacesBody": "状态、负责人和标签筛选器使用单个 Linear 工作区的 ID，请选择一个工作区以按这些属性进行筛选",
         "clearAll": "清除所有筛选器",
@@ -19991,12 +19983,7 @@
         "create": "创建"
       },
       "NativeChatResumeToast": {
-        "resumingOn_other": "正在恢复 {{machine}} 上的 {{count}} 个智能体…",
         "resuming_other": "正在恢复 {{count}} 个智能体…",
-        "resumedOn_other": "已恢复 {{machine}} 上的 {{count}} 个智能体",
-        "resumedUpdate_other": "更新后已恢复 {{count}} 个智能体",
-        "resumedRestart_other": "重启后已恢复 {{count}} 个智能体",
-        "partial_other": "已恢复 {{total}} 个智能体中的 {{resumed}} 个。{{count}} 个需要你处理",
         "stoppedOn_other": "{{machine}} 上有 {{count}} 个智能体已停止",
         "stoppedUpdate_other": "Orca 更新时有 {{count}} 个智能体已停止",
         "stoppedRestart_other": "Orca 关闭时有 {{count}} 个智能体已停止",
@@ -20006,8 +19993,6 @@
         "close": "关闭",
         "listLabel": "智能体",
         "untitled": "无标题智能体",
-        "willAsk": "Orca 会请求智能体继续。排队中的消息可能会被发送",
-        "asked": "Orca 已请求智能体继续。排队中的消息可能会被发送",
         "resumedAutomatically": "已自动恢复",
         "changeInSettings": "在设置中更改",
         "dismissAll": "全部忽略",
@@ -20017,7 +20002,13 @@
         "stateResumed": "已恢复",
         "stateNeedsYou": "需要你处理",
         "stateResuming": "正在恢复",
-        "stateStopped": "已停止"
+        "stateStopped": "已停止",
+        "resumingOne": "正在恢复 {{name}}…",
+        "failedOne": "无法恢复 {{name}}",
+        "failedSome_other": "无法恢复：{{total}} 个中的 {{count}} 个",
+        "resumedOne": "已恢复 {{name}}",
+        "resumedMany_other": "已恢复 {{count}} 个智能体",
+        "needYou_other": "{{count}} 个需要你处理"
       },
       "NativeChatResumeFailureGuidance": {
         "fallbackShort": "无法恢复",
@@ -24946,6 +24937,7 @@
     "antigravityChatToCli": "聊天 → CLI"
   },
   "common": {
+    "search": "搜索",
     "retry": "重试",
     "cancel": "取消",
     "unassigned": "未分配",
@@ -26267,7 +26259,8 @@
       "tabNewBrowserSplitRight": "在右侧拆分窗格中新建浏览器标签页",
       "5468defe61": "折叠/展开所有项目",
       "botItemPrevious": "上一个事项",
-      "botItemNext": "下一个事项"
+      "botItemNext": "下一个事项",
+      "pageSearch": "在此页面中搜索"
     },
     "group": {
       "global": "全局",
@@ -29882,7 +29875,13 @@
       },
       "repositoriesIn": "{{accounts}} 中的仓库",
       "repositoryCount_one": "{{accounts}} 中的 {{count}} 个仓库",
-      "repositoryCount_other": "{{accounts}} 中的 {{count}} 个仓库"
+      "repositoryCount_other": "{{accounts}} 中的 {{count}} 个仓库",
+      "ghSignedOut": {
+        "thisComputer": "这台电脑",
+        "status": "gh 已退出登录（{{host}}）",
+        "line": "gh 已退出登录（{{host}}），请在该电脑上运行 <code>gh auth login</code>",
+        "copy": "复制 {{text}}"
+      }
     },
     "access": {
       "thisComputer": "此电脑",

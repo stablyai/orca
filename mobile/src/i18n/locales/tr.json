@@ -878,6 +878,7 @@
         "task": "Görev"
       },
       "unnamedRecipient": "bir ajan",
+      "recipientName": "{{name}}",
       "event": {
         "followedUp": "Takip mesajı gönderildi",
         "update": "Güncelleme",
@@ -2205,12 +2206,8 @@
     },
     "automationsTab": {
       "connectDesktop": "Otomasyonları görüntülemek ve çalıştırmak için {{desktop}} ile bağlantı kurun.",
-      "createHint": "Bir ajan zamanlamak için + simgesine dokunun.",
       "emptyTitle": "Ajan işlerini zamanlayın",
-      "lastStatus": "Son: {{status}}",
       "newAutomation": "Yeni otomasyon",
-      "noAutomations": "Henüz otomasyon yok",
-      "paused": "Duraklatıldı",
       "scheduled": "Zamanlanmış",
       "showFor": "Otomasyonları gösterilecek masaüstü",
       "toggleFailed": "{{name}} güncellenemedi",
@@ -5161,7 +5158,6 @@
       "skipped": "Atlandı",
       "started": "Başladı",
       "trigger": "Tetikleyici",
-      "run": "Çalıştırma",
       "output": "Çıktı",
       "noOutput": "Çıktı içeriği yok.",
       "loadingRuns": "Çalıştırmalar yükleniyor…",
@@ -5187,10 +5183,6 @@
       "loadMoreWorkspaces": "Daha fazla çalışma alanı yükle",
       "installAndEnableAnAgentOnThisHostThenRetry": "Bu ana makineye bir aracı yükleyip etkinleştirin, sonra tekrar deneyin.",
       "loadingAutomations": "Otomasyonlar yükleniyor…",
-      "letYourAgentsWorkOnASchedule": "Aracılarınız bir programa göre çalışsın",
-      "createAnAutomationToRunATaskOnThisHost": "Bu ana makinede görev çalıştırmak için bir otomasyon oluşturun.",
-      "nextDate": "Sonraki: {{date}}",
-      "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Yenilemek veya değişiklik yapmak için bu ana makineye yeniden bağlanın. Kaydedilen bilgiler aşağıda kullanılabilir.",
       "recentRuns": "Son çalıştırmalar",
       "outcome": "Sonuç",
       "allOutcomes": "Tüm sonuçlar",
@@ -5199,14 +5191,9 @@
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Özgün aracı bölmesi doğrulanamadı. Yeniden bağlanıp tekrar deneyin.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "Özgün aracı bölmesi artık açılamıyor. Kaydedilen çıktı burada kalır.",
       "allRuns": "Tüm çalıştırmalar",
-      "thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow": "Bu çalıştırma artık ana makinenin saklanan geçmişinde değil. Son kaydedilen bilgiler aşağıda kalır.",
       "scheduledFor": "Zamanlanan tarih",
-      "notCreated": "Oluşturulmadı",
-      "projectHost": "Proje ana makinesi",
-      "notRecorded": "Kaydedilmedi",
       "capturedTruncated": "Kaydedildi: {{date}} · Çıktı ana makine tarafından kısaltıldı",
       "capturedDate": "Kaydedildi: {{date}}",
-      "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "Özgün aracı bölmesi kullanılamıyor. Kaydedilen çıktı burada kalır.",
       "openAgent": "Aracıyı aç",
       "retryHistory": "Geçmişi yeniden yükle",
       "fullOutputUnavailable": "Çıktının tamamı yüklenemedi.",
@@ -6058,7 +6045,11 @@
         "signIn": "GitHub’da oturum aç",
         "pickSubtitle": "Çalışabileceği repository'leri seçin"
       },
-      "allRepositoriesShort": "tüm repository'ler"
+      "allRepositoriesShort": "tüm repository'ler",
+      "ghSignedOut": {
+        "line": "{{host}} üzerinde gh oturumu kapalı. Orada gh auth login komutunu çalıştırın.",
+        "copy": "{{text}} komutunu kopyala"
+      }
     },
     "connect": {
       "finishOnHost": "{{host}} üzerinde Orca’yı açıp {{service}} bağlantısını tamamlayın.",
@@ -7438,7 +7429,8 @@
       "removeVariableRow": "Değişkeni kaldır",
       "emptyArgument": "Boş",
       "valueNew": "Yeni değer",
-      "valueSaved": "Kaydedildi"
+      "valueSaved": "Kaydedildi",
+      "hostMcpServers": "MCP sunucularınız"
     },
     "handToBot": {
       "title": "{{name}} öğesini bir bota devret",
@@ -7650,7 +7642,10 @@
       "groupReplierNotMember": "Oda yanıtları bölümünde mevcut bir oda üyesi seçin.",
       "groupMailNeverStarted": "Bu posta hiçbir tur başlatmadı.",
       "groupRemoteUnreachable": "{{host}} cihazına ulaşılamadı. {{detail}}",
-      "groupRemoteUnreachableRetry": "{{host}} cihazına ulaşılamadı. {{detail}} Yeniden denemek için tekrar gönderin."
+      "groupRemoteUnreachableRetry": "{{host}} cihazına ulaşılamadı. {{detail}} Yeniden denemek için tekrar gönderin.",
+      "composioKeyCantCreateSessions": "Bu Composio anahtarı oturum oluşturamıyor. {{permission}} izni gerekir.",
+      "composioKeyNeedsPermission": "Bu Composio anahtarında bir izin eksik. {{permission}} izni gerekir.",
+      "composioKeyMissingPermission": "Bu Composio anahtarında Orca'nın ihtiyaç duyduğu bir izin eksik."
     },
     "pairedServers": {
       "heading": "Eşleştirilmiş sunucular",
@@ -8213,6 +8208,7 @@
     "agentFilesMessage": "Orca, MCP sunucularınızı bu ajanların ayar dosyalarında tutacak. Kendi girdileriniz olduğu gibi kalır.",
     "allow": "İzin ver",
     "removeTitle": "{{name}} kaldırılsın mı?",
+    "removeMessageSavedData": "Bu sunucuyu kullanan oturumlar erişimi hemen kaybedebilir. Bu işlem, bu sunucu için kaydedilmiş üstbilgileri, ortam değişkenlerini veya oturum açma bilgilerini silebilir. Bu durumda erişimi geri almak için bunları yeniden girmeniz veya yeniden oturum açmanız gerekebilir.",
     "remove": "Kaldır",
     "moveTitle": "{{name}}, Orca'ya taşınsın mı?",
     "moveMessage": "Orca bunu {{agents}} ayarlarından kaldırır ve bir yedeğini saklar.",

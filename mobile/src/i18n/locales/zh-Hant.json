@@ -766,6 +766,7 @@
         "task": "任務"
       },
       "unnamedRecipient": "一個代理程式",
+      "recipientName": "{{name}}",
       "event": {
         "followedUp": "已傳送後續訊息",
         "update": "更新",
@@ -2140,12 +2141,8 @@
     },
     "automationsTab": {
       "connectDesktop": "請連線 {{desktop}}，才能檢視及執行自動化。",
-      "createHint": "點一下 + 即可排定代理程式。",
       "emptyTitle": "排定代理程式工作",
-      "lastStatus": "上次：{{status}}",
       "newAutomation": "新增自動化",
-      "noAutomations": "尚無自動化",
-      "paused": "已暫停",
       "scheduled": "已排定",
       "showFor": "選擇要顯示自動化的電腦",
       "toggleFailed": "無法更新 {{name}}",
@@ -5078,7 +5075,6 @@
       "skipped": "已略過",
       "started": "開始",
       "trigger": "觸發",
-      "run": "執行",
       "output": "輸出",
       "noOutput": "沒有可用的輸出內容。",
       "loadingRuns": "正在載入執行...",
@@ -5104,10 +5100,6 @@
       "loadMoreWorkspaces": "載入更多工作區",
       "installAndEnableAnAgentOnThisHostThenRetry": "請在此主機上安裝並啟用代理程式，然後再試。",
       "loadingAutomations": "正在載入自動化…",
-      "letYourAgentsWorkOnASchedule": "讓代理程式依排程工作",
-      "createAnAutomationToRunATaskOnThisHost": "建立自動化以在此主機上執行任務。",
-      "nextDate": "下次：{{date}}",
-      "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "請重新連線至此主機以重新整理或變更。已儲存的資訊仍可在下方查看。",
       "recentRuns": "最近執行",
       "outcome": "結果",
       "allOutcomes": "所有結果",
@@ -5116,14 +5108,9 @@
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "無法驗證原始代理程式窗格。請重新連線後再試。",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "原始代理程式窗格已無法開啟。已儲存的輸出仍保留在此處。",
       "allRuns": "所有執行",
-      "thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow": "此執行已不在主機保留的歷程記錄中。最後儲存的資訊仍保留在下方。",
       "scheduledFor": "排定時間",
-      "notCreated": "未建立",
-      "projectHost": "專案主機",
-      "notRecorded": "未記錄",
       "capturedTruncated": "擷取於 {{date}} · 輸出已由主機截斷",
       "capturedDate": "擷取於 {{date}}",
-      "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "原始代理程式窗格無法使用。已儲存的輸出仍保留在此處。",
       "openAgent": "開啟代理程式",
       "retryHistory": "重試歷程記錄",
       "fullOutputUnavailable": "無法載入完整輸出。",
@@ -7004,7 +6991,11 @@
         "signIn": "登入 GitHub",
         "pickSubtitle": "選擇它可以使用的存放庫"
       },
-      "allRepositoriesShort": "所有存放庫"
+      "allRepositoriesShort": "所有存放庫",
+      "ghSignedOut": {
+        "line": "{{host}} 上的 gh 未登入。請在該主機上執行 gh auth login。",
+        "copy": "複製 {{text}}"
+      }
     },
     "connect": {
       "finishOnHost": "請在 {{host}} 上的 Orca 中完成 {{service}} 的連線。",
@@ -7235,6 +7226,7 @@
     "agentFilesMessage": "Orca 會將你的 MCP 伺服器保存在各代理程式的設定檔中。你自己的項目會維持原狀。",
     "allow": "允許",
     "removeTitle": "要移除 {{name}} 嗎？",
+    "removeMessageSavedData": "使用此伺服器的工作階段可能會立即失去存取權。這可能會刪除為此伺服器儲存的標頭、環境變數或登入資訊。若是如此，你可能需要重新輸入這些資訊或重新登入，才能恢復存取權。",
     "remove": "移除",
     "moveTitle": "要將 {{name}} 移至 Orca 嗎？",
     "moveMessage": "Orca 會將它從 {{agents}} 的設定中移除，並保留備份。",

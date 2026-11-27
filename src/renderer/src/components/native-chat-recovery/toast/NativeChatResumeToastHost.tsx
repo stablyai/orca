@@ -15,7 +15,7 @@ import type { NativeChatRestartStore } from '../offers/native-chat-restart-runti
 import { useNativeChatRestartRuntimes } from '../offers/native-chat-restart-runtimes'
 import type { ResumeFailureAction } from '../failures/native-chat-resume-failure-guidance'
 import { resumeRunFailures } from '../runs/native-chat-resume-run-view'
-import { resumeToastView } from './native-chat-resume-toast-view'
+import { resumeToastShowsDetails, resumeToastView } from './native-chat-resume-toast-view'
 import { NativeChatResumeToast } from './NativeChatResumeToast'
 import { useResumeToastAutoDismiss } from './use-resume-toast-auto-dismiss'
 
@@ -151,7 +151,8 @@ function ConnectedResumeToast({
   const { onDetailsOpened } = useResumeToastAutoDismiss(
     view.phase === 'finished' && view.counts.needsYou === 0,
     close,
-    root
+    root,
+    resumeToastShowsDetails(view)
   )
 
   const feed = getStructuredAgentSessionStatusFeed(store.target)
