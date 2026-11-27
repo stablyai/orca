@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { isOrcaWindowForegroundFocused } from '@/attention/orca-window-foreground-focus'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 
 const POLL_MS = 30_000
 
@@ -12,8 +13,12 @@ export function useStatusBarAppMemory(enabled: boolean): number | null {
       return
     }
     let disposed = false
-    let timer: number | null = null
+    let sampledAt = -Infinity
     const sample = (): void => {
+      if (!isOrcaWindowForegroundFocused()) {
+        return
+      }
+      sampledAt = Date.now()
       void window.api.memory
         .getAppMemoryTotal()
         .then((total) => {
@@ -23,32 +28,17 @@ export function useStatusBarAppMemory(enabled: boolean): number | null {
         })
         .catch(() => {})
     }
-    const stop = (): void => {
-      if (timer !== null) {
-        window.clearInterval(timer)
-        timer = null
-      }
-    }
-    const sync = (): void => {
-      if (!isOrcaWindowForegroundFocused()) {
-        stop()
-        return
-      }
-      if (timer === null) {
+    const sampleIfStale = (): void => {
+      if (Date.now() - sampledAt >= POLL_MS) {
         sample()
-        timer = window.setInterval(sample, POLL_MS)
       }
     }
-    sync()
-    window.addEventListener('focus', sync)
-    window.addEventListener('blur', sync)
-    document.addEventListener('visibilitychange', sync)
+    const uninstall = installWindowVisibilityInterval({ run: sample, intervalMs: POLL_MS })
+    window.addEventListener('focus', sampleIfStale)
     return () => {
       disposed = true
-      stop()
-      window.removeEventListener('focus', sync)
-      window.removeEventListener('blur', sync)
-      document.removeEventListener('visibilitychange', sync)
+      uninstall()
+      window.removeEventListener('focus', sampleIfStale)
     }
   }, [enabled])
   return bytes
