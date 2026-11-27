@@ -1,7 +1,8 @@
 import type { SetupTrustMismatch } from '../../../../../shared/worktree/create-types'
 import type { RuntimeEnvironmentSshBucket } from '../../../store/slices/ssh/runtime-environment-ssh'
 import React, { useRef } from 'react'
-import { cn } from '@/lib/class-names'
+import { RailPageBody, RAIL_PAGE_GUTTER_X, RailPageScroll } from '@/components/rail-page/RailPage'
+import { RailPageToolbar } from '@/components/rail-page/RailPageToolbar'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import type {
   ExternalAutomationAction,
@@ -36,7 +37,6 @@ import {
   automationHostFilterStableKey
 } from '../../../../../shared/automations/ownership/automation-host-filter'
 import type { AutomationTemplate } from '../authoring/automation-templates'
-import type { ExternalAutomationListEntry } from '../external/external-automation-list-entries'
 import type { ExternalAutomationScope } from '../external/external-automation-scope-client'
 import { AutomationListLocalRow } from './AutomationListLocalRow'
 import { AutomationListExternalRow } from './AutomationListExternalRow'
@@ -45,13 +45,15 @@ import {
   AutomationHostLoadSummary
 } from '../hosts/AutomationHostFilterNotice'
 import { AutomationListEmptyView } from './AutomationListEmptyView'
-import { resolveAutomationListEmptyState } from './automation-list-empty-state'
+import {
+  offersAutomationTemplates,
+  resolveAutomationListEmptyState
+} from './automation-list-empty-state'
 import type { AutomationListSearchCounts } from './use-automation-list-search'
 import type { AutomationHostCatalogView } from '../hosts/use-automation-host-catalog'
 import type { AutomationHostRecoveryAction } from '../hosts/automation-host-status-descriptors'
 import type { AutomationHostCatalogEntry } from '../hosts/automation-host-catalog-types'
 import { useAutomationListFocusRecovery } from './use-automation-list-focus-recovery'
-import { LIST_TABLE_CONTAINER_CLASS } from '@/lib/list-interaction/list-table-layout'
 import { useTranslate } from '@/i18n/use-translate'
 import { AutomationTemplateEmptyState } from '../authoring/AutomationTemplateEmptyState'
 import { AutomationListTableHeader } from './AutomationListTableHeader'
@@ -59,9 +61,10 @@ import { AutomationListToolbar } from './AutomationListToolbar'
 import { AutomationListGroupSection } from './AutomationListGroupSection'
 import { useAutomationListGroups } from './use-automation-list-groups'
 
-const TEMPLATE_EMPTY_STATES: ReadonlySet<string> = new Set(['host-empty', 'all-hosts-empty'])
 const EMPTY_AUTOMATION_RUNS: ReadonlyMap<string, AutomationRun> = new Map()
 export type AutomationsListPanelProps = {
+  tabs: React.ReactNode
+  notice: React.ReactNode
   hasListItems: boolean
   hasFilteredListItems: boolean
   listSearchQuery: string
@@ -83,7 +86,6 @@ export type AutomationsListPanelProps = {
   onListSortChange: (field: AutomationListSortField) => void
   selectedRowKey: string | null
   selectedExternalKey: string | null
-  selectedExternal?: ExternalAutomationListEntry | null
   relativeNow: number
   repoMap: ReadonlyMap<string, Repo>
   worktreeMap: ReadonlyMap<string, Worktree>
@@ -114,13 +116,13 @@ export type AutomationsListPanelProps = {
   ) => void
   openCreateDialog: (template?: AutomationTemplate) => void
   onOpenDetail: () => void
-  onRefresh: () => void
-  isRefreshing: boolean
 }
 
 export function AutomationsListPanel(props: AutomationsListPanelProps): React.JSX.Element {
   const t = useTranslate()
   const {
+    tabs,
+    notice,
     hasListItems,
     hasFilteredListItems,
     listSearchQuery,
@@ -162,9 +164,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     requestDeleteAutomation,
     requestExternalAction,
     openCreateDialog,
-    onOpenDetail,
-    onRefresh,
-    isRefreshing
+    onOpenDetail
   } = props
   const listRef = useRef<HTMLDivElement>(null)
   // Use the Filters toolbar as focus fallback now that it owns host controls.
@@ -300,101 +300,105 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
   }
 
   return (
-    <section
-      className="flex min-h-0 flex-1 flex-col overflow-hidden pt-4"
-      data-contextual-tour-target="automations-list"
-    >
-      <AutomationListToolbar
-        toolbarRef={toolbarRef}
-        listSearchQuery={listSearchQuery}
-        isListSearchQueryTooLarge={isListSearchQueryTooLarge}
-        onListSearchQueryChange={onListSearchQueryChange}
-        onSearchArrowNavigate={handleSearchArrowNavigate}
-        onSearchEnter={handleSearchEnter}
-        listFilter={listFilter}
-        onListFilterChange={onListFilterChange}
-        hostEntries={hostCatalog.entries}
-        onRefresh={onRefresh}
-        isRefreshing={isRefreshing}
-      />
-
-      {listFilterActive || legacyScopeStableKey !== null ? (
-        <div className="flex flex-wrap items-center gap-1.5 pb-3">
-          <AutomationListFilterPills
-            filter={listFilter}
-            onChange={onListFilterChange}
-            hostLabel={selectedHostLabel}
-            onClearHost={() => {
-              onListFilterChange({ ...listFilter, hostStableKeys: [] })
-              onSelectHost({ kind: 'all' })
-            }}
+    <>
+      <RailPageToolbar
+        start={tabs}
+        endRef={toolbarRef}
+        end={
+          <AutomationListToolbar
+            listSearchQuery={listSearchQuery}
+            isListSearchQueryTooLarge={isListSearchQueryTooLarge}
+            onListSearchQueryChange={onListSearchQueryChange}
+            onSearchArrowNavigate={handleSearchArrowNavigate}
+            onSearchEnter={handleSearchEnter}
+            listFilter={listFilter}
+            onListFilterChange={onListFilterChange}
+            hostEntries={hostCatalog.entries}
           />
-        </div>
-      ) : null}
-      <AutomationHostFilterNotice
-        resolution={hostCatalog.resolution}
-        onRecover={(action) => onRecoverHost(action)}
-        className="mb-2"
+        }
       />
-      <AutomationHostLoadSummary {...hostCatalog.loadCounts} />
-      {externalManagersUncheckedNotice ? (
-        <p className="pb-2 text-[11px] text-muted-foreground" data-external-managers="unchecked">
-          {externalManagersUncheckedNotice}
-        </p>
-      ) : null}
-
-      <div
-        ref={listRef}
-        className={cn('scrollbar-sleek min-h-0 flex-1 overflow-auto', LIST_TABLE_CONTAINER_CLASS)}
-      >
-        {hasFilteredListItems ? (
-          <div className="min-w-full w-fit">
-            <AutomationListTableHeader
-              sort={listSort}
-              onSort={onListSortChange}
-              showHost={showHost}
+      <div className={RAIL_PAGE_GUTTER_X}>
+        {notice}
+        {listFilterActive || legacyScopeStableKey !== null ? (
+          <div className="flex flex-wrap items-center gap-1.5 py-2">
+            <AutomationListFilterPills
+              filter={listFilter}
+              onChange={onListFilterChange}
+              hostLabel={selectedHostLabel}
+              onClearHost={() => {
+                onListFilterChange({ ...listFilter, hostStableKeys: [] })
+                onSelectHost({ kind: 'all' })
+              }}
             />
-            {groups.map((group, groupIndex) => (
-              <AutomationListGroupSection
-                key={group.id}
-                group={group}
-                isFirst={groupIndex === 0}
-                renderItem={(item) =>
-                  item.kind === 'local' ? (
-                    <AutomationListLocalRow key={item.id} {...rowProps} row={item.row} />
-                  ) : (
-                    <AutomationListExternalRow
-                      key={item.id}
-                      entry={item.entry}
-                      showHost={showHost}
-                      selectedExternalKey={selectedExternalKey}
-                      relativeNow={relativeNow}
-                      sshConnectionStates={sshConnectionStates}
-                      externalActionKey={externalActionKey}
-                      onSelect={(entryKey) => {
-                        selectAutomationRow(null)
-                        selectExternalKey(entryKey)
-                        setActivePaneTab('overview')
-                        onOpenDetail()
-                      }}
-                      onRequestAction={requestExternalAction}
-                    />
-                  )
-                }
-              />
-            ))}
           </div>
-        ) : (
-          <AutomationListEmptyView
-            {...emptyStateInput}
-            onRecover={(action) => onRecoverHost(action)}
-          />
-        )}
-
-        {!hasListItems && TEMPLATE_EMPTY_STATES.has(emptyState.kind) ? (
-          <AutomationTemplateEmptyState onOpenCreate={openCreateDialog} />
+        ) : null}
+        <AutomationHostFilterNotice
+          resolution={hostCatalog.resolution}
+          onRecover={(action) => onRecoverHost(action)}
+          className="mb-2"
+        />
+        <AutomationHostLoadSummary {...hostCatalog.loadCounts} />
+        {externalManagersUncheckedNotice ? (
+          <p className="pb-2 text-[11px] text-muted-foreground" data-external-managers="unchecked">
+            {externalManagersUncheckedNotice}
+          </p>
         ) : null}
       </div>
-    </section>
+      <RailPageBody>
+        <RailPageScroll
+          ref={listRef}
+          data-contextual-tour-target="automations-list"
+          className="scrollbar-sleek min-h-0 flex-1 overflow-auto"
+        >
+          {hasFilteredListItems ? (
+            <div className="min-w-full w-fit">
+              <AutomationListTableHeader
+                sort={listSort}
+                onSort={onListSortChange}
+                showHost={showHost}
+              />
+              {groups.map((group, groupIndex) => (
+                <AutomationListGroupSection
+                  key={group.id}
+                  group={group}
+                  isFirst={groupIndex === 0}
+                  renderItem={(item) =>
+                    item.kind === 'local' ? (
+                      <AutomationListLocalRow key={item.id} {...rowProps} row={item.row} />
+                    ) : (
+                      <AutomationListExternalRow
+                        key={item.id}
+                        entry={item.entry}
+                        showHost={showHost}
+                        selectedExternalKey={selectedExternalKey}
+                        relativeNow={relativeNow}
+                        sshConnectionStates={sshConnectionStates}
+                        externalActionKey={externalActionKey}
+                        onSelect={(entryKey) => {
+                          selectAutomationRow(null)
+                          selectExternalKey(entryKey)
+                          setActivePaneTab('overview')
+                          onOpenDetail()
+                        }}
+                        onRequestAction={requestExternalAction}
+                      />
+                    )
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <AutomationListEmptyView
+              {...emptyStateInput}
+              onRecover={(action) => onRecoverHost(action)}
+            />
+          )}
+
+          {offersAutomationTemplates(emptyState, hasListItems) ? (
+            <AutomationTemplateEmptyState onOpenCreate={openCreateDialog} />
+          ) : null}
+        </RailPageScroll>
+      </RailPageBody>
+    </>
   )
 }

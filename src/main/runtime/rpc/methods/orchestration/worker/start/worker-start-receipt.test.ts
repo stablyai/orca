@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import '../../../../../orchestration/db/contract-constants'
 import '../../../../../orchestration/db/messages/mailbox-routing-page'
@@ -13,6 +13,14 @@ import { GitCommandTimeoutError } from '../../../../../../../shared/git/commands
 import { failWorkerStartWithReceipt } from './worker-start-receipt'
 import { TerminalHostCapError } from '../../../../../../../shared/terminal/pty/lifecycle/terminal-host-cap-refusal'
 import { readDispatchWorkers, type SessionWorkersRuntime } from '../session-workers-method'
+
+const closedChats = vi.hoisted((): string[] => [])
+vi.mock('../../../../../agent-session/lifecycle/structured-agent-session-close', () => ({
+  closeStructuredAgentSessionChild: async (sessionId: string) => {
+    closedChats.push(sessionId)
+    return { stopped: true, closeAttempted: true }
+  }
+}))
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each stub has every member the code under test calls.
 const stub = <T>(members: Partial<T>): T => members as T
@@ -162,5 +170,39 @@ describe('a worker start cut before its agent ran', () => {
       .getAllMessagesForHandle(mailbox)
       .filter((message) => message.payload?.includes(dispatch.id))
     expect(told).toHaveLength(1)
+  })
+
+  it('fails a chat worker a restart cut while its Setup ran, and closes its waiting chat', async () => {
+    open()
+    const dispatch = starting()
+    db.recordWorkerStage({
+      dispatchId: dispatch.id,
+      stage: 'terminal_readying',
+      worktreeId: 'worktree-1',
+      terminalHandle: 'structworker_1',
+      setupState: 'running',
+      effects: [
+        { kind: 'setup', action: 'run', state: 'running', terminalId: 'term_setup' },
+        { kind: 'terminal', role: 'agent', id: 'structworker_1', sessionId: 'chat-session-1' }
+      ]
+    })
+    db.recordWorkerStage({ dispatchId: dispatch.id, stage: 'awaiting_agent' })
+    const runtime = {
+      getRuntimeId: () => 'runtime_after_restart',
+      notifyMessageArrived: () => {},
+      ensureStructuredAgentSessionHost: async () => {},
+      currentLocalStructuredSessionPresentation: () => null,
+      captureStructuredAgentSessionPresentation: () => null,
+      retireStructuredAgentSessionTabFromSnapshot: () => {},
+      removeCapturedStructuredSessionSavedTabs: () => {}
+    }
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the close is mocked; it reads none of these.
+    const failed = settleRestartCutStart(db, dispatch.id, runtime as never)
+    expect(failed?.state).toBe('failed')
+    expect(failed?.last_error).toBe(
+      'Orca restarted while its Setup was still running, so it never sent its brief.'
+    )
+    await vi.waitFor(() => expect(closedChats).toEqual(['chat-session-1']))
   })
 })

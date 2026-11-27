@@ -109,7 +109,8 @@ function parseObservation(value: unknown): Record<string, unknown> | null {
   }
 }
 
-function parseOrchestration(value: unknown): Record<string, unknown> | null {
+/** A wire orchestration context, or null when its shape is not one. */
+export function parseOrchestration(value: unknown): Record<string, unknown> | null {
   if (!isRecord(value) || !isBoundedString(value.taskId) || !isBoundedString(value.dispatchId)) {
     return null
   }

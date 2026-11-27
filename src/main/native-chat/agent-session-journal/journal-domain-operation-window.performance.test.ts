@@ -9,8 +9,10 @@ import { applyJournalDomainSubmission } from './journal-domain-submission-admiss
 import { applyJournalDomainDispatch } from './journal-domain-dispatch'
 import { applyJournalDomainItem } from './journal-domain-item'
 import { readJournalDomainOperationWindow } from './journal-domain-operation-window'
+import { JournalWindowNotIndexed } from './journal-operation-window-sends'
 import { JournalSqlScope } from './journal-sql-scope'
 import { keptSends } from './journal-operation-window-held-sends'
+import { marginBefore } from './journal-operation-window-turn-ahead'
 import type { Send } from './journal-operation-window-sends'
 import { codexTurnLifecycleIdentity } from '../../codex/structured/journal/codex-structured-journal-translation-turns'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
@@ -22,7 +24,8 @@ import type { AgentJournalMessageItem } from '../../../shared/agent-session/jour
 // the bounded read: the rows and sends it returns stay fixed however many turns the chat ran after
 // it. The tally counts rows returned to our code, not work inside SQLite; each send read is pinned to
 // its index and was checked to key on it with EXPLAIN QUERY PLAN in review. Reverting the bound makes
-// the count grow with the later turns.
+// the count grow with the later turns. #47789's look-back contract counts work inside SQLite instead,
+// through a function wrapped around the rows it tests.
 
 const directories: string[] = []
 afterEach(() => {
@@ -374,6 +377,7 @@ it('walks a family of sends linked by provider id and queued card once, however 
   ])
 })
 
+// Builds twelve chats of up to 500 turns, about 30s on a Windows runner; it counts work, not time.
 it('stops reading a long send family at its first member older than the newest turns', () => {
   // Every send is in one family running back through the chat, from the newest send (unanswered or
   // not): the first older member settles the whole read, so the rest is never walked by index.
@@ -407,7 +411,7 @@ it('stops reading a long send family at its first member older than the newest t
   expect([extra(200, false, 'answered'), extra(500, false, 'answered')]).toEqual([74, 74])
   // Unsettled sends piled up before the newest turns: their lookup stops at the cap too.
   expect([extra(200, false, 'unsettled'), extra(500, false, 'unsettled')]).toEqual([65, 65])
-})
+}, 120_000)
 
 it('takes the whole read for a window crowded with rows rather than listing them to place its sends', () => {
   const lookups = (messages: number) => {
@@ -433,5 +437,119 @@ it('takes the whole read for a window crowded with rows rather than listing them
   expect([lookups(0), lookups(2000)]).toEqual([
     { placing: 3, sends: newest },
     { placing: 0, sends: newest }
+  ])
+})
+
+it('reads an indexed-only window of the newest turn by index, and throws where only the whole read answers', () => {
+  const read = (db: Database) => {
+    const scope = new JournalSqlScope(db, 'chat', 'epoch')
+    try {
+      const { snapshot } = readJournalDomainOperationWindow(scope, {
+        latestTurns: 1,
+        turnShape: true,
+        anchorsOnly: true,
+        indexedOnly: true
+      })
+      return {
+        rows: scope.work.rows,
+        sends: snapshot.submissions.map((send) => send.clientMessageId)
+      }
+    } catch (error) {
+      return { rows: scope.work.rows, thrown: error instanceof JournalWindowNotIndexed }
+    } finally {
+      db.close()
+    }
+  }
+  // An older unanswered send never pins this read back, however long the chat.
+  expect([read(chat(50, () => true, 0)), read(chat(500, () => true, 0))]).toEqual([
+    { rows: 18, sends: ['m48', 'm49'] },
+    { rows: 18, sends: ['m498', 'm499'] }
+  ])
+  // A family it would have to read whole: it stops at the cap and throws, never reading every send.
+  expect([
+    read(chat(200, () => true, undefined, 0, 0, 0, 'card')),
+    read(chat(500, () => true, undefined, 0, 0, 0, 'card'))
+  ]).toEqual([
+    { rows: 75, thrown: true },
+    { rows: 75, thrown: true }
+  ])
+  // Tool calls are dropped row by row: past the cap the read stops on the index, before any is read.
+  expect([
+    read(chat(50, () => true, undefined, 0, 100)),
+    read(chat(50, () => true, undefined, 0, 5000))
+  ]).toEqual([
+    { rows: 16, sends: ['m48', 'm49'] },
+    { rows: 10, thrown: true }
+  ])
+})
+
+// #47789: an item add's look back walked every root row ahead of a resumed turn.
+it('looks back for the turn ahead of an indexed-only window no further than the window could reach', () => {
+  // A turn resumed from the provider with no prompt of its own, after a long run of root tool calls:
+  // the prompt ahead of it sits behind every one of them.
+  const resumedAfter = (tools: number) => {
+    const db = chat(1, () => true, undefined, 0, tools)
+    db.exec('BEGIN IMMEDIATE')
+    applyJournalDomainItem(
+      db,
+      target,
+      {
+        kind: 'item',
+        identity: codexTurnLifecycleIdentity('chat', 'resumed'),
+        body: { kind: 'turn', turnId: 'resumed', state: 'completed', outcome: 'success' },
+        options: { turnScope: { kind: 'thread' }, fence: 1 }
+      },
+      1_900_000_000_000
+    )
+    db.exec('COMMIT')
+    return db
+  }
+  const lookBack = (db: Database, indexedOnly: boolean) => {
+    const scope = new JournalSqlScope(db, 'chat', 'epoch')
+    try {
+      return marginBefore(scope, Number.MAX_SAFE_INTEGER, indexedOnly)
+    } catch (error) {
+      return error instanceof JournalWindowNotIndexed ? 'thrown' : error
+    }
+  }
+  const near = resumedAfter(100)
+  const far = resumedAfter(5000)
+  try {
+    expect([lookBack(near, true), lookBack(near, false)]).toEqual([1, 1])
+    expect([lookBack(far, true), lookBack(far, false)]).toEqual(['thrown', 1])
+  } finally {
+    near.close()
+    far.close()
+  }
+})
+
+// #47789: an item add's look back for the turn ahead once tested every row up to its cap.
+it('stops its look back for the turn ahead at the nearest match, however long the chat ran', () => {
+  // Counts each candidate SQLite tests for the prompt: the nearest is right ahead at 100 and 1,000 turns.
+  const look = (turns: number) => {
+    const db = chat(turns)
+    let tested = 0
+    let probes = 0
+    db.function('tested', (hit) => {
+      tested += 1
+      return hit
+    })
+    const prepare = db.prepare.bind(db)
+    db.prepare = (sql: string) => {
+      probes += sql.includes('OFFSET') ? 1 : 0
+      const prompt = "kind='message' AND message_role='user'"
+      return prepare(sql.replaceAll(prompt, `tested(${prompt})`))
+    }
+    const found = marginBefore(
+      new JournalSqlScope(db, 'chat', 'epoch'),
+      Number.MAX_SAFE_INTEGER,
+      true
+    )
+    db.close()
+    return { found: found > 0, tested, probes }
+  }
+  expect([look(100), look(1000)]).toEqual([
+    { found: true, tested: 1, probes: 0 },
+    { found: true, tested: 1, probes: 0 }
   ])
 })

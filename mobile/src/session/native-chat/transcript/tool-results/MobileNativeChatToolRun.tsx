@@ -10,7 +10,7 @@ import {
   type NativeSyntheticEvent,
   type ScrollViewInstance
 } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { ChevronRight } from 'lucide-react-native'
 import { useWorkingPulse } from '../../../../components/motion/use-working-motion'
 import { MobileNativeChatReplyRevealsContext } from './mobile-native-chat-reply-reveals'
 import {
@@ -18,7 +18,8 @@ import {
   nativeChatToolCallCount
 } from './native-chat-tool-activity-copy'
 import { nativeChatToolRunWords } from './native-chat-tool-run-words'
-import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../../../i18n/use-mobile-translation'
 import { nativeChatToolLineIdentity } from '../../../../../../src/shared/native-chat/tools/native-chat-tool-line-identity'
 import { pairNativeChatToolResults } from '../../../../../../src/shared/native-chat/tools/native-chat-tool-pairing'
 import { nativeChatToolRunHeader } from '../../../../../../src/shared/native-chat/tools/native-chat-tool-run-header'
@@ -29,8 +30,8 @@ import type {
   NativeChatToolCallBlock
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { buildNativeChatTaskListRows } from '../../../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-history'
-import { colors, pressedStyle } from '../../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../../../../theme/mobile-theme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
 import { MobileNativeChatToolLine } from './MobileNativeChatToolLine'
 import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
@@ -41,13 +42,14 @@ import {
   MobileNativeChatDisclosureContext,
   useMobileNativeChatDisclosure
 } from '../viewport/mobile-native-chat-disclosure-store'
-import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
+import { toolStylesSheet, toolType } from './mobile-native-chat-tool-styles'
 import { mobileNativeChatMemberId } from '../viewport/mobile-native-chat-reading-place'
 import { MobileNativeChatOwnedScrollView } from '../viewport/MobileNativeChatOwnedScrollView'
 import type {
   MobileNativeChatToolRunAsides,
   MobileNativeChatToolRunProps
 } from './mobile-native-chat-tool-run-props'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 /** Desktop's 18rem: an opened run lists this much before it scrolls in place. */
 const MEMBERS_MIN_HEIGHT = 288
@@ -87,7 +89,7 @@ function ToolRunMembers({
   owner?: string
   children: React.ReactNode
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(toolStylesSheet)
   const { height } = useWindowDimensions()
   const store = useContext(MobileNativeChatDisclosureContext)
   const runScroll = store?.runScroll
@@ -177,8 +179,10 @@ export function ToolRun({
   fontScale = 1,
   viewedImages
 }: MobileNativeChatToolRunProps): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(toolStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
+  const locale = intlLocaleFor(useMobileUiLocale())
   const runKey = disclosureId === undefined ? undefined : `run:${disclosureId}`
   const [open, setOpen] = useMobileNativeChatDisclosure(runKey, false)
   const asideCount = asides
@@ -195,7 +199,11 @@ export function ToolRun({
     [activeTurnIsWorking, awaitingAnswer, blocks, trailing]
   )
   const { live, latestCallLabel, iconName: headerIcon } = header
-  const sentence = nativeChatToolRunSentence(header.work, { live }, nativeChatToolRunWords(t))
+  const sentence = nativeChatToolRunSentence(
+    header.work,
+    { live },
+    nativeChatToolRunWords(t, locale)
+  )
   const fallbackLabel =
     header.fallbackLabel === 'result'
       ? nativeChatToolActivityCopy(t).result
@@ -235,15 +243,14 @@ export function ToolRun({
             {` · ${marks.join(', ')}`}
           </Text>
         ) : null}
-        {}
-        {!live && header.succeeded ? (
-          <Check size={12 * fontScale} color={colors.textMuted} strokeWidth={2} />
-        ) : null}
         {latestCallLabel ? (
           <Text style={[styles.headerLatest, type.meta]} numberOfLines={1}>
             {latestCallLabel}
           </Text>
         ) : null}
+        <View style={open ? styles.caretOpen : undefined}>
+          <ChevronRight size={14 * fontScale} color={colors.textMuted} strokeWidth={2} />
+        </View>
       </Pressable>
       {/* A read's result is the image the agent saw, so it shows without opening the run. */}
       {viewedImages ? <View style={styles.viewedImages}>{viewedImages}</View> : null}

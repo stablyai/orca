@@ -3,6 +3,7 @@
  * the WSL host's route partition, or left the host on a fresh partition and says why.
  */
 import { z } from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 export const WSL_MOVE_BROWSER_COOKIES_STORE_ID = 'browser-cookies'
 
@@ -19,23 +20,25 @@ export const WSL_MOVE_BROWSER_COOKIE_FRESH_PARTITION_REASONS = [
 export type WslMoveBrowserCookieFreshPartitionReason =
   (typeof WSL_MOVE_BROWSER_COOKIE_FRESH_PARTITION_REASONS)[number]
 
-const count = z.number().int().nonnegative().max(1_000_000)
+const count = lazyZodSchema(() => z.number().int().nonnegative().max(1_000_000))
 
-const WslMoveBrowserCookieCopyCountsSchema = z.object({
-  copied: count,
-  /** Subsets of `copied`, by the kinds the design asked about. */
-  copiedHttpOnly: count,
-  copiedPartitioned: count,
-  copiedSessionOnly: count,
-  /** The host jar already held the cookie; its value wins. */
-  skippedPresent: count,
-  /** Sites that bind a login to the jar that minted it; a copy would sign out both jars. */
-  skippedSourceBound: count,
-  /** Partitioned under an opaque top-level site, which no write can address. */
-  skippedOpaquePartition: count,
-  /** Unreadable or refused by the cookie store (e.g. an invalid value or prefix). */
-  rejected: count
-})
+const WslMoveBrowserCookieCopyCountsSchema = lazyZodSchema(() =>
+  z.object({
+    copied: count,
+    /** Subsets of `copied`, by the kinds the design asked about. */
+    copiedHttpOnly: count,
+    copiedPartitioned: count,
+    copiedSessionOnly: count,
+    /** The host jar already held the cookie; its value wins. */
+    skippedPresent: count,
+    /** Sites that bind a login to the jar that minted it; a copy would sign out both jars. */
+    skippedSourceBound: count,
+    /** Partitioned under an opaque top-level site, which no write can address. */
+    skippedOpaquePartition: count,
+    /** Unreadable or refused by the cookie store (e.g. an invalid value or prefix). */
+    rejected: count
+  })
+)
 
 export type WslMoveBrowserCookieCopyCounts = z.infer<typeof WslMoveBrowserCookieCopyCountsSchema>
 
@@ -54,25 +57,27 @@ export function emptyWslMoveBrowserCookieCopyCounts(): WslMoveBrowserCookieCopyC
 
 export const WSL_MOVE_BROWSER_COOKIE_COPY_MAX_PROFILES = 256
 
-export const WslMoveBrowserCookieCopySchema = z.discriminatedUnion('outcome', [
-  z.object({
-    outcome: z.literal('copied'),
-    profiles: z
-      .array(
-        z.object({
-          browserProfileId: z.string().min(1).max(256),
-          destinationPartition: z.string().min(1).max(256),
-          /** An earlier move to this host already copied into this partition. */
-          alreadyCopied: z.boolean(),
-          counts: WslMoveBrowserCookieCopyCountsSchema
-        })
-      )
-      .max(WSL_MOVE_BROWSER_COOKIE_COPY_MAX_PROFILES)
-  }),
-  z.object({
-    outcome: z.literal('fresh-partition'),
-    reason: z.enum(WSL_MOVE_BROWSER_COOKIE_FRESH_PARTITION_REASONS)
-  })
-])
+export const WslMoveBrowserCookieCopySchema = lazyZodSchema(() =>
+  z.discriminatedUnion('outcome', [
+    z.object({
+      outcome: z.literal('copied'),
+      profiles: z
+        .array(
+          z.object({
+            browserProfileId: z.string().min(1).max(256),
+            destinationPartition: z.string().min(1).max(256),
+            /** An earlier move to this host already copied into this partition. */
+            alreadyCopied: z.boolean(),
+            counts: WslMoveBrowserCookieCopyCountsSchema
+          })
+        )
+        .max(WSL_MOVE_BROWSER_COOKIE_COPY_MAX_PROFILES)
+    }),
+    z.object({
+      outcome: z.literal('fresh-partition'),
+      reason: z.enum(WSL_MOVE_BROWSER_COOKIE_FRESH_PARTITION_REASONS)
+    })
+  ])
+)
 
 export type WslMoveBrowserCookieCopy = z.infer<typeof WslMoveBrowserCookieCopySchema>

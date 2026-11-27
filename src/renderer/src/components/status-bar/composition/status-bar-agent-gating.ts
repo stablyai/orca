@@ -5,9 +5,7 @@ import type { StatusBarItem } from '../../../../../shared/ui-chrome/ui-chrome-ty
 const CLI_GATED_ITEMS: ReadonlySet<StatusBarItem> = new Set([
   'claude',
   'codex',
-  'gemini',
   'kimi',
-  'antigravity',
   'grok',
   'zcode',
   'muse'

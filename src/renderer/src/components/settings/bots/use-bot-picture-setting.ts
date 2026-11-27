@@ -17,6 +17,7 @@ import {
   useSavedPictureDescription
 } from '@/components/bots/generated-avatar-descriptions'
 import { isUploadAvatar, parseBotAvatar } from '../../../../../shared/bot-avatar'
+import { withSlackIconPublish } from '../../bots/use-bot-slack-icons'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import type { BotAvatarOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
@@ -37,7 +38,7 @@ export { BOT_PICTURE_SAVE_DELAY_MS }
 
 export function useBotPictureSetting(
   bot: Bot,
-  update: (updates: BotUpdateParams['updates']) => Promise<Bot | null>
+  save: (updates: BotUpdateParams['updates']) => Promise<Bot | null>
 ): {
   value: BotPictureValue
   custom: BotPictureCustom | null
@@ -58,6 +59,8 @@ export function useBotPictureSetting(
    *  whether one came after a moment. */
   uploads: () => number
 } {
+  // A saved look is drawn for Slack at once, without waiting for the Bots sidebar.
+  const update = withSlackIconPublish(save, bot.hostId)
   const t = useTranslate()
   const [kept, setKeptState] = useState(() => keptFrom(bot.avatar, 0, -1))
   const [shown, setShown] = useState(() => savedChoice(bot.avatar))
@@ -200,7 +203,9 @@ export function useBotPictureSetting(
     const pending = !known && replacesUpload
     const previousPng = pending ? readBotAvatarPng(bot).catch(() => null) : Promise.resolve(known)
     beforeUpload.current = { kept: previous, shown: live.shown, png: previousPng }
-    setKept({ id: live.nextKeptId++, avatar: null, png, after, replaced: live.kept })
+    const id = live.nextKeptId
+    live.nextKeptId += 1
+    setKept({ id, avatar: null, png, after, replaced: live.kept })
     show({ kind: 'custom' })
     if (pending) {
       live.waits += 1
@@ -269,7 +274,9 @@ export function useBotPictureSetting(
     nextChoice()
     const choice = savedChoice(avatar)
     if (choice.kind === 'custom') {
-      setKept(keptFrom(avatar, live.nextKeptId++, live.kept?.after ?? -1))
+      const id = live.nextKeptId
+      live.nextKeptId += 1
+      setKept(keptFrom(avatar, id, live.kept?.after ?? -1))
     }
     show(choice)
     live.saved = live.desired = choiceKey(choice, live.kept)

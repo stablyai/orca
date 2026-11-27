@@ -33,7 +33,7 @@ const ENDED_CHILD_FAILURE = {
 export function structuredAgentSessionEndedChildFailure(
   ended: StructuredAgentSessionEndedChild
 ): StructuredAgentSessionStartFailureCause | null {
-  return ENDED_CHILD_FAILURE[ended.cause](ended)
+  return ended.endedBeforeAcquire ? null : ENDED_CHILD_FAILURE[ended.cause](ended)
 }
 
 export function logExitFailure(

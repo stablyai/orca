@@ -39,20 +39,20 @@ export type TabBarItemSurfaceRuntime = Pick<
 
 export function renderTabBarItems({
   items,
-  groupItems = items,
   props,
   runtime,
   actions,
   dropIndicatorByVisibleId,
   includeTopTabBorder,
   activeClientHostedBrowserRowId,
-  segments
+  segments,
+  itemOffset = 0
 }: {
   items: TabBarItem[]
-  /** Mounted runs of `items`; gaps render as fixed-width spacers. */
+  /** Mounted runs of `items` from `itemOffset` on; gaps render as fixed-width spacers. */
   segments: readonly TabStripSegment[]
-  /** The whole group in strip order; close-others/left/right act on hidden tabs too. */
-  groupItems?: readonly TabBarItem[]
+  /** Items before the strip, such as a pinned Home: segment indices start after them. */
+  itemOffset?: number
   props: TabBarItemSurfaceProps
   runtime: TabBarItemSurfaceRuntime
   actions: TabBarItemActions
@@ -104,12 +104,10 @@ export function renderTabBarItems({
     return (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
   }
 
-  const groupIndexById = new Map(groupItems.map((item, index) => [item.id, index]))
-  const unpinnedCount = groupItems.filter((item) => !item.isPinned).length
+  const unpinnedCount = items.filter((item) => !item.isPinned).length
 
-  function renderRow(item: TabBarItem): React.ReactNode {
-    const groupIndex = groupIndexById.get(item.id) ?? 0
-    // "Close others" enables at tabCount > 1: count what it closes, hidden tabs included, pinned never.
+  function renderRow(item: TabBarItem, index: number): React.ReactNode {
+    // "Close others" enables at tabCount > 1: count what it closes, pinned never.
     const closableOthers = unpinnedCount - (item.isPinned ? 0 : 1)
     let canToggleViewMode = false
     let isChatView = false
@@ -144,8 +142,8 @@ export function renderTabBarItems({
         groupId={resolvedGroupId}
         generatedTabTitlesEnabled={generatedTabTitlesEnabled}
         tabCount={closableOthers + 1}
-        hasTabsToLeft={groupIndex > 0}
-        hasTabsToRight={groupIndex < groupItems.length - 1}
+        hasTabsToLeft={index > 0}
+        hasTabsToRight={index < items.length - 1}
         isActive={isActiveItem(item)}
         isExpanded={item.type === 'terminal' && expandedPaneByTabId[item.id] === true}
         dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
@@ -178,8 +176,8 @@ export function renderTabBarItems({
       )
       continue
     }
-    for (let index = segment.start; index < segment.end; index++) {
-      rows.push(renderRow(items[index]))
+    for (let index = segment.start + itemOffset; index < segment.end + itemOffset; index++) {
+      rows.push(renderRow(items[index], index))
     }
   }
   return rows

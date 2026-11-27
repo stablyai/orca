@@ -1,4 +1,10 @@
+import type { Translate } from '../../i18n/mobile-i18n'
 import { hostEndpointCopy } from './host-endpoint-copy'
+import {
+  isCanonicalIpv4,
+  validateHostname,
+  validateNumericIpv4Candidate
+} from './host-endpoint-hostname'
 
 // Normalize Edit Host input to a websocket authority without requiring re-pairing.
 
@@ -18,7 +24,6 @@ type RawSchemeAuthority = {
 }
 
 const DEFAULT_PORT = '6768'
-const NUMERIC_IPV4_CANDIDATE = /^(?:0[xX][0-9a-fA-F]+|\d+)(?:\.(?:0[xX][0-9a-fA-F]+|\d+))*$/
 
 export function displayHostEndpoint(endpoint: string): string {
   try {
@@ -95,21 +100,22 @@ export function endpointScheme(endpoint: string): 'ws' | 'wss' {
 
 export function normalizeHostEndpoint(
   input: string,
-  options?: { fallbackPort?: string | number; fallbackScheme?: 'ws' | 'wss' }
+  options: { fallbackPort?: string | number; fallbackScheme?: 'ws' | 'wss' } | undefined,
+  t: Translate
 ): NormalizeHostEndpointResult {
   const trimmed = input.trim()
   if (!trimmed) {
-    return { ok: false, error: hostEndpointCopy.addressRequired() }
+    return { ok: false, error: hostEndpointCopy.addressRequired(t) }
   }
 
   const fallbackPort = resolveFallbackPort(options?.fallbackPort)
   const fallbackScheme = options?.fallbackScheme === 'wss' ? 'wss' : 'ws'
 
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) {
-    return normalizeSchemeUrl(trimmed, fallbackPort)
+    return normalizeSchemeUrl(trimmed, fallbackPort, t)
   }
 
-  return normalizeHostPort(trimmed, fallbackPort, fallbackScheme)
+  return normalizeHostPort(trimmed, fallbackPort, fallbackScheme, t)
 }
 
 function resolveFallbackPort(value: string | number | undefined): string {
@@ -123,58 +129,62 @@ function resolveFallbackPort(value: string | number | undefined): string {
   return asString
 }
 
-function normalizeSchemeUrl(input: string, fallbackPort: string): NormalizeHostEndpointResult {
+function normalizeSchemeUrl(
+  input: string,
+  fallbackPort: string,
+  t: Translate
+): NormalizeHostEndpointResult {
   const explicitPort = resolveWebsocketUrlPort(input)
   if (explicitPort.kind === 'invalid') {
-    return { ok: false, error: hostEndpointCopy.invalidPort() }
+    return { ok: false, error: hostEndpointCopy.invalidPort(t) }
   }
   const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//.exec(input)?.[1]?.toLowerCase()
   if (scheme !== 'ws' && scheme !== 'wss') {
-    return { ok: false, error: hostEndpointCopy.invalidScheme() }
+    return { ok: false, error: hostEndpointCopy.invalidScheme(t) }
   }
 
   const rawAuthority = parseRawSchemeAuthority(input)
   if (rawAuthority.hasUserInfo) {
-    return { ok: false, error: hostEndpointCopy.invalidAddress() }
+    return { ok: false, error: hostEndpointCopy.invalidAddress(t) }
   }
   if (rawAuthority.hasPathOrQuery) {
-    return { ok: false, error: hostEndpointCopy.pathOrQueryNotAllowed() }
+    return { ok: false, error: hostEndpointCopy.pathOrQueryNotAllowed(t) }
   }
   if (
     rawAuthority.hostname &&
-    validateNumericIpv4Candidate(normalizeRawNumericIpv4Candidate(rawAuthority.hostname))
+    validateNumericIpv4Candidate(normalizeRawNumericIpv4Candidate(rawAuthority.hostname), t)
   ) {
-    return { ok: false, error: hostEndpointCopy.invalidHostname() }
+    return { ok: false, error: hostEndpointCopy.invalidHostname(t) }
   }
 
   let url: URL
   try {
     url = new URL(input)
   } catch {
-    return { ok: false, error: hostEndpointCopy.invalidAddress() }
+    return { ok: false, error: hostEndpointCopy.invalidAddress(t) }
   }
 
   if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
-    return { ok: false, error: hostEndpointCopy.invalidScheme() }
+    return { ok: false, error: hostEndpointCopy.invalidScheme(t) }
   }
   if (!url.hostname) {
-    return { ok: false, error: hostEndpointCopy.hostnameRequired() }
+    return { ok: false, error: hostEndpointCopy.hostnameRequired(t) }
   }
 
   // Reject path/query/userinfo instead of silently stripping address typos.
   if (url.username || url.password) {
-    return { ok: false, error: hostEndpointCopy.invalidAddress() }
+    return { ok: false, error: hostEndpointCopy.invalidAddress(t) }
   }
   if ((url.pathname && url.pathname !== '/') || url.search || url.hash) {
-    return { ok: false, error: hostEndpointCopy.pathOrQueryNotAllowed() }
+    return { ok: false, error: hostEndpointCopy.pathOrQueryNotAllowed(t) }
   }
 
   const hostname = unwrapHostname(url.hostname)
   // Reject legacy IPv4 aliases that WHATWG URL would rewrite to a different address.
   if (rawAuthority.hostname && isCanonicalIpv4(hostname) && rawAuthority.hostname !== hostname) {
-    return { ok: false, error: hostEndpointCopy.invalidHostname() }
+    return { ok: false, error: hostEndpointCopy.invalidHostname(t) }
   }
-  const hostError = validateHostname(hostname)
+  const hostError = validateHostname(hostname, t)
   if (hostError) {
     return { ok: false, error: hostError }
   }
@@ -182,7 +192,7 @@ function normalizeSchemeUrl(input: string, fallbackPort: string): NormalizeHostE
   // Preserve explicit default ports; URL.port would otherwise replace them with fallbackPort.
   const resolvedPort = resolveWebsocketUrlPort(input, url)
   if (resolvedPort.kind === 'invalid') {
-    return { ok: false, error: hostEndpointCopy.invalidPort() }
+    return { ok: false, error: hostEndpointCopy.invalidPort(t) }
   }
   const port = resolvedPort.kind === 'valid' ? resolvedPort.port : fallbackPort
 
@@ -220,7 +230,8 @@ function parseRawSchemeAuthority(input: string): RawSchemeAuthority {
 function normalizeHostPort(
   input: string,
   fallbackPort: string,
-  fallbackScheme: 'ws' | 'wss'
+  fallbackScheme: 'ws' | 'wss',
+  t: Translate
 ): NormalizeHostEndpointResult {
   let host: string
   let port: string | undefined
@@ -228,14 +239,14 @@ function normalizeHostPort(
   if (input.startsWith('[')) {
     const close = input.indexOf(']')
     if (close <= 1) {
-      return { ok: false, error: hostEndpointCopy.invalidAddress() }
+      return { ok: false, error: hostEndpointCopy.invalidAddress(t) }
     }
     host = input.slice(1, close)
     const rest = input.slice(close + 1)
     if (rest.startsWith(':')) {
       port = rest.slice(1)
     } else if (rest.length > 0) {
-      return { ok: false, error: hostEndpointCopy.invalidAddress() }
+      return { ok: false, error: hostEndpointCopy.invalidAddress(t) }
     }
   } else {
     const firstColon = input.indexOf(':')
@@ -250,11 +261,11 @@ function normalizeHostPort(
 
   host = host.trim()
   if (!host) {
-    return { ok: false, error: hostEndpointCopy.hostnameRequired() }
+    return { ok: false, error: hostEndpointCopy.hostnameRequired(t) }
   }
 
   // Validate bare hosts too; URL-only delimiters must never become hostname bytes.
-  const hostError = validateHostname(host)
+  const hostError = validateHostname(host, t)
   if (hostError) {
     return { ok: false, error: hostError }
   }
@@ -262,7 +273,7 @@ function normalizeHostPort(
   if (port !== undefined) {
     port = port.trim()
     if (!isValidPort(port)) {
-      return { ok: false, error: hostEndpointCopy.invalidPort() }
+      return { ok: false, error: hostEndpointCopy.invalidPort(t) }
     }
   }
 
@@ -274,49 +285,6 @@ function formatHostForUrl(host: string): string {
   return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
 }
 
-function validateHostname(host: string): string | null {
-  if (!host) {
-    return hostEndpointCopy.hostnameRequired()
-  }
-  if (/[\s/?#@[\]]/.test(host)) {
-    return hostEndpointCopy.invalidHostname()
-  }
-  const numericIpv4Error = validateNumericIpv4Candidate(host)
-  if (numericIpv4Error) {
-    return numericIpv4Error
-  }
-  if (host.includes(':')) {
-    // Use the WebSocket URL parser to reject malformed IPv6 that a hex/colon regex accepts.
-    if (!/^[0-9a-fA-F:]+$/.test(host)) {
-      return hostEndpointCopy.invalidHostname()
-    }
-    try {
-      new URL(`ws://[${host}]:${DEFAULT_PORT}`)
-    } catch {
-      return hostEndpointCopy.invalidHostname()
-    }
-    return null
-  }
-  if (
-    !/^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/.test(
-      host
-    )
-  ) {
-    return hostEndpointCopy.invalidHostname()
-  }
-  return null
-}
-
-function validateNumericIpv4Candidate(host: string): string | null {
-  if (!NUMERIC_IPV4_CANDIDATE.test(host)) {
-    return null
-  }
-  if (!isCanonicalIpv4(host)) {
-    return hostEndpointCopy.invalidHostname()
-  }
-  return null
-}
-
 function normalizeRawNumericIpv4Candidate(host: string): string {
   let decoded = host
   try {
@@ -325,14 +293,6 @@ function normalizeRawNumericIpv4Candidate(host: string): string {
     // The URL parser will reject malformed escapes; keep them untouched here.
   }
   return decoded.endsWith('.') ? decoded.slice(0, -1) : decoded
-}
-
-function isCanonicalIpv4(host: string): boolean {
-  const octets = host.split('.')
-  return (
-    octets.length === 4 &&
-    octets.every((octet) => /^(?:0|[1-9]\d{0,2})$/.test(octet) && Number(octet) <= 255)
-  )
 }
 
 function isValidPort(port: string): boolean {

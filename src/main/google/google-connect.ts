@@ -3,6 +3,7 @@
 import { googleClientView, type GoogleClientView } from '../../shared/google/google-client-config'
 import { googleClientFile, parseGoogleClientFile } from './google-client-file'
 import {
+  GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY,
   GOOGLE_CONNECT_RUNTIME_CAPABILITY,
   GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
   GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY,
@@ -19,7 +20,11 @@ import {
   type GoogleServiceChoice
 } from '../../shared/google/google-scopes'
 import { CallerOwnedSignInFlows } from '../runtime/caller-owned-sign-in-flows'
-import { googleAccessToken, GoogleAccountUnavailableError } from './google-account-tokens'
+import {
+  googleAccessToken,
+  GoogleAccountUnavailableError,
+  googleRefusalText
+} from './google-account-tokens'
 import {
   hasGoogleAccount,
   listGoogleAccounts,
@@ -53,6 +58,7 @@ export function googleAccountView(record: GoogleAccountRecord): GoogleAccountVie
     email: record.email,
     status: record.status,
     ...(record.reason ? { reason: record.reason } : {}),
+    ...(record.googleError ? { googleError: googleRefusalText(record.googleError) } : {}),
     services: record.services,
     ...(record.checkedAt ? { checkedAt: record.checkedAt } : {}),
     connectedAt: record.connectedAt,
@@ -196,7 +202,7 @@ export class GoogleConnect {
         try {
           const accessToken = await googleAccessToken(email, deps)
           const record = await readGoogleAccount(email)
-          if (!record) {
+          if (!record?.refreshToken) {
             return
           }
           const services = await checkGoogleServices({
@@ -206,7 +212,11 @@ export class GoogleConnect {
             choices: record.choices ?? grantedGoogleChoices(record.grantedScopes),
             ...(record.projectId ? { projectId: record.projectId } : {})
           })
-          await saveGoogleAccount({ ...record, services, checkedAt: this.deps.now() })
+          // A refresh that ended the grant during the probes wins.
+          await saveGoogleAccount(
+            { ...record, services, checkedAt: this.deps.now() },
+            record.refreshToken
+          )
         } catch (error) {
           if (!(error instanceof GoogleAccountUnavailableError)) {
             throw error
@@ -326,7 +336,8 @@ export function googleRuntimeCapabilities(): string[] {
         GOOGLE_CONNECT_RUNTIME_CAPABILITY,
         GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
         GOOGLE_CONNECTED_ANSWER_RUNTIME_CAPABILITY,
-        GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY
+        GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY,
+        GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY
       ]
     : []
 }

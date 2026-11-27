@@ -37,6 +37,8 @@ export type SourceControlAiSettings = {
   discoveredModelsByAgentByHost?: Partial<
     Record<string, Partial<Record<TuiAgent, CommitMessageAiModelCapability[]>>>
   >
+  /** When each host's listing was saved (epoch ms); only a recent account listing bounds what runs. */
+  discoveredAtByAgentByHost?: Partial<Record<string, Partial<Record<TuiAgent, number>>>>
   selectedThinkingByModel: Record<string, string>
   customAgentCommand: string
   instructionsByOperation: Partial<Record<AiTextOperation, string>>

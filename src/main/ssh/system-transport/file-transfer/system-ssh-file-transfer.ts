@@ -14,6 +14,7 @@ import {
   type SystemSshBuildArgsOptions
 } from '../system-ssh-args'
 import { spawnSystemSshCommand } from '../system-ssh-command'
+import { terminateSystemSsh } from '../system-ssh-termination'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
@@ -90,7 +91,7 @@ export async function uploadDirectoryViaSystemSsh(
       options?.signal,
       () => {
         killProcess(tarCreate)
-        killProcess(sshExtract)
+        terminateSystemSsh(sshExtract)
       },
       settleUploadPipeline(
         waitForProcess(tarCreate, 'local tar relay upload'),
@@ -100,7 +101,7 @@ export async function uploadDirectoryViaSystemSsh(
     )
   } catch (err) {
     killProcess(tarCreate)
-    killProcess(sshExtract)
+    terminateSystemSsh(sshExtract)
     throw err
   }
 

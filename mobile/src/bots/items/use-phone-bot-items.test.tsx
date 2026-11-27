@@ -6,6 +6,11 @@ import { makeTestBotItem } from '../../../../src/shared/bots/bot-item.test-fixtu
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import { groupItemsFresh } from '../phone-group-items-freshness'
+import {
+  botItemAskCardKey,
+  readBotItemAskCardDraft,
+  saveBotItemAskCardDraft
+} from './bot-item-ask-card-drafts'
 import { usePhoneBotItems, type PhoneBotItems } from './use-phone-bot-items'
 
 const planned = makeTestBotItem(1, { status: 'planned' })
@@ -17,7 +22,14 @@ let current: PhoneBotItems
 let reads = 0
 let client: RpcClient
 function Harness() {
-  current = usePhoneBotItems({ client, botId: 'bot-a', chatIds: null, showing: true, reads })
+  current = usePhoneBotItems({
+    client,
+    hostKey: 'host',
+    botId: 'bot-a',
+    chatIds: null,
+    showing: true,
+    reads
+  })
   return null
 }
 const fresh = () => groupItemsFresh(members, notices(reads), new Map([['bot-a', current]]))
@@ -140,3 +152,49 @@ it.each([false, true])(
     ])
   }
 )
+
+it('drops a kept answer card when the list read shows its item closed, not one typed while it was read', async () => {
+  const shut = botItemAskCardKey('host', 'bot-a', 'uid-7')
+  const reopened = botItemAskCardKey('host', 'bot-a', 'uid-8')
+  const words = { '0': { picks: [], other: 'unsent' } }
+  saveBotItemAskCardDraft(shut, 'e1', words)
+  let settle: ((response: RpcResponse) => void) | undefined
+  client = makeClient(
+    () =>
+      new Promise<RpcResponse>((resolve) => {
+        settle = resolve
+      })
+  )
+  await act(async () => {
+    renderer = create(createElement(Harness))
+  })
+  // Typed while the read was out: the item may have reopened since the host answered.
+  saveBotItemAskCardDraft(reopened, 'e1', words)
+  await act(async () => {
+    settle!(reply([planned, closed(7), closed(8)]))
+  })
+
+  expect(readBotItemAskCardDraft(shut, 'e1')).toBeUndefined()
+  expect(readBotItemAskCardDraft(reopened, 'e1')).toEqual(words)
+})
+
+it('drops a kept answer card when a Closed page read past the first shows its item closed', async () => {
+  const deeper = botItemAskCardKey('host', 'bot-a', 'uid-9')
+  const words = { '0': { picks: [], other: 'unsent' } }
+  saveBotItemAskCardDraft(deeper, 'e1', words)
+  client = makeClient(async (_method, raw) =>
+    BotItemsOwnerList.parse(raw).closedCursor === 'c1'
+      ? reply([closed(9)])
+      : reply([planned, closed(4)], 'c1')
+  )
+  await act(async () => {
+    renderer = create(createElement(Harness))
+  })
+  await tick()
+  expect(readBotItemAskCardDraft(deeper, 'e1')).toEqual(words)
+
+  await act(async () => {
+    await current.loadMoreClosed!()
+  })
+  expect(readBotItemAskCardDraft(deeper, 'e1')).toBeUndefined()
+})

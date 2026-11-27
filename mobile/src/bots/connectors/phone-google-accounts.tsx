@@ -3,6 +3,7 @@
 import { useCallback, useEffect } from 'react'
 import { Share } from 'react-native'
 import { googleAppExportFileName } from '../../../../src/shared/google/google-console-setup'
+import { joinSentences } from '../../../../src/shared/text/sentence-joining'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
@@ -136,15 +137,15 @@ export function GoogleDisconnectConfirm(props: {
   const nextDefault = accounts.find((account) => account.email !== defaultAccount)?.email
   const promoted =
     email === defaultAccount && nextDefault
-      ? ` ${t('bots.google.disconnect.promotes', '{{email}} becomes the default.', {
+      ? t('bots.google.disconnect.promotes', '{{email}} becomes the default.', {
           email: nextDefault
-        })}`
+        })
       : ''
   return (
     <ConfirmContent
       title={t('bots.google.disconnect.title', 'Disconnect {{email}}?', { email })}
-      message={
-        (revoke
+      message={joinSentences([
+        revoke
           ? t(
               'bots.google.disconnect.revokeNote',
               'Bots stop using this account here, and Google cancels Orca’s access everywhere it was allowed.'
@@ -154,8 +155,9 @@ export function GoogleDisconnectConfirm(props: {
             : t(
                 'bots.google.disconnect.removeNote',
                 'Bots stop using this account here. Bot settings stay, so Connect Google turns it back on.'
-              )) + promoted
-      }
+              ),
+        promoted
+      ])}
       confirmLabel={t('bots.google.disconnect.confirm', 'Disconnect')}
       destructive
       onCancel={props.onClose}

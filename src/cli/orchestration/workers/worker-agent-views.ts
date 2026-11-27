@@ -19,8 +19,11 @@ type WorkerShowFields = {
   liveness?: string
   activity?: string
   lastActivity?: string
+  progress?: string
+  progressUpdatedAt?: string
   terminal?: string
   terminalState?: string
+  handedOnTo?: string
   workspace?: string
   server?: string
   asOf?: string
@@ -37,6 +40,8 @@ type WorkerShowFields = {
 export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerShowFields> = {
   fields: (value) => {
     const wait = value.observation?.agentWait
+    // A handed-on terminal's row is its follow-up's; its release state is not this worker's.
+    const ownTerminal = value.handedOnTo ? null : value.terminalResource
     return {
       dispatchId: value.dispatch?.id ?? value.worker.dispatchId ?? 'unknown',
       taskId: value.dispatch?.taskId,
@@ -47,13 +52,16 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
       liveness: livenessField(value.projection),
       activity: knownActivity(value.projection),
       lastActivity: lastActivity(value.projection),
-      terminal:
-        value.worker.agentTerminalHandle ?? value.terminalResource?.terminalHandle ?? undefined,
+      progress: value.dispatch?.progressNote ?? undefined,
+      progressUpdatedAt: value.dispatch?.progressUpdatedAt ?? undefined,
+      // Handoff keeps the predecessor's recorded handle; that terminal is the follow-up's now.
+      terminal: value.handedOnTo
+        ? undefined
+        : (value.worker.agentTerminalHandle ?? value.terminalResource?.terminalHandle ?? undefined),
       // The projection's accounting state matches worker-list; releaseState is the raw column.
       terminalState:
-        value.projection?.resource?.terminalState ??
-        value.terminalResource?.releaseState ??
-        undefined,
+        value.projection?.resource?.terminalState ?? ownTerminal?.releaseState ?? undefined,
+      handedOnTo: value.handedOnTo ?? undefined,
       workspace: value.projection?.workspace?.id ?? value.worker.worktreeId ?? undefined,
       server: value.server?.name,
       asOf: value.server?.asOf,

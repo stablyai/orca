@@ -9,11 +9,11 @@ import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-nam
 import { botItemQuestionShape } from '../../../../src/shared/bots/bot-item-ask'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
 import type { BotItemSentAnswers } from '../../../../src/shared/bots/use-bot-item-question-steps'
-import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
+import { MobileNativeChatMarkdown } from '../../session/native-chat/transcript/message-content/MobileNativeChatMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import {
   mobileBotItemCommentWords,
   MobileBotItemCommentAttachments,
@@ -22,6 +22,7 @@ import {
 import { MobileBotItemQuestionLines } from './MobileBotItemQuestionLines'
 import { MobileBotItemReplyQuote } from './MobileBotItemReplyQuote'
 import { useMobileMessageTime } from '../../session/native-chat/transcript/messages/use-mobile-message-time'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 const ICON = 13
 
@@ -41,7 +42,10 @@ export function MobileBotItemCommentCard({
   item: BotItem
   entry: Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'event' | 'replyTo' | 'waiting'> &
     Partial<
-      Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'answers' | 'byOrder' | 'ended'>
+      Pick<
+        Extract<BotItemActivityEntry, { kind: 'comment' }>,
+        'answers' | 'byOrder' | 'ended' | 'beside'
+      >
     >
   attachments: MobileBotItemAttachmentSource
   /** A comment sent from the box that didn't reach the host; no Retry when it may have. */
@@ -60,13 +64,19 @@ export function MobileBotItemCommentCard({
   /** Puts the comment's words in the comment box as a quote. */
   onQuote?: (text: string) => void
 }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { event, replyTo, waiting } = entry
   const time = useMobileMessageTime()
   const shape = botItemQuestionShape(event.data)
-  const text = mobileBotItemCommentWords({ ...event.data, text: shape.body })
+  const text = mobileBotItemCommentWords({ ...event.data, text: entry.beside ?? shape.body })
   // A question's lines too, as the agent wrote them.
-  const quoted = onQuote ? mobileBotItemCommentWords(event.data).trim() : ''
+  const quoted = onQuote
+    ? mobileBotItemCommentWords(
+        entry.beside === undefined ? event.data : { ...event.data, text: entry.beside }
+      ).trim()
+    : ''
   return (
     <View ref={ref} style={styles.row}>
       {flash ? <CommentFlash key={flash.at} still={flash.still} end={flash.end} /> : null}
@@ -102,7 +112,7 @@ export function MobileBotItemCommentCard({
         ) : null}
         <MobileBotItemCommentAttachments data={event.data} {...attachments}>
           {text.trim() ? (
-            <MobileMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
+            <MobileNativeChatMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
           ) : null}
         </MobileBotItemCommentAttachments>
         {shape.decisions.length > 0 ? (
@@ -149,6 +159,7 @@ const FLASH_STILL_MS = 1600
 
 /** The desktop's ring and tint, under the card's content. */
 function CommentFlash({ still, end }: { still: boolean; end: () => void }) {
+  const styles = useThemedStyles(stylesSheet)
   const opacity = useRef(new Animated.Value(1)).current
   useEffect(() => {
     const run = still
@@ -168,7 +179,7 @@ function CommentFlash({ still, end }: { still: boolean; end: () => void }) {
 }
 
 // The Activity event line's grid (MobileBotItemActivity): its glyph column, gap and time.
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   flash: {
     position: 'absolute',
     top: 0,

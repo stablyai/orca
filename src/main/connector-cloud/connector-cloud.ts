@@ -8,15 +8,9 @@ import {
   type ConnectorResult
 } from './connector-cloud-request'
 import { ConnectorPollClient } from './connector-poll-client'
-import type { ConnectorMachine } from './connector-machine'
-import {
-  ConnectorAccountTransport,
-  type ConnectorCallOptions,
-  type ConnectorTokenMint
-} from './connector-transport'
+import { ConnectorAccountTransport, type ConnectorCallOptions } from './connector-transport'
 import { ConnectorTurnEvents } from './connector-turn-events'
 import { ConnectorReach } from './connector-reach'
-import type { ConnectorReplyJournal } from './connector-reply-outbox'
 import { connectorRefResolver, type ConnectorRefResolver } from './connector-ref-resolution'
 import { postConnectorOutboxReply } from './connector-replies'
 import type {
@@ -27,24 +21,8 @@ import type {
 // Past this, a held call goes ahead without the hello and gets the cloud's own refusal.
 const HOLD_HELLO_WAIT_MS = 10_000
 
-export type ConnectorCloudOptions = {
-  userDataPath: string
-  origin: string
-  machine: ConnectorMachine
-  /** The signed-in Orca account, or null while signed out. */
-  account: () => string | null
-  /** Quitting or relaunching into another profile: nothing new starts, as for the relay. */
-  isFenced: () => boolean
-  /** Mints connector tokens for one account and no other. */
-  mintFor: (account: string) => ConnectorTokenMint
-  /** `status()` may have changed. */
-  onStatusChanged?: () => void
-  /** The signed-in account is another one, or none: setups in flight belong to the old one. */
-  onAccountSwitched?: () => void
-  fetchImpl?: typeof globalThis.fetch
-  /** The journal's reply outbox (design item 125); null while no journal is open. */
-  replyJournal?: () => ConnectorReplyJournal | null
-}
+export type { ConnectorCloudOptions } from './connector-cloud-options'
+import type { ConnectorCloudOptions } from './connector-cloud-options'
 
 export class ConnectorCloud {
   private connected = false
@@ -61,10 +39,7 @@ export class ConnectorCloud {
   private clientStop: string | null = null
   private readonly reach = new ConnectorReach(() => this.options.onStatusChanged?.())
   // One token cache per account, shared by the poll and the bot calls.
-  private transport: {
-    account: string
-    transport: ConnectorAccountTransport
-  } | null = null
+  private transport: { account: string; transport: ConnectorAccountTransport } | null = null
 
   // The account the last sign-in hook saw, so a refresh of the same one is not a switch.
   private lastAccount: string | null
@@ -78,13 +53,25 @@ export class ConnectorCloud {
     return this.activeAccount()
   }
 
+  // The account the last sign-in hook saw (null signing out or fenced for quit), from memory: no profile read.
+  readonly knownAccount = (): string | null => (this.options.isFenced() ? null : this.lastAccount)
+
   private noteAccount(): void {
     const account = this.signingOut ? null : this.options.account()
     if (account !== this.lastAccount) {
       this.lastAccount = account
       this.options.onAccountSwitched?.()
+      if (account) {
+        this.reach.accountSwitched()
+      }
     }
   }
+
+  /** A sign-in completed (not a refresh), even as the same account: bot pictures owed may go again. */
+  readonly signedIn = (): void => this.reach.back('signedIn')
+
+  /** The poll answered (after its own outage or not), or a sign-in: a bot picture owed may go again. */
+  readonly onBack: ConnectorReach['onBack'] = (listener) => this.reach.onBack(listener)
 
   /** From now on, hold the poll whenever an Orca account is signed in and the machine wants the connection. */
   connect(): void {
@@ -110,11 +97,10 @@ export class ConnectorCloud {
     this.holds++
     try {
       this.reconcile()
-      const { client } = this
-      if (client) {
+      if (this.client) {
         const waited = new AbortController()
         const timer = setTimeout(() => waited.abort(), HOLD_HELLO_WAIT_MS)
-        await client.helloTaken(waited.signal)
+        await this.client.helloTaken(waited.signal)
         clearTimeout(timer)
       }
       return await run()
@@ -151,25 +137,23 @@ export class ConnectorCloud {
     connectorNeedsSignIn?: true
   } {
     const connectorStatus = this.status()
+    const features = this.cloudFeatures()
+    const needsSignIn = this.needsSignIn() || connectorStatus === 'needs-sign-in'
     return {
       threadReplies: this.takesThreadReplies(),
       // Whether it sends GitHub's newer events and label=, so trigger-options offers only those it does.
-      githubEvents2:
-        this.cloudFeatures()?.has('triggers.github2' satisfies ConnectorCloudFeature) === true,
+      githubEvents2: features?.has('triggers.github2' satisfies ConnectorCloudFeature) === true,
       // Whether it sends github.workflow_finished, so trigger-options offers it only where it does.
-      githubWorkflows:
-        this.cloudFeatures()?.has('triggers.workflows' satisfies ConnectorCloudFeature) === true,
+      githubWorkflows: features?.has('triggers.workflows' satisfies ConnectorCloudFeature) === true,
       // Whether it sends github.ci_finished, so trigger-options and watch-pr use it only where it does.
       githubCiFinished:
-        this.cloudFeatures()?.has('triggers.ci_finished' satisfies ConnectorCloudFeature) === true,
+        features?.has('triggers.ci_finished' satisfies ConnectorCloudFeature) === true,
       connectorStatus,
       ...((connectorStatus === 'refused' || connectorStatus === 'needs-sign-in') &&
       this.reach.refusal
         ? { connectorMessage: this.reach.refusal }
         : {}),
-      ...(this.needsSignIn() || connectorStatus === 'needs-sign-in'
-        ? { connectorNeedsSignIn: true }
-        : {})
+      ...(needsSignIn ? { connectorNeedsSignIn: true } : {})
     }
   }
 
@@ -214,6 +198,8 @@ export class ConnectorCloud {
   /** The sign-out ended, either way; a sign-in that finished meanwhile resumes here. */
   signOutFinished(): void {
     this.signingOut = false
+    // A sign-in that finished meanwhile was seen as none: the account it left is taken up now.
+    this.noteAccount()
     this.reconcile()
     this.options.onStatusChanged?.()
   }
@@ -377,6 +363,6 @@ export class ConnectorCloud {
     if (neededSignIn) {
       this.options.onStatusChanged?.()
     }
-    this.reach.reached({ ok: true, value: undefined })
+    this.reach.stopped()
   }
 }

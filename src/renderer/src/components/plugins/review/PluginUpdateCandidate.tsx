@@ -67,6 +67,9 @@ const contributionGrowthLabel = (point: PluginContributionPoint, t: Translate): 
   if (point === 'vmRecipes') {
     return t('auto.components.settings.PluginUpdateAllDialog.newRecipes', 'Machine recipes')
   }
+  if (point === 'mcpServers') {
+    return t('auto.components.settings.PluginUpdateAllDialog.newMcpServers', 'MCP servers')
+  }
   if (point === 'customEditors') {
     return t(
       'auto.components.settings.PluginUpdateAllDialog.newFileTypes',

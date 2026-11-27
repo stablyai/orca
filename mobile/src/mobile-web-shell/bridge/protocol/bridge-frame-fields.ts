@@ -35,15 +35,11 @@ export const BRIDGE_SESSION_PANE_RETURN_GRANT = 'sessionPaneReturn'
 // This shell serves the chat visual frame, so visuals run their scripts in it; older shells keep them sealed.
 export const BRIDGE_CHAT_VISUAL_FRAME_GRANT = 'chatVisualFrame'
 
-// This shell skipped the build's deferred code (the diagram engine); the page asks for it before importing it.
-export const BRIDGE_DEFERRED_CODE_VERB = 'native.bundle.deferred'
-
 // Granted to every page this shell opens, whatever its route declares.
 export const BRIDGE_SHELL_GRANTS: readonly string[] = [
   BRIDGE_FAULT_GRANT,
   BRIDGE_RPC_ENVELOPE_GRANT,
   BRIDGE_HOST_CATALOGS_GRANT,
   BRIDGE_SESSION_PANE_RETURN_GRANT,
-  BRIDGE_CHAT_VISUAL_FRAME_GRANT,
-  BRIDGE_DEFERRED_CODE_VERB
+  BRIDGE_CHAT_VISUAL_FRAME_GRANT
 ]

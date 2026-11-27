@@ -40,7 +40,10 @@ for (const marker of [
   'output += withoutAnsi.slice(runStart, index)',
   // Pin density literals: retuning trigger changes which fixtures exercise fallback and otherwise silently invalidates boundary measurement.
   'const CONTROL_DENSITY_BLOCK_CODE_UNITS = 64',
-  'const CONTROL_DENSITY_FALLBACK_COUNT = 32'
+  'const CONTROL_DENSITY_FALLBACK_COUNT = 32',
+  // Pin regexes: the legacy and slice-run baselines reuse them, so drift would mix a regex change into the comparison.
+  '`${ESC}(?:\\\\[[0-?]*[ -/]*[@-~]|\\\\][^${BEL}${ESC}\\\\x18\\\\x1a\\\\x9c]*|[PX^_][^${ESC}\\\\x18\\\\x1a\\\\x9c]*|[@-Z\\\\\\\\])`',
+  "const INCOMPLETE_ANSI_ESCAPE_RE = new RegExp(`${ESC}(?:\\\\[[0-?]*[ -/]*|\\\\S?)?$`, 'g')"
 ]) {
   if (!PRODUCTION_SOURCE.includes(marker)) {
     throw new Error(`terminal-control-stripping.ts no longer contains \`${marker}\``)
@@ -56,14 +59,12 @@ const { stripTerminalControl: stripAdaptive } = await import(
 
 const ESC = String.fromCharCode(0x1b)
 const BEL = String.fromCharCode(0x07)
+// Mirrors terminal-control-stripping.ts; the marker guard above fails if either regex drifts.
 const ANSI_ESCAPE_RE = new RegExp(
-  `${ESC}(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~]|\\][^${BEL}]*(?:${BEL}|${ESC}\\\\))`,
+  `${ESC}(?:\\[[0-?]*[ -/]*[@-~]|\\][^${BEL}${ESC}\\x18\\x1a\\x9c]*|[PX^_][^${ESC}\\x18\\x1a\\x9c]*|[@-Z\\\\])`,
   'g'
 )
-const INCOMPLETE_ANSI_ESCAPE_RE = new RegExp(
-  `${ESC}(?:\\[[0-?]*[ -/]*|\\][^${BEL}${ESC}]*|\\S?)?$`,
-  'g'
-)
+const INCOMPLETE_ANSI_ESCAPE_RE = new RegExp(`${ESC}(?:\\[[0-?]*[ -/]*|\\S?)?$`, 'g')
 const HISTORY_LIMIT = 300
 const SCAN_LIMIT = 4096
 const SAMPLE_ID_LENGTH = 24

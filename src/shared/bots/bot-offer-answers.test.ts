@@ -49,3 +49,32 @@ describe('a further action on an answered offer card', () => {
     expect(card.answers()).toEqual([answered])
   })
 })
+
+describe('a first answer whose send outcome is unknown', () => {
+  it('keeps the claim after a lost reply, but gives it back after a definite failure', async () => {
+    const lost = new Error('reply lost')
+    const card = host([])
+    const press = (error: Error) =>
+      answerBotOffer(
+        { cardId: 'card', dismissed: true },
+        {
+          ...card.ops('Dismiss'),
+          send: async () => {
+            throw error
+          },
+          deliveryUnknown: (caught) => caught === lost
+        }
+      )
+
+    await expect(press(new Error('not connected'))).rejects.toThrow('not connected')
+    expect(card.answers()).toEqual([{ cardId: 'card' }])
+
+    await expect(press(lost)).rejects.toThrow('reply lost')
+    expect(card.answers()).toEqual([{ cardId: 'card', dismissed: true }])
+    // The host may have queued it, so a second press tells the bot nothing.
+    expect(await answerBotOffer({ cardId: 'card', dismissed: true }, card.ops('Dismiss'))).toBe(
+      'already_answered'
+    )
+    expect(card.sent).toEqual([])
+  })
+})

@@ -1,9 +1,9 @@
 import { Bell, ChevronDown, ChevronRight } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
-import { colors, radii, spacing } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { agentDotState } from '../agent-row-display'
 import { AgentStateDot } from '../../../agents/presentation/AgentStateDot'
 import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
@@ -20,7 +20,8 @@ type Props = {
 }
 
 export function WorktreeAgentSummary({ agents, expanded, unread, now, onToggle }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const visibleAgents = agents.slice(0, MAX_VISIBLE_AGENTS)
   const hiddenCount = agents.length - visibleAgents.length
@@ -76,7 +77,7 @@ export function WorktreeAgentSummary({ agents, expanded, unread, now, onToggle }
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   summary: {
     minHeight: 24,
     flexDirection: 'row',

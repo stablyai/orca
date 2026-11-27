@@ -1,3 +1,4 @@
+import type { Translate } from '../i18n/mobile-i18n'
 import type { RelayHostReachability } from '../transport/relay/relay-host-reachability'
 import type { MobileConnectionPath } from '../transport/connection/stable-logical-rpc-client'
 import {
@@ -42,6 +43,7 @@ export type HomeHostConnectionInputs = {
 export function classifyHomeHostConnection(
   host: { id: string; name: string; endpoint: string },
   inputs: HomeHostConnectionInputs,
+  t: Translate,
   nowMs?: number
 ): { state: ConnectionState; verdict: ConnectionVerdict } {
   const state = resolveHomeHostConnectionState(
@@ -50,17 +52,20 @@ export function classifyHomeHostConnection(
     inputs.autoConnectHostIds
   )
   const connection = inputs.hostConnections[host.id]
-  const verdict = classifyConnection({
-    state,
-    reconnectAttempts: inputs.hostAttempts[host.id] ?? 0,
-    lastConnectedAt: inputs.hostLastConnected[host.id] ?? null,
-    endpoint: host.endpoint,
-    pendingPath: connection?.pendingPath ?? null,
-    pairingRejected: connection?.pairingRejected ?? false,
-    relayHostReachability: connection?.relayHostReachability ?? 'connecting',
-    hostName: host.name,
-    nowMs
-  })
+  const verdict = classifyConnection(
+    {
+      state,
+      reconnectAttempts: inputs.hostAttempts[host.id] ?? 0,
+      lastConnectedAt: inputs.hostLastConnected[host.id] ?? null,
+      endpoint: host.endpoint,
+      pendingPath: connection?.pendingPath ?? null,
+      pairingRejected: connection?.pairingRejected ?? false,
+      relayHostReachability: connection?.relayHostReachability ?? 'connecting',
+      hostName: host.name,
+      nowMs
+    },
+    t
+  )
   return { state, verdict }
 }
 
@@ -69,10 +74,11 @@ export function classifyHomeHostConnection(
 export function homeUnreachableHostIds(
   hosts: readonly { id: string; name: string; endpoint: string }[],
   inputs: HomeHostConnectionInputs,
-  nowMs: number
+  nowMs: number,
+  t: Translate
 ): string[] {
   return hosts.flatMap((host) => {
-    const { state, verdict } = classifyHomeHostConnection(host, inputs, nowMs)
+    const { state, verdict } = classifyHomeHostConnection(host, inputs, t, nowMs)
     return state !== 'connected' && !isConnectionDialing(verdict) ? [host.id] : []
   })
 }

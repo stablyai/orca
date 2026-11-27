@@ -1,6 +1,6 @@
 import { isAbsolute, join, posix, relative, resolve, sep, win32 } from 'node:path'
 import type { Stats } from 'node:fs'
-import { lstat, mkdir, rm } from 'node:fs/promises'
+import { lstat, mkdir, rm, stat } from 'node:fs/promises'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison,
@@ -102,6 +102,18 @@ export function getClonePathComparisonKey(clonePath: string): string {
     return `//wsl/${wslUncMatch[1].toLowerCase()}${linuxPath}`
   }
   return normalizeRuntimePathForComparison(resolvedClonePath)
+}
+
+/** Creates the clone's parent folder; fresh installs may lack it. */
+export async function ensureCloneDestination(destination: string): Promise<void> {
+  try {
+    await mkdir(destination, { recursive: true })
+  } catch (error) {
+    // Windows reports EPERM for an existing drive root such as R:\.
+    if (!(await stat(destination).catch(() => null))?.isDirectory()) {
+      throw error
+    }
+  }
 }
 
 export async function claimCloneTarget(clonePath: string): Promise<ClaimedCloneTarget> {

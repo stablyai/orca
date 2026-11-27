@@ -136,10 +136,70 @@ describe('google.bot.set from the owner', () => {
     await expect(set({ on: true, accounts: ['me@gmail.com'] })).resolves.toMatchObject({
       bot: { google: true, accounts: ['me@gmail.com'] }
     })
-    expect((await set({ on: true })).bot).toEqual({ id: 'scout', name: 'Scout', google: true })
+    expect((await set({ on: true, allAccounts: true })).bot).toEqual({
+      id: 'scout',
+      name: 'Scout',
+      google: true
+    })
     await set({ on: true, accounts: ['me@gmail.com'] })
     expect((await set({ on: false })).bot).toEqual({ id: 'scout', name: 'Scout', google: false })
     expect(ctx.runtime.bots.list()[0]?.googleAccounts).toBeUndefined()
+  })
+
+  it('keeps a listed bot to its list on a plain on, and widens only for allAccounts', async () => {
+    const method = GOOGLE_METHODS.find((entry) => entry.name === 'google.bot.set')!
+    const ctx = { runtime: runtime({ google: true, googleAccounts: ['me@gmail.com'] }) }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these runtime fields.
+    const handler = method.handler as (params: unknown, ctx: unknown) => Promise<{ bot: unknown }>
+    const set = (params: Record<string, unknown>) =>
+      handler(method.params!.parse({ botId: 'scout', ...params }), ctx)
+    // A phone's or an older desktop's setup sends a plain on.
+    expect((await set({ on: true })).bot).toMatchObject({ accounts: ['me@gmail.com'] })
+    expect((await set({ on: true, allAccounts: true })).bot).toEqual({
+      id: 'scout',
+      name: 'Scout',
+      google: true
+    })
+    expect(ctx.runtime.bots.list()[0]?.googleAccounts).toBeUndefined()
+    // Saved before accounts could be chosen: no list stays every account.
+    expect((await set({ on: true })).bot).toEqual({ id: 'scout', name: 'Scout', google: true })
+  })
+})
+
+describe('a stale save', () => {
+  it('is refused when the bot changed since the caller read it, and saves nothing', async () => {
+    const method = GOOGLE_METHODS.find((entry) => entry.name === 'google.bot.set')!
+    // Another window took me@work.com off after this one opened the picker on both.
+    const ctx = { runtime: runtime({ google: true, googleAccounts: ['me@gmail.com'] }) }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these runtime fields.
+    const handler = method.handler as (params: unknown, ctx: unknown) => Promise<{ bot: unknown }>
+    const set = (params: Record<string, unknown>) =>
+      handler(method.params!.parse({ botId: 'scout', on: true, ...params }), ctx)
+    const stale = { on: true, accounts: ['me@work.com', 'me@gmail.com'] }
+    await expect(
+      set({ accounts: ['me@work.com', 'me@gmail.com', 'me@home.com'], basedOn: stale })
+    ).rejects.toThrow('changed since you opened them')
+    expect(ctx.runtime.bots.list()[0]?.googleAccounts).toEqual(['me@gmail.com'])
+    // Turned off elsewhere: a stale "every account" read can't turn it back on.
+    await expect(set({ allAccounts: true, basedOn: { on: false } })).rejects.toThrow(
+      'changed since you opened them'
+    )
+    // Read as it is now (any case), or not sent by an older client, it saves.
+    await set({
+      accounts: ['me@gmail.com', 'me@home.com'],
+      basedOn: { on: true, accounts: ['ME@gmail.com'] }
+    })
+    expect(ctx.runtime.bots.list()[0]?.googleAccounts).toEqual(['me@gmail.com', 'me@home.com'])
+    await set({ accounts: ['me@gmail.com'] })
+    expect(ctx.runtime.bots.list()[0]?.googleAccounts).toEqual(['me@gmail.com'])
+
+    // A stray stored entry echoes back as read and still matches, so it never blocks a save.
+    ctx.runtime.bots.list()[0]!.googleAccounts = ['me@gmail.com', 'stray']
+    await set({
+      accounts: ['me@gmail.com'],
+      basedOn: { on: true, accounts: ['stray', 'me@gmail.com'] }
+    })
+    expect(ctx.runtime.bots.list()[0]?.googleAccounts).toEqual(['me@gmail.com'])
   })
 })
 

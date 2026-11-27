@@ -17,11 +17,12 @@ import {
 } from '../../../connector-cloud/connector-connect-trips'
 import { keepConnectedLinearLogin } from '../../../linear/accounts/linear-login-store'
 import { CONNECTOR_CONNECT_CODE_PATTERN } from '../../../../../cloud/packages/connector-contract/src/connect-messages'
+import type { ConnectorConnectSource } from '../../../../shared/connectors/connector-cloud-contract'
 import { defineMethod, InvalidArgumentError } from '../core'
 import { withHostCloudClient } from './bots-slack'
 
 // Linear's link hands the linked user's own sign-in to this host, which keeps it.
-const keepLogin = (source: 'linear' | 'github') =>
+const keepLogin = (source: ConnectorConnectSource) =>
   source === 'linear' ? keepConnectedLinearLogin : undefined
 
 export const BOT_CONNECT_METHODS = [
