@@ -140,7 +140,7 @@ export async function readPluginGitCommit<T>(
   const temporaryRoot = await mkdtemp(join(tmpdir(), PLUGIN_GIT_CLONE_TEMP_PREFIX))
   const repository = join(temporaryRoot, 'repository')
   const hooks = join(temporaryRoot, 'no-hooks')
-  const config = pluginGitConfigArgs(hooks)
+  const config = pluginGitConfigArgs(hooks, repository)
   try {
     await mkdir(hooks)
     await mkdir(repository)

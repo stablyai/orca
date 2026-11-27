@@ -1,3 +1,5 @@
+import { windowsLongPathGitArgs } from '../../git/compatibility/windows-long-path-git-args'
+
 /** Exact Git argv for plugin downloads, shared with the real-binary compatibility matrix. */
 
 const PLUGIN_GIT_SETTINGS = [
@@ -17,12 +19,16 @@ const PLUGIN_GIT_SETTINGS = [
 ]
 
 /** An empty hooksPath and template stop user or global hooks (e.g. reference-transaction);
- *  unknown keys are ignored by older Git, so these stay 2.25-safe. */
-export function pluginGitConfigArgs(emptyHooksPath: string): string[] {
-  return [`core.hooksPath=${emptyHooksPath}`, ...PLUGIN_GIT_SETTINGS].flatMap((setting) => [
-    '-c',
-    setting
-  ])
+ *  unknown keys are ignored by older Git, so these stay 2.25-safe.
+ *
+ *  `checkoutDirectory` is where the plugin's clone writes its working tree. A deep plugin tree can
+ *  pass the Windows 260-character limit before Git touches a single file, so a clone there asks for
+ *  `core.longpaths`. It opts out on a WSL UNC path, where the server's Linux Git does not read it. */
+export function pluginGitConfigArgs(emptyHooksPath: string, checkoutDirectory?: string): string[] {
+  const longPathArgs = checkoutDirectory ? windowsLongPathGitArgs(checkoutDirectory) : []
+  return [...longPathArgs, `core.hooksPath=${emptyHooksPath}`, ...PLUGIN_GIT_SETTINGS].flatMap(
+    (value, index) => (index < longPathArgs.length ? [value] : ['-c', value])
+  )
 }
 
 export function pluginGitCloneArgs(url: string, ref: string, repository: string): string[] {
