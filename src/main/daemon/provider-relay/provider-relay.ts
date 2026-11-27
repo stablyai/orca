@@ -1,44 +1,38 @@
-import type { ManagedProviderProcess } from '../../provider-process/managed-provider-process'
+import type { ProviderRelayOptions as RelayOptions } from './provider-relay-options'
 import type {
   ProviderRelayAttachResult,
+  ProviderRelayDetachPolicy,
   ProviderRelayExit,
   ProviderRelayFailure,
   ProviderRelayInfo,
   ProviderRelayRecord
 } from '../protocol/daemon-provider-relay-protocol'
 import { ProviderRelayPendingRequests } from './provider-relay-pending-requests'
+import { ProviderRelayCut, type ProviderRelayAckOptions } from './provider-relay-cut'
+import { providerRelayStopFlags, type ProviderRelayStop } from './provider-relay-detached-cap'
 import { ProviderRelaySpool } from './provider-relay-spool'
 import { ProviderRelayLineReader } from './provider-relay-line-reader'
 import { ProviderRelayAttachment, type ProviderRelayStream } from './provider-relay-attachment'
 import { ProviderRelayInput } from './provider-relay-input'
+import { ProviderRelayIdleStop } from './provider-relay-idle-stop'
 
 const RELAY_TAKEN_OVER = 'Relay attach superseded by a detach or another attach'
-
-type RelayOptions = {
-  relayId: string
-  chatKey: string
-  managed: ManagedProviderProcess
-  spoolPath: string
-  /** Test seam; defaults to the reader's own spill size. */
-  lineSpillBytes?: number
-  log?: (event: string, details?: Record<string, unknown>) => void
-  /** The agent exited or its stdout ended: the record may now be finished or expire. */
-  onSettled: () => void
-  /** No client is attached anymore; an ended relay may now expire. */
-  onDetached: () => void
-}
 
 /** One daemon-owned agent: its stdout spool, unanswered requests, and the one client attached. */
 export class ProviderRelay {
   readonly relayId: string
   readonly chatKey: string
   readonly spawnedAtMs = Date.now()
-  readonly pending = new ProviderRelayPendingRequests()
+  readonly pending = new ProviderRelayPendingRequests(() => this.spool.ackedSeq)
   private readonly spool: ProviderRelaySpool
   private attachment: ProviderRelayAttachment | null = null
   private readonly lines: ProviderRelayLineReader
   private readerBusy = false
   private exitStatus: ProviderRelayExit | null = null
+  /** Set by the idle stop or the detached cap before it closes the agent; its exit says which. */
+  stoppedBy: ProviderRelayStop = null
+  /** The client's own acks that gave up an open kept span (the daemon's ask at its file cap). */
+  private readonly cut = new ProviderRelayCut()
   private stdoutEnded = false
   private exitAnnounced = false
   private spoolPaused = false
@@ -49,17 +43,23 @@ export class ProviderRelay {
   private exitDelivered = false
   /** The attachment the exit last went to, so one client never gets it twice. */
   private exitSentTo: ProviderRelayAttachment | null = null
+  private readonly idleStop: ProviderRelayIdleStop
+  /** What a paused relay asks its client to ack: only while streaming live, never mid-replay. */
+  private readonly askedSeq = () => (this.spool.streaming ? this.spool.nextSeq - 1 : null)
 
   constructor(private readonly options: RelayOptions) {
     this.relayId = options.relayId
     this.chatKey = options.chatKey
+    this.idleStop = ProviderRelayIdleStop.forRelay(this, options, () => this.spool.unacked())
     const stdout = options.managed.child.stdout
     this.input = new ProviderRelayInput(options.managed.child.stdin)
+    this.pending.toAgent = (line) => this.attachment === null && this.input.writeLine(line)
     this.spool = new ProviderRelaySpool({
       path: options.spoolPath,
       deliver: (record) => this.deliver(record),
       onPressureChanged: (paused) => {
         this.spoolPaused = paused
+        this.attachment?.whilePaused(paused, this.askedSeq)
         this.updateReading()
       },
       drained: () => this.attachment?.drained() ?? Promise.resolve(),
@@ -70,7 +70,7 @@ export class ProviderRelay {
     })
     this.lines = new ProviderRelayLineReader({
       spillPath: `${options.spoolPath}.line`,
-      onLine: (line, bytes) => this.appendLine(line, bytes),
+      onLine: (line, bytes) => void (this.idleStop.quiet(line) || this.appendLine(line, bytes)),
       onBusy: (busy) => {
         this.readerBusy = busy
         this.updateReading()
@@ -101,9 +101,11 @@ export class ProviderRelay {
       this.exitStatus = {
         code: exit.code,
         signal: exit.signal,
-        ...(this.failure ? { error: this.failure } : {})
+        ...(this.failure ? { error: this.failure } : {}),
+        ...providerRelayStopFlags(this.stoppedBy)
       }
       this.pending.clear()
+      this.idleStop.disarm()
       // Held requests no longer hold output back; the tail and stdout end must still drain.
       this.updateReading()
       // A processless or lost-outcome exit may never end stdout; it has nothing more to say.
@@ -139,6 +141,13 @@ export class ProviderRelay {
     )
   }
 
+  get idleStopPolicy(): Pick<
+    ProviderRelayIdleStop,
+    'configure' | 'tracking' | 'unaccounted' | 'onlyWaiting' | 'unread' | 'finished'
+  > {
+    return this.idleStop
+  }
+
   async attach(
     clientId: string,
     stream: ProviderRelayStream,
@@ -146,25 +155,20 @@ export class ProviderRelay {
   ): Promise<ProviderRelayAttachResult> {
     // Clamped before any wait: output arriving during the attach must stay above the cursor.
     const cursor = Math.min(fromSeq, this.spool.nextSeq - 1)
+    this.idleStop.disarm()
     // Read before the replay: lines released later through this client's own acks reached it.
-    const { truncatedThrough } = this.spool
+    const cut = this.cut.report(this.spool.truncatedThrough)
+    this.options.log?.('relay-attached', { relayId: this.relayId, cursor, ...cut })
     this.release()
     // Live records wait for this attach's own replay, or they would reach the new client twice.
     this.spool.suspend()
-    const attachment = new ProviderRelayAttachment(
-      clientId,
-      stream,
-      this.relayId,
-      () => void this.detach(clientId)
-    )
+    const gone = () => void this.detach(clientId)
+    const attachment = new ProviderRelayAttachment(clientId, stream, this.relayId, gone)
     this.attachment = attachment
-    // The initialize answer and held requests go first, as events, so no reply line has to carry them.
     const { initializeResult } = this.pending
+    const { records: kept, lines: keptLines } = this.pending.kept.snapshot()
     const pending = this.pending.records()
-    const sent =
-      (initializeResult === null ||
-        (await attachment.sendPieces('relayInitialize', 0, initializeResult))) &&
-      (await this.sendEach(attachment, pending))
+    const sent = await attachment.sendPreamble(initializeResult, kept, pending)
     // A detach or takeover during the preamble owns the spool now; this attach must not touch it.
     if (!sent || this.attachment !== attachment) {
       throw new Error(RELAY_TAKEN_OVER)
@@ -182,38 +186,32 @@ export class ProviderRelay {
     if (this.attachment !== attachment) {
       throw new Error(RELAY_TAKEN_OVER)
     }
+    attachment.whilePaused(this.spoolPaused, this.askedSeq)
     if (this.exitAnnounced) {
       this.sendExit()
     }
     return {
+      ...this.pending.kept.attachDetails(Math.max(cursor, this.spool.ackedSeq), keptLines),
       replayThroughSeq,
       pending: pending.map((record) => record.seq),
       maxClientRequestId: this.pending.maxClientRequestId,
       initializeResultSent: initializeResult !== null,
       stderrTail: this.options.managed.stderrTail(),
       exit: this.exitStatus,
-      // Lines the client already had before its cursor were never missing from its replay.
-      ...(truncatedThrough > cursor ? { truncatedThrough } : {})
+      ...cut,
+      ...this.idleStop.carriedWork()
     }
   }
 
-  private async sendEach(
-    attachment: ProviderRelayAttachment,
-    records: ProviderRelayRecord[]
-  ): Promise<boolean> {
-    for (const { seq, line } of records) {
-      if (!(await attachment.sendPieces('relayPending', seq, line))) {
-        return false
-      }
-    }
-    return true
-  }
-
-  detach(clientId?: string): Promise<void> {
+  detach(clientId?: string, policy?: ProviderRelayDetachPolicy | null): Promise<void> {
     if (clientId !== undefined && this.attachedClientId !== clientId) {
       return Promise.resolve()
     }
     this.release()
+    // A dropped stream (app crash) arms the policy the app gave at spawn or attach.
+    if (this.live) {
+      this.idleStop.arm(policy ?? null)
+    }
     const detached = this.spool.detach()
     if (!this.live) {
       this.spool.closeHandle()
@@ -234,19 +232,24 @@ export class ProviderRelay {
     })
   }
 
-  ack(seq: number, keepFrom?: number): void {
-    this.spool.ack(seq, keepFrom)
+  /** How far the spool released; past `keepFrom` once its file cap let a held replay go. */
+  /** `truncatedThrough`: how far the spool let kept lines go on its own, at either cap. */
+  ack(seq: number, keepFrom?: number, options: ProviderRelayAckOptions = {}) {
+    this.cut.record(seq, keepFrom, options)
+    const ackedThrough = this.spool.ack(seq, keepFrom, options.held === true)
+    return { ackedThrough, truncatedThrough: this.spool.truncatedThrough }
   }
 
   close(grace?: 'brief'): Promise<unknown> {
     this.input.flush()
-    return this.options.managed.close(undefined, grace === 'brief' ? { grace } : undefined)
+    return this.options.managed.close(this.options.tree, grace === 'brief' ? { grace } : undefined)
   }
 
   info(): ProviderRelayInfo {
     return {
       relayId: this.relayId,
       chatKey: this.chatKey,
+      agent: this.options.agent ?? null,
       pid: this.options.managed.child.pid ?? null,
       spawnedAtMs: this.spawnedAtMs,
       attached: this.attachment !== null,
@@ -258,6 +261,7 @@ export class ProviderRelay {
   }
 
   async dispose(): Promise<void> {
+    this.idleStop.disarm()
     this.release()
     if (this.live) {
       // stdin end starts provider-exec's own close ladder; owner death would start the same one.
@@ -293,6 +297,7 @@ export class ProviderRelay {
     const seq = this.spool.nextSeq
     if (this.live) {
       this.pending.observeAgentLine({ seq, line })
+      this.idleStop.observeAgentLine(line)
     }
     this.updateReading()
     this.spool.append(line, bytes)
@@ -305,21 +310,20 @@ export class ProviderRelay {
     if (paused !== this.readingPaused) {
       this.readingPaused = paused
       const { stdout } = this.options.managed.child
-      if (paused) {
-        stdout.pause()
-      } else {
-        stdout.resume()
-      }
+      void (paused ? stdout.pause() : stdout.resume())
     }
   }
 
   private release(): void {
     this.attachment?.release()
     this.attachment = null
+    this.pending.answerHeld()
+    // Answered held requests may free the table that paused stdout.
+    this.updateReading()
   }
 
   private deliver(record: ProviderRelayRecord): void {
-    this.attachment?.sendLine('relayData', record)
+    this.attachment?.sendLine('relayData', this.pending.answered.replayed(record))
   }
 
   private announceExitIfDone(): void {
@@ -341,7 +345,7 @@ export class ProviderRelay {
       type: 'event',
       event: 'relayExit',
       sessionId: this.relayId,
-      payload: this.exitStatus
+      payload: { ...this.exitStatus, stderrTail: this.options.managed.stderrTail() }
     })
     this.exitDelivered ||= sent === true
   }

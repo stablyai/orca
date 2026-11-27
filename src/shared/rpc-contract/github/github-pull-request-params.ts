@@ -19,31 +19,37 @@ export const OptionalPRRefreshReason = lazyZodSchema(() =>
     })
 )
 
-export const PrForBranch = RepoSelector.extend({
-  branch: requiredString('Missing branch'),
-  reason: OptionalPRRefreshReason,
-  userRefresh: z.boolean().optional(),
-  acceptRevalidationOnly: z.boolean().optional(),
-  selected: z.boolean().optional(),
-  linkedPRNumber: z.number().int().positive().nullable().optional(),
-  linkedPRUrl: z.string().max(4096).optional(),
-  fallbackPRNumber: z.number().int().positive().nullable().optional(),
-  acceptMergedFallbackPR: z.boolean().optional(),
-  currentHeadOid: z.string().nullable().optional()
-})
+export const PrForBranch = lazyZodSchema(() =>
+  RepoSelector.extend({
+    branch: requiredString('Missing branch'),
+    reason: OptionalPRRefreshReason,
+    userRefresh: z.boolean().optional(),
+    acceptRevalidationOnly: z.boolean().optional(),
+    selected: z.boolean().optional(),
+    linkedPRNumber: z.number().int().positive().nullable().optional(),
+    linkedPRUrl: z.string().max(4096).optional(),
+    fallbackPRNumber: z.number().int().positive().nullable().optional(),
+    acceptMergedFallbackPR: z.boolean().optional(),
+    currentHeadOid: z.string().nullable().optional()
+  })
+)
 
-export const PullRequest = RepoSelector.extend({
-  prNumber: z.number().int().positive(),
-  noCache: z.boolean().optional(),
-  prRepo: SlugRepo.nullable().optional()
-})
+export const PullRequest = lazyZodSchema(() =>
+  RepoSelector.extend({
+    prNumber: z.number().int().positive(),
+    noCache: z.boolean().optional(),
+    prRepo: SlugRepo.nullable().optional()
+  })
+)
 
-export const PRCommentReaction = RepoSelector.extend({
-  reactionSubjectId: requiredString('Missing reaction subject ID'),
-  content: z.enum(['+1', '-1', 'laugh', 'confused', 'heart', 'hooray', 'rocket', 'eyes']),
-  reacted: z.boolean(),
-  prRepo: SlugRepo.nullable().optional()
-})
+export const PRCommentReaction = lazyZodSchema(() =>
+  RepoSelector.extend({
+    reactionSubjectId: requiredString('Missing reaction subject ID'),
+    content: z.enum(['+1', '-1', 'laugh', 'confused', 'heart', 'hooray', 'rocket', 'eyes']),
+    reacted: z.boolean(),
+    prRepo: SlugRepo.nullable().optional()
+  })
+)
 
 export const PullRequestChecks = lazyZodSchema(() =>
   PullRequest.extend({
@@ -54,13 +60,15 @@ export const PullRequestChecks = lazyZodSchema(() =>
   })
 )
 
-export const PullRequestCheckDetails = RepoSelector.extend({
-  checkRunId: z.number().int().positive().optional(),
-  workflowRunId: z.number().int().positive().optional(),
-  checkName: OptionalString,
-  url: OptionalString.nullable().optional(),
-  prRepo: SlugRepo.nullable().optional()
-})
+export const PullRequestCheckDetails = lazyZodSchema(() =>
+  RepoSelector.extend({
+    checkRunId: z.number().int().positive().optional(),
+    workflowRunId: z.number().int().positive().optional(),
+    checkName: OptionalString,
+    url: OptionalString.nullable().optional(),
+    prRepo: SlugRepo.nullable().optional()
+  })
+)
 
 export const RerunPullRequestChecks = lazyZodSchema(() =>
   PullRequest.extend({
@@ -69,26 +77,32 @@ export const RerunPullRequestChecks = lazyZodSchema(() =>
   })
 )
 
-export const PullRequestFileContents = RepoSelector.extend({
-  prNumber: z.number().int().positive(),
-  prRepo: SlugRepo.nullable().optional(),
-  path: requiredString('Missing file path'),
-  oldPath: OptionalString,
-  status: z.enum(['added', 'removed', 'modified', 'renamed', 'copied', 'changed', 'unchanged']),
-  headSha: requiredString('Missing head SHA'),
-  baseSha: requiredString('Missing base SHA')
-})
+export const PullRequestFileContents = lazyZodSchema(() =>
+  RepoSelector.extend({
+    prNumber: z.number().int().positive(),
+    prRepo: SlugRepo.nullable().optional(),
+    path: requiredString('Missing file path'),
+    oldPath: OptionalString,
+    status: z.enum(['added', 'removed', 'modified', 'renamed', 'copied', 'changed', 'unchanged']),
+    headSha: requiredString('Missing head SHA'),
+    baseSha: requiredString('Missing base SHA')
+  })
+)
 
-export const PullRequestFileViewed = RepoSelector.extend({
-  expectedGhAccount: OptionalGhAccountExpectation,
-  prRepo: SlugRepo.nullable().optional(),
-  pullRequestId: requiredString('Missing pull request ID'),
-  path: requiredString('Missing file path'),
-  viewed: z.boolean()
-})
+export const PullRequestFileViewed = lazyZodSchema(() =>
+  RepoSelector.extend({
+    expectedGhAccount: OptionalGhAccountExpectation,
+    prRepo: SlugRepo.nullable().optional(),
+    pullRequestId: requiredString('Missing pull request ID'),
+    path: requiredString('Missing file path'),
+    viewed: z.boolean()
+  })
+)
 
-export const ReviewThread = RepoSelector.extend({
-  prRepo: SlugRepo.nullable().optional(),
-  threadId: requiredString('Missing thread ID'),
-  resolve: z.boolean()
-})
+export const ReviewThread = lazyZodSchema(() =>
+  RepoSelector.extend({
+    prRepo: SlugRepo.nullable().optional(),
+    threadId: requiredString('Missing thread ID'),
+    resolve: z.boolean()
+  })
+)

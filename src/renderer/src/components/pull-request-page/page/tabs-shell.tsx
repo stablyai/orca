@@ -1,5 +1,5 @@
 import React from 'react'
-import { FileText, ListChecks, LoaderCircle, MessageSquare, RefreshCw } from 'lucide-react'
+import { FileText, ListChecks, MessageSquare, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -28,6 +28,7 @@ import { ChecksPanelLoadingAnnouncement } from '@/components/right-sidebar/check
 import { ConversationTab } from '../conversation/tab'
 import { ChecksTab } from '../checks/tab'
 import { PRFilesCombinedDiffViewer } from '../files/combined-diff-viewer'
+import { PRFilesLoading } from '../files/files-loading'
 
 export function PullRequestPageTabs({
   tab,
@@ -191,9 +192,7 @@ export function PullRequestPageTabs({
 
         <TabsContent value="files" className="mt-0 h-full min-h-0 overflow-hidden">
           {loading && files.length === 0 ? (
-            <div className="flex items-center justify-center py-10">
-              <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-            </div>
+            <PRFilesLoading />
           ) : filesUnavailable && files.length === 0 ? (
             // Why: fetch failed (rate limit/auth/unresolved remote); offer retry instead of implying the PR is empty.
             <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
@@ -207,6 +206,14 @@ export function PullRequestPageTabs({
                 <RefreshCw className="size-3.5" />
                 {t('auto.components.PullRequestPage.filesRetry', 'Retry')}
               </Button>
+            </div>
+          ) : files.length === 0 && !detailsLoaded ? (
+            // Why: no read is running or owed (e.g. no repo route), so nothing confirms the PR changed no files.
+            <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
+              {t(
+                'auto.components.sidebar.worktreeCardPrDisplay.prDetailsUnavailable',
+                'PR details unavailable'
+              )}
             </div>
           ) : files.length === 0 ? (
             <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">

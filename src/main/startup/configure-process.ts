@@ -334,10 +334,7 @@ export function enableMainProcessGpuFeatures(): void {
     return
   }
 
-  if (process.platform === 'darwin') {
-    // Graphite can retain corrupt Metal tiles after idle. Keep this macOS fix unconditional if GPU fallback ever expands beyond win32.
-    app.commandLine.appendSwitch('disable-skia-graphite')
-  }
+  // #50940: Chromium 156 has no Ganesh/GL hardware mode on macOS, so disable-skia-graphite forces software compositing and disables WebGL.
 
   // Each terminal consumes WebGL context capacity; raise the default 16 limit while keeping leaks bounded.
   app.commandLine.appendSwitch('max-active-webgl-contexts', '128')

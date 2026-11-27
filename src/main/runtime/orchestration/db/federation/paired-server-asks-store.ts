@@ -150,6 +150,18 @@ export function listServerAllowances(
     }))
 }
 
+/** The agents here a person always lets this server ask, by id: what this computer names on its
+ *  pulls there, so the server's agents can see whom they may ask. */
+export function listAllowedBotsOfServer(db: OrchestrationDb, serverKey: string): string[] {
+  return db.db
+    .prepare(
+      `SELECT bot_id FROM paired_server_allowances
+       WHERE server_key = ? AND always = 1 ORDER BY created_at, bot_id`
+    )
+    .all(serverKey)
+    .map((row) => String(row.bot_id))
+}
+
 /** Inserts an ask once; a replayed pull finds it and changes nothing. */
 export function holdPairedServerAsk(
   db: OrchestrationDb,

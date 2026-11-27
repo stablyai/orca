@@ -44,7 +44,7 @@ export function countActivityUnread(source: ActivityUnreadCountSource, now = Dat
   }
 
   const { projection } = source.agentStatusByPaneKey
-  for (const [paneKey, entry] of Array.from(source.agentStatusByPaneKey.entries())) {
+  for (const [paneKey, entry] of source.agentStatusByPaneKey.entries()) {
     seenPaneKeys.add(paneKey)
     // Panes with no workspace row have no Activity row to clear.
     if (!projection.rowWorktree(paneKey)) {

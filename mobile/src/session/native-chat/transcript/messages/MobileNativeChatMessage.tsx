@@ -40,16 +40,16 @@ import { MobileNativeChatBackgroundTaskRun } from './MobileNativeChatBackgroundT
 import { withoutBackgroundTaskRows } from '../../../../../../src/shared/native-chat/input/task-lists/native-chat-background-task-row'
 import { ToolRun } from '../tool-results/MobileNativeChatToolRun'
 import type { NativeChatTurnStatus } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
-import { styles } from './mobile-native-chat-message-styles'
+import { stylesSheet } from './mobile-native-chat-message-styles'
 import { MobileNativeChatAgentMessageCard } from '../agent-messages/MobileNativeChatAgentMessageCard'
 import { mobileAutomationRow } from '../MobileAutomationSavedRow'
 import { MobileNativeChatVisualContext } from '../../visual/mobile-native-chat-visual-context'
 import { useMobileNativeChatFullMessage } from '../message-content/MobileNativeChatFullContent'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MobileNativeChatAnswerProse } from '../message-content/MobileNativeChatAnswerProse'
 import { Prose, userProseText } from '../message-content/MobileNativeChatProse'
 import * as Marks from './MobileNativeChatUserMessageMarks'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 function MobileNativeChatMessageImpl({
   message: rowMessage,
@@ -119,7 +119,7 @@ function MobileNativeChatMessageImpl({
   /** A group room draws one time line per turn; otherwise the time line always shows, so the row never shifts when copy appears. */
   withoutMeta?: true
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { shown: message, showFull, recovery } = useMobileNativeChatFullMessage(rowMessage)
   const agentFrom = message.role === 'user' || message.agentStart ? message.from : undefined
@@ -201,7 +201,7 @@ function MobileNativeChatMessageImpl({
       {turnStatusAbove ? null : statusRow}
     </>
   )
-  const botRow = mobileNativeChatBotCardRow(message, rowId, fontScale, foldedIntoRequest)
+  const botRow = mobileNativeChatBotCardRow(message, rowId, fontScale, foldedIntoRequest, styles)
   if (botRow) {
     return botRow
   }
@@ -400,12 +400,7 @@ function MobileNativeChatMessageImpl({
         {isUser ? <Marks.MobileNativeChatUserMessageNotes message={message} /> : null}
         {unsentNotice ? <Text style={styles.unsentNotice}>{unsentNotice}</Text> : null}
         {isChatTurn && !agentFrom && !withoutMeta ? (
-          <MobileNativeChatMessageMeta
-            message={message}
-            rowKey={rowKey ?? message.id}
-            fontScale={fontScale}
-            rewindable={rewindable}
-          />
+          <MobileNativeChatMessageMeta message={message} rewindable={rewindable} />
         ) : null}
       </View>
       {turnStatusAbove ? null : statusRow}

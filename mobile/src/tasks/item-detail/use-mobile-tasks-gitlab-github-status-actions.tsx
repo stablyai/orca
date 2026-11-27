@@ -84,7 +84,7 @@ export function useMobileTasksGitlabGithubStatusActions<
         finish()
       }
     },
-    [claimPublication, client, captureTaskListRefresh, tryBeginMutation]
+    [client, captureTaskListRefresh, tryBeginMutation]
   )
 
   const updateGitHubIssueMetadata = useCallback(

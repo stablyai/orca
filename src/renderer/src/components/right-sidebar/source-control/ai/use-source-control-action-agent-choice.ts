@@ -1,6 +1,5 @@
-import { useAppStateView } from '@/store/retained-views/app-state-view'
 import { buildRouteInputForStatuses } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { readRuntimeStatusesForView } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { useMemo } from 'react'
@@ -42,7 +41,6 @@ export function useSourceControlActionAgentChoice(args: {
   livePick: AgentLaunchSurface | undefined
   terminalOnly?: boolean
 }) {
-  const store = useAppStateView()
   const { recipe } = args
   const worktreeDetectionTarget = useAgentDetectionTargetForWorktree(args.worktreeId ?? null)
   const rows = useMemo(
@@ -102,18 +100,20 @@ export function useSourceControlActionAgentChoice(args: {
       selectedAgent &&
       !isSourceControlAgentDetectedAndEnabled(selectedAgent, detectedAgents, disabledAgents)
     )
-  const route = buildRouteInputForStatuses(store.getState(), readRuntimeStatusesForView(store), {
-    agent: selectedAgent ?? 'claude',
-    workspace: args.worktreeId
-      ? { worktreeId: args.worktreeId, kind: workspaceKindForWorktreeId(args.worktreeId) }
-      : typeof rows.target === 'string'
-        ? { worktreeId: rows.target, kind: workspaceKindForWorktreeId(rows.target) }
-        : rows.target.workspace
-  })
+  const canSaveSurface = useAppStateValueWithHostStatuses(
+    (state, statuses) =>
+      buildRouteInputForStatuses(state, statuses, {
+        agent: selectedAgent ?? 'claude',
+        workspace: args.worktreeId
+          ? { worktreeId: args.worktreeId, kind: workspaceKindForWorktreeId(args.worktreeId) }
+          : typeof rows.target === 'string'
+            ? { worktreeId: rows.target, kind: workspaceKindForWorktreeId(rows.target) }
+            : rows.target.workspace
+      }).hostCapabilities?.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY) === true
+  )
   return {
     observation,
-    canSaveSurface:
-      route.hostCapabilities?.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY) === true,
+    canSaveSurface,
     detectedAgents,
     detecting,
     selectedAgent,

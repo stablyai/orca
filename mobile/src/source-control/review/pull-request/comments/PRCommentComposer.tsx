@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react'
 import { Pressable } from 'react-native'
 import { X } from 'lucide-react-native'
-import { colors } from '../../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { isSubmittableCommentBody } from './pr-comment-actions'
 import { MessageBox } from '../../../../components/composer-input/MessageBox'
-import { composerInputStyles } from '../../../../components/composer-input/composer-input-styles'
+import { composerInputStylesSheet } from '../../../../components/composer-input/composer-input-styles'
 import { useDurableDraftField } from '../../../../drafts/durable-draft-fields'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 type Props = {
   // Share plain-text composer across root comment, reply and edit.
@@ -36,7 +36,8 @@ export function PRCommentComposer({
   autoFocus,
   inline
 }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
   const t = useMobileTranslation()
   const [edited, setEdited] = useState(initialBody ?? '')
   const [kept, setKept] = useDurableDraftField(draftKey, 'body')

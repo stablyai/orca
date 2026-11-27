@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type { ZodType } from 'zod'
 import type { ItsaplanFailure } from '../../../shared/itsaplan/itsaplan-types'
 import {
@@ -38,12 +39,13 @@ const INVALID_ARGS: ItsaplanFailure = {
 
 // Read methods throw (renderer reads the code prefix); mutations return the failure.
 function handleWithSchema<T, R>(
+  ipc: IpcHandleRegistrar,
   channel: string,
   schema: ZodType<T>,
   onInvalid: 'throw' | 'failure',
   run: (args: T) => Promise<R>
 ): void {
-  ipcMain.handle(channel, async (_event, raw: unknown) => {
+  ipc.handle(channel, async (_event, raw: unknown) => {
     const parsed = schema.safeParse(raw)
     if (!parsed.success) {
       if (onInvalid === 'throw') {
@@ -55,17 +57,23 @@ function handleWithSchema<T, R>(
   })
 }
 
-export function registerItsaplanHandlers(): void {
-  handleWithSchema('itsaplan:detectApiUrl', DetectApiUrl, 'failure', itsaplanDetectApiUrl)
-  handleWithSchema('itsaplan:connect', Connect, 'failure', itsaplanConnect)
-  ipcMain.handle('itsaplan:disconnect', async () => itsaplanDisconnect())
-  ipcMain.handle('itsaplan:status', async () => itsaplanStatus())
-  ipcMain.handle('itsaplan:testConnection', async () => itsaplanTestConnection())
-  handleWithSchema('itsaplan:listProjects', ListProjects, 'throw', itsaplanListProjects)
-  handleWithSchema('itsaplan:getProjectMetadata', ProjectRef, 'throw', itsaplanGetProjectMetadata)
-  handleWithSchema('itsaplan:listIssues', ListIssues, 'throw', itsaplanListIssues)
-  handleWithSchema('itsaplan:getIssue', IssueId, 'throw', itsaplanGetIssue)
-  handleWithSchema('itsaplan:createIssue', CreateIssue, 'failure', itsaplanCreateIssue)
-  handleWithSchema('itsaplan:updateIssue', UpdateIssue, 'failure', itsaplanUpdateIssue)
-  handleWithSchema('itsaplan:addComment', AddComment, 'failure', itsaplanAddComment)
+export function registerItsaplanHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  handleWithSchema(ipc, 'itsaplan:detectApiUrl', DetectApiUrl, 'failure', itsaplanDetectApiUrl)
+  handleWithSchema(ipc, 'itsaplan:connect', Connect, 'failure', itsaplanConnect)
+  ipc.handle('itsaplan:disconnect', async () => itsaplanDisconnect())
+  ipc.handle('itsaplan:status', async () => itsaplanStatus())
+  ipc.handle('itsaplan:testConnection', async () => itsaplanTestConnection())
+  handleWithSchema(ipc, 'itsaplan:listProjects', ListProjects, 'throw', itsaplanListProjects)
+  handleWithSchema(
+    ipc,
+    'itsaplan:getProjectMetadata',
+    ProjectRef,
+    'throw',
+    itsaplanGetProjectMetadata
+  )
+  handleWithSchema(ipc, 'itsaplan:listIssues', ListIssues, 'throw', itsaplanListIssues)
+  handleWithSchema(ipc, 'itsaplan:getIssue', IssueId, 'throw', itsaplanGetIssue)
+  handleWithSchema(ipc, 'itsaplan:createIssue', CreateIssue, 'failure', itsaplanCreateIssue)
+  handleWithSchema(ipc, 'itsaplan:updateIssue', UpdateIssue, 'failure', itsaplanUpdateIssue)
+  handleWithSchema(ipc, 'itsaplan:addComment', AddComment, 'failure', itsaplanAddComment)
 }

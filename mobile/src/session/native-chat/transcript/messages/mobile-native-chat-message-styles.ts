@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { feedback, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 
 export const TEXT_SIZE = 17
@@ -11,7 +11,7 @@ export function scaledType(size: number, fontScale: number, leading = 6) {
 }
 export const MONO_SIZE = 12
 
-export const styles = themedStyleSheet(() => ({
+export const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm
@@ -48,7 +48,7 @@ export const styles = themedStyleSheet(() => ({
     minHeight: 32
   },
   reasoningPressed: {
-    opacity: 0.6
+    opacity: feedback.pressedOpacity
   },
   reasoningHeadline: {
     color: colors.textMuted,
@@ -75,6 +75,10 @@ export const styles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6
+  },
+  // 24 pt from a reply's last line to its copy and ⋯ glyphs, which sit 4 pt into their 24 pt boxes.
+  metaReply: {
+    marginTop: spacing.lg + spacing.xs
   },
   // Copy and rewind sit together after the time; each 24 pt box centres a 14 pt glyph, so pulling 5 pt back on
   // both ends keeps the time-to-glyph gap at the meta gap and ends a user row's icons on the bubble's edge.

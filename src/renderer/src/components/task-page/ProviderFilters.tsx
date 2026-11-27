@@ -1,9 +1,9 @@
 import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
-import { TaskPageGitHubFilters } from './github/listing/Filters'
 import { TaskPageLinearFilters } from './linear/Filters'
 import { TaskPageJiraFilters } from './jira/Filters'
 import { TaskPageGitLabFilters } from './gitlab/Filters'
 import { TaskPageItsaplanFilters } from './itsaplan/Filters'
+import { TaskPageListBands } from './ListBands'
 export function TaskPageProviderFilters({
   model
 }: {
@@ -14,13 +14,9 @@ export function TaskPageProviderFilters({
     jiraConnected,
     itsaplanConnected,
     itsaplanCredentialInvalid,
-    taskSource,
-    githubMode
+    taskSource
   } = model
-  return taskSource === 'github' && githubMode === 'items' ? (
-    // Join the filter chrome to the table shell below.
-    <TaskPageGitHubFilters model={model} />
-  ) : taskSource === 'linear' && linearConnected ? (
+  return taskSource === 'linear' && linearConnected ? (
     <TaskPageLinearFilters model={model} />
   ) : taskSource === 'jira' && jiraConnected ? (
     <TaskPageJiraFilters model={model} />
@@ -28,5 +24,7 @@ export function TaskPageProviderFilters({
     <TaskPageGitLabFilters model={model} />
   ) : taskSource === 'itsaplan' && itsaplanConnected && !itsaplanCredentialInvalid ? (
     <TaskPageItsaplanFilters model={model} />
-  ) : null
+  ) : (
+    <TaskPageListBands model={model} />
+  )
 }

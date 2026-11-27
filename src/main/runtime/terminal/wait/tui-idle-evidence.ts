@@ -141,6 +141,8 @@ export type TuiIdleEvaluationInput = {
   readAgentRuleVerdict: () => AgentStateVerdict | null
   /** Whether an overlay on the agent's screen refuses input; null with no rule or no screen. */
   readScreenInputVeto: () => boolean | null
+  /** Reused-pane waits only: Claude's caught-up composer, painted by the running command, holds no text. */
+  readReusableComposer?: () => boolean
   /** Whether the tail rests at a screen where a human must sign in (agy's login menu). */
   readProgramSignInWaitScreen: () => boolean
   /** When the PTY's own current title was observed; null when it has none or no clock. */
@@ -307,6 +309,10 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
       input.readCommandPainted
     )
   ) {
+    return READY_WEAK
+  }
+  // A reused Claude can take a brief at its empty composer while its title still names the wrapper.
+  if (input.record.lastAgentStatus === null && input.readReusableComposer?.()) {
     return READY_WEAK
   }
   return {

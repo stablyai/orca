@@ -4,12 +4,10 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
-  readdirSync,
   readFileSync,
   readlinkSync,
   renameSync,
   rmSync,
-  statSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -19,10 +17,12 @@ import path from 'node:path'
 
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
 import {
+  collectDevBundles,
   DEV_BUNDLE_MARKER_FILENAME,
   getDevBundleProcessTable,
   isDevBundleInUse,
-  selectStaleDevBundleDirs
+  selectStaleDevBundleDirs,
+  touchDevBundle
 } from '../electron-bundle-cache/dev-electron-bundle-cache.mjs'
 import { startDevStorageReclaim } from '../../worktree-storage/dev-storage-reclaim.mjs'
 import {
@@ -164,22 +164,7 @@ function sanitizeMacAppBundleName(value) {
 }
 
 function pruneStaleDevBundles(distDir) {
-  const root = path.dirname(distDir)
-  let bundles
-  try {
-    bundles = readdirSync(root, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => {
-        const dir = path.join(root, entry.name)
-        return {
-          dir,
-          hasMarker: existsSync(path.join(dir, DEV_BUNDLE_MARKER_FILENAME)),
-          mtimeMs: getMtimeMs(dir)
-        }
-      })
-  } catch {
-    return
-  }
+  const bundles = collectDevBundles(repoRoot)
   if (bundles.length <= 1) {
     return
   }
@@ -283,6 +268,8 @@ function prepareMacDevElectronApp() {
     )
   }
 
+  // Touch before the usability check so a sibling sweep cannot delete the bundle mid-check.
+  touchDevBundle(distDir)
   if (copiedAppIsUsable()) {
     pruneStaleDevBundles(distDir)
     process.env.ELECTRON_EXEC_PATH = executablePath
@@ -371,6 +358,7 @@ function prepareMacDevElectronApp() {
   if (signed) {
     writeFileSync(markerPath, expectedMarker, 'utf8')
   }
+  touchDevBundle(distDir)
   pruneStaleDevBundles(distDir)
   process.env.ELECTRON_EXEC_PATH = executablePath
 }
@@ -488,14 +476,6 @@ const electronViteCli =
 const viteCli =
   process.env.ORCA_VITE_CLI ||
   path.join(path.dirname(require.resolve('vite/package.json')), 'bin', 'vite.js')
-
-function getMtimeMs(filePath) {
-  try {
-    return statSync(filePath).mtimeMs
-  } catch {
-    return 0
-  }
-}
 
 function getDevWebClientIndexPath() {
   return path.join(repoRoot, 'out', 'web', 'web-index.html')

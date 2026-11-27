@@ -59,7 +59,12 @@ const GOAL = {
 // The composer box is mocked, as the worker lifetime fixture does.
 function fixture(
   state: Partial<AgentSessionMcpPanelState>,
-  options: { runtime?: 'local' | 'remote'; underGoal?: boolean; manageable?: boolean } = {}
+  options: {
+    runtime?: 'local' | 'remote'
+    underGoal?: boolean
+    manageable?: boolean
+    agentLabel?: string
+  } = {}
 ) {
   return defineFixture({
     width: 640,
@@ -85,6 +90,7 @@ function fixture(
             failure: null,
             ...state
           }}
+          agentLabel={options.agentLabel ?? 'Claude Code'}
           runtime={options.runtime ?? 'local'}
           run={() => {}}
           retry={() => {}}
@@ -160,4 +166,30 @@ export const orcaServers = fixture(
     ]
   },
   { manageable: true }
+)
+
+// Before the first message: the servers its next start gets, under the line saying so.
+export const orcaServersAtRest = fixture(
+  {
+    result: { status: 'not-running' },
+    servers: [
+      server('Linear', 'not-started', { source: 'orca', canToggle: false }),
+      server('Sentry', 'needs-auth', { source: 'orca', canToggle: false }),
+      server('github', 'not-started', { source: 'project', canToggle: false }),
+      server('playwright', 'disabled', { source: 'user', canToggle: false })
+    ]
+  },
+  { manageable: true }
+)
+
+// A running agent that doesn't report how its servers are doing.
+export const unreportedServers = fixture(
+  {
+    servers: [
+      server('Linear', 'unreported', { source: 'orca', canToggle: false }),
+      server('Context7', 'unreported', { source: 'orca', canToggle: false }),
+      server('figma', 'unreported', { source: 'user', canToggle: false })
+    ]
+  },
+  { manageable: true, agentLabel: 'Gemini CLI' }
 )

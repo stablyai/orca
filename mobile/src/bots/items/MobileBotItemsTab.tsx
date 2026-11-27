@@ -32,9 +32,8 @@ import {
   LIST_LEADING_INSET
 } from '../../components/list/ListGroup'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotItemsAllClear } from './MobileBotItemsAllClear'
@@ -89,7 +88,7 @@ export function MobileBotItemsTab({
   client: RpcClient | null
   showToast: (message: string) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { read } = items
   const botName = bot.name
@@ -251,6 +250,7 @@ export function MobileBotItemsTab({
 
 /** A re-read that failed, over the last good list it keeps up. */
 export function ReadFailed({ onRetry }: { onRetry: () => void }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <ListGroup style={styles.failed}>
@@ -282,6 +282,7 @@ export function ItemGroup({
   renderItem: (item: BotItem) => ReactNode
   onCancelAll: (() => void) | null
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [folded, setFolded] = useState(BOT_ITEM_GROUPS_FOLDED_BY_DEFAULT.has(id))
   const [shown, setShown] = useState(BOT_ITEM_GROUP_ROWS)
@@ -343,7 +344,7 @@ export function ItemGroup({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   unseen: {
     width: 6,
     height: 6,

@@ -104,7 +104,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         // Retain normal-buffer scrollback while a TUI is in alt-screen so pre-TUI history remains restorable (#6106).
         // This emulator's retention: a hidden-output reveal repaints the pane from this model.
         const rendered = await controller.serializeBuffer!(ptyId, {
-          scrollbackRows: this.headlessTerminalScrollbackRows
+          scrollbackRows: state.providerOwnsScrollback ? 0 : this.headlessTerminalScrollbackRows
         })
         if (
           this.headlessTerminals.get(ptyId) !== state ||

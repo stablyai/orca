@@ -1,9 +1,9 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { ChevronDown, LoaderCircle, Plus, RefreshCw, X } from 'lucide-react'
+import { useRef } from 'react'
+import { ChevronDown, Plus, Search, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -14,7 +14,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
+import { RailPagePrimaryButton, RailPageRefreshButton } from '@/components/rail-page/RailPageHeader'
+import { RailPageSearch } from '@/components/rail-page/RailPageSearch'
 import { shouldSuppressEnterSubmit } from '@/lib/workspace/creation/new-workspace-enter-guard'
+import { TaskPageListBands } from '../ListBands'
 import { getItsaplanStateTypeOptions } from '../task-page-localized-options'
 import type { ItsaplanAssigneeFilter } from './use-task-page-itsaplan-list-state'
 
@@ -58,8 +68,11 @@ export function TaskPageItsaplanFilters({
     itsaplanLoading,
     refreshItsaplan,
     itsaplanProjectRef,
+    itsaplanProjects,
+    selectItsaplanProject,
     setNewItsaplanIssueOpen
   } = model
+  const inputRef = useRef<HTMLInputElement>(null)
   const stateOptions = getItsaplanStateTypeOptions()
   const members = itsaplanMetadata?.members ?? []
   const labels = itsaplanMetadata?.labels ?? []
@@ -94,160 +107,166 @@ export function TaskPageItsaplanFilters({
     setAppliedItsaplanSearch(value.trim())
   }
   return (
-    <div className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 py-2 shadow-sm">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              <span className="max-w-[180px] truncate">{stateLabel}</span>
-              <ChevronDown className="size-3 text-muted-foreground" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuLabel>
-              {t('auto.components.TaskPage.154b0fa623', 'Status')}
-            </DropdownMenuLabel>
-            {stateOptions.map((option) => (
-              <DropdownMenuCheckboxItem
-                key={option.id}
-                checked={itsaplanStateTypes.includes(option.id)}
-                onSelect={(event) => event.preventDefault()}
-                onCheckedChange={() =>
-                  setItsaplanStateTypes((current) => toggle(current, option.id))
-                }
-              >
-                {option.label}
-              </DropdownMenuCheckboxItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              <span className="max-w-[160px] truncate">{assigneeLabel}</span>
-              <ChevronDown className="size-3 text-muted-foreground" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuRadioGroup
-              value={assigneeFilterValue(itsaplanAssignee)}
-              onValueChange={(value) => setItsaplanAssignee(parseAssigneeFilterValue(value))}
+    <TaskPageListBands
+      model={model}
+      scope={
+        itsaplanProjects?.length ? (
+          <Select value={itsaplanProjectRef ?? undefined} onValueChange={selectItsaplanProject}>
+            <SelectTrigger
+              size="xs"
+              className="max-w-55 min-w-0"
+              aria-label={t('taskProviders.itsaplan.project', 'Project')}
             >
-              <DropdownMenuRadioItem value="me">
-                {t('auto.components.TaskPage.94f0339621', 'Assigned to me')}
-              </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="unassigned">
-                {t('auto.components.TaskPage.42a9160321', 'Unassigned')}
-              </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value={ANYONE}>
-                {t('auto.components.TaskPage.gitlabInvolvementEveryone', 'Everyone')}
-              </DropdownMenuRadioItem>
-              {members.length > 0 ? <DropdownMenuSeparator /> : null}
-              {members.map((member) => (
-                <DropdownMenuRadioItem key={member.userId} value={`user:${member.userId}`}>
-                  <span className="truncate">{member.name}</span>
-                </DropdownMenuRadioItem>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {itsaplanProjects.map((project) => (
+                <SelectItem key={project.ref} value={project.ref}>
+                  {project.key} · {project.name}
+                </SelectItem>
               ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-
-              disabled={labels.length === 0}
-            >
-              <span className="max-w-[140px] truncate">{labelsLabel}</span>
-              <ChevronDown className="size-3 text-muted-foreground" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {labels.map((label) => (
-              <DropdownMenuCheckboxItem
-                key={label.id}
-                checked={itsaplanLabelIds.includes(label.id)}
-                onSelect={(event) => event.preventDefault()}
-                onCheckedChange={() => setItsaplanLabelIds((current) => toggle(current, label.id))}
-              >
-                <span className="truncate">{label.name}</span>
-              </DropdownMenuCheckboxItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <div className="relative min-w-0 flex-1 basis-64">
-          <Input
-            value={itsaplanSearchInput}
-            onChange={(event) => setItsaplanSearchInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (
-                event.key !== 'Enter' ||
-                shouldSuppressEnterSubmit(
-                  { isComposing: event.nativeEvent.isComposing, shiftKey: event.shiftKey },
-                  false
-                )
-              ) {
-                return
-              }
-              event.preventDefault()
-              applySearch(itsaplanSearchInput.trim())
-            }}
-            placeholder={t('taskProviders.itsaplan.searchPlaceholder', 'Search issues...')}
-            density="compact"
-            adornment="trailing"
-            className="h-8"
+            </SelectContent>
+          </Select>
+        ) : null
+      }
+      actions={
+        <>
+          <RailPageRefreshButton
+            label={t('taskProviders.itsaplan.refresh', 'Refresh')}
+            busy={itsaplanLoading}
+            onRefresh={refreshItsaplan}
           />
-          {itsaplanSearchInput ? (
-            <button
-              type="button"
-              aria-label={t('auto.components.TaskPage.b797bdd7c3', 'Clear search')}
-              onClick={() => applySearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
-            >
-              <X className="size-4" />
-            </button>
-          ) : null}
-        </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setNewItsaplanIssueOpen(true)}
-              disabled={!itsaplanProjectRef}
-              aria-label={t('taskProviders.itsaplan.newIssue', 'New issue')}
-              className="size-8"
-            >
-              <Plus className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            {t('taskProviders.itsaplan.newIssue', 'New issue')}
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={refreshItsaplan}
-              disabled={itsaplanLoading}
-              aria-label={t('taskProviders.itsaplan.refresh', 'Refresh')}
-              className="size-8"
-            >
-              {itsaplanLoading ? (
-                <LoaderCircle className="size-4 animate-spin" />
-              ) : (
-                <RefreshCw className="size-4" />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            {t('taskProviders.itsaplan.refresh', 'Refresh')}
-          </TooltipContent>
-        </Tooltip>
-      </div>
-    </div>
+          <RailPagePrimaryButton
+            label={t('common.new', 'New')}
+            aria-label={t('taskProviders.itsaplan.newIssue', 'New issue')}
+            disabled={!itsaplanProjectRef}
+            icon={<Plus className="size-3.5" />}
+            onClick={() => setNewItsaplanIssueOpen(true)}
+          />
+        </>
+      }
+      controls={
+        <>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="toolbar">
+                <span className="max-w-[180px] truncate">{stateLabel}</span>
+                <ChevronDown className="size-3 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuLabel>
+                {t('auto.components.TaskPage.154b0fa623', 'Status')}
+              </DropdownMenuLabel>
+              {stateOptions.map((option) => (
+                <DropdownMenuCheckboxItem
+                  key={option.id}
+                  checked={itsaplanStateTypes.includes(option.id)}
+                  onSelect={(event) => event.preventDefault()}
+                  onCheckedChange={() =>
+                    setItsaplanStateTypes((current) => toggle(current, option.id))
+                  }
+                >
+                  {option.label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="toolbar">
+                <span className="max-w-[160px] truncate">{assigneeLabel}</span>
+                <ChevronDown className="size-3 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuRadioGroup
+                value={assigneeFilterValue(itsaplanAssignee)}
+                onValueChange={(value) => setItsaplanAssignee(parseAssigneeFilterValue(value))}
+              >
+                <DropdownMenuRadioItem value="me">
+                  {t('auto.components.TaskPage.94f0339621', 'Assigned to me')}
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="unassigned">
+                  {t('auto.components.TaskPage.42a9160321', 'Unassigned')}
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value={ANYONE}>
+                  {t('auto.components.TaskPage.gitlabInvolvementEveryone', 'Everyone')}
+                </DropdownMenuRadioItem>
+                {members.length > 0 ? <DropdownMenuSeparator /> : null}
+                {members.map((member) => (
+                  <DropdownMenuRadioItem key={member.userId} value={`user:${member.userId}`}>
+                    <span className="truncate">{member.name}</span>
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="toolbar" disabled={labels.length === 0}>
+                <span className="max-w-[140px] truncate">{labelsLabel}</span>
+                <ChevronDown className="size-3 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {labels.map((label) => (
+                <DropdownMenuCheckboxItem
+                  key={label.id}
+                  checked={itsaplanLabelIds.includes(label.id)}
+                  onSelect={(event) => event.preventDefault()}
+                  onCheckedChange={() =>
+                    setItsaplanLabelIds((current) => toggle(current, label.id))
+                  }
+                >
+                  <span className="truncate">{label.name}</span>
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <RailPageSearch inputRef={inputRef} hasValue={Boolean(itsaplanSearchInput)}>
+            <div className="relative min-w-0 w-full">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                ref={inputRef}
+                value={itsaplanSearchInput}
+                onChange={(event) => setItsaplanSearchInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (
+                    event.key !== 'Enter' ||
+                    shouldSuppressEnterSubmit(
+                      { isComposing: event.nativeEvent.isComposing, shiftKey: event.shiftKey },
+                      false
+                    )
+                  ) {
+                    return
+                  }
+                  event.preventDefault()
+                  applySearch(itsaplanSearchInput.trim())
+                }}
+                placeholder={t('taskProviders.itsaplan.searchPlaceholder', 'Search issues...')}
+                density="compact"
+                surface="background"
+                inset="leadingIcon"
+                adornment={itsaplanSearchInput ? 'trailing' : 'shortcut'}
+              />
+              {itsaplanSearchInput ? (
+                <button
+                  type="button"
+                  aria-label={t('auto.components.TaskPage.b797bdd7c3', 'Clear search')}
+                  onClick={() => {
+                    inputRef.current?.focus({ preventScroll: true })
+                    applySearch('')
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              ) : null}
+            </div>
+          </RailPageSearch>
+        </>
+      }
+    />
   )
 }

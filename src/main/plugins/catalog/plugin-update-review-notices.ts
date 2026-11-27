@@ -1,6 +1,7 @@
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { splitQualifiedPluginKey } from '../../../shared/plugins/catalog/plugin-marketplace'
 import type {
   PluginUpdateHold,
@@ -8,7 +9,7 @@ import type {
 } from '../../../shared/plugins/catalog/plugin-update-policy'
 import { writePluginFileAtomically } from '../installation/plugin-atomic-file-write'
 
-const notifiedSchema = z.record(z.string().max(256), z.string().max(256))
+const notifiedSchema = lazyZodSchema(() => z.record(z.string().max(256), z.string().max(256)))
 
 type PluginUpdateReviewNoticesOptions = {
   pluginsDataDir: string

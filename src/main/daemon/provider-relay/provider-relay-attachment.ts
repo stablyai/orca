@@ -9,6 +9,9 @@ import { isHighSurrogate } from './provider-relay-input'
 
 /** Keeps each event frame well under the stream's line cap even after JSON escaping. */
 const EVENT_PIECE_CHARS = 1024 * 1024
+/** A paused relay asks its client again after this, backing off to the max until it resumes. */
+export const RELAY_ACK_NUDGE_MS = 2_000
+const RELAY_ACK_NUDGE_MAX_MS = 30_000
 
 /** A piece never ends between the halves of a surrogate pair, so each piece encodes as UTF-8. */
 function pieceEnd(line: string, offset: number): number {
@@ -28,7 +31,7 @@ export type ProviderRelayStream = {
   framing?: DaemonStreamFraming
 }
 
-export type ProviderRelayLineEvent = 'relayData' | 'relayPending' | 'relayInitialize'
+export type ProviderRelayLineEvent = 'relayData' | 'relayPending' | 'relayInitialize' | 'relayKept'
 
 /** One client's hold on a relay. Once released (detach or takeover) it sends nothing and waits on nothing. */
 export class ProviderRelayAttachment {
@@ -49,11 +52,14 @@ export class ProviderRelayAttachment {
     return !this.released
   }
 
+  private nudge: ReturnType<typeof setTimeout> | null = null
+
   release(): void {
     if (this.released) {
       return
     }
     this.released = true
+    this.whilePaused(false, () => null)
     this.stream.socket.off('close', this.onClose)
     for (const settle of this.waits) {
       settle()
@@ -92,6 +98,61 @@ export class ProviderRelayAttachment {
       }
     } while (offset < line.length)
     return true
+  }
+
+  /** The initialize answer, kept lines and held requests, as events, so no reply line has to carry
+   *  them; false once released. */
+  async sendPreamble(
+    initializeResult: string | null,
+    kept: ProviderRelayRecord[],
+    pending: ProviderRelayRecord[]
+  ): Promise<boolean> {
+    return (
+      (initializeResult === null ||
+        (await this.sendPieces('relayInitialize', 0, initializeResult))) &&
+      (await this.sendRecords('relayKept', kept)) &&
+      (await this.sendRecords('relayPending', pending))
+    )
+  }
+
+  /** Kept lines or unanswered requests, in seq order; false once released. */
+  async sendRecords(
+    event: ProviderRelayLineEvent,
+    records: ProviderRelayRecord[]
+  ): Promise<boolean> {
+    for (const { seq, line } of records) {
+      if (!(await this.sendPieces(event, seq, line))) {
+        return false
+      }
+    }
+    return true
+  }
+
+  /**
+   * While the relay is paused at its cap the ask goes again, backing off, so an answer that fell
+   * short or went missing never stalls the agent. It stops once the relay resumes or detaches.
+   * `askedSeq` is null when there is nothing to ask.
+   */
+  whilePaused(paused: boolean, askedSeq: () => number | null, delayMs = RELAY_ACK_NUDGE_MS): void {
+    if (!paused || this.released) {
+      if (this.nudge) {
+        clearTimeout(this.nudge)
+        this.nudge = null
+      }
+      return
+    }
+    if (this.nudge) {
+      return
+    }
+    this.nudge = setTimeout(() => {
+      this.nudge = null
+      const seq = askedSeq()
+      if (seq !== null) {
+        this.askForAck(seq)
+      }
+      this.whilePaused(true, askedSeq, Math.min(delayMs * 2, RELAY_ACK_NUDGE_MAX_MS))
+    }, delayMs)
+    this.nudge.unref?.()
   }
 
   askForAck(seq: number): void {

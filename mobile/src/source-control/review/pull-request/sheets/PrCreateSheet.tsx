@@ -1,13 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronsUpDown, Sparkles } from 'lucide-react-native'
-import { colors, pressedStyle, spacing } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { ActivityIndicator, Text, View } from 'react-native'
+import { ChevronsUpDown } from 'lucide-react-native'
+import { spacing } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { triggerError, triggerSuccess } from '../../../../platform/haptics/haptics'
 import { SheetHeader } from '../../../../components/nav-bar/SheetHeader'
-import { SheetPrimaryButton } from '../../../../components/sheets/SheetPrimaryButton'
 import { ListGroup, ListRow } from '../../../../components/list/ListGroup'
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
 import { normalizeHostedReviewHeadRef } from '../../../../../../src/shared/source-control/hosted-review/hosted-review-refs'
@@ -34,9 +33,10 @@ import {
 import { useMobileCommitFailureRecovery } from '../../../commits/use-mobile-commit-failure-recovery'
 import { MobileCommitFailurePanel } from '../../../commits/MobileCommitFailurePanel'
 import type { MobilePrTab } from '../use-mobile-pr-tab'
-import { prSheetStyles as sheetStyles } from '../pr-tab-styles'
+import { prSheetStylesSheet as sheetStylesSheet } from '../pr-tab-styles'
 import { PrBasePicker } from './PrBasePicker'
-import { FieldTextInput } from '../../../../components/composer-input/FieldTextInput'
+import { MessageBox } from '../../../../components/composer-input/MessageBox'
+import { groupFieldStylesSheet } from '../../../../components/composer-input/composer-input-styles'
 import { workspaceDraftRowKey } from '../../../../drafts/durable-draft-rows'
 import {
   updateDurableDraftField,
@@ -72,7 +72,10 @@ function useKeptCreateFields(key: string | null): Fields | null {
 
 // One Create flow for every entry point and all five providers: seed from commits, push if needed, land on the PR tab.
 export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const sheetStyles = useThemedStyles(sheetStylesSheet)
+  const groupFieldStyles = useThemedStyles(groupFieldStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { client, hostId, worktreeId, gitBranch } = tab
   const executionHost = useWorkspaceExecutionHost()
@@ -140,7 +143,7 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
     }
   }, [client, gitBranch, worktreeId])
 
-  const copy = hostedReviewCopy(fields?.provider)
+  const copy = hostedReviewCopy(fields?.provider, t)
   const title = t('pullRequest.createSheet.title', 'Create {{reviewLabel}}', {
     reviewLabel: copy.reviewLabel
   })
@@ -300,6 +303,16 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
           onPress: tab.closeSheet,
           disabled: creating
         }}
+        {...(fields
+          ? {
+              trailing: {
+                label: t('pullRequest.createSheet.create', 'Create'),
+                onPress: () => void create(),
+                busy: creating,
+                disabled: fields.title.trim().length === 0 || !fields.base.trim() || generating
+              }
+            }
+          : {})}
       />
       {!fields ? (
         <View style={styles.loading}>
@@ -318,50 +331,40 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
         </View>
       ) : (
         <View style={sheetStyles.body}>
-          <View style={styles.field}>
-            <Text style={styles.label}>{t('pullRequest.createSheet.titleLabel', 'Title')}</Text>
-            <FieldTextInput
+          <ListGroup>
+            <MessageBox
+              key="title"
               value={fields.title}
-              onChangeText={(value) => update({ title: value })}
+              // A title is one line that wraps, as on GitHub.
+              onChangeText={(value) => update({ title: value.replace(/\n/g, ' ') })}
               // Write with AI rewrites the title too, so it is locked until the answer lands.
               editable={!creating && !generating}
-              multiline
-              style={sheetStyles.field}
+              lines={TITLE_LINES}
+              placeholder={t('pullRequest.createSheet.titleLabel', 'Title')}
               accessibilityLabel={t('pullRequest.createSheet.titleLabel', 'Title')}
+              style={groupFieldStyles.lines}
             />
-          </View>
-          <View style={styles.field}>
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>
-                {t('pullRequest.createSheet.descriptionLabel', 'Description')}
-              </Text>
-              <Pressable
-                onPress={() => void writeWithAi()}
-                disabled={generating || creating}
-                hitSlop={8}
-                accessibilityRole="button"
-                style={({ pressed }) => [styles.aiButton, pressed && pressedStyle]}
-              >
-                {generating ? (
-                  <ActivityIndicator size="small" color={colors.textPrimary} />
-                ) : (
-                  <Sparkles size={13} color={colors.textPrimary} strokeWidth={2.2} />
-                )}
-                <Text style={styles.aiLabel}>
-                  {t('pullRequest.createSheet.writeWithAi', 'Write with AI')}
-                </Text>
-              </Pressable>
-            </View>
-            <FieldTextInput
+            <MessageBox
+              key="body"
               value={fields.body}
               onChangeText={(value) => update({ body: value })}
               editable={!creating && !generating}
-              multiline
-              placeholder={t('pullRequest.createSheet.descriptionPlaceholder', 'Optional')}
-              style={[sheetStyles.field, sheetStyles.multiline]}
+              placeholder={t('pullRequest.createSheet.descriptionLabel', 'Description')}
               accessibilityLabel={t('pullRequest.createSheet.descriptionLabel', 'Description')}
+              style={groupFieldStyles.lines}
             />
-          </View>
+            <ListRow
+              key="ai"
+              title={t('pullRequest.createSheet.writeWithAi', 'Write with AI')}
+              accent
+              accessory={
+                generating ? <ActivityIndicator size="small" color={colors.textSecondary} /> : null
+              }
+              onPress={() => void writeWithAi()}
+              busy={generating}
+              disabled={creating}
+            />
+          </ListGroup>
           <ListGroup>
             <ListRow
               key="base"
@@ -390,23 +393,14 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
           ) : message ? (
             <Text style={message.error ? sheetStyles.error : sheetStyles.note}>{message.text}</Text>
           ) : null}
-          <SheetPrimaryButton
-            label={title}
-            busy={creating}
-            disabled={fields.title.trim().length === 0 || !fields.base.trim() || generating}
-            onPress={() => void create()}
-          />
         </View>
       )}
     </View>
   )
 }
 
-const styles = themedStyleSheet(() => ({
-  loading: { padding: spacing.xl, alignItems: 'center' },
-  field: { gap: 6 },
-  label: { fontSize: 13, fontWeight: '500', color: colors.textSecondary },
-  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  aiButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  aiLabel: { fontSize: 13, fontWeight: '600', color: colors.textPrimary }
+const TITLE_LINES = { min: 1, max: 3 }
+
+const stylesSheet = themedStyleSheet(() => ({
+  loading: { padding: spacing.xl, alignItems: 'center' }
 }))

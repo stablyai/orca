@@ -1,6 +1,18 @@
 import { open } from 'node:fs/promises'
 import path from 'node:path'
-const { lookup }: { lookup: (path: string) => string | false } = require('mime-types')
+
+type MimeLookup = (path: string) => string | false
+let mimeLookupLoader: Promise<MimeLookup> | null = null
+
+function loadMimeLookup(): Promise<MimeLookup> {
+  mimeLookupLoader ??= import('mime-types')
+    .then((mod) => mod.lookup)
+    .catch((error: unknown) => {
+      mimeLookupLoader = null
+      throw error
+    })
+  return mimeLookupLoader
+}
 
 export async function readTaskFile(file: string, directory: string, signal: AbortSignal) {
   signal.throwIfAborted()
@@ -29,6 +41,7 @@ export async function readTaskFile(file: string, directory: string, signal: Abor
 
 export async function prepareV2File(file: string, directory: string, signal: AbortSignal) {
   const { filename, bytes } = await readTaskFile(file, directory, signal)
+  const lookup = await loadMimeLookup()
   const detected = lookup(filename) || 'application/octet-stream'
   const name = path.basename(filename)
   if (detected.startsWith('image/') || detected === 'application/pdf') {
@@ -52,7 +65,7 @@ export async function prepareV1File(file: string, directory: string, signal: Abo
   const text = bytes.toString('utf8')
   const mime = Buffer.from(text, 'utf8').equals(bytes)
     ? 'text/plain'
-    : lookup(filename) || 'application/octet-stream'
+    : (await loadMimeLookup())(filename) || 'application/octet-stream'
   return {
     type: 'file' as const,
     mime,

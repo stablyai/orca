@@ -1,3 +1,4 @@
+import { RailPageScroll } from '@/components/rail-page/RailPage'
 import { toast } from 'sonner'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
@@ -21,7 +22,7 @@ import {
   ipcOrRuntimeTargetForHostId,
   runtimeTargetEnvironmentId
 } from '@/runtime/rpc/targets/runtime-client-target'
-import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import { useEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { getJiraBoardColumnOrderScopeKey } from './boards/task-page-jira-board-column-order'
 export function TaskPageJiraContent({
   model
@@ -73,9 +74,12 @@ export function TaskPageJiraContent({
   const boardTarget = ipcOrRuntimeTargetForHostId(
     jiraTaskSourceContext?.hostId ?? accountBackedTaskSourceHostId
   )
+  const boardTargetContextKey = useEnvironmentRuntimeContextKey(
+    boardTarget ? runtimeTargetEnvironmentId(boardTarget) : null
+  )
   const boardScopeKey = JSON.stringify([
     jiraTaskSourceScopeKey,
-    boardTarget ? getEnvironmentRuntimeContextKey(runtimeTargetEnvironmentId(boardTarget)) : null
+    boardTarget ? boardTargetContextKey : null
   ])
   return taskSource === 'jira' ? (
     !jiraStatusReady ? (
@@ -106,9 +110,9 @@ export function TaskPageJiraContent({
     ) : (
       <div
         style={jiraListGridStyle(jiraColumns)}
-        className="@container flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm"
+        className="@container flex min-h-0 max-h-full flex-col overflow-hidden bg-background"
       >
-        <div className="flex min-h-10 flex-none flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3 py-1">
+        <div className="flex min-h-10 flex-none flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-(--rail-page-gutter) py-1">
           <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
             {t('auto.components.TaskPage.63b2abd3aa', 'Jira issues')}
           </div>
@@ -132,12 +136,7 @@ export function TaskPageJiraContent({
           </div>
         </div>
 
-        <div
-          className="min-h-0 flex-1 overflow-auto scrollbar-sleek"
-          style={{
-            scrollbarGutter: 'stable'
-          }}
-        >
+        <RailPageScroll className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
           {jiraViewMode === 'list' ? (
             <TaskPageJiraSortControls
               columns={jiraColumns}
@@ -168,7 +167,7 @@ export function TaskPageJiraContent({
               {Array.from({
                 length: 6
               }).map((_, i) => (
-                <div key={i} className="px-3 py-3">
+                <div key={i} className="px-(--rail-page-gutter) py-3">
                   <div className="h-4 w-4/5 animate-pulse rounded bg-muted/70" />
                   <div className="mt-2 h-3 w-3/5 animate-pulse rounded bg-muted/60" />
                 </div>
@@ -248,7 +247,7 @@ export function TaskPageJiraContent({
               statusOrder={displayedJiraStatusOrder}
             />
           )}
-        </div>
+        </RailPageScroll>
         <JiraIssueWorkspace
           issue={selectedJiraIssue}
           onUse={handleUseJiraItem}
