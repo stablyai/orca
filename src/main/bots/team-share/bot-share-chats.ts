@@ -5,7 +5,8 @@ import { actsForOwner, shareOwnsChat } from '../../../shared/bots/bot-acts-for'
 import type { Bot } from '../../../shared/bot-types'
 import type { BotChatTreeChat } from '../../../shared/bots/bot-chat-tree'
 import { botChatPerson } from '../../../shared/bots/bot-chat-people'
-import { botSharePersonName } from '../../../shared/bots/bot-home-of'
+import { botSharePersonName, type BotHomeOf } from '../../../shared/bots/bot-home-of'
+import { hostChatId } from '../bot-chat-tree-viewer'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import type { RpcContext } from '../../runtime/rpc/core'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -92,24 +93,23 @@ export function emptyChatReusableBy(
 }
 
 /** The owner's chats, each a teammate's own naming them, by whose Home it falls under: the one place
- *  the desktop and the phone learn whose a chat is. A chat Orca never recorded stays the owner's. */
+ *  the desktop and the phone learn whose a chat is. A chat Orca never recorded stays the owner's.
+ *  `read` is as `viewer` reads it (`viewerChatId`). */
 export function withBotChatPeople<T extends { chats: BotChatTreeChat[] }>(
   sources: BotConversationActsForSources,
   bot: Pick<Bot, 'shares'> | undefined,
-  read: T
+  read: T,
+  viewer: BotHomeOf = 'owner'
 ): T {
   if (!bot?.shares?.some((share) => share.kind === 'account')) {
     return read
   }
-  const homes = botHomesOfChats(
-    sources,
-    bot,
-    read.chats.map((chat) => chat.chatId)
-  )
+  const hostIdOf = (chat: BotChatTreeChat) => hostChatId(chat.chatId, viewer)
+  const homes = botHomesOfChats(sources, bot, read.chats.map(hostIdOf))
   return {
     ...read,
     chats: read.chats.map((chat) => {
-      const of = homes.get(chat.chatId)
+      const of = homes.get(hostIdOf(chat))
       return of && of !== 'owner' ? { ...chat, person: botChatPerson(bot, of.accountId) } : chat
     })
   }

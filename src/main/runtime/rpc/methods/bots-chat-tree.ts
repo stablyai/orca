@@ -44,7 +44,7 @@ export const BOT_CHAT_TREE_METHODS = [
           : { ...params, chatId: hostChatId(params.chatId, viewer.person) }
       const tree = await readSharedBotChatTree(runtime, read)
       const view = botChatTreeForViewer(tree, viewer, { page: params.chatId !== undefined })
-      return withBotChatPeople(runtime, bot, view)
+      return withBotChatPeople(runtime, bot, view, viewer.person)
     }
   }),
   // Each bot's own side chats, pane and title, so its row's line says what any of them is doing.
@@ -68,15 +68,14 @@ export const BOT_CHAT_TREE_METHODS = [
     permission: 'workspace',
     share: SHARE_BY_BOT,
     params: BotChatSearch,
-    handler: async (params, context) =>
-      withBotChatPeople(
+    handler: async (params, context) => {
+      const viewer = chatTreeViewerOf(context)
+      return withBotChatPeople(
         context.runtime,
         context.runtime.bots.list().find((bot) => bot.id === params.botId),
-        await searchBotChats(
-          runtimeBotChatSearchHost(context.runtime),
-          params,
-          chatTreeViewerOf(context)
-        )
+        await searchBotChats(runtimeBotChatSearchHost(context.runtime), params, viewer),
+        viewer.person
       )
+    }
   })
 ]

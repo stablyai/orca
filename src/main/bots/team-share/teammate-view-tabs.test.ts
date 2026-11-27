@@ -5,6 +5,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { BOT_HOME_NAME, ownerHomeName } from '../../../shared/bots/bot-home-of'
 import { HOME_CHAT_TITLE } from '../../../shared/bots/bot-chat-tree-model'
+import { sessionTabPaneKey } from '../../../shared/remote-runtime/session-graph/session-tab-pane-key'
+import type { TabListPerson } from './teammate-rules'
 import { physicalReload } from '../../runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { chatTabCommandsSettled } from '../../runtime/terminal/layout/session-layout-apply.test-fixture'
 import {
@@ -247,4 +249,39 @@ it('finds every chat for a teammate’s search, with Homes named as their tree n
     [O]: ownerHomeName(null)
   })
   expect(await search('owner-desk')).toMatchObject({ [O]: HOME_CHAT_TITLE })
+})
+
+it('marks the host’s unread chats only on an owner’s phone reading its own list', async () => {
+  const r = await rig()
+  await r.reveal('owner-desk', O)
+  await r.reveal('mate-desk', O)
+  const shown = (await r.list('owner-desk')).tabs.find((tab) => tab.sessionId === O)
+  const paneKey = sessionTabPaneKey(
+    z.looseObject({ type: z.string(), id: z.string() }).parse(shown)
+  )
+  // The owner's desktop Agents list holds O unread.
+  r.runtime.setAgentListPublication({
+    publishedAt: 1,
+    verdicts: {
+      [paneKey!]: {
+        listed: true,
+        status: 'done',
+        unread: true,
+        clearable: true,
+        sortAt: 1,
+        title: 'O'
+      }
+    }
+  })
+  const unread = async (deviceId: string, person?: TabListPerson) =>
+    (await r.list(deviceId, undefined, person, 'mobile')).tabs.flatMap((tab) =>
+      tab.unread === true ? [tab.sessionId] : []
+    )
+
+  expect(await unread('owner-phone')).toEqual([O])
+  // Watched lists go as they are; a teammate never gets the owner's marks.
+  expect(await unread('owner-phone', MATE)).toEqual([])
+  expect(await unread('owner-phone', 'owner')).toEqual([])
+  expect(await unread('mate-phone')).toEqual([])
+  expect(await unread('mate-phone', 'owner')).toEqual([])
 })

@@ -137,10 +137,11 @@ export async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityR
   profile = opened.profile
   opened.runtime.botShareDevices = shareDevices()
   const dispatcher = new RpcDispatcher({ runtime: opened.runtime, methods: ALL_RPC_METHODS })
-  const context = (deviceId: string) => ({
+  /** `clientKind`: a desktop's by default; `mobile` as a phone's app calls. */
+  const context = (deviceId: string, clientKind: 'runtime' | 'mobile' = 'runtime') => ({
     pairedDeviceId: deviceId,
     connectionId: `socket-${deviceId}`,
-    clientKind: 'runtime' as const,
+    clientKind,
     // As a desktop's handshake sends them.
     clientCapabilities: remoteRuntimeClientCapabilities(
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
@@ -151,22 +152,42 @@ export async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityR
         ? { ...SCOPE, ...OTHER }
         : { kind: 'runtime-paired' as const, grants: [] }
   })
-  const send = (deviceId: string, method: string, params: unknown) =>
+  const send = (
+    deviceId: string,
+    method: string,
+    params: unknown,
+    clientKind?: 'runtime' | 'mobile'
+  ) =>
     dispatcher.dispatch(
       { id: `${method}-${randomUUID()}`, authToken: '', method, params },
-      context(deviceId)
+      context(deviceId, clientKind)
     )
-  const call = async (deviceId: string, method: string, params: unknown) => {
-    const reply = await send(deviceId, method, params)
+  const call = async (
+    deviceId: string,
+    method: string,
+    params: unknown,
+    clientKind?: 'runtime' | 'mobile'
+  ) => {
+    const reply = await send(deviceId, method, params, clientKind)
     expect(reply, JSON.stringify(reply)).toMatchObject({ ok: true })
     return reply.ok ? reply.result : undefined
   }
   const worktree = `id:${opened.workspace}`
   const home = folderWorkspaceKey(homeFolder)
   /** A device's list of a workspace: its own, or with `person` the list it watches. */
-  const list = async (deviceId: string, where = worktree, person?: TabListPerson) =>
+  const list = async (
+    deviceId: string,
+    where = worktree,
+    person?: TabListPerson,
+    clientKind?: 'runtime' | 'mobile'
+  ) =>
     Tabs.parse(
-      await call(deviceId, 'session.tabs.list', { worktree: where, ...(person ? { person } : {}) })
+      await call(
+        deviceId,
+        'session.tabs.list',
+        { worktree: where, ...(person ? { person } : {}) },
+        clientKind
+      )
     )
   /** A device's live frames: one workspace's stream (its own list, or with `person` the list it
    *  watches), or with `all` its census stream. */

@@ -9,6 +9,8 @@ import { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db
 import { botHomePlaceholderId } from '../../../shared/bots/bot-home-of'
 import { botHomeOfChat, botHomesOfChats } from '../bot-conversation-acts-for'
 import { withBotChatPeople } from './bot-share-chats'
+import { NO_HOME_CHAT_ID } from '../../../shared/bots/bot-chat-tree-model'
+import { OWNER_UNMADE_HOME_ID } from '../bot-chat-tree-viewer'
 
 const SHARES: NonNullable<Bot['shares']> = [
   {
@@ -116,6 +118,26 @@ describe('whose chat each of the owner’s chats is', () => {
       undefined,
       { accountId: 'acc-bo', name: 'bo@x.dev' },
       undefined
+    ])
+  })
+
+  it('reads each chat’s id as its viewer has it: their own Home not made yet is theirs', () => {
+    const read = withBotChatPeople(
+      sources(),
+      { shares: SHARES },
+      {
+        chats: [
+          chat(NO_HOME_CHAT_ID),
+          chat(OWNER_UNMADE_HOME_ID),
+          chat(botHomePlaceholderId('acc-bo'))
+        ]
+      },
+      { accountId: 'acc-alice' }
+    )
+    expect(read.chats.map((entry) => entry.person)).toEqual([
+      { accountId: 'acc-alice', name: 'Alice Park' },
+      undefined,
+      { accountId: 'acc-bo', name: 'bo@x.dev' }
     ])
   })
 

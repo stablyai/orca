@@ -10,6 +10,8 @@ import {
 } from '../../shared/bots/bot-chat-tree-model'
 import type { BotHomeOf } from '../../shared/bots/bot-home-of'
 import { botChatTreeForViewer, OWNER_UNMADE_HOME_ID } from './bot-chat-tree-viewer'
+import { searchBotChats } from './bot-chat-search-host'
+import { makeTestBot } from './bot.test-fixture'
 import {
   botSidebarListedChats,
   withViewerChatTabs
@@ -264,5 +266,33 @@ describe.each([true, false])('the owner’s Home not made yet (Alice’s made: %
       expect(owners).toMatchObject({ origin: 'side', homeOf: 'Jin', title: 'Jin’s Home' })
       expect(alice.workspaceChats['wt-handed']).toBe(OWNER_UNMADE_HOME_ID)
     }
+  })
+})
+
+describe('a teammate’s search of the work under their Home not made yet', () => {
+  it('finds the worker under their own Home row', async () => {
+    const chats = [
+      chat('owner-home', { origin: 'home', title: HOME_CHAT_TITLE, whoseHome: 'owner' }),
+      chat('alice-side', { closed: true })
+    ]
+    const placed = placeBotChatDispatches(
+      chats,
+      [{ ...dispatch('d-alice', 'alice-side', 'wt-alice'), title: 'deploy fix' }],
+      homeOfChat
+    )
+    const tree = buildBotChatTree({ chats, placed, workers: new Map() })
+    const found = await searchBotChats(
+      {
+        bots: () => [makeTestBot({ id: 'bot-1', ...bot })],
+        treeParts: async () => ({ tree, placed, rootOf: (id) => id }),
+        contentMatches: async () => [],
+        dispatchWorkers: async () => []
+      },
+      { botId: 'bot-1', query: 'deploy' },
+      { person: { accountId: ALICE } }
+    )
+    expect(found.chats.map((entry) => [entry.chatId, entry.origin])).toEqual([
+      [NO_HOME_CHAT_ID, 'home']
+    ])
   })
 })
