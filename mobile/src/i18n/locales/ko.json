@@ -3207,18 +3207,14 @@
       "requestFailed": "요청 실패: {{method}}"
     },
     "header": {
-      "workspaceDetailsHint": "워크스페이스의 전체 이름과 위치를 표시합니다",
       "backToWorktrees": "워크트리로 돌아가기",
       "moreActions": "세션 작업 더 보기",
-      "openSourceControl": "소스 제어 열기",
       "reconnectToDesktop": "데스크톱에 다시 연결",
       "showSidebar": "사이드바 표시",
       "terminalTitle": "터미널",
       "terminalLayout": "터미널 레이아웃",
-      "fileExplorer": "파일 탐색기",
       "sourceControl": "소스 제어",
       "itemsNeedYou": "항목, {{count}}개 확인 필요",
-      "newTab": "새 탭",
       "quickCommands": "빠른 명령어",
       "items": "항목",
       "textSize": "텍스트 크기"
@@ -3226,8 +3222,7 @@
     "headerMoreActionsSheet": {
       "agentHistory": "에이전트 기록",
       "agentHistoryHint": "에이전트 세션 탐색 및 재개",
-      "checks": "체크",
-      "checksHint": "PR 체크 열기"
+      "checks": "체크"
     },
     "markdownReader": {
       "changedOnDesktop": "데스크톱에서 변경됨",
@@ -3438,7 +3433,6 @@
     },
     "tabStrip": {
       "checkingCapabilities": "데스크톱에서 지원하는 기능을 확인 중입니다. 잠시 후 다시 시도하세요.",
-      "newTab": "새 탭",
       "quickCommandsUpdateRequired": "빠른 명령을 사용하려면 데스크톱 업데이트가 필요합니다."
     },
     "terminalActionSheetActions": {
@@ -3810,8 +3804,6 @@
       "oneTab": "탭 1개",
       "tabCount": "탭 {{count}}개",
       "actionsHint": "이 탭의 작업을 표시합니다",
-      "next": "다음 탭",
-      "previous": "이전 탭",
       "hint": "모든 탭 표시"
     },
     "textSizeSheet": {
