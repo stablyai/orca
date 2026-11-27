@@ -110,6 +110,12 @@ function returnTargetToComposer(input: AgentSessionRewindInput, itemId: string):
   return true
 }
 
+/** Where a rewind's in-flight guards live; a client that releases hidden views keeps them outside the view. */
+export type AgentSessionRewindGuards = {
+  useGuardRef: <T>(name: string, initial: T) => { current: T }
+  useGuardState: <T>(name: string, initial: T) => [T, (action: React.SetStateAction<T>) => void]
+}
+
 /** One rewind flow for every client; React and the client's wording come in so mobile and desktop share the rules. */
 export function createAgentSessionRewindHook(
   {
@@ -123,8 +129,13 @@ export function createAgentSessionRewindHook(
     typeof React,
     'useCallback' | 'useEffect' | 'useLayoutEffect' | 'useMemo' | 'useRef' | 'useState'
   >,
-  say: (notice: AgentSessionRewindNotice) => string
+  say: (notice: AgentSessionRewindNotice) => string,
+  guards?: AgentSessionRewindGuards
 ) {
+  const { useGuardRef, useGuardState }: AgentSessionRewindGuards = guards ?? {
+    useGuardRef: (_name, initial) => useRef(initial),
+    useGuardState: (_name, initial) => useState(initial)
+  }
   const blockedReason = (input: AgentSessionRewindInput): string | null => {
     const notice = blockedNotice(input)
     return notice ? say(notice) : null
@@ -141,14 +152,14 @@ export function createAgentSessionRewindHook(
     }, [input])
     // Reserve single-flight at the first click; only confirmed sending blocks other actions.
     // Both name their session: one phone view moves between chats, and another chat's rewind holds nothing here.
-    const inFlight = useRef<string | null>(null)
-    const [sending, setSending] = useState<string | null>(null)
-    const [awaiting, setAwaiting] = useState<{
+    const inFlight = useGuardRef<string | null>('in-flight', null)
+    const [sending, setSending] = useGuardState<string | null>('sending', null)
+    const [awaiting, setAwaiting] = useGuardState<{
       sessionId: string
       epoch: string
       sequence?: number
       isCurrent: () => boolean
-    } | null>(null)
+    } | null>('awaiting', null)
     const awaitingReset =
       awaiting?.sessionId === input.sessionId &&
       awaiting.epoch === input.state.epoch &&
@@ -174,7 +185,7 @@ export function createAgentSessionRewindHook(
     }, [awaiting, awaitingReset])
     const pending = sending === input.sessionId || awaitingReset
     const disabledReason = pending ? say('pending') : blockedReason(input)
-    const blockedRef = useRef(false)
+    const blockedRef = useGuardRef('blocked', false)
     useLayoutEffect(() => {
       blockedRef.current = pending
     }, [pending])

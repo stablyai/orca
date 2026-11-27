@@ -8,7 +8,7 @@ import {
   useSyncExternalStore
 } from 'react'
 import {
-  isNativeChatViewTabOpen,
+  isNativeChatViewTabLive,
   NativeChatViewTabContext
 } from '../pane/ownership/native-chat-view-memory'
 import {
@@ -82,7 +82,7 @@ export function useNativeChatAsyncQuestions({
   useNativeChatPaneLifetimeEffect(
     useCallback(
       () => () => {
-        if (viewTab && isNativeChatViewTabOpen(viewTab)) {
+        if (viewTab && isNativeChatViewTabLive(viewTab)) {
           keepAsyncScopeForTab(viewTab.tabId, scopeKey)
         } else {
           dismissals.forgetAsync(scopeKey)

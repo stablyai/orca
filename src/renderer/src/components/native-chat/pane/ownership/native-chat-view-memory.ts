@@ -9,6 +9,7 @@ import {
   type RefObject,
   type SetStateAction
 } from 'react'
+import { useAppStore } from '@/store'
 
 /** The chat tab a releasable view belongs to; null on surfaces that never release their view. */
 export type NativeChatViewTab = { tabId: string; worktreeId: string }
@@ -22,28 +23,24 @@ export const KEPT_TRANSCRIPTS_PER_TAB = 16
 /** Per-prompt view choices (a folded question, an opened detail) are kept for this many prompts per tab. */
 export const KEPT_PROMPT_VIEWS = 8
 
-const openTabs = new Set<string>()
 const records = new Map<string, Map<string, unknown>>()
 const listeners = new Map<string, Set<() => void>>()
-
-/** Layers report the chat tabs they own; a tab stays open here until it is released. */
-export function openNativeChatViewTabs(tabIds: Iterable<string>): void {
-  for (const tabId of tabIds) {
-    openTabs.add(tabId)
-  }
-}
 
 /** A closed tab's view state ends with it. */
 export function releaseNativeChatViewTabs(tabIds: Iterable<string>): void {
   for (const tabId of tabIds) {
-    openTabs.delete(tabId)
     records.delete(tabId)
     listeners.get(tabId)?.forEach((listener) => listener())
   }
 }
 
-export function isNativeChatViewTabOpen(tab: NativeChatViewTab): boolean {
-  return openTabs.has(tab.tabId)
+/** Why the tab store, not a list layers keep: a view's first write can run before its layer's effects. */
+export function isNativeChatViewTabLive(tab: NativeChatViewTab): boolean {
+  return (
+    useAppStore
+      .getState()
+      .unifiedTabsByWorktree[tab.worktreeId]?.some((entry) => entry.id === tab.tabId) === true
+  )
 }
 
 export function readNativeChatViewMemory<T>(tab: NativeChatViewTab, key: string): T | undefined {
@@ -64,7 +61,7 @@ export function writeNativeChatViewMemory(
     if (!record?.delete(key)) {
       return
     }
-  } else if (!openTabs.has(tab.tabId) || record?.get(key) === value) {
+  } else if (record?.get(key) === value || !isNativeChatViewTabLive(tab)) {
     return
   } else if (record) {
     record.delete(key)
@@ -171,7 +168,7 @@ export function useNativeChatViewRef<T>(key: string, initial: T): { current: T }
   return ref
 }
 
-/** A tab-kept value read once when the view mounts; without a key or a tab, nothing is kept. */
+/** A tab-kept value read when the view mounts and when its key changes; without a key or a tab, nothing is kept. */
 export function useNativeChatViewMemory<T>(
   key: string | undefined,
   keepNewest?: number
@@ -180,9 +177,15 @@ export function useNativeChatViewMemory<T>(
   write: (value: T | undefined) => void
 } {
   const tab = useContext(NativeChatViewTabContext)
-  const [saved] = useState(() =>
+  const read = (): T | undefined =>
     tab && key !== undefined ? readNativeChatViewMemory<T>(tab, key) : undefined
-  )
+  // Read again when the key changes: a remounted chat learns its conversation's key only once history loads.
+  const [held, setHeld] = useState(() => ({ key, saved: read() }))
+  let saved = held.saved
+  if (held.key !== key) {
+    saved = read()
+    setHeld({ key, saved })
+  }
   const write = useCallback(
     (value: T | undefined) => {
       if (tab && key !== undefined) {

@@ -1,7 +1,7 @@
 import { Editor, type EditorOptions } from '@tiptap/core'
 import { redoDepth, undoDepth } from '@tiptap/pm/history'
 import {
-  isNativeChatViewTabOpen,
+  isNativeChatViewTabLive,
   type NativeChatViewTab
 } from '../../pane/ownership/native-chat-view-memory'
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react'
@@ -213,7 +213,7 @@ export function NativeChatComposerEditorOwner({
       viewTab
         ? {
             // A closed tab's editors end with it; a released view of an open tab keeps what it can't rebuild.
-            keep: (editor) => isNativeChatViewTabOpen(viewTab) && keepsEditor(editor),
+            keep: (editor) => isNativeChatViewTabLive(viewTab) && keepsEditor(editor),
             done: (editors) => {
               if (editors.size > 0) {
                 keepEditors(viewTab.tabId, editors)

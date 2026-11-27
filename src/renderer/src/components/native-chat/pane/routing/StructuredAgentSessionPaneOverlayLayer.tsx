@@ -14,12 +14,9 @@ import { NativeChatComposerEditorOwner } from '../../composer/editor/native-chat
 import { NativeChatHostOutageOwner } from '../../host-access/native-chat-host-outage-owner'
 import { NativeChatPaneLifetime } from '../ownership/native-chat-pane-lifetime'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
-import {
-  NativeChatViewTabContext,
-  openNativeChatViewTabs
-} from '../ownership/native-chat-view-memory'
+import { NativeChatViewTabContext } from '../ownership/native-chat-view-memory'
 import { chatViewRetention, useRetainedChatViewKey } from './native-chat-view-retention'
-import { watchClosedChatTabs } from './native-chat-closed-tab-release'
+import { sweepClosedChatTabs, trackChatTabs } from './native-chat-closed-tab-release'
 
 const NativeChatView = lazy(() => import('../../NativeChatView'))
 const BotGroupChat = lazy(() =>
@@ -197,9 +194,11 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
     const ownedKey = structuredTabs.map((tab) => tab.id).join('\n')
     const ownedTabIds = useMemo(() => new Set(ownedKey ? ownedKey.split('\n') : []), [ownedKey])
     useLayoutEffect(() => {
-      watchClosedChatTabs(worktreeId)
-      openNativeChatViewTabs(ownedTabIds)
+      trackChatTabs(worktreeId, ownedTabIds)
+      sweepClosedChatTabs()
     }, [ownedTabIds, worktreeId])
+    // A removed workspace unmounts its layer without a tab-set change.
+    useLayoutEffect(() => sweepClosedChatTabs, [])
     // Why: only shown chats and a few recently shown ones stay mounted, so memory doesn't grow with chats visited.
     const retainedKey = useRetainedChatViewKey(ownedTabIds)
     const mountedTabs = [...new Set([...shownKey.split('\n'), ...retainedKey.split('\n')])]

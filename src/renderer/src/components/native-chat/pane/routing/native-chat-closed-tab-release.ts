@@ -12,42 +12,36 @@ export function releaseClosedChatTabs(closed: ReadonlySet<string>): void {
   forgetNativeChatAsyncSkipsForTabs(closed)
 }
 
-// Workspaces whose chat layer mounted: only they can own released state, so only they are compared.
-const watchedWorktrees = new Set<string>()
-let unsubscribe: (() => void) | null = null
+// Chat tabs a layer has owned, by workspace: only they can hold released state.
+const trackedTabs = new Map<string, string>()
+
+export function trackChatTabs(worktreeId: string, tabIds: Iterable<string>): void {
+  for (const tabId of tabIds) {
+    trackedTabs.set(tabId, worktreeId)
+  }
+}
 
 /**
- * Why the store, not the layers: a tab can close while its workspace's layer is unmounted. Each tab-list write
- * compares only watched workspaces, so a title tick costs O(workspaces visited), not O(all workspaces). Tabs never
- * move between workspaces, so a tab gone from its workspace's list is closed.
+ * Releases tracked tabs gone from the tab store, including ones closed while their workspace's layer was unmounted.
+ * Why layers call it as they mount, unmount or change tabs, not on store writes: title and status writes are frequent
+ * and touch tab lists; a sweep costs O(tracked tabs) per user-driven layer change and nothing per write.
  */
-export function watchClosedChatTabs(worktreeId: string): void {
-  watchedWorktrees.add(worktreeId)
-  unsubscribe ??= useAppStore.subscribe((state, previous) => {
-    const next = state.unifiedTabsByWorktree
-    const before = previous.unifiedTabsByWorktree
-    if (next === before) {
-      return
+export function sweepClosedChatTabs(): void {
+  const byWorktree = useAppStore.getState().unifiedTabsByWorktree
+  const live = new Map<string, Set<string>>()
+  const closed = new Set<string>()
+  for (const [tabId, worktreeId] of trackedTabs) {
+    let ids = live.get(worktreeId)
+    if (!ids) {
+      ids = new Set(byWorktree[worktreeId]?.map((tab) => tab.id))
+      live.set(worktreeId, ids)
     }
-    const closed = new Set<string>()
-    for (const id of watchedWorktrees) {
-      const was = before[id]
-      const now = next[id]
-      if (was === now || !was) {
-        continue
-      }
-      const live = new Set(now?.map((tab) => tab.id))
-      for (const tab of was) {
-        if (!live.has(tab.id)) {
-          closed.add(tab.id)
-        }
-      }
-      if (!now) {
-        watchedWorktrees.delete(id)
-      }
+    if (!ids.has(tabId)) {
+      closed.add(tabId)
     }
-    if (closed.size > 0) {
-      releaseClosedChatTabs(closed)
-    }
-  })
+  }
+  if (closed.size > 0) {
+    closed.forEach((tabId) => trackedTabs.delete(tabId))
+    releaseClosedChatTabs(closed)
+  }
 }
