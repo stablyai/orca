@@ -1858,7 +1858,12 @@
       "directionPad": "КРЕСТОВИНА",
       "showDirectionPad": "Показывать крестовину",
       "showDirectionPadDescription": "Закрепить крестовину на боковой панели. Если она выключена, на панели отображаются отдельные клавиши со стрелками.",
-      "showShortcut": "Показать сочетание {{label}}"
+      "showShortcut": "Показать сочетание {{label}}",
+      "shortcutRows": "Ряды быстрых клавиш",
+      "shortcutRowsDescription": "Разместить встроенные клавиши в 1–6 рядов на панели терминала",
+      "decreaseRows": "Уменьшить число рядов быстрых клавиш",
+      "increaseRows": "Увеличить число рядов быстрых клавиш",
+      "rowHeader": "Ряд {{row}}"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Использовать сброс лимитов?",
@@ -3221,7 +3226,10 @@
       "dismissKeyboard": "Скрыть клавиатуру",
       "sendKey": "Отправить {{label}}",
       "typeCharacter": "Ввести {{character}}",
+      "control": "Control",
       "interrupt": "Прервать работу терминала",
+      "alt": "Alt",
+      "shift": "Shift",
       "keysModeLabel": "Режим клавиш: ввод сразу отправляется в терминал. Переключиться в режим сообщений",
       "messageModeLabel": "Режим сообщений: напишите, затем отправьте. Переключиться в режим клавиш",
       "moreKeys": "Другие клавиши и действия",
@@ -3232,9 +3240,8 @@
       "pasteFromClipboard": "Вставить из буфера обмена",
       "paste": "Вставить",
       "addCustomShortcut": "Добавить пользовательское сочетание клавиш",
-      "control": "Control",
-      "alt": "Alt",
-      "shift": "Shift"
+      "collapseShortcutRows": "Свернуть ряды быстрых клавиш",
+      "expandShortcutRows": "Развернуть ряды быстрых клавиш"
     },
     "activeContent": {
       "createTab": "Создать вкладку",

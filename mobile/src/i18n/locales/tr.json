@@ -1756,7 +1756,12 @@
       "directionPad": "YÖN TUŞ TAKIMI",
       "showDirectionPad": "Yön tuş takımını göster",
       "showDirectionPadDescription": "Ok takımını yan çubuğa sabitleyin. Kapalıyken çubukta ayrı ok tuşları listelenir.",
-      "showShortcut": "{{label}} kısayolunu göster"
+      "showShortcut": "{{label}} kısayolunu göster",
+      "shortcutRows": "Kısayol Satırları",
+      "shortcutRowsDescription": "Yerleşik tuşları terminal çubuğunda 1 ila 6 satır halinde yerleştir",
+      "decreaseRows": "Kısayol satırlarını azalt",
+      "increaseRows": "Kısayol satırlarını artır",
+      "rowHeader": "{{row}}. Satır"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Hız sınırı sıfırlama hakkı kullanılsın mı?",
@@ -3045,7 +3050,10 @@
       "dismissKeyboard": "Klavyeyi gizle",
       "sendKey": "{{label}} gönder",
       "typeCharacter": "{{character}} yaz",
+      "control": "Control",
       "interrupt": "Terminali kesintiye uğrat",
+      "alt": "Alt",
+      "shift": "Shift",
       "keysModeLabel": "Tuş modu: yazılanlar doğrudan terminale gider. Mesaj moduna geç",
       "messageModeLabel": "Mesaj modu: yazın, ardından gönderin. Tuş moduna geç",
       "moreKeys": "Diğer tuşlar ve işlemler",
@@ -3056,9 +3064,8 @@
       "pasteFromClipboard": "Panodan yapıştır",
       "paste": "Yapıştır",
       "addCustomShortcut": "Özel kısayol ekle",
-      "control": "Control",
-      "alt": "Alt",
-      "shift": "Shift"
+      "collapseShortcutRows": "Kısayol satırlarını daralt",
+      "expandShortcutRows": "Kısayol satırlarını genişlet"
     },
     "activeContent": {
       "createTab": "Sekme Oluştur",
