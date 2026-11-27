@@ -58,7 +58,9 @@ export function sharedProviderRelayChatDropped(chatKey: string): void {
 /** Before a chat is deleted, each shared integration ends its kept run; false refuses the delete. */
 export async function stopSharedProviderRelayRuns(record: AgentSessionRecord): Promise<boolean> {
   const stopped = await Promise.all(
-    [...sharedAgents.values()].map(({ stop }) => stop?.(record).catch(() => false) ?? true)
+    [...sharedAgents.values()].map(
+      ({ stop }) => stop?.(record).catch(() => false) ?? Promise.resolve(true)
+    )
   )
   return stopped.every(Boolean)
 }
