@@ -21499,7 +21499,6 @@
       "linear-issue-attribute-filter-dropdowns": {
         "removeFilter": "Remover filtro de {{value0}}",
         "teamRequired": "Selecione uma equipe para carregar status, responsáveis e rótulos para este espaço de trabalho.",
-        "filters": "Filtros",
         "allWorkspacesTitle": "Selecione um espaço de trabalho",
         "allWorkspacesBody": "Os filtros de status, responsável e rótulo usam IDs de um único espaço de trabalho do Linear. Escolha um espaço de trabalho para filtrar por esses atributos.",
         "clearAll": "Limpar todos os filtros",

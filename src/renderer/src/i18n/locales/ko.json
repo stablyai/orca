@@ -19359,7 +19359,6 @@
       "linear-issue-attribute-filter-dropdowns": {
         "removeFilter": "{{value0}} 필터 제거",
         "teamRequired": "이 워크스페이스의 상태, 담당자, 라벨을 로드하려면 팀을 선택하세요.",
-        "filters": "필터",
         "allWorkspacesTitle": "워크스페이스 선택",
         "allWorkspacesBody": "상태, 담당자, 라벨 필터는 단일 Linear 워크스페이스의 ID를 사용합니다. 해당 속성으로 필터링할 워크스페이스 하나를 선택하세요.",
         "clearAll": "모든 필터 지우기",

@@ -19807,7 +19807,6 @@
       "linear-issue-attribute-filter-dropdowns": {
         "removeFilter": "移除 {{value0}} 篩選器",
         "teamRequired": "選擇一個團隊以載入此工作區的狀態、負責人和標籤。",
-        "filters": "篩選器",
         "allWorkspacesTitle": "選擇一個工作區",
         "allWorkspacesBody": "狀態、負責人和標籤篩選器使用單一 Linear 工作區的 ID。請選擇一個工作區以依這些屬性進行篩選。",
         "clearAll": "清除所有篩選器",

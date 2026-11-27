@@ -19147,7 +19147,6 @@
       "linear-issue-attribute-filter-dropdowns": {
         "removeFilter": "{{value0}} フィルターを解除",
         "teamRequired": "このワークスペースのステータス、担当者、ラベルを読み込むにはチームを選択してください。",
-        "filters": "フィルター",
         "allWorkspacesTitle": "ワークスペースを選択",
         "allWorkspacesBody": "ステータス、担当者、ラベルのフィルターは単一の Linear ワークスペースのIDを使用します。フィルタリングするワークスペースを選択してください。",
         "clearAll": "すべてのフィルターをクリア",

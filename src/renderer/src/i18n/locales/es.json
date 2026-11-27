@@ -19644,7 +19644,6 @@
       "linear-issue-attribute-filter-dropdowns": {
         "removeFilter": "Eliminar filtro de {{value0}}",
         "teamRequired": "Selecciona un equipo para cargar el estado, asignatarios y etiquetas de este espacio de trabajo.",
-        "filters": "Filtros",
         "allWorkspacesTitle": "Selecciona un espacio de trabajo",
         "allWorkspacesBody": "Los filtros de estado, asignatario y etiquetas usan IDs de un solo espacio de trabajo de Linear. Elige un espacio de trabajo para filtrar por esos atributos.",
         "clearAll": "Limpiar todos los filtros",
