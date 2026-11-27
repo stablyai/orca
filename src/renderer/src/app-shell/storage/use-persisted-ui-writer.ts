@@ -78,7 +78,9 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
       }
       changed = hostAndOtherLocalChanges
     }
-    const fields = PERSISTED_UI_WRITE_BASELINE_FIELDS.filter((field) => Object.hasOwn(changed, field))
+    const fields = PERSISTED_UI_WRITE_BASELINE_FIELDS.filter((field) =>
+      Object.hasOwn(changed, field)
+    )
     if (fields.length === 0) {
       if (baseline && marks) {
         try {

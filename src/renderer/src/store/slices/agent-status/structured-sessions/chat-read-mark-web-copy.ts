@@ -3,6 +3,7 @@ import {
   chatPaneKeySessionId
 } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { SessionTabsPublicationEpochHistory } from '@/runtime/web-session-tabs-sync/state'
 import {
   CHAT_READ_MARK_FIELDS,
   commitWebChatReadMarkCopy,
@@ -276,7 +277,7 @@ export function retireWebChatReadMarkWorkspace(
   environmentId: string,
   worktreeId: string,
   runtimeId: string | undefined,
-  trackingRecord: object | undefined,
+  trackingRecord: SessionTabsPublicationEpochHistory | undefined,
   readState: () => CopyState,
   censusMember: boolean
 ): CopyPatch | undefined {

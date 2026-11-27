@@ -22,7 +22,10 @@ export function hydrateWorkspaceFilters(
   ui: PersistedUIState,
   s: Pick<AppState, 'agentsVisibleHostIds' | 'agentsFilterRepoIds'>,
   validRepoIds: ReadonlySet<string>,
-  { persistedFilterRepoIds, persistedAgentsFilterRepoIds }: {
+  {
+    persistedFilterRepoIds,
+    persistedAgentsFilterRepoIds
+  }: {
     persistedFilterRepoIds: string[]
     persistedAgentsFilterRepoIds: string[]
   },

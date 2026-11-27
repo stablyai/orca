@@ -274,11 +274,11 @@ it('shares the tab walk on a fresh array and releases the receipt and fallback a
   const unmatchedTab = { ...CHAT_TAB, id: 'another-tab', sessionId: 'another-session' }
   let rowsRead = 0
   const tabs = new Proxy([unmatchedTab], {
-    get: (target, key) => {
+    get: (target, key: PropertyKey) => {
       if (key === '0') {
         rowsRead += 1
       }
-      return Reflect.get(target, key)
+      return target[key as keyof typeof target]
     }
   })
   marks.frame('w1', tabs)
@@ -289,11 +289,11 @@ it('shares the tab walk on a fresh array and releases the receipt and fallback a
   marks.census('w1', 'w2')
   let streamRowsRead = 0
   const updatedTabs = new Proxy([{ ...unmatchedTab, title: 'Updated title' }], {
-    get: (target, key) => {
+    get: (target, key: PropertyKey) => {
       if (key === '0' || key === '1') {
         streamRowsRead += 1
       }
-      return Reflect.get(target, key)
+      return target[key as keyof typeof target]
     }
   })
   const snapshot: RuntimeMobileSessionTabsResult = {
