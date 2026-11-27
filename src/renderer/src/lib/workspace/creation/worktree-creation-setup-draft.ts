@@ -6,6 +6,17 @@ import type { CreateWorktreeArgs } from '../../../../../shared/worktree/create-t
 type StartupPrompt = { prompt: string; expiry?: number }
 
 const startupPrompts = new Map<string, StartupPrompt>()
+let unsubscribeSetupGate: (() => void) | undefined
+
+export function installWorktreeCreationSetupGateListener(): void {
+  unsubscribeSetupGate ??= window.api.worktrees.onCreateProgress?.((data) => {
+    if (data.phase === 'startup-gate-settled' && data.creationId) {
+      settleWorktreeCreationSetupGate(data.creationId, data.blockReason)
+    }
+  })
+}
+
+import.meta.hot?.dispose(() => unsubscribeSetupGate?.())
 
 export async function createLocalWorktreeWithStartupDraft(
   args: CreateWorktreeArgs,
@@ -43,7 +54,7 @@ export async function createLocalWorktreeWithStartupDraft(
   }
 }
 
-export function settleWorktreeCreationSetupGate(
+function settleWorktreeCreationSetupGate(
   creationId: string,
   blockReason: AgentProgramBlockReason | undefined
 ): void {

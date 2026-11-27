@@ -30,6 +30,7 @@ import { registerBrowserClientPageGuestMessageHandler } from './components/brows
 import { handleGuestWindowCloseMessage } from './components/browser-pane/host-guest/lifecycle/browser-page-window-close'
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
+import { installWorktreeCreationSetupGateListener } from './lib/workspace/creation/worktree-creation-setup-draft'
 import { applyWindowMaterialToDocument } from './app-shell/appearance/window-material-runtime'
 import {
   trackPageFocusLossForTerminalIme,
@@ -46,6 +47,7 @@ installTypingLatencyDiagnostic()
 installFocusedHostGestureWake()
 installAppKeyboardRouter()
 installAutomationHostDiagnostic()
+installWorktreeCreationSetupGateListener()
 // Track from startup: a browser page can take focus before the lazy terminal chunk mounts.
 trackPageFocusLossForTerminalIme()
 trackWindowActivationForTerminalDragRegions()

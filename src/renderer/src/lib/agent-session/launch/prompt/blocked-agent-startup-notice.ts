@@ -1,5 +1,5 @@
 import { XIcon } from 'lucide-react'
-import { createElement, useLayoutEffect, useSyncExternalStore } from 'react'
+import { createElement, useEffect, useLayoutEffect, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AgentProgramBlockReason } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -11,9 +11,11 @@ const BLOCKED_STARTUP_DRAFTS_TOAST_ID = 'blocked-startup-drafts'
 const MAX_BLOCKED_STARTUP_DRAFTS = 3
 type StartupDraft = { prompt: string }
 type StartupDraftPreview = { reason: AgentProgramBlockReason; preview: string }
-type BlockedStartupDraft = StartupDraft & StartupDraftPreview
+type BlockedStartupDraft = StartupDraftPreview & { id: number }
 
 let blockedStartupDrafts: readonly BlockedStartupDraft[] = []
+const startupDraftTexts = new Map<number, string>()
+let nextDraftId = 0
 const draftListeners = new Set<() => void>()
 let copyingDraft = false
 let draftNoticeMounted = false
@@ -51,16 +53,18 @@ export function notifyBlockedAgentStartup<Draft extends StartupDraft>(
 
   if (typeof request === 'object') {
     const { prompt } = request
-    setStartupDrafts(
-      [{ reason, prompt, preview: startupPromptPreview(prompt) }, ...blockedStartupDrafts].slice(
-        0,
-        MAX_BLOCKED_STARTUP_DRAFTS
-      )
-    )
+    const id = nextDraftId++
+    const drafts = [{ id, reason, preview: startupPromptPreview(prompt) }, ...blockedStartupDrafts]
+    const evicted = drafts.length > MAX_BLOCKED_STARTUP_DRAFTS ? drafts.pop() : undefined
+    if (evicted) {
+      startupDraftTexts.delete(evicted.id)
+    }
+    startupDraftTexts.set(id, prompt)
+    setStartupDrafts(drafts)
     if (draftNoticeMounted) {
       dismissBlockedStartupDraftNotice()
     } else {
-      showBlockedStartupDraftNotice()
+      restoreBlockedStartupDraftNotice()
     }
   } else if (reason !== 'unbuildable') {
     toast.message(blockedStartupTitle(reason), request ? copyDroppedTextAction(request) : undefined)
@@ -178,15 +182,13 @@ function BlockedStartupDraftNotice(): ReturnType<typeof createElement> | null {
     }
     return () => {
       draftNoticeMounted = false
-      if (dismissingDraftNotice) {
-        // Recreate after Sonner removes the old card so this id returns at the front of the stack.
-        queueMicrotask(() => {
-          if (!draftNoticeMounted && dismissingDraftNotice) {
-            dismissingDraftNotice = false
-            showBlockedStartupDraftNotice()
-          }
-        })
-      }
+      // Recreate after Sonner removes the old card so this id returns at the front of the stack.
+      queueMicrotask(() => {
+        if (!draftNoticeMounted) {
+          dismissingDraftNotice = false
+          restoreBlockedStartupDraftNotice()
+        }
+      })
     }
   }, [])
   const draft = drafts[0]
@@ -195,10 +197,10 @@ function BlockedStartupDraftNotice(): ReturnType<typeof createElement> | null {
   }
   const moreCount = drafts.length - 1
   // Sonner measures the card on mount. Reserve room for the drafts this card advances through.
-  const sizingDrafts = drafts.map(({ reason, preview }, index) =>
+  const sizingDrafts = drafts.map(({ id, reason, preview }) =>
     createElement(
       'div',
-      { key: index, className: 'invisible col-start-1 row-start-1', 'aria-hidden': true },
+      { key: id, className: 'invisible col-start-1 row-start-1', 'aria-hidden': true },
       createElement(BlockedStartupDraftText, { reason, preview, moreCount })
     )
   )
@@ -212,8 +214,8 @@ function BlockedStartupDraftNotice(): ReturnType<typeof createElement> | null {
         'aria-label': translate('auto.components.ui.dialog.f26c4baeda', 'Close'),
         'data-close-button': true,
         onClick: () => {
-          if (blockedStartupDrafts[0] === draft) {
-            removeStartupDraft(draft)
+          if (blockedStartupDrafts[0]?.id === draft.id) {
+            removeStartupDraft(draft.id)
           }
         }
       },
@@ -241,8 +243,8 @@ function BlockedStartupDraftNotice(): ReturnType<typeof createElement> | null {
         'data-button': true,
         'data-action': true,
         onClick: () => {
-          if (blockedStartupDrafts[0] === draft) {
-            void copyStartupDraft(draft)
+          if (blockedStartupDrafts[0]?.id === draft.id) {
+            void copyStartupDraft(draft.id)
           }
         }
       },
@@ -251,8 +253,13 @@ function BlockedStartupDraftNotice(): ReturnType<typeof createElement> | null {
   )
 }
 
-function showBlockedStartupDraftNotice(): void {
-  if (blockedStartupDrafts.length === 0 || dismissingDraftNotice) {
+export function RestoreBlockedStartupDraftNotice(): null {
+  useEffect(restoreBlockedStartupDraftNotice, [])
+  return null
+}
+
+export function restoreBlockedStartupDraftNotice(): void {
+  if (blockedStartupDrafts.length === 0 || draftNoticeMounted || dismissingDraftNotice) {
     return
   }
   toast.message(createElement(BlockedStartupDraftNotice), {
@@ -271,30 +278,35 @@ function dismissBlockedStartupDraftNotice(): void {
   }
 }
 
-function removeStartupDraft(draft: BlockedStartupDraft): void {
-  const drafts = blockedStartupDrafts.filter((queuedDraft) => queuedDraft !== draft)
+function removeStartupDraft(id: number): void {
+  const drafts = blockedStartupDrafts.filter((draft) => draft.id !== id)
   if (drafts.length === blockedStartupDrafts.length) {
     return
   }
+  startupDraftTexts.delete(id)
   setStartupDrafts(drafts)
   if (drafts.length === 0) {
     dismissBlockedStartupDraftNotice()
   }
 }
 
-async function copyStartupDraft(draft: BlockedStartupDraft): Promise<void> {
+async function copyStartupDraft(id: number): Promise<void> {
   if (copyingDraft) {
+    return
+  }
+  const prompt = startupDraftTexts.get(id)
+  if (prompt === undefined) {
     return
   }
   copyingDraft = true
   try {
-    await window.api.ui.writeClipboardText(draft.prompt)
+    await window.api.ui.writeClipboardText(prompt)
   } catch {
     return
   } finally {
     copyingDraft = false
   }
-  removeStartupDraft(draft)
+  removeStartupDraft(id)
 }
 
 export function copyDroppedTextAction(text: string): {

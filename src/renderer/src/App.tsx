@@ -43,6 +43,7 @@ import { PlainSshTerminalPanels } from './components/plain-ssh-terminal/PlainSsh
 import { PluginShotReplayMount } from './components/plugins/view/PluginShotReplayMount'
 import { AddToChatPointMenuHost } from './components/native-chat/selection-quotes/AddToChatPointMenuHost'
 import { installActiveWorktreeRemovalSuccessor } from './lib/workspace/activation/active-worktree-removal-successor'
+import { RestoreBlockedStartupDraftNotice } from './lib/agent-session/launch/prompt/blocked-agent-startup-notice'
 import { useAppStore } from './store'
 
 function App(): React.JSX.Element {
@@ -122,7 +123,10 @@ function App(): React.JSX.Element {
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
         {createPortal(
-          <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />,
+          <>
+            <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
+            <RestoreBlockedStartupDraftNotice />
+          </>,
           document.body
         )}
         <PlainSshTerminalPanels />

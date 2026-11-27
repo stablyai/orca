@@ -72,7 +72,7 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     const freshLaunch = session.paneStartup?.freshAgentLaunch
     const draft =
       session.startupDraftPrompt ??
-      (freshLaunch?.promptDelivery === 'draft' ? freshLaunch.prompt : undefined)
+      (awaitSetupGate || freshLaunch?.promptDelivery === 'draft' ? freshLaunch?.prompt : undefined)
     notifyBlockedAgentStartup(
       reason,
       draft?.trim()
