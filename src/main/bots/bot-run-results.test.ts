@@ -118,3 +118,50 @@ describe('a result posted into the thread its automation was made in', () => {
     ])
   })
 })
+
+describe('a result posted into its thread when the chat that answers it was gone', () => {
+  it('still posts the copy named besides the thread', async () => {
+    const replies: unknown[] = []
+    const posts: unknown[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial fixture; the code under test reads only these fields
+    const deps = {
+      cloudSignedOut: () => false,
+      turnForOf: async () => 'owner',
+      replyInThread: (...args: unknown[]) => {
+        replies.push(args[2])
+        return Promise.resolve({ ok: true, value: {} })
+      },
+      postAsBot: (_bot: unknown, body: unknown) => {
+        posts.push(body)
+        return Promise.resolve({ ok: true, value: undefined })
+      }
+    } as unknown as BotRunDeliveryDependencies
+    const conversation = { source: 'slack', externalId: 'T1:C1:1.2' } as const
+    const copyTo = { channel: 'C9', label: '#news' } as const
+    const bot = {
+      botId: 'b1',
+      runsIn: 'chat',
+      resultsTo: copyTo,
+      originThread: { ...conversation, place: '#design', sessionId: 'thread-chat' }
+    } as const
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial fixture; the code under test reads only these fields
+    const completion = await deliverBotRunResult(deps, {
+      automation: { id: 'a1', name: 'Redo the review', dtstart: 1, bot },
+      run: { id: 'r1', trigger: 'scheduled' },
+      bot: { id: 'b1', name: 'Ranger' },
+      target: { runsIn: 'new', resultsTo: 'thread', threadPost: conversation, copyTo },
+      sessionId: 'run-conv',
+      ended: { outcome: 'success', message: 'Redone.' }
+    } as unknown as BotRunResult)
+    expect(completion.error).toBeUndefined()
+    expect(replies).toEqual([
+      '_From the automation “Redo the review”, created in this thread._\n\nRedone.'
+    ])
+    expect(posts).toEqual([
+      expect.objectContaining({
+        channelId: 'C9',
+        text: '_From the automation “Redo the review”, created in the Slack thread in #design._\n\nRedone.'
+      })
+    ])
+  })
+})

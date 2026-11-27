@@ -25,7 +25,9 @@ import { CONNECTOR_LEAVE_THREAD_METHOD } from '../connector-leave-thread'
 import { splitSlackHtmlReply } from '../../../../../shared/connectors/slack-html-reply'
 import type { ConnectorCloudFeature } from '../../../../../shared/connector-cloud-features'
 import { botOfSession } from '../../../../bots/bot-session-tabs'
-import { notInAThread, runOriginThread } from '../../../../bots/bot-run-reply-place'
+import { liveRunThreadPost, notInAThread } from '../../../../bots/bot-run-reply-place'
+import type { ReplyTarget } from '../../../../external-conversations/external-conversation-types'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 
 export function requireSeam(
   runtime: Pick<OrcaRuntimeService, 'getExternalConversationSeam'>
@@ -53,11 +55,31 @@ export const CONNECTOR_METHODS = [
         botIdOfSession: (id: string) => botOfSession(context.runtime.bots, id)?.id
       }
       const callerSession = 'sessionId' in params ? params.sessionId : undefined
-      // A run that posts its result into the thread it was made in replies there as it works.
-      const origin = !linked && callerSession ? runOriginThread(runs, callerSession) : null
-      const target =
+      // A run that posts its result into a thread from its own conversation replies there as it
+      // works, only from that run's own chat.
+      const post =
+        !linked && callerSession
+          ? liveRunThreadPost(
+              callerSession,
+              sessionCallerOf(context.orchestrationCaller)?.sessionId,
+              runs.botIdOfSession
+            )
+          : null
+      const poster =
+        post && context.runtime.bots.enabled()
+          ? context.runtime.bots.list().find((entry) => entry.id === post.botId)
+          : undefined
+      const target: ReplyTarget | null =
         linked ??
-        (origin && { key: origin.key, turnId: Date.now(), worktreeId: '', place: origin.place })
+        (post && poster
+          ? {
+              key: post.conversation,
+              turnId: Date.now(),
+              worktreeId: folderWorkspaceKey(poster.folderWorkspaceId),
+              bot: { kind: 'bot' as const, botId: poster.id },
+              place: post.place
+            }
+          : null)
       if (!target) {
         // A run's own conversation is in no thread: say where its final message goes instead.
         throw notInAThread(runs, callerSession)
@@ -87,8 +109,11 @@ export const CONNECTOR_METHODS = [
       const cloud = context.runtime.getConnectorCloud()
       // Slack shows a whole page as an .html file; a caller that asked resends it with the page attached.
       const features = cloud?.cloudFeatures()
+      // A run posting into a thread from its own conversation replies in text only: a page as a
+      // file needs the linked conversation the file actions read.
       if (
         params.pagesAsFiles &&
+        linked &&
         conversation.source === 'slack' &&
         'sessionId' in params &&
         context.runtime.bots.enabled() &&

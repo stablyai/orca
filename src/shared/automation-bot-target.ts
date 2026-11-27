@@ -29,8 +29,20 @@ export type AutomationOriginThread = {
   source: ConnectorSource
   externalId: string
   place?: string
-  /** The bot's chat that answers the thread, where its runs go while it takes mail. */
-  sessionId: string
+  /** The bot's chat that answers the thread, where its runs go while it takes mail. Absent on
+   *  targets saved before Orca kept it: there the chat it continues with toConversation stands in
+   *  (originChatOf). */
+  sessionId?: string
+}
+
+/** The chat that answers the thread an automation was made in, if Orca knows it. */
+export function originChatOf(
+  target: Pick<AutomationBotTarget, 'originThread' | 'chat'> | undefined
+): string | undefined {
+  return (
+    target?.originThread?.sessionId ??
+    (target?.originThread && target.chat?.toConversation ? target.chat.sessionId : undefined)
+  )
 }
 
 /** The bot an automation runs as: its folder, agent and preamble replace the project target. */

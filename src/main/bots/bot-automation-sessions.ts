@@ -122,7 +122,13 @@ export function botAutomationSessions(
       chatThatTookIt(await deps.chats.sendToSession(bot.id, sessionId, text, run)),
     sendToChat: async (bot, text, run) =>
       chatThatTookIt(await deps.chats.sendToChat(bot.id, text, undefined, run)),
-    takesMail: async (bot, chatId) => (await deps.chatTakingMail(bot, chatId)) !== null
+    takesMail: async (bot, chatId) => (await deps.chatTakingMail(bot, chatId)) !== null,
+    sendToOpenChat: async (bot, chatId, text, run) => {
+      const chat = await deps.chatTakingMail(bot, chatId)
+      return chat
+        ? chatThatTookIt(await deps.chats.sendToSession(bot.id, chat.sessionId, text, run))
+        : null
+    }
   }
 }
 

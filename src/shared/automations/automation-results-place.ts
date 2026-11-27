@@ -106,3 +106,15 @@ export function automationResultsSentence(target: ResultsTarget): string {
   })
   return `Your final message ${places.join(', and a copy ')}.`
 }
+
+/** The sentence for one run: run by hand, a thread's run is in no thread, so its result stays in
+ *  its conversation. */
+export function runResultsSentence(
+  target: ResultsTarget,
+  trigger: 'scheduled' | 'manual' | 'event'
+): string {
+  const manualThread = target.resultsTo === 'thread' && trigger === 'manual'
+  return automationResultsSentence(
+    manualThread ? { ...target, resultsTo: 'none', originThread: undefined } : target
+  )
+}

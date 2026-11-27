@@ -3,8 +3,8 @@ import { NOT_IN_A_THREAD, notInAThread, type RunReplySources } from './bot-run-r
 
 const sources: RunReplySources = {
   listAutomationRuns: () => [
-    { automationId: 'old', chatSessionId: 'run-chat', status: 'completed' },
-    { automationId: 'a1', chatSessionId: 'run-chat', status: 'dispatched' }
+    { automationId: 'old', chatSessionId: 'run-chat', status: 'completed', trigger: 'scheduled' },
+    { automationId: 'a1', chatSessionId: 'run-chat', status: 'dispatched', trigger: 'scheduled' }
   ],
   showAutomation: (id) => {
     if (id !== 'a1') {

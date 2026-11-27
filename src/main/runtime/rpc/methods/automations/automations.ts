@@ -17,6 +17,8 @@ import { LOOK_AROUND_REFUSAL } from '../../../../bots/bot-look-around-policy'
 import { automationForClient, readsGoogleRules } from '../../google-rules-for-client'
 import { targetInCallerChat } from './runs-in-caller-chat'
 import { creatorThreadOf } from './creator-thread'
+import { sessionCallerOf } from '../../../orchestration/addressing/orchestration-caller-identity'
+import { sameSession } from '../../../../bots/bot-turn-for'
 import { originThreadNote } from '../../../../automations/bot-automation-origin-thread'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import { onceClaimed } from '../../../../../shared/automation-once'
@@ -67,10 +69,19 @@ function firedWaits(
 function notesOf(
   asked: Automation['bot'],
   saved: Automation['bot'],
-  runsInAsked: boolean
+  given: { runsIn: boolean; resultsTo: boolean }
 ): { notes?: string[] } {
-  const note = asked ? originThreadNote(asked, saved, runsInAsked) : null
+  const note = asked ? originThreadNote(asked, saved, given) : null
   return note ? { notes: [note] } : {}
+}
+
+/** The bot target saved before an edit, to tell which choices the edit made; undefined if unread. */
+function savedBotTarget(context: RpcContext, id: string): Automation['bot'] {
+  try {
+    return context.runtime.showAutomation(id).bot
+  } catch {
+    return undefined
+  }
 }
 
 /** A look-around run only reads, so it can't make or change automations. */
@@ -128,10 +139,13 @@ export const AUTOMATION_METHODS = [
         params.bot && runsInDefaulted
           ? await targetInCallerChat(context.runtime, caller, params.bot, Boolean(params.once))
           : params.bot
-      // A thread's turn made it: the host routes it to answer there once its places are refs.
-      const originThread = inCaller
-        ? await creatorThreadOf(context.runtime, caller, inCaller.botId)
-        : null
+      // A thread's turn made it: the host routes it to answer there once its places are refs. Only
+      // the chat Orca verified sent the request can give an automation its thread.
+      const verified = sessionCallerOf(context.orchestrationCaller)?.sessionId
+      const originThread =
+        inCaller && caller && verified !== undefined && sameSession(verified, caller)
+          ? await creatorThreadOf(context.runtime, caller, inCaller.botId)
+          : null
       const bot = inCaller && originThread ? { ...inCaller, originThread } : inCaller
       const { plugin } = context
       const input = { ...params, bot }
@@ -148,7 +162,7 @@ export const AUTOMATION_METHODS = [
       return {
         automation: automationForClient(automation, context),
         // Older clients ignore it; the CLI prints it under the saved automation.
-        ...notesOf(params.bot, automation.bot, !runsInDefaulted)
+        ...notesOf(params.bot, automation.bot, { runsIn: !runsInDefaulted, resultsTo: true })
       }
     }
   }),
@@ -158,6 +172,7 @@ export const AUTOMATION_METHODS = [
     params: AutomationUpdate,
     handler: async (params, context) => {
       refuseFromLookAround(params.callerSessionId, context)
+      const before = params.updates.bot ? savedBotTarget(context, params.id) : undefined
       const automation = await context.runtime.updateAutomation(params.id, params.updates, {
         expectedOwner: mutationOwner(params.id, params.expectedOwner, context),
         destination: params.destination,
@@ -167,7 +182,16 @@ export const AUTOMATION_METHODS = [
       recordAutomationSavedCard(caller, 'updated', automation)
       return {
         automation: automationForClient(automation, context),
-        ...(params.updates.bot ? notesOf(params.updates.bot, automation.bot, true) : {})
+        ...(params.updates.bot
+          ? notesOf(params.updates.bot, automation.bot, {
+              // An edit sends the whole target: only what changed was asked for.
+              runsIn:
+                params.updates.bot.runsIn !== before?.runsIn ||
+                params.updates.bot.chat?.sessionId !== before?.chat?.sessionId,
+              resultsTo:
+                JSON.stringify(params.updates.bot.resultsTo) !== JSON.stringify(before?.resultsTo)
+            })
+          : {})
       }
     }
   }),

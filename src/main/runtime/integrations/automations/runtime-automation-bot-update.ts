@@ -5,6 +5,7 @@ import type {
   AutomationBotTarget,
   AutomationUpdateInput
 } from '../../../../shared/automations/automation-definition'
+import { originChatOf } from '../../../../shared/automation-bot-target'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { botAutomationSetup } from '../../../../shared/bots/bot-agent-setup'
 import { withPatchPlaceRefs } from '../../../automations/bot-automation-place-refs'
@@ -45,7 +46,11 @@ export async function botAutomationCreateRules(
     input.on
   )
   const rules = bot ? await withTriggerPeople(lookups.triggerPeople(bot), input.on) : input.on
-  const inChat = await withCheckedBotChat(input.bot, bot, lookups.botChat)
+  // The chat a thread's automation runs in was Orca's choice: closed before the save, the thread
+  // still gets the answer (inOriginThread), so it isn't refused here. A chat named by id still is.
+  const ownChat =
+    input.bot?.chat !== undefined && input.bot.chat.sessionId === originChatOf(input.bot)
+  const inChat = ownChat ? input.bot : await withCheckedBotChat(input.bot, bot, lookups.botChat)
   const placed = bot
     ? await withPatchPlaceRefs(lookups.placeRefs(), bot.id, { on: rules, bot: inChat })
     : {}
@@ -60,13 +65,13 @@ async function inOriginThread(
   target: AutomationBotTarget | undefined,
   hasEvents: boolean
 ): Promise<AutomationBotTarget | undefined> {
-  const thread = target?.originThread
-  if (!target || !thread || !bot) {
+  const chatId = originChatOf(target)
+  if (!target?.originThread || !bot) {
     return target
   }
   // The chat is looked up only when the target would run there.
   const originChat =
-    hasEvents || target.agentSetup ? undefined : await lookups.botChat(bot, thread.sessionId)
+    hasEvents || target.agentSetup || !chatId ? undefined : await lookups.botChat(bot, chatId)
   return routeToOriginThread(target, { hasEvents, originChat })
 }
 
@@ -106,13 +111,16 @@ export async function patchBotAutomationUpdate(
     patch,
     await withPatchPlaceRefs(lookups.placeRefs(), current.bot.botId, patch, current)
   )
-  // An edit of where it runs or answers is routed as on create.
-  patch.bot &&= await inOriginThread(
-    lookups,
-    bot,
-    patch.bot,
-    Boolean((patch.on ?? current.on)?.length)
-  )
+  // An edit of where it runs or answers, or of whether events start it, is routed as on create.
+  const hasEvents = Boolean((patch.on ?? current.on)?.length)
+  if (patch.bot) {
+    patch.bot = await inOriginThread(lookups, bot, patch.bot, hasEvents)
+  } else if (patch.on !== undefined && current.bot.originThread) {
+    const routed = await inOriginThread(lookups, bot, current.bot, hasEvents)
+    if (JSON.stringify(routed) !== JSON.stringify(current.bot)) {
+      patch.bot = routed
+    }
+  }
 }
 
 /** Clients can't send the thread an automation was made in, so an edit keeps the saved one. */

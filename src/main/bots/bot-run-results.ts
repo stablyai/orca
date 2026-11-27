@@ -41,16 +41,11 @@ import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent
 import { ANSWERED_TOGETHER_NOTICE } from '../../shared/automations/history/automation-run-answered-together'
 import * as resultNote from './bot-run-result-note'
 import { writeStructuredAgentSessionOrcaNote } from '../native-chat/agent-session-wire/structured-agent-session-orca-note'
-import { resultPlaceValue } from '../automations/bot-automation-place-refs'
-import { runtimeRunStartLine, withProvenance } from './bot-run-result-provenance'
+import { withProvenance } from './bot-run-result-provenance'
+import { noteNotices, POST_COPY, postToPlace } from './bot-run-place-post'
 import { watchBotTurnEnds, type BotRunUnavailable, type BotTurnEnd } from './bot-run-turn-watch'
 import { orcaSignInServer } from './orca-sign-in-server'
-import {
-  hostNotSignedIn,
-  orcaCloudNeedsSignIn,
-  serverSignInSteps,
-  type OrcaSignInServer
-} from '../../shared/bots/host-orca-sign-in'
+import { orcaCloudNeedsSignIn, type OrcaSignInServer } from '../../shared/bots/host-orca-sign-in'
 
 export type BotRunCompletion = Awaited<NonNullable<AutomationLaunch['completion']>>
 
@@ -87,6 +82,9 @@ export type BotRunResult = {
   target: Pick<AutomationBotTarget, 'runsIn' | 'resultsTo' | 'letBotReact'> & {
     /** A run that answers in its event's thread without taking it: its result is posted there. */
     threadPost?: ConversationKey
+    /** A channel or issue that also gets the result: the copy named besides a thread whose chat
+     *  was gone when the run started. */
+    copyTo?: Extract<AutomationBotTarget['resultsTo'], object>
   }
   /** The conversation the run went to. */
   sessionId: string
@@ -116,14 +114,6 @@ function runSender(sessionId: string, name: string): AgentMessageSource {
 const COPY = {
   failed: (outcome: string) => `The bot's turn ended without finishing (${outcome}).`,
   chatResult: (automation: string, message: string) => `Result of "${automation}":\n\n${message}`,
-  cloudOff: "Orca Cloud isn't connected, so the result wasn't posted.",
-  signedOut: (place: string, server: OrcaSignInServer, botName: string) => {
-    const steps = serverSignInSteps(server, botName, 'owner')
-    return steps
-      ? `Not posted to ${place}. ${hostNotSignedIn(server)}. ${steps}`
-      : `Not posted to ${place}: this computer isn't signed in to Orca Cloud.`
-  },
-  postFailed: "The result couldn't be posted.",
   chatFailed: "The result couldn't be sent to the bot's Chat.",
   notInThread:
     "Orca Cloud didn't link this event to a thread, so the result stayed in this run's conversation.",
@@ -183,7 +173,10 @@ export async function deliverBotRunResult(
     return { ...completed, error: COPY.notInThread }
   }
   if (message && !isQuietBotResult(message) && resultsTo === 'thread' && target.threadPost) {
-    const into = automation.bot?.originThread?.externalId === target.threadPost.externalId
+    const origin = automation.bot?.originThread
+    const into =
+      origin?.source === target.threadPost.source &&
+      origin.externalId === target.threadPost.externalId
     const words = into ? withProvenance(message, automation, true) : message
     const text = capAnswer(words, CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes)
     const posted = await deps.replyInThread(
@@ -193,10 +186,11 @@ export async function deliverBotRunResult(
       await deps.turnForOf(result.sessionId)
     )
     if (!posted?.ok) {
-      return { ...completed, error: posted ? COPY.postFailed : COPY.cloudOff }
+      return { ...completed, error: posted ? POST_COPY.postFailed : POST_COPY.cloudOff }
     }
     await noteNotices(deps, result, posted.value.notices)
-    return completed
+    const copyError = target.copyTo && (await postToPlace(deps, result, target.copyTo, message))
+    return copyError ? { ...completed, error: copyError } : completed
   }
   // A run in the Chat already left its result there; one linked to its event's thread posts it there.
   if (
@@ -224,55 +218,8 @@ export async function deliverBotRunResult(
       return { ...completed, error: COPY.chatFailed }
     }
   }
-  const words = withProvenance(message, automation)
-  const text = capAnswer(words, CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes)
-  const postId = result.run.id
-  // The ref where the host saved one; the id or key where it saved only that.
-  const place = resultPlaceValue(resultsTo)
-  // Said where the result shows, not only in run history afterwards.
-  if (deps.cloudSignedOut()) {
-    const error = COPY.signedOut(
-      'channel' in resultsTo ? 'Slack' : 'Linear',
-      deps.signInServer?.(),
-      bot.name
-    )
-    await deps
-      .noteToRun(result.sessionId, `result-not-posted:${result.run.id}`, error)
-      .catch((noteError: unknown) =>
-        console.warn('[bots] could not note an unposted result in its run', noteError)
-      )
-    return { ...completed, error }
-  }
-  const turnFor = 'channel' in resultsTo ? await deps.turnForOf(result.sessionId) : undefined
-  const posted = await deps.postAsBot(
-    bot,
-    resultsTo.ref
-      ? { postId, ref: resultsTo.ref, text, ...(turnFor ? { turnFor } : {}) }
-      : 'channel' in resultsTo
-        ? { postId, channelId: place, text, ...(turnFor ? { turnFor } : {}) }
-        : { postId, issue: place, text }
-  )
-  if (!posted?.ok) {
-    return { ...completed, error: posted ? COPY.postFailed : COPY.cloudOff }
-  }
-  await noteNotices(deps, result, posted.value?.notices)
-  return completed
-}
-
-// Why the result can't wake an Orca bot it mentions, said in the run where it shows.
-async function noteNotices(
-  deps: BotRunDeliveryDependencies,
-  result: BotRunResult,
-  notices: readonly string[] | undefined
-): Promise<void> {
-  if (!notices?.length) {
-    return
-  }
-  await deps
-    .noteToRun(result.sessionId, `result-notices:${result.run.id}`, notices.join('\n'))
-    .catch((noteError: unknown) =>
-      console.warn('[bots] could not note a result’s notices in its run', noteError)
-    )
+  const error = await postToPlace(deps, result, resultsTo, message)
+  return error ? { ...completed, error } : completed
 }
 
 export function runtimeBotRunRefusals(
@@ -296,7 +243,6 @@ export function runtimeBotRunResults(runtime: OrcaRuntimeService): BotRunResults
         )
       }
     },
-    announce: runtimeRunStartLine(runtime),
     deliver: (result) =>
       deliverBotRunResult(
         {

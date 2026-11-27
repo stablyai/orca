@@ -157,7 +157,7 @@ function parseRunsIn(raw: string | undefined, fallback: AutomationBotRunsIn): Ru
   throw new RuntimeClientError('invalid_argument', '--runs-in must be new, chat or chat:<id>')
 }
 
-function parseResultsTo(raw: string | undefined): AutomationBotResultsTo | undefined {
+export function parseResultsTo(raw: string | undefined): AutomationBotResultsTo | undefined {
   if (raw === undefined || raw === 'chat' || raw === 'none' || raw === 'thread') {
     return raw
   }
@@ -165,7 +165,10 @@ function parseResultsTo(raw: string | undefined): AutomationBotResultsTo | undef
   const place = rest.join(':').trim()
   // An id or key in its one spelling; the host looks a #name, link or ref up.
   if (place && kind === 'channel') {
-    return { channel: legacyPlaceOf('slack', place) ?? place }
+    // A pasted link keeps its workspace for the host to look up; anything else in its one spelling.
+    return {
+      channel: /^https?:\/\//i.test(place) ? place : (legacyPlaceOf('slack', place) ?? place)
+    }
   }
   if (place && kind === 'linear') {
     return { linearIssue: place }

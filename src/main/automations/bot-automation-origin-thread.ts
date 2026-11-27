@@ -1,9 +1,10 @@
 // An automation a bot's turn makes while it answers a thread answers under that thread: the person
 // asked there, so its result belongs there, never as a new post beside it in the same channel.
 // Decided once its places are refs, on create and on every edit of its target.
-import type {
-  AutomationBotTarget,
-  AutomationOriginThread
+import {
+  originChatOf,
+  type AutomationBotTarget,
+  type AutomationOriginThread
 } from '../../shared/automation-bot-target'
 import { originThreadText } from '../../shared/automations/automation-results-place'
 import { isRefOf, legacyPlaceOf } from '../../shared/connector-place-names'
@@ -26,7 +27,11 @@ export function namesThreadChannel(place: ResultChannel, thread: AutomationOrigi
 }
 
 /** Results sent somewhere else by name go there, not to the thread. */
-function sentElsewhere(target: AutomationBotTarget, thread: AutomationOriginThread): boolean {
+function sentElsewhere(
+  target: AutomationBotTarget,
+  thread: AutomationOriginThread,
+  originChat: string | undefined
+): boolean {
   const { resultsTo } = target
   if (resultsTo === 'none') {
     return true
@@ -39,7 +44,7 @@ function sentElsewhere(target: AutomationBotTarget, thread: AutomationOriginThre
     resultsTo === 'chat' &&
     target.runsIn === 'chat' &&
     target.chat !== undefined &&
-    target.chat.sessionId !== thread.sessionId
+    target.chat.sessionId !== originChat
   )
 }
 
@@ -59,16 +64,16 @@ export function routeToOriginThread(
   }
 ): AutomationBotTarget {
   const thread = target.originThread
-  if (!thread || options.hasEvents || sentElsewhere(target, thread)) {
+  const originChat = originChatOf(target)
+  if (!thread || options.hasEvents || sentElsewhere(target, thread, originChat)) {
     return target
   }
-  const otherChat =
-    target.runsIn === 'chat' && target.chat && target.chat.sessionId !== thread.sessionId
+  const otherChat = target.runsIn === 'chat' && target.chat && target.chat.sessionId !== originChat
   if (target.agentSetup || otherChat) {
     return { ...target, resultsTo: 'thread' }
   }
-  // That chat is gone, so a new conversation posts into the thread.
-  if (options.originChat === null) {
+  // That chat is gone, or Orca never knew it: a new conversation posts into the thread.
+  if (!originChat || options.originChat === null) {
     const { chat: _gone, ...rest } = target
     return { ...rest, runsIn: 'new', resultsTo: 'thread' }
   }
@@ -77,12 +82,14 @@ export function routeToOriginThread(
     ...target,
     runsIn: 'chat',
     chat: {
-      sessionId: thread.sessionId,
+      sessionId: originChat,
       ...(title ? { title } : {}),
       homeIfGone: true,
       toConversation: true
     },
-    resultsTo: 'chat'
+    resultsTo: 'chat',
+    // Kept on the thread, so later edits and runs find the chat without the chat field.
+    originThread: { ...thread, sessionId: originChat }
   }
 }
 
@@ -90,7 +97,7 @@ export function routeToOriginThread(
 export function originThreadNote(
   asked: AutomationBotTarget,
   saved: AutomationBotTarget | undefined,
-  runsInAsked: boolean
+  given: { runsIn: boolean; resultsTo: boolean }
 ): string | null {
   const thread = saved?.originThread
   const inThread =
@@ -100,11 +107,15 @@ export function originThreadNote(
     return null
   }
   const flags = [
-    ...(runsInAsked &&
+    ...(given.runsIn &&
     (asked.runsIn !== saved.runsIn || asked.chat?.sessionId !== saved.chat?.sessionId)
       ? ['--runs-in']
       : []),
-    ...(typeof asked.resultsTo === 'object' ? ['--results-to'] : [])
+    ...(given.resultsTo &&
+    typeof asked.resultsTo === 'object' &&
+    typeof saved.resultsTo !== 'object'
+      ? ['--results-to']
+      : [])
   ]
   if (flags.length === 0) {
     return null
