@@ -1,7 +1,7 @@
 import {
   applyNativeChatSessionOptionSettingsMutation,
   resolveStructuredLaunchSeedOptions
-} from '../../../../../../../shared/native-chat/input/native-chat-session-option-defaults'
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { PersistedNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 
 /** Replay every host mutation in order, exactly as the runtime does. */

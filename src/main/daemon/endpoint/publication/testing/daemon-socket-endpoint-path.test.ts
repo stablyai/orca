@@ -11,7 +11,7 @@ import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { setAppEnvironment } from '../../../../../shared/app-environment'
+import { setAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import { DaemonClient } from '../../../transport/client/daemon-client'
 import { checkDaemonHealthWithCoverage } from '../../../health/daemon-health'
 import { createOutOfProcessLauncher } from '../../../launch/daemon-out-of-process-launcher'
@@ -21,7 +21,8 @@ import { getDaemonSocketPath, getDaemonTokenPath } from '../../../launch/daemon-
 import { ensureDaemonSocketDir, shortDaemonSocketDir } from '../daemon-socket-endpoint-path'
 
 describe.skipIf(process.platform === 'win32')('relocated endpoint binds (#17840)', () => {
-  const uid = process.getuid!()
+  // Skipped describes still run their body during collection, and win32 has no getuid.
+  const uid = process.getuid?.() ?? 0
   let base = ''
   let runtimeDir = ''
 

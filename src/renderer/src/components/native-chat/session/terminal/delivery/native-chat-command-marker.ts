@@ -1,7 +1,7 @@
 // Slash-command feedback and transcript boundaries stay separate from optimistic user-send pruning.
 
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
-import { setBoundedScopeCacheEntry } from '../../../../../../../shared/native-chat/native-chat-scope-cache'
+import { setBoundedScopeCacheEntry } from '../../../../../../../shared/native-chat/input/composer/native-chat-scope-cache'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -55,11 +55,6 @@ export function appendCommandMarkerCache(
   // Bound scope keys as well as per-scope markers; changing session ids would otherwise grow the cache forever.
   setBoundedScopeCacheEntry(commandMarkerCache, key, next)
   return [...next]
-}
-
-export function clearCommandMarkerCacheForTests(): void {
-  commandMarkerCache.clear()
-  commandMarkerCounter = 0
 }
 
 function isClearCommand(command: string): boolean {

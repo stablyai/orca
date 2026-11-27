@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { isTerminalLeafId } from '../../workspace-layout/stable-pane-id'
 import { SleepCommand, StartPaneCommand, WakeCommand } from './workspace-layout-sleep-wake-params'
 import { RenameTabsCommand } from './workspace-layout-rename-tabs-params'
@@ -197,6 +197,18 @@ const OpenAgentSessionTabCommand = z.object({
   split: NewGroupSplit
 })
 
+/** A bot group's room tab; its entity is the group id. */
+const OpenRoomTabCommand = z.object({
+  type: z.literal('openRoomTab'),
+  ...OnTab,
+  botGroupId: z.string().min(1),
+  groupId: z.string().min(1).optional(),
+  afterTabId: z.string().min(1).optional(),
+  index: z.number().int().nonnegative().optional(),
+  createdAt: z.number().int().nonnegative().optional(),
+  split: NewGroupSplit
+})
+
 const OnBrowserPage = {
   workspace: OnPane.workspace,
   browserTabId: z.string().min(1),
@@ -208,11 +220,16 @@ const OpenBrowserPageCommand = z.object({ type: z.literal('openBrowserPage'), ..
 
 const CloseBrowserPageCommand = z.object({ type: z.literal('closeBrowserPage'), ...OnBrowserPage })
 
-/** A converted page: the window's new page takes the old one's place. */
-const ReplaceBrowserPageCommand = z.object({
-  type: z.literal('replaceBrowserPage'),
-  ...OnBrowserPage,
-  newPageId: z.string().min(1)
+/** A converted page replaces the rendered resource without moving its tab-bar slot. */
+const ReplaceTabContentCommand = z.object({
+  type: z.literal('replaceTabContent'),
+  workspace: OnPane.workspace,
+  replacement: z.object({
+    kind: z.literal('browser-page'),
+    browserTabId: z.string().min(1),
+    pageId: z.string().min(1),
+    newPageId: z.string().min(1)
+  })
 })
 
 const SetBrowserTabProfileCommand = z.object({
@@ -307,12 +324,13 @@ export const LayoutApplyParams = z.object({
     OpenBrowserTabCommand,
     OpenBrowserPageCommand,
     CloseBrowserPageCommand,
-    ReplaceBrowserPageCommand,
+    ReplaceTabContentCommand,
     SetBrowserTabProfileCommand,
     OpenEditorTabCommand,
     OpenAgentSessionTabCommand,
     PromotePreviewTabCommand,
     OpenSimulatorTabCommand,
+    OpenRoomTabCommand,
     MoveTabToWorkspaceCommand,
     RenameEditorFilesCommand,
     SleepCommand,

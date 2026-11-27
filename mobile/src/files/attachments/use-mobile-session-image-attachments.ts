@@ -4,17 +4,17 @@ import type { MobileImageSource } from '../../platform/media-picking/media-picke
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
-} from '../../session/native-chat/composer/mobile-native-chat-send'
-import type { StructuredMobileSendAttachment } from '../../session/native-chat/composer/use-mobile-structured-send-with-outcome'
+} from '../../session/native-chat/composer/delivery/mobile-native-chat-send'
+import type { StructuredMobileSendAttachment } from '../../session/native-chat/composer/delivery/use-mobile-structured-send-with-outcome'
 import { useMobileImageAttachment } from './use-mobile-image-attachment'
 import {
   useMobileNativeChatImageAttachments,
   type MobileNativeChatImageAttachments
-} from '../../session/native-chat/composer/use-mobile-native-chat-image-attachments'
+} from '../../session/native-chat/composer/attachments/use-mobile-native-chat-image-attachments'
 import {
   useMobileNativeChatFileAttachments,
   type MobileNativeChatFileAttachments
-} from '../../session/native-chat/composer/use-mobile-native-chat-file-attachments'
+} from '../../session/native-chat/composer/attachments/use-mobile-native-chat-file-attachments'
 
 type CurrentRef<T> = { readonly current: T }
 

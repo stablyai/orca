@@ -1,4 +1,4 @@
-import type * as Rpc from '../../../../shared/runtime-rpc-envelope'
+import type * as Rpc from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { KnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   prepareManagedRuntimeRequest,
@@ -29,7 +29,7 @@ export async function prepareFencedRuntimeRequest(
 > {
   // A stale caller is refused before its request can wake (and re-pair) a VM.
   const stale = runtimeEnvironmentRevisionFailure(
-    resolveEnvironment(userDataPath, environmentId),
+    await resolveEnvironment(userDataPath, environmentId),
     expected.pairingRevision,
     method,
     expected.runtimeId

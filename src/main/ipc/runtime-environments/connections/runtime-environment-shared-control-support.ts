@@ -30,7 +30,9 @@ export async function supportsSharedControl(
   if (accepted) {
     return accepted
   }
-  const response = await getRuntimeEnvironmentStatusOwner(userDataPath, environment.id).refresh({
+  const response = await (
+    await getRuntimeEnvironmentStatusOwner(userDataPath, environment.id)
+  ).refresh({
     timeoutMs
   })
   if (!response.ok) {

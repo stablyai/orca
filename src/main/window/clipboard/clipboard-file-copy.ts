@@ -2,7 +2,7 @@ import { isAbsolute } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 
 export type ClipboardFileResult = { ok: boolean; reason?: string }
 
@@ -14,7 +14,7 @@ export type ClipboardFileDeps = {
   resolveFilePath: (
     path: string
   ) => Promise<{ ok: true; path: string } | { ok: false; reason: string }>
-  writeBuffer: (format: string, buffer: Buffer) => void
+  writeBuffer: (format: string, buffer: Buffer) => void | Promise<void>
   runProcess: (spec: ProcessSpec) => Promise<ProcessResult>
 }
 
@@ -43,7 +43,10 @@ export async function writeFileToClipboard(
   if (deps.platform === 'darwin') {
     // macOS synthesizes Finder's legacy types from public.file-url.
     try {
-      deps.writeBuffer('public.file-url', Buffer.from(pathToFileURL(clipboardPath).href, 'utf8'))
+      await deps.writeBuffer(
+        'public.file-url',
+        Buffer.from(pathToFileURL(clipboardPath).href, 'utf8')
+      )
       return { ok: true }
     } catch {
       return { ok: false, reason: 'clipboard-write-failed' }

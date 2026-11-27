@@ -1,92 +1,107 @@
 import { z } from 'zod'
-import { isOrcaSessionId, type OrcaSessionId } from '../../../../shared/orca-session-address'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
+import {
+  isOrcaSessionId,
+  type OrcaSessionId
+} from '../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import {
   RUN_PANE_KEY_MATCH_SUFFIX_SQL,
   DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL
 } from '../db/pane-key-match'
 import { workerSeatGrabSql } from '../db/runs/run-coordinator-mail-routing'
+import { formerlyOwnedResourceIdSql } from '../db/worker-terminal/worker-terminal-prior-owner-index'
 
-const nullable = z.string().nullable()
-const sessionId = z.custom<OrcaSessionId>(
-  (value) => typeof value === 'string' && isOrcaSessionId(value)
+const nullable = lazyZodSchema(() => z.string().nullable())
+const sessionId = lazyZodSchema(() =>
+  z.custom<OrcaSessionId>((value) => typeof value === 'string' && isOrcaSessionId(value))
 )
-const Run = z.object({
-  id: z.string(),
-  legacy: z.number(),
-  home_database: z.string(),
-  coordinator_pane_key: nullable,
-  coordinator_orca_session_id: sessionId.nullable(),
-  coordinator_orca_session_id_generation: z.number().nullable(),
-  consumer_generation: z.number()
-})
-const Resource = z.object({
-  terminal_handle: z.string(),
-  pane_key: nullable,
-  process_incarnation: nullable,
-  worktree_id: nullable,
-  host_scope: nullable,
-  owner_dispatch_id: z.string(),
-  ownership_state: z.enum(['owned', 'transferred', 'user_owned', 'external', 'released']),
-  release_state: z.enum([
-    'not_requested',
-    'retained',
-    'requested',
-    'releasing',
-    'released',
-    'unknown'
-  ])
-})
+const Run = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    legacy: z.number(),
+    home_database: z.string(),
+    coordinator_pane_key: nullable,
+    coordinator_orca_session_id: sessionId.nullable(),
+    coordinator_orca_session_id_generation: z.number().nullable(),
+    consumer_generation: z.number()
+  })
+)
+const Resource = lazyZodSchema(() =>
+  z.object({
+    terminal_handle: z.string(),
+    pane_key: nullable,
+    process_incarnation: nullable,
+    worktree_id: nullable,
+    host_scope: nullable,
+    owner_dispatch_id: z.string(),
+    ownership_state: z.enum(['owned', 'transferred', 'user_owned', 'external', 'released']),
+    release_state: z.enum([
+      'not_requested',
+      'retained',
+      'requested',
+      'releasing',
+      'released',
+      'unknown'
+    ])
+  })
+)
 const resource = (alias: string) => `CASE WHEN ${alias}.id IS NOT NULL THEN json_object(
   'terminal_handle', ${alias}.terminal_handle, 'pane_key', ${alias}.pane_key,
   'process_incarnation', ${alias}.process_incarnation, 'worktree_id', ${alias}.worktree_id,
   'host_scope', ${alias}.host_scope, 'owner_dispatch_id', ${alias}.owner_dispatch_id,
   'ownership_state', ${alias}.ownership_state, 'release_state', ${alias}.release_state) END`
-const resourceValue = nullable.transform((value) =>
-  value === null ? null : Resource.parse(JSON.parse(value))
+const resourceValue = lazyZodSchema(() =>
+  nullable.transform((value) => (value === null ? null : Resource.parse(JSON.parse(value))))
 )
-const Dispatch = z.object({
-  key: z.string(),
-  branch: z.enum(['handle', 'pane', 'suffix', 'explicit']),
-  id: z.string(),
-  run_id: z.string(),
-  contract_version: z.number(),
-  status: z.string(),
-  follow_up_of_dispatch_id: nullable,
-  next_dispatch_id: nullable,
-  creator_handle: nullable,
-  creator_pane_key: nullable,
-  assignee_handle: nullable,
-  assignee_pane_key: nullable,
-  assignee_orca_session_id: sessionId.nullable(),
-  process_incarnation: nullable,
-  protocol_version: z.number().nullable(),
-  worker_state: nullable,
-  sender_run_id: nullable,
-  sender_run_legacy: z.number().nullable(),
-  nested_resource: resourceValue
-})
+const Dispatch = lazyZodSchema(() =>
+  z.object({
+    key: z.string(),
+    branch: z.enum(['handle', 'pane', 'suffix', 'explicit']),
+    id: z.string(),
+    run_id: z.string(),
+    contract_version: z.number(),
+    status: z.string(),
+    follow_up_of_dispatch_id: nullable,
+    next_dispatch_id: nullable,
+    creator_handle: nullable,
+    creator_pane_key: nullable,
+    assignee_handle: nullable,
+    assignee_pane_key: nullable,
+    assignee_orca_session_id: sessionId.nullable(),
+    process_incarnation: nullable,
+    protocol_version: z.number().nullable(),
+    worker_state: nullable,
+    sender_run_id: nullable,
+    sender_run_legacy: z.number().nullable(),
+    nested_resource: resourceValue
+  })
+)
 export type DispatchInput = z.infer<typeof Dispatch>
 
-const workerState = z.enum([
-  'starting',
-  'ready',
-  'start_unknown',
-  'failed',
-  'succeeded',
-  'stopping',
-  'stop_unknown',
-  'stopped',
-  'abandoned',
-  'unsupervised'
-])
-const Identity = z.object({
-  root: sessionId,
-  recorded: z.number(),
-  identity_resource: resourceValue,
-  custody_resource: resourceValue,
-  owner_state: workerState
-})
+const workerState = lazyZodSchema(() =>
+  z.enum([
+    'starting',
+    'ready',
+    'start_unknown',
+    'failed',
+    'succeeded',
+    'stopping',
+    'stop_unknown',
+    'stopped',
+    'abandoned',
+    'unsupervised'
+  ])
+)
+const Identity = lazyZodSchema(() =>
+  z.object({
+    root: sessionId,
+    recorded: z.number(),
+    identity_resource: resourceValue,
+    custody_resource: resourceValue,
+    owner_state: workerState
+  })
+)
 
 export type CrewRecipientRun = z.infer<typeof Run>
 const runColumns = `r.id, r.legacy, r.home_database, r.coordinator_pane_key, r.coordinator_orca_session_id,
@@ -194,7 +209,7 @@ export function crewRecipientOwnerQueries(db: OrchestrationDb) {
   }
   const resourceFor = (id: string) => `COALESCE(
     (SELECT id FROM worker_terminal_resources WHERE owner_dispatch_id = ${id}),
-    (SELECT id FROM worker_terminal_resources WHERE prior_owner_dispatch_ids LIKE '%"' || ${id} || '"%' ORDER BY updated_at DESC LIMIT 1))`
+    ${formerlyOwnedResourceIdSql(id)})`
   const followUps = (ids: string[]) => {
     return Dispatch.extend({
       lineage_resource: nullable.transform((value) =>

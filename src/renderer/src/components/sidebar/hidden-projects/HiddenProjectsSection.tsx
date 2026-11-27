@@ -5,16 +5,16 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
-import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { RepoMark } from '@/components/repo/RepoMark'
 import { cn } from '@/lib/class-names'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../../shared/execution-host'
-import { isRepoHidden } from '../../../../../shared/hidden-projects'
+} from '../../../../../shared/execution-host/execution-host'
+import { isRepoHidden } from '../../../../../shared/project/catalog/hidden-projects'
 import { getRepoRowIdentity } from '@/store/repos/repo-host-identity'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { setProjectHidden } from './set-project-hidden'
 
 function selectHiddenRepos(repos: readonly Repo[]): Repo[] {
@@ -99,12 +99,7 @@ const HiddenProjectsSection = React.memo(function HiddenProjectsSection() {
               data-testid="hidden-project"
               className="group/hidden-project flex h-7 min-w-0 items-center gap-1.5 rounded-md pl-1.5 pr-0.5 transition-colors hover:bg-worktree-sidebar-accent focus-within:bg-worktree-sidebar-accent"
             >
-              <RepoIconGlyph
-                repoIcon={repo.repoIcon}
-                color={repo.badgeColor || undefined}
-                className="size-4 shrink-0 text-muted-foreground"
-                iconClassName="size-3.5"
-              />
+              <RepoMark repo={repo} size="md" />
               <span className="min-w-0 flex-1 truncate text-[13px] leading-4">
                 {repo.displayName}
               </span>

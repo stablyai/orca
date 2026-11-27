@@ -218,6 +218,21 @@ export function useAgentPickerSetup({
       activeRecord.active = false
     }
   }, [open, read, acquire, retained, mode, initial])
+  const readOnUnmount = useRef(read)
+  useLayoutEffect(() => {
+    readOnUnmount.current = read
+  }, [read])
+  // Why: a panel that unmounts while open (a closed dropdown) never renders closed, so release its
+  // pick here; reopening then starts from the form's saved setup, including edits made meanwhile.
+  useLayoutEffect(
+    () => () => {
+      const current = readOnUnmount.current()
+      if (current) {
+        pickedSetups.delete(current)
+      }
+    },
+    []
+  )
   let record = retained && matches(retained) ? retained : undefined
   const currentDraft = (draft: AgentPickerDraft) => {
     const current =

@@ -1,7 +1,10 @@
-import type { RefreshCurrentOrcaProfileAuthResult } from '../../../shared/orca-profiles'
+import type { RefreshCurrentOrcaProfileAuthResult } from '../../../shared/orca-profiles/orca-profiles'
 import { getOrcaCloudAuthConfig, isOrcaCloudDevAuthEnabled } from './profile-cloud-auth-config'
 import { getOrcaProfileAuthStatusFromProfile } from './profile-cloud-auth-status'
-import { refreshOrcaCloudCapabilities } from './profile-cloud-client'
+import {
+  refreshOrcaCloudCapabilities,
+  uploadDesktopReportAfterCapabilityRefresh
+} from './profile-cloud-client'
 import { ensureActiveOrcaProfile } from '../profile-index-store'
 import { refreshDevOrcaCloudProfile } from './profile-cloud-dev-service'
 import {
@@ -42,16 +45,16 @@ export async function refreshCurrentOrcaProfileAuth(
       configState.config,
       active,
       userDataPath,
-      (session) => {
+      async (session) => {
         // Take the ticket after refresh because refreshing may relink the session.
         ticket = takeCloudSessionTicket(active.profile.id, userDataPath)
-        return refreshOrcaCloudCapabilities(configState.config, session)
+        return { session, refresh: await refreshOrcaCloudCapabilities(configState.config, session) }
       }
     )
     if (operation.status !== 'ok' || !ticket) {
       return { status: 'reconnect-required', auth: auth() }
     }
-    const refresh = operation.value
+    const { refresh, session } = operation.value
     if (
       refresh.cloud &&
       (refresh.cloud.userId !== cloud.userId ||
@@ -62,6 +65,14 @@ export async function refreshCurrentOrcaProfileAuth(
     const list = commitCloudSessionCapabilities(active.profile.id, userDataPath, ticket, refresh)
     if (!list) {
       return { status: 'reconnect-required', auth: auth() }
+    }
+    if (list.activeProfileId === active.profile.id) {
+      // Reporting is separate so inventory outages do not affect sign-in or policy refresh.
+      void uploadDesktopReportAfterCapabilityRefresh(
+        configState.config,
+        session,
+        refresh.capabilities
+      ).catch(() => undefined)
     }
     return {
       status: 'refreshed',

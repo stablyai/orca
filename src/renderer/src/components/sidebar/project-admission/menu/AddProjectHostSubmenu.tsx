@@ -15,15 +15,15 @@ import { HostListSearchField } from '@/components/host-picker/HostListSearchFiel
 import { useBoundedHostRows } from '@/components/host-picker/use-bounded-host-rows'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { AddRemoteHostMode } from '../../host-admission/ssh/AddRemoteHostDialog'
 import {
   openWslHostsExperimentalSetting,
   useWslHostsAcceptNewWork,
   useWslHostsPaused
-} from '../../use-wsl-hosts-enabled'
+} from '../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { sidebarHostDisplayLabel } from '../../worktree-list/controls/sidebar-host-options'
-import { getWslHostsPausedShortLabel } from '../../wsl-host-row-status'
+import { getWslHostsPausedShortLabel } from '../../host-admission/wsl/wsl-host-row-status'
 import {
   canConnectAddRepoHost,
   canSelectAddRepoHost
@@ -241,7 +241,7 @@ export function AddProjectHostSubmenu({
                     <span className="text-[11px] text-muted-foreground">
                       {t(
                         'auto.components.sidebar.AddRepoHostSelector.addSshHostDetail',
-                        'Use an existing machine over SSH.'
+                        'Connect to a machine over SSH.'
                       )}
                     </span>
                   </span>
@@ -257,7 +257,7 @@ export function AddProjectHostSubmenu({
                     <span className="text-[11px] text-muted-foreground">
                       {t(
                         'auto.components.sidebar.AddRepoHostSelector.addRemoteServerDetail',
-                        'Pair with Orca running on another computer.'
+                        'Orca on another computer, no SSH needed.'
                       )}
                     </span>
                   </span>

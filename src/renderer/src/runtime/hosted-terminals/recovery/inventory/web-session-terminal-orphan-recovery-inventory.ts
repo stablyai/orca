@@ -1,9 +1,9 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalOrphanAdoptionClaim
-} from '../../../../../../shared/runtime-terminal-contracts'
-import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
+} from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { toRuntimeWorktreeSelector } from '../../../rpc/targets/runtime-worktree-selector'
 import { isTerminalListResult } from './web-session-terminal-orphan-recovery-inventory-validation'
 import {
@@ -19,7 +19,7 @@ import {
   type RecoverySurface
 } from '../surfaces/web-session-terminal-orphan-recovery-surface'
 import { runInTerminalRecoveryRpcLane } from '../scheduling/web-session-terminal-orphan-recovery-rpc-lane'
-import { hostScopeCensusIsComplete } from '../../../../../../shared/runtime-listing-host-scope'
+import { hostScopeCensusIsComplete } from '../../../../../../shared/execution-host/runtime-listing-host-scope'
 
 type RuntimeCall = (args: {
   selector: string

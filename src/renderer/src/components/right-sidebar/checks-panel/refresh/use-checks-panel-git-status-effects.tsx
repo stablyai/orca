@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useEffect, useRef } from 'react'
 import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
 import { getRuntimeGitUpstreamStatus } from '@/runtime/source-control/git/runtime-git-sync-client'
@@ -12,9 +12,9 @@ import {
   createCoalescedPollRunner,
   type CoalescedPollRunner
 } from '../../../../lib/source-control/refresh/coalesced-poll-runner'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
-import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
-import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
+import type { ChecksPanelReviewState } from '../review-state/use-checks-panel-review-state'
+import type { ChecksPanelContextState } from '../review-state/use-checks-panel-context-state'
 
 type ChecksPanelGitStatusEffectsInput = Pick<
   ChecksPanelControllerState,
@@ -327,7 +327,8 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
       linkedGitLabMR,
       linkedBitbucketPR,
       linkedAzureDevOpsPR,
-      linkedGiteaPR
+      linkedGiteaPR,
+      currentHeadOid: eligibilityHeadOidRef.current
     })
       .then((result) => {
         if (!stale) {

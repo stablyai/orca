@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagedOptional, salvagingArray } from '../../../../src/shared/zod-salvage'
+import { salvagedOptional, salvagingArray } from '../../../../src/shared/validation/zod-salvage'
 import {
   CHECK_STATUS,
   MERGEABLE_STATE,
@@ -8,7 +8,7 @@ import {
   prStringList,
   prText,
   prRepoIdentity
-} from '../../source-control/review/github-pr-entity-reply-schema'
+} from '../../source-control/review/github-operations/github-pr-entity-reply-schema'
 import {
   assignableUserListSchema,
   detailCheckListSchema,

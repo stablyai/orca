@@ -2,7 +2,7 @@
 
 import { ClaudeTaskInvocations } from '../background-tasks/claude-task-invocations'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
-import { classifyClaudeBackgroundTaskKind } from '../../../shared/claude-background-task-kind'
+import { classifyClaudeBackgroundTaskKind } from '../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-background-task-kind'
 import {
   liveClaudeTaskRunState,
   record,
@@ -30,7 +30,8 @@ type ClaudeToolOwner = (toolUseId: string) => string | null
 type PendingEdge = (observedAt: number) => AgentChildWorkEvidence
 
 export class ClaudeChildWorkDecoder {
-  private readonly live = new Map<string, DecodedClaudeTask>()
+  /** Read-only outside the decoder; Steer moves the top-level foreground ones to the background. */
+  readonly live = new Map<string, DecodedClaudeTask>()
   /** Retain ended runs for the session to distinguish wakes from late starts. */
   private readonly ended = new Map<string, EndedClaudeTask>()
   private readonly childrenByOwner = new Map<string, Set<string>>()
@@ -90,7 +91,8 @@ export class ClaudeChildWorkDecoder {
           message.status,
           {
             runId: taskAliasId(message.tool_use_id),
-            lastMessage: taskText(message.summary),
+            // A forked command's summary only repeats its name.
+            lastMessage: selected?.invocation.forkedCommand ? undefined : taskText(message.summary),
             totalTokens: taskUsageTotalTokens(message)
           },
           ownerOf

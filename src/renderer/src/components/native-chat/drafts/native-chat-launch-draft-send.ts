@@ -26,39 +26,44 @@ export function planNativeChatLaunchDraftSend(args: {
   }
 }
 
-/** Select replacement clearing and optional confirmation for the normal send paths. */
+type NativeChatInputLineSendOptions = {
+  clearInput: string | null
+  readInputLine: () => string | null | undefined
+}
+
+const tooTallToClear = (text: string | null | undefined): boolean =>
+  text != null && countAgentTuiInputLines(text) > AGENT_TUI_CLEAR_MAX_LINES
+
+/** Size the clear to what the agent's input line holds. */
+export function resolveNativeChatInputLineSend(
+  /** The user's text on the agent's input line: '' when it is empty, null when unreadable. */
+  readInputLine: () => string | null | undefined
+): NativeChatInputLineSendOptions {
+  const draft = readInputLine()
+  if (tooTallToClear(draft)) {
+    return { clearInput: null, readInputLine }
+  }
+  return { clearInput: buildAgentTuiClearInputForText(draft), readInputLine }
+}
+
+/** Replace a parked launch draft, otherwise clear whatever the input line holds. */
 export function resolveNativeChatLaunchDraftSend(args: {
   launchDraft: { agent: string; text: string } | null | undefined
   launchDraftResolved: boolean
   agent: string
-  /** The user's text on the agent's input line: '' when it is empty, null when unreadable. */
   readInputLine: () => string | null | undefined
-}): {
-  plan: NativeChatLaunchDraftSendPlan
-  sendOptions: { clearInput: string | null; confirmCleared?: () => boolean }
-} {
+}): { plan: NativeChatLaunchDraftSendPlan; sendOptions: NativeChatInputLineSendOptions } {
   const { launchDraft, launchDraftResolved, agent, readInputLine } = args
   // A resolved prefill no longer owns TUI input; clearing again could erase the user’s replacement.
   const seededText =
     launchDraft && launchDraft.agent === agent && !launchDraftResolved ? launchDraft.text : null
   const plan = planNativeChatLaunchDraftSend({ seededText })
-  const draft = readInputLine()
-  if (
-    [draft, seededText].some(
-      (text) => text != null && countAgentTuiInputLines(text) > AGENT_TUI_CLEAR_MAX_LINES
-    )
-  ) {
-    return { plan, sendOptions: { clearInput: null } }
+  const sendOptions = resolveNativeChatInputLineSend(readInputLine)
+  if (plan.kind !== 'replace-draft' || sendOptions.clearInput === null) {
+    return { plan, sendOptions }
   }
-  if (plan.kind !== 'replace-draft') {
-    return { plan, sendOptions: { clearInput: buildAgentTuiClearInputForText(draft) } }
+  if (tooTallToClear(seededText)) {
+    return { plan, sendOptions: { clearInput: null, readInputLine } }
   }
-  return {
-    plan,
-    sendOptions: {
-      clearInput: plan.clearInput,
-      // A dim placeholder or suggestion is not residue; only typed text is.
-      confirmCleared: () => readInputLine() === ''
-    }
-  }
+  return { plan, sendOptions: { clearInput: plan.clearInput, readInputLine } }
 }

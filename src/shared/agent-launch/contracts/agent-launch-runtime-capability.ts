@@ -56,9 +56,26 @@ export const AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY =
 // `user-arguments` and publishes `agentPermission`. Older hosts keep the permission in the text.
 export const AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY = 'settings.agent-permission.v1' as const
 
+// Host accepts `seed-permission`, applied only while the host is still at the product default.
+export const AGENT_LAUNCH_PERMISSION_SEED_CAPABILITY = 'settings.agent-permission.seed.v1' as const
+
 // Host-advertised: reads `surface`, the user's chat or terminal pick for one launch, and refuses an
 // explicit chat it cannot open before creating anything. Older hosts strip the field.
 export const AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY = 'agent.launch.surface.v1' as const
+
+// Host-advertised: accepts a Pi model/effort; hosts before the Pi launch catalog silently start Pi
+// on its default.
+export const AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY = 'agent.launch.pi-model.v1' as const
+
+// Host-advertised: accepts a reserved chat ID in any Orca ID spelling; older hosts refuse one not
+// spelled `<agent>_…`.
+export const AGENT_LAUNCH_PLAIN_SESSION_ID_RUNTIME_CAPABILITY =
+  'agent.launch.plain-session-id.v1' as const
+
+// Host-advertised: a created workspace's receipt reports `setupTrustMismatch`, so a client that
+// pinned setup can re-ask. Older hosts skip that setup without saying so.
+export const AGENT_LAUNCH_SETUP_TRUST_MISMATCH_RUNTIME_CAPABILITY =
+  'agent.launch.setup-trust-mismatch.v1' as const
 
 export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_CHAT_OPTIONS_RUNTIME_CAPABILITY,
@@ -67,6 +84,7 @@ export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY,
   AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY,
   AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY,
+  AGENT_LAUNCH_PERMISSION_SEED_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
@@ -75,5 +93,8 @@ export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_CREATE_FOLDER_WORKSPACE_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_PLAIN_SESSION_ID_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_SETUP_TRUST_MISMATCH_RUNTIME_CAPABILITY
 ] as const

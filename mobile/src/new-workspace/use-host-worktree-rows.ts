@@ -1,6 +1,6 @@
 import { useHostQuery } from '../query/host-query'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import {
   HOST_LIST_TARGET,
   hostWorktreeCatalogQuery,

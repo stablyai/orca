@@ -12,7 +12,7 @@ import { resolvePaneKeyboardProtocolAgent } from '../input/keyboard/terminal-key
 import { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { PtyConnectionDeps } from './pty-connection-deps'
 import { registerTerminalPaneRecoveryInstance } from '../render-health/recovery/terminal-pane-recovery'
-import { captureTabRecoveryGeneration } from '@/store/terminals/terminal-tab-recovery-ledger'
+import { captureTabRecoveryGeneration } from '@/store/terminals/pty/terminal-tab-recovery-ledger'
 import { TerminalIdleCursorReset } from '../emulation/terminal-idle-cursor-reset'
 import { TerminalStreamPosition } from '../pty-transport/delivery/terminal-stream-position'
 import { writeTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'

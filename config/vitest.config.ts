@@ -1,5 +1,6 @@
 import { globSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { availableParallelism } from 'node:os'
 import { resolve } from 'node:path'
 import { normalizePath, transformWithOxc, type Plugin } from 'vite'
 import { configDefaults, defaultExclude, defineConfig } from 'vitest/config'
@@ -13,11 +14,11 @@ import { filesSafeToShareWorker } from './scripts/test-runtime/execution-policy/
 import { gitSigningOffEnv } from './scripts/test-runtime/environment/vitest-git-signing-env.mjs'
 import RuntimeSequencer from './scripts/test-runtime/execution-policy/vitest-runtime-sequencer.mjs'
 import { getNodeRuntimeInclude } from './scripts/test-runtime/sqlite-admission/vitest-node-runtime-files.mjs'
-import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool'
+import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool.ts'
 import { readRunFilters } from './scripts/test-runtime/execution-policy/vitest-run-filters.mjs'
 import { createWorkspaceSourceResolver } from './scripts/workspace/source-exports/workspace-source-exports.mjs'
-import { moduleCacheResolutionKey } from './scripts/test-runtime/module-cache/vitest-module-cache-resolution-key'
-import { vitestReactCompiler } from './build-plugins/vitest-react-compiler'
+import { moduleCacheResolutionKey } from './scripts/test-runtime/module-cache/vitest-module-cache-resolution-key.ts'
+import { vitestReactCompiler } from './build-plugins/vitest-react-compiler.ts'
 
 const nodeRuntimeInclude = process.versions.bun
   ? getNodeRuntimeInclude({ filters: readRunFilters() })
@@ -27,11 +28,48 @@ const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
 const gitEnv = { ...gitSigningOffEnv(), ORCA_WSL_HOSTS_GATE_STATE: '' }
 const moduleCachePath = process.env.ORCA_UNIT_MODULE_CACHE_PATH
 const phoneContractPattern = /\/mobile\/src\/.*\.(?:ts|tsx)(?:\?.*)?$/
+const patchedNoTestFoundLoggers = new WeakSet<object>()
 const transforms = {
   // Auto-discovery climbs past the repo for files no in-repo tsconfig owns, into an enclosing checkout.
   tsconfig: resolve(import.meta.dirname, 'tsconfig.vitest-transform.json'),
   oxc: { exclude: [/\.js$/, phoneContractPattern] },
   plugins: [
+    {
+      // Summarize per-file worker routing arrays so filter misses do not dump ~1 MB of paths.
+      name: 'compact-no-test-found-output',
+      configureVitest({ vitest }) {
+        if (patchedNoTestFoundLoggers.has(vitest.logger)) {
+          return
+        }
+        patchedNoTestFoundLoggers.add(vitest.logger)
+        const original = vitest.logger.printNoTestFound.bind(vitest.logger)
+        vitest.logger.printNoTestFound = (filters) => {
+          const restored = vitest.projects.map((project) => {
+            const { include, exclude } = project.config
+            if (include && include.length > UNIT_INCLUDE.length) {
+              project.config.include = [`(${include.length} worker-routed files)`]
+            }
+            if (exclude && exclude.length > testOptions.exclude.length) {
+              project.config.exclude = [
+                ...testOptions.exclude,
+                `(${exclude.length - testOptions.exclude.length} worker-routed files)`
+              ]
+            }
+            return () => {
+              project.config.include = include
+              project.config.exclude = exclude
+            }
+          })
+          try {
+            original(filters)
+          } finally {
+            for (const restore of restored) {
+              restore()
+            }
+          }
+        }
+      }
+    } satisfies Plugin,
     {
       // These plain TS consumers need no Expo app configuration in root-only installs.
       name: 'phone-contract-oxc',
@@ -94,7 +132,12 @@ const testOptions = {
   env: { ...gitEnv, ORCA_VITEST_RUNTIME: 'node' },
   server: { deps: { inline: ['zod'] } },
   // Node's storage globals and V8 retention checks require the existing child flags.
-  execArgv: ['--no-experimental-webstorage', '--expose-gc'],
+  execArgv: [
+    '--no-experimental-webstorage',
+    '--expose-gc',
+    '--require',
+    resolve('config/scripts/test-runtime/node-worker/vitest-worker-parent-exit.cjs')
+  ],
   setupFiles: UNIT_SETUP_FILES.map((file) => resolve(file)),
   include: UNIT_INCLUDE,
   exclude: balancedShards ? UNIT_EXCLUDE : defaultExclude,
@@ -195,6 +238,11 @@ export default defineConfig({
     // A finished file's background log can lose the race with worker teardown; only that log line is lost.
     onUnhandledError: (error) =>
       !(error.name === 'EnvironmentTeardownError' && error.message.includes('"onUserConsoleLog"')),
-    ...(process.platform === 'win32' ? { maxWorkers: 4 } : {})
+    // Each worker holds a large module graph; uncapped local runs exhausted laptop memory.
+    ...(process.platform === 'win32'
+      ? { maxWorkers: 4 }
+      : process.env.CI
+        ? {}
+        : { maxWorkers: Math.max(1, Math.min(6, Math.floor(availableParallelism() / 2))) })
   }
 })

@@ -1,9 +1,8 @@
 // PreCompact alone also occurs on aborted compact, so it cannot mark working (STA-2915/STA-4613). Only manual PostCompact clears the pane; auto resumes a turn that emits Stop.
 
-import {
-  agentProviderSessionsEqual,
-  type AgentProviderSessionMetadata
-} from '../../../../agent-session/lifecycle/agent-session-resume'
+// PreCompact alone also occurs on aborted compact, so it cannot mark working (STA-2915/STA-4613). Only manual PostCompact clears the pane; auto resumes a turn that emits Stop.
+import type { AgentProviderSessionMetadata } from '../../../../agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { AgentHookSource } from '../../../transport/agent-hook-relay'
 
 export type ClaudeCompactCompletionOwner = {

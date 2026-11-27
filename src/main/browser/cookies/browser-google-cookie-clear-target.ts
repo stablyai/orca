@@ -1,12 +1,13 @@
 import type {
   BrowserCookieImportResult,
   BrowserSessionProfile
-} from '../../../shared/browser-workspace-types'
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 import type { GoogleCookieClearLocalTarget } from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import { bindRoutePartition } from './client-route/browser-client-route-cookie-import'
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { clearGoogleCookiesFromPartition } from './browser-google-cookie-clear'
+import { restoreBrowserRoutePartitionSessionCookies } from './session-restore/browser-session-cookie-route-restore'
 
 export function googleCookieClearLocalTarget(
   profileId: string,
@@ -28,7 +29,7 @@ export function googleCookieClearLocalTarget(
   }
 }
 
-export function clearGoogleCookiesForLocalTarget(target: GoogleCookieClearLocalTarget) {
+export async function clearGoogleCookiesForLocalTarget(target: GoogleCookieClearLocalTarget) {
   const current = googleCookieClearLocalTarget(target.profileId, target.environmentId)
   if (
     !current ||
@@ -41,6 +42,10 @@ export function clearGoogleCookiesForLocalTarget(target: GoogleCookieClearLocalT
     ? getPairedRuntimeBrowserClientRouteIdentity(target.environmentId)
     : null
   const partition = browserSessionRegistry.getProfile(target.profileId)?.partition
+  if (target.environmentId) {
+    // A route jar restores its saved session cookies lazily; a later restore would undo this clear.
+    await restoreBrowserRoutePartitionSessionCookies(target.partition)
+  }
   return clearGoogleCookiesFromPartition(target.partition, () => {
     if (
       browserSessionRegistry.getProfile(target.profileId)?.partition !== partition ||

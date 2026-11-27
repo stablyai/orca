@@ -1,5 +1,5 @@
-import { sanitizeCrashReportString } from '../../../shared/crash-report-redaction'
-import type { CrashReportCopySubmissionFailure } from '../../../shared/crash-reporting'
+import { sanitizeCrashReportString } from '../../../shared/crash-reporting/crash-report-redaction'
+import type { CrashReportCopySubmissionFailure } from '../../../shared/crash-reporting/crash-reporting'
 
 function sanitizedNonEmptyString(value: unknown): string | null {
   if (typeof value !== 'string') {

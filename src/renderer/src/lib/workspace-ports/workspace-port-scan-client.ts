@@ -1,7 +1,7 @@
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callHostRoute } from '@/runtime/rpc/calls/host-route-call'
 import type { HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
@@ -12,9 +12,9 @@ import type {
   WorkspacePortPageProbeRequest,
   WorkspacePortPageProbeResult,
   WorkspacePortScanResult
-} from '../../../../shared/workspace-ports'
-import { normalizeExecutionHostId } from '../../../../shared/execution-host'
-import { WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY } from '../../../../shared/workspace-ports-runtime-capabilities'
+} from '../../../../shared/workspace/ports/workspace-ports'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/workspace-ports-runtime-capabilities'
 import { translate } from '@/i18n/i18n'
 
 export const WORKSPACE_PORTS_SERVER_SSH_UPDATE_REASON =
@@ -107,7 +107,8 @@ function requireWorkspacePortScanResult(value: unknown): WorkspacePortScanResult
 
 export async function runWorkspacePortScanForTarget(
   target: RuntimeClientTarget,
-  repoId?: string
+  repoId?: string,
+  options?: { background?: boolean }
 ): Promise<WorkspacePortScanResult> {
   const params = repoId ? { repoId } : {}
   if (target.kind === 'local') {
@@ -118,7 +119,7 @@ export async function runWorkspacePortScanForTarget(
       target,
       'workspacePorts.scan',
       params,
-      { timeoutMs: WORKSPACE_PORT_RPC_TIMEOUT_MS }
+      { timeoutMs: WORKSPACE_PORT_RPC_TIMEOUT_MS, background: options?.background }
     )
     return requireWorkspacePortScanResult(result)
   } catch (error) {

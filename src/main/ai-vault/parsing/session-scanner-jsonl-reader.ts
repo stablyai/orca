@@ -13,6 +13,18 @@ import {
   type SkippedTranscriptRecord
 } from '../transcripts/session-transcript-record-budget'
 
+const sourceFailures = new WeakSet<object>()
+
+export function noteTranscriptSourceFailure(error: unknown): void {
+  if (typeof error === 'object' && error !== null) {
+    sourceFailures.add(error)
+  }
+}
+
+export function isTranscriptSourceFailure(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && sourceFailures.has(error)
+}
+
 const NEWLINE_BYTE = 0x0a
 const CARRIAGE_RETURN_BYTE = 0x0d
 
@@ -72,13 +84,24 @@ export async function consumeCompleteJsonlLines(args: {
   if (compressed && args.start !== 0) {
     throw new Error(`compressed transcript cannot resume at byte ${args.start}: ${args.path}`)
   }
-  const rawStream = openTranscriptReadStream(
-    args.path,
-    { start: compressed ? 0 : args.start },
-    'scan',
-    args.signal
-  )
-  const stream = compressed ? zstdTranscriptStream(rawStream) : rawStream
+  let rawStream: ReturnType<typeof openTranscriptReadStream>
+  let stream: ReturnType<typeof zstdTranscriptStream>
+  try {
+    rawStream = openTranscriptReadStream(
+      args.path,
+      { start: compressed ? 0 : args.start },
+      'scan',
+      args.signal
+    )
+    rawStream.on('error', noteTranscriptSourceFailure)
+    stream = compressed ? zstdTranscriptStream(rawStream) : rawStream
+    if (stream !== rawStream) {
+      stream.on('error', noteTranscriptSourceFailure)
+    }
+  } catch (error) {
+    noteTranscriptSourceFailure(error)
+    throw error
+  }
   let chunkStart = args.start
   try {
     for await (const chunk of stream as AsyncIterable<Buffer>) {
@@ -155,6 +178,11 @@ export async function consumeCompleteJsonlLines(args: {
   } catch (error) {
     throwIfAiVaultScanCancelled(args.signal)
     throw error
+  } finally {
+    rawStream.off('error', noteTranscriptSourceFailure)
+    if (stream !== rawStream) {
+      stream.off('error', noteTranscriptSourceFailure)
+    }
   }
 
   if (discarding) {

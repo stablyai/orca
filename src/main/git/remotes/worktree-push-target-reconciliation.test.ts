@@ -1,125 +1,68 @@
-import { describe, expect, it, vi, type Mock } from 'vitest'
+import { expect, it, vi } from 'vitest'
+import type * as GitExecFileModule from '../command-runner/git-exec-file'
+import type * as WorktreeScanCacheModule from '../worktrees/catalog/worktree-scan-cache'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import type { GitPushTarget } from '../../../shared/worktree/types'
-import type { GitRemoteExec, WorktreePushTargetStore } from './worktree-push-target-cleanup'
-import { reconcileOrphanedPrRemotesWithExec } from './worktree-push-target-reconciliation'
+import { composeWorktreeId } from '../../../shared/worktree/id'
 
-type ExecMock = Mock<GitRemoteExec>
+const mocks = vi.hoisted(() => ({
+  strictList: vi.fn(),
+  execGit: vi.fn()
+}))
 
-const REPO_PATH = '/repo-root'
-const REPO_ID = 'repo-1'
-const FORK_URL = 'git@github.com:contributor/orca.git'
-const FORK_REMOTE = 'pr-contributor-orca'
+vi.mock('../worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+  listWorktreesSharedStrictAllowingTrueEmpty: mocks.strictList
+}))
 
-function worktreeId(suffix: string): string {
-  return `${REPO_ID}::${suffix}`
-}
+vi.mock('../command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitExecFileModule>()),
+  gitExecFileAsync: mocks.execGit
+}))
 
-function forkTarget(overrides: Partial<GitPushTarget> = {}): GitPushTarget {
+import { reconcileOrphanedPrRemotes } from './worktree-push-target-reconciliation'
+
+const REPO_ID = 'repo-under-test'
+const REPO_PATH = '/repo'
+const REMOTE_NAME = 'pr-head'
+const REMOTE_URL = 'https://github.com/fork/orca.git'
+
+function metaWithPushTarget(): WorktreeMeta {
   return {
-    remoteName: FORK_REMOTE,
-    branchName: 'contributor/fix',
-    remoteUrl: FORK_URL,
-    remoteCreated: true,
-    ...overrides
+    displayName: 'task',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    pushTarget: {
+      remoteName: REMOTE_NAME,
+      branchName: 'task',
+      remoteUrl: REMOTE_URL,
+      remoteCreated: true
+    }
   }
 }
 
-function metaWith(pushTarget: GitPushTarget | undefined): WorktreeMeta {
-  return { pushTarget } as unknown as WorktreeMeta
-}
-
-function storeOf(entries: Record<string, GitPushTarget | undefined>): WorktreePushTargetStore {
-  const meta: Record<string, WorktreeMeta> = {}
-  for (const [id, pushTarget] of Object.entries(entries)) {
-    meta[id] = metaWith(pushTarget)
+it('keeps the PR remote when the worktree listing fails', async () => {
+  mocks.strictList.mockRejectedValue(new Error('git worktree list timed out'))
+  mocks.execGit.mockResolvedValue({
+    stdout: `${REMOTE_NAME}\t${REMOTE_URL} (fetch)\n`,
+    stderr: ''
+  })
+  const store = {
+    getAllWorktreeMeta: () => ({
+      [composeWorktreeId(REPO_ID, '/repo/still-live')]: metaWithPushTarget()
+    })
   }
-  return { getAllWorktreeMeta: () => meta }
-}
 
-type ExecScript = {
-  remotes?: string
-  branchConfig?: string
-  localBranches?: string
-}
+  await reconcileOrphanedPrRemotes(REPO_PATH, REPO_ID, store)
 
-function makeExec(script: ExecScript = {}): ExecMock {
-  const { remotes = '', branchConfig = '', localBranches = '' } = script
-  return vi.fn<GitRemoteExec>(async (args: string[]) => {
-    if (args[0] === 'remote' && args[1] === '-v') {
-      return { stdout: remotes, stderr: '' }
-    }
-    if (args[0] === 'config') {
-      return { stdout: branchConfig, stderr: '' }
-    }
-    if (args[0] === 'for-each-ref') {
-      return { stdout: localBranches, stderr: '' }
-    }
-    if (args[0] === 'remote' && args[1] === 'remove') {
-      return { stdout: '', stderr: '' }
-    }
-    return { stdout: '', stderr: '' }
-  })
-}
-
-function remoteLines(entries: { name: string; url: string }[]): string {
-  return entries
-    .flatMap(({ name, url }) => [`${name}\t${url} (fetch)`, `${name}\t${url} (push)`])
-    .join('\n')
-}
-
-function removeCalls(exec: ExecMock): string[][] {
-  return exec.mock.calls
-    .map(([args]) => args)
-    .filter((args) => args[0] === 'remote' && args[1] === 'remove')
-}
-
-describe('reconcileOrphanedPrRemotesWithExec', () => {
-  it('leaves a remote alone when no worktree metadata ever proves Orca created it (user-created, ambiguous)', async () => {
-    // Remote naming alone does not establish Orca ownership.
-    const exec = makeExec({ remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]) })
-    const reclaimed = await reconcileOrphanedPrRemotesWithExec(
-      REPO_PATH,
-      REPO_ID,
-      storeOf({}),
-      exec,
-      []
-    )
-    expect(reclaimed).toEqual([])
-    expect(removeCalls(exec)).toEqual([])
-  })
-
-  it('leaves a remote alone that is referenced by an existing branch (path 2, branch still kept)', async () => {
-    const exec = makeExec({
-      remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]),
-      branchConfig: `branch.contributor/fix.remote ${FORK_REMOTE}`,
-      localBranches: 'contributor/fix\nmain'
-    })
-    const reclaimed = await reconcileOrphanedPrRemotesWithExec(
-      REPO_PATH,
-      REPO_ID,
-      storeOf({ [worktreeId('/wt/gone')]: forkTarget() }),
-      exec,
-      []
-    )
-    expect(reclaimed).toEqual([])
-    expect(removeCalls(exec)).toEqual([])
-  })
-
-  it('reclaims a remote whose protecting branch config is stale (path 2, branch since deleted)', async () => {
-    const exec = makeExec({
-      remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]),
-      branchConfig: `branch.contributor/fix.remote ${FORK_REMOTE}`,
-      localBranches: 'main'
-    })
-    const reclaimed = await reconcileOrphanedPrRemotesWithExec(
-      REPO_PATH,
-      REPO_ID,
-      storeOf({ [worktreeId('/wt/gone')]: forkTarget() }),
-      exec,
-      []
-    )
-    expect(reclaimed).toEqual([FORK_REMOTE])
-    expect(removeCalls(exec)).toEqual([['remote', 'remove', FORK_REMOTE]])
-  })
+  const removals = mocks.execGit.mock.calls.filter(
+    ([args]) => args[0] === 'remote' && args[1] === 'remove'
+  )
+  expect(removals).toEqual([])
 })

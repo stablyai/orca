@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
-import { removeTree } from '../../../shared/windows-transient-lock-removal'
+import { removeTree } from '../../../shared/file-write/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'

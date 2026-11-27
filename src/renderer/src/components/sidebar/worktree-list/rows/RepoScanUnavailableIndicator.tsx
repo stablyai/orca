@@ -4,9 +4,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { WorktreeScanFailureKind } from '../../../../../../shared/worktree-scan-failure'
-import { isLocalToolchainFailure, resolveRepoScanFailure } from '../../repo-scan-failure'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { WorktreeScanFailureKind } from '../../../../../../shared/worktree/catalog/worktree-scan-failure'
+import {
+  isLocalToolchainFailure,
+  resolveRepoScanFailure
+} from '../../../repo/toolchain/repo-scan-failure'
 import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle

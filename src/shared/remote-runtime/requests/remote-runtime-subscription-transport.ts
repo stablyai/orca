@@ -1,5 +1,5 @@
 import { closeRemoteRuntimeSocket } from '../remote-runtime-socket-close'
-import { throwIfSignalAborted, abortSignalReason } from '../../abort-signal-reason'
+import { throwIfSignalAborted, abortSignalReason } from '../../concurrency/abort-signal-reason'
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
@@ -46,7 +46,8 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
     requestId,
     deviceToken: connection.credential.deviceToken,
     method,
-    params
+    params,
+    idlePassive: options?.idlePassive
   })
   return await new Promise((resolve, reject) => {
     const handshake = createRemoteRuntimeClientHandshake(connection.hostPublicKeyB64)

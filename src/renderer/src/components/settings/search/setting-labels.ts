@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 export const SETTING_LABELS: Partial<Record<keyof GlobalSettings, string>> = {
   terminalFontSize: 'Font Size',

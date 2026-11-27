@@ -4,11 +4,11 @@ import type { PtyModelRestoreNeededEvent } from '../../../shared/terminal/replay
 import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import type { PreloadApi } from '../../api-types'
 import type { TerminalProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import type { CodexSharedServerStatus } from '../../../shared/codex-shared-server-command'
+import type { CodexSharedServerStatus } from '../../../shared/agent-launch/startup/codex-shared-server-command'
 import type {
   NewerDaemonHeldScreen,
   NewerDaemonReopenResult
-} from '../../../shared/newer-daemon-hold'
+} from '../../../shared/terminal/daemon/newer-daemon-hold'
 
 export const ptyStreamAndSerializationApi = {
   inspectProcess: (
@@ -17,6 +17,8 @@ export const ptyStreamAndSerializationApi = {
       expectedIncarnationId?: string
       scanChildProcesses?: boolean
       steadyState?: boolean
+      jobMembershipOnly?: boolean
+      foregroundOnly?: boolean
     }
   ): Promise<TerminalProcessInspection> =>
     ipcRenderer.invoke('pty:inspectProcess', { id, ...options }),
@@ -82,6 +84,12 @@ export const ptyStreamAndSerializationApi = {
       callback(event)
     ipcRenderer.on('pty:modelRestoreNeeded', listener)
     return () => ipcRenderer.removeListener('pty:modelRestoreNeeded', listener)
+  },
+  onHiddenOutputActivity: (callback: (event: { ids: string[] }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, event: { ids: string[] }) =>
+      callback(event)
+    ipcRenderer.on('pty:hiddenOutputActivity', listener)
+    return () => ipcRenderer.removeListener('pty:hiddenOutputActivity', listener)
   },
   onSideEffect: (callback: (batch: TerminalSideEffectBatch) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, batch: TerminalSideEffectBatch) =>

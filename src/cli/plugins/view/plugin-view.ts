@@ -3,7 +3,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path'
 import type { CommandHandler, HandlerContext } from '../../dispatch/dispatch'
 import { getOptionalPositiveIntegerFlag } from '../../arguments/flags'
 import { printPluginResult } from '../plugin-cli-output'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import {
   PLUGIN_SHOT_MAX_WIDTH,
   PLUGIN_SHOT_MIN_WIDTH

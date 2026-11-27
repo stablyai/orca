@@ -15,7 +15,7 @@ import {
   type WorkerTranscriptSnapshotArchive
 } from '../../../../../orchestration/workers/archives/worker-output-archive'
 import { readReleasedWorkerOriginal } from './worker-original-read'
-import { clampWorkerTranscriptLimit } from '../../../../../orchestration/workers/transcripts/worker-transcript-payload'
+import { pageWorkerTranscriptMessages } from '../../../../../orchestration/workers/transcripts/worker-transcript-payload'
 import {
   createWorkerOutputSourceIdentity,
   decodeWorkerOutputCursor,
@@ -104,8 +104,13 @@ function readFrozenTranscript(
   if (cursor && (cursor.source !== 'transcript' || cursor.sourceIdentity !== sourceIdentity)) {
     throw sourceChanged()
   }
-  const start = Math.min(cursor?.position ?? 0, snapshot.messages.length)
-  const end = Math.min(start + clampWorkerTranscriptLimit(args.limit), snapshot.messages.length)
+  const page = pageWorkerTranscriptMessages({
+    messages: snapshot.messages,
+    start: cursor?.position ?? 0,
+    limit: args.limit,
+    alreadyBounded: true
+  })
+  const end = page.end
   const nextCursor = encodeWorkerOutputCursor(args.dispatchId, 'transcript', sourceIdentity, end)
   const status = archivedStatus(args)
   const snapshotClipping = snapshot.clipping ?? (snapshot.limited ? ['archive_message_limit'] : [])
@@ -119,10 +124,10 @@ function readFrozenTranscript(
     sourceIdentity,
     provider: snapshot.agent,
     transcript: {
-      messages: snapshot.messages.slice(start, end),
+      messages: page.messages,
       nextCursor,
-      limited: snapshot.limited || end < snapshot.messages.length,
-      returnedMessageCount: end - start
+      limited: snapshot.limited || page.limited,
+      returnedMessageCount: page.messages.length
     },
     cursor: nextCursor,
     status,

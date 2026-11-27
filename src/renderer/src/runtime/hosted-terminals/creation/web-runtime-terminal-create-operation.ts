@@ -1,9 +1,10 @@
 import { buildLegacyAgentCreateTerminalParams } from './web-runtime-legacy-agent-create-params'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
-import { createAgentSessionKeyboardOptions } from './agent-launch/agent-session-keyboard-capability'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../../shared/runtime-session-contracts'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
+import { createAgentSessionTerminalOptions } from './agent-launch/agent-session-terminal-options'
+import { publishedTerminalColorQueryReplyColors } from '../../../components/terminal-pane/appearance/terminal-view-attributes-publisher'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { agentProviderSessionForHostEnsure } from './agent-launch/agent-session-ensure-provider-session'
 import { translate } from '../../../i18n/i18n'
 import { agentResumeHostAuthorityCapability } from './agent-launch/agent-resume-host-authority-capability'
@@ -94,7 +95,10 @@ export async function createWebRuntimeSessionTerminalResult(
     if (agent) {
       // Paired panes retain the default keyboard advertisement, including on Windows clients.
       const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
-      const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
+      const terminalOptions = createAgentSessionTerminalOptions(
+        keyboardProtocol,
+        publishedTerminalColorQueryReplyColors()
+      )
       const trustOptions = createAgentSessionTrustWorktreeOptions(args.trustWorktreeId)
       let legacyAlreadyPlacedInGroup = false
       // Keep legacy placement until structured creation supports afterTabId.
@@ -111,7 +115,7 @@ export async function createWebRuntimeSessionTerminalResult(
                     await callEnvironment({
                       method: 'terminal.ensureAgentSession',
                       params: {
-                        ...(await keyboardOptions(environmentId)),
+                        ...(await terminalOptions(environmentId)),
                         kind: 'explicit',
                         worktree: toRuntimeWorktreeSelector(args.worktreeId),
                         agent,
@@ -143,7 +147,7 @@ export async function createWebRuntimeSessionTerminalResult(
                       method: 'terminal.createAgentSession',
                       params: withAgentSessionCreateOperationId(
                         {
-                          ...(await keyboardOptions(environmentId)),
+                          ...(await terminalOptions(environmentId)),
                           ...(args.trustWorktreeId ? await trustOptions(environmentId) : {}),
                           ...agentSessionCreateRequest({
                             ...args,

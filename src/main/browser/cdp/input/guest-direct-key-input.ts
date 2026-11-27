@@ -85,8 +85,10 @@ async function sendToFrameSession(
   method: string,
   params: Record<string, unknown>
 ): Promise<unknown> {
-  return await withAgentInputInjection(webContents, () =>
-    sendFrameSessionInput(webContents, send, sessionId, method, params)
+  return await withAgentInputInjection(
+    webContents,
+    () => sendFrameSessionInput(webContents, send, sessionId, method, params),
+    { keyboard: method === 'Input.dispatchKeyEvent' }
   )
 }
 
@@ -208,7 +210,8 @@ export async function releaseHeldPageInput(
       return await send(release.method, release.params)
     }
     const button = normalizeCdpPointerButton(String(release.params.button))
-    const state = cdpPointerStateFor(webContents)
+    // Held input belongs to an SSH host's orca CLI, an agent.
+    const state = cdpPointerStateFor(webContents, 'agent')
     const remaining = { ...state }
     releaseCdpPointerButton(remaining, button)
     // Preserve other callers' held buttons when releasing this one.
@@ -246,14 +249,18 @@ export async function routePageTextInsertion(
     const insertText = await prepareGuestTextInsertion(send, route.contextId)
     return {
       deliver: (insertParams) =>
-        withAgentInputInjection(webContents, async () => {
-          assertExpectedPageUrlForStep()
-          if (typeof insertParams.text !== 'string') {
-            throw new BrowserError('invalid_argument', 'Browser text must be a string')
-          }
-          await insertText(webContents, insertParams.text)
-          return {}
-        })
+        withAgentInputInjection(
+          webContents,
+          async () => {
+            assertExpectedPageUrlForStep()
+            if (typeof insertParams.text !== 'string') {
+              throw new BrowserError('invalid_argument', 'Browser text must be a string')
+            }
+            await insertText(webContents, insertParams.text)
+            return {}
+          },
+          { keyboard: false }
+        )
     }
   }
   if (route.kind === 'unknown') {

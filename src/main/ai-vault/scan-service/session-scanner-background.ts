@@ -22,7 +22,7 @@ import type {
   AiVaultServiceScanOptions,
   AiVaultServiceSubagentRequest
 } from './session-scanner-service-protocol'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import type { LocalAiVaultScanProgressHandle } from '../scan-lifecycle/ai-vault-local-scan-progress'
 
 // Let forced refreshes retry after a local service circuit opens.

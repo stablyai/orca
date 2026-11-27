@@ -2,8 +2,8 @@ import type {
   BrowserAgentActivityEvent,
   BrowserAgentCursorEvent,
   BrowserAgentViewportEvent
-} from '../../../shared/browser-agent-activity-contract'
-import type { DesktopBrowserBridgeHostNotice } from '../../../shared/desktop-browser-bridge-host-control-contract'
+} from '../../../shared/browser/automation/browser-agent-activity-contract'
+import type { DesktopBrowserBridgeHostNotice } from '../../../shared/browser/client-hosting/desktop-browser-bridge-host-control-contract'
 
 /** window.api.browser members through which main shows an agent driving a page. */
 export type BrowserAgentPresenceApi = {

@@ -1,6 +1,8 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { projectWorkerListFleet } from './worker/fleet/worker-list-projection'
+import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 
 // Only an empty check sees the whole mailbox, so only it says to stop.
 const AWAIT_WAKE = "Orca wakes you when workers report; end your turn when you're done."
@@ -10,22 +12,28 @@ const AWAIT_WORKER_REPORTS =
   'Orca wakes you when a worker reports. Once every worker you need is started, end your turn. Do not poll.'
 export const WORKER_DONE_RECORDED_NEXT = 'Recorded. End your turn.'
 
-const ReadyWorkerStart = z.looseObject({
-  state: z.literal('ready'),
-  workerOutcome: z.never().optional()
-})
+const ReadyWorkerStart = lazyZodSchema(() =>
+  z.looseObject({
+    state: z.literal('ready'),
+    workerOutcome: z.never().optional()
+  })
+)
 
-const TakenRunCheck = z.looseObject({
-  runId: z.string(),
-  deliveryAcknowledged: z.literal(true)
-})
+const TakenRunCheck = lazyZodSchema(() =>
+  z.looseObject({
+    runId: z.string(),
+    deliveryAcknowledged: z.literal(true)
+  })
+)
 
-const EmptyRunCheck = z.looseObject({
-  runId: z.string(),
-  count: z.literal(0),
-  cancelled: z.literal(false).optional(),
-  waitInterrupted: z.never().optional()
-})
+const EmptyRunCheck = lazyZodSchema(() =>
+  z.looseObject({
+    runId: z.string(),
+    count: z.literal(0),
+    cancelled: z.literal(false).optional(),
+    waitInterrupted: z.never().optional()
+  })
+)
 
 export function withWorkerStartNext(
   receipt: unknown,
@@ -49,13 +57,16 @@ export async function withRunCheckNext(
   // A batch is capped, so a take that leaves unread mail behind is the one case that needs another check.
   const taken = TakenRunCheck.safeParse(result)
   if (taken.success) {
-    const leftBehind = runtime.getOrchestrationDb().getUnreadRunMailbox(taken.data.runId, 1)
-    return leftBehind.length > 0 ? { ...taken.data, next: MORE_MAIL } : result
+    return withTakenRunCheckNext(runtime.getOrchestrationDb(), result, taken.data.runId)
   }
   const empty = EmptyRunCheck.safeParse(result)
   return empty.success && (await awaitsWorkerReports(runtime, empty.data.runId))
     ? { ...empty.data, next: AWAIT_WORKER_REPORTS }
     : result
+}
+
+export function withTakenRunCheckNext<T>(db: OrchestrationDb, result: T, runId: string): T {
+  return db.getUnreadRunMailbox(runId, 1).length > 0 ? { ...result, next: MORE_MAIL } : result
 }
 
 /** A question arrives in a batch the caller has not finished handling. */

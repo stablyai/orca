@@ -1,7 +1,7 @@
 import type { AgentChildWorkKind } from '../../../shared/agent-status/child-work/agent-status-child-work'
 // Task IDs alone cannot distinguish agents from shells or workflows; task_type identifies the kind.
 
-import { classifyClaudeBackgroundTaskKind } from '../../../shared/claude-background-task-kind'
+import { classifyClaudeBackgroundTaskKind } from '../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-background-task-kind'
 import {
   taskId as claudeTaskId,
   isBoundedClaudeTaskId
@@ -25,6 +25,18 @@ export type ClaudeSubagentTaskFrame = {
   announcesSubagent: boolean
   /** Remember non-agent and housekeeping exclusions for later frames. */
   excluded: boolean
+}
+
+// Claude flags a forked slash command's agent as ambient, yet it is that turn's whole work.
+export function isClaudeForkedCommandTask(message: Record<string, unknown>): boolean {
+  return (
+    message.subtype === 'task_started' &&
+    message.task_type === 'local_agent' &&
+    message.is_backgrounded === false &&
+    message.spawn_depth === 1 &&
+    claudeText(message.tool_use_id) === null &&
+    claudeText(message.description)?.startsWith('/') === true
+  )
 }
 
 export function isClaudeSubagentTask(message: Record<string, unknown>): boolean {
@@ -55,7 +67,9 @@ export function readClaudeSubagentTaskFrame(
   const toolUseId =
     claudeText(message.tool_use_id) ?? claudeText(claudeRecord(message.patch)?.tool_use_id)
   const announcement = subtype === 'task_started'
-  const suppressed = message.ambient === true || message.skip_transcript === true
+  const suppressed =
+    !isClaudeForkedCommandTask(message) &&
+    (message.ambient === true || message.skip_transcript === true)
   const subagent = announcement && !suppressed && isClaudeSubagentTask(message)
   return {
     taskId,

@@ -1,9 +1,9 @@
 import {
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus
-} from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import { ephemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import { ephemeralVmFailure } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 
 export async function removeEphemeralVmRuntimeSshTarget(args: {
   userDataPath: string

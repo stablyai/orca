@@ -1,4 +1,4 @@
-import { SKILL_INSTALL_CANCELLED_FAILURE } from '../../../shared/skill-install-failure'
+import { SKILL_INSTALL_CANCELLED_FAILURE } from '../../../shared/skills/installation/skill-install-failure'
 import { SkillInstallOperationError } from '../install/skill-install-operation-error'
 
 const TRANSFER_RPC_ATTEMPTS = 3

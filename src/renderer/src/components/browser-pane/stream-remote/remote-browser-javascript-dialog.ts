@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   BrowserJavaScriptDialog,
   BrowserJavaScriptDialogAnswer,
@@ -24,7 +24,7 @@ function toJavaScriptDialog(event: BrowserScreencastDialogResult): BrowserJavaSc
   if (type !== 'alert' && type !== 'confirm' && type !== 'prompt') {
     return null
   }
-  return { type, message: event.message, defaultPromptText: '' }
+  return { type, message: event.message, defaultPromptText: event.defaultPromptText ?? '' }
 }
 
 /** Asks the person about the streamed page's open dialog and answers it on the host. */
@@ -46,12 +46,14 @@ export class RemoteBrowserJavaScriptDialog {
     }
     const open = new AbortController()
     this.open = open
-    // The stream reports no frame origin, so the title can't name one.
-    void this.deps.askJavaScriptDialog({ ...dialog, origin: null }, open.signal).then((answer) => {
-      if (!open.signal.aborted) {
-        void this.answerOnHost(page, answer, open.signal).catch(() => {})
-      }
-    })
+    // Older hosts report no frame origin, so the title can't name one.
+    void this.deps
+      .askJavaScriptDialog({ ...dialog, origin: event.origin ?? null }, open.signal)
+      .then((answer) => {
+        if (!open.signal.aborted) {
+          void this.answerOnHost(page, answer, open.signal).catch(() => {})
+        }
+      })
   }
 
   /** The host closed it (answered here, by an agent or a phone, or by the page), or the stream ended. */

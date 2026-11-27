@@ -1,6 +1,6 @@
 import type { Grammar } from 'shiki/core'
 import type { StateStack } from 'shiki/textmate'
-import { BoundedMap } from '../../../../shared/bounded-map'
+import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import {
   COLD_GRAMMAR_LINE_ATTEMPTS,
   createTextMateCore,

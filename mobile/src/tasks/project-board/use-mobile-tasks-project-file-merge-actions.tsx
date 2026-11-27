@@ -1,5 +1,5 @@
 import { requireGitHubTaskTarget, sameGitHubTask } from '../item-detail/github-task-identity'
-import { withGitHubTargetOperation } from '../../source-control/review/github-work-item-operation'
+import { withGitHubTargetOperation } from '../../source-control/review/github-operations/github-work-item-operation'
 import type { ProjectReviewCheckActionsModel } from './use-mobile-tasks-project-review-check-actions'
 import { useCallback } from 'react'
 import type { DetailComment, GitHubDetailFile } from '../mobile-tasks-provider-detail-types'
@@ -246,7 +246,9 @@ export function useMobileTasksProjectFileMergeActions<Model extends ProjectFileM
             repo: `id:${repo.id}`,
             prNumber: row.content.number,
             prRepo: projectRowGitHubRepository(row, activeGitHubProjectHost),
-            method
+            method,
+            expectedHeadSha:
+              projectRowDetail?.provider === 'github' ? projectRowDetail.headSha : undefined
           },
           { timeoutMs: 60_000 }
         )
@@ -279,7 +281,7 @@ export function useMobileTasksProjectFileMergeActions<Model extends ProjectFileM
         setProjectMutating(false)
       }
     },
-    [activeGitHubProjectHost, client, findProjectRowRepo, projectMutating]
+    [activeGitHubProjectHost, client, findProjectRowRepo, projectMutating, projectRowDetail]
   )
 
   const toggleGitHubStatus = useCallback(

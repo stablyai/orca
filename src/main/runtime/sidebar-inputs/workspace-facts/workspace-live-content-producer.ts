@@ -1,7 +1,7 @@
 import {
   workspaceLiveContentEqual,
   type WorkspaceLiveContent
-} from '../../../../shared/sidebar-list/workspace-live-content'
+} from '../../../../shared/sidebar-list/feed-facts/workspace-live-content'
 import { ProducerRevision } from '../producer-revision'
 
 /** Refresh live terminal content through the activity producer's per-workspace funnel, including PTY binds, exits and verdicts. */

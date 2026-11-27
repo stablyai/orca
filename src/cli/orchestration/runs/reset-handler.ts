@@ -1,6 +1,6 @@
 import type { CommandHandler } from '../../dispatch/dispatch'
 import { printOrchestrationReceipt } from '../agent-view'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import type { ResetRemovedWork } from '../../../shared/orchestration/orchestration-removed-work'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { formatResetResult } from './removed-work-format'

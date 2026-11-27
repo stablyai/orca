@@ -19,7 +19,7 @@ import {
   taskStatusActionLabel,
   isGitHubPrMergeBlocked
 } from './mobile-tasks-item-comments'
-import type { ActionSheetAction } from '../../components/ActionSheetModal'
+import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 
 /** The detail sheet's status and merge actions, which live behind its "…" button. */

@@ -1,11 +1,11 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
-import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
-import { keybindingMatchesAction } from '../../../../../shared/keybindings'
+import { useAppStore } from '@/store/index'
+import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
-import { isEditableKeyboardTarget } from '../host-guest/browser-keyboard'
+import { isEditableKeyboardTarget } from '../host-guest/input/browser-keyboard'
 import {
   REMOTE_BROWSER_FIND_UNAVAILABLE_NOTICE_ID,
   type RemoteBrowserPaneNotice
@@ -19,13 +19,18 @@ export function useRemoteBrowserPageChromeChords({
   chromeShortcutScope,
   workspaceId,
   runRemoteNavigation,
+  openFind,
   setPaneNotice
 }: {
   chromeShortcutScope: BrowserChromeShortcutScope
   workspaceId: string
   runRemoteNavigation: (
-    method: 'browser.reload' | 'browser.back' | 'browser.forward'
+    method: 'browser.reload' | 'browser.back' | 'browser.forward',
+    url?: string,
+    ignoreCache?: boolean
   ) => Promise<void> | void
+  /** Null on hosts that cannot search their pages. */
+  openFind: (() => void) | null
   setPaneNotice: Dispatch<SetStateAction<RemoteBrowserPaneNotice | null>>
 }): void {
   const keybindings = useAppStore((state) => state.keybindings)
@@ -63,6 +68,10 @@ export function useRemoteBrowserPageChromeChords({
       if (keybindingMatchesAction('browser.find', event, shortcutPlatform, keybindings)) {
         event.preventDefault()
         event.stopImmediatePropagation()
+        if (openFind) {
+          openFind()
+          return
+        }
         // Decoded frames have no searchable DOM; rank this notice below stream failures and deduplicate OS key repeats by ID.
         setPaneNotice((current) =>
           current?.id === REMOTE_BROWSER_FIND_UNAVAILABLE_NOTICE_ID
@@ -108,9 +117,7 @@ export function useRemoteBrowserPageChromeChords({
       }
       event.preventDefault()
       event.stopImmediatePropagation()
-      // Why: the runtime exposes one reload; a hard reload would need a wire change, so both
-      // chords land on it rather than one of them silently doing nothing.
-      void runRemoteNavigation('browser.reload')
+      void runRemoteNavigation('browser.reload', undefined, isHardReload)
     }
     addAppKeyListener('keydown', handleKeyDown)
     return () => {
@@ -120,5 +127,5 @@ export function useRemoteBrowserPageChromeChords({
         findNoticeTimerRef.current = null
       }
     }
-  }, [chromeShortcutScope, keybindings, runRemoteNavigation, setPaneNotice, workspaceId])
+  }, [chromeShortcutScope, keybindings, openFind, runRemoteNavigation, setPaneNotice, workspaceId])
 }

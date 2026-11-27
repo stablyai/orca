@@ -6,11 +6,11 @@ import {
 import {
   createSleepingSweepRetentionState,
   updateSleepingSweepRetention
-} from '../../../../shared/sidebar-list/sleeping-sweep-retention'
+} from '../../../../shared/sidebar-list/selection/sleeping-sweep-retention'
 import type {
   SidebarRetention,
   SidebarTemporalSnapshot
-} from '../../../../shared/sidebar-list/sidebar-temporal-snapshot'
+} from '../../../../shared/sidebar-list/feed/sidebar-temporal-snapshot'
 import type { SidebarClock } from '../sidebar-clock'
 
 /** This host's activity by bare id, read for each listed row: its session names no host. */

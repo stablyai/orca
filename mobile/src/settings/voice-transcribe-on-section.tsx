@@ -11,7 +11,7 @@ import { ListRow } from '../components/list/ListGroup'
 import type { Translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { DictationEnginePreference } from '../mobile-web-shell/bridge/bridge-speech-verbs'
+import type { DictationEnginePreference } from '../mobile-web-shell/bridge/native-capabilities/bridge-speech-verbs'
 import { isSpeechBusyError } from '../platform/speech/native-speech'
 import { onDeviceSpeechLocale } from '../platform/speech/on-device-speech-locale'
 import {

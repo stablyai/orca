@@ -6,6 +6,8 @@ import type { RpcClient } from './rpc-client-contract'
 export type ConnectOptions = {
   onStateChange?: (state: ConnectionState) => void
   onLog?: ConnectionLogSink
+  /** The paired host, so the capabilities its loaded page declares are advertised too. */
+  hostId?: string
 }
 
 export function connect(

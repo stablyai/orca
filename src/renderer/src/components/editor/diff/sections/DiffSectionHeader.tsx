@@ -2,7 +2,7 @@ import { combinedDiffHeaderAttributes } from '../../combined-diff/scroll-viewpor
 import { ChevronDown, ChevronRight, ExternalLink, Eye } from 'lucide-react'
 import type { MouseEvent, ReactElement, ReactNode } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
-import { splitPathForDisplay } from '../../editor-path-display'
+import { splitPathForDisplay } from '../../panel/header/editor-path-display'
 
 export function DiffSectionHeader({
   path,

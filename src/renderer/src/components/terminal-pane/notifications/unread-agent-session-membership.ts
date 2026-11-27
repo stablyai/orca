@@ -1,4 +1,4 @@
-import { readTabMapChanges } from '@/store/keyed-record-change-reads'
+import { readTabMapChanges } from '@/store/record-transitions/keyed-record-change-reads'
 
 type MembershipTab = { id: string; contentType?: string }
 type TabBuckets = Readonly<Record<string, readonly MembershipTab[] | undefined>>

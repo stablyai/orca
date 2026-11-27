@@ -1,15 +1,15 @@
 import type { Store } from '../../persistence/loading-store/store'
-import type { Repo } from '../../../shared/repo-types'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
-import {
-  inspectGitRepoForRegistrationAsync,
-  getGitRepoRootAsync
-} from '../../git/repositories/discovery/repo-detection'
+import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
 import { getRepoName } from '../../git/repositories/repository-name'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
 import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'
+import { matchLinkedWorktreeMainCheckout } from '../../workspaces/catalog/linked-worktree-main-checkout'
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { describeWslUncAccessDenied } from '../../wsl/filesystem/wsl-unc-access-denied'
@@ -63,27 +63,12 @@ export async function addLocalRepoFromPath(
     return { repo: existingAtRealPath, alreadyExisted: true }
   }
 
-  // Linked worktrees report their own toplevel; resolve the main checkout to avoid duplicate host setups.
-  let mainRepoKey: string | null = null
-  if (repoKind === 'git') {
-    const mainRepoRoot = gitInfo?.mainRepoPath
-      ? await getGitRepoRootAsync(gitInfo.mainRepoPath)
-      : null
-    if (mainRepoRoot) {
-      mainRepoKey = normalizeRuntimePathForComparison(mainRepoRoot)
-      // Only Git checkouts share project identity with their worktrees; folder records do not deduplicate them.
-      const trackedMainRepo = store
-        .getRepos()
-        .find(
-          (repo) =>
-            !repo.connectionId &&
-            !isFolderRepo(repo) &&
-            normalizeRuntimePathForComparison(repo.path) === mainRepoKey
-        )
-      if (trackedMainRepo) {
-        return { repo: trackedMainRepo, alreadyExisted: true }
-      }
-    }
+  const isMainCheckout = matchLinkedWorktreeMainCheckout(gitInfo)
+  const trackedMainRepo = store
+    .getRepos()
+    .find((repo) => !repo.connectionId && isMainCheckout(repo))
+  if (trackedMainRepo) {
+    return { repo: trackedMainRepo, alreadyExisted: true }
   }
 
   const detected = await detectRepoLocalMetadata({
@@ -97,11 +82,7 @@ export async function addLocalRepoFromPath(
       return false
     }
     const repoPathKey = normalizeRuntimePathForComparison(repo.path)
-    return (
-      repoPathKey === pathKey ||
-      repoPathKey === resolvedPathKey ||
-      (mainRepoKey !== null && !isFolderRepo(repo) && repoPathKey === mainRepoKey)
-    )
+    return repoPathKey === pathKey || repoPathKey === resolvedPathKey || isMainCheckout(repo)
   })
   if (raceWinner) {
     return { repo: raceWinner, alreadyExisted: true }

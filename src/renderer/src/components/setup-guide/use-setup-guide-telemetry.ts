@@ -4,8 +4,8 @@ import {
   getFirstIncompleteFeatureWallSetupStepId,
   getFeatureWallSetupSteps,
   type FeatureWallSetupStepId
-} from '../../../../shared/feature-wall-setup-steps'
-import type { SetupGuideSource } from '../../../../shared/feature-education-telemetry'
+} from '../../../../shared/feature-education/explore/feature-wall-setup-steps'
+import type { SetupGuideSource } from '../../../../shared/feature-education/feature-education-telemetry'
 import type { FeatureWallSetupProgress } from '../feature-wall/setup/feature-wall-setup-progress'
 import {
   persistEmittedSetupGuideStepId,

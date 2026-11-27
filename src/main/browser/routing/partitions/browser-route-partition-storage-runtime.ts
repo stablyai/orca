@@ -59,7 +59,7 @@ export async function collectOrphanedBrowserRoutePartitionStorage(
     })
   )
   const liveStorageScopes = new Set(
-    listEnvironments(getRuntimeEnvironmentRegistryRoot()).map((environment) =>
+    (await listEnvironments(getRuntimeEnvironmentRegistryRoot())).map((environment) =>
       deriveBrowserRoutePartitionStorageScope({ orcaProfileId, environmentId: environment.id })
     )
   )

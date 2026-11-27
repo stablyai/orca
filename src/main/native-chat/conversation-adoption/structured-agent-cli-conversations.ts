@@ -3,8 +3,8 @@ import { admitTranscriptPath } from '../transcript-discovery/transcript-path-adm
 import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
-import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+} from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { sessionIdFromFileName } from '../../ai-vault/parsing/session-scanner-accumulator'
@@ -20,7 +20,7 @@ export type StructuredAgentTranscriptImport = {
   accountHomeCandidates: (input: {
     settings: StructuredAgentTranscriptImportSettings
     selectedAccountHome: AgentSessionAccountHome
-  }) => AgentSessionAccountHome[]
+  }) => AgentSessionAccountHome[] | Promise<AgentSessionAccountHome[]>
   /** Admission and lookup share one store path; null means this account has none. */
   conversationStore: (input: {
     accountHome: AgentSessionAccountHome

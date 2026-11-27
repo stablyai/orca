@@ -1,4 +1,4 @@
-import type { CrashReportDetailValue } from '../../../shared/crash-reporting'
+import type { CrashReportDetailValue } from '../../../shared/crash-reporting/crash-reporting'
 import { preGoneSystemMemoryDetails } from '../memory/pre-gone-host-memory'
 import { getSystemMemoryDetails, SYSTEM_MEMORY_KEY_PREFIX } from '../memory/system-memory-details'
 

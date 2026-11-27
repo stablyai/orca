@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { mobileCommitDropdownCopy } from './mobile-commit-dropdown-copy'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { buildMobileSourceControlActions } from './mobile-source-control-actions'
-import type { ActionSheetAction } from '../../components/ActionSheetModal'
+import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { SOURCE_CONTROL_ACTION_ICONS } from '../changes/mobile-source-control-screen-state'
 import type { MobileSourceControlState } from '../use-mobile-source-control-state'
 import {

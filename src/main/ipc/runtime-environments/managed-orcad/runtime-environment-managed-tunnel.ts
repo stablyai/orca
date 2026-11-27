@@ -8,7 +8,7 @@ import type {
   SshManagedServerStatus,
   SshManagedServerUpdateNote,
   SshTarget
-} from '../../../../shared/ssh-types'
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { managedServerUpdateDeps } from '../../../ssh/host-server/managed-server-update-deps'
 import {
   ensureOrcadManagedTunnel,
@@ -33,21 +33,32 @@ import {
   setSshHostServerStatus
 } from '../../../ssh/host-server/ssh-host-server-status'
 import { getSshTargetRegistryStore } from '../../../ssh/targets/ssh-target-registry'
-import { connectionManager, getCurrentMainWindow } from '../../ssh/ssh-ipc-context'
+import { connectionManager } from '../../ssh/ssh-ipc-context'
 import {
   getWslHostPhoneGate,
   getWslHostService
 } from '../../../wsl/host-lifecycle/wsl-host-service-instance'
 import { assertWslHostReachable } from '../../../wsl/host-lifecycle/wsl-host-gate'
-import { wslHostPhoneRefusal } from '../../../wsl/host-lifecycle/wsl-host-phone-reach'
+import { isWslHostIdleStopped } from '../../../wsl/host-lifecycle/wsl-host-idle-stop'
+import {
+  type PhoneWake,
+  wslHostPhoneRefusal
+} from '../../../wsl/host-lifecycle/wsl-host-phone-reach'
 import { broadcastSshState } from '../../ssh/ssh-renderer-broadcast'
 import { restoreManagedHostPortForwards } from '../../ssh/ssh-managed-port-forward-restore'
 import { recipeVmWakeIntentFor } from '../../../../shared/remote-runtime/recipe-vm-wake'
 import { prepareRecipeVm } from './runtime-environment-recipe-vm-wake'
 
 /** `wslStart: 'never'` serves a WSL host only while it runs: a paired phone never boots a distro.
- *  `recipeVmHoldMs` bounds how long an open of a sleeping recipe VM workspace is held. */
-export type ManagedRuntimeCallPreparation = { wslStart?: 'never'; recipeVmHoldMs?: number }
+ *  `recipeVmHoldMs` bounds how long an open of a sleeping recipe VM workspace is held.
+ *  `background`: a poll, no use of an idle host. `wake`: the user's call, which may boot a WSL
+ *  host Orca stopped idle (nothing else does). */
+export type ManagedRuntimeCallPreparation = {
+  wslStart?: 'never'
+  recipeVmHoldMs?: number
+  background?: boolean
+  wake?: boolean
+}
 
 export async function resolveManagedRuntimeEnvironment(
   userDataPath: string,
@@ -56,7 +67,7 @@ export async function resolveManagedRuntimeEnvironment(
   /** The request that needs the server: only one that opens a workspace wakes a sleeping recipe VM. */
   method?: string,
   signal?: AbortSignal
-): Promise<ReturnType<typeof resolveEnvironment>> {
+): Promise<Awaited<ReturnType<typeof resolveEnvironment>>> {
   return (await prepareManagedRuntimeRequest(userDataPath, selector, preparation, method, signal))
     .environment
 }
@@ -69,7 +80,7 @@ export async function prepareManagedRuntimeRequest(
   method?: string,
   signal?: AbortSignal
 ): Promise<PreparedManagedRuntimeRequest> {
-  const environment = resolveEnvironment(userDataPath, selector)
+  const environment = await resolveEnvironment(userDataPath, selector)
   // Enforce the WSL gate for calls, subscriptions and status probes.
   assertWslHostReachable(environment)
   const vm = await prepareRecipeVm(
@@ -82,14 +93,19 @@ export async function prepareManagedRuntimeRequest(
   const host = classifyRuntimeEnvironmentHost(environment)
   switch (host.kind) {
     case 'wsl':
-      await prepareWslHostForCall(environment, preparation)
+      await prepareWslHostForCall(
+        environment,
+        preparation,
+        // No method (a grant resync) is nobody asking, so it never wakes.
+        method === undefined ? 'never' : method === 'status.get' ? 'status' : 'call'
+      )
       break
     case 'network':
     case 'ssh':
       await prepareNetworkServerForCall(userDataPath, environment)
       break
   }
-  const prepared = resolveEnvironment(userDataPath, environment.id)
+  const prepared = await resolveEnvironment(userDataPath, environment.id)
   return {
     environment: prepared,
     before: environment,
@@ -111,16 +127,25 @@ export async function requireWslHostWithoutStart(
   selector: string,
   preparation: ManagedRuntimeCallPreparation
 ): Promise<void> {
-  const environment = resolveEnvironment(userDataPath, selector)
+  const environment = await resolveEnvironment(userDataPath, selector)
   if (classifyRuntimeEnvironmentHost(environment).kind === 'wsl') {
     assertWslHostReachable(environment)
     await prepareWslHostForCall(environment, preparation)
   }
 }
 
+/** A user's status read (the compatibility probe ahead of their call) wakes an idle-stopped host. */
+export async function wakeIdleStoppedWslHost(environmentId: string): Promise<void> {
+  if (isWslHostIdleStopped(environmentId)) {
+    await getWslHostService()?.ensureForRuntimeCall(environmentId, () => true, true)
+  }
+}
+
 async function prepareWslHostForCall(
   environment: KnownRuntimeEnvironment,
-  preparation: ManagedRuntimeCallPreparation | undefined
+  preparation: ManagedRuntimeCallPreparation | undefined,
+  /** What a phone's request may do to an idle-stopped host; a status read wakes only rarely. */
+  phoneWake: PhoneWake = 'never'
 ): Promise<void> {
   if (preparation?.wslStart === 'never') {
     const gate = getWslHostPhoneGate()
@@ -129,11 +154,16 @@ async function prepareWslHostForCall(
         environment.orcadDeployment?.kind === 'wsl' ? environment.orcadDeployment.distro : null
       throw wslHostPhoneRefusal('unavailable', distro ?? environment.id)
     }
-    await gate.requireRunningWithoutStart(environment.id)
+    await gate.requireRunningWithoutStart(environment.id, phoneWake)
     return
   }
   // Reached over the wsl.exe bridge; connects only when an open project or terminal needs it.
-  await getWslHostService()?.ensureForRuntimeCall(environment.id)
+  await getWslHostService()?.ensureForRuntimeCall(
+    environment.id,
+    undefined,
+    preparation?.wake === true,
+    preparation?.background === true
+  )
 }
 
 async function prepareNetworkServerForCall(
@@ -245,7 +275,6 @@ export function publishResolvedChangedHostStatus(
   })
   // Moves release the relay session; publish even when its stale status line is disconnected.
   broadcastSshState(
-    getCurrentMainWindow,
     target.id,
     connectionManager?.getState(target.id) ?? {
       targetId: target.id,
@@ -261,7 +290,7 @@ export function publishHostServerStatus(targetId: string, status: SshManagedServ
   // Only a host with a connection state has a status line to refresh.
   const state = connectionManager?.getState(targetId)
   if (state) {
-    broadcastSshState(getCurrentMainWindow, targetId, { ...state, managedServer: status })
+    broadcastSshState(targetId, { ...state, managedServer: status })
   }
 }
 

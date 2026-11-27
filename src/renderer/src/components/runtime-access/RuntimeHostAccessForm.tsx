@@ -223,7 +223,7 @@ export function RuntimeHostAccessForm({
           {tunnelOverrideEnabled
             ? t(
                 'auto.components.settings.RuntimeHostAccessForm.addServerWithTunnel',
-                'Add server using tunnel'
+                'Add via tunnel'
               )
             : t('auto.components.settings.RuntimeHostAccessForm.addServer', 'Add server')}
         </Button>

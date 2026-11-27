@@ -1,4 +1,4 @@
-import type { RepoIconPickResult } from '../../../shared/repo-icon-pick-failure-copy'
+import type { RepoIconPickResult } from '../../../shared/repository/appearance/repo-icon-pick-failure-copy'
 import { ipcRenderer } from 'electron'
 import type {
   ShellOpenExternalEditorRequest,
@@ -6,9 +6,14 @@ import type {
   ShellOpenFileResult,
   ShellOpenLocalPathResult
 } from '../../../shared/shell/opening/shell-open-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { RuntimeFileOpenPosition } from '../../../shared/file-access/runtime-editor-file-open'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { ShellPathExistence } from '../../../shared/file-access/path-existence-batch'
 import type { PreloadApi } from '../../api-types'
+import type {
+  ForwardedUrlOpenRequest,
+  ForwardedUrlOpenResult
+} from '../../../shared/workspace/ports/forwarded-url-open'
 
 export const shellApi = {
   openPath: (path: string, ownerHostId: ExecutionHostId): Promise<void> =>
@@ -27,8 +32,14 @@ export const shellApi = {
 
   openUrl: (url: string): Promise<void> => ipcRenderer.invoke('shell:openUrl', url),
 
-  openFilePath: (path: string, ownerHostId: ExecutionHostId): Promise<boolean> =>
-    ipcRenderer.invoke('shell:openFilePath', path, ownerHostId),
+  openForwardedUrl: (request: ForwardedUrlOpenRequest): Promise<ForwardedUrlOpenResult> =>
+    ipcRenderer.invoke('shell:openForwardedUrl', request),
+
+  openFilePath: (
+    path: string,
+    ownerHostId: ExecutionHostId,
+    location?: RuntimeFileOpenPosition
+  ): Promise<boolean> => ipcRenderer.invoke('shell:openFilePath', path, ownerHostId, location),
 
   openFileUri: (uri: string, ownerHostId: ExecutionHostId): Promise<ShellOpenFileResult> =>
     ipcRenderer.invoke('shell:openFileUri', uri, ownerHostId),

@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/remote-runtime/relay/mobile-relay-status'
 import type { PairingRelay } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type * as RelayCredentials from '../../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
-import type { RelayHostCloseReason } from '../../../../shared/relay-host-close-reason'
+import type { RelayHostCloseReason } from '../../../../shared/remote-runtime/relay/relay-host-close-reason'
 import type { DeviceCredentialInstallAuthorization } from '../control-channel/relay-control-requests'
 import {
   deriveRelayHostId,
@@ -19,6 +19,7 @@ import { relayIdentityKey } from '../authentication/relay-auth-identity'
 import { RelayOriginPool } from '../origin-lifecycle/relay-origin-pool'
 import { RelayRegionRefresh } from '../region-selection/relay-region-refresh'
 import { relayRenewalDelayMs } from './relay-renewal-jitter'
+import { RelayRenewalOrigin, renewRelayAuthorization } from './relay-renewal-origin'
 import { RelayWallClockTimer } from './relay-wall-clock-timer'
 
 export class RelaySessionBroker {
@@ -28,6 +29,7 @@ export class RelaySessionBroker {
   private readonly regionRefresh: RelayRegionRefresh | null
   private authorization: RelayAuthorization | null = null
   private readonly refreshTimer: RelayWallClockTimer
+  private readonly renewalOrigin = new RelayRenewalOrigin()
   private closed = false
 
   private constructor(options: RelaySessionBrokerOptions) {
@@ -92,6 +94,11 @@ export class RelaySessionBroker {
 
   isLive(): boolean {
     return !this.closed && this.originPool.hasLiveControl()
+  }
+
+  // An expiring relay JWT needs no check here: refresh give-up closes the broker and reports it.
+  isRecovering(): boolean {
+    return !this.closed && this.originPool.isRecovering()
   }
 
   get endpoint(): RelayCredentials.MobileRelayEndpoint | null {
@@ -262,25 +269,23 @@ export class RelaySessionBroker {
   }
 
   private async refreshAuthorization(): Promise<void> {
+    // Retries after an unanswered attempt alternate with the director's authOrigin (front door).
+    const authOrigin = this.originPool.activeAssignment?.authOrigin
     try {
-      const refresh = await this.options.refreshAccessToken()
+      const via = this.renewalOrigin.next(authOrigin)
+      const result = await renewRelayAuthorization(this.options, via)
       this.assertCurrent()
-      if (refresh.accessToken === null) {
-        this.closeNow(refresh.hostCloseReason)
+      if (result.kind === 'refused') {
+        this.closeNow(result.hostCloseReason)
         return
       }
-      const authorization = await exchangeRelayAuthorization({
-        endpoint: this.options.authConfig.relayTokenEndpoint,
-        accessToken: refresh.accessToken,
-        keypair: this.options.keypair,
-        fetch: this.options.fetch
-      })
-      this.assertCurrent()
-      this.originPool.refreshAuthorization(authorization.relayToken)
-      this.authorization = authorization
+      this.renewalOrigin.succeeded()
+      this.originPool.refreshAuthorization(result.authorization.relayToken)
+      this.authorization = result.authorization
       this.regionRefresh?.checkDeadline()
       this.scheduleRefresh()
-    } catch {
+    } catch (error) {
+      this.renewalOrigin.failed(error, authOrigin)
       const expiry = this.authorization?.expiresAt ?? 0
       const now = (this.options.now ?? Date.now)()
       if (!this.closed && this.options.isCurrent() && now <= expiry + 60_000) {
@@ -292,6 +297,7 @@ export class RelaySessionBroker {
         return
       }
       this.closeNow()
+      this.options.onSelfClose?.()
     }
   }
 

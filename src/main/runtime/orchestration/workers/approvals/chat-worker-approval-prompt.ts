@@ -1,17 +1,19 @@
 /** A chat worker's permission prompt is its own journal item: Orca reads it there and answers it
  *  through the chat's ordinary prompt response, so the worker's chat and Orca share one record. */
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mintAgentSessionOperationId } from '../../mailbox/structured-pointer/structured-pointer-operation-id'
 import { workerApprovalDecisionOf, workerApprovalOption } from './worker-approval'
-import type {
-  WorkerApprovalDecision,
-  WorkerApprovalOutcome
+import {
+  ORCHESTRATION_APPROVAL_CALLER_PREFIX,
+  ORCHESTRATION_COORDINATOR_APPROVAL_CALLER_PREFIX,
+  ORCHESTRATION_PERSON_APPROVAL_CALLER_PREFIX,
+  type WorkerApprovalDecision,
+  type WorkerApprovalOutcome
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
-/** Marks a prompt Orca answered for a coordinator or a person, so the chat's own closer leaves it alone. */
-export const ORCHESTRATION_APPROVAL_CALLER_PREFIX = 'trusted-local:orchestration:approval:'
+export { ORCHESTRATION_APPROVAL_CALLER_PREFIX }
 
 export type ChatWorkerPrompt = { revision: number; body: AgentJournalApprovalItem }
 export type ChatWorkerPromptReader = (
@@ -26,8 +28,7 @@ export const readChatWorkerPrompt: ChatWorkerPromptReader = async (sessionId, it
   if (!host) {
     throw new Error('No chat host is running.')
   }
-  const snapshot = await host.journalCurrentRead(sessionId)
-  const item = snapshot.items.find((candidate) => candidate.itemId === itemId)
+  const item = await host.approvalPrompt(sessionId, itemId)
   return item?.body.kind === 'approval' ? { revision: item.revision, body: item.body } : null
 }
 
@@ -112,7 +113,8 @@ export async function answerChatWorkerApproval(input: {
           : `Approval ${approvalId} offers no way to allow just this request. A person must answer it on the worker.`
     }
   }
-  const callerKey = `${ORCHESTRATION_APPROVAL_CALLER_PREFIX}${input.dispatchId}`
+  // The worker's chat names who answered: the coordinator, or a person in its chat.
+  const callerKey = `${input.byAgent ? ORCHESTRATION_COORDINATOR_APPROVAL_CALLER_PREFIX : ORCHESTRATION_PERSON_APPROVAL_CALLER_PREFIX}${input.dispatchId}`
   const { resolution } = prompt.body
   // A retry of this Dispatch's own answer: the same receipt, and no second effect.
   if (

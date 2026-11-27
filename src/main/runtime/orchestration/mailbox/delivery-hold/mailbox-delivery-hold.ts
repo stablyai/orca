@@ -1,7 +1,22 @@
+import { orchestrationCheckRunFlag } from '../formatting/message-formatting'
+import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
+import type { AgentSessionUsageLimitContinue } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue-wire'
+import { formatUsageLimitResetClock } from '../../../../../shared/agent-session/failures/agent-session-usage-limit'
+
 /** Why mail to a worker is not delivered right now, read from the same gates that hold it, so a send
  *  receipt says only what is true at send time. Null means delivery would go ahead. */
 
 export type MailboxDeliveryHold =
+  | {
+      kind: 'asleep'
+      agentName: string
+      openTab: boolean
+      failed?: boolean
+      liveShell?: boolean
+      waking?: boolean
+      resuming?: boolean
+      workspaceName?: string
+    }
   /** A terminal dialog only a person can answer. */
   | { kind: 'prompt' }
   /** Typed text in the worker's terminal that delivery would submit with the mail. */
@@ -16,25 +31,50 @@ export type MailboxDeliveryHold =
   | { kind: 'overlay' }
   /** The worker has not settled at its prompt (a permission request, a question, or output still arriving). */
   | { kind: 'unsettled' }
+  /** No live status shows an agent in this terminal that takes typed input, so no note is typed for now. */
+  | { kind: 'unverified'; terminal: string }
+  /** The terminal is open but cannot read this mailbox (it reads only its Task's mail). */
+  | { kind: 'unreachable'; terminal: string }
+  /** The terminal's own check reads another mailbox (`reads`; null when no local sender can reach it). */
+  | { kind: 'not-read'; terminal: string; reads: string | null }
   /** The chat accepts the mail into its queue behind an open prompt or question. */
   | { kind: 'behind-prompt' }
   /** The chat is detached from its agent, or not attached here; the mail waits for it. */
   | { kind: 'detached' }
   /** The chat refuses new messages for now. */
   | { kind: 'refused'; reason: string }
+  /** The chat's last turn failed; agent mail waits for its next turn. `usageLimit` is set when that
+   *  turn stopped at a usage limit, with Orca's automatic continue as the host publishes it. */
+  | { kind: 'failed-turn'; usageLimit?: UsageLimitHold }
+
+/** A usage-limited chat's automatic continue; `state: 'none'` when Orca has none to promise.
+ *  `off` names why: the setting, a sleeping workspace (which continues once it wakes), or neither. */
+export type UsageLimitHold =
+  | (Pick<AgentSessionUsageLimitContinue, 'state' | 'resetsAt' | 'continueAt'> & {
+      off?: UsageLimitContinueOff
+    })
+  | { state: 'none' }
+
+export type UsageLimitContinueOff = 'setting' | 'asleep' | 'other'
 
 /** What a chat's mail admission would do with a message now; null when the chat cannot be read. */
 export type ChatMailAdmitFacts =
   | { attached: false }
-  | { attached: true; fenced: boolean; refusal: string | null; behindPrompt: boolean }
+  | {
+      attached: true
+      fenced: boolean
+      refusal: string | null
+      behindPrompt: boolean
+      /** Agent mail is held behind the chat's failed last turn (see `failed-turn`). */
+      failedTurn?: { usageLimit?: UsageLimitHold }
+    }
 
 export type MailboxDeliveryHoldReaders = {
   /** The chat a mailbox's mail reaches, if a chat holds it. */
   chatSessionFor: (mailbox: string) => string | null
   readChatAdmit: (sessionId: string) => Promise<ChatMailAdmitFacts | null>
-  /** The terminal handle a mailbox's pointer is typed into, if a terminal holds it. */
-  terminalFor: (mailbox: string) => string | null
-  readTerminalHold: (terminalHandle: string) => MailboxDeliveryHold | null
+  /** The hold of the terminal a mailbox's pointer is typed into; null when none holds it or none would. */
+  readTerminalHold: (mailbox: string) => MailboxDeliveryHold | null
 }
 
 /** The chat pointer's own admission order: no fence or no attachment parks, a refusal parks, and an
@@ -46,7 +86,10 @@ export function chatMailHold(facts: ChatMailAdmitFacts): MailboxDeliveryHold | n
   if (facts.refusal) {
     return { kind: 'refused', reason: facts.refusal }
   }
-  return facts.behindPrompt ? { kind: 'behind-prompt' } : null
+  if (facts.behindPrompt) {
+    return { kind: 'behind-prompt' }
+  }
+  return facts.failedTurn ? { kind: 'failed-turn', ...facts.failedTurn } : null
 }
 
 export async function readMailboxDeliveryHold(
@@ -59,12 +102,25 @@ export async function readMailboxDeliveryHold(
     const facts = await readers.readChatAdmit(sessionId)
     return facts ? chatMailHold(facts) : null
   }
-  const terminal = readers.terminalFor(mailbox)
-  return terminal ? readers.readTerminalHold(terminal) : null
+  return readers.readTerminalHold(mailbox)
 }
 
-export function describeMailboxDeliveryHold(recipient: string, hold: MailboxDeliveryHold): string {
+export function describeMailboxDeliveryHold(
+  recipient: string,
+  hold: MailboxDeliveryHold,
+  receiverCli: OrchestrationCliCommand = 'orca'
+): string {
   switch (hold.kind) {
+    case 'asleep':
+      if (hold.waking || hold.resuming) {
+        return `Queued. Orca is ${hold.waking ? 'waking' : 'resuming'} ${hold.agentName}; the message will be delivered when it's back.`
+      }
+      if (hold.liveShell) {
+        return `Queued. Re-run ${hold.agentName} in that terminal; the message is waiting.`
+      }
+      return hold.failed
+        ? `Queued. Orca couldn't resume ${hold.agentName} in ${hold.workspaceName ?? 'its workspace'} because the agent didn't reconnect; open its tab to try again. The message is waiting.`
+        : `Queued. Open ${hold.openTab ? 'its tab' : (hold.workspaceName ?? 'its workspace')} to resume ${hold.agentName}; the message is waiting.`
     case 'prompt':
       return `Queued. ${recipient} is at a prompt that needs a person; delivery is held while it stays open.`
     case 'draft':
@@ -79,11 +135,54 @@ export function describeMailboxDeliveryHold(recipient: string, hold: MailboxDeli
       return `Queued. ${recipient}'s screen shows something that refuses typed input; delivery waits until it closes.`
     case 'unsettled':
       return `Queued. ${recipient} has not settled at its prompt (an open request or question, or output still arriving); delivery waits until it does.`
+    case 'unverified':
+      return `Queued. Orca can't notify the agent in ${hold.terminal} right now with the evidence it has. The agent in ${hold.terminal} can read it by running \`${receiverCli} orchestration check${orchestrationCheckRunFlag(recipient)} --terminal ${hold.terminal}\` in its own terminal; don't run this yourself or type into its terminal. Orca will notify it once it can verify the agent accepts input; if it needs the message sooner, tell the user.`
+    case 'unreachable':
+      return `Queued for ${hold.terminal}, but it can't be read in that terminal: it only reads its Task's mail. Message its coordinator instead.`
+    case 'not-read':
+      return hold.reads
+        ? `Queued for ${recipient}, but the agent in ${hold.terminal} reads ${mailboxOwnerRole(hold.reads)}, so Orca won't notify it of this message and its own check won't read it. Message ${hold.terminal} directly instead.`
+        : `Queued for ${recipient}, but the agent in ${hold.terminal} can't read this mailbox there, so Orca won't notify it of this message. Tell the user instead.`
     case 'behind-prompt':
       return `Queued behind an open prompt; ${recipient} sees it after the prompt is answered.`
     case 'detached':
       return `Queued. ${recipient}'s chat is not attached to its agent; delivery waits until it is.`
     case 'refused':
       return `Queued. ${recipient}'s chat refuses new messages for now (${hold.reason}); delivery is retried when that changes.`
+    case 'failed-turn':
+      return describeFailedTurnHold(recipient, hold.usageLimit)
   }
+}
+
+function mailboxOwnerRole(mailbox: string): string {
+  return mailbox.startsWith('run:')
+    ? `its Run's mail (${mailbox})`
+    : mailbox.startsWith('dispatch:')
+      ? `its Task's mail (${mailbox})`
+      : 'only its own mail'
+}
+
+function describeFailedTurnHold(recipient: string, limit: UsageLimitHold | undefined): string {
+  if (!limit) {
+    return `Queued. ${recipient}'s last turn failed; delivery waits until a person continues the chat.`
+  }
+  if (limit.state === 'scheduled') {
+    const at = formatUsageLimitResetClock(limit.continueAt ?? limit.resetsAt)
+    return `Queued. ${recipient} stopped at its usage limit; Orca continues it at ${at}, then delivers this.`
+  }
+  if (limit.state === 'none') {
+    return `Queued. ${recipient} stopped at its usage limit and Orca has no reset time to promise; delivery waits until the chat continues.`
+  }
+  if (limit.state === 'off' && limit.off === 'asleep') {
+    return `Queued. ${recipient} stopped at its usage limit while its workspace sleeps; Orca can continue it once the workspace wakes, then delivers this.`
+  }
+  if (limit.state === 'off' && limit.off !== 'setting') {
+    return `Queued. ${recipient} stopped at its usage limit and Orca has not scheduled a continue for it; delivery waits until the chat continues.`
+  }
+  const why = {
+    off: 'automatic continue is off in Settings',
+    cancelled: 'automatic continue was cancelled for this chat',
+    failed: 'automatic continue gave up on this chat'
+  }[limit.state]
+  return `Queued. ${recipient} stopped at its usage limit and Orca will not continue it on its own (${why}); delivery waits until a person continues the chat.`
 }

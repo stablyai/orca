@@ -75,5 +75,7 @@ export const KIMI_ACP_DIALECT: AcpDialect = {
   // Without forms, Kimi drops every question after the first and offers no free-text answer.
   clientCapabilities: { elicitation: { form: {} } },
   normalizeToolUpdate,
-  request: approvalRequest
+  request: approvalRequest,
+  // User and project skills arrive as `skill:<name>`; built-in skills keep bare command names.
+  skillDescription: ({ name, description }) => (name.startsWith('skill:') ? description : null)
 }

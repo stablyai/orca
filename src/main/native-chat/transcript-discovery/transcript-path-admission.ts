@@ -3,8 +3,8 @@ import { basename, dirname, isAbsolute, relative, resolve } from 'node:path'
 import {
   isDescendantOrEqual,
   isENOENT
-} from '../../ipc/filesystem/access/filesystem-path-containment'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+} from '../../filesystem/local-file-io/filesystem-path-containment'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { needsWslHostResolution } from './host-readable-transcript-path'
 
 /** Account containment must survive symlinks and host-native path translation. */

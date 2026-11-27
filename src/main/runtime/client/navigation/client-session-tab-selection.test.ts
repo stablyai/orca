@@ -1,136 +1,56 @@
 import { describe, expect, it } from 'vitest'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { MobileSessionSnapshotsByWorktree } from '../../session-tabs/publication/mobile-session-snapshots-by-worktree'
+import { projectStructuredSessionTab } from '../../session-tabs/chat/structured-session-tab-publication'
 import { ClientSessionTabSelectionStore } from './client-session-tab-selection'
 
-function snapshot(activeTabId = 'terminal-a::leaf-a'): RuntimeMobileSessionTabsResult {
-  const tabs = [
-    {
-      type: 'terminal' as const,
-      id: 'terminal-a::leaf-a',
-      parentTabId: 'terminal-a',
-      leafId: 'leaf-a',
-      title: 'A',
-      isActive: activeTabId === 'terminal-a::leaf-a',
-      status: 'ready' as const,
-      terminal: 'term-a'
+const WORKTREE = 'wt-1'
+const SESSION_ID = 'chat-1'
+const CHAT_ID = `agent-session:${SESSION_ID}`
+
+function hostWithSelections() {
+  const selections = new ClientSessionTabSelectionStore()
+  const runtime = {
+    mobileSessionTabsByWorktree: new MobileSessionSnapshotsByWorktree(),
+    storeMobileSessionSnapshot(worktreeId: string, snapshot: RuntimeMobileSessionTabsSnapshot) {
+      runtime.mobileSessionTabsByWorktree.set(worktreeId, snapshot)
+      return snapshot
     },
-    {
-      type: 'terminal' as const,
-      id: 'terminal-a::leaf-b',
-      parentTabId: 'terminal-a',
-      leafId: 'leaf-b',
-      title: 'A split',
-      isActive: activeTabId === 'terminal-a::leaf-b',
-      status: 'ready' as const,
-      terminal: 'term-b'
-    },
-    {
-      type: 'browser' as const,
-      id: 'browser-unified',
-      browserWorkspaceId: 'browser-workspace',
-      browserPageId: 'page-1',
-      title: 'Browser',
-      url: 'about:blank',
-      loading: false,
-      canGoBack: false,
-      canGoForward: false,
-      isActive: activeTabId === 'browser-unified'
-    }
-  ]
-  return {
-    worktree: 'wt-1',
-    publicationEpoch: 'renderer:1',
-    snapshotVersion: 1,
-    activeGroupId: 'group-left',
-    activeTabId,
-    activeTabType: activeTabId === 'browser-unified' ? 'browser' : 'terminal',
-    tabGroups: [
-      { id: 'group-left', activeTabId: 'terminal-a', tabOrder: ['terminal-a'] },
-      { id: 'group-right', activeTabId: 'browser-unified', tabOrder: ['browser-unified'] }
-    ],
-    tabs
+    reopenClosedMobileSessionTab: (worktreeId: string, tabId: string) =>
+      selections.reopenForAllClients(worktreeId, tabId)
   }
+  const publishChat = () =>
+    projectStructuredSessionTab(
+      runtime,
+      { workspaceId: WORKTREE, sessionId: SESSION_ID, agent: 'claude', activate: false },
+      () => {}
+    )
+  const frame = (): RuntimeMobileSessionTabsResult => {
+    const stored = runtime.mobileSessionTabsByWorktree.get(WORKTREE)!
+    return { ...stored, tabs: stored.tabs.filter((tab) => tab.type === 'agent-session') }
+  }
+  const shown = (client: string) => selections.project(frame(), client).tabs.map((tab) => tab.id)
+  return { selections, runtime, publishChat, frame, shown }
 }
 
-function browserStrip(
-  tabOrder: string[],
-  options: { hostActiveTabId?: string; hostRecentTabIds?: string[] } = {}
-): RuntimeMobileSessionTabsResult {
-  const hostActiveTabId = options.hostActiveTabId ?? tabOrder[0]!
-  return {
-    worktree: 'wt-1',
-    publicationEpoch: 'renderer:1',
-    snapshotVersion: 1,
-    activeGroupId: 'group',
-    activeTabId: hostActiveTabId,
-    activeTabType: 'browser',
-    tabGroups: [
-      {
-        id: 'group',
-        activeTabId: hostActiveTabId,
-        tabOrder,
-        ...(options.hostRecentTabIds ? { recentTabIds: options.hostRecentTabIds } : {})
-      }
-    ],
-    tabs: tabOrder.map((id) => ({
-      type: 'browser' as const,
-      id,
-      browserWorkspaceId: `workspace-${id}`,
-      browserPageId: `page-${id}`,
-      title: id,
-      url: 'about:blank',
-      loading: false,
-      canGoBack: false,
-      canGoForward: false,
-      isActive: id === hostActiveTabId
-    }))
-  }
-}
+describe('closed chat tabs across clients', () => {
+  it('shows a reopened chat to a client that missed its close, and hides stale echoes until then', () => {
+    const host = hostWithSelections()
+    host.publishChat()
+    expect(host.shown('phone')).toEqual([CHAT_ID])
 
-describe('client session-tab selection', () => {
-  it('does not restore a closed tab from a stale pre-close snapshot', () => {
-    const store = new ClientSessionTabSelectionStore()
-    const full = snapshot()
-    store.activate(full, 'device-a', 'browser-unified')
-    store.activate(full, 'device-b', 'browser-unified')
+    // Closed while a stale frame still lists it: every client keeps it hidden.
+    host.selections.forgetTabs(WORKTREE, [CHAT_ID])
+    expect(host.shown('phone')).toEqual([])
 
-    store.forgetTabs('wt-1', ['browser-unified'])
+    // The host drops the row and later reopens the same chat while the phone is away.
+    const open = host.frame()
+    host.runtime.storeMobileSessionSnapshot(WORKTREE, { ...open, tabs: [], tabGroups: [] })
+    host.publishChat()
 
-    for (const clientId of ['device-a', 'device-b']) {
-      const stale = store.project(full, clientId)
-      expect(stale.activeTabId).toBe('terminal-a::leaf-a')
-      expect(stale.tabs.some((tab) => tab.id === 'browser-unified')).toBe(false)
-    }
-
-    const withoutBrowser = {
-      ...full,
-      activeTabId: 'terminal-a::leaf-a',
-      activeTabType: 'terminal' as const,
-      tabGroups: full.tabGroups?.slice(0, 1),
-      tabs: full.tabs.filter((tab) => tab.id !== 'browser-unified')
-    }
-    store.project(withoutBrowser, 'device-a')
-    const reused = store.project(full, 'device-a')
-    expect(reused.activeTabId).toBe('terminal-a::leaf-a')
-    expect(reused.tabs.some((tab) => tab.id === 'browser-unified')).toBe(true)
+    expect(host.shown('phone')).toEqual([CHAT_ID])
   })
-})
-
-it('reopening caller visibility retains host-follow policy without changing a bystander close', () => {
-  const store = new ClientSessionTabSelectionStore()
-  const tabs = browserStrip(['a', 'b'])
-  store.project(tabs, 'caller')
-  store.project(tabs, 'bystander')
-  store.forgetTabs('wt-1', ['a'])
-  const before = store.project(tabs, 'caller')
-  expect(before.activeTabId).toBe('b')
-  expect(store.serialize()).toEqual({})
-  const reopened = store.reopen(tabs, 'caller', 'a')
-  expect(reopened.activeTabId).toBe('a')
-  expect(store.project(tabs, 'caller').activeTabId).toBe('a')
-  expect(store.project(tabs, 'bystander').activeTabId).toBe('b')
-  expect(
-    store.project(browserStrip(['a', 'b'], { hostActiveTabId: 'b' }), 'caller').activeTabId
-  ).toBe('b')
-  expect(store.serialize()).toEqual({})
 })

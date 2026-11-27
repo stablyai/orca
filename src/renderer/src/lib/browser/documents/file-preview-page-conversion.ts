@@ -6,7 +6,7 @@ import { webClientDocPreviewRefusal } from './doc-preview-web-client'
 import { openFileInBrowserTab } from './file-preview'
 import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import type { BrowserPageConversionLeg } from '@/store/slices/browser/pages/browser-page-conversion'
-import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
+import type { BrowserPageDocLocation } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { findWorkspaceShowingDoc } from './workspace-doc-tab-lookup'
 
 /**

@@ -21,6 +21,7 @@ import { registerNimLanguage } from '../../monaco-languages/register-nim'
 import { registerQuartoLanguage } from '../../monaco-languages/register-quarto'
 import { registerShellMarkdownAliases } from '../../monaco-languages/register-shell-markdown-aliases'
 import { registerSvelteLanguage } from '../../monaco-languages/register-svelte'
+import { registerSwiftLanguage } from '../../monaco-languages/register-swift'
 import { registerTypstLanguage } from '../../monaco-languages/register-typst'
 import { registerVueLanguage } from '../../monaco-languages/register-vue'
 import { registerZigLanguage } from '../../monaco-languages/register-zig'
@@ -28,7 +29,7 @@ import { installMonacoDelayerCancellationGuard } from './monaco-delayer-cancella
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
 import { installMonacoDiffViewportTokenization } from './monaco-diff-viewport-tokenization'
 import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
-import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
+import { installMonacoContextMenuPaste } from '@/components/editor/monaco/install-monaco-context-menu-paste'
 import { runMonacoSetupSteps } from './monaco-setup-steps'
 import { installMonacoTsWorkerIdleStop } from './monaco-ts-worker-idle-stop'
 import { onPluginFontLoadsChanged } from '@/store/plugins/appearance/plugin-fonts'
@@ -86,6 +87,7 @@ runMonacoSetupSteps([
   ['Zig language registration', () => registerZigLanguage(monaco)],
   ['Groovy language registration', () => registerGroovyLanguage(monaco)],
   ['CMake language registration', () => registerCMakeLanguage(monaco)],
+  ['Swift language registration', () => registerSwiftLanguage(monaco)],
   ['JSONL language registration', () => registerJsonlLanguage(monaco)],
   ['dotenv language registration', () => registerDotenvLanguage(monaco)],
   ['Quarto language registration', () => registerQuartoLanguage(monaco)],

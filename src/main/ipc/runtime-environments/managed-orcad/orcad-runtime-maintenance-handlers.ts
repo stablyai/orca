@@ -19,14 +19,17 @@ export function registerOrcadRuntimeMaintenanceHandlers(options: ManagedOrcadAct
       args: {
         selector: string
         force?: boolean
-        pastLiveTerminals?: { incumbentVersion?: unknown }
+        pastLiveTerminals?: { incumbentVersion?: unknown; uncounted?: unknown }
       }
     ) => {
       const incumbentVersion = args?.pastLiveTerminals?.incumbentVersion
       const pastLiveTerminals =
         args?.pastLiveTerminals &&
         (typeof incumbentVersion === 'string' || incumbentVersion === null)
-          ? { incumbentVersion }
+          ? {
+              incumbentVersion,
+              ...(args.pastLiveTerminals.uncounted === true ? { uncounted: true as const } : {})
+            }
           : undefined
       return actions.update(
         requiredString(args?.selector, 'Server'),

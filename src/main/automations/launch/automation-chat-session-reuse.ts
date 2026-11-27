@@ -12,7 +12,7 @@ import {
   structuredAgentSessionSendBody
 } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { automationRunAcceptedTarget } from './automation-agent-run-result'
-import { publishChatTabInBackground } from '../../runtime/session-tabs/background-chat-tab-publication'
+import { publishChatTabInBackground } from '../../runtime/session-tabs/chat/background-chat-tab-publication'
 
 export async function reuseAutomationChat(
   runtime: OrcaRuntimeService,
@@ -97,7 +97,7 @@ export async function reuseAutomationChat(
         store.selectWritableRecord(id).kind === 'missing' &&
         !store.isSessionUnreadable(id) &&
         !store.getOperationRow(callerKey, operationId) &&
-        store.readCommandReceipt({ kind: 'global' }, operationId).verdict === 'absent'
+        (await store.readCommandReceipt({ kind: 'global' }, operationId)).verdict === 'absent'
       ) {
         return null
       }

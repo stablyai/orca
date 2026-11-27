@@ -1,8 +1,8 @@
 import { ArrowUpRight, Copy, Eye, EyeOff, Folder, X } from 'lucide-react-native'
 import { useCallback, useMemo, useState } from 'react'
 import { Alert } from 'react-native'
-import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
-import { TransientToast, useTransientToast } from '../components/TransientToast'
+import { ActionSheetModal, type ActionSheetAction } from '../components/sheets/ActionSheetModal'
+import { TransientToast, useTransientToast } from '../components/feedback/TransientToast'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../platform/clipboard/clipboard'
 import { useOpenMobileSession } from '../session/use-open-mobile-session'
@@ -35,6 +35,7 @@ export function useAgentListRowActions(
         hostId: row.hostId,
         worktreeId: row.entry.worktreeId,
         name: row.entry.workspaceName,
+        ...(row.entry.executionHost ? { executionHost: row.entry.executionHost.id } : {}),
         // Home's lists span desktops, so Back returns to them rather than to this desktop's list.
         standalone: true,
         ...(withPane ? { paneKey: row.entry.agent.paneKey } : {})

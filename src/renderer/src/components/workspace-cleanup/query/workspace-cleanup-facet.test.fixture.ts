@@ -1,6 +1,6 @@
-import type { LiveAgentWorktreeStatus } from '../../../../../shared/sidebar-list/workspace-activity-facts'
+import type { LiveAgentWorktreeStatus } from '../../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
-import { cloneDefaultWorkspaceStatuses } from '../../../../../shared/workspace-statuses'
+import { cloneDefaultWorkspaceStatuses } from '../../../../../shared/workspace/status/workspace-statuses'
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import {
   buildWorkspaceCleanupFacets,
@@ -33,7 +33,7 @@ export function makeFacetCandidate(
       browserTabCount: 0,
       diffCommentCount: 0,
       newestDiffCommentAt: null,
-      retainedDoneAgentCount: 0
+      finishedAgentCount: 0
     },
     git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: FACET_NOW },
     fingerprint: 'fingerprint',

@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto'
 import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult
-} from '../../../shared/browser-workspace-types'
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 import {
   isEligibleLocalCertificateHost,
   toSecureCertificateEndpoint
-} from '../../../shared/browser-url'
+} from '../../../shared/browser/navigation/browser-url'
 import {
   certificateChallengeIdentityMatches,
   CERTIFICATE_CHALLENGE_TTL_MS,
@@ -22,33 +22,30 @@ import {
   SUPPORTED_CERTIFICATE_ERROR_CODE
 } from './browser-certificate-identity'
 import { normalizeCertificateError } from '../../../shared/browser/certificate-trust/browser-certificate-errors'
-import { BrowserCertificateRequestGuard } from './browser-certificate-request-guard'
+import { BrowserSessionCertificateDecisions } from './browser-session-certificate-decisions'
+import {
+  installBrowserSessionRequestGate,
+  removeBrowserSessionRequestGate
+} from '../sessions/requests/browser-session-request-gate'
 
 export class BrowserCertificateTrustController {
   private readonly pendingByGuestId = new Map<number, PendingCertificateChallenge>()
   private readonly navigationSequenceByGuestId = new Map<number, number>()
   private readonly expiryTimerByGuestId = new Map<number, ReturnType<typeof setTimeout>>()
-  private readonly requestGuard: BrowserCertificateRequestGuard
+  private readonly decisions = new BrowserSessionCertificateDecisions()
+  // Sessions whose certificate exceptions Orca answers; others keep Chromium's default denial.
+  private readonly sessions = new Set<Electron.Session>()
 
-  constructor(private readonly dependencies: BrowserCertificateTrustControllerDependencies) {
-    this.requestGuard = new BrowserCertificateRequestGuard({
-      onBlockedMainFrame: (blocked) => {
-        const context = this.dependencies.resolveManagedGuestContext(blocked.webContentsId)
-        if (context) {
-          this.recordPendingChallenge({
-            ...blocked,
-            browserPageId: context.browserPageId
-          })
-        }
-      }
-    })
-  }
+  constructor(private readonly dependencies: BrowserCertificateTrustControllerDependencies) {}
 
   installSessionRequestGuard(session: Electron.Session): void {
-    this.requestGuard.installSession(session)
+    this.sessions.add(session)
+    installBrowserSessionRequestGate(session)
   }
   removeSessionRequestGuard(session: Electron.Session): void {
-    this.requestGuard.removeSession(session)
+    this.sessions.delete(session)
+    this.decisions.forget(session)
+    removeBrowserSessionRequestGate(session)
   }
 
   handleCertificateError(args: {
@@ -78,13 +75,8 @@ export class BrowserCertificateTrustController {
         return
       }
       const identity = { secureEndpoint: endpoint, leafCertificateSha256: digest, error }
-      if (
-        this.requestGuard.shouldTrustCertificate(
-          args.webContents.session,
-          args.webContents.id,
-          identity
-        )
-      ) {
+      const session = args.webContents.session
+      if (this.sessions.has(session) && this.decisions.trusts(session, identity)) {
         args.event.preventDefault()
         answer(true)
         return
@@ -94,7 +86,8 @@ export class BrowserCertificateTrustController {
         parsed.protocol === 'https:' &&
         error === SUPPORTED_CERTIFICATE_ERROR &&
         isEligibleLocalCertificateHost(parsed.hostname) &&
-        this.requestGuard.canOfferCertificate(args.webContents.session, identity)
+        this.sessions.has(session) &&
+        this.decisions.canOffer(session, identity)
       ) {
         this.recordPendingChallenge({
           webContentsId: args.webContents.id,
@@ -125,9 +118,11 @@ export class BrowserCertificateTrustController {
   }
 
   onGuestRetired(webContentsId: number): void {
-    this.clearPending(webContentsId, true)
-    this.requestGuard.revokeGuest(webContentsId)
-    this.navigationSequenceByGuestId.delete(webContentsId)
+    try {
+      this.clearPending(webContentsId, true)
+    } finally {
+      this.navigationSequenceByGuestId.delete(webContentsId)
+    }
   }
 
   onMainFrameNavigationStarted(webContentsId: number): void {
@@ -136,10 +131,6 @@ export class BrowserCertificateTrustController {
       (this.navigationSequenceByGuestId.get(webContentsId) ?? 0) + 1
     )
     this.clearPending(webContentsId, true)
-  }
-
-  onMainFrameNavigationCommitted(webContentsId: number, url: string): void {
-    this.requestGuard.revokeForCommittedNavigation(webContentsId, url)
   }
 
   hasFailureForGuest(webContentsId: number): boolean {
@@ -191,12 +182,13 @@ export class BrowserCertificateTrustController {
     if (!context || context.browserPageId !== browserPageId || !guest || guest.isDestroyed()) {
       return { ok: false, reason: 'missing' }
     }
-    const granted = this.requestGuard.grant(guest.session, {
-      guestWebContentsId: webContentsId,
-      secureEndpoint: pending.secureEndpoint,
-      leafCertificateSha256: pending.leafCertificateSha256,
-      error: pending.error
-    })
+    const granted =
+      this.sessions.has(guest.session) &&
+      this.decisions.accept(guest.session, {
+        secureEndpoint: pending.secureEndpoint,
+        leafCertificateSha256: pending.leafCertificateSha256,
+        error: pending.error
+      })
     if (!granted) {
       return { ok: false, reason: 'ineligible' }
     }

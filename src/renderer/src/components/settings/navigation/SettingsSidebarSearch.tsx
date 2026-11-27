@@ -1,14 +1,14 @@
 import type { KeyboardEvent, RefObject } from 'react'
 import { Search, X } from 'lucide-react'
-import type { RepoIcon } from '../../../../../shared/repo-icon'
-import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
-import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
+import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
+import { useShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
+import { ShortcutKeyCombo } from '../../ui/ShortcutKeyCombo'
 import { cn } from '@/lib/class-names'
 import { RepoIconGlyph } from '../../repo/repo-icon'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { useTranslate } from '@/i18n/use-translate'
-import { HighlightedText } from '../../worktree-jump/worktree-jump-palette-primitives'
+import { HighlightedText } from '../../worktree-jump/rows/worktree-jump-palette-row-content'
 import {
   getSettingsSearchTitleMatchRanges,
   type SettingsSearchResult
@@ -39,7 +39,7 @@ export function SettingsSearchField({
   const searchShortcutCombos = useShortcutKeyComboDetails('settings.search')
 
   return (
-    <div className="border-b border-worktree-sidebar-border px-3 py-3">
+    <div className="border-b border-worktree-sidebar-divider px-3 py-3">
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -116,7 +116,7 @@ export function SettingsSearchResultsList({
 }: SettingsSearchResultsListProps): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 py-4">
+    <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 pb-4 pt-2">
       {searchResults.length > 0 ? (
         <div
           id={listboxId}
@@ -141,7 +141,7 @@ export function SettingsSearchResultsList({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onSelect(result)}
                 className={cn(
-                  'flex min-h-10 w-full items-start gap-2 rounded-lg px-3 py-1 text-left outline-none transition-colors duration-150',
+                  'flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-1 text-left outline-none transition-colors duration-150',
                   isSelected
                     ? 'bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/25'
                     : 'hover:bg-worktree-sidebar-accent/60'
@@ -151,13 +151,13 @@ export function SettingsSearchResultsList({
                   <RepoIconGlyph
                     repoIcon={repoSection.repoIcon}
                     color={repoSection.badgeColor}
-                    className="mt-px size-4 shrink-0 text-muted-foreground"
+                    className="size-4 shrink-0 text-muted-foreground"
                     iconClassName="size-3.5"
                   />
                 ) : (
                   <Icon
                     className={cn(
-                      'mt-px size-4 shrink-0',
+                      'size-4 shrink-0',
                       isSelected
                         ? 'text-worktree-sidebar-accent-foreground'
                         : 'text-muted-foreground'

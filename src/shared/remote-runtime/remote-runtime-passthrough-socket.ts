@@ -1,6 +1,6 @@
 import WebSocket from 'ws'
 import type { PairedRuntimeConnection } from './pairing/paired-runtime-connection'
-import type { RuntimeCapability } from '../protocol-version'
+import type { RuntimeCapability } from './protocol/protocol-version'
 import {
   formatRemoteRuntimeCloseMessage,
   sendRemoteRuntimeTokenAuth

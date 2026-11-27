@@ -1,4 +1,4 @@
-import type { AgentSessionPromptResponse } from '../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionPromptAnswerRejectedError,
@@ -8,6 +8,8 @@ import type { JsonlRpcTimelineLane } from '../../jsonl-rpc/timeline-lane'
 import type { JsonlRpcRecord } from '../../jsonl-rpc/peer'
 import { piRpcDialogPresentation, type PiRpcDialogPresentation } from './rpc-extension-dialogs'
 import { PiRpcBackgroundWork } from './background-work/rpc-background-work'
+import { PiRpcSubagents } from './rpc-subagents'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 
 type Callback = { presentation: PiRpcDialogPresentation; claimed: boolean; bytes: number }
 const DECORATION = new Set(['notify', 'setStatus', 'setWidget', 'setTitle', 'setEditorText'])
@@ -17,23 +19,27 @@ export class PiRpcDialogCallbacks {
   private pendingBytes = 0
   /** Its frames never reach presentation, the pending cap, or cancelAll at turn end. */
   readonly backgroundWork: PiRpcBackgroundWork
+  private readonly subagents: PiRpcSubagents
   constructor(
     private readonly lane: JsonlRpcTimelineLane,
     private readonly send: (frame: JsonlRpcRecord) => Promise<void>,
     private readonly onFailed: (error: Error) => void,
-    backgroundWorkDirectory: string | null = null
+    backgroundWorkDirectory: string | null,
+    onChildWork: (evidence: AgentChildWorkEvidence[]) => void
   ) {
     this.backgroundWork = new PiRpcBackgroundWork(backgroundWorkDirectory)
+    this.subagents = new PiRpcSubagents(onChildWork)
   }
 
   /** The child exited: its dialogs and any probe awaiting an answer can never be answered. */
   close(): void {
     this.cancelAll()
     this.backgroundWork.end()
+    this.subagents.end()
   }
 
   receive(frame: JsonlRpcRecord): void {
-    if (this.backgroundWork.receive(frame)) {
+    if (this.backgroundWork.receive(frame) || this.subagents.receive(frame)) {
       return
     }
     if (typeof frame.method === 'string' && DECORATION.has(frame.method)) {

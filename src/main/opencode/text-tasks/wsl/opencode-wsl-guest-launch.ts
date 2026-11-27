@@ -2,7 +2,7 @@ import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-
 import {
   buildWslCapturedLoginShellCommand,
   buildWslLoginShellCommand
-} from '../../../../shared/wsl-login-shell-command'
+} from '../../../../shared/shell/wsl/wsl-login-shell-command'
 import type { SourceControlAgentSpawnInput } from '../../../text-generation/source-control-text-generation-types'
 
 const TASK_ENV_PREFIX = 'ORCA_OPENCODE_TASK_ENV_'

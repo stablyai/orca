@@ -170,9 +170,9 @@ function getChipKindLabel(kind: string): string {
       return translate('components.workspace.cleanup.browse.chip.kind.prunable', 'Prunable')
     case 'locked':
       return translate('components.workspace.cleanup.browse.chip.kind.locked', 'Locked')
-    case 'retainedAgents':
+    case 'finishedAgents':
       return translate(
-        'components.workspace.cleanup.browse.chip.kind.retainedAgents',
+        'components.workspace.cleanup.browse.chip.kind.finishedAgents',
         'Finished agents'
       )
     default:

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { NativeChatDefaultSettings } from '../../../../../shared/structured-native-chat-launch-route'
+import type { NativeChatDefaultSettings } from '../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '@/store/index'
 import { restoreLocalStructuredSessionTabsOnce } from '../../local-structured-session-tabs-sync/inventory-refresh'
@@ -113,13 +113,4 @@ export async function restoreLocalStructuredChatsAtStartup(
   if (await localStructuredChatsInUse(settings)) {
     await runStep(() => restoreLocalStructuredSessionTabsOnce())
   }
-}
-
-/** @internal - tests need a clean module between cases. */
-export function resetLocalStructuredChatsForTests(): void {
-  stopListening?.()
-  stopListening = null
-  held = false
-  pushes = 0
-  listeners.clear()
 }

@@ -1,15 +1,15 @@
 import { useMemo } from 'react'
-import type { BridgeMediaItem } from '../../mobile-web-shell/bridge/bridge-media-verbs'
+import type { BridgeMediaItem } from '../../mobile-web-shell/bridge/native-capabilities/bridge-media-verbs'
 import {
   readStagedMediaItem,
   releaseAllStagedMedia,
   releaseStagedMedia
-} from '../../mobile-web-shell/bridge/staged-media-bytes'
+} from '../../mobile-web-shell/bridge/native-capabilities/staged-media-bytes'
 import {
   NativeVerbError,
   useNativeVerbs,
   type NativeVerbs
-} from '../../mobile-web-shell/bridge/use-native-verbs'
+} from '../../mobile-web-shell/bridge/native-capabilities/use-native-verbs'
 import {
   MobileFileTooLargeError,
   type MediaPicker,

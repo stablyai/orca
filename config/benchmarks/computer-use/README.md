@@ -64,8 +64,7 @@ click. Interference probes remain separate from task latency comparisons.
 
 Explicit-target typing is a native capability probe. Orca's public CLI/RPC accepts
 an element target for text (`type-text --element-index`) on providers that report
-`actions.typeTextElement` (macOS and Linux); Windows types only at the focused
-field. Click-then-type tasks send no element with the text, like `type-text`
+`actions.typeTextElement` (macOS, Linux and Windows). Click-then-type tasks send no element with the text, like `type-text`
 without the index, although this benchmark still bypasses public transports.
 
 The Linux Electron job also records restoration stages in `focus-probe/results.json`.

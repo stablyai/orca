@@ -15,14 +15,14 @@ import type {
   AgentJournalSubmission
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../../../shared/remote-runtime/remote-runtime-memory-limits'
-import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../../../shared/mobile-bridge-frame-bytes'
+import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../../../shared/mobile-bridge/mobile-bridge-frame-bytes'
 import { agentSessionHostStatusBody } from '../../../../../shared/agent-session/view/agent-session-host-status-rows'
 import { isSubagentBlock } from '../../../../../shared/native-chat/native-chat-types'
 import {
   subagentFoldKey,
   subagentItemBlock
-} from '../../../../../shared/native-chat/transcript/native-chat-subagent-items'
-import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+} from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 
 export const AGENT_SESSION_HISTORY_MAX_PAGE_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES / 2
 
@@ -105,14 +105,20 @@ export function measureHistoryItem(item: AgentJournalRenderItem): HistoryItemFor
 /** Measure pages in the exact form sent to each reader. */
 export type HistoryReader = {
   form: (item: AgentJournalRenderItem) => HistoryItemForm
+  wireForm?: 'client' | 'bounded'
   budgetBytes: number
+  /** Aborts when nobody will read the page; a read still waiting for a reader is withdrawn. */
+  signal?: AbortSignal
   /** Forward reads project touched identities; cold reads include retained sources before bounds. */
   snapshot?: (
     journal: AgentSessionJournal,
     snapshot?: AgentJournalSnapshot,
     touched?: Set<string>
-  ) => AgentJournalSnapshot
-  queueSourceIds?: (journal: AgentSessionJournal, messageId: string) => readonly string[]
+  ) => AgentJournalSnapshot | Promise<AgentJournalSnapshot>
+  queueSourceIds?: (
+    journal: AgentSessionJournal,
+    messageId: string
+  ) => readonly string[] | Promise<readonly string[]>
 }
 
 export function boundHistoryItemsByBytes(

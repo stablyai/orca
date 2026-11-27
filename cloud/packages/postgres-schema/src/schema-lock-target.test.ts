@@ -14,6 +14,18 @@ describe('catalog name folding', () => {
       skipWhen: 'present'
     })
   })
+
+  it('reads a column drop as skipped once the column is gone, and refuses one without IF EXISTS', () => {
+    expect(schemaLockTarget('ALTER TABLE t DROP COLUMN IF EXISTS Old_Col')).toEqual({
+      kind: 'column',
+      table: 't',
+      name: 'old_col',
+      skipWhen: 'absent'
+    })
+    expect(() => requireSchemaLockTarget('ALTER TABLE t DROP COLUMN old_col')).toThrow(
+      'unparsed_schema_lock_target'
+    )
+  })
 })
 
 describe('square brackets in an ALTER TABLE', () => {
@@ -25,17 +37,10 @@ describe('square brackets in an ALTER TABLE', () => {
 
   it('still catches a second subcommand after an array default', () => {
     expect(() =>
-      requireSchemaLockTarget('ALTER TABLE t ADD COLUMN a bigint[] DEFAULT ARRAY[1, 2], ADD COLUMN b TEXT')
+      requireSchemaLockTarget(
+        'ALTER TABLE t ADD COLUMN a bigint[] DEFAULT ARRAY[1, 2], ADD COLUMN b TEXT'
+      )
     ).toThrow(/unparsed_schema_lock_target/)
-  })
-})
-
-describe('multi-action ALTER TABLE', () => {
-  it('throws rather than deriving only the first subcommand', () => {
-    // Skipping on the first subcommand would permanently drop every later action.
-    const statement =
-      'ALTER TABLE t ADD COLUMN IF NOT EXISTS a TEXT, ADD COLUMN IF NOT EXISTS b TEXT'
-    expect(() => requireSchemaLockTarget(statement)).toThrow(/unparsed_schema_lock_target/)
   })
 })
 

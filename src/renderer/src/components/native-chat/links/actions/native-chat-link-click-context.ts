@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/comment-markdown-element-renderers'
+import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
 
 /** The chat's one link handler, provided by its session view; undefined where the chat cannot open links. */
 export const NativeChatLinkClickContext = createContext<

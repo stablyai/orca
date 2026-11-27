@@ -1,7 +1,7 @@
 import type {
   BROWSER_PASSWORDS_GUEST_CHANNELS,
   BROWSER_PASSWORDS_TO_GUEST_CHANNELS
-} from '../../../shared/browser-passwords-types'
+} from '../../../shared/browser/passwords/browser-passwords-types'
 
 // Why literals: the sandboxed guest preload's `require` resolves only 'electron', so importing the
 // shared constants would emit a chunk it cannot load. `satisfies` and the test pin them.

@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 const NATIVE_CHAT_CARD_KIND_HIDDEN_TOAST_ID = 'native-chat-card-kind-hidden'
 // Long enough to reach the link; Settings stays reachable after it goes.

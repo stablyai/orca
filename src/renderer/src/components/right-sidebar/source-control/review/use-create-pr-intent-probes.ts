@@ -1,4 +1,6 @@
 import { useCallback } from 'react'
+import { useAppStore } from '@/store/index'
+import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import { operationGitContext } from '../listing/operation-target'
 import { getRuntimeGitBranchCompare } from '@/runtime/source-control/git/runtime-git-diff-client'
@@ -99,7 +101,14 @@ export function useSourceControlCreatePrIntentProbes({
           linkedGitLabMR,
           linkedBitbucketPR,
           linkedAzureDevOpsPR,
-          linkedGiteaPR
+          linkedGiteaPR,
+          // Read after the run's git refresh so a merged review from before the new commits cannot block.
+          currentHeadOid:
+            findWorktreeById(
+              useAppStore.getState(),
+              token.worktreeId,
+              token.pinnedCopy?.hostId ?? undefined
+            )?.head ?? null
         })
       } catch (error) {
         console.warn('[SourceControl] Create PR intent eligibility failed', error)

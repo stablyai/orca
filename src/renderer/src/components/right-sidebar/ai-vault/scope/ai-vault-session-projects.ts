@@ -6,13 +6,13 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import type { ProjectHostSetupProjection } from '../../../../../../shared/project-host-setup-projection'
+} from '../../../../../../shared/execution-host/execution-host'
+import type { ProjectHostSetupProjection } from '../../../../../../shared/project/host-setup/project-host-setup-projection'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { ProjectHostSetup } from '../../../../../../shared/project-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 import {
   aiVaultSessionProjectCwdKey,
   matchAiVaultSessionCwdCandidates

@@ -1,4 +1,4 @@
-import type { RuntimeWorktreePsResult } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsResult } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { compareWorktreePs } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 
 // Why: mobile reads lastOutputAt only to rank rows; a 30 s floor bounds activity-driven resends to one per bucket.

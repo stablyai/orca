@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Amplify remote bulk-open freezes against running desktop/paired runtime using multi-worktree concurrent switches.
-// Run: ORCA_FREEZE_ENV=paired-remote ORCA_FREEZE_CREATE=12 ORCA_FREEZE_SWITCH_PASSES=5 ORCA_FREEZE_PARALLEL=8 node config/scripts/live-remote-bulk-open-freeze-repro.mjs
+// Run: ORCA_FREEZE_ENV=paired-remote ORCA_FREEZE_CREATE=12 ORCA_FREEZE_SWITCH_PASSES=5 ORCA_FREEZE_PARALLEL=8 node config/scripts/diagnostics/remote-freeze/live-remote-bulk-open-freeze-repro.mjs
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, writeFileSync, copyFileSync } from 'node:fs'
 import path from 'node:path'

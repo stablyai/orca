@@ -1,5 +1,5 @@
-import { parseWslUncPath } from '../../../shared/wsl-paths'
-import { PromiseSettlementWaiters } from '../../../shared/promise-settlement-waiters'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
+import { PromiseSettlementWaiters } from '../../../shared/concurrency/promise-settlement-waiters'
 
 const MAX_CONCURRENT_WSL_AUTH_OPERATIONS = 2
 const activeWslOperationDistros = new Set<string>()

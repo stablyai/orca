@@ -1,12 +1,12 @@
 import type { CommandHandler } from '../../dispatch/dispatch'
 import { printOrchestrationReceipt } from '../agent-view'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../arguments/flags'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import { orchestrationMigrationData } from '../../../shared/orchestration/orchestration-rpc-contract'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { isDevCliInvocation } from '../recovery/runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from '../identity/terminal-identity'
-import { injectedSessionAddress } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
+import { injectedSessionAddress } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 
 export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration dispatch': async ({ flags, client, cwd, json }) => {

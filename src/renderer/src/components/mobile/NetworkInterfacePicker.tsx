@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { AddressPicker, type AddressOption } from '../network/AddressPicker'
 import { parseManualNetworkAddress } from '../../../../shared/network/manual-address'
-import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
+import type { PairingNetworkInterface } from '../../../../shared/remote-runtime/pairing/pairing-address-auto-selection'
 
 function formatCustomAddressLabel(address: string): string {
   return translate(

@@ -78,20 +78,6 @@ function resolveDumpDirectory(): string | null {
   }
 }
 
-export function _setCrashpadCaptureStateForTest(
-  state: { dumpDirectory: string | null; started: boolean; startedAtMs?: number } | null
-): void {
-  crashpadDumpDirectory = state?.dumpDirectory ?? null
-  captureStarted = state?.started ?? false
-  captureStartedAtMs = state?.started ? (state.startedAtMs ?? Number.NEGATIVE_INFINITY) : null
-  claimedDumpPaths.clear()
-  reservedDumpPaths.clear()
-  if (dumpPruneTimer) {
-    clearTimeout(dumpPruneTimer)
-    dumpPruneTimer = null
-  }
-}
-
 async function collectDumpCandidates(directory: string): Promise<DumpCandidate[]> {
   let entries: Dirent[]
   try {
@@ -166,13 +152,6 @@ export function scheduleCrashpadDumpPrune(): void {
       })
   }, DUMP_PRUNE_DELAY_MS)
   dumpPruneTimer.unref()
-}
-
-export async function _pruneCrashpadDumpsForTest(
-  maxBytes: number,
-  maxDumps = MAX_STORED_DUMPS
-): Promise<void> {
-  await pruneCrashpadDumps(maxBytes, maxDumps)
 }
 
 type DumpPollingOptions = {

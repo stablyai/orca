@@ -2,6 +2,7 @@ import { projectPRCheckOwner } from '../../../../../../shared/github/checks/comp
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
 import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
+import { sortWorkItemsByRecency } from '../../../../../../shared/work-items/work-item-order'
 import { getRegistryMergedTaskPageGitHubWorkItem } from './task-page-github-work-item-mutation-composition'
 import {
   getStickyHideEntry,
@@ -111,9 +112,8 @@ export function materializeTaskPageItemList(args: {
     const scope = resolveItemSourceScope(item.repoId, item.id)
     byKey.set(k, getRegistryMergedTaskPageGitHubWorkItem(item, scope))
   }
-  return [...byKey.values()].sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  )
+  // Why: match the cross-repo aggregate and mobile order so retained rows keep their slot.
+  return sortWorkItemsByRecency([...byKey.values()], (item) => item)
 }
 
 export function reconcileTaskPagePagesAfterQuietRefresh(args: {

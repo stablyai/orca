@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { BrowserAgentVerificationPane } from './BrowserAgentVerificationPane'
 import { BrowserStoryboardWindow } from './BrowserStoryboardWindow'

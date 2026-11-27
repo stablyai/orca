@@ -2,7 +2,7 @@ import {
   normalizeTaskSourceContext,
   type TaskSourceContext
 } from '../../../../../shared/work-items/task-source-context'
-import { getLinearIssueWorkspaceName } from '../../../../../shared/workspace-name'
+import { getLinearIssueWorkspaceName } from '../../../../../shared/workspace/naming/workspace-name'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import {

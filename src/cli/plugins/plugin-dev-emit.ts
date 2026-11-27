@@ -1,6 +1,6 @@
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { printPluginResult, requirePluginPathArg } from './plugin-cli-output'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { callPlugins, devTargetParams, stringFlag } from './plugin-runtime'
 
 export type PluginDevEmitReply = {

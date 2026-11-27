@@ -22,13 +22,14 @@ import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agen
 import { findGithubPrWorkspaceAttachment } from '@/lib/work-items/github/github-work-item-workspace-attachment'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-work-item-direct'
 import { readSourceControlLaunchRecipeAgentId } from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { resolveRepoWorktreeLaunchPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { reportAgentWorkspaceActivation } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { activateAndRevealWorktreeWithOutcome } from '@/lib/workspace/activation/worktree-activation'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import {
   type SourceControlActionRecipe,
@@ -202,7 +203,12 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
     const targetRepo =
       latestStore.repos.find((candidate) => candidate.id === targetWorktree.repoId) ?? repo
     const launchPlatform = targetRepo
-      ? resolveRepoWorktreeLaunchPlatform(latestStore, targetRepo, targetWorktree)
+      ? resolveRepoWorktreeLaunchPlatform(
+          latestStore,
+          readRuntimeStatuses(),
+          targetRepo,
+          targetWorktree
+        )
       : undefined
     const { commandInput: projectedPrompt, ...projection } = projectSourceControlActionLaunch(
       recipe,

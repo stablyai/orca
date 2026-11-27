@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import type {
   BrowserPasswordFieldFocusEvent,
   BrowserPasswordSavePrompt
-} from '../../../../../shared/browser-passwords-types'
+} from '../../../../../shared/browser/passwords/browser-passwords-types'
 
 type PageState = {
   savePrompt: BrowserPasswordSavePrompt | null

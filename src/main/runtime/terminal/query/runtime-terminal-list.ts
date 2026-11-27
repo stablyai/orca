@@ -1,10 +1,10 @@
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
-} from '../../../../shared/runtime-terminal-contracts'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { PtyControllerInventory } from '../lifecycle/runtime-pty-controller-contract'
 import type { ResolvedWorktreeSnapshot } from '../../workspaces/catalog/runtime-resolved-worktree-cache'
 import type {
@@ -52,6 +52,13 @@ type RuntimeTerminalListDependencies = {
   ): { hostIds: ExecutionHostId[]; omittedHostIds: ExecutionHostId[] }
   /** Layout-owner builds: main lists every saved pane of the workspace, a live terminal or not. */
   listsEveryPane?: (worktreeId: string) => boolean
+  /** Agent Sleep stopped this pane's process; it is listed as the idle agent it stands for. */
+  isSleptAgentLeaf: (leaf: RuntimeLeafRecord) => boolean
+  /** Slept agents whose tab the window hasn't mounted, listed under the handle their record saved. */
+  unmountedSleptAgents: (
+    worktreeId?: string,
+    handles?: readonly string[]
+  ) => Iterable<RuntimeLeafRecord>
 }
 
 export class RuntimeTerminalList {
@@ -132,7 +139,8 @@ export class RuntimeTerminalList {
         if (
           !leaf.ptyId &&
           liveWorktreeIds.has(leaf.worktreeId) &&
-          !(ORCA_LAYOUT_OWNER_IS_MAIN && this.deps.listsEveryPane?.(leaf.worktreeId))
+          !(ORCA_LAYOUT_OWNER_IS_MAIN && this.deps.listsEveryPane?.(leaf.worktreeId)) &&
+          !this.deps.isSleptAgentLeaf(leaf)
         ) {
           continue
         }
@@ -140,6 +148,13 @@ export class RuntimeTerminalList {
           leafPtyIds.add(leaf.ptyId)
         }
         terminals.push(this.deps.buildLeafSummary(leaf, worktreesById, provenLivePtyIds))
+      }
+      if (!opts.requireFreshPtyLiveness) {
+        for (const leaf of this.deps.unmountedSleptAgents(targetId ?? undefined, opts.handles)) {
+          if (!targetId || leaf.worktreeId === targetId) {
+            terminals.push(this.deps.buildLeafSummary(leaf, worktreesById, provenLivePtyIds))
+          }
+        }
       }
     }
     for (const pty of ptys) {

@@ -7,10 +7,10 @@ import { useAppStore } from '@/store/index'
 
 import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { evaluateHostDetails, type RuntimeHostDetails } from './runtime-environment-host-details'
 import { LOCAL_RUNTIME_VALUE, NO_RUNTIME_VALUE } from './runtime-environment-selection'
-import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/runtime-project-refresh-scheduler'
+import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/ipc-events/workspace-catalog/runtime-project-refresh-scheduler'
 
 type RuntimeEnvironmentConnectionActionParams = {
   allowLocalRuntime: boolean

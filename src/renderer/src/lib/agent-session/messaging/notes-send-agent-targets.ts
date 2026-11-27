@@ -7,11 +7,13 @@ import {
 } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { resolveTerminalTitleAgentType } from '../../../../../shared/agent-status/title/terminal-title-agent-type'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
-import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/runtime-pane-title-leaf-id'
-import type { RuntimePaneTitleLeafResolution } from '../../../../../shared/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
+import type { RuntimePaneTitleLeafResolution } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import {
   deriveRunningAgentSendTargets,
   deriveStatuslessStructuredAgentSendTargets,
+  hookSilentAgentSendRefusal,
+  launchAgentMayOwnPane,
   runningAgentMessageTarget
 } from './running-agent-targets'
 import type { RunningAgentSendTarget, RunningAgentTargetState } from './running-agent-targets'
@@ -54,15 +56,14 @@ function detectTitleHintPaneEvidence(
   return status ? { status, title: tabTitle } : null
 }
 
-/** Add live title-backed terminals and first-turn chats that lack hook status. launchAgent gives stronger ownership than manual title hints; hints expose targets only, while runtime independently verifies guarded writes. */
+/** Add live title-backed terminals and chats the host has not published yet. launchAgent gives stronger ownership than manual title hints; hints expose targets only, while runtime independently verifies guarded writes. */
 export function deriveNotesSendAgentTargets(
   state: NotesSendAgentTargetState,
   worktreeId: string,
-  chatNames: StructuredChatTabNames,
-  now = Date.now()
+  chatNames: StructuredChatTabNames
 ): NotesSendAgentTarget[] {
   const targets: NotesSendAgentTarget[] = [
-    ...deriveRunningAgentSendTargets(state, worktreeId, now),
+    ...deriveRunningAgentSendTargets(state, worktreeId),
     ...deriveStatuslessStructuredAgentSendTargets(state, worktreeId)
   ].map((target) => {
     const tab = structuredChatTabById(state.unifiedTabsByWorktree, worktreeId, target.tabId)
@@ -140,18 +141,33 @@ function deriveTitleHintAgentTarget(
     // Launch metadata can precede actual TUI startup; require current matching title evidence for discovery.
     return null
   }
+  const agentType =
+    (launchAgentMayOwnPane(tab, ptyId) ? tab.launchAgent : null) ??
+    resolveTerminalTitleAgentType(titleEvidence.title)
+  // Without the agent's own turn-end report, a title cannot rule out an approval menu its hooks hide.
   const disabledReason =
-    titleEvidence.status === 'permission' ? 'Agent needs permission' : undefined
+    titleEvidence.status === 'permission'
+      ? 'Agent needs permission'
+      : hookSilentAgentSendRefusal(state, tab, ptyId, null, titleEvidence.title)
 
   return {
     paneKey: makePaneKey(tab.id, leafId),
     tabId: tab.id,
     messageTarget: { kind: 'terminal', tabId: tab.id, leafId },
-    agentType: tab.launchAgent ?? resolveTerminalTitleAgentType(titleEvidence.title),
+    agentType,
     tabTitle: tab.title,
     status: disabledReason ? 'disabled' : 'eligible',
     ...(disabledReason ? { disabledReason } : {})
   }
+}
+
+// Agent-state refusals come from the agent's own reports; a title cannot clear them.
+function refusesForAgentState(target: NotesSendAgentTarget): boolean {
+  return (
+    target.disabledReason === 'Agent needs permission' ||
+    target.disabledReason === 'Agent may be waiting for approval' ||
+    target.disabledReason === 'Update Orca on this host to send to this agent'
+  )
 }
 
 // Manual hints are weakest; never duplicate status/launch rows, including disabled ones.
@@ -172,7 +188,7 @@ function mergeLaunchAgentTitleTarget(
   const samePaneIndex = targets.findIndex((existing) => existing.paneKey === target.paneKey)
   if (samePaneIndex !== -1) {
     const existing = targets[samePaneIndex]
-    if (existing.status === 'eligible' || existing.disabledReason === 'Agent needs permission') {
+    if (existing.status === 'eligible' || refusesForAgentState(existing)) {
       return
     }
 
@@ -193,7 +209,7 @@ function mergeLaunchAgentTitleTarget(
     targets.some(
       (existing) =>
         existing.tabId === target.tabId &&
-        (existing.status === 'eligible' || existing.disabledReason === 'Agent needs permission')
+        (existing.status === 'eligible' || refusesForAgentState(existing))
     )
   ) {
     return

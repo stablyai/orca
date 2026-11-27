@@ -3,10 +3,10 @@ import type { AgentJournalProducerLinkage } from '../../../shared/agent-session/
 import {
   canReplaceBackgroundTaskState,
   isSettledBackgroundTaskState
-} from '../../../shared/native-chat/input/native-chat-background-task-row'
+} from '../../../shared/native-chat/input/task-lists/native-chat-background-task-row'
 import type { NativeChatBackgroundTaskBlock } from '../../../shared/native-chat/native-chat-types'
 import type { ClaudeSubagentIds } from '../subagents/claude-subagent-id-aliases'
-import { classifyClaudeBackgroundTaskKind } from '../../../shared/claude-background-task-kind'
+import { classifyClaudeBackgroundTaskKind } from '../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-background-task-kind'
 import {
   liveClaudeTaskRunState,
   record,

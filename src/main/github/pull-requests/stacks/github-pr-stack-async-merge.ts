@@ -4,7 +4,7 @@ import { acquire, release } from '../../execution/github-operation-slots'
 import { githubHostExecOptions } from '../../repositories/github-repository-host'
 import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import type { GitHubRepoExecOptions } from '../../repositories/github-api-repository'
-import { codeHostFailure } from '../../../../shared/code-host-failure-copy'
+import { codeHostFailure } from '../../../../shared/source-control/code-host-failure-copy'
 
 const POLL_INTERVAL_MS = 1_000
 const MAX_POLLS = 180

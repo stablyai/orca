@@ -1,7 +1,5 @@
-import {
-  agentProviderSessionsEqual,
-  type TerminalLaunchResult
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { TerminalLaunchResult } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { useAppStore } from '@/store/index'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import type { ReattachPayloadSession } from '../reattach/reattach-payload-session'
@@ -18,7 +16,7 @@ export function captureTerminalLaunchContext(
   return {
     startup,
     registration: state.agentLaunchConfigByPaneKey[session.cacheKey],
-    status: state.agentStatusByPaneKey[session.cacheKey],
+    status: state.agentStatusByPaneKey.get(session.cacheKey),
     paneStartup: session.paneStartup
   }
 }
@@ -57,8 +55,8 @@ export function applyTerminalLaunchResult(
       currentStartup !== context.paneStartup &&
       currentStartup.resumeSource !== startup?.resumeSource) ||
     (currentRegistration && currentRegistration !== context.registration) ||
-    (state.agentStatusByPaneKey[session.cacheKey] &&
-      state.agentStatusByPaneKey[session.cacheKey] !== context.status)
+    (state.agentStatusByPaneKey.get(session.cacheKey) &&
+      state.agentStatusByPaneKey.get(session.cacheKey) !== context.status)
   try {
     if (
       rejected &&

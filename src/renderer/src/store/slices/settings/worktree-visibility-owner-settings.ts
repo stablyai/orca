@@ -5,11 +5,11 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { WorktreeVisibilityDefaults } from '../../../../../shared/repo-types'
-import { normalizeWorktreeVisibilityDefaults } from '../../../../../shared/external-worktree-visibility'
-import { WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY } from '../../../../../shared/worktree-runtime-capabilities'
+} from '../../../../../shared/execution-host/execution-host'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { WorktreeVisibilityDefaults } from '../../../../../shared/repository/repo-types'
+import { normalizeWorktreeVisibilityDefaults } from '../../../../../shared/worktree/visibility/external-worktree-visibility'
+import { WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 
 export type WorktreeVisibilityDefaultsByHost = Partial<
   Record<ExecutionHostId, WorktreeVisibilityDefaults | null>

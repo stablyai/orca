@@ -6,7 +6,7 @@ import {
 import { useTerminalViewportRefit } from '../../viewport/terminal-viewport-refit'
 import { removeCustomKey, type CustomKey } from '../../key-input/terminal-custom-keys'
 import { useWorkspaceExecutionHost } from '../../../navigation/workspace-execution-host'
-import { writeLastVisitedWorktree } from '../../../worktree/last-visited-worktree-by-host'
+import { writeLastVisitedWorktree } from '../../../worktree/navigation/last-visited-worktree-by-host'
 import type { MobileSessionLifecycleModel } from '../../../session/use-mobile-session-lifecycle'
 
 export type MobileSessionKeyboardScope = Pick<
@@ -27,6 +27,7 @@ export type MobileSessionKeyboardScope = Pick<
   | 'terminalRefs'
   | 'terminals'
   | 'terminalTextScale'
+  | 'terminalFontStyle'
   | 'unsubscribeTerminal'
   | 'viewportMeasuredRef'
   | 'viewportRef'
@@ -41,6 +42,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     connState,
     terminals,
     terminalTextScale,
+    terminalFontStyle,
     setCustomKeys,
     setShowCustomKeyModal,
     deviceTokenRef,
@@ -74,7 +76,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     deviceTokenRef,
     connState,
     tabStripVisible: terminals.length > 1,
-    textScale: terminalTextScale,
+    fontMetricsKey: `${terminalTextScale}/${terminalFontStyle.font}/${terminalFontStyle.lineHeight}/${terminalFontStyle.weight}`,
     unsubscribeTerminal,
     subscribeToTerminal
   })

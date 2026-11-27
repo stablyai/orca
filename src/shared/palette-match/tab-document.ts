@@ -14,6 +14,11 @@ export type PaletteTabDocumentInput = {
   title: string
   /** Paths and URLs shown or resolvable on the row, in display preference order. */
   secondaryTexts: readonly string[]
+  /**
+   * Location paths rendered like secondaries (ids continue after `secondaryTexts`) but scored as
+   * container evidence: a hit on an enclosing folder must not tie the workspace's own name.
+   */
+  containerSecondaryTexts?: readonly string[]
   worktreeName: string
   branch: string
   repoName: string
@@ -87,6 +92,16 @@ export function buildPaletteTabDocument(input: PaletteTabDocumentInput): Palette
       profile: 'path',
       text,
       role: 'secondary',
+      destinationEligible: true
+    })
+  }
+
+  for (const [offset, text] of (input.containerSecondaryTexts ?? []).entries()) {
+    fields.push({
+      id: paletteTabSecondaryFieldId(input.secondaryTexts.length + offset),
+      profile: 'path',
+      text,
+      role: 'container',
       destinationEligible: true
     })
   }

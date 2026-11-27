@@ -1,10 +1,10 @@
-import { buildClaudeModelListArgs } from '../../../shared/claude-model-list-probe'
+import { buildClaudeModelListArgs } from '../../../shared/agent-session/options/model-catalog/claude-model-list-probe'
 import type { CommitMessageModel } from '../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../codex-cli/codex-read-only-app-server-args'
 import type { CommandTemplateBackslash } from '../../../shared/source-control/ai/generation/commit-message-prompt'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import { planAgentBinary } from '../../../shared/agent-launch/startup/agent-command-plan'
-import type { AgentModelProbeSpec } from '../../../shared/agent-model-probe-spec'
+import type { AgentModelProbeSpec } from '../../../shared/agent-session/options/model-catalog/agent-model-probe-spec'
 import { formatAgentCliFailureMessage } from '../failures/source-control-agent-failure'
 import type { DiscoverCommitMessageModelsResult } from '../source-control-text-generation-types'
 

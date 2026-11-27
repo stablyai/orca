@@ -4,7 +4,7 @@
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
+} from '../../../../shared/concurrency/abort-signal-reason'
 import type { StructuredAgentSessionAttachLock } from '../acquisition/structured-agent-session-attach-lock'
 import type { StructuredAgentSessionEndedEvent } from '../providers/structured-agent-session-adapter'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
@@ -21,9 +21,37 @@ export type StructuredAgentSessionStartFlight = {
 }
 
 export class StructuredAgentSessionStartFlights {
+  constructor(private readonly workChanged?: (sessionId: string) => void) {}
   private readonly flying = new Map<string, StructuredAgentSessionStartFlight>()
   /** Buffer exits before child publication. */
   private readonly exits = new Map<string, StructuredAgentSessionEndedEvent[]>()
+  /** Attempts still unwinding: a decided start's provider work may still be acquiring. */
+  private readonly attempts = new Map<string, Set<Promise<unknown>>>()
+
+  trackAttempt(sessionId: string, attempt: Promise<unknown>): void {
+    const live = this.attempts.get(sessionId) ?? new Set()
+    live.add(attempt)
+    this.attempts.set(sessionId, live)
+    const done = (): void => {
+      live.delete(attempt)
+      if (live.size === 0 && this.attempts.get(sessionId) === live) {
+        this.attempts.delete(sessionId)
+      }
+    }
+    void attempt.then(done, done)
+  }
+
+  /** An attempt, though perhaps already decided, has not finished its provider work. */
+  attempting(sessionId: string): boolean {
+    return (this.attempts.get(sessionId)?.size ?? 0) > 0
+  }
+
+  /** Settles once every attempt for the session, including its acquisition cleanup, has ended. */
+  async attemptsEnded(sessionId: string): Promise<void> {
+    while (this.attempts.get(sessionId)?.size) {
+      await Promise.allSettled(this.attempts.get(sessionId)!)
+    }
+  }
 
   get(sessionId: string): StructuredAgentSessionStartFlight | undefined {
     return this.flying.get(sessionId)
@@ -33,12 +61,18 @@ export class StructuredAgentSessionStartFlights {
     return this.flying.has(sessionId)
   }
 
+  /** Distinct sessions among `loaded` and those still starting, which have no indexed child yet. */
+  countWith(loaded: readonly string[]): number {
+    return new Set([...loaded, ...this.flying.keys()]).size
+  }
+
   isCurrent(sessionId: string, attemptId: string): boolean {
     return this.flying.get(sessionId)?.attemptId === attemptId
   }
 
   register(sessionId: string, flight: StructuredAgentSessionStartFlight): void {
     this.flying.set(sessionId, flight)
+    this.workChanged?.(sessionId)
   }
 
   published(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): void {
@@ -61,6 +95,7 @@ export class StructuredAgentSessionStartFlights {
     if (this.isCurrent(sessionId, attemptId)) {
       this.flying.delete(sessionId)
       this.exits.delete(sessionId)
+      this.workChanged?.(sessionId)
     }
   }
 

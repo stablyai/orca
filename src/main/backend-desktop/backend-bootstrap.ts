@@ -1,5 +1,9 @@
-import { app } from 'electron'
-import { BACKEND_CAPABILITIES, type BackendBootstrap } from '../../shared/backend-service-contract'
+import { app, type MessagePortMain, type UtilityProcess } from 'electron'
+import { readDesktopOwnerIdentity } from '../backend/backend-desktop-owner-watch'
+import {
+  BACKEND_CAPABILITIES,
+  type BackendBootstrap
+} from '../../shared/backend/backend-service-contract'
 
 export let capturedBootstrap: BackendBootstrap | undefined
 
@@ -16,4 +20,22 @@ export function captureBackendBootstrap(): void {
     appPath: app.getAppPath(),
     isPackaged: app.isPackaged
   }
+}
+
+/** Carries main's identity, so the backend can tell main's death from a reused pid. */
+export function sendBackendBootstrap(
+  child: UtilityProcess,
+  port: MessagePortMain,
+  isCurrent: () => boolean
+): void {
+  void readDesktopOwnerIdentity().then((desktopOwner) => {
+    if (!isCurrent()) {
+      port.close()
+      return
+    }
+    child.postMessage(
+      { type: 'bootstrap', config: capturedBootstrap && { ...capturedBootstrap, desktopOwner } },
+      [port]
+    )
+  })
 }

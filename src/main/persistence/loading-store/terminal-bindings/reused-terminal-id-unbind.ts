@@ -11,7 +11,10 @@ export type ReusedTerminalBinding = {
 type UnboundFields = Pick<
   WorkspaceSessionState,
   'terminalLayoutsByTabId' | 'terminalPtyIncarnationsByPaneKey' | 'tabsByWorktree'
->
+> & {
+  /** The workspaces whose rows name an unbound pane's tab. */
+  workspaces: ReadonlySet<string>
+}
 
 /** Unbind other incarnations atomically with the new binding; unstamped legacy panes remain unproven. */
 export function reusedTerminalIdUnbinding(
@@ -23,6 +26,7 @@ export function reusedTerminalIdUnbinding(
   let remainingStamps = stamps
   let rows = session.tabsByWorktree
   let changed = false
+  const workspaces = new Set<string>()
   for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
     const stale = Object.entries(layout.ptyIdsByLeafId ?? {}).flatMap(([leafId, ptyId]) => {
       const stamp = stamps[`${tabId}:${leafId}`]
@@ -51,21 +55,27 @@ export function reusedTerminalIdUnbinding(
     const named = (tab: { id: string; ptyId?: string | null }) =>
       tab.id === tabId && tab.ptyId === binding.ptyId
     rows = Object.fromEntries(
-      Object.entries(rows).map(([worktreeId, tabs]) => [
-        worktreeId,
-        tabs.some(named)
-          ? tabs.map((tab) =>
-              named(tab) ? { ...tab, ptyId: Object.values(stillBound)[0] ?? null } : tab
-            )
-          : tabs
-      ])
+      Object.entries(rows).map(([worktreeId, tabs]) => {
+        if (tabs.some((tab) => tab.id === tabId)) {
+          workspaces.add(worktreeId)
+        }
+        return [
+          worktreeId,
+          tabs.some(named)
+            ? tabs.map((tab) =>
+                named(tab) ? { ...tab, ptyId: Object.values(stillBound)[0] ?? null } : tab
+              )
+            : tabs
+        ]
+      })
     )
   }
   return changed
     ? {
         terminalLayoutsByTabId: layouts,
         terminalPtyIncarnationsByPaneKey: remainingStamps,
-        tabsByWorktree: rows
+        tabsByWorktree: rows,
+        workspaces
       }
     : null
 }

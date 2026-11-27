@@ -1,0 +1,69 @@
+const leaseCountsByPageId = new Map<string, number>()
+const pageIdByToken = new Map<string, string>()
+const listeners = new Set<(pageId: string) => void>()
+
+let version = 0
+let nextLeaseId = 0
+
+function emitChange(pageId: string): void {
+  version += 1
+  for (const listener of listeners) {
+    listener(pageId)
+  }
+}
+
+export function subscribeBrowserAutomationVisibilitySnapshot(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+export function onBrowserAutomationVisibilityChange(
+  listener: (pageId: string) => void
+): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+export function getBrowserAutomationVisibilitySnapshot(): number {
+  return version
+}
+
+export function isBrowserAutomationVisible(browserPageId: string): boolean {
+  return (leaseCountsByPageId.get(browserPageId) ?? 0) > 0
+}
+
+export function getBrowserAutomationVisiblePageIds(browserPageIds: readonly string[]): Set<string> {
+  const visible = new Set<string>()
+  for (const pageId of browserPageIds) {
+    if (isBrowserAutomationVisible(pageId)) {
+      visible.add(pageId)
+    }
+  }
+  return visible
+}
+
+export function acquireBrowserAutomationVisibility(browserPageId: string): string {
+  const token = `browser-automation-${Date.now()}-${++nextLeaseId}`
+  pageIdByToken.set(token, browserPageId)
+  leaseCountsByPageId.set(browserPageId, (leaseCountsByPageId.get(browserPageId) ?? 0) + 1)
+  emitChange(browserPageId)
+  return token
+}
+
+export function releaseBrowserAutomationVisibility(token: string): boolean {
+  const browserPageId = pageIdByToken.get(token)
+  if (!browserPageId) {
+    return false
+  }
+  pageIdByToken.delete(token)
+  const nextCount = (leaseCountsByPageId.get(browserPageId) ?? 1) - 1
+  if (nextCount > 0) {
+    leaseCountsByPageId.set(browserPageId, nextCount)
+  } else {
+    leaseCountsByPageId.delete(browserPageId)
+  }
+  emitChange(browserPageId)
+  return true
+}

@@ -21,6 +21,10 @@ import {
   validatePluginManifestV2Rules
 } from './plugin-manifest-v2-rules'
 import { upgradePluginManifestV1Names } from './plugin-manifest-v1-names'
+import {
+  pluginPanelIconEngineFloorError,
+  withDrawablePluginPanelIcons
+} from './plugin-panel-icon-fallback'
 import { formatPluginSchemaIssues } from './plugin-schema-issues'
 import { pluginApiMajorSchema } from '../workers/plugin-host-api-major'
 import {
@@ -257,13 +261,16 @@ export function qualifiedPluginKey(manifest: { publisher: string; id: string }):
 }
 
 export type PluginManifestParseResult =
-  | { ok: true; manifest: PluginManifest }
-  | { ok: false; error: string }
+  /** `warnings`: advice that did not stop the load, such as a panel icon shown as `puzzle`. */
+  { ok: true; manifest: PluginManifest; warnings?: string[] } | { ok: false; error: string }
 
 function parseWith(schema: typeof pluginManifestSchema, raw: unknown): PluginManifestParseResult {
-  const parsed = schema.safeParse(raw)
+  const drawable = withDrawablePluginPanelIcons(raw)
+  const parsed = schema.safeParse(drawable.raw)
   if (parsed.success) {
-    return { ok: true, manifest: parsed.data }
+    // Why unique: panels sharing a title and an icon problem would repeat the same line.
+    const warnings = [...new Set(drawable.warnings)]
+    return { ok: true, manifest: parsed.data, ...(warnings.length > 0 ? { warnings } : {}) }
   }
   return { ok: false, error: formatPluginSchemaIssues(parsed.error.issues, raw) }
 }
@@ -271,14 +278,19 @@ function parseWith(schema: typeof pluginManifestSchema, raw: unknown): PluginMan
 /** Strict authoring check (`validate:plugin`, catalog CI, dev folders). */
 export function parsePluginManifest(raw: unknown): PluginManifestParseResult {
   const parsed = parseWith(pluginManifestSchema, raw)
+  if (!parsed.ok) {
+    return parsed
+  }
   // Why only here: hosts strip these characters so installed plugins keep loading.
-  const unsafe = parsed.ok ? unsafePluginDisplayTextPaths(raw) : []
-  return unsafe.length > 0
-    ? {
-        ok: false,
-        error: unsafe.map((path) => `${path}: ${UNSAFE_PLUGIN_DISPLAY_TEXT_MESSAGE}`).join('; ')
-      }
-    : parsed
+  const unsafe = unsafePluginDisplayTextPaths(raw)
+  if (unsafe.length > 0) {
+    return {
+      ok: false,
+      error: unsafe.map((path) => `${path}: ${UNSAFE_PLUGIN_DISPLAY_TEXT_MESSAGE}`).join('; ')
+    }
+  }
+  const iconFloor = pluginPanelIconEngineFloorError(raw)
+  return iconFloor ? { ok: false, error: iconFloor } : parsed
 }
 
 /** Runtime read for install, discovery and update. Callers must still check engines.orca

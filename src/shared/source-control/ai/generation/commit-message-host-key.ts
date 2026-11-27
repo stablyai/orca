@@ -1,4 +1,7 @@
-import { getRepoExecutionHostId, parseRoutableExecutionHostId } from '../../../execution-host'
+import {
+  getRepoExecutionHostId,
+  parseRoutableExecutionHostId
+} from '../../../execution-host/execution-host'
 
 export const LOCAL_COMMIT_MESSAGE_HOST_KEY = 'local'
 export const UNKNOWN_COMMIT_MESSAGE_HOST_KEY = 'unknown'

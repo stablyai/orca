@@ -10,14 +10,14 @@ import { MobileFilePreviewEditableSource } from './MobileFilePreviewEditableSour
 import { MobileFilePreviewSourceText } from './MobileFilePreviewSourceText'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
-import { MobilePanZoomImage } from '../../components/MobilePanZoomImage'
-import { MobileHtmlPreview } from '../../components/MobileHtmlPreview'
-import { MobileSvgPreview } from '../../components/MobileSvgPreview'
+import { MobilePanZoomImage } from '../media/presentation/MobilePanZoomImage'
+import { MobileHtmlPreview } from './documents/MobileHtmlPreview'
+import { MobileSvgPreview } from './documents/MobileSvgPreview'
 import {
   MobileLoadErrorState,
   MobileOfflineState,
   MobileStateView
-} from '../../components/MobileStateView'
+} from '../../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type Props = {

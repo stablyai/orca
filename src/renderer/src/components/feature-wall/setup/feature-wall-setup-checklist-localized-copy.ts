@@ -1,7 +1,7 @@
 import type {
   FeatureWallSetupStep,
   FeatureWallSetupStepId
-} from '../../../../../shared/feature-wall-setup-steps'
+} from '../../../../../shared/feature-education/explore/feature-wall-setup-steps'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 

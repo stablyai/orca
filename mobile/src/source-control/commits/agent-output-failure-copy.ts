@@ -1,4 +1,4 @@
-import type { AgentOutputFailureCode } from '../../../../src/shared/agent-output-failure-copy'
+import type { AgentOutputFailureCode } from '../../../../src/shared/text-generation/output/agent-output-failure-copy'
 import { translate } from '../../i18n/mobile-i18n'
 
 export const AGENT_OUTPUT_FAILURE_COPY: Record<
@@ -9,24 +9,6 @@ export const AGENT_OUTPUT_FAILURE_COPY: Record<
     translate(
       'sourceControl.textGenerationFailure.openCodeInvalidEvents',
       'OpenCode returned invalid JSON events.',
-      values
-    ),
-  antigravityInvalidEvents: (values) =>
-    translate(
-      'sourceControl.textGenerationFailure.antigravityInvalidEvents',
-      'Antigravity returned invalid JSON events.',
-      values
-    ),
-  antigravityInvalidResult: (values) =>
-    translate(
-      'sourceControl.textGenerationFailure.antigravityInvalidResult',
-      'Antigravity returned an invalid result.',
-      values
-    ),
-  antigravityNoFinalResult: (values) =>
-    translate(
-      'sourceControl.textGenerationFailure.antigravityNoFinalResult',
-      'Antigravity returned no final result.',
       values
     ),
   kimiUnreadableOutput: (values) =>

@@ -1,4 +1,4 @@
-import type { WslUncPathInfo } from '../../../shared/wsl-paths'
+import type { WslUncPathInfo } from '../../../shared/file-access/wsl-paths'
 
 // Exit codes conflate host failures with guest results; only stdout markers prove the guest answered.
 const WSL_DIRECTORY_EXISTS_MARKER = '__ORCA_DIRECTORY_EXISTS__'

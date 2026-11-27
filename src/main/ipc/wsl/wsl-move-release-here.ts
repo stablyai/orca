@@ -28,7 +28,7 @@ import {
   wslMoveHostCopyOutcome
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-host-copy-stop'
 import { beginWslMoveUndoRun } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
-import { runWslMoveHostAutomationsExclusive } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-undo-host-automations'
+import { runWslMoveHostAutomationsExclusive } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-host-automations-lock'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { wasWslHostKeptForPeers } from '../../wsl/host-lifecycle/wsl-host-kept-for-peers'
 
@@ -159,6 +159,12 @@ async function releaseWslMovesHereNow(
     const ports = createUndoPorts()
     for (const move of released) {
       ports.refocusHere?.(move)
+      try {
+        ports.unhideMovedEntries?.(move)
+      } catch (error) {
+        // Cosmetic and repeated by the startup prune; it must never block the reload below.
+        console.warn('[wsl-move] Could not unhide moved entries after undo:', error)
+      }
     }
     fenceHandedToReload = true
     reloadWslMoveWindowWithWritesHeld(releaseSpawnFence)
@@ -179,10 +185,13 @@ async function releaseWslMovesHereNow(
 }
 
 /** R39: removed here but kept running for another Orca; only re-adding the host reaches it again. */
-function wslMoveHostKeptForPeers(userDataPath: string, move: WslMoveCutover): boolean {
+async function wslMoveHostKeptForPeers(
+  userDataPath: string,
+  move: WslMoveCutover
+): Promise<boolean> {
   return (
     wasWslHostKeptForPeers(userDataPath, move.destinationEnvironmentId) &&
-    !listEnvironments(userDataPath).some((env) => env.id === move.destinationEnvironmentId)
+    !(await listEnvironments(userDataPath)).some((env) => env.id === move.destinationEnvironmentId)
   )
 }
 
@@ -199,7 +208,7 @@ async function releaseOneMoveHere(
   // A bring-back reads first and refuses before turning anything off, so nothing is toggled.
   const preflight = await ports.preflightHostCopies?.(move)
   if (preflight !== undefined && preflight !== 'stopped') {
-    if (preflight === 'unreachable' && wslMoveHostKeptForPeers(userDataPath, move)) {
+    if (preflight === 'unreachable' && (await wslMoveHostKeptForPeers(userDataPath, move))) {
       return keptForPeersRefusal()
     }
     return {
@@ -211,10 +220,13 @@ async function releaseOneMoveHere(
   const automations = (await ports.stopHostAutomations?.(move)) ?? {
     outcome: 'stopped',
     restore: async () => {},
-    applyHere: () => () => {}
+    applyHere: async () => async () => {}
   }
   if (automations.outcome !== 'stopped') {
-    if (automations.outcome === 'unreachable' && wslMoveHostKeptForPeers(userDataPath, move)) {
+    if (
+      automations.outcome === 'unreachable' &&
+      (await wslMoveHostKeptForPeers(userDataPath, move))
+    ) {
       return keptForPeersRefusal()
     }
     return {
@@ -237,7 +249,7 @@ async function releaseOneMoveHere(
   const asleep = wslMoveHostCopiesSlept(stopped) ? { hostTerminalsAsleep: true as const } : {}
   if (stop !== 'stopped') {
     await automations.restore()
-    if (stop === 'unreachable' && wslMoveHostKeptForPeers(userDataPath, move)) {
+    if (stop === 'unreachable' && (await wslMoveHostKeptForPeers(userDataPath, move))) {
       return keptForPeersRefusal()
     }
     return {
@@ -246,12 +258,19 @@ async function releaseOneMoveHere(
       ...asleep
     }
   }
-  // Written here just before the release (the record keeps the choice), and undone if it refuses.
-  const revertHere = automations.applyHere()
+  // Written and flushed here before the release (the record keeps the choice), and undone if either refuses.
+  let revertHere: () => Promise<void>
+  try {
+    revertHere = await automations.applyHere()
+  } catch (error) {
+    console.warn('[wsl-move] Could not persist local automation states for undo:', error)
+    await automations.restore()
+    return { released: false, reason: 'failed', detail: 'local-automations', ...asleep }
+  }
   const release = releaseWslMove(userDataPath, move)
   if (!release.released) {
     try {
-      revertHere()
+      await revertHere()
     } finally {
       // The host's copies go back on even if putting the copies here back failed.
       await automations.restore()

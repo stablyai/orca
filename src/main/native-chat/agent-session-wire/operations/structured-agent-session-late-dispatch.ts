@@ -1,7 +1,7 @@
 import type { AgentJournalAnsweredTurnIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalDispatchRejection } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import type { ResolveDispatchInput } from '../../agent-session-journal/journal-store-contracts'
+import type { JournalLateDispatchInput } from '../../agent-session-journal/journal-store-contracts'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
 import { whileStructuredAgentSessionHandingOver } from '../delivery/structured-agent-session-handing-over'
@@ -13,7 +13,11 @@ export async function settleStructuredAgentSessionLateDispatch(
     sessionId: string
     clientMessageId: string
   } & (
-    | { providerIdentity: AgentJournalItemIdentity }
+    | {
+        providerIdentity: AgentJournalItemIdentity
+        /** The running turn it joined, which another send opened. */
+        answeredInTurn?: AgentJournalAnsweredTurnIdentity
+      }
     | ({
         state: 'rejected'
         answeredInTurn?: AgentJournalAnsweredTurnIdentity
@@ -27,17 +31,13 @@ export async function settleStructuredAgentSessionLateDispatch(
     return
   }
   const fence = structuredAgentSessionConversationFence(context.deps.store, input.sessionId)
-  const unrunCard =
-    'state' in input &&
-    input.state === 'rejected' &&
-    input.unrun === true &&
-    session.journal.submission(input.clientMessageId)?.queuedMessageId !== undefined
-  const settlement: ResolveDispatchInput =
+  const settlement: JournalLateDispatchInput =
     'providerIdentity' in input
       ? {
           clientMessageId: input.clientMessageId,
           state: 'accepted',
           providerIdentity: input.providerIdentity,
+          ...(input.answeredInTurn ? { answeredInTurn: input.answeredInTurn } : {}),
           fence
         }
       : input.state === 'unknown'
@@ -52,9 +52,8 @@ export async function settleStructuredAgentSessionLateDispatch(
             clientMessageId: input.clientMessageId,
             state: 'rejected',
             reason: input.reason,
-            rejection: unrunCard
-              ? { ...input.rejection, neverReachedAgent: true }
-              : input.rejection,
+            rejection: input.rejection,
+            ...(input.unrun ? { unrun: true } : {}),
             ...(input.answeredInTurn ? { answeredInTurn: input.answeredInTurn } : {}),
             fence
           }
@@ -64,9 +63,9 @@ export async function settleStructuredAgentSessionLateDispatch(
       session.journal,
       input.clientMessageId,
       async () => {
-        await (settlement.state === 'accepted'
-          ? session.journal.acceptLate(settlement)
-          : session.journal.resolveDispatch(settlement))
+        // Earlier provider facts take their writer position before this receipt.
+        context.sealEventSink(input.sessionId)
+        await session.journal.settleLateDispatch(settlement)
       }
     )
   } catch (error) {

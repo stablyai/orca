@@ -190,6 +190,7 @@ export function createHarness() {
     callRpc,
     subscribeScreencast,
     getWorktreeSelector: () => 'worktree:wt-1',
+    readCurrentObservation: () => [],
     getCurrentUrl: () => 'https://example.test/',
     readStoredHandle: () => storedHandle,
     writeStoredHandle: (handle) => {
@@ -212,10 +213,17 @@ export function createHarness() {
     syncViewport: async () => {},
     askJavaScriptDialog: (dialog, signal) =>
       new Promise((answer) => dialogAsks.push({ dialog, signal, answer })),
+    askPagePrompt: () => new Promise(() => {}),
+    openExternalAppLink: async () => false,
+    reportPagePromptFailed: () => {},
+    pickFiles: async () => [],
+    stageFilesOnHost: async () => [],
+    reportFilesNotDelivered: () => {},
     getDeviceScaleFactor: () => 1,
     setStatus: (status) => statusLog.push(status),
     clearFrame: () => {},
-    handleFrameBytes: () => {}
+    handleFrameBytes: () => {},
+    viewerEvents: { onPointer: () => {}, onAgentCursor: () => {}, onDriver: () => {} }
   })
 
   return {

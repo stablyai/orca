@@ -1,10 +1,11 @@
-import { useEffect } from 'react'
-import { getRepoExecutionHostId } from '../../../../src/shared/execution-host'
+import { useEffect, useMemo } from 'react'
+import { getRepoExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
+import { repoIconFeedKey } from '../../../../src/shared/sidebar-list/catalog/repo-icon-data-urls-contract'
 import { useHostQuery } from '../../query/host-query'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { buildRepoHostIdByRepoId } from '../../worktree/worktree-host-context-labels'
-import { buildSshHostHealthById } from '../../worktree/worktree-host-health'
-import type { SectionRepo } from '../../worktree/workspace-list-types'
+import { buildRepoHostIdByRepoId } from '../../worktree/row-presentation/worktree-host-context-labels'
+import { buildSshHostHealthById } from '../../worktree/execution-hosts/worktree-host-health'
+import type { SectionRepo } from '../../worktree/workspace-list/workspace-list-types'
 import {
   catalogNeedsHostLabels,
   HOST_LIST_TARGET,
@@ -14,15 +15,26 @@ import {
 } from './host-list-queries'
 import type { HostRepoCatalogRow } from '../host-screen-reply-schema'
 import type { HostScreenState } from '../use-host-screen-state'
+import { useHostRepoIconDataUrls } from './use-host-repo-icon-data-urls'
 
-function desktopSectionRepo(repo: HostRepoCatalogRow): SectionRepo {
+const NO_ICON_IDS: readonly string[] = []
+
+function desktopSectionRepo(
+  repo: HostRepoCatalogRow,
+  iconDataUrl: string | null | undefined
+): SectionRepo {
+  // The host's small PNG of an image icon; the page shell would refuse an https one.
+  const repoIcon =
+    iconDataUrl && repo.repoIcon?.type === 'image'
+      ? { ...repo.repoIcon, src: iconDataUrl }
+      : repo.repoIcon
   return {
     id: repo.id,
     displayName: repo.displayName,
     path: repo.path ?? repo.id,
     executionHostId: getRepoExecutionHostId(repo),
     ...(repo.badgeColor ? { badgeColor: repo.badgeColor } : {}),
-    ...(repo.repoIcon ? { repoIcon: repo.repoIcon } : {})
+    ...(repoIcon ? { repoIcon } : {})
   }
 }
 
@@ -50,6 +62,21 @@ export function useHostRepoMetadata(args: {
     NO_HOST_LIST_INPUT,
     options
   )
+  // Rebuilt on every settled read, so an icon read that failed is asked again on the next poll.
+  const iconIds = useMemo(
+    () =>
+      repos.data
+        ? [
+            ...new Set(
+              repos.data.catalog.flatMap(
+                (repo) => repos.data.repoIconIds[repoIconFeedKey(repo)] ?? []
+              )
+            )
+          ]
+        : NO_ICON_IDS,
+    [repos.data, repos.dataUpdatedAt]
+  )
+  const iconDataUrls = useHostRepoIconDataUrls(client, iconIds)
   const needsLabels = repos.data !== undefined && catalogNeedsHostLabels(repos.data.catalog)
   const labels = useHostQuery(hostRepoLabelsQuery, host, HOST_LIST_TARGET, NO_HOST_LIST_INPUT, {
     ...options,
@@ -59,10 +86,16 @@ export function useHostRepoMetadata(args: {
   // which clears the shown repos while the cache keeps them.
   useEffect(() => {
     if (repos.data) {
-      setDesktopRepos(repos.data.catalog.map(desktopSectionRepo))
-      setRepoHostIdByRepoId(buildRepoHostIdByRepoId(repos.data.catalog))
+      const { catalog, repoIconIds } = repos.data
+      setDesktopRepos(
+        catalog.map((repo) => {
+          const iconId = repoIconIds[repoIconFeedKey(repo)]
+          return desktopSectionRepo(repo, iconId ? iconDataUrls.get(iconId) : undefined)
+        })
+      )
+      setRepoHostIdByRepoId(buildRepoHostIdByRepoId(catalog))
     }
-  }, [repos.data, hostId])
+  }, [repos.data, iconDataUrls, hostId])
   useEffect(() => {
     if (needsLabels && labels.data) {
       setHostHealthById(buildSshHostHealthById(labels.data.sshTargetSummaries))

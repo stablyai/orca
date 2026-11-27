@@ -11,7 +11,7 @@ import { JiraIntegrationCard } from '../../integrations/task-trackers/jira-integ
 import { ItsaplanIntegrationCard } from '../../integrations/task-trackers/itsaplan-integration-card'
 import { LinearIntegrationCard } from '../../integrations/task-trackers/linear-integration-card'
 import { IntegrationCardPresentationProvider } from '../../integrations/presentation/integration-card-presentation'
-import { useIntegrationProviderStatusRefresh } from '../../../hooks/use-integration-provider-status-refresh'
+import { useIntegrationProviderStatusRefresh } from '../../../runtime/hosts/observations/use-integration-provider-status-refresh'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { INTEGRATION_SETTING_TARGET_IDS } from './integrations-search'
 import { useTranslate } from '@/i18n/use-translate'

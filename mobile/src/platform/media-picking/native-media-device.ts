@@ -3,7 +3,7 @@ import * as DocumentPicker from 'expo-document-picker'
 import { Directory, File as FsFile, Paths } from 'expo-file-system'
 import * as ImagePicker from 'expo-image-picker'
 import { agentReadableLibraryImageOptions } from '../../files/attachments/mobile-image-source-picker'
-import type { MediaHandleRegistry } from '../../mobile-web-shell/media-handle-registry'
+import type { MediaHandleRegistry } from '../../mobile-web-shell/native-capabilities/media-handle-registry'
 import type { NativeMediaDeps } from './native-media'
 
 // Isolate native imports so handlers can be tested with injected device calls.

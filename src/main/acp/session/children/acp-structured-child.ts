@@ -14,10 +14,13 @@ export type AcpStructuredChild = Pick<
   | 'spec'
   | 'cwd'
   | 'permissionModes'
+  | 'permission'
+  | 'launchArgsGrantFullAccess'
   | 'connection'
   | 'closeRequested'
   | 'failureClose'
   | 'journalClosed'
+  | 'historyCatchUp'
   | 'ended'
   | 'exitObservedAt'
 > & {

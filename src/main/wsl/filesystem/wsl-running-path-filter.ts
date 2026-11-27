@@ -1,4 +1,4 @@
-import { isWslUncPath, parseWslUncPath } from '../../../shared/wsl-paths'
+import { isWslUncPath, parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { listRunningWslDistrosAsync } from '../discovery/distro-catalog'
 
 export function filterPathsToWslDistros(

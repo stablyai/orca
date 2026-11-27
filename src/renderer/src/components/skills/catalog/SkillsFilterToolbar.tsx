@@ -12,7 +12,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import type { SkillSourceKind } from '../../../../../shared/skills'
+import type { SkillSourceKind } from '../../../../../shared/skills/discovery/skills'
 import {
   resultCountLabel,
   shareLinkCountLabel,

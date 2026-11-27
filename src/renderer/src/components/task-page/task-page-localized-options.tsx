@@ -16,10 +16,10 @@ import {
   type LinearViewMode
 } from '../../../../shared/linear/issue-view-resume-state'
 import { getTaskPresetQuery } from '../../../../shared/work-items/task-preset-query'
-import type { GitLabMRInvolvement } from '../../../../shared/gitlab-types'
+import type { GitLabMRInvolvement } from '../../../../shared/gitlab/gitlab-types'
 import type { GitHubPRStateChip, GitHubPRWhoChip } from './github/listing/task-page-pr-chips'
 import type { TaskProvider } from '../../../../shared/work-items/task-providers'
-import type { TaskViewPresetId } from '../../../../shared/ui-chrome-types'
+import type { TaskViewPresetId } from '../../../../shared/ui-chrome/ui-chrome-types'
 import type { ItsaplanStateType } from '../../../../shared/itsaplan/itsaplan-types'
 
 export type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'

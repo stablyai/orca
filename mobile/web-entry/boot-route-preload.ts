@@ -1,5 +1,5 @@
 import { createElement, lazy, useState, type ComponentType } from 'react'
-import { matchesRoutePattern } from '../src/mobile-web-shell/page-route-policy'
+import { matchesRoutePattern } from '../src/mobile-web-shell/routing/page-route-policy'
 
 type RouteComponent = ComponentType<Record<string, unknown>>
 type RouteModule = { default: RouteComponent }

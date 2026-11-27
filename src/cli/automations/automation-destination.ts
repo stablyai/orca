@@ -5,10 +5,10 @@ import {
   AutomationOwnerConflictError
 } from '../../shared/automations/ownership/automation-owner-conflict'
 import type { AutomationDestination } from '../../shared/automations/ownership/automation-owner-precondition'
-import type { RuntimeWorktreeRecord } from '../../shared/runtime-worktree-contracts'
-import type { SshTargetSummary } from '../../shared/ssh-types'
-import type { Repo } from '../../shared/repo-types'
-import { getRepoRoutingConnectionId } from '../../shared/execution-host'
+import type { RuntimeWorktreeRecord } from '../../shared/worktree/catalog/runtime-worktree-contracts'
+import type { SshTargetSummary } from '../../shared/remote-runtime/ssh/ssh-types'
+import type { Repo } from '../../shared/repository/repo-types'
+import { getRepoRoutingConnectionId } from '../../shared/execution-host/execution-host'
 import { getManagedOrcadSshTargetId } from '../../shared/execution-host/managed-orcad-execution-host'
 import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { RuntimeClient } from '../runtime/client'
@@ -101,7 +101,7 @@ export async function routeAutomationCreate<
   const connectionId = repo ? getRepoRoutingConnectionId(repo) : null
   const server =
     repo && connectionId && client.isRemote === false
-      ? listEnvironments(client.userDataPath).find(
+      ? (await listEnvironments(client.userDataPath)).find(
           (environment) => getManagedOrcadSshTargetId(environment) === connectionId
         )
       : undefined

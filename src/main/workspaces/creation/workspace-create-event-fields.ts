@@ -4,13 +4,13 @@ import {
   WORKTREE_CREATE_PHASES,
   type WorkspaceCreateEntryPoint,
   type WorktreeCreatePhase
-} from '../../../shared/worktree/create-timing-vocabulary'
+} from '../../../shared/worktree/creation/create-timing-vocabulary'
 import type {
   REPO_FILE_COUNT_BUCKETS,
   WORKTREE_COUNT_BUCKETS,
   workspaceCreateFailedProperties,
   workspaceCreatedTimingProperties
-} from '../../../shared/telemetry-workspace-create-schemas'
+} from '../../../shared/telemetry/schemas/telemetry-workspace-create-schemas'
 import type { WorktreeCreateTimingRecorder } from './worktree-create-timing'
 import type { WorktreeCreateConcurrency } from './worktree-create-concurrency'
 import type { CreateEventRepoFacts } from '../../git/worktrees/creation/create-event-repo-probe'

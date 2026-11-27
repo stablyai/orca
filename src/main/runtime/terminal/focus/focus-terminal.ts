@@ -1,10 +1,11 @@
 import { OrcaRuntimeWithWaitForLeafPtyId } from '../view/renderer-terminal-snapshot'
-import type { RuntimeTerminalFocus } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalFocus } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
   RuntimeTerminalReveal,
   TerminalPaneRevealTarget
 } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { PtyPaneOf } from '../surface/pty-pane-query'
 import { getLatestPtyTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import { copySleepingAgentLaunchConfig } from '../launch/runtime-agent-launch-resolution'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
@@ -184,17 +185,36 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
   }
 
   protected getPtyIdsForExplicitTabClose(worktreeId: string, tabId: string): string[] {
-    const ptyIds = new Set<string>()
+    return [...(this.getPtyIdsByTabForExplicitClose(worktreeId, tabId).get(tabId) ?? [])]
+  }
+
+  /** One pass over PTYs and leaves; `onlyTabId` keeps a single-tab close from grouping the rest. */
+  protected getPtyIdsByTabForExplicitClose(
+    worktreeId: string,
+    onlyTabId?: string
+  ): Map<string, Set<string>> {
+    const byTab = new Map<string, Set<string>>()
+    const add = (tabId: string | null | undefined, ptyId: string): void => {
+      if (!tabId || (onlyTabId !== undefined && tabId !== onlyTabId)) {
+        return
+      }
+      const ptyIds = byTab.get(tabId) ?? new Set<string>()
+      ptyIds.add(ptyId)
+      byTab.set(tabId, ptyIds)
+    }
+    // One lookup captured on first use: per-PTY `paneOfPty` would scan every main leaf for each PTY.
+    let paneOf: PtyPaneOf | undefined
     for (const pty of this.ptysById.values()) {
-      if (pty.connected && pty.worktreeId === worktreeId && this.paneOfPty(pty).tabId === tabId) {
-        ptyIds.add(pty.ptyId)
+      if (pty.connected && pty.worktreeId === worktreeId) {
+        paneOf ??= this.captureTerminalPaneReader()
+        add(paneOf(pty).tabId, pty.ptyId)
       }
     }
     for (const leaf of this.leaves.values()) {
-      if (leaf.worktreeId === worktreeId && leaf.tabId === tabId && leaf.ptyId) {
-        ptyIds.add(leaf.ptyId)
+      if (leaf.worktreeId === worktreeId && leaf.ptyId) {
+        add(leaf.tabId, leaf.ptyId)
       }
     }
-    return [...ptyIds]
+    return byTab
   }
 }

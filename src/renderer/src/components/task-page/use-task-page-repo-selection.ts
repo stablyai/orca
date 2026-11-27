@@ -5,7 +5,7 @@ import {
   normalizeTaskRepoSelection,
   getDefaultTaskRepoSelection,
   getTaskProjectPickerGroups
-} from '@/components/task-page/task-page-default-repo-selection'
+} from '../../../../shared/work-items/task-repo-selection'
 import { areStringSetsEqual } from '@/components/task-page/task-page-string-set-equality'
 import { buildSelectedReposKey } from '@/components/task-page/task-page-work-item-pagination'
 import {

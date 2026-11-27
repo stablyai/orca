@@ -1,12 +1,12 @@
 import { translate } from '@/i18n/i18n'
 import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/workspace-card/activity/worktree-title-derived-agent-rows'
 import { detectAgentStatusFromTitle } from '../../../../../shared/agent-status/title/agent-title-status'
-import { tabHasLivePty } from '../../../../../shared/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import {
   collectRuntimePaneLeafIds,
   isRuntimePaneTitleOrphan,
   resolveRuntimePaneTitleLeafIdFromRoot
-} from '../../../../../shared/runtime-pane-title-leaf-id'
+} from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import { containsAgentSpinnerGlyph } from '../../../../../shared/agent-status/title/agent-title-glyphs'
 import { isSyntheticAgentPermissionTitle } from '../../../../../shared/agent-status/title/synthetic-agent-title'
 import type {
@@ -15,11 +15,11 @@ import type {
   TerminalTab
 } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { LiveAgentWorktreeStatus } from '../../../../../shared/sidebar-list/workspace-activity-facts'
+import type { LiveAgentWorktreeStatus } from '../../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 import {
   rankWorktreeStatus,
   type WorktreeStatus
-} from '../../../../../shared/worktree-status-rollup'
+} from '../../../../../shared/worktree/row-display/worktree-status-rollup'
 
 type WorktreeStatusHeuristicOptions = {
   liveAgentStatus?: LiveAgentWorktreeStatus
@@ -192,13 +192,12 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
 
 /**
  * Apply the WorktreeCard priority overlay on top of the title-heuristic base. Explicit agent rows may
- * promote the dot; sleep cleanup owns removing stale retained rows.
+ * promote the dot; sleep cleanup removes stale rows.
  *
  * Map args are narrowed to this worktree. `hasPermission`/`hasLiveWorking`/
  * `hasLiveDone` are fresh hook entries ({blocked,waiting} / {working} / {done});
- * `hasRetainedDone`/`hasRetainedFailed` are retained-agent snapshots scoped to this worktreeId.
  */
-export function resolveWorktreeStatus(args: {
+type ResolveWorktreeStatusArgs = {
   tabs: readonly Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>[]
   browserTabs: readonly { id: string }[]
   hasStructuredChat?: boolean
@@ -215,9 +214,13 @@ export function resolveWorktreeStatus(args: {
   hasInterrupted?: boolean
   hasUnconfirmed?: boolean
   hasLiveDone: boolean
-  hasRetainedDone: boolean
-  hasRetainedFailed?: boolean
-}): WorktreeStatus {
+}
+
+export function resolveWorktreeStatusParts(args: ResolveWorktreeStatusArgs): {
+  /** What the terminal titles alone say, before explicit agent rows rank over it. */
+  heuristic: WorktreeStatus
+  status: WorktreeStatus
+} {
   const heuristic = getWorktreeStatus(
     args.tabs,
     args.browserTabs,
@@ -231,5 +234,9 @@ export function resolveWorktreeStatus(args: {
       terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId
     }
   )
-  return rankWorktreeStatus(heuristic, args)
+  return { heuristic, status: rankWorktreeStatus(heuristic, args) }
+}
+
+export function resolveWorktreeStatus(args: ResolveWorktreeStatusArgs): WorktreeStatus {
+  return resolveWorktreeStatusParts(args).status
 }

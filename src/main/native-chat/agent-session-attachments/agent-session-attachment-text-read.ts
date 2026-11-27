@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { stat, realpath } from 'node:fs/promises'
 import { openAuthorizedDocPreviewTarget } from '../../../shared/document-preview/doc-preview-file-access'
 import { validateFileRangeRequest } from '../../../shared/file-content/file-range-read'
-import { remoteRpcResultExceedsContentBudget } from '../../../shared/remote-rpc-content-budget'
+import { remoteRpcResultExceedsContentBudget } from '../../../shared/remote-runtime/rpc/remote-rpc-content-budget'
 import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../../shared/agent-session/agent-session-attachments'
 import type {
   AttachmentTextChunk,

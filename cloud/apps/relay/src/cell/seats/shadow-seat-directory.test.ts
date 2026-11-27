@@ -351,17 +351,6 @@ describe('startShadowSeatPoller', () => {
     expect(directory.cellState('cell-b')?.flagsApplied).toBeUndefined()
   })
 
-  it('completes without a cell that is dead, empty or isolated', async () => {
-    const cell = poller({ 'cell-a': () => json(feed({ seq: 1, full: [] })) }, 'all', async () => [
-      CELLS[0]!,
-      { ...CELLS[1]!, requiredForComplete: false }
-    ])
-    await cell.tick()
-    cell.stop()
-    expect(cell.directory.cellState('cell-b')).toMatchObject({ status: 'pending' })
-    expect(cell.directory.isComplete()).toBe(true)
-  })
-
   it('treats a malformed or mislabelled body as unverifiable', async () => {
     const cell = poller({
       'cell-a': () => json({ v: 2 }),

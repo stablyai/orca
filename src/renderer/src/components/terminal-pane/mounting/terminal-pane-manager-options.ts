@@ -1,6 +1,10 @@
 import type { IDisposable } from '@xterm/xterm'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type { PaneManagerOptions } from '@/lib/pane-manager/pane-manager-types'
+import {
+  noteBotThreadPaneActivation,
+  withBotThreadPaneHover
+} from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { useAppStore } from '@/store/index'
 import { resolveTerminalLigaturesEnabled } from '../../../../../shared/terminal/appearance/terminal-ligatures'
 import { resolveTerminalFontWeights } from '../../../../../shared/terminal/appearance/terminal-fonts'
@@ -13,14 +17,14 @@ import {
   resolveTerminalCursorInactiveStyle,
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
-import { buildFontFamily } from '../../../../../shared/monospace-font-family'
+import { buildFontFamily } from '../../../../../shared/styles/monospace-font-family'
 import { pluginFontFamilyWhenLoaded } from '@/store/plugins/appearance/plugin-fonts'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/terminal-protocol/windows-pty-compatibility'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-protocol/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from '../input/keyboard/terminal-keyboard-protocol-pane-agent'
-import { UNRESOLVED_OWNER_HOST_ID } from '../../../../../shared/execution-host'
+import { UNRESOLVED_OWNER_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
-import { acquireWebviewsDragPassthrough } from '../../browser-pane/host-guest/webview-drag-passthrough'
+import { acquireWebviewsDragPassthrough } from '../../browser-pane/host-guest/drag/webview-drag-passthrough'
 import { handleTerminalWebLinkClick } from '../links/http/terminal-web-link-click'
 import { createTerminalPaneCreatedHandler } from './terminal-pane-created-handler'
 import { createTerminalPaneClosedHandler } from './terminal-pane-closed-handler'
@@ -32,7 +36,7 @@ import {
 import { resolveTerminalLayoutActiveLeafId } from '../layout/ownership/terminal-layout-active-leaf'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal/images/terminal-inline-images-settings'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { layoutOwnerPaneGestures } from '../layout/ownership/terminal-pane-layout-owner-gestures'
 
 export function createTerminalPaneManagerOptions(
@@ -54,7 +58,10 @@ export function createTerminalPaneManagerOptions(
   return {
     onPaneCreated: createTerminalPaneCreatedHandler(context),
     onPaneClosed: createTerminalPaneClosedHandler(context),
-    onActivePaneChange: (pane) => {
+    withHoverFocus: withBotThreadPaneHover,
+    onPaneActivation: (leafId, interaction, changed) =>
+      noteBotThreadPaneActivation(tabId, leafId, interaction, changed),
+    onActivePaneChange: (pane, interaction) => {
       const layout = useAppStore.getState().terminalLayoutsByTabId[tabId]
       const ptyIdsByLeafId = layout?.ptyIdsByLeafId ?? {}
       if (Object.keys(ptyIdsByLeafId).length > 0 && !ptyIdsByLeafId[pane.leafId]) {
@@ -67,7 +74,7 @@ export function createTerminalPaneManagerOptions(
           ? (managerRef.current?.getNumericIdForLeaf(fallbackLeafId) ?? null)
           : null
         if (fallbackPaneId != null && fallbackPaneId !== pane.id) {
-          managerRef.current?.setActivePane(fallbackPaneId, { focus: true })
+          managerRef.current?.setActivePane(fallbackPaneId, { focus: true, interaction })
           return
         }
       }
@@ -191,7 +198,7 @@ export function createTerminalPaneManagerOptions(
         sourceOwner: activePane ? context.getHttpLinkSourceOwnerForPane(paneId) : { kind: 'local' },
         requestOpenLinksInAppPreference,
         linkActionContext: context.getLinkActionContext(paneId),
-        actionDestinations: context.getHttpLinkActionDestinations(paneId)
+        getActionDestinations: (linkUrl) => context.getHttpLinkActionDestinations(paneId, linkUrl)
       })
     },
     linkOpenHint: context.getUrlOpenLinkHint,

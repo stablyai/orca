@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import { HostSectionHeader } from './HostSectionHeader'
 
 const base: HostHeaderRow = {

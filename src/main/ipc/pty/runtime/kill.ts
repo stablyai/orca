@@ -9,7 +9,7 @@ import {
 import { isPtyAlreadyGoneError, delay, verifyPtyStopped } from '../provider/liveness'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import {
   PtyExitProof,
   PtyRetirementWithoutProof,

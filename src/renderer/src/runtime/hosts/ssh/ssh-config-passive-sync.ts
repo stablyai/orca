@@ -37,9 +37,3 @@ export function syncSshConfigTargetsPassively(): Promise<void> {
   })()
   return inFlight
 }
-
-export function resetSshConfigPassiveSyncForTests(): void {
-  inFlight = null
-  lastStartedAt = Number.NEGATIVE_INFINITY
-  metadataRefreshPending = false
-}

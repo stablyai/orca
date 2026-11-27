@@ -1,37 +1,44 @@
 import { describe, expect, it } from 'vitest'
-import { Terminal } from '@xterm/headless'
-import { installTerminalCapabilityReplyHandlers } from './terminal-capability-replies'
+import { Terminal } from '@xterm/xterm'
+import {
+  createTerminalPixelSizeQueryResponder,
+  rescalePixelMouseReport
+} from './terminal-capability-replies'
 
-function writeTerminal(term: Terminal, data: string): Promise<void> {
-  return new Promise((resolve) => term.write(data, resolve))
-}
-
-describe('installTerminalCapabilityReplyHandlers', () => {
-  it.each([
-    ['OSC 11 then CPR', '\x1b]11;?\x1b\\\x1b[6n', ['osc', 'cpr']],
-    ['CPR then OSC 11', '\x1b[6n\x1b]11;?\x1b\\', ['cpr', 'osc']]
-  ] as const)('preserves combined query order (%s)', async (_name, input, expectedKinds) => {
-    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
-    term.options.theme = { background: '#ffffff' }
+describe('rescalePixelMouseReport', () => {
+  // Real xterm: the rescale reads xterm's private mouse encoding, so an upgrade that moves it fails here.
+  it('lands every pixel on its drawn cell using the size the app was last told', async () => {
+    const terminal = new Terminal({ cols: 120, rows: 38, allowProposedApi: true })
+    let screen = { width: 1234.5, height: 581 }
+    const screenElement = { getBoundingClientRect: () => screen }
+    Object.defineProperty(terminal, 'element', { value: { querySelector: () => screenElement } })
+    await new Promise<void>((resolve) => terminal.write('\x1b[?1016h', resolve))
     const replies: string[] = []
-    const disposable = installTerminalCapabilityReplyHandlers({
-      terminal: term as never,
-      parser: term.parser,
-      sendInput: (data) => {
-        replies.push(data)
-      },
-      isReplaying: () => false
-    })
-    const onData = term.onData((data) => replies.push(data))
+    createTerminalPixelSizeQueryResponder(terminal, (reply) => void replies.push(reply))('\x1b[16t')
+    expect(replies).toEqual(['\x1b[6;15;10t'])
 
-    try {
-      await writeTerminal(term, input)
-      const kinds = replies.map((reply) => (reply.startsWith('\x1b]11;') ? 'osc' : 'cpr'))
-      expect(kinds).toEqual(expectedKinds)
-    } finally {
-      onData.dispose()
-      disposable.dispose()
-      term.dispose()
+    const misplaced = (): string[] => {
+      const wrong: string[] = []
+      for (let px = 0; px < Math.max(screen.width, screen.height); px++) {
+        const [, x, y] = rescalePixelMouseReport(terminal, `\x1b[<0;${px};${px}M`)
+          .slice(3, -1)
+          .split(';')
+          .map(Number)
+        const drawn = [Math.floor(px / (screen.width / 120)), Math.floor(px / (screen.height / 38))]
+        // The app converts with the 10 x 15 reply until it asks again.
+        if (px < screen.width && Math.floor(x / 10) !== drawn[0]) {
+          wrong.push(`x=${px}`)
+        }
+        if (px < screen.height && Math.floor(y / 15) !== drawn[1]) {
+          wrong.push(`y=${px}`)
+        }
+      }
+      return wrong
     }
+    expect(misplaced()).toEqual([])
+    screen = { width: 120 * 8.362, height: 38 * 18.268 }
+    expect(misplaced()).toEqual([])
+    expect(rescalePixelMouseReport(terminal, 'a')).toBe('a')
+    terminal.dispose()
   })
 })

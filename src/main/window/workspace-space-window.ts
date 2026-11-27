@@ -7,8 +7,11 @@ import {
 } from './activation/foreground-activation-policy'
 import { installPrivilegedWindowNavigationPolicy } from './security/privileged-window-navigation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
-import type { Store } from '../persistence/loading-store/store'
-import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
+import type { NativeSettingsProjection } from '../core-desktop/native-settings-projection'
+import {
+  stepUIZoomLevel,
+  type UIZoomDirection
+} from '../../shared/app-lifecycle/windows/ui-zoom-level'
 import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 
 let spaceWindow: BrowserWindow | null = null
@@ -33,7 +36,9 @@ export function zoomWorkspaceSpaceWindowIfFocused(direction: UIZoomDirection): b
   return true
 }
 
-export function createOrFocusWorkspaceSpaceWindow(store: Store): BrowserWindow {
+export function createOrFocusWorkspaceSpaceWindow(
+  nativeSettings: NativeSettingsProjection
+): BrowserWindow {
   const existing = getWorkspaceSpaceWindow()
   if (existing) {
     if (existing.webContents.isCrashed()) {
@@ -75,11 +80,11 @@ export function createOrFocusWorkspaceSpaceWindow(store: Store): BrowserWindow {
   window.webContents.session.setPermissionCheckHandler(() => false)
   window.webContents.on('dom-ready', () => {
     if (!window.isDestroyed()) {
-      window.webContents.setZoomLevel(store.getUI().uiZoomLevel ?? 0)
+      window.webContents.setZoomLevel(nativeSettings.getUI().uiZoomLevel ?? 0)
     }
   })
-  let lastFollowedZoomLevel = store.getUI().uiZoomLevel ?? 0
-  const offUIChanged = store.onUIChanged((ui) => {
+  let lastFollowedZoomLevel = nativeSettings.getUI().uiZoomLevel ?? 0
+  const offUIChanged = nativeSettings.onUIChanged((ui) => {
     const level = ui.uiZoomLevel ?? 0
     if (level !== lastFollowedZoomLevel && !window.isDestroyed()) {
       lastFollowedZoomLevel = level

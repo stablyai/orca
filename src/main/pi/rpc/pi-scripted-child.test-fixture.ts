@@ -198,12 +198,12 @@ class ScriptedPiConnection implements PiRpcConnection {
     this.closed = true
     this.rootVerdict = 'exited'
     this.lastCloseResult = { root: 'exited', tree: 'exited' }
-    this.exitListeners.forEach((listener) => listener())
-    this.exitListeners.clear()
     this.handlers.onExit?.(error, {
       expected: false,
       exit: { code: 0, signal: null, processless: false }
     })
+    this.exitListeners.forEach((listener) => listener())
+    this.exitListeners.clear()
   }
 
   private endTurn(stopReason: string): void {

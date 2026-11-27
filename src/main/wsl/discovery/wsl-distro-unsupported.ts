@@ -5,7 +5,7 @@
 import { OrcadHostUnsupportedError } from '../../orcad/diagnostics/orcad-host-unavailable'
 import { OrcadHostGlibcUnsupportedError } from '../../managed-server/lifecycle/orcad-runtime-target'
 import { RemoteNodeRuntimeSelfTestError } from '../../managed-server/install/orcad-remote-node-runtime-report'
-import { wslHostAddRefusalText } from '../../../shared/wsl-host-failure-copy'
+import { wslHostAddRefusalText } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
 
 /** Keeps OrcadHostUnsupportedError's name, so callers that classify by name still see it. */
 export class WslDistroVersion1Error extends OrcadHostUnsupportedError {

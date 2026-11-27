@@ -2,8 +2,8 @@ import {
   isWindowsAbsolutePathLike,
   relativePathInsideRoot,
   resolveRuntimePath
-} from '../../../../src/shared/cross-platform-path'
-import { routeMarkdownHref } from '../../components/markdown-href-routing'
+} from '../../../../src/shared/file-access/cross-platform-path'
+import { routeMarkdownHref } from '../../components/markdown/links/markdown-href-routing'
 import type { MobileFilePreviewRpcSender } from '../preview/mobile-file-preview-operations'
 import { loadMobileFilePreview } from '../preview/mobile-file-preview-request'
 import { classifyMobileArtifact } from '../preview/mobile-artifact-kind'
@@ -42,7 +42,7 @@ export async function loadMarkdownPreviewImage(
     throw new Error('Unsupported image location')
   }
   if (!client) {
-    throw new Error('Waiting for desktop...')
+    throw new Error('Waiting for host…')
   }
   const result = await loadMobileFilePreview(client, worktreeId, relativePath)
   if (result.status === 'ready' && result.kind === 'image') {

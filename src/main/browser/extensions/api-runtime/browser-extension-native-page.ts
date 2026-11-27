@@ -1,13 +1,5 @@
-import { BrowserWindow } from 'electron'
 import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
-
-const nativePages = new WeakSet<Electron.WebContents>()
-// Why: web-contents-created fires inside the BrowserWindow constructor, before nativePages.add.
-let creatingNativePage = false
-
-export function isBrowserExtensionNativePage(contents: Electron.WebContents): boolean {
-  return creatingNativePage || nativePages.has(contents)
-}
+import { openHiddenHelperWindow } from '../../hidden-helper-window'
 
 /** Native extension bindings without Orca's API wrappers, always on a hidden document. */
 export async function runBrowserExtensionNativePage(options: {
@@ -19,22 +11,7 @@ export async function runBrowserExtensionNativePage(options: {
 }): Promise<unknown> {
   const { session, extensionId, code, timeoutMs, signal } = options
   signal?.throwIfAborted()
-  creatingNativePage = true
-  let window: BrowserWindow
-  try {
-    window = new BrowserWindow({
-      show: false,
-      webPreferences: {
-        session,
-        sandbox: true,
-        contextIsolation: true,
-        nodeIntegration: false
-      }
-    })
-  } finally {
-    creatingNativePage = false
-  }
-  nativePages.add(window.webContents)
+  const window = openHiddenHelperWindow(session)
   let timer: NodeJS.Timeout | undefined
   let onAbort: (() => void) | undefined
   try {

@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import { getStatus as getLinearStatus } from '../../../linear/accounts/linear-account-client'
+import { requireConnectedWorkspaces } from '../../../linear/issues/context/linear-connected-workspaces'
 import { listTeamsOrThrow as listLinearTeamsOrThrow } from '../../../linear/teams/linear-team-queries'
 import {
   LinearAgentAccessError,
@@ -18,7 +19,7 @@ import type { LinearAgentWriteTarget } from './linear-agent-write-target'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { RuntimeLinearDedupeCommands } from './runtime-linear-dedupe-commands'
 import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 
 export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands {
   public parseLinearAttachmentUrl(value: string): URL {
@@ -88,7 +89,7 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     workspaceName?: string
   }> {
     signal?.throwIfAborted()
-    this.validateLinearCreateWorkspaceScope(workspaceId === 'all' ? undefined : workspaceId)
+    await this.validateLinearCreateWorkspaceScope(workspaceId === 'all' ? undefined : workspaceId)
     let teams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
     try {
       teams = await listLinearTeamsOrThrow(workspaceId ?? 'all', signal)
@@ -149,17 +150,15 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     }
 
     const scope = parent?.workspaceId ?? workspaceId
-    this.validateLinearCreateWorkspaceScope(scope)
+    await this.validateLinearCreateWorkspaceScope(scope)
     let teams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
     try {
       teams = await listLinearTeamsOrThrow(scope ?? 'all', signal)
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }
-    if (teams.length === 0 && (getLinearStatus().workspaces?.length ?? 0) === 0) {
-      throw linearError('linear_not_connected', 'Linear is not connected.', {
-        nextSteps: ['Connect Linear from Orca settings, then retry the issue create.']
-      })
+    if (teams.length === 0) {
+      await requireConnectedWorkspaces()
     }
     const matches = teams.filter(
       (team) =>
@@ -209,11 +208,11 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     throw linearError('linear_team_required', `No connected Linear team matched ${teamInput}.`)
   }
 
-  public validateLinearCreateWorkspaceScope(workspaceId: string | undefined): void {
+  public async validateLinearCreateWorkspaceScope(workspaceId: string | undefined): Promise<void> {
     if (!workspaceId) {
       return
     }
-    const workspaces = getLinearStatus().workspaces ?? []
+    const workspaces = (await getLinearStatus()).workspaces ?? []
     if (workspaces.length > 0 && !workspaces.some((workspace) => workspace.id === workspaceId)) {
       throw linearError(
         'linear_invalid_workspace',
@@ -273,7 +272,7 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     signal?.throwIfAborted()
     const link = getLinearCurrentIssueFromWorktree(worktree)
     if (!link.workspaceId) {
-      const backfill = resolveLegacyLinearLinkWorkspace(
+      const backfill = await resolveLegacyLinearLinkWorkspace(
         worktree.linkedLinearIssue ?? '',
         worktree.linkedLinearIssueOrganizationUrlKey
       )

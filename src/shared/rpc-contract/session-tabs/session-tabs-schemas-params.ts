@@ -1,6 +1,8 @@
+import { BotLinkOpenTargetSchema } from '../../bots/bot-link-open-target'
 import { z } from 'zod'
-import { RUNTIME_NAVIGATION_TARGETS } from '../../runtime-navigation'
-import { TAB_ACTIVATION_INTENTS } from '../../tab-activation-intent'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
+import { TAB_ACTIVATION_INTENTS } from '../../workspace-layout/tab-groups/tab-activation-intent'
 import { OptionalBoolean } from '../rpc-param-primitives'
 import { sleepingAgentLaunchConfigSchema } from '../../workspace-session/workspace-session-sleeping-agents'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
@@ -11,42 +13,58 @@ import {
   WindowsShellOverrideParam
 } from '../terminal/terminal-unary-params'
 
-export const WorktreeTabSelector = z.object({
-  worktree: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing worktree selector'))
-})
+export const WorktreeTabSelector = lazyZodSchema(() =>
+  z.object({
+    worktree: z
+      .unknown()
+      .transform((v) => (typeof v === 'string' ? v : ''))
+      .pipe(z.string().min(1, 'Missing worktree selector'))
+  })
+)
 
-export const SessionTabsUnsubscribe = WorktreeTabSelector.extend({
-  subscriptionId: z.string().min(1).optional()
-})
+export const SessionTabsUnsubscribe = lazyZodSchema(() =>
+  WorktreeTabSelector.extend({
+    subscriptionId: z.string().min(1).optional()
+  })
+)
 
-export const ActivateTab = WorktreeTabSelector.extend({
-  tabId: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing tab id')),
-  leafId: z.string().max(128).optional(),
-  notifyClients: OptionalBoolean,
-  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),
-  // Absent means user intent for old clients; only automatic activation may refuse a slept pane.
-  intent: z.enum(TAB_ACTIVATION_INTENTS).optional()
-})
+export const ActivateTab = lazyZodSchema(() =>
+  WorktreeTabSelector.extend({
+    tabId: z
+      .unknown()
+      .transform((v) => (typeof v === 'string' ? v : ''))
+      .pipe(z.string().min(1, 'Missing tab id')),
+    leafId: z.string().max(128).optional(),
+    notifyClients: OptionalBoolean,
+    navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),
+    // Absent means user intent for old clients; only automatic activation may refuse a slept pane.
+    intent: z.enum(TAB_ACTIVATION_INTENTS).optional()
+  })
+)
 
-export const CloseTab = ActivateTab.extend({
-  // Absent preserves legacy user closes; lifecycle intent uses the evidence-bearing method.
-  // Send replay only with SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY after reconnect.
-  reason: z.enum(['user', 'replay']).optional(),
-  // Confirmed pinned-tab close; gate on SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY because old hosts strip and refuse.
-  force: z.literal(true).optional()
-})
+export const BotLinkActivateTab = lazyZodSchema(() =>
+  ActivateTab.extend({
+    botLinkTarget: BotLinkOpenTargetSchema.optional()
+  })
+)
 
-export const CloseLifecycleTab = ActivateTab.extend({
-  reason: z.enum(['pty-exit', 'cleanup']),
-  publicationEpoch: z.string().min(1).max(128),
-  terminal: z.string().min(1).max(256)
-})
+export const CloseTab = lazyZodSchema(() =>
+  ActivateTab.extend({
+    // Absent preserves legacy user closes; lifecycle intent uses the evidence-bearing method.
+    // Send replay only with SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY after reconnect.
+    reason: z.enum(['user', 'replay']).optional(),
+    // Confirmed pinned-tab close; gate on SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY because old hosts strip and refuse.
+    force: z.literal(true).optional()
+  })
+)
+
+export const CloseLifecycleTab = lazyZodSchema(() =>
+  ActivateTab.extend({
+    reason: z.enum(['pty-exit', 'cleanup']),
+    publicationEpoch: z.string().min(1).max(128),
+    terminal: z.string().min(1).max(256)
+  })
+)
 
 export type TerminalPaneLayoutNodeInput =
   | { type: 'leaf'; leafId: string }
@@ -102,153 +120,165 @@ export function parseTerminalPaneLayoutNode(value: unknown): TerminalPaneLayoutN
   return value as TerminalPaneLayoutNodeInput
 }
 
-export const TerminalPaneLayoutNodeSchema = z
-  .unknown()
-  .transform((value) => parseTerminalPaneLayoutNode(value))
-  .pipe(
-    z.custom<TerminalPaneLayoutNodeInput>((value) => value !== null, {
-      message: 'Invalid or too-deep pane layout tree'
-    })
-  )
-
-export const UpdatePaneLayout = WorktreeTabSelector.extend({
-  tabId: z
+export const TerminalPaneLayoutNodeSchema = lazyZodSchema(() =>
+  z
     .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing tab id')),
-  root: z.union([z.null(), TerminalPaneLayoutNodeSchema]),
-  expandedLeafId: z.string().max(128).nullable().optional(),
-  chatLeafId: z.string().max(128).nullable().optional(),
-  titlesByLeafId: z.record(z.string(), z.string()).optional(),
-  // Only these leaves were renamed; other titles are resends. Older gesture intent is stripped unread.
-  renamedLeafIds: z.array(z.string().max(128)).max(64).optional().catch(undefined)
-})
-
-const MovePaneId = z
-  .unknown()
-  .transform((v) => (typeof v === 'string' ? v : ''))
-  .pipe(z.string().min(1).max(512))
-
-export const MovePaneToNewTab = WorktreeTabSelector.extend({
-  sourceTabId: MovePaneId,
-  targetTabId: MovePaneId,
-  leafId: MovePaneId,
-  // Where the client dropped the new tab; without it the host appends the tab.
-  targetGroupId: z.string().min(1).max(512).optional(),
-  index: z.number().int().min(0).optional()
-})
-export const SetTabProps = WorktreeTabSelector.extend({
-  tabId: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing tab id')),
-  // undefined = leave unchanged; null = clear color / unset.
-  color: z.string().max(64).nullable().optional(),
-  isPinned: z.boolean().optional(),
-  // undefined = leave unchanged; no "clear" semantic (absence means default 'terminal').
-  viewMode: z.enum(['terminal', 'chat']).optional(),
-  // A terminal tab's manual name; null clears it. Older hosts strip it and change nothing.
-  customTitle: z.string().max(512).nullable().optional()
-})
-
-export const CreateTerminalTab = WorktreeTabSelector.extend({
-  sourceChatFork: z
-    .object({ sessionId: z.string().min(1) })
-    .strict()
-    .optional(),
-  afterTabId: z.string().optional(),
-  targetGroupId: z.string().optional(),
-  command: z.string().optional(),
-  // Why: the shell the terminal IS; a shell sent as `command` runs nested in the host default.
-  shell: WindowsShellOverrideParam.optional(),
-  cwd: z.string().min(1).optional(),
-  env: z.record(z.string(), z.string()).optional(),
-  envToDelete: z.array(z.string().min(1).max(256)).max(32).optional(),
-  startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
-  launchConfig: sleepingAgentLaunchConfigSchema,
-  launchToken: z.string().min(1).max(128).optional(),
-  // Record the resumed conversation before hook reports; drop malformed hints, never the create (#10923).
-  resumeProviderSession: ResumeProviderSessionParam.optional().catch(undefined),
-  agent: z
-    .custom<TuiAgent>(isTuiAgent, {
-      message: 'Unknown agent preset'
-    })
-    .optional(),
-  // Legacy phones without agent.launch need host-shell quoting and TUI-ready prompt injection; quick commands retain the legacy cap.
-  agentPrompt: z
-    .string()
-    .max(LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH)
-    .refine((value) => value.trim().length > 0, { message: 'Agent prompt cannot be empty' })
-    .optional(),
-  trustWorktreeId: z.string().min(1).max(32_768).optional(),
-  // agent is the legacy preset; launchAgent preserves launch-plan identity/config across runtime boundaries.
-  launchAgent: z
-    .custom<TuiAgent>(isTuiAgent, {
-      message: 'Unknown launch agent'
-    })
-    .optional(),
-  viewMode: z.enum(['terminal', 'chat']).optional(),
-  activate: z.boolean().optional(),
-  select: z.boolean().optional(),
-  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),
-  // Retry the same in-flight create on double-tap/reconnect instead of spawning another terminal.
-  clientMutationId: z.string().min(1).max(128).optional()
-}).superRefine((value, context) => {
-  if (value.sourceChatFork) {
-    if (!value.clientMutationId) {
-      context.addIssue({
-        code: 'custom',
-        path: ['clientMutationId'],
-        message: 'A fork needs a mutation id'
+    .transform((value) => parseTerminalPaneLayoutNode(value))
+    .pipe(
+      z.custom<TerminalPaneLayoutNodeInput>((value) => value !== null, {
+        message: 'Invalid or too-deep pane layout tree'
       })
-    }
-    for (const field of [
-      'command',
-      'shell',
-      'agent',
-      'agentPrompt',
-      'env',
-      'envToDelete',
-      'cwd',
-      'launchConfig',
-      'launchToken',
-      'resumeProviderSession',
-      'launchAgent',
-      'startupCommandDelivery',
-      'viewMode'
-    ] as const) {
-      if (value[field] !== undefined) {
+    )
+)
+
+export const UpdatePaneLayout = lazyZodSchema(() =>
+  WorktreeTabSelector.extend({
+    tabId: z
+      .unknown()
+      .transform((v) => (typeof v === 'string' ? v : ''))
+      .pipe(z.string().min(1, 'Missing tab id')),
+    root: z.union([z.null(), TerminalPaneLayoutNodeSchema]),
+    expandedLeafId: z.string().max(128).nullable().optional(),
+    chatLeafId: z.string().max(128).nullable().optional(),
+    titlesByLeafId: z.record(z.string(), z.string()).optional(),
+    // Only these leaves were renamed; other titles are resends. Older gesture intent is stripped unread.
+    renamedLeafIds: z.array(z.string().max(128)).max(64).optional().catch(undefined)
+  })
+)
+
+const MovePaneId = lazyZodSchema(() =>
+  z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1).max(512))
+)
+
+export const MovePaneToNewTab = lazyZodSchema(() =>
+  WorktreeTabSelector.extend({
+    sourceTabId: MovePaneId,
+    targetTabId: MovePaneId,
+    leafId: MovePaneId,
+    // Where the client dropped the new tab; without it the host appends the tab.
+    targetGroupId: z.string().min(1).max(512).optional(),
+    index: z.number().int().min(0).optional()
+  })
+)
+export const SetTabProps = lazyZodSchema(() =>
+  WorktreeTabSelector.extend({
+    tabId: z
+      .unknown()
+      .transform((v) => (typeof v === 'string' ? v : ''))
+      .pipe(z.string().min(1, 'Missing tab id')),
+    // undefined = leave unchanged; null = clear color / unset.
+    color: z.string().max(64).nullable().optional(),
+    isPinned: z.boolean().optional(),
+    // undefined = leave unchanged; no "clear" semantic (absence means default 'terminal').
+    viewMode: z.enum(['terminal', 'chat']).optional(),
+    // A terminal tab's manual name; null clears it. Older hosts strip it and change nothing.
+    customTitle: z.string().max(512).nullable().optional()
+  })
+)
+
+export const CreateTerminalTab = lazyZodSchema(() =>
+  WorktreeTabSelector.extend({
+    sourceChatFork: z
+      .object({ sessionId: z.string().min(1) })
+      .strict()
+      .optional(),
+    afterTabId: z.string().optional(),
+    targetGroupId: z.string().optional(),
+    command: z.string().optional(),
+    // Why: the shell the terminal IS; a shell sent as `command` runs nested in the host default.
+    shell: WindowsShellOverrideParam.optional(),
+    cwd: z.string().min(1).optional(),
+    env: z.record(z.string(), z.string()).optional(),
+    envToDelete: z.array(z.string().min(1).max(256)).max(32).optional(),
+    startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
+    launchConfig: sleepingAgentLaunchConfigSchema,
+    launchToken: z.string().min(1).max(128).optional(),
+    // Record the resumed conversation before hook reports; drop malformed hints, never the create (#10923).
+    resumeProviderSession: ResumeProviderSessionParam.optional().catch(undefined),
+    agent: z
+      .custom<TuiAgent>(isTuiAgent, {
+        message: 'Unknown agent preset'
+      })
+      .optional(),
+    // Legacy phones without agent.launch need host-shell quoting and TUI-ready prompt injection; quick commands retain the legacy cap.
+    agentPrompt: z
+      .string()
+      .max(LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH)
+      .refine((value) => value.trim().length > 0, { message: 'Agent prompt cannot be empty' })
+      .optional(),
+    trustWorktreeId: z.string().min(1).max(32_768).optional(),
+    // agent is the legacy preset; launchAgent preserves launch-plan identity/config across runtime boundaries.
+    launchAgent: z
+      .custom<TuiAgent>(isTuiAgent, {
+        message: 'Unknown launch agent'
+      })
+      .optional(),
+    viewMode: z.enum(['terminal', 'chat']).optional(),
+    activate: z.boolean().optional(),
+    select: z.boolean().optional(),
+    navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),
+    // Retry the same in-flight create on double-tap/reconnect instead of spawning another terminal.
+    clientMutationId: z.string().min(1).max(128).optional()
+  }).superRefine((value, context) => {
+    if (value.sourceChatFork) {
+      if (!value.clientMutationId) {
         context.addIssue({
           code: 'custom',
-          path: [field],
-          message: 'A fork uses host launch settings'
+          path: ['clientMutationId'],
+          message: 'A fork needs a mutation id'
         })
       }
+      for (const field of [
+        'command',
+        'shell',
+        'agent',
+        'agentPrompt',
+        'env',
+        'envToDelete',
+        'cwd',
+        'launchConfig',
+        'launchToken',
+        'resumeProviderSession',
+        'launchAgent',
+        'startupCommandDelivery',
+        'viewMode'
+      ] as const) {
+        if (value[field] !== undefined) {
+          context.addIssue({
+            code: 'custom',
+            path: [field],
+            message: 'A fork uses host launch settings'
+          })
+        }
+      }
     }
-  }
-  if (value.agentPrompt !== undefined && value.agent === undefined) {
-    context.addIssue({
-      code: 'custom',
-      path: ['agentPrompt'],
-      message: 'Agent prompt requires an agent preset'
-    })
-  }
-  if (value.agentPrompt !== undefined && value.command !== undefined) {
-    context.addIssue({
-      code: 'custom',
-      path: ['agentPrompt'],
-      message: 'Agent prompt cannot be combined with a startup command'
-    })
-  }
-  // Why: agent launches plan their own shell, which would silently replace the pick.
-  if (value.shell !== undefined && (value.agent || value.launchAgent || value.launchConfig)) {
-    context.addIssue({
-      code: 'custom',
-      path: ['shell'],
-      message: 'A shell pick cannot be combined with an agent launch'
-    })
-  }
-})
+    if (value.agentPrompt !== undefined && value.agent === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['agentPrompt'],
+        message: 'Agent prompt requires an agent preset'
+      })
+    }
+    if (value.agentPrompt !== undefined && value.command !== undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['agentPrompt'],
+        message: 'Agent prompt cannot be combined with a startup command'
+      })
+    }
+    // Why: agent launches plan their own shell, which would silently replace the pick.
+    if (value.shell !== undefined && (value.agent || value.launchAgent || value.launchConfig)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['shell'],
+        message: 'A shell pick cannot be combined with an agent launch'
+      })
+    }
+  })
+)
 
 export const MoveTabBase = {
   worktree: WorktreeTabSelector.shape.worktree,
@@ -262,34 +292,38 @@ export const MoveTabBase = {
     .pipe(z.string().min(1, 'Missing target group id'))
 } as const
 
-export const MoveTab = z.discriminatedUnion('kind', [
-  z
-    .object({
-      ...MoveTabBase,
-      kind: z.literal('reorder'),
-      tabOrder: z.array(z.string().min(1)).min(1, 'Missing tab order')
-    })
-    .strict(),
-  z
-    .object({
-      ...MoveTabBase,
-      kind: z.literal('move-to-group'),
-      index: z.number().int().nonnegative().optional()
-    })
-    .strict(),
-  z
-    .object({
-      ...MoveTabBase,
-      kind: z.literal('split'),
-      splitDirection: z.enum(['left', 'right', 'up', 'down'])
-    })
-    .strict()
-])
+export const MoveTab = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    z
+      .object({
+        ...MoveTabBase,
+        kind: z.literal('reorder'),
+        tabOrder: z.array(z.string().min(1)).min(1, 'Missing tab order')
+      })
+      .strict(),
+    z
+      .object({
+        ...MoveTabBase,
+        kind: z.literal('move-to-group'),
+        index: z.number().int().nonnegative().optional()
+      })
+      .strict(),
+    z
+      .object({
+        ...MoveTabBase,
+        kind: z.literal('split'),
+        splitDirection: z.enum(['left', 'right', 'up', 'down'])
+      })
+      .strict()
+  ])
+)
 
-export const SaveMarkdownTab = ActivateTab.extend({
-  baseVersion: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing base version')),
-  content: z.string()
-})
+export const SaveMarkdownTab = lazyZodSchema(() =>
+  ActivateTab.extend({
+    baseVersion: z
+      .unknown()
+      .transform((v) => (typeof v === 'string' ? v : ''))
+      .pipe(z.string().min(1, 'Missing base version')),
+    content: z.string()
+  })
+)

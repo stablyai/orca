@@ -2,8 +2,10 @@ import { ORCHESTRATION_REPLY_METHOD } from './reply-method'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { inspectedRunAccess, taskCreateAccess, taskUpdateAccess } from '../access/run-access-rules'
 import type { TaskStatus } from '../../../../orchestration/db/orchestration-records'
+import { exposeUtcTimestamp } from '../../../../orchestration/db/utc-timestamp'
 import { abbreviateOrchestrationTasks } from '../../../../../../shared/orchestration/orchestration-task-summary'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { resolveOrchestrationParty } from '../../../../orchestration/addressing/orchestration-party'
 import {
   InboxParams,
@@ -21,6 +23,13 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     access: { kind: 'reads', targets: { terminal: 'party', run: 'run' }, collection: true },
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      // Why: an empty list for a mistyped Run (or a `run:` mailbox address) reads as "no mail".
+      if (params.run && !db.getRun(params.run)) {
+        const hint = params.run.startsWith('run:')
+          ? ' --run takes the bare Run id; --terminal takes the run:<id> mailbox.'
+          : ''
+        throw new OrchestrationError('run_not_found', `Run ${params.run} was not found.${hint}`)
+      }
       // Return empty for stale/unknown handles because historical mail outlives handle deletion (design doc §3.3).
       const messages = params.terminal
         ? db.getAllMessagesForHandle(
@@ -31,7 +40,9 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
           )
         : db.getInbox(params.limit, params.run)
       return {
-        messages: messages.map(({ answer_sender_snapshot: _answer, ...message }) => message),
+        messages: messages.map(
+          ({ answer_sender_snapshot: _answer, reply_to: _replyTo, ...message }) => message
+        ),
         count: messages.length
       }
     }
@@ -122,12 +133,34 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     access: {
       kind: 'writes',
       caller: 'callerTerminalHandle',
+      callerPane: 'senderPaneKey',
       targets: { id: 'task', run: 'run' },
       rule: taskUpdateAccess
     },
-    handler: (params, { runtime }) => {
+    handler: (params, { runtime, recordMutationReceipt }, grant) => {
       const db = runtime.getOrchestrationDb()
-      const task = db.updateTaskStatus(params.id, params.status, params.result)
+      if (grant.kind === 'note') {
+        const updated = db.recordWorkerProgress({
+          dispatchId: grant.dispatch.id,
+          note: params.note!
+        })
+        const task = db.getTask(updated.task_id)
+        if (!task) {
+          throw new Error(`Task not found: ${updated.task_id}`)
+        }
+        const receipt = {
+          task,
+          dispatchId: updated.id,
+          progressNote: updated.progress_note ?? params.note!,
+          progressUpdatedAt:
+            exposeUtcTimestamp(updated.progress_updated_at) ??
+            updated.progress_updated_at ??
+            undefined
+        }
+        recordMutationReceipt?.(receipt)
+        return receipt
+      }
+      const task = db.updateTaskStatus(params.id!, params.status!, params.result)
       if (!task) {
         throw new Error(`Task not found: ${params.id}`)
       }

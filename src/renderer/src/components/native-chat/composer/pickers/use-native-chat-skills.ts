@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../../store/index'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../../../shared/skills'
-import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/native-chat-agent-profiles'
-import { isNativeChatSkillForAgent } from '../../../../../../shared/native-chat/input/native-chat-skill-visibility'
+import type {
+  DiscoveredSkill,
+  SkillDiscoveryResult
+} from '../../../../../../shared/skills/discovery/skills'
+import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
+import { isNativeChatSkillForAgent } from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { emitNativeChatSkillDiscovery } from '@/components/native-chat/telemetry/native-chat-telemetry'
 import {
   isNativeChatSkillDiscoveryAwaitingDirectory,
   resolveNativeChatSkillDiscoveryContext,
@@ -99,11 +101,6 @@ export function useNativeChatSkills(
       return
     }
     if (context.executionHostKind === 'ssh') {
-      emitNativeChatSkillDiscovery({
-        agent,
-        outcome: 'unavailable',
-        executionHostKind: 'ssh'
-      })
       setState({
         status: 'error',
         skills: [],
@@ -122,11 +119,6 @@ export function useNativeChatSkills(
         : { status: 'loading', skills: [], error: null, contextKey: context.key }
     )
     if (cached && checkedThisOpen.current.has(paneCacheKey)) {
-      emitNativeChatSkillDiscovery({
-        agent,
-        outcome: 'ready',
-        executionHostKind: context.executionHostKind
-      })
       return
     }
     // Explicit Retry bypasses shared host scans; passive discovery reuses them.
@@ -141,11 +133,6 @@ export function useNativeChatSkills(
           return
         }
         checkedThisOpen.current.add(paneCacheKey)
-        emitNativeChatSkillDiscovery({
-          agent,
-          outcome: 'ready',
-          executionHostKind: context.executionHostKind
-        })
         setState({ status: 'ready', skills: result.skills, error: null, contextKey: paneCacheKey })
       },
       (reason) => {
@@ -154,11 +141,6 @@ export function useNativeChatSkills(
         }
         const error = reason instanceof Error ? reason : new Error(String(reason))
         const timedOut = /timed?\s*out|timeout/i.test(error.message)
-        emitNativeChatSkillDiscovery({
-          agent,
-          outcome: timedOut ? 'timeout' : 'error',
-          executionHostKind: context.executionHostKind
-        })
         checkedThisOpen.current.add(paneCacheKey)
         if (cached) {
           // A failed recheck keeps the last good list rather than hiding it behind an error.
@@ -267,8 +249,4 @@ function withDiscoveryTimeout<T>(promise: Promise<T>, timeoutMs: number): Promis
       }
     )
   })
-}
-
-export function resetNativeChatSkillDiscoveryCacheForTests(): void {
-  inFlightDiscovery.clear()
 }

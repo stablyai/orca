@@ -34,8 +34,13 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   }
 }
 
+// Copilot lists skills among its commands, each with this input hint whatever its own.
+const SKILL_INPUT_HINT = 'instructions for the skill'
+
 export const COPILOT_ACP_DIALECT: AcpDialect = {
   normalizeToolUpdate,
+  skillDescription: ({ description, input }) =>
+    input?.hint === SKILL_INPUT_HINT ? description : null,
   // These switch Copilot to approving everything itself, behind the chat's permission mode.
   withheldCommands: ['allow-all', 'permissions', 'autopilot']
 }

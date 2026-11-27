@@ -14,7 +14,7 @@ import {
   formatTabProfileShow
 } from './browser-format'
 import { printResult } from '../output/command-result-output'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { getBrowserCommandTarget } from './browser-command-target'
 
 function parseScopeFlag(flags: Map<string, string | boolean>): 'isolated' | 'imported' {

@@ -1,4 +1,4 @@
-import type { RuntimeClientEvent } from '../../../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import { toRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   unregisterPtyDataHandlers,

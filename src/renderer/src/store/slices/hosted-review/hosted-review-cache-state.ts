@@ -10,12 +10,12 @@ import {
   hostedReviewForBranchOutcome
 } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type HostedReviewCacheEntry<T> = {
   data: T | null
@@ -45,6 +45,8 @@ export type HostedReviewFetchOptions = {
   repoOwnerExecutionHostId?: string
   /** An explicit Refresh: may start a stopped WSL distro. Local IPC only. */
   wakeWslDistro?: boolean
+  /** A refresh timer's read: no use of an idle WSL host (#46567). */
+  background?: boolean
 }
 export type CreateHostedReviewStoreInput = CreateHostedReviewInput & {
   repoId?: string | null
@@ -266,7 +268,8 @@ export function hostedReviewBranchLookupArgs(
 export async function requestHostedReviewForBranch(
   target: RuntimeClientTarget,
   runtimeParams: Record<string, unknown>,
-  ipcArgs: HostedReviewForBranchArgs
+  ipcArgs: HostedReviewForBranchArgs,
+  background?: boolean
 ): Promise<HostedReviewForBranchOutcome> {
   return hostedReviewForBranchOutcome(
     target.kind === 'environment'
@@ -275,7 +278,7 @@ export async function requestHostedReviewForBranch(
           'hostedReview.forBranch',
           runtimeParams,
           // Remote git/gh, especially Windows paths, can be slow; main queue bounds concurrency so longer timeout cannot cause stampedes.
-          { timeoutMs: 30_000 }
+          { timeoutMs: 30_000, background }
         )
       : await window.api.hostedReview.forBranch(ipcArgs)
   )

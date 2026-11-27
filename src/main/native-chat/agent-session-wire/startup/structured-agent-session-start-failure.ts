@@ -2,6 +2,10 @@
 // the host reads only this verdict, never provider error classes.
 
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import {
+  isAgentSessionRefusalError,
+  isAgentSessionWireRefusalCode
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { findInErrorChain } from '../../../provider-process/provider-error-chain'
 import {
   providerExecutableMissing,
@@ -193,6 +197,37 @@ export function retryableAgentSessionAcquisition(error: unknown): boolean {
       error instanceof AgentSessionAcquisitionRootExitObservedError) &&
     agentSessionStartRetry(error) === 'safe'
   )
+}
+
+/** Only consecutive acquisition exit proofs can carry the adapter's original verdict. */
+export function provenAgentSessionStartFailure(
+  error: unknown,
+  depth = 0
+): AgentSessionStartFailure | undefined {
+  if (
+    depth >= 5 ||
+    !(
+      error instanceof AgentSessionAcquisitionExitProvenError ||
+      error instanceof AgentSessionAcquisitionRootExitObservedError
+    )
+  ) {
+    return undefined
+  }
+  const { cause } = error
+  if (!(cause instanceof AgentSessionStartFailure)) {
+    return provenAgentSessionStartFailure(cause, depth + 1)
+  }
+  const excluded = findInErrorChain(cause, (inner) =>
+    inner instanceof AggregateError ||
+    inner instanceof AgentSessionAcquisitionExitUnprovenError ||
+    inner instanceof AgentSessionAcquisitionRefusal ||
+    isAgentSessionRefusalError(inner) ||
+    isAgentSessionPreSpawnError(inner) ||
+    isAgentSessionWireRefusalCode(inner.message)
+      ? true
+      : undefined
+  )
+  return excluded ? undefined : cause
 }
 
 /** A final answer anywhere in the chain wins. Cleanup's exit proof alone says nothing about the

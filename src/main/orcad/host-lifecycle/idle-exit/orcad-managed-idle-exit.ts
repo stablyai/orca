@@ -1,15 +1,15 @@
 // Live terminals block idle exit; ordinary shutdown disconnects without killing their daemon.
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { RELAY_INSTALL_LOCK_NAME } from '../../../../shared/relay-install-lock-name'
+import { RELAY_INSTALL_LOCK_NAME } from '../../../../shared/remote-runtime/relay/relay-install-lock-name'
 import { hasErrorCode } from '../../../daemon/endpoint/identity/daemon-process-inspection'
 import type { RuntimeRpcClientActivity } from '../../../runtime/rpc/server/runtime-rpc'
-import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../../../shared/orcad-managed-launch-env'
+import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../../../shared/remote-runtime/serve-supervisor/orcad-managed-launch-env'
 import {
   ORCAD_IDLE_EXIT_TIMEOUT_MS,
   readOrcadE2EIdleTimeoutMs,
   readOrcadIdleTimeoutMs
-} from '../../../../shared/orcad-idle-exit'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
 import {
   OrcadIdleExitMonitor,
   type OrcadIdleExitEvidence,

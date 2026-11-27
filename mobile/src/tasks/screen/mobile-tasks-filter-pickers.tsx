@@ -3,9 +3,10 @@ import { translate } from '../../i18n/mobile-i18n'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { View, Text, ActivityIndicator } from 'react-native'
 import { colors } from '../../theme/mobile-theme'
-import { PickerModal } from '../../components/PickerModal'
+import { PickerModal } from '../../components/sheets/PickerModal'
 import { ListGroup, ListRow } from '../../components/list/ListGroup'
 import { linearWorkspaceSelect } from '../screen-state/mobile-task-runtime-operations'
+import { linearAccountClient } from '../task-list/linear-account-host'
 import { styles } from '../mobile-tasks-legacy-styles'
 import { JIRA_FILTER_OPTIONS } from '../task-list/mobile-task-view-options'
 import {
@@ -142,6 +143,7 @@ export function renderMobileTasksLinearFilterPicker(model: ConnectionPresentatio
 export function renderMobileTasksLinearWorkspacePicker(model: ConnectionPresentationModel) {
   const {
     client,
+    linearAccountBindingRef,
     linearWorkspaceOptions,
     loadLinearContext,
     selectedLinearWorkspaceId,
@@ -162,8 +164,8 @@ export function renderMobileTasksLinearWorkspacePicker(model: ConnectionPresenta
         setSelectedLinearWorkspaceId(workspaceId)
         setSelectedLinearTeamIds(new Set())
         if (client) {
-          void linearWorkspaceSelect
-            .request(client, { workspaceId })
+          void linearAccountClient(linearAccountBindingRef.current, client)
+            .then((target) => linearWorkspaceSelect.request(target, { workspaceId }))
             .then(() => loadLinearContext())
             .catch((err) => {
               setError(

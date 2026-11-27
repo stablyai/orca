@@ -14,6 +14,8 @@ import type { NativeChatForkSurface } from './use-native-chat-fork'
 export type NativeChatSideChat = {
   /** Why no side chat can start now. */
   notReadyReason: string | null
+  /** The newest finished response a fork can copy through now; a running reply never is one. */
+  finishedForkItemId: string | null
   /** Starts one; the reason when it can't start now, else whether it started (with a question:
    *  whether the question went out). */
   open: (question: string) => Promise<{ refused: string } | { started: boolean }>
@@ -32,6 +34,11 @@ export function useNativeChatSideChat(
     if (!fork) {
       return undefined
     }
+    // A rewind may have dropped the reported response before the list said so.
+    const finishedForkItemId =
+      point.kind === 'ready' && fork.forkableItemIds.has(point.throughItemId)
+        ? point.throughItemId
+        : null
     const start = (): { refused: string } | { throughItemId: string } => {
       // Another fork from this chat is still opening.
       if (fork.support.kind === 'unknown' || fork.pendingItemId !== null) {
@@ -42,14 +49,14 @@ export function useNativeChatSideChat(
           )
         }
       }
-      // A rewind may have dropped the reported response before the list said so.
-      return point.kind === 'ready' && fork.forkableItemIds.has(point.throughItemId)
-        ? { throughItemId: point.throughItemId }
+      return finishedForkItemId
+        ? { throughItemId: finishedForkItemId }
         : { refused: sideChatRefusal(point.kind === 'ready' ? { kind: 'no-reply' } : point, t) }
     }
     const now = start()
     return {
       notReadyReason: 'refused' in now ? now.refused : null,
+      finishedForkItemId,
       reportForkPoint,
       open: async (question) => {
         const next = start()

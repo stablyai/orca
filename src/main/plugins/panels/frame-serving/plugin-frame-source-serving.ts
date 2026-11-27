@@ -1,5 +1,5 @@
 import { posix } from 'node:path'
-import { resolveContainedPluginArtifact } from '../../plugin-artifact-validation'
+import { resolveContainedPluginArtifact } from '../../artifacts/plugin-contained-artifact'
 import type { PluginFrameFileDigests } from './plugin-frame-integrity'
 import type { PluginFileExists } from './plugin-frame-module-resolution'
 

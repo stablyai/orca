@@ -19,30 +19,34 @@ export function retireAgentPickerSetups(
           entry.rows[0]?.executionHostId ?? 'local',
           entry.agent
         ])
-  const membership = new Map(
-    entries.map((entry) => [
-      entryKey(entry),
-      agentPickerCatalogAuthoritative(entry)
-        ? new Map(
-            entry.catalog.models.map((model) => [
-              model.id,
-              model.effortsKnown === false
-                ? undefined
-                : new Set(model.efforts.map((effort) => effort.value))
-            ])
-          )
-        : undefined
-    ])
-  )
+  const byKey = new Map(entries.map((entry) => [entryKey(entry), entry]))
+  const indexed = new Map<string, Map<string, Set<string> | undefined> | undefined>()
+  // Indexed on first need, so a picker with no kept presets reads no catalog.
+  const membership = (key: string) => {
+    if (!indexed.has(key)) {
+      const entry = byKey.get(key)
+      indexed.set(
+        key,
+        entry && agentPickerCatalogAuthoritative(entry)
+          ? new Map(
+              entry.catalog.models.map((model) => [
+                model.id,
+                model.effortsKnown === false
+                  ? undefined
+                  : new Set(model.efforts.map((effort) => effort.value))
+              ])
+            )
+          : undefined
+      )
+    }
+    return indexed.get(key)
+  }
   const retire = (
     drafts: Map<string, AgentPickerRetainedSetup>,
     currentKey?: string,
     currentOwner?: { workspaceId: string; executionHostId: string }
   ) => {
     for (const [key, retained] of drafts) {
-      const models = membership.get(
-        currentKey ?? JSON.stringify([retained.target?.key, retained.agent])
-      )
       // Accepted relocation owns the slot now; an obsolete address cannot retire its options.
       const target =
         retained.target && currentOwner
@@ -54,7 +58,13 @@ export function retireAgentPickerSetups(
           : retained.target
       if (target && targetAlive && !targetAlive(target)) {
         drafts.delete(key)
-      } else if (models && retained.preset && !retained.active) {
+        continue
+      }
+      const models =
+        retained.preset && !retained.active
+          ? membership(currentKey ?? JSON.stringify([retained.target?.key, retained.agent]))
+          : undefined
+      if (models && retained.preset) {
         const { model, effort } = retained.preset
         if (
           !models.has(model) ||

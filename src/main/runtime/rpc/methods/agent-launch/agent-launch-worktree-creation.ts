@@ -1,9 +1,9 @@
-import type { RuntimeTerminalCreate } from '../../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 /** Terminal launches create agent-first worktrees; structured launches create the workspace without an agent and add chat afterwards.
  * The executor chooses; setup, default tabs, provenance and lineage use the normal create path. */
 
 import { callerLaunchSource } from '../../../../agent-launch/agent-started-telemetry'
-import { buildCliWorkspaceProvenance } from '../../../../../shared/cli-workspace-provenance'
+import { buildCliWorkspaceProvenance } from '../../../../../shared/worktree/creation/cli-workspace-provenance'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
@@ -139,7 +139,8 @@ export function agentLaunchWorkspaceFactory(
           ...(result.startupTerminal?.paneKey
             ? { startupTerminalPaneKey: result.startupTerminal.paneKey }
             : {}),
-          ...(warning ? { warning } : {})
+          ...(warning ? { warning } : {}),
+          ...(result.setupTrustMismatch ? { setupTrustMismatch: result.setupTrustMismatch } : {})
         }
       } catch (error) {
         releaseAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
@@ -159,7 +160,7 @@ function withoutHostActivation(params: WorktreeCreateParams): WorktreeCreatePara
   }
 }
 
-async function waitForStructuredSetup(
+export async function waitForStructuredSetup(
   runtime: Pick<OrcaRuntimeService, 'waitForSetupTerminalCompletion'>,
   receipt: Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>['setupReceipt']
 ): Promise<void> {

@@ -25,6 +25,10 @@ export class OrchestrationMailboxPointerState {
     return this.flightsByPtyId.has(ptyId)
   }
 
+  isDeferred(ptyId: string): boolean {
+    return this.flightsByPtyId.get(ptyId)?.deferredUntilIdle === true
+  }
+
   beginFlight(ptyId: string): OrchestrationMailboxDeliveryFlight {
     const flight = {
       enterTimer: null,

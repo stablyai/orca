@@ -7,7 +7,7 @@ import {
   updateGitHubChecksTabLocalChecks,
   type GitHubChecksContextOwner,
   type GitHubChecksTabState
-} from '@/components/github-checks-tab-state'
+} from '@/components/github/github-checks-tab-state'
 import {
   getGitHubRuntimeRepoId,
   type GitHubRuntimeHost
@@ -120,11 +120,7 @@ export async function refreshGitHubChecksTab(
     }
     ctx.setChecksState((current) =>
       current.contextOwner === refreshContextOwner
-        ? updateGitHubChecksTabLocalChecks(
-            resetGitHubChecksTabForSource(current),
-            nextChecks,
-            observation.owner
-          )
+        ? updateGitHubChecksTabLocalChecks(resetGitHubChecksTabForSource(current), nextChecks)
         : current
     )
     ctx.onChecksUpdated(nextChecks)

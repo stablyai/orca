@@ -75,11 +75,7 @@
         "main:mobile/src/session/use-pr-bot-author-overrides.ts:usePRBotAuthorOverrides:settings.get:35:refused",
         "main:mobile/src/session/use-pr-bot-author-overrides.ts:usePRBotAuthorOverrides:settings.get:35:transport-error"
       ],
-      "scenarios": [
-        "settings-bot-overrides-fulfilled",
-        "settings-bot-overrides-refused",
-        "settings-bot-overrides-transport-error"
-      ]
+      "scenarios": ["settings-bot-overrides-refresh-refused"]
     },
     {
       "manifestOperation": "main:mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx:hydrateTaskState:settings.get:253",

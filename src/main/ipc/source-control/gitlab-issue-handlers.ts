@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { GitLabIssueUpdate, GitLabWorkItem } from '../../../shared/gitlab-types'
+import type { GitLabIssueUpdate, GitLabWorkItem } from '../../../shared/gitlab/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Store } from '../../persistence/loading-store/store'
 import {

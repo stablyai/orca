@@ -4,7 +4,7 @@ import {
   PluginDevHookParams
 } from '../../../../../shared/rpc-contract/plugins/plugins-params'
 import { firePluginDevHook } from '../../../../plugins/hooks/plugin-dev-hook-fire'
-import { emitPluginDevEvent } from '../../../../plugins/plugin-dev-event-emit'
+import { emitPluginDevEvent } from '../../../../plugins/development/plugin-dev-event-emit'
 import { requirePluginService } from './plugins'
 
 export const PLUGIN_DEV_EMIT_METHODS = [

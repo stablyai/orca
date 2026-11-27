@@ -1,6 +1,6 @@
 import { lstat, realpath } from 'node:fs/promises'
 import * as path from 'node:path'
-import { forEachWithConcurrency } from '../../map-with-concurrency'
+import { forEachWithConcurrency } from '../../concurrency/map-with-concurrency'
 
 const DISCARD_PATH_VALIDATION_CONCURRENCY = 16
 

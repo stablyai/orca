@@ -1,7 +1,7 @@
 import { request as httpRequest, type ClientRequest } from 'node:http'
 import type { Socket } from 'node:net'
 import { request as httpsRequest } from 'node:https'
-import { errorMessage } from '../../shared/error-message'
+import { errorMessage } from '../../shared/errors/error-message'
 import { AvccFrameParser, type AvccFrame } from './avcc-frame-parser'
 
 // serve-sim re-sends unchanged screens at ~5 fps, so seconds of socket silence mean a dead stream.

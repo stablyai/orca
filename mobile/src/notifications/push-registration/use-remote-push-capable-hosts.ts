@@ -3,7 +3,7 @@ import { loadHostCatalog } from '../../host-catalog/host-store'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { startRuntimeCapabilityProbe } from '../../transport/connection/runtime-capability-probe'
 import { useAllHostClients } from '../../transport/connection/use-all-host-clients'
-import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY as NOTIFICATIONS_REMOTE_PUSH_CAPABILITY } from '../../../../src/shared/mobile-runtime-capabilities'
+import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY as NOTIFICATIONS_REMOTE_PUSH_CAPABILITY } from '../../../../src/shared/remote-runtime/protocol/mobile-runtime-capabilities'
 
 export type RemotePushHostSupport = {
   supported: boolean

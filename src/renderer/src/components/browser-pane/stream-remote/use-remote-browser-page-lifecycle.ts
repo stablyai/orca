@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { getBrowserPageRuntimeEnvironmentId } from '../../../../../shared/browser/browser-page-runtime-owner'
 import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type {
   RemoteBrowserOperationToken,
   RemoteBrowserViewportSize
 } from './remote-browser-stream-tokens'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
-import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
-import { browserPageExists } from '../describe-page/browser-page-load-error'
+import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   REMOTE_BROWSER_STREAM_IDLE,
   type RemoteBrowserStreamStatus
@@ -23,8 +23,13 @@ import {
   type RemoteBrowserStreamBridge
 } from './remote-browser-page-input-model'
 import { subscribeRuntimeEnvironment } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { javaScriptDialogPrompt } from '../browser-javascript-dialog-prompt'
+import {
+  readRemoteBrowserPage,
+  readRemoteBrowserPageObservation
+} from './remote-browser-page-observation'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
+import { remoteBrowserPagePromptAsks } from './remote-browser-page-prompt-asks'
+import { useRemoteBrowserStreamViewerState } from './use-remote-browser-stream-viewer-state'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -33,7 +38,7 @@ export function useRemoteBrowserPageLifecycle({
   isActive,
   setPaneNotice,
   setPaneBusy,
-  clearPendingRemoteWheel,
+  clearPendingRemoteInput,
   resetRemoteInputQueue
 }: {
   browserTab: BrowserPageState
@@ -42,7 +47,7 @@ export function useRemoteBrowserPageLifecycle({
   isActive: boolean
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
   setPaneBusy: (busy: boolean) => void
-  clearPendingRemoteWheel: () => void
+  clearPendingRemoteInput: () => void
   resetRemoteInputQueue: () => void
 }) {
   const [frameUrl, setFrameUrl] = useState<string | null>(null)
@@ -60,6 +65,7 @@ export function useRemoteBrowserPageLifecycle({
   const pendingFrameDecodeRef = useRef(0)
   const mountedRef = useRef(true)
   const isActiveRef = useRef(isActive)
+  const currentWorkspaceIdRef = useRef(browserTab.workspaceId)
   const currentBrowserTabIdRef = useRef(browserTab.id)
   const currentBrowserTabUrlRef = useRef(browserTab.url)
   const runtimeWorktree = useMemo(() => toRuntimeWorktreeSelector(worktreeId), [worktreeId])
@@ -68,18 +74,27 @@ export function useRemoteBrowserPageLifecycle({
   // The lifecycle is built once; bridge committed callbacks to avoid stale render closures.
   const streamBridgeRef = useRef<RemoteBrowserStreamBridge>(NO_REMOTE_BROWSER_STREAM_BRIDGE)
   const lifecycleRef = useRef<RemoteBrowserStreamLifecycle | null>(null)
+  const viewer = useRemoteBrowserStreamViewerState(() => currentBrowserTabIdRef.current)
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
   // Stable for the provider's life, so the once-built lifecycle may hold it.
   const confirm = useConfirmationDialog()
 
   useLayoutEffect(() => {
+    currentWorkspaceIdRef.current = browserTab.workspaceId
     currentBrowserTabIdRef.current = browserTab.id
     currentBrowserTabUrlRef.current = browserTab.url
     activeRuntimeEnvironmentIdRef.current = activeRuntimeEnvironmentId
     isActiveRef.current = isActive
     runtimeWorktreeRef.current = runtimeWorktree
-  }, [activeRuntimeEnvironmentId, browserTab.id, browserTab.url, isActive, runtimeWorktree])
+  }, [
+    activeRuntimeEnvironmentId,
+    browserTab.id,
+    browserTab.workspaceId,
+    browserTab.url,
+    isActive,
+    runtimeWorktree
+  ])
 
   if (!lifecycleRef.current) {
     lifecycleRef.current = new RemoteBrowserStreamLifecycle({
@@ -88,12 +103,21 @@ export function useRemoteBrowserPageLifecycle({
         isActive: () => isActiveRef.current,
         getTabId: () => currentBrowserTabIdRef.current,
         getEnvironmentId: () => activeRuntimeEnvironmentIdRef.current,
-        browserPageExists
+        browserPageExists: (pageId) =>
+          Boolean(
+            readRemoteBrowserPage(useAppStore.getState(), currentWorkspaceIdRef.current, pageId)
+          )
       },
       callRpc: callRuntimeRpc,
       subscribeScreencast: (args, callbacks) => subscribeRuntimeEnvironment(args, callbacks),
       getWorktreeSelector: () => runtimeWorktreeRef.current,
       getCurrentUrl: () => currentBrowserTabUrlRef.current,
+      readCurrentObservation: () =>
+        readRemoteBrowserPageObservation(
+          useAppStore.getState(),
+          currentWorkspaceIdRef.current,
+          currentBrowserTabIdRef.current
+        ),
       readStoredHandle: () =>
         useAppStore.getState().remoteBrowserPageHandlesByPageId[currentBrowserTabIdRef.current] ??
         null,
@@ -113,12 +137,13 @@ export function useRemoteBrowserPageLifecycle({
       applyTabInfo: (tab) => streamBridgeRef.current.applyTabInfo(tab),
       clearFrame: () => streamBridgeRef.current.clearFrame(),
       handleFrameBytes: (token, bytes) => streamBridgeRef.current.handleFrameBytes(token, bytes),
+      viewerEvents: viewer.viewerEvents,
       closeMissingRemotePage: (remotePageId) =>
         streamBridgeRef.current.closeMissingRemotePage(remotePageId),
       waitForViewportSize: () => streamBridgeRef.current.waitForViewportSize(),
       readViewportSize: () => remoteViewportSizeRef.current,
       syncViewport: (pageId) => streamBridgeRef.current.syncViewport(pageId),
-      askJavaScriptDialog: (dialog, signal) => javaScriptDialogPrompt.ask(confirm, dialog, signal)
+      ...remoteBrowserPagePromptAsks(confirm)
     })
   }
   const lifecycle = lifecycleRef.current
@@ -203,23 +228,23 @@ export function useRemoteBrowserPageLifecycle({
         window.clearTimeout(remoteViewportTimerRef.current)
         remoteViewportTimerRef.current = null
       }
-      clearPendingRemoteWheel()
+      clearPendingRemoteInput()
       if (streamFrameUrlRef.current) {
         URL.revokeObjectURL(streamFrameUrlRef.current)
         streamFrameUrlRef.current = null
       }
     }
-  }, [clearPendingRemoteWheel, lifecycle])
+  }, [clearPendingRemoteInput, lifecycle])
 
   useEffect(() => {
     // Why: only reset frame/wheel on identity change; bumping the stream/operation generations here races the streaming effect and wedges the pane.
     lifecycle.forgetStreamViewportSize()
-    clearPendingRemoteWheel()
+    clearPendingRemoteInput()
     clearStreamFrame()
   }, [
     activeRuntimeEnvironmentId,
     browserTab.id,
-    clearPendingRemoteWheel,
+    clearPendingRemoteInput,
     clearStreamFrame,
     lifecycle
   ])
@@ -234,9 +259,17 @@ export function useRemoteBrowserPageLifecycle({
         return
       }
       const state = useAppStore.getState()
-      const currentEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
-      const pageStillExists = browserPageExists(browserTab.id)
-      if (currentEnvironmentId === activeRuntimeEnvironmentId && pageStillExists) {
+      const page = state.browserPagesByWorkspace[browserTab.workspaceId]?.find(
+        (candidate) => candidate.id === browserTab.id
+      )
+      // A page can run on another runtime than its workspace (a paired desktop's page in an SSH host's workspace).
+      if (
+        page &&
+        getBrowserPageRuntimeEnvironmentId(
+          page,
+          runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+        ) === activeRuntimeEnvironmentId
+      ) {
         return
       }
       const removedHandle = state.removeRemoteBrowserPageHandle(browserTab.id, remotePageId)
@@ -252,13 +285,24 @@ export function useRemoteBrowserPageLifecycle({
         { timeoutMs: 15_000, suppressFeatureInteraction: true }
       ).catch(() => {})
     }
-  }, [activeRuntimeEnvironmentId, browserTab.id, lifecycle, runtimeWorktree, worktreeId])
+  }, [
+    activeRuntimeEnvironmentId,
+    browserTab.id,
+    browserTab.workspaceId,
+    lifecycle,
+    runtimeWorktree,
+    worktreeId
+  ])
 
   return {
     lifecycle,
     streamStatus,
     frameUrl,
     frameMetadata,
+    // Only the live stream's report is current; a new stream's ready replaces it.
+    pagePointer: streamStatus.kind === 'live' ? viewer.pagePointer : null,
+    // Kept through drops: the phone still holds the page, and the next stream's `driver` follows its ready.
+    pageDriver: viewer.pageDriver,
     runtimeWorktree,
     runtimeTarget,
     createRemoteOperationToken,

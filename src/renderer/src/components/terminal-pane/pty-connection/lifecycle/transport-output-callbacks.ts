@@ -139,6 +139,12 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
             session.handleRemotePausedOutputDropped()
           }
         },
+        onOutputGapRecovered: (): void => {
+          const ptyId = session.transport.getPtyId()
+          if (ptyId && isCurrent()) {
+            session.revokeHiddenGraphicsAfterGap(ptyId)
+          }
+        },
         onSpawnDeferred: (reason: SpawnDeferralReason): void => {
           if (isCurrent()) {
             session.pendingSpawnDeferral = reason

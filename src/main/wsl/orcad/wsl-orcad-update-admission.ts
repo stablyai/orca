@@ -3,7 +3,7 @@ import {
   ORCAD_HOST_NEWER_DEFERRAL_CODE,
   ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE,
   type WslHostDeferredUpdate
-} from '../../../shared/wsl-host-types'
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { refuseOrcadHostDowngrade } from '../../managed-server/activation/orcad-host-version-admission'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import type { OrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'

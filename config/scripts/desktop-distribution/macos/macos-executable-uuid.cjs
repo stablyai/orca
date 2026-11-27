@@ -74,11 +74,14 @@ function rewriteMachOUuids(buffer, appId, executableName) {
   })
 }
 
-/** Gives the executable its own UUID, then re-signs it ad hoc; real signing replaces that later. */
-function giveMacExecutableUniqueUuid(executable, appId) {
+/**
+ * Gives the executable the UUID derived for executable `uuidName` (its own name by default), then
+ * re-signs it ad hoc; real signing replaces that later.
+ */
+function giveMacExecutableUniqueUuid(executable, appId, uuidName = basename(executable)) {
   const name = basename(executable)
   const buffer = readFileSync(executable)
-  const changes = rewriteMachOUuids(buffer, appId, name)
+  const changes = rewriteMachOUuids(buffer, appId, uuidName)
   // The edit breaks Electron's linker ad hoc signature and arm64 kills unsigned code, but identity-less builds skip app signing.
   // Signed outside the bundle: in place, codesign would treat it as the bundle and require its unsigned siblings be signed.
   const staging = mkdtempSync(join(tmpdir(), 'orca-executable-uuid-'))
@@ -98,12 +101,11 @@ function giveMacExecutableUniqueUuid(executable, appId) {
 }
 
 /** Fails when a shipped executable lost its own UUID, e.g. the hook was skipped or signing rewrote it. */
-function assertMacExecutableUuid(executable, appId) {
-  const name = basename(executable)
+function assertMacExecutableUuid(executable, appId, uuidName = basename(executable)) {
   const buffer = readFileSync(executable)
   for (const { cpuType, uuidOffset } of machOUuidSlots(buffer)) {
     const actual = formatUuid(buffer.subarray(uuidOffset, uuidOffset + 16))
-    const expected = formatUuid(deriveExecutableUuid(appId, name, cpuType))
+    const expected = formatUuid(deriveExecutableUuid(appId, uuidName, cpuType))
     if (actual !== expected) {
       throw new Error(
         `[macos-executable-uuid] ${executable} cpu ${cpuType} has UUID ${actual}, expected ${expected}`

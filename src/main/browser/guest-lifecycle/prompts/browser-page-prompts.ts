@@ -4,10 +4,18 @@ import type {
   BrowserPagePromptAnswer,
   BrowserPagePromptDetails,
   BrowserPagePromptKind,
+  BrowserPagePromptRequest,
   BrowserPagePromptResponse,
-  BrowserPagePromptResult
+  BrowserPagePromptResult,
+  BrowserStreamedPagePromptKind
 } from '../../../../shared/browser/prompts/browser-page-prompt'
+import { BROWSER_SITE_PERMISSION_LOCAL_FILES_ORIGIN } from '../../../../shared/browser/site-settings/browser-site-permission'
 import { isBrowserPagePromptQuiet, quietBrowserPagePrompts } from './browser-page-prompt-quiet'
+import {
+  closeStreamedBrowserPagePrompt,
+  mayAnswerStreamedBrowserPagePrompt,
+  showStreamedBrowserPagePrompt
+} from './browser-page-prompt-viewers'
 
 export const BROWSER_PAGE_PROMPT_TIMEOUT_MS = 120_000
 
@@ -15,6 +23,8 @@ export const BROWSER_PAGE_PROMPT_TIMEOUT_MS = 120_000
 export type BrowserPagePromptTarget =
   | { browserPageId: string; renderer: Electron.WebContents }
   | 'awaiting-registration'
+  /** A server page with no window: the devices streaming it ask on their own screens. */
+  | 'stream-viewers'
 
 type SettlePrompt<A> = (answer: A | null) => void | 'failed' | Promise<void | 'failed'>
 
@@ -25,6 +35,8 @@ type PendingPrompt = {
   /** Null until the tab registers its window. */
   browserPageId: string | null
   renderer: Electron.WebContents | null
+  /** Asked on the devices streaming the requester instead of a window. */
+  streamed: boolean
   details: () => unknown
   parseAnswer: (value: unknown) => unknown
   settles: ((value: unknown) => ReturnType<SettlePrompt<unknown>>)[]
@@ -49,6 +61,13 @@ export function browserPagePromptOrigin(rawUrl: string | null): string | null {
   }
 }
 
+/** Returns null for opaque sites; local files share one permission origin. */
+export function browserSitePermissionOrigin(rawUrl: string | null): string | null {
+  return rawUrl?.startsWith('file:')
+    ? BROWSER_SITE_PERMISSION_LOCAL_FILES_ORIGIN
+    : browserPagePromptOrigin(rawUrl)
+}
+
 function takePending(requestId: string): PendingPrompt | null {
   const pending = pendingPrompts.get(requestId)
   if (!pending) {
@@ -59,6 +78,7 @@ function takePending(requestId: string): PendingPrompt | null {
     unwatch()
   }
   pendingPrompts.delete(requestId)
+  closeStreamedBrowserPagePrompt(requestId)
   return pending
 }
 
@@ -156,10 +176,12 @@ export function openBrowserPagePrompt<K extends BrowserPagePromptKind>(args: {
   settle: SettlePrompt<BrowserPagePromptAnswer<K>>
 }): BrowserPagePromptOpening {
   const { requester, target } = args
-  if (!target || requester.isDestroyed()) {
+  // Streams carry the page's JavaScript dialogs as their own `dialog` event.
+  const streamed = target === 'stream-viewers'
+  if (!target || (streamed && args.kind === 'javascript-dialog') || requester.isDestroyed()) {
     return 'no-window'
   }
-  const context = target === 'awaiting-registration' ? null : target
+  const context = typeof target === 'object' ? target : null
   if (context?.renderer.isDestroyed()) {
     return 'no-window'
   }
@@ -193,6 +215,7 @@ export function openBrowserPagePrompt<K extends BrowserPagePromptKind>(args: {
     requester,
     browserPageId: null,
     renderer: null,
+    streamed,
     details: args.details,
     parseAnswer: args.parseAnswer,
     settles: [bindSettle(args.parseAnswer, args.settle)],
@@ -202,7 +225,15 @@ export function openBrowserPagePrompt<K extends BrowserPagePromptKind>(args: {
     unwatch: [closeWhenGone(requestId, requester, { orNavigates: true })]
   }
   pendingPrompts.set(requestId, pending)
-  if (context && !showPrompt(requestId, pending, context)) {
+  const shown = streamed
+    ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: details() is typed by kind, and javascript-dialog never streams.
+      showStreamedBrowserPagePrompt(requester.id, {
+        requestId,
+        kind: args.kind,
+        details: args.details()
+      } as BrowserPagePromptRequest<BrowserStreamedPagePromptKind>)
+    : !context || showPrompt(requestId, pending, context)
+  if (!shown) {
     takePending(requestId)
     return 'no-window'
   }
@@ -214,7 +245,7 @@ export function showBrowserPagePromptsAwaitingRegistration(
   context: { browserPageId: string; renderer: Electron.WebContents } | null
 ): void {
   for (const [requestId, pending] of pendingPrompts) {
-    if (pending.renderer || pending.requester.id !== guestWebContentsId) {
+    if (pending.renderer || pending.streamed || pending.requester.id !== guestWebContentsId) {
       continue
     }
     if (!context || context.renderer.isDestroyed() || !showPrompt(requestId, pending, context)) {
@@ -234,6 +265,25 @@ export async function respondToBrowserPagePrompt(
   if (!pending || pending.renderer?.id !== sender.id) {
     return 'rejected'
   }
+  return answerPending(response, pending)
+}
+
+/** A streaming device's answer, accepted only from a device streaming the page that asked. */
+export async function respondToStreamedBrowserPagePrompt(
+  pairedDeviceId: string | undefined,
+  response: BrowserPagePromptResponse
+): Promise<BrowserPagePromptResult> {
+  const pending = pendingPrompts.get(response.requestId)
+  if (!pending || !mayAnswerStreamedBrowserPagePrompt(response.requestId, pairedDeviceId)) {
+    return 'rejected'
+  }
+  return answerPending(response, pending)
+}
+
+async function answerPending(
+  response: BrowserPagePromptResponse,
+  pending: PendingPrompt
+): Promise<BrowserPagePromptResult> {
   const answer = response.answer === null ? null : pending.parseAnswer(response.answer)
   if (answer === undefined) {
     return 'rejected'

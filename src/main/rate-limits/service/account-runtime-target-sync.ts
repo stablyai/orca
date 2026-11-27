@@ -1,20 +1,16 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { RateLimitState } from '../../../shared/rate-limit-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { RateLimitState } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { RateLimitService } from './rate-limit-service'
 import { getInitialClaudeRateLimitTarget } from '../providers/claude/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from '../providers/codex/codex-rate-limit-target'
 import {
   localAccountRuntimeTargetKey,
   resolveLocalAccountUsageTarget
-} from '../../../shared/local-account-runtime'
+} from '../../../shared/agent-accounts/local-account-runtime'
 
 type AccountRuntimeRateLimitService = Pick<
   RateLimitService,
-  | 'getState'
-  | 'refreshClaudeForTarget'
-  | 'refreshCodexForTarget'
-  | 'setAntigravityFetchTarget'
-  | 'refresh'
+  'getState' | 'refreshClaudeForTarget' | 'refreshCodexForTarget' | 'refresh'
 >
 
 type RuntimeTarget = {
@@ -45,10 +41,7 @@ export function createAccountRuntimeTargetSettingsSync(
       return
     }
 
-    if (usageTargetChanged) {
-      rateLimits.setAntigravityFetchTarget(nextSettingsTargets.usage)
-    }
-    const current = rateLimits.getState()
+    const current = await rateLimits.getState()
     const refreshes: Promise<RateLimitState>[] = []
     if (claudePolicyChanged && !isSameTarget(current.claudeTarget, nextSettingsTargets.claude)) {
       refreshes.push(rateLimits.refreshClaudeForTarget(nextSettingsTargets.claude))
@@ -58,7 +51,7 @@ export function createAccountRuntimeTargetSettingsSync(
     }
 
     await Promise.all(refreshes)
-    // Antigravity has no targeted refresh, so a usage target change needs a full one.
+    // Kimi reads the usage target at fetch time and has no targeted refresh.
     if (usageTargetChanged) {
       await rateLimits.refresh()
     }

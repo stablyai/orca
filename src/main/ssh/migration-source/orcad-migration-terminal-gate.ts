@@ -1,5 +1,8 @@
 /** Relay PTYs cannot move to orcad: prove host-wide exit or retain possible survivors in the legacy bridge. Lost contact and unaccounted leases never prove exit. */
-import { isLiveSshPtyLease, type SshRemotePtyLease } from '../../../shared/ssh-types'
+import {
+  isLiveSshPtyLease,
+  type SshRemotePtyLease
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { Store } from '../../persistence/loading-store/store'
 import { PtyExitProof } from '../../pty/process-retirement/pty-exit-proof'
 

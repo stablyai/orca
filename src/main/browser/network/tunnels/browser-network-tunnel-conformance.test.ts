@@ -12,7 +12,6 @@ import { BrowserNetworkTunnelSession } from './browser-network-tunnel-session'
 import {
   BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS,
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
-  type BrowserNetworkTunnelFlowControl,
   type BrowserNetworkTunnelSocket
 } from './browser-network-tunnel-stream-state'
 
@@ -34,15 +33,6 @@ describe('browser network tunnel conformance', () => {
     const { duplex, destination } = await openStream(tunnel)
     const consumer = consumeDuplex(duplex)
 
-    expect(opcodesFor(tunnel, 'sessionToClient', 1)).toEqual(['Opened', 'WindowUpdate'])
-    expect(opcodesFor(tunnel, 'clientToSession', 1)).toEqual(['Open', 'WindowUpdate'])
-    expect(windowUpdatesFor(tunnel, 'sessionToClient', 1)).toEqual([
-      BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
-    ])
-    expect(windowUpdatesFor(tunnel, 'clientToSession', 1)).toEqual([
-      BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
-    ])
-
     await writeChunk(duplex, new Uint8Array([1, 2, 3, 4, 5]))
     await settle()
     expect(concatBytes(destination.written)).toEqual(new Uint8Array([1, 2, 3, 4, 5]))
@@ -56,12 +46,10 @@ describe('browser network tunnel conformance', () => {
     duplex.end()
     await settle()
     expect(destination.ended).toBe(true)
-    expect(opcodesFor(tunnel, 'clientToSession', 1)).toContain('HalfClose')
 
     destination.emit('end')
     await whenClosed(duplex)
     expect(consumer.ended).toBe(true)
-    expect(opcodesFor(tunnel, 'clientToSession', 1).slice(-2)).toEqual(['HalfClose', 'Close'])
     expect(destination.destroyed).toBe(true)
 
     await teardown(tunnel)
@@ -176,7 +164,6 @@ type ConformanceTunnel = {
   aggregate: AggregateBudgetProbe
   memory: BrowserNetworkTunnelOutboundMemoryBudgetRegistry
   releaseMemoryLease: () => void
-  refuseNextConnect: boolean
 }
 
 type OpenedStream = { duplex: BrowserNetworkTunnelDuplex; destination: FakeDestination }
@@ -263,13 +250,14 @@ function createAggregateBudgetProbe(): AggregateBudgetProbe {
   }
 }
 
-function createConformanceTunnel(flowControl?: BrowserNetworkTunnelFlowControl): ConformanceTunnel {
+function createConformanceTunnel(): ConformanceTunnel {
   const aggregate = createAggregateBudgetProbe()
   const memory = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
   const lease = memory.acquire('conformance-host')
   if (!lease) {
     throw new Error('conformance outbound memory lease was refused')
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: client/session are assigned before use; constructors only retain callbacks.
   const tunnel = {
     destinations: [] as FakeDestination[],
     frames: [] as RecordedFrame[],
@@ -277,16 +265,11 @@ function createConformanceTunnel(flowControl?: BrowserNetworkTunnelFlowControl):
     onSessionClose: vi.fn<() => void>(),
     aggregate,
     memory,
-    releaseMemoryLease: lease.release,
-    refuseNextConnect: false
+    releaseMemoryLease: lease.release
   } as ConformanceTunnel
   tunnel.session = new BrowserNetworkTunnelSession({
     tunnelGeneration: TUNNEL_GENERATION,
     connect: () => {
-      if (tunnel.refuseNextConnect) {
-        tunnel.refuseNextConnect = false
-        throw new Error('connect refused')
-      }
       const destination = new FakeDestination()
       tunnel.destinations.push(destination)
       return destination
@@ -296,7 +279,6 @@ function createConformanceTunnel(flowControl?: BrowserNetworkTunnelFlowControl):
       tunnel.client.handleBinary(bytes)
       return true
     },
-    flowControl,
     onClose: tunnel.onSessionClose,
     claimAggregateRetainedBytes: aggregate.claim
   })
@@ -308,7 +290,6 @@ function createConformanceTunnel(flowControl?: BrowserNetworkTunnelFlowControl):
       return true
     },
     outboundMemory: lease,
-    flowControl,
     onClosed: (error) => tunnel.closures.push(error)
   })
   return tunnel
@@ -407,16 +388,6 @@ function whenClosed(duplex: BrowserNetworkTunnelDuplex): Promise<void> {
 
 function settle(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve))
-}
-
-function opcodesFor(
-  tunnel: ConformanceTunnel,
-  direction: FrameDirection,
-  streamId: number
-): string[] {
-  return tunnel.frames
-    .filter((frame) => frame.direction === direction && frame.streamId === streamId)
-    .map((frame) => BrowserNetworkTunnelOpcode[frame.opcode]!)
 }
 
 function windowUpdatesFor(

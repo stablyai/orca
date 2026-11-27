@@ -1,4 +1,4 @@
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
 import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../../shared/workspace-session/workspace-session-host-field-ownership'
 import {
   buildWorktreeIdByFileId,

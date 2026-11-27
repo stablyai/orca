@@ -1,4 +1,4 @@
-import { isClipboardTextByteLengthOverLimit } from '../clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../clipboard/clipboard-text'
 
 /** Explorer name-filter matching, shared so the host can filter a scan exactly like the renderer. */
 

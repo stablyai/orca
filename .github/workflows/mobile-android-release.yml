@@ -1,10 +1,11 @@
 name: Mobile Android Release
 
 # Release Android independently so App Store review cannot block its shipping cadence.
+# dev.orca.app ships on Google Play and as an APK on GitHub; both are the same Play-signed build.
 on:
   push:
     tags:
-      - 'mobile-android-v*'
+      - 'android-v*'
   workflow_dispatch:
     inputs:
       release_version:
@@ -12,7 +13,7 @@ on:
         required: false
         type: string
       publish_github_release:
-        description: 'Create or update the mobile-android-v<version> GitHub Release'
+        description: 'Release to Play internal testing and publish the android-v<version> GitHub pre-release; off only validates the bundle with Play'
         required: false
         default: true
         type: boolean
@@ -20,14 +21,14 @@ on:
 jobs:
   android-build:
     runs-on: ubuntu-latest
-
-    # Grant contents:write for gh release create; build success alone does not authorize publication.
     permissions:
-      contents: write
+      contents: read
 
     outputs:
       publish_release: ${{ steps.release.outputs.publish_release }}
       version: ${{ steps.release.outputs.version }}
+      version_code: ${{ steps.release.outputs.android_version_code }}
+      tag: ${{ steps.release.outputs.tag }}
 
     defaults:
       run:
@@ -37,37 +38,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      # Release signing is enforced once ORCA_ANDROID_RELEASE_CERT_SHA256 (or ORCA_ANDROID_REQUIRE_RELEASE_SIGNING=true)
-      # is set as a repository variable. Until then the build keeps the Expo debug key, with a warning.
-      - name: Check release signing configuration
-        id: signing
+      # Play only accepts bundles signed with the upload key, and re-signs them with Google's app signing key.
+      - name: Check upload key configuration
         env:
           ORCA_ANDROID_KEYSTORE_BASE64: ${{ secrets.ORCA_ANDROID_KEYSTORE_BASE64 }}
           ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ORCA_ANDROID_KEYSTORE_PASSWORD }}
           ORCA_ANDROID_KEY_ALIAS: ${{ secrets.ORCA_ANDROID_KEY_ALIAS }}
           ORCA_ANDROID_KEY_PASSWORD: ${{ secrets.ORCA_ANDROID_KEY_PASSWORD }}
-          ORCA_ANDROID_RELEASE_CERT_SHA256: ${{ vars.ORCA_ANDROID_RELEASE_CERT_SHA256 }}
-          ORCA_ANDROID_REQUIRE_RELEASE_SIGNING: ${{ vars.ORCA_ANDROID_REQUIRE_RELEASE_SIGNING }}
         run: |
           set -euo pipefail
-          if [ -z "${ORCA_ANDROID_RELEASE_CERT_SHA256:-}" ] && [ "${ORCA_ANDROID_REQUIRE_RELEASE_SIGNING:-}" != 'true' ]; then
-            message="Android release signing is not enabled, so this APK is signed with the Expo debug key as before. Set the ORCA_ANDROID_RELEASE_CERT_SHA256 repository variable to enable it; see the Android Release Signing section of mobile/README.md."
-            echo "::warning::$message"
-            printf '### Android release signing not enabled\n\n%s\n' "$message" >> "$GITHUB_STEP_SUMMARY"
-            echo "mode=debug" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           missing=()
-          for name in ORCA_ANDROID_KEYSTORE_BASE64 ORCA_ANDROID_KEYSTORE_PASSWORD ORCA_ANDROID_KEY_ALIAS ORCA_ANDROID_KEY_PASSWORD ORCA_ANDROID_RELEASE_CERT_SHA256; do
+          for name in ORCA_ANDROID_KEYSTORE_BASE64 ORCA_ANDROID_KEYSTORE_PASSWORD ORCA_ANDROID_KEY_ALIAS ORCA_ANDROID_KEY_PASSWORD; do
             if [ -z "${!name:-}" ]; then
               missing+=("$name")
             fi
           done
           if [ "${#missing[@]}" -ne 0 ]; then
-            echo "::error::Android release signing is enabled but not fully configured. Missing secrets or variables: ${missing[*]}. See the Android Release Signing section of mobile/README.md."
+            echo "::error::The Play upload key is not fully configured. Missing secrets: ${missing[*]}. See the Android Release Signing section of mobile/README.md."
             exit 1
           fi
-          echo "mode=release" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -99,8 +88,7 @@ jobs:
       - name: Expo prebuild
         run: npx expo prebuild --platform android --no-install
 
-      - name: Decode release keystore
-        if: steps.signing.outputs.mode == 'release'
+      - name: Decode upload keystore
         env:
           ORCA_ANDROID_KEYSTORE_BASE64: ${{ secrets.ORCA_ANDROID_KEYSTORE_BASE64 }}
         run: |
@@ -108,66 +96,148 @@ jobs:
           umask 077
           printf '%s' "$ORCA_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/orca-release.keystore"
 
-      - name: Build Android release APK
+      - name: Build Play app bundle
         env:
-          # Empty in debug mode, which leaves Gradle on the debug key exactly as before.
-          ORCA_ANDROID_REQUIRE_RELEASE_SIGNING: ${{ steps.signing.outputs.mode == 'release' && 'true' || '' }}
-          ORCA_ANDROID_KEYSTORE_PATH: ${{ steps.signing.outputs.mode == 'release' && format('{0}/orca-release.keystore', runner.temp) || '' }}
-          ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ steps.signing.outputs.mode == 'release' && secrets.ORCA_ANDROID_KEYSTORE_PASSWORD || '' }}
-          ORCA_ANDROID_KEY_ALIAS: ${{ steps.signing.outputs.mode == 'release' && secrets.ORCA_ANDROID_KEY_ALIAS || '' }}
-          ORCA_ANDROID_KEY_PASSWORD: ${{ steps.signing.outputs.mode == 'release' && secrets.ORCA_ANDROID_KEY_PASSWORD || '' }}
-        run: cd android && ./gradlew assembleRelease
+          ORCA_ANDROID_REQUIRE_RELEASE_SIGNING: 'true'
+          ORCA_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/orca-release.keystore
+          ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ORCA_ANDROID_KEYSTORE_PASSWORD }}
+          ORCA_ANDROID_KEY_ALIAS: ${{ secrets.ORCA_ANDROID_KEY_ALIAS }}
+          ORCA_ANDROID_KEY_PASSWORD: ${{ secrets.ORCA_ANDROID_KEY_PASSWORD }}
+        run: cd android && ./gradlew bundleRelease
 
-      - name: Remove release keystore
+      - name: Remove upload keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/orca-release.keystore"
 
-      # Why pin the certificate: a regenerated or swapped key would make every installed copy refuse the update.
-      - name: Verify APK signing certificate
-        id: signer
-        if: steps.signing.outputs.mode == 'release'
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-mobile-aab
+          path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+  # Its own job so a Play outage can be rerun without rebuilding. Play rejects a versionCode it has
+  # seen, so a missed versionCode bump fails here, before anything is published.
+  play-internal-upload:
+    needs: android-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    env:
+      BUNDLE_FROZEN: 'true'
+      FASTLANE_SKIP_UPDATE_CHECK: '1'
+      FASTLANE_HIDE_CHANGELOG: '1'
+      FASTLANE_OPT_OUT_USAGE: '1'
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download AAB artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: orca-mobile-aab
+          path: mobile/build/play
+
+      - name: Setup Ruby and fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: mobile
+
+      - name: Write Play service account key
         env:
-          EXPECTED_CERT_SHA256: ${{ vars.ORCA_ANDROID_RELEASE_CERT_SHA256 }}
+          ORCA_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.ORCA_PLAY_SERVICE_ACCOUNT_JSON }}
         run: |
           set -euo pipefail
-          # Expo template debug keystore, public in expo-template-bare-minimum.
-          debug_cert="fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c"
-          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
-          apks=(android/app/build/outputs/apk/release/*.apk)
-          certs="$("$apksigner" verify --print-certs "${apks[0]}" | sed -n 's/^Signer #[0-9]* certificate SHA-256 digest: //p' | sort -u)"
-          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ': ' | tr 'A-F' 'a-f')"
-          if [ "$certs" = "$debug_cert" ]; then
-            echo "::error::The APK is signed with the public Expo debug key."
-            exit 1
-          fi
-          if [ "$certs" != "$expected" ]; then
-            echo "::error::The APK signing certificate ($certs) does not match ORCA_ANDROID_RELEASE_CERT_SHA256 ($expected)."
-            exit 1
-          fi
-          echo "cert_sha256=$(printf '%s' "$certs" | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')" >> "$GITHUB_OUTPUT"
-          echo "APK signing certificate SHA-256: $certs"
+          umask 077
+          key="$RUNNER_TEMP/play-service-account.json"
+          printf '%s' "$ORCA_PLAY_SERVICE_ACCOUNT_JSON" > "$key"
+          echo "ORCA_PLAY_JSON_KEY_PATH=$key" >> "$GITHUB_ENV"
+
+      # Production promotion stays a manual step in Play Console.
+      - name: Upload to the internal testing track
+        env:
+          VALIDATE_ONLY: ${{ needs.android-build.outputs.publish_release != 'true' }}
+        run: bundle exec fastlane android upload_internal aab:"$PWD/build/play/app-release.aab" validate_only:"$VALIDATE_ONLY"
+
+      - name: Remove Play service account key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/play-service-account.json"
+
+  # The GitHub APK is Google's universal APK for the uploaded bundle, so it carries the same
+  # app signing key as Play installs and either channel can update the other.
+  github-release:
+    needs: [android-build, play-internal-upload]
+    if: needs.android-build.outputs.publish_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Grant contents:write for gh release create; build success alone does not authorize publication.
+    permissions:
+      contents: write
+
+    env:
+      BUNDLE_FROZEN: 'true'
+      FASTLANE_SKIP_UPDATE_CHECK: '1'
+      FASTLANE_HIDE_CHANGELOG: '1'
+      FASTLANE_OPT_OUT_USAGE: '1'
+      APK: build/play/app-release.apk
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Ruby and fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: mobile
+
+      - name: Write Play service account key
+        env:
+          ORCA_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.ORCA_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key="$RUNNER_TEMP/play-service-account.json"
+          printf '%s' "$ORCA_PLAY_SERVICE_ACCOUNT_JSON" > "$key"
+          echo "ORCA_PLAY_JSON_KEY_PATH=$key" >> "$GITHUB_ENV"
+
+      # Fails unless the V3.0 signer is Google's Play app signing key.
+      - name: Download and verify the Play-signed universal APK
+        id: signer
+        run: bundle exec fastlane android download_signed_apk version_code:"${{ needs.android-build.outputs.version_code }}" destination:"$PWD/$APK"
+
+      - name: Remove Play service account key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/play-service-account.json"
 
       # Publish size/digest to distinguish truncated downloads (missing tail signature block) from bad APK builds.
       - name: Checksum the APK
         id: apk
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          apks=(android/app/build/outputs/apk/release/*.apk)
-          if [ "${#apks[@]}" -ne 1 ]; then
-            echo "Expected exactly one release APK, found ${#apks[@]}" >&2
-            exit 1
-          fi
-
-          apk="${apks[0]}"
-          bytes="$(wc -c < "$apk" | tr -d ' ')"
-          sha256="$(sha256sum "$apk" | cut -d ' ' -f 1)"
+          bytes="$(wc -c < "$APK" | tr -d ' ')"
+          sha256="$(sha256sum "$APK" | cut -d ' ' -f 1)"
           # Publish sha256sum -c sidecars, excluded by *.apk globs. Use binary “ *” mode:
           # Git Bash text-mode newline translation can reject a valid APK.
-          printf '%s *%s\n' "$sha256" "$(basename "$apk")" > "$apk.sha256"
+          printf '%s *%s\n' "$sha256" "$(basename "$APK")" > "$APK.sha256"
 
           {
-            echo "checksum=$apk.sha256"
+            echo "checksum=$APK.sha256"
             echo "bytes=$bytes"
             echo "sha256=$sha256"
           } >> "$GITHUB_OUTPUT"
@@ -178,14 +248,14 @@ jobs:
         with:
           name: orca-mobile-apk
           path: |
-            mobile/android/app/build/outputs/apk/release/*.apk
-            mobile/android/app/build/outputs/apk/release/*.apk.sha256
+            mobile/build/play/app-release.apk
+            mobile/build/play/app-release.apk.sha256
 
       - name: Ensure GitHub release tag
-        if: steps.release.outputs.publish_release == 'true' && !startsWith(github.ref, 'refs/tags/mobile-android-v')
+        if: ${{ !startsWith(github.ref, 'refs/tags/android-v') }}
         run: |
           set -euo pipefail
-          tag="${{ steps.release.outputs.tag }}"
+          tag="${{ needs.android-build.outputs.tag }}"
 
           if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
             echo "Tag $tag already exists"
@@ -196,21 +266,16 @@ jobs:
           git push origin "refs/tags/$tag"
 
       - name: Create GitHub Release
-        if: steps.release.outputs.publish_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag="${{ steps.release.outputs.tag }}"
+          tag="${{ needs.android-build.outputs.tag }}"
           notes_file="$RUNNER_TEMP/android-release-notes.md"
 
           # printf rather than a heredoc: YAML block indentation would leak into the Markdown.
           # Both platforms' commands are named because a reader on macOS has no sha256sum.
-          # Only release-signed builds list a certificate, since only they are pinned.
-          signer_line=''
-          if [ -n '${{ steps.signer.outputs.cert_sha256 }}' ]; then
-            signer_line='- Signing certificate SHA-256: `${{ steps.signer.outputs.cert_sha256 }}`\n'
-          fi
+          signer_line='- Signing certificate SHA-256: `${{ steps.signer.outputs.cert_sha256 }}`\n'
           verification_section() {
             printf '\n### Verify your download\n\n- Size: `%s` bytes\n- SHA-256: `%s`\n%b\nA "no certificate" or "problem parsing the package" install failure is usually a truncated download — check the size first, then `sha256sum -c app-release.apk.sha256` (`shasum -a 256 -c` on macOS).\n' \
               '${{ steps.apk.outputs.bytes }}' '${{ steps.apk.outputs.sha256 }}' "$signer_line"
@@ -244,7 +309,7 @@ jobs:
             gh release upload "$tag" \
               --repo "$GITHUB_REPOSITORY" \
               --clobber \
-              android/app/build/outputs/apk/release/*.apk \
+              "$APK" \
               "${{ steps.apk.outputs.checksum }}"
             # --clobber replaced the APK; rewrite its digest so users cannot compare against obsolete bytes.
             gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq .body \
@@ -256,7 +321,7 @@ jobs:
             # the 125000-character API cap; pin the comparison base and truncate.
             previous_tag="$(
               gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName --jq '.[].tagName' \
-                | grep '^mobile-android-v' | grep -Fxv "$tag" | sort -V | tail -1 || true
+                | grep '^android-v' | grep -Fxv "$tag" | sort -V | tail -1 || true
             )"
 
             if [ -n "$previous_tag" ]; then
@@ -280,110 +345,15 @@ jobs:
               --prerelease \
               --latest=false \
               --notes-file "$notes_file" \
-              android/app/build/outputs/apk/release/*.apk \
+              "$APK" \
               "${{ steps.apk.outputs.checksum }}"
           fi
 
-  # Advisory like the site bump: a failed mirror only leaves orca.dev's "mirror link" on the prior APK.
+  # Advisory: a failed mirror only leaves the R2 copy of this APK missing.
   release-mirror-r2:
-    needs: android-build
-    if: needs.android-build.outputs.publish_release == 'true'
+    needs: [android-build, github-release]
     uses: ./.github/workflows/release-mirror-r2.yml
     with:
-      tag: mobile-android-v${{ needs.android-build.outputs.version }}
+      tag: ${{ needs.android-build.outputs.tag }}
       assets: app-release.apk
     secrets: inherit
-
-  # Keep site bump advisory after publication; failure only leaves its download link on the prior APK.
-  # Why after the mirror: the site's mirror link uses the bumped version, so upload the APK first
-  # (success not required, so a mirror outage never blocks the bump).
-  bump-apk-download:
-    needs: [android-build, release-mirror-r2]
-    if: ${{ !cancelled() && needs.android-build.outputs.publish_release == 'true' }}
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    permissions:
-      contents: read
-    env:
-      VERSION: ${{ needs.android-build.outputs.version }}
-      SITE_REPO: stablyai/orca-marketing-website
-      BRANCH: bump/android-apk-${{ needs.android-build.outputs.version }}
-    steps:
-      - name: Checkout orca
-        uses: actions/checkout@v6
-        with:
-          sparse-checkout: config/scripts
-
-      # Why the buf0-bot app, as in homebrew-bump.yml: GITHUB_TOKEN cannot push to another
-      # repo, and a PR it opened would not run the site's checks.
-      - name: Generate buf0-bot token
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: 2590194
-          private-key: ${{ secrets.BUFO_BOT_PRIVATE_KEY }}
-          owner: stablyai
-          repositories: orca-marketing-website
-          permission-contents: write
-          permission-pull-requests: write
-
-      - name: Checkout marketing site
-        uses: actions/checkout@v6
-        with:
-          repository: stablyai/orca-marketing-website
-          path: site
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Open and merge the version bump PR
-        working-directory: site
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          set -euo pipefail
-          node ../config/scripts/release/versioning/bump-android-apk-download-version.mjs src/lib/downloadTargets.ts "$VERSION"
-          if git diff --quiet; then
-            echo "The site's main branch already has Android APK $VERSION or newer." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          title="Point the Android APK download at $VERSION"
-          git config user.name "buf0-bot[bot]"
-          git config user.email "252831055+buf0-bot[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
-          git commit -am "$title"
-          # Why --force: a rerun rebuilds the branch on the site's current main.
-          git push --force origin "$BRANCH"
-
-          # Why: a rerun of the same release reuses its open PR instead of opening another.
-          pr="$(gh pr list --repo "$SITE_REPO" --head "$BRANCH" --state open --json url --jq '.[].url')"
-          if [ -z "$pr" ]; then
-            pr="$(gh pr create --repo "$SITE_REPO" --base main --head "$BRANCH" --title "$title" \
-              --body "Opened by the [Android release run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) for mobile-android-v$VERSION. Merging points /download/android and every APK link on the site at the new APK.")"
-          fi
-          echo "Android APK download bump: $pr" >> "$GITHUB_STEP_SUMMARY"
-
-          # Why wait for checks: they push a deploy commit onto the branch (merging first fails with
-          # "Head branch was modified"), and a failed site build must not merge. Main's push deploys.
-          sleep 20
-          gh pr checks "$pr" --repo "$SITE_REPO" --watch --interval 15 || true
-          failed="$(gh pr checks "$pr" --repo "$SITE_REPO" --json bucket --jq 'map(select(.bucket == "fail")) | length' 2>/dev/null || true)"
-          # The deploy commit is [skip ci], so the final head may report no checks at all.
-          if [ "${failed:-0}" != "0" ]; then
-            echo "::warning::The site's checks failed on $pr; not merging. Fix and merge it by hand."
-            exit 1
-          fi
-          for _ in 1 2 3; do
-            if gh pr merge "$pr" --repo "$SITE_REPO" --squash --delete-branch; then
-              echo "Merged; the site deploys from main." >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
-            sleep 30
-          done
-          echo "::warning::Could not merge $pr; merge it by hand to update /download/android."
-          exit 1
-
-      - name: Report a failed bump
-        if: failure()
-        run: |
-          echo "::warning::The release is published, but the site's Android APK download was not bumped to $VERSION."
-          printf '### Android APK download not bumped\n\nThe release is published, but /download/android still serves the previous APK. Rerun this job, or set `ANDROID_RELEASE_VERSION` in `src/lib/downloadTargets.ts` of %s to `%s` by hand.\n' "$SITE_REPO" "$VERSION" >> "$GITHUB_STEP_SUMMARY"

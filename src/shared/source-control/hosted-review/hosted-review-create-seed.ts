@@ -1,4 +1,4 @@
-import { escapeRegex } from '../../string-utils'
+import { escapeRegex } from '../../text/regex-escaping'
 import { JIRA_ISSUE_KEY_PATTERN } from '../../jira/jira-issue-url'
 import { prefixJiraReviewTitle } from '../../jira/jira-review-title'
 import { humanizeBranchSlug } from '../ai/naming/branch-name-from-work'

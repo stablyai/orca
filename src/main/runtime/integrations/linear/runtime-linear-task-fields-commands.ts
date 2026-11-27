@@ -11,7 +11,7 @@ import type {
   LinearSaveIssueRequest,
   LinearCurrentIssueContextHints
 } from '../../../../shared/linear/agent-access'
-import type { LinearIssueUpdate } from '../../../../shared/issue-mutation-types'
+import type { LinearIssueUpdate } from '../../../../shared/work-items/issue-mutation-types'
 import type { LinearAgentWriteTarget } from './linear-agent-write-target'
 import { RuntimeLinearLabelWriteCommands } from './runtime-linear-label-write-commands'
 

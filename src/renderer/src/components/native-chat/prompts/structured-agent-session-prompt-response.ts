@@ -5,7 +5,7 @@ import {
 import {
   legacyAgentSessionSelectedOptionId,
   type AgentSessionPromptResponse
-} from '../../../../../shared/agent-session/agent-session-question-answer'
+} from '../../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import type { AgentSessionPromptResult } from '../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredPromptItem } from '../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import type { StructuredAgentSessionAction } from '../session/structured/writes/use-structured-agent-session-mutate'

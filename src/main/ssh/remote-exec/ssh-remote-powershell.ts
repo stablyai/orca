@@ -1,5 +1,5 @@
 import { gunzipSync, gzipSync } from 'node:zlib'
-import { encodePowerShellCommand } from '../../../shared/powershell-command-encoding'
+import { encodePowerShellCommand } from '../../../shared/shell/launch/powershell-command-encoding'
 import { CMD_EXE_COMMAND_LINE_MAX_CHARS } from '../../providers/shell-launch/windows/shell-args'
 
 // Stock sshd reparses exec through cmd.exe; budget below its 8,191-character ceiling for the added /c wrapper.

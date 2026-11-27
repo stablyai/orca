@@ -1,5 +1,5 @@
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { editMobileNativeChatDraft } from '../session/native-chat/composer/mobile-native-chat-draft-store'
+import { editMobileNativeChatDraft } from '../session/native-chat/composer/drafts/mobile-native-chat-draft-store'
 import { terminalInputSend } from '../terminal/host-operations/mobile-terminal-operations'
 import {
   buildTerminalSendParams,

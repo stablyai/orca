@@ -3,13 +3,16 @@ import type {
   SkillDeletePlan,
   SkillDeleteRequest,
   SkillDeleteResult
-} from '../../../shared/skill-delete-contract'
-import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../../shared/skills'
+} from '../../../shared/skills/deletion/skill-delete-contract'
+import type {
+  SkillDiscoveryResult,
+  SkillDiscoveryTarget
+} from '../../../shared/skills/discovery/skills'
 import type {
   SkillCloudOwnedShare,
   SkillCloudOperation,
   SkillCloudPackageDetails
-} from '../../../shared/skill-cloud-contract'
+} from '../../../shared/skills/sharing/skill-cloud-contract'
 import type {
   SkillBundleInstallPreviewInput,
   SkillBundleInstallPreviewOperation,
@@ -31,14 +34,14 @@ import type {
   SkillSharePublishInput,
   SkillSharePublishOperation,
   SkillShareResolvedOperation
-} from '../../../shared/skill-sharing-contract'
+} from '../../../shared/skills/sharing/skill-sharing-contract'
 import type {
   BundledSkillAutoUpdateRequest,
   LocalBundledSkillExecuteRequest,
   BundledSkillInstallResult,
   BundledSkillPlan,
   LocalBundledSkillPlanRequest
-} from '../../../shared/bundled-skill-plan'
+} from '../../../shared/skills/bundled/bundled-skill-plan'
 import type { PreloadApi } from '../../api-types'
 
 export const skillsApi = {

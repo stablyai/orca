@@ -4,7 +4,7 @@
 // slot, reused across connects), so a flooding phone cannot reset this one and a connect never
 // creates a new object. The control socket uses the Hibernation API; durable state lives in object
 // storage; credentials and assignments are the relay's Postgres tables, through Hyperdrive.
-// The class is layered (host-relay-base → -handshake → -control → -phones → this file) only to keep
+// The class is layered (host-relay-base → -handshake → -control → -phones → -director → this file) only to keep
 // files small; it is one object with one state.
 import { parseRelayHostCapabilities } from '../../../packages/relay-contract/src/control-messages'
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
@@ -12,16 +12,17 @@ import { RELAY_PROTOCOL_LIMITS } from '../../../packages/relay-contract/src/prot
 import { CONTROL_CONTINUITY_LIMITS } from '../../../packages/relay-contract/src/control-continuity'
 import { metric } from './metrics'
 import { RelayCredentialStore } from '../../relay/src/credentials/credential-store'
-import type { AssignBody, DeviceRow } from './admin'
+import type { AssignBody, DeviceRow, VerifyBody, VerifyResult } from './admin'
+import { verifiesHere, verifyCredential } from './verify'
 import { ADMIN_JTI_KEY, admitJti, type AdminReplayGuard, type ReplayRefusal, type SeenJtis } from './admin-jti'
 import type { AssignResult, StoredAssignment } from './object-store'
 import type { EdgeClaims } from './env'
 import { KEEPALIVE_PROBE_MS, SWEEP_AT_KEY, type Session } from './host-relay-base'
-import { HostRelayPhones } from './host-relay-phones'
+import { HostRelayDirector } from './host-relay-director'
 
 export type { AuthorizeResult, ConfirmResult } from './host-relay-base'
 
-export class HostRelay extends HostRelayPhones {
+export class HostRelay extends HostRelayDirector {
   // ---------------- director admin (phase 2; the Worker verified the signed request) ----------------
 
   // Every op records its token's jti before it runs (admin-jti.ts), so a copy of the token is
@@ -98,6 +99,17 @@ export class HostRelay extends HostRelayPhones {
   // both ignore it, so a just-drained desktop does not make the export that follows answer busy.
   private liveControls(): WebSocket[] {
     return this.ctx.getWebSockets('control').filter((ws) => this.attachment(ws) !== null)
+  }
+
+  // The director's phone credential check (/v1/resolve, the invite move): read-only (verify.ts). An
+  // object that never held a host (pushed() reads sqlite_master, so no schema is created) or does
+  // not hold this one answers before the jti is recorded and writes nothing; otherwise the jti is
+  // its only write.
+  async adminVerify(body: VerifyBody, replay?: AdminReplayGuard | null): Promise<VerifyResult | ReplayRefusal> {
+    if (!this.pushed() || !verifiesHere(this.store, this.config.cellId, body.relayHostId)) { return { outcome: 'not_here' } }
+    const refused = await this.claimAdminJti(replay)
+    if (refused) { return refused }
+    return await verifyCredential(this.store, this.config.cellId, body)
   }
 
   // Health probe (GET /__health/object, health.ts), only ever called on the canary object: one
@@ -233,6 +245,7 @@ export class HostRelay extends HostRelayPhones {
       const sweepAt = await this.ctx.storage.get<number>(SWEEP_AT_KEY)
       if (sweepAt !== undefined && sweepAt <= now && (await this.sweep(now)) === 'wiped') { return }
     }
+    await this.flushUserIndex(now)
     await this.reschedule()
   }
 

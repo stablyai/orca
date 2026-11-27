@@ -1,13 +1,14 @@
 import type { CommandHandler } from '../../dispatch/dispatch'
 import { printResult } from '../../output/command-result-output'
 import { printOrchestrationReceipt, printOrchestrationResult } from '../agent-view'
-import { WORKER_SHOW_VIEW, type WorkerShowResult } from './worker-agent-views'
+import { WORKER_SHOW_VIEW } from './worker-agent-views'
+import type { WorkerShowResult } from './worker-view-results'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../../arguments/flags'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import type {
   OrchestrationWorkerReadResult,
   OrchestrationWorkerReadSource
@@ -29,6 +30,11 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
       ]
       if (value.dispatch?.followUpOf) {
         lines.push(`Follow-up of: dispatch:${value.dispatch.followUpOf}`)
+      }
+      if (value.dispatch?.progressNote) {
+        lines.push(
+          `Progress: ${value.dispatch.progressNote}${value.dispatch.progressUpdatedAt ? ` (at ${value.dispatch.progressUpdatedAt})` : ''}`
+        )
       }
       // This Orca's record of a worker on a server that did not answer.
       if (value.server) {

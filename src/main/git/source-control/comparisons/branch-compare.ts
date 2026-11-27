@@ -3,7 +3,7 @@ import type {
   GitBranchCompareSummary
 } from '../../../../shared/git/diff/git-diff-compare-types'
 import { readBranchCompareHead } from '../../../../shared/git/branches/git-branch-compare-head'
-import { resolveWorktreeAddBaseRef } from '../../../../shared/worktree/base-ref'
+import { resolveWorktreeAddBaseRef } from '../../../../shared/worktree/base-refs/base-ref'
 import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
 import { resolveWorktreeBaseCommitOid } from '../../worktrees/creation/worktree-base-ref-probe'
 import { loadBranchChangesThroughCache } from './branch-change-list-cache'
@@ -19,6 +19,14 @@ import {
   resolveMergeBase,
   resolveRefOid
 } from './compare-ref-oids'
+
+const BRANCH_COMPARE_FAILED_MESSAGE = 'Failed to load branch compare'
+
+// `rev-parse --verify --quiet` exits 1 only for a missing ref; git's own failures exit 128.
+// Stderr is ignored because WSL login-shell wrappers can add noise to it.
+function isMissingRefExit(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 1
+}
 
 export async function getBranchCompare(
   worktreePath: string,
@@ -66,6 +74,14 @@ export async function getBranchCompare(
     headOid = headOidResult.oid
     summary.headOid = headOid
   } else {
+    if (!isMissingRefExit(headOidResult.error)) {
+      summary.status = 'error'
+      summary.errorMessage =
+        headOidResult.error instanceof Error
+          ? headOidResult.error.message
+          : BRANCH_COMPARE_FAILED_MESSAGE
+      return { summary, entries: [] }
+    }
     if (baseOidResult.ok) {
       baseOid = baseOidResult.oid
       summary.baseOid = baseOid
@@ -141,7 +157,7 @@ export async function getBranchCompare(
     return { summary, entries }
   } catch (error) {
     summary.status = 'error'
-    summary.errorMessage = error instanceof Error ? error.message : 'Failed to load branch compare'
+    summary.errorMessage = error instanceof Error ? error.message : BRANCH_COMPARE_FAILED_MESSAGE
     return { summary, entries: [] }
   }
 }

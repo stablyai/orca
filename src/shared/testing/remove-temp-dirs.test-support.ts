@@ -1,4 +1,4 @@
-import { removeTree } from '../windows-transient-lock-removal'
+import { removeTree } from '../file-write/windows-transient-lock-removal'
 
 /** Removes every directory even when one fails, then rethrows the first failure. */
 export async function removeTempDirs(dirs: readonly string[]): Promise<void> {

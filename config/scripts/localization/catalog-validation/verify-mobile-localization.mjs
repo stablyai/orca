@@ -25,7 +25,7 @@ const ANDROID_LOCALE_PLUGIN = './plugins/android-locale-config.js'
 const PLURAL_POLYFILL_PATH = path.join('mobile', 'src', 'i18n', 'plural-rules-polyfill.ts')
 // The runtime owns the subscription that every other caller must go through.
 const I18N_RUNTIME_DIR = 'mobile/src/i18n/'
-const UI_LOCALE_SOURCE_PATH = path.join('src', 'shared', 'ui-locale.ts')
+const UI_LOCALE_SOURCE_PATH = path.join('src', 'shared', 'i18n', 'ui-locale.ts')
 // Apple lproj and Android locale_config name these by script/region; the rest match the UI locale id.
 const NATIVE_LOCALE_TAGS = { zh: 'zh-Hans', pt: 'pt-BR' }
 const PLURAL_SUFFIX_RE = /^(.*)_(zero|one|two|few|many|other)$/

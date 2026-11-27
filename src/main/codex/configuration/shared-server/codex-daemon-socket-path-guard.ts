@@ -1,6 +1,10 @@
 import { realpathSync } from 'node:fs'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
-import { unixSocketPathFits } from '../../../../shared/unix-socket-path-limit'
+import {
+  observeResolvedFilePath,
+  observeResolvedFilePathError
+} from '../../../filesystem/file-content-observation'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import { unixSocketPathFits } from '../../../../shared/network/unix-socket-path-limit'
 import { upsertTableSettingsInContent } from '../settings/codex-config-settings-upsert'
 import {
   createTomlLineScanState,
@@ -26,9 +30,11 @@ export function codexDaemonSocketPath(homePath: string, platform = process.platf
   let canonical = homePath
   try {
     canonical = realpathSync.native(homePath)
-  } catch {
+  } catch (error) {
+    observeResolvedFilePathError('daemon-home', homePath, error)
     // Unresolvable homes are measured as spelled.
   }
+  canonical = observeResolvedFilePath('daemon-home', homePath, canonical)
   const separator = platform === 'win32' ? '\\' : '/'
   return [canonical.replace(/[\\/]+$/, ''), ...DAEMON_SOCKET_SEGMENTS].join(separator)
 }
@@ -45,12 +51,12 @@ export function codexDaemonSocketPathExceedsLimit(
 const unguardableHomesWarned = new Set<string>()
 
 /** Applies (or removes) Orca's daemon override so it tracks the home's current path. */
-export function applyCodexDaemonSocketGuard(
+export function applyCodexDaemonOverride(
   config: string,
   homePath: string,
-  platform = process.platform
+  socketPathExceedsLimit: boolean
 ): string {
-  if (!codexDaemonSocketPathExceedsLimit(homePath, platform)) {
+  if (!socketPathExceedsLimit) {
     return stripCodexDaemonOverride(config)
   }
   const guarded = upsertTableSettingsInContent(
@@ -89,8 +95,11 @@ export function stripCodexDaemonOverride(config: string): string {
   let featuresHeaderIndex = -1
   let removedFromFeatures = false
   const dropEmptyFeaturesTable = (): void => {
-    const body = kept.slice(featuresHeaderIndex + 1)
-    if (featuresHeaderIndex !== -1 && removedFromFeatures && body.every((l) => l.trim() === '')) {
+    // Why: copying the kept lines at every header made large configs quadratic.
+    if (featuresHeaderIndex === -1 || !removedFromFeatures) {
+      return
+    }
+    if (kept.slice(featuresHeaderIndex + 1).every((l) => l.trim() === '')) {
       kept.length = featuresHeaderIndex
       while (kept.at(-1)?.trim() === '') {
         kept.pop()

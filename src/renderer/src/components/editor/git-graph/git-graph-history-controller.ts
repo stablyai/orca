@@ -12,7 +12,7 @@ import type {
   GitHistoryRefs,
   GitHistoryResult
 } from '../../../../../shared/git/history/git-history-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 const filterFor = (worktreeId: string) =>
   useAppStore.getState().gitGraphFiltersByWorktree?.[worktreeId] ?? 'all'

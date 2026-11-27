@@ -1,6 +1,6 @@
 import { posix as pathPosix, win32 as pathWin32 } from 'node:path'
-import { skillDirectoryMaxDepth } from '../../../shared/skill-discovery-depth'
-import type { SkillPathSemantics } from '../../../shared/skill-path-containment'
+import { skillDirectoryMaxDepth } from '../../../shared/skills/discovery/skill-discovery-depth'
+import type { SkillPathSemantics } from '../../../shared/skills/paths/skill-path-containment'
 import type { SkillScanRoot } from '../discovery/skill-discovery-sources'
 import type {
   SkillInstallFilesystem,

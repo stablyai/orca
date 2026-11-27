@@ -1,4 +1,4 @@
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { runtimeEnvironmentIdUnlessTwin } from '../../../lib/workspace/ownership/resolve-owner'
 import { useAppStore } from '../../../store/index'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
@@ -31,7 +31,7 @@ export function setWebRuntimeTabProps(args: {
   }
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId)
   const state = useAppStore.getState()
-  void import('../../web-session-tabs-sync/tracking-mappings')
+  void import('../../web-session-tabs-sync/identity/tracking-mappings')
     .then(({ resolveHostSessionTabIdForWebSessionTab }) => {
       const hostTabId =
         resolveHostSessionTabIdForWebSessionTab(state, {

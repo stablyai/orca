@@ -24,7 +24,7 @@ function createWorker(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`Detection directory worker entry not found: ${workerPath}`)
   }
-  return spawnWorkerThread(workerPath)
+  return spawnWorkerThread(workerPath, { name: 'orca-command-path-directory' })
 }
 
 /** fs.Dir can synchronously lstat unknown entry types, even during async iteration. */

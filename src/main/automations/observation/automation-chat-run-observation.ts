@@ -4,7 +4,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { createAutomationOutputSnapshotBuffer } from '../launch/automation-launch'
 import type { AutomationRunCompletionObservation } from './run-completion-watcher'
 
@@ -136,4 +136,9 @@ export function automationAgentDidNotStart(rejection: { kind: string } | undefin
 
 export function automationAgentDidNotStartError(agent: string): string {
   return `${agent} did not start (the machine may have slept or startup timed out), so it never received this run's prompt. Run the automation again.`
+}
+
+/** A run sent before Orca could find its turn again: its chat has finished, but which reply was the run's is unknown. */
+export function automationRunResultNotRecorded(agent: string): string {
+  return `Orca restarted before this run's result was recorded. Open ${agent}'s chat to see how it ended.`
 }

@@ -4,7 +4,7 @@ import { wslGatedReadFile } from '../../../native-chat/transcript-filesystem/wsl
 import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { kiroTranscriptPathForMetadata } from '../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   createAccumulator,
   finalizeSession,
@@ -16,7 +16,7 @@ import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-ty
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
 import type { SkippedTranscriptRecord } from '../../transcripts/session-transcript-record-budget'
 import { arrayValue, asRecord } from '../../parsing/session-record-fields'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 

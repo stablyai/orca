@@ -27,7 +27,7 @@ import { renderSourceControlActionCommandTemplate } from '../../../shared/source
 import {
   textGenerationFailure,
   textGenerationFailureCodeFields
-} from '../../../shared/text-generation-failure-copy'
+} from '../../../shared/text-generation/text-generation-failure-copy'
 import { captureAgentGenerationFailureOutput } from '../failures/agent-failure-output'
 import { commandBackslashMode, runGenerationRequest } from '../agent-generation-request'
 import { fitsLocalCommandLine } from '../execution/source-control-command-line-budget'

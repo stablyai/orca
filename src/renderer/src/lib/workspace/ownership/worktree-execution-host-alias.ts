@@ -3,7 +3,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 
 export function isExecutionHostAliasForWorktree(
   executionHostId: ExecutionHostId,

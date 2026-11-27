@@ -15,7 +15,7 @@ export async function releaseFederatedWorkerAtHomeDeadline(
   // A thrown or unknown attempt keeps the deadline the claim postponed, so it runs again.
   const receipt = await releaseFederatedWorker({
     runtime,
-    server: resolvePinnedFederatedServer(runtime, federated),
+    server: await resolvePinnedFederatedServer(runtime, federated),
     federated,
     dispatchId,
     requestId: `home_auto_release_${dispatchId}_${Date.now()}`,

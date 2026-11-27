@@ -19,18 +19,19 @@ import {
   SessionSearchIndexWriter,
   type SessionSearchFileWrite
 } from './session-search-index-writer'
-import { deleteExpiredSearchFiles, drainOrphanedMessages } from './session-search-retention-delete'
-import { reportSessionSearchBackgroundError } from '../session-search-trace'
+import {
+  deleteExpiredSearchFiles,
+  SessionSearchOrphanCleanup
+} from './session-search-retention-delete'
 import { openSessionSearchDatabase } from './session-search-schema'
+import { seedSessionSearchDeletedRows } from './session-search-index-compaction'
 
 export class SessionSearchStore {
   private readonly db: SyncDatabase
   private readonly writer: SessionSearchIndexWriter
   private closed = false
   private retentionCutoffMs: number | null = null
-  // Coalesce replacements into one drain, rerunning if more rows become orphaned.
-  private draining = false
-  private drainRequested = false
+  private readonly orphanCleanup: SessionSearchOrphanCleanup
 
   constructor(
     path: string,
@@ -43,38 +44,20 @@ export class SessionSearchStore {
   ) {
     this.db = openSessionSearchDatabase(path)
     ensureSessionSearchQuerySchema(this.db)
+    seedSessionSearchDeletedRows(this.db)
+    this.orphanCleanup = new SessionSearchOrphanCleanup(
+      this.db,
+      () => this.closed,
+      onMessagesChanged,
+      this.onError
+    )
     this.writer = new SessionSearchIndexWriter(
       this.db,
       SESSION_SEARCH_COMMIT_CHARS,
-      () => this.scheduleOrphanDrain(),
+      (sessionRowId) => this.orphanCleanup.request(sessionRowId),
       onMessagesChanged
     )
-  }
-
-  /** Reclaim orphaned rows in batches; their missing session rows also make crash recovery resumable. */
-  private scheduleOrphanDrain(): void {
-    this.drainRequested = true
-    if (this.draining || this.closed) {
-      return
-    }
-    this.draining = true
-    // Defer the first synchronous drain batch until after the committing call returns.
-    void Promise.resolve().then(() => this.runOrphanDrain())
-  }
-
-  private async runOrphanDrain(): Promise<void> {
-    try {
-      while (this.drainRequested && !this.closed) {
-        this.drainRequested = false
-        await drainOrphanedMessages(this.db, () => this.closed, undefined, this.onMessagesChanged)
-      }
-    } catch (error) {
-      if (!this.closed) {
-        reportSessionSearchBackgroundError(this.onError, error)
-      }
-    } finally {
-      this.draining = false
-    }
+    this.orphanCleanup.request()
   }
 
   /** Keep reads synchronous: transactions or iterators held across awaits pin the WAL. */
@@ -130,7 +113,7 @@ export class SessionSearchStore {
     }
   }
 
-  /** A current cursor with bytes past it, and the hash a replacement read must reproduce to append there. */
+  /** A current cursor within the file and the hash a replacement read must reproduce to append there; at EOF an unchanged reread appends nothing. */
   resumableCursor(candidate: SessionFileCandidate): SessionSearchResumableCursor | null {
     const file = candidate.file
     if (this.closed || typeof file.sizeBytes !== 'number') {
@@ -143,7 +126,7 @@ export class SessionSearchStore {
           .prepare(
             `SELECT byte_offset AS byteOffset, prefix_hash AS prefixHash FROM files
              WHERE path = ? AND state = 'current' AND prefix_hash IS NOT NULL
-             AND byte_offset > 0 AND byte_offset < ?
+             AND byte_offset > 0 AND byte_offset <= ?
              AND (? IS NULL OR (CAST(dev AS REAL) = ? AND CAST(ino AS REAL) = ?))`
           )
           .get(
@@ -287,6 +270,7 @@ export class SessionSearchStore {
   removeFile(path: string): void {
     try {
       this.writer.removeFile(path)
+      this.orphanCleanup.checkCompaction()
     } catch (error) {
       this.onError(error)
     }
@@ -302,7 +286,7 @@ export class SessionSearchStore {
         this.onMessagesChanged,
         false
       )
-      this.scheduleOrphanDrain()
+      this.orphanCleanup.request()
     } catch (error) {
       if (!this.closed) {
         this.onError(error)
@@ -316,6 +300,7 @@ export class SessionSearchStore {
       return
     }
     this.closed = true
+    this.orphanCleanup.close()
     this.writer.close()
     this.db.close()
   }

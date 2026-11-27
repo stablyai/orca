@@ -1,8 +1,8 @@
 import { homedir } from 'node:os'
 import path, { isAbsolute, join, posix, resolve } from 'node:path'
-import { SKILL_INSTALL_PROVIDERS } from '../../../shared/skill-install-providers'
-import { buildWslCapturedLoginShellCommand } from '../../../shared/wsl-login-shell-command'
-import { toWindowsWslPath } from '../../../shared/wsl-paths'
+import { SKILL_INSTALL_PROVIDERS } from '../../../shared/skills/installation/skill-install-providers'
+import { buildWslCapturedLoginShellCommand } from '../../../shared/shell/wsl/wsl-login-shell-command'
+import { toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 import {
   type DefaultHermesHomeInput,
   resolveDefaultHermesHome

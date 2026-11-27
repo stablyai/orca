@@ -1,10 +1,11 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { PLUGIN_HOST_API } from '../../../../shared/plugins/workers/plugin-host-api'
 import { pluginResumeKey } from '../../../../shared/plugins/workers/plugin-agent-resume-key'
 import {
   getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
 import { preparePluginPastSession, resumableTranscript } from './plugin-past-session-resume'
 import {
@@ -15,13 +16,21 @@ import {
 import { recordPluginOpenedTerminal } from './plugin-opened-terminals'
 import type { PluginAgentStatusRow } from './plugin-workspace-projection'
 
-const worktreeShowAnswer = z.object({
-  worktree: z.object({ id: z.string(), hostId: z.string().optional(), path: z.string().optional() })
-})
-const ensureSessionAnswer = z.object({
-  terminal: z.object({ handle: z.string() }),
-  disposition: z.enum(['created', 'adopted'])
-})
+const worktreeShowAnswer = lazyZodSchema(() =>
+  z.object({
+    worktree: z.object({
+      id: z.string(),
+      hostId: z.string().optional(),
+      path: z.string().optional()
+    })
+  })
+)
+const ensureSessionAnswer = lazyZodSchema(() =>
+  z.object({
+    terminal: z.object({ handle: z.string() }),
+    disposition: z.enum(['created', 'adopted'])
+  })
+)
 
 /** The live row of this session in this workspace, whose transcript some agents resume from;
  *  a same-id session elsewhere is another agent's. */

@@ -4,7 +4,7 @@ import type {
   JiraSite,
   JiraViewer
 } from '../../../../shared/jira/jira-types'
-import type { SecretAtRestProtection } from '../../../../shared/secret-at-rest-protection'
+import type { SecretAtRestProtection } from '../../../../shared/secure-storage/secret-at-rest-protection'
 
 // Coverage records: tsc fails when the shared union gains or loses an arm.
 const JIRA_AUTH_TYPES = { cloud: true, server: true } as const satisfies Readonly<

@@ -2,7 +2,7 @@ import {
   type AgentSessionWireRefusal,
   agentSessionRefusalError
 } from '../failures/agent-session-wire-refusals'
-import { waitForPromiseWithSignal } from '../../abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../concurrency/abort-signal-reason'
 
 export const AGENT_SESSION_SWITCH_HOST_MS = 720_000
 export const AGENT_SESSION_SWITCH_CLIENT_MS = 735_000

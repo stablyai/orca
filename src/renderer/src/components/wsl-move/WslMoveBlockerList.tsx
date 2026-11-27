@@ -59,14 +59,12 @@ export function WslMoveBlockerList({
                     onClick={() => onSkip(projects)}
                   >
                     {projects.length === 1
-                      ? t('wslMove.blockers.skipOne', 'Leave {{name}} out of this move', {
+                      ? t('wslMove.blockers.skipOne', 'Skip {{name}}', {
                           name: projects[0].name
                         })
-                      : t(
-                          'wslMove.blockers.skipMany',
-                          'Leave these {{n}} projects out of this move',
-                          { n: projects.length }
-                        )}
+                      : t('wslMove.blockers.skipMany', 'Skip {{n}} projects', {
+                          n: projects.length
+                        })}
                   </Button>
                 ) : null}
               </div>

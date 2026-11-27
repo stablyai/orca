@@ -1,3 +1,4 @@
+import { sleepingMailUiApi } from './ui-sleeping-mail-api'
 import type { AgentSessionAttachmentClipboardTarget } from '../../../shared/agent-session/agent-session-attachments'
 import { ipcRenderer, webFrame } from 'electron'
 import {
@@ -6,11 +7,11 @@ import {
   plainTextContextMenuTargetChannel,
   type RichMarkdownContextMenuCommandPayload,
   type RichMarkdownContextMenuTableTarget
-} from '../../../shared/rich-markdown-context-menu'
-import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
+} from '../../../shared/editor/markdown/rich-markdown-context-menu'
+import type { RuntimeNavigationTarget } from '../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { TerminalSurfaceCloseTarget } from '../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
-import type { ClipboardImageThumbnail } from '../../../shared/clipboard-image'
-import type { ReadClipboardTextOptions } from '../../../shared/clipboard-text'
+import type { ClipboardImageThumbnail } from '../../../shared/clipboard/clipboard-image'
+import type { ReadClipboardTextOptions } from '../../../shared/clipboard/clipboard-text'
 import type {
   AgentPaneActivityReply,
   AgentPaneActivityRequest
@@ -83,12 +84,7 @@ export const uiClipboardAndWindowControlsApi = {
   respondProjectMovePause: (response) => {
     ipcRenderer.send('ui:projectMovePauseResponse', response)
   },
-  onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
-      callback(data)
-    ipcRenderer.on('ui:resumeSleepingAgents', listener)
-    return () => ipcRenderer.removeListener('ui:resumeSleepingAgents', listener)
-  },
+  ...sleepingMailUiApi,
   onApplyAgentPaneActivity: (callback: (data: AgentPaneActivityRequest) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: AgentPaneActivityRequest) =>
       callback(data)
@@ -137,6 +133,9 @@ export const uiClipboardAndWindowControlsApi = {
     ipcRenderer.invoke('clipboard:readImageThumbnail'),
   writeClipboardText: (text: string): Promise<void> =>
     ipcRenderer.invoke('clipboard:writeText', text),
+  /** For a secret: cleared from the clipboard after a minute if it's still there. */
+  writeSecretClipboardText: (text: string): Promise<{ clearsLater: boolean }> =>
+    ipcRenderer.invoke('clipboard:writeSecretText', text),
   writeTerminalClipboardText: (text: string): Promise<void> =>
     ipcRenderer.invoke('clipboard:writeTerminalText', text),
   writeSelectionClipboardText: (text: string): Promise<void> =>

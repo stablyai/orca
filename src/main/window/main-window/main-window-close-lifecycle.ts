@@ -1,13 +1,18 @@
 import { ipcMain, Menu, Notification, type BrowserWindow } from 'electron'
-import { QUIT_RENDERER_ACK_TIMEOUT_MS } from '../../../shared/quit-teardown-deadline'
+import { QUIT_RENDERER_ACK_TIMEOUT_MS } from '../../../shared/app-lifecycle/shutdown/quit-teardown-deadline'
 import { translateMain } from '../../i18n/main-i18n'
-import type { Store } from '../../persistence/loading-store/store'
+import type { NativeSettingsProjection } from '../../core-desktop/native-settings-projection'
 import { resolveWindowCloseAction } from './window-close-decision'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import type { MainWindowStateLifecycle } from './main-window-state-lifecycle'
 import { syncTrafficLightPosition } from './main-window-visual-lifecycle'
 import { consumeUserQuitWindowClose } from './user-quit-window-close'
+import {
+  getWindowCloseInFlight,
+  settleRendererPreparationBeforeClose,
+  setWindowCloseInFlight
+} from '../renderer-relays/native-unload-coordinator'
 
 export function installMainWindowCloseLifecycle(args: {
   focus: MainWindowFocusLifecycle
@@ -15,9 +20,9 @@ export function installMainWindowCloseLifecycle(args: {
   opts?: CreateMainWindowOptions
   rendererWebContentsId: number
   state: MainWindowStateLifecycle
-  store: Store | null
+  nativeSettings: NativeSettingsProjection | null
 }): { dispose: () => void } {
-  const { focus, mainWindow, opts, rendererWebContentsId, state, store } = args
+  const { focus, mainWindow, opts, rendererWebContentsId, state, nativeSettings } = args
   // Renderer confirms save/process guards through window:confirm-close.
   let windowCloseConfirmed = false
   const confirmCloseChannel = 'window:confirm-close'
@@ -25,6 +30,7 @@ export function installMainWindowCloseLifecycle(args: {
   const closeCancelledChannel = 'window:close-cancelled'
   let closeRequestSequence = 0
   let quitRendererAckRequestId: number | null = null
+  const rendererWebContents = mainWindow.webContents
   let quitRendererAckTimer: ReturnType<typeof setTimeout> | null = null
   const clearQuitRendererAckTimer = (): void => {
     quitRendererAckRequestId = null
@@ -52,6 +58,16 @@ export function installMainWindowCloseLifecycle(args: {
     quitRendererAckTimer.unref?.()
   }
   let lastAcknowledgedRequestId = 0
+  // First request of the tracked close; any later ack proves the page received that close.
+  let trackedCloseFirstRequestId = 0
+  const trackCloseRequest = (quitting: boolean): number => {
+    const requestId = ++closeRequestSequence
+    if (!getWindowCloseInFlight(rendererWebContents)) {
+      trackedCloseFirstRequestId = requestId
+    }
+    setWindowCloseInFlight(rendererWebContents, { quitting })
+    return requestId
+  }
   const onCloseRequestReceived = (event: Electron.IpcMainEvent, requestId: unknown): void => {
     if (event.sender.id !== rendererWebContentsId) {
       return
@@ -64,6 +80,26 @@ export function installMainWindowCloseLifecycle(args: {
     }
   }
 
+  // The renderer may already be waiting on a durable checkpoint.
+  const sendCloseRequestAfterPreparation = (send: () => void): void => {
+    const preparation = settleRendererPreparationBeforeClose(mainWindow.webContents)
+    if (!preparation) {
+      send()
+      return
+    }
+    void preparation.then(() => {
+      if (mainWindow.isDestroyed()) {
+        return
+      }
+      // A renderer that died during the reload cannot answer; reenter close through the gone-renderer bypass.
+      if (focus.isRendererProcessGone() || (mainWindow.webContents.isCrashed?.() ?? false)) {
+        mainWindow.close()
+        return
+      }
+      send()
+    })
+  }
+
   // Windows tray minimization owns close when enabled; callers must skip their normal close path.
   const hideToTrayIfEnabled = (): boolean => {
     const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
@@ -72,13 +108,13 @@ export function installMainWindowCloseLifecycle(args: {
       focus.isRendererProcessGone() ||
       isRendererCrashed ||
       opts?.getIsQuitting?.() === true ||
-      store?.getSettings().minimizeToTrayOnClose !== true
+      nativeSettings?.getSettings().minimizeToTrayOnClose !== true
     ) {
       return false
     }
     mainWindow.hide()
     // Persist the one-time tray notice so later minimize actions stay quiet.
-    if (store.getUI().trayMinimizeNoticeShown !== true) {
+    if (nativeSettings.getUI().trayMinimizeNoticeShown !== true) {
       try {
         new Notification({
           title: 'Orca',
@@ -90,7 +126,10 @@ export function installMainWindowCloseLifecycle(args: {
       } catch {
         // Notification is best-effort — never block hiding the window.
       }
-      store.updateUI({ trayMinimizeNoticeShown: true })
+      void nativeSettings.requestCoreWrite({
+        kind: 'ui',
+        updates: { trayMinimizeNoticeShown: true }
+      })
     }
     return true
   }
@@ -120,19 +159,38 @@ export function installMainWindowCloseLifecycle(args: {
     }
     e.preventDefault()
     const isQuitting = opts?.getIsQuitting?.() ?? false
-    const requestId = ++closeRequestSequence
-    // User Quit on serve closes windows without quitting the host; still bound frozen-renderer acknowledgement.
-    if (isQuitting || userQuitClose) {
-      armQuitRendererAckTimer(requestId)
-    }
-    // The always-mounted App subscription can confirm even before a workspace exists (#5144).
-    mainWindow.webContents.send('window:close-requested', {
-      isQuitting,
-      requestId
+    sendCloseRequestAfterPreparation(() => {
+      const requestId = trackCloseRequest(isQuitting || userQuitClose)
+      // User Quit on serve closes windows without quitting the host; still bound frozen-renderer acknowledgement.
+      if (isQuitting || userQuitClose) {
+        armQuitRendererAckTimer(requestId)
+      }
+      // The always-mounted App subscription can confirm even before a workspace exists (#5144).
+      mainWindow.webContents.send('window:close-requested', {
+        isQuitting,
+        requestId
+      })
     })
+  })
+  // A renderer that dies before confirming cannot answer; finish the close a gone renderer may bypass anyway.
+  mainWindow.webContents.on('render-process-gone', () => {
+    const close = getWindowCloseInFlight(rendererWebContents)
+    if (!close || mainWindow.isDestroyed()) {
+      return
+    }
+    setWindowCloseInFlight(rendererWebContents, null)
+    // A page that never received an ordinary close (e.g. not yet subscribed after reload) was not closing.
+    if (!close.quitting && lastAcknowledgedRequestId < trackedCloseFirstRequestId) {
+      return
+    }
+    clearQuitRendererAckTimer()
+    console.warn('[window] Renderer exited during a close request; destroying window')
+    state.freezeBoundsOnQuit()
+    mainWindow.destroy()
   })
   // A veto cancels quit; resume bounds persistence for subsequent user resizing.
   const abortQuit = (): void => {
+    setWindowCloseInFlight(rendererWebContents, null)
     state.resumeBoundsPersistence()
     clearQuitRendererAckTimer()
     opts?.onQuitAborted?.()
@@ -144,15 +202,19 @@ export function installMainWindowCloseLifecycle(args: {
   // Renderer prompts never reach will-prevent-unload. IPC is ordered, so a cancel before the newest ack is stale.
   const onCloseCancelled = (event: Electron.IpcMainEvent): void => {
     if (
-      event.sender.id === rendererWebContentsId &&
-      lastAcknowledgedRequestId === closeRequestSequence &&
-      opts?.getIsQuitting?.() === true
+      event.sender.id !== rendererWebContentsId ||
+      lastAcknowledgedRequestId !== closeRequestSequence
     ) {
+      return
+    }
+    setWindowCloseInFlight(rendererWebContents, null)
+    if (opts?.getIsQuitting?.() === true) {
       abortQuit()
     }
   }
 
   const onConfirmClose = (): void => {
+    setWindowCloseInFlight(rendererWebContents, null)
     clearQuitRendererAckTimer()
     windowCloseConfirmed = true
     if (!mainWindow.isDestroyed()) {
@@ -193,7 +255,10 @@ export function installMainWindowCloseLifecycle(args: {
     if (hideToTrayIfEnabled()) {
       return
     }
-    mainWindow.webContents.send('window:close-requested', { isQuitting: false })
+    sendCloseRequestAfterPreparation(() => {
+      const requestId = trackCloseRequest(false)
+      mainWindow.webContents.send('window:close-requested', { isQuitting: false, requestId })
+    })
   }
   // Custom titlebar menu replaces Alt reveal of the hidden Windows/Linux menu.
   const popupMenuChannel = 'menu:popup'

@@ -1,4 +1,4 @@
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { captureDirectSshMutationExpectation } from '@/runtime/hosts/ssh/ssh-mutation-expectation'
 import { useAppStore } from '@/store/index'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'

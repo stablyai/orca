@@ -5,7 +5,7 @@ import {
   tearDown,
   toggleRecording
 } from '@orca/expo-two-way-audio'
-import { bridgeAudioInterruptionEndsCapture } from '../../mobile-web-shell/bridge/bridge-audio-verbs'
+import { bridgeAudioInterruptionEndsCapture } from '../../mobile-web-shell/bridge/native-capabilities/bridge-audio-verbs'
 import { nativeMicrophoneScreenLock } from './native-audio-device'
 import type { DictationCapture } from './dictation-capture-contract'
 

@@ -7,31 +7,44 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { DialogCancel } from '@/components/ui/dialog-parts'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
+import { useModalReturnFocus } from '@/lib/pane-manager/pane-focus/useModalReturnFocus'
 
 export type CloseTerminalDialogCopyKind = 'command' | 'agent' | 'chat-agent'
 
 export default function CloseTerminalDialog({
   open,
   copyKind = 'command',
-  tabLabel,
   subjectKey,
+  workspaceName,
+  onSleepInstead,
   onCancel,
   onConfirm
 }: {
   open: boolean
   copyKind?: CloseTerminalDialogCopyKind
-  /** Name off-focus tab-strip/middle-click targets; omit for focused-pane keyboard closes. */
-  tabLabel?: string
+  /** Names the workspace in a terminal agent's title. */
+  workspaceName?: string
+  /** Offered only where sleeping keeps the agent's session resumable. */
+  onSleepInstead?: () => void
   /** Changing queued subject clears the previous tab’s opt-out without reopening the dialog. */
   subjectKey?: string
   onCancel: () => void
   onConfirm: (dontAskAgain: boolean) => void
 }): React.JSX.Element {
   const checkboxId = useId()
+  // Why: no Radix trigger, so dismiss would leave focus on body; Stop/Sleep move focus themselves, and Cancel re-arms after a queued Stop.
+  const { captureReturnFocus, skipReturnFocus, rearmReturnFocus } = useModalReturnFocus(open, {
+    preferCapturedElement: true
+  })
+  const cancel = (): void => {
+    rearmReturnFocus()
+    onCancel()
+  }
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const [previousOpen, setPreviousOpen] = useState(open)
   const [previousSubjectKey, setPreviousSubjectKey] = useState(subjectKey)
@@ -52,26 +65,35 @@ export default function CloseTerminalDialog({
     }
   }
 
-  const trimmedTabLabel = tabLabel?.trim()
-
   return (
     <Dialog
       open={open}
       onOpenChange={(isOpen) => {
         if (!isOpen) {
-          onCancel()
+          cancel()
         }
       }}
     >
-      <DialogContent className="max-w-sm" showCloseButton={false}>
+      <DialogContent size="confirm" initialFocus="cancel" onOpenAutoFocus={captureReturnFocus}>
         <CloseTerminalDialogBody
           copyKind={copyKind}
-          trimmedTabLabel={trimmedTabLabel}
+          workspaceName={workspaceName}
+          onSleepInstead={
+            onSleepInstead
+              ? () => {
+                  skipReturnFocus()
+                  onSleepInstead()
+                }
+              : undefined
+          }
           checkboxId={checkboxId}
           dontAskAgain={dontAskAgain}
           setDontAskAgain={setDontAskAgain}
-          onCancel={onCancel}
-          onConfirm={onConfirm}
+          onCancel={cancel}
+          onConfirm={(dontAskAgainChoice) => {
+            skipReturnFocus()
+            onConfirm(dontAskAgainChoice)
+          }}
         />
       </DialogContent>
     </Dialog>
@@ -81,7 +103,8 @@ export default function CloseTerminalDialog({
 // Keep translation and element construction behind the dialog portal's mount boundary.
 function CloseTerminalDialogBody({
   copyKind,
-  trimmedTabLabel,
+  workspaceName,
+  onSleepInstead,
   checkboxId,
   dontAskAgain,
   setDontAskAgain,
@@ -89,7 +112,8 @@ function CloseTerminalDialogBody({
   onConfirm
 }: {
   copyKind: CloseTerminalDialogCopyKind
-  trimmedTabLabel: string | undefined
+  workspaceName?: string
+  onSleepInstead?: () => void
   checkboxId: string
   dontAskAgain: boolean
   setDontAskAgain: (value: boolean) => void
@@ -98,86 +122,84 @@ function CloseTerminalDialogBody({
 }): React.JSX.Element {
   const t = useTranslate()
   const isAgent = copyKind !== 'command'
-  const isChat = copyKind === 'chat-agent'
+  const title =
+    copyKind === 'chat-agent'
+      ? t(
+          'components.terminal.pane.CloseTerminalDialog.stopChatAgentTitle',
+          'Stop the agent in this chat?'
+        )
+      : copyKind === 'agent'
+        ? workspaceName
+          ? t(
+              'components.terminal.pane.CloseTerminalDialog.stopAgentInWorkspaceTitle',
+              'Stop the agent in “{{name}}”?',
+              { name: workspaceName }
+            )
+          : t(
+              'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_title',
+              'Stop this agent?'
+            )
+        : t(
+            'components.terminal.pane.CloseTerminalDialog.stopRunningCommandTitle',
+            'Stop the running command?'
+          )
+  const optOut = (
+    <div className="flex items-center gap-2">
+      <Checkbox
+        id={checkboxId}
+        checked={dontAskAgain}
+        onCheckedChange={(checked) => setDontAskAgain(checked === true)}
+      />
+      <Label htmlFor={checkboxId} variant="dialog-muted">
+        {t('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")}
+      </Label>
+    </div>
+  )
   return (
     <>
       <DialogHeader>
-        <DialogTitle className="text-sm">
-          {isAgent
-            ? t(
-                'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_title',
-                'Stop this agent?'
-              )
-            : t(
-                'auto.components.terminal.pane.CloseTerminalDialog.stop_command_title',
-                'Stop running command?'
-              )}
-        </DialogTitle>
-        <DialogDescription className="text-xs">
-          {isChat
-            ? t(
-                'auto.components.terminal.pane.CloseTerminalDialog.stop_chat_description',
-                "Closing this chat will stop the agent's current work."
-              )
-            : isAgent
-              ? t(
-                  'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_description',
-                  "Closing this terminal will stop the agent's current work."
-                )
-              : t(
-                  'auto.components.terminal.pane.CloseTerminalDialog.stop_command_description',
-                  'Closing this terminal will stop the command running inside it.'
-                )}
-        </DialogDescription>
+        <DialogTitle className="break-words">{title}</DialogTitle>
+        {isAgent ? (
+          <DialogDescription>
+            {t(
+              'components.terminal.pane.CloseTerminalDialog.agentWorkStops',
+              'Its current work stops and won’t resume.'
+            )}
+          </DialogDescription>
+        ) : null}
       </DialogHeader>
-      {copyKind === 'agent' ? (
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'auto.components.terminal.pane.CloseTerminalDialog.automatic_resume_warning',
-            'This terminal will not resume automatically. Cancel and put the workspace to sleep to resume it later.'
-          )}
-        </p>
-      ) : null}
-      {trimmedTabLabel ? (
-        <p className="truncate text-xs font-medium text-foreground" title={trimmedTabLabel}>
-          {trimmedTabLabel}
-        </p>
-      ) : null}
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id={checkboxId}
-          checked={dontAskAgain}
-          onCheckedChange={(checked) => setDontAskAgain(checked === true)}
-        />
-        <Label htmlFor={checkboxId} className="text-xs font-normal text-muted-foreground">
-          {isChat
-            ? t('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")
-            : t(
-                'auto.components.terminal.pane.CloseTerminalDialog.dont_ask_again',
-                "Don't ask again for running terminals"
+      {onSleepInstead ? optOut : null}
+      <DialogFooter
+        start={
+          onSleepInstead ? (
+            <Button type="button" variant="ghost" size="sm" onClick={onSleepInstead}>
+              {t(
+                'components.terminal.pane.CloseTerminalDialog.sleepWorkspaceInstead',
+                'Sleep workspace'
               )}
-        </Label>
-      </div>
-      <DialogFooter className="gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={onCancel}>
+            </Button>
+          ) : (
+            optOut
+          )
+        }
+      >
+        <DialogCancel
+          onClick={(event) => {
+            event.preventDefault()
+            onCancel()
+          }}
+        >
           {t('auto.components.terminal.pane.CloseTerminalDialog.1d1a7a9c1f', 'Cancel')}
-        </Button>
+        </DialogCancel>
         <Button
           type="button"
           variant="destructive"
           size="sm"
-          autoFocus
           onClick={() => onConfirm(dontAskAgain)}
         >
           {isAgent
-            ? t(
-                'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_confirm',
-                'Stop Agent'
-              )
-            : t(
-                'auto.components.terminal.pane.CloseTerminalDialog.stop_command_confirm',
-                'Stop and Close'
-              )}
+            ? t('components.terminal.pane.CloseTerminalDialog.stopAgentSentence', 'Stop agent')
+            : t('components.terminal.pane.CloseTerminalDialog.stopAndClose', 'Stop and close')}
         </Button>
       </DialogFooter>
     </>

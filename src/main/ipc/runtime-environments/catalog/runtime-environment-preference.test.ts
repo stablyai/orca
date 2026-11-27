@@ -1,82 +1,48 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../../../shared/constants'
-import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
-import {
-  addEnvironmentFromPairingCode,
-  removeEnvironment
-} from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { getEnvironmentStorePath } from '../../../../shared/remote-runtime/host-store/runtime-environment-store-records'
+// #48712: a read whose registry lookup fails returns the settings as they are, not as they were.
+import { describe, expect, it, vi } from 'vitest'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { Store } from '../../../persistence/loading-store/store'
-import {
-  readSettingsWithRuntimeEnvironmentPreference,
-  watchRuntimeEnvironmentPreference
-} from './runtime-environment-preference'
 
-let userDataPath: string
+const { listEnvironments } = vi.hoisted(() => ({ listEnvironments: vi.fn() }))
 
-beforeEach(() => {
-  userDataPath = mkdtempSync(join(tmpdir(), 'orca-removed-preference-'))
-})
+vi.mock('../../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments
+}))
 
-afterEach(() => {
-  rmSync(userDataPath, { recursive: true, force: true })
-})
+import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environment-preference'
 
-function preferenceStore(activeId: string | null) {
-  let settings = { ...getDefaultSettings(userDataPath), activeRuntimeEnvironmentId: activeId }
-  const updateSettings = vi.fn<Store['updateSettings']>((updates) => {
-    settings = { ...settings, ...updates }
-    return settings
-  })
-  return { getSettings: () => settings, updateSettings }
-}
-
-function saveEnvironment(name = 'server') {
-  return addEnvironmentFromPairingCode(userDataPath, {
-    name,
-    pairingCode: encodePairingOffer({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:59999',
-      deviceToken: 'test-token',
-      // Each saved server needs a distinct key; duplicate keys are rejected.
-      publicKeyB64: Buffer.alloc(32, name).toString('base64')
-    })
-  })
-}
-
-describe('Active Server after a saved host is removed', () => {
-  it('survives a failed watch installation and repairs on the next settings read', () => {
-    const environment = saveEnvironment()
-    const store = preferenceStore(environment.id)
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    let stopWatching: (() => void) | undefined
-    rmSync(userDataPath, { recursive: true })
-    try {
-      stopWatching = watchRuntimeEnvironmentPreference(store, userDataPath)
-      expect(store.getSettings().activeRuntimeEnvironmentId).toBe(environment.id)
-      mkdirSync(userDataPath)
-      writeFileSync(getEnvironmentStorePath(userDataPath), '{"version":1,"environments":[]}')
-      expect(
-        readSettingsWithRuntimeEnvironmentPreference(store, userDataPath).activeRuntimeEnvironmentId
-      ).toBeNull()
-    } finally {
-      stopWatching?.()
-      warning.mockRestore()
+function settingsStore(): Pick<Store, 'getSettings' | 'updateSettings'> {
+  let settings: GlobalSettings = {
+    ...getDefaultSettings('/home'),
+    activeRuntimeEnvironmentId: 'server-a',
+    showMobileButton: false
+  }
+  return {
+    getSettings: () => settings,
+    updateSettings: (patch) => {
+      settings = { ...settings, ...patch }
+      return settings
     }
-  })
+  }
+}
 
-  it('does not select a same-name replacement or another saved server', () => {
-    const removed = saveEnvironment()
-    const store = preferenceStore(removed.id)
-    removeEnvironment(userDataPath, removed.id)
-    saveEnvironment()
-    saveEnvironment('other')
+describe('reading the settings under a registry lookup that fails', () => {
+  it('returns the settings as they are when it fails, not the ones from before it', async () => {
+    let failLookup!: (error: Error) => void
+    listEnvironments.mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          failLookup = reject
+        })
+    )
+    const store = settingsStore()
 
-    expect(
-      readSettingsWithRuntimeEnvironmentPreference(store, userDataPath).activeRuntimeEnvironmentId
-    ).toBeNull()
+    const read = readSettingsWithRuntimeEnvironmentPreference(store, '/user-data')
+    // A change that lands while the lookup waits, as a menu toggle in another window does.
+    store.updateSettings({ showMobileButton: true })
+    failLookup(new Error('registry unavailable'))
+
+    await expect(read).resolves.toMatchObject({ showMobileButton: true })
   })
 })

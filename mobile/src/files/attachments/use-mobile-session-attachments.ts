@@ -5,11 +5,11 @@ import { triggerSelection, triggerError } from '../../platform/haptics/haptics'
 import { resolveMobileImageAttachmentAgent } from './mobile-image-paste-agent'
 import { useMobileNewTabAgentOptions } from '../../session/agent-launch/use-mobile-new-tab-agent-options'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
-import { useMobileNativeChatStructuredComposer } from '../../session/native-chat/composer/use-mobile-native-chat-structured-composer'
+import { useMobileNativeChatStructuredComposer } from '../../session/native-chat/composer/commands/use-mobile-native-chat-structured-composer'
 import {
   isMobileNativeChatAgentConfirmed,
   resolveMobileNativeChatSessionId
-} from '../../session/native-chat/mobile-native-chat-eligibility'
+} from '../../session/native-chat/conversation/mobile-native-chat-eligibility'
 import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input-lease-gate'
 import { useMobileTerminalPaste } from '../../terminal/session/input-controls/use-mobile-terminal-paste'
 import type { MobileSessionAccessorySelectionModel } from '../../terminal/session/accessory-keys/use-mobile-session-accessory-selection'
@@ -117,7 +117,10 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     compactInstructions:
       nativeChatController.nativeChatSessionOptions?.controller.compactInstructions,
     files: nativeChatFiles,
-    threadGoal: nativeChatController.nativeChatThreadGoal
+    threadGoal: nativeChatController.nativeChatThreadGoal,
+    mcpPanel: nativeChatController.nativeChatMcpPanel,
+    accountUsage: nativeChatController.nativeChatAccountUsage,
+    onCommandNotice: nativeChatSendError.show
   })
 
   useEffect(() => {
@@ -156,6 +159,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
   return {
     createTabAgentLoadState: createTabAgents.loadState,
     createTabAgentOptions: createTabAgents.options,
+    createTabAgentSurfaceChoice: createTabAgents.surfaceChoice,
     handlePaste,
     flushPendingLiveInputBeforeAttachmentSend,
     attachImage,

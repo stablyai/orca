@@ -4,10 +4,9 @@ import {
   WORKER_RELEASABLE_STATES,
   WORKER_TERMINAL_AUTO_RELEASE_LIVE_SQL
 } from '../../terminal-authority/release/worker-terminal-ownership'
+import { WORKER_AUTO_CLOSE_GRACE_MS } from '../../../../../shared/orchestration/workers/worker-auto-close'
 import type { OrchestrationDb } from '../orchestration-db'
 import { exposeUtcTimestamp, toSqliteUtcTimestamp } from '../utc-timestamp'
-
-export const WORKER_TERMINAL_AUTO_RELEASE_GRACE_MS = 2 * 60_000
 
 const RELEASABLE_STATES_SQL = WORKER_RELEASABLE_STATES.map((state) => `'${state}'`).join(', ')
 
@@ -44,7 +43,7 @@ export function armWorkerTerminalAutoReleaseStatement(
           AND release_state = 'not_requested'
           AND auto_release_dispatch_id IS NOT owner_dispatch_id`
     )
-    .run(toSqliteUtcTimestamp(nowMs + WORKER_TERMINAL_AUTO_RELEASE_GRACE_MS), dispatchId)
+    .run(toSqliteUtcTimestamp(nowMs + WORKER_AUTO_CLOSE_GRACE_MS), dispatchId)
   if (changes > 0) {
     this.workerTerminalAutoReleaseListener?.()
   }
@@ -74,7 +73,7 @@ export function restartWorkerTerminalAutoRelease(
       `UPDATE worker_terminal_resources SET auto_release_at = ?, updated_at = datetime('now')
         WHERE pane_key = ? AND ${ARMED_SQL} AND auto_release_at IS NULL`
     )
-    .run(toSqliteUtcTimestamp(nowMs + WORKER_TERMINAL_AUTO_RELEASE_GRACE_MS), paneKey)
+    .run(toSqliteUtcTimestamp(nowMs + WORKER_AUTO_CLOSE_GRACE_MS), paneKey)
   if (changes > 0) {
     this.workerTerminalAutoReleaseListener?.()
   }
@@ -154,7 +153,8 @@ export function deferWorkerTerminalAutoRelease(this: OrchestrationDb, resourceId
 export function admitWorkerChatReleaseClose(
   this: OrchestrationDb,
   resourceId: string,
-  inTurn: (resource: WorkerTerminalResourceRow) => boolean
+  inTurn: (resource: WorkerTerminalResourceRow) => boolean,
+  retryUnknown = false
 ): boolean {
   const current = this.getWorkerTerminalResource(resourceId)
   if (
@@ -163,6 +163,18 @@ export function admitWorkerChatReleaseClose(
     inTurn(current)
   ) {
     this.deferWorkerTerminalAutoRelease(resourceId)
+    if (retryUnknown && current.pane_key) {
+      const deferred = this.getWorkerTerminalResource(resourceId)
+      if (
+        deferred?.owner_dispatch_id === current.owner_dispatch_id &&
+        deferred.terminal_handle === current.terminal_handle &&
+        deferred.process_incarnation === current.process_incarnation &&
+        deferred.pane_key === current.pane_key &&
+        deferred.release_state === 'not_requested'
+      ) {
+        this.restartWorkerTerminalAutoRelease(current.pane_key)
+      }
+    }
     return false
   }
   const { changes } = this.db

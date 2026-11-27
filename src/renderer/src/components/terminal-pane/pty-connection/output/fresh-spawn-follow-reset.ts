@@ -8,7 +8,7 @@ import {
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
   buildKittyKeyboardRestore
 } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
-import { buildFreshShellViewportBlankingSequence } from '../../../../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
+import { buildFreshShellViewportSequence } from '../../../../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
 import { flushTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import {
   getTerminalScrollIntentKind,
@@ -22,7 +22,7 @@ import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
 
-/** Follow-output reset, replay writes, and fresh-shell viewport blanking. */
+/** Follow-output reset, replay writes, and the fresh-shell viewport. */
 export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void {
   session.resetFreshSpawnFollowOutput = (): void => {
     session.cancelFreshSpawnFollowReset()
@@ -177,8 +177,10 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     return session.deps.restoredViewportBlankingPanesRef?.current.delete(session.pane.id) ?? false
   }
 
-  session.writeFreshShellViewportBlanking = (rows = session.pane.terminal.rows): void => {
-    session.writeReplayData(buildFreshShellViewportBlankingSequence(rows))
+  session.writeFreshShellViewport = (rows = session.pane.terminal.rows): void => {
+    // A remote owner whose OS has not arrived yet may be ConPTY; blanking is safe for either.
+    const ownerIsConpty = session.windowsPtyModel?.ownerUsesConpty() !== false
+    session.writeReplayData(buildFreshShellViewportSequence(rows, ownerIsConpty))
   }
 
   session.prepareFreshShellViewportForSpawn = (options: FreshSpawnOptions): void => {
@@ -186,7 +188,23 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     if (!options.forceBlankRestoredViewport && !hadRestoredViewport) {
       return
     }
-    // Move restored rows into scrollback before coordinate-based Windows ConPTY prompt output.
-    session.writeFreshShellViewportBlanking()
+    if (!hadRestoredViewport && isTerminalBlank(session.pane.terminal)) {
+      return
+    }
+    session.writeFreshShellViewport()
   }
+}
+
+/** Nothing on screen or in scrollback, and the cursor home: no content or stale position to fix. */
+function isTerminalBlank(terminal: ConnectPanePtySession['pane']['terminal']): boolean {
+  const buffer = terminal.buffer.active
+  if (buffer.baseY > 0 || buffer.cursorX > 0 || buffer.cursorY > 0) {
+    return false
+  }
+  for (let row = 0; row < terminal.rows; row += 1) {
+    if (buffer.getLine(row)?.translateToString(true)) {
+      return false
+    }
+  }
+  return true
 }

@@ -12,12 +12,12 @@ import { getManagedServerActions } from '../../../runtime/hosts/management/manag
  * The other entry still manages that server, so this entry is unlinked here without touching the host.
  * Null when no other entry manages the same server; the store's guard then keeps the pairing.
  */
-export function removeRedundantManagedPairing(
+export async function removeRedundantManagedPairing(
   userDataPath: string,
   environment: KnownRuntimeEnvironment
-): Promise<RuntimeEnvironmentRemoval> | null {
+): Promise<RuntimeEnvironmentRemoval | null> {
   const actions = getManagedServerActions()
-  if (!actions || !findManagedSshTwin(listEnvironments(userDataPath), environment)) {
+  if (!actions || !findManagedSshTwin(await listEnvironments(userDataPath), environment)) {
     return null
   }
   // Forget is the managed removal: it also closes this entry's tunnel and releases its SSH claims.

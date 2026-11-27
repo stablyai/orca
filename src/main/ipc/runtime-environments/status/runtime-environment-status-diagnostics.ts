@@ -1,6 +1,6 @@
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import '../../../../shared/protocol-version'
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/host-runtime-capabilities'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import '../../../../shared/remote-runtime/protocol/protocol-version'
+import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import { getRemoteRuntimeSharedControlDiagnostics } from '../connections/runtime-environment-request-connections'
 
 export function attachRemoteControlDiagnostics<TResult extends object>(

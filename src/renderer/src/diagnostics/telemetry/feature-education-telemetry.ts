@@ -1,5 +1,8 @@
-import type { ContextualTourId } from '../../../../shared/contextual-tours'
-import type { EventName, EventProps } from '../../../../shared/telemetry-events'
+import type { ContextualTourId } from '../../../../shared/feature-education/contextual-tours/contextual-tours'
+import type {
+  EventName,
+  EventProps
+} from '../../../../shared/telemetry/telemetry-event-classification'
 import {
   normalizeFeatureEducationSource,
   normalizeSetupGuideSource,
@@ -7,12 +10,12 @@ import {
   type SetupGuideCloseOutcome,
   type SetupGuideSource,
   type TerminalPaneSplitSource
-} from '../../../../shared/feature-education-telemetry'
+} from '../../../../shared/feature-education/feature-education-telemetry'
 import {
   getFeatureWallSetupSectionId,
   isFeatureWallSetupStepId,
   type FeatureWallSetupStepId
-} from '../../../../shared/feature-wall-setup-steps'
+} from '../../../../shared/feature-education/explore/feature-wall-setup-steps'
 import { track } from './telemetry'
 
 const SETUP_GUIDE_TELEMETRY_COMPLETED_STEPS_STORAGE_KEY =

@@ -8,7 +8,7 @@ import {
   linearIssueUpdatedSchema,
   taskItemMutationSchema
 } from './task-item-state-reply-schema'
-import { githubPrMutationConfirmationSchema as taskMutationConfirmationSchema } from '../../source-control/review/github-pr-mutation-reply-schema'
+import { githubPrMutationConfirmationSchema as taskMutationConfirmationSchema } from '../../source-control/review/github-operations/github-pr-mutation-reply-schema'
 
 // Preserve lost mutation replies as transport rejections; a missing answer does not prove host failure.
 

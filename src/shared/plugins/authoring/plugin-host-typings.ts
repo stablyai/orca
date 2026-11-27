@@ -59,7 +59,10 @@ export function renderPluginHostMethodMembers(
       }
       const frames =
         spec.framesSince === undefined ? '' : ` (panels and editors: ${version(spec.framesSince)})`
-      const since = `Since host API ${version(spec.since)}${frames}.`
+      const addedParams = Object.entries(spec.paramsSince ?? {})
+        .map(([param, minor]) => `; \`${param}\` since ${version(minor)}`)
+        .join('')
+      const since = `Since host API ${version(spec.since)}${frames}${addedParams}.`
       const deprecated =
         spec.deprecatedSince === undefined
           ? ''

@@ -19,10 +19,8 @@ import {
   type NativeChatOpenedPullRequest
 } from '../../../../../../shared/native-chat/tools/native-chat-opened-pull-requests'
 import { NATIVE_CHAT_OPENED_PULL_REQUESTS_SETTING_SECTION_ID } from '../../../settings/chat/native-chat-opened-pull-requests-setting-target'
-import {
-  NativeChatCardHideButton,
-  NATIVE_CHAT_HIDEABLE_CARD_CLASS
-} from '../../messages/disclosure/NativeChatCardHideButton'
+import { NativeChatCardHideButton } from '../../messages/disclosure/NativeChatCardHideButton'
+import { NativeChatEventRow } from '../../messages/events/NativeChatEventRow'
 import {
   githubLinkPreviewKey,
   loadGitHubLinkPreview,
@@ -210,52 +208,109 @@ function OpenedPullRequestRow({
   )
 }
 
-/** "Opened orca#3": the pull requests a turn's own commands opened, each opening on click. */
+/** The opened pull request's state glyph and tone once read, else the plain mark. */
+function PullRequestStateIcon({ item }: { item: GitHubWorkItem | null }): React.JSX.Element {
+  return createElement((item && getReviewStateIcon(item.state)) || GitPullRequest, {
+    'aria-hidden': true,
+    className: cn('size-3.5 shrink-0', item ? STATE_TEXT_TONE[item.state] : undefined)
+  })
+}
+
+/** "Opened orca#3 · title": one pull request, its name opening it. */
+function OneOpenedPullRequest({
+  pullRequest,
+  action,
+  timestamp
+}: {
+  pullRequest: NativeChatOpenedPullRequest
+  action: React.ReactNode
+  timestamp?: number | null
+}): React.JSX.Element {
+  const t = useTranslate()
+  const { githubRepo } = useContext(NativeChatLinkPeekContext)
+  const onLinkClick = useNativeChatLinkClick()
+  const { item, settled } = usePullRequestDetails(previewLink(githubRepo, pullRequest))
+  return (
+    <NativeChatEventRow
+      icon={<PullRequestStateIcon item={item} />}
+      action={action}
+      timestamp={timestamp}
+    >
+      {/* One line: the title truncates, and a placeholder holds its place until it arrives. */}
+      <span className="flex min-w-0 items-center">
+        <a
+          href={pullRequest.url}
+          onClick={(event) => onLinkClick?.(event, pullRequest.url)}
+          className="shrink-0 rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          {t('components.native-chat.openedPullRequests.one', 'Opened {{name}}', {
+            name: pullRequestName(pullRequest, githubRepo)
+          })}
+        </a>
+        {item ? (
+          <span className="min-w-0 truncate text-chat-foreground">{`\u00a0· ${item.title}`}</span>
+        ) : settled ? null : (
+          <span aria-hidden className="ml-2 block h-3 w-40 min-w-0 rounded bg-chat-code-surface" />
+        )}
+      </span>
+    </NativeChatEventRow>
+  )
+}
+
+/** "Opened orca#3": the pull requests a turn's own commands opened; several open into one list. */
 export function NativeChatOpenedPullRequestCard({
-  pullRequests
+  pullRequests,
+  timestamp
 }: {
   pullRequests: readonly NativeChatOpenedPullRequest[]
+  /** The turn's time, on the row's edge with every other status row's. */
+  timestamp?: number | null
 }): React.JSX.Element {
   const t = useTranslate()
   const [first] = pullRequests
-  const { githubRepo } = useContext(NativeChatLinkPeekContext)
+  const hide = (
+    <NativeChatCardHideButton
+      inline
+      ariaLabel={t(
+        'components.native-chat.openedPullRequests.hide',
+        "Don't show opened pull requests"
+      )}
+      updates={{ nativeChatOpenedPullRequests: false }}
+      settingSectionId={NATIVE_CHAT_OPENED_PULL_REQUESTS_SETTING_SECTION_ID}
+      hiddenMessage={t(
+        'components.native-chat.openedPullRequests.hidden',
+        "Orca won't show opened pull requests anymore"
+      )}
+    />
+  )
+  if (pullRequests.length === 1 && first) {
+    return <OneOpenedPullRequest pullRequest={first} action={hide} timestamp={timestamp} />
+  }
+  const heading = t(
+    'components.native-chat.openedPullRequests.many',
+    'Opened {{count}} pull requests',
+    { count: pullRequests.length, defaultValue_one: 'Opened {{count}} pull request' }
+  )
   return (
-    <div
-      className={`${NATIVE_CHAT_HIDEABLE_CARD_CLASS} rounded-lg border border-chat-code-border p-2 text-sm`}
+    <NativeChatEventRow
+      icon={<GitPullRequest aria-hidden className="size-3.5" />}
+      label={heading}
+      action={hide}
+      timestamp={timestamp}
+      disclosureKey={`opened-pull-requests:${pullRequests.map(nativeChatOpenedPullRequestKey).join(',')}`}
+      clampDetails={false}
+      details={
+        <div className="-mx-1 space-y-0.5">
+          {pullRequests.map((pullRequest) => (
+            <OpenedPullRequestRow
+              key={nativeChatOpenedPullRequestKey(pullRequest)}
+              pullRequest={pullRequest}
+            />
+          ))}
+        </div>
+      }
     >
-      <div className="flex min-w-0 items-center gap-1.5 px-1 pb-1 text-xs text-chat-foreground-faint">
-        <span className="min-w-0 truncate">
-          {pullRequests.length === 1 && first
-            ? t('components.native-chat.openedPullRequests.one', 'Opened {{name}}', {
-                name: pullRequestName(first, githubRepo)
-              })
-            : t(
-                'components.native-chat.openedPullRequests.many',
-                'Opened {{count}} pull requests',
-                { count: pullRequests.length, defaultValue_one: 'Opened {{count}} pull request' }
-              )}
-        </span>
-        <NativeChatCardHideButton
-          ariaLabel={t(
-            'components.native-chat.openedPullRequests.hide',
-            "Don't show opened pull requests"
-          )}
-          updates={{ nativeChatOpenedPullRequests: false }}
-          settingSectionId={NATIVE_CHAT_OPENED_PULL_REQUESTS_SETTING_SECTION_ID}
-          hiddenMessage={t(
-            'components.native-chat.openedPullRequests.hidden',
-            "Orca won't show opened pull requests anymore"
-          )}
-        />
-      </div>
-      <div className="space-y-0.5">
-        {pullRequests.map((pullRequest) => (
-          <OpenedPullRequestRow
-            key={nativeChatOpenedPullRequestKey(pullRequest)}
-            pullRequest={pullRequest}
-          />
-        ))}
-      </div>
-    </div>
+      {heading}
+    </NativeChatEventRow>
   )
 }

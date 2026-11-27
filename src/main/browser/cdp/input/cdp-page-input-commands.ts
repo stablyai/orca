@@ -116,11 +116,17 @@ export class CdpPageInputCommands {
       return await dispatchPageKeyEvent(this.webContents, params, this.sendRoot, this.guardFocus)
     }
     if (!isEmbeddedGuest(this.webContents)) {
+      // Popup and serve pages never borrow native focus, so emulate it as the bridge does.
+      if (isFocusTakingCdpInput(method, params)) {
+        await enablePageFocusEmulation(this.sendRoot)
+      }
       return await this.debuggerChannel.sendDebuggerCommand(method, params, sessionId)
     }
     const send = (): Promise<unknown> =>
-      withAgentInputInjection(this.webContents, () =>
-        this.debuggerChannel.sendDebuggerCommand(method, params, sessionId)
+      withAgentInputInjection(
+        this.webContents,
+        () => this.debuggerChannel.sendDebuggerCommand(method, params, sessionId),
+        { keyboard: method === 'Input.dispatchKeyEvent' }
       )
     if (!sessionId && isFocusRoutedCdpInput(method)) {
       throw pageInputRouteUnavailableError()

@@ -1,7 +1,7 @@
 import type * as pty from 'node-pty'
 import { statSync } from 'node:fs'
 import { release } from 'node:os'
-import { getCmdExePath } from '../../../shared/windows-batch-spawn'
+import { getCmdExePath } from '../../../shared/shell/launch/windows-batch-spawn'
 import {
   ensureNodePtySpawnHelperExecutable,
   getNodePtySpawnHelperCandidates
@@ -14,6 +14,7 @@ import { resolveSafePtyDefaultCwd } from '../../providers/working-directory/defa
 import { TerminalAttachCanceledError, DaemonProtocolError } from '../protocol/daemon-errors'
 
 import { checkDaemonAsyncIo } from '../health/daemon-async-io-probe'
+import { spawnWithSystemConptyFallback } from '../../windows/bundled-conpty-fallback'
 
 export const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
 
@@ -188,15 +189,20 @@ export async function runPtySpawnHealthProbe(
         env[key] = value
       }
     }
-    proc = (await loadNodePty()).spawn(command.file, command.args, {
-      name: 'xterm-256color',
-      cols: 2,
-      rows: 1,
-      cwd,
-      env,
-      // Probe the same bundled ConPTY used for terminal spawns.
-      ...(process.platform === 'win32' ? { useConptyDll: true } : {})
-    })
+    const nodePty = await loadNodePty()
+    // Probe the bundled ConPTY used for terminal spawns, falling back as they do (#47506).
+    proc = spawnWithSystemConptyFallback(
+      (useConptyDll) =>
+        nodePty.spawn(command.file, command.args, {
+          name: 'xterm-256color',
+          cols: 2,
+          rows: 1,
+          cwd,
+          env,
+          ...(process.platform === 'win32' ? { useConptyDll } : {})
+        }),
+      command.file
+    )
   } catch (err) {
     throw formatPtySpawnError(err, command.file, cwd)
   }

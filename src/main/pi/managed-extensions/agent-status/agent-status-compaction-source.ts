@@ -1,4 +1,4 @@
-import type { PiAgentKind } from '../../../../shared/pi-agent-kind'
+import type { PiAgentKind } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 
 /** Attribute between-turn compaction to the finished reply so the host can announce completion before compaction ends. */
 export function getPiAgentStatusCompactionHandlerSourceLines(kind: PiAgentKind): string[] {

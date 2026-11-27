@@ -3,7 +3,7 @@ import {
   agentSessionRefusalError,
   isAgentSessionRefusalError
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { agentSessionOperationKey } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import { agentSessionOperationKey } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import { foundAgentSessionRecord } from './agent-session-record-founding'
 import {
   assertAdoptedConversationUnowned,
@@ -13,7 +13,7 @@ import {
   type AgentSessionReserveRequest,
   type AgentSessionReserveResult
 } from '../ownership/agent-session-reservation-admission'
-import { assertReservedTabUnheld, setAgentSessionTabVisibility } from '../agent-session-tab-table'
+import { assertReservedTabUnheld, setAgentSessionTabVisibility } from './agent-session-tab-table'
 import {
   selectWritableAgentSessionRecord,
   requireWritableAgentSessionRecord,

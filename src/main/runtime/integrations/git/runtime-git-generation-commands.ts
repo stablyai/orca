@@ -1,9 +1,10 @@
 import {
   textGenerationFailure,
   textGenerationFailureCodeFields
-} from '../../../../shared/text-generation-failure-copy'
+} from '../../../../shared/text-generation/text-generation-failure-copy'
 import type { CommitMessageDraftContext } from '../../../../shared/source-control/ai/generation/commit-message-generation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../../../shared/source-control/ai/generation/commit-message-host-key'
+import { isRetiredTextAgent } from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { withLinkedIssueDraftContext } from '../../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -27,6 +28,10 @@ import type {
 import type { GeneratePullRequestFieldsResult } from '../../../text-generation/commit-message-text-generation'
 import { getPullRequestDraftContext } from '../../../text-generation/pull-request-context/pull-request-context'
 import {
+  CANCELED_GENERATION_RESULT,
+  runCancelableLocalGeneration
+} from '../../../text-generation/execution/source-control-generation-lanes'
+import {
   localGitOptionsForTarget,
   runtimeGitRouteForTarget,
   type RuntimeGitCommandHost
@@ -41,6 +46,14 @@ import {
   type RuntimeCommitMessageSettingsOverride
 } from './runtime-git-generation-context'
 
+// Older clients resolve a saved Antigravity choice themselves; it picks as if unset here.
+function runnableResolvedParams(
+  settingsOverride: RuntimeCommitMessageSettingsOverride | undefined
+) {
+  const params = settingsOverride?.sourceControlAiResolvedParams
+  return params && !isRetiredTextAgent(params.agentId) ? params : undefined
+}
+
 export class RuntimeGitGenerationCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
 
@@ -53,11 +66,9 @@ export class RuntimeGitGenerationCommands {
     const discoveryHostKey =
       settingsOverride?.commitMessageDiscoveryHostKey ??
       getCommitMessageModelDiscoveryHostKey(route.kind === 'ssh' ? route.connectionId : null)
-    const resolvedSettings = settingsOverride?.sourceControlAiResolvedParams
-      ? {
-          ok: true as const,
-          params: settingsOverride.sourceControlAiResolvedParams
-        }
+    const resolvedParams = runnableResolvedParams(settingsOverride)
+    const resolvedSettings = resolvedParams
+      ? { ok: true as const, params: resolvedParams }
       : resolveCommitMessageSettings(
           getRuntimeGitGenerationSettings(
             this.host.getRuntimeSettings(),
@@ -80,35 +91,44 @@ export class RuntimeGitGenerationCommands {
       return { success: false, error: SSH_HOST_NOT_SERVED_MESSAGE }
     }
 
-    let context: CommitMessageDraftContext | null
-    try {
-      context = await getStagedCommitContext(target.worktree.path, {
-        ...localGitOptionsForTarget(target),
-        admissionTier: 'interactive'
-      })
-    } catch (error) {
-      console.error('[runtime-git] Failed to read staged commit context:', error)
-      return {
-        success: false,
-        ...textGenerationFailure('stagedChangesReadFailed')
+    return runCancelableLocalGeneration<GenerateCommitMessageResult>(
+      'commit-message',
+      target.worktree.path,
+      async (isCanceled) => {
+        let context: CommitMessageDraftContext | null
+        try {
+          context = await getStagedCommitContext(target.worktree.path, {
+            ...localGitOptionsForTarget(target),
+            admissionTier: 'interactive'
+          })
+        } catch (error) {
+          console.error('[runtime-git] Failed to read staged commit context:', error)
+          return {
+            success: false,
+            ...textGenerationFailure('stagedChangesReadFailed')
+          }
+        }
+        if (!context) {
+          return { success: false, ...textGenerationFailure('noStagedChanges') }
+        }
+        context = withLinkedIssueDraftContext(context, linkedIssueForTarget(this.host, target))
+        const localEnv = await prepareLocalCommitMessageAgentEnv(
+          resolvedSettings.params.agentId,
+          this.host.getCommitMessageAgentEnvironment?.(),
+          localAgentRuntimeTargetForTarget(target)
+        )
+        if (!localEnv.ok) {
+          return { success: false, error: localEnv.error }
+        }
+        if (isCanceled()) {
+          return CANCELED_GENERATION_RESULT
+        }
+        return generateCommitMessageFromContext(
+          context,
+          resolvedSettings.params,
+          localTextGenerationTargetForTarget(target, localEnv.env)
+        )
       }
-    }
-    if (!context) {
-      return { success: false, ...textGenerationFailure('noStagedChanges') }
-    }
-    context = withLinkedIssueDraftContext(context, linkedIssueForTarget(this.host, target))
-    const localEnv = await prepareLocalCommitMessageAgentEnv(
-      resolvedSettings.params.agentId,
-      this.host.getCommitMessageAgentEnvironment?.(),
-      localAgentRuntimeTargetForTarget(target)
-    )
-    if (!localEnv.ok) {
-      return { success: false, error: localEnv.error }
-    }
-    return generateCommitMessageFromContext(
-      context,
-      resolvedSettings.params,
-      localTextGenerationTargetForTarget(target, localEnv.env)
     )
   }
 
@@ -140,11 +160,9 @@ export class RuntimeGitGenerationCommands {
     const discoveryHostKey =
       settingsOverride?.commitMessageDiscoveryHostKey ??
       getCommitMessageModelDiscoveryHostKey(route.kind === 'ssh' ? route.connectionId : null)
-    const resolvedSettings = settingsOverride?.sourceControlAiResolvedParams
-      ? {
-          ok: true as const,
-          params: settingsOverride.sourceControlAiResolvedParams
-        }
+    const resolvedParams = runnableResolvedParams(settingsOverride)
+    const resolvedSettings = resolvedParams
+      ? { ok: true as const, params: resolvedParams }
       : resolveCommitMessageSettings(
           getRuntimeGitGenerationSettings(
             this.host.getRuntimeSettings(),

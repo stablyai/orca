@@ -1,11 +1,12 @@
 import { access } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import * as path from 'node:path'
-import { BoundedMap } from '../../../../shared/bounded-map'
+import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import { resolveWorktreeHostPath } from '../../../../shared/git/metadata/git-metadata-path'
-import { InFlightPromiseDedupe } from '../../../../shared/in-flight-promise-dedupe'
-import { iterateNulDelimitedFields } from '../../../../shared/nul-delimited-fields'
-import { wslDistroForCommand } from '../../../../shared/wsl-paths'
+import { InFlightPromiseDedupe } from '../../../../shared/concurrency/in-flight-promise-dedupe'
+import { iterateNulDelimitedFields } from '../../../../shared/git/commands/nul-delimited-fields'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
+import { wslDistroForCommand } from '../../../../shared/file-access/wsl-paths'
 import {
   gitReadOptionsForWorktree,
   type GitRuntimeOptions
@@ -19,10 +20,26 @@ import {
   type WorktreeDiffStamp
 } from './worktree-diff-stamp'
 
+// Only keys callers inspect are retained; heavy repos can carry tens of thousands of branch.* entries.
+export type StampedGitConfigKey =
+  | 'attr.tree'
+  | 'core.attributesfile'
+  | 'status.showuntrackedfiles'
+  | 'core.untrackedcache'
+  | 'feature.manyfiles'
+
+const RETAINED_CONFIG_KEYS: ReadonlyMap<string, StampedGitConfigKey> = new Map([
+  ['attr.tree', 'attr.tree'],
+  ['core.attributesfile', 'core.attributesfile'],
+  ['status.showuntrackedfiles', 'status.showuntrackedfiles'],
+  ['core.untrackedcache', 'core.untrackedcache'],
+  ['feature.manyfiles', 'feature.manyfiles']
+])
+
 /** Effective Git config of a worktree whose config inputs the host can stamp. */
 export type StampedGitConfig = {
-  /** Canonical keys; the last value wins, as in Git. A bare key reads as `true`. */
-  values: ReadonlyMap<string, string>
+  /** Retained canonical keys; the last value wins, as in Git. A bare key reads as `true`. */
+  values: ReadonlyMap<StampedGitConfigKey, string>
   /** Host paths of every config input: files Git read, include targets, and standard files it could create. */
   files: readonly string[]
   /** info/attributes and the global attributes file, which shape diffs without being config. */
@@ -170,8 +187,8 @@ async function resolveConfigLocations(
 function parseConfigList(
   stdout: string,
   locations: ConfigLocations
-): { values: Map<string, string>; inputFiles: string[] } {
-  const values = new Map<string, string>()
+): { values: Map<StampedGitConfigKey, string>; inputFiles: string[] } {
+  const values = new Map<StampedGitConfigKey, string>()
   const inputFiles = new Set<string>()
   let origin: string | null = null
   for (const field of iterateNulDelimitedFields(stdout)) {
@@ -185,20 +202,33 @@ function parseConfigList(
       : null
     origin = null
     const newline = field.indexOf('\n')
-    const key = newline === -1 ? field : field.slice(0, newline)
-    const value = newline === -1 ? 'true' : field.slice(newline + 1)
-    values.set(key, value)
-    if (originFile) {
-      inputFiles.add(originFile)
+    const rawKey = newline === -1 ? field : field.slice(0, newline)
+    const rawValue = newline === -1 ? 'true' : field.slice(newline + 1)
+    const retainedKey = RETAINED_CONFIG_KEYS.get(rawKey)
+    if (retainedKey !== undefined) {
+      // Detach slices so cached config maps do not pin the full `git config --list -z` stdout.
+      values.set(retainedKey, ownRetainedString(rawValue))
+    }
+    // Every field repeats its origin; copy each file path once.
+    if (originFile && !inputFiles.has(originFile)) {
+      inputFiles.add(ownRetainedString(originFile))
     }
     // Include targets may be empty or missing now and filled in later.
-    if (key === 'include.path' || (key.startsWith('includeif.') && key.endsWith('.path'))) {
+    if (
+      rawKey === 'include.path' ||
+      (rawKey.startsWith('includeif.') && rawKey.endsWith('.path'))
+    ) {
       inputFiles.add(
-        resolveConfigPath(value, originFile ? path.dirname(originFile) : locations.hostWorktreePath)
+        ownRetainedString(
+          resolveConfigPath(
+            rawValue,
+            originFile ? path.dirname(originFile) : locations.hostWorktreePath
+          )
+        )
       )
     }
     // onbranch: conditions switch with the checked-out branch.
-    if (key.startsWith('includeif.') && key.toLowerCase().includes('.onbranch:')) {
+    if (rawKey.startsWith('includeif.') && rawKey.toLowerCase().includes('.onbranch:')) {
       inputFiles.add(path.join(locations.gitDir, 'HEAD'))
     }
   }

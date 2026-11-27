@@ -1,4 +1,4 @@
-import { composeAgentLaunchModel } from '../../agent-session/options/agent-session-option-launch'
+import { composeAgentLaunchModel } from '../../agent-session/options/launch/agent-session-option-launch'
 import { analyzeAgentChoiceArgs, type AgentChoicePublicationContext } from './agent-choice-args'
 import type { ChoiceOccurrence } from './agent-choice-args-analysis'
 import {

@@ -1,5 +1,5 @@
 import type { JSX, ReactNode } from 'react'
-import { ClaudeIcon } from '@/components/status-bar/icons'
+import { ClaudeIcon } from '@/components/status-bar/accounts/provider-icons'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { FeatureWallClickRing } from '../storyboard-interaction/FeatureWallClickRing'

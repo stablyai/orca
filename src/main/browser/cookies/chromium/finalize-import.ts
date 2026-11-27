@@ -1,7 +1,7 @@
 import type {
   BrowserCookieImportResult,
   BrowserCookieImportSummary
-} from '../../../../shared/browser-workspace-types'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { summarizePartitionSkips } from '../browser-cookie-partition-summary'
 import { openCookieClearStore } from '../browser-cookie-clear-store'

@@ -1,7 +1,7 @@
 import { nativeImage } from 'electron'
-import { PetImportError } from '../../../shared/pet-import-failure-copy'
+import { PetImportError } from '../../../shared/pets/pet-import-failure-copy'
 import { readFile } from 'node:fs/promises'
-import type { CustomPet } from '../../../shared/pet-types'
+import type { CustomPet } from '../../../shared/pets/pet-types'
 import { MAX_BYTES } from './pet-import-size-limits'
 import {
   readWebpDimensionsFromBuffer,

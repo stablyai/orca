@@ -14,6 +14,10 @@ import type { SessionSearchStateCounts } from '../storage/session-search-store-t
 import { SessionSearchWorkerStore } from '../worker/session-search-worker-store'
 import type { SessionSearchDegradedRoot } from '../discovery/session-search-degraded-roots'
 import { SessionSearchWorkLoop } from './session-search-work-loop'
+import { SessionDiscoveryStatCache } from '../../ai-vault/discovery/session-discovery-stat-cache'
+
+// Files untouched this long reuse their indexed stat until a scheduled sweep or a directory change.
+const SESSION_SEARCH_QUIET_FILE_MS = 24 * 60 * 60_000
 
 // Duplicate indexers would register competing consumers and fence each other’s writes.
 const liveIndexerPaths = new Set<string>()
@@ -60,6 +64,11 @@ export class SessionSearchIndexer {
   private lastCounts: SessionSearchStateCounts | null = null
   private cyclesSinceSweep = 0
   private sweepNext = false
+  /** Deferred reads repeat full discovery with reused stats until a pass finishes its reads. */
+  private drainNext = false
+  private readonly statCache = new SessionDiscoveryStatCache((path) =>
+    this.store.committedStat(path)
+  )
   private started = false
   private closed = false
 
@@ -215,56 +224,70 @@ export class SessionSearchIndexer {
   private async pass(signal: AbortSignal): Promise<void> {
     // Refresh the cutoff each pass so purged transcripts cannot immediately be re-indexed.
     this.store.setRetentionCutoffMs(this.cutoffMs())
-    const startedAt = this.clock.now()
-    const full = this.sweepNext
-    // Consume the flag before awaiting so requests arriving during this pass survive.
+    const scheduled = this.sweepNext
+    const full = scheduled || this.drainNext
+    // Consume the flags before awaiting so requests arriving during this pass survive.
     this.sweepNext = false
+    this.drainNext = false
     try {
-      if (full && this.options.resolveRoots) {
+      if (scheduled && this.options.resolveRoots) {
         const roots = await this.options.resolveRoots(signal)
         if (signal.aborted) {
           return
         }
         this.roots = roots
       }
+      this.statCache.beginPass(this.clock.now() - SESSION_SEARCH_QUIET_FILE_MS, !scheduled)
       const result = await runSessionSearchPass({
         store: this.store,
         roots: this.roots,
         full,
+        skipPurge: !scheduled,
         recentPerAgent: this.recentPerAgent,
         previousRootsWithFiles: this.previousRootsWithFiles ?? undefined,
-        overdue: () => this.clock.now() - startedAt >= this.passDeadlineMs,
+        readDeadline: () => {
+          const startedAt = this.clock.now()
+          return () => this.clock.now() - startedAt >= this.passDeadlineMs
+        },
+        statCache: this.statCache,
         listings: new SessionSearchDirectoryListings(),
         signal
       })
       if (!result.completed) {
         // Preserve previous health findings and retry the sweep after an incomplete pass.
-        this.sweepNext ||= full
+        this.retry(scheduled, full)
         return
       }
+      this.statCache.endPass()
       this.degradedRoots = result.degradedRoots
       this.previousRootsWithFiles = result.rootsWithFiles
       this.lastReconcileAt = this.clock.now()
       this.left = result.left
       // Repeat full discovery while backlogged so reads outside the recency window can progress.
-      this.sweepNext ||= result.outOfTime
-      if (full) {
-        // Deferred reads prevent a sweep from establishing that the index is current.
-        if (!result.outOfTime) {
-          this.lastSweepCompletedAt = this.lastReconcileAt
-        }
+      this.drainNext ||= result.outOfTime
+      // Deferred reads prevent a sweep from establishing that the index is current.
+      if (full && !result.outOfTime) {
+        this.lastSweepCompletedAt = this.lastReconcileAt
+      }
+      if (scheduled) {
         this.cyclesSinceSweep = 0
         return
       }
+      // Drain passes count too, so a long backlog cannot postpone the full restat and purge.
       this.cyclesSinceSweep += 1
       if (this.cyclesSinceSweep >= this.fullSweepEveryCycles) {
         this.sweepNext = true
       }
     } catch (error) {
       // Retry a failed sweep rather than waiting for the periodic cadence.
-      this.sweepNext ||= full
+      this.retry(scheduled, full)
       throw error
     }
+  }
+
+  private retry(scheduled: boolean, full: boolean): void {
+    this.sweepNext ||= scheduled
+    this.drainNext ||= full && !scheduled
   }
 
   private cutoffMs(): number | null {

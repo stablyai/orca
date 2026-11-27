@@ -1,4 +1,5 @@
 import { webContents } from 'electron'
+import { browserExtensionSourceProfileId } from '../profile-sessions/browser-extension-route-profiles'
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import {
   parseChromeWebStoreExtensionInput,
@@ -12,7 +13,6 @@ import { removeBrowserExtension } from '../browser-extension-management'
 import { readBrowserExtensionIconDataUrl } from '../installation/browser-extension-manifest'
 import { samePermissionSummary } from '../permissions/browser-extension-permission-summary'
 import type { BrowserExtensionAccessLists as BrowserExtensionPermissionSummary } from '../../../../shared/browser/extensions/browser-extension-permission-warnings'
-import { getBrowserExtensionSessionForProfile } from '../profile-sessions/browser-extension-session-loader'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import {
   downloadWebStoreCrx,
@@ -51,7 +51,9 @@ export function isBrowserExtensionEnabledInProfile(
 }
 
 function profileLabel(profileId: string): string | null {
-  return browserSessionRegistry.getProfile(profileId)?.label ?? null
+  return (
+    browserSessionRegistry.getProfile(browserExtensionSourceProfileId(profileId))?.label ?? null
+  )
 }
 
 function liveGuest(frame: ChromeWebStoreFrame): Electron.WebContents | null {
@@ -143,7 +145,7 @@ export async function installBrowserExtensionFromWebStore(
       error: 'Paste a Chrome Web Store link or a 32-letter extension ID'
     }
   }
-  if (!getBrowserExtensionSessionForProfile(profileId)) {
+  if (!browserSessionRegistry.getProfile(profileId)) {
     return { status: 'failed', error: 'Browser profile is not available for extensions' }
   }
   const existing = getBrowserExtensionInstallStore().get(extensionId)

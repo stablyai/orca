@@ -10,7 +10,7 @@ import type { NativeChatEditFile } from '../../../../../../shared/native-chat/to
 import {
   buildNativeChatTaskListRows,
   type NativeChatTaskListRow
-} from '../../../../../../shared/native-chat/input/native-chat-task-list-history'
+} from '../../../../../../shared/native-chat/input/task-lists/native-chat-task-list-history'
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
 
 /** One drawn row of an opened run. `focusable`: it renders a control, so keyboard order can land on it. */

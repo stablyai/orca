@@ -108,22 +108,14 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
         startupLaunchAgent: session.paneStartup?.launchAgent,
         initialStatusAgent: session.paneStartup?.initialAgentStatus?.agent,
         commandInferredAgent: session.commandInferredPaneAgent,
-        hookAgent: state.agentStatusByPaneKey[session.cacheKey]?.agentType
+        hookAgent: state.agentStatusByPaneKey.get(session.cacheKey)?.agentType
       }) ?? undefined
-    )
-  }
-  // GPU veto needs current pane evidence: tab-shared/never-cleared launch seeds can describe siblings or dead agents. Use fresh active rows or command evidence; Pi/OMP titles retain their own guard (#7428).
-  session.getPaneScopedRendererOwner = (): AgentType | undefined => {
-    const entry = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
-    return (
-      session.commandInferredPaneAgent ??
-      (session.isFreshActivePaneAgentEntry(entry) ? entry.agentType : undefined)
     )
   }
   session.clearInferredInterruptWorkingTitle = (): void => {
     const state = useAppStore.getState()
     const currentTitle = state.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
-    const statusTitle = state.agentStatusByPaneKey[session.cacheKey]?.terminalTitle
+    const statusTitle = state.agentStatusByPaneKey.get(session.cacheKey)?.terminalTitle
     const neutralTitle = titleAfterInferredInterrupt(
       currentTitle ?? statusTitle,
       session.neutralTerminalTitle()
@@ -132,10 +124,9 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
       return
     }
     // After inferred interrupt, clear only stale working-title fallback; process tracking still decides whether the TUI lives.
-    session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, neutralTitle)
-    if (session.manager.getActivePane()?.id === session.pane.id) {
-      session.deps.updateTabTitle(session.deps.tabId, neutralTitle)
-    }
+    session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, neutralTitle, {
+      alsoTabTitle: session.manager.getActivePane()?.id === session.pane.id
+    })
   }
   session.titleOnlyInterruptTimer = null
   session.clearTitleOnlyInterruptTimer = (): void => {
@@ -146,7 +137,7 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
   }
   session.observeTitleOnlyInterrupt = (): void => {
     const state = useAppStore.getState()
-    if (state.agentStatusByPaneKey[session.cacheKey]) {
+    if (state.agentStatusByPaneKey.get(session.cacheKey)) {
       return
     }
     const runtimeTitle = state.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
@@ -160,7 +151,7 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
     session.clearTitleOnlyInterruptTimer()
     session.titleOnlyInterruptTimer = setTimeout(() => {
       session.titleOnlyInterruptTimer = null
-      if (useAppStore.getState().agentStatusByPaneKey[session.cacheKey]) {
+      if (useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)) {
         return
       }
       const currentState = useAppStore.getState()
@@ -216,7 +207,7 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
   }
   session.hasLiveAgentReattachStatusOrTitleSignal = (imageTitle?: string): boolean => {
     // Permanent tab launch metadata cannot prove liveness; require current status/title or restored screen shape.
-    if (useAppStore.getState().agentStatusByPaneKey[session.cacheKey]) {
+    if (useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)) {
       return true
     }
     // A replayed image's own title outranks the store's, which arrives on a separate channel.

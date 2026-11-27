@@ -7,7 +7,7 @@ import {
   GRAB_SAFE_ATTRIBUTE_NAMES,
   GRAB_SECRET_PATTERNS
 } from '../../../shared/browser/element-grab/browser-grab-types'
-import { isSafeDisplayCharacter } from '../../../shared/display-text-safety'
+import { isSafeDisplayText } from '../../../shared/text/display-text-safety'
 import { resolveDocPreviewUrlFilePath } from '../document-preview/doc-preview-grant-registry'
 
 const SAFE_GRAB_URL_PROTOCOLS = new Set(['http:', 'https:', 'file:'])
@@ -136,7 +136,7 @@ export function clampGrabPayload(raw: unknown, documentUrl = ''): BrowserGrabPay
   // Preview URLs carry a grant and are blanked; name the previewed file if it is display-safe.
   const previewFilePath = resolveDocPreviewUrlFilePath(documentUrl)
   const pageUrl =
-    previewFilePath && [...previewFilePath].every(isSafeDisplayCharacter)
+    previewFilePath && isSafeDisplayText(previewFilePath)
       ? previewFilePath
       : sanitizeUrl(page.sanitizedUrl)
 
@@ -152,7 +152,10 @@ export function clampGrabPayload(raw: unknown, documentUrl = ''): BrowserGrabPay
       scrollX: safeNum(page.scrollX),
       scrollY: safeNum(page.scrollY),
       devicePixelRatio: safeNum(page.devicePixelRatio, 1),
-      capturedAt: safeStr(page.capturedAt, 100)
+      capturedAt: safeStr(page.capturedAt, 100),
+      ...(typeof page.selectionId === 'string'
+        ? { selectionId: safeStr(page.selectionId, 200) }
+        : {})
     },
     target: {
       tagName: safeStr(target.tagName, 50),

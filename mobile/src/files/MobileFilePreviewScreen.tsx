@@ -12,10 +12,10 @@ import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
-import { getWorktreeLabel } from '../worktree/worktree-label'
+import { getWorktreeLabel } from '../worktree/row-presentation/worktree-label'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useForceReconnect } from '../transport/connection/host-client-hooks'
-import { useWorkspaceClient } from '../worktree/use-workspace-client'
+import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
 import { connectionRetryAction } from '../transport/connection/connection-retry-action'
 import {
   loadMobileFilePreview,
@@ -152,12 +152,12 @@ function MobileFilePreviewDocument({ route }: Props) {
       draftContentRef.current !== savedContentRef.current
     if (!client || connState !== 'connected') {
       if (preserveDirtyDraft) {
-        setSaveError(translate('files.filePreviewScreen.waiting', 'Waiting for desktop...'))
+        setSaveError(translate('common.waitingForHost', 'Waiting for host…'))
         return
       }
       setPreview({
         status: 'waiting',
-        message: translate('files.filePreviewScreen.waiting', 'Waiting for desktop...'),
+        message: translate('common.waitingForHost', 'Waiting for host…'),
         reconnect: true
       })
       return

@@ -1,5 +1,5 @@
 import type { AppState } from '../types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { isRemovedRuntimeHostId } from './removed-runtime-host-rows'
 import { getEnvironmentSshStateGeneration } from '../slices/ssh/runtime-environment-ssh'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
@@ -11,14 +11,14 @@ import {
 
 export type HostCatalogKind = 'repos' | 'project-groups' | 'folder-workspaces'
 
-/** Identity fence plus data generations: guards reads that apply a host's catalog snapshot. */
-export type HostCatalogFence = {
-  key: string
-  generation: number
+export type HostCatalogIdentity = {
   target: RuntimeClientTarget
   identity: HostIdentityFence
   sshStateGeneration: number | null
 }
+
+/** Identity fence plus data generations: guards reads that apply a host's catalog snapshot. */
+export type HostCatalogFence = HostCatalogIdentity & { key: string; generation: number }
 
 type CatalogFenceStore = () => Pick<AppState, 'removedRuntimeEnvironmentIds'>
 
@@ -54,13 +54,20 @@ export function isHostCatalogFenceCurrent(
   if (latestHostCatalogGenerationByStore.get(get)?.get(fence.key) !== fence.generation) {
     return false
   }
+  return isHostCatalogIdentityCurrent(get(), fence)
+}
+
+export function isHostCatalogIdentityCurrent(
+  state: Pick<AppState, 'removedRuntimeEnvironmentIds'>,
+  fence: HostCatalogIdentity
+): boolean {
   if (fence.target.kind !== 'environment') {
     return true
   }
   return (
     !isRemovedRuntimeHostId(
       getRuntimeTargetHostId(fence.target),
-      get().removedRuntimeEnvironmentIds
+      state.removedRuntimeEnvironmentIds
     ) &&
     getEnvironmentSshStateGeneration(fence.target.environmentId) === fence.sshStateGeneration &&
     isHostIdentityFenceCurrent(fence.identity)

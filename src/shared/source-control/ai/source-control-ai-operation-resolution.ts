@@ -4,6 +4,8 @@ import {
   getCommitMessageAgentSpec,
   getCommitMessageModel,
   isCustomAgentId,
+  isNamingOnlyTextAgent,
+  isRetiredTextAgent,
   listCommitMessageAgentCapabilities,
   resolveCommitMessageAgentChoice
 } from './generation/commit-message-agent-spec'
@@ -12,14 +14,16 @@ import {
   textGenerationFailure,
   type TextGenerationFailureCode,
   type TextGenerationFailureFields
-} from '../../text-generation-failure-copy'
-import type { GlobalSettings } from '../../global-settings-types'
-import type { Repo } from '../../repo-types'
+} from '../../text-generation/text-generation-failure-copy'
+import type { GlobalSettings } from '../../settings/global-settings-types'
+import type { Repo } from '../../repository/repo-types'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
 import { projectSourceControlAiToLegacyCommitMessageAi as projectLegacySettings } from './settings/source-control-ai-legacy-projection'
 import {
-  getDiscoveredModels,
+  getFreshAccountModelListing,
+  getTextGenerationModels,
+  listsAccountModels,
   resolveThinkingLevel,
   selectPersistedModelId
 } from './settings/source-control-ai-model-selection'
@@ -40,6 +44,8 @@ import type {
 export type ResolvedSourceControlAiGenerationParams = {
   agentId: TuiAgent | 'custom'
   model: string
+  /** Orca passed its own default (spec.defaultModelId) because no available model was picked. */
+  usesOrcaDefaultModel?: boolean
   thinkingLevel?: string
   customPrompt?: string
   commandInputTemplate?: string
@@ -117,8 +123,8 @@ const CUSTOM_COMMAND_EMPTY = {
   dictationCleanup: 'sourceControlCustomCommandEmpty'
 } as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
 
-function supportedAgentLabels(): string {
-  return listCommitMessageAgentCapabilities()
+function supportedAgentLabels(operation: AiTextOperation): string {
+  return listCommitMessageAgentCapabilities(operation)
     .map((capability) => capability.label)
     .join(', ')
 }
@@ -139,7 +145,9 @@ export function resolveSourceControlAiForOperation(
     : normalizeRepoOverrides(input.repo?.sourceControlAi)
   const agentUnsupported = (): { ok: false } & TextGenerationFailureFields =>
     resolveFailure(
-      textGenerationFailure(AGENT_UNSUPPORTED[input.operation], { agents: supportedAgentLabels() })
+      textGenerationFailure(AGENT_UNSUPPORTED[input.operation], {
+        agents: supportedAgentLabels(input.operation)
+      })
     )
   const prCreationDefaults = resolvePrCreationDefaults(
     source,
@@ -170,7 +178,11 @@ export function resolveSourceControlAiForOperation(
       legacy?.customPrompt
     ),
     commandInputTemplate: actionRecipe.commandInputTemplate,
-    ...(actionRecipe.agentArgs !== undefined ? { agentArgs: actionRecipe.agentArgs } : {})
+    // A retired agent's arguments would reach the agent picked in its place.
+    ...(actionRecipe.agentArgs !== undefined &&
+    !isRetiredTextAgent(preferredAgent || input.settings.defaultTuiAgent)
+      ? { agentArgs: actionRecipe.agentArgs }
+      : {})
   }
   if (isCustomAgentId(agentChoice)) {
     if (!customAgentCommand) {
@@ -204,15 +216,20 @@ export function resolveSourceControlAiForOperation(
     return agentUnsupported()
   }
   const spec = getCommitMessageAgentSpec(resolvedAgent)
-  if (!spec) {
+  if (!spec || (input.operation !== 'conversationName' && isNamingOnlyTextAgent(resolvedAgent))) {
     return resolveFailure(
       textGenerationFailure(AGENT_CANNOT_GENERATE[input.operation], {
-        agent: resolvedAgent,
-        agents: supportedAgentLabels()
+        agent: spec?.label ?? resolvedAgent,
+        agents: supportedAgentLabels(input.operation)
       })
     )
   }
   const hostKey = input.discoveryHostKey ?? LOCAL_COMMIT_MESSAGE_HOST_KEY
+  const listing = getFreshAccountModelListing(source, legacy, hostKey, resolvedAgent)
+  const models =
+    listing ?? getTextGenerationModels(spec.models, source, legacy, hostKey, resolvedAgent)
+  // Without a fresh account listing a pick may be newer than Orca knows; Codex's refusal retry covers a bad one.
+  const runsUnlistedPicks = !listing && listsAccountModels(resolvedAgent)
   const persistedModelId = selectPersistedModelId({
     source,
     legacy,
@@ -220,13 +237,21 @@ export function resolveSourceControlAiForOperation(
     operation: input.operation,
     hostKey,
     agentId: resolvedAgent,
-    defaultModelId: spec.defaultModelId
+    // Only an account listing skips a pick; elsewhere the nearest pick stands, as before.
+    isAvailable: (modelId) => !listing || listing.some((candidate) => candidate.id === modelId)
   })
-  const discoveredModels = getDiscoveredModels(source, legacy, hostKey, resolvedAgent)
+  const pickedModel =
+    models.find((candidate) => candidate.id === persistedModelId) ??
+    (runsUnlistedPicks && persistedModelId
+      ? getCommitMessageModel(resolvedAgent, persistedModelId)
+      : undefined)
+  // An account listing without Orca's default runs the listing's own default, else its first model.
   const model =
-    spec.models.find((candidate) => candidate.id === persistedModelId) ??
-    discoveredModels.find((candidate) => candidate.id === persistedModelId) ??
-    getCommitMessageModel(resolvedAgent, spec.defaultModelId)
+    pickedModel ??
+    models.find((candidate) => candidate.id === spec.defaultModelId) ??
+    (listing
+      ? (listing.find((candidate) => candidate.isDefault) ?? listing[0])
+      : getCommitMessageModel(resolvedAgent, spec.defaultModelId))
   if (!model) {
     return resolveFailure(textGenerationFailure('noModelForAgent', { label: spec.label }))
   }
@@ -245,6 +270,7 @@ export function resolveSourceControlAiForOperation(
       params: {
         agentId: resolvedAgent,
         model: model.id,
+        ...(pickedModel ? {} : { usesOrcaDefaultModel: true }),
         thinkingLevel,
         ...commonParams,
         ...(customAgentCommand ? { customAgentCommand } : {}),

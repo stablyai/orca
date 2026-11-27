@@ -4,9 +4,9 @@ import {
   requestBrowserWebAuthnAccount
 } from './browser-webauthn-account-picker'
 import {
-  unwatchBrowserPasskeyRequests,
-  watchBrowserPasskeyRequests
-} from './browser-passkey-requests'
+  unwatchBrowserSystemDialogs,
+  watchBrowserSystemDialogs
+} from '../guest-lifecycle/prompts/browser-system-dialogs'
 
 const FIDO_HID_USAGE_PAGE = 0xf1d0
 const LOCALHOST_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
@@ -104,7 +104,7 @@ export function installBrowserWebAuthnAccessHandlers(browserSession: Session): v
     handleBrowserSelectWebAuthnAccount(browserSession, event, details, callback)
   selectWebAuthnAccountHandlers.set(browserSession, selectWebAuthnAccountHandler)
   browserSession.on('select-webauthn-account', selectWebAuthnAccountHandler)
-  watchBrowserPasskeyRequests(browserSession)
+  watchBrowserSystemDialogs(browserSession)
 }
 
 export function clearBrowserWebAuthnAccessHandlers(browserSession: Session): void {
@@ -116,5 +116,5 @@ export function clearBrowserWebAuthnAccessHandlers(browserSession: Session): voi
   }
   browserSession.setDevicePermissionHandler(null)
   cancelBrowserWebAuthnAccountRequestsForSession(browserSession)
-  unwatchBrowserPasskeyRequests(browserSession)
+  unwatchBrowserSystemDialogs(browserSession)
 }

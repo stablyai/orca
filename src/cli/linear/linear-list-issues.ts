@@ -10,7 +10,7 @@ import {
 } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { formatLinearMcpIssueList, printLinearMcpIssueListWarnings } from './linear-format'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 export const runLinearListIssues: CommandHandler = async ({ flags, client, json }) => {
   const priority = getOptionalNonNegativeIntegerFlag(flags, 'priority')

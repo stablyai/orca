@@ -1,6 +1,11 @@
 import { spawn } from 'node:child_process'
 import { runProcess } from '@orca/process-host'
+import { assertTeamAllowsComputerUse } from '../computer-team-policy'
 import { RuntimeClientError } from '../runtime-client-error'
+import {
+  COMPUTER_ERROR_CODES,
+  COMPUTER_SCREEN_LOCKED_MESSAGE
+} from '../../../shared/computer/computer-use-runtime-types'
 import { isHostShuttingDown } from '../../startup/quit/host-shutdown-state'
 import { readMacosBundleId, resetMacosTccPermission } from '../../macos-permissions/macos-tcc-reset'
 import { resolveMacOSComputerUseAppPath } from '../macos-native/macos-native-provider-paths'
@@ -11,7 +16,7 @@ import type {
   ComputerUsePermissionResetResult,
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
-} from '../../../shared/computer-use-permissions-types'
+} from '../../../shared/computer/computer-use-permissions-types'
 
 const DEFAULT_COMPUTER_USE_BUNDLE_ID = 'com.stablyai.orca.computer-use'
 
@@ -33,9 +38,9 @@ let resetInProgress: Promise<ComputerUsePermissionResetResult> | null = null
 /** `locale` comes from the desktop caller; orcad and CLI opens leave the helper on its default copy. */
 export function openComputerUsePermissions(
   permissionId?: ComputerUsePermissionId,
-  locale?: string
+  options: { locale?: string; skipGranted?: boolean } = {}
 ): Promise<ComputerUsePermissionSetupResult> {
-  return openComputerUsePermissionsAsync(permissionId, locale, ++setupRequestSeq, setupGeneration)
+  return openComputerUsePermissionsAsync(permissionId, options, ++setupRequestSeq, setupGeneration)
 }
 
 function cancelPendingSetupLaunches(): void {
@@ -128,11 +133,13 @@ async function launchSetupHelper(
   if (isHostShuttingDown()) {
     return 'cancelled'
   }
+  assertTeamAllowsComputerUse()
   // Kill and relaunch so a repeated click always brings the helper back to the front.
   await closeExistingPermissionHelpers()
   if (generation !== setupGeneration || isHostShuttingDown()) {
     return 'cancelled'
   }
+  assertTeamAllowsComputerUse()
   const helper = spawn(
     '/usr/bin/open',
     ['-n', request.helperAppPath, '--args', ...request.helperArgs],
@@ -151,10 +158,11 @@ async function launchSetupHelper(
 
 async function openComputerUsePermissionsAsync(
   permissionId: ComputerUsePermissionId | undefined,
-  locale: string | undefined,
+  { locale, skipGranted }: { locale?: string; skipGranted?: boolean },
   seq: number,
   generation: number
 ): Promise<ComputerUsePermissionSetupResult> {
+  assertTeamAllowsComputerUse()
   if (process.platform !== 'darwin') {
     return {
       platform: process.platform,
@@ -178,9 +186,15 @@ async function openComputerUsePermissionsAsync(
   while (resetInProgress) {
     await resetInProgress.catch(() => {})
   }
+  assertTeamAllowsComputerUse()
   const status = await computerUsePermissionStatusGate.peek()
+  assertTeamAllowsComputerUse()
   if (status.helperUnavailableReason) {
     throw new RuntimeClientError('accessibility_error', status.helperUnavailableReason)
+  }
+  // Why: behind the lock screen macOS reports Accessibility as untrusted, so setup would open Settings for nothing.
+  if (status.sessionLocked) {
+    throw new RuntimeClientError(COMPUTER_ERROR_CODES.screen_locked, COMPUTER_SCREEN_LOCKED_MESSAGE)
   }
   const nextStep = nextPermissionStep(status.permissions)
   if (generation !== setupGeneration || isHostShuttingDown()) {
@@ -191,7 +205,13 @@ async function openComputerUsePermissionsAsync(
     )
   }
 
-  if (!permissionId && !nextStep) {
+  const alreadyGranted = permissionId
+    ? skipGranted === true &&
+      status.permissions.some(
+        (permission) => permission.id === permissionId && permission.status === 'granted'
+      )
+    : !nextStep
+  if (alreadyGranted) {
     return {
       platform: process.platform,
       helperAppPath,

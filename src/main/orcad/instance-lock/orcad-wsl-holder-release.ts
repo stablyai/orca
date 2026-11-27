@@ -4,9 +4,9 @@
  */
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { ORCAD_WSL_HOLDER_RELEASE_FILENAME } from '../../../shared/orcad-idle-exit'
+import { ORCAD_WSL_HOLDER_RELEASE_FILENAME } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
 import { writeSecureFile } from '../../../shared/secure-storage/secure-file'
-import { ORCAD_WSL_HOST_ENV } from '../../../shared/orcad-server-launch-env'
+import { ORCAD_WSL_HOST_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
 import type { OrcadDaemonRetirement } from '../daemon/orcad-daemon-retirement'
 
 export function orcadWslHolderReleasePath(userDataPath: string): string {

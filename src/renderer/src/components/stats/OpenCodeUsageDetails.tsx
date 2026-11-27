@@ -3,7 +3,7 @@ import type {
   OpenCodeUsageDailyPoint,
   OpenCodeUsageSessionRow,
   OpenCodeUsageSummary
-} from '../../../../shared/opencode-usage-types'
+} from '../../../../shared/agent-usage/analytics/opencode-usage-types'
 import { CodexUsageDailyChart } from './CodexUsageDailyChart'
 import { UsageBreakdownSection } from './UsageBreakdownSection'
 import { UsageRecentSessionsTable } from './UsageRecentSessionsTable'

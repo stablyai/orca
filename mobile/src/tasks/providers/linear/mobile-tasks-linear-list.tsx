@@ -3,7 +3,7 @@ import { translate } from '../../../i18n/mobile-i18n'
 import { View, Text, ScrollView, Pressable, FlatList } from 'react-native'
 import { colors, spacing, type MobileColorScheme, pressedStyle } from '../../../theme/mobile-theme'
 import { ChevronDown } from 'lucide-react-native'
-import { TaskProviderLogo } from '../../../components/TaskProviderLogo'
+import { TaskProviderLogo } from '../../../components/icons/TaskProviderLogo'
 import {
   ignoreKeptRowPress,
   renderMobileTasksListState

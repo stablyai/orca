@@ -72,9 +72,12 @@ export abstract class TaskRecordReads extends TaskRecordOwners {
     return stored
   }
   /** Each external delivery retries at most one owed read per binding, the longest-waiting first. */
-  protected wake(incarnation: BindingIncarnation) {
+  protected wake(
+    incarnation: BindingIncarnation,
+    candidates: Iterable<AcceptedTask> = this.records.values()
+  ) {
     let next: AcceptedTask | undefined
-    for (const record of this.records.values()) {
+    for (const record of candidates) {
       if (
         record.binding.incarnation === incarnation &&
         record.needsRead &&

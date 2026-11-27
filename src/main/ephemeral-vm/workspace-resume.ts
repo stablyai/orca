@@ -1,18 +1,18 @@
 import { app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import { updateEphemeralVmRuntimeStatus } from '../../shared/ephemeral-vm-runtime-store'
-import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-workspace-runtime'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import { updateEphemeralVmRuntimeStatus } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-workspace-runtime'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import {
   getEphemeralVmRecipeResultConnection,
   getEphemeralVmRecipeResultPairingCode
-} from '../../shared/ephemeral-vm-recipes'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   EphemeralVmFailureError,
   ephemeralVmFailureFromError,
   pickEphemeralVmFailureCode
-} from '../../shared/ephemeral-vm-failure-copy'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 import { resumeEphemeralVmRuntime } from './runtime-service'
 import { connectRuntimeOwnedSshTarget, refreshRuntimeOwnedSshTarget } from './runtime-ssh'
 import { noteRecipeVmWakePairing } from './recipe-vm-wake-pairings'
@@ -23,7 +23,7 @@ import {
   sshUserDisconnectCount
 } from '../ssh/connection/ssh-user-disconnect'
 import type { VmWakeRequest } from '../runtime/workspaces/sleep/workspace-sleep-platform'
-import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
+import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm/ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
 import {
   getRemoteRuntimeSharedControlDiagnostics,
@@ -151,7 +151,7 @@ export async function resumeEphemeralVmWorkspace(
         connection
       })
       // The reconnect can move the server's tunnel and re-pair it; the waiting open expects that.
-      const reached = resolveEnvironment(userDataPath, ssh.environmentId)
+      const reached = await resolveEnvironment(userDataPath, ssh.environmentId)
       noteRecipeVmWakePairing(reached.id, reached.pairingRevision ?? reached.createdAt)
       const woken = updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
         connectionMode: 'ssh',
@@ -185,10 +185,10 @@ function isPairedServerContactLost(environmentId: string): boolean {
 /** Nothing retried this server's control socket or health probe while its VM slept; reopen them.
  *  On the next turn, once this wake is no longer pending, so the reopen is not refused as waking. */
 function reestablishWokenServer(userDataPath: string, environmentId: string): void {
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
       reconnectRemoteRuntimeSharedControlConnection(environmentId)
-      void getRuntimeEnvironmentStatusOwner(userDataPath, environmentId)
+      void (await getRuntimeEnvironmentStatusOwner(userDataPath, environmentId))
         .refresh({ reconnect: true })
         .catch(() => {})
     } catch (error) {

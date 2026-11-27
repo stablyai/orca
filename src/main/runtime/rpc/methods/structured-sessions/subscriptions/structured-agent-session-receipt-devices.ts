@@ -1,4 +1,4 @@
-import { isNativeChatLocalResolver } from '../../../../../../shared/native-chat/native-chat-resolution-receipt'
+import { isNativeChatLocalResolver } from '../../../../../../shared/native-chat/input/questions/native-chat-resolution-receipt'
 import type {
   AgentJournalRenderItem,
   AgentJournalResolution

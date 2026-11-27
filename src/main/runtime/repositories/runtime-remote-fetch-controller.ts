@@ -1,4 +1,4 @@
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type { GitExecOptions } from '../../git/command-runner/git-exec-options'
 import type { LocalGitExecOptions } from '../../git/refs/resolution/repo-default-base-ref'
 import { runRemoteTrackingBaseFetch } from './runtime-remote-tracking-base-fetch'

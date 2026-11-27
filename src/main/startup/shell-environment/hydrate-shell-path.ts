@@ -1,9 +1,9 @@
 import type { ChildProcess } from 'node:child_process'
 import { delimiter, win32 as pathWin32 } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
-import { stripAnsiEscapeSequences } from '../../../shared/ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import type { ShellHydrationFailureReason } from '../../../shared/shell/launch/shell-path-hydration-types'
-import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
+import { resolveWindowsShellStartupFamily } from '../../../shared/shell/launch/windows-terminal-shell'
 import { SHELL_PATH_DELIMITER as DELIMITER, shellPathProbe } from './shell-path-probe'
 import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell-path-ownership'
 import { bindShellProbeLifetime } from './shell-probe-lifetime'
@@ -94,11 +94,6 @@ function parseCapturedPath(stdout: string, pathDelimiter: string = delimiter): s
   ]
 }
 
-/** @internal - tests need a launch PATH the runner's own environment cannot supply. */
-export function _setLaunchPathForTests(value: string, key = 'PATH'): void {
-  launchPathOverride = { key, value }
-}
-
 function isLaunchPathKey(name: string, key: string): boolean {
   return process.platform === 'win32' ? name.toLowerCase() === key.toLowerCase() : name === key
 }
@@ -116,12 +111,19 @@ function applyLaunchPath(env: NodeJS.ProcessEnv, key: string, value: string | nu
   env[key] = value
 }
 
+/** Copy `env` with Orca's launch PATH, so profiles add their entries to a clean PATH, not Orca's merged one. */
+export function withLaunchPath(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const next = { ...env }
+  applyLaunchPath(
+    next,
+    launchPathOverride?.key ?? LAUNCH_PATH_KEY,
+    launchPathOverride?.value ?? LAUNCH_PATH
+  )
+  return next
+}
+
 function shellProbeEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, [PROBE_MARKER_ENV_VAR]: '1' }
-  const key = launchPathOverride?.key ?? LAUNCH_PATH_KEY
-  const value = launchPathOverride?.value ?? LAUNCH_PATH
-  applyLaunchPath(env, key, value)
-  return env
+  return withLaunchPath({ ...process.env, [PROBE_MARKER_ENV_VAR]: '1' })
 }
 
 /** Run a synchronous launcher without passing Orca's seeded PATH to its child. */

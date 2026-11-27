@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import React, { useCallback, useEffect, useRef } from 'react'
@@ -6,11 +6,11 @@ import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refre
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review/hosted-review-card-refresh'
 import { toast } from 'sonner'
 
-import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
-import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
+import type { ChecksPanelContextState } from '../review-state/use-checks-panel-context-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
+import type { ChecksPanelReviewState } from '../review-state/use-checks-panel-review-state'
 import type { ChecksPanelPollingState } from './use-checks-panel-polling'
-import type { ChecksPanelReviewDataState } from '../use-checks-panel-review-data'
+import type { ChecksPanelReviewDataState } from '../review-data/use-checks-panel-review-data'
 import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 type ChecksPanelEntryRefreshAndTitleActionsInput = Pick<

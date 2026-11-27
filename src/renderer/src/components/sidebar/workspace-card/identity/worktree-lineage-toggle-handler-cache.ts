@@ -1,6 +1,6 @@
 import type React from 'react'
 
-export type LineageToggleHandler = (event: React.MouseEvent<HTMLButtonElement>) => void
+export type LineageToggleHandler = (event: React.MouseEvent<HTMLElement>) => void
 
 // Cache one handler per lineage group so callback identity cannot defeat WorktreeCard memoization.
 export const createLineageToggleHandlerCache = (

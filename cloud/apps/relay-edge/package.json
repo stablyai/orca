@@ -9,7 +9,11 @@
     "spike": "tsx spike/run-all.ts",
     "test": "vitest run",
     "test:schema": "tsx test/apply-schema.ts",
-    "test:mvp": "tsx test/mvp.ts"
+    "test:mvp": "tsx test/mvp.ts",
+    "ingress-cidrs": "tsx scripts/ingress-source-cidrs.ts",
+    "test:g1": "tsx test/g1-front-door.ts",
+    "test:g1-local": "tsx test/g1-local.ts",
+    "test:ingress-e2e": "tsx test/ingress-e2e.ts"
   },
   "dependencies": {
     "@types/pg": "^8.23.1",

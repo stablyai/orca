@@ -7,7 +7,7 @@ import type {
 import type { GitHubRepoSlugCacheEntry } from '../project-board/github-project-repo-match'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
 import { useHostRepoList } from '../repositories/use-host-repo-list'
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { reconcileRepoSelection } from '../repositories/hosted-repo-selection'
 import {
   useLastConnectedAt,
@@ -22,7 +22,7 @@ import {
   normalizeVisibleTaskProviders
 } from '../../../../src/shared/work-items/task-providers'
 import { newTabRepoListRead } from '../../session/agent-launch/mobile-runtime-repo-operations'
-import { useHostProtocolGates } from '../../components/host-protocol-gates-context'
+import { useHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import { useTaskHostRepos } from '../repositories/use-task-host-repos'
 import { DEFAULT_LINEAR_DISPLAY_PROPERTIES } from '../task-list/mobile-tasks-options'
 import type {
@@ -55,6 +55,10 @@ import type {
 import { getTaskPresetQuery } from '../../../../src/shared/work-items/task-preset-query'
 import { useMobileTasksItemState } from '../item-detail/use-mobile-tasks-item-state'
 import { useTaskCommentDraft, useTaskCreateDraft } from '../item-detail/task-draft-rows'
+import {
+  bindLinearAccountClient,
+  type LinearAccountBinding
+} from '../task-list/linear-account-host'
 import { useMobileJiraConnectionState } from '../providers/jira/use-mobile-jira-connection-state'
 import type { JiraIssueFilter } from '../../../../src/shared/jira/jira-types'
 
@@ -123,6 +127,13 @@ export function useMobileTasksRouteAndItemState() {
   const [showLinearTeamPicker, setShowLinearTeamPicker] = useState(false)
   const [showLinearDisplayPicker, setShowLinearDisplayPicker] = useState(false)
   const [showLinearConnect, setShowLinearConnect] = useState(false)
+  const linearAccountBindingRef = useRef<LinearAccountBinding | null>(null)
+  // Called as Linear setup opens; its status, connect and workspace switch then share one host.
+  const bindLinearAccountHost = useCallback(() => {
+    linearAccountBindingRef.current = client
+      ? { base: client, client: bindLinearAccountClient(client, hostCapabilities) }
+      : null
+  }, [client, hostCapabilities])
   const [linearApiKeyDraft, setLinearApiKeyDraft] = useState('')
   const [linearConnectState, setLinearConnectState] = useState<'idle' | 'connecting' | 'error'>(
     'idle'
@@ -274,6 +285,8 @@ export function useMobileTasksRouteAndItemState() {
     setShowLinearDisplayPicker,
     showLinearConnect,
     setShowLinearConnect,
+    linearAccountBindingRef,
+    bindLinearAccountHost,
     linearApiKeyDraft,
     setLinearApiKeyDraft,
     linearConnectState,

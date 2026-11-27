@@ -2,7 +2,7 @@
 import { useMemo } from 'react'
 import { Copy, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
-import { IntegrationStatusPill } from '@/components/integration-status-pill'
+import { IntegrationStatusPill } from '@/components/integrations/presentation/integration-status-pill'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -20,11 +20,11 @@ import {
 import { getLinearAgentSkillUpdateTarget } from '@/lib/skills/installation/linear-agent-skill-update-target'
 
 import { cn } from '@/lib/class-names'
-import { getLinearAgentSkillSetupInlineRuntimeCopy } from '../../sidebar/linear-agent-skill-setup-copy'
+import { getLinearAgentSkillSetupInlineRuntimeCopy } from './linear-agent-skill-setup-copy'
 import {
   getLinearPromptSkillDiscoveryTarget,
   type LinearAgentSkillPromptSettings
-} from '../../sidebar/linear-agent-skill-runtime'
+} from './linear-agent-skill-runtime'
 import {
   type LocalAgentRuntime,
   buildSkillCommandForRuntime

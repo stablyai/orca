@@ -3,7 +3,7 @@ import {
   FEATURE_WALL_SETUP_STEPS,
   getFirstIncompleteFeatureWallSetupStepId,
   type FeatureWallSetupStepId
-} from '../../../../../shared/feature-wall-setup-steps'
+} from '../../../../../shared/feature-education/explore/feature-wall-setup-steps'
 import { useSetupGuideProgress } from '../../setup-guide/use-setup-guide-progress'
 
 export type SettingsSetupGuideProgress = {

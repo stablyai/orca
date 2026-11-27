@@ -6,9 +6,9 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import {
   sameOrcadRetainedMarker,
   type OrcadRetainedMarker
-} from '../../../../shared/orcad-retained-marker'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
-import type { Repo } from '../../../../shared/repo-types'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-retained-marker'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { isLocalWslMoveRow } from '../quiescence/wsl-move-scope-guard'
 
 /** `marker: null` removes the mark. */

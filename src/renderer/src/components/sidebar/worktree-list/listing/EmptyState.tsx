@@ -3,7 +3,7 @@ import { CircleX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { isRepoHidden } from '../../../../../../shared/hidden-projects'
+import { isRepoHidden } from '../../../../../../shared/project/catalog/hidden-projects'
 
 export function SidebarWorktreeListEmptyState({
   hasFilters,

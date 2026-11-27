@@ -54,6 +54,11 @@ export const FILL_ELEMENT_FUNCTION = `function (value) {
   return null;
 }`
 
+export const FOCUS_ELEMENT_FUNCTION = `function () {
+  this.focus();
+  return null;
+}`
+
 // Returns whether an editable element holds focus, so a select-all shortcut would stay inside it.
 export const SELECT_ALL_ELEMENT_FUNCTION = `function () {
   this.focus();

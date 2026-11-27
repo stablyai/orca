@@ -5,9 +5,9 @@ import type {
 import type { PRRefreshErrorType } from '../../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { normalizeHostedReviewBaseRef } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import { isHostedReviewCreateEligibilityConfirmable } from '../../../../../../shared/source-control/hosted-review/hosted-review-create-confirmation'
-import type { ChecksPanelReviewLookup } from '../checks-panel-review-lookup-authority'
+import type { HostedReviewLookupAuthority as ChecksPanelReviewLookup } from '../../../../../../shared/source-control/hosted-review/hosted-review-create-confirmation'
 // Share hard-error definitions so composer gating and empty-state copy cannot drift.
-import { HARD_REFRESH_ERROR_TYPES } from '../checks-panel-review-state-model'
+import { HARD_REFRESH_ERROR_TYPES } from '../review-state/checks-panel-review-state-model'
 
 export function resolveChecksPanelHostedReviewBaseRef(input: {
   worktreeBaseRef?: string | null

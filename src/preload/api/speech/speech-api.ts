@@ -1,5 +1,5 @@
-import type { SecretAtRestProtection } from '../../../shared/secret-at-rest-protection'
-import type { DictationCleanupResult } from '../../../shared/dictation-cleanup'
+import type { SecretAtRestProtection } from '../../../shared/secure-storage/secret-at-rest-protection'
+import type { DictationCleanupResult } from '../../../shared/speech/dictation/dictation-cleanup'
 import type {
   DictationContext,
   OpenAiCompatibleSpeechProvider,
@@ -10,7 +10,7 @@ import type {
   SpeechModelState,
   SpeechPendingEvent,
   SpeechTranscriptEvent
-} from '../../../shared/speech-types'
+} from '../../../shared/speech/speech-types'
 
 export type SpeechApi = {
   getCatalog: () => Promise<SpeechModelManifest[]>

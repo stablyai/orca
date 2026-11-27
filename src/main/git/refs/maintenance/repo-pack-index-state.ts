@@ -1,6 +1,6 @@
 import { open, opendir, stat } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 
 export const PACK_INDEX_PROBE_ENTRY_LIMIT = 65_536
 export const PACK_INDEX_PROBE_TIMEOUT_MS = 1_000

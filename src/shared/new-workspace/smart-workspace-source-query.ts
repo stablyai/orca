@@ -1,4 +1,4 @@
-import { isClipboardTextByteLengthOverLimit } from '../clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../clipboard/clipboard-text'
 
 export const SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES = 2048
 

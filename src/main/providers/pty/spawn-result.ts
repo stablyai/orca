@@ -3,15 +3,18 @@ import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/t
 import type { TerminalLaunchResult } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalOscLinkRange } from '../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session/agent-session-host-authority'
+import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { TerminalOwner } from '../../../shared/terminal/pty/lifecycle/terminal-owner'
-import type { OpenCodeCliCapabilities } from '../../../shared/opencode-cli-version'
+import type { OpenCodeCliCapabilities } from '../../../shared/agent-launch/startup/opencode-cli-version'
+import type { HostTerminalUsage } from '../../../shared/terminal/runtime-policy/terminal-limit-policy'
 
 export type PtySpawnResult = TerminalLaunchResult & {
   /** Execution-host probe; absent on older hosts and reattachments. */
   openCodeCapabilities?: OpenCodeCliCapabilities
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
+  /** Terminals on the spawning host after this spawn; absent from older and remote hosts. */
+  hostTerminalUsage?: HostTerminalUsage
   /** App-routable id; remote relay-local handles cannot route renderer/runtime IPC. */
   id: string
   /** Opaque provider-owned identity for this process behind a reusable PTY id. */

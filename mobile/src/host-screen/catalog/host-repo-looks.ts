@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { SectionRepo } from '../../worktree/workspace-list-types'
-import { sectionRepoColor } from '../../worktree/workspace-filter-repos'
+import type { SectionRepo } from '../../worktree/workspace-list/workspace-list-types'
+import { sectionRepoColor } from '../../worktree/repositories/workspace-filter-repos'
 import { readMobileRepoIcon, type MobileHostRepoIcon } from '../host-screen-reply-schema'
 
 export type RepoLook = { color: string; icon: MobileHostRepoIcon | null }

@@ -5,7 +5,7 @@ import {
 import {
   SSH_SIGN_IN_AWAITED_SUFFIX,
   SSH_SIGN_IN_CANCELLED_SUFFIX
-} from '../../../shared/ssh-sign-in-required-copy'
+} from '../../../shared/remote-runtime/ssh/ssh-sign-in-required-copy'
 
 /** Suppress automatic prompts after decline until explicit connect; background status/tunnels/reconnects would otherwise reopen the modal repeatedly. */
 // The declining attempt may try other methods; only later attempts are barred. awaitingSignIn records credentials not yet supplied this launch.
@@ -45,10 +45,6 @@ export function clearSshCredentialDeclinedForEnvironment(
   if (targetId) {
     clearSshCredentialDeclined(targetId)
   }
-}
-
-export function resetSshCredentialDeclinesForTests(): void {
-  declinedTargets.clear()
 }
 
 /** Classify as needs-sign-in, never a transient reconnect failure. */

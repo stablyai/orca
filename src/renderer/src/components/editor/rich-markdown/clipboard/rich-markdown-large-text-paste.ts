@@ -2,11 +2,11 @@ import type { Editor } from '@tiptap/react'
 import { TextSelection, type SelectionBookmark, type Transaction } from '@tiptap/pm/state'
 import { closeHistory } from '@tiptap/pm/history'
 import { toast } from 'sonner'
-import { yieldToEventLoop } from '../../../../../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../../../../../shared/concurrency/event-loop-yield'
 import {
   getUtf8ChunkEndIndex,
   isUtf8ByteLengthWithinLimit
-} from '../../../../../../shared/utf8-byte-limits'
+} from '../../../../../../shared/text/utf8-byte-limits'
 import {
   measureTextControlPasteByteLength,
   measureTextControlPasteByteLengthWithYield

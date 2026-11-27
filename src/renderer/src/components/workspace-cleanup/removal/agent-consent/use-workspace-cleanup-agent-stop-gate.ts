@@ -33,7 +33,8 @@ export function useWorkspaceCleanupAgentStopGate(): WorkspaceCleanupAgentStopGat
           : []
       )
       const liveCandidates = candidates.filter(
-        (candidate) => agentEvidence.get(getWorkspaceCleanupCandidateIdentity(candidate)) === 'live'
+        (candidate) =>
+          agentEvidence.get(getWorkspaceCleanupCandidateIdentity(candidate))?.status === 'live'
       )
       if (
         liveCandidates.some(

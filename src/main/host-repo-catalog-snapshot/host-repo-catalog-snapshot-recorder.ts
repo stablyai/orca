@@ -3,8 +3,8 @@
 import {
   hostRepoCatalogSnapshotFromRepoList,
   type HostRepoCatalogSnapshot
-} from '../../shared/host-repo-catalog-snapshot'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+} from '../../shared/execution-host/host-repo-catalog-snapshot'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   isWslHostRuntimeEnvironment,
   type OrcadDeploymentLink
@@ -50,4 +50,20 @@ export function listHostRepoCatalogSnapshots(
     }
   }
   return result
+}
+
+/** A stopped WSL host lists its projects from this saved answer, so a removed one must leave it too. */
+export function forgetHostRepoCatalogRepo(
+  store: HostRepoCatalogSnapshotStore,
+  environmentId: string,
+  repoId: string
+): void {
+  const snapshot = hostRepoCatalogSnapshotFromRepoList(
+    store.getHostRepoCatalogSnapshots()[environmentId]
+  )
+  if (snapshot) {
+    store.setHostRepoCatalogSnapshot(environmentId, {
+      repos: snapshot.repos.filter((repo) => repo.id !== repoId)
+    })
+  }
 }

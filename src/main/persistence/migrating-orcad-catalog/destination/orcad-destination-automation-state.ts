@@ -1,3 +1,4 @@
+import { decodeSavedLocalAutomationRun } from '../../restoring-sessions/saved-local-terminal-ids'
 import { automationCanonicalDefinition } from '../../../../shared/automations/launch/automation-launch-setup'
 import { MAX_AUTOMATION_RUNS_PER_AUTOMATION } from '../../../../shared/automations/history/automation-run-retention'
 import {
@@ -5,7 +6,9 @@ import {
   type AutomationRun
 } from '../../../../shared/automations/history/automation-run'
 import type { Automation } from '../../../../shared/automations/automation-definition'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
+import { serializeOrcadMigrationValue } from '../../../../shared/orcad-migration/orcad-migration-manifest'
+import { reseedOffZoneNextRuns } from '../../scheduling-automations/automation-zone-reseed'
 import { selectNewRows } from '../catalog-commit/orcad-catalog-row-identity'
 
 export type PreparedOrcadMigrationAutomationState = {
@@ -13,6 +16,16 @@ export type PreparedOrcadMigrationAutomationState = {
   incomingRuns: AutomationRun[]
   newAutomations: Automation[]
   newRuns: AutomationRun[]
+}
+
+// The next run is this host's schedule state (re-seeded on its own clock), not the row's identity.
+function sameAutomationConfiguration(current: Automation, incoming: Automation): boolean {
+  const { nextRunAt: _current, ...currentConfiguration } = current
+  const { nextRunAt: _incoming, ...incomingConfiguration } = incoming
+  return (
+    serializeOrcadMigrationValue(currentConfiguration) ===
+    serializeOrcadMigrationValue(incomingConfiguration)
+  )
 }
 
 export function prepareOrcadMigrationAutomationState(
@@ -23,12 +36,20 @@ export function prepareOrcadMigrationAutomationState(
   const incomingAutomations = (automations ?? []).map((entry) =>
     structuredClone(automationCanonicalDefinition(entry))
   )
-  const incomingRuns = (runs ?? []).map((entry) => structuredClone(entry))
-  const newAutomations = selectNewRows(
-    incomingAutomations,
-    state.automations,
-    dormantConflict('automation')
+  const incomingRuns = (runs ?? []).map((entry) =>
+    decodeSavedLocalAutomationRun(structuredClone(entry))
   )
+  // The destination is a server, which reads a row's saved zone; a next run the source computed on
+  // its own clock would otherwise start one fake Missed or late run there.
+  const newAutomations = reseedOffZoneNextRuns(
+    selectNewRows(
+      incomingAutomations,
+      state.automations,
+      dormantConflict('automation'),
+      sameAutomationConfiguration
+    ),
+    'runtime'
+  ).automations
   const newRuns = selectNewRows(
     incomingRuns,
     state.automationRuns,

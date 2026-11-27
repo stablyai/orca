@@ -2,7 +2,7 @@ import { ipcRenderer } from 'electron'
 import type {
   DashboardRevealAgentArgs,
   DashboardSnapshot
-} from '../../../shared/dashboard-snapshot'
+} from '../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { PreloadApi } from '../../api-types'
 
 export const dashboardApi = {

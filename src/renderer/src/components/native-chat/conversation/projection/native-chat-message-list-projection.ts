@@ -7,20 +7,25 @@ import {
 import {
   hostStatesTurnScopes,
   type NativeChatTurnJournal
-} from '../../../../../../shared/native-chat/transcript/native-chat-turn-membership'
+} from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
 import {
   compareNativeChatDisplayMessages as compareMessages,
   nativeChatDisplaySortRank,
   orderNativeChatDisplayMessages as orderMessages
-} from '../../../../../../shared/native-chat/transcript/native-chat-message-order'
-import { buildNativeChatFoldUnits } from '../../../../../../shared/native-chat/transcript/native-chat-fold-units'
+} from '../../../../../../shared/native-chat/transcript/messages/native-chat-message-order'
+import { buildNativeChatFoldUnits } from '../../../../../../shared/native-chat/transcript/folding/native-chat-fold-units'
 import {
   nativeChatToolFoldKind,
   type NativeChatToolFoldKind
 } from '../../../../../../shared/native-chat/tools/native-chat-tool-fold'
-import { foldSubagentItems } from '../../../../../../shared/native-chat/transcript/native-chat-subagent-items'
-import { stripNoiseMessages } from '../../../../../../shared/native-chat/native-chat-noise'
+import { foldSubagentItems } from '../../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
+import { stripNoiseMessages } from '../../../../../../shared/native-chat/transcript/messages/native-chat-noise'
 import { agentJournalItemSubagentId } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
+import {
+  noteStreamedTextStage,
+  projectionBesideStreamedText,
+  rowsBesideStreamedText
+} from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { reuseUnits } from './native-chat-message-list-reuse'
 import { subagentTurnKeys } from './native-chat-message-list-turns'
 import {
@@ -168,14 +173,41 @@ function retainIdentity(
   }
 }
 
+/** Whether two journals give child rows the same turns: only streamed reply text may differ. */
+function sameTurnJournalBesideStreamedText(
+  next: NativeChatTurnJournal | null | undefined,
+  prior: NativeChatTurnJournal | null | undefined
+): boolean {
+  if (next === prior || !next || !prior) {
+    return next === prior
+  }
+  return (
+    rowsBesideStreamedText(next.items) === rowsBesideStreamedText(prior.items) &&
+    next.submissions === prior.submissions &&
+    next.working === prior.working &&
+    (next.latestTurn === prior.latestTurn ||
+      JSON.stringify(next.latestTurn) === JSON.stringify(prior.latestTurn))
+  )
+}
+
 export function createNativeChatMessageListProjection(): (
   messages: NativeChatMessage[],
   journal?: NativeChatTurnJournal | null
 ) => NativeChatTranscriptProjection {
   let state: NativeChatListState | null = null
   return (messages, journal) => {
+    const previous = state
     state =
       (state && reuseUnits(state, messages, journal)) ?? projectFully(messages, journal, state)
+    // A subagent's streaming reply changes only text, so scans that read none (turn diffs, opened
+    // pull requests) keep what they built for the rows it revised.
+    if (
+      previous &&
+      projectionBesideStreamedText(messages) === projectionBesideStreamedText(previous.input) &&
+      sameTurnJournalBesideStreamedText(journal, previous.journal)
+    ) {
+      noteStreamedTextStage(state.projection.subagentRows, previous.projection.subagentRows)
+    }
     return state.projection
   }
 }

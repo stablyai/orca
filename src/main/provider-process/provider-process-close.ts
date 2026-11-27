@@ -1,4 +1,4 @@
-import type { ChildProcess } from 'node:child_process'
+import type { ProviderChild } from './provider-child'
 import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { waitForProcessExitUntil } from './provider-process-exit-deadline'
 import {
@@ -26,7 +26,7 @@ export type ProviderProcessClosePolicy = {
 }
 
 export type ProviderProcessCloseInput = {
-  child: Pick<ChildProcess, 'pid' | 'kill' | 'stdin'>
+  child: Pick<ProviderChild, 'pid' | 'kill'> & { stdin?: ProviderChild['stdin'] | null }
   exitPromise: Promise<void>
   rootVerdict: () => DescendantTreeVerdict
   supervised?: boolean

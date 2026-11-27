@@ -3,11 +3,17 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import {
   ChevronDown,
   ChevronRight,
+  CircleSlash,
   File,
   FileText,
   Folder,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Link
 } from 'lucide-react-native'
+import { STATUS_LABELS } from '../../../../src/shared/git/status/git-status-labels'
+import type { GitFileStatus } from '../../../../src/shared/git/status/git-status-types'
+import { statusColor } from '../../source-control/changes/mobile-git-status'
+import type { DecorateFileRow } from './use-mobile-file-explorer-decorations'
 import { triggerMediumImpact, triggerSelection } from '../../platform/haptics/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, spacing } from '../../theme/mobile-theme'
@@ -28,6 +34,7 @@ type Props = {
   item: FileExplorerRow
   maximumIndentation: number
   expanded: ReadonlySet<string>
+  decorate: DecorateFileRow
   onPreviewFile: (relativePath: string, displayName: string) => void
   onRetryDirectory: (relativePath: string) => void
   onToggleDirectory: (relativePath: string) => void
@@ -48,6 +55,7 @@ export function MobileFileExplorerRow(props: Props) {
     item,
     maximumIndentation,
     expanded,
+    decorate,
     onPreviewFile,
     onRetryDirectory,
     onToggleDirectory,
@@ -108,6 +116,7 @@ export function MobileFileExplorerRow(props: Props) {
         item={item}
         paddingLeft={paddingLeft}
         expanded={expanded}
+        decorate={decorate}
         onPreviewFile={onPreviewFile}
         onToggleDirectory={onToggleDirectory}
         onOpenActions={onOpenActions}
@@ -227,6 +236,11 @@ function FolderPagingRow(props: {
   )
 }
 
+// As desktop's tree: a modified name is amber, so it doesn't read as dimmed like an ignored one.
+function treeStatusColor(status: GitFileStatus): string {
+  return status === 'modified' ? colors.gitDecorationModified : statusColor(status)
+}
+
 function isTreeNode(item: FileExplorerRow): item is TreeNode {
   return item.kind === 'directory' || item.kind === 'text' || item.kind === 'binary'
 }
@@ -235,14 +249,18 @@ function TreeRow(props: {
   item: TreeNode
   paddingLeft: number
   expanded: ReadonlySet<string>
+  decorate: DecorateFileRow
   onPreviewFile: (relativePath: string, displayName: string) => void
   onToggleDirectory: (relativePath: string) => void
   onOpenActions: (node: TreeNode) => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const { item, paddingLeft, expanded, onPreviewFile, onToggleDirectory, onOpenActions } = props
+  const { item, paddingLeft, expanded, decorate, onPreviewFile, onToggleDirectory, onOpenActions } =
+    props
   const isDirectory = item.kind === 'directory'
+  const { status, ignored } = decorate(item.relativePath, isDirectory)
+  const decorationColor = status ? treeStatusColor(status) : ignored ? colors.textMuted : undefined
   const isExpanded = expanded.has(item.relativePath)
   const previewable =
     item.kind !== 'directory' &&
@@ -296,6 +314,8 @@ function TreeRow(props: {
       )}
       {isDirectory ? (
         <Folder size={17} color={colors.textSecondary} />
+      ) : item.isSymlink ? (
+        <Link size={17} color={colors.textSecondary} />
       ) : markdown ? (
         <FileText size={17} color={disabled ? colors.textMuted : colors.textSecondary} />
       ) : isImage ? (
@@ -304,7 +324,15 @@ function TreeRow(props: {
         <File size={17} color={disabled ? colors.textMuted : colors.textSecondary} />
       )}
       <View style={styles.rowTextBlock}>
-        <Text style={[styles.rowTitle, disabled && styles.rowTitleDisabled]} numberOfLines={1}>
+        <Text
+          style={[
+            styles.rowTitle,
+            disabled && styles.rowTitleDisabled,
+            decorationColor !== undefined && { color: decorationColor },
+            ignored && styles.rowTitleIgnored
+          ]}
+          numberOfLines={1}
+        >
           {item.name}
         </Text>
         {disabled ? (
@@ -315,6 +343,17 @@ function TreeRow(props: {
       </View>
       {item.entryCount !== undefined ? (
         <Text style={styles.entryCount}>{formatCount(item.entryCount)}</Text>
+      ) : null}
+      {status ? (
+        <Text style={[styles.statusLetter, { color: decorationColor }]}>
+          {STATUS_LABELS[status]}
+        </Text>
+      ) : ignored ? (
+        <CircleSlash
+          size={13}
+          color={colors.textMuted}
+          accessibilityLabel={t('files.fileExplorerRow.ignored', 'Ignored by .gitignore')}
+        />
       ) : null}
     </Pressable>
   )

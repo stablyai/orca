@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
+import { useGitHubTaskItems } from '@/lib/work-items/github/useGitHubTaskItems'
 import type { TaskPageJiraCreationMetadataModel } from '../../jira/creation/use-task-page-jira-creation-metadata'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import { taskPageGitHubItemKey } from '@/components/task-page/github/mutations/task-page-github-work-item-mutation-keys'

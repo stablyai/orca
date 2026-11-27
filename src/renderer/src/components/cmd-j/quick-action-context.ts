@@ -9,7 +9,7 @@ import {
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { SshConnectionStatus } from '../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { NativeChatSplitDirection } from '@/components/native-chat/pane/routing/native-chat-pane-shortcut'
 import type { TabSplitDirection } from '@/store/slices/tabs/tabs-slice-contract'
 

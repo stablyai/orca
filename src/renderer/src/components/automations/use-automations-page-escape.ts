@@ -1,29 +1,30 @@
 import { useEffect } from 'react'
+import { useAppStore } from '@/store/index'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import type { AutomationsPageNavigation } from './automations-page-navigation'
 
 export function useAutomationsPageEscape({
   store,
-  local
+  local,
+  navigation
 }: {
   store: AutomationsPageStoreState
   local: AutomationsPageLocalState
+  navigation: AutomationsPageNavigation
 }): void {
-  const { activeModal, closeAutomationsPage, setPendingAutomationRunNavigation } = store
+  const { activeModal, closeAutomationsPage } = store
   const {
     createOpen,
     deleteTarget,
     externalDeleteTarget,
     isDetailOpen,
-    selectedAutomationRunPageId,
+    activePaneTab,
     pageView,
     runPageOrigin,
-    setPageView,
-    setActivePaneTab,
-    setIsDetailOpen,
-    setSelectedAutomationRunPageId
+    runNotFound
   } = local
   useEffect(() => {
     if (createOpen || deleteTarget || externalDeleteTarget || activeModal !== 'none') {
@@ -63,53 +64,51 @@ export function useAutomationsPageEscape({
         }
       }
 
-      if (pageView === 'run') {
-        event.preventDefault()
-        setPendingAutomationRunNavigation(null)
-        setSelectedAutomationRunPageId(null)
-        setPageView(runPageOrigin === 'automation' ? 'automations' : 'runs')
-        setIsDetailOpen(runPageOrigin === 'automation')
-        setActivePaneTab(runPageOrigin === 'automation' ? 'runs' : 'overview')
+      event.preventDefault()
+      if (pageView !== 'run' && !isDetailOpen && pageView !== 'runs') {
+        closeAutomationsPage()
         return
       }
-
-      if (isDetailOpen) {
-        event.preventDefault()
-        if (selectedAutomationRunPageId) {
-          setSelectedAutomationRunPageId(null)
+      // Why: Escape goes to the parent page; when that is the previous history entry, step
+      // back to it rather than adding a new one, so Forward still returns here.
+      useAppStore.getState().setAutomationsPageNextVisitMode('return')
+      // Escape undoes the last step: a run returns where it was opened from.
+      if (pageView === 'run') {
+        if (runNotFound) {
+          if (runNotFound.kind === 'run' && isDetailOpen) {
+            navigation.returnFromRun(runPageOrigin)
+          } else {
+            navigation.showList()
+          }
           return
         }
-        setIsDetailOpen(false)
-        setActivePaneTab('overview')
+        navigation.returnFromRun(runPageOrigin)
         return
       }
-
-      if (pageView === 'runs') {
-        event.preventDefault()
-        setPageView('automations')
+      if (isDetailOpen) {
+        if (activePaneTab === 'runs') {
+          navigation.showSelectedAutomation()
+          return
+        }
+        navigation.showList()
         return
       }
-
-      event.preventDefault()
-      closeAutomationsPage()
+      navigation.showList()
     }
 
     addAppKeyListener('keydown', onKeyDown)
     return () => removeAppKeyListener('keydown', onKeyDown)
   }, [
     activeModal,
+    activePaneTab,
     closeAutomationsPage,
     createOpen,
     deleteTarget,
     externalDeleteTarget,
     isDetailOpen,
+    navigation,
     pageView,
-    runPageOrigin,
-    selectedAutomationRunPageId,
-    setActivePaneTab,
-    setIsDetailOpen,
-    setSelectedAutomationRunPageId,
-    setPendingAutomationRunNavigation,
-    setPageView
+    runNotFound,
+    runPageOrigin
   ])
 }

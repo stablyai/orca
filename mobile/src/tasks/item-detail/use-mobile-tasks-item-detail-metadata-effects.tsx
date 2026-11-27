@@ -4,7 +4,7 @@ import {
   SHOW_MOBILE_DETAIL_METADATA_EDITORS,
   SHOW_MOBILE_DETAIL_REVIEW_PANELS
 } from '../task-list/mobile-tasks-options'
-import { withGitHubTargetOperation } from '../../source-control/review/github-work-item-operation'
+import { withGitHubTargetOperation } from '../../source-control/review/github-operations/github-work-item-operation'
 import { requireGitHubTaskTarget } from './github-task-identity'
 import type { ListAndDetailEffectsModel } from '../task-list/use-mobile-tasks-list-and-detail-effects'
 import { useEffect } from 'react'

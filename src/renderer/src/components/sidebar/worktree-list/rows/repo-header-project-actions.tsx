@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import React from 'react'
-import { useRepoSshGate } from '@/hooks/use-repo-ssh-gate'
+import { useRepoSshGate } from '@/lib/workspace/catalog/use-repo-ssh-gate'
 import {
   CircleX,
   Ellipsis,
@@ -30,14 +30,18 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getRepositoryIconSectionId } from '@/components/settings/repository/repository-settings-targets'
 import { WslMoveProjectMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import { WslMovedRepoUseHereMenuItem } from '@/components/wsl-move/WslMovedUseHereMenuItem'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type {
+  Repo,
+  WorktreeVisibilityDefaults
+} from '../../../../../../shared/repository/repo-types'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
+import '../../../../../../shared/worktree/visibility/ownership'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../../../shared/worktree/ownership'
+} from '../../../../../../shared/worktree/visibility/external-worktree-visibility'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
 import { setProjectHidden } from '../../hidden-projects/set-project-hidden'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
@@ -185,6 +189,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
           </DropdownMenuItem>
         ) : null}
         <WslMoveProjectMenuItem repo={repo} />
+        <WslMovedRepoUseHereMenuItem repo={repo} />
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() =>

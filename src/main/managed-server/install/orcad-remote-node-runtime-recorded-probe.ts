@@ -1,5 +1,8 @@
 // WSL opt-in reuses verified runtime stat signatures; inode replacement or in-place ctime change forces a full hash.
-import { pinnedNodeRuntimeAsset, type NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
+import {
+  pinnedNodeRuntimeAsset,
+  type NodeRuntimeTarget
+} from '../../../shared/node-runtime/node-runtime-pin'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { assertPosixOrcadHost } from './orcad-remote-host-support'

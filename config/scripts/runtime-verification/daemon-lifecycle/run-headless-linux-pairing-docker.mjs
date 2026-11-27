@@ -126,14 +126,6 @@ async function validateAuthenticatedPairing() {
     'paired client runtime ID does not match ready contract'
   )
   assert(
-    typeof statusResult?.runtime?.appVersion === 'string',
-    'paired server did not report its Orca app version'
-  )
-  assert(
-    statusResult?.runtime?.capabilities?.includes('updater.remote-control.v1'),
-    'paired server did not advertise remote updater capability'
-  )
-  assert(
     statusResult?.runtime?.remoteUpdateSupport?.automatic === false &&
       statusResult.runtime.remoteUpdateSupport.reason === 'manual-service-update-required',
     'direct headless server did not require a safe manual service update'

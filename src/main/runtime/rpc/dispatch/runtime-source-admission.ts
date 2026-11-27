@@ -1,4 +1,4 @@
-import { ExpectedRuntimeSourceSchema } from '../../../../shared/runtime-rpc-envelope'
+import { ExpectedRuntimeSourceSchema } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { getPublishedHostDescriptor } from '../../hosts/platform-probe/host-descriptor'
 import type { RpcEnvelopeMeta, RpcRequest, RpcResponse } from '../core'
 import { errorResponse } from '../responses/rpc-response'

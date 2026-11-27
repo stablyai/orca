@@ -1,22 +1,22 @@
 import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath } from '../../../pty/shell-startup/git-bash'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
-import { toLinuxPath, toWindowsWslPath } from '../../../../shared/wsl-paths'
-import { msysDrivePathToWindows } from '../../../../shared/cross-platform-path'
+import { toLinuxPath, toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
+import { msysDrivePathToWindows } from '../../../../shared/file-access/cross-platform-path'
 import {
   buildWslExecArgs,
   buildWslInteractiveLoginShellCommand
-} from '../../../../shared/wsl-login-shell-command'
+} from '../../../../shared/shell/wsl/wsl-login-shell-command'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { getBashWrapperLaunchArgs } from '../../local-pty/local-pty-shell-ready'
 import { ensureShellReadyWrappersAt } from '../../local-pty/local-pty-shell-ready-wrapper-generation'
-import { encodePowerShellCommand } from '../../../../shared/powershell-command-encoding'
+import { encodePowerShellCommand } from '../../../../shared/shell/launch/powershell-command-encoding'
 import {
   getPowerShellOsc133Bootstrap,
   getPowerShellOsc133StartupCommandMark
 } from '../../../pty/shell-startup/powershell-osc133-bootstrap'
 import { quoteStartupArg } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { WSL_GUEST_ROOT_MARKER_COMMAND } from '../../../../shared/wsl-guest-root-marker'
+import { WSL_GUEST_ROOT_MARKER_COMMAND } from '../../../../shared/shell/wsl/wsl-guest-root-marker'
 
 /** cmd.exe's own documented ceiling; callers that go through sshd budget below it. */
 export const CMD_EXE_COMMAND_LINE_MAX_CHARS = 8191

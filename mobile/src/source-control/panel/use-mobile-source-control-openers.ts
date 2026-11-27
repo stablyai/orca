@@ -3,7 +3,7 @@ import { useWorkspaceRouteHandoff } from '../../navigation/workspace-route-hando
 import {
   buildMobileReviewFileRoute,
   type MobileReviewRouteArea
-} from '../review/mobile-review-route'
+} from '../review/diff-state/mobile-review-route'
 
 // A changed file in the worktree or on the branch, or a file in one commit (diffed against its parent).
 export type MobileDiffFileTarget =

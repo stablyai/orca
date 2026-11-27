@@ -1,5 +1,8 @@
 import * as z from 'zod'
-import { prFlag, prText } from '../../source-control/review/github-pr-entity-reply-schema'
+import {
+  prFlag,
+  prText
+} from '../../source-control/review/github-operations/github-pr-entity-reply-schema'
 import { taskCommentWriteEnvelopeSchema } from '../task-provider-entity-reply-schema'
 
 // Missing or unreadable comments retain the local echo; callers handle optional ok/error fields themselves.

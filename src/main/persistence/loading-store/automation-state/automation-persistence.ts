@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type {
   Automation,
@@ -7,8 +7,7 @@ import type {
 } from '../../../../shared/automations/automation-definition'
 import type {
   AutomationDispatchResult,
-  AutomationRun,
-  AutomationRunTrigger
+  AutomationRun
 } from '../../../../shared/automations/history/automation-run'
 import type {
   AutomationCapturedHostIssue,
@@ -23,6 +22,7 @@ import type {
   AutomationUpdatePreconditions
 } from '../../../../shared/automations/ownership/automation-owner-precondition'
 import type { WorkspaceRunContext } from '../../../../shared/work-items/task-source-context'
+import type { AutomationRunEvent } from '../../../../shared/automation-event-triggers'
 import { getWorktreePathBasenameFromId } from '../../../../shared/worktree/id'
 import {
   normalizeAutomationRunWorkspaceDisplayName,
@@ -35,6 +35,7 @@ import {
   type AutomationDefinitionOperations
 } from '../../scheduling-automations/automation-definition-operations'
 import { deleteAutomation as deleteAutomationOperation } from '../../scheduling-automations/automation-definition-removal'
+import { foldAutomationEvent as foldAutomationEventOperation } from '../../scheduling-automations/automation-run-occurrence-folding'
 import {
   updateAutomations as updateAutomationsOperation,
   type AutomationBatchUpdate,
@@ -43,6 +44,7 @@ import {
 import {
   createAutomationRun as createAutomationRunOperation,
   listAutomationRuns as listAutomationRunsOperation,
+  listAutomationRunsByAutomation as listRunsByAutomationOperation,
   listAutomationRunsPage as listAutomationRunsOperationPage,
   recordRepeatedAutomationSkip as recordRepeatedAutomationSkipOperation,
   snapshotAutomationRunWorkspaceDisplayName as snapshotAutomationRunWorkspaceDisplayNameOperation,
@@ -51,6 +53,7 @@ import {
 } from '../../scheduling-automations/automation-run-operations'
 import {
   advanceAutomationNextRun as advanceAutomationNextRunOperation,
+  advanceAutomationNextRuns as advanceAutomationNextRunsOperation,
   disableAutomations as disableAutomationsOperation,
   getLatestAutomationOccurrence as getLatestAutomationOccurrenceOperation
 } from '../../scheduling-automations/automation-schedule-operations'
@@ -65,7 +68,6 @@ import {
 import type { StoreRuntimeState } from '../store-runtime-state'
 import type { WriteFlushBarrierOperations } from '../profile-writing/write-flush-barriers'
 import type { ProfilePreferences } from '../profile-preferences/profile-preferences'
-import { AutomationEnablementTransitions } from './automation-enablement-transitions'
 
 type AutomationPersistenceRuntime = Pick<
   StoreRuntimeState,
@@ -77,16 +79,17 @@ type AutomationPersistenceRuntime = Pick<
 >
 
 const automationPersistenceContext = Symbol('AutomationPersistence')
-const automationEnablement = Symbol('AutomationEnablement')
 type AutomationPersistenceContext = {
   runtime: AutomationPersistenceRuntime
   flushBarriers: WriteFlushBarrierOperations
   preferences: ProfilePreferences
 }
 
+/** An operation's arguments after the operations it acts through. */
+type ArgsAfterOperations<F> = F extends (operations: never, ...rest: infer R) => unknown ? R : never
+
 export class AutomationPersistence {
   readonly [automationPersistenceContext]: AutomationPersistenceContext
-  readonly [automationEnablement] = new AutomationEnablementTransitions()
 
   constructor(
     runtime: AutomationPersistenceRuntime,
@@ -148,6 +151,10 @@ export class AutomationPersistence {
     )
   }
 
+  listAutomationRunsByAutomation(ids: readonly string[]): Map<string, AutomationRun[]> {
+    return listRunsByAutomationOperation(this[automationPersistenceContext].runtime.state, ids)
+  }
+
   listAutomationRunsPage(automationId?: string, limit?: number, cursor?: string) {
     return listAutomationRunsOperationPage(
       this[automationPersistenceContext].runtime.state,
@@ -159,7 +166,7 @@ export class AutomationPersistence {
 
   createAutomation(
     input: AutomationCreateInput,
-    options?: { destination?: AutomationDestination; resolvedRepo?: Repo }
+    options?: { destination?: AutomationDestination; id?: string; resolvedRepo?: Repo }
   ): Automation {
     return createAutomationOperation(getAutomationDefinitionOperations(this), input, options)
   }
@@ -169,23 +176,12 @@ export class AutomationPersistence {
     updates: AutomationUpdateInput,
     options?: AutomationUpdatePreconditions & { resolvedRepo?: Repo }
   ): Automation {
-    const stored = this[automationPersistenceContext].runtime.state.automations ?? []
-    return this[automationEnablement].track(stored, id, () =>
-      updateAutomationOperation(getAutomationDefinitionOperations(this), id, updates, options)
-    )
+    return updateAutomationOperation(getAutomationDefinitionOperations(this), id, updates, options)
   }
 
   /** `updateAutomation` for many rows with one list write and one flush. */
   updateAutomations(batch: readonly AutomationBatchUpdate[]): AutomationBatchUpdateResult[] {
-    const stored = this[automationPersistenceContext].runtime.state.automations ?? []
-    return this[automationEnablement].trackMany(stored, () =>
-      updateAutomationsOperation(getAutomationDefinitionOperations(this), batch)
-    )
-  }
-
-  /** Changes when an update pauses or re-enables the automation, never on run bookkeeping. */
-  automationEnablementRevision(id: string): number {
-    return this[automationEnablement].revision(id)
+    return updateAutomationsOperation(getAutomationDefinitionOperations(this), batch)
   }
 
   stampLegacyAutomationRunContext(automationId: string, runContext: WorkspaceRunContext): boolean {
@@ -200,30 +196,18 @@ export class AutomationPersistence {
     deleteAutomationOperation(getAutomationDefinitionOperations(this), id, options)
   }
 
-  createAutomationRun(
-    automation: Automation,
-    scheduledFor: number,
-    trigger: AutomationRunTrigger = 'scheduled'
-  ): AutomationRun {
-    return createAutomationRunOperation(
-      getAutomationRunOperations(this),
-      automation,
-      scheduledFor,
-      trigger
-    )
+  createAutomationRun(...args: ArgsAfterOperations<typeof createAutomationRunOperation>) {
+    return createAutomationRunOperation(getAutomationRunOperations(this), ...args)
   }
 
   recordRepeatedAutomationSkip(
-    automationId: string,
-    error: string,
-    scheduledFor: number
-  ): AutomationRun | null {
-    return recordRepeatedAutomationSkipOperation(
-      getAutomationRunOperations(this),
-      automationId,
-      error,
-      scheduledFor
-    )
+    ...args: ArgsAfterOperations<typeof recordRepeatedAutomationSkipOperation>
+  ) {
+    return recordRepeatedAutomationSkipOperation(getAutomationRunOperations(this), ...args)
+  }
+
+  foldAutomationEvent(automationId: string, event: AutomationRunEvent): AutomationRun | null {
+    return foldAutomationEventOperation(getAutomationRunOperations(this), automationId, event)
   }
 
   updateAutomationRun(result: AutomationDispatchResult): AutomationRun {
@@ -249,6 +233,20 @@ export class AutomationPersistence {
         this[automationPersistenceContext].flushBarriers.flush()
       },
       id,
+      this[automationPersistenceContext].runtime.storageAuthority,
+      now
+    )
+  }
+
+  advanceAutomationNextRuns(ids: ReadonlySet<string>, now = Date.now()): number {
+    return advanceAutomationNextRunsOperation(
+      this[automationPersistenceContext].runtime.state,
+      () => {
+        markAutomationDefinitionDomain(this)
+        this[automationPersistenceContext].flushBarriers.flush()
+      },
+      ids,
+      this[automationPersistenceContext].runtime.storageAuthority,
       now
     )
   }
@@ -265,7 +263,11 @@ export class AutomationPersistence {
   }
 
   getLatestAutomationOccurrence(automation: Automation, now = Date.now()): number | null {
-    return getLatestAutomationOccurrenceOperation(automation, now)
+    return getLatestAutomationOccurrenceOperation(
+      automation,
+      this[automationPersistenceContext].runtime.storageAuthority,
+      now
+    )
   }
 }
 

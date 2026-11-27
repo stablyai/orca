@@ -15,7 +15,11 @@ import {
   startWindowsInstallDirAclRepairIfPoisoned
 } from '../windows-install-permissions/windows-install-dir-acl-recovery'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
-import { notifyMainWindowBecameVisible } from '../../window/visibility/main-window-visibility'
+import {
+  notifyMainWindowBecameVisible,
+  notifyMainWindowFocused,
+  notifyMainWindowHidden
+} from '../../window/visibility/main-window-visibility'
 import { setTrayAttention } from '../../tray/system-tray'
 import { createSystemTrayDeferred, showRendererRecoveryPrompt } from './main-window-actions'
 import { attachMainWindowCoreServices } from './main-window-core-services'
@@ -45,23 +49,29 @@ import {
   applyBackgroundActivationPolicy,
   applyServeDesktopWindowActivationPolicy
 } from '../../window/activation/foreground-activation-policy'
+import type { MainWindowOpenOptions } from '../../window/main-window/main-window-contracts'
+import { argvRequestsBackgroundOpen } from '../../../shared/app-lifecycle/launch/background-open-argv'
 
 const TRAY_CREATE_FALLBACK_MS = 12_000
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 
-export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
+export async function openMainWindow(options: MainWindowOpenOptions = {}): Promise<BrowserWindow> {
   logStartupMilestone('open-main-window-start')
-  const { store, keybindings } = requireMainWindowServices({
+  // The launch's first window honours the background request `orca open` put on its argv.
+  const revealInBackground =
+    options.revealInBackground ??
+    (!state.hasOpenedMainWindow && argvRequestsBackgroundOpen(process.argv))
+  const { keybindings } = requireMainWindowServices({
     store: state.store,
-    runtime: state.runtime,
-    stats: state.stats,
-    rateLimits: state.rateLimits,
-    automations: state.automations,
-    codexAccounts: state.codexAccounts,
-    codexRuntimeHome: state.codexRuntimeHome,
-    claudeAccounts: state.claudeAccounts,
-    claudeRuntimeAuth: state.claudeRuntimeAuth,
-    keybindings: state.keybindings
+    runtime: state.core.runtime,
+    stats: state.core.stats,
+    rateLimits: state.core.rateLimits,
+    automations: state.core.automations,
+    codexAccounts: state.core.codexAccounts,
+    codexRuntimeHome: state.core.codexRuntimeHome,
+    claudeAccounts: state.core.claudeAccounts,
+    claudeRuntimeAuth: state.core.claudeRuntimeAuth,
+    keybindings: state.core.keybindings
   })
   if (process.platform === 'win32') {
     logStartupMilestone('acl-grant-start')
@@ -89,9 +99,9 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
     }
   }
   if (state.isServeMode) {
-    applyServeDesktopWindowActivationPolicy({ warn: console.warn })
+    applyServeDesktopWindowActivationPolicy({ warn: console.warn, background: revealInBackground })
   }
-  const window = createMainWindow(store, {
+  const window = createMainWindow(state.nativeSettings, {
     getIsQuitting: () => state.isQuitting,
     onQuitAborted: () => {
       state.isQuitting = false
@@ -142,6 +152,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
     },
     deferLoad: true,
     ...(options.revealOnDidFinishLoad === true ? { revealOnDidFinishLoad: true } : {}),
+    revealInBackground,
     title: state.devInstanceIdentity?.name ?? app.name,
     getKeybindings: () => keybindings.getOverrides(),
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
@@ -188,13 +199,36 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
     }
   }
   window.webContents.on('did-finish-load', onFirstWindowLoad)
-  attachMainWindowCoreServices(window, {
-    markExpectedRendererReload,
-    recordRendererReload: (ignoreCache) =>
-      recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
-  })
   state.mainWindow = window
   state.hasOpenedMainWindow = true
+  window.on('closed', () => {
+    if (state.mainWindow === window) {
+      state.mainWindow = null
+      if (state.isServeMode) {
+        applyBackgroundActivationPolicy({ serveWithoutDesktopWindow: true, warn: console.warn })
+      }
+    }
+    clearExpectedRendererReload(rendererWebContentsId)
+    clearMainWindowAgentStatusListeners()
+  })
+  const hostInitialization = Promise.withResolvers<void>()
+  try {
+    await attachMainWindowCoreServices(window, {
+      hostInitialization: hostInitialization.promise,
+      markExpectedRendererReload,
+      recordRendererReload: (ignoreCache) =>
+        recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
+    })
+    if (window.isDestroyed() || state.mainWindow !== window || state.isQuitting) {
+      throw new Error('Main window closed while preparing services')
+    }
+  } catch (error) {
+    hostInitialization.resolve()
+    if (!window.isDestroyed()) {
+      window.destroy()
+    }
+    throw error
+  }
   const publishResourceVisibility = (): void => {
     if (!window.isDestroyed()) {
       window.webContents.send('memory:resourceWindowVisibility', isResourceWindowVisible(window))
@@ -211,6 +245,9 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   window.on('minimize', stopSyntheticTitleSpinnerTimer)
   window.on('show', notifyMainWindowBecameVisible)
   window.on('restore', notifyMainWindowBecameVisible)
+  window.on('focus', notifyMainWindowFocused)
+  window.on('hide', notifyMainWindowHidden)
+  window.on('minimize', notifyMainWindowHidden)
   window.on('show', () => setTrayAttention(false))
   window.on('restore', () => setTrayAttention(false))
   installMainWindowAgentStatusListeners({
@@ -223,17 +260,8 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
         minIntervalMs: AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS
       })
   })
-  window.on('closed', () => {
-    if (state.mainWindow === window) {
-      state.mainWindow = null
-      if (state.isServeMode) {
-        applyBackgroundActivationPolicy({ serveWithoutDesktopWindow: true, warn: console.warn })
-      }
-    }
-    clearExpectedRendererReload(rendererWebContentsId)
-    clearMainWindowAgentStatusListeners()
-  })
   logStartupMilestone('load-start')
-  loadMainWindow(window)
+  loadMainWindow(window, options.loadObserver)
+  hostInitialization.resolve()
   return window
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import type {
   DocPreviewFileFailure,
@@ -11,6 +11,7 @@ import {
 } from '@/lib/browser/history/browser-page-conversion-history'
 import { BrowserGuestAnnotateOverlays } from '@/components/browser-pane/annotate/browser-guest-annotate-overlays'
 import { attachDocPreviewWebview } from './doc-preview-webview-attach'
+import { setBrowserGuestVisible } from '../host-guest/browser-guest-activity'
 import {
   buildDocPreviewGrantRequest,
   ensureDocPreviewGrant,
@@ -20,7 +21,7 @@ import {
 import { selectWorktreeHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { openDocPreviewExternally, openDocPreviewSource } from './doc-preview-document-actions'
 import {
   DocPreviewDirectoryAccessBanner,
@@ -33,7 +34,7 @@ import { buildDocPreviewShareControl } from './doc-preview-artifact-share'
 import { useDocPreviewWebviewHistory } from './doc-preview-webview-history'
 import { useDocPreviewGuestFocus } from './use-doc-preview-guest-focus'
 import { useDocPreviewGuestTools } from './use-doc-preview-guest-tools'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { getOpenFileRevealOwner } from '@/lib/files/os-open/reveal-in-file-manager'
 import { subscribeDocPreviewExternalLinkConfirmation } from './doc-preview-external-link-confirmation'
@@ -59,8 +60,13 @@ export function HtmlDocPreview({
   const confirm = useConfirmationDialog()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
+  const isActiveRef = useRef(isActive)
+  useLayoutEffect(() => {
+    isActiveRef.current = isActive
+  }, [isActive])
   const reloadRef = useRef<(() => void) | null>(null)
   const [state, setState] = useState<PreviewState>('loading')
+  const [documentGeneration, setDocumentGeneration] = useState(0)
   const [failureReason, setFailureReason] = useState<DocPreviewFileFailureReason | null>(null)
   const [assetFailures, setAssetFailures] = useState<DocPreviewFileFailure[]>([])
   const [downloadBlocked, setDownloadBlocked] = useState(false)
@@ -124,13 +130,16 @@ export function HtmlDocPreview({
     browserOverlayViewport,
     handleAnnotationViewportMessage,
     resetBrowserOverlayViewport,
-    elementTools
+    elementTools,
+    toolSwitch
   } = useDocPreviewGuestTools({
+    documentGeneration,
     previewId,
     worktreeId,
     grantId,
     webviewRef,
     containerRef,
+    isActive,
     toolsReady: state === 'ready' && !isUnavailable
   })
   const previewDocument = useMemo(
@@ -144,6 +153,7 @@ export function HtmlDocPreview({
     let unsubscribeExternalLinks: (() => void) | undefined
     let loadFailed = false
     const onLoadStarted = (): void => {
+      setDocumentGeneration((generation) => generation + 1)
       resetBrowserOverlayViewport()
       loadFailed = false
       setFailureReason(null)
@@ -246,6 +256,7 @@ export function HtmlDocPreview({
         detach = attached.detach
         reloadRef.current = attached.reload
         webviewRef.current = attached.webview
+        setBrowserGuestVisible(previewId, isActiveRef.current)
         // Main binds the grant on first commit; tools need the attached guest pointed at it.
         setGrant(handle)
       })
@@ -279,6 +290,7 @@ export function HtmlDocPreview({
   ])
 
   useEffect(() => {
+    setBrowserGuestVisible(previewId, isActive)
     // Eviction removes the guest, not the retained pane; only the selected preview restores it.
     if (isActive && webviewRef.current && !webviewRef.current.isConnected) {
       setRemintCount((count) => count + 1)
@@ -338,7 +350,7 @@ export function HtmlDocPreview({
         onOpenExternally={() => openDocPreviewExternally(previewDocument)}
         elementTools={elementTools}
         markupActive={markup.isActive}
-        onToggleMarkup={() => (markup.isActive ? markup.cancel() : void markup.start())}
+        onToggleMarkup={() => toolSwitch.toggleTool('draw')}
         // Nothing has painted yet on a loading or failed preview, so there is nothing to draw on.
         markupDisabled={isUnavailable || state !== 'ready' || grab.state !== 'idle'}
         shareControl={buildDocPreviewShareControl(filePath, grant?.location ?? null)}
@@ -370,9 +382,13 @@ export function HtmlDocPreview({
           annotationSend={annotationSend}
           grabAnnotations={grabAnnotations}
           containerRef={containerRef}
-          webviewRef={webviewRef}
+          guestSurfaceRef={webviewRef}
           browserOverlayViewport={browserOverlayViewport}
           worktreeId={worktreeId}
+          currentUrl={history.currentUrl}
+          toolSwitch={toolSwitch}
+          canPickElements={state === 'ready' && !isUnavailable}
+          showPaletteKeyHints={true}
         />
         {state === 'loading' && failureReason === null ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-editor-surface">

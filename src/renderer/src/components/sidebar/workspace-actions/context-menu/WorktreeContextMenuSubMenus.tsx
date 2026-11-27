@@ -1,3 +1,4 @@
+import { WorktreeRemoveParentMenuItem } from './WorktreeRemoveParentMenuItem'
 import {
   CircleX,
   Copy,
@@ -6,7 +7,6 @@ import {
   Folders,
   GitBranchPlus,
   GitFork,
-  Unlink,
   Workflow
 } from 'lucide-react'
 import {
@@ -43,6 +43,12 @@ export function WorktreeCopySubMenu({ model }: { model: WorktreeContextMenuModel
           <Copy className="size-3.5" />
           {t('auto.components.sidebar.WorktreeContextMenu.copyNameOption', 'Worktree Name')}
         </DropdownMenuItem>
+        {model.worktree.firstAgentMessageRenameError ? (
+          <DropdownMenuItem onSelect={model.handleCopyRenameError} disabled={model.isDeleting}>
+            <Copy className="size-3.5" />
+            {t('auto.components.sidebar.WorktreeContextMenu.copyAutoNameError', 'Auto-Name Error')}
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   )
@@ -84,10 +90,11 @@ export function WorktreeLineageSubMenu({ model }: { model: WorktreeContextMenuMo
           </DropdownMenuItem>
         ) : null}
         {hasParentLink ? (
-          <DropdownMenuItem onSelect={model.handleRemoveParentLink} disabled={isDeleting}>
-            <Unlink className="size-3.5" />
-            {t('auto.components.sidebar.WorktreeContextMenu.579b1a8e61', 'Remove from Parent')}
-          </DropdownMenuItem>
+          <WorktreeRemoveParentMenuItem
+            worktree={model.worktree}
+            onSelect={model.handleRemoveParentLink}
+            disabled={isDeleting}
+          />
         ) : null}
       </DropdownMenuSubContent>
     </DropdownMenuSub>

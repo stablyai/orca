@@ -35,7 +35,7 @@ the boundary records a thrown render so a scenario can observe it. The boundary 
 effect sink, so a hook mount, whose projection is the hook's own value and never a crash, still
 carries it into a golden: an effect forces a cleanup checkpoint even when no adapter looks.
 
-The view packages a screen imports are in `screen-native-substitutes.ts`, under the table's usual
+The view packages a screen imports are in `native-substitutes/screen-native-substitutes.ts`, under the table's usual
 rule: only what a recording is known to read is listed, the rest throws. Every element there is
 inert. It renders its children and keeps its props where a projection can read them, and does
 nothing else: no callback it is handed is ever invoked, nothing is measured and no navigation
@@ -144,9 +144,9 @@ differing (checkpoint, field) at its first differing JSON path with both resolve
 where an append-only field re-states the same moved entry at later checkpoints; past eight groups it
 counts the rest. The failure ends with the command that re-records that golden.
 
-`mutants/` is unreachable from the recording drivers by rule, not by convention:
-`mutants/mutant-seam.test.ts` walks the static import graph from the two drivers and fails if any
-module under `mutants/` appears in it, and refuses a recording file that names the directory. A
+Keep `mutants/` outside the recording drivers' dependency graph. The previously documented
+`mutants/mutant-seam.test.ts` is absent from this tree, so it supplies no automated boundary
+check here. A
 mutant planted on the recording path would be recorded and replayed alike, so every golden would
 compare clean while certifying the mutated code.
 
@@ -154,14 +154,13 @@ A module-private product export an adapter drives is exposed by its own module �
 `settingsMountExposures` — not by a shared table. One exposure is shared instead: five domains
 mount a screen that reads the client off the context `client-context.tsx` keeps module-private, and
 `hostClientContextExposure` is the one copy of that string. A rename of the local is invisible to
-`tsc`, so `adapter-seam.test.ts` asserts the declaration it names exists exactly once, and refuses a
-sixth inline copy. The same test requires every file under `adapters/` to be registered in
-`adapters/mounted-operation-modules.ts`.
+`tsc`. The previously documented `adapter-seam.test.ts` is absent from this tree, so it supplies
+no automated context-name, duplicate-exposure or adapter-registration check here.
 
 Checkpoints contain ordered sender calls and serialized physical application payloads, action and
 request settlements, projected state, and ordered external effects. Each sender call, each payload
 and each effect carries `ordinal`, its position in one monotonic counter the recording shares
-across all three lists (`write-ordinal.ts`), stamped at the moment that entry is written: the three
+across all three lists (`execution/write-ordinal.ts`), stamped at the moment that entry is written: the three
 are independent append-only lists, so without a shared ordinal a send reordered ahead of a device
 write, or ahead of a subscribe, moves no list and no golden notices. A subscribe is the sharper case
 of the two, because it publishes synchronously while a request first waits for connected: swapping
@@ -183,7 +182,7 @@ A golden records no operating system, so comparison does not require the one it 
 ### Value pool
 
 Format version 3 stores each distinct observation _entry_ once under `values`, keyed by the first
-12 hex of sha256 over the entry's sorted-key, whitespace-free JSON. `golden-value-pool.ts` declares
+12 hex of sha256 over the entry's sorted-key, whitespace-free JSON. `goldens/golden-value-pool.ts` declares
 how each field interns rather than sniffing it from the value: `sender`, `payloads` and `effects`
 are lists of pool hashes, `settlements` is a map from action id to a pool hash, and `state` is one
 hash. A field recorded in a container its declaration does not name fails, so a projection change
@@ -229,8 +228,8 @@ and any change to it moves the hash in every checkpoint that reads it.
 
 ## Owned family schedules
 
-`family-recordings.test.ts` runs the selected sibling, interruption and lifecycle schedules in
-`derived-goldens.ts`. These exercise completion order, pending peers and stale owners through the
+`goldens/family-recordings.test.ts` runs the selected sibling, interruption and lifecycle schedules in
+`goldens/derived-goldens.ts`. These exercise completion order, pending peers and stale owners through the
 actual mounted operations. Blur variants are omitted where the adapter's blur action does nothing.
 
 The automatic per-reply-site shape matrices have been removed. Their per-caller refusal, malformed
@@ -286,15 +285,10 @@ state and effects as the base branch did? A pull request that moves no golden sa
 ### Recorded requests against the host's params contract
 
 The goldens script the host's replies, so nothing in a replay stops a scenario from recording a
-success for a request the real host would refuse. `recorded-request-params.test.ts` parses every
-distinct request the corpus puts on the wire with the host dispatcher's own
-`parseRpcRequestParams` and the schema `rpc-params-catalog.generated.ts` binds to that method. It
-fails on a method the host does not have, params the host refuses, params sent to a method that
-takes none (the dispatcher never reads them), and keys the schema silently strips, unless an entry
-in its inventory gives the reason; an entry nothing strips fails too. It runs in the Mobile Checks
-suite, which a desktop pull request to `src/shared/` triggers, so tightening a host schema that
-today's phone requests do not satisfy fails there. It checks against the current
-host only, and it does not check the scripted replies against real host results.
+success for a request the real host would refuse. The previously documented
+`recorded-request-params.test.ts` is absent from this tree. This tree supplies no such corpus-wide
+host-params check through that suite, and the recordings do not validate scripted replies against
+real host results. The finding below describes the earlier check's history.
 
 When it landed it found twelve requests the host would refuse, all from invented fixture values
 rather than product code: git object ids that were not ids, an iOS push token without its APNs
@@ -351,10 +345,9 @@ It is not a substitute for reading the diff. Five facts bound it, all learned th
   in-flight guard survived. An argument the adapter supplies itself is not an
   argument. What the adapter forwards is the whole of what the goldens can hold.
 
-`mutants/probe-hole-witness.test.ts` closes the first two and the last, and keeps them closed. It asserts the
-hole and the closure together: each probe must kill its mutation _and_ every pre-probe scenario of
-the same operation must still survive it. A probe that stops being load-bearing fails instead of
-lingering.
+The previously documented `mutants/probe-hole-witness.test.ts` is absent from this tree. This
+tree supplies no such paired hole-and-closure check through that suite; the preceding mutation
+measurements remain historical findings.
 
 What is still not covered: what the count-based raw-port inventory covers instead (which files
 reach `sendRequest`, and how often), native storage, transport skew, and the mutations listed under
@@ -364,8 +357,8 @@ Subscription coverage requires a scenario that drives the real consumer. The man
 notifications, live worktree names, native chat, and host worktree refresh. Structured transcript,
 structured status, and session tab streams still need scenarios. Account streams need native UI
 or multi-host support; terminal and browser streams need device effects the recorder cannot model.
-`rpc-client-ready-stream-release.test.ts` checks release before and after `ready` through both
-direct and relay transports.
+The previously documented `rpc-client-ready-stream-release.test.ts` is absent from this tree;
+this tree supplies no release-before/after-`ready` check through that suite.
 
 The frame plumbing is method-agnostic, so what stops a site is its consumer rather than the runner.
 Blur is unrecorded across all ten subscribing sites: `useFocusEffect` is substituted as `useEffect`,
@@ -474,17 +467,16 @@ rather than reading it as incompatible. `collectSalvageDrops` counts both and na
 every decoded reply, and no product code reads the result — so which rows a reply lost was visible
 nowhere, including here.
 
-The recorder now reads it. `salvage-observation.ts` wraps `classifyRpcReply` on the mounted module,
+The recorder now reads it. `module-mounting/salvage-observation.ts` wraps `classifyRpcReply` on the mounted module,
 which is the one seam every checked read passes through and the only one that knows which operation
 the drop happened under, and records a non-empty report as a `reply-salvage` effect carrying the
 operation, the method, the decoded variant, the dropped paths and the count. Nothing in the product
 tree changes: the report was already being built and thrown away.
 
 A narrowed element or member schema changes a golden when a recorded row stops parsing, even
-where nothing downstream reads the row. `salvage-observation.test.ts` is what keeps the
-observation itself honest, driving a malformed row and a malformed optional through the real
-`git.status` reply schema, because a refactor that stopped reporting would otherwise leave every
-golden comparing clean.
+where nothing downstream reads the row. The previously documented
+`salvage-observation.test.ts` is absent from this tree. This tree supplies no standalone
+malformed-row/optional observation check through that suite.
 
 ## The cleanup checkpoint
 

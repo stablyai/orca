@@ -1,5 +1,5 @@
 import type { WorkspaceAttachment } from '../../shared/worktree/types'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { JiraIssue } from '../../shared/jira/jira-types'
 import {
   isResolvedJiraIssueMatch,
@@ -14,7 +14,7 @@ import {
 
 import type { HandlerContext } from '../dispatch/dispatch'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { getOptionalStringFlag, getRepeatedStringFlag } from '../arguments/flags'
 import { resolveJiraTarget } from '../jira/jira-target'
 

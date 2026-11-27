@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { TelemetryConsentState } from '../../../../../shared/telemetry-consent-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { TelemetryConsentState } from '../../../../../shared/telemetry/telemetry-consent-types'
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
 import {

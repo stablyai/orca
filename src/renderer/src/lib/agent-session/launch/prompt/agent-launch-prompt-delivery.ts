@@ -1,6 +1,6 @@
 import { agentDeliversDraftViaNativePrefill } from '@/lib/agent-session/messaging/paste/agent-native-draft-prefill'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-session/messaging/paste/agent-paste-draft'
-import { canMirrorLaunchDraftToNativeChat } from '../../../../../../shared/native-chat/input/native-chat-launch-draft-mirrorability'
+import { canMirrorLaunchDraftToNativeChat } from '../../../../../../shared/native-chat/input/composer/native-chat-launch-draft-mirrorability'
 import { isNativeChatSupportedAgent } from '../../../../../../shared/native-chat/native-chat-agent-support'
 import { useAppStore } from '@/store/index'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
@@ -31,6 +31,7 @@ export function deliverLaunchPromptToAgentTab(args: {
   timeoutMs?: number
   beforePaste?: () => boolean
   onTimeout?: () => void
+  onAgentExited?: () => void
   /** The paste was written without ever observing the agent's composer. */
   onUnconfirmedDelivery?: () => void
   /** The launch pane's PTY once its agent started; the chat copy is seeded only then. */
@@ -80,6 +81,7 @@ export function deliverLaunchPromptToAgentTab(args: {
     forcePaste,
     timeoutMs,
     onTimeout,
+    onAgentExited: args.onAgentExited,
     onUnconfirmedDelivery,
     beforePaste: args.beforePaste,
     ...(launchPty ? { launchPty } : {})

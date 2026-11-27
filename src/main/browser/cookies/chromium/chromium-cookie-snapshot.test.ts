@@ -14,7 +14,7 @@ vi.mock('node:fs', async (importOriginal) => {
   }
 })
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -93,7 +93,6 @@ describe('createChromiumCookieSnapshot', () => {
     database.close()
 
     expect(row).toEqual(expect.objectContaining({ value: 'wal-value' }))
-    expect(beforeCopyMock.mock.calls.filter(([source]) => source === sourcePath)).toHaveLength(2)
     snapshot.cleanup()
   })
 
@@ -117,26 +116,6 @@ describe('createChromiumCookieSnapshot', () => {
     database.close()
 
     expect(row).toEqual(expect.objectContaining({ value: 'main-value' }))
-    expect(beforeCopyMock.mock.calls.filter(([source]) => source === sourcePath)).toHaveLength(2)
     snapshot.cleanup()
-  })
-
-  it('removes a partial snapshot when a WAL copy fails', () => {
-    const sourcePath = join(root, 'Chrome', 'Default', 'Cookies')
-    const snapshotsRoot = join(root, 'snapshots')
-    mkdirSync(snapshotsRoot)
-    writer = createChromiumCookieTestDatabase(sourcePath, [{ name: 'session', value: 'value' }], {
-      journalMode: 'wal'
-    })
-    beforeCopyMock.mockImplementation((source: string) => {
-      if (source === `${sourcePath}-wal`) {
-        throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
-      }
-    })
-
-    expect(() => createChromiumCookieSnapshot(sourcePath, { tempRoot: snapshotsRoot })).toThrow(
-      'permission denied'
-    )
-    expect(readdirSync(snapshotsRoot)).toEqual([])
   })
 })

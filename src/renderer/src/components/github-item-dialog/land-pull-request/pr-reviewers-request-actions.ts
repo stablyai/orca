@@ -12,7 +12,7 @@ import type { GitHubAssignableUser } from '../../../../../shared/github/pull-req
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { translate } from '@/i18n/i18n'
 import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 

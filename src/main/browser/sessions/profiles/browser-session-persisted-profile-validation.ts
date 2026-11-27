@@ -1,5 +1,5 @@
-import { getOrcaProfileBrowserSessionPartition } from '../../../../shared/orca-profiles'
-import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
+import { getOrcaProfileBrowserSessionPartition } from '../../../../shared/orca-profiles/orca-profiles'
+import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 const BROWSER_SESSION_PROFILE_ID_RE =
   /^[\da-f-]{8}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{12}$/

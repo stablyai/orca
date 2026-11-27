@@ -1,5 +1,8 @@
+import { join } from 'node:path'
+import { agentModelCatalogInputStamp } from '../../native-chat/agent-model-catalog/agent-model-catalog-input-stamp'
 import { withOrcaClaudeChatEntrypoint } from '../../../shared/agent-launch/startup/claude-chat-entrypoint'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
+import type { ClaudeCliLaunch } from '../cli-capabilities/claude-cli-flag-support'
 import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation
@@ -7,20 +10,11 @@ import {
 import {
   buildClaudeModelListArgs,
   CLAUDE_MODEL_LIST_STDIN
-} from '../../../shared/claude-model-list-probe'
-import { requireLegacyAgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
-import { runClaudeBackgroundAttempts } from '../../../shared/claude-background-run-isolation'
-import {
-  isCompleteClaudeModelListing,
-  listedModels,
-  record
-} from '../structured/launch/claude-structured-model-catalog'
-import { claudeCatalogSignedOut } from './claude-model-catalog-signed-out'
-import {
-  claudeFastModeSupport,
-  wireClaudeModels
-} from '../structured/launch/claude-structured-catalog-listing'
-import { readClaudeSettingsApplied } from '../structured/launch/claude-structured-session-options'
+} from '../../../shared/agent-session/options/model-catalog/claude-model-list-probe'
+import { requireLegacyAgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { runClaudeBackgroundAttempts } from '../../../shared/text-generation/launch/claude-background-run-isolation'
+import { listedModels, record } from '../structured/launch/claude-structured-model-catalog'
+import { readClaudeCatalogObservation } from './claude-model-catalog-observation'
 import { readClaudeControlResponses } from '../sdk-transport/claude-control-responses'
 import { claudeStructuredLaunchArgs } from '../structured/launch/claude-structured-launch-args'
 import { AgentModelCatalogUnavailableError } from '../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
@@ -28,17 +22,18 @@ import { claudeConfigDirEnvPatch } from '../structured/launch/claude-config-dir-
 import {
   envWithPathRelativeTo,
   catalogListingDirectory
-} from '../../../shared/node-cli-command-resolution'
+} from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
-  CLAUDE_DEFAULT_SETTING_SOURCES,
   resolveClaudeStructuredInvocation,
   type ClaudeStructuredLaunchPartDeps
 } from '../structured/launch/claude-structured-launch-resolution'
+import { CLAUDE_DEFAULT_SETTING_SOURCES } from '../structured/launch/claude-discovery-options'
 import {
   resolveClaudeChildEnvSources,
   type ClaudeEnvDeps
 } from '../structured/launch/claude-structured-child-env'
 import type {
+  AgentModelCatalogProgress,
   AgentModelCatalogProbe,
   AgentModelCatalogLookup
 } from '../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
@@ -68,6 +63,8 @@ export async function runClaudeListing(
     cwd?: string
     signal?: AbortSignal
     isCurrent?: () => boolean
+    /** Flags that decide what this CLI loads (a chat's discovery options), read for the resolved CLI. */
+    discovery?: (launch: ClaudeCliLaunch) => Promise<readonly string[]>
   }
 ): Promise<string> {
   // Explicitly pinning the default directory changes the CLI's Keychain identity.
@@ -78,6 +75,12 @@ export async function runClaudeListing(
     })),
     request.signal
   )
+  const discoveryArgs = request.discovery
+    ? await waitForPromiseWithSignal(
+        request.discovery({ command, prefixArgs, cwd: request.cwd ?? process.cwd(), env }),
+        request.signal
+      )
+    : []
   const run = (args: readonly string[]) => {
     request.signal?.throwIfAborted()
     if (request.isCurrent && !request.isCurrent()) {
@@ -100,12 +103,14 @@ export async function runClaudeListing(
   const result = await runClaudeBackgroundAttempts({
     agentId: 'claude',
     run: (strictMcp) =>
-      run(buildClaudeModelListArgs(strictMcp)).catch((error: unknown) => {
-        if (error instanceof AgentModelCatalogProbeError) {
-          return error
+      run([...buildClaudeModelListArgs(strictMcp, discoveryArgs), ...discoveryArgs]).catch(
+        (error: unknown) => {
+          if (error instanceof AgentModelCatalogProbeError) {
+            return error
+          }
+          throw error
         }
-        throw error
-      }),
+      ),
     failedExit: (outcome) =>
       outcome instanceof AgentModelCatalogProbeError && outcome.reason === 'exit'
         ? outcome.failedExit
@@ -147,7 +152,9 @@ export function createClaudeModelCatalogProbe(
     const launchDeps = {
       ...deps,
       operation,
-      ...(lookup === 'saved' ? { resolveInheritedEnv: deps.resolveSavedEnvironment } : {}),
+      ...(lookup !== 'recover'
+        ? { resolveInheritedEnv: deps.resolveSavedEnvironment ?? deps.resolveInheritedEnv }
+        : {}),
       ...(lookup === 'recover' ? {} : { refreshEnvironmentAfterMiss: undefined }),
       ...(launchDirectory ? { resolveWorkingDirectory: () => launchDirectory } : {})
     }
@@ -175,6 +182,13 @@ export function createClaudeModelCatalogProbe(
     const settingSources = listIn === cwd ? CLAUDE_DEFAULT_SETTING_SOURCES : ['user']
     const args = argsFor(true, settingSources)
     return {
+      inputStamp: await agentModelCatalogInputStamp({
+        command,
+        prefixArgs,
+        cwd: listIn ?? process.cwd(),
+        env: launchDirectory ? envWithPathRelativeTo(env, launchDirectory) : env,
+        configFiles: [join(requireLegacyAgentSessionAccountHome(accountHome).path, 'settings.json')]
+      }),
       identity: {
         command,
         prefixArgs,
@@ -184,7 +198,9 @@ export function createClaudeModelCatalogProbe(
       },
       run: async (
         signal?: AbortSignal,
-        runOperation = operation
+        runOperation = operation,
+        _selectedModels?: readonly string[],
+        publish?: AgentModelCatalogProgress
       ): Promise<AgentModelCatalogSuccess> => {
         assertStructuredAgentResolutionCurrent(runOperation)
         signal?.throwIfAborted()
@@ -193,6 +209,14 @@ export function createClaudeModelCatalogProbe(
           run: (strictMcp) => {
             assertStructuredAgentResolutionCurrent(runOperation)
             signal?.throwIfAborted()
+            const requests = [
+              'orca-model-discovery',
+              'orca-model-settings',
+              'orca-signin-discovery'
+            ]
+            const settled = new Set<string>()
+            const replies = new Map<string, unknown>()
+            let incomplete: string[] = []
             return (deps.runListing ?? runAgentModelCatalogListing)(
               {
                 command,
@@ -208,16 +232,37 @@ export function createClaudeModelCatalogProbe(
                   process.platform
                 ),
                 signal,
-                partialOutput: {
-                  timeoutMs: 2_000,
-                  ready: (stdout) => {
-                    const replies = readClaudeControlResponses(stdout)
-                    return (
-                      listedModels(replies.get('orca-model-discovery')).length > 0 &&
-                      replies.has('orca-model-settings')
+                timeoutMs: null,
+                onOutput: (chunk) => {
+                  const lines = chunk.split('\n')
+                  incomplete.push(lines[0])
+                  if (lines.length === 1) {
+                    return
+                  }
+                  const stdout = [incomplete.join(''), ...lines.slice(1, -1)].join('\n')
+                  incomplete = [lines.at(-1)!]
+                  const previous = settled.size
+                  for (const [id, value] of readClaudeControlResponses(stdout, (id) => {
+                    if (requests.includes(id)) {
+                      settled.add(id)
+                    }
+                  })) {
+                    if (requests.includes(id)) {
+                      replies.set(id, value)
+                    }
+                  }
+                  if (
+                    settled.size > previous &&
+                    listedModels(replies.get('orca-model-discovery')).length > 0
+                  ) {
+                    publish?.(
+                      readClaudeCatalogObservation(replies, env, account),
+                      record(record(replies.get('orca-signin-discovery'))?.account) !== null &&
+                        record(record(replies.get('orca-model-settings'))?.effective) !== null
                     )
                   }
-                }
+                },
+                completeOutput: () => requests.every((id) => settled.has(id))
               }
             ).catch((error: unknown) => {
               if (error instanceof AgentModelCatalogProbeError) {
@@ -237,33 +282,7 @@ export function createClaudeModelCatalogProbe(
           }
           throw outcome
         }
-        const stdout = outcome
-        const replies = readClaudeControlResponses(stdout)
-        const listing = replies.get('orca-model-discovery')
-        const models = listedModels(listing)
-        const settings = replies.get('orca-model-settings')
-        const applied = record(record(settings)?.applied)
-        const configured =
-          applied &&
-          ['model', 'effort'].every(
-            (key) => applied[key] == null || typeof applied[key] === 'string'
-          )
-            ? (readClaudeSettingsApplied(settings) ?? undefined)
-            : undefined
-        if (models.length === 0) {
-          throw new Error('claude listed no models')
-        }
-        const fastModeSupport = claudeFastModeSupport(models)
-        return {
-          models: wireClaudeModels(models),
-          origin: 'probe',
-          complete: isCompleteClaudeModelListing(listing) && configured !== undefined,
-          ...(fastModeSupport ? { fastModeSupport } : {}),
-          ...(configured ? { configured } : {}),
-          ...(claudeCatalogSignedOut(replies.get('orca-signin-discovery'), settings, env)
-            ? { unavailable: { reason: 'notSignedIn', account } }
-            : {})
-        }
+        return readClaudeCatalogObservation(readClaudeControlResponses(outcome), env, account)
       }
     }
   }
@@ -279,7 +298,10 @@ export function createClaudeModelCatalogProbe(
           'recover',
           options?.operation
         )
-      ).run(options?.signal),
-    { resolve, resolveLegacy: (home, operation) => resolve(home, undefined, 'recover', operation) }
+      ).run(options?.signal, options?.operation, options?.selectedModels, options?.publish),
+    {
+      resolve,
+      resolveLegacy: (home, operation, lookup) => resolve(home, undefined, lookup, operation)
+    }
   )
 }

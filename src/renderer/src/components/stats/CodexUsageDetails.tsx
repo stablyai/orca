@@ -3,7 +3,7 @@ import type {
   CodexUsageDailyPoint,
   CodexUsageSessionRow,
   CodexUsageSummary
-} from '../../../../shared/codex-usage-types'
+} from '../../../../shared/agent-usage/analytics/codex-usage-types'
 import { CodexUsageDailyChart } from './CodexUsageDailyChart'
 import { UsageBreakdownSection } from './UsageBreakdownSection'
 import { UsageRecentSessionsTable } from './UsageRecentSessionsTable'
@@ -27,7 +27,7 @@ export function CodexUsageDetails({
   const t = useTranslate()
   return (
     <>
-      <CodexUsageDailyChart daily={daily} />
+      <CodexUsageDailyChart daily={daily} reasoningIncludedInOutput />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <UsageBreakdownSection

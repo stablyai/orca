@@ -53,21 +53,28 @@ export function createClaudeStreamedThinking(deps: {
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     producer: deps.producer,
-    persist: (identity, text, options, ended) => {
+    sink: deps.sink,
+    liveBody: (text) => journalReasoningBody(text, { state: 'running' }),
+    persist: (identity, text, options, ended, onCommitted) => {
       const body = journalReasoningBody(
         text,
         ended ? endedJournalReasoning(ended.completedAt) : { state: 'running' }
       )
       if (body) {
         const startedAt = open.get(agentJournalItemKey(identity))?.startedAt
-        deps.sink.appendItem(identity, body, {
-          ...options,
-          turnScope: deps.turnScope(),
-          // Preserve block start time despite delayed text or writes.
-          ...(startedAt === undefined ? {} : { observedAt: startedAt }),
-          // Preserve terminal writes under pressure so reasoning cannot remain open.
-          ...(ended ? { lifecycle: true } : {})
-        })
+        deps.sink.appendItem(
+          identity,
+          body,
+          {
+            ...options,
+            turnScope: deps.turnScope(),
+            // Preserve block start time despite delayed text or writes.
+            ...(startedAt === undefined ? {} : { observedAt: startedAt }),
+            // Preserve terminal writes under pressure so reasoning cannot remain open.
+            ...(ended ? { lifecycle: true } : {})
+          },
+          onCommitted
+        )
         deps.sink.publish()
       }
     }
@@ -128,6 +135,11 @@ export function createClaudeStreamedThinking(deps: {
       return body
         ? { identity, body, ...(streamed ? { startedAt: streamed.startedAt } : {}) }
         : null
+    },
+    /** End root reasoning only; a subagent's streams continue. */
+    finishRoot: (sessionId: string, completedAt: number): void => {
+      finish({ completedAt }, `${sessionId}/`)
+      blocks.clearScope(sessionId, null)
     },
     finishOpen: (completedAt: number): void => {
       finish({ completedAt })

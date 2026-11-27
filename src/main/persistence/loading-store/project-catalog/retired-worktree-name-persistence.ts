@@ -4,7 +4,7 @@ import {
   addRetiredNames,
   EMPTY_RETIRED_NAME_REGISTRY,
   type RetiredNameRegistry
-} from '../../../../shared/worktree/retired-name-registry'
+} from '../../../../shared/worktree/naming/retired-name-registry'
 import type { StoreRuntimeState } from '../store-runtime-state'
 import type { WriteSchedulingOperations } from '../profile-writing/write-scheduling'
 import { scheduleSave } from '../profile-writing/write-scheduling'

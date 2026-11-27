@@ -11,7 +11,7 @@ import {
 } from './profile-state-database-schema'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import '../../../../shared/profile-state-storage-paths'
+import '../../../../shared/orca-profiles/profile-state-storage-paths'
 import { ProfileStateDatabaseOpenError } from './profile-state-database-errors'
 import {
   verifyEmptyProfileStateSchema,

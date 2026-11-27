@@ -1,7 +1,13 @@
 import { agentJournalLinkageFields } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { StructuredAgentSessionAppendOptions } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  StructuredAgentSessionAppendOptions,
+  StructuredAgentSessionEventSink,
+  StructuredAgentSessionItemCommitted
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { StructuredAgentSessionLiveTextRows } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-live-text-rows'
 import {
   createAgentSessionDeltaCoalescer,
   type AgentSessionDeltaCoalescerDeps
@@ -14,8 +20,13 @@ export type ClaudeStreamedTextCheckpointDeps = {
     identity: AgentJournalItemIdentity,
     text: string,
     options: StructuredAgentSessionAppendOptions,
-    ended?: ClaudeStreamedBlockEnd
+    ended?: ClaudeStreamedBlockEnd,
+    onCommitted?: StructuredAgentSessionItemCommitted
   ) => void
+  /** Shows unsaved text over the saved row between saves. */
+  sink: Pick<StructuredAgentSessionEventSink, 'bindLiveText' | 'publishLiveText'>
+  /** The running row's body for streamed text. */
+  liveBody: (text: string) => AgentJournalItemBody | null
   producer: ClaudeSubagentLinkageSource
   coalesceMs?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
@@ -25,7 +36,7 @@ export type ClaudeStreamedTextCheckpointDeps = {
 export type ClaudeStreamedBlockEnd = { completedAt?: number }
 
 export type ClaudeStreamedTextCheckpoints = {
-  /** Coalesce deltas and widen checkpoint intervals to avoid per-token journal rewrites. */
+  /** Show text every coalescing window; save on growth, quiet and lifecycle ends, never per window. */
   append: (
     identity: AgentJournalItemIdentity,
     text: string,
@@ -38,6 +49,8 @@ export type ClaudeStreamedTextCheckpoints = {
   latest: (key: string) => string | undefined
   /** End matching rows whose final frames will never arrive; discard empty blocks. */
   finish: (ended: ClaudeStreamedBlockEnd, only?: (key: string) => boolean) => void
+  /** End root rows only; a subagent's streams continue. */
+  finishRoot: (ended: ClaudeStreamedBlockEnd) => void
   /** Flush before settling; discard retained blocks so interrupted turns cannot accumulate text. */
   settle: () => void
   readonly pending: number
@@ -82,6 +95,7 @@ export function createClaudeStreamedTextCheckpoints(
     const checkpointLength = checkpointLengths.get(key) ?? 0
     const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
     if (!force && checkpointLength > 0 && text.length < nextLength) {
+      live.publish()
       return
     }
     const identity = identities.get(key)
@@ -91,7 +105,7 @@ export function createClaudeStreamedTextCheckpoints(
     const options = producerOptions(key)
     checkpointLengths.set(key, text.length)
     writtenLinkage.set(key, options)
-    deps.persist(identity, text, options)
+    deps.persist(identity, text, options, undefined, live.committed(key))
   }
 
   const coalescer = createAgentSessionDeltaCoalescer({
@@ -100,13 +114,44 @@ export function createClaudeStreamedTextCheckpoints(
     emit: (key, text) => persist(key, text, false)
   })
 
+  const live = new StructuredAgentSessionLiveTextRows(
+    deps.sink,
+    coalescer.textWithin,
+    (_key, text) => deps.liveBody(text),
+    coalescer.streamOf
+  )
+
+  const flush = (): void => {
+    coalescer.flushAll()
+    for (const [key, text] of latestText) {
+      if (checkpointLengths.get(key) !== text.length) {
+        persist(key, text, true)
+      }
+    }
+  }
+
   const drop = (key: string): void => {
+    live.forget(key)
     coalescer.forget(key)
     identities.delete(key)
     scopes.delete(key)
     writtenLinkage.delete(key)
     latestText.delete(key)
     checkpointLengths.delete(key)
+  }
+
+  const finish = (ended: ClaudeStreamedBlockEnd, only?: (key: string) => boolean): void => {
+    for (const [key, identity] of identities) {
+      if (only && !only(key)) {
+        continue
+      }
+      coalescer.flush(key)
+      const text = latestText.get(key)
+      if (text !== undefined) {
+        deps.persist(identity, text, producerOptions(key), ended)
+      }
+      drop(key)
+    }
   }
 
   return {
@@ -116,14 +161,7 @@ export function createClaudeStreamedTextCheckpoints(
       scopes.set(key, parentToolUseId)
       coalescer.append(key, text)
     },
-    flush: () => {
-      coalescer.flushAll()
-      for (const [key, text] of latestText) {
-        if (checkpointLengths.get(key) !== text.length) {
-          persist(key, text, true)
-        }
-      }
-    },
+    flush,
     reattribute: () => {
       for (const [key, identity] of identities) {
         const text = latestText.get(key)
@@ -136,24 +174,13 @@ export function createClaudeStreamedTextCheckpoints(
           continue
         }
         writtenLinkage.set(key, options)
-        deps.persist(identity, text, options)
+        deps.persist(identity, text, options, undefined, live.committed(key))
       }
     },
     forget: drop,
     latest: (key) => coalescer.snapshot(key)?.text ?? latestText.get(key),
-    finish: (ended, only) => {
-      for (const [key, identity] of identities) {
-        if (only && !only(key)) {
-          continue
-        }
-        coalescer.flush(key)
-        const text = latestText.get(key)
-        if (text !== undefined) {
-          deps.persist(identity, text, producerOptions(key), ended)
-        }
-        drop(key)
-      }
-    },
+    finishRoot: (ended) => finish(ended, (key) => scopes.get(key) === null),
+    finish,
     settle: () => {
       for (const key of identities.keys()) {
         drop(key)
@@ -163,6 +190,7 @@ export function createClaudeStreamedTextCheckpoints(
       return identities.size
     },
     dispose: () => {
+      live.dispose()
       coalescer.dispose()
       identities.clear()
       scopes.clear()

@@ -1,7 +1,7 @@
 import {
   DESKTOP_PRESENCE_REPORT_INTERVAL_MS,
   NOTIFICATIONS_DESKTOP_PRESENCE_RUNTIME_CAPABILITY
-} from '../../shared/desktop-client-presence'
+} from '../../shared/app-lifecycle/presence/desktop-client-presence'
 import { getRuntimeEnvironmentStatusSnapshots } from '../ipc/runtime-environments/connections/runtime-environment-request-connections'
 import {
   listReadySharedControlSockets,

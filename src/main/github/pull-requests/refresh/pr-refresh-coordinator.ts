@@ -1,22 +1,24 @@
+import { sharedPromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
+import { runImmediatePRRefresh } from './pr-refresh-immediate-read'
 import type {
+  GitHubPRRefreshAlias,
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason,
-  PRRefreshOutcome
+  PRRefreshOutcome,
+  PRSnapshotReply
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import { getPRForBranchOutcome } from '../../client/lookup/pr-for-branch-outcome'
+import type { PreparedPRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
 import {
   aliasFromCandidate,
-  hostedReviewOptionArgs,
-  isBackground,
-  MANUAL_MERGEABILITY_PENDING_REFRESH_MS,
+  isBudgetedBackground,
   refreshKey,
-  shouldBroadcastQueued,
   validateCandidate
 } from './pr-refresh-candidate-policy'
 import {
   PRRefreshEventPublisher,
   type PRRefreshOutcomeObserver
 } from './pr-refresh-event-publisher'
+import { retimeQueuedErrorRetries } from './pr-refresh-error-retry-retiming'
 import { PRRefreshPacing } from './pr-refresh-pacing'
 import { PRRefreshQueue } from './pr-refresh-queue'
 import { PRRefreshQueueDrainer, type PRRefreshRegistrationCheck } from './pr-refresh-queue-drainer'
@@ -24,29 +26,55 @@ import {
   prWatchQueueKey,
   schedulePRWatchEntry,
   type PRWatchJob,
-  type PRWatchJobHooks
+  type PRWatchJobHooks,
+  type PRWatchPlan
 } from './pr-refresh-watch-jobs'
-import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import { PRRefreshRetryState } from './pr-refresh-retry-state'
 import { PRRefreshVisibility } from './pr-refresh-visibility'
+import { refreshPRPolicyContext } from '../../client/lookup/pr-quiet-policy-evidence'
+import { getPRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import {
-  blockedWslDistroForPath,
-  wslDistroForPath
-} from '../../../wsl/filesystem/wsl-unc-access-gate'
+  deliverablePRBranchOutcome,
+  setPRBranchReadCompletion,
+  type PRBranchReadResult
+} from '../../client/lookup/pr-branch-read-resources'
+import { hostedPRReadSettlement } from './hosted-pr-read-settlement'
 
 const retry = new PRRefreshRetryState()
-const queue = new PRRefreshQueue((key) => retry.reset(key))
+// Dropping an old gate index entry must not forget a visible row's current failure.
+const queue = new PRRefreshQueue((key) => {
+  if (!visibility.has(key)) {
+    retry.reset(key)
+  }
+})
 const pacing = new PRRefreshPacing()
-const visibility = new PRRefreshVisibility()
+// A row no longer shown owes no retry for its failure (only its rate-limit gate stays), and its
+// queued visible read is dropped.
+const visibility = new PRRefreshVisibility((key) => {
+  retry.releaseFailure(key)
+  const entry = queue.get(key)
+  if (entry?.reason === 'visible') {
+    queue.delete(key)
+    events.broadcast({
+      aliases: Array.from(entry.aliases.values()),
+      reason: 'visible',
+      status: 'skipped',
+      skippedReason: 'fresh'
+    })
+  }
+})
 const events = new PRRefreshEventPublisher()
 const drainer = new PRRefreshQueueDrainer(queue, pacing, visibility, retry, events)
+setPRBranchReadCompletion((outcome, producer, prepared, request) =>
+  drainer.scheduler.reconcileCompletion(outcome, prepared, request, producer)
+)
 
 export function addPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver): () => void {
   return events.addOutcomeObserver(observer)
 }
 
 export function setPRRefreshRegistrationCheck(check: PRRefreshRegistrationCheck | null): void {
-  drainer.setRegistrationCheck(check)
+  drainer.registrationCheck = check
 }
 
 export function setPRWatchJobHooks(hooks: PRWatchJobHooks | null): void {
@@ -58,9 +86,9 @@ export function schedulePRWatchRead(
   job: PRWatchJob,
   candidate: GitHubPRRefreshCandidate,
   dueAt: number,
-  options: { defer?: boolean } = {}
+  options: { defer?: boolean; plan?: PRWatchPlan } = {}
 ): void {
-  schedulePRWatchEntry(queue, job, candidate, dueAt, options.defer === true)
+  schedulePRWatchEntry(queue, job, candidate, dueAt, options.defer === true, options.plan)
   drainer.schedule()
 }
 
@@ -69,40 +97,136 @@ export function cancelPRWatchRead(job: PRWatchJob): void {
 }
 
 /** A read a paired server made for a client reaches every observer. It takes no queue ownership,
- *  so a desktop read in flight for the same checkout keeps its follow-up. */
+ *  so a desktop read in flight for the same checkout keeps its follow-up. A prepared read is
+ *  observed once, by its actual read while that is the newest in scope, and plans a visible row of
+ *  its request; its caller still gets its own outcome. */
 export async function runHostedPRRead(
   candidate: GitHubPRRefreshCandidate,
-  read: () => Promise<PRRefreshOutcome>
+  read: (() => Promise<PRRefreshOutcome>) | PreparedPRBranchRead,
+  didRead: () => boolean = () => true,
+  release: () => void = () => {}
 ): Promise<PRRefreshOutcome> {
-  const outcome = await read()
-  events.observe(candidate, outcome)
-  return outcome
+  if (typeof read !== 'function') {
+    const owners = { queue, retry, observe: events.observe.bind(events) }
+    const settle = hostedPRReadSettlement(owners, candidate, read, false)
+    try {
+      return (await read.readResult(settle))!.outcome
+    } finally {
+      read.release()
+    }
+  }
+  try {
+    const outcome = await read()
+    if (didRead()) {
+      events.observe(candidate, outcome)
+    }
+    return outcome
+  } finally {
+    release()
+  }
 }
 
-function removeInvisibleVisibleRefreshes(): void {
-  const removed = queue.removeInvisibleVisibleEntries((key) => visibility.has(key))
-  for (const entry of removed) {
-    events.broadcast({
-      aliases: Array.from(entry.aliases.values()),
-      reason: 'visible',
-      status: 'skipped',
-      skippedReason: 'fresh'
-    })
+export async function runHostedPRSnapshot(
+  candidate: GitHubPRRefreshCandidate,
+  prepared: PreparedPRBranchRead,
+  deadline: number,
+  signal?: AbortSignal,
+  acceptRevalidationOnly = false
+): Promise<PRSnapshotReply> {
+  if (prepared.cached() || drainer.hostedJobs.has(prepared)) {
+    return drainer.hostedJobs.read(prepared, candidate, deadline, signal, acceptRevalidationOnly)
   }
+  if (acceptRevalidationOnly && !prepared.canRetain()) {
+    return drainer.hostedJobs.complete(prepared, candidate, null, acceptRevalidationOnly)
+  }
+  const pending = prepared.pending()
+  if (pending) {
+    const timeout = new Error('Pull request snapshot wait timed out')
+    let result: PRBranchReadResult
+    try {
+      result = await sharedPromiseSettlementWaiters(pending).wait({
+        signal,
+        ...(acceptRevalidationOnly
+          ? { timeoutMs: Math.max(0, deadline - Date.now()), createTimeoutError: () => timeout }
+          : {}),
+        createAbortError: () => new Error('Pull request wait was cancelled')
+      })
+    } catch (error) {
+      if (error === timeout) {
+        return drainer.hostedJobs.complete(prepared, candidate, null, acceptRevalidationOnly)
+      }
+      throw error
+    }
+    // A client that takes receipts gets only the request's current result; another gets its own.
+    const outcome = acceptRevalidationOnly
+      ? deliverablePRBranchOutcome(prepared, result)
+      : result.outcome
+    return drainer.hostedJobs.complete(prepared, candidate, outcome, acceptRevalidationOnly)
+  }
+  return drainer.hostedJobs.readCold(candidate, prepared, acceptRevalidationOnly)
 }
 
 export function clearVisiblePRRefreshWindow(windowId: number): void {
   const hadVisibleRefreshes = visibility.clearWindow(windowId)
   pacing.clearActiveBurstWindow(windowId)
   if (hadVisibleRefreshes) {
-    removeInvisibleVisibleRefreshes()
     queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
     drainer.schedule()
   }
 }
 
+/** A cadence change moves queued visible follow-ups, error retries and their shared schedules to
+ *  the new interval, and the gates of queued host jobs with them; "off" drops them. Under a timed
+ *  cadence visible rows then get their automatic work back without waiting for the windows to
+ *  report again: a row whose failure is still current gets that failure's own retry, others the
+ *  follow-up the cadence gives them. Either stays automatic, so the next Off retires it. */
+export function retimePRRefreshesForCadence(): void {
+  const failureRetries = retry.retimeErrors(queue)
+  queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
+  retimeQueuedErrorRetries(queue, retry, (key, candidate) => visibility.candidate(key, candidate))
+  drainer.hostedJobs.retime()
+  drainer.watchJobs.retime()
+  // Every shown row of a request shares its one restored read, so each gets the result.
+  const restored = new Map<
+    string,
+    { windowId: number; lead: GitHubPRRefreshCandidate; aliases: Map<string, GitHubPRRefreshAlias> }
+  >()
+  const timed = getPRAutoRefreshCadence() !== 'off'
+  for (const [windowId, reported] of timed ? visibility.reported() : []) {
+    const key = refreshKey(reported)
+    if (validateCandidate(reported)) {
+      continue
+    }
+    const alias = aliasFromCandidate(reported)
+    const request = restored.get(key)
+    if (request) {
+      request.aliases.set(alias.cacheKey, alias)
+    } else {
+      restored.set(key, { windowId, lead: reported, aliases: new Map([[alias.cacheKey, alias]]) })
+    }
+  }
+  for (const [key, { windowId, lead, aliases: shown }] of restored) {
+    const candidate = visibility.candidate(key, lead)
+    const aliases = [...shown.values()]
+    const failed = failureRetries.get(key)
+    const retryAt =
+      failed !== undefined && retry.failureMatches(key, candidate) ? failed : undefined
+    // Release an obsolete failure even when a queued action already owns the next read.
+    if (queue.get(key)) {
+      continue
+    }
+    if (retryAt === undefined) {
+      drainer.scheduler.restoreFollowUp(key, candidate, 40, aliases, windowId)
+    } else {
+      drainer.scheduler.scheduleErrorRetry(key, candidate, retryAt, 40, aliases, windowId)
+    }
+  }
+  drainer.schedule()
+}
+
 export function pruneWorktreePRRefreshAliases(worktreeId: string): void {
   queue.pruneWorktreeAliases(worktreeId)
+  visibility.removeWorktree(worktreeId)
 }
 
 export function enqueuePRRefresh(
@@ -128,7 +252,8 @@ export function enqueuePRRefresh(
     pending.bypassBackgroundBudget = true
   }
   events.record(enqueued.coalesced ? 'coalesced' : 'enqueued', reason)
-  if (shouldBroadcastQueued(reason, enqueued.dueAt)) {
+  const delay = enqueued.dueAt - Date.now()
+  if (!isBudgetedBackground(reason) && delay > 0 && delay <= 5_000) {
     events.broadcast({ aliases: [enqueued.alias], reason, status: 'queued' })
   }
   drainer.schedule()
@@ -139,11 +264,11 @@ export function reportVisiblePRRefreshCandidates(
   generation: number,
   windowId: number
 ): void {
-  const newlyExposed = new Set(candidates.map(refreshKey).filter((key) => !visibility.has(key)))
-  if (!visibility.report(candidates, generation, windowId)) {
+  refreshPRPolicyContext()
+  const reported = visibility.report(candidates, generation, windowId)
+  if (!reported) {
     return
   }
-  removeInvisibleVisibleRefreshes()
   queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
   for (const candidate of candidates) {
     const key = refreshKey(candidate)
@@ -151,137 +276,25 @@ export function reportVisiblePRRefreshCandidates(
       enqueuePRRefresh(candidate, 'visible', 40, windowId)
       continue
     }
-    queue.enqueue(
-      visibility.candidate(key, candidate),
-      'visible',
-      40,
-      windowId,
-      newlyExposed.has(key)
-    )
+    // A row still shown as the same request keeps its automatic work; only a return, a new row or
+    // another request earns a read the cadence does not give.
+    const exposed = reported.exposed.has(key)
+    queue.enqueue(visibility.candidate(key, candidate), 'visible', 40, windowId, exposed, {
+      routine: !exposed && !reported.changed.has(key)
+    })
   }
   drainer.schedule()
 }
 
-export function _getVisiblePRRefreshWindowCountForTests(): number {
-  return visibility.windowCount
-}
-
-export function _getPRRefreshErrorBackoffCountForTests(): number {
-  return retry.errorBackoffCount
-}
-
-export function _getPRRefreshQueueSizeForTests(): number {
-  return queue.size
-}
-
-export function _getPRRefreshAliasCountForTests(key: string): number {
-  return queue.aliasCount(key)
-}
-
-export async function refreshPRNow(
+export function refreshPRNow(
   candidate: GitHubPRRefreshCandidate,
   reason: GitHubPRRefreshReason = 'manual',
   options: { userRefresh?: boolean } = {}
-): Promise<PRRefreshOutcome> {
-  const alias = aliasFromCandidate(candidate)
-  const key = refreshKey(candidate)
-  const existing = queue.get(key)
-  const aliasMap = new Map(existing ? existing.aliases : [])
-  aliasMap.set(alias.cacheKey, alias)
-  const aliases = Array.from(aliasMap.values())
-  const skippedReason = validateCandidate(candidate)
-  if (skippedReason) {
-    queue.removeInvalidAlias(key, alias)
-    const outcome: PRRefreshOutcome = {
-      kind: 'upstream-error',
-      errorType: 'unknown',
-      message: `Cannot refresh PR for this worktree: ${skippedReason}`,
-      fetchedAt: Date.now()
-    }
-    events.broadcast({ aliases: [alias], reason, status: 'skipped', skippedReason })
-    return outcome
-  }
-  // E9: renderer fallbacks reach here with automatic reasons; only a manual refresh may start a stopped distro.
-  if (
-    isBackground(reason) &&
-    wslDistroForPath(candidate.repoPath, candidate.localGitOptions?.wslDistro) &&
-    (await blockedWslDistroForPath(candidate.repoPath, candidate.localGitOptions?.wslDistro))
-  ) {
-    events.broadcast({ aliases: [alias], reason, status: 'skipped', skippedReason: 'fresh' })
-    // Local callers keep their cached PR on an upstream error; nothing is recorded or retried here.
-    return {
-      kind: 'upstream-error',
-      errorType: 'unknown',
-      message: 'WSL distro is not running',
-      fetchedAt: Date.now()
-    }
-  }
-
-  const primaryGateUntil = await prRefreshRateLimitPausedUntil(candidate, false)
-  const gateUntil = Math.max(primaryGateUntil ?? 0, retry.manualGateUntil(key))
-  if (gateUntil > Date.now()) {
-    queue.protectBackgroundUntil(key, gateUntil)
-    queue.set(key, {
-      key,
-      candidate,
-      aliases: aliasMap,
-      reason,
-      priority: 40,
-      dueAt: gateUntil,
-      queuedAt: queue.nextOrder()
-    })
-    events.broadcast({
-      aliases,
-      reason,
-      status: 'paused',
-      pausedUntil: gateUntil,
-      skippedReason: 'rate-limit'
-    })
-    drainer.schedule(Math.max(1_000, gateUntil - Date.now()))
-    return {
-      kind: 'upstream-error',
-      errorType: 'rate_limited',
-      message: 'GitHub is temporarily limiting requests. Try again after the limit resets.',
-      fetchedAt: Date.now(),
-      nextAutoRetryAt: gateUntil,
-      retryDisabledUntil: gateUntil
-    }
-  }
-
-  queue.delete(key)
-  const requestSequence = events.nextSequence()
-  const requestStartedAt = Date.now()
-  queue.noteRequestStarted(key, requestSequence)
-  events.broadcast({ aliases, reason, status: 'in-flight', requestStartedAt }, requestSequence)
-  const outcome = await getPRForBranchOutcome(
-    candidate.repoPath,
-    candidate.branch,
-    candidate.linkedPRNumber ?? null,
-    candidate.connectionId ?? null,
-    candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
-    ...hostedReviewOptionArgs(candidate, reason, options)
+): Promise<PRSnapshotReply> {
+  return runImmediatePRRefresh(
+    { queue, retry, visibility, events, drainer },
+    candidate,
+    reason,
+    options
   )
-  if (!queue.ownsRequest(key, requestSequence)) {
-    events.broadcast({ aliases, reason, outcome, requestStartedAt }, requestSequence)
-    return outcome
-  }
-  let plannedRetryAt: number | undefined
-  let broadcastOutcome = outcome
-  if (outcome.kind === 'upstream-error' && visibility.has(key)) {
-    plannedRetryAt = retry.nextVisibleErrorRetryAt(key, visibility.candidate(key, candidate))
-    broadcastOutcome = retry.withErrorSchedule(outcome, plannedRetryAt)
-  }
-  events.observe(candidate, outcome, aliases)
-  retry.noteManualGate(key, broadcastOutcome)
-  events.broadcast(
-    { aliases, reason, outcome: broadcastOutcome, requestStartedAt },
-    requestSequence
-  )
-  drainer.scheduleVisibleFollowUp(key, candidate, outcome, 40, aliases, undefined, {
-    plannedRetryAt,
-    ...(reason === 'manual'
-      ? { pendingMergeabilityDelayMs: MANUAL_MERGEABILITY_PENDING_REFRESH_MS }
-      : {})
-  })
-  return broadcastOutcome
 }

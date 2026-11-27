@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 
 // Under main authority, copying fabricated bytes would create renderer ACKs for unmetered data.
 export function shouldCopySyntheticTitleFrameToPtyData(

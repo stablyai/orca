@@ -1,6 +1,6 @@
 // Mirror runtime PTY driver presence from IPC: mobile ownership locks xterm input/resize and shows Take back (mobile-presence-lock.md).
 
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 const driverByPtyId = new Map<string, RuntimeTerminalDriverState>()
 

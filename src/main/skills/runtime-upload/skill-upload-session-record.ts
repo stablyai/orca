@@ -3,7 +3,7 @@ import {
   SKILL_UPLOAD_CHUNK_MAX_BYTES,
   type SkillUploadBeginRequest,
   type SkillUploadBeginResult
-} from '../../../shared/skill-upload-session-contract'
+} from '../../../shared/skills/sharing/skill-upload-session-contract'
 
 export type SkillUploadSessionRecord = {
   id: string

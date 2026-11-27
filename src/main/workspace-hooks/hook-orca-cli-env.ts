@@ -1,5 +1,5 @@
-import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
-import { toLinuxPath } from '../../shared/wsl-paths'
+import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import { toLinuxPath } from '../../shared/file-access/wsl-paths'
 import { prependOrcaCliDirToChildPath } from '../cli/launchers/orca-cli-child-path'
 import { getManagedWslCliDir, getWslCliCommandName } from '../cli/wsl/wsl-managed-cli'
 import { WSL_MANAGED_CLI_PATH_RESTORE } from '../wsl/execution/wsl-managed-cli-path-restore'

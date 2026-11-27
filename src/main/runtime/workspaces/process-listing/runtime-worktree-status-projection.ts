@@ -10,11 +10,11 @@ import { isOpenCodeNativeTitle } from '../../../../shared/agent-status/title/pro
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
-import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalAgentStatus } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
   RuntimeWorktreePsSummary,
   RuntimeWorktreeStatus
-} from '../../../../shared/runtime-worktree-contracts'
+} from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 const WORKTREE_STATUS_PRIORITY: Record<RuntimeWorktreeStatus, number> = {

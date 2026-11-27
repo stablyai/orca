@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import {
   ORCAD_CLI_ENTRY_FILENAME,
   ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { nodeFileContentsEqual } from '../../../shared/file-content/node-file-content-equality'
 import { buildUnixCliLauncher } from '../../cli/launchers/cli-dev-launcher'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'

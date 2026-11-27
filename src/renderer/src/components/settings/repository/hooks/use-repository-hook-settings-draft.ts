@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { RepoHookSettings } from '../../../../../../shared/orca-yaml-hook-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { RepoHookSettings } from '../../../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   areHookSettingsDraftsEqual,
   getHookSettingsDraft,
@@ -13,7 +13,7 @@ export function useRepositoryHookSettingsDraft({
   repoHostIdentity,
   onUpdateHookSettings
 }: {
-  repo: Repo
+  repo: Pick<Repo, 'hookSettings'>
   repoHostIdentity: string
   onUpdateHookSettings: (settings: RepoHookSettings) => void
 }): {

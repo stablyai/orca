@@ -3,7 +3,8 @@ import type {
   RuntimeFileOpenPosition
 } from '../../../shared/file-access/runtime-editor-file-open'
 import { ipcRenderer } from 'electron'
-import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
+import type { TerminalPaneSplitSource } from '../../../shared/feature-education/feature-education-telemetry'
+import type { RendererTerminalSplitRequest } from '../../../shared/workspace-layout/terminal-topology/renderer-terminal-split-request'
 import type { TerminalTabCreateReply } from '../../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
 import type {
   AgentLaunchTabPublishReply,
@@ -21,12 +22,12 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
-import type { RuntimeMobileSessionTabMove } from '../../../shared/runtime-session-contracts'
+import type { RuntimeNavigationTarget } from '../../../shared/remote-runtime/session-graph/runtime-navigation'
+import type { RuntimeMobileSessionTabMove } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
-} from '../../../shared/runtime-terminal-contracts'
+} from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { PreloadApi } from '../../api-types'
 
 export const uiTerminalAndSessionTabsApi = {
@@ -148,31 +149,9 @@ export const uiTerminalAndSessionTabsApi = {
     ipcRenderer.on('ui:launchRecipe', listener)
     return () => ipcRenderer.removeListener('ui:launchRecipe', listener)
   },
-  onSplitTerminal: (
-    callback: (data: {
-      tabId: string
-      paneRuntimeId: number
-      direction: 'horizontal' | 'vertical'
-      command?: string
-      worktreeId?: string
-      sourceLeafId?: string
-      telemetrySource?: TerminalPaneSplitSource
-      newLeafId?: string
-    }) => void
-  ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: {
-        tabId: string
-        paneRuntimeId: number
-        direction: 'horizontal' | 'vertical'
-        command?: string
-        worktreeId?: string
-        sourceLeafId?: string
-        telemetrySource?: TerminalPaneSplitSource
-        newLeafId?: string
-      }
-    ) => callback(data)
+  onSplitTerminal: (callback: (data: RendererTerminalSplitRequest) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: RendererTerminalSplitRequest) =>
+      callback(data)
     ipcRenderer.on('ui:splitTerminal', listener)
     return () => ipcRenderer.removeListener('ui:splitTerminal', listener)
   },

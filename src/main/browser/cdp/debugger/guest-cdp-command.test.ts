@@ -1,58 +1,37 @@
-import { describe, expect, it, vi } from 'vitest'
+import type { WebContents } from 'electron'
+import { expect, it } from 'vitest'
+import { registerAgentInputSuspension } from '../input/agent-input-injection'
 import { sendGuestCdpCommand } from './guest-cdp-command'
-import { runInRemoteCliBrowserScope } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
-function makeGuest(state: { crashed?: boolean; destroyed?: boolean } = {}) {
-  const sendCommand = vi.fn(async () => ({ ok: true }))
+it('delivers CDP pointer commands when a tool-key policy cannot acknowledge, but refuses keyboard input', async () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the command path reads only these members.
   const guest = {
     id: 3,
-    setIgnoreMenuShortcuts: vi.fn(),
-    isDestroyed: vi.fn(() => state.destroyed ?? false),
-    isCrashed: vi.fn(() => {
-      if (state.destroyed) {
-        throw new Error('Object has been destroyed')
-      }
-      return state.crashed ?? false
-    }),
-    debugger: { sendCommand }
+    isDestroyed: () => false,
+    isCrashed: () => false,
+    setIgnoreMenuShortcuts: () => {},
+    isOffscreen: () => false,
+    debugger: { sendCommand: async () => ({ ok: true }) }
+  } as unknown as WebContents
+  const unavailable = new Error('key policy unavailable')
+  const dispose = registerAgentInputSuspension(guest, async () => {
+    throw unavailable
+  })
+  try {
+    await expect(
+      sendGuestCdpCommand(guest, 'Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        x: 20,
+        y: 30
+      })
+    ).resolves.toEqual({ ok: true })
+    await expect(
+      sendGuestCdpCommand(guest, 'Input.dispatchKeyEvent', {
+        type: 'keyDown',
+        key: 'g'
+      })
+    ).rejects.toBe(unavailable)
+  } finally {
+    dispose()
   }
-  return { guest, sendCommand }
-}
-
-describe('sendGuestCdpCommand', () => {
-  it('refuses a host the answer to a read that landed after its page moved to a desktop file', async () => {
-    let url = 'https://example.com/'
-    const { guest, sendCommand } = makeGuest()
-    sendCommand.mockImplementation(async () => {
-      url = 'file:///Users/me/private.txt'
-      return { ok: true }
-    })
-    const sent = runInRemoteCliBrowserScope(
-      'wt-1',
-      () => sendGuestCdpCommand({ ...guest, id: 7 }, 'DOM.getDocument', {}),
-      undefined,
-      () => url.startsWith('https:')
-    )
-    await expect(sent).rejects.toMatchObject({ code: 'desktop_browser_bridge_unrouted' })
-    expect(sendCommand).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps a host input that landed even when the host is revoked before it answers', async () => {
-    const revoked = new AbortController()
-    const { guest, sendCommand } = makeGuest()
-    sendCommand.mockImplementation(async () => {
-      revoked.abort()
-      return { ok: true }
-    })
-    const sent = runInRemoteCliBrowserScope(
-      'wt-1',
-      () =>
-        sendGuestCdpCommand({ ...guest, id: 7 }, 'Input.dispatchKeyEvent', {
-          type: 'keyDown',
-          key: 'a'
-        }),
-      revoked.signal
-    )
-    await expect(sent).resolves.toEqual({ ok: true })
-  })
 })

@@ -1,4 +1,4 @@
-import type { SpeechModelErrorRate } from '../../shared/speech-types'
+import type { SpeechModelErrorRate } from '../../shared/speech/speech-types'
 
 type Measured = readonly [language: string, percent: number, measuredOn: string]
 

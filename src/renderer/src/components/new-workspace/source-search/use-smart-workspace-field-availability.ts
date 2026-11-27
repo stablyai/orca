@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { filterAvailableTaskProviders } from '../../../../../shared/work-items/task-providers'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { getMrStateFilters, getSmartWorkspaceNameModes } from './smart-workspace-localized-options'
 import {
   SEARCH_DEBOUNCE_MS,

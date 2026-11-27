@@ -4,7 +4,7 @@ import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { themedStyleSheet } from '../../../theme/themed-styles'
-import { TailClippedText } from '../../../components/TailClippedText'
+import { TailClippedText } from '../../../components/list/TailClippedText'
 import {
   mobileDictationStatusTitle,
   type MobileDictationStatusFlags

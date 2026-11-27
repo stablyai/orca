@@ -5,9 +5,9 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-project-checklist'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { RepoCreateFailure } from '../../../../../../shared/repo-create-failure-copy'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { RepoCreateFailure } from '../../../../../../shared/repository/creation/repo-create-failure-copy'
 import { repoCreateErrorText } from './repo-create-error-copy'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
@@ -17,11 +17,11 @@ import {
   resolveAddRepoRuntimeTarget,
   worktreeRefreshOptions
 } from '../host-selection/add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   readWslHostWindowsDriveRefusal,
   type WslHostWindowsDriveRefusal
-} from '../../../../../../shared/wsl-host-windows-drive-refusal'
+} from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 
 export function useCreateRepo(
   fetchWorktrees: (
@@ -111,7 +111,8 @@ export function useCreateRepo(
                 name,
                 kind: createKind
               },
-              { timeoutMs: 60_000 }
+              // Creating a repo is the user's act: it may wake an idle-stopped WSL host (#46567).
+              { timeoutMs: 60_000, wake: true }
             )
           : await window.api.repos.create({
               parentPath,

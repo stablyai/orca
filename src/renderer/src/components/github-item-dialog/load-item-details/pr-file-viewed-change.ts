@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { GhAccountBinding } from '../../../../../shared/github/accounts/account-binding'
 import { toast } from 'sonner'
 import { setPRFileViewedForRepo } from '@/components/github/github-work-item-comment-mutations'

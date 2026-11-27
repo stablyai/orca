@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo, useState } from 'react'
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Maximize2, X } from 'lucide-react-native'
-import type { NativeChatVisualDirective } from '../../../../../src/shared/native-chat/native-chat-visual-directive'
+import type { NativeChatVisualDirective } from '../../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'

@@ -11,7 +11,7 @@ import {
   projectAgentLaunchSettings,
   type AgentLaunchSettingsMutation
 } from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import {
   AgentLaunchSettingsCatalog,
   type AgentPermissionsRenderer

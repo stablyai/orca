@@ -28,12 +28,13 @@ export class RelayRetrySchedule {
       : Promise.resolve()
   }
 
-  schedule(retryAfterMs: number, retry: () => void): void {
+  // maxMs lowers the backoff ceiling for one attempt; Retry-After can still push past it.
+  schedule(retryAfterMs: number, retry: () => void, maxMs = RETRY_MAX_MS): void {
     if (this.timer) {
       return
     }
     const exponent = Math.min(this.attempt, Math.ceil(Math.log2(RETRY_MAX_MS / RETRY_BASE_MS)))
-    const capMs = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** exponent)
+    const capMs = Math.min(maxMs, RETRY_MAX_MS, RETRY_BASE_MS * 2 ** exponent)
     this.attempt++
     const delayMs = Math.max(Math.floor(this.random() * (capMs + 1)), retryAfterMs)
     this.dueAt = Date.now() + delayMs

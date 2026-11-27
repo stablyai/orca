@@ -1,15 +1,15 @@
-import { isPathInsideOrEqual } from '../cross-platform-path'
+import { isPathInsideOrEqual } from '../file-access/cross-platform-path'
 import {
   getConnectionExecutionHostId,
   getRepoExecutionHostId,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../execution-host'
-import { getProjectGroupSubtreeIds } from '../project-groups'
-import { isGitRepoKind } from '../repo-kind'
+} from '../execution-host/execution-host'
+import { getProjectGroupSubtreeIds } from '../project/groups/project-groups'
+import { isGitRepoKind } from '../repository/repo-kind'
 
-import type { ProjectGroup } from '../project-group-types'
-import type { Repo } from '../repo-types'
+import type { ProjectGroup } from '../project/groups/project-group-types'
+import type { Repo } from '../repository/repo-types'
 
 const EMPTY_REPOS: Repo[] = []
 

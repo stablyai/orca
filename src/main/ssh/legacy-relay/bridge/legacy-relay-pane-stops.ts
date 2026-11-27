@@ -1,8 +1,8 @@
 /** Retain closed-pane stops across reconnects until relay exit/absence is proven; lost contact stays unverifiable. Persist restart-fenced intent as pendingKill; connection-only identity cannot survive restart. COMPAT(legacy-relay-bridge): revisit 2027-01-15. */
-import { parseAppSshPtyId, toAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import type { SshPendingPtyKill } from '../../../../shared/ssh-pending-pty-kill'
-import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
-import type { LegacyRelayBridgeCloseResult } from '../../../../shared/legacy-relay-bridge-contract'
+import { parseAppSshPtyId, toAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import type { SshPendingPtyKill } from '../../../../shared/remote-runtime/ssh/ssh-pending-pty-kill'
+import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
+import type { LegacyRelayBridgeCloseResult } from '../../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
 import { isStoppingLease, listedAppPtyIds } from './legacy-relay-bridge-leases'
 import { LegacyRelayExitProofs, LegacyRelayRetry } from './legacy-relay-bridge-timers'
 import type { LegacyRelayClient } from './legacy-relay-client'

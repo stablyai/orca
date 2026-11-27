@@ -6,55 +6,28 @@ import {
   agentForksConversations,
   agentForksThroughChat
 } from '../../../shared/agent-launch/startup/agent-resume-argv'
-import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { pendingAgentSessionRewindFork } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
+import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { pendingAgentSessionRewindFork } from '../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type {
   AiVaultPrepareChatForkArgs,
   AiVaultPrepareSessionResumeResult,
   AiVaultSessionResumePreparation
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
+import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/records/agent-session-record-launch-directory'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredAgentRuntimeMetadata } from '../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import { readPiSessionHeader } from '../../pi/rpc/launch/rpc-launch-resolution'
 import { copyStructuredChatRecordConversation } from './structured-chat-conversation-copy'
 import { isAiVaultAgent } from '../listing/session-list-result-validation'
-import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { JournalSavedContent } from '../../native-chat/agent-session-journal/journal-domain-fork-reads'
 
-function assertNativeConversationContent(snapshot: AgentJournalSnapshot): void {
-  const submissions = new Map(
-    snapshot.submissions.map((submission) => [
-      agentJournalSubmissionKey(submission.clientMessageId),
-      submission
-    ])
-  )
-  let uncertain = false
-  const hasContent = snapshot.items.some(({ itemId, body }) => {
-    if (body.kind !== 'message' || (body.role !== 'user' && body.role !== 'assistant')) {
-      return false
-    }
-    const identity = parseAgentJournalItemKey(itemId)
-    const submission = submissions.get(itemId)
-    if (submission?.dispatchState === 'accepted' || (identity && identity.provider !== 'orca')) {
-      return true
-    }
-    // Write-ahead messages alone prove neither provider content nor failed delivery.
-    uncertain ||=
-      !submission ||
-      submission.dispatchState === 'unknown' ||
-      (submission.dispatchState === 'pending' &&
-        (!submission.handoverRecorded || submission.handedOverAt !== undefined))
-    return false
-  })
-  if (!hasContent) {
+function assertNativeConversationContent(content: JournalSavedContent): void {
+  if (content !== 'content') {
     throw new Error(
-      uncertain
+      content === 'uncertain'
         ? 'Could not confirm this conversation was saved. Try again after the agent responds.'
         : 'This chat has no saved conversation to copy.'
     )
@@ -121,8 +94,10 @@ export async function prepareStructuredChatCliFork(
     }
   }
   const agent = record.provider
+  // The terminal resumes where the chat runs, as its launch does: the pinned folder first.
   const cwd =
-    (await host.deps.resolveWorkspacePath?.(record.location.workspaceId)) || record.launchDirectory
+    agentSessionPinnedLaunchDirectory(record) ??
+    (await host.deps.resolveWorkspacePath?.(record.location.workspaceId))
   if (!cwd || !isAbsolute(cwd) || isWslUncPath(cwd)) {
     throw new Error('The chat workspace is unavailable on this host.')
   }
@@ -130,7 +105,7 @@ export async function prepareStructuredChatCliFork(
   if (!providerSessionId.trim()) {
     throw new Error('This chat has no saved conversation to copy.')
   }
-  assertNativeConversationContent(await host.journalSnapshot(record.sessionId))
+  assertNativeConversationContent(await host.savedContent(record.sessionId))
   if (agentForksThroughChat(agent)) {
     requireCurrent()
     const result = await copyStructuredChatRecordConversation(record, providerSessionId)
@@ -142,7 +117,8 @@ export async function prepareStructuredChatCliFork(
       ...result,
       cliForkSource: {
         agent: copy.agent,
-        sourceAgent: metadata.sessionHistory.rowAgents.at(-1) ?? agent,
+        // Older clients add this agent's launch flags to the copy's; its own CLI adds none.
+        sourceAgent: copy.agent,
         sessionId: copy.sessionId,
         filePath: copy.filePath ?? '',
         codexHome: null,

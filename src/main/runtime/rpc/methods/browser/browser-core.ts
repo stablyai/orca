@@ -35,6 +35,9 @@ import {
   BrowserTabCreateParams
 } from '../../../../../shared/rpc-contract/browser/browser-tab-create-params'
 import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
+import { BROWSER_PAGE_LOAD_METHODS } from './browser-page-load-rpc-methods'
+import { BROWSER_PAGE_FIND_METHODS } from './browser-page-find-rpc-methods'
+import { BROWSER_PAGE_MENU_METHODS } from './browser-page-menu-rpc-methods'
 import { BROWSER_PROFILE_METHODS } from './browser-profile-rpc-methods'
 import { CertificateProceed } from '../../../../../shared/rpc-contract/browser/browser-core-params'
 
@@ -82,12 +85,9 @@ export const BROWSER_CORE_METHODS = [
     params: ExpectUrlBrowserTarget,
     handler: async (params, { runtime }) => runtime.browserBack(params)
   }),
-  defineMethod({
-    name: 'browser.reload',
-    permission: 'workspace',
-    params: ExpectUrlBrowserTarget,
-    handler: async (params, { runtime }) => runtime.browserReload(params)
-  }),
+  ...BROWSER_PAGE_LOAD_METHODS,
+  ...BROWSER_PAGE_FIND_METHODS,
+  ...BROWSER_PAGE_MENU_METHODS,
   defineMethod({
     name: 'browser.screenshot',
     permission: 'workspace',
@@ -134,16 +134,17 @@ export const BROWSER_CORE_METHODS = [
     name: 'browser.tabCreate',
     permission: 'workspace',
     params: BrowserTabCreateParams,
-    handler: async (params, { runtime, pairedDeviceId, clientKind }) =>
+    handler: async (params, { runtime, pairedDeviceId, clientKind, signal }) =>
       pairedDeviceId
-        ? runtime.browserTabCreate(params, { pairedDeviceId, clientKind })
-        : runtime.browserTabCreate(params, { clientKind })
+        ? runtime.browserTabCreate(params, { pairedDeviceId, clientKind, signal })
+        : runtime.browserTabCreate(params, { clientKind, signal })
   }),
   defineMethod({
     name: 'browser.openUrl',
     permission: 'workspace',
     params: BrowserOpenUrlParams,
-    handler: async (params, { runtime }) => runtime.browserOpenUrlOnClient(params)
+    handler: async (params, { runtime, signal }) =>
+      runtime.browserOpenUrlOnClient(params, { signal })
   }),
   defineMethod({
     name: 'browser.tabClose',

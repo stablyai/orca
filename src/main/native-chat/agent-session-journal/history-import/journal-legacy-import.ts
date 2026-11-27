@@ -6,27 +6,22 @@ import {
   type AdoptedTranscriptSource
 } from './adopted-transcript-source'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type {
-  AgentJournalCursor,
-  AgentJournalItemIdentity
-} from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type * as ids from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from '../../session-file-resolver'
 import { readLegacyImportTranscript, TRANSCRIPT_DECODERS } from './journal-legacy-transcript-stream'
 import { readOpenCodeNativeChatTranscriptFull } from '../../transcript-history/opencode/transcript-opencode'
+import { prepareHermesImport } from './journal-hermes-import'
+import { prepareAntigravityImport } from './journal-antigravity-import'
+import { replacementItem, replacementItems } from './journal-replacement-items'
 import { mayBeClaudeConversationRecord } from '../../transcript-decoding/transcript-line-decoders-claude'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
 import { createPiTranscriptCollector } from './journal-pi-active-branch'
 import { createNewestItemWindow } from './journal-newest-item-window'
 import { createCodexHistoryCollector } from './journal-codex-history'
 import type { JournalReplacementItem } from '../context-epochs/journal-epoch-replacement'
-import {
-  boundLegacyImportBlock,
-  boundToolInput,
-  type JournalPayloadLimits
-} from '../item-lifecycle/journal-payload-bounds'
+import type { JournalPayloadLimits } from '../item-lifecycle/journal-payload-bounds'
 import type { AgentSessionJournal } from '../journal-store'
 // Hydrating a journal from a bridge-era transcript.
 //
@@ -56,7 +51,7 @@ export type LegacyImportResult =
   | {
       ok: true
       epoch: string
-      cursor: AgentJournalCursor
+      cursor: ids.AgentJournalCursor
       imported: number
       replaced: boolean
     }
@@ -64,7 +59,8 @@ export type LegacyImportResult =
 
 type PreparedLegacyImport =
   | { ok: true; items: JournalReplacementItem[]; sourceEmpty: boolean; forkTipItemIds?: string[] }
-  | { ok: false; error: string }
+  // cause keeps a typed adoption refusal for the caller.
+  | { ok: false; error: string; cause?: unknown }
 
 export async function importLegacyTranscriptIntoJournal(input: {
   journal: AgentSessionJournal
@@ -81,7 +77,12 @@ export async function importLegacyTranscriptIntoJournal(input: {
     const current = input.journal.cursor()
     return { ok: true, epoch: current.epoch, cursor: current, imported: 0, replaced: false }
   }
-  const cursor = await input.journal.replaceEpochItems('legacy_import', input.fence, prepared.items)
+  const { cursor } = await input.journal.write({
+    kind: 'epoch-replace',
+    reason: 'legacy_import',
+    fence: input.fence,
+    items: prepared.items
+  })
   return { ok: true, epoch: cursor.epoch, cursor, imported: prepared.items.length, replaced: true }
 }
 
@@ -93,6 +94,17 @@ export async function prepareLegacyTranscriptImport(input: {
   const options = input.options ?? {}
   const limits = options.limits ?? LEGACY_IMPORT_BLOCK_LIMITS
   // OMP retained Pi's format, so its decoder also reads Pi sessions.
+  if (input.agent === 'hermes') {
+    return prepareHermesImport(input.sessionId, options, limits, MAX_LEGACY_IMPORT_RETAINED_BYTES)
+  }
+  if (input.agent === 'antigravity') {
+    return prepareAntigravityImport(
+      input.sessionId,
+      options,
+      limits,
+      MAX_LEGACY_IMPORT_RETAINED_BYTES
+    )
+  }
   const transcriptAgent =
     input.agent === 'pi' ? 'omp' : resolveNativeChatTranscriptAgent(input.agent)
   if (!transcriptAgent) {
@@ -123,7 +135,7 @@ export async function prepareLegacyTranscriptImport(input: {
     })
     return { ok: true, items, sourceEmpty, forkTipItemIds }
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    return { ok: false, error: err instanceof Error ? err.message : String(err), cause: err }
   }
 }
 
@@ -141,8 +153,8 @@ async function prepareOpenCodeImport(input: {
     }
     try {
       await validateAdoptedOpenCodeSource(dbPath, input.options.source, input.options.signal)
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err), cause: err }
     }
   }
   const read = await readOpenCodeNativeChatTranscriptFull(
@@ -152,7 +164,7 @@ async function prepareOpenCodeImport(input: {
   if ('error' in read) {
     return { ok: false, error: read.error }
   }
-  const identities = read.messages.map((message): AgentJournalItemIdentity => ({
+  const identities = read.messages.map((message): ids.AgentJournalItemIdentity => ({
     provider: 'legacy',
     agent: input.agent,
     sessionId: input.sessionId,
@@ -171,35 +183,6 @@ async function prepareOpenCodeImport(input: {
         recordId
       })
     )
-  }
-}
-
-function replacementItems(
-  messages: readonly NativeChatMessage[],
-  identities: readonly AgentJournalItemIdentity[],
-  limits: JournalPayloadLimits
-): JournalReplacementItem[] {
-  const replacement: JournalReplacementItem[] = []
-  for (const [index, message] of messages.entries()) {
-    const identity = identities[index]
-    if (identity) {
-      replacement.push(replacementItem(message, identity, limits))
-    }
-  }
-  return replacement
-}
-
-function replacementItem(
-  message: NativeChatMessage,
-  identity: AgentJournalItemIdentity,
-  limits: JournalPayloadLimits
-): JournalReplacementItem {
-  return {
-    identity,
-    body: legacyItemBody(message, limits),
-    observedAt: message.timestamp ?? undefined,
-    // Imported history belongs to no active generation, even when saved rows claim to be running.
-    ownerFence: 0
   }
 }
 
@@ -229,7 +212,7 @@ async function decodeReplacementItems(input: {
     agent: input.agent,
     sessionId: input.sessionId
   })
-  const toItem = (message: NativeChatMessage, identity: AgentJournalItemIdentity) =>
+  const toItem = (message: NativeChatMessage, identity: ids.AgentJournalItemIdentity) =>
     replacementItem(message, identity, input.limits)
   const retained =
     input.transcriptAgent === 'codex'
@@ -300,29 +283,5 @@ async function decodeReplacementItems(input: {
     return { items: retained.items(), sourceEmpty, forkTipItemIds: forkTip.settledItems() }
   } finally {
     pi?.close()
-  }
-}
-
-export function legacyItemBody(
-  message: NativeChatMessage,
-  limits?: JournalPayloadLimits
-): AgentJournalItemBody {
-  const only = message.blocks.length === 1 ? message.blocks[0] : undefined
-  if (only?.type === 'tool-call') {
-    // Bound adoption before epoch publication; catch-up uses whole-batch admission.
-    return {
-      kind: 'tool-call',
-      name: only.name,
-      input: limits ? boundToolInput(only.input, limits) : only.input,
-      ...(only.callId !== undefined ? { callId: only.callId } : {}),
-      state: 'completed'
-    }
-  }
-  return {
-    kind: 'message',
-    role: message.role,
-    blocks: limits
-      ? message.blocks.map((block) => boundLegacyImportBlock(block, limits))
-      : message.blocks
   }
 }

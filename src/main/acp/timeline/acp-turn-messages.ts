@@ -1,5 +1,4 @@
 import type { AcpItemOwnership } from './acp-item-ownership'
-import type { AcpMessageOwner, AcpOwnershipReader } from '../journal/acp-ownership-reader'
 import type { SessionUpdate } from '../generated/acp-protocol.generated'
 import type { ProviderTimelineTextChannel } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import { providerTimelineKeyPart } from '../../native-chat/agent-session-timeline/provider-timeline-identity'
@@ -10,6 +9,8 @@ export function acpNamedTextKey(messageId: string, channel: ProviderTimelineText
 }
 
 type MessagePosition = { ordinal: number; channel?: string }
+
+export type AcpMessageOwner = { turn?: string; settled?: boolean }
 
 export type AcpTextDrop = {
   reason: 'turn-settled' | 'stream-mismatch'
@@ -23,10 +24,7 @@ export type AcpTextDrop = {
 export class AcpTurnMessages {
   private readonly turns = new Map<string, MessagePosition>()
 
-  constructor(
-    private readonly owners: AcpItemOwnership,
-    private readonly read?: AcpOwnershipReader
-  ) {}
+  constructor(private readonly owners: AcpItemOwnership) {}
 
   /** Keep trailing chunks on the provider message's original turn. */
   owner(
@@ -46,12 +44,7 @@ export class AcpTurnMessages {
     if (owner) {
       return { ...owner, settled: owner.settled || settled(owner.turn) }
     }
-    return (
-      this.read?.message(update.messageId) ?? {
-        turn,
-        settled: turn !== undefined && settled(turn)
-      }
-    )
+    return { turn, settled: turn !== undefined && settled(turn) }
   }
 
   observe(turn: string | undefined, update: SessionUpdate | undefined): void {

@@ -4,13 +4,13 @@ import { join } from 'node:path'
 import type { HandlerContext } from '../dispatch/dispatch'
 import { REPEATED_FLAG_SEPARATOR } from '../arguments/args'
 import { printResult } from '../output/command-result-output'
-import { RuntimeClientError } from '../runtime/types'
-import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
+import { RuntimeClientError } from '../runtime/connection/types'
+import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/account-runtime-capabilities'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   ManagedDataAccountProvider,
   ManagedDataAccountsState
-} from '../../shared/managed-account-types'
+} from '../../shared/agent-accounts/managed-account-types'
 import {
   withInteractiveLoginCleanup,
   type InteractiveLoginSession

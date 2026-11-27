@@ -1,5 +1,5 @@
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useAppStore } from '@/store/index'
 import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-workspace'

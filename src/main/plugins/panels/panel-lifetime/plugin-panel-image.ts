@@ -4,7 +4,7 @@ import {
   PLUGIN_IMAGE_MIME,
   readPluginImageHeader
 } from '../../../../shared/plugins/images/plugin-image-format'
-import { readContainedPluginArtifactBytes } from '../../plugin-artifact-validation'
+import { readContainedPluginArtifactBytes } from '../../artifacts/plugin-contained-artifact'
 
 /** One `Image` (or Markdown image) file; larger images belong in the plugin's own HTML panels. */
 export const PLUGIN_PANEL_IMAGE_MAX_BYTES = 8 * 1024 * 1024

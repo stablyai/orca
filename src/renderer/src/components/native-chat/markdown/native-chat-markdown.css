@@ -1,11 +1,9 @@
 /* Shared markdown also renders sidebar comments, so chat styling stays opt-in. */
-/* :where keeps these below the link-label rule, so bold link text takes the link color. */
-.native-chat-markdown :where(h1, h2, h3, h4, h5, h6, [role='heading']) {
-  color: var(--chat-foreground-strong);
-}
-
+/* Bold and headings stand out by weight alone, in the text color around them (body text in
+   replies, the bubble's color in user messages); a theme may still color bold. :where keeps this
+   below the link-label rule, so bold link text takes the link color. */
 .native-chat-markdown :where(strong) {
-  color: var(--chat-bold-foreground, var(--chat-foreground-strong));
+  color: var(--chat-bold-foreground, currentColor);
 }
 
 /* Match chat headings' semibold; inherited `bolder` resolved to 700 and outweighed them. */
@@ -25,7 +23,7 @@
   font-size: 1.0714285714em;
 }
 
-/* 13/14 keeps the default table size; em follows Text size the way headings do. */
+/* A step under body text; em follows Text size the way headings do. */
 .native-chat-markdown table {
   font-size: 0.9285714286em;
 }
@@ -80,11 +78,21 @@
   color: inherit;
 }
 
-/* Fade new words/blocks with opacity only, preserving line geometry. */
+/* Fade new words/blocks in place, preserving line geometry. */
 @media (prefers-reduced-motion: no-preference) {
-  .native-chat-markdown[data-word-fade] :is([data-word], a, :not(pre) > code),
-  .native-chat-markdown[data-block-fade] > :is(pre, div, table, hr) {
+  /* A word fades its own color: an opacity transition would give every fading word a compositing
+     layer, and a smoothly streaming reply keeps hundreds of them alive in GPU memory. */
+  .native-chat-markdown[data-word-fade] [data-word] {
     /* WORD_FADE_MS in use-native-chat-paced-text.ts waits this long for the last words. */
+    transition: color 300ms ease-out;
+
+    @starting-style {
+      color: transparent;
+    }
+  }
+
+  .native-chat-markdown[data-word-fade] :is(a, :not(pre) > code),
+  .native-chat-markdown[data-block-fade] > :is(pre, div, table, hr) {
     transition: opacity 300ms ease-out;
 
     @starting-style {

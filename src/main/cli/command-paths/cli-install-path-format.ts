@@ -1,7 +1,7 @@
 import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import { isAbsolute, relative } from 'node:path'
-import { expandWindowsEnvironmentVariables } from '../../../shared/windows-environment-expansion'
+import { expandWindowsEnvironmentVariables } from '../../../shared/shell/launch/windows-environment-expansion'
 
 export function splitPathEntries(platform: NodeJS.Platform, value: string | null): string[] {
   if (!value) {

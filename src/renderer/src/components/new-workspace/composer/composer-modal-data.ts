@@ -7,7 +7,7 @@ import type { DirectWorkItemSetupRequest } from '@/lib/workspace/creation/work-i
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../shared/workspace-source'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../shared/workspace/creation/workspace-source'
 import type { WorkspaceStatus } from '../../../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'

@@ -1,7 +1,7 @@
 import {
   readLastJcodeUserPromptFromHookPayload,
   type JcodeUserPromptEvidence
-} from '../../../jcode-session-files'
+} from './jcode-session-files'
 import { isNewTurnEvent } from '../../provider-event-routing'
 import type { HookListenerState } from '../../listener-state'
 

@@ -2,7 +2,7 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { isPairedWebClientWindow } from '../chrome/desktop-window-chrome'
 
 type HostRouteState = { runtimeEnvironments?: readonly { id: string }[] }

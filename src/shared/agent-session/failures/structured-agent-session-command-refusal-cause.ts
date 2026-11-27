@@ -1,7 +1,7 @@
 import {
   isAgentSessionConversationCommand,
   type AgentSessionConversationCommandResult
-} from '../agent-session-conversation-command'
+} from '../conversation-context/agent-session-conversation-command'
 import { readWholeAgentSessionFailureFact } from './agent-session-failure'
 import type { AgentSessionWriteFailure } from './agent-session-write-failure'
 import type { StructuredAgentSessionCommandRefusalCause } from '../view/structured-agent-session-composer'

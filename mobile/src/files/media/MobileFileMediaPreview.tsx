@@ -10,7 +10,7 @@ import { MobileMediaPlayback } from './MobileMediaPlayback'
 import { MobilePdfPreview } from './MobilePdfPreview'
 import { filePreviewStyles as styles } from '../preview/mobile-file-preview-styles'
 import { formatPreviewByteLength } from '../preview/mobile-file-preview-response'
-import { MobileLoadErrorState } from '../../components/MobileStateView'
+import { MobileLoadErrorState } from '../../components/feedback/MobileStateView'
 import { translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
@@ -71,9 +71,7 @@ function MediaDownload({ media, client, title }: Props) {
   if (!client) {
     return (
       <View style={styles.state}>
-        <Text style={styles.stateText}>
-          {t('files.fileMediaPreview.waiting', 'Waiting for desktop...')}
-        </Text>
+        <Text style={styles.stateText}>{t('common.waitingForHost', 'Waiting for host…')}</Text>
       </View>
     )
   }

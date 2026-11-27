@@ -1,4 +1,4 @@
-import { MAX_TIMER_DELAY_MS } from '../../../../shared/timer-delay'
+import { MAX_TIMER_DELAY_MS } from '../../../../shared/concurrency/timer-delay'
 
 export type RuntimeMobileFilePathInventory = {
   paths: string[]

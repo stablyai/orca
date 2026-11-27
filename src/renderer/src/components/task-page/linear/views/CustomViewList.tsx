@@ -3,7 +3,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   LinearCustomViewTable,
   LinearCollectionNotice
-} from '@/components/linear-project-view-surfaces'
+} from '@/components/task-page/linear/projects/linear-project-view-surfaces'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageLinearCustomViewList({
   model

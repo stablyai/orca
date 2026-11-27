@@ -1,4 +1,7 @@
-import { isUnresolvedOwnerHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  isUnresolvedOwnerHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import {
   AI_VAULT_SESSION_HANDOFF_TIMEOUT_MS,
   readAiVaultSessionHandoffResult,

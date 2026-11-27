@@ -1,5 +1,5 @@
 import { useTranslate } from '@/i18n/use-translate'
-import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
+import type { PairingNetworkInterface } from '../../../../shared/remote-runtime/pairing/pairing-address-auto-selection'
 import { HeroFlow, type Platform, type StepIndex } from './MobileHero'
 import { HeroIntro } from './MobileHeroIntro'
 import { HeroPaired } from './MobileHeroPairedDevices'

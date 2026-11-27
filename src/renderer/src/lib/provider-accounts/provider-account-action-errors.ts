@@ -1,5 +1,5 @@
-import { CLAUDE_SIGN_IN_FAILED_MESSAGE } from '../../../../shared/claude-sign-in-link'
-import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../../shared/codex-auth-errors'
+import { CLAUDE_SIGN_IN_FAILED_MESSAGE } from '../../../../shared/agent-accounts/claude/claude-sign-in-link'
+import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../../shared/agent-accounts/codex/codex-auth-errors'
 import { translate } from '@/i18n/i18n'
 
 const CODEX_SIGN_IN_FAILED_MESSAGE = 'Codex sign-in failed. Please try again.'

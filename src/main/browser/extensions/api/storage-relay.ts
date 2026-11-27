@@ -1,7 +1,8 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
+import { noteBrowserExtensionNeedsCleanStart } from '../profile-sessions/browser-extension-idle-kept-state'
 import {
-  BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace
 } from '../api-runtime/browser-extension-namespace-registry'
@@ -14,9 +15,11 @@ import {
  */
 const STORAGE_RELAY_NAMESPACE = 'orcaStorageRelay'
 
-const changesSchema = z.record(
-  z.string(),
-  z.object({ oldValue: z.unknown().optional(), newValue: z.unknown().optional() }).strict()
+const changesSchema = lazyZodSchema(() =>
+  z.record(
+    z.string(),
+    z.object({ oldValue: z.unknown().optional(), newValue: z.unknown().optional() }).strict()
+  )
 )
 
 export function registerStorageRelayNamespace(): void {
@@ -26,8 +29,12 @@ export function registerStorageRelayNamespace(): void {
       report: defineBrowserExtensionMethod(
         z.tuple([z.enum(['local', 'session']), changesSchema]),
         (caller, areaName, changes) => {
-          if (caller.fromWorker) {
-            throw new BrowserExtensionApiError('The worker delivers its own storage changes')
+          if (areaName === 'session') {
+            noteBrowserExtensionNeedsCleanStart(caller.browserProfileId, caller.extension.id)
+          }
+          // Why only noted: a worker delivers its own changes; it reports only its first session use.
+          if (caller.fromWorker || Object.keys(changes).length === 0) {
+            return
           }
           emitBrowserExtensionEvent(
             { session: caller.session, extensionId: caller.extension.id },

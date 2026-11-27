@@ -1,4 +1,4 @@
-import { hasControllingTty } from '../../../shared/posix-controlling-terminal'
+import { hasControllingTty } from '../../../shared/terminal/pty/native-process/posix-controlling-terminal'
 import { recordSelfInitiatedTreeKill } from '../../crash-reporting/process-exits/self-initiated-tree-kill-log'
 import {
   parseProcessRows,

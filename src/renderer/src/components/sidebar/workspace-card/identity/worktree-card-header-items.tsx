@@ -1,48 +1,65 @@
 import React from 'react'
-import { AlertCircle, FolderMinus, House, Server, ServerOff, Star, Trash2 } from 'lucide-react'
+import { FolderMinus, House, Server, ServerOff, Star, Trash2 } from 'lucide-react'
 
-import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { ProjectPeekPopover } from '@/components/repo/project-peek/ProjectPeekPopover'
+import { RepoMark } from '@/components/repo/RepoMark'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { resolveRepoHeaderColor } from '../../worktree-list/rows/project-header-color'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import { formatSparseDirectoryPreview } from '../controller/worktree-card-model'
 
-export function WorktreeCardRepoChip({ repo }: { repo: Repo }): React.JSX.Element {
+export function WorktreeCardRepoChip({
+  repo,
+  card,
+  hasHoverDetails = false
+}: {
+  repo: Repo
+  card?: IdentityBadgeProps['card']
+  hasHoverDetails?: boolean
+}): React.JSX.Element {
   const t = useTranslate()
+  const hover = card ? identityIndicatorHoverHandlers({ card, hasHoverDetails }) : null
+  const editorOpenRef = React.useRef(false)
+  const handleEditorOpenChange = (open: boolean): void => {
+    editorOpenRef.current = open
+    // The editor replaces the card details while it's open.
+    if (open) {
+      hover?.onPointerEnter()
+    }
+  }
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className="inline-flex h-4 max-w-24 shrink-0 items-center justify-center gap-0.5 rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55 px-0.5"
-          aria-label={t('auto.components.sidebar.WorktreeCard.35ccfe2475', 'Project {{value0}}', {
-            value0: repo.displayName
-          })}
-        >
-          {/* Why: emoji glyphs scale with font size (0.9em), so pin it to fit the 12px icon box. */}
-          <span className="inline-flex size-3 shrink-0 items-center justify-center text-2xs">
-            <RepoIconGlyph
-              repoIcon={repo.repoIcon}
-              color={resolveRepoHeaderColor(repo.badgeColor)}
-              className="size-full"
-              iconClassName="size-3"
-            />
-          </span>
-          {/* Why: the default folder icon is the same for every project, so the name tells them apart. */}
-          <span className="min-w-0 truncate text-3xs leading-none text-muted-foreground lowercase">
-            {repo.displayName}
-          </span>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="right" sideOffset={8}>
-        {repo.displayName}
-      </TooltipContent>
-    </Tooltip>
+    <ProjectPeekPopover repo={repo} onOpenChange={handleEditorOpenChange}>
+      {/* Why: the name squeezed titles out of narrow cards; the mark is kept distinct per project instead. */}
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-label={t('auto.components.sidebar.WorktreeCard.35ccfe2475', 'Project {{value0}}', {
+          value0: repo.displayName
+        })}
+        data-worktree-card-identity-indicator=""
+        // Why: the card activates on pointerdown; pressing the mark opens its editor instead.
+        onPointerDown={(event) => event.stopPropagation()}
+        onPointerMove={(event) => {
+          // Why: moving across the card toward the open editor must not pop the card details over it.
+          if (editorOpenRef.current) {
+            event.stopPropagation()
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.stopPropagation()
+          }
+        }}
+        onFocus={hover?.onFocus}
+        className="inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <RepoMark repo={repo} />
+      </button>
+    </ProjectPeekPopover>
   )
 }
 
@@ -93,44 +110,6 @@ export function WorktreeCardRuntimeHostMark({
   )
 }
 
-export function WorktreeCardRenameErrorButton({
-  onPointerDown,
-  onOpen
-}: {
-  onPointerDown: React.PointerEventHandler<HTMLButtonElement>
-  onOpen: React.MouseEventHandler<HTMLButtonElement>
-}): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    // Errors can contain raw agent output; open a dialog rather than a tooltip.
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          onPointerDown={onPointerDown}
-          onClick={onOpen}
-          onDoubleClick={onOpen}
-          className="h-4 shrink-0 gap-0.5 rounded !px-0.5 text-[10px] font-medium leading-none text-destructive border border-destructive/40 bg-destructive/10 hover:bg-destructive/15 hover:text-destructive has-[>svg]:!px-0.5"
-          aria-label={t(
-            'auto.components.sidebar.WorktreeCard.02e19349f4',
-            'Auto-rename failed: view error'
-          )}
-        >
-          <AlertCircle className="size-2.5" />
-          {t('auto.components.sidebar.WorktreeCard.74522ee457', 'rename failed')}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="right" sideOffset={8}>
-        {t(
-          'auto.components.sidebar.WorktreeCard.4eba2ea99e',
-          'Auto-name failed. Click to see details.'
-        )}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
 function primaryWorktreeTooltip(t: Translate = translate): string {
   return t(
     'auto.components.sidebar.WorktreeCard.0777de5970',
@@ -138,16 +117,17 @@ function primaryWorktreeTooltip(t: Translate = translate): string {
   )
 }
 
-type IdentityBadgeProps = {
+export type IdentityBadgeProps = {
   card: Pick<WorktreeCardController, 'newCardStyle' | 'detailsHoverControl'>
   hasHoverDetails: boolean
 }
 
-function renderIdentityIcon(
-  { card, hasHoverDetails }: IdentityBadgeProps,
-  label: string,
-  icon: React.ReactNode
-): React.JSX.Element {
+// Why: an indicator's own popup replaces the card details while hovered, then hands hover back.
+export function identityIndicatorHoverHandlers({ card, hasHoverDetails }: IdentityBadgeProps): {
+  onPointerEnter: () => void
+  onPointerLeave: (event: React.PointerEvent<HTMLSpanElement>) => void
+  onFocus: () => void
+} {
   const { detailsHoverControl } = card
   const closeDetails = (): void => detailsHoverControl.handleHoverOpenChange(false)
   const resumeDetails = (event: React.PointerEvent<HTMLSpanElement>): void => {
@@ -164,15 +144,21 @@ function renderIdentityIcon(
       detailsHoverControl.handleHoverOpenChange(true)
     }
   }
+  return { onPointerEnter: closeDetails, onPointerLeave: resumeDetails, onFocus: closeDetails }
+}
+
+function renderIdentityIcon(
+  props: IdentityBadgeProps,
+  label: string,
+  icon: React.ReactNode
+): React.JSX.Element {
   return (
     <span
       role="img"
       aria-label={label}
       tabIndex={0}
       data-worktree-card-identity-indicator=""
-      onPointerEnter={closeDetails}
-      onPointerLeave={resumeDetails}
-      onFocus={closeDetails}
+      {...identityIndicatorHoverHandlers(props)}
       className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {icon}

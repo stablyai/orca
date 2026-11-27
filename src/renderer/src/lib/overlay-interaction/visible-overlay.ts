@@ -60,8 +60,8 @@ export function isVisibleOverlay(element: Element, options?: VisibleOverlayOptio
 }
 
 // These don't own Escape, but still paint above pages: popper surfaces (tooltips, hover cards),
-// toasts, modal backdrops and the floating workspace.
-const OVERLAY_LAYER_SELECTOR = `${OVERLAY_SELECTOR}, [data-radix-popper-content-wrapper], [data-sonner-toast], [data-slot$="-overlay"], [data-floating-terminal-panel]`
+// toasts, modal backdrops, the floating workspace and opted-in page notes.
+const OVERLAY_LAYER_SELECTOR = `${OVERLAY_SELECTOR}, [data-radix-popper-content-wrapper], [data-sonner-toast], [data-slot$="-overlay"], [data-floating-terminal-panel], [data-paints-over-native-views]`
 
 /** Whether any overlay paints over `owner`'s `rect`; a native view there would hide it. Layers
  *  holding `owner`, like a floating workspace showing the page, are under it, not over it. */

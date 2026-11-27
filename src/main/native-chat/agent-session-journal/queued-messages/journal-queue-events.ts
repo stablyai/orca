@@ -1,5 +1,5 @@
 import type { UnreadAgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import {
   AGENT_SESSION_JOURNAL_QUEUE_SCHEMA_VERSION,
   type AgentJournalMessageItem

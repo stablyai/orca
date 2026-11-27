@@ -1,4 +1,4 @@
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 
 export function extractCodexSessionMetadataTitle(payload: Record<string, unknown>): string | null {

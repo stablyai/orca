@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Model idle output backlog, sequential return/open and reconnect storms on large paired remotes.
 // restart-proxy uses orca open plus status/list storm; it does not kill desktop.
-// Run: ORCA_FREEZE_ENV=paired-remote ORCA_FREEZE_SCENARIO=idle-backlog-open node config/scripts/live-remote-realistic-freeze-repro.mjs
+// Run: ORCA_FREEZE_ENV=paired-remote ORCA_FREEZE_SCENARIO=idle-backlog-open node config/scripts/diagnostics/remote-freeze/live-remote-realistic-freeze-repro.mjs
 import { spawnSync } from 'node:child_process'
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'

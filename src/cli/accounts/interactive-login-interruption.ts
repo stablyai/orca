@@ -1,4 +1,6 @@
 import { execFile, type ChildProcess } from 'node:child_process'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
+import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 
 export const LOGIN_PROCESS_POSIX_GRACE_MS = 5_000
 export const LOGIN_PROCESS_CLOSE_FALLBACK_MS = 1_000
@@ -54,7 +56,7 @@ export function terminateWindowsLoginProcessTree(
   }
   return new Promise((resolve) => {
     execFileImpl(
-      'taskkill',
+      windowsSystem32Binary('taskkill.exe'),
       ['/pid', String(rootPid), '/T', '/F'],
       { timeout: WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS, windowsHide: true },
       () => resolve()
@@ -83,7 +85,7 @@ export async function terminateInteractiveLoginProcess(
   const closeFallbackMs = deps.closeFallbackMs ?? LOGIN_PROCESS_CLOSE_FALLBACK_MS
   try {
     if (platform === 'win32') {
-      if (child.pid) {
+      if (child.pid && !childProcessHasExited(child)) {
         const killTree = deps.killWindowsTree ?? terminateWindowsLoginProcessTree
         await killTree(child.pid).catch(() => {})
         if (closed || (await waitForClose(closePromise, closeFallbackMs))) {

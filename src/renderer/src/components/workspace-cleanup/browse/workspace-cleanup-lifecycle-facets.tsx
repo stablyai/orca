@@ -157,10 +157,7 @@ export function WorkspaceCleanupLifecycleFacets({
           onChange={(states) => onPatch('agent', { states })}
         />
         <FacetChoice
-          label={t(
-            'components.workspace.cleanup.browse.retainedDoneAgents',
-            'Finished agent transcripts'
-          )}
+          label={t('components.workspace.cleanup.browse.finishedAgents', 'Finished agents')}
           value={filters.agent.retainedDoneAgents}
           options={WORKSPACE_CLEANUP_TRI_STATE_VALUES}
           getLabel={getWorkspaceCleanupTriStateLabel}

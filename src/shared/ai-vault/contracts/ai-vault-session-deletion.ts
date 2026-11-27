@@ -1,5 +1,5 @@
 import type { AiVaultAgent } from './ai-vault-types'
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 
 // IPC payload for aiVault:deleteSession.
 export type AiVaultDeleteSessionArgs = {
@@ -19,12 +19,10 @@ export type AiVaultDeleteSessionResult =
   | { outcome: 'failed'; agent: AiVaultAgent; error: string }
 
 // Allow only sessions whose complete unshared data is derivable from the scanned path.
-// Exclude Antigravity/Kimi registries (Antigravity lacks IDs), Codex indexes/hardlink aliases (one-sided deletion reappears), and OpenCode 1.17.x SQLite rows.
+// Exclude Antigravity/Kimi registries (Antigravity lacks IDs), Codex indexes/hardlink aliases (one-sided deletion reappears), and SQLite rows (OpenCode 1.17.x, Hermes state.db).
 export const AI_VAULT_DELETABLE_AGENTS = [
-  'gemini',
   'copilot',
   'cursor',
-  'hermes',
   'devin',
   'openclaw',
   'droid',

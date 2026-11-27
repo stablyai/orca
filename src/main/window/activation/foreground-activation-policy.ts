@@ -68,7 +68,10 @@ export function applyBackgroundActivationPolicy(options: ActivationPolicyOptions
 
 /** Gives a serve process its Dock tile and menu bar back while it hosts a desktop window. */
 export function applyServeDesktopWindowActivationPolicy(
-  options: Omit<ActivationPolicyOptions, 'serveWithoutDesktopWindow'> = {}
+  options: Omit<ActivationPolicyOptions, 'serveWithoutDesktopWindow'> & {
+    /** The window opens behind the user's app: take the Dock tile without dock.show()'s activation. */
+    background?: boolean
+  } = {}
 ): boolean {
   const platform = options.platform ?? process.platform
   // dock.show() activates the app, so automated launches keep the accessory policy.
@@ -78,9 +81,11 @@ export function applyServeDesktopWindowActivationPolicy(
   try {
     const app = options.app ?? electronApp
     app.setActivationPolicy('regular')
-    void app.dock?.show?.().catch((error: unknown) => {
-      options.warn?.('[window] Failed to show the Dock icon', error)
-    })
+    if (options.background !== true) {
+      void app.dock?.show?.().catch((error: unknown) => {
+        options.warn?.('[window] Failed to show the Dock icon', error)
+      })
+    }
     return true
   } catch (error) {
     options.warn?.('[window] Failed to apply foreground activation policy', error)

@@ -7,7 +7,7 @@ import {
   type OrcadManagedStopCancellation,
   type OrcadManagedStopCompletion,
   type OrcadManagedStopRequest
-} from '../../../../shared/orcad-stop-request'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import { cancelOrcadManagedStop } from './orcad-managed-stop-cancellation'
 import { readOrcadCompletedStopReceipt } from './orcad-completed-stop-receipt'
 import { readOrcadManagedStopRequest } from './orcad-managed-stop-request'

@@ -1,4 +1,4 @@
-import { readMobileGitStatusResult } from '../mobile-diff-review-rpc'
+import { readMobileGitStatusResult } from './mobile-diff-review-rpc'
 import type { MobileGitStatusHostPayload as MobileGitStatusResult } from '../../git/git-status-reply-schema'
 
 export async function readFreshGitStatus(

@@ -3,7 +3,7 @@ import type { Automation } from '../../../shared/automations/automation-definiti
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import { getAutomationRunRepoId } from '../../../shared/automations/history/automation-run-identity'
 import { buildAutomationWorkspaceProvenance } from '../../../shared/automations/ownership/automation-workspace-provenance'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type {
   AutomationWorkspaceProvenance,
   AutomationWorkspaceProvenanceRequest

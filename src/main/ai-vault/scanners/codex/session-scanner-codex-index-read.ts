@@ -5,7 +5,7 @@ import {
   readTranscriptSlice
 } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { consumeCompleteJsonlLines } from '../../parsing/session-scanner-jsonl-reader'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 

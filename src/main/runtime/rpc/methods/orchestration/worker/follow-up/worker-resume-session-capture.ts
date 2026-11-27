@@ -43,13 +43,9 @@ export function watchMovedWorkerResumeSessions(
   runtime: Pick<OrcaRuntimeService, 'getExactWorkerProviderSession'>,
   getDb: () => OrchestrationDb | null
 ): (sessions: readonly { paneKey: string; sessionId: string }[]) => void {
-  // Each notification lists every pane; only a pane whose conversation changed needs saving.
-  let seen = new Map<string, string>()
   return (sessions) => {
     const db = getDb()
-    const moved = sessions.filter(({ paneKey, sessionId }) => seen.get(paneKey) !== sessionId)
-    seen = new Map(sessions.map(({ paneKey, sessionId }) => [paneKey, sessionId]))
-    for (const { paneKey } of db ? moved : []) {
+    for (const { paneKey } of db ? sessions : []) {
       const owner = db && findHeldWorkerResourceForPane(db, paneKey)?.owner_dispatch_id
       if (db && owner) {
         captureReportedWorkerResumeSession(runtime, db, owner)

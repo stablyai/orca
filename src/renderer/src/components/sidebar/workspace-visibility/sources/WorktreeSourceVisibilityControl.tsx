@@ -1,6 +1,6 @@
 import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import type { ExternalWorktreeVisibility } from '../../../../../../shared/repo-types'
+import type { ExternalWorktreeVisibility } from '../../../../../../shared/repository/repo-types'
 import { worktreeVisibilityValueLabel } from './worktree-visibility-source-provenance'
 import { useTranslate } from '@/i18n/use-translate'
 

@@ -1,73 +1,90 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { isAbsoluteBrowserUrl } from '../browser/client-hosting/browser-expected-url'
-import { memoizeStringResult } from '../string-result-cache'
+import { memoizeStringResult } from '../collections/string-result-cache'
 
 // ~300 declarations repeat ~170 messages; zod schemas are immutable, so equal messages can share one instance.
 const MAX_CACHED_VALIDATION_MESSAGES = 256
 
 // Preserve legacy nonnumeric/nonfinite limits as absent. Zod v4 needs outer optional(): one hidden by pipe
 // still makes object keys required.
-export const OptionalFiniteNumber = z
-  .unknown()
-  .transform((value) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined))
-  .pipe(z.union([z.number(), z.undefined()]))
-  .optional()
+export const OptionalFiniteNumber = lazyZodSchema(() =>
+  z
+    .unknown()
+    .transform((value) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined))
+    .pipe(z.union([z.number(), z.undefined()]))
+    .optional()
+)
 
-export const OptionalPositiveInt = z
-  .unknown()
-  .transform((value) =>
-    typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
-  )
-  .pipe(z.union([z.number(), z.undefined()]))
-  .optional()
+export const OptionalPositiveInt = lazyZodSchema(() =>
+  z
+    .unknown()
+    .transform((value) =>
+      typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+    )
+    .pipe(z.union([z.number(), z.undefined()]))
+    .optional()
+)
 
-export const OptionalString = z
-  .unknown()
-  .transform((value) => (typeof value === 'string' && value.length > 0 ? value : undefined))
-  .pipe(z.union([z.string(), z.undefined()]))
-  .optional()
+export const OptionalString = lazyZodSchema(() =>
+  z
+    .unknown()
+    .transform((value) => (typeof value === 'string' && value.length > 0 ? value : undefined))
+    .pipe(z.union([z.string(), z.undefined()]))
+    .optional()
+)
 
-export const OptionalPlainString = z
-  .unknown()
-  .transform((value) => (typeof value === 'string' ? value : undefined))
-  .pipe(z.union([z.string(), z.undefined()]))
-  .optional()
+export const OptionalPlainString = lazyZodSchema(() =>
+  z
+    .unknown()
+    .transform((value) => (typeof value === 'string' ? value : undefined))
+    .pipe(z.union([z.string(), z.undefined()]))
+    .optional()
+)
 
-export const OptionalBoolean = z
-  .unknown()
-  .transform((value) => (typeof value === 'boolean' ? value : undefined))
-  .pipe(z.union([z.boolean(), z.undefined()]))
-  .optional()
+export const OptionalBoolean = lazyZodSchema(() =>
+  z
+    .unknown()
+    .transform((value) => (typeof value === 'boolean' ? value : undefined))
+    .pipe(z.union([z.boolean(), z.undefined()]))
+    .optional()
+)
 
 // Preserve three update meanings: undefined leaves unchanged, null clears, number sets.
-export const TriStateLinkedIssue = z
-  .unknown()
-  .transform((value) => {
-    if (value === null) {
-      return null
-    }
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value
-    }
-    return undefined
-  })
-  .pipe(z.union([z.number(), z.null(), z.undefined()]))
-  .optional()
+export const TriStateLinkedIssue = lazyZodSchema(() =>
+  z
+    .unknown()
+    .transform((value) => {
+      if (value === null) {
+        return null
+      }
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return value
+      }
+      return undefined
+    })
+    .pipe(z.union([z.number(), z.null(), z.undefined()]))
+    .optional()
+)
 
 // Legacy browser targeting permits empty worktree (“any worktree”) but requires a nonempty page; preserve that asymmetry.
-export const BrowserTarget = z.object({
-  worktree: OptionalPlainString,
-  page: OptionalString
-})
+export const BrowserTarget = lazyZodSchema(() =>
+  z.object({
+    worktree: OptionalPlainString,
+    page: OptionalString
+  })
+)
 
 /** The target of a command that acts on the page, which may name the URL it was meant for. */
-export const ExpectUrlBrowserTarget = BrowserTarget.extend({
-  expectUrl: z
-    .custom<string>((v) => typeof v === 'string' && isAbsoluteBrowserUrl(v), {
-      message: '--expect-url must be an absolute URL, like https://example.com/chat/a'
-    })
-    .optional()
-})
+export const ExpectUrlBrowserTarget = lazyZodSchema(() =>
+  BrowserTarget.extend({
+    expectUrl: z
+      .custom<string>((v) => typeof v === 'string' && isAbsoluteBrowserUrl(v), {
+        message: '--expect-url must be an absolute URL, like https://example.com/chat/a'
+      })
+      .optional()
+  })
+)
 
 export const requiredString = memoizeStringResult(
   (message: string) =>

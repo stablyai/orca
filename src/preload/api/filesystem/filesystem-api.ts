@@ -1,7 +1,8 @@
+import type { WatchWorktreeResult } from '../../../shared/file-watch/watch-worktree-result'
 import type { PathExistenceResult } from '../../../shared/file-access/path-existence-batch'
 import type { RuntimeFileReadChunkResult } from '../../../shared/file-content/runtime-file-read'
 import type { SearchOptions, SearchResult } from '../../../shared/file-search/code-search-types'
-import type { PdfExportResult } from '../../../shared/pdf-export-failure-copy'
+import type { PdfExportResult } from '../../../shared/document-preview/pdf-export-failure-copy'
 import type { DirEntry } from '../../../shared/file-listing/directory-entry'
 import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
@@ -18,8 +19,8 @@ import type {
   LocalLogTailReadArgs,
   LocalLogTailReadResult,
   LocalLogTailWatchArgs
-} from '../../../shared/local-log-tail-types'
-import type { SshMutationExpectation } from '../../../shared/ssh-types'
+} from '../../../shared/file-content/local-log-tail-types'
+import type { SshMutationExpectation } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
 import type { RemoteFilePreviewAddress } from '../../../shared/file-preview/remote-file-preview-address'
 import type { FileBytesWritePrecondition } from '../../../shared/file-write/file-bytes-write'
@@ -33,7 +34,7 @@ import type {
   KernelStartResult,
   PythonEnvironment,
   PythonEnvironments
-} from '../../../shared/notebook-kernel-types'
+} from '../../../shared/editor/notebooks/notebook-kernel-types'
 import type {
   AgentSessionAttachmentPathUploadResult,
   AgentSessionAttachmentUploadTarget
@@ -190,8 +191,12 @@ export type FilesystemApi = {
       access?: LocalFileAccess
       wakeWslDistro?: boolean
     }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
-    /** Local only: whether a symlink below `rootPath` leads to `path` (the root watch can't see past it). */
-    hasSymlinkBelowRoot: (args: { rootPath: string; path: string }) => Promise<boolean>
+    /** Local only: the first or deepest symlink below `rootPath` on the way to `path`, or null (the root watch can't see past one). */
+    findSymlinkBelowRoot: (args: {
+      rootPath: string
+      path: string
+      which: 'first' | 'deepest'
+    }) => Promise<string | null>
     pathsExist?: (args: {
       filePaths: string[]
       connectionId?: string
@@ -246,7 +251,11 @@ export type FilesystemApi = {
     uploadPathsToAgentSessionAttachments: (
       args: AgentSessionAttachmentUploadTarget & { paths: string[] }
     ) => Promise<AgentSessionAttachmentPathUploadResult>
-    watchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
+    /** Local roots resolve with the outcome; remote roots resolve undefined. */
+    watchWorktree: (args: {
+      worktreePath: string
+      connectionId?: string
+    }) => Promise<WatchWorktreeResult | undefined>
     unwatchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void
   }

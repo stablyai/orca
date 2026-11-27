@@ -3,7 +3,6 @@ import { getGeneralSubPageTitle } from '../general/general-sub-pages'
 import { ActiveSettingsSectionProvider } from '../section-layout/SettingsSection'
 import { SettingsContentScrollElementProvider } from './settings-content-scroll-element'
 import { SettingsSidebar } from '../navigation/SettingsSidebar'
-import { PluginInstallTrustDialogHost } from '../../plugins/dialogs/PluginInstallTrustDialog'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -14,6 +13,7 @@ import {
   renderAgentsSettingsSection,
   renderDesktopCapabilitySettingsSections,
   renderLinearSettingsSection,
+  renderMcpServersSettingsSection,
   renderOrchestrationSettingsSection
 } from './settings-capability-section-renderers'
 import {
@@ -25,7 +25,9 @@ import {
   renderMobileSettingsSection,
   renderOrcaAccountSettingsSection,
   renderSetupGuideSettingsSection,
-  renderShareSkillsSettingsSection
+  renderShareSkillsSettingsSection,
+  renderSharedLinksSettingsSection,
+  renderWorkspaceCleanupSettingsSection
 } from './settings-setup-workflow-section-renderers'
 import {
   renderGitSettingsSection,
@@ -59,6 +61,8 @@ import {
   renderPluginsSettingsSection
 } from './settings-advanced-section-renderers'
 import { renderProjectSettingsSections } from './settings-project-section-renderer'
+import { renderBotsSettingsSections } from '../bots/settings-bots-section-renderer'
+import { botIdFromSettingsSectionId, isBotsSettingsSection } from '../bots/bot-settings-section-ids'
 import {
   SettingsHostScopePicker,
   shouldShowSettingsHostScopePicker
@@ -107,20 +111,30 @@ export function renderSettingsPage(
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <SettingsHeader
           title={
-            navigation.navSections.find((section) => section.id === model.activeSectionId)?.title ??
-            t('settings.breadcrumb.settings', 'Settings')
+            // A bot's page is under Bots; its view draws its own crumb below.
+            (botIdFromSettingsSectionId(model.activeSectionId) !== null
+              ? t('settings.bots.title', 'Bots')
+              : navigation.navSections.find((section) => section.id === model.activeSectionId)
+                  ?.title) ?? t('settings.breadcrumb.settings', 'Settings')
           }
           subPageTitle={
-            model.activeSectionId === 'general' &&
-            !model.settingsSearchQuery.trim() &&
-            model.generalSubPage
-              ? getGeneralSubPageTitle(model.generalSubPage, t)
-              : undefined
+            model.settingsSearchQuery.trim()
+              ? undefined
+              : model.activeSectionId === 'general' && model.generalSubPage
+                ? getGeneralSubPageTitle(model.generalSubPage, t)
+                : model.activeSectionId === 'mcp-servers' && model.mcpServerSubPage
+                  ? model.mcpServerSubPage.title
+                  : undefined
           }
-          onGeneral={() => void actions.scrollToSection('general')}
+          onParent={() =>
+            model.activeSectionId === 'mcp-servers'
+              ? model.setMcpServerSubPage(null)
+              : void actions.scrollToSection('general')
+          }
           onClose={interactions.closeSettingsPageWithPromptGuard}
           hostPicker={
             !model.isWebClient &&
+            !isBotsSettingsSection(model.activeSectionId) &&
             shouldShowSettingsHostScopePicker(
               model.settingsHostScope,
               model.runtimeEnvironments
@@ -162,6 +176,7 @@ export function renderSettingsPage(
               <SettingsContentScrollElementProvider value={interactions.contentScrollElement}>
                 <ActiveSettingsSectionProvider value={model.activeSectionId}>
                   {renderAgentsSettingsSection(context, t)}
+                  {renderMcpServersSettingsSection(context, t)}
                   {renderAccountsSettingsSection(context, t)}
                   {renderOrchestrationSettingsSection(context, t)}
                   {renderLinearSettingsSection(context, t)}
@@ -169,11 +184,14 @@ export function renderSettingsPage(
                   {renderOrcaAccountSettingsSection(context, t)}
                   {renderSetupGuideSettingsSection(context, t)}
                   {renderGeneralSettingsSection(context, t)}
+                  {renderWorkspaceCleanupSettingsSection(context, t)}
                   {renderIntegrationsSettingsSection(context, t)}
+                  {renderBotsSettingsSections(context)}
                   {renderMobileSettingsSection(context, t)}
                   {renderAutomationsSettingsSection(context, t)}
                   {renderArtifactsSettingsSection(context, t)}
                   {renderShareSkillsSettingsSection(context, t)}
+                  {renderSharedLinksSettingsSection(context, t)}
                   {renderSessionHistorySettingsSection(context, t)}
                   {renderGitSettingsSection(context, t)}
                   {renderTasksSettingsSection(context, t)}
@@ -203,8 +221,6 @@ export function renderSettingsPage(
           </div>
         </div>
       </div>
-      {/* Why page level: Plugins and the Appearance theme pickers both install through it. */}
-      <PluginInstallTrustDialogHost />
     </div>
   )
 }

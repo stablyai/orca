@@ -1,4 +1,4 @@
-import { withGitHubTargetOperation } from '../../source-control/review/github-work-item-operation'
+import { withGitHubTargetOperation } from '../../source-control/review/github-operations/github-work-item-operation'
 import { githubTaskKey, requireGitHubTaskTarget } from './github-task-identity'
 import {
   matchesGitHubWorkItemTarget,

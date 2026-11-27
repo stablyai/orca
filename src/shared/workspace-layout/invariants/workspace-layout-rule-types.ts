@@ -1,5 +1,5 @@
 import type { TerminalLeafOwner } from '../terminal-topology/terminal-owner-invariants'
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
 
 export type PaneOwner = Pick<

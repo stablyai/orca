@@ -1,5 +1,5 @@
 import { getPresentStringFlag } from '../arguments/flags'
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 
 // Hosts use generic runtime_error here; this message is the stable discriminator.
 const SETUP_DECISION_REQUIRED = 'Setup decision required for this repository'

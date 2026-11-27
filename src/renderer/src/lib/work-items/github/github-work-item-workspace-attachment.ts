@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { normalizeGitRemoteUrl } from '../../../../../shared/git/remotes/git-remote-identity'
 import { getWorkspaceAttachmentUrlScope } from '../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
@@ -6,7 +6,7 @@ import { githubRepoIdentityKey } from '../../../../../shared/github/repositories
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { getWorkspaceAttachments } from '../../../../../shared/workspace-attachments/workspace-attachments'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 
 type GitHubWorkItemType = GitHubWorkItem['type']
 

@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { WorkspaceCleanupBlocker } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupGitState } from '../../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
-import type { WorktreeAtRiskLocalFiles } from '../../../../../shared/worktree/at-risk-local-files'
+import type { WorktreeAtRiskLocalFiles } from '../../../../../shared/worktree/removal/at-risk-local-files'
 import { formatAtRiskLocalFileNames } from '@/lib/workspace/display/at-risk-local-files-label'
 
 type ContextDetailKind = 'terminal' | 'editor' | 'browser' | 'diff' | 'agent'

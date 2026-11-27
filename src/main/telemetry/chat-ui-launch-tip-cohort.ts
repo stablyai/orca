@@ -1,7 +1,7 @@
 import type { Store } from '../persistence/loading-store/store'
 import { resolveConsent } from './consent'
-import { getFeatureTipSeenId } from '../../shared/feature-tips'
-import type { ChatUiLaunchTipCohort } from '../../shared/telemetry-settings-types'
+import { getFeatureTipSeenId } from '../../shared/feature-education/feature-tips'
+import type { ChatUiLaunchTipCohort } from '../../shared/telemetry/telemetry-settings-types'
 
 export type { ChatUiLaunchTipCohort }
 

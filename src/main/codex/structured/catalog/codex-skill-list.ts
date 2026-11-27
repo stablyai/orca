@@ -1,5 +1,5 @@
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
-import { structuredSlashCommands } from '../../../../shared/agent-session/view/structured-agent-session-composer'
+import { structuredSlashCommands } from '../../../../shared/agent-session/view/structured-agent-session-slash-menu'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import {
   type CodexAppServerRpc,

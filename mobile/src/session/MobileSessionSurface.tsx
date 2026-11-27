@@ -1,4 +1,4 @@
-import { useContext } from 'react'
+import { useCallback, useContext, useMemo } from 'react'
 import { Text, View } from 'react-native'
 import { styles } from './mobile-session-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -8,12 +8,14 @@ import { MobileSessionContentRow } from './MobileSessionContentRow'
 import { MobileSessionHeader } from './MobileSessionHeader'
 import { MobileSessionSheets } from './MobileSessionSheets'
 import { MobileWorkerAutoCloseStrip } from './tabs/MobileWorkerAutoCloseStrip'
-import { AnchoredDetailCardLayer } from '../components/AnchoredDetailCard'
-import { StatusDot } from '../components/StatusDot'
+import { BotChatOpenContext, BotItemOpenContext, BotPanelOpenContext } from '../bots/bot-item-open'
+import { openBotChatTab } from './bot-chat-tab-open'
+import { AnchoredDetailCardLayer } from '../components/detail-cards/AnchoredDetailCard'
+import { StatusDot } from '../components/feedback/StatusDot'
 import { useResponsiveLayout } from '../layout/responsive-layout'
-import { WorkspaceServerContext } from '../worktree/workspace-server-context'
+import { WorkspaceServerContext } from '../worktree/execution-hosts/workspace-server-context'
 import { useSessionTitleCard } from './tabs/use-session-title-card'
-import { useDetailCardScope } from '../components/use-detail-card-scope'
+import { useDetailCardScope } from '../components/detail-cards/use-detail-card-scope'
 import { useShellSideRail } from '../layout/use-shell-side-rail'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
@@ -33,6 +35,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
     controller.showHeaderMoreActions ||
     controller.showCreateTabDrawer ||
     controller.showTerminalLayout ||
+    controller.textSizeSheet != null ||
     (controller.showQuickCommands && controller.quickCommandsSupported === true) ||
     controller.pendingDiffNotesDelivery != null ||
     controller.actionTarget != null ||
@@ -50,6 +53,44 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
     controller.deleteKeyTarget != null
   )
   const details = useSessionTitleCard(besideTabs, obscured)
+  const { itemsOnPhone, openBotPanel, openNativeSession, worktreeId, sessionTabs } = controller
+  const { switchSessionTab, activeSessionTabId, routeBot } = controller
+  const homeChatId = routeBot?.bot.chatSessionId
+  const openItem = useMemo(
+    () => (itemsOnPhone ? (itemUid: string) => openBotPanel({ item: itemUid }) : null),
+    [itemsOnPhone, openBotPanel]
+  )
+  const routeBotId = routeBot?.bot.id
+  // Keyed on the ids, so an Activity read that changes none doesn't redraw every card using the opener.
+  const automationIds = (routeBot?.activity?.automations ?? [])
+    .map((row) => row.automation.id)
+    .join('\n')
+  const panelOpener = useMemo(
+    () =>
+      itemsOnPhone && routeBotId
+        ? {
+            botId: routeBotId,
+            open: openBotPanel,
+            automationIds: new Set(automationIds.split('\n'))
+          }
+        : null,
+    [itemsOnPhone, routeBotId, openBotPanel, automationIds]
+  )
+  const openChat = useCallback(
+    (chat: { chatId: string; home?: true }) =>
+      openBotChatTab(
+        { chatId: chat.chatId, home: chat.home === true },
+        {
+          homeChatId,
+          sessionTabs,
+          activeSessionTabId,
+          switchSessionTab,
+          openNativeSession,
+          worktreeId
+        }
+      ),
+    [homeChatId, sessionTabs, activeSessionTabId, switchSessionTab, openNativeSession, worktreeId]
+  )
   useDetailCardScope({ ...details, obscured })
   // Only a proven local record belongs to this route's desktop or server.
   const hostName =
@@ -59,7 +100,14 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
       <View style={styles.kavInner}>
         <MobileSessionHeader controller={controller} details={details} />
         <MobileWorkerAutoCloseStrip controller={controller} />
-        <MobileSessionContentRow controller={controller} />
+        {/* A chat's item chips open the item's page in the bot panel. */}
+        <BotItemOpenContext.Provider value={openItem}>
+          <BotChatOpenContext.Provider value={openChat}>
+            <BotPanelOpenContext.Provider value={panelOpener}>
+              <MobileSessionContentRow controller={controller} />
+            </BotPanelOpenContext.Provider>
+          </BotChatOpenContext.Provider>
+        </BotItemOpenContext.Provider>
       </View>
       <AnchoredDetailCardLayer
         card={details}
@@ -69,7 +117,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
         footer={
           hostName ? (
             <>
-              <StatusDot state={controller.connState} />
+              <StatusDot state={controller.connState} verdict={controller.connectionVerdict} />
               <Text style={styles.sessionMetaText}>{hostName}</Text>
             </>
           ) : null

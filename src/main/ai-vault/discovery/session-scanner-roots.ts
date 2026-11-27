@@ -1,7 +1,9 @@
 import { claudeProfileHistoryDirs } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { resolveAbsoluteDirOverride } from '../../../shared/absolute-dir-override'
+import { resolveAbsoluteDirOverride } from '../../../shared/file-access/absolute-dir-override'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../../pty/shell-startup/codex-home-wsl-env'
 import { ompProfileSessionsDirs, resolveOmpSessionsDir } from '../scanners/omp/omp-session-root'
 
@@ -61,6 +63,24 @@ export function wslHomeSessionDirs(
 
 export function uniqueDirs(dirs: readonly string[]): string[] {
   return dirs.filter((dir, index) => dirs.indexOf(dir) === index)
+}
+
+/** Maps the first spelling of each directory to the later roots that resolve (symlink or junction) to it. */
+export async function realDirAliases(dirs: readonly string[]): Promise<Map<string, string[]>> {
+  // WSL roots are touched only through the transcript gate; a missing root keeps its own spelling.
+  const keys = await Promise.all(
+    dirs.map(async (dir) => (isWslUncPath(dir) ? dir : realpath(dir).catch(() => dir)))
+  )
+  const aliases = new Map<string, string[]>()
+  for (const [index, dir] of dirs.entries()) {
+    const first = dirs[keys.indexOf(keys[index])]
+    if (first === dir) {
+      aliases.set(dir, aliases.get(dir) ?? [])
+    } else {
+      aliases.get(first)?.push(dir)
+    }
+  }
+  return aliases
 }
 
 // Use these same roots for discovery, transcript path validation and native chat ID lookup.

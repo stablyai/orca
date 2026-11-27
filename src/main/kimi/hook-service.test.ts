@@ -1,90 +1,58 @@
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { KimiHookService } from './hook-service'
 
-// Isolate homedir (HOME/USERPROFILE) and KIMI_CODE_HOME so installs cannot touch real configs.
-let home: string
-let originalHome: string | undefined
-let originalKimiHome: string | undefined
-let originalUserProfile: string | undefined
+const { homedirMock } = vi.hoisted(() => ({ homedirMock: vi.fn<() => string>() }))
 
-beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'orca-kimi-hook-'))
-  originalHome = process.env.HOME
-  originalKimiHome = process.env.KIMI_CODE_HOME
-  originalUserProfile = process.env.USERPROFILE
-  process.env.HOME = home
-  process.env.KIMI_CODE_HOME = join(home, '.kimi-code')
-  process.env.USERPROFILE = home
+vi.mock('node:os', async () => {
+  const actual = await vi.importActual<typeof NodeOs>('node:os')
+  return { ...actual, homedir: homedirMock }
 })
 
-afterEach(() => {
-  if (originalHome === undefined) {
-    delete process.env.HOME
-  } else {
-    process.env.HOME = originalHome
-  }
-  if (originalKimiHome === undefined) {
-    delete process.env.KIMI_CODE_HOME
-  } else {
-    process.env.KIMI_CODE_HOME = originalKimiHome
-  }
-  if (originalUserProfile === undefined) {
-    delete process.env.USERPROFILE
-  } else {
-    process.env.USERPROFILE = originalUserProfile
-  }
-  rmSync(home, { recursive: true, force: true })
-})
+import { kimiHookService } from './hook-service'
+import { buildManagedKimiHooksBlock } from './kimi-hook-config-toml'
+import { localDiskSftp } from '../agent-hooks/installation/remote/local-disk-sftp.test-fixture'
 
-const configPath = (): string => join(home, '.kimi-code', 'config.toml')
-const supportsPosixFileModes = process.platform !== 'win32'
+// #49505: a re-serialized config holds Orca's hooks as an inline array.
+describe('Kimi hook install beside an inline hooks array', () => {
+  let home: string
+  let configPath: string
+  let command: string
+  let inline: string
 
-describe('KimiHookService', () => {
-  it.skipIf(!supportsPosixFileModes)(
-    'preserves an existing config mode while installing and removing hooks',
-    () => {
-      mkdirSync(join(home, '.kimi-code'), { recursive: true })
-      writeFileSync(configPath(), 'api_key = "sk-secret"\n')
-      const existingMode = 0o640
-      chmodSync(configPath(), existingMode)
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'orca-kimi-hooks-'))
+    mkdirSync(join(home, '.kimi-code'))
+    configPath = join(home, '.kimi-code', 'config.toml')
+    homedirMock.mockReturnValue(home)
+    vi.stubEnv('KIMI_CODE_HOME', '')
+    // Forward slashes keep Windows temp paths free of TOML escape sequences.
+    command = `sh '${home.replaceAll('\\', '/')}/.orca/agent-hooks/kimi-hook.sh'`
+    inline = `default_model = "k"\nhooks = [{ event = "Stop", command = "${command}" }]\n`
+  })
 
-      const service = new KimiHookService()
-      const originalUmask = process.umask(0o077)
-      try {
-        service.install()
-        expect(statSync(configPath()).mode & 0o777).toBe(existingMode)
-        expect(statSync(`${configPath()}.bak`).mode & 0o777).toBe(existingMode)
-        expect(
-          readdirSync(join(home, '.kimi-code')).filter((name) => name.endsWith('.tmp'))
-        ).toEqual([])
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    rmSync(home, { recursive: true, force: true })
+  })
 
-        service.remove()
-        expect(statSync(configPath()).mode & 0o777).toBe(existingMode)
-      } finally {
-        process.umask(originalUmask)
-      }
-    }
-  )
+  it('writes nothing, locally or remotely', async () => {
+    writeFileSync(configPath, inline)
+    expect(kimiHookService.install().state).toBe('error')
+    expect((await kimiHookService.installRemote(localDiskSftp(), home)).state).toBe('error')
+    expect(readFileSync(configPath, 'utf-8')).toBe(inline)
+    expect(existsSync(join(home, '.orca'))).toBe(false)
+  })
 
-  it.skipIf(!supportsPosixFileModes)('creates a new config with an owner-only mode', () => {
-    const originalUmask = process.umask(0o022)
-    try {
-      new KimiHookService().install()
-
-      expect(statSync(configPath()).mode & 0o777).toBe(0o600)
-    } finally {
-      process.umask(originalUmask)
-    }
+  it('drops the block an older install appended, locally and remotely', async () => {
+    const broken = `${inline}\n${buildManagedKimiHooksBlock(command)}\n`
+    writeFileSync(configPath, broken)
+    expect(kimiHookService.install().state).toBe('error')
+    expect(readFileSync(configPath, 'utf-8')).toBe(inline)
+    writeFileSync(configPath, broken)
+    expect((await kimiHookService.installRemote(localDiskSftp(), home)).state).toBe('error')
+    expect(readFileSync(configPath, 'utf-8')).toBe(inline)
   })
 })

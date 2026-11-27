@@ -9,12 +9,12 @@ import {
   commentMarkdownSanitizeSchema,
   commentMarkdownAllowedTagNames,
   commentMarkdownUrlTransform
-} from '../../sidebar/comment-markdown-sanitize'
-import { remarkUnknownHtmlAsText } from '../../sidebar/comment-markdown-unknown-html-as-text'
+} from '../../comment-markdown/comment-markdown-sanitize'
+import { remarkUnknownHtmlAsText } from '../../comment-markdown/comment-markdown-unknown-html-as-text'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../../shared/native-chat/transcript/native-chat-row-content'
-import { commentMarkdownRemarkPlugins } from '../../sidebar/comment-markdown-remark-plugins'
-import { remarkChatMath } from '../../sidebar/chat-markdown-math'
+import { deriveNativeChatRowContent } from '../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
+import { commentMarkdownRemarkPlugins } from '../../comment-markdown/comment-markdown-remark-plugins'
+import { remarkChatMath } from '../../comment-markdown/chat-markdown-math'
 import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
 
 function sourceReader(visuals: boolean) {

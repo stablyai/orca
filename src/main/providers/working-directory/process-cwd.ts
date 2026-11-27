@@ -1,7 +1,7 @@
 import { execFile as execFileCb } from 'node:child_process'
 import { readlink } from 'node:fs/promises'
-import { LSOF_NONBLOCKING_ARGS } from '../../../shared/lsof-nonblocking-args'
-import { readLibprocProcessFilePath } from '../../../shared/libproc-addon'
+import { LSOF_NONBLOCKING_ARGS } from '../../../shared/process-observation/lsof-nonblocking-args'
+import { readLibprocProcessFilePath } from '../../../shared/process-observation/darwin/libproc-addon'
 
 // Coalesce/cache per-PID cwd reads briefly so rapid pane actions cannot accumulate lsof subprocesses.
 const CACHE_TTL_MS = 1500

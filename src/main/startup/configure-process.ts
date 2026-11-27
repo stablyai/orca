@@ -1,22 +1,24 @@
 import { app } from 'electron'
+import { installBestEffortSocketTypeOfService } from '../network/best-effort-socket-type-of-service'
 import { guardExternalOpensInE2E } from './testing/e2e-external-open-guard'
 import { quitProcess } from './quit/process-quit-request'
 import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
-import { isWindowsFnmDefaultAliasDir } from '../../shared/fnm-default-alias-dirs'
+import { isWindowsFnmDefaultAliasDir } from '../../shared/shell/command-resolution/fnm-default-alias-dirs'
 import { getMainE2EConfig } from './testing/e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './chromium-policy/disabled-chromium-features'
 import { readHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
 import { checkServeUserDataPath } from './serve-launch/serve-user-data-path-guard'
-import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
-import { isLinuxWaylandSession } from '../../shared/linux-wayland-session'
+import { stampRuntimeSourceEnv } from '../../shared/remote-runtime/host-catalog/runtime-source-env'
+import { isLinuxWaylandSession } from '../../shared/app-lifecycle/launch/linux-wayland-session'
 import {
   hasMissingProfileStateDatabaseWithRetainedAuthority,
   readActiveProfileId,
   readPersistedHttp1CompatibilityMode
 } from './network-compatibility/http1-compatibility-profile-state'
+import { declineBackgroundClientCertificates } from './network-compatibility/background-client-certificate-guard'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
@@ -71,6 +73,8 @@ export function shouldDisableHttp2ForElectronNetworking(
 export function configureElectronNetworkCompatibility(
   options: NetworkCompatibilityOptions = {}
 ): void {
+  installBestEffortSocketTypeOfService()
+  declineBackgroundClientCertificates(app)
   if (!shouldDisableHttp2ForElectronNetworking(options)) {
     return
   }
@@ -115,10 +119,6 @@ function requestDevParentShutdown(): void {
 
 export function isDevParentShutdownRequested(): boolean {
   return devParentShutdownRequested
-}
-
-export function resetDevParentShutdownRequestForTests(): void {
-  devParentShutdownRequested = false
 }
 
 function resolvePackagedHome(): string {

@@ -1,10 +1,9 @@
-import { applyClaudeAgentViewEnv } from './claude-agent-view'
-import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal/images/terminal-inline-images-settings'
+import { applyClaudeAgentViewEnv, stripInheritedClaudePluginDir } from './claude-agent-view'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType
-} from '../../../../shared/pi-agent-kind'
+} from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 import { applyTerminalGitCredentialPromptGuard } from '../../../../shared/shell/launch/terminal-git-credential-guard'
 import { ensureOpenCodeStartupPromptForLaunch } from '../../../opencode/startup-prompts/opencode-startup-prompt-installer'
 import { mimoCodeHookService } from '../../../mimo/hook-service'
@@ -13,12 +12,14 @@ import { wslHookRelayManager } from '../../../agent-hooks/wsl-relay/wsl-hook-rel
 import { wslInteropHealthMonitor } from '../../../wsl/execution/wsl-interop-health'
 import { piTitlebarExtensionService } from '../../../pi/managed-extensions/titlebar-extension-service'
 import { prependOrcaCliDirToChildPath } from '../../../cli/launchers/orca-cli-child-path'
+import { appendManagedAgentDirsToChildPath } from '../../../managed-agent-cli/managed-agent-cli-registry'
+import { resolveTerminalBrowserCommand } from './terminal-browser-command'
 import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl/wsl-managed-cli'
 import { stripLegacyTerminalShimEnv } from '../../../pty/shell-startup/legacy-terminal-shim-dir'
 import { mergePersistedWindowsPath } from '../../../pty/environment/windows-environment-path'
 import { resolveCodexShellLaunchPreflightCommand } from '../../../pty/shell-startup/codex-shell-launch-preflight'
 import { scheduleCodexHookReconcile } from '../../../codex/hooks/reconciliation/codex-hook-reconcile'
-import { buildConfiguredProxyEnv } from '../../../../shared/network-proxy'
+import { buildConfiguredProxyEnv } from '../../../../shared/network/network-proxy'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { BuildPtyHostEnvOptions } from './types'
 import { stripInheritedOrcaCodexHomeOverride } from './codex-home'
@@ -32,6 +33,8 @@ import {
 } from './pi-agent'
 import { restoreOrStripOverlayEnv } from '../../../../shared/agent-launch/startup/agent-overlay-env'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
+import { CLAUDE_HOOK_PLUGIN_DIR_ENV } from '../../../../shared/agent-hook-listener/providers/claude/claude-hook-plugin'
+import { getClaudeHookPluginDir } from '../../../claude/hooks/claude-hook-plugin'
 import { applyManagedDataAccountEnvironment } from '../../../managed-data-accounts/launch-environment'
 import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'
 import { applyRemoteViewerClipboardEnv } from './remote-viewer-clipboard-env'
@@ -44,16 +47,6 @@ export function buildPtyHostEnv(
 ): Record<string, string> {
   mergePersistedWindowsPath(baseEnv)
   Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
-
-  // Claude currently recognizes image support only in a short terminal allowlist.
-  if (
-    opts.launchAgent === 'claude' &&
-    resolveTerminalInlineImagesEnabled(opts.terminalInlineImages) &&
-    baseEnv.CLAUDE_CODE_FORCE_TERMINAL_IMAGES === undefined &&
-    process.env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES === undefined
-  ) {
-    baseEnv.CLAUDE_CODE_FORCE_TERMINAL_IMAGES = '1'
-  }
 
   const openCodeConfig = captureOpenCodeSourceConfig(baseEnv, opts.userDataPath)
   const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(baseEnv, opts.launchCommand)
@@ -126,11 +119,15 @@ export function buildPtyHostEnv(
   }
 
   // Remove inherited hook coordinates before injecting the owning pane's receiver.
+  stripInheritedClaudePluginDir(baseEnv, CLAUDE_HOOK_PLUGIN_DIR_ENV)
   for (const key of AGENT_HOOK_RUNTIME_ENV_KEYS) {
     delete baseEnv[key]
   }
   if (opts.agentStatusHooksEnabled) {
     Object.assign(baseEnv, agentHookServer.buildPtyEnv())
+    if (opts.isWsl !== true && isTuiAgentEnabled('claude', opts.disabledTuiAgents)) {
+      baseEnv[CLAUDE_HOOK_PLUGIN_DIR_ENV] = getClaudeHookPluginDir(opts.userDataPath)
+    }
     if (opts.isWsl === true) {
       // Windows loopback is outside WSL's NAT namespace; use the guest relay endpoint.
       const distro = opts.wslDistro ?? null
@@ -177,7 +174,8 @@ export function buildPtyHostEnv(
     // Bare shells must not create agent homes; use existing Pi/OMP directories or userData for OMP status (#10196).
     if (shouldInstallPiExtensions && piAgentKind === 'pi') {
       const piEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingPiAgentDir, 'pi', {
-        materializeDefaultHome: explicitPiAgentKind === 'pi'
+        materializeDefaultHome: explicitPiAgentKind === 'pi',
+        cliOnPath: opts.agentsOnPath?.has('pi') === true
       })
       Object.assign(baseEnv, piEnv)
       exposePiManagedExtensionEnv(baseEnv, 'pi', piEnv)
@@ -186,6 +184,7 @@ export function buildPtyHostEnv(
     if (shouldInstallOmpExtensions && shouldPrepareOmpShadow) {
       const ompEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingOmpAgentDir, 'omp', {
         materializeDefaultHome: explicitPiAgentKind === 'omp',
+        cliOnPath: opts.agentsOnPath?.has('omp') === true,
         // WSL loads the host-rooted managed extension through drvfs; guest storage stays separate.
         ...(opts.isWsl
           ? { configDirName: '.omp' }
@@ -298,19 +297,21 @@ export function buildPtyHostEnv(
     }
     delete baseEnv.ORCA_CLI_COMMAND
   }
-  prependOrcaCliDirToChildPath(baseEnv, {
+  const cliLauncher = prependOrcaCliDirToChildPath(baseEnv, {
     isPackaged: opts.isPackaged,
     userDataPath: opts.userDataPath,
     resourcesPath: opts.resourcesPath
   })
+  appendManagedAgentDirsToChildPath(baseEnv)
 
   if (
     opts.routeBrowserOpensToClient === true &&
     baseEnv.BROWSER === undefined &&
     process.env.BROWSER === undefined
   ) {
-    const cliCommand = opts.isWsl ? getWslCliCommandName(opts.isPackaged) : 'orca'
-    baseEnv.BROWSER = `${cliCommand} open-url --url %s`
+    baseEnv.BROWSER = opts.isWsl
+      ? getWslCliCommandName(opts.isPackaged)
+      : resolveTerminalBrowserCommand(cliLauncher)
   }
   // Browser-relayed and SSH-managed headless hosts both have viewers on another machine.
   applyRemoteViewerClipboardEnv(baseEnv, {

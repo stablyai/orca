@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Validate saved layout against shared structural rules, including live dev profiles; print breaches and exit 1.
-// Usage: node config/scripts/check-workspace-layout-rules.mjs <userDataDir>
+// Usage: node config/scripts/static-analysis/repository-layout/check-workspace-layout-rules.mjs <userDataDir>
 
 import { build } from 'esbuild'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'

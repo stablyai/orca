@@ -1,4 +1,4 @@
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { AutomationWorkspaceMode } from '../../shared/automations/automation-definition'
 
 export function getAutomationSetupFlag(

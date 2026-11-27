@@ -1,7 +1,7 @@
 import { ChevronRight, ExternalLink, GitMerge } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
-import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
+import { SpinnerFrame } from '@/components/ui/LoadingSpinner'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
@@ -84,18 +84,13 @@ export function FolderWorkspacePrChecksRow({
         <div className="min-w-0 flex-1">
           <PrChecksRowHeader row={row} />
           <div className="mt-1 truncate text-[12px] text-foreground/90">{row.title}</div>
-          <div
-            ref={animateStatusIcon ? observeOffscreenAnimation : undefined}
-            className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground"
-          >
-            {showStatusIcon ? (
-              <StatusIcon
-                className={cn(
-                  'size-3 shrink-0',
-                  CHECK_COLOR[row.checkTone],
-                  animateStatusIcon && 'animate-spin motion-reduce:animate-none'
-                )}
-              />
+          <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+            {showStatusIcon && animateStatusIcon ? (
+              <SpinnerFrame>
+                <StatusIcon className={cn('block size-3', CHECK_COLOR[row.checkTone])} />
+              </SpinnerFrame>
+            ) : showStatusIcon ? (
+              <StatusIcon className={cn('size-3 shrink-0', CHECK_COLOR[row.checkTone])} />
             ) : null}
             <span className="truncate">{row.summary}</span>
             {row.repo ? <span className="shrink-0">· {row.repo.displayName}</span> : null}

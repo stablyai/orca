@@ -1,6 +1,8 @@
+import type { JournalKeyedMap, JournalKeyedSet } from '../journal-keyed-storage'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { AgentJournalTurnScopeSchema } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
-import { AgentSessionExecutionOptionsSchema } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import { AgentSessionExecutionOptionsSchema } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { JournalHistoryOrigin } from '../context-epochs/journal-history-origin'
@@ -136,11 +138,16 @@ function checked<T>(schema: z.ZodType): z.ZodType<T> {
   // SAFETY: the strict schema admits only keys the type declares (checked at the end of this file);
   // decoding keeps the stored value as it is.
   const strict = strictStorage(schema)
-  return z.custom<T>((value) => strict.safeParse(value).success)
+  return lazyZodSchema(() => z.custom<T>((value) => strict.safeParse(value).success))
 }
 
 type State = JournalReducerState
-type Stored<F> = F extends Map<infer K, infer V> ? [K, V] : F extends Set<infer T> ? [T, T] : never
+type Stored<F> =
+  F extends JournalKeyedMap<infer K, infer V>
+    ? [K, V]
+    : F extends JournalKeyedSet<infer T>
+      ? [T, T]
+      : never
 type Cards = State['queue']['cards']
 const s = outcomeFormat1Stored
 const scalar = outcomeFormat1StoredScalars.shape
@@ -253,7 +260,7 @@ type StoredIn<F> = F extends 'items'
     ? [
         string,
         Omit<
-          Cards extends Map<string, infer V> ? V : never,
+          Cards extends JournalKeyedMap<string, infer V> ? V : never,
           'recovers' | 'deliveryMode' | 'unattended'
         >
       ]

@@ -2,13 +2,13 @@ import {
   isViewEntry,
   type WorktreeNavHistoryEntry
 } from '@/store/slices/ui/workspace-navigation-history'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderedWorkspaceRow } from './worktree-sidebar-row-preference'
 import { getRenderedWorkspaceRowsInSidebarOrder as getCyclableWorktreeRows } from './worktree-sidebar-row-preference'

@@ -1,4 +1,4 @@
-import type { UsageRateLimitFailureKind } from '../../../../shared/rate-limit-types'
+import type { UsageRateLimitFailureKind } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 // reqwest wraps proxy/DNS/TCP/TLS failures in these phrases; HTTP-status failures use different text.
 const CODEX_TRANSPORT_FAILURE_PATTERN =

@@ -1,11 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
-import type { SshTarget } from '../../../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { LoadingSpinner } from '../../../LoadingSpinner'
+import { LoadingSpinner } from '../../../ui/LoadingSpinner'
 import { Button } from '../../../ui/button'
 import {
   Dialog,

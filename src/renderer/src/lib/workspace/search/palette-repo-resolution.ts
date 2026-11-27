@@ -2,8 +2,8 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
-import { getRepoHostIdentityForParts } from '../../../../../shared/repo-host-identity'
+} from '../../../../../shared/execution-host/execution-host'
+import { getRepoHostIdentityForParts } from '../../../../../shared/repository/repo-host-identity'
 import { composeWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { isExecutionHostAliasForWorktree } from '../ownership/worktree-execution-host-alias'

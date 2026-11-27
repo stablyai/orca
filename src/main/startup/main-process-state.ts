@@ -1,47 +1,20 @@
 import type { BackendSupervisor } from '../backend-desktop/backend-supervisor'
-import type { AutomationUsageClient } from '../../shared/backend-service-contract'
 import { type BrowserWindow, type Tray, app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import type { StatsCollector } from '../stats/collector'
-import type { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
-import type { CodexAccountService } from '../codex-accounts/service'
-import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
-import type { ClaudeAccountService } from '../claude-accounts/service'
-import type { ClaudeRuntimeAuthService } from '../claude-accounts/runtime-auth-service'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
-import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
-import type { DesktopRelayService } from '../runtime/mobile-cloud-relay/desktop-relay-service'
-import type { DesktopRelayServiceInstaller } from '../runtime/mobile-cloud-relay/desktop-relay-service-installer'
-import type { DesktopPushService } from '../runtime/push/desktop-push-service'
-import type { StarNagService } from '../star-nag/service'
+import type { NativeSettingsProjection } from '../core-desktop/native-settings-projection'
 import type { AgentAwakeService } from '../power/agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/reports/crash-report-store'
-import type { AutomationService } from '../automations/automation-service'
-import type { PluginService } from '../plugins/plugin-service'
-import type { PluginKillListService } from '../plugins/catalog/plugin-kill-list-service'
-import type { PluginInstallStatsService } from '../plugins/catalog/plugin-install-stats-service'
-import type { PluginAutoUpdater } from '../plugins/catalog/plugin-auto-updater'
-import type { PluginUpdateReviewNotices } from '../plugins/catalog/plugin-update-review-notices'
-import type { PluginMarketplaceService } from '../plugins/catalog/plugin-marketplace-service'
-import type { PluginMarketplaceInstaller } from '../plugins/catalog/plugin-marketplace-installer'
-import type { KeybindingService } from '../keybindings/keybinding-service'
-import type { MobileRelayStatusDetail } from '../../shared/remote-runtime/relay/mobile-relay-status'
 import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
-import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import type { GpuFallbackMarker, GpuFallbackEnvironment } from './gpu-recovery/gpu-fallback-marker'
-import type { createCodexSessionMigrationScheduler } from '../codex/history/backfill/codex-session-migration-scheduler'
 import type { getDevInstanceIdentity } from './profile-startup/dev-instance-identity'
 import type { createServeDesktopActivationGate } from './serve-launch/serve-desktop-activation'
 import type { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import type { createWindowsShellPathHydration } from './shell-environment/windows-shell-path-hydration'
 import type { ServeOptions } from './serve-launch/serve-options'
 import type { HangDetectionMarker } from '../hang-watchdog/hang-detection-marker'
-import { ServeReadinessPublisher } from '../server/serve-readiness'
-import {
-  PluginInstallLinkState,
-  SkillShareDeepLinkState
-} from './open-routing/skill-share-deep-link-state'
+import { DeepLinkState } from './deep-link-state'
+import { DesktopCore } from '../core-desktop/desktop-core'
+import { PluginInstallLinkState } from './open-routing/skill-share-deep-link-state'
 import { OsOpenedDocumentState } from './open-routing/os-opened-documents'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
@@ -68,17 +41,11 @@ function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | un
   return undefined
 }
 
-function createInitialBackendServices(): {
-  backend: BackendSupervisor | null
-  claudeUsage: AutomationUsageClient | null
-  codexUsage: AutomationUsageClient | null
-} {
-  return { backend: null, claudeUsage: null, codexUsage: null }
+function createInitialBackendServices(): { backend: BackendSupervisor | null } {
+  return { backend: null }
 }
 
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
-const desktopRelayStatus: MobileRelayStatusDetail = { status: 'offline' }
-
 export const mainProcessState = {
   mainWindow: null as BrowserWindow | null,
   // Never cleared: closing the last main window still quits on Windows/Linux.
@@ -86,52 +53,22 @@ export const mainProcessState = {
   /** User quit bypasses running-process confirmation during close. */
   isQuitting: false,
   store: null as Store | null,
+  // Main's native consumers read settings through this; it never exposes the Store.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot assigned by main-process-ready-foundation.
+  nativeSettings: null as NativeSettingsProjection | null,
   profileStateStartup: createInitialProfileStateStartup(),
+  core: new DesktopCore(),
   profileStateAdmission: createInitialProfileStateAdmission(),
-  stats: null as StatsCollector | null,
   ...createInitialBackendServices(),
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot assigned by main-process-observers.
-  usageWorktreeHistory: null as UsageWorktreeHistory | null,
-  codexAccounts: null as CodexAccountService | null,
-  codexRuntimeHome: null as CodexRuntimeHomeService | null,
-  codexSessionMigration: null as ReturnType<typeof createCodexSessionMigrationScheduler> | null,
-  claudeAccounts: null as ClaudeAccountService | null,
-  claudeRuntimeAuth: null as ClaudeRuntimeAuthService | null,
-  runtime: null as OrcaRuntimeService | null,
-  rateLimits: null as RateLimitService | null,
-  runtimeRpc: null as OrcaRuntimeRpcServer | null,
-  serveReadinessPublisher: new ServeReadinessPublisher(),
-  desktopRelayService: null as DesktopRelayService | null,
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the installer assigned by main-process-relay-startup.
-  desktopRelayInstaller: null as DesktopRelayServiceInstaller | null,
-  desktopPushService: null as DesktopPushService | null,
-  desktopRelayStatus,
-  pendingUnpairedDeviceAuthFailure: false,
   // Advertise headless browser panes only when offscreen display initialization succeeds.
   headlessBrowserDisplayAvailable: false,
-  starNag: null as StarNagService | null,
   agentAwakeService: null as AgentAwakeService | null,
-  uninstallRepoMaintenanceIdleGate: null as (() => Promise<void>) | null,
-  repoMaintenanceShutdown: Promise.resolve() as Promise<void>,
   crashReports: null as CrashReportStore | null,
   unsubscribeAgentAwakeStatusChanges: null as (() => void) | null,
   unsubscribeSystemResumeBroadcast: null as (() => void) | null,
+  unsubscribeWakeSignalClock: null as (() => void) | null,
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the stop function assigned by main-process-observers.
   stopDesktopPresenceReporter: null as (() => void) | null,
-  watcherShutdownPromise: null as Promise<void> | null,
-  watcherShutdownDone: false,
-  automations: null as AutomationService | null,
-  pluginService: null as PluginService | null,
-  pluginKillListService: null as PluginKillListService | null,
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null initial value; assigned once plugins start.
-  pluginInstallStatsService: null as PluginInstallStatsService | null,
-  pluginMarketplaceService: null as PluginMarketplaceService | null,
-  pluginMarketplaceInstaller: null as PluginMarketplaceInstaller | null,
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null initial value; assigned once plugins start.
-  pluginAutoUpdater: null as PluginAutoUpdater | null,
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null initial value; assigned once plugins start.
-  pluginUpdateReviewNotices: null as PluginUpdateReviewNotices | null,
-  keybindings: null as KeybindingService | null,
   // Timed reload flags cannot leak to later loads; recovery did-finish-load must preserve live PTYs (#5787).
   expectedRendererReload: createWebContentsTimedFlag(),
   recoveryReloadInFlight: createWebContentsTimedFlag(),
@@ -139,7 +76,7 @@ export const mainProcessState = {
   pendingOpenSettings: createWebContentsTimedFlag(),
   // Why: a confirmed Quit Completely can open the window; its renderer pulls this one-shot on mount.
   pendingQuitAndStopAllSessions: createWebContentsTimedFlag(),
-  skillShareDeepLinks: new SkillShareDeepLinkState(),
+  deepLinks: new DeepLinkState(),
   pluginInstallLinks: new PluginInstallLinkState(),
   // Buffer OS Open With before any renderer listener exists.
   osOpenedDocuments: new OsOpenedDocumentState(),
@@ -176,11 +113,9 @@ export const mainProcessState = {
   windowsShellPathHydration: null as ReturnType<typeof createWindowsShellPathHydration> | null,
   shellPathReady: Promise.resolve(),
   hangDetection: null as HangDetectionMarker | null,
-  skillTransactionRecovery: Promise.resolve() as Promise<unknown>,
   serveOptions: null as ServeOptions | null,
   desktopWindow: null as BrowserWindow | null,
   agentBrowserBridge: null as AgentBrowserBridge | null,
-  emulatorBridge: null as EmulatorBridge | null,
   tray: null as Tray | null
 }
 

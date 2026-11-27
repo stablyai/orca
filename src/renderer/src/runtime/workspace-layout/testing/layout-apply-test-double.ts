@@ -1,6 +1,6 @@
 // Renderer-test main validates each layout.apply against its RPC schema and answers applied; switch-off sends none.
 import type { z } from 'zod'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { LayoutApplyParams } from '../../../../../shared/rpc-contract/workspace-layout/workspace-layout-params'
 import type {
   LayoutApplyReply,

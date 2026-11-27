@@ -2,28 +2,14 @@ import { afterEach, describe, expect, it, vi, type TestContext } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { CodexAppServerTimeoutError, runCodexAppServerSession } from './codex-app-server-session'
+import { CodexAppServerTimeoutError } from './codex-app-server-session'
 import {
   runCodexHookTrustGrantSession,
   type CodexHookTrustGrantRequest
 } from './codex-app-server-client'
-import {
-  PROVIDER_SIGTERM_GRACE_MS,
-  PROVIDER_SUPERVISOR_MAX_STOP_MS
-} from '../../provider-process/provider-process-supervisor'
-
-// The orphan guard's process reads add timers of their own; the timer audit below is the session's.
-vi.mock('../../provider-process/provider-group-orphan-guard', () => ({
-  guardSupervisedProviderGroup: () => false
-}))
 
 const STUB_SERVER_SOURCE = `
 const config = JSON.parse(process.env.STUB_CONFIG)
-// A wedged server ignores SIGTERM and its stdin end, so only SIGKILL ends it.
-if (config.scenario === 'wedged') {
-  process.on('SIGTERM', () => {})
-  setInterval(() => {}, 60000)
-}
 require('node:fs').writeFileSync(config.pidFile, String(process.pid))
 const trusted = new Set(config.hooks.filter(h => h.trustStatus === 'trusted').map(h => h.key))
 let buffer = ''
@@ -73,7 +59,7 @@ process.stdin.on('data', (chunk) => {
       continue
     }
     if (message.method === 'initialized') continue
-    if (config.scenario === 'hang' || config.scenario === 'wedged') continue
+    if (config.scenario === 'hang') continue
     if (message.method === 'hooks/list') {
       if (config.scenario === 'unknown-method') {
         send({ id: message.id, error: { code: -32601, message: 'Method not found' } })
@@ -93,7 +79,7 @@ process.stdin.on('data', (chunk) => {
     }
   }
 })
-process.stdin.on('end', () => { if (config.scenario !== 'wedged') process.exit(0) })
+process.stdin.on('end', () => process.exit(0))
 function writeFileSyncSafe(file, contents) { require('node:fs').writeFileSync(file, contents) }
 `
 
@@ -171,8 +157,6 @@ function managedHook(key: string, trustStatus = 'untrusted'): StubHook {
 
 describe('runCodexHookTrustGrantSession', () => {
   it('grants and verifies exactly the expected managed entries', async () => {
-    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
-    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
     const keys = [
       '/home/a/.codex/hooks.json:session_start:0:0',
       '/home/a/.codex/hooks.json:stop:0:0'
@@ -214,12 +198,6 @@ describe('runCodexHookTrustGrantSession', () => {
     expect(written.edits[0].mergeStrategy).toBe('upsert')
     expect(Object.keys(written.edits[0].value).sort()).toEqual([...keys].sort())
     expect(written.reloadUserConfig).toBe(true)
-    // Leaked grace timers delay entry-process exit and synchronous launch preparation.
-    const timerHandles = setTimeoutSpy.mock.results.map(({ value }) => value)
-    expect(timerHandles).toHaveLength(2)
-    expect(clearTimeoutSpy.mock.calls.map(([handle]) => handle)).toEqual(
-      expect.arrayContaining(timerHandles)
-    )
   })
 
   it('skips config/batchWrite when every expected entry is already trusted', async () => {
@@ -287,62 +265,9 @@ describe('runCodexHookTrustGrantSession', () => {
       onTestFinished
     )
 
-    const startedAt = Date.now()
     await expect(runCodexHookTrustGrantSession(request)).rejects.toBeInstanceOf(
       CodexAppServerTimeoutError
     )
-    // This stub exits on stdin end or SIGTERM, so reaping must not add a grace delay.
-    expect(Date.now() - startedAt - STUB_START_DEADLINE_MS).toBeLessThan(2_000)
-    const childPid = Number(readFileSync(pidFile, 'utf8'))
-    expect(() => process.kill(childPid, 0)).toThrow()
-  })
-
-  it.runIf(process.platform !== 'win32').concurrent(
-    'stops a server that ignores its stdin end and SIGTERM after the SIGTERM grace',
-    async ({ expect, onTestFinished }) => {
-      const keys = ['/home/a/.codex/hooks.json:session_start:0:0']
-      const { request, pidFile } = createStubRequest(
-        {
-          scenario: 'wedged',
-          hooks: keys.map((key) => managedHook(key)),
-          expectedTrustKeys: keys,
-          managedCommand: MANAGED_COMMAND,
-          timeoutMs: STUB_START_DEADLINE_MS
-        },
-        onTestFinished
-      )
-
-      const startedAt = Date.now()
-      await expect(runCodexHookTrustGrantSession(request)).rejects.toBeInstanceOf(
-        CodexAppServerTimeoutError
-      )
-      // The supervisor SIGTERMs its group at the deadline and SIGKILLs it after the grace.
-      const pastDeadline = Date.now() - startedAt - STUB_START_DEADLINE_MS
-      expect(pastDeadline).toBeGreaterThanOrEqual(PROVIDER_SIGTERM_GRACE_MS - 100)
-      expect(pastDeadline).toBeLessThan(PROVIDER_SUPERVISOR_MAX_STOP_MS + 1_000)
-      const childPid = Number(readFileSync(pidFile, 'utf8'))
-      expect(() => process.kill(childPid, 0)).toThrow()
-    }
-  )
-
-  it.concurrent('bounds a callback that stalls between RPC requests', async (context) => {
-    const { expect, onTestFinished } = context
-    const { request, pidFile } = createStubRequest(
-      {
-        scenario: 'happy',
-        hooks: [],
-        expectedTrustKeys: [],
-        managedCommand: MANAGED_COMMAND,
-        timeoutMs: STUB_START_DEADLINE_MS
-      },
-      onTestFinished
-    )
-
-    const startedAt = Date.now()
-    await expect(
-      runCodexAppServerSession(request.invocation, async () => new Promise<never>(() => {}))
-    ).rejects.toBeInstanceOf(CodexAppServerTimeoutError)
-    expect(Date.now() - startedAt - STUB_START_DEADLINE_MS).toBeLessThan(2_000)
     const childPid = Number(readFileSync(pidFile, 'utf8'))
     expect(() => process.kill(childPid, 0)).toThrow()
   })

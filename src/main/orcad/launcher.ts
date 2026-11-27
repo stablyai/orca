@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import { ORCAD_SERVER_ENTRY_FILENAME } from '../../shared/orcad-artifacts'
+import { ORCAD_SERVER_ENTRY_FILENAME } from '../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import {
   assertOrcadServerRuntime,
   handoffToBundledOrcad

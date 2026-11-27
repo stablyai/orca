@@ -1,10 +1,10 @@
-import { delayUnlessAborted } from '../../../../shared/abort-aware-delay'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { delayUnlessAborted } from '../../../../shared/concurrency/abort-aware-delay'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import * as Pools from './codex-at-rest-skills-probe-pools'
 import {
   isLegacyAgentSessionAccountHome,
   requireLegacyAgentSessionAccountHome
-} from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-args'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
@@ -26,8 +26,9 @@ import {
   isCodexSkillsListUnsupported
 } from './codex-skill-list'
 import { createCodexSkillSourcesStamp } from './codex-skill-sources-stamp'
-import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
+import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host/execution-host'
 import { resolveHiddenProbeCwd } from '../../../lib/hidden-probe-cwd'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   resolveCodexStructuredInvocation,
   type CodexStructuredInvocationDeps
@@ -42,7 +43,9 @@ export type CodexAtRestSkillsDeps = CodexStructuredInvocationDeps & {
   resolveLaunchArgs: () => Promise<string[]> | string[]
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   /** Apply launch-time home sync so the probe sees the same configuration. */
-  prepareHome?: (home: string) => void
+  prepareHome?: (home: string) => void | Promise<void>
+  /** The skill roots a chat's launch would give Codex (`codexSkillRoots`); none for most chats. */
+  skillRoots?: (record: AgentSessionRecord) => Promise<string[]>
   now?: () => number
   runSession?: typeof runCodexAppServerSession
   sleep?: (ms: number) => Promise<void>
@@ -76,8 +79,12 @@ export function createCodexAtRestSkillCatalog(deps: CodexAtRestSkillsDeps): AtRe
     dispose,
     stamp: (record, cwd, signal) =>
       stampSources(requireLegacyAgentSessionAccountHome(record.accountHome).path, cwd, signal),
-    scan: async (record, cwd, isCurrent, generation, signal, admitted) => {
+    scan: async (record, cwd, isCurrent, generation, signal, admitted, demand) => {
       const accountHomePath = requireLegacyAgentSessionAccountHome(record.accountHome).path
+      // Codex takes skill roots per process, so each root list gets its own probe process.
+      const roots = deps.skillRoots
+        ? await waitForPromiseWithSignal(deps.skillRoots(record), signal)
+        : []
       const { command, prefixArgs, environment } = await resolveCodexStructuredInvocation({
         ...deps,
         signal,
@@ -96,7 +103,7 @@ export function createCodexAtRestSkillCatalog(deps: CodexAtRestSkillsDeps): AtRe
       // Not the env itself: the shell capture refreshes every 10 s with volatile values (prompt
       // session keys), which would start a second probe. Settings and account env changes retire
       // the generation; a running probe keeps the env it started with for its ~70 s life.
-      const key = JSON.stringify([accountHomePath, command, args, generation])
+      const key = JSON.stringify([accountHomePath, command, args, generation, roots])
       const pool = pools.get(key) ?? { failedStarts: 0, retryAt: 0, lastDemandAt: now() }
       pools.set(key, pool)
       pool.lastDemandAt = now()
@@ -109,17 +116,23 @@ export function createCodexAtRestSkillCatalog(deps: CodexAtRestSkillsDeps): AtRe
         command,
         args,
         environment: env,
+        roots,
+        demanded: false,
         pending: new Set<Pools.FolderRequest>(),
         active: new Set<Pools.FolderRequest>(),
         controller: new AbortController(),
         started: false
       }
+      const stopPromoting = Pools.promoteOnDemand(demand, () => pool.owner ?? owner)
       const request: Pools.FolderRequest = {
         cwd,
         isCurrent,
         admitted,
         answer: Promise.withResolvers<AtRestCommandScan>(),
-        cancel: () => signal.removeEventListener('abort', onAbort),
+        cancel: () => {
+          signal.removeEventListener('abort', onAbort)
+          stopPromoting()
+        },
         done: false
       }
       const onAbort = (): void => {
@@ -180,6 +193,9 @@ export async function probe(
       signal.throwIfAborted()
       const sleep = deps.sleep ?? ((ms: number) => delayUnlessAborted(Math.max(0, ms), signal))
       onStarted()
+      // Set once, before any list: every request waits for it, and a failed set lists nothing.
+      const rootsFailure = await Pools.setProbeRoots(rpc, pool.roots)
+      signal.throwIfAborted()
       const graceEnded = sleep(spawnedAt + CODEX_SKILLS_PROBE_SETTLE_MS - now()).then(() => false)
       let answered = false
       for (;;) {
@@ -206,11 +222,21 @@ export async function probe(
         if (pool.pending.size === 0) {
           pool.cursor = undefined
         }
+        if (batch.length > 0 && rootsFailure) {
+          batch.forEach((request) => pool.active.delete(request))
+          batch.forEach((request) => Pools.settle(request, rootsFailure))
+          answered = true
+          continue
+        }
         if (batch.length > 0) {
           try {
-            deps.prepareHome?.(pool.accountHomePath)
-            batch.forEach((request) => request.admitted())
-            await answer(rpc, batch, signal)
+            await deps.prepareHome?.(pool.accountHomePath)
+            // A request cancelled while the home was prepared left the active set.
+            const live = batch.filter((request) => pool.active.has(request))
+            live.forEach((request) => request.admitted())
+            if (live.length > 0) {
+              await answer(rpc, live, signal)
+            }
           } catch (error) {
             batch.forEach((request) =>
               Pools.settle(request, error instanceof Error ? error : new Error(String(error)))

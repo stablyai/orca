@@ -1,4 +1,4 @@
-import { ORCA_ORCHESTRATION_WAIT_COMMAND } from '../../../shared/orca-cli-invocations'
+import { ORCA_ORCHESTRATION_WAIT_COMMAND } from '../../../shared/cli/orca-cli-invocations'
 import type {
   AgentChildWorkKind,
   AgentChildWorkOperation,
@@ -10,7 +10,7 @@ import type {
 } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import { taskText, taskUsageTotalTokens } from '../background-tasks/claude-background-task-frames'
 import type { ClaudeSession } from '../structured/claude-structured-session-state'
-import type { ClaudeStructuredSessionEvent } from '../structured/claude-structured-session-event'
+import type { ClaudeStructuredSessionEvent } from '../structured/lifecycle/claude-structured-session-event'
 import { deriveToolInputPreview } from '../../../shared/agent-hook-listener/tool-input-preview'
 import {
   claudeRecord,
@@ -151,6 +151,12 @@ export function claudeChildOperation(
     return []
   }
   const { agentId, openTool } = activityOf(parentRef)
+  const model = claudeChildMessageModel(message)
+  // A returned call stays the child's latest work until its next call or its ending; clearing it
+  // here blanked the roster line between every call of a subagent that only runs tools.
+  if (!openTool && !model) {
+    return []
+  }
   const input = openTool ? deriveToolInputPreview(openTool.name, openTool.input) : undefined
   return [
     {
@@ -159,9 +165,16 @@ export function claudeChildOperation(
       childId: agentId,
       operation: openTool
         ? { toolName: openTool.name, ...(input ? { input } : {}), basis: 'open', observedAt }
-        : null
+        : null,
+      ...(model ? { model } : {})
     }
   ]
+}
+
+/** Claude names the model on each assistant message; `<synthetic>` marks Claude Code's own repair text. */
+function claudeChildMessageModel(frame: Record<string, unknown>): string | undefined {
+  const model = frame.type === 'assistant' ? claudeRecord(frame.message)?.model : undefined
+  return typeof model === 'string' && model.trim() && model !== '<synthetic>' ? model : undefined
 }
 
 /** Waiting requires both a written journal card and a registry request still awaiting an answer. */

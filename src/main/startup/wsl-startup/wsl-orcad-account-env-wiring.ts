@@ -7,7 +7,7 @@ import { installWslOrcadAccountEnvDependencies } from '../../wsl/orcad/wsl-orcad
 import {
   WSL_ORCAD_ACCOUNT_NOT_APPLIED_CHANNEL,
   type WslOrcadAccountNotAppliedEvent
-} from '../../../shared/wsl-orcad-account-notice'
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-orcad-account-notice'
 import { mainProcessState as state } from '../main-process-state'
 
 /** Calls `send` once per distro (case-insensitive) for the life of this process. */
@@ -40,7 +40,7 @@ function broadcastAccountNotApplied(distro: string): void {
 export function installWslOrcadAccountShim(store: Pick<Store, 'getSettings'>): void {
   installWslOrcadAccountEnvDependencies({
     prepareClaudeLaunch: (target) => {
-      const auth = state.claudeRuntimeAuth
+      const auth = state.core.claudeRuntimeAuth
       if (!auth) {
         throw new Error('Claude account service is not initialized')
       }
@@ -48,7 +48,7 @@ export function installWslOrcadAccountShim(store: Pick<Store, 'getSettings'>): v
     },
     claudeTerminalEnv: (target) => withClaudeProfileTerminalEnv({}, target),
     prepareCodexHome: async (target) => {
-      const runtimeHome = state.codexRuntimeHome
+      const runtimeHome = state.core.codexRuntimeHome
       if (!runtimeHome || !getSelectedCodexAccountIdForTarget(store.getSettings(), target)) {
         return null
       }

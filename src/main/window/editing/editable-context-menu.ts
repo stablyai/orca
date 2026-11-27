@@ -3,7 +3,7 @@ import {
   type RichMarkdownContextMenuCommand,
   type RichMarkdownContextMenuCommandPayload,
   type RichMarkdownContextMenuTableTarget
-} from '../../../shared/rich-markdown-context-menu'
+} from '../../../shared/editor/markdown/rich-markdown-context-menu'
 import type { ContextMenuSpelling } from '../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { translateMain } from '../../i18n/main-i18n'
 import { editableContextMenuLabels } from './editable-context-menu-labels'

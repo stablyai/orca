@@ -1,13 +1,14 @@
 import { ipcRenderer } from 'electron'
-import { BackendPortRpc, type BackendPort } from '../../shared/backend-port-rpc'
+import { BackendPortRpc, type BackendPort } from '../../shared/backend/backend-port-rpc'
 import {
   BACKEND_CONNECTION_CHANGED,
   BACKEND_PORT_DELIVERY,
   BACKEND_PORT_REQUEST,
   type BackendConnectionPurpose,
   type BackendConnectionStatus,
-  type BackendConnectionListener
-} from '../../shared/backend-service-contract'
+  type BackendConnectionListener,
+  type BackendPortDelivery
+} from '../../shared/backend/backend-service-contract'
 
 let connection: BackendPortRpc | undefined
 let connecting: Promise<BackendPortRpc> | undefined
@@ -44,12 +45,18 @@ function publishConnection(next: boolean): void {
   }
 }
 
-ipcRenderer.on(BACKEND_PORT_DELIVERY, (event, data: { token?: string }) => {
+ipcRenderer.on(BACKEND_PORT_DELIVERY, (event, data: Partial<BackendPortDelivery>) => {
   const [port, ...surplus] = event.ports
   for (const extra of surplus) {
     extra.close()
   }
-  if (!port || !pendingPort || pendingPort.token !== data?.token) {
+  const incarnation = data?.incarnation
+  if (
+    !port ||
+    !pendingPort ||
+    pendingPort.token !== data?.token ||
+    typeof incarnation !== 'string'
+  ) {
     port?.close()
     return
   }
@@ -80,7 +87,8 @@ ipcRenderer.on(BACKEND_PORT_DELIVERY, (event, data: { token?: string }) => {
       if (connection === client) {
         publishConnection(false)
       }
-    }
+    },
+    incarnation
   )
   connection = client
   const attempt = pendingPort

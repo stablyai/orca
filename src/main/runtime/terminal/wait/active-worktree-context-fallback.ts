@@ -3,8 +3,11 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
-import { getActiveSidebarWorkspaceId, parseWorkspaceKey } from '../../../../shared/workspace-scope'
+} from '../../../../shared/execution-host/execution-host'
+import {
+  getActiveSidebarWorkspaceId,
+  parseWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { worktreeMetaIdentityKey } from '../../../../shared/worktree/identity'
 

@@ -2,8 +2,8 @@ import { Import, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
 import { Button } from '../../../ui/button'
-import { BrowserCookieImportDisclosure } from '../../../BrowserCookieImportDisclosure'
-import { BrowserCookieImportMachineNotice } from '../../../BrowserCookieImportMachineNotice'
+import { BrowserCookieImportDisclosure } from '../profiles/BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from '../profiles/BrowserCookieImportMachineNotice'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -124,10 +124,7 @@ export function BrowserUseCookieImportStep({
               onClick={onConfigureMoreBrowsers}
               className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
             >
-              {t(
-                'auto.components.settings.BrowserUsePane.67d9a53f47',
-                'Manage profiles for separate logins'
-              )}
+              {t('auto.components.settings.BrowserUsePane.67d9a53f47', 'Manage profiles')}
             </button>
           ) : null}
         </div>

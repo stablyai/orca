@@ -1,17 +1,16 @@
 export class CdpSyntheticSessionRegistry {
   // agent-browser filters events by its Target.attachToTarget session ID.
   private clientSessionId: string | undefined = undefined
+  private screencastSessionId: string | undefined = undefined
   private readonly clientSessionIds = new Set<string>()
   private readonly clientBrowserSessionIds = new Set<string>()
   private nextClientSessionOrdinal = 0
   private nextClientBrowserSessionOrdinal = 0
-
-  get primarySessionId(): string | undefined {
-    return this.clientSessionId
-  }
+  private screencastDetachListener: (() => void) | null = null
 
   clear(): void {
     this.clientSessionId = undefined
+    this.screencastSessionId = undefined
     this.clientSessionIds.clear()
     this.clientBrowserSessionIds.clear()
     this.nextClientSessionOrdinal = 0
@@ -39,7 +38,27 @@ export class CdpSyntheticSessionRegistry {
       if (detachedSessionId === this.clientSessionId) {
         this.clientSessionId = this.clientSessionIds.values().next().value
       }
+      if (detachedSessionId === this.screencastSessionId) {
+        this.screencastSessionId = undefined
+        this.screencastDetachListener?.()
+      }
     }
+  }
+
+  onScreencastSessionDetached(listener: () => void): void {
+    this.screencastDetachListener = listener
+  }
+
+  routeScreencastEventsTo(msgSessionId: string | undefined): void {
+    this.screencastSessionId =
+      msgSessionId && this.clientSessionIds.has(msgSessionId) ? msgSessionId : undefined
+  }
+
+  rootEventSessionId(method: string): string | undefined {
+    if (this.screencastSessionId && method.startsWith('Page.screencast')) {
+      return this.screencastSessionId
+    }
+    return this.clientSessionId
   }
 
   resolveDebuggerSessionId(msgSessionId?: string): string | undefined {

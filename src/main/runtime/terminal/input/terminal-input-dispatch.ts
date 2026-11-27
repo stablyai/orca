@@ -5,7 +5,7 @@ import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-record
 import type {
   RuntimeTerminalPromptDelivery,
   RuntimeTerminalSend
-} from '../../../../shared/runtime-terminal-send-contract'
+} from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import { OrcaRuntimeWithResolveTerminalPane } from '../recovery/resolve-terminal-pane'
 import { wrapTerminalBracketedPasteText } from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from './proven-absent-leaf-pty'
@@ -20,7 +20,6 @@ import {
   agentPromptTakesLeadLine,
   buildAgentPromptPasteBytes
 } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
   protected abstract writeTerminalAction(
@@ -140,10 +139,14 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     action: { text?: string; enter?: boolean; interrupt?: boolean },
     options: RuntimeTerminalWriteOptions
   ): Promise<RuntimeTerminalSend> {
-    // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
-    const starting = ORCA_LAYOUT_OWNER_IS_MAIN
-      ? this.startRestoredHandlePane(handle, { signal: options.signal })
-      : null
+    // An idle agent ignores a bare interrupt; a slept one is not woken for it, nor for a terminal's
+    // query reply, which answers the stopped process and is refused as on a disconnected pane.
+    const queryReply = options.inputKind === 'query-reply'
+    if ((queryReply || (!action.text && !action.enter)) && this.sleptAgentHandle(handle)) {
+      return { handle, accepted: !queryReply, bytesWritten: 0 }
+    }
+    // A slept agent wakes first; with the switch, a saved pane main holds with no terminal starts first (once, shared).
+    const starting = this.startRestoredHandlePane(handle, { signal: options.signal })
     if (starting) {
       const target = await starting
       return { ...(await this.sendTerminalAfterPluginHooks(target, action, options)), handle }
@@ -247,10 +250,10 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
         agentPromptTakesLeadLine(agent) ? options.leadLine : undefined
       )
     }
-    // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
-    const starting = ORCA_LAYOUT_OWNER_IS_MAIN
-      ? this.startRestoredHandlePane(handle, { signal: agentPromptObservationSignal(options) })
-      : null
+    // A slept agent wakes first; with the switch, a saved pane main holds with no terminal starts first (once, shared).
+    const starting = this.startRestoredHandlePane(handle, {
+      signal: agentPromptObservationSignal(options)
+    })
     if (starting) {
       const target = await starting
       return { ...(await this.sendAgentPromptAfterPluginHooks(target, prompt, options)), handle }

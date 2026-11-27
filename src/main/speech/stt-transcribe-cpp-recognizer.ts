@@ -2,7 +2,7 @@ import { availableParallelism } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type * as TranscribeCpp from 'transcribe-cpp'
-import { appendDictationText } from '../../shared/dictation-transcript-spacing'
+import { appendDictationText } from '../../shared/speech/dictation/dictation-transcript-spacing'
 import { resampleToRate } from './stt-audio-resample'
 import {
   type AudioSegmenter,

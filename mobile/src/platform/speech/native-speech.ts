@@ -4,7 +4,7 @@ import {
   type BridgeSpeechFailure,
   type BridgeSpeechRead,
   type DictationEnginePreference
-} from '../../mobile-web-shell/bridge/bridge-speech-verbs'
+} from '../../mobile-web-shell/bridge/native-capabilities/bridge-speech-verbs'
 
 // The shell side of native.speech.act. The recognizer itself lives in the native audio module; this keeps its events between the page's polls.
 

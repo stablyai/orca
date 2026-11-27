@@ -3,7 +3,7 @@ import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecyc
 import type {
   WorkspaceActivityFactsSnapshot,
   WorkspaceTerminalLiveness
-} from '../../../../shared/sidebar-list/workspace-activity-facts'
+} from '../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import { SidebarClock } from '../sidebar-clock'
 import {

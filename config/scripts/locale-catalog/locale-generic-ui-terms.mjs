@@ -29,6 +29,8 @@ const GENERIC_TERM_FAMILIES = [
   },
   {
     terms: ['Continue'],
+    // Why: Continue is also a product name, so English "Continue" in translated copy can be right.
+    glossary: false,
     renderings: {
       ko: ['계속하다', '계속'],
       ja: ['続ける', '続行'],
@@ -37,12 +39,30 @@ const GENERIC_TERM_FAMILIES = [
     }
   },
   {
-    terms: ['Repo', 'Repos', 'repo', 'repos'],
+    terms: [
+      'Repo',
+      'Repos',
+      'repo',
+      'repos',
+      'Repository',
+      'Repositories',
+      'repository',
+      'repositories'
+    ],
     renderings: {
       ko: ['저장소', '레포'],
       ja: ['リポジトリ', 'リポ'],
       zh: ['存储库', '仓库'],
       es: ['Repositorio', 'repositorio', 'Repositorios', 'repositorios']
+    },
+    variants: {
+      ko: ['리포지토리']
+    }
+  },
+  {
+    terms: ['Source Control', 'source control'],
+    renderings: {
+      ko: ['소스 제어']
     }
   },
   {
@@ -55,6 +75,23 @@ const GENERIC_TERM_FAMILIES = [
     }
   }
 ]
+
+// Locales whose catalogs fail verification when copy keeps a glossary term in English; add one once its catalog is clean.
+const GLOSSARY_LOCALES = new Set(['ko'])
+
+// The first rendering is the settled one; `variants` are native spellings the glossary replaces with it.
+export function glossaryRules(locale) {
+  if (!GLOSSARY_LOCALES.has(locale)) {
+    return []
+  }
+  return GENERIC_TERM_FAMILIES.filter(
+    (family) => family.glossary !== false && family.renderings[locale]
+  ).map((family) => ({
+    terms: family.terms,
+    rendering: family.renderings[locale][0],
+    variants: family.variants?.[locale] ?? []
+  }))
+}
 
 export const LOCALIZABLE_GENERIC_TERMS = new Set(
   GENERIC_TERM_FAMILIES.flatMap((family) => family.terms)

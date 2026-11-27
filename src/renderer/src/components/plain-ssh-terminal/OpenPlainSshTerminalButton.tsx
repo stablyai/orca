@@ -1,5 +1,5 @@
-import type { SshManagedServerStatus } from '../../../../shared/ssh-types'
-import { isSshHostMoveBlocked } from '../../../../shared/ssh-host-move-blocked'
+import type { SshManagedServerStatus } from '../../../../shared/remote-runtime/ssh/ssh-types'
+import { isSshHostMoveBlocked } from '../../../../shared/remote-runtime/ssh/ssh-host-move-blocked'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { showPlainSshPanel } from '@/ssh/plain-ssh-terminal-panels'
@@ -28,7 +28,7 @@ export function OpenPlainSshTerminalButton({
         variant="outline"
         onClick={() => showPlainSshPanel(targetId, targetLabel)}
       >
-        {t('auto.components.plainSshTerminal.open', 'Open plain SSH terminal')}
+        {t('auto.components.plainSshTerminal.open', 'Plain SSH terminal')}
       </Button>
       <span className="text-xs text-muted-foreground">
         {t(

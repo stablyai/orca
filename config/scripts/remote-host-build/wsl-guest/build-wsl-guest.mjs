@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Ship self-contained builtins-only CommonJS WSL hook/network/profile/SQLite/OpenCode text-task programs via out/relay/wsl extraResources.
+// Ship self-contained builtins-only CommonJS WSL hook/network/profile/Codex/SQLite/OpenCode text-task programs via out/relay/wsl extraResources.
 import { build } from 'esbuild'
 import { JSONC_PARSER_ESM_ALIAS } from '../../../build-plugins/jsonc-parser-esm.ts'
 import { createHash } from 'node:crypto'
@@ -8,8 +8,10 @@ import { join } from 'node:path'
 import {
   OPENCODE_SQLITE_READER_FILENAME,
   OPENCODE_WSL_TEXT_TASK_FILENAME,
-  WSL_CLAUDE_PROFILE_HELPER_FILENAME
-} from '../../../../src/shared/remote-bundle-artifacts.ts'
+  WSL_CLAUDE_PROFILE_HELPER_FILENAME,
+  WSL_CODEX_ACCOUNT_HISTORY_HELPER_FILENAME,
+  WSL_CODEX_CONFIG_SYNC_HELPER_FILENAME
+} from '../../../../src/shared/remote-runtime/orcad-distribution/remote-bundle-artifacts.ts'
 
 const __dirname = import.meta.dirname
 const ROOT = join(__dirname, '../../..', '..')
@@ -57,6 +59,14 @@ console.log(`Built WSL browser network relay → ${outDir}/wsl-browser-network-r
 await bundle(
   'src/main/claude-accounts/profiles/wsl/claude-profile-wsl-entry.ts',
   WSL_CLAUDE_PROFILE_HELPER_FILENAME
+)
+await bundle(
+  'src/main/codex/history/shared-store/codex-account-history-wsl-entry.ts',
+  WSL_CODEX_ACCOUNT_HISTORY_HELPER_FILENAME
+)
+await bundle(
+  'src/main/codex/configuration/settings/codex-config-sync-wsl-entry.ts',
+  WSL_CODEX_CONFIG_SYNC_HELPER_FILENAME
 )
 await bundle(
   'src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-process-entry.ts',

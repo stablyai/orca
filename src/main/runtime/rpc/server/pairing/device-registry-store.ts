@@ -3,7 +3,8 @@ import { removeStaleDurableWriteTempFiles } from '../../../../filesystem/durable
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import { withoutEphemeralRows } from './ephemeral-device-rows'
 import { DeviceRegistryWriter } from './device-registry-disk-merge'
-import type { DeviceEntry } from './device-entry'
+import { isPairedMobileDevice, type DeviceEntry } from './device-entry'
+import { usesLegacyE2EE } from './device-sighting'
 
 const STALE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
@@ -18,6 +19,8 @@ export class DeviceRegistryStore {
   private corruptFilePending = false
   protected pendingLastSeenFlush: NodeJS.Timeout | null = null
   private readonly writer: DeviceRegistryWriter
+  private onPairedDevicesChanged: (() => void) | null = null
+  private pairedDevicesKey = ''
 
   constructor(userDataPath: string) {
     this.registryPath = join(userDataPath, DEVICE_REGISTRY_FILENAME)
@@ -27,6 +30,11 @@ export class DeviceRegistryStore {
       minimumAgeMs: STALE_WRITE_TEMP_AGE_MS
     })
     this.load()
+  }
+
+  /** Fires when a save or an adopted external edit changes a listed phone or runtime grant. */
+  setOnPairedDevicesChanged(listener: (() => void) | null): void {
+    this.onPairedDevicesChanged = listener
   }
 
   protected saveOrLog(
@@ -53,7 +61,11 @@ export class DeviceRegistryStore {
   protected adoptExternalEdits(options: { fresh?: boolean } = {}): void {
     // An unreadable load refuses everything until restart; there is nothing to merge into.
     if (!this.registryUnreadable) {
-      this.devices = this.writer.adoptExternalEdits(this.devices, options) ?? this.devices
+      const adopted = this.writer.adoptExternalEdits(this.devices, options)
+      if (adopted) {
+        this.devices = adopted
+        this.publishPairedDevicesChange(adopted)
+      }
     }
   }
 
@@ -67,6 +79,7 @@ export class DeviceRegistryStore {
     if (this.devices.length !== read.devices.length) {
       this.saveOrLog({ durable: true }, 'drop session-only devices after restart', read.devices)
     }
+    this.pairedDevicesKey = pairedDevicesKeyOf(this.devices)
   }
 
   // Persist before memory swap so failed writes cannot diverge authorization state.
@@ -105,6 +118,34 @@ export class DeviceRegistryStore {
     const written = this.writer.write(before, devices, options)
     // Every save includes current timestamps, making a pending refresh redundant.
     this.cancelPendingLastSeenFlush()
+    this.publishPairedDevicesChange(written)
     return written
   }
+
+  private publishPairedDevicesChange(devices: readonly DeviceEntry[]): void {
+    const pairedDevicesKey = pairedDevicesKeyOf(devices)
+    if (pairedDevicesKey === this.pairedDevicesKey) {
+      return
+    }
+    this.pairedDevicesKey = pairedDevicesKey
+    try {
+      this.onPairedDevicesChanged?.()
+    } catch (error) {
+      // The change already landed; a failing listener must not stop callers from taking it.
+      console.error('[runtime] Paired device change listener failed:', error)
+    }
+  }
+}
+
+// Leaves out lastSeenAt: reconnect bookkeeping saves must not push a renderer refetch.
+function pairedDevicesKeyOf(devices: readonly DeviceEntry[]): string {
+  return JSON.stringify(
+    devices
+      .filter((device) => device.scope === 'runtime' || isPairedMobileDevice(device))
+      .map((device) =>
+        device.scope === 'runtime'
+          ? device.deviceId
+          : [device.deviceId, device.name, usesLegacyE2EE(device)]
+      )
+  )
 }

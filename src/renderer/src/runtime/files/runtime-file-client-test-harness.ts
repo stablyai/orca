@@ -7,7 +7,7 @@ import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../../../shared/f
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/remote-runtime/protocol/protocol-version'
 
 /** One stub stands in for many differently shaped preload methods, so arguments stay open. */
 export type PreloadStub = Mock<(...args: never[]) => unknown>

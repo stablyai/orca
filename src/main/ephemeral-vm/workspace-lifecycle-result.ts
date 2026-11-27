@@ -1,8 +1,8 @@
 import type {
   EphemeralVmRuntimeRecord,
   EphemeralVmWorkspaceLifecycleResult
-} from '../../shared/ephemeral-vm-runtimes'
-import { ephemeralVmFailureFromError } from '../../shared/ephemeral-vm-failure-copy'
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import { ephemeralVmFailureFromError } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 
 /** Thrown IPC errors keep only the message; a value keeps the code for the renderer catalog. */
 export async function toWorkspaceLifecycleResult(

@@ -36,9 +36,9 @@ export function DocPreviewDocumentChip({
           className="@container flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-lg bg-muted px-2.5 text-left hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           {copied ? (
-            <Check className="size-4 shrink-0 text-muted-foreground" />
+            <Check className="size-3.5 shrink-0 text-muted-foreground" />
           ) : (
-            <FileCode2 className="size-4 shrink-0 text-muted-foreground" />
+            <FileCode2 className="size-3.5 shrink-0 text-muted-foreground" />
           )}
           {/* Match file-tree emphasis: muted directory, normal filename. */}
           <span className="min-w-0 flex-1 truncate text-sm">

@@ -1,4 +1,4 @@
-import { resolveRuntimePath } from '../../../../shared/cross-platform-path'
+import { resolveRuntimePath } from '../../../../shared/file-access/cross-platform-path'
 import { isSafeGitStatusUpstreamRef } from '../../../../shared/git/status/git-status-upstream-ref'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import {

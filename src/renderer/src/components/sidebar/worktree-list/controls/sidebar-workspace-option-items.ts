@@ -1,4 +1,4 @@
-import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
+import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import {
   WORKSPACE_AGENT_ACTIVITY_LAYOUT_CHOICES,
   WORKSPACE_CARD_LAYOUT_CHOICES,

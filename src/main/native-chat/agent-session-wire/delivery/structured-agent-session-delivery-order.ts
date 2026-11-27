@@ -1,4 +1,4 @@
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import { selectedStructuredSubmission } from './structured-agent-session-input-selection'
 import type { StructuredAgentSessionProviderChild } from '../host/structured-agent-session-host-types'
 
@@ -26,8 +26,8 @@ type Lane = {
 export class StructuredAgentSessionDeliveryOrder {
   private readonly lanes = new Map<string, Lane>()
 
-  reconcile(sessionId: string, journal: AgentSessionJournal | undefined): void {
-    const selected = journal && selectedStructuredSubmission(journal)
+  async reconcile(sessionId: string, journal: AgentSessionJournal | undefined): Promise<void> {
+    const selected = journal && (await selectedStructuredSubmission(journal))
     const queued = selected ? [selected] : []
     const lane = this.lanes.get(sessionId)
     if (lane?.options && (queued.length > 0 || lane.active.size > 0)) {

@@ -1,4 +1,9 @@
-import { isAntigravityReferenceSession } from '../../../../../../shared/antigravity-session-origin'
+import {
+  orcaChatGroupDeleteReason,
+  useOrcaChatDeleteHostReason
+} from '@/lib/agent-session/chat-deletion/orca-chat-delete'
+import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
+import { isAntigravityReferenceSession } from '../../../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { useCallback } from 'react'
 import type React from 'react'
@@ -28,10 +33,11 @@ import {
   getSessionDetailsId,
   SessionMetadata
 } from './ai-vault-session-row-display'
-import type { AgentDotState } from '@/components/AgentStateDot'
+import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
 import { AiVaultSearchEvidence } from '../search/AiVaultSearchEvidence'
 import { useAiVaultSessionDisplayTitle } from './use-ai-vault-session-display-title'
+import { ForkMarkedName } from '@/components/native-chat/fork/ForkMarkedName'
 import type { AiVaultOriginalPaneTarget } from '../session-actions/ai-vault-original-pane'
 
 export function VaultSessionRow({
@@ -112,15 +118,21 @@ export function VaultSessionRow({
     ? t('aiVault.continueInCli', 'Continue in CLI')
     : defaultResumeLabel
   const updatedAt = session.updatedAt ?? session.modifiedAt
-  const title = useAiVaultSessionDisplayTitle(session, originalPaneTarget)
+  const { title, forked } = useAiVaultSessionDisplayTitle(session, originalPaneTarget)
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
   const deleteHost = useAiVaultSessionDeleteHost(session)
+  const chatDeleteHostReason = useOrcaChatDeleteHostReason(session.executionHostId)
+  // An Orca chat is deleted by the host that owns it; the agent's own transcript stays.
   const deleteBlockedReason = session.structuredSession
-    ? t(
-        'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonSyntheticPath',
-        "This session can't be deleted from Orca."
-      )
+    ? onRequestDelete
+      ? isBotGroupMemberSession(session.structuredSession.sessionId)
+        ? orcaChatGroupDeleteReason(t)
+        : chatDeleteHostReason
+      : t(
+          'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
+          'The transcript source is unavailable.'
+        )
     : onRequestDelete
       ? aiVaultSessionDeleteBlockedReason(session, deleteHost, t)
       : t(
@@ -201,7 +213,7 @@ export function VaultSessionRow({
             window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
           }}
         >
-          {title}
+          {forked ? <ForkMarkedName name={title} /> : title}
         </div>
         <SessionRowTrailingActions
           session={session}

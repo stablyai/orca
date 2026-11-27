@@ -1,11 +1,14 @@
 /** Why a distro cannot be added as a WSL host, decided before anything runs in it. */
-import type { WslHostAddFailureKind, WslHostAddResult } from '../../../shared/wsl-host-types'
+import type {
+  WslHostAddFailureKind,
+  WslHostAddResult
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import {
   WSL_HOST_ADD_REFUSAL_COPY,
   wslHostAddRefusalText,
   type WslHostAddRefusalCode,
   type WslHostCopyParams
-} from '../../../shared/wsl-host-failure-copy'
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
 

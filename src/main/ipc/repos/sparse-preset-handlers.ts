@@ -9,7 +9,7 @@ import {
 import {
   SparsePresetValidationError,
   type SparsePresetFailure
-} from '../../../shared/worktree/sparse-preset-failure'
+} from '../../../shared/worktree/creation/sparse-preset-failure'
 import { assertWslMoveProjectWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: Store): void {

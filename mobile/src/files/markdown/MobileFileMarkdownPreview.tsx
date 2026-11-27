@@ -1,8 +1,8 @@
 import { MobileMarkdownPreviewImage } from './MobileMarkdownPreviewImage'
 import type { MobileFilePreviewRpcSender } from '../preview/mobile-file-preview-operations'
 import { ScrollView } from 'react-native'
-import { MobileMarkdown } from '../../components/MobileMarkdown'
-import { MOBILE_MARKDOWN_DOCUMENT_SCALE } from '../../components/mobile-markdown-styles'
+import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
+import { MOBILE_MARKDOWN_DOCUMENT_SCALE } from '../../components/markdown/mobile-markdown-styles'
 import {
   MobileFilePreviewSourceText,
   MobileFilePreviewTruncatedNote

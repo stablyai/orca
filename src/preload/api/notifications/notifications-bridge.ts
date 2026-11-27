@@ -10,7 +10,7 @@ import type {
   NotificationSoundPathResult,
   NotificationSoundResult,
   StructuredNotificationRead
-} from '../../../shared/notification-settings-types'
+} from '../../../shared/notifications/notification-settings-types'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { PreloadApi } from '../../api-types'
 
@@ -63,11 +63,13 @@ export const notificationsApi = {
     volume?: number
   }): Promise<NotificationSoundResult> => {
     try {
-      const resolved = (await ipcRenderer.invoke(
-        'notifications:resolveSoundPath'
-      )) as NotificationSoundPathResult
+      const resolved: NotificationSoundPathResult = await ipcRenderer.invoke(
+        'notifications:resolveSoundPath',
+        { force: options?.force === true }
+      )
       if (!resolved.ok) {
-        if (cachedNotificationSound) {
+        // System Focus suppression is transient; keep the decoded sound for later plays.
+        if (resolved.reason !== 'focus-active' && cachedNotificationSound) {
           disposeCachedNotificationSound()
         }
         return { played: false, reason: resolved.reason }

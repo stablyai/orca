@@ -1,5 +1,5 @@
 import { GitCapabilityCache } from '../../../../shared/git/commands/git-capability-cache'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
   isWslLinkedWorktreeGitRoutingCandidate,
   prepareWslLinkedWorktreeGitRouting
@@ -60,8 +60,4 @@ export function withLocalGitCapabilityCacheForExecution<T>(
       )
     )
   )
-}
-
-export function clearGitCapabilityStateForTests(): void {
-  localCapabilitiesByExecutionHost.clear()
 }

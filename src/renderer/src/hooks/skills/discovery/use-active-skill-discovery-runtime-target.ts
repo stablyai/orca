@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { getSingleFocusedRuntimeEnvironmentId } from '@/lib/workspace/ownership/single-runtime-legacy-owner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useAppStore } from '@/store/index'
 
 /** Distinguishes "not known yet" from "known to be the local host", without

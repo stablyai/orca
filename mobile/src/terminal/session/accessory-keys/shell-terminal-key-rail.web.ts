@@ -11,7 +11,7 @@ import type {
   BridgeTerminalToolbar,
   BridgeTerminalKeyId,
   BridgeTerminalKeyRail
-} from '../../../mobile-web-shell/bridge/bridge-terminal-key'
+} from '../../../mobile-web-shell/bridge/native-capabilities/bridge-terminal-key'
 import { usePageBridgeClient } from '../../../transport/connection/client-context.web'
 
 let nextInputOwner = 0

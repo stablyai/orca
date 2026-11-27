@@ -1,4 +1,4 @@
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '../../../store/index'
 import {
   shouldRestoreWebRuntimeSessionWorkspaceSelection,

@@ -1,54 +1,50 @@
 import {
   openStructuredAgentSession,
   structuredSessionOpenFailure
-} from '../../../../../shared/open-structured-agent-session'
+} from '../../../../../shared/agent-session/view/open-structured-agent-session'
 import type {
   StructuredSessionOpenSource,
   StructuredSessionOpenResult,
   StructuredSessionOpenDeps,
+  StructuredSessionOpenInventoryRecheck,
   StructuredSessionOpenTarget,
-  StructuredSessionOpenTab,
-  StructuredSessionOpenFailure
-} from '../../../../../shared/open-structured-agent-session'
+  StructuredSessionOpenTab
+} from '../../../../../shared/agent-session/view/open-structured-agent-session'
 import {
   findStructuredAgentSessionTab,
   activateStructuredAgentSessionById
 } from '../structured-agent-session-tab-activation'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../workspace/ownership/worktree-runtime-owner'
-import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
-import { refreshLocalStructuredSessionWorktreeTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
-import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import type { OrchestrationPartyLocationResult } from '../../../../../shared/orchestration/orchestration-caller-status'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-
-const STRUCTURED_SESSION_RESTORE_TIMEOUT_MS = 5_000
-
-/** Keep distinct remedies: retry unreachable hosts, stop on a confirmed missing record, or update incompatible hosts/adapters. Failure to answer never proves a chat is gone. */
-export type StructuredSessionRevealOutcome =
-  | StructuredSessionOpenTarget
-  | StructuredSessionOpenFailure
-  | 'gone'
-  | 'host-cannot-open'
-  | 'unreachable'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { throwIfSignalAborted } from '../../../../../shared/concurrency/abort-signal-reason'
+import {
+  callStructuredSessionParty,
+  refreshStructuredSessionTabs,
+  revealStructuredSession,
+  STRUCTURED_SESSION_RESTORE_TIMEOUT_MS,
+  type StructuredSessionRevealOutcome,
+  withStructuredSessionRestoreTimeout
+} from './structured-session-restore'
+import { pairedBotThreadRecovery } from './paired-bot-thread-recovery'
 
 export type StructuredSessionOpenAdapterDeps = {
   activate: typeof activateStructuredAgentSessionById
+  locate?: StructuredSessionOpenDeps['locate']
   tabs: (
     target: { sessionId: string; worktreeId: string },
     owner: RuntimeClientTarget
   ) => readonly StructuredSessionOpenTab[]
-  refresh: (worktreeId: string, target?: RuntimeClientTarget) => Promise<void>
+  refresh: (target: StructuredSessionOpenTarget, owner: RuntimeClientTarget) => Promise<void>
   reveal: (target: {
     worktreeId: string
     sessionId: string
     target?: RuntimeClientTarget
-  }) => Promise<StructuredSessionRevealOutcome>
+  }) => Promise<StructuredSessionRevealOutcome | StructuredSessionOpenInventoryRecheck>
+  current?: () => boolean
+  signal?: AbortSignal
 }
 
 const defaultDeps: StructuredSessionOpenAdapterDeps = {
@@ -61,8 +57,61 @@ const defaultDeps: StructuredSessionOpenAdapterDeps = {
     })
     return tab ? [{ id: tab.id, sessionId: tab.entityId, agent: tab.agentSessionAgent }] : []
   },
-  refresh: refreshStructuredSessionTabs,
+  refresh: async (target, owner) => {
+    await refreshStructuredSessionTabs(target.worktreeId, owner)
+  },
   reveal: revealStructuredSession
+}
+
+export function pairedBotThreadOpenDeps(
+  linkedWorkspaceId: string,
+  linkedSessionId: string,
+  target: RuntimeClientTarget,
+  signal: AbortSignal,
+  current: () => boolean,
+  activate: StructuredSessionOpenAdapterDeps['activate']
+): StructuredSessionOpenAdapterDeps {
+  const recovery =
+    target.kind === 'environment'
+      ? pairedBotThreadRecovery(target, linkedWorkspaceId, linkedSessionId, signal)
+      : undefined
+  return {
+    ...defaultDeps,
+    current,
+    signal,
+    activate,
+    locate: recovery?.locate,
+    reveal: recovery?.reveal ?? ((target) => revealStructuredSession({ ...target, signal })),
+    refresh: async ({ worktreeId, sessionId }, owner) => {
+      if (await recovery?.resumePending()) {
+        return
+      }
+      if (!current()) {
+        return
+      }
+      if (owner.kind === 'environment' && worktreeId === linkedWorkspaceId) {
+        const timeout = new AbortController()
+        const requestSignal = AbortSignal.any([signal, timeout.signal])
+        await withStructuredSessionRestoreTimeout(
+          import('@/runtime/web-session-tabs-sync/inventory/paired-chat-tab-reply').then(
+            ({ readPairedChatTab }) =>
+              readPairedChatTab({
+                environmentId: owner.environmentId,
+                worktreeId,
+                sessionId,
+                timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS,
+                minimumReceivedFrame: recovery?.minimumInventoryFrame(),
+                signal: requestSignal,
+                current
+              })
+          ),
+          { onTimeout: () => timeout.abort() }
+        )
+      } else {
+        await defaultDeps.refresh({ worktreeId, sessionId }, owner)
+      }
+    }
+  }
 }
 
 export type StructuredSessionOpenOutcome = 'activated' | 'gone' | 'host-cannot-open' | 'unavailable'
@@ -87,7 +136,7 @@ type DesktopInteractionOptions = {
   deps?: StructuredSessionOpenAdapterDeps
   locate?: StructuredSessionOpenDeps['locate']
   initialize?: () => boolean
-  present: (result: StructuredSessionOpenResult) => void
+  present: (result: StructuredSessionOpenResult, owner: RuntimeClientTarget) => void
   onError?: () => void
 }
 
@@ -116,18 +165,19 @@ export async function openDesktopStructuredSessionInteraction(
     throw error
   }
   const key =
-    source.kind === 'history'
+    source.kind === 'history' && !options.deps?.signal
       ? `${executionHostIdForStructuredTarget(owner)}\0${source.structuredSession.workspaceId}\0${source.structuredSession.sessionId}`
       : undefined
   const pending = key === undefined ? undefined : activationsInFlight.get(key)
   if (pending) {
     return pending
   }
+  const deps = options.deps ?? defaultDeps
   let initialized = true
   const execute = async (): Promise<StructuredSessionOpenResult> => {
     initialized = options.initialize?.() !== false
     return initialized
-      ? executeDesktopStructuredSession(source, owner, options.deps ?? defaultDeps, options.locate)
+      ? executeDesktopStructuredSession(source, owner, deps, options.locate)
       : {
           kind: 'failed' as const,
           failure: { reason: 'unreachable' as const, beforeEffects: true }
@@ -136,8 +186,8 @@ export async function openDesktopStructuredSessionInteraction(
   const activation = (key === undefined ? execute() : Promise.resolve().then(execute))
     .then(
       (result) => {
-        if (initialized) {
-          options.present(result)
+        if (initialized && (deps.current?.() ?? true)) {
+          options.present(result, owner)
         }
         return result
       },
@@ -181,19 +231,22 @@ async function executeDesktopStructuredSession(
     async (address: string, messageIds: readonly string[]) => {
       try {
         return await withStructuredSessionRestoreTimeout(
-          callRuntimeRpc<OrchestrationPartyLocationResult>(
+          callStructuredSessionParty(
             owner,
             method,
-            { address, ...(messageIds.length ? { messageIds } : {}) },
-            { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS }
-          )
+            address,
+            messageIds,
+            deps.signal ? { beforeSend: () => throwIfSignalAborted(deps.signal) } : undefined
+          ),
+          { signal: deps.signal }
         )
       } catch (error) {
         return structuredSessionOpenFailure(error)
       }
     }
   return openStructuredAgentSession(source, {
-    locate: locate ?? party('orchestration.partyLocation'),
+    current: deps.current,
+    locate: locate ?? deps.locate ?? party('orchestration.partyLocation'),
     ...(locate ? {} : { open: party('orchestration.partyOpen') }),
     tabs: (target) => deps.tabs(target, owner),
     activate: (tab, target) =>
@@ -201,7 +254,7 @@ async function executeDesktopStructuredSession(
         .tabs(target, owner)
         .some((row) => row.id === tab.id && row.sessionId === target.sessionId) &&
       deps.activate({ ...target, target: owner }),
-    refresh: (target) => deps.refresh(target.worktreeId, owner),
+    refresh: (target) => deps.refresh(target, owner),
     reveal: async (target) => {
       const outcome = await deps.reveal({ ...target, target: owner })
       return typeof outcome === 'object'
@@ -212,110 +265,4 @@ async function executeDesktopStructuredSession(
           }
     }
   })
-}
-
-/** Only revealed promises a tab; preserve distinct retry/missing/update outcomes for the other replies. */
-export async function revealStructuredSession(target: {
-  worktreeId: string
-  sessionId: string
-  target?: RuntimeClientTarget
-}): Promise<StructuredSessionRevealOutcome> {
-  const host =
-    target.target ??
-    runtimeTargetForOwnerEnvironment(
-      runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), target.worktreeId)
-    )
-  // Probe the answering paired host’s build; the local host shares this build and needs no probe.
-  if (host.kind === 'environment') {
-    let supported: boolean
-    try {
-      // Race even cached probe promises: an older unbounded probe must not hold the session’s in-flight guard forever.
-      supported = await withStructuredSessionRestoreTimeout(
-        runtimeEnvironmentSupportsCapability(
-          host.environmentId,
-          STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
-          STRUCTURED_SESSION_RESTORE_TIMEOUT_MS
-        )
-      )
-    } catch (error) {
-      // Only a version block proves age; other probe failures say nothing about the chat (as in remote-agent-session-launch).
-      return isRuntimeCompatBlockError(error) ? 'host-cannot-open' : 'unreachable'
-    }
-    if (!supported) {
-      return 'host-cannot-open'
-    }
-  }
-  let result: AgentSessionRevealReply | undefined
-  try {
-    result = await withStructuredSessionRestoreTimeout(
-      callRuntimeRpc<AgentSessionRevealReply>(
-        host,
-        'agentSession.reveal',
-        { sessionId: target.sessionId },
-        {
-          timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS
-        }
-      )
-    )
-  } catch {
-    return 'unreachable'
-  }
-  if (result?.ok === true) {
-    return { sessionId: result.sessionId, worktreeId: result.workspaceId, agent: result.agent }
-  }
-  // Distinguish a missing record from an existing record the host cannot open; only the first means gone.
-  if (result?.refusal?.code === 'agent_session_workspace_removed') {
-    return structuredSessionOpenFailure(result.refusal)
-  }
-  return result?.refusal?.code === 'agent_session_identity_required'
-    ? 'gone'
-    : result?.refusal?.code === 'agent_session_operation_unknown'
-      ? 'unreachable'
-      : 'host-cannot-open'
-}
-
-type AgentSessionRevealReply =
-  | { ok: true; sessionId: string; workspaceId: string; agent: string }
-  | { ok: false; refusal: { code?: string; details?: unknown } }
-
-async function refreshStructuredSessionTabs(
-  worktreeId: string,
-  target?: RuntimeClientTarget
-): Promise<void> {
-  const state = useAppStore.getState()
-  const host =
-    target ??
-    runtimeTargetForOwnerEnvironment(runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId))
-  if (host.kind === 'local') {
-    await withStructuredSessionRestoreTimeout(refreshLocalStructuredSessionWorktreeTabs(worktreeId))
-    return
-  }
-  // Paired inventories arrive through their existing host-scoped subscription.
-  await withStructuredSessionRestoreTimeout(
-    callRuntimeRpc(
-      host,
-      'session.tabs.list',
-      { worktree: toRuntimeWorktreeSelector(worktreeId) },
-      { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS }
-    )
-  )
-}
-
-async function withStructuredSessionRestoreTimeout<T>(promise: Promise<T>): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(
-          () => reject(new Error('structured_session_restore_timeout')),
-          STRUCTURED_SESSION_RESTORE_TIMEOUT_MS
-        )
-      })
-    ])
-  } finally {
-    if (timer) {
-      clearTimeout(timer)
-    }
-  }
 }

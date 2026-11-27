@@ -1,4 +1,4 @@
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
 import { hasActiveTraceSink } from '../observability/tracer'
 import { runWithGitCause, type GitOperationCause } from '../observability/git-operation-cause'
 import { peekGitCommonDir } from './repositories/canonical-repo-key'

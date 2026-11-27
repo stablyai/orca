@@ -5,7 +5,7 @@ import {
   ORCAD_MOBILE_WEB_DIR,
   ORCAD_MOBILE_WEB_MANIFEST,
   orcadMobileWebAssetFilenames
-} from '../../../../src/shared/orcad-artifacts.ts'
+} from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 
 const { MOBILE_WEB_BUNDLE_DIR, assertMobileWebBundleBuilt } = createRequire(import.meta.url)(
   '../../desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle.cjs'

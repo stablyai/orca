@@ -6,7 +6,7 @@ import {
 } from './git-graph-commit-action-controls'
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
-import { RefreshCw } from 'lucide-react'
+import { FileDiff, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -22,14 +22,20 @@ import { loadMoreInView } from './git-graph-viewport-paging'
 import { GitGraphDetails } from './git-graph-details'
 import { GitGraphRefs, useGitGraphWorkspaces } from './git-graph-ref-menu'
 import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store'
+import { editorTabWorkspace } from '@/store/slices/editor/tabs/workspace-editor-files'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 const sameGroup = () => undefined
 // About 200px of rows, so scrolling fetches before the end shows.
 const PAGE_AHEAD_ROWS = 8
 
-export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
+export function GitGraphTab({ worktreeId, tabId }: { worktreeId: string; tabId: string }) {
   const t = useTranslate()
+  // A folder workspace can show a child worktree's graph; its diffs belong next to it.
+  const placementWorkspaceId = useAppStore((state) =>
+    editorTabWorkspace(state.unifiedTabsByWorktree, tabId)
+  )
   const intlLocale = useIntlLocale()
   const history = useGitGraphHistory(worktreeId)
   const { result, scope, selectedId, revealId, controller, loading } = history
@@ -93,12 +99,22 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
       controller.clearReveal()
     }
   }, [revealIndex, revealRow, controller])
+  // Switching to another tab unmounts this view; only closing Git Graph cancels a pending Open diff.
+  const isGraphOpen = useCallback(
+    () =>
+      useAppStore
+        .getState()
+        .openFiles.some((file) => file.worktreeId === worktreeId && file.mode === 'git-graph'),
+    [worktreeId]
+  )
   const actions = useGitHistoryCommitActions({
     activeWorktreeId: worktreeId,
     worktreePath: scope?.worktree.path ?? null,
     activeRepoTarget: scope?.target ?? null,
     ownerConnectionId: scope?.connectionId,
-    resolveSplitTargetGroupId: sameGroup
+    resolveSplitTargetGroupId: sameGroup,
+    isSurfaceOpen: isGraphOpen,
+    placementWorkspaceId
   })
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
@@ -269,6 +285,16 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                   item={selected}
                   controller={controller.actions}
                   support={commitActionSupport}
+                  leading={
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={() => void actions.openHistoryCommitDiff(selected)}
+                    >
+                      <FileDiff className="size-3.5" />
+                      {t('gitGraph.openDiff', 'Open diff')}
+                    </Button>
+                  }
                 />
               }
               actions={actions}

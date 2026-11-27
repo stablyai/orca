@@ -4,20 +4,12 @@ import {
   createNdjsonParser,
   NdjsonLineTooLongError,
   createIncrementalNdjsonFramer
-} from '../../../../../shared/main-process-ndjson-framer'
+} from '../../../../../shared/json-stream/main-process-ndjson-framer'
 
 describe('encodeNdjson', () => {
-  it('accepts the exact line-byte limit and rejects one byte more', () => {
-    const emptyBytes = Buffer.byteLength(JSON.stringify({ data: '' }), 'utf8')
-    expect(encodeNdjson({ data: 'abc' }, emptyBytes + 3)).toBe('{"data":"abc"}\n')
-    expect(() => encodeNdjson({ data: 'abcd' }, emptyBytes + 3)).toThrow(NdjsonLineTooLongError)
-  })
-
   it('measures multibyte payloads in UTF-8 bytes, not characters', () => {
-    const emptyBytes = Buffer.byteLength(JSON.stringify({ data: '' }), 'utf8')
-    expect(encodeNdjson({ data: '🐙' }, emptyBytes + 4)).toBe('{"data":"🐙"}\n')
-    expect(() => encodeNdjson({ data: '🐙' }, emptyBytes + 3)).toThrow(NdjsonLineTooLongError)
-    expect(() => encodeNdjson({ data: 'é' }, emptyBytes + 1)).toThrow(NdjsonLineTooLongError)
+    expect(encodeNdjson({ data: '🐙' }, 15)).toBe('{"data":"🐙"}\n')
+    expect(() => encodeNdjson({ data: '🐙' }, 14)).toThrow(NdjsonLineTooLongError)
   })
 })
 

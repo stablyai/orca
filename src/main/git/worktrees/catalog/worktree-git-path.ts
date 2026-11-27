@@ -5,7 +5,7 @@
  */
 import { readFileSync, statSync } from 'node:fs'
 import { join, resolve, win32 } from 'node:path'
-import { parseWslUncPath, toWindowsWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { wslDrivePathUnderRoots } from '../../../wsl/filesystem/wsl-automount-root'
 
 // Git keeps these per worktree; everything else under the git dir (`hooks/`, `info/`, `objects/`,

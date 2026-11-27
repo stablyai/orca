@@ -1,7 +1,8 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { codeHostReadExecutionScope as workItemSearchScope } from '../../../source-control/code-host-read-execution-scope'
 
-import { BoundedMap } from '../../../../shared/bounded-map'
+import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
 import { createGhRateLimitBlockedError } from '../../../git/command-runner/hosted-cli/gh-rate-limit-breaker'
 import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
@@ -9,17 +10,19 @@ import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../api/rate-limit'
 import type { GitHubRepoExecOptions } from '../../repositories/github-api-repository'
 
-const envelopeSchema = z.object({
-  data: z.record(z.string(), z.unknown()).nullish(),
-  errors: z
-    .array(
-      z.object({
-        message: z.string().optional(),
-        path: z.array(z.union([z.string(), z.number()])).optional()
-      })
-    )
-    .optional()
-})
+const envelopeSchema = lazyZodSchema(() =>
+  z.object({
+    data: z.record(z.string(), z.unknown()).nullish(),
+    errors: z
+      .array(
+        z.object({
+          message: z.string().optional(),
+          path: z.array(z.union([z.string(), z.number()])).optional()
+        })
+      )
+      .optional()
+  })
+)
 type Envelope = z.infer<typeof envelopeSchema>
 export type WorkItemSearchType = 'ISSUE' | 'ISSUE_ADVANCED'
 type SearchRequest = {

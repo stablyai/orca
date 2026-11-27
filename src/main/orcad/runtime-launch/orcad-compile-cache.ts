@@ -1,6 +1,6 @@
 import module from 'node:module'
 import { join } from 'node:path'
-import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../../shared/orcad-managed-launch-env'
+import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-managed-launch-env'
 
 export const ORCAD_COMPILE_CACHE_DIRNAME = '.orcad-compile-cache'
 

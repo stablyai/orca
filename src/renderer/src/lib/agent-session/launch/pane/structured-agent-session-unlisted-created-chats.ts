@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 // Lists built before create can arrive after its reply; omission proves no close until a list actually shows the chat or protection expires.
 const UNLISTED_CREATED_CHAT_TTL_MS = 30_000

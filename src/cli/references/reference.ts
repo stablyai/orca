@@ -1,7 +1,7 @@
 import type {
   RuntimeReferenceFindResult,
   RuntimeReferenceListResult
-} from '../../shared/runtime-reference-contracts'
+} from '../../shared/workspace-attachments/runtime-reference-contracts'
 import type { WorkspaceAttachment } from '../../shared/worktree/types'
 import {
   getWorkspaceReferenceIdentifier,
@@ -22,8 +22,8 @@ import {
   parseReferenceUrls,
   resolveReferenceInputs
 } from './reference-input'
-import { RuntimeClientError } from '../runtime/types'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import { RuntimeClientError } from '../runtime/connection/types'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 // Older hosts may advertise linked-item deltas without supporting reference.*.
 async function callReference<TResult>(

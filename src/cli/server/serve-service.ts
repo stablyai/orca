@@ -1,42 +1,36 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { reenterPackagedElectron } from '../runtime/app-launch/packaged-cli-interpreter'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname } from 'node:path'
-import { runProcess } from '@orca/process-host'
 import type { CommandHandler } from '../dispatch/dispatch'
-import { RuntimeClientError } from '../runtime/types'
-import { getOptionalServePort } from '../runtime/serve-port-flag'
-import { getOptionalServeBind, resolveServeBindValue } from '../runtime/serve-bind-flag'
+import { RuntimeClientError } from '../runtime/connection/types'
+import { getOptionalServePort } from '../runtime/commands/serve-port-flag'
+import { getOptionalServeBind, resolveServeBindValue } from '../runtime/commands/serve-bind-flag'
 import { formatServeServiceInstall, formatServeServiceStatus } from './serve-service-format'
-import { resolveLaunchUserDataPath } from '../runtime/launch-user-data-path'
-import { getPlatformUserDataPath } from '../runtime/metadata'
+import { resolveLaunchUserDataPath } from '../runtime/profile/launch-user-data-path'
+import { getPlatformUserDataPath } from '../runtime/profile/metadata'
 import {
   clearServeSupervisorBrake,
   readServeSupervisorBrake
-} from '../runtime/serve-supervisor-brake'
+} from '../runtime/serve/supervision/serve-supervisor-brake'
 import {
   renderServeService,
   resolveServeServiceManager,
   type ServeServiceSpec
-} from '../runtime/serve-service-unit'
-import { resolveServiceCommand, resolveServicePath } from '../runtime/serve-app-launcher'
-
-type Run = (program: string, args: string[]) => Promise<{ code: number | null; out: string }>
+} from '../runtime/serve/supervision/serve-service-unit'
+import { resolveServiceCommand, resolveServicePath } from '../runtime/app-launch/serve-app-launcher'
+import {
+  removeServeServiceUnit,
+  runServeServiceManager,
+  type ServeServiceRun
+} from '../../shared/remote-runtime/serve-supervisor/serve-service-unit-removal'
 
 export type ServeServiceDeps = {
   platform: NodeJS.Platform
   env: NodeJS.ProcessEnv
   homeDir: string
   uid: number
-  run: Run
-}
-
-const defaultRun: Run = async (program, args) => {
-  try {
-    const result = await runProcess({ program, args, timeoutMs: 20_000 })
-    return { code: result.timedOut ? null : result.code, out: `${result.stdout}${result.stderr}` }
-  } catch (error) {
-    return { code: null, out: error instanceof Error ? error.message : String(error) }
-  }
+  run: ServeServiceRun
 }
 
 function defaultDeps(): ServeServiceDeps {
@@ -45,7 +39,7 @@ function defaultDeps(): ServeServiceDeps {
     env: process.env,
     homeDir: homedir(),
     uid: process.getuid?.() ?? 0,
-    run: defaultRun
+    run: runServeServiceManager
   }
 }
 
@@ -241,14 +235,7 @@ export async function uninstallServeService(
 ): Promise<Record<string, unknown>> {
   requireManager(deps.platform)
   const spec = serviceSpec(deps, { command: 'orca' })
-  await (spec.manager === 'launchd'
-    ? deps.run('launchctl', ['bootout', `gui/${deps.uid}/${spec.name}`])
-    : deps.run('systemctl', ['--user', 'disable', '--now', spec.name]))
-  const existed = existsSync(spec.unitPath)
-  rmSync(spec.unitPath, { force: true })
-  if (spec.manager === 'systemd') {
-    await deps.run('systemctl', ['--user', 'daemon-reload'])
-  }
+  const existed = await removeServeServiceUnit(spec, deps.run, deps.uid)
   return { removed: existed, manager: spec.manager, name: spec.name, unitPath: spec.unitPath }
 }
 
@@ -268,7 +255,7 @@ export const SERVE_SERVICE_HANDLERS: Record<string, CommandHandler> = {
         'Use either --allow-public or --refuse-public, not both.'
       )
     }
-    const result = await installServeService({
+    const options = {
       command: optionalString(flags.get('command')),
       // Validate before launchd can loop on a bad value and trip the supervisor brake.
       port: getOptionalServePort(flags),
@@ -276,8 +263,10 @@ export const SERVE_SERVICE_HANDLERS: Record<string, CommandHandler> = {
       pairingAddress: optionalString(flags.get('pairing-address')),
       allowPublic: flags.get('allow-public') === true,
       refusePublic: flags.get('refuse-public') === true,
-      dryRun: flags.get('dry-run') === true
-    })
+      dryRun: flags.has('dry-run')
+    }
+    reenterPackagedElectron()
+    const result = await installServeService(options)
     emit(result, json, formatServeServiceInstall)
   },
   'serve service status': async ({ json }) => {

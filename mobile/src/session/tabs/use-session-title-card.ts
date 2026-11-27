@@ -4,7 +4,7 @@ import type { HostInstance, Text } from 'react-native'
 import {
   useAnchoredDetailCard,
   type DetailCardMeasure
-} from '../../components/use-anchored-detail-card'
+} from '../../components/detail-cards/use-anchored-detail-card'
 
 export function useSessionTitleCard(besideTabs: boolean, obscured: boolean) {
   const barRef = useRef<HostInstance>(null)

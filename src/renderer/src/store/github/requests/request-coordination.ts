@@ -2,6 +2,10 @@ import type { PRCheckContract } from '@/lib/source-control/checks/pr-check-obser
 import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import type {
+  GitHubPRRefreshReason,
+  PRSnapshotReply
+} from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type {
   IssueInfo,
   PRInfo
 } from '../../../../../shared/github/pull-requests/pull-request-types'
@@ -10,12 +14,20 @@ import type { GetProjectViewTableResult } from '../../../../../shared/github/pro
 import type { LinkedReviewClearScope } from '../pull-requests/linked-review-clear'
 import type { AppState } from '../../types'
 import { matchesRepoCacheEviction, type RepoCacheEviction } from '../cache/cache-identity'
+import type { PromiseSettlementWaiters } from '../../../../../shared/concurrency/promise-settlement-waiters'
 
 export type InflightPR = {
   promise: Promise<PRInfo | null>
+  controller: AbortController
+  waiters: PromiseSettlementWaiters<PRInfo | null>
   force: boolean
   generation: number
   lookupHintKey: string
+  reason?: GitHubPRRefreshReason
+  /** A poll's flight, refused by an idle-stopped WSL host: a counted read must not join it. */
+  background?: boolean
+  superseded?: boolean
+  outcome?: PRSnapshotReply
 }
 export type InflightChecks = {
   promise: Promise<PRCheckDetail[]>
@@ -28,7 +40,7 @@ export type InflightChecks = {
   wakeWslDistro?: boolean
 }
 export type InflightComments = {
-  promise: Promise<PRComment[]>
+  promise: Promise<PRComment[] | null>
   reply?: Promise<PRComment[]>
   requestId: number
   postedComments: PRComment[]
@@ -82,19 +94,6 @@ export function ownsInflightRequest<T extends { requestId: number }>(
   requestId: number
 ): boolean {
   return registry.get(key)?.requestId === requestId
-}
-
-export function _getGitHubPRRequestGenerationCountForTest(): number {
-  return prRequestGenerations.size
-}
-
-export function _getGitHubPRRefreshStartedEntryCountForTest(): number {
-  return prRefreshStartedHostedReviewEntries.size
-}
-
-export function _clearGitHubPRRefreshStartedEntriesForTest(): void {
-  prRefreshStartedHostedReviewEntries.clear()
-  prRefreshStartedLinkedReviewScopes.clear()
 }
 
 const PROVIDER_REQUEST_CONCURRENCY = 8

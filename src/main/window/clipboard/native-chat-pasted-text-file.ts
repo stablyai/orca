@@ -5,8 +5,8 @@ import {
   agentSessionPastedTextName,
   type AgentSessionAttachmentClipboardTarget
 } from '../../../shared/agent-session/agent-session-attachments'
-import { assertClipboardTextWithinLimit } from '../../../shared/clipboard-text'
-import { uploadPasteToAgentSessionAttachments } from '../../ipc/agent-session-attachment-upload'
+import { assertClipboardTextWithinLimit } from '../../../shared/clipboard/clipboard-text'
+import { uploadPasteToAgentSessionAttachments } from '../../ipc/agent-attachments/agent-session-attachment-upload'
 import type { AgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 export type SavePastedTextAsFileArgs = {

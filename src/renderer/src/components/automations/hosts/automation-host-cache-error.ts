@@ -1,6 +1,6 @@
 /** Classify by error code: contract/owner failures do not spend retry budget; unreachable or slow hosts do. */
 
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import {
   AUTOMATION_OWNER_CONFLICT_CODES,
   matchAutomationOwnerConflict,

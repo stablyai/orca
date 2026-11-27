@@ -9,7 +9,7 @@ import {
   formatMarkdownReviewNotes,
   type MarkdownReviewNote
 } from '@/lib/editor/markdown/review-notes/markdown-review-notes'
-import { installOpenDraftAddReviewNoteGuard } from '../../editor-shortcuts'
+import { installOpenDraftAddReviewNoteGuard } from '../../commands/editor-shortcuts'
 import { NotesSendMenu } from '../../review-note-delivery/NotesSendMenu'
 
 export function MarkdownPreviewSingleNoteSendMenu({

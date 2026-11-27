@@ -1,6 +1,10 @@
-import type { ClassifiedError } from '../../../shared/classified-error'
-import type { GitLabCommentResult, GitLabIssueInfo, MRComment } from '../../../shared/gitlab-types'
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { ClassifiedError } from '../../../shared/errors/classified-error'
+import type {
+  GitLabCommentResult,
+  GitLabIssueInfo,
+  MRComment
+} from '../../../shared/gitlab/gitlab-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { mapGitLabIssueInfo } from '../requests/gitlab-response-mapping'
 // prettier-ignore
 import { glabApiWithHeaders, acquire, release } from '../requests/glab-request-admission'
@@ -13,7 +17,10 @@ import { parseGlabJsonList, parseGlabPaginationHeader } from '../requests/glab-a
 import type { ProjectRef } from '../projects/project-ref-parser'
 import { encodedProject } from '../projects/project-path-encoding'
 import { isTaskRepositoryIneligible } from '../../git/remotes/task-repository-eligibility'
-import { codeHostFailure, classifiedFailure } from '../../../shared/code-host-failure-copy'
+import {
+  codeHostFailure,
+  classifiedFailure
+} from '../../../shared/source-control/code-host-failure-copy'
 
 // Distinguish a confirmed empty list from fetch failure.
 export type IssueListResult = {

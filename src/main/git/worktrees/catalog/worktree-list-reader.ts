@@ -1,11 +1,11 @@
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
+} from '../../../../shared/concurrency/abort-signal-reason'
 import { annotateWorktreeLocksFromAdmin } from '../../../../shared/git/worktrees/git-worktree-admin'
 import { stat } from 'node:fs/promises'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
-import { toWslExecutionSpace } from '../../../../shared/wsl-paths'
+import { toWslExecutionSpace } from '../../../../shared/file-access/wsl-paths'
 import {
   hasUnsupportedRevParsePathFormatEcho,
   isUnsupportedRevParsePathFormatError,

@@ -23,8 +23,12 @@ export async function getLatestPendingReport(
 ): Promise<Awaited<ReturnType<CrashReportStore['getLatestPending']>>> {
   const reports = await store.listRecent()
   return (
-    reports.find((report) => report.status === 'pending' && !submittedReportIds.has(report.id)) ??
-    null
+    reports.find(
+      (report) =>
+        report.status === 'pending' &&
+        report.reason !== 'main-thread-hang' &&
+        !submittedReportIds.has(report.id)
+    ) ?? null
   )
 }
 

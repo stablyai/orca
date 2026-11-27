@@ -11,7 +11,7 @@ import {
   isClaudeToolResultContent,
   claudeToolResultText,
   claudeToolResultFailed
-} from '../../../../shared/claude-tool-content'
+} from '../../../../shared/agent-hook-listener/providers/claude/transcripts/claude-tool-content'
 
 export type ClaudeMessageEnvelope = {
   sessionId: string

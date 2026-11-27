@@ -1,7 +1,7 @@
 import {
   isClaudeTeammateLifecycleId,
   recordClaudeTeammateTaskDescription
-} from '../../../../claude-subagent-roster'
+} from './claude-subagent-roster'
 import type { HookListenerState } from '../../../listener-state'
 import { readString } from '../../../tool-input-preview'
 import { getOrCreateClaudeSubagentRoster } from './claude-roster-state'

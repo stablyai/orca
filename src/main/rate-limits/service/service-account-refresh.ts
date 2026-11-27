@@ -4,7 +4,7 @@ import { hasUsageWindows } from './service-result-policy'
 import {
   normalizeCodexAccountSelectionTarget,
   type CodexAccountSelectionTarget
-} from '../../../shared/codex-selection-lane'
+} from '../../../shared/agent-accounts/codex/codex-selection-lane'
 import {
   normalizeClaudeAccountSelectionTarget,
   type ClaudeAccountSelectionTarget
@@ -14,7 +14,7 @@ import type {
   RateLimitRuntimeTarget,
   RateLimitState,
   CodexRateLimitResetResult
-} from '../../../shared/rate-limit-types'
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceInactiveAccounts {
   async refresh(): Promise<RateLimitState> {
@@ -106,14 +106,6 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     })
   }
 
-  invalidateAntigravityCredentialState(): void {
-    this.antigravityFetchGeneration += 1
-    this.updateState({
-      ...this.state,
-      antigravity: null
-    })
-  }
-
   invalidateMiniMaxCredentialState(): void {
     this.minimaxFetchGeneration += 1
     // Clear before an old-cookie fetch can return.
@@ -137,10 +129,11 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     target?: CodexAccountSelectionTarget
   ): Promise<RateLimitState> {
     const nextTarget = normalizeCodexAccountSelectionTarget(target)
-    // Weekly-only plans still need outgoing switcher snapshots.
+    // Weekly-only and monthly-only plans still need outgoing switcher snapshots.
     if (
       outgoingAccountId &&
-      (this.state.codex?.session || this.state.codex?.weekly) &&
+      this.state.codex &&
+      hasUsageWindows(this.state.codex) &&
       this.isSameCodexTarget(this.codexFetchTarget, nextTarget)
     ) {
       this.inactiveCodexCache.set(outgoingAccountId, this.state.codex)
@@ -181,7 +174,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
   }): Promise<CodexRateLimitResetResult> {
     const codexTarget = normalizeCodexAccountSelectionTarget(options.target)
     const codexHomePath = options.codexHomePath
-    const scopedStateBeforeReset = this.getState()
+    const scopedStateBeforeReset = await this.getState()
     const missingWslCodexHome = codexHomePath
       ? null
       : this.getMissingWslCodexHomeResult(codexTarget)

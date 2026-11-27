@@ -1,4 +1,4 @@
-import { formatSshUserDisconnectedMessage } from '../../../shared/ssh-user-disconnect-message'
+import { formatSshUserDisconnectedMessage } from '../../../shared/remote-runtime/ssh/ssh-user-disconnect-message'
 import {
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
@@ -37,11 +37,6 @@ export function clearSshUserDisconnectedForEnvironment(
   if (targetId) {
     clearSshUserDisconnected(targetId)
   }
-}
-
-export function resetSshUserDisconnectsForTests(): void {
-  userDisconnectedTargets.clear()
-  userDisconnectCounts.clear()
 }
 
 /** Not an auth or transient failure: callers neither ask for a sign-in nor retry it. */

@@ -1,4 +1,5 @@
 import type { runProcess as runNativeProcess } from '@orca/process-host'
+import { MAX_NATIVE_HANG_REPORT_BYTES } from './native-hang-report'
 import {
   emptyHangStacks,
   hangLabel,
@@ -117,6 +118,7 @@ export function reduceNativeHangSample(
 export function captureNativeHang(options: {
   pid: number
   publish: (capture: NativeHangCapture) => void
+  completeReport?: (report: string) => void
 }): { stop: () => void; done: Promise<void> } {
   const abort = new AbortController()
   const baseline: NativeHangCapture = {
@@ -152,8 +154,8 @@ export function captureNativeHang(options: {
       const result = await runProcess({
         program: '/usr/bin/sample',
         args: [String(options.pid), '1', '10', '-file', '/dev/stdout'],
-        timeoutMs: 2500,
-        maxOutputBytes: 128 * 1024,
+        timeoutMs: 10_000,
+        maxOutputBytes: MAX_NATIVE_HANG_REPORT_BYTES,
         killOnOutputLimit: true,
         signal: abort.signal,
         onChildTerminated: () => {
@@ -171,6 +173,14 @@ export function captureNativeHang(options: {
         cleanup: terminated ? 'terminated' : 'unverified',
         ...(result.code !== null ? { exitCode: result.code } : {})
       })
+      if (
+        result.code === 0 &&
+        !result.timedOut &&
+        !result.outputTruncated &&
+        !abort.signal.aborted
+      ) {
+        options.completeReport?.(result.stdout)
+      }
     } catch {
       publish({
         ...baseline,

@@ -4,8 +4,7 @@ import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalo
 import { TUI_AGENT_FAVICON_DOMAINS } from '../../../src/shared/agent-launch/catalog/tui-agent-favicon-domains'
 import {
   filterEnabledTuiAgents,
-  isTuiAgentEnabled,
-  pickTuiAgent
+  isTuiAgentEnabled
 } from '../../../src/shared/agent-launch/catalog/tui-agent-selection'
 
 // Reuse the shared registry; Metro cannot load renderer ?url icons, so the phone draws favicons.
@@ -35,14 +34,6 @@ function asDisabledList(disabled: unknown): Iterable<unknown> | null {
 
 export function isMobileTuiAgentEnabled(agent: TuiAgent, disabled?: unknown): boolean {
   return isTuiAgentEnabled(agent, asDisabledList(disabled))
-}
-
-export function pickMobileTuiAgent(
-  preferred: TuiAgent | 'blank' | null | undefined,
-  detected: Iterable<TuiAgent>,
-  disabled?: unknown
-): TuiAgent | null {
-  return pickTuiAgent(preferred, detected, asDisabledList(disabled))
 }
 
 export function filterEnabledMobileTuiAgents<T extends TuiAgent>(

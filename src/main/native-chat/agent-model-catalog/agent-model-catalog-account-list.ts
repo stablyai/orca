@@ -1,6 +1,6 @@
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
-import { isNativeLocalLocation } from '../../../shared/execution-host'
-import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { isNativeLocalLocation } from '../../../shared/execution-host/execution-host'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import {
   agentModelCatalogListingKey,
   agentModelCatalogResultFromEntry
@@ -73,7 +73,10 @@ export function readAccountList(
     ? {
         ...agentModelCatalogResultFromEntry(entry, false, false, false),
         modelsDifferByWorkspace: true,
-        ...(result.listingInProgress ? { listingInProgress: true as const } : {})
+        ...(result.listingInProgress ? { listingInProgress: true as const } : {}),
+        ...(result.unavailable?.reason === 'agentCommandNotRunnable'
+          ? { unavailable: result.unavailable }
+          : {})
       }
     : result
 }

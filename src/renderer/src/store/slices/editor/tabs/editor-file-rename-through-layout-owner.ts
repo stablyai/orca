@@ -19,6 +19,7 @@ import { isEditorTabContentType } from './editor-tab-content-type'
 import { restorableEditorFile } from './editor-tab-layout-owner'
 import { layoutEditorViewOfOpenFile } from './open-file-layout-view'
 import { rekeyEditorBytesDocuments } from '@/components/editor/save/bytes/editor-bytes-document-boxes'
+import { handOffRenamedEditorModels } from '@/components/editor/model-lifetime/identity/editor-model-rename-handoff'
 
 /** Main's renames: an edit-mode file's record moves from its old path; a view takes the new one. */
 function renamesOf(
@@ -90,6 +91,7 @@ export function renameEditorFilesThroughLayoutOwner(
     }
     // Why here: this runs as the rename lands, so the old tab's close never frees its bytes.
     rekeyEditorBytesDocuments(own)
+    handOffRenamedEditorModels(s, own)
     return next.patch
   }
   // Each file's own workspace: the same path can be open in more than one.

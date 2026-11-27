@@ -1,6 +1,8 @@
-import { parseExecutionHostId } from '../../../../src/shared/execution-host'
-import type { HostStackRouteTarget } from '../../navigation/host-stack-navigation'
+import { parseExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
+import { HOST_GROUP_ROUTE, type HostStackRouteTarget } from '../../navigation/host-stack-navigation'
+import { botGroupIdOfRoomPaneKey } from '../../../../src/shared/bots/bot-notification-pane-keys'
 import { mobileSessionRouteTarget } from '../../session/mobile-session-route'
+import { mobileSessionAccessTarget } from '../../session/mobile-session-item-target'
 import type { HostCredentialStatus } from '../../host-catalog/host-profile'
 
 export type NotificationNavigationOptions = {
@@ -46,19 +48,26 @@ export function getNotificationNavigationTarget(
   }
 
   const worktreeId = readNonEmptyString(record.worktreeId)
+  const paneKey = readNonEmptyString(record.paneKey)
+  const groupId = botGroupIdOfRoomPaneKey(paneKey)
   // Accept only relayed servers; unknown execution hosts retain the paired desktop route.
   const executionHost = parseExecutionHostId(readNonEmptyString(record.executionHost))
+  const accessRequestId = readNonEmptyString(record.accessRequestId)
   const credentialStatus = options.credentialStatusByHostId?.get(hostId)
   return {
     hostId,
-    sessionTarget: worktreeId
-      ? mobileSessionRouteTarget({
-          hostId,
-          worktreeId,
-          paneKey: readNonEmptyString(record.paneKey) ?? undefined,
-          ...(executionHost?.kind === 'runtime' ? { executionHost: executionHost.id } : {})
-        })
-      : null,
+    sessionTarget: groupId
+      ? { name: HOST_GROUP_ROUTE, params: { hostId, groupId } }
+      : worktreeId
+        ? mobileSessionRouteTarget({
+            hostId,
+            worktreeId,
+            paneKey: paneKey ?? undefined,
+            // An access request's push opens its decision in the bot's panel.
+            ...(accessRequestId ? { botItem: mobileSessionAccessTarget(accessRequestId) } : {}),
+            ...(executionHost?.kind === 'runtime' ? { executionHost: executionHost.id } : {})
+          })
+        : null,
     ...(credentialStatus === 'missing'
       ? { credentialRecovery: 're-pair' as const }
       : credentialStatus === 'temporarily-unavailable'

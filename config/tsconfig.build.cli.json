@@ -4,6 +4,9 @@
     "../src/**/*.test.ts",
     "../src/**/*.test.tsx",
     "../src/**/*.spec.ts",
-    "../src/**/*.spec.tsx"
+    "../src/**/*.spec.tsx",
+    // The bot evals' harnesses run under vitest only; they must not ship in the CLI.
+    "../src/cli/bot-automation-eval/**",
+    "../src/cli/bot-orchestration-eval/**"
   ]
 }

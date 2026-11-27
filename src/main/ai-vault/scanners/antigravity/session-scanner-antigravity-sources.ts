@@ -1,6 +1,6 @@
 import { completeAntigravityTranscriptPairs } from './antigravity-transcript-candidates'
 import { recordAntigravityArtifactPath } from './antigravity-session-artifacts'
-import { ANTIGRAVITY_HISTORY_ROOTS } from '../../../../shared/antigravity-session-origin'
+import { ANTIGRAVITY_HISTORY_ROOTS } from '../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -52,6 +52,7 @@ export function antigravityDiscoveries(
       onDirectoryEntries: (dirPath, entries) =>
         recordAntigravityArtifactPath(antigravityArtifactPaths, rootDir, dirPath, entries),
       keepScopeFiles: scopeWalksAgentFiles('antigravity', options.scopePaths),
+      statCache: options.statCache,
       signal: options.signal
     })
       .then((discovery) => completeAntigravityTranscriptPairs(discovery, issues))

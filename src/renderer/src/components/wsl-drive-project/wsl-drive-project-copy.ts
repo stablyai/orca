@@ -1,7 +1,7 @@
 /** Plain-language copy for converting a WSL project on a Windows drive to Windows Git. */
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { WslDriveProjectBlocker } from '../../../../shared/wsl-drive-project-types'
+import type { WslDriveProjectBlocker } from '../../../../shared/wsl-move/wsl-drive-project-types'
 
 export function wslDriveProjectBlockerMessage(
   blocker: WslDriveProjectBlocker,

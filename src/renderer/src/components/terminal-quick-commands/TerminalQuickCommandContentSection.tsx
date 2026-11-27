@@ -19,7 +19,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
+import type { NewTabAgentMenuModel } from '../agent/launch-menu/new-tab-agent-menu-model'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { cn } from '@/lib/class-names'
 import { getIntlLocale, translate } from '@/i18n/i18n'

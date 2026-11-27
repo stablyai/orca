@@ -1,9 +1,10 @@
-import { dirname, basename, join, posix, win32 } from 'node:path'
+import { posix, win32 } from 'node:path'
+import { claudeSubagentTranscriptPath } from './claude-subagent-transcript-path'
 import { AgentTranscriptPollScheduler } from '../../../transcripts/agent-transcript-poll-scheduler'
 import {
   claudeRosterHasRuntimeWorkingSubagent,
   stopClaudeSubagent
-} from '../../../../claude-subagent-roster'
+} from '../lifecycle/claude-subagent-roster'
 import { stopOwingClaudeAgentTaskNotification } from '../background-tasks/claude-owed-task-notifications'
 import type { HookListenerState } from '../../../listener-state'
 import type { AgentHookEventPayload } from '../../../listener-event'
@@ -196,25 +197,13 @@ export class ClaudeHelperKillPoller {
     }
     const ended: string[] = []
     for (const [id, tracked] of roster) {
-      if (
-        tracked.state !== 'working' ||
-        tracked.restoredFromSnapshot ||
-        !/^[\w-]{1,64}$/.test(id)
-      ) {
+      const childPath = claudeSubagentTranscriptPath(entry.parent.path, id)
+      if (tracked.state !== 'working' || tracked.restoredFromSnapshot || !childPath) {
         continue
       }
       let child = entry.children.get(id)
       if (!child) {
-        child = {
-          cursor: createClaudeTranscriptCursor(
-            join(
-              dirname(entry.parent.path),
-              basename(entry.parent.path, '.jsonl'),
-              'subagents',
-              `agent-${id}.jsonl`
-            )
-          )
-        }
+        child = { cursor: createClaudeTranscriptCursor(childPath) }
         entry.children.set(id, child)
       }
       const result = await this.readChunk(child.cursor, undefined, {

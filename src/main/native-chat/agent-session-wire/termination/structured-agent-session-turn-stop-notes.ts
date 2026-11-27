@@ -2,13 +2,12 @@
 
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { structuredAgentSessionStopNoteIdentity } from '../operations/structured-agent-session-command-turn'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 
-export const STOP_NOTE_CANCELLATION_REQUESTED = 'Cancellation requested.'
+export { STOP_NOTE_CANCELLATION_REQUESTED } from '../../../../shared/agent-session/view/structured-agent-session-stop-note-identity'
 
 export function structuredAgentSessionStoppedTurnId(
   work: Pick<StructuredAgentSessionCurrentWork, 'activeTurnId'>,
@@ -25,45 +24,27 @@ export function structuredAgentSessionStopNamesTurnNotLive(
 }
 
 /** A known non-live turn is ended, including one removed by rewind; unknown turns may still open. */
-export function structuredAgentSessionStopNamesEndedTurn(
-  journal: Pick<AgentSessionJournal, 'itemsRead' | 'stops'>,
+export async function structuredAgentSessionStopNamesEndedTurn(
+  journal: Pick<AgentSessionJournal, 'reads'>,
   work: Pick<StructuredAgentSessionCurrentWork, 'activeTurnId' | 'working'>,
   namedTurnId: string | undefined
-): boolean {
+): Promise<boolean> {
   const live = work.activeTurnId()
   if (namedTurnId === undefined || namedTurnId === live) {
     return false
   }
-  return (
-    live !== null ||
-    !work.working() ||
-    journal.stops.turnWasRemoved(namedTurnId) ||
-    structuredAgentSessionNamedTurnScope(journal, namedTurnId) !== null
-  )
+  if (live !== null || !work.working()) {
+    return true
+  }
+  const turn = await journal.reads.namedTurn(namedTurnId)
+  return turn.removed || turn.scope !== null
 }
 
-export function structuredAgentSessionNamedTurnScope(
-  journal: Pick<AgentSessionJournal, 'itemsRead'>,
+export async function structuredAgentSessionNamedTurnScope(
+  journal: Pick<AgentSessionJournal, 'reads'>,
   turnId: string
-): Extract<AgentJournalTurnScope, { kind: 'turn' }> | null {
-  const turn = journal
-    .itemsRead()
-    .items.findLast((item) => readAgentJournalTurn(item.body)?.turnId === turnId)
-  return turn ? { kind: 'turn', turnItemId: turn.itemId } : null
-}
-
-/** The turn the provider says the interrupt took, even one that opened while the cancel waited for
- *  it: the note is that turn's, never a conversation row read before the wait. */
-export function structuredAgentSessionStopNoteScope(
-  journal: Pick<AgentSessionJournal, 'itemsRead'>,
-  stoppedTurn: string | undefined,
-  fallback: AgentJournalTurnScope
-): AgentJournalTurnScope {
-  return (
-    (stoppedTurn !== undefined
-      ? structuredAgentSessionNamedTurnScope(journal, stoppedTurn)
-      : null) ?? fallback
-  )
+): Promise<Extract<AgentJournalTurnScope, { kind: 'turn' }> | null> {
+  return (await journal.reads.namedTurn(turnId)).scope
 }
 
 export function writeStructuredAgentSessionStopNote(
@@ -83,11 +64,8 @@ export function writeStructuredAgentSessionStopNote(
   return ctx.journal
     .appendItem(input.identity, input.body, {
       fence: ctx.fence,
-      turnScope: structuredAgentSessionStopNoteScope(
-        ctx.journal,
-        input.stoppedTurn,
-        input.fallbackScope
-      )
+      stoppedTurnId: input.stoppedTurn,
+      turnScope: input.fallbackScope
     })
     .then(() => undefined)
     .catch((error: unknown) =>

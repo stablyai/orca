@@ -1,4 +1,4 @@
-import { splitFilePathLineSuffix } from '../../../components/markdown-file-path-detection'
+import { splitFilePathLineSuffix } from '../../../components/markdown/links/markdown-file-path-detection'
 import {
   openMobileFileTap,
   type FileTapSessionTab,
@@ -7,10 +7,11 @@ import {
 
 export type OpenMobileNativeChatFileTapOptions<T extends FileTapSessionTab> = Omit<
   OpenMobileFileTapOptions<T>,
-  'terminalHandle' | 'cwd' | 'candidates'
+  'terminalHandle' | 'candidates'
 > & { pathText: string }
 
-// Resolve chat citations from worktree root without terminal cwd/handle; a live terminal subdirectory would misplace them. Preserve path:line:column locations.
+// Resolve chat citations from the chat's own folder (`cwd`, the workspace root when unset), never a
+// live terminal's cwd, which would misplace them. Preserve path:line:column locations.
 export function openMobileNativeChatFileTap<T extends FileTapSessionTab>(
   options: OpenMobileNativeChatFileTapOptions<T>
 ): void {

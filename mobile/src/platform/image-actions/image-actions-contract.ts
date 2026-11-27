@@ -1,4 +1,4 @@
-import type { BridgeImageOperation } from '../../mobile-web-shell/bridge/bridge-image-verbs'
+import type { BridgeImageOperation } from '../../mobile-web-shell/bridge/native-capabilities/bridge-image-verbs'
 
 export type ImageAction = (operation: BridgeImageOperation) => Promise<void>
 

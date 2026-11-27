@@ -1,8 +1,11 @@
-import type { RuntimeTerminalShow } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalShow } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { OrcaRuntimeWithRepositoryCommands } from '../../construction/runtime-repository-command-state'
 import { RuntimeLinearCommands } from './runtime-linear-connection-commands'
-import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
+import {
+  readWorktreeMetaForHost,
+  worktreeRowTarget
+} from '../../../persistence/host-qualified-worktree-meta'
 
 export abstract class OrcaRuntimeWithLinearCommands extends OrcaRuntimeWithRepositoryCommands {
   abstract showTerminal(handle: string): Promise<RuntimeTerminalShow>
@@ -16,7 +19,17 @@ export abstract class OrcaRuntimeWithLinearCommands extends OrcaRuntimeWithRepos
     listResolvedWorktrees: () => this.listResolvedWorktrees(),
     setWorktreeMeta: (worktree, meta) => {
       const target = worktreeRowTarget(this.store!, worktree)
-      if (target) {
+      const current = target && readWorktreeMetaForHost(this.store!, target.id, target.hostId)
+      // A relink (issue, workspace or organization) that landed during the async lookup wins.
+      if (
+        target &&
+        current &&
+        current.linkedLinearIssue === worktree.linkedLinearIssue &&
+        (current.linkedLinearIssueWorkspaceId ?? null) ===
+          (worktree.linkedLinearIssueWorkspaceId ?? null) &&
+        (current.linkedLinearIssueOrganizationUrlKey ?? null) ===
+          (worktree.linkedLinearIssueOrganizationUrlKey ?? null)
+      ) {
         this.store!.setWorktreeMeta(target, meta)
       }
     },

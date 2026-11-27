@@ -1,4 +1,4 @@
-import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 
 /** Local setup facts; remote protocol and saved host records do not carry them. */
 type SetupFact =

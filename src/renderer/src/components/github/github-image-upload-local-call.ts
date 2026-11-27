@@ -1,5 +1,5 @@
-import { abortSignalReason } from '../../../../shared/abort-signal-reason'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import { abortSignalReason } from '../../../../shared/concurrency/abort-signal-reason'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 
 export async function callAbortableGitHubImageUpload<T>(

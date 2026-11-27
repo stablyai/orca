@@ -1,13 +1,13 @@
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
+import type { StatusBarItem } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
-import { getAntigravityStatusBarToggleSearchEntry } from './appearance-status-bar-antigravity-toggle-search'
 import { getMiniMaxStatusBarToggleSearchEntry } from './appearance-status-bar-minimax-toggle-search'
 import { getGrokStatusBarToggleSearchEntry } from './appearance-status-bar-grok-toggle-search'
 import { getCursorStatusBarToggleSearchEntry } from './appearance-status-bar-cursor-toggle-search'
 import { getZcodeStatusBarToggleSearchEntry } from './appearance-status-bar-zcode-toggle-search'
 import { getMuseStatusBarToggleSearchEntry } from './appearance-status-bar-muse-toggle-search'
+import { getGitBlameStatusBarToggleSearchEntry } from './appearance-status-bar-git-blame-toggle-search'
 
 export const getStatusBarToggles = createLocalizedCatalog(
   (): readonly {
@@ -75,36 +75,6 @@ export const getStatusBarToggles = createLocalizedCatalog(
         'Show Codex token and cost usage for the active workspace.'
       )
     },
-    {
-      id: 'gemini',
-      title: translate('auto.components.settings.appearance.search.585be839e9', 'Gemini usage'),
-      description: translate(
-        'auto.components.settings.appearance.search.9660c5b2f1',
-        'Show Gemini token and cost usage in the status bar.'
-      ),
-      keywords: [
-        ...translateSearchKeyword(
-          'auto.components.settings.appearance.search.896eb53fd4',
-          'status bar'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.appearance.search.2804a920ad',
-          'gemini'
-        ),
-        ...translateSearchKeyword('auto.components.settings.appearance.search.00a028f25f', 'usage'),
-        ...translateSearchKeyword(
-          'auto.components.settings.appearance.search.afbb6a3767',
-          'tokens'
-        ),
-        ...translateSearchKeyword('auto.components.settings.appearance.search.edbf0f63a0', 'cost'),
-        ...translateSearchKeyword('auto.components.settings.appearance.search.51b0ccd6a2', 'google')
-      ],
-      toggleDescription: translate(
-        'settings.appearance.statusBar.geminiToggleDescription',
-        'Show Gemini token and cost usage for the active workspace.'
-      )
-    },
-    getAntigravityStatusBarToggleSearchEntry(),
     {
       id: 'opencode-go',
       title: translate(
@@ -268,6 +238,7 @@ export const getStatusBarToggles = createLocalizedCatalog(
         'settings.appearance.statusBar.portsToggleDescription',
         'Show live workspace ports. Click it for workspace-scoped ports and external listeners.'
       )
-    }
+    },
+    getGitBlameStatusBarToggleSearchEntry()
   ]
 )

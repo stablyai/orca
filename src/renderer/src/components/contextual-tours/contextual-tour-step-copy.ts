@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
-import type { ContextualTourStepId } from '../../../../shared/contextual-tours'
+import type { ContextualTourStepId } from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 
 export type LocalizedContextualTourStepCopy = {
   title: string
@@ -117,7 +117,7 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
   'browser-extensions-intro': () => ({
     title: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.browser.extensions.intro.title',
-      'Chrome extensions'
+      'Bring your Chrome extensions'
     ),
     body: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.browser.extensions.intro.body',

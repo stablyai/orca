@@ -1,9 +1,9 @@
 import type { ConfirmedUnsavedDiscards } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { PreservedBranchCleanup } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
-import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
+import { normalizeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 
 export type WorktreeBatchDeleteOptions = {
   forceConfirm?: boolean
@@ -15,7 +15,6 @@ export type WorktreeBatchDeleteOptions = {
 export type WorktreeDeleteIdentity = Pick<Worktree, 'id' | 'instanceId' | 'hostId'>
 
 export type WorktreeDeleteOptions = {
-  forceConfirm?: boolean
   expectedInstanceId?: string
   /** Pin deletion to the confirmed host because workspace IDs repeat across hosts. */
   expectedHostId?: ExecutionHostId

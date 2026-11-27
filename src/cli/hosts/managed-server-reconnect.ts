@@ -1,9 +1,9 @@
 // Updates can close this connection mid-call; report the outcome from status after the runtime returns.
-import type { OrcadManagedRuntimeStatus } from '../../shared/orcad-managed-runtime'
+import type { OrcadManagedRuntimeStatus } from '../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { HandlerContext } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
-import { RuntimeClientError } from '../runtime/types'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import { RuntimeClientError } from '../runtime/connection/types'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 const STATUS_ATTEMPTS = 15
 const STATUS_RETRY_MS = 2_000

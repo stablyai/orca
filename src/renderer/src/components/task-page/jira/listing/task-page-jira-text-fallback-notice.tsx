@@ -3,13 +3,13 @@ import { ChevronDown, ChevronRight, Info } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import type { TaskPageJiraJqlRejection } from './task-page-jira-search'
+import type { JiraJqlRejection } from '../../../../../../shared/jira/jira-issue-input-search'
 
 /** `rejection` is null when no fallback happened. */
 export function TaskPageJiraTextFallbackNotice({
   rejection
 }: {
-  rejection: TaskPageJiraJqlRejection | null
+  rejection: JiraJqlRejection | null
 }): React.JSX.Element {
   // Why: screen readers announce changes inside an existing live region, not a freshly mounted one.
   return (
@@ -19,7 +19,7 @@ export function TaskPageJiraTextFallbackNotice({
   )
 }
 
-function FallbackNoticeBody({ reason, likelyTypo }: TaskPageJiraJqlRejection): React.JSX.Element {
+function FallbackNoticeBody({ reason, likelyTypo }: JiraJqlRejection): React.JSX.Element {
   const t = useTranslate()
   // Why: for plain-text searches Jira's JQL reason is noise; for a JQL typo it is the answer.
   const [open, setOpen] = useState(likelyTypo)

@@ -4,7 +4,7 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
-import { agentPinsAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { agentPinsAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 
 export function adapterSupportsCreate(
   adapter: StructuredAgentSessionAdapter,

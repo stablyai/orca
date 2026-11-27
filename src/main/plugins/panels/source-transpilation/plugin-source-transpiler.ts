@@ -1,5 +1,5 @@
 import { parse } from 'es-module-lexer/js'
-import { transformPluginSourceWithMappings } from '../../plugin-source-sucrase-transform'
+import { transformPluginSourceWithMappings } from '../../source-loading/plugin-source-sucrase-transform'
 import type { PluginSourceTranspiled } from './plugin-source-transpile-protocol'
 
 /** Types and JSX removed with lines kept (sucrase), plus the module's static import specifiers. */

@@ -1,12 +1,13 @@
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../../shared/managed-account-types'
-import type { RateLimitState } from '../../../../../shared/rate-limit-types'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+} from '../../../../../shared/agent-accounts/managed-account-types'
+import type { RateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { translate } from '@/i18n/i18n'
 
 // Mirrors OrcaRuntime.getAccountsSnapshot() / the accounts.subscribe payload.
 export type ProviderAccountsSnapshot = {
@@ -17,12 +18,6 @@ export type ProviderAccountsSnapshot = {
   failedProviders?: ('claude' | 'codex')[]
 }
 
-type ProviderAccountSelection = {
-  accountId: string | null
-  runtime: 'host' | 'wsl'
-  wslDistro?: string | null
-}
-
 type ProviderAccountsSubscriptionMessage = {
   type: 'ready' | 'snapshot' | 'end'
   snapshot?: ProviderAccountsSnapshot
@@ -30,7 +25,7 @@ type ProviderAccountsSubscriptionMessage = {
 
 const REMOTE_ACCOUNTS_FIRST_SNAPSHOT_TIMEOUT_MS = 15_000
 // Selection applies before slow usage refreshes; allow time so broken auth does not report an already-applied switch as failed.
-const REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS = 30_000
+export const REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS = 30_000
 const pendingProviderAccountsSnapshots = new Map<string, Promise<ProviderAccountsSnapshot>>()
 
 export function getProviderAccountsOwnerKey(target: RuntimeClientTarget): string {
@@ -221,36 +216,6 @@ export function fetchProviderAccountsSnapshot(
   return request
 }
 
-export async function selectClaudeProviderAccount(
-  target: RuntimeClientTarget,
-  selection: ProviderAccountSelection
-): Promise<ClaudeRateLimitAccountsState> {
-  if (target.kind === 'environment') {
-    return callRuntimeRpc<ClaudeRateLimitAccountsState>(
-      target,
-      'accounts.selectClaude',
-      { accountId: selection.accountId },
-      { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
-    )
-  }
-  return window.api.claudeAccounts.select(selection)
-}
-
-export async function selectCodexProviderAccount(
-  target: RuntimeClientTarget,
-  selection: ProviderAccountSelection
-): Promise<CodexRateLimitAccountsState> {
-  if (target.kind === 'environment') {
-    return callRuntimeRpc<CodexRateLimitAccountsState>(
-      target,
-      'accounts.selectCodex',
-      { accountId: selection.accountId },
-      { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
-    )
-  }
-  return window.api.codexAccounts.select(selection)
-}
-
 export async function removeClaudeProviderAccount(
   target: RuntimeClientTarget,
   accountId: string
@@ -279,4 +244,54 @@ export async function removeCodexProviderAccount(
     )
   }
   return window.api.codexAccounts.remove({ accountId })
+}
+
+type ProviderAccountRename = { accountId: string; displayName: string | null }
+
+async function renameOnHost<T>(
+  target: Extract<RuntimeClientTarget, { kind: 'environment' }>,
+  method: 'accounts.renameClaude' | 'accounts.renameCodex',
+  rename: ProviderAccountRename,
+  hostLabel: string
+): Promise<T> {
+  try {
+    return await callRuntimeRpc<T>(target, method, rename, {
+      timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS
+    })
+  } catch (error) {
+    throw renameUnsupportedOnOldHost(error, hostLabel)
+  }
+}
+
+/** Hosts older than account names lack the rename methods; say what to do instead of the raw RPC error. */
+export function renameUnsupportedOnOldHost(error: unknown, hostLabel: string): unknown {
+  return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
+    ? new Error(
+        translate(
+          'accounts.rename.unsupportedHost',
+          'Update Orca on {{host}} to change this setting there.',
+          { host: hostLabel }
+        )
+      )
+    : error
+}
+
+export function renameClaudeProviderAccount(
+  target: RuntimeClientTarget,
+  rename: ProviderAccountRename,
+  hostLabel: string
+): Promise<ClaudeRateLimitAccountsState> {
+  return target.kind === 'environment'
+    ? renameOnHost(target, 'accounts.renameClaude', rename, hostLabel)
+    : window.api.claudeAccounts.rename(rename)
+}
+
+export function renameCodexProviderAccount(
+  target: RuntimeClientTarget,
+  rename: ProviderAccountRename,
+  hostLabel: string
+): Promise<CodexRateLimitAccountsState> {
+  return target.kind === 'environment'
+    ? renameOnHost(target, 'accounts.renameCodex', rename, hostLabel)
+    : window.api.codexAccounts.rename(rename)
 }

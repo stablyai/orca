@@ -4,7 +4,7 @@ import process from 'node:process'
 import {
   formatServeRuntimeSelection,
   ORCAD_LOCAL_SERVE_SELECTION_FLAGS as FLAGS
-} from '../../shared/orcad-local-serve-selection'
+} from '../../shared/remote-runtime/serve-supervisor/orcad-local-serve-selection'
 import { selectServeRuntime } from './serve-startup/orcad-local-serve-selection'
 import { pruneDesktopOrcadArtifactCache } from './artifact-slots/orcad-artifact-cache-retention'
 import { findAppImageNodeRuntime } from '../node-runtime/appimage-bundled-node-runtime'

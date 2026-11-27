@@ -1,8 +1,12 @@
 import { posix, win32 } from 'node:path'
-import { parseWslUncPath, toWindowsWslDrivePath, toWindowsWslPath } from '../../wsl-paths'
+import {
+  parseWslUncPath,
+  toWindowsWslDrivePath,
+  toWindowsWslPath
+} from '../../file-access/wsl-paths'
 
 // Only /x is guest-rooted; //x is already host UNC syntax. Match resolveWslRepoWorktreeBasePath to avoid double shares.
-const GUEST_ROOTED_PATH = /^\/(?!\/)/
+export const GUEST_ROOTED_PATH = /^\/(?!\/)/
 
 export type GitMetadataPathOptions = {
   /** Host that reads the pointer back. Defaults to the current process platform. */

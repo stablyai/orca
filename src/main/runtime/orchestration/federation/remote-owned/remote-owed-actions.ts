@@ -1,6 +1,9 @@
 import { z } from 'zod'
-import { mapWithConcurrency } from '../../../../../shared/map-with-concurrency'
-import { HelperStopOutcome } from '../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
+import { mapWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
+import {
+  HelperStopOutcome,
+  isHelperStopDone
+} from '../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { PeerRunCancelResult } from '../../../../../shared/orchestration/remote-owned-wire'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../../db/orchestration-db'
@@ -45,16 +48,16 @@ export function serverAnswered(error: unknown): boolean {
 }
 
 /** The server answers for that link's work only under the pairing it was made with; a re-pair ends it. */
-function closeOnPairingChange(
+async function closeOnPairingChange(
   runtime: RemoteOwnedRuntime,
   link: RemoteRunLinkRow,
   error: unknown
-): boolean {
+): Promise<boolean> {
   if (
     error instanceof OrchestrationError &&
     (error.code === 'server_pairing_changed' || error.code === 'runtime_environment_changed')
   ) {
-    const now = runtime.resolveOrchestrationWorkerServer(link.environment_id)
+    const now = await runtime.resolveOrchestrationWorkerServer(link.environment_id)
     if (!remoteRunLinkPinMatches(link, remoteServerPin(now))) {
       closeRemoteRunLink(
         runtime.getOrchestrationDb(),
@@ -82,9 +85,7 @@ export function isRemoteStopProof(receipt: unknown): boolean {
     parsed.success &&
     (parsed.data.state === 'stopped' || parsed.data.alreadySettled) &&
     parsed.data.helperStopError === undefined &&
-    (parsed.data.helpers ?? []).every((helper) =>
-      ['stopped', 'already_finished', 'kept_open'].includes(helper.outcome)
-    )
+    (parsed.data.helpers ?? []).every(isHelperStopDone)
   )
 }
 
@@ -121,7 +122,7 @@ export async function sendOwedRemoteStop(
     }
     return receipt
   } catch (error) {
-    if (!closeOnPairingChange(runtime, link, error)) {
+    if (!(await closeOnPairingChange(runtime, link, error))) {
       deferRemoteDispatchStop(runtime.getOrchestrationDb(), record, {
         answered: serverAnswered(error),
         error: error instanceof Error ? error.message : String(error),
@@ -184,7 +185,7 @@ export async function sendOwedRemoteRunCancel(
         answer.remaining === 0 ? null : `${answer.remaining} workers there are not proven stopped.`
     })
   } catch (error) {
-    if (closeOnPairingChange(runtime, link, error)) {
+    if (await closeOnPairingChange(runtime, link, error)) {
       return
     }
     settle({

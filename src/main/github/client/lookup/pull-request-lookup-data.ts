@@ -92,6 +92,7 @@ export const PR_BRANCH_LIST_JSON_FIELDS =
   'number,title,state,url,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
+  resetQuietBackoff?: boolean
   userRefresh?: boolean
   /** CI watches need provider status, without local conflict or stack enrichment. */
   includeDerivedData?: boolean
@@ -102,6 +103,8 @@ export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   checkPageLimit?: number
   /** A CI-line watch's own PR repository: lookups read only it, never another remote by number. */
   exactRepository?: GitHubOwnerRepo
+  /** Saved URL of the linked PR; its repository is read even when no git remote names it. */
+  linkedPRUrl?: string
 }
 
 export function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {

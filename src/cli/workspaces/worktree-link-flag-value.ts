@@ -1,4 +1,4 @@
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 export function getOptionalWorktreeLinkFlagValue(
   flags: Map<string, string | boolean>,

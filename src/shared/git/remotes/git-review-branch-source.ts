@@ -9,6 +9,8 @@ export type GitReviewBranchSource = {
   remoteName: string
   urls: string[]
   branchName: string
+  /** A constrained publish destination; null leaves discovery usable without claiming a push head. */
+  pushBranchName?: string | null
   trackedBranchName?: string
   trackedUrls?: string[]
 }
@@ -57,11 +59,12 @@ function mappedPushBranch(spec: string, branch: string): string | null {
   return target.replace(/^refs\/heads\//, '')
 }
 
-/** One repository snapshot supplies all branches, rather than probing configuration per lookup. */
-export async function readGitReviewBranchSources(
-  runGit: GitExec,
-  branchNames: Iterable<string>
-): Promise<Map<string, GitReviewBranchSource | Error>> {
+export type GitReviewBranchSourceResolver = (branch: string) => GitReviewBranchSource | Error
+
+/** One repository snapshot resolves any queried branch lazily, avoiding per-branch allocation for the whole repo. */
+export async function createGitReviewBranchSourceResolver(
+  runGit: GitExec
+): Promise<GitReviewBranchSourceResolver> {
   const config = await readGitConfigSnapshot(runGit)
   const { stdout } = await runGit(['remote', '-v'])
   const remotes = new Map<string, { fetch: string[]; push: string[] }>()
@@ -83,7 +86,8 @@ export async function readGitReviewBranchSources(
       }
     }
   }
-  const normalizeRemote = (remote: string): string => remoteIdentities.get(remote) ?? remote
+  const normalizeRemote = (remote: string): string =>
+    remote === '.' ? remote : (remoteIdentities.get(remote) ?? remote)
   const expandedUrls = new Map<string, string[]>()
   const urlsFor = (remote: string): string[] => {
     const cached = expandedUrls.get(remote)
@@ -103,8 +107,13 @@ export async function readGitReviewBranchSources(
     expandedUrls.set(remote, result)
     return result
   }
-  const sources = new Map<string, GitReviewBranchSource | Error>()
-  for (const branch of branchNames) {
+  const resolved = new Map<string, GitReviewBranchSource | Error>()
+  return (branch: string): GitReviewBranchSource | Error => {
+    const cached = resolved.get(branch)
+    if (cached) {
+      return cached
+    }
+    let result: GitReviewBranchSource | Error
     try {
       const trackedRemoteValue = get(`branch.${branch}.remote`)
       const trackedRemote = trackedRemoteValue ? normalizeRemote(trackedRemoteValue) : undefined
@@ -126,6 +135,27 @@ export async function readGitReviewBranchSources(
         throw new Error('Review push destination is ambiguous')
       }
       const branchName = destinations.values().next().value ?? branch
+      let pushBranchName: string | null =
+        localTracking ||
+        (destinations.size === 0 && (specs.length > 0 || get('push.default') === 'nothing'))
+          ? null
+          : branchName
+      const fetchRemote =
+        trackedRemote ??
+        (remotes.has('origin')
+          ? 'origin'
+          : remotes.size === 1
+            ? remotes.keys().next().value
+            : undefined)
+      if (
+        specs.length === 0 &&
+        (!trackedRemote || !get(`branch.${branch}.merge`)) &&
+        (((get('push.default') ?? 'simple') === 'simple' && remote === fetchRemote) ||
+          get('push.default') === 'upstream') &&
+        !/^(true|yes|on|1)$/i.test(get('push.autosetupremote') ?? '')
+      ) {
+        pushBranchName = null
+      }
       if (destinations.size === 0) {
         if (!localTracking && remote === trackedRemote) {
           const merge = get(`branch.${branch}.merge`)
@@ -139,10 +169,17 @@ export async function readGitReviewBranchSources(
           ) {
             trackedBranchName = tracked
           }
-          if (get('push.default') === 'upstream' && !merge) {
-            throw new Error('Review upstream is unavailable')
+          if ((get('push.default') ?? 'simple') === 'simple' && tracked && tracked !== branch) {
+            pushBranchName = null
+          }
+          if (specs.length === 0 && get('push.default') === 'upstream') {
+            if (!merge) {
+              throw new Error('Review upstream is unavailable')
+            }
+            pushBranchName = tracked ?? null
           }
         } else if (
+          specs.length === 0 &&
           get('push.default') === 'upstream' &&
           explicitRemote &&
           remote !== trackedRemote
@@ -150,17 +187,32 @@ export async function readGitReviewBranchSources(
           throw new Error('Review upstream belongs to another remote')
         }
       }
-      sources.set(branch, {
+      result = {
         remoteName: remote,
         urls: urlsFor(remote),
         branchName,
+        ...(pushBranchName !== branchName ? { pushBranchName } : {}),
         ...(trackedBranchName
           ? { trackedBranchName, trackedUrls: remotes.get(remote)?.fetch ?? [remote] }
           : {})
-      })
+      }
     } catch {
-      sources.set(branch, new Error('Cannot establish a unique hosted review source'))
+      result = new Error('Cannot establish a unique hosted review source')
     }
+    resolved.set(branch, result)
+    return result
+  }
+}
+
+/** One repository snapshot supplies all branches, rather than probing configuration per lookup. */
+export async function readGitReviewBranchSources(
+  runGit: GitExec,
+  branchNames: Iterable<string>
+): Promise<Map<string, GitReviewBranchSource | Error>> {
+  const resolve = await createGitReviewBranchSourceResolver(runGit)
+  const sources = new Map<string, GitReviewBranchSource | Error>()
+  for (const branch of branchNames) {
+    sources.set(branch, resolve(branch))
   }
   return sources
 }

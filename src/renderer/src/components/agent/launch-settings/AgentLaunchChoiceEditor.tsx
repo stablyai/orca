@@ -12,7 +12,7 @@ import { useAgentLaunchFieldWrite } from './use-agent-launch-field-write'
 import { reconcileAgentChoiceArgs } from '../../../../../shared/agent-launch/choices/agent-choice-reconciliation'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { useTranslate } from '@/i18n/use-translate'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { AgentChoiceFields } from './AgentChoiceControls'
 import { useAgentSettingsModelCatalog } from './use-agent-settings-model-catalog'
 

@@ -1,4 +1,4 @@
-import { compareDisplayName } from '@/lib/workspace/display/worktree-display-name-order'
+import { compareDisplayName } from '../../../../../shared/worktree/display-name-order'
 import {
   isWorkspaceCleanupHeadLanded,
   type WorkspaceCleanupCandidate
@@ -50,7 +50,7 @@ export function hasWorkspaceCleanupLocalContext(candidate: WorkspaceCleanupCandi
     candidate.localContext.cleanEditorTabCount > 0 ||
     candidate.localContext.browserTabCount > 0 ||
     candidate.localContext.diffCommentCount > 0 ||
-    candidate.localContext.retainedDoneAgentCount > 0
+    (candidate.localContext.finishedAgentCount ?? 0) > 0
   )
 }
 

@@ -1,5 +1,5 @@
 import type { OrcadMigrationManifest } from '../../../../../shared/orcad-migration/orcad-migration-manifest'
-import type { PersistedState } from '../../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../../shared/orca-profiles/persisted-state-types'
 import { subtractOrcadSourceWorktreeMetadata } from '../worktrees/orcad-source-worktree-metadata'
 import { subtractOrcadMigrationSourceAutomationState } from '../automations/orcad-source-automation-subtraction'
 import { subtractOrcadMigrationSourceWorkspaceSession } from '../sessions/orcad-source-workspace-session-subtraction'

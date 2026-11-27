@@ -1,5 +1,5 @@
-import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { readableWslDistroHoldText } from '../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
+import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
 
 const FOLDER_UNAVAILABLE_PREFIX = 'folder_workspace_path_unavailable:'
 
@@ -13,10 +13,14 @@ export function readableWslDistroCliRefusal(message: string): string {
     return held
   }
   const start = message.indexOf(FOLDER_UNAVAILABLE_PREFIX)
-  const path = start === -1 ? '' : message.slice(start + FOLDER_UNAVAILABLE_PREFIX.length).trim()
+  const rest = start === -1 ? '' : message.slice(start + FOLDER_UNAVAILABLE_PREFIX.length)
+  // Callers may append lines after the refusal; the path ends at the first one.
+  const lineEnd = rest.indexOf('\n')
+  const path = (lineEnd === -1 ? rest : rest.slice(0, lineEnd)).trim()
   const distro = parseWslUncPath(path)?.distro
   if (!distro) {
     return message
   }
-  return `${message.slice(0, start)}Orca couldn't reach ${path}. The WSL distro ${distro} may be stopped, and Orca doesn't start a stopped distro for this. Start ${distro} (for example, open a terminal in it), then try again.`
+  const trailing = lineEnd === -1 ? '' : rest.slice(lineEnd)
+  return `${message.slice(0, start)}Orca couldn't reach ${path}. The WSL distro ${distro} may be stopped, and Orca doesn't start a stopped distro for this. Start ${distro} (for example, open a terminal in it), then try again.${trailing}`
 }

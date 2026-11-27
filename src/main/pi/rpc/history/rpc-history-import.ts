@@ -1,12 +1,13 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { legacyItemBody } from '../../../native-chat/agent-session-journal/history-import/journal-legacy-import'
+import { legacyItemBody } from '../../../native-chat/agent-session-journal/history-import/journal-replacement-items'
 import { decodePiSessionEntryLine } from '../../../native-chat/agent-session-journal/history-import/journal-pi-active-branch'
 import '../../../native-chat/agent-session-journal/writing/journal-row-builders'
 import { journalLifecycleItemMutation } from '../../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
-import type { StructuredAgentSessionTransitionJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
+import type { AgentSessionJournalReads } from '../../../native-chat/agent-session-journal/journal-reads'
 import {
   continuedOutsideNotice,
   continuedOutsideRecordId,
@@ -14,18 +15,22 @@ import {
   type HistoryCatchUpPlan
 } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 
-const piEntrySchema = z.looseObject({
-  id: z.string().min(1),
-  parentId: z.string().min(1).nullable(),
-  type: z.string()
-})
+const piEntrySchema = lazyZodSchema(() =>
+  z.looseObject({
+    id: z.string().min(1),
+    parentId: z.string().min(1).nullable(),
+    type: z.string()
+  })
+)
 export type PiSessionEntry = z.infer<typeof piEntrySchema>
 
 /** get_entries returns append order, including abandoned branches. */
-export const piEntriesAnswerSchema = z.object({
-  entries: z.array(piEntrySchema),
-  leafId: z.string().min(1).nullable()
-})
+export const piEntriesAnswerSchema = lazyZodSchema(() =>
+  z.object({
+    entries: z.array(piEntrySchema),
+    leafId: z.string().min(1).nullable()
+  })
+)
 export type PiEntriesAnswer = z.infer<typeof piEntriesAnswerSchema>
 
 /** Walk from the leaf to the claim; null requires a whole-tree read to place an earlier rewind. */
@@ -86,20 +91,32 @@ export function piHistoryEntryIdentity(
 }
 
 /** Stage all outside rows before writing; exclude journaled entries so prior imports cannot veto newer ones. */
-export function createPiHistoryImportPlan(input: {
+export async function createPiHistoryImportPlan(input: {
   sessionFile: string
-  journal: StructuredAgentSessionTransitionJournal
+  epoch: string
+  reads: Pick<AgentSessionJournalReads, 'historyItems'>
   path: readonly PiSessionEntry[]
   rewound: boolean
   divider: boolean
   check: () => void
-}): HistoryCatchUpPlan | null {
+}): Promise<HistoryCatchUpPlan | null> {
   const batch = createHistoryCatchUpBatch()
+  const saved = new Set(
+    (
+      await input.reads.historyItems(
+        input.path.map((entry) =>
+          agentJournalItemKey(piHistoryEntryIdentity(input.sessionFile, entry.id))
+        )
+      )
+    )
+      .filter((entry) => entry.item !== null)
+      .map((entry) => entry.key)
+  )
   const entryIds: string[] = []
   for (const entry of input.path) {
     input.check()
     const identity = piHistoryEntryIdentity(input.sessionFile, entry.id)
-    if (input.journal.item(input.journal.canonicalItemId(agentJournalItemKey(identity))) !== null) {
+    if (saved.has(agentJournalItemKey(identity))) {
       continue
     }
     const message = decodePiSessionEntryLine(JSON.stringify(entry), entry.id)
@@ -131,5 +148,5 @@ export function createPiHistoryImportPlan(input: {
   }
   return batch.size === 0
     ? null
-    : batch.finish('pi-history-import', [input.journal.epoch, input.sessionFile, entryIds])
+    : batch.finish('pi-history-import', [input.epoch, input.sessionFile, entryIds])
 }

@@ -19,11 +19,11 @@ import { composerInputStyles } from '../../components/composer-input/composer-in
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from '../changes/mobile-source-control-screen-state'
 import type { MobileSourceControlState } from '../use-mobile-source-control-state'
 import type { MobileSourceControlPrimaryAction } from '../workflows/mobile-source-control-primary-action'
-import { AgentLaunchNotice } from '../../components/AgentLaunchNotice'
-import { ConfirmModal } from '../../components/ConfirmModal'
+import { AgentLaunchNotice } from '../../agents/presentation/AgentLaunchNotice'
+import { ConfirmModal } from '../../components/sheets/ConfirmModal'
 import type { MobileMergeConfirm } from './use-mobile-source-control-next-step'
 import type { MobileAgentLaunchAvailability } from '../../session/agent-launch/mobile-agent-launch-availability'
-import type { PrAiTriageLaunchNotice } from '../review/use-mobile-pr-ai-triage'
+import type { PrAiTriageLaunchNotice } from '../review/agent-launch/use-mobile-pr-ai-triage'
 import type {
   MobileNextStepBarView,
   MobileNextStepIcon,
@@ -48,6 +48,7 @@ type ComposerState = Pick<
   | 'commitMessage'
   | 'setCommitMessage'
   | 'generatingMessage'
+  | 'commitMessageAiEnabled'
   | 'stagedCount'
   | 'generateCommitMessage'
   | 'cancelGenerateCommitMessage'
@@ -253,6 +254,7 @@ function CommitComposer({
     commitMessage,
     setCommitMessage,
     generatingMessage,
+    commitMessageAiEnabled,
     stagedCount,
     generateCommitMessage,
     cancelGenerateCommitMessage
@@ -260,7 +262,8 @@ function CommitComposer({
   const ioBusy = busyAction !== null
   // Unmounting a focused field sends no blur, so let go of focus on the way out.
   useEffect(() => () => onFocusChange(false), [onFocusChange])
-  const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
+  // As desktop, Generate follows the Source Control AI switch; a running generation stays cancelable.
+  const shouldShowGenerateButton = (commitMessageAiEnabled && stagedCount > 0) || generatingMessage
   // Typed text blocks regeneration; the same button cancels active generation.
   const generateBlockedByMessage = !generatingMessage && commitMessage.trim().length > 0
   const generateDisabled = busyAction !== null || generateBlockedByMessage

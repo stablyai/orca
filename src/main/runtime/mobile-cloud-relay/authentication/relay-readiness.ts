@@ -1,6 +1,6 @@
 import { RelayHttpError } from '../director/relay-http-client'
 import { RelayHostProofClockSkewError } from '../control-channel/relay-host-proof'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 
 // Lowercase reason tokens must form valid relay_<reason> mint-failure codes.
 export type RelayUnavailableReason =

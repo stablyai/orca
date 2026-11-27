@@ -12,7 +12,7 @@ import {
   type NativeChatTask,
   type NativeChatTaskChange,
   type NativeChatTaskList as TaskList
-} from '../../../../../../shared/native-chat/input/native-chat-task-list'
+} from '../../../../../../shared/native-chat/input/task-lists/native-chat-task-list'
 
 function statusLabel(task: NativeChatTask, t: Translate = translate): string {
   if (task.status === 'completed') {
@@ -174,7 +174,7 @@ export function NativeChatTaskList({
                 {t('components.native-chat.taskList.showAll', 'Full task list')}
               </button>
             </CollapsibleTrigger>
-            <CollapsibleContent animation="height" data-native-chat-member-detail>
+            <CollapsibleContent animation="height">
               <Checklist list={list} />
             </CollapsibleContent>
           </Collapsible>

@@ -1,6 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
-import { githubPrRepoSlugSchema } from '../../source-control/review/github-pr-read-reply-schema'
+import { githubPrRepoSlugSchema } from '../../source-control/review/github-operations/github-pr-read-reply-schema'
 import {
   taskProjectAccessibleListSchema,
   taskProjectAssignableUserListSchema,

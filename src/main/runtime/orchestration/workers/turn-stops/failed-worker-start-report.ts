@@ -1,6 +1,6 @@
 import type { OrchestrationDb } from '../../db/orchestration-db'
-import type { WorkerDispatchRow } from '../../db/orchestration-records'
-import { reportWorkerTurnStop } from './worker-turn-stop-report'
+import type { DispatchContextRow, WorkerDispatchRow } from '../../db/orchestration-records'
+import { observeWorker } from './worker-presence-report'
 
 /** What a failed start left behind, as its residual resources name it. */
 function describeLeftover(residualResources: string): string | undefined {
@@ -28,33 +28,70 @@ function describeLeftover(residualResources: string): string | undefined {
   return described.length > 0 ? described.join(', ') : undefined
 }
 
+function reusesTerminal(worker: WorkerDispatchRow): boolean {
+  try {
+    const options: unknown = JSON.parse(worker.start_options)
+    return (
+      typeof options === 'object' && options !== null && 'terminal' in options && !!options.terminal
+    )
+  } catch {
+    return false
+  }
+}
+
+/** A start that failed after its terminal opened still has output to read; a local reuse start
+ *  that failed before binding never ran in the terminal it named. Federated rows never bind here. */
+export function failedWorkerStartHasOutput(
+  db: OrchestrationDb,
+  worker: WorkerDispatchRow,
+  dispatch: DispatchContextRow | undefined
+): boolean {
+  const unboundReuse =
+    reusesTerminal(worker) &&
+    !dispatch?.assignee_handle &&
+    !dispatch?.assignee_orca_session_id &&
+    !db.getFederatedDispatch(worker.dispatch_id)
+  return Boolean(worker.agent_terminal_handle || dispatch?.assignee_handle) && !unboundReuse
+}
+
 /** A failed start leaves its task unowned, and the caller may never have read the start's receipt. */
 export function reportFailedWorkerStart(
   db: OrchestrationDb,
   worker: WorkerDispatchRow,
-  notify: (handle: string, messageType: string) => void
-): void {
+  notify: (handle: string, messageType: string) => void,
+  restartCutReason?: string
+): WorkerDispatchRow {
   const dispatch = db.getDispatchContextById(worker.dispatch_id)
-  if (!dispatch || worker.state !== 'failed') {
-    return
+  if (!dispatch || worker.state !== (restartCutReason ? 'starting' : 'failed')) {
+    return worker
   }
-  const settled =
-    dispatch.status === 'failed' || dispatch.status === 'circuit_broken'
-      ? dispatch.status
-      : undefined
-  reportWorkerTurnStop(
+  let result = worker
+  observeWorker(
     db,
     { kind: 'local', dispatch },
     {
-      from: `dispatch:${dispatch.id}`,
-      reason: 'lost',
-      cause: `it never started: ${worker.last_error ?? 'its start failed'}`,
-      lastOutput: undefined,
-      leftover: describeLeftover(worker.residual_resources),
-      // A start that failed after its terminal opened still has output to read.
-      ...(worker.agent_terminal_handle || dispatch.assignee_handle ? {} : { neverStarted: true }),
-      ...(settled ? { settled } : {})
+      presence: 'gone',
+      fence: 'start',
+      legacyStopKey: 'gone',
+      gone: {
+        from: `dispatch:${dispatch.id}`,
+        reason: 'start-failed',
+        cause: restartCutReason ?? worker.last_error ?? undefined,
+        lastOutput: undefined,
+        leftover: describeLeftover(worker.residual_resources),
+        ...(failedWorkerStartHasOutput(db, worker, dispatch) ? {} : { neverStarted: true })
+      },
+      settle: () => {
+        if (restartCutReason) {
+          result = db.failWorkerStart(dispatch.id, worker.stage, restartCutReason)
+        }
+        const status = restartCutReason
+          ? db.getDispatchContextById(dispatch.id)?.status
+          : dispatch.status
+        return status === 'failed' || status === 'circuit_broken' ? status : undefined
+      }
     },
     { getDb: () => db, isWaitingForMail: () => false, notify }
   )
+  return result
 }
