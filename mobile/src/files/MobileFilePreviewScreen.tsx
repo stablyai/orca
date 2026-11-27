@@ -315,14 +315,13 @@ function MobileFilePreviewDocument({ route }: Props) {
   // Unmount retires pending saves; a refused back keeps the document and its save alive.
   const leave = useCallback(() => router.back(), [router])
   const editDraftKey = filePreviewEditDraftKey(previewSource, previewParams?.hostId, executionHost)
-  const { confirmingDiscard, requestBack, requestLeaveToSessionList, stay, discard } =
-    useMobileFilePreviewBack({
-      hasUnsavedDraft: hasUnsavedTerminalArtifactDraft,
-      leave,
-      router,
-      hostId: previewParams?.hostId,
-      onDiscard: () => editDraftKey && dropDocumentEditDraft(editDraftKey)
-    })
+  const back = useMobileFilePreviewBack({
+    hasUnsavedDraft: hasUnsavedTerminalArtifactDraft,
+    leave,
+    router,
+    hostId: previewParams?.hostId,
+    onDiscard: () => editDraftKey && dropDocumentEditDraft(editDraftKey)
+  })
 
   return (
     <View style={styles.container}>
@@ -331,8 +330,8 @@ function MobileFilePreviewDocument({ route }: Props) {
           leading={
             <NavBarButton
               icon={ChevronLeft}
-              onPress={requestBack}
-              onLongPress={previewParams?.hostId ? requestLeaveToSessionList : undefined}
+              onPress={back.requestBack}
+              onLongPress={previewParams?.hostId ? back.requestLeaveToSessionList : undefined}
               accessibilityLabel={t('files.filePreviewScreen.backToFiles', 'Back to files')}
             />
           }
@@ -409,10 +408,10 @@ function MobileFilePreviewDocument({ route }: Props) {
         onRestore={setDraftContent}
       />
       <MobileFilePreviewDiscardModal
-        visible={confirmingDiscard}
+        visible={back.confirmingDiscard}
         saving={saving}
-        onConfirm={discard}
-        onCancel={stay}
+        onConfirm={back.discard}
+        onCancel={back.stay}
       />
     </View>
   )
