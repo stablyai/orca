@@ -187,6 +187,19 @@ it('pairs equivalent mixed plain and HTML siblings without removing independent 
   expect(bodyText(message)).toBe(
     'Daily\tstatus\nRepeated plain section\nRepeated plain section\nIndependent HTML section\nIndependent HTML section\nNested section\nNested section'
   )
+  const short = textPart('text/plain', 'Status')
+  for (const exactText of ['Status update', 'Status\tupdate']) {
+    const exact = textPart('text/plain', exactText)
+    const html = textPart('text/html', '<p>Status update</p>')
+    for (const representation of [html, { mimeType: 'multipart/related', parts: [html] }]) {
+      expect(
+        bodyText({ mimeType: 'multipart/mixed', parts: [short, representation, exact] })
+      ).toBe(`Status\n${exactText}`)
+      expect(
+        bodyText({ mimeType: 'multipart/mixed', parts: [exact, representation, short] })
+      ).toBe(`${exactText}\nStatus`)
+    }
+  }
   const report = 'Nightly report\nAll checks passed. See the chart below.'
   expect(
     bodyText({

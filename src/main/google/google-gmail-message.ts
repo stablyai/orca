@@ -148,22 +148,18 @@ function mixedBodyParts(
     }
     const html = equivalentText(part)
     // Do not pair across another visible section: its position is meaningful in mixed mail.
-    for (const neighbor of [index - 1, index + 1]) {
+    const neighbors = [index - 1, index + 1].flatMap((neighbor) => {
       const plain = representations[neighbor]
-      if (plain?.mimeType !== 'text/plain' || pairedPlain.has(neighbor)) {
-        continue
-      }
-      const text = equivalentText(plain)
-      if (text === html) {
-        omitted.add(index)
-      } else if (containsCompleteBody(html, text)) {
-        // Retain the richer representation so template text is not lost along with the duplicate.
-        omitted.add(neighbor)
-      } else {
-        continue
-      }
-      pairedPlain.add(neighbor)
-      break
+      return plain?.mimeType === 'text/plain' && !pairedPlain.has(neighbor)
+        ? [{ index: neighbor, text: equivalentText(plain) }]
+        : []
+    })
+    const exact = neighbors.find((neighbor) => neighbor.text === html)
+    const match = exact ?? neighbors.find((neighbor) => containsCompleteBody(html, neighbor.text))
+    if (match) {
+      // Prefer equality on either side; containment retains the richer HTML representation.
+      omitted.add(exact ? index : match.index)
+      pairedPlain.add(match.index)
     }
   })
   return children.filter((_, index) => !omitted.has(index)).flatMap((child) => child.leaves)
