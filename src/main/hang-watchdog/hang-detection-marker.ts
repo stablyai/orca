@@ -10,6 +10,7 @@ import {
 } from 'node:fs'
 import { open, rename } from 'node:fs/promises'
 import { join } from 'node:path'
+import { finalHangMarkerPath } from './hang-final-marker'
 import {
   asHangObservations,
   latestHangMarker,
@@ -58,9 +59,7 @@ export function writeHangDetectionMarker(markerPath: string, marker: StoredHangM
 /** The watchdog's write: a stalled disk must not block the loop that escalates and spawns sample. */
 export async function writeHangDetectionMarkerAsync(
   markerPath: string,
-  marker: StoredHangMarker,
-  // Checked right before the rename, so a newer sync write is never replaced by this older state.
-  stillCurrent: () => boolean = () => true
+  marker: StoredHangMarker
 ): Promise<void> {
   const text = serializeHangDetectionMarker(marker)
   const temporaryPath = `${markerPath}.async.tmp`
@@ -71,9 +70,7 @@ export async function writeHangDetectionMarkerAsync(
   } finally {
     await file.close()
   }
-  if (stillCurrent()) {
-    await rename(temporaryPath, markerPath)
-  }
+  await rename(temporaryPath, markerPath)
 }
 
 export function readAvailableHangDetectionMarker(
@@ -123,12 +120,11 @@ export function createHangMarkerWriter(
   writeSync: (path: string, marker: StoredHangMarker) => void
 ): {
   write: (marker: StoredHangMarker) => void
-  /** Shutdown only: if the file may lag the newest state, write it synchronously (main answered, so this is safe). */
+  /** Shutdown only: if the marker may lag the newest state, write it synchronously to the final file (main answered, so this is safe). */
   flushPending: (marker: StoredHangMarker) => void
 } {
   let latest: StoredHangMarker | null = null
   let writing = false
-  let generation = 0
   const run = (): void => {
     const marker = latest
     if (!marker) {
@@ -136,8 +132,7 @@ export function createHangMarkerWriter(
     }
     latest = null
     writing = true
-    const mine = ++generation
-    void writeHangDetectionMarkerAsync(markerPath, marker, () => mine === generation)
+    void writeHangDetectionMarkerAsync(markerPath, marker)
       .catch(() => {})
       .finally(() => {
         writing = false
@@ -155,11 +150,10 @@ export function createHangMarkerWriter(
       if (!writing && latest === null) {
         return
       }
-      // Bumping the generation stops any in-flight async write from renaming over this one.
-      generation++
+      // A separate file: an already-submitted async rename can land after this and must not undo it.
       latest = null
       try {
-        writeSync(markerPath, marker)
+        writeSync(finalHangMarkerPath(markerPath), marker)
       } catch {
         // Optional diagnostics must not fail shutdown.
       }

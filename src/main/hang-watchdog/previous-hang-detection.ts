@@ -6,6 +6,7 @@ import { hasActiveTraceSink } from '../observability/tracer'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { hangCaptureDetails } from './hang-capture-details'
 import { findUnrecoveredStall } from './unrecovered-stall-selection'
+import { finalHangMarkerPath, mergeFinalHangMarker } from './hang-final-marker'
 import {
   consumeHangDetectionMarker,
   hangDetectionMarkerPath,
@@ -33,8 +34,12 @@ export function preservePreviousHangDetection(userDataPath: string): void {
   }
   try {
     const currentPath = hangDetectionMarkerPath(userDataPath)
+    const finalPath = finalHangMarkerPath(currentPath)
     const pendingPath = previousMarkerPath(userDataPath)
-    const current = asHangObservations(readAvailableHangDetectionMarker(currentPath))
+    const current = mergeFinalHangMarker(
+      asHangObservations(readAvailableHangDetectionMarker(currentPath)),
+      readAvailableHangDetectionMarker(finalPath)
+    )
     if (!current) {
       return
     }
@@ -47,7 +52,9 @@ export function preservePreviousHangDetection(userDataPath: string): void {
       current
     )
     writeHangDetectionMarker(pendingPath, merged)
-    rmSync(currentPath, { force: true })
+    for (const path of [currentPath, finalPath]) {
+      rmSync(path, { force: true })
+    }
   } catch {
     // Missing or inaccessible markers must not prevent startup; retain any earlier pending note.
   }

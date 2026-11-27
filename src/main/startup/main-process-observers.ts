@@ -130,7 +130,8 @@ export function initializeMainProcessObservers(store: Store): void {
         )
         .catch((error) =>
           console.warn('[hang-watchdog] Failed to record unrecovered stall:', error)
-        )
+        ),
+      unrecoveredStall.detectedAt
     )
   }
   if (state.hangDetection) {

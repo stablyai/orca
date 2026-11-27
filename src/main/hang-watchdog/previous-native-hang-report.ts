@@ -12,9 +12,15 @@ export function createPreviousNativeHangReport(options: {
 }): { ensureImported: () => Promise<void> } {
   let importing: Promise<void> | undefined
   const prepare = async (): Promise<void> => {
-    await unrecoveredStallImportSettled()
+    const newerStallAt = await unrecoveredStallImportSettled()
     const capture = await readPreviousNativeHangCapture(options.directory, options.processStartedAt)
-    if (!capture || Date.now() - capture.artifact.detectedAt > MAX_PREVIOUS_CAPTURE_AGE_MS) {
+    const detectedAt = capture?.artifact.detectedAt ?? 0
+    // A capture older than the freeze already filed this launch would be offered ahead of it (newest first).
+    if (
+      !capture ||
+      Date.now() - detectedAt > MAX_PREVIOUS_CAPTURE_AGE_MS ||
+      (newerStallAt !== null && detectedAt < newerStallAt)
+    ) {
       return
     }
     const artifact = capture.artifact

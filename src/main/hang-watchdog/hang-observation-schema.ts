@@ -76,7 +76,9 @@ export function hangObservationUnresponsiveMs(record: HangObservation): number {
   // An escalated hang lasted at least to escalation, even if its resolution was stamped earlier.
   const lastKnownAt = Math.max(
     record.resolution?.wallMs ?? record.detectedAt,
-    record.escalatedAt ?? record.detectedAt
+    record.escalatedAt ?? record.detectedAt,
+    // Each tick saw main still silent, so a run killed mid-stall was unresponsive at least that long.
+    record.watchdogTickAt ?? record.detectedAt
   )
   return record.durationMs + Math.max(0, lastKnownAt - record.detectedAt)
 }
