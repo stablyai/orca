@@ -1,6 +1,7 @@
 // The MCP servers a host gives its agents' sessions: one list per host, kept beside bot tools in the
 // same file format, with which agents and workspaces each server is on for.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import type { BotToolSignInStatus } from '../bot-tool-sign-in'
 import { isFloatingWorkspaceId } from '../workspace/identity/floating-workspace-worktree'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../workspace/identity/workspace-scope'
@@ -16,33 +17,37 @@ export const MCP_SERVER_AGENT_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/
  * A repo id, or `folder:<id>` for a folder workspace: never a worktree id (`<repo>::<path>`), so a
  * choice holds for every worktree of the repo.
  */
-export const McpServerWorkspaceKey = z
-  .string()
-  .min(1)
-  .max(512)
-  .refine(
-    (key) => !key.includes('::') && !key.startsWith('worktree:'),
-    'Name a repo or folder workspace, not a worktree'
-  )
+export const McpServerWorkspaceKey = lazyZodSchema(() =>
+  z
+    .string()
+    .min(1)
+    .max(512)
+    .refine(
+      (key) => !key.includes('::') && !key.startsWith('worktree:'),
+      'Name a repo or folder workspace, not a worktree'
+    )
+)
 
 /**
  * Where a server is on: a workspace in `on` has it, one in `off` doesn't, and any other (one added
  * later) follows `later`. "All workspaces" is `{ later: true, on: [], off: [] }`.
  */
-export const McpServerWorkspacesSchema = z
-  .strictObject({
-    later: z.boolean(),
-    on: z.array(McpServerWorkspaceKey).max(1000),
-    off: z.array(McpServerWorkspaceKey).max(1000)
-  })
-  .refine(({ on, off }) => {
-    // Every launch parses each server's choice, and the usual one has an empty side.
-    if (on.length === 0 || off.length === 0) {
-      return true
-    }
-    const offKeys = new Set(off)
-    return !on.some((key) => offKeys.has(key))
-  }, 'A workspace is either on or off')
+export const McpServerWorkspacesSchema = lazyZodSchema(() =>
+  z
+    .strictObject({
+      later: z.boolean(),
+      on: z.array(McpServerWorkspaceKey).max(1000),
+      off: z.array(McpServerWorkspaceKey).max(1000)
+    })
+    .refine(({ on, off }) => {
+      // Every launch parses each server's choice, and the usual one has an empty side.
+      if (on.length === 0 || off.length === 0) {
+        return true
+      }
+      const offKeys = new Set(off)
+      return !on.some((key) => offKeys.has(key))
+    }, 'A workspace is either on or off')
+)
 export type McpServerWorkspaces = z.infer<typeof McpServerWorkspacesSchema>
 
 export const ALL_MCP_SERVER_WORKSPACES: McpServerWorkspaces = { later: true, on: [], off: [] }

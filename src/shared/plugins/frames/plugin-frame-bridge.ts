@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { isPluginJsonObject } from '../manifest/plugin-json-object'
 import { PLUGIN_PROTOCOL_VERSION } from './plugin-protocol'
 
@@ -66,16 +67,18 @@ export const PANEL_CONTROL_MESSAGE_MAX_BYTES = 1024
 export const PANEL_WATCHDOG_PING_INTERVAL_MS = 10_000
 export const PANEL_WATCHDOG_PONG_TIMEOUT_MS = 5_000
 
-export const panelSessionTokenSchema = z.string().min(32).max(128)
+export const panelSessionTokenSchema = lazyZodSchema(() => z.string().min(32).max(128))
 
 /** Host-issued opaque sessions identify approved frames; plugin callers never supply their own identity. */
-export const panelActionCallSchema = z
-  .object({
-    sessionToken: panelSessionTokenSchema,
-    action: z.string().min(1),
-    params: z.unknown().optional()
-  })
-  .strict()
+export const panelActionCallSchema = lazyZodSchema(() =>
+  z
+    .object({
+      sessionToken: panelSessionTokenSchema,
+      action: z.string().min(1),
+      params: z.unknown().optional()
+    })
+    .strict()
+)
 
 export type PluginPanelActionCall = z.infer<typeof panelActionCallSchema>
 

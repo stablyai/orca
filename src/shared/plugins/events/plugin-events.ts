@@ -29,16 +29,16 @@ export function shortPluginBranchName(branch: string): string {
  *  before host API 1.7. */
 const workspaceListId = lazyZodSchema(() => pluginWorkspaceIdSchema.optional())
 
-const workspaceIdentity = {
+const workspaceIdentity = () => ({
   workspaceId: z.string().min(1).max(2048),
   workspaceListId,
   /** Folder workspaces have no branch; only worktrees emit lifecycle events today. */
   kind: z.enum(['worktree', 'folder'])
-}
+})
 
 export const workspaceCreatedPayloadSchema = lazyZodSchema(() =>
   z.object({
-    ...workspaceIdentity,
+    ...workspaceIdentity(),
     path: z
       .string()
       .min(1)
@@ -49,7 +49,7 @@ export const workspaceCreatedPayloadSchema = lazyZodSchema(() =>
 
 export const workspaceRemovedPayloadSchema = lazyZodSchema(() =>
   z.object({
-    ...workspaceIdentity,
+    ...workspaceIdentity(),
     path: z
       .string()
       .min(1)
