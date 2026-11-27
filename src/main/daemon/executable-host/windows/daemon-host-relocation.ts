@@ -1,8 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, readdirSync } from 'node:fs'
-import { mkdir, rename, rm } from 'node:fs/promises'
+import { mkdir, rm } from 'node:fs/promises'
 import { join, win32 as winPath } from 'node:path'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
+import { renameWithWindowsRetry } from '../../../filesystem/windows-rename-retry'
+import { currentBuildFingerprint, observedEntrySourcePath } from './daemon-host-observed-builds'
 import {
   buildDaemonHostManifest,
   daemonHostFitsPathBudget,
@@ -37,35 +39,6 @@ export type RelocatedDaemonHost = {
 }
 
 const HOST_SUBDIR = 'daemon-host'
-const observedBuilds = new Map<string, { fingerprint: string; entrySourcePath: string }>()
-
-function observedBuildKey(sources: Pick<DaemonHostSources, 'execPath' | 'resourcesPath'>): string {
-  return JSON.stringify([
-    getAppEnvironment().getVersion(),
-    sources.execPath,
-    sources.resourcesPath,
-    process.versions.electron ?? `node-${process.versions.node}`,
-    process.arch
-  ])
-}
-
-function currentBuildFingerprint(
-  sources: DaemonHostSources,
-  sourceFingerprint: string | null
-): string | null {
-  const key = observedBuildKey(sources)
-  if (sourceFingerprint !== null) {
-    observedBuilds.set(key, {
-      fingerprint: sourceFingerprint,
-      entrySourcePath: sources.entrySourcePath
-    })
-    return sourceFingerprint
-  }
-  // Reuse the observed fingerprint after source removal; app version alone cannot select a build.
-  const observed = observedBuilds.get(key)
-  return observed?.entrySourcePath === sources.entrySourcePath ? observed.fingerprint : null
-}
-
 // Keep runtimes out of roaming storage; match the NSIS uninstall root in config/nsis/orca-installer-hooks.nsh.
 const LOCAL_HOST_ROOT_NAME = 'Orca'
 
@@ -100,8 +73,10 @@ function collectDaemonHostSources(): DaemonHostSources | null {
   }
   const execPath = process.execPath
   const appDir = winPath.dirname(execPath)
-  const observed = observedBuilds.get(observedBuildKey({ execPath, resourcesPath }))
-  const entrySourcePath = resolveEntrySourcePath(resourcesPath, observed?.entrySourcePath)
+  const entrySourcePath = resolveEntrySourcePath(
+    resourcesPath,
+    observedEntrySourcePath({ execPath, resourcesPath })
+  )
   return {
     appDir,
     execPath,
@@ -295,8 +270,8 @@ async function materializeOnce(): Promise<RelocatedDaemonHost | null> {
       new Map(inventory.files.map((file) => [file.path, file.sha256]))
     )
     await writeDaemonHostBuildMarker(staging, version, inventory)
-    // Publish a new immutable build; a same-version daemon may still load files from an older mirror.
-    await rename(staging, dest)
+    // Publish a new immutable build (a live daemon may use an older one); retry Defender's brief holds.
+    await renameWithWindowsRetry(staging, dest)
   } catch {
     await rm(staging, { recursive: true, force: true }).catch(() => {
       // Best-effort staging cleanup; a later launch reclaims it once this pid exits.
