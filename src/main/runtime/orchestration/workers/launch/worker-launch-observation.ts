@@ -46,6 +46,32 @@ export function workerStartOptionsAgent(json: string): string | null {
   return workerLaunchAgent(options.launch) || (isTuiAgent(options.agent) ? options.agent : null)
 }
 
+export type WorkerLaunchEffectiveSettings = {
+  agent: string | null
+  model: string | null
+  effort: string | null
+}
+
+/** The choices this worker actually launched with, for its preamble to report. */
+export function workerStartOptionsLaunch(
+  json: string | undefined
+): WorkerLaunchEffectiveSettings | null {
+  if (!json) {
+    return null
+  }
+  const parsed = launch.safeParse(startOptions(json).launch)
+  const effective = parsed.success ? parsed.data.effective : undefined
+  if (!effective) {
+    return null
+  }
+  const settings = {
+    agent: effective.agent ?? null,
+    model: effective.model ?? null,
+    effort: effective.effort ?? null
+  }
+  return settings.agent || settings.model || settings.effort ? settings : null
+}
+
 /** Enrich the existing launch concept without rewriting the person's selector or preferences. */
 export function mergeWorkerLaunchObservation(json: string, observation: unknown): string {
   let options: Record<string, unknown>

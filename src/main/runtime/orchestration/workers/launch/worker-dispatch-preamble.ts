@@ -1,4 +1,5 @@
 import type { OrchestrationCliCommand } from './orchestration-cli-command'
+import type { WorkerLaunchEffectiveSettings } from './worker-launch-observation'
 import type { RuntimeAgentPromptWriteOptions } from '../../../terminal/input/agent-prompt-write-options'
 import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../../../shared/orchestration/workers/orca-dispatch-status-prompt'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
@@ -32,6 +33,8 @@ export type PreambleParams = {
   subWorkersInOwnRun?: boolean
   // Mail already in the Dispatch's mailbox, which no wake will announce.
   unreadMail?: boolean
+  // What this worker launched with, so it reports its real settings instead of guessing.
+  launch?: WorkerLaunchEffectiveSettings
 }
 
 /** A session address names a chat worker; any other handle is a terminal. */
@@ -50,8 +53,18 @@ function dispatchIdentityLines(params: PreambleParams): string {
     `Your task ID is: ${params.taskId}`,
     ...(isSessionHandle(params.workerHandle)
       ? [`Your Orca session ID is: ${params.workerHandle}`]
-      : [])
+      : []),
+    ...(params.launch ? [launchSettingsLine(params.launch)] : [])
   ].join('\n')
+}
+
+function launchSettingsLine(launch: WorkerLaunchEffectiveSettings): string {
+  const settings = [
+    launch.agent ? `agent ${launch.agent}` : null,
+    launch.model ? `model ${launch.model}` : null,
+    launch.effort ? `effort ${launch.effort}` : null
+  ].filter((value) => value !== null)
+  return `Your launch settings are: ${settings.join(', ')}.`
 }
 
 function windowsSandboxLine(cli: string, runsOnNativeWindows: boolean | undefined): string {

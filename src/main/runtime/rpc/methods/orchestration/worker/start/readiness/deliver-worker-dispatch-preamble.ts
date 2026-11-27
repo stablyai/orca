@@ -11,6 +11,7 @@ import {
   resolveDispatchAssigneeParty
 } from '../../../../../../orchestration/addressing/orchestration-party'
 import { buildDispatchPreamble } from '../../../../../../orchestration/workers/launch/worker-dispatch-preamble'
+import { workerStartOptionsLaunch } from '../../../../../../orchestration/workers/launch/worker-launch-observation'
 import { sendAgentTurn } from '../../../../../../orchestration/turn-delivery/send-agent-turn'
 import { createWorkerBriefWriteGuard } from '../../../../../../terminal/wait/launched-agent-write-guard'
 import { sendStructuredWorkerPreamble } from '../../../structured-workers/orchestration-structured-worker-session'
@@ -71,7 +72,10 @@ export async function deliverWorkerDispatchPreamble(args: {
           : terminalHandle,
     devMode: args.devMode,
     ...runtime.getTerminalOrchestrationCliTarget(terminalHandle),
-    unreadMail: args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined
+    unreadMail: args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined,
+    launch:
+      workerStartOptionsLaunch(args.db.getWorkerDispatch(args.dispatchId)?.start_options) ??
+      undefined
   })
   if (chat) {
     const dispatch = args.db.getDispatchContextById(args.dispatchId)
