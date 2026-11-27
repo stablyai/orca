@@ -59,7 +59,7 @@ import { registerPetHandlers } from '../pets/pet'
 import { registerPluginHandlers } from '../plugins/plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
 import { registerLazyEmulatorHandlers } from '../emulator/lazy-emulator-handlers'
-import { registerSpeechHandlers } from '../speech'
+import { registerLazySpeechHandlers } from '../lazy-speech-handlers'
 import { registerTerminalRenderDesyncEvidenceHandler } from '../terminal-views/terminal-render-desync-evidence'
 import { registerOrcaProfileHandlers } from '../profiles/orca-profiles'
 import { registerCodexAccountHandlers } from '../accounts/codex-accounts'
@@ -279,7 +279,7 @@ export async function registerCoreHandlers(
       }
     })
     registerUpdaterHandlers()
-    registerSpeechHandlers(store, commitMessageAgentEnv)
+    registerLazySpeechHandlers(store, commitMessageAgentEnv)
     void hostsReady.catch((error: unknown) =>
       console.warn('[startup] Host initialization failed:', error)
     )
