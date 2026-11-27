@@ -50,7 +50,8 @@ vi.mock('../../../layout/side-safe-area', () => ({
   useWindowSafeAreaInsets: () => ({ top: 12, right: 0, bottom: 21, left: 0 })
 }))
 vi.mock('../../../theme/use-mobile-color-scheme', () => ({
-  useMobileColorScheme: () => 'dark'
+  useMobileColorScheme: () => 'dark',
+  useMobileColors: () => ({ textPrimary: '#fff', textSecondary: '#aaa' })
 }))
 vi.mock('../../../i18n/use-mobile-translation', () => ({
   useMobileTranslation: () => (_key: string, fallback: string) => fallback
