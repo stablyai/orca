@@ -150,8 +150,12 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
       container.contains(active) &&
       (active.disabled || active.getClientRects().length === 0)
     if (dropped || stranded) {
-      lastFocusedAction.current = null
       toggleRef.current?.focus()
+    }
+    // One pass per loss: a ref that can no longer take focus is spent, rescued or not, so it can't
+    // pull focus back on a later commit.
+    if (lastFocused !== null && !isFocusable(lastFocused)) {
+      lastFocusedAction.current = null
     }
   }, [])
   // No deps: a cheap check after every commit, since any re-render can replace the action.
@@ -337,10 +341,16 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
               lastFocusedAction.current = event.target instanceof HTMLElement ? event.target : null
             }}
             onBlur={(event) => {
-              // A blur from a button that can still take focus is a real move away. Chromium also
-              // blurs a button that was removed, disabled or hidden; that keeps the ref so its
-              // focus can land on Servers.
-              if (event.target instanceof HTMLElement && isFocusable(event.target)) {
+              // Focus moving to another control, or a blur from a button that can still take
+              // focus, is a real move away. Chromium also blurs a button that was removed,
+              // disabled or hidden onto the page; that keeps the ref so focus can land on Servers.
+              const movedOutside =
+                event.relatedTarget instanceof Node &&
+                !actionRef.current?.contains(event.relatedTarget)
+              if (
+                movedOutside ||
+                (event.target instanceof HTMLElement && isFocusable(event.target))
+              ) {
                 lastFocusedAction.current = null
               }
             }}
