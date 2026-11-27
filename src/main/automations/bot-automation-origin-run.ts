@@ -12,6 +12,7 @@ import {
   originThreadText
 } from '../../shared/automations/automation-results-place'
 import { LINEAR_ISSUE_KEY_PATTERN } from '../../shared/connector-bot-linear-contract'
+import { BOT_QUIET_MARKER } from '../../shared/bot-quiet-result'
 import type { BotRunFields } from '../bots/bot-chat-session'
 import type { BotRunSend } from '../bots/bot-run-turn-watch'
 import type { ConversationKey } from '../external-conversations/external-conversation-types'
@@ -57,7 +58,7 @@ export async function sendToOpenOriginChat(
 /** A wait's run answering in its thread's chat opens its answer with where it came from: the chat's
  *  own answer is the thread post, so the run writes the line Orca would have put first. */
 export function originProvenanceInstruction(automation: { name: string }): string {
-  return `[Orca: start your final message with this line, as written: _From the automation “${automation.name}”, created in this thread._]`
+  return `[Orca: if you answer, begin your final message with this exact line, unchanged, then a blank line, then your answer; if you stay silent (${BOT_QUIET_MARKER}), leave it out: _From the automation “${automation.name}”, created in this thread._]`
 }
 
 /** What a run's live replies and refusals say of its final message: where this run's result goes

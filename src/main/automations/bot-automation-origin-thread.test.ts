@@ -219,7 +219,7 @@ const IN_ORIGIN_CHAT = {
 } as const
 
 const PROVENANCE =
-  '[Orca: start your final message with this line, as written: _From the automation “Redo the review”, created in this thread._]'
+  '[Orca: if you answer, begin your final message with this exact line, unchanged, then a blank line, then your answer; if you stay silent (NO_REPLY), leave it out: _From the automation “Redo the review”, created in this thread._]'
 
 const GONE_TO_THREAD = { runsIn: 'new', resultsTo: 'thread', threadPost: ORIGIN_KEY }
 
