@@ -1,4 +1,4 @@
-// An open question's answers: one row per quick reply, the recommended one first with its label and a
+// An open question's answers: one row per quick reply, the recommended one first with a star and a
 // light tint, then an Other… field. Keys 1–n pick a row and n+1 goes to the field while
 // the item's pane has focus outside any text field; Enter in an empty field picks the recommended reply.
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
@@ -66,6 +66,7 @@ export function BotItemQuickReplyRows({
   const field = useRef<HTMLInputElement | null>(null)
   const replies = orderedReplies(quickReplies)
   const recommended = replies.find((reply) => reply.recommended) ?? null
+  const recommendedWord = t('bots.items.ask.recommended', 'Recommended')
   const otherKey = replies.length + 1
   const pick = (reply: BotItemQuickReply): void => onPick(reply, false)
   const sendOther = (): void => {
@@ -135,7 +136,9 @@ export function BotItemQuickReplyRows({
           key={reply.label}
           type="button"
           aria-pressed={current === undefined ? undefined : reply.label === current}
-          title={reply.detail ? `${reply.label}\n${reply.detail}` : reply.label}
+          title={[reply.label, reply.recommended ? recommendedWord : null, reply.detail]
+            .filter(Boolean)
+            .join('\n')}
           className={cn(
             ROW,
             'outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
@@ -146,15 +149,16 @@ export function BotItemQuickReplyRows({
           onClick={(event) => onPick(reply, event.altKey || event.shiftKey)}
         >
           <Key label={String(index + 1)} />
-          {/* In a narrow pane, Recommended moves under the label so the label keeps the row. */}
-          <span className="flex min-w-0 flex-1 items-baseline gap-2.5 @max-[18rem]/item-pane:flex-col @max-[18rem]/item-pane:gap-0 @max-[18rem]/item-pane:py-1">
-            <span className="w-full min-w-0 flex-1 truncate text-foreground">{reply.label}</span>
-            {reply.recommended ? (
-              <span className="shrink-0 text-xs text-theme-accent">
-                {t('bots.items.ask.recommended', 'Recommended')}
-              </span>
-            ) : null}
+          <span className="min-w-0 flex-1 truncate text-foreground">
+            {reply.label}
+            {reply.recommended ? <span className="sr-only">, {recommendedWord}</span> : null}
           </span>
+          {/* A star, not the word: the label keeps the row at any width; the word is in the title. */}
+          {reply.recommended ? (
+            <span aria-hidden className="shrink-0 text-xs text-theme-accent">
+              ★
+            </span>
+          ) : null}
           {reply.label === current ? (
             <Check aria-hidden className="size-3.5 shrink-0 text-theme-accent" />
           ) : null}
