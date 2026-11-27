@@ -33,6 +33,7 @@ import {
 import { useTerminalConfigImport } from '../terminal/configuration/useTerminalConfigImport'
 import { useWarpThemeImport } from '../terminal/themes/useWarpThemeImport'
 import { getInitialMountedSectionIds } from './settings-load-performance'
+import { useOptInOnlyExperimentRows } from '../advanced/use-opt-in-only-experiment-rows'
 import {
   buildRepoIdToHostSelection,
   buildRepoIdToRepresentative,
@@ -178,6 +179,7 @@ export function useSettingsStoreModel() {
   const confirm = useConfirmationDialog()
   // Option-click unlocks hidden experiments for this session only.
   const [hiddenExperimentalUnlocked, setHiddenExperimentalUnlocked] = useState(false)
+  const optInOnlyExperimentRows = useOptInOnlyExperimentRows(settings, hiddenExperimentalUnlocked)
   const {
     settingsHostChoice,
     setSettingsHostChoice,
@@ -289,6 +291,7 @@ export function useSettingsStoreModel() {
     confirm,
     hiddenExperimentalUnlocked,
     setHiddenExperimentalUnlocked,
+    optInOnlyExperimentRows,
     runtimeEnvironments,
     settingsHostScope,
     nativeAccounts,

@@ -134,6 +134,31 @@ describe('wake alerts', () => {
     expect(fired).toEqual(['FIRING cloudflare-errors: Worker/Durable Object errors 100 = 10.0% of 1000 invocations in 15 min'])
   })
 
+  it('leaves out hibernated socket events that throw, and still counts Worker and object fetch/RPC errors', async () => {
+    const ns = 'c9b66c56'
+    const doGroup = (type: string, status: string, requests: number) => ({ sum: { requests }, dimensions: { namespaceId: ns, type, status } })
+    let graphql: { query: string; variables: Record<string, unknown> } | undefined
+    const answer = (o0: unknown[]) => async (input: string, init?: RequestInit) => {
+      const url = String(input)
+      if (url === env.ALERT_WEBHOOK_URL || url.endsWith('/v1/connector/wake')) { return new Response(null, { status: url.endsWith('/wake') ? 401 : 200 }) }
+      if (url.endsWith('/__health/object')) { return Response.json({ ok: true }) }
+      if (url.endsWith('/graphql')) {
+        graphql = JSON.parse(String(init?.body))
+        const w0 = [{ sum: { requests: 1000 }, dimensions: { status: 'success' } }]
+        return Response.json({ data: { viewer: { accounts: [{ w0, w1: [], o0, o1: [] }] } } })
+      }
+      return sqlAnswer(minutes({}, {}))
+    }
+    const retirement = [doGroup('hibernation', 'success', 800), doGroup('hibernation', 'scriptThrewException', 200)]
+    vi.stubGlobal('fetch', answer(retirement))
+    expect(await evaluate({ ...env, CF_DO_NAMESPACE_IDS: ns }, at(10, 17))).toEqual([])
+    // Cloudflare filters to the configured namespaces, so other objects never fill the group limit.
+    expect(graphql?.variables.ns).toEqual([ns])
+    expect(graphql?.query).toContain('durableObjectsInvocationsAdaptiveGroups(limit:200,filter:{namespaceId_in:$ns,')
+    vi.stubGlobal('fetch', answer([...retirement, doGroup('jsrpc', 'scriptThrewException', 30), doGroup('http', 'internalError', 30)]))
+    expect(await evaluate({ ...env, CF_DO_NAMESPACE_IDS: ns }, at(10, 17))).toEqual(['FIRING cloudflare-errors: Worker/Durable Object errors 60 = 2.9% of 2060 invocations in 15 min'])
+  })
+
   it('alerts when metrics are unreadable or the canary object fails', async () => {
     vi.stubGlobal('fetch', async (input: string) => {
       const url = String(input)
@@ -142,8 +167,36 @@ describe('wake alerts', () => {
       if (url.endsWith('/__health/object')) { return Response.json({ ok: false }, { status: 503 }) }
       return new Response('no', { status: 500 })
     })
-    const fired = await evaluate(env, Date.UTC(2026, 10, 22, 10, 17))
-    expect(fired).toEqual(['FIRING object-probe: object health check got 503, expected 200', 'alerts cannot read metrics: analytics query failed: 500'])
+    const fired = await evaluate(env, Date.UTC(2026, 10, 22, 10, 17), async () => {})
+    expect(fired).toEqual([
+      'FIRING object-probe: object health check got 503, expected 200 (retried after 10 s; first try: object health check got 503, expected 200)',
+      'alerts cannot read metrics: analytics query failed: 500'
+    ])
+  })
+
+  it('retries one canary miss after 10 s and stays quiet when the retry answers', async () => {
+    let objectCalls = 0
+    const waits: number[] = []
+    const posts: string[] = []
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+      const url = String(input)
+      if (url === env.ALERT_WEBHOOK_URL) {
+        posts.push(JSON.parse(String(init?.body)).text)
+        return new Response('ok')
+      }
+      if (url.endsWith('/v1/connector/wake')) { return new Response(null, { status: 401 }) }
+      if (url.endsWith('/__health/object')) {
+        objectCalls++
+        return objectCalls === 1 ? Response.json({ ok: false }, { status: 503 }) : Response.json({ ok: true })
+      }
+      if (url.endsWith('/graphql')) { return Response.json({ data: { viewer: { accounts: [{ w0: [], w1: [] }] } } }) }
+      return sqlAnswer(minutes({}, {}))
+    })
+    const fired = await evaluate(env, Date.UTC(2026, 10, 22, 10, 17), async (ms) => { waits.push(ms) })
+    expect(fired).toEqual([])
+    expect(posts).toEqual([])
+    expect(objectCalls).toBe(2)
+    expect(waits).toEqual([10_000])
   })
 
   it('alerts when the wake upgrade is not refused 401', async () => {

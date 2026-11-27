@@ -38,12 +38,14 @@ const isLocal = (executionHostId: string | null | undefined): boolean =>
  * Orca into their own file, the others when their terminal takes the servers and no launch learned
  * otherwise. Orca launches no other agent (Gemini CLI) with the list.
  */
-async function hostListReaches(): Promise<AgentMcpReach> {
-  const agentFiles = await readMcpAgentFiles()
+async function hostListReaches(agents: readonly string[]): Promise<AgentMcpReach> {
+  // The consent is read only when a file-based agent is asked about.
+  const asksFiles = agents.some((agent) => MCP_FILE_AGENTS.some((fileAgent) => fileAgent === agent))
+  const agentFiles = asksFiles ? await readMcpAgentFiles() : null
   return (agent) => {
     const fileAgent = MCP_FILE_AGENTS.find((candidate) => candidate === agent)
     if (fileAgent) {
-      return agentFiles[fileAgent]
+      return agentFiles?.[fileAgent] === true
     }
     return isTuiAgent(agent) && terminalMcpAdapterFor(agent) !== null && !hasMcpAgentProblem(agent)
   }
@@ -88,13 +90,17 @@ function editFailure(error: AgentMcpConfigEditError): string {
 type AgentMcpImport = (
   host: AgentMcpImportHost,
   key: string,
-  add: AddImportedMcpServer<McpServer>
+  add: AddImportedMcpServer<McpServer>,
+  confirmed?: readonly string[]
 ) => Promise<McpServer>
 
-/** Adds the discovered server to the host list (scoped like its agent copy) by `importer`. */
+/**
+ * Adds the discovered server to the host list (scoped like its agent copy) by `importer`. `agents`:
+ * the ones a Move's confirm named, which bound the copies it takes out.
+ */
 export async function importAgentMcpServer(
   context: RpcContext,
-  key: string,
+  { key, agents }: { key: string; agents?: readonly string[] },
   importer: AgentMcpImport
 ): Promise<{ server: McpServer }> {
   let added = false
@@ -123,7 +129,7 @@ export async function importAgentMcpServer(
     return saved!
   }
   try {
-    return { server: await importer(agentMcpImportHost(context.runtime), key, add) }
+    return { server: await importer(agentMcpImportHost(context.runtime), key, add, agents) }
   } catch (error) {
     if (error instanceof AgentMcpServerImportError) {
       throw error.reason === 'gone' ? new McpServersError('mcp_server_gone', error.message) : error

@@ -1,18 +1,25 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect } from './acp-dialect'
 
-const toolMetaSchema = z.looseObject({
-  _meta: z.looseObject({ 'codebuddy.ai/toolName': z.string().min(1) })
-})
-const shellResponseSchema = z.looseObject({
-  rawOutput: z.looseObject({ type: z.literal('text'), text: z.string() }),
-  _meta: z.looseObject({
-    'codebuddy.ai/toolName': z.literal('Bash'),
-    'codebuddy.ai/rawResponse': z.looseObject({ exitCode: z.number().int() })
+const toolMetaSchema = lazyZodSchema(() =>
+  z.looseObject({
+    _meta: z.looseObject({ 'codebuddy.ai/toolName': z.string().min(1) })
   })
-})
-const skillMetaSchema = z.looseObject({ _meta: z.looseObject({ type: z.literal('skill') }) })
+)
+const shellResponseSchema = lazyZodSchema(() =>
+  z.looseObject({
+    rawOutput: z.looseObject({ type: z.literal('text'), text: z.string() }),
+    _meta: z.looseObject({
+      'codebuddy.ai/toolName': z.literal('Bash'),
+      'codebuddy.ai/rawResponse': z.looseObject({ exitCode: z.number().int() })
+    })
+  })
+)
+const skillMetaSchema = lazyZodSchema(() =>
+  z.looseObject({ _meta: z.looseObject({ type: z.literal('skill') }) })
+)
 
 const SHELL_TAIL = /\nExit Code: -?\d+\nSignal: [^\n]*$/u
 const STDOUT = 'Stdout: '

@@ -98,12 +98,20 @@ export class BotItemsHost {
   }
 
   /** The store only when this profile already has an items file: nothing links work before one. */
-  private openedStore(): BotItemsRemote | null {
+  openedStore(): BotItemsRemote | null {
     return this.openedTracked()?.remote ?? null
   }
 
   private openedTracked(): TrackedBotItems | null {
     return this.stores.get(botItemsStoreFile(getProfileUserDataPath())) ?? null
+  }
+
+  async owedCommentAttachmentUploads(
+    stateDirectory: string,
+    root: string
+  ): Promise<ReadonlySet<string>> {
+    const tracked = this.stores.get(botItemsStoreFile(stateDirectory))
+    return new Set(await tracked?.remote.owedCommentAttachmentUploads(root))
   }
 
   /** Once the runtime has its bot hooks: an existing items file sends what a crash left owed and
