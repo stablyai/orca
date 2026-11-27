@@ -30,7 +30,7 @@ import {
   registerLazySkillDeleteIpcHandlers,
   registerLazySkillsHandlers
 } from '../skills/lazy-skills-handlers'
-import { registerWorkspacePortHandlers } from '../ports/workspace-ports'
+import { registerLazyWorkspacePortHandlers } from '../ports/lazy-workspace-ports-handlers'
 import { registerAutomationHandlers } from '../automations'
 import { registerLazyKeybindingHandlers } from '../lazy-keybindings-handlers'
 import { registerTelemetryHandlers } from '../telemetry'
@@ -39,10 +39,10 @@ import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
 import { registerLazyEmulatorHandlers } from '../emulator/lazy-emulator-handlers'
 import { registerLazySpeechHandlers } from '../lazy-speech-handlers'
 import { registerOrcaProfileHandlers } from '../profiles/orca-profiles'
-import { registerCodexAccountHandlers } from '../accounts/codex-accounts'
+import { registerLazyCodexAccountHandlers } from '../accounts/lazy-codex-accounts-handlers'
 import { registerAgentHookHandlers } from '../agent-hooks/agent-hooks'
 import { getPtyIdForPaneKey } from '../pty/pane/key-state'
-import { registerClaudeAccountHandlers } from '../accounts/claude-accounts'
+import { registerLazyClaudeAccountHandlers } from '../accounts/lazy-claude-accounts-handlers'
 import { registerUpdaterHandlers } from '../../updater/lifecycle/main-window-updater'
 import { registerClipboardHandlers } from '../../window/clipboard/clipboard-ipc-handlers'
 import { setTrustedClipboardRendererWebContentsId } from '../../window/clipboard/clipboard-ipc-sender-trust'
@@ -108,9 +108,9 @@ export async function registerCoreHandlers(
     })
     registerLazyRareIpcHandlers(store)
     registerLazySetupIpcHandlers(store, codexAccounts, keybindings)
-    registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
+    registerLazyCodexAccountHandlers(codexAccounts, () => store.getSettings())
     registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
-    registerClaudeAccountHandlers(claudeAccounts, (change, held) =>
+    registerLazyClaudeAccountHandlers(claudeAccounts, (change, held) =>
       runtime.moveRunningClaudePanes(change, held)
     )
     registerLazyAccountAndDiagnosticIpcHandlers(rateLimits)
@@ -150,7 +150,7 @@ export async function registerCoreHandlers(
     registerSessionHandlers(store, runtime)
     registerUIHandlers(store, { isDashboardPopoutRenderer })
     registerLazyEmulatorHandlers((id) => runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id))
-    registerWorkspacePortHandlers(store)
+    registerLazyWorkspacePortHandlers(store)
     registerFilesystemHandlers(store, commitMessageAgentEnv)
     registerFilesystemWatcherHandlers()
     registerRuntimeHandlers(runtime)
