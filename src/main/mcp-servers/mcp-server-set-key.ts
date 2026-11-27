@@ -23,6 +23,10 @@ export async function mcpServerSetKey(
   servers: readonly McpServerIdentity[],
   secret: Promise<Buffer> = mcpServerSetKeySecret()
 ): Promise<string> {
+  // No servers hold nothing to guess, so the empty set keeps one key across runs and installs.
+  if (servers.length === 0) {
+    return 'none'
+  }
   const each = servers
     .map((server) =>
       JSON.stringify([

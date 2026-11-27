@@ -20,5 +20,7 @@ describe('mcpServerSetKey', () => {
     expect(await mcpServerSetKey([stdio, { ...http, type: 'sse' }], secret(1))).not.toBe(key)
     // Under another install's secret the same set gives another key: a stored key can't be checked against guesses.
     expect(await mcpServerSetKey([stdio, http], secret(2))).not.toBe(key)
+    // No servers: one key whatever the secret, so a run-only secret never reads as a change.
+    expect(await mcpServerSetKey([], secret(1))).toBe(await mcpServerSetKey([], secret(2)))
   })
 })
