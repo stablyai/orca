@@ -163,10 +163,10 @@ export function BrowserAnnotateToolButton({
   // A click opens Grab, so the button is named for the whole mode, not for Annotate.
   const modeLabel = t('browser.toolbar.annotateMode', 'Annotate, grab or draw')
   // The palette over the page now carries the per-tool detail, so the button names the whole mode.
-  // The chord shown is Grab's: it does what a click does.
+  // The chord shown is Grab's: it does what a click does. No annotate chord means none are wired (doc preview).
   const primaryTooltip = active
     ? t('browser.annotatePalette.doneTitle', 'Done (Esc)')
-    : tools.grabShortcutLabel
+    : tools.annotateShortcutLabel && tools.grabShortcutLabel
       ? t('browser.toolbar.annotateModeWithShortcut', 'Annotate, grab or draw ({{value0}})', {
           value0: tools.grabShortcutLabel
         })
