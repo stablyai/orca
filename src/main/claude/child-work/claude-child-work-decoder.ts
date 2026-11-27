@@ -10,6 +10,7 @@ import {
   taskDescription,
   taskId,
   taskName,
+  taskReply,
   taskText,
   taskUsageTotalTokens,
   terminalClaudeTaskRunState
@@ -86,8 +87,7 @@ export class ClaudeChildWorkDecoder {
           message.status,
           {
             runId: taskAliasId(message.tool_use_id),
-            // A forked command's summary only repeats its name.
-            lastMessage: selected?.invocation.forkedCommand ? undefined : taskText(message.summary),
+            lastMessage: taskReply(message, selected?.invocation.forkedCommand),
             totalTokens: taskUsageTotalTokens(message)
           },
           ownerOf

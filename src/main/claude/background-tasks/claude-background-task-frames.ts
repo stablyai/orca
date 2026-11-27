@@ -43,6 +43,14 @@ export function taskText(value: unknown): string | undefined {
   return boundedTaskText(value)
 }
 
+// A forked command's summary only repeats its name; its reply arrives from the SubagentStop hook.
+export function taskReply(
+  message: Record<string, unknown>,
+  forkedCommand: boolean | undefined
+): string | undefined {
+  return taskText(forkedCommand ? message.last_assistant_message : message.summary)
+}
+
 // SDK versions use both agent_type and subagent_type for the same identity.
 export function taskName(frame: Record<string, unknown>): string | undefined {
   return (
