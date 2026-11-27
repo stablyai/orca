@@ -177,15 +177,16 @@ function hasConsistentLegacyAdoption(db: Database.Database): boolean {
 // before that column's step instead of replaying old migrations over its live data.
 const ADD_MISSING_COLUMN_STEPS_FROM = 51
 
-function hasCompletePostV6Schema(db: Database.Database, storedVersion: number): boolean {
-  return (
+/** Where a stamp's migration resumes: the stamp, or just before the earliest add-a-column step whose
+ *  column it lacks; null when anything older is missing. */
+function postV6ResumeStep(db: Database.Database, storedVersion: number): number | null {
+  const missing = VERSIONED_POST_V6_COLUMNS.filter(
+    ({ version, table, column }) =>
+      version <= storedVersion && !hasOrchestrationColumn(db, table, column)
+  ).map(({ version }) => version)
+  const complete =
+    missing.every((version) => version >= ADD_MISSING_COLUMN_STEPS_FROM) &&
     POST_V6_COLUMNS.every(([table, column]) => hasOrchestrationColumn(db, table, column)) &&
-    VERSIONED_POST_V6_COLUMNS.every(
-      ({ version, table, column }) =>
-        storedVersion < version ||
-        version >= ADD_MISSING_COLUMN_STEPS_FROM ||
-        hasOrchestrationColumn(db, table, column)
-    ) &&
     (storedVersion < 34 || hasNotNullOrchestrationColumn(db, 'deliveries', 'mailbox_handle')) &&
     VERSIONED_POST_V6_COLUMN_DEFAULTS.every(
       ({ version, table, column, defaultValue }) =>
@@ -198,18 +199,7 @@ function hasCompletePostV6Schema(db: Database.Database, storedVersion: number): 
     POST_V6_INDEXES.every((index) => hasOrchestrationIndex(db, index)) &&
     messagesAllowQuestions(db) &&
     hasConsistentLegacyAdoption(db)
-  )
-}
-
-/** The step just before the earliest add-a-column step whose column this stamp lacks. */
-function firstMissingColumnStep(db: Database.Database, storedVersion: number): number {
-  const missing = VERSIONED_POST_V6_COLUMNS.filter(
-    ({ version, table, column }) =>
-      version >= ADD_MISSING_COLUMN_STEPS_FROM &&
-      version <= storedVersion &&
-      !hasOrchestrationColumn(db, table, column)
-  ).map(({ version }) => version - 1)
-  return Math.min(storedVersion, ...missing)
+  return complete ? Math.min(storedVersion, ...missing.map((version) => version - 1)) : null
 }
 
 export function resolveOrchestrationMigrationStartVersion(
@@ -220,9 +210,6 @@ export function resolveOrchestrationMigrationStartVersion(
   if (storedVersion > schemaVersion) {
     return storedVersion
   }
-  if (hasCompletePostV6Schema(db, storedVersion)) {
-    return firstMissingColumnStep(db, storedVersion)
-  }
   // Pre-Run databases may claim post-v6 versions while retaining the old tables.
-  return Math.min(storedVersion, schemaVersion, 6)
+  return postV6ResumeStep(db, storedVersion) ?? Math.min(storedVersion, schemaVersion, 6)
 }
