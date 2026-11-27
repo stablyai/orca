@@ -368,10 +368,10 @@ describe("a teammate's bots and the agent shared with them", () => {
   const Cards = z.object({ cards: z.array(z.object({ messageId: z.string() })) })
   const cards = async () => Cards.parse(await call('pairedServerAsks.list', {})).cards
   /** An agent on the owner's computer asks Docs on Dana's computer. */
-  const ask = async (subject: string, from = RANGER_ASKS) =>
+  const ask = async (subject: string, from = RANGER_ASKS, onClient = 'install_dana') =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the send handler's receipt carries its message id.
     (await send.handler(
-      { from, onClient: 'install_dana', to: 'bot:docs', subject, type: 'question' },
+      { from, onClient, to: 'bot:docs', subject, type: 'question' },
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
       { runtime: owner.runtime, orchestrationCaller: sessionCaller(from) } as RpcContext
     )) as { message: { id: string } }
@@ -596,5 +596,51 @@ describe("a teammate's bots and the agent shared with them", () => {
     await expect(ask('And this one?')).rejects.toThrow('offline')
     // The asking chat shows what it showed before: no notice about the revoke.
     expect(owner.db.getUnreadMessages(RANGER_ASKS)).toEqual([])
+  })
+
+  /** A computer paired with the owner's (not over a share) takes asks under Dana's computer's name. */
+  async function pairedComputerPulls(deviceId: string, installationId: string): Promise<void> {
+    const response = await new RpcDispatcher({
+      runtime: owner.runtime,
+      methods: ORCHESTRATION_METHODS
+    }).dispatch(
+      {
+        id: `pull_${deviceId}`,
+        authToken: '',
+        method: 'orchestration.peerMailPull',
+        params: {
+          waitMs: 0,
+          clientAsks: { session: deviceId, installationId, name: "Dana's Mac" }
+        },
+        orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION
+      },
+      {
+        authenticatedCallerFingerprint: `fingerprint-${deviceId}`,
+        pairedDeviceId: deviceId,
+        clientKind: 'runtime',
+        callerScope: { kind: 'runtime-paired', grants: [] }
+      }
+    )
+    expect(response.ok).toBe(true)
+  }
+
+  it("tells a computer's pairing and share apart, but never two computers of the same name", async () => {
+    await call('pairedServerAsks.allow', { environmentId: SHARED_ENVIRONMENT, botId: 'docs' })
+    dana.runtime.ensureOrchestrationFederationRelay()
+    await vi.waitFor(() => expect(listeningClients(owner.runtime, 'install_dana')).toHaveLength(1))
+
+    // The owner's own laptop, paired here, happens to share the name of Dana's computer.
+    await pairedComputerPulls('owner-laptop', 'install_owner_laptop')
+    await expect(ask('Review this PR?', RANGER_ASKS, "Dana's Mac")).rejects.toThrow(
+      "Two paired computers answer to Dana's Mac"
+    )
+
+    // Dana's computer is also paired here: Ranger asks over its share, any other agent the pairing.
+    await pairedComputerPulls('dana-paired', 'install_dana')
+    await ask('Review this PR?')
+    await vi.waitFor(() => expect(dana.db.getUnreadMessages(DOCS_HOME)).toHaveLength(1))
+    await expect(ask('Anything?', OTHER_AGENT)).resolves.toMatchObject({
+      message: { id: expect.any(String) }
+    })
   })
 })
