@@ -476,6 +476,8 @@ async function spawnLocalStartupAndSetupTerminals(args: {
     const outcome = terminal[SETUP_AGENT_GATE]?.outcome
     if (creationId && outcome && startupGateProgressTarget) {
       startupTerminal.reportsSetupGateOutcome = true
+      const blockedAtSpawn = Boolean(terminal.agentProgramBlocked)
+      const worktreeId = worktree.id
       void outcome
         .catch(() => undefined)
         .then((settled) => {
@@ -483,7 +485,8 @@ async function spawnLocalStartupAndSetupTerminals(args: {
             startupGateProgressTarget.send('createWorktree:progress', {
               creationId,
               phase: 'startup-gate-settled',
-              blocked: settled === 'blocked'
+              worktreeId,
+              blocked: blockedAtSpawn || settled === 'blocked'
             } satisfies CreateWorktreeProgressEvent)
           }
         })

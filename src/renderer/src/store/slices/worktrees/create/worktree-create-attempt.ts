@@ -21,6 +21,7 @@ export async function runCreateAttempt(
   clientCreateSettings: ClientWorktreeCreateSettings = {}
 ): Promise<CreateAttemptOutcome> {
   const provisionedRoot = request.options?.provisionedRoot
+  const creationAgentLaunch = request.options?.creationAgentLaunch
   const create = async (
     parentWorkspace: WorktreeCreateAttempt['parentWorkspace']
   ): Promise<CreatedWorktreeResult> =>
@@ -40,7 +41,7 @@ export async function runCreateAttempt(
         ? // Why local can still reject on the parent: paired web clients route this API to their host.
           await createLocalWorktreeWithStartupDraft(
             buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace }),
-            request.options?.creationAgentLaunch?.draft
+            creationAgentLaunch?.draft ?? creationAgentLaunch?.prompt
           )
         : await createWorktreeOnRuntimeHost(
             target.environmentId,

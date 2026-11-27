@@ -69,11 +69,14 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     clearStartupDraftPasteTimers()
   }
   session.notifyBlockedStartup = (reason: AgentProgramBlockReason): void => {
+    const draft: string | null = session.startupDraftPrompt
     notifyBlockedAgentStartup(
       reason,
-      session.startupDraftPrompt ??
-        session.paneStartup?.env?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV] ??
-        session.paneStartup?.command
+      draft
+        ? { worktreeId: session.deps.worktreeId, prompt: draft }
+        : (draft ??
+            session.paneStartup?.env?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV] ??
+            session.paneStartup?.command)
     )
   }
   const getStartupDraftPtyId = (): string | null => {
