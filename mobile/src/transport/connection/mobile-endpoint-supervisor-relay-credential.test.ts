@@ -231,4 +231,51 @@ describe('Relay credential recovery', () => {
       supervisor.stop()
     }
   })
+
+  // A refused pending may still commit, so it stays dialable, but only on the slow reprobe and only until its lease ages out.
+  it('backs a refused pending off to the slow reprobe and stops trying it after its lease expires', async () => {
+    vi.useFakeTimers()
+    const start = Date.now()
+    const refused: MobileRelayCredentialBundle = {
+      ...bundle,
+      current: { ...bundle.current, expiresAt: start + 3_600_000 },
+      pending: { token: 'C'.repeat(43), hash: 'D'.repeat(43), reqId: 'rotate-lost' }
+    }
+    const openRelay = vi.fn(
+      (_cell: unknown, _credential: { token: string }) =>
+        new FakeRelaySession('disconnected', new RelayOuterError(4401, true))
+    )
+    const pendingDials = () =>
+      openRelay.mock.calls.filter(([, credential]) => credential.token === refused.pending?.token)
+        .length
+    const logical = new FakeLogicalClient('disconnected', 'relay')
+    const supervisor = new MobileEndpointSupervisor(
+      logical,
+      host.id,
+      relay,
+      dependencies({
+        openRelay,
+        readBundle: vi.fn(async () => refused),
+        directUnavailable: true
+      })
+    )
+    try {
+      await supervisor.start()
+      expect(pendingDials()).toBe(1)
+      // Transport backoff would redial within 30 s; the credential reprobe waits at least 45 s.
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(pendingDials()).toBe(1)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(pendingDials()).toBe(2)
+
+      // Past current's expiry plus a full resume lease, the pending lease has aged out locally.
+      vi.setSystemTime(start + 3_600_000 + 31 * 24 * 3_600_000)
+      const dialsBefore = openRelay.mock.calls.length
+      await vi.advanceTimersByTimeAsync(60 * 60_000)
+      expect(openRelay.mock.calls.length).toBe(dialsBefore)
+      expect(logical.getState()).toBe('disconnected')
+    } finally {
+      supervisor.stop()
+    }
+  })
 })
