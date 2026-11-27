@@ -11,7 +11,8 @@ const sources: RunReplySources = {
       throw new Error('gone')
     }
     return { bot: { botId: 'b1', runsIn: 'new', resultsTo: { channel: 'C9', label: '#news' } } }
-  }
+  },
+  botIdOfSession: () => 'b1'
 }
 
 describe('a reply refused in a run that is in no thread', () => {

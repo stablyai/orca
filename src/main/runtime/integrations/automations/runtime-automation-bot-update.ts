@@ -18,6 +18,7 @@ import type {
   RuntimeAutomationUpdateInput
 } from './runtime-automation-run-context'
 import type { Bot } from '../../../../shared/bot-types'
+import { routeToOriginThread } from '../../../automations/bot-automation-origin-thread'
 import {
   assertBotHearsEventTriggers,
   assertNoBotOwnedSettings,
@@ -48,7 +49,25 @@ export async function botAutomationCreateRules(
   const placed = bot
     ? await withPatchPlaceRefs(lookups.placeRefs(), bot.id, { on: rules, bot: inChat })
     : {}
-  return { on: placed.on ?? rules, bot: placed.bot ?? inChat }
+  const on = placed.on ?? rules
+  return { on, bot: await inOriginThread(lookups, bot, placed.bot ?? inChat, Boolean(on?.length)) }
+}
+
+/** A target made answering a thread, routed to answer there; its places must already be refs. */
+async function inOriginThread(
+  lookups: Pick<BotAutomationLookups, 'botChat'>,
+  bot: Bot | null | undefined,
+  target: AutomationBotTarget | undefined,
+  hasEvents: boolean
+): Promise<AutomationBotTarget | undefined> {
+  const thread = target?.originThread
+  if (!target || !thread || !bot) {
+    return target
+  }
+  // The chat is looked up only when the target would run there.
+  const originChat =
+    hasEvents || target.agentSetup ? undefined : await lookups.botChat(bot, thread.sessionId)
+  return routeToOriginThread(target, { hasEvents, originChat })
 }
 
 export async function patchBotAutomationUpdate(
@@ -86,6 +105,13 @@ export async function patchBotAutomationUpdate(
   Object.assign(
     patch,
     await withPatchPlaceRefs(lookups.placeRefs(), current.bot.botId, patch, current)
+  )
+  // An edit of where it runs or answers is routed as on create.
+  patch.bot &&= await inOriginThread(
+    lookups,
+    bot,
+    patch.bot,
+    Boolean((patch.on ?? current.on)?.length)
   )
 }
 

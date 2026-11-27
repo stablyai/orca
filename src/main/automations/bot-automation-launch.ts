@@ -24,6 +24,7 @@ import type { BotRunFields } from '../bots/bot-chat-session'
 import type { AgentJournalAutomationRunNotStartedItem } from '../../shared/agent-journal-orca-card-items'
 import { BotSessionRefusedError } from '../bots/bot-session-refused-error'
 import { automationResultsSentence } from '../../shared/automations/automation-results-place'
+import { originThreadStartLine } from '../bots/bot-run-result-provenance'
 
 /** Where a bot run's prompt goes; each resolves to the structured session and message that took it. */
 export type BotAutomationSessions = {
@@ -59,12 +60,17 @@ export type BotAutomationSessions = {
   release(sessionId: string): Promise<void>
   /** The bot's Chat, created on first use. */
   sendToChat(bot: Bot, text: string, run?: BotRunFields): Promise<BotRunSend>
+  /** Whether one of the bot's chats still takes mail; absent, it is taken to. */
+  takesMail?(bot: Bot, chatId: string): Promise<boolean>
 }
 
 /** How a bot run ends: watch its turn from before the prompt is sent, then deliver its result. */
 export type BotRunResults = {
   watch(): Promise<BotTurnWatch>
   deliver(result: BotRunResult): Promise<BotRunCompletion>
+  /** A line the bot posts in a thread as the run starts, through that thread's conversation; it
+   *  never fails the run. */
+  announce?(conversation: ConversationKey, replyId: string, text: string, send: BotRunSend): void
   /** Its session refused the prompt or couldn't open, so no turn began. With `notStarted`, the chat
    *  the run was meant for (else the bot's Chat) shows the card. */
   couldNotStart(
@@ -209,19 +215,24 @@ export function createBotAutomationDispatcher(
       ...(automationRun ? { automationRun } : {}),
       messageId: automationRunOperationId(run, 'run-message')
     }
-    const { runsIn } = target
     const chosenChat = automation.bot?.chat?.sessionId
-    const saved = automation.bot?.resultsTo ?? 'chat'
     const origin = automation.bot?.originThread
+    const originKey = origin && { source: origin.source, externalId: origin.externalId }
+    const inOriginChat =
+      Boolean(origin) && target.runsIn === 'chat' && chosenChat === origin?.sessionId
+    // The chat that answers its thread is gone: a new conversation posts the result there instead.
+    const originGone =
+      inOriginChat && sessions.takesMail
+        ? !(await sessions.takesMail(target.bot, chosenChat!))
+        : false
+    const runsIn = originGone ? 'new' : target.runsIn
+    const saved = originGone ? 'thread' : (automation.bot?.resultsTo ?? 'chat')
+    if (originGone && fields.automationRun?.toConversation) {
+      const { toConversation: _unlinked, ...automationRun } = fields.automationRun
+      fields.automationRun = automationRun
+    }
     const route: ThreadRoute =
-      saved === 'thread'
-        ? await threadRoute(
-            threads,
-            run,
-            runsIn,
-            origin && { source: origin.source, externalId: origin.externalId }
-          )
-        : { kind: 'take' }
+      saved === 'thread' ? await threadRoute(threads, run, runsIn, originKey) : { kind: 'take' }
     // A new conversation that never opened has no chat to show why: the bot's Chat does.
     const destination: BotRunChat =
       route.kind === 'owner'
@@ -273,6 +284,10 @@ export function createBotAutomationDispatcher(
         }
       )
       throw error
+    }
+    // The chat answers the thread itself, so the thread is told first which automation this is.
+    if (originKey && inOriginChat && !originGone && automation.bot?.chat?.toConversation) {
+      results.announce?.(originKey, `run-start:${run.id}`, originThreadStartLine(automation), send)
     }
     // A run in the owning chat waits behind its running turn, so its result is posted through the
     // owning conversation, never by marking a turn that may be another's.

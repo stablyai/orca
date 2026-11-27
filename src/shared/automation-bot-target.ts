@@ -23,9 +23,15 @@ export function botResultsPlace(resultsTo: Extract<AutomationBotResultsTo, objec
   return resultsTo.label ?? ('channel' in resultsTo ? resultsTo.channel : resultsTo.linearIssue)
 }
 
-/** The thread a bot's turn was answering when it made the automation, as its chat's link names it.
- *  Set by the host only; place is how people name where it is ("#orca"). */
-export type AutomationOriginThread = { source: ConnectorSource; externalId: string; place?: string }
+/** The thread a bot's turn was answering when it made the automation, as its chat's link names it,
+ *  and that chat. Set by the host only; place is how people name where it is ("#orca"). */
+export type AutomationOriginThread = {
+  source: ConnectorSource
+  externalId: string
+  place?: string
+  /** The bot's chat that answers the thread, where its runs go while it takes mail. */
+  sessionId: string
+}
 
 /** The bot an automation runs as: its folder, agent and preamble replace the project target. */
 export type AutomationBotTarget = {

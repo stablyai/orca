@@ -42,7 +42,7 @@ import { ANSWERED_TOGETHER_NOTICE } from '../../shared/automations/history/autom
 import * as resultNote from './bot-run-result-note'
 import { writeStructuredAgentSessionOrcaNote } from '../native-chat/agent-session-wire/structured-agent-session-orca-note'
 import { resultPlaceValue } from '../automations/bot-automation-place-refs'
-import { withProvenance } from './bot-run-result-provenance'
+import { runtimeRunStartLine, withProvenance } from './bot-run-result-provenance'
 import { watchBotTurnEnds, type BotRunUnavailable, type BotTurnEnd } from './bot-run-turn-watch'
 import { orcaSignInServer } from './orca-sign-in-server'
 import {
@@ -183,7 +183,9 @@ export async function deliverBotRunResult(
     return { ...completed, error: COPY.notInThread }
   }
   if (message && !isQuietBotResult(message) && resultsTo === 'thread' && target.threadPost) {
-    const text = capAnswer(message, CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes)
+    const into = automation.bot?.originThread?.externalId === target.threadPost.externalId
+    const words = into ? withProvenance(message, automation, true) : message
+    const text = capAnswer(words, CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes)
     const posted = await deps.replyInThread(
       target.threadPost,
       `run-result:${result.run.id}`,
@@ -222,10 +224,8 @@ export async function deliverBotRunResult(
       return { ...completed, error: COPY.chatFailed }
     }
   }
-  const text = capAnswer(
-    withProvenance(message, automation),
-    CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes
-  )
+  const words = withProvenance(message, automation)
+  const text = capAnswer(words, CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes)
   const postId = result.run.id
   // The ref where the host saved one; the id or key where it saved only that.
   const place = resultPlaceValue(resultsTo)
@@ -296,6 +296,7 @@ export function runtimeBotRunResults(runtime: OrcaRuntimeService): BotRunResults
         )
       }
     },
+    announce: runtimeRunStartLine(runtime),
     deliver: (result) =>
       deliverBotRunResult(
         {

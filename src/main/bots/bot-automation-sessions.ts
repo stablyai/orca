@@ -121,7 +121,8 @@ export function botAutomationSessions(
     sendToSession: async (bot, sessionId, text, run) =>
       chatThatTookIt(await deps.chats.sendToSession(bot.id, sessionId, text, run)),
     sendToChat: async (bot, text, run) =>
-      chatThatTookIt(await deps.chats.sendToChat(bot.id, text, undefined, run))
+      chatThatTookIt(await deps.chats.sendToChat(bot.id, text, undefined, run)),
+    takesMail: async (bot, chatId) => (await deps.chatTakingMail(bot, chatId)) !== null
   }
 }
 

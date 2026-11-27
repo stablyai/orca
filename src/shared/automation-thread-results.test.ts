@@ -6,7 +6,12 @@ import {
   THREAD_RESULTS_NEED_A_THREAD
 } from './automation-event-triggers'
 
-const ORIGIN = { source: 'slack', externalId: 'T1:C1:1700000000.000100', place: '#design' } as const
+const ORIGIN = {
+  source: 'slack',
+  externalId: 'T1:C1:1700000000.000100',
+  place: '#design',
+  sessionId: 'thread-chat'
+} as const
 
 function wait(bot: Automation['bot']): Automation {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial fixture; the code under test reads only these fields

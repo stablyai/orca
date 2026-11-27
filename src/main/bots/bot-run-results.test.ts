@@ -80,3 +80,41 @@ describe('a result posted away from the thread its automation was made in', () =
     ])
   })
 })
+
+describe('a result posted into the thread its automation was made in', () => {
+  it('starts with a line naming the automation', async () => {
+    const replies: unknown[][] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial fixture; the code under test reads only these fields
+    const deps = {
+      turnForOf: async () => 'owner',
+      replyInThread: (...args: unknown[]) => {
+        replies.push(args)
+        return Promise.resolve({ ok: true, value: {} })
+      }
+    } as unknown as BotRunDeliveryDependencies
+    const conversation = { source: 'slack', externalId: 'T1:C1:1.2' } as const
+    const bot = {
+      botId: 'b1',
+      runsIn: 'new',
+      resultsTo: 'thread',
+      originThread: { ...conversation, place: '#design', sessionId: 'thread-chat' }
+    } as const
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial fixture; the code under test reads only these fields
+    await deliverBotRunResult(deps, {
+      automation: { id: 'a1', name: 'Redo the review', dtstart: 1, bot },
+      run: { id: 'r1', trigger: 'scheduled' },
+      bot: { id: 'b1', name: 'Ranger' },
+      target: { runsIn: 'new', resultsTo: 'thread', threadPost: conversation },
+      sessionId: 'run-conv',
+      ended: { outcome: 'success', message: 'Redone.' }
+    } as unknown as BotRunResult)
+    expect(replies).toEqual([
+      [
+        conversation,
+        'run-result:r1',
+        '_From the automation “Redo the review”, created in this thread._\n\nRedone.',
+        'owner'
+      ]
+    ])
+  })
+})

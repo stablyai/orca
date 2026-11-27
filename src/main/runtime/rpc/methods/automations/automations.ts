@@ -16,7 +16,8 @@ import { deleteAutomationRecordingCancelledWait } from '../../../../bots/bot-wai
 import { LOOK_AROUND_REFUSAL } from '../../../../bots/bot-look-around-policy'
 import { automationForClient, readsGoogleRules } from '../../google-rules-for-client'
 import { targetInCallerChat } from './runs-in-caller-chat'
-import { answerInOriginThread, creatorThreadOf } from './answer-in-origin-thread'
+import { creatorThreadOf } from './creator-thread'
+import { originThreadNote } from '../../../../automations/bot-automation-origin-thread'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import { onceClaimed } from '../../../../../shared/automation-once'
 
@@ -60,6 +61,16 @@ function firedWaits(
     // Unreadable run history must not fail the list; its waits read as before.
     return []
   }
+}
+
+/** What the host changed about the target the caller asked for, as the CLI prints it. */
+function notesOf(
+  asked: Automation['bot'],
+  saved: Automation['bot'],
+  runsInAsked: boolean
+): { notes?: string[] } {
+  const note = asked ? originThreadNote(asked, saved, runsInAsked) : null
+  return note ? { notes: [note] } : {}
 }
 
 /** A look-around run only reads, so it can't make or change automations. */
@@ -117,16 +128,11 @@ export const AUTOMATION_METHODS = [
         params.bot && runsInDefaulted
           ? await targetInCallerChat(context.runtime, caller, params.bot, Boolean(params.once))
           : params.bot
-      // Events answer in their own threads; anything else a thread's turn made answers in that one.
-      const creator =
-        inCaller && !params.on?.length
-          ? await creatorThreadOf(context.runtime, caller, inCaller.botId)
-          : null
-      const threaded =
-        inCaller && creator
-          ? answerInOriginThread(inCaller, creator, { runsInAsked: !runsInDefaulted })
-          : null
-      const bot = threaded?.target ?? inCaller
+      // A thread's turn made it: the host routes it to answer there once its places are refs.
+      const originThread = inCaller
+        ? await creatorThreadOf(context.runtime, caller, inCaller.botId)
+        : null
+      const bot = inCaller && originThread ? { ...inCaller, originThread } : inCaller
       const { plugin } = context
       const input = { ...params, bot }
       const automation = plugin
@@ -142,7 +148,7 @@ export const AUTOMATION_METHODS = [
       return {
         automation: automationForClient(automation, context),
         // Older clients ignore it; the CLI prints it under the saved automation.
-        ...(threaded?.note ? { notes: [threaded.note] } : {})
+        ...notesOf(params.bot, automation.bot, !runsInDefaulted)
       }
     }
   }),
@@ -159,7 +165,10 @@ export const AUTOMATION_METHODS = [
       })
       const caller = chatOfCaller(params.callerSessionId, context)
       recordAutomationSavedCard(caller, 'updated', automation)
-      return { automation: automationForClient(automation, context) }
+      return {
+        automation: automationForClient(automation, context),
+        ...(params.updates.bot ? notesOf(params.updates.bot, automation.bot, true) : {})
+      }
     }
   }),
   defineMethod({

@@ -25,7 +25,7 @@ import { CONNECTOR_LEAVE_THREAD_METHOD } from '../connector-leave-thread'
 import { splitSlackHtmlReply } from '../../../../../shared/connectors/slack-html-reply'
 import type { ConnectorCloudFeature } from '../../../../../shared/connector-cloud-features'
 import { botOfSession } from '../../../../bots/bot-session-tabs'
-import { notInAThread } from '../../../../bots/bot-run-reply-place'
+import { notInAThread, runOriginThread } from '../../../../bots/bot-run-reply-place'
 
 export function requireSeam(
   runtime: Pick<OrcaRuntimeService, 'getExternalConversationSeam'>
@@ -46,16 +46,21 @@ export const CONNECTOR_METHODS = [
     handler: async (params, context) => {
       const { replyId, text, review } = params
       const paneKey = 'paneKey' in params ? params.paneKey : chatPaneKey(params.sessionId)
-      const target = requireSeam(context.runtime).replyTarget(paneKey)
+      const linked = requireSeam(context.runtime).replyTarget(paneKey)
+      const runs = {
+        listAutomationRuns: () => context.runtime.listAutomationRuns(),
+        showAutomation: (id: string) => context.runtime.showAutomation(id),
+        botIdOfSession: (id: string) => botOfSession(context.runtime.bots, id)?.id
+      }
+      const callerSession = 'sessionId' in params ? params.sessionId : undefined
+      // A run that posts its result into the thread it was made in replies there as it works.
+      const origin = !linked && callerSession ? runOriginThread(runs, callerSession) : null
+      const target =
+        linked ??
+        (origin && { key: origin.key, turnId: Date.now(), worktreeId: '', place: origin.place })
       if (!target) {
         // A run's own conversation is in no thread: say where its final message goes instead.
-        throw notInAThread(
-          {
-            listAutomationRuns: () => context.runtime.listAutomationRuns(),
-            showAutomation: (id) => context.runtime.showAutomation(id)
-          },
-          'sessionId' in params ? params.sessionId : undefined
-        )
+        throw notInAThread(runs, callerSession)
       }
       // A bot posts only into the conversation its chat is bound to, as that bot.
       const botRefusal = botReplyRefusal(

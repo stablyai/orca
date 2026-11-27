@@ -2,10 +2,7 @@ import { agentQuestionNotices } from './rpc/methods/orchestration/messaging/agen
 import { announceAgentCliUpdatesFinished } from '../agent-cli-update/agent-cli-update-service'
 import { forgetPairedServerAsksOf } from './orchestration/federation/paired-server-asks/paired-server-ask-removal'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
-import {
-  chatConversation,
-  chatMailPlace
-} from '../external-conversations/external-conversation-links'
+import { chatMailPlace } from '../external-conversations/external-conversation-links'
 import * as botGroups from '../bots/bot-group-runtime'
 import * as botGroupRemote from '../bots/bot-group-remote-answers'
 import { chatReplyFollowUp } from './rpc/methods/orchestration/messaging/reply-follow-up'
@@ -92,11 +89,6 @@ class OrcaRuntimeService extends OrcaRuntimeWithRelayHostNotices {
 
   protected override chatConversationPlace(sessionId: string, from: AgentMessageSource) {
     return this.store ? chatMailPlace(this.store, sessionId, from) : null
-  }
-
-  /** The conversation a chat is bound to, and where it is as people name it; null when unlinked. */
-  chatConversation(sessionId: string) {
-    return this.store ? chatConversation(this.store, sessionId) : null
   }
 
   protected override botGroupRoomMailArrived(groupId: string): void {

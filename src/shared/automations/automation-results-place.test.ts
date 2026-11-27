@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { AutomationBotTarget } from '../automation-bot-target'
 import { automationResultsSentence, formatAutomationResultsTo } from './automation-results-place'
 
-const THREAD = { source: 'slack', externalId: 'T1:C1:1700000000.000100', place: '#design' } as const
+const THREAD = {
+  source: 'slack',
+  externalId: 'T1:C1:1700000000.000100',
+  place: '#design',
+  sessionId: 'thread-chat'
+} as const
 const base: AutomationBotTarget = { botId: 'b1', runsIn: 'new', resultsTo: 'chat' }
 
 describe('where a bot automation says its results go', () => {
