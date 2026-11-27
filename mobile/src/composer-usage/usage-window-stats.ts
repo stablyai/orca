@@ -125,7 +125,9 @@ export function buildUsageChartModel(
     return null
   }
   const minSpanMs = windowMs > 0 ? Math.min(windowMs, MIN_CHART_SPAN_MS) : MIN_CHART_SPAN_MS
-  const startsAt = Math.max(windowStart ?? first.at, Math.min(first.at, now - minSpanMs))
+  // No reset means no window start; the first sample must not become the floor.
+  const historyStart = Math.min(first.at, now - minSpanMs)
+  const startsAt = windowStart === null ? historyStart : Math.max(windowStart, historyStart)
   const endsAt = now
   if (endsAt <= startsAt) {
     return null

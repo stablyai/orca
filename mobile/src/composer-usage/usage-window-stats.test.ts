@@ -96,4 +96,20 @@ describe('buildUsageChartModel', () => {
     const long = buildUsageChartModel(weekly(20), samples, NOW, 'used')
     expect(long?.startsAt).toBe(NOW - 2 * DAY + HOUR)
   })
+
+  it('keeps a six-hour span when the reset time is unknown', () => {
+    const recent = [
+      { at: NOW - 2 * HOUR, usedPercent: 30 },
+      { at: NOW - HOUR, usedPercent: 35 }
+    ]
+    const model = buildUsageChartModel(
+      { usedPercent: 35, windowMinutes: 7 * 24 * 60, resetsAt: null },
+      recent,
+      NOW,
+      'used'
+    )
+    expect(model?.startsAt).toBe(NOW - 6 * HOUR)
+    expect(model?.endsAt).toBe(NOW)
+    expect(model?.pace).toBeNull()
+  })
 })
