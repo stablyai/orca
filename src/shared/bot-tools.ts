@@ -7,15 +7,17 @@ import { englishTranslate, type CopyTranslate } from './i18n/english-translate'
 import { lazyZodSchema } from './schema/lazy-zod-schema'
 
 export const BOT_TOOL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/
-const BotToolName = z.string().regex(BOT_TOOL_NAME_PATTERN)
+const BotToolName = lazyZodSchema(() => z.string().regex(BOT_TOOL_NAME_PATTERN))
 
 /** One of the bot's own servers, as its agent's config holds it. */
 export const BOT_TOOL_HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
 export const BOT_TOOL_ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
-const Text = z
-  .string()
-  .max(4096)
-  .refine((value) => !value.includes('\0'))
+const Text = lazyZodSchema(() =>
+  z
+    .string()
+    .max(4096)
+    .refine((value) => !value.includes('\0'))
+)
 // React Native's URL reads username, password and origin with regexes over the whole text, so an `@`
 // in a path (https://server.smithery.ai/@owner/mcp) reads as a user there; read the authority instead.
 function botToolUrlAuthority(value: string): { userinfo: string; hostPort: string } | null {
@@ -32,20 +34,22 @@ export function botToolUrlOrigin(value: string): string {
   const hostPort = (botToolUrlAuthority(value)?.hostPort ?? '').toLowerCase()
   return `${scheme}//${hostPort.replace(scheme === 'https:' ? /:443$/ : /:80$/, '')}`
 }
-export const BotToolUrl = z
-  .string()
-  .max(2048)
-  .refine((value) => {
-    try {
-      new URL(value)
-      // The authority read only matches http(s)://, so it settles the scheme too. An empty user and
-      // password (`https://@host`, `https://:@host`) is no credential.
-      const authority = botToolUrlAuthority(value)
-      return authority !== null && (authority.userinfo === '' || authority.userinfo === ':')
-    } catch {
-      return false
-    }
-  }, 'Use an HTTP or HTTPS URL without embedded credentials')
+export const BotToolUrl = lazyZodSchema(() =>
+  z
+    .string()
+    .max(2048)
+    .refine((value) => {
+      try {
+        new URL(value)
+        // The authority read only matches http(s)://, so it settles the scheme too. An empty user and
+        // password (`https://@host`, `https://:@host`) is no credential.
+        const authority = botToolUrlAuthority(value)
+        return authority !== null && (authority.userinfo === '' || authority.userinfo === ':')
+      } catch {
+        return false
+      }
+    }, 'Use an HTTP or HTTPS URL without embedded credentials')
+)
 const Executable = lazyZodSchema(() =>
   Text.pipe(z.string().min(1).max(1024)).refine(
     (value) => value.trim() === value && !/[\r\n]/.test(value),
@@ -92,7 +96,7 @@ const SecretRow = lazyZodSchema(() =>
       'Enter a value or keep a saved value'
     )
 )
-const Secrets = z.array(SecretRow).max(64)
+const Secrets = lazyZodSchema(() => z.array(SecretRow).max(64))
 export const BotToolInputSchema = lazyZodSchema(() =>
   z.union([
     z.strictObject({

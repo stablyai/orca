@@ -62,7 +62,6 @@
 2 src/main/ipc/plugins/plugin-frame-entry-ipc.ts
 1 src/main/ipc/plugins/plugin-panel-push-ipc.ts
 3 src/main/ipc/plugins/plugin-settings-ipc.ts
-4 src/main/ipc/skills/skill-cloud-install-ipc-schemas.ts
 4 src/main/ipc/skills/skill-install-management-ipc-handlers.ts
 1 src/main/ipc/slack-hand-off.ts
 1 src/main/ipc/wsl/wsl-move-undo-wiring.ts
@@ -146,7 +145,6 @@
 1 src/shared/agent-launch/startup/host-account-launch-env.ts
 1 src/shared/agent-session/agent-discovery/agent-session-agent-availability.ts
 2 src/shared/agent-session/agent-discovery/agent-session-registered-agents.ts
-4 src/shared/agent-session/conversation-context/agent-session-context-usage-schema.ts
 1 src/shared/agent-session/failures/agent-session-failure-fact-schema.ts
 1 src/shared/agent-session/journal/agent-session-journal-approval-subject-schema.ts
 2 src/shared/agent-session/journal/agent-session-journal-bounded-payload-schema.ts
@@ -160,7 +158,6 @@
 1 src/shared/ai-vault/search/ai-vault-search-settings.ts
 1 src/shared/attachment-text/attachment-text-source.ts
 1 src/shared/automations/automation-run-message.ts
-4 src/shared/bot-tools.ts
 1 src/shared/bots/bot-agent-setup.ts
 1 src/shared/bots/bot-avatar-color.ts
 1 src/shared/bots/bot-avatar-outfit.ts
@@ -214,11 +211,8 @@
 2 src/shared/mcp-servers/mcp-servers.ts
 2 src/shared/mobile-web-bundle/locale-catalog-contract.ts
 2 src/shared/orcad-migration/orcad-migration-terminal-restore-hints.ts
-4 src/shared/orchestration/orchestration-removed-work.ts
-4 src/shared/orchestration/remote-owned-wire.ts
 1 src/shared/plugins/approval/plugin-consent-request.ts
 5 src/shared/plugins/artifacts/plugin-theme-artifact.ts
-4 src/shared/plugins/artifacts/plugin-theme-background.ts
 1 src/shared/plugins/capabilities/plugin-capabilities.ts
 1 src/shared/plugins/catalog/plugin-catalog-release.ts
 11 src/shared/plugins/catalog/plugin-detail-fields.ts
@@ -275,7 +269,6 @@
 2 src/shared/rpc-contract/browser/browser-extras-params.ts
 1 src/shared/rpc-contract/browser/browser-observation-params.ts
 2 src/shared/rpc-contract/client-ui/client-settings-params.ts
-4 src/shared/rpc-contract/connectors/connector-params.ts
 2 src/shared/rpc-contract/filesystem/files-params.ts
 1 src/shared/rpc-contract/filesystem/files-staged-save-params.ts
 3 src/shared/rpc-contract/filesystem/files-terminal-artifact-params.ts
@@ -283,7 +276,6 @@
 3 src/shared/rpc-contract/github/github-project-params.ts
 1 src/shared/rpc-contract/google-call-params.ts
 1 src/shared/rpc-contract/google-files-params.ts
-4 src/shared/rpc-contract/google-write-params.ts
 2 src/shared/rpc-contract/mcp-servers-params.ts
 3 src/shared/rpc-contract/orchestration/orchestration-worker-release-params.ts
 1 src/shared/rpc-contract/preflight/preflight-params.ts
@@ -296,12 +288,11 @@
 1 src/shared/sidebar-list/catalog/project-section-catalog-schema.ts
 1 src/shared/sidebar-list/catalog/repo-icon-data-urls-contract.ts
 1 src/shared/sidebar-list/feed-facts/desktop-sidebar-facts.ts
-4 src/shared/sidebar-list/feed-facts/paired-server-rows.ts
+1 src/shared/sidebar-list/feed-facts/paired-server-rows.ts
 3 src/shared/sidebar-list/feed-facts/workspace-activity-facts.ts
 2 src/shared/sidebar-list/feed-facts/workspace-creations.ts
 1 src/shared/sidebar-list/feed-facts/workspace-live-content.ts
 2 src/shared/sidebar-list/feed-facts/workspace-review-facts.ts
-4 src/shared/sidebar-list/feed-facts/workspace-rows.ts
 1 src/shared/sidebar-list/feed/sidebar-feed-domains.ts
 3 src/shared/sidebar-list/feed/sidebar-inputs-feed-contract.ts
 2 src/shared/sidebar-list/feed/sidebar-temporal-snapshot.ts
@@ -310,7 +301,6 @@
 3 src/shared/telemetry/schemas/telemetry-agent-dashboard-event-schemas.ts
 2 src/shared/telemetry/schemas/telemetry-codex-history-move-event-schemas.ts
 1 src/shared/telemetry/schemas/telemetry-codex-legacy-history-event-schemas.ts
-4 src/shared/telemetry/schemas/telemetry-onboarding-language-schemas.ts
 2 src/shared/telemetry/schemas/telemetry-plugin-event-schemas.ts
 3 src/shared/telemetry/schemas/telemetry-repository-event-schemas.ts
 3 src/shared/telemetry/schemas/telemetry-ssh-host-server-event-schemas.ts
