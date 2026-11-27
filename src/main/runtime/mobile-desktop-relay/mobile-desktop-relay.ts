@@ -112,6 +112,7 @@ export class MobileDesktopRelay {
           rewriteRelayedPhoneRequest(frame, phone.deviceToken, hostToken),
           request.method,
           environmentId,
+          phone.deviceId,
           this.options
         )
         try {
