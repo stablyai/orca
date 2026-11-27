@@ -61,11 +61,7 @@ export function notifyBlockedAgentStartup<Draft extends StartupDraft>(
 export function blockedStartupTitle(reason: AgentProgramBlockReason): string {
   switch (reason) {
     case 'unbuildable':
-      return translate(
-        'components.agentSessionContinuation.launchFailed',
-        'Could not start a new {{agent}} session.',
-        { agent: translate('auto.lib.agent.catalog.8a9ba743cc', 'Hermes') }
-      )
+      return translate('terminal.startupPromptNotDelivered', "The startup prompt wasn't delivered.")
     case 'unavailable':
       return translate(
         'terminal.agentStartup.unavailable',
@@ -80,12 +76,6 @@ export function blockedStartupTitle(reason: AgentProgramBlockReason): string {
 }
 
 export function closeStartupDraft(id: number): void {
-  if (blockedStartupDrafts[0]?.id === id) {
-    removeStartupDraft(id)
-  }
-}
-
-function removeStartupDraft(id: number): void {
   const drafts = blockedStartupDrafts.filter((draft) => draft.id !== id)
   if (drafts.length === blockedStartupDrafts.length) {
     return
@@ -95,7 +85,7 @@ function removeStartupDraft(id: number): void {
 }
 
 export async function copyStartupDraft(id: number): Promise<void> {
-  if (copyingDraft || blockedStartupDrafts[0]?.id !== id) {
+  if (copyingDraft) {
     return
   }
   const prompt = startupDraftTexts.get(id)
@@ -110,7 +100,7 @@ export async function copyStartupDraft(id: number): Promise<void> {
   } finally {
     copyingDraft = false
   }
-  removeStartupDraft(id)
+  closeStartupDraft(id)
 }
 
 export function copyDroppedTextAction(text: string): {

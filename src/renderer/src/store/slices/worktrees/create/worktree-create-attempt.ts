@@ -41,7 +41,9 @@ export async function runCreateAttempt(
         ? // Why local can still reject on the parent: paired web clients route this API to their host.
           await createLocalWorktreeWithStartupDraft(
             buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace }),
-            creationAgentLaunch?.draft ?? creationAgentLaunch?.prompt
+            creationAgentLaunch?.draft ??
+              creationAgentLaunch?.prompt ??
+              request.options?.hostAgentLaunch?.prompt
           )
         : await createWorktreeOnRuntimeHost(
             target.environmentId,

@@ -10,6 +10,8 @@ import { copyUtf16SuffixToOwnedString } from '../../text/owned-utf16-suffix'
 
 /** The wrapper itself gives up then, so no agent can start after it. */
 export const SETUP_WAIT_GATE_MAX_MS = SETUP_AGENT_WAIT_TIMEOUT_SECONDS * 1000
+// Allow the login shell to initialize and the wrapper to recheck the executable after setup.
+export const WORKTREE_SETUP_GATE_OBSERVER_TIMEOUT_MS = SETUP_WAIT_GATE_MAX_MS + 5 * 60_000 + 15_000
 
 const SETUP_WAIT_END_LINES: readonly { line: string; phase: 'started' | 'failed' }[] = [
   { line: SETUP_COMPLETE_MESSAGE, phase: 'started' },

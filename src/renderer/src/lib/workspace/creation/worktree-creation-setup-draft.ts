@@ -1,5 +1,5 @@
 import { notifyBlockedAgentStartup } from '@/lib/agent-session/launch/prompt/blocked-agent-startup-notice'
-import { SETUP_WAIT_GATE_MAX_MS } from '../../../../../shared/agent-launch/startup/setup-wait-output-gate'
+import { WORKTREE_SETUP_GATE_OBSERVER_TIMEOUT_MS } from '../../../../../shared/agent-launch/startup/setup-wait-output-gate'
 import type { AgentProgramBlockReason } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { CreateWorktreeArgs } from '../../../../../shared/worktree/create-types'
 
@@ -43,10 +43,9 @@ export async function createLocalWorktreeWithStartupDraft(
   } finally {
     if (startupPrompts.get(creationId) === entry) {
       if (reportsSetupGateOutcome) {
-        // Match the gate's grace period for the wrapper's final executable check.
         entry.expiry = window.setTimeout(() => {
           startupPrompts.delete(creationId)
-        }, SETUP_WAIT_GATE_MAX_MS + 15_000)
+        }, WORKTREE_SETUP_GATE_OBSERVER_TIMEOUT_MS)
       } else {
         startupPrompts.delete(creationId)
       }
