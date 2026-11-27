@@ -22,7 +22,6 @@ import { registerLazyEphemeralVmHandlers } from '../ephemeral-vm/lazy-ephemeral-
 import { registerLazyAiVaultHandlers } from '../ai-vault/lazy-ai-vault-handlers'
 import { registerNativeChatHandlers } from '../native-chat'
 import { registerNotificationHandlers } from '../notifications/notifications'
-import { registerDashboardPopoutHandlers } from '../dashboard/dashboard-popout'
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser/browser'
 import { setTrustedBrowserRendererWebContentsId } from '../browser/browser-renderer-trust'
 import { registerSessionHandlers } from '../session'
@@ -35,7 +34,6 @@ import { registerWorkspacePortHandlers } from '../ports/workspace-ports'
 import { registerAutomationHandlers } from '../automations'
 import { registerKeybindingHandlers } from '../keybindings'
 import { registerTelemetryHandlers } from '../telemetry'
-import { registerShellHandlers } from '../shell/shell'
 import { registerPluginHandlers } from '../plugins/plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
 import { registerLazyEmulatorHandlers } from '../emulator/lazy-emulator-handlers'
@@ -109,7 +107,7 @@ export async function registerCoreHandlers(
       onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)
     })
     registerLazyRareIpcHandlers(store)
-    registerLazySetupIpcHandlers(store, codexAccounts, runtime)
+    registerLazySetupIpcHandlers(store, codexAccounts, runtime, keybindings)
     registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
     registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
     registerClaudeAccountHandlers(claudeAccounts, (change, held) =>
@@ -127,7 +125,6 @@ export async function registerCoreHandlers(
     }
     registerStatsHandlers(stats)
     registerNotificationHandlers(store, runtime)
-    registerDashboardPopoutHandlers(store, keybindings)
     registerSettingsHandlers(store, agentAwakeService)
     registerLazySkillsHandlers(store, runtime)
     registerLazySkillDeleteIpcHandlers(store, runtime)
@@ -150,7 +147,6 @@ export async function registerCoreHandlers(
       onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch
     })
     registerBrowserHandlers(store)
-    registerShellHandlers(store)
     registerSessionHandlers(store, runtime)
     registerUIHandlers(store, { isDashboardPopoutRenderer })
     registerLazyEmulatorHandlers((id) => runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id))

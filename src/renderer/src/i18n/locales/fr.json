@@ -19962,7 +19962,6 @@
       "linear-issue-attribute-filter-dropdowns": {
         "removeFilter": "Retirer le filtre {{value0}}",
         "teamRequired": "Sélectionnez une équipe pour charger les statuts, responsables et étiquettes de cet espace de travail.",
-        "filters": "Filtres",
         "allWorkspacesTitle": "Sélectionnez un espace de travail",
         "allWorkspacesBody": "Les filtres de statut, responsable et étiquette utilisent des identifiants issus d'un seul espace de travail Linear. Choisissez-en un pour filtrer selon ces attributs.",
         "clearAll": "Effacer tous les filtres",

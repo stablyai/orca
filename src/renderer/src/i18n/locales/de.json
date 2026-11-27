@@ -20043,7 +20043,6 @@
       "linear-issue-attribute-filter-dropdowns": {
         "removeFilter": "Filter für {{value0}} entfernen",
         "teamRequired": "Ein Team auswählen, um Status, Zuständige und Labels für diesen Arbeitsbereich zu laden.",
-        "filters": "Filter",
         "allWorkspacesTitle": "Einen Arbeitsbereich auswählen",
         "allWorkspacesBody": "Status-, Zuständigkeits- und Label-Filter verwenden IDs aus einem einzelnen Linear-Arbeitsbereich. Einen Arbeitsbereich auswählen, um nach diesen Attributen zu filtern.",
         "clearAll": "Alle Filter zurücksetzen",

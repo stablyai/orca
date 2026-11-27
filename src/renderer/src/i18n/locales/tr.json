@@ -20310,7 +20310,6 @@
       "linear-issue-attribute-filter-dropdowns": {
         "removeFilter": "{{value0}} filtresini kaldır",
         "teamRequired": "Bu çalışma alanı için durum, atanan kişi ve etiketleri yüklemek üzere bir takım seçin.",
-        "filters": "Filtreler",
         "allWorkspacesTitle": "Bir çalışma alanı seçin",
         "allWorkspacesBody": "Durum, atanan kişi ve etiket filtreleri tek bir Linear çalışma alanından gelen id'leri kullanır. Bu özelliklere göre filtrelemek için bir çalışma alanı seçin.",
         "clearAll": "Tüm filtreleri temizle",

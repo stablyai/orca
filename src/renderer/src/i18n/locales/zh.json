@@ -19428,7 +19428,6 @@
       "linear-issue-attribute-filter-dropdowns": {
         "removeFilter": "移除 {{value0}} 筛选器",
         "teamRequired": "选择一个团队以加载此工作区的状态、负责人和标签",
-        "filters": "筛选器",
         "allWorkspacesTitle": "选择一个工作区",
         "allWorkspacesBody": "状态、负责人和标签筛选器使用单个 Linear 工作区的 ID，请选择一个工作区以按这些属性进行筛选",
         "clearAll": "清除所有筛选器",

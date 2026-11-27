@@ -15,10 +15,11 @@ import {
 import { ManagedOrcadEventWindow } from '../managed-server/lifecycle/orcad-managed-event-window'
 import { ORCAD_SHUTDOWN_DEADLINE_MS } from '../orcad/host-lifecycle/managed-stop/orcad-stop-deadlines'
 import {
+  BackendIdleStopTimer,
   createBackendDesktopCapabilities,
-  admitBackendPortRequest,
-  deliverBackendDocumentPort,
-  trackBackendDocument,
+  handleBackendPortRequest,
+  stopBackendUtilityChild,
+  terminateBackendChild,
   type BackendDocument
 } from './backend-desktop-capabilities'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
@@ -37,6 +38,9 @@ export class BackendSupervisor {
   private readonly failures = new ManagedOrcadEventWindow(10 * 60_000, Date.now)
   private incarnation: string | undefined
   private readonly documents = new Map<number, BackendDocument>()
+  private readonly idleStop = new BackendIdleStopTimer()
+  private readonly idleRetired = new WeakSet<ReturnType<typeof utilityProcess.fork>>()
+  private activeControlCalls = 0
   private stopping?: Promise<void>
 
   private readonly retireRenderer = (_event: unknown, contents: WebContents): void =>
@@ -47,42 +51,22 @@ export class BackendSupervisor {
       throw new Error('Backend paths were not captured during preflight.')
     }
     app.on('render-process-gone', this.retireRenderer)
-    ipcMain.handle(
-      BACKEND_PORT_REQUEST,
-      async (event, token: unknown, purpose: unknown = 'demand') => {
-        const admitted = admitBackendPortRequest(event, token, purpose)
-        const { sender, senderFrame, role } = admitted
-        const document = trackBackendDocument(
-          this.documents,
-          sender,
-          senderFrame,
-          { token: admitted.token, role },
-          (id) => this.child?.postMessage({ type: 'retire', document: id })
-        )
-        if (!this.desiredRunning) {
-          throw new Error('Orca is shutting down.')
-        }
-        const ready = admitted.purpose === 'recovery' ? this.ready : this.ensureReady(true)
-        const child = this.child
-        if (!ready) {
-          throw new Error('Usage is unavailable. Try refreshing the usage view.')
-        }
-        await ready
-        const incarnation = this.incarnation
-        if (
-          this.documents.get(sender.id) !== document ||
-          !this.desiredRunning ||
-          !child ||
-          this.child !== child ||
-          !incarnation ||
-          sender.isDestroyed() ||
-          sender.mainFrame !== senderFrame
-        ) {
-          throw new Error('The document was replaced before Orca connected.')
-        }
-        deliverBackendDocumentPort(child, document, incarnation)
-        return document.token
-      }
+    ipcMain.handle(BACKEND_PORT_REQUEST, (event, token: unknown, purpose: unknown = 'demand') =>
+      handleBackendPortRequest(event, token, purpose, {
+        documents: this.documents,
+        isDesiredRunning: () => this.desiredRunning,
+        onActivity: () => this.idleStop.clear(),
+        onDocumentRetired: (id) => {
+          this.child?.postMessage({ type: 'retire', document: id })
+          this.scheduleIdleStopIfUnused()
+        },
+        acquireReady: (admittedPurpose) => ({
+          ready: admittedPurpose === 'recovery' ? this.ready : this.ensureReady(true),
+          child: this.child
+        }),
+        getCurrentChild: () => this.child,
+        getIncarnation: () => this.incarnation
+      })
     )
     // Start the usage utility process on first demand (BACKEND_PORT_REQUEST or callControl)
     // rather than eagerly at launch, saving ~28 MiB physical footprint when Usage is unused.
@@ -99,18 +83,58 @@ export class BackendSupervisor {
   }
 
   async callControl(method: string, params: unknown): Promise<unknown> {
-    const ready = this.ensureReady(true)
-    const control = this.control
-    await ready
-    if (!this.desiredRunning || !control || this.control !== control) {
-      throw new Error('Usage disconnected. Try again after it reconnects.')
+    this.idleStop.clear()
+    this.activeControlCalls += 1
+    try {
+      const ready = this.ensureReady(true)
+      const control = this.control
+      await ready
+      if (!this.desiredRunning || !control || this.control !== control) {
+        throw new Error('Usage disconnected. Try again after it reconnects.')
+      }
+      return await control.call(method, params)
+    } finally {
+      this.activeControlCalls -= 1
+      this.scheduleIdleStopIfUnused()
     }
-    return control.call(method, params)
+  }
+
+  private clearChildState(): void {
+    this.child = null
+    this.control = null
+    this.incarnation = undefined
+    this.ready = null
+    this.disposeFailedStartup = undefined
+  }
+
+  private isUnused(): boolean {
+    return Boolean(
+      this.child &&
+      this.desiredRunning &&
+      this.documents.size === 0 &&
+      this.activeControlCalls === 0
+    )
+  }
+
+  private scheduleIdleStopIfUnused(): void {
+    if (!this.isUnused()) {
+      return
+    }
+    this.idleStop.schedule(() => {
+      if (!this.isUnused() || !this.child) {
+        return
+      }
+      const { child, control } = this
+      this.idleRetired.add(child)
+      this.clearChildState()
+      terminateBackendChild(child, control)
+    })
   }
 
   stop(): Promise<void> {
     this.stopping ??= (async () => {
       this.desiredRunning = false
+      this.idleStop.clear()
       app.off('render-process-gone', this.retireRenderer)
       clearTimeout(this.restartTimer)
       this.restartTimer = undefined
@@ -119,18 +143,13 @@ export class BackendSupervisor {
         document.retire()
       }
       ipcMain.removeHandler(BACKEND_PORT_REQUEST)
-      if (!child) {
-        return
-      }
-      const exited = this.exited
-      const deadline = setTimeout(() => {
-        if (this.child === child) {
-          child.kill()
-        }
-      }, ORCAD_SHUTDOWN_DEADLINE_MS + 1_000)
-      this.control?.close()
-      await exited
-      clearTimeout(deadline)
+      await stopBackendUtilityChild({
+        child,
+        control: this.control,
+        exited: this.exited,
+        isCurrentChild: (candidate) => this.child === candidate,
+        deadlineMs: ORCAD_SHUTDOWN_DEADLINE_MS + 1_000
+      })
     })()
     return this.stopping
   }
@@ -201,16 +220,9 @@ export class BackendSupervisor {
           this.disposeFailedStartup = () => {
             disposed = true
             const control = this.control
-            this.child = null
-            this.control = null
-            this.incarnation = undefined
-            this.ready = null
-            this.disposeFailedStartup = undefined
+            this.clearChildState()
             clearTimeout(startupDeadline)
-            control?.close()
-            try {
-              child.kill()
-            } catch {}
+            terminateBackendChild(child, control)
           }
         }
         reject(error)
@@ -260,21 +272,18 @@ export class BackendSupervisor {
       failed(new Error('Usage could not start. Try refreshing the usage view.'))
     })
     child.once('exit', (code) => {
+      const idleRetired = this.idleRetired.has(child)
       recordDurableCrashBreadcrumb('backend_process_exited', {
         pid: childPid ?? null,
         incarnation: incarnation ?? null,
         exitCode: code,
-        expected: disposed || !this.desiredRunning
+        expected: disposed || idleRetired || !this.desiredRunning
       })
       clearTimeout(startupDeadline)
       failed(new Error('Usage disconnected. Try again after it reconnects.'))
       if (this.child === child) {
         this.control?.close()
-        this.control = null
-        this.child = null
-        this.incarnation = undefined
-        this.ready = null
-        this.disposeFailedStartup = undefined
+        this.clearChildState()
         if (this.desiredRunning) {
           this.failures.record('backend')
         }
