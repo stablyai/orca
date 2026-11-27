@@ -52,7 +52,7 @@ function StateMark({ row }: { row: ResumeToastRow }): React.JSX.Element {
       <span
         role="img"
         aria-label={t('auto.components.NativeChatResumeToast.stateStopped', 'Stopped')}
-        className="mt-0.5 inline-flex size-3.5 shrink-0 items-center justify-center"
+        className="inline-flex size-4 shrink-0 items-center justify-center"
       >
         <span className="size-1.5 rounded-full bg-muted-foreground/60" />
       </span>
@@ -77,7 +77,12 @@ function StateMark({ row }: { row: ResumeToastRow }): React.JSX.Element {
             t('auto.components.NativeChatResumeToast.stateResuming', 'Resuming')
           ]
   return (
-    <span role="img" aria-label={label} className="mt-0.5 inline-flex shrink-0">
+    // As wide as the header's icon, so the two columns line up.
+    <span
+      role="img"
+      aria-label={label}
+      className="inline-flex size-4 shrink-0 items-center justify-center"
+    >
       <Icon className={`size-3.5 ${className}`} />
     </span>
   )

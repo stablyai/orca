@@ -27,6 +27,11 @@ export type ResumeToastView = Readonly<{
   startedBy: ResumeRunStarter | null
 }>
 
+/** A lone agent's line says it all; Details stays for several agents, the offer, or a failure. */
+export function resumeToastShowsDetails(view: ResumeToastView): boolean {
+  return view.phase === 'offer' || view.rows.length !== 1 || view.rows[0]?.state === 'needs-you'
+}
+
 const ORDER: Record<ResumeToastRowState, number> = {
   'needs-you': 0,
   resuming: 1,

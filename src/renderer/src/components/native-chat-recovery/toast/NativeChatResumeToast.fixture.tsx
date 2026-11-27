@@ -116,6 +116,86 @@ export const allResumed = defineFixture({
   )
 })
 
+/** One agent, longest name: the whole report is one line. */
+export const oneResumed = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(finishedRun(twelve.slice(0, 1), 'launch'), [], new Map())}
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
+export const oneResumedShort = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(finishedRun(twelve.slice(1, 2), 'launch'), [], new Map())}
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
+export const oneResuming = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(
+        { ...finishedRun(twelve.slice(0, 1), 'launch'), inFlight: true, continued: undefined },
+        twelve.slice(0, 1),
+        new Map()
+      )}
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
+export const oneFailed = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(
+        finishedRun(twelve.slice(0, 1), 'launch'),
+        [],
+        new Map([[notAttached.sessionId, notAttached]])
+      )}
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
+export const allResumedDetails = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(finishedRun(twelve.slice(0, 3), 'launch'), [], new Map())}
+      listedAt={NOW}
+      defaultExpanded
+      {...actions}
+    />
+  )
+})
+
+export const threeOneFailed = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(
+        finishedRun(twelve.slice(0, 3), 'launch'),
+        [],
+        new Map([[notAttached.sessionId, notAttached]])
+      )}
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
 /** Worst case: twelve chats with long names, one needing the person, Details open. */
 export const twelveOneNeedsYou = defineFixture({
   width: NARROW,
@@ -158,6 +238,70 @@ export const remoteServer = defineFixture({
       {...actions}
     />
   )
+})
+
+export const remoteOneFailed = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(
+        finishedRun(twelve.slice(0, 3), 'user'),
+        [],
+        new Map([[notAttached.sessionId, notAttached]])
+      )}
+      machineName="build-server-02"
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
+export const remoteOneResumed = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(finishedRun(twelve.slice(0, 1), 'user'), [], new Map())}
+      machineName="build-server-02"
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
+export const remoteOneFailed416 = defineFixture({
+  width: 448,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(
+        finishedRun(twelve.slice(0, 3), 'user'),
+        [],
+        new Map([[notAttached.sessionId, notAttached]])
+      )}
+      machineName="build-server-02"
+      listedAt={NOW}
+      {...actions}
+    />
+  )
+})
+
+export const remoteOneFailedGerman = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(
+        finishedRun(twelve.slice(0, 3), 'user'),
+        [],
+        new Map([[notAttached.sessionId, notAttached]])
+      )}
+      machineName="build-server-02"
+      listedAt={NOW}
+      {...actions}
+    />
+  ),
+  interact: async () => {
+    await setRendererUiLanguage('de')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
 })
 
 type FixtureLanguage =

@@ -74,9 +74,7 @@ function Timing(): React.JSX.Element {
 const render = (): React.JSX.Element => <Timing />
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 const reportShown = (frame: HTMLElement): boolean =>
-  frame
-    .querySelector('[role=status]')
-    ?.textContent?.includes('Resumed 20 agents after the restart.') === true
+  frame.querySelector('[role=status]')?.textContent?.includes('Resumed 20 agents') === true
 
 function expectReport(frame: HTMLElement, shown: boolean, why: string): void {
   if (reportShown(frame) !== shown) {
