@@ -67,5 +67,15 @@ describe('upgrade forward', () => {
     const broken = { ...env, WAKE_ADMIN_KEY: 'short' } as Env
     await expect(upgrade(broken)).rejects.toThrow('connector_wake_config_admin')
     expect(error.mock.calls[0]?.[0]).toBe('connector-wake: request threw')
+    expect(error.mock.calls[0]?.[1]).toMatchObject({ route: CONNECTOR_WAKE_PATH })
+  })
+
+  it('logs an unknown path as "other", never the path itself', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { env } = harness(async () => new Response(null, { status: 204 }))
+    const broken = { ...env, WAKE_ADMIN_KEY: 'short' } as Env
+    await expect(worker.fetch(new Request('https://wake.test/__spike/object/acct-123:machine-456'), broken, {} as ExecutionContext)).rejects.toThrow()
+    expect(error.mock.calls[0]?.[1]).toMatchObject({ route: 'other' })
+    expect(JSON.stringify(error.mock.calls)).not.toContain('acct-123')
   })
 })

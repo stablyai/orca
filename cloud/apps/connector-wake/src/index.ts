@@ -138,6 +138,12 @@ async function handleAdminWake(env: Env, request: Request): Promise<Response> {
   return Response.json(counts)
 }
 
+const ROUTE_LABELS = new Set(['/health', '/__health/object', CONNECTOR_WAKE_ADMIN_PATH, CONNECTOR_WAKE_PATH])
+function routeLabel(request: Request): string {
+  const path = new URL(request.url).pathname
+  return ROUTE_LABELS.has(path) ? path : 'other'
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   // Fails every request (500) on a misconfigured deploy.
   wakeConfig(env)
@@ -165,8 +171,8 @@ export default {
       return await route(request, env)
     } catch (error) {
       // Still thrown (500, scriptThrewException, as before); logged first so Workers Logs keeps
-      // the reason. The path is one of the fixed routes above or another; no ids, no query.
-      console.error('connector-wake: request threw', { path: new URL(request.url).pathname, place: requestPlace(request), message: String((error as { message?: unknown })?.message ?? error) })
+      // the reason. A fixed route label, never the path (it can carry ids) or the query.
+      console.error('connector-wake: request threw', { route: routeLabel(request), place: requestPlace(request), message: String((error as { message?: unknown })?.message ?? error) })
       throw error
     }
   }
