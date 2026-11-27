@@ -1,4 +1,5 @@
 import { notifyBlockedAgentStartup } from '@/lib/agent-session/launch/prompt/blocked-agent-startup-notice'
+import type { AgentProgramBlockReason } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { CreateWorktreeArgs } from '../../../../../shared/worktree/create-types'
 
 const startupPrompts = new Map<string, string>()
@@ -32,12 +33,11 @@ export async function createLocalWorktreeWithStartupDraft(
 
 export function settleWorktreeCreationSetupGate(
   creationId: string,
-  blocked: boolean,
-  worktreeId: string
+  blockReason: AgentProgramBlockReason | undefined
 ): void {
   const prompt = startupPrompts.get(creationId)
   startupPrompts.delete(creationId)
-  if (blocked && prompt) {
-    notifyBlockedAgentStartup('unknown', { worktreeId, prompt })
+  if (blockReason && prompt) {
+    notifyBlockedAgentStartup(blockReason, { creationId, prompt })
   }
 }

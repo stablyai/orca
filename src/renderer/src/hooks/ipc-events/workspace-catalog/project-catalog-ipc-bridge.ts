@@ -105,11 +105,7 @@ export function registerProjectCatalogIpcBridge(
         return
       }
       if (data.phase === 'startup-gate-settled') {
-        settleWorktreeCreationSetupGate(
-          data.creationId,
-          data.blocked === true,
-          data.worktreeId ?? data.creationId
-        )
+        settleWorktreeCreationSetupGate(data.creationId, data.blockReason)
         return
       }
       // Why: every event without a live meter (a phase change, or null when git finished) clears it.
