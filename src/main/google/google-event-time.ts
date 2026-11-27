@@ -9,7 +9,7 @@ export const DEFAULT_EVENT_MINUTES = 30
 export type EventTime = { kind: 'day'; date: string } | { kind: 'time'; ms: number }
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/
-const LOCAL = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::\d{2})?$/
+const LOCAL = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::([0-5]\d))?$/
 const WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/i
 
 export function parseEventTime(value: string, timeZone: string, flag: string): EventTime {
@@ -19,7 +19,10 @@ export function parseEventTime(value: string, timeZone: string, flag: string): E
   }
   const local = LOCAL.exec(trimmed)
   if (local?.[1] && local[2]) {
-    return { kind: 'time', ms: zonedInstant(local[1], local[2], timeZone) }
+    return {
+      kind: 'time',
+      ms: zonedInstant(local[1], local[2], timeZone) + Number(local[3] ?? 0) * 1000
+    }
   }
   if (WITH_OFFSET.test(trimmed) && !Number.isNaN(Date.parse(trimmed))) {
     return { kind: 'time', ms: Date.parse(trimmed) }
