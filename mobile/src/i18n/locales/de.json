@@ -3728,6 +3728,7 @@
       "switchBranch": "Branch wechseln",
       "syncCounts": "{{behind}} pullen, {{ahead}} pushen.",
       "upToDate": "Nichts zu committen. Branch ist aktuell.",
+      "openCommits": "Commits öffnen",
       "waitForRemoteOperation": "Nach Abschluss des Remote-Vorgangs erneut versuchen."
     },
     "branchBaseRef": {
@@ -3759,6 +3760,11 @@
       "commitSync": "Committen & synchronisieren",
       "commitThenPullPush": "Committen, dann pullen und pushen",
       "enterMessage": "Zum Committen eine Commit-Nachricht eingeben",
+      "statusConflicts": "Konflikte",
+      "statusNothingStaged": "Nichts vorgemerkt",
+      "statusNeedsMessage": "Nachricht fehlt",
+      "statusNotPublished": "Nicht veröffentlicht",
+      "statusNoBranch": "Kein Branch",
       "linkedReviewTargetUnavailable": "Ziel des verknüpften Review-Branches nicht verfügbar",
       "prAlreadyMerged": "PR wurde bereits gemergt",
       "publishBranchFirstToPush": "Zum Pushen von Commits zuerst den Branch veröffentlichen",
@@ -3839,8 +3845,10 @@
       "loadingCommitted": "Committete Änderungen werden geladen…",
       "openChangedFile": "Geänderte Datei {{path}} öffnen",
       "openCommittedChange": "Committete Änderung an {{path}} öffnen",
+      "discard": "Verwerfen",
       "renamedFrom": "von {{path}}",
       "stageFile": "{{path}} vormerken",
+      "discardFile": "{{path}} verwerfen",
       "unresolvedConflict": "Ungelöster Konflikt",
       "unstageFile": "Vormerkung für {{path}} aufheben"
     },
@@ -3863,11 +3871,14 @@
       "loadFailed": "Verlauf konnte nicht geladen werden.",
       "loadFilesFailed": "Commit-Dateien konnten nicht geladen werden.",
       "noCommits": "Keine Commits.",
+      "loading": "Commits werden geladen…",
       "noFileChanges": "Keine Dateiänderungen",
       "retryFiles": "Commit-Dateien erneut laden"
     },
     "gitStatus": {
-      "conflicts": "Konflikte"
+      "conflicts": "Konflikte",
+      "uncommitted": "Nicht committet",
+      "staged": "Vorgemerkt"
     },
     "header": {
       "backToSession": "Zurück zur Sitzung",
@@ -3926,7 +3937,8 @@
       "pushBeforeCreateFailed": "Push fehlgeschlagen. Den Push-Fehler beheben und erneut versuchen."
     },
     "hubTab": {
-      "changes": "Änderungen"
+      "changes": "Änderungen",
+      "pullRequest": "Pull Request"
     },
     "loaders": {
       "loadFailed": "Quellcodeverwaltung konnte nicht geladen werden.",
@@ -3943,7 +3955,24 @@
       "switchBranchTitle": "Branch wechseln"
     },
     "panel": {
-      "unavailableTitle": "Quellcodeverwaltung nicht verfügbar"
+      "unavailableTitle": "Quellcodeverwaltung nicht verfügbar",
+      "loading": "Änderungen werden geladen…"
+    },
+    "folder": {
+      "emptyTitle": "Noch keine zugeordneten Worktrees",
+      "emptyCopy": "Aus diesem Arbeitsbereich erstellte Worktrees werden hier angezeigt.",
+      "statusUnavailable": "Nicht verfügbar",
+      "backToFolder": "Zurück zum Ordner",
+      "createSection": "Worktree erstellen",
+      "createIn": "Worktree in {{repo}} erstellen",
+      "created": "Worktree {{name}} in {{repo}} erstellt",
+      "createdNamed": "Worktree {{name}} erstellt",
+      "createFailed": "Worktree in {{repo}} konnte nicht erstellt werden.",
+      "loadReposRetry": "Repositorys laden",
+      "setupChoiceTitle": "Ohne Einrichtung erneut versuchen?",
+      "setupChoiceMessage": "Orca konnte das letzte Erstellen in {{repo}} nicht bestätigen. Für einen erneuten Versuch ist eine Entscheidung zur Einrichtung nötig; der Worktree wird ohne Ausführen der Repository-Einrichtung erstellt.",
+      "setupChoiceSkip": "Ohne Einrichtung erneut versuchen",
+      "checking": "Ein Worktree aus {{repo}} wurde möglicherweise bereits erstellt. Ordner wird geprüft…"
     },
     "prCreate": {
       "authRequired": "Vor dem Erstellen eines {{reviewLabel}}s ist eine Authentifizierung erforderlich.",
@@ -3972,6 +4001,13 @@
       "forcePush": "Push erzwingen",
       "forcePushFromDesktop": "Push für den Branch dieses Pull Requests vom Desktop aus erzwingen",
       "publishBranch": "Branch veröffentlichen",
+      "commitFiles_one": "{{count}} Datei committen",
+      "commitFiles_other": "{{count}} Dateien committen",
+      "pushCommits_one": "{{count}} Commit pushen",
+      "pushCommits_other": "{{count}} Commits pushen",
+      "pullCommits_one": "{{count}} Commit pullen",
+      "pullCommits_other": "{{count}} Commits pullen",
+      "stageAll": "Alle vormerken",
       "pull": "Pullen",
       "push": "Pushen",
       "sync": "Synchronisieren"
@@ -4020,6 +4056,14 @@
       "rebaseFromBase": "Auf Basis-Branch rebasen",
       "rebaseFromNamedBase": "Auf {{baseRef}} rebasen",
       "rebaseWithLatestFrom": "Aktuellen Branch auf die neuesten Commits von {{baseRef}} rebasen",
+      "statusUpToDate": "Aktuell",
+      "statusSetsUpstream": "Setzt einen Upstream",
+      "statusNotPublished": "Nicht veröffentlicht",
+      "statusNoBranch": "Kein Branch",
+      "statusMayFail": "Kann fehlschlagen",
+      "statusPublished": "Veröffentlicht",
+      "statusStashFirst": "Zuerst stashen",
+      "statusReplaces": "Ersetzt ↓{{behind}}",
       "sync": "Synchronisieren",
       "tryFastForwardPull": "Pull per Fast-Forward versuchen; git lehnt lokale Commits eventuell ab",
       "tryRegularPush": "Regulären Push versuchen; git erfordert eventuell einen erzwungenen Push",
@@ -4120,17 +4164,101 @@
     "useMobileCommitMessageGeneration": {
       "generateFailed": "Commit-Nachricht konnte nicht generiert werden."
     },
+    "useMobileCreatePrRunner": {
+      "branchRequired": "Vor dem Erstellen eines Pull Requests einen Branch auschecken."
+    },
     "useMobileGitRequests": {
       "actionFailed": "Aktion der Quellcodeverwaltung fehlgeschlagen",
       "branchUnavailable": "Branch-Status nicht verfügbar",
       "commitFailed": "Commit fehlgeschlagen"
     },
     "conflictActions": {
+      "resolveFile": "{{action}}: {{path}}",
       "needsNewerHost": "Aktualisiere Orca auf dem Computer, auf dem dieser Arbeitsbereich ausgeführt wird, um Merge-Konflikte auf deinem Smartphone zu lösen.",
       "markResolved": "Als gelöst markieren",
       "keepFile": "Datei behalten",
       "keepDeletion": "Löschung beibehalten",
       "completeMergeFailed": "Merge konnte nicht abgeschlossen werden"
+    },
+    "commitDetail": {
+      "copySha": "SHA kopieren",
+      "openOnGitHub": "Auf GitHub öffnen",
+      "openOnWeb": "Im Web öffnen",
+      "back": "Zurück zu Commits",
+      "title": "Commit",
+      "more": "Weitere Commit-Aktionen",
+      "author": "Autor",
+      "date": "Datum",
+      "status": "Status",
+      "onOrigin": "Auf origin",
+      "notPushed": "Nicht gepusht",
+      "files_one": "{{count}} Datei",
+      "files_other": "{{count}} Dateien",
+      "filesHeader": "Dateien",
+      "authorWithCoAuthors": "{{author}}, mit {{coAuthors}}"
+    },
+    "commits": {
+      "branchedFrom": "Abgezweigt von {{baseRef}}",
+      "baseUpToDate": "Aktuell",
+      "baseNewer_one": "1 neuerer Commit",
+      "baseNewer_other": "{{count}} neuere Commits",
+      "updateBranch": "Branch aktualisieren",
+      "back": "Zurück zur Quellcodeverwaltung",
+      "title": "Commits",
+      "loadMoreFailed": "Commits erneut laden",
+      "notPushed": "Nicht gepusht {{count}}",
+      "onOrigin": "Auf origin {{count}}"
+    },
+    "nextStep": {
+      "willMergeWhenReady": "Wird gemergt, sobald möglich",
+      "cancelAutoMerge": "Abbrechen",
+      "cancelAutoMergeLabel": "Auto-Merge abbrechen",
+      "mergedInto": "In {{base}} gemergt",
+      "merged": "Gemergt",
+      "genericAgent": "KI",
+      "resolveWithAgent": "Mit {{agent}} lösen",
+      "fixWithAgent": "Mit {{agent}} beheben",
+      "cantMergeYet": "Mergen noch nicht möglich:",
+      "checksFailing_one": "{{count}} Check fehlgeschlagen",
+      "checksFailing_other": "{{count}} Checks fehlgeschlagen",
+      "mergeWhenReady": "Mergen, sobald möglich",
+      "pushAndCreateReview": "Pushen & {{review}} erstellen",
+      "createReview": "{{review}} erstellen",
+      "merge": "Mergen",
+      "checksRunning_one": "{{count}} Check läuft noch",
+      "checksRunning_other": "{{count}} Checks laufen noch",
+      "waitingOnReviewer": "Wartet auf Review von {{login}}",
+      "waitingOnReview": "Wartet auf Review"
+    },
+    "prCreateDraft": {
+      "generateFailed": "Beschreibung konnte nicht geschrieben werden"
+    },
+    "changesHeader": {
+      "merging": "Merge läuft",
+      "rebasing": "Rebase läuft",
+      "cherryPicking": "Cherry-Pick läuft",
+      "notPublished": "Nicht veröffentlicht",
+      "notPushed": "{{count}} nicht gepusht",
+      "behind": "{{count}} zurück",
+      "upToDate": "Aktuell",
+      "switchBranch": "Von {{branch}} auf anderen Branch wechseln",
+      "mergeInProgress": "Merge läuft",
+      "rebaseInProgress": "Rebase läuft",
+      "cherryPickInProgress": "Cherry-Pick läuft",
+      "filesNeedDecision_one": "Vor dem Abschließen ist für {{count}} Datei eine Entscheidung nötig.",
+      "filesNeedDecision_other": "Vor dem Abschließen ist für {{count}} Dateien eine Entscheidung nötig.",
+      "conflictsResolved": "Alle Konflikte sind gelöst. Über die Leiste unten abschließen.",
+      "continueOnComputer": "Alle Konflikte sind gelöst. Zum Abschließen auf dem Computer fortfahren.",
+      "commits_one": "{{count}} Commit",
+      "commits_other": "{{count}} Commits",
+      "conflictsMayRemain": "Nicht alle Dateien werden aufgelistet, daher können noch Konflikte bestehen. Auf dem Computer prüfen."
+    },
+    "fileList": {
+      "stageAll": "Alle vormerken",
+      "mergedCleanly": "Ohne Konflikte gemergt",
+      "unstageAll": "Alle Vormerkungen aufheben",
+      "onThisBranch": "Auf diesem Branch {{count}}",
+      "versusBase": "vs. {{base}}"
     }
   },
   "tasks": {
@@ -4147,6 +4275,46 @@
       "loadPageFailed": "Seite {{page}} konnte nicht von GitHub geladen werden.",
       "noMoreResults": "Keine weiteren Ergebnisse auf Seite {{page}}."
     },
+    "filterSheet": {
+      "sortBy": "Sortieren nach",
+      "issueSource": "Issue-Quelle",
+      "issueSourceRow": "Upstream oder Origin",
+      "view": "Ansicht",
+      "projectView": "Projektansicht",
+      "projectItems_one": "{{count}} Eintrag",
+      "projectItems_other": "{{count}} Einträge",
+      "chooseView": "Auswählen",
+      "showOnRows": "In Zeilen anzeigen",
+      "projectFields": "Projektfelder",
+      "workspace": "Arbeitsbereich",
+      "linearWorkspace": "Linear-Arbeitsbereich",
+      "layout": "Layout",
+      "groupBy": "Gruppieren nach",
+      "orderBy": "Ordnen nach",
+      "displayProperties": "Anzeigeeigenschaften",
+      "title": "Filter & Anzeige",
+      "done": "Fertig",
+      "jqlReplacesPreset": "Die JQL-Suche ersetzt die Anzeige-Voreinstellung. Zum erneuten Auswählen die Suche leeren."
+    },
+    "jiraViewControls": {
+      "jqlSearch": "JQL-Suche"
+    },
+    "itemComments": {
+      "noComments": "Noch keine Kommentare",
+      "oneComment": "1 Kommentar",
+      "commentCount": "{{commentCount}} Kommentare"
+    },
+    "listState": {
+      "loading": "Aufgaben werden geladen…"
+    },
+    "connectionPresentation": {
+      "connectToHost": "Mit einem Host verbinden, um Aufgaben zu laden",
+      "noMatchingTasks": "Keine passenden Aufgaben"
+    },
+    "runtimeHydration": {
+      "loadFailed": "Aufgabeneinstellungen konnten nicht geladen werden"
+    },
+    "rerunUnsuccessful": "Checks erneut ausführen",
     "composerSource": {
       "baseFailed": "Der Basis-Branch konnte nicht ermittelt werden.",
       "forkPushWarning": "Bei diesem PR ist „Allow edits from maintainers“ deaktiviert; GitHub könnte einen Push zum Fork ablehnen."
@@ -4174,6 +4342,7 @@
       "gitlabView": "GitLab-Ansicht",
       "jiraFilter": "Jira-Filter",
       "jiraSite": "Jira-Site",
+      "statesFailed": "Status konnten nicht geladen werden. Zum erneuten Versuch noch einmal öffnen.",
       "linearFilter": "Linear-Filter",
       "linearIssue": "Linear-Issue",
       "linearWorkspace": "Linear-Arbeitsbereich",
@@ -4195,6 +4364,8 @@
       "items": "Einträge",
       "moreFields_one": "+{{count}} Feld",
       "moreFields_other": "+{{count}} Felder",
+      "loading": "Projekt wird geladen…",
+      "noMatches": "Keine passenden Projekteinträge.",
       "noItems": "Keine Projekteinträge",
       "pullRequestSubtitle": "Pull Request · {{repository}}{{number}}",
       "linkedPullRequestsOverflow": "+{{count}} weitere"
@@ -4229,6 +4400,9 @@
     },
     "itemActions": {
       "changeStatus": "Status ändern",
+      "copyLink": "Link kopieren",
+      "startWorkspace": "Arbeitsbereich starten",
+      "moreActions": "Weitere Aktionen",
       "copyGitHubLink": "GitHub-Link kopieren",
       "copyLinearLink": "Linear-Link kopieren",
       "creating": "Wird erstellt…",
@@ -4243,6 +4417,14 @@
       "discussion": "Diskussion",
       "noChecks": "Keine Checks gefunden.",
       "noComments": "Keine Kommentare.",
+      "details": "Details",
+      "type": "Typ",
+      "status": "Status",
+      "assignee": "Zuständige Person",
+      "project": "Projekt",
+      "priority": "Priorität",
+      "assignees": "Zuständige Personen",
+      "loading": "Details werden geladen…",
       "noPipelineRuns": "Keine Pipeline-Ausführungen für diesen MR.",
       "noSubIssues": "Keine untergeordneten Issues.",
       "none": "Keine",
@@ -4485,10 +4667,15 @@
     },
     "providerControls": {
       "myTodos": "Meine To-dos",
+      "reposLabel": "Repositorys: {{repos}}",
+      "filterCount": "Filter · {{count}}",
+      "filter": "Filter",
+      "filterLabel": "Filter und Anzeige",
       "projectMergeRequests": "Projekt-MRs"
     },
     "providerItemList": {
       "intoBranch": "in {{base}}",
+      "kindAndStatus": "{{kind}}, {{status}}",
       "nextPage": "Nächste Seite",
       "page": "Seite {{page}}",
       "pageOfTotal": "Seite {{page}} von {{total}}",
@@ -4604,6 +4791,7 @@
       "agent": "Agent",
       "connectFirst": "Zuerst Repository verbinden",
       "connectRepository": "Repository verbinden",
+      "optionalLabel": "Optional",
       "defaultBranch": "Standard-Branch",
       "detectingAgents": "Agenten werden erkannt…",
       "remoteRepository": "Entferntes Repository",
@@ -4910,6 +5098,7 @@
       "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "Wird auf dem ausgewählten Host ausgeführt. Halte diesen Host zur geplanten Zeit verfügbar.",
       "host": "Host",
       "pairedHost": "Gekoppelter Host",
+      "chooseHost": "Automatisierungen auf {{host}}, anderen Host auswählen",
       "selectedServerUnavailable": "Ausgewählter Server (nicht verfügbar)",
       "addANameInstructionsAndAnAgent": "Füge einen Namen, Anweisungen und einen Agenten hinzu.",
       "chooseAnExistingWorkspace": "Wähle einen vorhandenen Arbeitsbereich.",
@@ -4941,7 +5130,16 @@
       "discardChangesTitle": "Änderungen verwerfen?",
       "discardChangesMessage": "Nicht gespeicherte Änderungen an dieser Automatisierung gehen verloren.",
       "discard": "Verwerfen",
-      "keepEditing": "Weiter bearbeiten"
+      "keepEditing": "Weiter bearbeiten",
+      "on": "Ein",
+      "repeats": "Wiederholung",
+      "newOnePerRun": "Bei jeder Ausführung neu",
+      "moreActions": "Weitere Aktionen",
+      "noRunsYet": "Noch keine Ausführungen",
+      "nextRunToday": "Nächste Ausführung heute um {{time}}",
+      "nextRunTomorrow": "Nächste Ausführung morgen um {{time}}",
+      "nextRunWeekday": "Nächste Ausführung am {{day}} um {{time}}",
+      "nextRunDate": "Nächste Ausführung am {{date}}"
     },
     "orphanIssues": {
       "hostReselection": "Bearbeite diese Automatisierung und wähle ihren Host erneut aus, bevor du sie ausführst.",
@@ -4977,6 +5175,7 @@
       "hooksReviewBlocked": "Der Agent wartet darauf, dass neue oder geänderte Hooks überprüft werden („Hooks need review“). Diese Ausführung öffnen und den Hooks vertrauen oder sie entfernen. Geplante Ausführungen laufen weiter und sind erfolgreich, sobald nichts mehr überprüft werden muss.",
       "agentNeverStarted": "Der Agent der Automatisierung wurde nach dem Absenden des Prompts nie gestartet.",
       "agentNoCompletion": "Der Agent der Automatisierung hat keinen Abschluss gemeldet.",
+      "agentInterrupted": "Der Agent wurde unterbrochen, bevor er diese Ausführung abschließen konnte.",
       "watchTimedOut": "Orca hat die Überwachung dieser Ausführung nach 6 Stunden ohne Abschlusssignal beendet.",
       "projectSetupState": {
         "notSetUp": "Das Projekt ist auf dem ausgewählten Automatisierungs-Host nicht eingerichtet.",
@@ -5212,6 +5411,84 @@
           }
         }
       }
+    }
+  },
+  "agents": {
+    "list": {
+      "idleCount": "{{count}} inaktiv",
+      "offlineTitle": "{{desktop}} ist offline",
+      "offlineMessage": "Erneut verbinden, um diesen Agenten zu öffnen.",
+      "actions": "Aktionen für {{title}}",
+      "workers_one": "{{count}} Worker",
+      "workers_other": "{{count}} Worker",
+      "noMatches": "Keine Agenten zu „{{query}}“ gefunden",
+      "emptyTitle": "Keine laufenden Agenten",
+      "pairDesktop": "Einen Desktop koppeln, um hier seine Agenten zu sehen.",
+      "emptyBody": "Ein in einem beliebigen Arbeitsbereich gestarteter Agent erscheint hier.",
+      "unread": "Ungelesen",
+      "noDesktopTitle": "Kein Desktop verbunden",
+      "noDesktopBody": "Agenten erscheinen hier, sobald ein Desktop verbunden ist.",
+      "hideWorkers": "{{workers}} ausblenden",
+      "showWorkers": "{{workers}} anzeigen"
+    },
+    "actions": {
+      "offlineHint": "Der zugehörige Desktop ist offline.",
+      "open": "Öffnen",
+      "goToWorkspace": "Zum Arbeitsbereich wechseln",
+      "copyTitle": "Titel kopieren",
+      "copied": "Kopiert",
+      "copyFailed": "Titel konnte nicht kopiert werden",
+      "markRead": "Als gelesen markieren",
+      "markUnread": "Als ungelesen markieren",
+      "clear": "Aus Liste entfernen"
+    },
+    "groupBy": {
+      "status": "Status",
+      "workspace": "Arbeitsbereich",
+      "project": "Projekt",
+      "agent": "Agent",
+      "desktop": "Desktop"
+    },
+    "options": {
+      "groupBy": "Gruppieren nach",
+      "showWorkers": "Worker-Agenten anzeigen",
+      "open": "Optionen der Agentenliste",
+      "unreadOnly": "Nur ungelesene",
+      "markAllRead": "Alle als gelesen markieren",
+      "clearFinished": "Erledigte entfernen"
+    },
+    "search": {
+      "toggle": "Agenten suchen",
+      "placeholder": "Agenten suchen"
+    },
+    "desktops": {
+      "pickerTitle": "Desktop auswählen",
+      "agents_one": "{{count}} Agent",
+      "agents_other": "{{count}} Agenten",
+      "all": "Alle Desktops",
+      "offline": "Offline",
+      "needsYou_one": "{{count}} braucht dich",
+      "needsYou_other": "{{count}} brauchen dich"
+    },
+    "sections": {
+      "needsYou": "Benötigt dich",
+      "working": "In Arbeit",
+      "done": "Erledigt",
+      "offline": "Offline",
+      "offlineSeenAgo": "Offline · zuletzt vor {{ago}} gesehen",
+      "offlineSeenJustNow": "Offline · gerade eben gesehen",
+      "seenAgo": "Zuletzt vor {{ago}} gesehen",
+      "seenJustNow": "Gerade eben gesehen",
+      "clear": "Leeren"
+    },
+    "swipe": {
+      "read": "Gelesen",
+      "unread": "Ungelesen",
+      "clear": "Entfernen"
+    },
+    "activity": {
+      "needsWindow": "Aktualisierung fehlgeschlagen. Orca auf {{desktop}} öffnen.",
+      "failed": "Agentenliste konnte nicht aktualisiert werden."
     }
   },
   "bots": {
