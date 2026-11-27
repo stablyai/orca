@@ -118,7 +118,7 @@ function isAttachment(node: Part): boolean {
     node.headers?.some(
       (entry) =>
         entry.name.toLowerCase() === 'content-disposition' &&
-        /^\s*attachment(?=[\s;(]|$)/i.test(normalizeMimeHeader(entry.value))
+        /^\s*attachment(?=[\s;(]|$)/i.test(normalizeMimeHeader(entry.value) || entry.value)
     )
   )
 }

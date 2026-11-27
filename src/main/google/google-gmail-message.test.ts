@@ -51,7 +51,9 @@ it('ignores disposition comments when excluding attachments without changing rel
     '(export) attachment',
     '(export (archive)) ATTACHMENT (payload); filename=""',
     '(escaped \\( label) attachment',
-    'attachment(export)'
+    'attachment(export)',
+    'attachment (unterminated',
+    'attachment; filename="" (unterminated'
   ]) {
     const attached: Part = {
       ...textPart('text/plain', 'Attached note'),
