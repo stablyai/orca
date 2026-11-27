@@ -1,19 +1,16 @@
 import { app, ipcMain, MessageChannelMain, type IpcMainInvokeEvent } from 'electron'
 import {
   MAX_PROVIDER_RECEIPT_REQUEST_BYTES,
-  MAX_PROVIDER_RECEIPT_REPLY_BYTES,
   PROVIDER_RECEIPT_READ_METHOD,
   PROVIDER_RECEIPT_PORT_ACQUIRE,
   PROVIDER_RECEIPT_PORT_DELIVERY,
-  ReceiptCursor,
-  ReceiptPortRequest,
-  ReceiptRead
+  ReceiptPortRequest
 } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-provider-receipts'
 import { backendDocumentRole } from '../../backend-desktop/backend-desktop-capabilities'
 import { electronDocumentEndpoint } from '../../backend-desktop/electron-document-endpoint'
 import type { ProviderReceiptDestination } from '../../native-chat/agent-session-wire/publication/receipts/provider-receipt-credits'
+import { providerReceiptPortRequest } from '../../native-chat/agent-session-wire/publication/receipts/provider-receipt-port-request'
 import type { ProviderReceiptReaders } from '../../native-chat/agent-session-wire/publication/receipts/provider-receipt-readers'
-import { providerReceiptEnvelope } from '../../native-chat/agent-session-wire/publication/receipts/provider-receipt-frame'
 import type { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import { DESKTOP_RPC_CALLER } from '../../runtime/rpc/callers/rpc-caller-identity'
 import {
@@ -23,7 +20,6 @@ import {
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 
 const decoder = new TextDecoder('utf-8', { fatal: true })
-const encoder = new TextEncoder()
 
 function decodeRequest(data: unknown): unknown {
   if (!(data instanceof Uint8Array) || data.byteLength > MAX_PROVIDER_RECEIPT_REQUEST_BYTES) {
@@ -41,8 +37,7 @@ export class DesktopProviderReceiptPort {
 
   constructor(
     private readonly readers: ProviderReceiptReaders,
-    private readonly dispatcher: RpcDispatcher,
-    private readonly runtimeId: () => string
+    private readonly dispatcher: RpcDispatcher
   ) {
     ipcMain.handle(PROVIDER_RECEIPT_PORT_ACQUIRE, (event, data: unknown) =>
       this.acquire(event, data)
@@ -94,6 +89,7 @@ export class DesktopProviderReceiptPort {
     const document: ReceiptDocument = {
       endpoint,
       isCurrent: () => !controller.signal.aborted && delivery.isCurrent(),
+      isFrameCurrent: delivery.isCurrent,
       retire: () => {
         if (controller.signal.aborted) {
           return
@@ -125,7 +121,7 @@ export class DesktopProviderReceiptPort {
     const { endpoint } = document
     const previous = document.binding
     if (
-      !this.readers.canOpenPort(endpoint, reader) ||
+      !this.readers.canReply(endpoint, reader) ||
       (previous &&
         (previous.pending ||
           previous.reader.id !== reader.id ||
@@ -135,63 +131,66 @@ export class DesktopProviderReceiptPort {
     }
     previous?.close()
     const { port1, port2 } = new MessageChannelMain()
-    const onClose = (): void => document.retire()
+    const onClose = (): void => {
+      if (document.binding === binding) {
+        document.retire()
+      }
+    }
+    let closed = false
     const binding: NonNullable<ReceiptDocument['binding']> = {
       reader,
       pending: false,
       close: () => {
+        if (closed) {
+          return
+        }
+        closed = true
         if (document.binding === binding) {
           document.binding = undefined
         }
         port1.off('message', onMessage)
         port1.off('close', onClose)
         port1.close()
+        // The frame token fences restart delivery even after the binding is retired.
+        if (document.isFrameCurrent()) {
+          try {
+            senderFrame.postMessage(PROVIDER_RECEIPT_PORT_DELIVERY, nonce)
+          } catch {
+            // The frame disappeared before the send.
+          }
+        }
       }
     }
     const isCurrent = (): boolean => document.binding === binding && document.isCurrent()
-    const restart = (): void => {
-      const notify = isCurrent()
-      this.readers.suppress(endpoint)
-      binding.close()
-      if (notify) {
-        senderFrame.postMessage(PROVIDER_RECEIPT_PORT_DELIVERY, nonce)
-      }
-    }
     const onMessage = ({ data }: { data: unknown }): void => {
-      if (!isCurrent() || binding.pending) {
+      const request = providerReceiptPortRequest(
+        this.readers,
+        endpoint,
+        binding,
+        isCurrent(),
+        decodeRequest(data)
+      )
+      if (request.kind === 'drop') {
         return
       }
-      const decoded = decodeRequest(data)
-      const disposition = ReceiptCursor.safeParse(decoded)
-      if (disposition.success) {
-        this.readers.discard(endpoint, disposition.data)
-        return
-      }
-      const input = ReceiptRead.safeParse(decoded)
-      if (
-        !input.success ||
-        input.data.reader.id !== reader.id ||
-        input.data.reader.generation !== reader.generation
-      ) {
-        return
-      }
-      const admission = this.readers.readAdmission(endpoint, input.data)
-      if (admission === 'invalid') {
-        return
-      }
-      if (admission === 'capacity') {
-        restart()
+      if (request.kind === 'discard') {
+        this.readers.discard(endpoint, request.cursor)
         return
       }
       binding.pending = true
       void (async () => {
+        let posted = false
+        const canPost = (): boolean => isCurrent() && this.readers.canReply(endpoint, reader)
         try {
+          if (request.kind !== 'read') {
+            return
+          }
           const dispatched = await this.dispatcher.dispatch(
             {
               id: 'desktop-ipc',
               authToken: 'desktop-ipc',
               method: PROVIDER_RECEIPT_READ_METHOD,
-              params: input.data
+              params: request.input
             },
             {
               clientId: 'desktop-renderer',
@@ -202,41 +201,30 @@ export class DesktopProviderReceiptPort {
               localProviderReceipts: { endpoint, readers: this.readers }
             }
           )
-          if (!isCurrent()) {
-            this.readers.suppress(endpoint)
+          if (!dispatched.ok && (!isCurrent() || !this.readers.canStartRead(endpoint, reader))) {
             return
           }
-          let result = dispatched.ok ? dispatched.result : undefined
-          if (!dispatched.ok) {
-            if (this.readers.readAdmission(endpoint, input.data) !== 'ready') {
-              restart()
-              return
-            }
-            result = await this.readers.read(endpoint, input.data, undefined, 'closed')
-          }
+          const reply = dispatched.ok
+            ? dispatched.result
+            : await this.readers.read(endpoint, request.input, undefined, 'closed')
           const prepared = this.readers.preparedReply(endpoint)
-          if (!prepared || prepared !== result) {
-            restart()
-            return
-          }
-          const encoded = encoder.encode(
-            JSON.stringify(providerReceiptEnvelope(this.runtimeId(), prepared))
-          )
-          if (!isCurrent()) {
-            this.readers.suppress(endpoint)
-            return
-          }
-          if (
-            encoded.byteLength > MAX_PROVIDER_RECEIPT_REPLY_BYTES ||
-            !window.watchRenderer(pid) ||
-            !this.readers.handoff(endpoint, encoded.byteLength, () => port1.postMessage(encoded))
-          ) {
-            restart()
-          }
+          posted =
+            prepared !== undefined &&
+            prepared.reply === reply &&
+            prepared.reply.status !== 'reader_unknown' &&
+            canPost() &&
+            window.watchRenderer(pid) &&
+            this.readers.handoff(endpoint, (encoded) => port1.postMessage(encoded))
         } catch {
-          restart()
+          // Failure to hand off a reply retires this binding below.
         } finally {
           binding.pending = false
+          if (!posted) {
+            if (request.kind === 'read') {
+              this.readers.suppress(endpoint)
+            }
+            binding.close()
+          }
         }
       })()
     }

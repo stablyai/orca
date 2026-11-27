@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type {
-  ProviderReceiptRead,
-  ProviderReceiptReader,
-  ProviderReceiptReply
+import {
+  MAX_PROVIDER_RECEIPT_REPLY_BYTES,
+  type ProviderReceiptRead,
+  type ProviderReceiptReader,
+  type ProviderReceiptReply
 } from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-provider-receipts'
 import type { StructuredAgentSessionProviderReceipts } from '../../host/structured-agent-session-provider-receipts'
 import { ProviderReceiptStream } from './provider-receipt-stream'
-import { fitProviderReceiptUpdates, providerReceiptFrameBytes } from './provider-receipt-frame'
+import { encodeProviderReceiptFrame, fitProviderReceiptUpdates } from './provider-receipt-frame'
 
 import {
   ProviderReceiptCredits,
@@ -57,21 +58,12 @@ export class ProviderReceiptReaders {
     )
   }
 
-  readAdmission(
-    endpoint: ProviderReceiptDestination,
-    input: ProviderReceiptRead
-  ): 'ready' | 'capacity' | 'invalid' {
-    if (
-      !this.ownsDocument(endpoint, input.reader, true) ||
-      !this.credits.canContinue(endpoint, input.since)
-    ) {
-      return 'invalid'
-    }
-    return this.credits.hasRoom(endpoint.transport) ? 'ready' : 'capacity'
+  canStartRead(endpoint: ProviderReceiptDestination, identity: ProviderReceiptReader): boolean {
+    return this.canReply(endpoint, identity) && !!this.credits.get(endpoint.transport)?.reader
   }
 
-  canOpenPort(endpoint: ProviderReceiptDestination, identity: ProviderReceiptReader): boolean {
-    return this.credits.hasRoom(endpoint.transport) && this.ownsDocument(endpoint, identity, true)
+  canReply(endpoint: ProviderReceiptDestination, identity: ProviderReceiptReader): boolean {
+    return this.ownsDocument(endpoint, identity, true) && this.credits.hasRoom(endpoint.transport)
   }
 
   attach(
@@ -181,11 +173,14 @@ export class ProviderReceiptReaders {
     if (endpoint.document.aborted || endpoint.transport.aborted) {
       throw new Error('provider_receipt_sender_retired')
     }
-    const admission = this.readAdmission(endpoint, input)
-    if (admission !== 'ready') {
-      throw new Error(
-        admission === 'capacity' ? 'provider_receipt_capacity' : 'provider_receipt_read_pending'
-      )
+    if (
+      !this.ownsDocument(endpoint, input.reader, true) ||
+      !this.credits.canContinue(endpoint, input.since)
+    ) {
+      throw new Error('provider_receipt_read_pending')
+    }
+    if (!this.credits.hasRoom(endpoint.transport)) {
+      throw new Error('provider_receipt_capacity')
     }
     const target = (this.credits.get(endpoint.transport) ??
       this.credits.allocate(endpoint.transport))!
@@ -238,6 +233,7 @@ export class ProviderReceiptReaders {
     return promise
   }
 
+  canContinue = this.credits.canContinue.bind(this.credits)
   hasPostedReply = this.credits.hasPostedReply.bind(this.credits)
   discard = this.credits.discard.bind(this.credits)
   handoff = this.credits.handoff.bind(this.credits)
@@ -273,7 +269,7 @@ export class ProviderReceiptReaders {
     const runtimeId = this.runtimeId()
     if (wait.failure) {
       const reply = makeReply()
-      this.credits.deliver(target, wait, reply, providerReceiptFrameBytes(runtimeId, reply))
+      this.credits.deliver(target, wait, reply, encodeProviderReceiptFrame(runtimeId, reply))
       return
     }
     const reader = wait.reader!
@@ -292,18 +288,18 @@ export class ProviderReceiptReaders {
       const { frame, updates } = prepared
       const reply = makeReply()
       reply.streams.push(frame)
-      const complete = fitProviderReceiptUpdates(
-        providerReceiptFrameBytes(runtimeId, reply),
-        frame,
-        updates
-      )
-      if (frame.updates.length === 0 && updates.length !== 0) {
+      const complete = fitProviderReceiptUpdates(runtimeId, reply, frame, updates)
+      const encoded = encodeProviderReceiptFrame(runtimeId, reply)
+      if (
+        encoded.byteLength > MAX_PROVIDER_RECEIPT_REPLY_BYTES ||
+        (frame.updates.length === 0 && updates.length !== 0)
+      ) {
         wait.failure = 'capacity'
         return this.wake(target)
       }
       member.stream.handedOff(frame, complete)
       member.staged = frame
-      this.credits.deliver(target, wait, reply, providerReceiptFrameBytes(runtimeId, reply), {
+      this.credits.deliver(target, wait, reply, encoded, {
         subscription: frame.subscription,
         token: member.token
       })

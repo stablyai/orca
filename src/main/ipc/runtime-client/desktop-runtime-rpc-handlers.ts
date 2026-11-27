@@ -35,8 +35,7 @@ export function registerDesktopRuntimeRpcHandlers(runtime: OrcaRuntimeService): 
   })
   const receiptPort = new DesktopProviderReceiptPort(
     readers,
-    new RpcDispatcher({ runtime, methods: [LOCAL_READ_PROVIDER_RECEIPTS] }),
-    () => runtime.getRuntimeId()
+    new RpcDispatcher({ runtime, methods: [LOCAL_READ_PROVIDER_RECEIPTS] })
   )
 
   ipcMain.handle(

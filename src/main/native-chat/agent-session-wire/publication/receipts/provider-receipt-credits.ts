@@ -48,7 +48,7 @@ type Unread = {
   revision: ProviderReceiptCursor
   document: AbortSignal
   bytes: number
-  reply?: ProviderReceiptReply
+  prepared?: { reply: ProviderReceiptReply; encoded: Uint8Array }
   stream?: { subscription: string; token: symbol }
   handedOff: boolean
 }
@@ -88,18 +88,18 @@ export class ProviderReceiptCredits {
 
   canContinue(endpoint: ProviderReceiptDestination, since: ProviderReceiptCursor | null): boolean {
     const target = this.get(endpoint.transport)
-    if (target?.waiting) {
+    if (target?.waiting?.document === endpoint.document) {
       return false
     }
     const unread = target?.unread
-    return unread
+    return unread?.document === endpoint.document
       ? unread.handedOff && sameCursor(unread.revision, since)
       : since === null || sameCursor(since, this.consumed(endpoint.document) ?? null)
   }
 
-  preparedReply(endpoint: ProviderReceiptDestination): ProviderReceiptReply | undefined {
+  preparedReply(endpoint: ProviderReceiptDestination): Unread['prepared'] {
     const unread = this.get(endpoint.transport)?.unread
-    return unread?.document === endpoint.document ? unread.reply : undefined
+    return unread?.document === endpoint.document ? unread.prepared : undefined
   }
 
   hasRoom(transport: AbortSignal): boolean {
@@ -128,16 +128,12 @@ export class ProviderReceiptCredits {
   }
 
   // Navigation cancels the waiter. Only a suppressed send or destruction frees unread bytes.
-  handoff(endpoint: ProviderReceiptDestination, bytes?: number, post?: () => void): boolean {
+  handoff(endpoint: ProviderReceiptDestination, post?: (encoded: Uint8Array) => void): boolean {
     const unread = this.get(endpoint.transport)?.unread
-    if (
-      unread?.document === endpoint.document &&
-      !unread.handedOff &&
-      (bytes === undefined || bytes === unread.bytes)
-    ) {
-      post?.()
+    if (unread?.document === endpoint.document && !unread.handedOff && unread.prepared) {
+      post?.(unread.prepared.encoded)
       unread.handedOff = true
-      unread.reply = undefined
+      unread.prepared = undefined
       return true
     }
     return false
@@ -243,9 +239,10 @@ export class ProviderReceiptCredits {
     target: Destination,
     wait: Wait,
     reply: ProviderReceiptReply,
-    bytes: number,
+    encoded: Uint8Array,
     stream?: Unread['stream']
   ): void {
+    const bytes = encoded.byteLength
     if (
       bytes > MAX_PROVIDER_RECEIPT_REPLY_BYTES ||
       this.unreadBytes + bytes > MAX_PROVIDER_RECEIPT_UNREAD_BYTES
@@ -260,7 +257,7 @@ export class ProviderReceiptCredits {
       revision: reply.revision,
       document: wait.document,
       bytes,
-      reply,
+      prepared: { reply, encoded },
       stream,
       handedOff: false
     }
