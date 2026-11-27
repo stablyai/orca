@@ -1,7 +1,6 @@
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
-import { nativeChatStagedInputPaths } from '../../drafts/native-chat-draft-attachment-staging'
 import { noteNativeChatFilesHeldElsewhere } from '../controls/native-chat-held-elsewhere-notice'
-import { captureNativeChatStagedInput } from '../../drafts/native-chat-staged-input'
+import { captureNativeChatStagedInputNamed } from '../../drafts/native-chat-staged-input'
 import { mayHoldAgentReferences } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
@@ -149,10 +148,8 @@ export function useNativeChatStructuredComposerSend({
       // Only a message naming an original this draft's staging holds gets a preparation: unrelated
       // staging in the same scope gives an unstaged reference nothing to wait for.
       const stagedInput =
-        !hostCommand &&
-        !structuredTransport.attachmentStagingScope &&
-        nativeChatStagedInputPaths(draftScopeKey, { text, attachments }).length > 0
-          ? captureNativeChatStagedInput(draftScopeKey, { text, attachments })
+        !hostCommand && !structuredTransport.attachmentStagingScope
+          ? captureNativeChatStagedInputNamed(draftScopeKey, { text, attachments })
           : undefined
       // A new send replaces the last refusal's account of files held in another chat.
       noteNativeChatFilesHeldElsewhere(structuredTransport.sessionId, null)

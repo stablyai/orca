@@ -40,7 +40,7 @@ vi.mock('../attachments/uploads/native-chat-session-attachment-upload', () => ({
 
 const {
   adoptNativeChatStagedFile,
-  nativeChatStagedFileHolderScopes,
+  nativeChatStagedFileDraftHolderScopes,
   reconcileNativeChatStagedDraft,
   stageNativeChatDraftFile,
   stagedNativeChatFiles
@@ -50,6 +50,14 @@ const { captureNativeChatStagedInput, NativeChatStagedCustodyLostError } =
 const { structuredAgentSessionDraftScopeKey } = await import('./native-chat-draft-scope')
 const { readNativeChatHeldElsewhere, resetNativeChatHeldElsewhereForTests } =
   await import('../composer/controls/native-chat-held-elsewhere-notice')
+const { nativeChatHeldElsewhereNow } =
+  await import('../attachments/native-chat-browser-file-refusal')
+
+// The live account: who holds the refused files now, read from the drafts (see D12-03).
+const heldNow = (sessionId: string) => {
+  const record = readNativeChatHeldElsewhere(sessionId)
+  return record && nativeChatHeldElsewhereNow(record.references, sessionId).held
+}
 
 const SIBLING = '/host/agent-session-attachments/sibling/already.png'
 
@@ -97,11 +105,11 @@ it('starts no upload for an original adopted before the upload', async () => {
   await expect(prepared).rejects.toBeInstanceOf(NativeChatStagedCustodyLostError)
   await expect(prepared).rejects.toMatchObject({ references: [original] })
   expect(uploadedSources).toEqual([])
-  expect(nativeChatStagedFileHolderScopes(original)).toEqual([
+  expect(nativeChatStagedFileDraftHolderScopes(original)).toEqual([
     structuredAgentSessionDraftScopeKey(old)
   ])
   // Intact in the old chat, so the refusal says where rather than calling it expired.
-  expect(readNativeChatHeldElsewhere(retry)).toEqual({ count: 1, ownerSessionId: old })
+  expect(heldNow(retry)).toEqual({ count: 1, ownerSessionId: old })
 })
 
 // D11-03 / C15-03, during upload. The upload that started before the adoption finishes as the

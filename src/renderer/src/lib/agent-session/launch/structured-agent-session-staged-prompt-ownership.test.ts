@@ -75,7 +75,8 @@ it('reports a stopped reservation outcome without a second hand-back', async () 
   const result = await finishStagedLaunchPromptWithHandBack(prompt, { busy: true })
 
   expect(result).toMatchObject({ delivered: false, inComposer: true })
-  expect(result.handBackFinished).toBeUndefined()
+  // The reservation's own hand-back ended the operation, and its result says so (D12-01 / C16-02).
+  expect(result.handBackFinished).toBe(true)
   expect(result.busy).toBeUndefined()
   expect(count(sessionId)).toBe(1)
   expect(await prompt.whenCreateSettled).toMatchObject({ inComposer: true })

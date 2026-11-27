@@ -37,6 +37,7 @@ import {
 } from '../../paste/native-chat-composer-pasted-text-references'
 import { nativeChatBrowserFileReferences } from '../../attachments/native-chat-browser-file-references'
 import { nativeChatBrowserFileRefusal } from '../../attachments/native-chat-browser-file-refusal'
+import { noteNativeChatFilesHeldElsewhere } from '../controls/native-chat-held-elsewhere-notice'
 import { agentSessionWriteNoticeText } from '../../messages/notices/agent-session-write-notice-text'
 
 export type NativeChatComposerGoalMode = {
@@ -177,10 +178,13 @@ export function useNativeChatComposerSubmit(args: {
       }
       structuredTransport.onSubmitted?.()
       const isCurrent = structuredTransport.capturePresentation()
+      const sessionId = structuredTransport.sessionId
       void threadGoal.setObjective(objective).then((accepted) => {
         if (!accepted) {
           return
         }
+        // A corrected goal went: the last refusal's account of files held elsewhere is over.
+        noteNativeChatFilesHeldElsewhere(sessionId, null)
         if (!clearNativeChatComposerDraftIfUnchanged(draftScopeKey, submitted)) {
           return
         }

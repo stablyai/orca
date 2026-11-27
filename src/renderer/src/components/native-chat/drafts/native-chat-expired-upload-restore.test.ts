@@ -90,6 +90,14 @@ const { agentSessionWriteNoticeText } =
 
 const { readNativeChatHeldElsewhere } =
   await import('../composer/controls/native-chat-held-elsewhere-notice')
+const { nativeChatHeldElsewhereNow } =
+  await import('../attachments/native-chat-browser-file-refusal')
+
+// The live account: who holds the refused files now, read from the drafts (see D12-03).
+const heldNow = (sessionId: string) => {
+  const record = readNativeChatHeldElsewhere(sessionId)
+  return record && nativeChatHeldElsewhereNow(record.references, sessionId).held
+}
 const { imageReferenceToken } =
   await import('../../../../../shared/native-chat/attachments/native-chat-image-reference')
 
@@ -213,7 +221,7 @@ it('refuses a Retry naming an adopted browser file whole, before any request', a
   expect(attempted).toHaveLength(0)
   // Both files are intact in the old chat's draft: the Retry chat's persistent notice says where, and
   // no text calls them expired.
-  expect(readNativeChatHeldElsewhere(retrySession)).toEqual({
+  expect(heldNow(retrySession)).toEqual({
     count: 2,
     ownerSessionId: sent.sessionId
   })

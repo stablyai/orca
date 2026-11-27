@@ -1,46 +1,96 @@
 import type { AgentSessionWriteNoticePart } from '../../../../../shared/agent-session/failures/agent-session-write-notice-copy'
 import { translate } from '@/i18n/i18n'
-import { nativeChatStagedFileHolderScopes } from '../drafts/native-chat-draft-attachment-staging'
+import { nativeChatStagedFileDraftHolderScopes } from '../drafts/native-chat-draft-attachment-staging'
 import {
   structuredAgentSessionDraftScopeKey,
   structuredAgentSessionIdOfDraftScope
 } from '../drafts/native-chat-draft-scope'
 import {
   noteNativeChatFilesHeldElsewhere,
-  type NativeChatHeldElsewhere
+  type NativeChatHeldElsewhere,
+  type NativeChatHeldElsewhereRecord
 } from '../composer/controls/native-chat-held-elsewhere-notice'
 import { nativeChatBrowserFileRefusalParts } from './native-chat-browser-file-references'
 
 /**
- * Split `references` into files another chat's draft holds now (intact there) and the rest. A chat is
- * named only when one chat's draft holds them all; a pending creation's draft is no chat to name.
+ * Split `references` by what the drafts hold now: files another chat's draft holds (intact there),
+ * files no draft holds any more (`gone`), and the rest (this chat's own, or with no chat to ask). A
+ * chat is named only when one chat's draft holds them all; a pending creation's draft is no chat to
+ * name. Custody is the draft's: a send's lease keeps an original readable but owns no chat.
  */
 function splitHeldElsewhere(
   references: readonly string[],
   sessionId: string | undefined
-): { held: NativeChatHeldElsewhere | null; rest: string[] } {
+): { held: NativeChatHeldElsewhere | null; heldReferences: string[]; rest: string[] } {
   const own = sessionId === undefined ? undefined : structuredAgentSessionDraftScopeKey(sessionId)
   const ownerScopes = new Set<string>()
-  let count = 0
+  const heldReferences: string[] = []
   const rest: string[] = []
   for (const reference of references) {
-    const holders = nativeChatStagedFileHolderScopes(reference)
+    const holders = nativeChatStagedFileDraftHolderScopes(reference)
     if (own === undefined || holders.length === 0 || holders.includes(own)) {
       rest.push(reference)
     } else {
-      count += 1
+      heldReferences.push(reference)
       ownerScopes.add(holders[0])
     }
   }
+  const count = heldReferences.length
   if (count === 0) {
-    return { held: null, rest }
+    return { held: null, heldReferences, rest }
   }
   if (ownerScopes.size > 1) {
-    return { held: { count, severalChats: true }, rest }
+    return { held: { count, severalChats: true }, heldReferences, rest }
   }
   const [ownerScope] = ownerScopes
   const ownerSessionId = structuredAgentSessionIdOfDraftScope(ownerScope) ?? undefined
-  return { held: { count, ...(ownerSessionId ? { ownerSessionId } : {}) }, rest }
+  return {
+    held: { count, ...(ownerSessionId ? { ownerSessionId } : {}) },
+    heldReferences,
+    rest
+  }
+}
+
+/**
+ * What the drafts say now about files a refused message of chat `sessionId` named: who holds them
+ * elsewhere, if anyone still does, and which of them nobody holds any more (`gone`: they have to be
+ * attached again). Files back in this chat's own draft are neither.
+ */
+export function nativeChatHeldElsewhereNow(
+  references: readonly string[],
+  sessionId: string
+): { held: NativeChatHeldElsewhere | null; gone: string[] } {
+  const own = structuredAgentSessionDraftScopeKey(sessionId)
+  const { held, rest } = splitHeldElsewhere(references, sessionId)
+  return {
+    held,
+    gone: rest.filter(
+      (reference) => !nativeChatStagedFileDraftHolderScopes(reference).includes(own)
+    )
+  }
+}
+
+const shown = new WeakMap<
+  NativeChatHeldElsewhereRecord,
+  { sessionId: string; version: number; now: ReturnType<typeof nativeChatHeldElsewhereNow> }
+>()
+
+/**
+ * `nativeChatHeldElsewhereNow` for a shown notice, read once per ownership `version` of the drafts:
+ * the same result until the record or what the drafts hold changes.
+ */
+export function nativeChatHeldElsewhereAt(
+  record: NativeChatHeldElsewhereRecord,
+  sessionId: string,
+  version: number
+): ReturnType<typeof nativeChatHeldElsewhereNow> {
+  const cached = shown.get(record)
+  if (cached?.sessionId === sessionId && cached.version === version) {
+    return cached.now
+  }
+  const now = nativeChatHeldElsewhereNow(record.references, sessionId)
+  shown.set(record, { sessionId, version, now })
+  return now
 }
 
 /** The queued-card Save toast's account of files another chat's draft holds. */
@@ -72,7 +122,7 @@ export function nativeChatBrowserFileRefusal(
   sessionId?: string,
   write: 'send' | 'queued-edit' = 'send'
 ): AgentSessionWriteNoticePart[] | null {
-  const { held, rest } = splitHeldElsewhere(references, sessionId)
+  const { held, heldReferences, rest } = splitHeldElsewhere(references, sessionId)
   if (write === 'queued-edit') {
     return [
       ...(held ? [{ text: queuedEditHeldElsewhereSentence(held) }] : []),
@@ -82,7 +132,7 @@ export function nativeChatBrowserFileRefusal(
     ]
   }
   if (sessionId !== undefined) {
-    noteNativeChatFilesHeldElsewhere(sessionId, held)
+    noteNativeChatFilesHeldElsewhere(sessionId, heldReferences)
   }
   return rest.length ? nativeChatBrowserFileRefusalParts(rest) : null
 }

@@ -1,6 +1,4 @@
-import { structuredAgentSessionSendBody } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
-import { handBackStructuredAgentSessionMessage } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-hand-back'
 import {
   dropStructuredAgentSessionSends,
   reserveStructuredAgentSessionSend,
@@ -8,12 +6,23 @@ import {
   type StructuredAgentSessionReservedSend
 } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import { publishStructuredAgentSessionSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
-import { agentSessionWriteNoticeText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { StructuredAgentSessionSendInput } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-slot'
 import type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-callers'
 import { abandonNativeChatPendingStagedLeases } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
+import { noteNativeChatFilesHeldElsewhere } from '@/components/native-chat/composer/controls/native-chat-held-elsewhere-notice'
 import type { StructuredAgentSessionSendOutcome } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-runtime'
+import {
+  handBackStagedLaunchPrompt,
+  stagedHandBackDelivery,
+  stagedSendDelivery
+} from './structured-agent-session-staged-hand-back'
+
+export {
+  handBackStagedLaunchPrompt,
+  stagedSendDelivery,
+  unconfirmedStructuredLaunchDelivery
+} from './structured-agent-session-staged-hand-back'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import { nativeChatBrowserFileReferences } from '@/components/native-chat/attachments/native-chat-browser-file-references'
 
@@ -25,20 +34,6 @@ export type StagedDelivery = Omit<
 > & {
   inComposer: boolean
   failureNotified?: boolean
-}
-
-/**
- * An unconfirmed send can still be recorded later. Every launch result carries that send operation's
- * own recorded signal, whichever path (reservation, create, plain send) reports it first.
- */
-export function unconfirmedStructuredLaunchDelivery(
-  outcome: StructuredAgentSessionSendOutcome,
-  recorded: Promise<void> | undefined
-): Pick<StructuredPromptDeliveryResult, 'unconfirmed' | 'whenRecorded'> {
-  if (outcome !== 'unconfirmed') {
-    return {}
-  }
-  return { unconfirmed: true, ...(recorded ? { whenRecorded: recorded } : {}) }
 }
 
 export type StructuredLaunchPromptOptions = {
@@ -142,25 +137,7 @@ export function stagedDeliveryFromSlotOutcome(
   prompt: StagedStructuredLaunchPrompt,
   outcome: StructuredAgentSessionSendOutcome
 ): StagedDelivery {
-  return {
-    delivered: outcome === 'recorded',
-    inComposer: stagedPromptReturnedDurably(prompt, outcome),
-    ...unconfirmedStructuredLaunchDelivery(outcome, prompt.slot?.recorded)
-  }
-}
-
-/**
- * `inComposer` claims the recipient's draft durably holds the returned input, so a caller may retire
- * its own copy. A `returned` outcome only says the send ended: its hand-back may have thrown, or put
- * the input in a draft that isn't saved yet. Only a durable hand-back makes the claim.
- */
-function stagedPromptReturnedDurably(
-  prompt: StagedStructuredLaunchPrompt,
-  outcome: StructuredAgentSessionSendOutcome
-): boolean {
-  return (
-    !prompt.callerKeepsText && outcome === 'returned' && prompt.slot?.handedBack() === 'durable'
-  )
+  return stagedSendDelivery(prompt, outcome, prompt.slot?.handedBack(), prompt.slot?.recorded)
 }
 
 /**
@@ -177,23 +154,31 @@ function stagedPromptReturnedDurably(
  */
 export function finishStagedLaunchPromptWithHandBack(
   prompt: StagedStructuredLaunchPrompt,
-  extra: Partial<StagedDelivery> = {}
+  extra: Partial<StagedDelivery> & {
+    /** Why it came back; a hand-back that threw adds that the message wasn't saved after it. */
+    notice?: string
+  } = {}
 ): StagedDelivery | Promise<StagedDelivery> {
+  const { notice, ...rest } = extra
   const settled = prompt.settledResult()
-  if (settled) {
-    unstageStructuredLaunchPrompt(prompt)
-    return settled
-  }
   const slot = prompt.slot
-  if (slot && !slot.active()) {
+  const ended = settled
+    ? settled
+    : slot && !slot.active()
+      ? slot.outcome.then((outcome) => stagedDeliveryFromSlotOutcome(prompt, outcome))
+      : undefined
+  if (ended) {
+    // Something else already ended it: that result stands, and the reason is still said.
+    if (notice) {
+      publishStructuredAgentSessionSends(prompt.sessionId, { notice })
+    }
     unstageStructuredLaunchPrompt(prompt)
-    return slot.outcome.then((outcome) => stagedDeliveryFromSlotOutcome(prompt, outcome))
+    return ended
   }
   const result: StagedDelivery = {
     delivered: false,
-    inComposer: handBackStagedLaunchPrompt(prompt),
-    handBackFinished: true,
-    ...extra
+    ...stagedHandBackDelivery(prompt, handBackStagedLaunchPrompt(prompt, notice)),
+    ...rest
   }
   prompt.delivery ??= Promise.resolve(result)
   prompt.settleCreate(result)
@@ -228,6 +213,8 @@ export function discardStructuredAgentSessionChatSends(sessionId: string): void 
   dropStructuredAgentSessionSends(sessionId)
   // Nothing it was sending will be handed back now: a moved first send stops waiting for this draft.
   abandonNativeChatPendingStagedLeases(structuredAgentSessionDraftScopeKey(sessionId))
+  // Its account of files held in another chat ends with it.
+  noteNativeChatFilesHeldElsewhere(sessionId, null)
 }
 
 // Prepublication Stop returns unsent text to the composer while allowing chat startup to continue.
@@ -287,11 +274,7 @@ export function prepareStructuredLaunchPromptForCreate(
   if (sent) {
     prompt.delivery = sent.outcome.then((outcome) => {
       unstageStructuredLaunchPrompt(prompt)
-      return {
-        delivered: outcome === 'recorded',
-        inComposer: stagedPromptReturnedDurably(prompt, outcome),
-        ...unconfirmedStructuredLaunchDelivery(outcome, sent.recorded)
-      }
+      return stagedSendDelivery(prompt, outcome, sent.handedBack(), sent.recorded)
     })
   } else if (slot) {
     prompt.delivery = slot.outcome.then((outcome) => {
@@ -317,27 +300,4 @@ export function issueStructuredLaunchPromptForCreate(sessionId: string): boolean
 
 export function hasStagedStructuredLaunchPrompt(sessionId: string): boolean {
   return (staged.get(sessionId)?.size ?? 0) > 0
-}
-
-/** Return launch text to the composer unless the sender retains it. Report draft-write failure in chat without blocking the caller; true means adopted. */
-export function handBackStagedLaunchPrompt(prompt: StagedStructuredLaunchPrompt): boolean {
-  if (prompt.callerKeepsText) {
-    return false
-  }
-  try {
-    return handBackStructuredAgentSessionMessage(
-      prompt.sessionId,
-      `launch-${prompt.sessionId}`,
-      structuredAgentSessionSendBody(prompt.text, prompt.attachments ?? [], prompt.skills)
-    )
-  } catch (error) {
-    console.error(
-      '[native-chat-send] a launch message could not be put back in the composer',
-      error
-    )
-    publishStructuredAgentSessionSends(prompt.sessionId, {
-      notice: agentSessionWriteNoticeText(['messageNotSaved'])
-    })
-    return false
-  }
 }

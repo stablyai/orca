@@ -7,10 +7,12 @@ import {
   sendCalls
 } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender.test-fixture'
 import {
+  dropStructuredAgentSessionSends,
   reserveStructuredAgentSessionSend,
   resetStructuredAgentSessionSendsForTests,
   sendStructuredAgentSessionMessage
 } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
+import { structuredAgentSessionSendCustodyLost } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-runtime'
 import { getStructuredAgentSessionSendNotice } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import { noteStructuredAgentSessionFence } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-attempt'
 import { stagedDeliveryFromSlotOutcome } from '@/lib/agent-session/launch/structured-agent-session-staged-prompt'
@@ -155,4 +157,61 @@ it('reports a caller-kept hand-back without claiming the draft holds it', async 
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mapping reads only these two fields.
   const prompt = { slot, callerKeepsText: true } as unknown as StagedStructuredLaunchPrompt
   expect(stagedDeliveryFromSlotOutcome(prompt, outcome).inComposer).toBe(false)
+})
+
+/** A grant that reports a lost original only once `probe.on` flips, so the attempt is not refused. */
+function probeGrant() {
+  const probe = { on: false }
+  return { probe, custodyLost: () => (probe.on ? ['orca-browser-file:probe/p.png'] : []) }
+}
+
+// C16-05. A dropped direct send keeps no custody grant: dropped before its issue, it never reaches the
+// host and its grant is gone; dropped after its issue, the late reply changes nothing and its grant is
+// gone too. The reserved control drops its grant the same way.
+it('retains no custody grant for a dropped send, before or after its issue', async () => {
+  const release = heldCompatibility()
+  const early = probeGrant()
+  const before = sendStructuredAgentSessionMessage({
+    sessionId: SESSION,
+    target: environment,
+    text: 'dropped before issue',
+    custodyLost: early.custodyLost
+  })!
+  await flush()
+  dropStructuredAgentSessionSends(SESSION)
+  early.probe.on = true
+  expect(structuredAgentSessionSendCustodyLost(before.clientMessageId)).toEqual([])
+  release()
+  expect(await before.outcome).toBe('dropped')
+  await flush()
+  expect(sendCalls()).toBe(0)
+
+  // The drop forgot the chat's fence with its sends; the next send needs one again.
+  noteStructuredAgentSessionFence(SESSION, 4)
+  mocks.compatible.mockResolvedValue(undefined)
+  let reply = (_value: unknown): void => {}
+  mocks.call.mockImplementation(() => new Promise((resolve) => (reply = resolve)))
+  const late = probeGrant()
+  const after = sendStructuredAgentSessionMessage({
+    sessionId: SESSION,
+    target: environment,
+    text: 'dropped after issue',
+    custodyLost: late.custodyLost
+  })!
+  await vi.waitFor(() => expect(sendCalls()).toBe(1))
+  dropStructuredAgentSessionSends(SESSION)
+  late.probe.on = true
+  expect(structuredAgentSessionSendCustodyLost(after.clientMessageId)).toEqual([])
+  reply(okSubmission(after.clientMessageId, 'accepted'))
+  expect(await after.outcome).toBe('dropped')
+  await flush()
+  expect(structuredAgentSessionSendCustodyLost(after.clientMessageId)).toEqual([])
+
+  const reserved = reserveStructuredAgentSessionSend({ sessionId: SESSION, text: 'reserved' })!
+  const held = probeGrant()
+  reserved.prepare({ text: 'reserved' }, held.custodyLost)
+  dropStructuredAgentSessionSends(SESSION)
+  held.probe.on = true
+  expect(structuredAgentSessionSendCustodyLost(reserved.clientMessageId)).toEqual([])
+  expect(await reserved.outcome).toBe('dropped')
 })

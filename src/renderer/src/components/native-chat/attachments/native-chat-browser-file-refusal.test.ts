@@ -9,6 +9,13 @@ const { stageNativeChatDraftFile } = await import('../drafts/native-chat-draft-a
 const { structuredAgentSessionDraftScopeKey } = await import('../drafts/native-chat-draft-scope')
 const { readNativeChatHeldElsewhere, resetNativeChatHeldElsewhereForTests } =
   await import('../composer/controls/native-chat-held-elsewhere-notice')
+const { nativeChatHeldElsewhereNow } = await import('./native-chat-browser-file-refusal')
+
+// The live account: who holds the refused files now, read from the drafts (see D12-03).
+const heldNow = (sessionId: string) => {
+  const record = readNativeChatHeldElsewhere(sessionId)
+  return record && nativeChatHeldElsewhereNow(record.references, sessionId).held
+}
 const { nativeChatHeldElsewhereNotice } =
   await import('../composer/controls/use-native-chat-held-elsewhere-notice')
 const { agentSessionWriteNoticeText } =
@@ -28,7 +35,7 @@ it('words an unheld file as not sendable here, not as expired', () => {
     "Can't send old.png from this chat. Your message was not sent. Remove it and attach it again."
   )
   expect(text).not.toMatch(/expired/i)
-  expect(readNativeChatHeldElsewhere('refusing-a')).toBeNull()
+  expect(heldNow('refusing-a')).toBeNull()
 })
 
 // A file intact in another chat's draft is said by that chat's persistent notice instead; the text
@@ -40,7 +47,7 @@ it('leaves a file held by another chat to the persistent notice', () => {
   stageNativeChatDraftFile(structuredAgentSessionDraftScopeKey('refusing-b'), own)
 
   expect(nativeChatBrowserFileRefusal([elsewhere], 'refusing-b')).toBeNull()
-  expect(readNativeChatHeldElsewhere('refusing-b')).toEqual({
+  expect(heldNow('refusing-b')).toEqual({
     count: 1,
     ownerSessionId: 'owner-chat'
   })
@@ -48,7 +55,7 @@ it('leaves a file held by another chat to the persistent notice', () => {
   const parts = nativeChatBrowserFileRefusal([own], 'refusing-b')
   expect(agentSessionWriteNoticeText(parts!)).toContain("Can't send mine.png from this chat.")
   // A refusal with nothing held elsewhere replaces the last account.
-  expect(readNativeChatHeldElsewhere('refusing-b')).toBeNull()
+  expect(heldNow('refusing-b')).toBeNull()
 })
 
 // The notice is one short line naming the count and the chat, with one action that opens it; without
@@ -98,7 +105,7 @@ it('names no chat when the held files are in more than one chat', () => {
   stageNativeChatDraftFile(structuredAgentSessionDraftScopeKey('owner-two'), second)
 
   expect(nativeChatBrowserFileRefusal([first, second], 'refusing-c')).toBeNull()
-  const held = readNativeChatHeldElsewhere('refusing-c')
+  const held = heldNow('refusing-c')
   expect(held).toEqual({ count: 2, severalChats: true })
   const notice = nativeChatHeldElsewhereNotice(held!, null, () => {})
   expect(notice.text).toBe('Not sent — attachments in other chats')
@@ -107,7 +114,7 @@ it('names no chat when the held files are in more than one chat', () => {
   // The control: both in one chat's draft name that chat.
   stageNativeChatDraftFile(structuredAgentSessionDraftScopeKey('owner-one'), second)
   nativeChatBrowserFileRefusal([first, second], 'refusing-c')
-  expect(readNativeChatHeldElsewhere('refusing-c')).toEqual({
+  expect(heldNow('refusing-c')).toEqual({
     count: 2,
     ownerSessionId: 'owner-one'
   })
@@ -123,7 +130,7 @@ it('words a queued-card Save refusal for Save, not as a send', () => {
   expect(agentSessionWriteNoticeText(parts!)).toBe(
     "1 attachment is in another chat's draft. Your edit wasn't saved."
   )
-  expect(readNativeChatHeldElsewhere('refusing-d')).toBeNull()
+  expect(heldNow('refusing-d')).toBeNull()
 
   const mixed = nativeChatBrowserFileRefusal(
     [elsewhere, 'orca-browser-file:gone/old.png'],
@@ -134,5 +141,5 @@ it('words a queued-card Save refusal for Save, not as a send', () => {
     "1 attachment is in another chat's draft. Can't send old.png from this chat. Your edit wasn't saved. Remove it and attach it again."
   )
   expect(agentSessionWriteNoticeText(mixed!)).not.toMatch(/not sent/i)
-  expect(readNativeChatHeldElsewhere('refusing-d')).toBeNull()
+  expect(heldNow('refusing-d')).toBeNull()
 })

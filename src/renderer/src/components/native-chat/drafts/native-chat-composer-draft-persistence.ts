@@ -11,6 +11,7 @@ import {
   hasLocalChange,
   load,
   nextSavedAt,
+  nativeChatDraftPositions,
   notifyScope,
   records,
   installNativeChatDraftRecord,
@@ -20,7 +21,8 @@ import {
   type DraftRecord,
   type UnconfirmedDraftChange
 } from './native-chat-composer-draft-memory'
-import type { AppendBeforeLoad, DraftAppend } from './native-chat-composer-draft-load'
+import type { DraftAppend } from './native-chat-composer-draft-load'
+import { recordNativeChatAppendBeforeLoad } from './native-chat-composer-draft-load-appends'
 import {
   journalNativeChatComposerDraftChanges,
   pruneNativeChatComposerDraftJournal
@@ -188,19 +190,17 @@ function installFlushOnHide(): void {
 
 /** Before hydration, append atomically to storage’s current record and replay over the eventual loaded draft. */
 function appendBeforeLoad(scopeKey: string, append: DraftAppend): void {
-  load.appendSequence += 1
-  const entry: AppendBeforeLoad = { sequence: load.appendSequence, append, committed: false }
-  load.appendsBeforeLoad.set(scopeKey, [...(load.appendsBeforeLoad.get(scopeKey) ?? []), entry])
+  const entry = recordNativeChatAppendBeforeLoad(scopeKey, append)
   const owner = records.get(scopeKey)?.owner
   const appendedAt = records.get(scopeKey)?.savedAt ?? 0
   const empty: StoredNativeChatComposerDraft = { text: '', images: [], savedAt: 0 }
   const written = nativeChatComposerDraftStorage()
     .update(scopeKey, (stored) => {
       const base = parseStoredNativeChatComposerDraft(stored) ?? empty
-      return savedForm({
-        ...append({ ...base, ...(base.owner || !owner ? {} : { owner }) }),
-        savedAt: nextSavedAt()
-      })
+      const appended = append({ ...base, ...(base.owner || !owner ? {} : { owner }) })
+      // Where this write puts the placement, against the stored text it actually read.
+      entry.committedPosition = nativeChatDraftPositions.get(appended)
+      return savedForm({ ...appended, savedAt: nextSavedAt() })
     })
     .then(
       () => {

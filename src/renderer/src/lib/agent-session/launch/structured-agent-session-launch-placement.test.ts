@@ -245,6 +245,33 @@ const beforeHeldLoad = (scope: string, saved: StoredNativeChatComposerDraft) => 
   return { release: () => release() }
 }
 
+/**
+ * Like `beforeHeldLoad`, but the first read fails, so the load is tried again later. That retry begins
+ * reading only after the move's write, so it reads that write committed: nothing is left to replay, and
+ * the placement must come from what the write itself recorded. Resolves once the retry is reading.
+ */
+const beforeRetriedLoad = (scope: string, saved: StoredNativeChatComposerDraft) => {
+  const storage = beforeLoad(scope, saved)
+  let release = (): void => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let reads = 0
+  const loadAll = storage.loadAll
+  storage.loadAll = async () => {
+    reads += 1
+    if (reads === 1) {
+      throw new Error('first read fails')
+    }
+    await held
+    return loadAll()
+  }
+  return {
+    release: () => release(),
+    retried: () => vi.waitFor(() => expect(reads).toBe(2), { timeout: 5_000 })
+  }
+}
+
 // D11-05 / C15-05. A load that already read the committed move has nothing to replay. The live
 // placement still stands, rebased past the stored prefix: no cold-start placement replaces it.
 it('keeps a pending placement when the load already holds the committed move', async () => {
@@ -317,4 +344,49 @@ it('opens a draft nothing placed this run at its start', async () => {
 
   expect(readNativeChatComposerDraft(scope).text).toBe('saved earlier')
   expect(positionOf(scope)).toEqual({ at: 'start', pending: true })
+})
+
+// D12-06 / C16-06. The same loaded bytes, two histories: the chat had "hello world" saved and the move
+// added "hello" after it, or nothing was saved and the move brought all of it. Each placement lands
+// where its own write put it, never where matching text first happens to occur.
+it.each([
+  ['moved after a saved prefix', 'hello world', 'hello', { from: 0, to: 5 }, { from: 13, to: 18 }],
+  ['moved whole', '', 'hello world\n\nhello', { from: 0, to: 5 }, { from: 0, to: 5 }]
+] as const)(
+  'places a committed move where its write put it when it is %s',
+  async (name, saved, movedText, selection, expected) => {
+    const quiet = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const scope = structuredAgentSessionDraftScopeKey(`placement-lineage-${name}`)
+    const { release, retried } = beforeRetriedLoad(scope, { text: saved, images: [], savedAt: 1 })
+    move(`lineage-${name}`, '', { text: movedText }, selection)
+    await committed(scope)
+    await retried()
+
+    release()
+    await hydrateNativeChatComposerDrafts()
+    quiet.mockRestore()
+
+    expect(readNativeChatComposerDraft(scope).text).toBe('hello world\n\nhello')
+    expect(spanOf(positionOf(scope))).toMatchObject(expected)
+    expect(positionOf(scope)?.pending).toBe(true)
+  }
+)
+
+// A placement this run made and a later replacing step retired is not a cold start: the loaded draft
+// gets no placement, rather than one armed at its start.
+it('arms nothing for a placement a replacing step retired before the load', async () => {
+  const quiet = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const scope = structuredAgentSessionDraftScopeKey('placement-lineage-retired')
+  const { release, retried } = beforeRetriedLoad(scope, savedEarlier)
+  move('lineage-retired', '', { text: '/compact' }, { from: 0, to: 8 })
+  appendToNativeChatComposerDraft(scope, { text: 'refused' })
+  expect(positionOf(scope)).toBeUndefined()
+  await committed(scope)
+  await retried()
+
+  release()
+  await hydrateNativeChatComposerDrafts()
+  quiet.mockRestore()
+
+  expect(positionOf(scope)).toBeUndefined()
 })

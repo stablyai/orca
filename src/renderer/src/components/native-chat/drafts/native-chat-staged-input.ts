@@ -147,12 +147,35 @@ async function uploadStagedInput<T extends NativeChatStagedInput>(
 /** Keep the submitted files across draft moves, and retain successful uploads after a partial failure. */
 export function captureNativeChatStagedInput(scope: string, input?: NativeChatStagedInput) {
   const files = stagedNativeChatFiles(scope)
-  const paths = files ? (input ? inputPaths(files, input) : [...files.paths]) : []
-  const lease =
-    [...(files?.heldInputs ?? [])].find(
-      (held) => paths.length === held.size && paths.every((path) => held.has(path))
-    ) ?? new Set(paths)
-  files?.leases.add(lease)
+  return captureStagedPaths(
+    files,
+    files ? (input ? inputPaths(currentFiles(files), input) : [...files.paths]) : []
+  )
+}
+
+/**
+ * The same capture, made only when `input` names an original this scope's staging holds (else
+ * undefined): the named paths are found once, for the decision and the capture both.
+ */
+export function captureNativeChatStagedInputNamed(scope: string, input: NativeChatStagedInput) {
+  const files = stagedNativeChatFiles(scope)
+  const paths = files ? inputPaths(currentFiles(files), input) : []
+  return paths.length ? captureStagedPaths(files, paths) : undefined
+}
+
+function captureStagedPaths(files: StagedFiles | undefined, paths: string[]) {
+  // Each attempt owns its lease: releasing one never changes another's grant or prunes an original
+  // another attempt still leases. A retained input hold for exactly these files becomes this
+  // attempt's lease (it ends with this attempt, as it did before); a later attempt never shares it.
+  const holder = files && currentFiles(files)
+  const held = [...(holder?.heldInputs ?? [])].find(
+    (candidate) => paths.length === candidate.size && paths.every((path) => candidate.has(path))
+  )
+  const lease = new Set(paths)
+  holder?.leases.add(lease)
+  if (held) {
+    holder?.heldInputs.delete(held)
+  }
   // The send's grant: the originals captured now. Adoption removes one from every lease of its old
   // staging, so a path still in this lease, and still in its staging, is still this send's to deliver.
   const granted: ReadonlySet<string> = new Set(paths)

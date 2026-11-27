@@ -73,7 +73,7 @@ export function finish(
     runtimes.delete(entry.clientMessageId)
     runtime.resolve(outcome)
   }
-  sendCustody.delete(entry.clientMessageId)
+  retireStructuredAgentSessionSend(entry.clientMessageId)
   updateStructuredAgentSessionPendingSend(entry.sessionId, entry.clientMessageId, keep ?? null)
 }
 
@@ -108,22 +108,30 @@ export function structuredAgentSessionSendCustodyLost(clientMessageId: string): 
  */
 export type StructuredAgentSessionHandBackCustody = 'durable' | 'installed' | 'lost' | 'caller'
 
-const handBackObservers = new Map<
-  string,
-  (custody: StructuredAgentSessionHandBackCustody) => void
->()
+type HandBackObserver = (custody: StructuredAgentSessionHandBackCustody) => void
+// Every holder of the send (its reservation, and the send itself once it begins) hears the same result.
+const handBackObservers = new Map<string, Set<HandBackObserver>>()
 
-/** Hear this send's hand-back, before its outcome settles; one observer per send. */
+/** Hear this send's hand-back, before its outcome settles. */
 export function observeStructuredAgentSessionHandBack(
   clientMessageId: string,
-  observer: (custody: StructuredAgentSessionHandBackCustody) => void
+  observer: HandBackObserver
 ): () => void {
-  handBackObservers.set(clientMessageId, observer)
+  const observers = handBackObservers.get(clientMessageId) ?? new Set()
+  observers.add(observer)
+  handBackObservers.set(clientMessageId, observers)
   return () => {
-    if (handBackObservers.get(clientMessageId) === observer) {
+    observers.delete(observer)
+    if (observers.size === 0 && handBackObservers.get(clientMessageId) === observers) {
       handBackObservers.delete(clientMessageId)
     }
   }
+}
+
+/** The send ended: nothing will hand it back, and nothing waits for its custody grant any more. */
+export function retireStructuredAgentSessionSend(clientMessageId: string): void {
+  handBackObservers.delete(clientMessageId)
+  sendCustody.delete(clientMessageId)
 }
 
 function returnToComposer(
@@ -175,12 +183,14 @@ export function handBack(
       })
     }
   } finally {
-    const observer = handBackObservers.get(entry.clientMessageId)
+    const observers = [...(handBackObservers.get(entry.clientMessageId) ?? [])]
     handBackObservers.delete(entry.clientMessageId)
-    try {
-      observer?.(custody)
-    } catch (error) {
-      console.error('[native-chat-send] a hand-back observer failed', error)
+    for (const observer of observers) {
+      try {
+        observer(custody)
+      } catch (error) {
+        console.error('[native-chat-send] a hand-back observer failed', error)
+      }
     }
     // Bookkeeping never holds the chat: whatever the hand-back met, the send ends.
     finish(entry, 'returned')
@@ -272,6 +282,11 @@ export type StructuredAgentSessionSent = {
   outcome: Promise<StructuredAgentSessionSendOutcome>
   /** Resolves once the host records this send, including after an `unconfirmed` outcome. */
   recorded: Promise<void>
+  /**
+   * What this send's hand-back left of its input, heard before a `returned` outcome settles;
+   * undefined when nothing handed it back. A `returned` outcome alone says only that the send ended.
+   */
+  handedBack: () => StructuredAgentSessionHandBackCustody | undefined
 }
 
 export function beginSend(
@@ -285,6 +300,11 @@ export function beginSend(
     afterSequence: owner.getSnapshot().state.cursor?.sequence
   })
   const recorded = structuredAgentSessionSendRecorded(clientMessageId)
+  let handedBack: StructuredAgentSessionHandBackCustody | undefined
+  // Retired with the send (see `retireStructuredAgentSessionSend`): no observer outlives it.
+  observeStructuredAgentSessionHandBack(clientMessageId, (custody) => {
+    handedBack = custody
+  })
   const outcome = new Promise<StructuredAgentSessionSendOutcome>((resolve) => {
     runtimes.set(clientMessageId, {
       activity: owner.trackSend(clientMessageId),
@@ -294,5 +314,5 @@ export function beginSend(
       resolve
     })
   })
-  return { clientMessageId, outcome, recorded }
+  return { clientMessageId, outcome, recorded, handedBack: () => handedBack }
 }

@@ -5,6 +5,7 @@ import {
 import { nativeChatTextAttachmentParts } from '../../../../../shared/native-chat/attachments/native-chat-text-attachment-references'
 import type { NativeChatComposerDraft } from './native-chat-composer-draft-storage'
 import { releaseBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
+import { nativeChatStagedOwnershipChanged } from './native-chat-staged-ownership'
 
 export type NativeChatStagedInput = {
   text: string
@@ -82,6 +83,7 @@ export function adoptNativeChatStagedFile(from: StagedFiles, path: string, toSco
   for (const held of [...from.leases, ...from.heldInputs, ...from.pendingLeases]) {
     held.delete(path)
   }
+  nativeChatStagedOwnershipChanged()
   if (!from.paths.size) {
     for (const [scope, held] of staged) {
       if (held === from) {
@@ -91,17 +93,14 @@ export function adoptNativeChatStagedFile(from: StagedFiles, path: string, toSco
   }
 }
 
-/** The draft scopes whose staging holds this original now, after any move or adoption. */
-export function nativeChatStagedFileHolderScopes(path: string): string[] {
+/**
+ * The draft scopes whose draft holds this original now, after any move or adoption: its draft
+ * references it. A send's lease alone keeps an original readable but makes no chat its owner.
+ */
+export function nativeChatStagedFileDraftHolderScopes(path: string): string[] {
   return [...staged].flatMap(([scope, files]) =>
-    currentFiles(files).paths.has(path) ? [scope] : []
+    currentFiles(files).draftPaths.has(path) ? [scope] : []
   )
-}
-
-/** The staged originals of this scope that `input` names: what its preparation may upload. */
-export function nativeChatStagedInputPaths(scope: string, input: NativeChatStagedInput): string[] {
-  const files = staged.get(scope)
-  return files ? inputPaths(currentFiles(files), input) : []
 }
 
 export function nativeChatStagedScopes(): string[] {
@@ -121,14 +120,14 @@ export function namedNativeChatStagedPaths(
   paths: ReadonlySet<string>,
   input: NativeChatStagedInput
 ): string[] {
-  const referenced = new Set(
-    nativeChatTextAttachmentParts(input.text, true, (path) => paths.has(path)).flatMap((part) =>
-      part.path ? [part.path] : []
-    )
-  )
-  return [...paths].filter(
-    (path) => input.attachments?.some((image) => image.path === path) || referenced.has(path)
-  )
+  // Indexed once, so the work is linear in the paths, attachments and text: O(P + A + T).
+  const named = new Set(input.attachments?.map((image) => image.path))
+  for (const part of nativeChatTextAttachmentParts(input.text, true, (path) => paths.has(path))) {
+    if (part.path) {
+      named.add(part.path)
+    }
+  }
+  return [...paths].filter((path) => named.has(path))
 }
 
 export function hasNativeChatStagedFiles(scope: string): boolean {
@@ -152,6 +151,7 @@ export function stageNativeChatDraftFile(scope: string, path: string): void {
   }
   files.paths.add(path)
   files.draftPaths.add(path)
+  nativeChatStagedOwnershipChanged()
 }
 
 export function moveNativeChatStagedFiles(from: string, to: string): void {
@@ -180,6 +180,7 @@ export function moveNativeChatStagedFiles(from: string, to: string): void {
   staged.set(to, files)
   staged.delete(from)
   files.draft = undefined
+  nativeChatStagedOwnershipChanged()
 }
 
 function draftReferences(files: StagedFiles): Set<string> {
@@ -258,7 +259,7 @@ export function reconcileNativeChatStagedDraft(
   }
   const images = new Set(draft?.images.map(({ path }) => path))
   const pasted = new Set(Object.values(draft?.pastedTextFiles ?? {}))
-  files.draftPaths = new Set(
+  const draftPaths = new Set(
     [...files.paths].filter((path) => {
       if (images.has(path) || pasted.has(path)) {
         return true
@@ -266,6 +267,14 @@ export function reconcileNativeChatStagedDraft(
       return files.textReferences.has(path)
     })
   )
+  // Typing that leaves the held originals as they were changes no ownership.
+  if (
+    draftPaths.size !== files.draftPaths.size ||
+    [...draftPaths].some((path) => !files.draftPaths.has(path))
+  ) {
+    nativeChatStagedOwnershipChanged()
+  }
+  files.draftPaths = draftPaths
   pruneFiles(files)
 }
 
@@ -279,6 +288,9 @@ export function holdNativeChatStagedInput(scope: string, input: NativeChatStaged
 }
 
 function releaseFiles(files: StagedFiles, paths: string[]): void {
+  if (paths.length) {
+    nativeChatStagedOwnershipChanged()
+  }
   releaseBrowserAttachmentFiles(paths)
   for (const path of paths) {
     files.paths.delete(path)
@@ -319,6 +331,7 @@ export function abandonNativeChatPendingStagedLeases(scope: string): void {
   files.pendingLeases.clear()
   if (!files.draft) {
     files.draftPaths.clear()
+    nativeChatStagedOwnershipChanged()
   }
   pruneFiles(files)
 }

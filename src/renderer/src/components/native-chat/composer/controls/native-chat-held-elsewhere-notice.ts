@@ -1,7 +1,19 @@
 // A message refused because files it names are in another chat's draft says so where it was refused,
-// and stays until dismissed or the next send there: a toast would vanish before the person looked.
+// and stays until dismissed, the next send or goal there, or the chat closing: a toast would vanish
+// before the person looked. It lives in memory only, so a reload starts without it.
 
-/** Files a refused message named that another chat's draft holds now, and that chat. */
+/**
+ * The browser files a refused message named that another chat's draft held then. Who holds them is
+ * not stored: it is read from the drafts each time it is shown (see `nativeChatHeldElsewhereNow`), so
+ * a later move, send or removal is told truthfully.
+ */
+export type NativeChatHeldElsewhereRecord = {
+  references: readonly string[]
+  /** A chat this notice tried and failed to open: it is not offered again. */
+  unreachableOwner?: string
+}
+
+/** What the drafts say now about those files: how many another chat holds, and which one. */
 export type NativeChatHeldElsewhere = {
   count: number
   /** The one conversation whose draft holds them all; absent when no chat (a pending creation) does. */
@@ -10,7 +22,7 @@ export type NativeChatHeldElsewhere = {
   severalChats?: true
 }
 
-const notices = new Map<string, NativeChatHeldElsewhere>()
+const notices = new Map<string, NativeChatHeldElsewhereRecord>()
 const listeners = new Map<string, Set<() => void>>()
 
 function notify(sessionId: string): void {
@@ -22,10 +34,10 @@ function notify(sessionId: string): void {
 /** Record (or with null, clear) why this chat's last refused message didn't go. */
 export function noteNativeChatFilesHeldElsewhere(
   sessionId: string,
-  held: NativeChatHeldElsewhere | null
+  references: readonly string[] | null
 ): void {
   const current = notices.get(sessionId)
-  if (!held) {
+  if (!references?.length) {
     if (current) {
       notices.delete(sessionId)
       notify(sessionId)
@@ -33,17 +45,32 @@ export function noteNativeChatFilesHeldElsewhere(
     return
   }
   if (
-    current?.count === held.count &&
-    current.ownerSessionId === held.ownerSessionId &&
-    current.severalChats === held.severalChats
+    current &&
+    !current.unreachableOwner &&
+    current.references.length === references.length &&
+    current.references.every((reference, index) => reference === references[index])
   ) {
     return
   }
-  notices.set(sessionId, held)
+  notices.set(sessionId, { references: [...references] })
   notify(sessionId)
 }
 
-export function readNativeChatHeldElsewhere(sessionId: string): NativeChatHeldElsewhere | null {
+/** Opening `ownerSessionId` from this notice failed: the notice stops offering it. */
+export function noteNativeChatHeldOwnerUnreachable(
+  sessionId: string,
+  ownerSessionId: string
+): void {
+  const current = notices.get(sessionId)
+  if (current && current.unreachableOwner !== ownerSessionId) {
+    notices.set(sessionId, { ...current, unreachableOwner: ownerSessionId })
+    notify(sessionId)
+  }
+}
+
+export function readNativeChatHeldElsewhere(
+  sessionId: string
+): NativeChatHeldElsewhereRecord | null {
   return notices.get(sessionId) ?? null
 }
 
@@ -60,6 +87,10 @@ export function subscribeToNativeChatHeldElsewhere(
       listeners.delete(sessionId)
     }
   }
+}
+
+export function nativeChatHeldElsewhereRecordCountForTests(): number {
+  return notices.size
 }
 
 export function resetNativeChatHeldElsewhereForTests(): void {

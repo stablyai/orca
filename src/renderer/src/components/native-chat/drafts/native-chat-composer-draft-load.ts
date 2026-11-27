@@ -37,6 +37,13 @@ export type AppendBeforeLoad = {
   readonly sequence: number
   readonly append: DraftAppend
   committed: boolean
+  /** The live draft had a placement right after this append (in memory, before any load). */
+  readonly placed: boolean
+  /**
+   * The placement this append's own storage write produced, against the stored draft that write read:
+   * where the placement is in what a later load reads, if this is the last step that load holds.
+   */
+  committedPosition?: NativeChatDraftPosition
 }
 
 export type LoadBookkeeping = {
@@ -58,23 +65,34 @@ let hydration: Promise<void> | null = null
 let failedLoads = 0
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 
-/** The appends this load could not have read: made after it began reading, or never written. */
+/**
+ * The appends this load could not have read (made after it began reading, or never written) replayed
+ * over what it read. The placement starts where the last step the read holds put it in storage, and
+ * replay carries it from there: its coordinates come from the writes themselves, never from matching
+ * text, so the same loaded bytes reached by two different histories place it where each put it.
+ */
 function withAppends(
   scopeKey: string,
   loaded: StoredNativeChatComposerDraft,
   readAtSequence: number
 ): DraftLoadResult {
-  const missing = (load.appendsBeforeLoad.get(scopeKey) ?? []).filter(
-    (entry) => !entry.committed || entry.sequence > readAtSequence
-  )
+  const appends = load.appendsBeforeLoad.get(scopeKey) ?? []
+  const held = (entry: AppendBeforeLoad) => entry.committed && entry.sequence <= readAtSequence
+  const missing = appends.filter((entry) => !held(entry))
+  const placedThisRun = appends.some((entry) => entry.placed)
+  const committedPosition = appends.findLast(held)?.committedPosition
   if (missing.length === 0) {
-    return { draft: loaded, changed: false }
+    return { draft: loaded, changed: false, position: committedPosition, placedThisRun }
+  }
+  if (committedPosition) {
+    nativeChatDraftPositions.set(loaded, committedPosition)
   }
   const merged = missing.reduce((draft, entry) => entry.append(draft), loaded)
   return {
     draft: { ...merged, savedAt: nextSavedAt() },
     changed: true,
-    position: nativeChatDraftPositions.get(merged)
+    position: nativeChatDraftPositions.get(merged),
+    placedThisRun
   }
 }
 
@@ -82,62 +100,29 @@ type DraftLoadResult = {
   draft: StoredNativeChatComposerDraft
   changed: boolean
   position?: NativeChatDraftPosition
+  /** An append this run placed the caret here, whether or not that placement still stands. */
+  placedThisRun: boolean
 }
 
 /**
  * The placement a loaded draft starts with. Replay may move a placement but never create or revive
- * one. A draft this run never placed opens at its start, as on a cold start. Otherwise the live
- * placement's lineage decides: one already applied (or given up) is never armed again, and a pending
- * one stands where replay moved it or, when the read already held every move (all committed, or a
- * committed prefix with only image steps left), where it is live, rebased onto the loaded text.
+ * one. A draft this run never placed opens at its start, as on a cold start. One placed this run whose
+ * placement a later step retired (a replacing append) gets none. Otherwise the live placement's
+ * lineage decides: one already applied (or given up) is never armed again, and a pending one stands
+ * where the writes and replay put it in the loaded text.
  */
 function loadedDraftPosition(
-  draft: StoredNativeChatComposerDraft,
-  changed: boolean,
-  replayed: NativeChatDraftPosition | undefined,
+  { changed, position, placedThisRun }: DraftLoadResult,
   live: StoredNativeChatComposerDraft | undefined
 ): NativeChatDraftPosition | undefined {
   const livePosition = live && nativeChatDraftPositions.get(live)
   if (!livePosition) {
-    // Nothing placed here this run: a load with no missing step opens at the start, as a cold start
-    // does; a replayed one gets none, since no live placement is pending for it to move.
-    return changed ? undefined : { at: 'start', pending: true }
+    return changed || placedThisRun ? undefined : { at: 'start', pending: true }
   }
-  if (!livePosition.pending) {
+  if (!livePosition.pending || !position) {
     return undefined
   }
-  if (replayed) {
-    return { ...replayed, pending: true }
-  }
-  return live ? rebasedLivePosition(livePosition, live.text, draft.text) : undefined
-}
-
-/**
- * The live placement in the loaded text, which already holds every live step: the same text, the live
- * text with more after it (coordinates unchanged), or the live text after a stored prefix (shifted past
- * it). Any other loaded text has no place the live coordinates name, so there is none.
- */
-function rebasedLivePosition(
-  position: NativeChatDraftPosition,
-  liveText: string,
-  loadedText: string
-): NativeChatDraftPosition | undefined {
-  if (loadedText.startsWith(liveText)) {
-    return { ...position }
-  }
-  if (!loadedText.endsWith(liveText)) {
-    return undefined
-  }
-  const offset = loadedText.length - liveText.length
-  const kept = {
-    ...(position.target === undefined ? {} : { target: position.target }),
-    pending: true
-  }
-  if (position.at === 'end') {
-    return { at: 'end', ...kept }
-  }
-  const [from, to] = position.at === 'selection' ? [position.from, position.to] : [0, 0]
-  return { at: 'selection', from: from + offset, to: to + offset, ...kept }
+  return { ...position, pending: true }
 }
 
 function applyLoaded(
@@ -169,14 +154,11 @@ function applyLoaded(
       dirtyScopes.add(scopeKey)
       continue
     }
-    const { draft, changed, position } = withAppends(scopeKey, stored, readAtSequence)
+    const result = withAppends(scopeKey, stored, readAtSequence)
+    const { draft, changed } = result
     reconcileRestoredImageChecks(scopeKey, draft.images, records.get(scopeKey)?.images ?? [])
     const live = records.get(scopeKey)
-    installNativeChatDraftRecord(
-      scopeKey,
-      draft,
-      loadedDraftPosition(draft, changed, changed ? position : undefined, live)
-    )
+    installNativeChatDraftRecord(scopeKey, draft, loadedDraftPosition(result, live))
     if (changed) {
       dirtyScopes.add(scopeKey)
     }

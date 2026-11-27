@@ -8,7 +8,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import {
   finishStagedLaunchPromptWithHandBack,
   stagedDeliveryFromSlotOutcome,
-  unconfirmedStructuredLaunchDelivery,
+  stagedSendDelivery,
   unstageStructuredLaunchPrompt,
   type StagedStructuredLaunchPrompt,
   type StagedDelivery,
@@ -55,15 +55,21 @@ function sendStagedPrompt(
           return stagedDeliveryFromSlotOutcome(prompt, await prompt.slot.outcome)
         }
         // Preparation failed with the reservation still held (also after a paired create succeeded):
-        // the terminal hand-back is published before the reservation is released.
-        const result = await finishStagedLaunchPromptWithHandBack(prompt, { failureNotified: true })
-        publishStructuredAgentSessionSends(prompt.sessionId, {
+        // the terminal hand-back is published before the reservation is released. It words why, and a
+        // hand-back that threw adds that the message wasn't saved instead of being worded over.
+        const notice = error instanceof Error ? error.message : String(error)
+        if (!notice) {
           // Empty when another notice already says why (a file held in another chat's draft).
-          notice: (error instanceof Error ? error.message : String(error)) || null
+          publishStructuredAgentSessionSends(prompt.sessionId, { notice: null })
+        }
+        return await finishStagedLaunchPromptWithHandBack(prompt, {
+          failureNotified: true,
+          ...(notice ? { notice } : {})
         })
-        return result
       }
     }
+    // Either path reports what its own send heard: a direct send (no reservation at staging, joined
+    // after the slot freed) keeps the caller's copy exactly as a reserved one does.
     const sent = prompt.slot
       ? prompt.slot.send(target)
       : sendStructuredAgentSessionMessage({
@@ -72,6 +78,7 @@ function sendStagedPrompt(
           text: prompt.text,
           attachments: prompt.attachments,
           skills: prompt.skills,
+          ...(prompt.callerKeepsText ? { callerKeepsText: true as const } : {}),
           ...(prompt.custodyLost ? { custodyLost: prompt.custodyLost } : {})
         })
     if (!sent) {
@@ -80,11 +87,7 @@ function sendStagedPrompt(
     }
     try {
       const outcome = await sent.outcome
-      return {
-        delivered: outcome === 'recorded',
-        inComposer: !prompt.callerKeepsText && outcome === 'returned',
-        ...unconfirmedStructuredLaunchDelivery(outcome, sent.recorded)
-      }
+      return stagedSendDelivery(prompt, outcome, sent.handedBack(), sent.recorded)
     } finally {
       unstageStructuredLaunchPrompt(prompt)
     }

@@ -36,6 +36,7 @@ import {
   handBackRefused,
   observeStructuredAgentSessionHandBack,
   retainUnconfirmed,
+  retireStructuredAgentSessionSend,
   revokeStructuredAgentSessionSendCustody,
   runtimes,
   settleRecorded,
@@ -289,8 +290,10 @@ export function dropStructuredAgentSessionSends(sessionId: string): void {
   for (const entry of getStructuredAgentSessionPendingSends(sessionId)) {
     const runtime = runtimes.get(entry.clientMessageId)
     reservations.get(entry.clientMessageId)?.drop()
-    // Dropped sends are never recorded: their signal ends with them, live runtime or not.
+    // Dropped sends are never recorded: their signal ends with them, live runtime or not, and so do
+    // their custody grant and hand-back observers (a late attempt finds no entry and issues nothing).
     forgetStructuredAgentSessionSendRecorded(entry.clientMessageId)
+    retireStructuredAgentSessionSend(entry.clientMessageId)
     runtime?.abort.abort()
     if (runtime) {
       runtime.activity.settle(false)
