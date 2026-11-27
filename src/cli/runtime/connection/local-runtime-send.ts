@@ -47,8 +47,17 @@ export async function sendLocalRuntimeRequest<TResult>(
       }
       throw restartingOr(error)
     }
-    // Refusal precedes sending, so there is no request to recover.
-    const expectedRuntimeSource = await request.fence.check(metadata, request.method)
+    let expectedRuntimeSource
+    try {
+      // Refusal precedes sending, so there is no request to recover.
+      expectedRuntimeSource = await request.fence.check(metadata, request.method)
+    } catch (error) {
+      // The fence probe is a read-only status call, so retrying it is always safe.
+      if (await retryDuringRestart(error)) {
+        continue
+      }
+      throw restartingOr(error)
+    }
     let socketErrorCode: unknown
     try {
       const response = await sendRequest<TResult>(
