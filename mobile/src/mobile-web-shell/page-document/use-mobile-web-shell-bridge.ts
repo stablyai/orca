@@ -11,36 +11,34 @@ import type {
   OrcaMobileWebShellViewHandle
 } from '../../../modules/orca-mobile-web-shell/src/index'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
-import { createBridgeDiagnosticReporter } from '../diagnostics/bridge-diagnostic-log'
-import { bridgeDiagnosticLine } from '../diagnostics/shell-bridge-log-lines'
-import { recordShellLifecycleLine } from '../diagnostics/shell-lifecycle-line-recorder'
 import type { BridgeColorScheme, BridgeUiLocale } from '../bridge/protocol/bridge-envelope'
 import type { BridgeInitRoute } from '../bridge/protocol/bridge-init-route'
 import type { BridgeClearableRouteParam } from '../bridge/page-lifecycle/bridge-route-update'
 import type { BridgeSafeAreaInsets } from '../bridge/page-geometry/bridge-safe-area-insets'
 import type { BridgeFoldDivision } from '../bridge/page-geometry/bridge-fold-division'
 import type { BridgeHapticsKind } from '../bridge/native-capabilities/bridge-haptics-notify'
-import { createBridgeHost } from '../host-bridge/bridge-host'
-import { latestBridgeCallbacks } from './bridge-latest-callbacks'
+import type { BridgeHost } from '../host-bridge/bridge-host'
+import type { BridgeNavigateBackOutcome } from '../host-bridge/bridge-host-contract'
 import { usePageAppPresence } from './use-page-app-presence'
-import type { BridgeHost, BridgeNavigateBackOutcome } from '../host-bridge/bridge-host-contract'
 import type { BridgeSessionBack } from '../host-bridge/bridge-host-back'
 import type { BridgeNativeVerb } from '../bridge/native-capabilities/bridge-native-verbs'
 import type { BridgeErrorCapture } from '../bridge/protocol/bridge-error-capture'
 import type { MobileWebShellSessionState } from '../session/mobile-web-shell-session-contract'
 import type { PageHostSnapshot } from '../host-gates/use-page-host-snapshot'
 import type { PageStorageForInit } from '../page-storage/page-storage-keys'
+import {
+  acquireRetainedOrCreateBridgeHost,
+  postToMountedBridgeView,
+  releaseOrParkBridgeHost,
+  resetBridgeDocumentBindings,
+  type MountedBridgeView
+} from '../retained-bridge-host-lifecycle'
+import {
+  flushRetainedBridgeFrames,
+  type RetainedBridgeHostBinding
+} from '../retained-shell-session-store'
 import { createPageFramesWithoutHost } from './page-frames-without-host'
 
-class BridgeViewGoneError extends Error {
-  constructor() {
-    super('the shell view for this session is not mounted')
-    this.name = 'BridgeViewGoneError'
-  }
-}
-
-// Stamp both refs with their session: React attaches replacement refs before retired cleanup, which must not post teardown frames into the new page.
-type MountedView = { sessionId: string; handle: OrcaMobileWebShellViewHandle }
 type MountedHost = { sessionId: string; host: BridgeHost }
 type EstablishedBack = { sessionId: string; back: BridgeSessionBack }
 
@@ -131,8 +129,9 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
   const ready = args.session.kind === 'ready' ? args.session : null
   const sessionId = ready?.sessionId ?? null
   const buildId = ready?.buildId ?? null
-  const viewRef = useRef<MountedView | null>(null)
+  const viewRef = useRef<MountedBridgeView | null>(null)
   const hostRef = useRef<MountedHost | null>(null)
+  const bindingRef = useRef<RetainedBridgeHostBinding | null>(null)
   // Preserve Back across same-document client rebuilds, stamped by session so the next document cannot inherit it.
   const establishedBackRef = useRef<EstablishedBack | null>(null)
   // Hold fresh props in a ref so renders cannot rebuild the host and settle pending work; paneKey updates publish init without remounting (ruling 33.1).
@@ -140,70 +139,81 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
   // Read identity lazily without rebuilding a live host just to refresh a string.
   const clientIdRef = useRef(clientId)
   const clientRef = useRef(client)
+  const writingFromPageRef = useRef(false)
   const [framesWithoutHost] = useState(createPageFramesWithoutHost)
   // Update refs on every commit before host construction; native frames may arrive before passive effects.
   useLayoutEffect(() => {
     argsRef.current = args
     clientIdRef.current = clientId
     clientRef.current = client
+    if (bindingRef.current !== null) {
+      bindingRef.current.args = args
+      bindingRef.current.clientId = clientId
+    }
   })
   const snapshot = args.snapshot
+  const hasSnapshot = snapshot !== null
 
   // Replace the host on commit so same-session native frames cannot reach a retired client in the passive-effect gap.
   useLayoutEffect(() => {
-    if (client === null || sessionId === null || buildId === null || snapshot === null) {
+    const currentSnapshot = argsRef.current.snapshot
+    if (client === null || sessionId === null || buildId === null || currentSnapshot === null) {
       return
     }
-    const latest = argsRef.current
-    // Read callbacks from the current committed ref; captured render closures would outlive their screen state.
-    const host = createBridgeHost({
+    const { host, binding } = acquireRetainedOrCreateBridgeHost({
       client,
       buildId,
       sessionId,
-      route: latest.route,
-      safeAreaInsets: latest.safeAreaInsets,
-      keyboardInset: latest.keyboardInset,
-      pageGeometry: latest.pageGeometry,
-      foldDivision: latest.foldDivision,
-      terminalKeyRail: latest.terminalKeyRail,
-      colorScheme: latest.colorScheme,
-      uiLocale: latest.uiLocale,
-      pageRoutes: latest.pageRoutes,
-      pageRouteGrants: latest.pageRouteGrants,
-      routeGrants: latest.routeGrants,
-      ownsHostArea: latest.ownsHostArea === true,
-      readHostStatus: () => argsRef.current.hostStatus ?? null,
-      sessionEstablished: latest.sessionEstablished,
-      ...(establishedBackRef.current?.sessionId === sessionId
-        ? { sessionBack: establishedBackRef.current.back }
-        : {}),
-      host: snapshot.host,
-      readClientIdentity: () => clientIdRef.current,
-      post: (json) => {
-        const mounted = viewRef.current
-        return mounted === null || mounted.sessionId !== sessionId
-          ? Promise.reject(new BridgeViewGoneError())
-          : mounted.handle.postBridgeMessage(json)
-      },
-      onDiagnostic: createBridgeDiagnosticReporter((diagnostic) => {
-        const line = bridgeDiagnosticLine(diagnostic)
-        if (line !== null) {
-          recordShellLifecycleLine(latest.hostId, line)
-        }
-      }),
-      ...latestBridgeCallbacks(argsRef)
+      snapshot: currentSnapshot,
+      latest: argsRef.current,
+      clientId: clientIdRef.current,
+      sessionBack:
+        establishedBackRef.current?.sessionId === sessionId
+          ? establishedBackRef.current.back
+          : undefined,
+      readMountedView: () => viewRef.current,
+      setWritingFromPage: (writing) => {
+        writingFromPageRef.current = writing
+      }
     })
+    bindingRef.current = binding
     hostRef.current = { sessionId, host }
     // Reset host-owned drop totals on rebuild so a new lower count cannot look like frames being recovered.
-    latest.onBinaryFramesDropped(0)
+    argsRef.current.onBinaryFramesDropped(0)
     framesWithoutHost.replayReady(sessionId, host)
     return () => {
       // Capture Back before disposal so the next host for this document inherits it.
       establishedBackRef.current = { sessionId, back: host.readSessionBack() }
       hostRef.current = null
-      host.dispose()
+      if (bindingRef.current === binding) {
+        bindingRef.current = null
+      }
+      releaseOrParkBridgeHost({
+        hostId: argsRef.current.hostId,
+        sessionId,
+        buildId,
+        client,
+        host,
+        binding
+      })
     }
-  }, [buildId, client, framesWithoutHost, sessionId, snapshot])
+  }, [buildId, client, framesWithoutHost, hasSnapshot, sessionId])
+
+  const wasEstablishedRef = useRef<{ sessionId: string | null; established: boolean }>({
+    sessionId,
+    established: args.sessionEstablished
+  })
+  useLayoutEffect(() => {
+    const previous = wasEstablishedRef.current
+    wasEstablishedRef.current = { sessionId, established: args.sessionEstablished }
+    if (previous.sessionId === sessionId && previous.established && !args.sessionEstablished) {
+      establishedBackRef.current = null
+      resetBridgeDocumentBindings(
+        bindingRef.current,
+        hostRef.current?.sessionId === sessionId ? hostRef.current.host : null
+      )
+    }
+  }, [args.sessionEstablished, sessionId])
 
   useEffect(() => {
     const mounted = hostRef.current
@@ -237,6 +247,17 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     viewRef: useCallback(
       (handle: OrcaMobileWebShellViewHandle | null) => {
         viewRef.current = handle === null || sessionId === null ? null : { sessionId, handle }
+        if (handle === null || sessionId === null) {
+          if (bindingRef.current !== null) {
+            bindingRef.current.post = null
+          }
+          return
+        }
+        if (bindingRef.current !== null) {
+          flushRetainedBridgeFrames(bindingRef.current, (json) =>
+            postToMountedBridgeView(viewRef.current, sessionId, json)
+          )
+        }
       },
       [sessionId]
     ),
@@ -283,7 +304,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
           mounted.host.publishRoute(route)
         }
       },
-      [buildId, client, sessionId, snapshot]
+      [buildId, client, hasSnapshot, sessionId]
     ),
     publishSafeAreaInsets: useCallback(
       (insets: BridgeSafeAreaInsets) => {
@@ -292,7 +313,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
           mounted.host.publishSafeAreaInsets(insets)
         }
       },
-      [buildId, client, sessionId, snapshot]
+      [buildId, client, hasSnapshot, sessionId]
     ),
     publishKeyboardInset: useCallback(
       (height: number) => {
@@ -301,7 +322,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
           mounted.host.publishKeyboardInset(height)
         }
       },
-      [buildId, client, sessionId, snapshot]
+      [buildId, client, hasSnapshot, sessionId]
     ),
     publishFoldDivision: useCallback(
       (division: BridgeFoldDivision | null) => {
@@ -341,3 +362,4 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     }, [sessionId])
   }
 }
+

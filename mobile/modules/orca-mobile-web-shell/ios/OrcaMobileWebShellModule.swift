@@ -52,6 +52,16 @@ public class OrcaMobileWebShellModule: Module {
       try MobileWebShellGenerationStoreDirectory.prepare(name: name)
     }
 
+    Function("clearRetainedSlot") {
+      if Thread.isMainThread {
+        OrcaMobileWebShellView.clearRetainedSlot()
+      } else {
+        DispatchQueue.main.async {
+          OrcaMobileWebShellView.clearRetainedSlot()
+        }
+      }
+    }
+
     // Home calls this once it has a paired host, so a user with nothing to open pays nothing.
     Function("warmUp") {
       // A second's delay keeps the warm-up off the launch's first frames.
@@ -97,6 +107,10 @@ public class OrcaMobileWebShellModule: Module {
         view.setBridgeEnabled(value)
       }
 
+      Prop("retainsSlot") { (view: OrcaMobileWebShellView, value: Bool) in
+        view.setRetainsSlot(value)
+      }
+
       Prop("backEdgeSwipe") { (view: OrcaMobileWebShellView, value: Bool) in
         view.setBackEdgeSwipe(value)
       }
@@ -108,6 +122,10 @@ public class OrcaMobileWebShellModule: Module {
 
       OnViewDidUpdateProps { (view: OrcaMobileWebShellView) in
         view.propsDidUpdate()
+      }
+
+      OnViewDestroys { (view: OrcaMobileWebShellView) in
+        view.destroyWebView()
       }
     }
   }

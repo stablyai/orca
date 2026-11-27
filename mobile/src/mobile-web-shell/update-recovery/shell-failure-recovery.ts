@@ -107,7 +107,7 @@ export function reduceRetryPressed(
 }
 
 // Try again after these must not reopen the files that just failed: a damaged tree would fail again on every tap.
-function retryDeletesCache(state: MobileWebShellSessionState): boolean {
+export function retryDeletesCache(state: MobileWebShellSessionState): boolean {
   return (
     state.kind === 'failed' &&
     (state.reason === 'document-load-failed' || state.reason === 'generation-unreadable')

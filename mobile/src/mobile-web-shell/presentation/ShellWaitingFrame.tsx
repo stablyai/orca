@@ -5,6 +5,11 @@ import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
+export const SHELL_OPENING_LABEL = 'Opening workspace'
+
+/** The same wait on the host root, which is not a workspace. */
+export const SHELL_HOST_OPENING_LABEL = 'Loading host'
+
 // Ease in to hold opacity while the compositor catches up with the reported renderer paint; linear fade exposed two bare-surface frames.
 export const SHELL_PAGE_COVER_FADE_MS = 100
 
@@ -33,7 +38,13 @@ export function ShellWaitingFrame({
 }
 
 // Cover the mounted view until first paint, not ready; keep it noninteractive so a missing report cannot block an otherwise usable page.
-export function ShellPageCover({ visible }: { visible: boolean }) {
+export function ShellPageCover({
+  label,
+  visible
+}: {
+  label?: string
+  visible: boolean
+}) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const opacity = useRef(new Animated.Value(1)).current
@@ -72,7 +83,11 @@ export function ShellPageCover({ visible }: { visible: boolean }) {
       pointerEvents="none"
     >
       <ShellWaitingFrame
-        label={t('webShell.shellStateScreen.openingWorkspace', 'Opening workspace')}
+        label={
+          label === undefined || label === SHELL_OPENING_LABEL
+            ? t('webShell.shellStateScreen.openingWorkspace', SHELL_OPENING_LABEL)
+            : label
+        }
       />
     </Animated.View>
   )
