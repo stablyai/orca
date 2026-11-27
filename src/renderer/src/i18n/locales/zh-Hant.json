@@ -12342,7 +12342,18 @@
             "3fdccf0277": "垂直內距",
             "651c993c32": "字型家族",
             "64f6b4fdf6": "焦點跟隨滑鼠",
-            "18a9f63aff": "淺色模式分隔線顏色"
+            "18a9f63aff": "淺色模式分隔線顏色",
+            "fitWideGlyphs": {
+              "wide": "寬字元",
+              "cjk": "cjk",
+              "korean": "韓文",
+              "hangul": "諺文",
+              "chinese": "中文",
+              "japanese": "日文",
+              "fallback": "後備字型",
+              "spacing": "間距",
+              "center": "置中"
+            }
           },
           "windows": {
             "search": {
@@ -13660,7 +13671,9 @@
         },
         "TerminalRenderingSection": {
           "fffab5890b": "使用 SIXEL、iTerm2 (IIP) 和 Kitty 圖形協定直接在終端機中顯示影像。",
-          "08db7947d8": "內嵌影像"
+          "08db7947d8": "內嵌影像",
+          "fitWideGlyphs": "寬字元調整與置中",
+          "fitWideGlyphsDescription": "將由後備字型繪製的韓文、中文和日文字元放大到接近兩個儲存格的寬度（不超過行高），並置中顯示，避免文字看起來像被空格隔開。"
         },
         "CursorAccountsSection": {
           "source": {

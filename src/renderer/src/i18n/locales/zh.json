@@ -11901,7 +11901,18 @@
             "64f6b4fdf6": "焦点跟随鼠标",
             "18a9f63aff": "浅色模式分隔线颜色",
             "kitty_import": "从 Kitty 导入",
-            "kitty_import_description": "一次性从 kitty.conf 导入支持的设置"
+            "kitty_import_description": "一次性从 kitty.conf 导入支持的设置",
+            "fitWideGlyphs": {
+              "wide": "宽字符",
+              "cjk": "cjk",
+              "korean": "韩文",
+              "hangul": "韩文字母",
+              "chinese": "中文",
+              "japanese": "日文",
+              "fallback": "后备字体",
+              "spacing": "间距",
+              "center": "居中"
+            }
           },
           "windows": {
             "search": {
@@ -13332,7 +13343,9 @@
         },
         "TerminalRenderingSection": {
           "fffab5890b": "使用 SIXEL、iTerm2（IIP）和 Kitty 图形协议直接在终端中显示图片",
-          "08db7947d8": "内嵌图像"
+          "08db7947d8": "内嵌图像",
+          "fitWideGlyphs": "宽字符适配与居中",
+          "fitWideGlyphsDescription": "将由后备字体绘制的韩文、中文和日文字符放大到接近两个单元格的宽度（不超过行高），并居中显示，避免文字看起来间距过大。"
         },
         "CursorAccountsSection": {
           "dashboardLink": "Cursor 仪表盘",

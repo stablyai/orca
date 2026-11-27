@@ -12298,7 +12298,18 @@
             "3fdccf0277": "Marge verticale",
             "651c993c32": "Famille de polices",
             "64f6b4fdf6": "Le focus suit la souris",
-            "18a9f63aff": "Couleur du séparateur en mode clair"
+            "18a9f63aff": "Couleur du séparateur en mode clair",
+            "fitWideGlyphs": {
+              "wide": "large",
+              "cjk": "cjk",
+              "korean": "coréen",
+              "hangul": "hangul",
+              "chinese": "chinois",
+              "japanese": "japonais",
+              "fallback": "police de secours",
+              "spacing": "espacement",
+              "center": "centrer"
+            }
           },
           "windows": {
             "search": {
@@ -13675,7 +13686,9 @@
         },
         "TerminalRenderingSection": {
           "fffab5890b": "Affichez les images directement dans le terminal à l'aide des protocoles graphiques SIXEL, iTerm2 (IIP) et Kitty.",
-          "08db7947d8": "Images en ligne"
+          "08db7947d8": "Images en ligne",
+          "fitWideGlyphs": "Ajuster et centrer les caractères larges",
+          "fitWideGlyphsDescription": "Agrandit les caractères coréens, chinois et japonais dessinés avec une police de secours vers leur largeur de deux cellules, sans dépasser la hauteur de ligne, et les centre pour que le texte ne paraisse pas espacé."
         },
         "CursorAccountsSection": {
           "dashboardLink": "Tableau de bord Cursor",

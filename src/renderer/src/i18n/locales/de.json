@@ -12497,7 +12497,18 @@
             "3fdccf0277": "Vertikaler Innenabstand",
             "651c993c32": "Schriftfamilie",
             "64f6b4fdf6": "Fokus folgt der Maus",
-            "18a9f63aff": "Trennlinienfarbe im hellen Modus"
+            "18a9f63aff": "Trennlinienfarbe im hellen Modus",
+            "fitWideGlyphs": {
+              "wide": "breit",
+              "cjk": "cjk",
+              "korean": "koreanisch",
+              "hangul": "hangul",
+              "chinese": "chinesisch",
+              "japanese": "japanisch",
+              "fallback": "ersatzschrift",
+              "spacing": "abstand",
+              "center": "zentrieren"
+            }
           },
           "windows": {
             "search": {
@@ -13815,7 +13826,9 @@
         },
         "TerminalRenderingSection": {
           "fffab5890b": "Bilder mit den Grafikprotokollen SIXEL, iTerm2 (IIP) und Kitty direkt im Terminal anzeigen.",
-          "08db7947d8": "Eingebettete Bilder"
+          "08db7947d8": "Eingebettete Bilder",
+          "fitWideGlyphs": "Breite Zeichen anpassen und zentrieren",
+          "fitWideGlyphsDescription": "Vergrößert koreanische, chinesische und japanische Zeichen aus einer Ersatzschrift auf annähernd ihre Breite von zwei Zellen, nie höher als die Zeile, und zentriert sie, damit der Text nicht gesperrt wirkt."
         },
         "CursorAccountsSection": {
           "source": {

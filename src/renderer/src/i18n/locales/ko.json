@@ -11753,7 +11753,18 @@
             "3fdccf0277": "수직 패딩",
             "651c993c32": "글꼴 패밀리",
             "64f6b4fdf6": "마우스를 따라 포커스 이동",
-            "18a9f63aff": "라이트 모드 구분선 색상"
+            "18a9f63aff": "라이트 모드 구분선 색상",
+            "fitWideGlyphs": {
+              "wide": "넓은 문자",
+              "cjk": "cjk",
+              "korean": "한국어",
+              "hangul": "한글",
+              "chinese": "중국어",
+              "japanese": "일본어",
+              "fallback": "대체 글꼴",
+              "spacing": "자간",
+              "center": "가운데 정렬"
+            }
           },
           "windows": {
             "search": {
@@ -13184,7 +13195,9 @@
         },
         "TerminalRenderingSection": {
           "fffab5890b": "SIXEL, iTerm2(IIP) 및 Kitty 그래픽 프로토콜을 사용하여 터미널에 이미지를 직접 표시합니다.",
-          "08db7947d8": "인라인 이미지"
+          "08db7947d8": "인라인 이미지",
+          "fitWideGlyphs": "넓은 문자 크기 맞춤 및 가운데 정렬",
+          "fitWideGlyphsDescription": "대체 글꼴로 그려지는 한국어·중국어·일본어 문자를 줄 높이를 넘지 않는 선에서 두 칸 너비에 가깝게 키우고 가운데에 배치해, 글자 사이가 띄어 쓴 것처럼 벌어져 보이지 않게 합니다."
         },
         "CursorAccountsSection": {
           "dashboardLink": "Cursor 대시보드",

@@ -11936,7 +11936,18 @@
             "3fdccf0277": "Relleno vertical",
             "651c993c32": "Familia de fuentes",
             "64f6b4fdf6": "El foco sigue al mouse",
-            "18a9f63aff": "Color del divisor claro"
+            "18a9f63aff": "Color del divisor claro",
+            "fitWideGlyphs": {
+              "wide": "ancho",
+              "cjk": "cjk",
+              "korean": "coreano",
+              "hangul": "hangul",
+              "chinese": "chino",
+              "japanese": "japonés",
+              "fallback": "alternativa",
+              "spacing": "espaciado",
+              "center": "centrar"
+            }
           },
           "windows": {
             "search": {
@@ -13433,7 +13444,9 @@
         },
         "TerminalRenderingSection": {
           "fffab5890b": "Muestre imágenes directamente en el terminal utilizando los protocolos gráficos SIXEL, iTerm2 (IIP) y Kitty.",
-          "08db7947d8": "Imágenes en línea"
+          "08db7947d8": "Imágenes en línea",
+          "fitWideGlyphs": "Ajustar y centrar caracteres anchos",
+          "fitWideGlyphsDescription": "Amplía los caracteres coreanos, chinos y japoneses dibujados con una fuente alternativa hasta casi su ancho de dos celdas, sin superar la altura de la línea, y los centra para que el texto no parezca espaciado."
         },
         "UnsealedCredentialNotice": {
           "body": "{{credential}} se almacena sin cifrar: este sistema no tiene ningún conjunto de claves del sistema operativo que Orca pueda usar. Cualquiera que pueda leer su disco o una copia de seguridad del mismo puede leer la credencial. Instale y desbloquee gnome-keyring o kwallet, luego guárdelo nuevamente para sellarlo."
