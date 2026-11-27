@@ -340,6 +340,7 @@ export function useTabStripOverflowNavigation({
           revealFocusedSlot()
         }
       })
+      return removeReleaseListener
     }
     if (tabClosedThisCommitRef.current) {
       requestAnimationFrame(updateTabStripOverflowState)
