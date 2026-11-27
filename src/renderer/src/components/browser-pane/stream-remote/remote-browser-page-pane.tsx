@@ -67,6 +67,9 @@ export function RemoteBrowserPagePane({
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const keyboardProxyRef = useRef<HTMLTextAreaElement | null>(null)
+  // The proxy mounts with the first stream frame, after this pane has rendered, so the native
+  // listener needs the element itself as a dependency and not just the stable ref.
+  const [keyboardProxyNode, setKeyboardProxyNode] = useState<HTMLTextAreaElement | null>(null)
   const remoteViewportRef = useRef<HTMLDivElement | null>(null)
   // Before the first frame mounts the keyboard proxy, the viewport is the only guest-focus target.
   const guestFocus = useElementGuestFocus(keyboardProxyRef, remoteViewportRef)
@@ -274,6 +277,7 @@ export function RemoteBrowserPagePane({
     inputQueue,
     imageRef,
     keyboardProxyRef,
+    keyboardProxyNode,
     remoteViewportRef,
     remoteCssViewportSizeRef,
     remoteViewportSizeRef,
@@ -387,6 +391,7 @@ export function RemoteBrowserPagePane({
         attachFileDrop={attachFileDrop}
         imageRef={imageRef}
         keyboardProxyRef={keyboardProxyRef}
+        onKeyboardProxyNode={setKeyboardProxyNode}
         feedbackBadgeRef={zoom.feedbackBadgeRef}
         find={find}
         frameUrl={frameUrl}

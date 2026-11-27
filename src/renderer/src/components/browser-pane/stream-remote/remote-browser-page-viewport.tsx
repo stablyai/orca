@@ -54,6 +54,7 @@ export function RemoteBrowserPageViewport({
   attachFileDrop,
   imageRef,
   keyboardProxyRef,
+  onKeyboardProxyNode,
   feedbackBadgeRef,
   find,
   frameUrl,
@@ -89,6 +90,8 @@ export function RemoteBrowserPageViewport({
   imageRef: React.RefObject<HTMLImageElement | null>
   /** Holds the page's keyboard focus, so host input methods compose. */
   keyboardProxyRef: React.RefObject<HTMLTextAreaElement | null>
+  /** The mounted proxy element, so listeners that depend on it re-attach when it mounts. */
+  onKeyboardProxyNode: (node: HTMLTextAreaElement | null) => void
   feedbackBadgeRef: React.RefObject<BrowserPageFeedbackBadgeHandle | null>
   find: RemoteBrowserPageFind
   frameUrl: string | null
@@ -222,7 +225,10 @@ export function RemoteBrowserPageViewport({
             draggable={false}
           />
           <ComposingKeyboardProxy
-            ref={keyboardProxyRef}
+            ref={(node) => {
+              keyboardProxyRef.current = node
+              onKeyboardProxyNode(node)
+            }}
             data-browser-keyboard-proxy=""
             inert={phoneDriven}
             aria-label={t('auto.components.browser.pane.BrowserPane.572046436a', 'Remote browser')}

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render } from '@testing-library/react'
-import { createElement, type RefObject } from 'react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { createElement, useRef, useState, type RefObject } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createHarness } from './remote-browser-stream-lifecycle-test-harness'
 
@@ -156,4 +156,62 @@ it('forwards text the proxy already holds rather than pressing a key for it', as
     })
   )
   expect(calls).toEqual([])
+})
+
+it('presses Backspace on the page when the proxy mounts after the pane first rendered', async () => {
+  const { lifecycle } = createHarness()
+  lifecycle.tokens.setRemotePage('page')
+  let showProxy = () => {}
+  function StreamedPage() {
+    const keyboardProxyRef = useRef<HTMLTextAreaElement | null>(null)
+    const [keyboardProxyNode, setKeyboardProxyNode] = useState<HTMLTextAreaElement | null>(null)
+    const [mounted, setMounted] = useState(false)
+    showProxy = () => setMounted(true)
+    const { handleRemoteKeyboardProxyText } = useRemoteBrowserPageKeyboard({
+      pickerAvailable: false,
+      runtimeTarget: () => ({ kind: 'environment', environmentId: 'env-1' }),
+      lifecycle,
+      runtimeWorktree: 'wt',
+      keyboardProxyRef,
+      keyboardProxyNode,
+      enqueueRemoteInput: (operation) => operation(),
+      createRemoteOperationToken: (pageId) => lifecycle.tokens.createOperationToken(pageId),
+      isCurrentRemoteOperationToken: (token) => lifecycle.tokens.isCurrent(token),
+      closeMissingRemotePage: vi.fn(),
+      scheduleRemoteTabInfoRefresh: vi.fn(),
+      setPaneNotice: vi.fn(),
+      closeSelectPopupForPageInput: vi.fn(),
+      readSelectPopupAfterKey: vi.fn()
+    })
+    return mounted
+      ? createElement('textarea', {
+          'data-testid': 'proxy',
+          ref: (node: HTMLTextAreaElement | null) => {
+            keyboardProxyRef.current = node
+            setKeyboardProxyNode(node)
+          },
+          onInput: handleRemoteKeyboardProxyText
+        })
+      : createElement('img', { alt: 'Waiting for the first stream frame' })
+  }
+
+  const { getByTestId, getByRole } = render(createElement(StreamedPage))
+  expect(getByRole('img')).toBeTruthy()
+
+  act(() => showProxy())
+  const proxy = getByTestId('proxy')
+  proxy.focus()
+  const beforeInput = new InputEvent('beforeinput', {
+    inputType: 'deleteContentBackward',
+    bubbles: true,
+    cancelable: true
+  })
+  fireEvent(proxy, beforeInput)
+
+  expect(beforeInput.defaultPrevented).toBe(true)
+  await vi.waitFor(() =>
+    expect(calls).toEqual([
+      { method: 'browser.keypress', params: { worktree: 'wt', page: 'page', key: 'Backspace' } }
+    ])
+  )
 })

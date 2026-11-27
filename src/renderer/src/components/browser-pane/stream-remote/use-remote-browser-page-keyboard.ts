@@ -62,6 +62,7 @@ export function useRemoteBrowserPageKeyboard({
   lifecycle,
   runtimeWorktree,
   keyboardProxyRef,
+  keyboardProxyNode,
   enqueueRemoteInput,
   createRemoteOperationToken,
   isCurrentRemoteOperationToken,
@@ -77,6 +78,8 @@ export function useRemoteBrowserPageKeyboard({
   runtimeWorktree: string
   /** The proxy to attach the native beforeinput listener to; omitted by callers that have none. */
   keyboardProxyRef?: React.RefObject<HTMLTextAreaElement | null>
+  /** The mounted proxy. It arrives with the first stream frame, so it drives the listener effect. */
+  keyboardProxyNode?: HTMLTextAreaElement | null
   enqueueRemoteInput: (operation: () => Promise<void>) => Promise<void>
   createRemoteOperationToken: (remotePageId?: string | null) => RemoteBrowserOperationToken | null
   isCurrentRemoteOperationToken: (token: RemoteBrowserOperationToken) => boolean
@@ -271,7 +274,9 @@ export function useRemoteBrowserPageKeyboard({
     }
   }
   useEffect(() => {
-    const proxy = keyboardProxyRef?.current
+    // Why the element and not the ref: the ref object never changes identity, so a proxy that
+    // mounts after this pane's first render (the first stream frame) would never get a listener.
+    const proxy = keyboardProxyNode ?? keyboardProxyRef?.current
     if (!proxy) {
       return
     }
@@ -283,7 +288,7 @@ export function useRemoteBrowserPageKeyboard({
     }
     proxy.addEventListener('beforeinput', onBeforeInput)
     return () => proxy.removeEventListener('beforeinput', onBeforeInput)
-  }, [keyboardProxyRef])
+  }, [keyboardProxyRef, keyboardProxyNode])
 
   const handleRemoteScreenshotPaste = (event: React.ClipboardEvent<HTMLTextAreaElement>): void => {
     // Why text only: markup and files would be staged in the page over several requests, and a page
