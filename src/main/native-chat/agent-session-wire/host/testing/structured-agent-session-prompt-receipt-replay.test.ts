@@ -95,14 +95,21 @@ it.each(['approval', 'question'] as const)(
         )
       })
     ).toMatchObject({ ok: false, refusal: { code: 'agent_session_operation_conflict' } })
-    vi.spyOn(
+    const pointReader = vi.spyOn(
       rig.host.collaboratorsForTests().deps.journalDatabase.readers,
       'point'
-    ).mockRejectedValueOnce(new Error('reader closed'))
-    expect(await rig.host.respondToPrompt(CALLER, { ...params, replayOnly: true })).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
-    })
+    )
+    pointReader.mockRejectedValue(new Error('reader closed'))
+    try {
+      expect(await rig.host.respondToPrompt(CALLER, { ...params, replayOnly: true })).toMatchObject(
+        {
+          ok: false,
+          refusal: { code: 'agent_session_operation_unknown' }
+        }
+      )
+    } finally {
+      pointReader.mockRestore()
+    }
     vi.spyOn(rig.store, 'readCommandReceipt').mockRejectedValueOnce(new Error('reader closed'))
     expect(await rig.host.respondToPrompt(CALLER, { ...params, replayOnly: true })).toMatchObject({
       ok: false,
