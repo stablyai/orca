@@ -1339,7 +1339,7 @@
       "soulEmpty": "还没有指令。双击或选择“编辑”开始撰写",
       "muteNotifications": "静音通知",
       "muteNotificationsDescription": "不再发送系统通知。未读圆点仍会显示。",
-      "teamDisabled": "你的团队已关闭 bots。"
+      "teamDisabled": "你的团队已关闭 Bots"
     },
     "automaticUpdates": {
       "title": "自动更新",
@@ -2209,7 +2209,7 @@
             "failed": "无法从 {{host}} 转发端口 {{port}}，请检查连接后重试",
             "forwarded": "已从 {{host}} 转发端口 {{port}}",
             "opened": "已在默认浏览器中打开 {{address}}",
-            "otherMachine": "无法转发端口 {{port}}：此工作区并非运行在 {{host}} 本身上",
+            "otherMachine": "无法转发端口 {{port}}：此工作区并非直接运行在 {{host}} 上",
             "useSshPorts": "无法从 {{host}} 转发端口 {{port}}，请先在“端口”中转发，然后重试",
             "restoredMoved": "已将 {{host}} 的端口 {{port}} 转发到 localhost:{{localPort}}",
             "restoredMovedReason": "这台电脑上的 localhost:{{previousPort}} 已被占用"
@@ -2562,7 +2562,7 @@
           "minimaxUnknownUsageError": "未知 MiniMax 用量错误",
           "minimaxUsageFetchFailed": "MiniMax 用量获取失败 ({{status}})",
           "noCredentials": "无凭据",
-          "noSubscriptionApiKeyBilling": "无订阅套餐 — API 密钥计费",
+          "noSubscriptionApiKeyBilling": "无订阅套餐 — 按 API 密钥计费",
           "opencodeInvalidWorkspaceId": "工作区 ID 格式无效",
           "opencodeNoAuthCookie": "未找到认证 Cookie — 请从 opencode.ai DevTools 粘贴完整 Cookie 请求头",
           "opencodeNoWorkspaceId": "未找到工作区 ID — 请在设置中填写工作区 ID 覆盖",
@@ -2749,7 +2749,7 @@
         "devDescription": "仅用于调试 UI 状态",
         "devBadge": "开发",
         "devSearchNotificationPlayground": "通知测试面板",
-        "devSearchNotificationPlaygroundDescription": "触发代表性提示与通知状态",
+        "devSearchNotificationPlaygroundDescription": "触发典型的提示与通知界面状态",
         "devSearchKeywordDev": "dev",
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
@@ -5170,7 +5170,7 @@
             "34c25dfe9c": "宠物",
             "aec479308a": "宠物菜单",
             "cef0ab4636": "导入宠物包失败",
-            "2021d4f6db": "宠物包导入需要完全重启应用(不仅是重新加载)",
+            "2021d4f6db": "导入宠物包后需要完全重启应用（仅重新加载不够）",
             "f395c9a685": "导入文件失败",
             "e6234bcc17": "自定义宠物上传需要完全重启应用(不仅是重新加载)",
             "6d0a8cd179": "显示宠物",
@@ -6488,7 +6488,7 @@
           "installAvailable": "可安装",
           "otherBuild": "由其他版本的 Orca 安装",
           "otherBuildKept": "已保留：由其他版本的 Orca 写入",
-          "differsFromOrca": "此副本与 Orca 的副本不同",
+          "differsFromOrca": "此副本与 Orca 的版本不同",
           "replaceMovesFolder": "替换会将整个文件夹（包括所有额外文件）移动到 {{folder}}。",
           "replaceMovesFolderOnHost": "替换会将整个文件夹（包括所有额外文件）移动到 {{host}} 上的 {{folder}}。",
           "replaceMovesLink": "替换会将此链接移动到 {{folder}}。",
@@ -7535,7 +7535,7 @@
           }
         },
         "LinearAgentSkillSetupPrompt": {
-          "modalTitle": "启用 Linear 议题访问",
+          "modalTitle": "允许访问 Linear 议题",
           "modalPrompt": "允许智能体读取和编辑已附加的 Linear 议题",
           "dontShowAgain": "不再显示",
           "missingSkill": "缺少 Linear 代理技能",
@@ -7720,13 +7720,13 @@
           "loopbackBlocked": "启用 SSH 隧道选项，或使用另一台主机的 Tailscale 或 LAN 地址创建新链接",
           "sshAlreadyExists": "该 SSH 主机已在 Orca 中",
           "sshConfigPickerLoadFailed": "无法读取 ~/.ssh/config",
-          "sshConfigPickerResolveFailed": "无法解析该 SSH 配置主机",
-          "sshConfigPickerRestartRequired": "请重启 Orca 以完成 SSH 配置选择器更新",
+          "sshConfigPickerResolveFailed": "无法解析 SSH 配置中的该主机",
+          "sshConfigPickerRestartRequired": "请重启 Orca 以完成 SSH 配置选择器的更新",
           "sshConfigPickerFilled": "已从 {{value0}} 填充，请检查并保存",
           "sshConfigPickerTitle": "从 ~/.ssh/config 选择",
           "sshConfigPickerImportDescription": "选择一个主机以填写表单，或将所有新主机添加到 Orca 的主机列表",
           "sshConfigPickerFilter": "筛选主机…",
-          "sshConfigPickerHostsLabel": "SSH 配置主机",
+          "sshConfigPickerHostsLabel": "SSH 配置中的主机",
           "sshConfigPickerLoading": "正在读取 ~/.ssh/config…",
           "sshConfigPickerEmpty": "~/.ssh/config 中没有主机",
           "sshConfigPickerNoMatch": "没有匹配的主机",
@@ -8196,7 +8196,7 @@
           "selectedEndpointStorage": "保存在本地，并发送到所选的 MiniMax 端点以刷新用量",
           "openSelectedConsole": "在浏览器中打开 {{url}} 并登录",
           "cookieSelectedEndpoint": "保存在本地，并发送到所选的 MiniMax 端点以刷新用量",
-          "copySelectedConsoleCookie": "打开所选控制台并登录，然后从开发者工具复制 Cookie 请求标头（网络 (Network) 面板 → 任意 remains 请求 → Cookie）",
+          "copySelectedConsoleCookie": "打开所选控制台并登录，然后从开发者工具复制 Cookie 请求头（网络/Network 面板 → 任意 remains 请求 → Cookie）",
           "apiKeySelectedEndpoint": "粘贴 MiniMax 控制台 → API 密钥中的密钥，保存在本地，并发送到所选的 MiniMax 端点以刷新用量，API 密钥优先于 Cookie",
           "apiKeyInstructions": "从 MiniMax 控制台 → API 密钥中复制密钥，已保存的 API 密钥优先于 Cookie，使用“忘记密钥”切换回 Cookie",
           "endpointOverseas": "海外 (platform.minimax.io)",
@@ -8680,8 +8680,8 @@
           },
           "sharedCodexServers": {
             "title": "共享 Codex 服务器",
-            "description": "设置相同的 Codex 聊天共享一个后台进程，而不是每个聊天各启动一个",
-            "copy": "占用内存更少，新聊天启动更快。如果共享进程崩溃，其所有聊天都会重新连接。更改后仅对这台电脑上新启动的聊天生效，远程和 WSL 主机仍为每个聊天一个进程",
+            "description": "配置相同的 Codex 聊天共用一个后台进程，而不是每个聊天各启动一个",
+            "copy": "占用更少内存，新聊天启动更快。如果共享进程崩溃，它的所有聊天都会重新连接。仅对更改后在这台电脑上开始的聊天生效；远程主机和 WSL 主机仍为每个聊天使用一个进程",
             "toggleLabel": "切换共享 Codex 服务器"
           }
         },
@@ -9246,7 +9246,7 @@
           "9b821fa19d": "# e.g. echo \"Cleaning up $ORCA_WORKSPACE_NAME\"",
           "6f90ebe3fd": "在归档或删除工作树之前运行",
           "a3fc966677": "# e.g. pnpm install cp \"$ORCA_ROOT_PATH/.env\" \"$ORCA_WORKTREE_PATH/.env\"",
-          "f0710e1c83": "创建新工作树后运行，安装依赖，复制 env 文件，运行迁移",
+          "f0710e1c83": "在新工作树创建后运行，可用于安装依赖、复制 env 文件、执行迁移",
           "8561b0665f": "首先是 orca.yaml，然后是本地命令",
           "0e8b2a520d": "忽略 orca.yaml，仅运行本地命令",
           "83dc78202a": "仅限本地",
@@ -10229,7 +10229,7 @@
               "39bbdebe13": "Cursor 用量"
             },
             "zcodePlan": {
-              "description": "追踪 Z.AI 或智谱（BigModel）GLM Coding Plan 的用量，选择站点并保存套餐 API 密钥",
+              "description": "跟踪 Z.AI 或智谱（BigModel）GLM Coding Plan 的用量。选择站点并保存套餐的 API 密钥",
               "kw": {
                 "glm": "glm",
                 "zai": "zai",
@@ -10752,7 +10752,7 @@
               "a0c19119fb": "下载",
               "4438f81bfa": "文件",
               "c10e36cbd1": "全磁盘访问",
-              "05ab708ee5": "打开 macOS 隐私窗格，以访问受保护的项目和工作树文件",
+              "05ab708ee5": "打开 macOS 隐私设置，为受保护的项目和工作树文件授予访问权限",
               "bbf543a3a1": "全磁盘访问",
               "7f145a3984": "窗户",
               "5610022e1e": "自动化",
@@ -10847,7 +10847,7 @@
             },
             "sharedCodexServers": {
               "title": "共享 Codex 服务器",
-              "description": "设置相同的 Codex 聊天共享一个后台进程，而不是每个聊天各启动一个",
+              "description": "配置相同的 Codex 聊天共用一个后台进程，而不是每个聊天各启动一个",
               "codex": "codex",
               "memory": "内存"
             }
@@ -11997,7 +11997,7 @@
                   "commitMessage": "根据已暂存的更改生成提交信息",
                   "pullRequest": "生成托管评论标题和描述",
                   "branchName": "重命名 Orca 从初始代理任务创建的分支",
-                  "fixCommitFailure": "当提交挂钩或 git commit 失败时启动智能体",
+                  "fixCommitFailure": "提交钩子或 git commit 失败时启动智能体",
                   "fixChecks": "从失败的托管评审检查中启动代理",
                   "resolveConflicts": "启动用于解决本地或托管评审合并冲突的代理",
                   "customCommand": "自定义命令",
@@ -12164,8 +12164,8 @@
                 "fe9231215b": "在显示设置操作前正在检查 Linear 访问权限",
                 "disconnect_all": "断开连接",
                 "account_scope_prefix": "账户范围",
-                "2d60ec7921": "使用 API 令牌连接 Jira Cloud 站点，或使用个人访问令牌或用户名和密码连接自托管 Jira，凭据会发送到所选远程运行时并以运行时支持的加密方式存储",
-                "977e360b71": "使用 API 令牌连接 Jira Cloud 站点，或使用个人访问令牌或用户名和密码连接自托管 Jira，凭据存储在本地，本地运行时存储支持时会进行加密",
+                "2d60ec7921": "使用 API 令牌连接 Jira Cloud 站点，或使用个人访问令牌（或用户名和密码）连接自托管 Jira。凭据会发送到所选的远程运行时，并以其支持的加密方式存储",
+                "977e360b71": "使用 API 令牌连接 Jira Cloud 站点，或使用个人访问令牌（或用户名和密码）连接自托管 Jira。凭据存储在本地，本地运行时存储支持时会加密",
                 "statusConnected": "已连接",
                 "statusNotConnected": "未连接",
                 "linearTokenName": "您的 Linear API 令牌",
@@ -13387,7 +13387,7 @@
           "keySaved": "GLM Coding Plan API 密钥已保存",
           "keySaveFailed": "GLM Coding Plan 凭据更新失败",
           "title": "GLM Coding Plan",
-          "subtitle": "在状态栏追踪 Z.AI 或智谱（BigModel）GLM Coding Plan 用量，在此保存套餐 API 密钥，无需安装 ZCode CLI",
+          "subtitle": "在状态栏中跟踪 Z.AI 或智谱（BigModel）GLM Coding Plan 的用量。在这里保存套餐的 API 密钥即可，无需设置 ZCode CLI",
           "consoleLink": "获取 API 密钥",
           "keyStored": "API 密钥已保存 · {{value0}}",
           "keyStoredHelp": "仅保存在本地，并只发送到所选站点用于用量刷新，优先级高于 ZCode CLI 登录",
@@ -13399,14 +13399,14 @@
           "siteTitle": "套餐站点",
           "siteDescription": "选择你的 Coding Plan 所属控制台：国际站选 Z.AI，国内站选智谱 BigModel",
           "keyTitle": "API 密钥",
-          "keyDescription": "粘贴所选控制台 API Keys 页面中的 API 密钥，保存在本地，系统支持时加密存储，并只发送到该站点用于用量刷新",
+          "keyDescription": "粘贴所选控制台“API Keys”页面中的 API 密钥。密钥保存在本地（系统支持时加密），只会发送到该站点以刷新用量",
           "saved": "已保存",
           "notSaved": "未保存",
           "keyPlaceholder": "粘贴你的 GLM Coding Plan API 密钥",
           "replace": "替换",
           "save": "保存",
           "forgetKey": "忘记密钥",
-          "keyHelp": "与编码工具使用同一个套餐密钥（例如 Claude Code 将 ANTHROPIC_BASE_URL 指向对应站点），切换上方站点会变更接收该密钥的主机",
+          "keyHelp": "即编码工具为该套餐使用的同一个密钥（例如将 ANTHROPIC_BASE_URL 指向该站点的 Claude Code）。切换上方的站点会改变接收该密钥的主机",
           "usageTitle": "套餐用量",
           "usageDescription": "已关联 Coding Plan 的实时配额窗口，随状态栏用量周期刷新",
           "planLevel": "套餐：{{value0}}",
@@ -13651,7 +13651,7 @@
           "restartAsWslHost": {
             "button": "作为 WSL 主机重启",
             "title": "要作为 WSL 主机重启吗？",
-            "description": "结束 {{host}} 上的所有终端和代理（包括 SSH 主机打开的），然后将 Orca 的服务器作为 WSL 主机重启。",
+            "description": "结束 {{host}} 上的所有终端和智能体（包括 SSH 主机打开的），然后将 Orca 的服务器作为 WSL 主机重启",
             "cancel": "取消",
             "action": "结束终端并重启"
           }
@@ -13789,7 +13789,7 @@
           "defaultHostHelp": "现有项目保持不变",
           "defaultHostWebHelp": "此浏览器会在所选服务器上打开新项目",
           "updateAll": "全部更新",
-          "shareRowHint": "让另一个 Orca 连接到这里",
+          "shareRowHint": "允许另一个 Orca 连接到这里",
           "manageShare": "管理",
           "share": "共享",
           "serversCaption": "服务器",
@@ -13865,7 +13865,7 @@
           "attentionSharedNotCurrent": "需要处理 · 此文件夹使用的共享副本不是 Orca 的副本",
           "resultUpdateSkippedPlaces": "{{result}} · 已跳过 {{places}} 个位置的更新：{{reason}}",
           "resultUpdateSkippedAgent": "{{result}} · 已跳过 {{agent}} 中的更新：{{reason}}",
-          "attentionDiffersFromOrca": "需要处理 · 此副本与 Orca 的副本不同",
+          "attentionDiffersFromOrca": "需要处理 · 此副本与 Orca 的版本不同",
           "replaceMovesCopyToBackup": "替换会将当前副本（包括所有额外文件）移动到备份。",
           "replaceMovesCopyToFolder": "替换会将当前副本（包括所有额外文件）移动到 {{folder}}。",
           "replaceMovesCopyToFolderOnHost": "替换会将当前副本（包括所有额外文件）移动到 {{host}} 上的 {{folder}}。"
@@ -15304,7 +15304,7 @@
                   "blockedSyncFirst": "请先同步",
                   "blockedUnsupportedProvider": "不受支持的提供商",
                   "blockedExistingReview": "{{reviewLabel}} 已存在",
-                  "blockedForkHeadUnsupported": "不支持 Fork 头",
+                  "blockedForkHeadUnsupported": "不支持 Fork 中的源分支",
                   "blockedBaseNotOnRemote": "基准分支不在远程上",
                   "blockedBranchNotReady": "分支尚未就绪",
                   "titleCheckOutBranchToPush": "请先检出分支再推送提交",
@@ -15417,7 +15417,7 @@
                   "484f45c439": "{{value0}} 正在进行中...",
                   "6f7a8b9c0d": "远程操作进行中…",
                   "7f8a9b0c1d": "远程操作进行中——请等它完成后重试",
-                  "74fc171e99": "强制推送正在进行中...",
+                  "74fc171e99": "正在强制推送…",
                   "16aee3a5c1": "正在提交…",
                   "e61b0d7a3c": "请先检出分支再发布提交",
                   "1d47e850cf": "将更新推送到已关联的评审分支",
@@ -16266,8 +16266,8 @@
           "3960f5c339": "第 2 步(共 2 步)",
           "3241f3c26a": "安装二维码",
           "aa97420ba4": "复制安装链接",
-          "ac1eb64952": "安卓",
-          "711e6f4b47": "iOS系统",
+          "ac1eb64952": "Android",
+          "711e6f4b47": "iOS",
           "e75647ace0": "用手机相机扫描此下载二维码。已经安装 Orca Mobile？继续到第 2 步查看配对二维码",
           "0d9b33299e": "下载应用",
           "92ddfdfa1f": "第 1 步(共 2 步)",
@@ -16869,9 +16869,9 @@
           },
           "FeatureTipsModal": {
             "c169298e4d": "完成",
-            "3c6c478462": "X 完成后，把评审任务发给它，\"",
+            "3c6c478462": "X 中的智能体完成后，把评审任务发给它”",
             "298301b7a0": "工作树",
-            "864e2db28f": "当",
+            "864e2db28f": "“当",
             "4795ac2d4a": "尝试询问：",
             "53905bd076": "开发预览：打开技能设置终端",
             "1da82af45b": "Orca CLI 需要注意",
@@ -18084,7 +18084,7 @@
                       },
                       "name": {
                         "title": "命名，或从已有工作开始",
-                        "body": "从关联的任务开始可获得简短的议题或 PR 名称。留空则会根据你的第一条智能体消息自动命名"
+                        "body": "从关联的任务开始，可以得到简短的议题或 PR 名称；也可以留空，根据你发给智能体的第一条消息自动命名"
                       },
                       "agent": {
                         "title": "选择由哪个智能体开始工作",
@@ -18131,11 +18131,11 @@
                     },
                     "filter": {
                       "title": "筛选出你需要的工作",
-                      "body": "使用预设和搜索来缩小议题、评审、合并请求或任务的范围"
+                      "body": "用预设和搜索筛选议题、评审、合并请求或任务"
                     },
                     "start": {
                       "title": "从工作项开始",
-                      "body": "在任务、议题、评审或合并请求上点击开始或打开，即可把其上下文带入工作区"
+                      "body": "在任务、议题、评审或合并请求上点击“开始”或“打开”，即可将其上下文带入工作区"
                     }
                   },
                   "floating": {
@@ -22275,7 +22275,7 @@
           "projectOnHost": "{{project}} · {{host}}",
           "notGit": "不是 Git 工作区。请改为从 Orca 中移除该项目。",
           "unreachable": "无法连接 {{host}}。重新连接后即可删除，或将其从 Orca 中移除。",
-          "mainCheckout": "无法删除项目的主检出。",
+          "mainCheckout": "无法删除项目的主工作树",
           "uncommittedFiles_other": "{{count}} 个未提交的文件",
           "couldntCheck": "无法检查更改"
         },
@@ -23231,7 +23231,7 @@
       "downloading": "正在下载 {{done}} MB",
       "downloadingOf": "正在下载 {{done}} MB / {{total}} MB",
       "external": "使用你自己的 {{agent}}",
-      "externalShort": "使用你自己的副本",
+      "externalShort": "使用你自己安装的版本",
       "extracting": "正在解压 {{agent}}…",
       "extractingShort": "正在解压…",
       "failed": "安装失败，请重试",
@@ -23294,7 +23294,7 @@
         "bannerFinishedStatus": "工作代理已完成 · 即将关闭",
         "boundRunning": "随 {{worker}} 一同关闭",
         "boundFinished": "{{worker}} 已完成 · {{countdown}}后关闭",
-        "boundFallbackName": "其工作代理"
+        "boundFallbackName": "其工作者"
       }
     },
     "wslHostMark": {
@@ -25026,11 +25026,11 @@
       "chatCancelSignIn": "取消登录",
       "chatCopied": "已复制",
       "chatCopySignInLink": "复制登录链接",
-      "chatFinishInBrowser": "请在浏览器中完成，然后粘贴代码。",
+      "chatFinishInBrowser": "在浏览器中完成登录，然后粘贴授权码",
       "chatOtherWindow": "正在另一个窗口中登录。",
       "chatPageDidntOpen": "页面没有打开？",
-      "chatPasteCode": "粘贴代码",
-      "chatPasteCodeLabel": "登录后 Google 显示的代码，或那个页面的地址",
+      "chatPasteCode": "粘贴授权码",
+      "chatPasteCodeLabel": "登录后 Google 显示的授权码，或该页面的地址",
       "description": "聊天和终端中的 agy 共用 agy 的 Google 账户。聊天也可以改用 Gemini API 密钥或 gcloud 登录。",
       "descriptionWindows": "聊天和终端中的 agy 共用 agy 的 Google 账户。切换只影响这台主机的默认 agy 凭据。聊天也可以改用 Gemini API 密钥或 gcloud 登录。",
       "agentPlatform": "Google Agent Platform",
@@ -26457,7 +26457,7 @@
         "credentialsRequired": "必须填写站点 URL、电子邮件和 API 令牌",
         "projectRequired": "必须选择项目",
         "issueTypeRequired": "必须选择议题类型",
-        "issueKeyRequired": "必须提供议题键",
+        "issueKeyRequired": "必须提供议题编号",
         "updatesRequired": "必须提供更新对象",
         "commentBodyRequired": "必须填写评论正文",
         "invalidSiteUrl": "请输入有效的 Jira 站点 URL",
@@ -26469,11 +26469,11 @@
         "missingProjectIdentity": "Jira 返回的项目缺少 ID 或键",
         "invalidIssuePage": "Jira 返回了无效的议题页面",
         "incompleteIssuePage": "Jira 返回了不完整的议题页面",
-        "repeatedIssueToken": "Jira 返回了无效或重复的议题页面令牌",
-        "issueSearchLimit": "Jira 议题搜索超出了页面数量限制。请改用 JQL 选择项目",
+        "repeatedIssueToken": "Jira 返回了无效或重复的议题分页令牌",
+        "issueSearchLimit": "Jira 议题搜索超出了分页上限。请改用 JQL 选择项目",
         "invalidProjectPage": "Jira 返回了无效的项目页面",
         "incompleteProjectPage": "Jira 返回了不完整的项目页面",
-        "projectListLimit": "Jira 项目列表超出了页面数量限制。请改用 JQL 选择项目",
+        "projectListLimit": "Jira 项目列表超出了分页上限。请改用 JQL 选择项目",
         "invalidCloudId": "站点未返回有效的 Atlassian Cloud ID"
       },
       "linear": {
@@ -27953,9 +27953,9 @@
       "outfitNightShift": "夜班",
       "outfitNone": "无装扮",
       "outfitParty": "派对",
-      "outfitReviewer": "审阅者",
+      "outfitReviewer": "评审人",
       "outfitScientist": "科学家",
-      "outfitSecurity": "安保",
+      "outfitSecurity": "保安",
       "outfitTie": "领带",
       "pictureOutfit": "装扮",
       "wslSetupFailedShort": "设置未完成",
@@ -28928,7 +28928,7 @@
         "apiOff": "{{service}} 已在 Google Cloud 中停用",
         "error": "无法检查 {{service}}",
         "notAllowed": "不允许使用 {{service}}",
-        "signedOut": "登录已失效"
+        "signedOut": "已被 Google 退出登录"
       },
       "setDefault": "设为默认",
       "addServiceMenu": "添加服务…",
@@ -30243,7 +30243,7 @@
       "generic": "出了点问题，请重试",
       "avatarInvalid": "无法使用该图片。请选择 PNG 或 JPG 图片",
       "unsavedDrafts": "它的文件夹中有未保存的编辑器更改。请先保存或关闭这些更改，然后再删除",
-      "avatarHomeUnreadable": "无法读取已保存的图片。请重新选择",
+      "avatarHomeUnreadable": "无法读取已保存的头像。请重新选择",
       "folderNotOwned": "无法验证此 bot 的文件夹"
     },
     "slack": {
