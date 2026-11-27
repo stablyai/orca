@@ -27,9 +27,9 @@ async function workerHeapLimitMb(maxOldGenerationSizeMb: number): Promise<number
     "require('node:worker_threads').parentPort.postMessage(require('node:v8').getHeapStatistics().heap_size_limit)",
     { eval: true, execArgv: [], resourceLimits: { maxOldGenerationSizeMb } }
   )
-  const [bytes] = (await once(worker, 'message')) as [number]
+  const [bytes]: unknown[] = await once(worker, 'message')
   await worker.terminate()
-  return Math.round(bytes / 2 ** 20)
+  return Math.round(Number(bytes) / 2 ** 20)
 }
 
 function asMainProcess(): void {
