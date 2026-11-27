@@ -1344,25 +1344,13 @@
     },
     "customKeyModal": {
       "add": "추가",
-      "addShortcut": "단축키 추가",
-      "command": "명령",
       "commandPlaceholder": "예: pnpm build",
       "editing": "편집",
       "function": "기능 키",
       "key": "키",
-      "label": "레이블",
       "labelPlaceholder": "예: 빌드",
-      "manageShortcuts": "단축키 관리",
-      "manageShortcutsHint": "단축키 표시, 숨기기 및 순서 변경",
-      "modifiers": "보조 키",
-      "moreKeys": "더 많은 키",
       "navigation": "탐색",
-      "pickKey": "키 선택",
-      "pressEnter": "Enter 누르기",
-      "shortcutCombo": "단축키 조합",
-      "shortcutComboHint": "Ctrl, Alt, Shift 키 조합 만들기",
-      "textMacro": "텍스트 매크로",
-      "textMacroHint": "사용자 지정 텍스트 명령 전송"
+      "pressEnter": "Enter 누르기"
     },
     "dictationSetupSheet": {
       "description": "여기서 모델을 다운로드하거나 선택하고 페어링된 컴퓨터의 받아쓰기를 활성화할 수 있습니다.",
@@ -2954,12 +2942,7 @@
       "messageModeLabel": "메시지 모드: 작성한 뒤 전송합니다. 키 모드로 전환",
       "moreKeys": "더 많은 키와 작업",
       "showKeyboard": "키보드 표시",
-      "dismissKeyboardHint": "소프트웨어 키보드를 숨기고 현재 터미널 세션을 열린 상태로 유지합니다.",
-      "switchToDesktopMode": "데스크톱 모드로 전환",
-      "switchToPhoneMode": "휴대폰 모드로 전환",
-      "pasteFromClipboard": "클립보드에서 붙여넣기",
-      "paste": "붙여넣기",
-      "addCustomShortcut": "사용자 지정 단축키 추가"
+      "pasteFromClipboard": "클립보드에서 붙여넣기"
     },
     "activeContent": {
       "creatingTab": "만드는 중…",
@@ -3058,7 +3041,6 @@
     },
     "commandDock": {
       "liveInputHint": "입력한 텍스트가 활성 터미널로 바로 전송됩니다.",
-      "tapToShowKeyboard": "탭하여 키보드 표시",
       "liveInputLabel": "실시간 터미널 입력"
     },
     "contentRow": {
@@ -3505,20 +3487,12 @@
       "switchToDesktop": "데스크톱 모드로 전환",
       "switchToPhone": "휴대폰 모드로 전환"
     },
-    "terminalInputActions": {
-      "attachFileHint": "사진 대신 파일을 첨부하려면 길게 누르세요.",
-      "attachPhoto": "사진 첨부",
-      "sendingImage": "이미지 전송 중"
-    },
     "terminalLiveInputStatus": {
       "listening": "듣는 중",
-      "liveInput": "실시간 입력",
       "preparingMic": "마이크 준비 중",
       "processing": "처리 중",
       "releaseMicHint": "중지하려면 마이크에서 손을 떼세요",
-      "startingMic": "마이크 시작 중",
-      "uploadingImage": "호스트에 이미지 업로드 중",
-      "uploadingImageTitle": "이미지 업로드 중"
+      "startingMic": "마이크 시작 중"
     },
     "terminalRecords": {
       "defaultTitle": "터미널"
@@ -3776,17 +3750,14 @@
     "terminalMoreKeys": {
       "sendKey": "{{label}} 보내기",
       "paste": "붙여넣기",
-      "sending": "보내는 중…",
       "photo": "사진",
       "file": "파일",
       "desktopWidth": "데스크톱 너비",
       "phoneWidth": "휴대폰 너비",
       "keys": "키",
-      "combos": "조합",
       "yourKeys": "내 키",
       "deleteKeyHint": "길게 눌러 이 키 삭제",
-      "addCustomKey": "사용자 지정 키 추가",
-      "addKey": "키 추가"
+      "addCustomKey": "사용자 지정 키 추가"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, 포커스됨",

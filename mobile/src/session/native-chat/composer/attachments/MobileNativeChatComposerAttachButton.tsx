@@ -65,10 +65,12 @@ export function MobileNativeChatComposerAttachButton({
           actions={mobileNativeChatAttachActions({
             onPhotos: onAttachImage,
             onFiles: onAttachFiles,
-            onWorkspaceFile: sheet.openFileMenu,
-            onSkills: () => sheet.openSlashMenu('skill'),
-            onCommands: () => sheet.openSlashMenu('command'),
-            skillCount: sheet.skillCount
+            chat: {
+              onWorkspaceFile: sheet.openFileMenu,
+              onSkills: () => sheet.openSlashMenu('skill'),
+              onCommands: () => sheet.openSlashMenu('command'),
+              skillCount: sheet.skillCount
+            }
           })}
         />
       ) : null}

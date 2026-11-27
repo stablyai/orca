@@ -527,7 +527,7 @@
   {
     "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
-    "text": "Shift+Tab",
+    "text": "⇧Tab",
     "dynamic": false,
     "count": 1
   },
