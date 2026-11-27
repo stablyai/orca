@@ -32,16 +32,58 @@ export function getRepositoryItsaplanSearchEntry(repo: Repo, t: Translate = tran
   }
 }
 
+type UpdateRepo = (
+  id: string,
+  updates: { defaultItsaplanProject: ItsaplanProjectReference | null }
+) => unknown
+
+// Why: module-level so the try/catch stays out of the React Compiler's component body.
+async function saveDefaultProject(
+  repo: Repo,
+  project: ItsaplanProjectReference | null,
+  updateRepo: UpdateRepo,
+  t: Translate
+): Promise<string | null> {
+  try {
+    const result = await updateRepo(repo.id, { defaultItsaplanProject: project })
+    if (result === false) {
+      throw new Error(
+        t(
+          'components.RepositoryItsaplanProjectSection.saveFailed',
+          "Could not save the default It's a Plan project."
+        )
+      )
+    }
+    const echoed = useAppStore
+      .getState()
+      .repos.find(
+        (entry) =>
+          entry.id === repo.id && getRepoExecutionHostId(entry) === getRepoExecutionHostId(repo)
+      )?.defaultItsaplanProject
+    if (
+      (echoed?.projectRef ?? null) !== (project?.projectRef ?? null) ||
+      (echoed?.instanceId ?? null) !== (project?.instanceId ?? null)
+    ) {
+      throw new Error(
+        t(
+          'components.RepositoryItsaplanProjectSection.runtimeUpdate',
+          "Update this runtime to save a default It's a Plan project."
+        )
+      )
+    }
+    return null
+  } catch (caught) {
+    return caught instanceof Error ? caught.message : String(caught)
+  }
+}
+
 export function RepositoryItsaplanProjectSection({
   repo,
   updateRepo,
   forceVisible
 }: {
   repo: Repo
-  updateRepo: (
-    id: string,
-    updates: { defaultItsaplanProject: ItsaplanProjectReference | null }
-  ) => unknown
+  updateRepo: UpdateRepo
   forceVisible?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
@@ -97,38 +139,8 @@ export function RepositoryItsaplanProjectSection({
   const applyProject = async (project: ItsaplanProjectReference | null) => {
     setSaving(true)
     setError(null)
-    try {
-      const result = await updateRepo(repo.id, { defaultItsaplanProject: project })
-      if (result === false) {
-        throw new Error(
-          t(
-            'components.RepositoryItsaplanProjectSection.saveFailed',
-            "Could not save the default It's a Plan project."
-          )
-        )
-      }
-      const echoed = useAppStore
-        .getState()
-        .repos.find(
-          (entry) =>
-            entry.id === repo.id && getRepoExecutionHostId(entry) === getRepoExecutionHostId(repo)
-        )?.defaultItsaplanProject
-      if (
-        (echoed?.projectRef ?? null) !== (project?.projectRef ?? null) ||
-        (echoed?.instanceId ?? null) !== (project?.instanceId ?? null)
-      ) {
-        throw new Error(
-          t(
-            'components.RepositoryItsaplanProjectSection.runtimeUpdate',
-            "Update this runtime to save a default It's a Plan project."
-          )
-        )
-      }
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught))
-    } finally {
-      setSaving(false)
-    }
+    setError(await saveDefaultProject(repo, project, updateRepo, t))
+    setSaving(false)
   }
 
   const entry = getRepositoryItsaplanSearchEntry(repo, t)

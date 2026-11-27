@@ -613,7 +613,7 @@
 20 src/renderer/src/components/task-page/linear/issues/use-task-page-linear-list-selection.ts
 2 src/renderer/src/components/task-page/linear/creation/use-task-page-linear-project-creation.ts
 1 src/renderer/src/components/task-page/linear/use-task-page-linear-view-state.ts
-10 src/renderer/src/components/task-page/use-task-page-composer-actions.ts
+11 src/renderer/src/components/task-page/use-task-page-composer-actions.ts
 3 src/renderer/src/components/task-page/use-task-page-detail-routing.ts
 1 src/renderer/src/components/task-page/use-task-page-global-effects.ts
 8 src/renderer/src/components/task-page/use-task-page-provider-metadata.ts
