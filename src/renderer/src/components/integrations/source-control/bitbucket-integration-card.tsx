@@ -36,7 +36,9 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
   const [disconnectError, setDisconnectError] = useState<string | null>(null)
-  const [connectionLoadFailed, setConnectionLoadFailed] = useState(false)
+  const [connectionFailedSettings, setConnectionFailedSettings] = useState<GlobalSettings | null>(
+    null
+  )
   const connectionLoadGenerationRef = useRef(0)
 
   // Read metadata only; mounting must not decrypt secrets or trigger keychain prompts.
@@ -52,7 +54,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
       ) {
         setConnection(next)
         setConnectionSettings(settings)
-        setConnectionLoadFailed(false)
+        setConnectionFailedSettings(null)
       }
     } catch {
       // Report unreadable state as unknown rather than indistinguishable from missing credentials.
@@ -62,7 +64,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
         useAppStore.getState().settings === settings
       ) {
         setConnectionSettings(settings)
-        setConnectionLoadFailed(true)
+        setConnectionFailedSettings(settings)
       }
     }
   }, [mountedRef, readConnectionStatus, settings])
@@ -71,13 +73,19 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
     void loadConnection()
   }, [loadConnection])
 
-  // Metadata loaded for another host describes nobody actionable; keep actions down until a read for
-  // this host lands, so Disconnect can never delete the active host's credential.
+  // A dialog opened under one host must not submit its form under another.
+  useEffect(() => {
+    setDialogOpen(false)
+  }, [settings])
+
+  // Reads and failures scoped to another host describe nobody actionable; keep actions down until a
+  // read for this host lands, so Disconnect can never delete the active host's credential.
   const connectionIsCurrent = connectionSettings === settings
-  const currentConnection = connectionLoadFailed || !connectionIsCurrent ? null : connection
+  const readFailed = connectionFailedSettings === settings
+  const currentConnection = readFailed || !connectionIsCurrent ? null : connection
   const credentialStatusKnown = currentConnection !== null
   // A remote provider runtime owns the credential; the local preflight cannot see it.
-  const remoteCardStatus: BitbucketStatus | 'unavailable' = connectionLoadFailed
+  const remoteCardStatus: BitbucketStatus | 'unavailable' = readFailed
     ? 'unavailable'
     : currentConnection === null
       ? 'checking'
@@ -163,13 +171,13 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
       statusTone={connected ? 'connected' : 'attention'}
       statusLabel={tokenProviderStatusLabel({ configured: connected, status }, t)}
       actions={
-        status !== 'checking' && !envManaged && (credentialStatusKnown || connectionLoadFailed) ? (
+        status !== 'checking' && !envManaged && (credentialStatusKnown || readFailed) ? (
           <Button
             variant={storedCredential ? 'outline' : 'default'}
             size="sm"
             onClick={() => setDialogOpen(true)}
           >
-            {connectionLoadFailed
+            {readFailed
               ? t(
                   'auto.components.settings.bitbucket.integration.card.replaceCredentials',
                   'Manage credentials'
@@ -224,7 +232,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
             </div>
           ) : null}
           {disconnectError ? <p className="text-xs text-destructive">{disconnectError}</p> : null}
-          {connectionLoadFailed ? (
+          {readFailed ? (
             <p role="alert" className="text-xs text-destructive">
               {t(
                 'auto.components.settings.bitbucket.integration.card.statusLoadFailed',
