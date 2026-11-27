@@ -1,8 +1,8 @@
 import type { ActivityBarPosition } from '../../../../../shared/ui-chrome/ui-chrome-types'
-import { preserveStringArrayIdentity } from './ui-slice-hydration-sanitizers'
+import { preserveStringArrayIdentity } from './ui-slice-hydration-array-identity'
 
 // Any other value would hide the activity bar entirely, since the layout renders only Top or Side.
-function sanitizeActivityBarPosition(position: unknown): ActivityBarPosition {
+export function sanitizeActivityBarPosition(position: unknown): ActivityBarPosition {
   return position === 'side' ? 'side' : 'top'
 }
 

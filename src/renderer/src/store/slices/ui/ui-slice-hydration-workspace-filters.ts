@@ -12,10 +12,9 @@ import {
   normalizeActivityGroupBy,
   normalizeThreadReadFilter
 } from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
+import { preserveStringArrayIdentity } from './ui-slice-hydration-array-identity'
 import {
   normalizeHydratedVisibleWorkspaceHostIds,
-  preserveStringArrayIdentity,
-  sanitizePersistedRepoIds,
   sanitizePerWorktreePreferences
 } from './ui-slice-hydration-sanitizers'
 
@@ -23,11 +22,13 @@ export function hydrateWorkspaceFilters(
   ui: PersistedUIState,
   s: Pick<AppState, 'agentsVisibleHostIds' | 'agentsFilterRepoIds'>,
   validRepoIds: ReadonlySet<string>,
+  { persistedFilterRepoIds, persistedAgentsFilterRepoIds }: {
+    persistedFilterRepoIds: string[]
+    persistedAgentsFilterRepoIds: string[]
+  },
   manualRepoOrder: ManualRepoOrderEntry[],
   orderedRepos: AppState['repos']
 ) {
-  const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
-  const persistedAgentsFilterRepoIds = sanitizePersistedRepoIds(ui.agentsFilterRepoIds)
   return {
     // Why: ignore older positive-form keys so old profiles start from the new default (sleeping workspaces visible).
     showSleepingWorkspaces: !(ui.hideSleepingWorkspaces ?? DEFAULT_HIDE_SLEEPING_WORKSPACES),

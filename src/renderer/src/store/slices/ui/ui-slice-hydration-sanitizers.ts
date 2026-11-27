@@ -20,19 +20,13 @@ import '../../../../../shared/orca-profiles/constants'
 import type { UISlice } from './ui-slice-contract'
 import { chatPaneKeySessionId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
-const MIN_SIDEBAR_WIDTH = 220
+export {
+  sanitizeActivityBarArrangement,
+  sanitizeActivityBarPosition
+} from './ui-slice-hydration-activity-bar'
+export { preserveStringArrayIdentity } from './ui-slice-hydration-array-identity'
 
-export function preserveStringArrayIdentity<T extends string>(
-  current: readonly T[] | null,
-  next: T[] | null
-): T[] | null {
-  if (!current || !next) {
-    return next
-  }
-  return current.length === next.length && current.every((value, index) => value === next[index])
-    ? (current as T[])
-    : next
-}
+const MIN_SIDEBAR_WIDTH = 220
 
 export function isPlainPersistedRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)

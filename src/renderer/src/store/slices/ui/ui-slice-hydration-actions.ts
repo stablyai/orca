@@ -45,6 +45,7 @@ import {
   hydrateTrustedOrcaHooks,
   hydrateUnexpectedSignoutDismissal,
   sanitizeHydratedActiveView,
+  sanitizePersistedRepoIds,
   sanitizeWorkspaceCleanupDismissals,
   sanitizePersistedSidebarWidth,
   keepUnchangedHydratedFields,
@@ -88,6 +89,8 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             ? listedRepoIds
             : withWslMovedRepoIds(listedRepoIds, s.wslMovedProjects)
         const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
+        const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
+        const persistedAgentsFilterRepoIds = sanitizePersistedRepoIds(ui.agentsFilterRepoIds)
         // Why: pre-rename builds used sidekick* keys; read as fallback only so new pet* writes win after upgrade.
         const customPets = Array.isArray(ui.customPets)
           ? ui.customPets
@@ -130,7 +133,14 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           projectOrderBy: ui.projectOrderBy,
           // Why: Active-only was retired; force the old flag off so an old profile can't invisibly narrow the workspace list.
           showActiveOnly: false,
-          ...hydrateWorkspaceFilters(ui, s, validRepoIds, manualRepoOrder, orderedRepos),
+          ...hydrateWorkspaceFilters(
+            ui,
+            s,
+            validRepoIds,
+            { persistedFilterRepoIds, persistedAgentsFilterRepoIds },
+            manualRepoOrder,
+            orderedRepos
+          ),
           collapsedGroups: new Set(ui.collapsedGroups ?? []),
           uiZoomLevel: ui.uiZoomLevel ?? 0,
           editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
