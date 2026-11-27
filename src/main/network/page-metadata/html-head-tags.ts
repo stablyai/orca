@@ -24,6 +24,18 @@ function findTagEnd(html: string, from: number): number {
   return -1
 }
 
+function findCommentEnd(html: string, from: number): number {
+  if (html[from] === '>') {
+    return from
+  }
+  if (html.startsWith('->', from)) {
+    return from + 1
+  }
+  const close = /--!?>/g
+  close.lastIndex = from
+  return close.test(html) ? close.lastIndex - 1 : -1
+}
+
 type HtmlTag = { attributesStart: number; end: number; contentEnd?: number }
 
 /** Skip inert text before interpreting tag-shaped strings as page metadata. */
@@ -32,11 +44,11 @@ function* htmlTags(html: string, tagName: string): Generator<HtmlTag> {
   const open = /<!--|<([a-z][a-z0-9:-]*)(?=[\s/>])/gi
   for (let match = open.exec(html); match; match = open.exec(html)) {
     if (match[0] === '<!--') {
-      const end = html.indexOf('-->', open.lastIndex)
+      const end = findCommentEnd(html, open.lastIndex)
       if (end === -1) {
         return
       }
-      open.lastIndex = end + 3
+      open.lastIndex = end + 1
       continue
     }
     const name = match[1].toLowerCase()

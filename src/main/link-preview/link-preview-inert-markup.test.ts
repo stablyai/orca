@@ -4,7 +4,7 @@ import { extractHtmlTitle } from '../network/page-metadata/html-head-tags'
 
 it('ignores metadata examples inside comments, raw text and other tags attributes', () => {
   const html = `<!-- <meta charset="windows-1252"><meta property="og:title" content="Removed">
-    <title>Removed tab title</title><link rel="icon" href="/removed.ico"> -->
+    <title>Removed tab title</title><link rel="icon" href="/removed.ico"> --!><!--><!--->
     <script>const example = '<meta name="description" content="Script example">';</script>
     <style>body::before { content: '<meta property="og:site_name" content="Style example">'; }</style>
     <div data-example='<meta property="og:image" content="/example.png">'></div>
