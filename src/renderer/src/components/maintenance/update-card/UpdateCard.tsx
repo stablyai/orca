@@ -23,7 +23,8 @@ export function UpdateCard(): React.JSX.Element | null {
   const setCollapsed = useAppStore((state) => state.setUpdateCardCollapsed)
   const reassuranceSeen = useAppStore((state) => state.updateReassuranceSeen)
   const markReassuranceSeen = useAppStore((state) => state.markUpdateReassuranceSeen)
-  const hasStartedDownload = useRef(false)
+  // Only the download this card started installs on finish; Settings downloads wait for Restart.
+  const cardDownloadVersion = useRef<string | null>(null)
   const dismissAnimationTimerRef = useRef<number | null>(null)
   const collapseAnimationTimerRef = useRef<number | null>(null)
   const [mediaFailed, setMediaFailed] = useState(false)
@@ -52,7 +53,6 @@ export function UpdateCard(): React.JSX.Element | null {
   const prevVersionRef = useRef<string | null>(null)
   if (status.state === 'available' && status.version !== prevVersionRef.current) {
     prevVersionRef.current = status.version
-    hasStartedDownload.current = false
     setMediaFailed(false)
     setMediaLoaded(false)
   }
@@ -98,11 +98,18 @@ export function UpdateCard(): React.JSX.Element | null {
       })
   }, [])
   useEffect(() => {
-    if (status.state !== 'downloaded' || !hasStartedDownload.current) {
+    const version = cardDownloadVersion.current
+    if (version === null || (status.state === 'downloading' && status.version === version)) {
       return
     }
-    hasStartedDownload.current = false
-    if (!status.installing && !status.automaticDownload && !status.requiredByTeam) {
+    cardDownloadVersion.current = null
+    if (
+      status.state === 'downloaded' &&
+      status.version === version &&
+      !status.installing &&
+      !status.automaticDownload &&
+      !status.requiredByTeam
+    ) {
       requestInstall(installTarget)
     }
   }, [status, installTarget, requestInstall])
@@ -141,7 +148,7 @@ export function UpdateCard(): React.JSX.Element | null {
   }
 
   const handleUpdate = (): void => {
-    hasStartedDownload.current = true
+    cardDownloadVersion.current = versionRef.current
     if (!reassuranceSeen) {
       markReassuranceSeen()
     }
@@ -247,7 +254,7 @@ export function UpdateCard(): React.JSX.Element | null {
       errorCard={errorCard}
       linuxPackageRecovery={linuxPackageRecovery}
       isLocalBuild={isLocalBuild}
-      hasStartedDownload={hasStartedDownload.current}
+      hasStartedDownload={cardDownloadVersion.current !== null}
       prefersReducedMotion={prefersReducedMotion}
       mediaFailed={mediaFailed}
       mediaLoaded={mediaLoaded}
