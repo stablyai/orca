@@ -2727,7 +2727,13 @@
         "botCount_other": "{{count}} bots",
         "fileCount_one": "{{count}} file",
         "fileCount_other": "{{count}} files",
-        "placeholder": "Ask anything, @ to mention files, / for commands"
+        "heldInAnotherChat_one": "Not sent — {{count}} attachment in another chat",
+        "heldInAnotherChat_other": "Not sent — {{count}} attachments in another chat",
+        "heldInOtherChat_one": "Not sent — {{count}} attachment in {{chat}}",
+        "heldInOtherChat_other": "Not sent — {{count}} attachments in {{chat}}",
+        "placeholder": "Ask anything, @ to mention files, / for commands",
+        "queuedEditHeldInAnotherChat_one": "{{count}} attachment is in another chat's draft.",
+        "queuedEditHeldInAnotherChat_other": "{{count}} attachments are in another chat's draft."
       },
       "composerErrors": {
         "commandTakesNoArguments": "Use /{{name}} without arguments.",
