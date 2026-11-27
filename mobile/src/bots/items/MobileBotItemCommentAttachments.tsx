@@ -205,7 +205,7 @@ export function MobileBotItemCommentAttachments({
     return {
       path,
       caption,
-      label: caption ?? t('components.native-chat.composer.pastedImageLabel', 'Pasted image')
+      label: caption ?? t('chat.nativeChatProse.attachedImage', 'Attached image')
     }
   })
   const { files } = botItemCommentFiles(typeof data.text === 'string' ? data.text : '')
