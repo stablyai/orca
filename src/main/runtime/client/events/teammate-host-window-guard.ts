@@ -1,7 +1,6 @@
 // Rule 4 for the host's window (teammate-rules.ts): its two entry points, the notifier and the
 // renderer requests, ask `activeCallMayTouchHostTabs` for the workspace each call opens, focuses or
 // drives a tab in. A teammate's call reaches the window only in a shared (worker) workspace.
-import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RendererRequest } from '../../construction/runtime-desktop-surface'
 import { TeammateHostTabWriteError } from '../../session-tabs/person/host-tab-list-admission'
@@ -15,27 +14,26 @@ type Lookups = {
   worktreeOfBrowserPage: (browserPageId: string) => string | null
 }
 
-/** Finds a tab's workspace in the host's lists, and a browser page's in the browser's. */
+/** Finds a tab's workspace, or a browser page's, in the host's lists. */
 export function hostWindowLookups(
   hostLists: Iterable<[string, RuntimeMobileSessionTabsSnapshot]>
 ): Lookups {
-  return {
-    worktreeOfTab: (tabId) => {
-      for (const [worktreeId, snapshot] of hostLists) {
-        if (
-          snapshot.tabs.some(
-            (tab) => tab.id === tabId || ('parentTabId' in tab && tab.parentTabId === tabId)
-          )
-        ) {
-          return worktreeId
-        }
+  const find = (holds: (tab: RuntimeMobileSessionTabsSnapshot['tabs'][number]) => boolean) => {
+    for (const [worktreeId, snapshot] of hostLists) {
+      if (snapshot.tabs.some(holds)) {
+        return worktreeId
       }
-      return null
-    },
+    }
+    return null
+  }
+  return {
+    worktreeOfTab: (tabId) =>
+      find((tab) => tab.id === tabId || ('parentTabId' in tab && tab.parentTabId === tabId)),
     worktreeOfBrowserPage: (browserPageId) =>
-      browserManager.getWorktreeIdForTab(browserPageId) ?? null
+      find((tab) => tab.type === 'browser' && tab.browserPageId === browserPageId)
   }
 }
+
 type Target = (args: readonly unknown[], lookups: Lookups) => string | null
 
 function stringField(value: unknown, key: string): string | null {
