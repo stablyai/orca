@@ -5,7 +5,7 @@ import { useMobileNativeChatOpenFile } from '../../links/mobile-native-chat-open
 /** Chat markdown: generic markdown with the chat's file opener, so file paths in any chat text open,
  *  and desktop chat's math delimiters. */
 export function MobileNativeChatMarkdown(
-  props: Omit<ComponentProps<typeof MobileMarkdown>, 'onOpenFile' | 'chatMath'>
+  props: Omit<ComponentProps<typeof MobileMarkdown>, 'onOpenFile' | 'nativeChat'>
 ): React.JSX.Element {
-  return <MobileMarkdown {...props} chatMath onOpenFile={useMobileNativeChatOpenFile()} />
+  return <MobileMarkdown {...props} nativeChat onOpenFile={useMobileNativeChatOpenFile()} />
 }

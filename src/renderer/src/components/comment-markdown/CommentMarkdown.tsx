@@ -81,6 +81,7 @@ const rehypePlugins: MarkdownPlugins = [rehypeRaw, [rehypeSanitize, commentMarkd
 /** Keep extensions stable per surface; new objects rebuild components and remount their contents. */
 export type CommentMarkdownExtension = {
   remarkPlugins: RemarkPlugins
+  rehypePlugins?: MarkdownPlugins
   /** Extra flow syntax requires one of these markers; omitted means unknown grammar. */
   extraFlowSyntaxMarkers?: readonly string[]
   sanitizeAttributes: Record<string, readonly string[]>
@@ -100,7 +101,11 @@ function extensionRehypePlugins(
   if (trackCodeFences) {
     attributes.code = [...(attributes.code ?? []), MARKDOWN_CLOSING_FENCE]
   }
-  return [rehypeRaw, [rehypeSanitize, { ...commentMarkdownSanitizeSchema, attributes }]]
+  return [
+    rehypeRaw,
+    ...(extension?.rehypePlugins ?? []),
+    [rehypeSanitize, { ...commentMarkdownSanitizeSchema, attributes }]
+  ]
 }
 
 type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
