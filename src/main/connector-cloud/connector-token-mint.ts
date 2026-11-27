@@ -1,5 +1,6 @@
 // Connector tokens for the desktop's signed-in Orca account, fetched the way relay tokens are.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { OrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import type { OrcaCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-store'
 import {
@@ -26,24 +27,26 @@ import type { ConnectorToken, ConnectorTokenMint } from './connector-transport'
 // The auth service's flag for accepting a host-key proof; servers without it refuse the field.
 export const CONNECTOR_HOST_KEY_CAPABILITY = 'connector.hostKey'
 
-const ConnectorTokenResponse = z.object({
-  connectorToken: z
-    .string()
-    .min(1)
-    .max(8 * 1024),
-  expiresAt: z.number().int().positive(),
-  // From an auth service that mints the wake socket's token beside it; unreadable is none.
-  wakeToken: z
-    .object({
-      token: z
-        .string()
-        .min(1)
-        .max(8 * 1024),
-      expiresAt: z.number().int().positive()
-    })
-    .optional()
-    .catch(undefined)
-})
+const ConnectorTokenResponse = lazyZodSchema(() =>
+  z.object({
+    connectorToken: z
+      .string()
+      .min(1)
+      .max(8 * 1024),
+    expiresAt: z.number().int().positive(),
+    // From an auth service that mints the wake socket's token beside it; unreadable is none.
+    wakeToken: z
+      .object({
+        token: z
+          .string()
+          .min(1)
+          .max(8 * 1024),
+        expiresAt: z.number().int().positive()
+      })
+      .optional()
+      .catch(undefined)
+  })
+)
 
 // Refusals a fresh session can't change, whatever their status, so they never refresh it.
 const NO_REFRESH_REFUSALS: ReadonlySet<string> = new Set([
@@ -60,7 +63,7 @@ const HOST_KEY_REFUSALS: ReadonlySet<string> = new Set([
   'host_key_mismatch',
   'recent_sign_in_required'
 ])
-const ServerTime = z.object({ serverTime: z.number().int().positive() })
+const ServerTime = lazyZodSchema(() => z.object({ serverTime: z.number().int().positive() }))
 
 // The server clock minus ours, learned from a stale-proof refusal.
 let clockOffsetMs = 0

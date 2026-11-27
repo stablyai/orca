@@ -47,7 +47,6 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
     controller.leaveDrafts != null ||
     controller.discardMarkdownTarget != null ||
     controller.renameTarget != null ||
-    controller.showCreateBrowserModal ||
     controller.showCustomKeyModal ||
     controller.showDictationSetup ||
     controller.deleteKeyTarget != null

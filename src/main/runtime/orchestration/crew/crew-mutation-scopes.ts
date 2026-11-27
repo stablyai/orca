@@ -1,5 +1,6 @@
 // Which crews a mutation can change: the Dispatches it wrote, and the parties of what it created.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { OrchestrationDb } from '../db/orchestration-db'
 
 export const dispatchOf = (value: unknown): string | undefined =>
@@ -15,6 +16,7 @@ export const dispatchOf = (value: unknown): string | undefined =>
 /** Progress writes change one shown row's stage or liveness, never who a crew shows: patched, not rebuilt. */
 export const progressMutations: ReadonlySet<keyof OrchestrationDb> = new Set([
   'recordWorkerStage',
+  'recordWorkerProgress',
   'markWorkerDispatchReady',
   'recordAttemptObservation'
 ])
@@ -93,16 +95,18 @@ export function collectDispatchWrites<T>(
   }
 }
 
-const party = z.string().nullish()
-const CreatedDispatchParties = z.object({
-  run_id: z.string(),
-  creator_orca_session_id: party,
-  creator_handle: party,
-  creator_pane_key: party,
-  assignee_orca_session_id: party,
-  assignee_handle: party,
-  assignee_pane_key: party
-})
+const party = lazyZodSchema(() => z.string().nullish())
+const CreatedDispatchParties = lazyZodSchema(() =>
+  z.object({
+    run_id: z.string(),
+    creator_orca_session_id: party,
+    creator_handle: party,
+    creator_pane_key: party,
+    assignee_orca_session_id: party,
+    assignee_handle: party,
+    assignee_pane_key: party
+  })
+)
 
 /** New Dispatches' Runs (as `run:<id>`) and their creators and assignees: one keyed read per create,
  *  so a crew that shows none of them skips the rebuild. */
@@ -127,11 +131,13 @@ export function createdDispatchParties(db: OrchestrationDb, ids: Set<string>): S
   return parties
 }
 
-const RunCoordinator = z.object({
-  coordinatorHandle: party,
-  coordinatorPaneKey: party,
-  coordinatorOrcaSessionId: party
-})
+const RunCoordinator = lazyZodSchema(() =>
+  z.object({
+    coordinatorHandle: party,
+    coordinatorPaneKey: party,
+    coordinatorOrcaSessionId: party
+  })
+)
 
 /** A new Run names only its coordinator; the crew showing that party reads it. */
 export function runCoordinatorParties(params: unknown): Set<string> | null {

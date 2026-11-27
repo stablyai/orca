@@ -31,8 +31,8 @@ function isOrcaInstallUrl(data: string): boolean {
 export function getPairingScanErrorMessage(data: string, t: Translate): string {
   return isOrcaInstallUrl(data)
     ? t(
-        'app.pairScan.downloadQrCode',
-        "That's the download code. Scan the pairing code in step 2 on your desktop."
+        'app.pairScan.downloadCodeScanned',
+        'That’s the download code. Scan the pairing code in Settings → Mobile on your computer.'
       )
     : t('app.pairScan.invalidQrCode', 'Not a valid Orca QR code')
 }

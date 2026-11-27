@@ -75,7 +75,7 @@ export async function addIssueComment(
       author: data.user?.login ?? 'You',
       authorAvatarUrl: data.user?.avatar_url ?? '',
       body: data.body ?? body,
-      bodyImageUrls: githubBodyImageUrls(data.body ?? body, data.body_html),
+      bodyImageUrls: await githubBodyImageUrls(data.body ?? body, data.body_html),
       createdAt: data.created_at ?? new Date().toISOString(),
       url: data.html_url ?? '',
       isBot: data.user?.type === 'Bot'

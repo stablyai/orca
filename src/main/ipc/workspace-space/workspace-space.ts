@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type { Store } from '../../persistence/loading-store/store'
 import type {
   WorkspaceSpaceAnalysis,
@@ -23,13 +24,18 @@ type InFlightWorkspaceSpaceScan = {
   promise: Promise<WorkspaceSpaceAnalyzeResult>
 }
 
-export function registerWorkspaceSpaceHandlers(store: Store): void {
+export function registerWorkspaceSpaceHandlers(
+  store: Store,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const snapshotDirectory = store.getProfileStorageDirectory()
   let inFlightScan: InFlightWorkspaceSpaceScan | null = null
-  ipcMain.removeHandler('workspaceSpace:cancel')
-  ipcMain.removeHandler('workspaceSpace:analyze')
-  ipcMain.removeHandler('workspaceSpace:getCachedAnalysis')
-  ipcMain.handle('workspaceSpace:analyze', async (event): Promise<WorkspaceSpaceAnalyzeResult> => {
+  if (ipc === ipcMain) {
+    ipcMain.removeHandler('workspaceSpace:cancel')
+    ipcMain.removeHandler('workspaceSpace:analyze')
+    ipcMain.removeHandler('workspaceSpace:getCachedAnalysis')
+  }
+  ipc.handle('workspaceSpace:analyze', async (event): Promise<WorkspaceSpaceAnalyzeResult> => {
     if (!inFlightScan) {
       // A scan is always a user's click, so it is also the retry after repeated worker crashes.
       retryHeavyWorkers()
@@ -112,11 +118,11 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
     return inFlightScan.promise
   })
 
-  ipcMain.handle('workspaceSpace:getCachedAnalysis', (): Promise<WorkspaceSpaceAnalysis | null> =>
+  ipc.handle('workspaceSpace:getCachedAnalysis', (): Promise<WorkspaceSpaceAnalysis | null> =>
     readWorkspaceSpaceAnalysisSnapshot(snapshotDirectory)
   )
 
-  ipcMain.handle('workspaceSpace:cancel', async (): Promise<boolean> => {
+  ipc.handle('workspaceSpace:cancel', async (): Promise<boolean> => {
     if (!inFlightScan || inFlightScan.controller.signal.aborted) {
       return false
     }

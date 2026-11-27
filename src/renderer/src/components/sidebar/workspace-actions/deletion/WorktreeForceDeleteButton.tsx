@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '../../../ui/dropdown-menu'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 // Sonner hides toasts through collapsed stacking or its visible-toast limit.
 function isHiddenInToastStack(toastElement: Element): boolean {
@@ -86,19 +87,27 @@ export function WorktreeForceDeleteButton({
     }
     setIsSaving(true)
     onSavingChange?.(true)
-    try {
-      await onAlwaysForceDelete()
-    } catch (error) {
-      toast.error(
-        t('workspaceDeletion.preferenceSaveFailed', 'Could not save deletion preference'),
-        { description: error instanceof Error ? error.message : String(error) }
-      )
-      return
-    } finally {
-      setIsSaving(false)
-      onSavingChange?.(false)
+    const saved = await runWithFinally(
+      async () => {
+        try {
+          await onAlwaysForceDelete()
+          return true
+        } catch (error) {
+          toast.error(
+            t('workspaceDeletion.preferenceSaveFailed', 'Could not save deletion preference'),
+            { description: error instanceof Error ? error.message : String(error) }
+          )
+          return false
+        }
+      },
+      () => {
+        setIsSaving(false)
+        onSavingChange?.(false)
+      }
+    )
+    if (saved) {
+      forceDelete()
     }
-    forceDelete()
   }
 
   return (

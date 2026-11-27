@@ -5,12 +5,9 @@ import {
   resolveWorktreeScanCacheTtlMs,
   resolveWorktreeScanRuntime
 } from './runtime-worktree-scan-cache'
-import {
-  WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
-  WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
-} from './worktree-scan-admin-budget'
+import { WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS } from './worktree-scan-admin-budget'
 import { getLocalProjectWorktreeGitOptionsForRuntime } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { readRepoWorktreeAdminFingerprint } from './repo-worktree-admin-fingerprint'
+import { createLocalAdminFingerprintVerifier } from './repo-worktree-admin-fingerprint'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { scanLocalRepoWorktreesForResolution } from './repo-worktree-resolution-scan'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
@@ -33,25 +30,6 @@ import {
 } from '../../../ipc/worktrees/listing/worktree-catalog-observation-hygiene'
 import type { Store } from '../../../persistence/loading-store/store'
 import { SUPERSEDED_SCAN_RESCANS } from '../../../ipc/worktrees/listing/overtaken-scan-rerun'
-
-const lastFingerprintUnknownWarnAt = new Map<string, number>()
-
-// Why once per reconcile window: a wedged mount answers "unknown" on every poll.
-function warnFingerprintUnknownOnce(repoId: string, reason: string): void {
-  const now = Date.now()
-  const last = lastFingerprintUnknownWarnAt.get(repoId)
-  if (last !== undefined && now - last < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS) {
-    return
-  }
-  lastFingerprintUnknownWarnAt.set(repoId, now)
-  console.warn(
-    '[worktree-scan] admin fingerprint unknown; reusing cached rows until the reconcile ceiling',
-    {
-      repoId,
-      reason
-    }
-  )
-}
 
 export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCatalog {
   /** Runtime readers accept the owner's observation for the scan TTL, then its admin-fingerprint verifier. */
@@ -88,12 +66,7 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     // WSL execution cannot be described by local admin reads; a TTL at the ceiling could never reuse a probe.
     const verifier =
       ttlMs < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS && !gitOptions.wslDistro
-        ? {
-            ceilingMs: WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS,
-            timeoutMs: WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
-            probe: () => this.startRepoWorktreeAdminFingerprintProbe(repo),
-            onUnknown: (reason: string) => warnFingerprintUnknownOnce(repo.id, reason)
-          }
+        ? createLocalAdminFingerprintVerifier(repo)
         : undefined
     const store = this.store
     const { observation, superseded } = await readWorktreeCatalog(
@@ -134,21 +107,6 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     const result = runtimeResultForObservation(observation)
     // Mutations kept overtaking scans: publish the rows as non-authoritative, never as current truth.
     return superseded && result.ok ? { ok: false, worktrees: result.worktrees } : result
-  }
-
-  /** Allow one outstanding filesystem probe per repo: timeouts do not cancel readdir/stat, so repeated probes could exhaust libuv on wedged mounts. */
-  protected startRepoWorktreeAdminFingerprintProbe(
-    repo: Repo
-  ): Promise<string | null> | 'in-flight' {
-    if (this.worktreeAdminFingerprintProbes.has(repo.id)) {
-      return 'in-flight'
-    }
-    this.worktreeAdminFingerprintProbes.add(repo.id)
-    return readRepoWorktreeAdminFingerprint(repo.path)
-      .catch(() => null)
-      .finally(() => {
-        this.worktreeAdminFingerprintProbes.delete(repo.id)
-      })
   }
 
   protected listStoredWorktreesForResolution(repo: Repo): GitWorktreeInfo[] {

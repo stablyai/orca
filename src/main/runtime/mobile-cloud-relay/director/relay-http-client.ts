@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { E2EEKeypair } from '../../rpc/server/pairing/e2ee-keypair'
 import { cancelUnreadResponseBody } from '../../../lib/unread-response-body'
 import { parseRetryAfterHeaderMs } from '../../../../shared/network/retry-after-header'
@@ -19,32 +20,36 @@ import {
 const RELAY_HTTP_REQUEST_DEADLINE_MS = 15_000
 const RELAY_RETRY_AFTER_MAX_MS = 5 * 60_000
 
-const RelayTokenResponseSchema = z
-  .object({
-    relayToken: z
-      .string()
-      .min(1)
-      .max(8 * 1024),
-    expiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
-  })
-  .strict()
+const RelayTokenResponseSchema = lazyZodSchema(() =>
+  z
+    .object({
+      relayToken: z
+        .string()
+        .min(1)
+        .max(8 * 1024),
+      expiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+    })
+    .strict()
+)
 
-const AssignmentResponseSchema = z
-  .object({
-    v: z.literal(1),
-    cellUrl: z.string().min(1).max(2048),
-    assignmentEpoch: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-    lease: z
-      .string()
-      .min(1)
-      .max(8 * 1024),
-    regionCorrection: RelayRegionCorrectionResponseSchema.optional().catch(undefined),
-    // Validated per entry in relayAlternateCellUrls so a bad entry never rejects the assignment.
-    alternateCellUrls: z.unknown().optional(),
-    // Validated in relayAuthOrigin so a bad value never rejects the assignment.
-    authOrigin: z.unknown().optional()
-  })
-  .strict()
+const AssignmentResponseSchema = lazyZodSchema(() =>
+  z
+    .object({
+      v: z.literal(1),
+      cellUrl: z.string().min(1).max(2048),
+      assignmentEpoch: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+      lease: z
+        .string()
+        .min(1)
+        .max(8 * 1024),
+      regionCorrection: RelayRegionCorrectionResponseSchema.optional().catch(undefined),
+      // Validated per entry in relayAlternateCellUrls so a bad entry never rejects the assignment.
+      alternateCellUrls: z.unknown().optional(),
+      // Validated in relayAuthOrigin so a bad value never rejects the assignment.
+      authOrigin: z.unknown().optional()
+    })
+    .strict()
+)
 
 // Mirror relay-contract RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES and
 // RELAY_HOST_CAPABILITY_FRONT_DOOR_AUTH. A header, not a body key, so an older director ignores it;

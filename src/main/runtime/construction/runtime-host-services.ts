@@ -29,8 +29,7 @@ import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/termi
 import { sweepStoppedWorkerTerminals } from '../orchestration/terminal-authority/release/stopped-worker-terminal-release'
 
 import { RuntimeAccountController } from '../agent-session/environment/runtime-account-controller'
-import { RuntimeMobileSpeechCatalog } from '../speech/runtime-mobile-speech-catalog'
-import { RuntimeMobileDictationController } from '../speech/runtime-mobile-dictation-controller'
+import { createLazyMobileSpeechOwners } from '../speech/lazy-mobile-speech-owners'
 import { RuntimeProjectHostSetupController } from '../repositories/runtime-project-host-setup-controller'
 import { RuntimeProjectGroupController } from '../repositories/runtime-project-group-controller'
 import { RuntimeNestedRepoImport } from '../repositories/runtime-nested-repo-import'
@@ -259,9 +258,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
     ...change: Parameters<ClaudeAccountSelectedHandler>
   ): ReturnType<ClaudeAccountSelectedHandler>
 
-  protected readonly mobileSpeech = new RuntimeMobileSpeechCatalog(() => this.store)
-
-  protected readonly mobileDictation = new RuntimeMobileDictationController(() => this.store)
+  protected readonly mobileSpeechOwners = createLazyMobileSpeechOwners(() => this.store)
 
   protected readonly projectHostSetups = new RuntimeProjectHostSetupController({
     getStore: () => this.store,

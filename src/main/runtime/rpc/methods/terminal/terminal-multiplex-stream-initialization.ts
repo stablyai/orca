@@ -48,6 +48,7 @@ export async function initializeMultiplexStream(
     supportsEndpointLossNotice:
       request.capabilities?.writeUnavailable === 1 && request.capabilities.endpointLossNotice === 1,
     inputSessionId: request.capabilities?.inputAck === 1 ? (request.inputSessionId ?? null) : null,
+    unsequencedInputTail: Promise.resolve(),
     outputPaused: false,
     supportsOutputCadence,
     supportsDesktopViewportClaims: request.capabilities?.desktopViewportClaims === 1,

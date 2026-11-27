@@ -8,9 +8,18 @@ import type { StructuredAgentSessionAdapter } from '../providers/structured-agen
 import { hostCanStartRecord } from '../providers/structured-agent-session-provider-support'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import {
+  listProviderRelaysAtLaunch,
+  providerRelayChatsIdleStoppedThisRun,
+  providerRelayKeptFromLastRun,
+  providerRelayRunLiveness,
+  type ProviderRelayRunRecord
+} from '../../../provider-relay/app-provider-relays'
+import {
   structuredAgentSessionResumableSet,
   type StructuredAgentSessionResumableSet
 } from './structured-agent-session-restart-resume-set'
+import { agentSessionRunPlacement } from '../../../../shared/agent-session/lifecycle/agent-session-run-placement'
+import { providerRelayListedIdleStopped } from '../../../provider-relay/provider-relay-launch-inventory'
 
 export type StructuredAgentSessionRestartJournalSource = { journal: AgentSessionJournal }
 
@@ -28,9 +37,10 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
   movedOn: (marker: AgentSessionResumeMarker) => Promise<boolean>
   savedByNewerOrca: (sessionId: string) => boolean
 }): StructuredAgentSessionRestartCandidateReader {
-  return (markers, leaseState) =>
+  return async (markers, leaseState) =>
     structuredAgentSessionResumableSet({
-      markers,
+      // A chat whose agent kept working under the terminal host was never cut; it reattaches.
+      markers: await withoutKeptRunningChats(markers, deps.getRecord),
       getRecord: deps.getRecord,
       supportsRecord: (record) => hostCanStartRecord(deps, record),
       movedOn: deps.movedOn,
@@ -43,6 +53,42 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
       },
       leaseState
     })
+}
+
+async function withoutKeptRunningChats(
+  markers: readonly AgentSessionResumeMarker[],
+  getRecord: (sessionId: string) => ProviderRelayRunRecord | null | undefined
+): Promise<readonly AgentSessionResumeMarker[]> {
+  if (markers.length === 0) {
+    return markers
+  }
+  await listProviderRelaysAtLaunch()
+  const finished = providerRelayChatsIdleStoppedThisRun()
+  // Its run may still be going (its daemon start lists it or can't say yet), or was already
+  // reattached: either way its agent never stopped. One the daemon idle-stopped had finished its
+  // work, so nothing was cut either. Each relayed run asks only its own daemon start.
+  const reads = await Promise.all(
+    markers.map(async ({ sessionId }) => {
+      const record = getRecord(sessionId)
+      if (!record) {
+        return { mayRun: false, idleStopped: false }
+      }
+      const mayRun = (await providerRelayRunLiveness(record, { observe: true })) !== 'gone'
+      // Read from the answer it just heard: an observer records nothing, idle stops included.
+      const placement = agentSessionRunPlacement(record)
+      const idleStopped =
+        placement?.kind === 'relayed' &&
+        providerRelayListedIdleStopped(placement.daemon.instance, placement.relayId)
+      return { mayRun, idleStopped }
+    })
+  )
+  return markers.filter(
+    (marker, index) =>
+      !reads[index].mayRun &&
+      !reads[index].idleStopped &&
+      !finished.has(marker.sessionId) &&
+      !providerRelayKeptFromLastRun(marker.sessionId)
+  )
 }
 
 /** Listing skips newer chats; pre-send must retain them so refused sends preserve their offers. */

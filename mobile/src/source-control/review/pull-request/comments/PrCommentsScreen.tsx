@@ -28,7 +28,8 @@ import {
   MobileLoadErrorState,
   MobileStateView
 } from '../../../../components/feedback/MobileStateView'
-import { PrThreadRow, type PrAskToFix, type PrThreadActions } from './PrThreadRow'
+import { PrThreadRow, type PrAskToFix } from './PrThreadRow'
+import { usePrThreadActions } from './use-mobile-pr-comment-actions'
 import { PrThreadScreen } from './PrThreadScreen'
 import { PRCommentComposer } from './PRCommentComposer'
 import { NotReady, ScreenFrame, type ScreenProps } from '../pr-tab-screen-frame'
@@ -82,24 +83,7 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
   const shown = open.slice(0, limit)
   const { commentActions } = tab
   const isPr = details?.item.type === 'pr'
-  const rowActions = useMemo<PrThreadActions | undefined>(
-    () =>
-      isPr
-        ? {
-            reply: commentActions.reply,
-            toggleResolve: commentActions.toggleResolve,
-            editComment: commentActions.editComment,
-            deleteComment: commentActions.deleteComment,
-            isReplyBusy: commentActions.isReplyBusy,
-            isResolveBusy: commentActions.isResolveBusy,
-            isEditBusy: commentActions.isEditBusy,
-            isDeleteBusy: commentActions.isDeleteBusy,
-            draftKey: commentActions.draftKey,
-            prRepo: data?.pr.prRepo ?? null
-          }
-        : undefined,
-    [commentActions, data?.pr.prRepo, isPr]
-  )
+  const rowActions = usePrThreadActions(isPr ? commentActions : undefined, data?.pr.prRepo)
   const canComment = isPr && canAddRootComment(data?.pr.state ?? null)
   const { hostCapabilities } = useHostProtocolGates()
   const hasBotFindings = unresolved.some((group) =>

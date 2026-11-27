@@ -2,6 +2,7 @@ import { quotePosixShellUnlessPlainNoAt } from '../../shell/launch/shell-argumen
 import { encodePowerShellCommand } from '../../shell/launch/powershell-command-encoding'
 import { getPosixCodexShellLaunchPreflight } from '../../shell/launch/agents/codex-shell-function'
 import { getPosixClaudeShellFunction } from '../../shell/launch/agents/claude-shell-function'
+import { getPowerShellAgentWrappers } from '../../shell/launch/agents/powershell-agent-wrappers'
 import {
   nativeWindowsPathToPosixShellPath,
   resolveSetupRunnerCommand,
@@ -72,7 +73,9 @@ export function createSequencedSetupAgentCommands(args: {
       ),
       startupCommand: buildWindowsStartupCommand(markerPath, nonce, waitTimeoutSeconds),
       startupEnv: {
-        [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand
+        [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand,
+        // Why env: inlined, the wrappers push the encoded gate past the pane's command-line budget.
+        [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: getPowerShellAgentWrappers()
       }
     }
   }
@@ -250,6 +253,7 @@ function buildWindowsStartupCommand(
 ): string {
   const timeout = Math.max(1, Math.floor(waitTimeoutSeconds))
   // Use PowerShell for safe bounded marker polling; native Windows runners still launch through cmd.
+  // Indentation is trimmed below: the encoded gate must fit the pane's 6000-char startup command budget.
   const script = [
     // User startup may invoke policy-gated .ps1; apply relief in-payload to avoid the flagged command-line switch.
     // Silence/restore module-autoload progress so stderr stays clean. Stop routes nonterminating autoload errors
@@ -285,6 +289,10 @@ function buildWindowsStartupCommand(
     '        exit 1',
     '      }',
     `      [Console]::Error.WriteLine(${quotePowerShellLiteral(SETUP_COMPLETE_MESSAGE)})`,
+    // This powershell.exe lacks the pane bootstrap's agent wrappers, so 5.1 would split prompts at embedded quotes.
+    // Define them after setup, which may install the agent. No FullLanguage guard: setup already needs it.
+    `      $wrappers = $env:${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}`,
+    `      if ($wrappers) { Invoke-Expression $wrappers; Remove-Item Env:${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV} }`,
     '      Invoke-Expression $startup',
     '      if ($global:LASTEXITCODE -ne $null) { exit $global:LASTEXITCODE }',
     '      if (-not $?) { exit 1 }',
@@ -297,7 +305,9 @@ function buildWindowsStartupCommand(
     '  }',
     '  Start-Sleep -Seconds 1',
     '}'
-  ].join('; ')
+  ]
+    .map((line) => line.trimStart())
+    .join('; ')
 
   return encodePowerShellInvocation(script)
 }
