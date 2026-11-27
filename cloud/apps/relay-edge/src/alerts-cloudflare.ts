@@ -42,6 +42,16 @@ function tally(groups: Group[] | undefined, namespaces?: Set<string>, options: C
   return { cf_invocations: invocations, cf_errors: errors }
 }
 
+type GraphqlError = { message?: string; path?: unknown[]; extensions?: { code?: string } }
+
+// One line per failed read, every run: the hourly warning alone loses the reason. No token or variables.
+function readFailed(reason: string, script: string, status: number, startedMs: number, errors: GraphqlError[] = []): Error {
+  const detail = errors.slice(0, 5).map((e) => ({ message: e.message, path: e.path, code: e.extensions?.code }))
+  console.error(`cloudflare analytics read failed ${JSON.stringify({ reason, script, status, durationMs: Date.now() - startedMs, errors: detail })}`)
+  const text = detail.map((e) => (e.code ? `${e.code}: ${e.message}` : e.message)).filter(Boolean).join('; ')
+  return new Error(text ? `${reason}: ${text}` : reason)
+}
+
 const add = (a: Counts, b: Counts): Counts => ({
   cf_invocations: a.cf_invocations + b.cf_invocations,
   cf_errors: a.cf_errors + b.cf_errors
@@ -56,6 +66,8 @@ export async function cloudflareErrors(env: AlertsEnv, windowMin: number, lagMin
   const namespaceIds = (env.CF_DO_NAMESPACE_IDS ?? '').split(',').map((id) => id.trim()).filter(Boolean)
   const namespaces = namespaceIds.length > 0 ? new Set(namespaceIds) : undefined
   const at = (minutes: number) => new Date(nowMs - minutes * 60_000).toISOString()
+  const script = env.CF_SCRIPT_NAME || DEFAULT_SCRIPT_NAME
+  const startedMs = Date.now()
   const response = await fetch(GRAPHQL_URL, {
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
@@ -63,7 +75,7 @@ export async function cloudflareErrors(env: AlertsEnv, windowMin: number, lagMin
       query: cloudflareQuery(namespaces !== undefined),
       variables: {
         a: env.ACCOUNT_ID,
-        script: env.CF_SCRIPT_NAME || DEFAULT_SCRIPT_NAME,
+        script,
         ...(namespaces ? { ns: namespaceIds } : {}),
         s0: at(windowMin + lagMin),
         e0: at(lagMin),
@@ -72,13 +84,13 @@ export async function cloudflareErrors(env: AlertsEnv, windowMin: number, lagMin
       }
     })
   })
-  if (!response.ok) { throw new Error(`cloudflare analytics query failed: ${response.status}`) }
+  if (!response.ok) { throw readFailed(`cloudflare analytics query failed: ${response.status}`, script, response.status, startedMs) }
   const body = (await response.json()) as {
     data?: { viewer?: { accounts?: Record<string, Group[] | undefined>[] } }
-    errors?: unknown[] | null
+    errors?: GraphqlError[] | null
   }
   const account = body.data?.viewer?.accounts?.[0]
-  if ((body.errors && body.errors.length > 0) || !account) { throw new Error('cloudflare analytics query returned errors') }
+  if ((body.errors && body.errors.length > 0) || !account) { throw readFailed('cloudflare analytics query returned errors', script, response.status, startedMs, body.errors ?? []) }
   return [
     add(tally(account.w0), namespaces ? tally(account.o0, namespaces, options) : tally([])),
     add(tally(account.w1), namespaces ? tally(account.o1, namespaces, options) : tally([]))
