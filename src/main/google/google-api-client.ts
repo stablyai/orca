@@ -13,6 +13,7 @@ import {
 } from './google-account-tokens'
 import { readGoogleAccount, readGoogleDefaultAccount } from './google-credential-store'
 import { classifyGoogleApiError, readGoogleApiError } from './google-readiness'
+import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const REQUEST_TIMEOUT_MS = 20_000
 
@@ -145,7 +146,11 @@ export async function googleApi(
     }
     // A token can be refused before its saved expiry (revoked session, clock skew): renew once.
     // Retrying a write is safe too: Google acted on nothing it refused.
-    return response.status === 401 && !retried ? call(request, true) : response
+    if (response.status === 401 && !retried) {
+      await cancelUnreadResponseBody(response)
+      return call(request, true)
+    }
+    return response
   }
 
   async function fail(service: GoogleService, response: Response): Promise<never> {
@@ -164,6 +169,7 @@ export async function googleApi(
   ): Promise<T | null> {
     const response = await call(request)
     if (absentIsNull && response.status === 404) {
+      await cancelUnreadResponseBody(response)
       return null
     }
     if (!response.ok) {
