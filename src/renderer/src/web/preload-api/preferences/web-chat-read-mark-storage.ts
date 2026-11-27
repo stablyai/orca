@@ -1,15 +1,14 @@
 import {
   moveChatReadMark,
+  orderMovedChatReadMarks,
   setChatReadMark,
   type ChatReadMarks
 } from '../../../../../shared/agent-session/view/chat-read-mark-move'
-import {
-  capPaneKeyTimestampRecord,
-  readPaneKeyTimestampRecord
-} from '../../../../../shared/agent-session/view/pane-key-timestamp-record'
+import { readPaneKeyTimestampRecord } from '../../../../../shared/agent-session/view/pane-key-timestamp-record'
 import {
   adoptChatReadMarkAliases,
   aliasesAtChatReadMarkLeaf,
+  capWebChatReadMarkRecord,
   chatReadMarkAliases,
   confirmChatReadMarkMatches,
   loadedChatReadMarkMatches,
@@ -83,6 +82,7 @@ export function rebaseWebChatReadMarks(
       continue
     }
     const record = { ...stored[field] }
+    const movedAliases = moveKeys?.size ? new Map<string, string>() : undefined
     let moved = false
     if (current) {
       applyWebChatReadMarkEdits(record, current, baseline[field])
@@ -111,11 +111,13 @@ export function rebaseWebChatReadMarks(
         setChatReadMark(record, key, aliases, current[key])
       } else if (moveKeys?.has(key)) {
         const turn = field === 'manuallyUnreadTurnsByPaneKey' ? currentTurn?.(key) : undefined
-        moved = moveChatReadMark(record, key, aliases, turn) || moved
+        moved = moveChatReadMark(record, key, aliases, turn, movedAliases) || moved
       }
     }
     if (current || moved) {
-      marks[field] = readPaneKeyTimestampRecord(record)
+      marks[field] = readPaneKeyTimestampRecord(
+        movedAliases ? orderMovedChatReadMarks(stored[field], record, movedAliases) : record
+      )
       changed = true
     }
   }
@@ -128,6 +130,7 @@ export function writeWebChatReadMarkEdits(
   options?: {
     moveKeys?: ReadonlySet<string>
     currentTurn?: (key: string) => number | undefined
+    retain?: WebChatReadMarks
     mergeUI?: (stored: Record<string, unknown>) => Record<string, unknown>
   }
 ): WebChatReadMarks {
@@ -147,7 +150,11 @@ export function writeWebChatReadMarkEdits(
       // Keep this tab's cutoffs available for Undo until the next hydration cap.
       for (const field of WEB_CHAT_READ_MARK_FIELDS) {
         if (marks[field] !== storedMarks[field]) {
-          marks[field] = capPaneKeyTimestampRecord(marks[field], changes[field])
+          marks[field] = capWebChatReadMarkRecord(
+            field,
+            marks[field],
+            changes[field] ?? options?.retain?.[field]
+          )
         }
       }
       writeJson(UI_STORAGE_KEY, { ...(options?.mergeUI?.(stored) ?? stored), ...marks })

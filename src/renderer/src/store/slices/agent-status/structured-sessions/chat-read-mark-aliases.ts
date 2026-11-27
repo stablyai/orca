@@ -13,10 +13,12 @@ import {
   type LegacyChatReadMarkIndex,
   type ChatReadMarks
 } from '../../../../../../shared/agent-session/view/chat-read-mark-move'
+import { capPaneKeyTimestampRecord } from '../../../../../../shared/agent-session/view/pane-key-timestamp-record'
 import {
   CHAT_PANE_ADDRESS_PREFIX,
   chatPaneKeySessionId
 } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { isStablePaneId } from '../../../../../../shared/workspace-layout/stable-pane-id'
 
 const MIGRATION_DEADLINE_MS = 120_000
 
@@ -46,16 +48,35 @@ export function indexLoadedChatReadMarks(marks: ChatReadMarks, web: boolean): vo
   }
 }
 
-export function hasLoadedChatReadMarkAliases(field?: ChatReadMarkField): boolean {
-  if (field === undefined) {
-    return legacyIndex.size > 0
+export function hasLoadedChatReadMarkAliases(): boolean {
+  return legacyIndex.size > 0
+}
+
+export function capWebChatReadMarkRecord(
+  field: ChatReadMarkField,
+  record: Record<string, number>,
+  retain?: Readonly<Record<string, number>>
+): Record<string, number> {
+  const index = webIndex
+  if (!index?.size || field === 'acknowledgedAgentsByPaneKey') {
+    return capPaneKeyTimestampRecord(record, retain)
   }
-  for (const aliases of legacyIndex.values()) {
-    if (aliases[field]) {
-      return true
+  return capPaneKeyTimestampRecord(record, retain, () => {
+    const pendingSubjects = new Map<string, string>()
+    for (const [leaf, aliases] of index) {
+      const keys = aliases[field]
+      if (!keys) {
+        continue
+      }
+      // A pending leaf can share a cap slot before a receipt verifies its destination.
+      const match = matches.get(leaf)
+      const subject = match === undefined && isStablePaneId(leaf) ? keys[0] : match
+      for (const key of keys) {
+        pendingSubjects.set(key, subject ?? key)
+      }
     }
-  }
-  return false
+    return pendingSubjects
+  })
 }
 
 export function canMoveWebChatReadMarks(): boolean {

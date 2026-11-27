@@ -131,11 +131,38 @@ export function moveChatReadMark(
   record: Record<string, number>,
   key: string,
   aliases: readonly string[],
-  currentTurn?: number
+  currentTurn?: number,
+  movedAliases?: Map<string, string>
 ): boolean {
   if (!aliases.some((alias) => Object.hasOwn(record, alias))) {
     return false
   }
-  setChatReadMark(record, key, aliases, resolveChatReadMark(record, key, aliases, currentTurn))
+  const value = resolveChatReadMark(record, key, aliases, currentTurn)
+  if (movedAliases && value !== undefined) {
+    for (const alias of aliases) {
+      if (Object.hasOwn(record, alias)) {
+        movedAliases.set(alias, key)
+      }
+    }
+  }
+  setChatReadMark(record, key, aliases, value)
   return true
+}
+
+export function orderMovedChatReadMarks(
+  original: Readonly<Record<string, number>>,
+  record: Record<string, number>,
+  movedAliases: ReadonlyMap<string, string>
+): Record<string, number> {
+  if (movedAliases.size === 0) {
+    return record
+  }
+  const ordered: Record<string, number> = {}
+  for (const key of Object.keys(original)) {
+    const destination = movedAliases.get(key) ?? key
+    if (Object.hasOwn(record, destination)) {
+      ordered[destination] = record[destination]
+    }
+  }
+  return { ...ordered, ...record }
 }

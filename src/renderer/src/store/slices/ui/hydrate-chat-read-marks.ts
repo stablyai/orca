@@ -1,12 +1,8 @@
-import {
-  CHAT_READ_MARK_FIELDS,
-  type ChatReadMarkField
-} from '../../../../../shared/agent-session/view/chat-read-mark-move'
+import { CHAT_READ_MARK_FIELDS } from '../../../../../shared/agent-session/view/chat-read-mark-move'
 import { capPaneKeyTimestampRecord } from '../../../../../shared/agent-session/view/pane-key-timestamp-record'
 import {
   adoptChatReadMarkAliases,
-  canMoveWebChatReadMarks,
-  hasLoadedChatReadMarkAliases,
+  capWebChatReadMarkRecord,
   indexLoadedChatReadMarks
 } from '../agent-status/structured-sessions/chat-read-mark-aliases'
 import { moveLoadedWebChatReadMarks } from '../agent-status/structured-sessions/chat-read-mark-web-move'
@@ -43,24 +39,19 @@ export function hydrateChatReadMarks(
     adoptChatReadMarkAliases(incoming)
   }
 
-  const deferWebCap = web && canMoveWebChatReadMarks()
-  const deferCap = (field: ChatReadMarkField): boolean =>
-    deferWebCap && field !== 'acknowledgedAgentsByPaneKey' && hasLoadedChatReadMarkAliases(field)
   baseline = { ...baseline }
   for (const field of CHAT_READ_MARK_FIELDS) {
-    if (!deferCap(field)) {
-      baseline[field] = capPaneKeyTimestampRecord(baseline[field])
-    }
+    baseline[field] = web
+      ? capWebChatReadMarkRecord(field, baseline[field])
+      : capPaneKeyTimestampRecord(baseline[field])
   }
 
   if (localMarks) {
     for (const field of WEB_CHAT_READ_MARK_FIELDS) {
-      if (!deferCap(field)) {
-        const current = pending[field]
-        localMarks[field] = current
-          ? capPaneKeyTimestampRecord(localMarks[field], current)
-          : baseline[field]
-      }
+      const current = pending[field]
+      localMarks[field] = current
+        ? capWebChatReadMarkRecord(field, localMarks[field], current)
+        : baseline[field]
     }
   }
   return { baseline, localMarks }
