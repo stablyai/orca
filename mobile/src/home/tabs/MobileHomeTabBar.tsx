@@ -16,9 +16,9 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { HOME_EASE_OUT, type HomeTabId } from './home-tabs'
 
 const TAB_ICONS: Record<HomeTabId, LucideIcon> = {
@@ -42,7 +42,7 @@ export function MobileHomeTabBar(props: {
   onSelect: (tab: HomeTabId) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const labels: Record<HomeTabId, string> = {
     feed: t('home.tabs.feed', 'Feed'),
     bots: t('home.tabs.bots', 'Bots'),
@@ -82,7 +82,8 @@ function TabButton(props: {
   badge: number
   onPress: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const [pressed, setPressed] = useState(false)
   const Icon = props.icon
   const tint = props.selected ? colors.textPrimary : colors.textMuted
@@ -120,7 +121,7 @@ function TabButton(props: {
 
 /** Pops in when it first appears, and nudges when the count changes so a new ask is noticed. */
 function TabBadge({ count }: { count: number }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const reducedMotion = useReducedMotionEnabled() === true
   const scale = useSharedValue(reducedMotion ? 1 : 0.6)
   const opacity = useSharedValue(reducedMotion ? 1 : 0)
@@ -147,7 +148,7 @@ function TabBadge({ count }: { count: number }) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   bar: {
     flexDirection: 'row',
     paddingTop: 6,

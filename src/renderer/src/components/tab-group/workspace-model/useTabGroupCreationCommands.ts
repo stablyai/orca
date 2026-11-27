@@ -16,7 +16,7 @@ import { buildDuplicatedBrowserTabOptions } from '@/lib/browser/workspace/duplic
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/browser/ownership/remote-browser-tab-ownership'
 import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
 
 export function useTabGroupCreationCommands({
@@ -28,6 +28,7 @@ export function useTabGroupCreationCommands({
   worktreeId: string
   worktreeState: TabGroupWorktreeSnapshot
 }) {
+  const t = useTranslate()
   const createTab = useAppStore((state) => state.createTab)
   const setActiveTab = useAppStore((state) => state.setActiveTab)
   const setActiveTabType = useAppStore((state) => state.setActiveTabType)
@@ -96,7 +97,7 @@ export function useTabGroupCreationCommands({
             return
           }
           throw new Error(
-            translate(
+            t(
               'auto.components.tab.group.useTabGroupCreationCommands.duplicateBrowserTabFailed',
               'The paired runtime could not duplicate the managed browser tab.'
             )

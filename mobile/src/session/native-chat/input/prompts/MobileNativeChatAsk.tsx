@@ -18,10 +18,9 @@ import {
   askUnansweredRequired,
   toggleAskOption
 } from '../../../../../../src/shared/native-chat/input/questions/native-chat-ask-card-rules'
-import { colors, pressedStyle } from '../../../../theme/mobile-theme'
+import { pressedStyle } from '../../../../theme/mobile-theme'
 import { triggerSelection } from '../../../../platform/haptics/haptics'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import type { Translate } from '../../../../i18n/mobile-i18n'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MessageBox } from '../../../../components/composer-input/MessageBox'
 import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
@@ -34,8 +33,10 @@ import {
 } from './use-mobile-native-chat-ask-answers'
 import { MobileNativeChatAskOptionRow } from './MobileNativeChatAskOptionRow'
 import { MobileNativeChatOptionPreviewSheet } from '../session-options/MobileNativeChatOptionPreviewSheet'
-import { mobileNativeChatAskStyles as styles } from './MobileNativeChatAsk.styles'
+import { mobileNativeChatAskStylesSheet as stylesSheet } from './MobileNativeChatAsk.styles'
 import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-scroll'
+import { composerInputStylesSheet } from '../../../../components/composer-input/composer-input-styles'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 type Props = {
   prompt: AskPrompt
@@ -59,14 +60,6 @@ type Props = {
   drafts?: MobileNativeChatAskDrafts
 }
 
-function confirmLabels(t: Translate) {
-  return {
-    submit: t('chat.ask.send', 'Send'),
-    next: t('chat.ask.next', 'Next'),
-    skip: t('chat.ask.skip', 'Skip')
-  }
-}
-
 // Sentinel index for the free-text "Other…" row (never a real option index).
 const OTHER = -1
 
@@ -84,7 +77,9 @@ export function MobileNativeChatAsk({
   questionKeys,
   drafts
 }: Props): React.JSX.Element | null {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { scrollRef, inputRef, revealReply, onViewportLayout } = useMobileNativeChatReplyScroll()
   const [index, setIndex] = useState(0)
@@ -163,15 +158,18 @@ export function MobileNativeChatAsk({
       return
     }
     const cur = selections[qi] ?? []
+    // A single-select's choice tapped again stays chosen; only multi-select untoggles.
+    if (!multi && cur.includes(optIndex)) {
+      return
+    }
     // Preview choices wait for Submit so inspecting alternatives never commits an answer.
     const keep = optIndex !== OTHER && askQuestionShowsPreviews(prompt.questions[qi])
-    const picked = !cur.includes(optIndex)
     const next = selections.map((s, i) =>
-      i === qi ? toggleAskOption(cur, optIndex, multi, keep || choosing) : s
+      i === qi ? toggleAskOption(cur, optIndex, multi, choosing) : s
     )
     setPicks(qi, next)
     autoAdvance.cancel()
-    if (picked && !multi && optIndex !== OTHER && !keep) {
+    if (!multi && optIndex !== OTHER && !keep) {
       autoAdvance.schedule(() => void advance(next))
     }
   }
@@ -223,11 +221,9 @@ export function MobileNativeChatAsk({
   const advance = async (sel = selections): Promise<void> => {
     autoAdvance.cancel()
     const unanswered = askUnansweredRequired(prompt.questions, (i) => isAnswered(i, sel))
-    if (isLast && unanswered === -1) {
-      await submit(sel)
-    } else {
-      showStep((i) => (isLast ? unanswered : Math.min(i + 1, total - 1)))
-    }
+    await (isLast && unanswered === -1
+      ? submit(sel)
+      : Promise.resolve(showStep((i) => (isLast ? unanswered : Math.min(i + 1, total - 1)))))
   }
 
   const cancel = async (control: 'confirm' | 'cancel'): Promise<void> => {
@@ -367,7 +363,7 @@ export function MobileNativeChatAsk({
           <MessageBox
             inputRef={inputRef}
             onFocus={revealReply}
-            style={styles.other}
+            style={[composerInputStyles.filledFill, styles.other]}
             value={otherText[index] ?? ''}
             onChangeText={(v) => setOther(index, v)}
             placeholder={
@@ -408,7 +404,13 @@ export function MobileNativeChatAsk({
           </Text>
         ) : null}
         <MobilePendingButton
-          label={confirmLabels(t)[confirmSkips && isLast ? 'submit' : confirmLabel]}
+          label={
+            (confirmSkips && isLast) || confirmLabel === 'submit'
+              ? t('chat.ask.send', 'Send')
+              : confirmLabel === 'next'
+                ? t('chat.ask.next', 'Next')
+                : t('chat.ask.skip', 'Skip')
+          }
           pending={confirmBusy}
           disabled={submitting || confirmBlocked || (confirmSkips && isLast)}
           onPress={confirm}

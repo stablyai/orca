@@ -9,13 +9,13 @@ import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
 import { useNow } from '../../hooks/use-now'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { mobileWebhookStatus } from '../../session/native-chat/transcript/bot-cards/MobileBotWebhookCard'
 import { spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import {
@@ -52,7 +52,9 @@ type DetailProps = {
 }
 
 export function MobileBotWebhookDetail(props: DetailProps) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const now = useNow(30_000)
   const { hook, ready, busy } = props
   const clipboard = useClipboardWriter()
@@ -144,7 +146,7 @@ export function MobileBotWebhookDetail(props: DetailProps) {
         <ListRow title={t('bots.webhooks.starts', 'Starts')} subtitle={webhookStarts(hook, t)} />
         <ListRow
           title={t('bots.webhooks.onlyWhen', 'Only when')}
-          subtitle={webhookOnlyWhen(hook.filters, t)}
+          subtitle={webhookOnlyWhen(hook.filters, t, intlLocale)}
           subtitleLines={4}
           accessory={
             props.onAskInChat ? (
@@ -235,9 +237,9 @@ export function MobileBotWebhookDetail(props: DetailProps) {
   )
 }
 
-function callTime(row: PhoneWebhookCall): string {
+function callTime(row: PhoneWebhookCall, intlLocale: string): string {
   const at = row.kind === 'call' ? row.receivedAt : row.minute
-  const format = new Intl.DateTimeFormat(getUiIntlLocale(), { hour: 'numeric', minute: '2-digit' })
+  const format = new Intl.DateTimeFormat(intlLocale, { hour: 'numeric', minute: '2-digit' })
   return format.format(at)
 }
 
@@ -249,6 +251,7 @@ function RecentCalls(props: {
   version: number
 }) {
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const read = usePhoneWebhookCalls(props.client, props.hook.hookId, props.version)
   const [showAll, setShowAll] = useState(false)
   const calls = read.status === 'ready' ? read.value : []
@@ -284,7 +287,7 @@ function RecentCalls(props: {
                 title={line.label}
                 subtitle={line.detail || undefined}
                 subtitleLines={1}
-                value={callTime(row)}
+                value={callTime(row, intlLocale)}
               />
             )
           })}
@@ -294,6 +297,6 @@ function RecentCalls(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   primary: { marginTop: spacing.lg }
 }))

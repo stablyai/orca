@@ -1,6 +1,7 @@
 // Uninstall only: end each running WSL host's terminals and orcad, so its distro can stop.
 // No paired connection exists by then, so the server's own CLI inside the distro stands in for RPC.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { errorMessage } from '../../../shared/errors/error-message'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import type { WslHostServerStop } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
@@ -23,14 +24,18 @@ export const WSL_HOST_UNINSTALL_STOP_TIMEOUT_MS = 30_000
 /** orcad writes this launcher into its data root; older slots without a CLI have none. */
 const GUEST_CLI = '"$HOME/.orca/cli/bin/orca"'
 
-const TerminalListSchema = z.object({
-  result: z.object({
-    terminals: z.array(z.object({ handle: z.string().min(1), worktreeId: z.string() }))
+const TerminalListSchema = lazyZodSchema(() =>
+  z.object({
+    result: z.object({
+      terminals: z.array(z.object({ handle: z.string().min(1), worktreeId: z.string() }))
+    })
   })
-})
-const StatusSchema = z.object({
-  result: z.object({ runtime: z.object({ runtimeId: z.string().min(1).optional() }) })
-})
+)
+const StatusSchema = lazyZodSchema(() =>
+  z.object({
+    result: z.object({ runtime: z.object({ runtimeId: z.string().min(1).optional() }) })
+  })
+)
 
 /** The CLI's JSON envelope, past anything a login shell printed first. */
 function parseCliJson(stdout: string): unknown {

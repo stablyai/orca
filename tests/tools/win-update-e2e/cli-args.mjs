@@ -48,6 +48,11 @@ Options:
   --keep-install           Skip teardown/uninstall (leaves the app installed)
   --asset-pattern <glob>   gh release asset glob (default: *windows-setup.exe)
   --soak-seconds <n>       Post-relaunch window watch duration (default: 180)
+  --updated                Run the update installer as electron-updater does
+                           (--updated /S) instead of as a manual /S install
+  --daemon-fallback        Launch the app with a LOCALAPPDATA too deep for the
+                           relocated daemon host, so the terminal daemon runs
+                           from the install folder's Orca.exe
   -h, --help               Show this help
 `
 
@@ -67,6 +72,8 @@ export function parseArgs(argv) {
     installDir: takeValue(argv, '--install-dir'),
     keepInstall: argv.includes('--keep-install'),
     allowExistingInstall: argv.includes('--allow-existing-install'),
+    updated: argv.includes('--updated'),
+    daemonFallback: argv.includes('--daemon-fallback'),
     usage: USAGE
   }
 

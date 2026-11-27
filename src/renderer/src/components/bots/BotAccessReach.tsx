@@ -43,8 +43,9 @@ import { botAgentLabel, botErrorMessage } from './bot-presentation'
 import { useBotGoogleReach } from './google/google-connect-client'
 import { setBotGoogle } from './google/set-bot-google'
 import { useTurnOnBotGoogle } from './google/use-turn-on-bot-google'
-import { NewBotDialog } from './NewBotDialog'
 import { useBotAccessPlace } from './use-bot-access-place'
+
+import { LazyNewBotDialog } from './lazy-bot-dialogs'
 import { useBotConnectorPaged } from './bot-connector-page'
 
 const copy = (t: Translate, id: BotAccessCopyId, values: Record<string, unknown> = {}): string =>
@@ -360,7 +361,7 @@ function BotAccessAdvice({
           </Button>
         </p>
       ) : null}
-      {newBotOpen ? <NewBotDialog open onOpenChange={setNewBotOpen} /> : null}
+      {newBotOpen ? <LazyNewBotDialog open onOpenChange={setNewBotOpen} /> : null}
     </section>
   )
 }

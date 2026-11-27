@@ -4,6 +4,10 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../sidebar-list/feed/sidebar-inp
 export const WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY =
   'worktree.rename-error-dismiss.v1' as const
 
+// Hosts serving worktree.autoName.{availability,retry,dismiss}; older hosts show the failure without actions.
+export const WORKTREE_AUTO_NAME_ACTIONS_RUNTIME_CAPABILITY =
+  'worktree.auto-name-actions.v1' as const
+
 export const WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY =
   'worktree.open-existing-branch.v1' as const
 // Older hosts advertised V2 while still accepting the V1 wire value.
@@ -128,6 +132,7 @@ export const WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY =
 export const WORKTREE_RUNTIME_CAPABILITIES = [
   WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY,
   WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
+  WORKTREE_AUTO_NAME_ACTIONS_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY,

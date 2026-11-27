@@ -1,3 +1,4 @@
+import { runWithFinally } from '@/lib/run-with-finally'
 import { useClaudeSwitcherState } from './use-claude-switcher-state'
 import type { ClaudeSwitcherMenuProps } from './ClaudeSwitcherMenu'
 import type { ChatAccountAction } from './ProviderAccountChatButton'
@@ -148,50 +149,55 @@ export function ClaudeSwitcherForOwner({
     }
     const previousActiveAccountId = getClaudeStatusActiveId(accountState, target)
     setIsSwitching(true)
-    try {
-      if (chatAction && !(await chatAction.canSwitch())) {
-        toast.error(
-          t(
-            'components.native-chat.usageLimitActions.accountUnavailable',
-            'This chat cannot move to another account. Hand it off to another agent instead.'
+    await runWithFinally(
+      async () => {
+        try {
+          if (chatAction && !(await chatAction.canSwitch())) {
+            toast.error(
+              t(
+                'components.native-chat.usageLimitActions.accountUnavailable',
+                'This chat cannot move to another account. Hand it off to another agent instead.'
+              )
+            )
+            return
+          }
+          const { runningSessions, ...next } = await selectClaudeProviderAccount(runtimeTarget, {
+            accountId,
+            runtime: target.runtime,
+            wslDistro: target.wslDistro
+          })
+          recordFeatureInteraction('claude-account-switching')
+          if (mountedRef.current) {
+            setAccounts(next)
+          }
+          // Why: remote selections live on the server; local GlobalSettings are untouched, so refetching is pure churn.
+          if (!hasActiveRuntimeEnvironment) {
+            await fetchSettings()
+          }
+          const nextActiveAccountId = getClaudeStatusActiveId(next, target)
+          if (runningSessions || (!chatAction && previousActiveAccountId !== nextActiveAccountId)) {
+            void handleRunningClaudeSessionsAfterSwitch({
+              owner: runtimeTarget,
+              target,
+              before: { state: accountState, accountId: previousActiveAccountId ?? null },
+              after: { state: next, accountId: nextActiveAccountId ?? null },
+              ...(runningSessions ? { hostMove: runningSessions } : {})
+            })
+          }
+        } catch (error) {
+          console.error('Failed to switch Claude account from status bar:', error)
+          toast.error(
+            t('auto.components.settings.AccountsPane.2743cdc0af', 'Claude account update failed.'),
+            { description: getClaudeAccountErrorDescription(error) }
           )
-        )
-        return
+        }
+      },
+      () => {
+        if (mountedRef.current) {
+          setIsSwitching(false)
+        }
       }
-      const { runningSessions, ...next } = await selectClaudeProviderAccount(runtimeTarget, {
-        accountId,
-        runtime: target.runtime,
-        wslDistro: target.wslDistro
-      })
-      recordFeatureInteraction('claude-account-switching')
-      if (mountedRef.current) {
-        setAccounts(next)
-      }
-      // Why: remote selections live on the server; local GlobalSettings are untouched, so refetching is pure churn.
-      if (!hasActiveRuntimeEnvironment) {
-        await fetchSettings()
-      }
-      const nextActiveAccountId = getClaudeStatusActiveId(next, target)
-      if (runningSessions || (!chatAction && previousActiveAccountId !== nextActiveAccountId)) {
-        void handleRunningClaudeSessionsAfterSwitch({
-          owner: runtimeTarget,
-          target,
-          before: { state: accountState, accountId: previousActiveAccountId ?? null },
-          after: { state: next, accountId: nextActiveAccountId ?? null },
-          ...(runningSessions ? { hostMove: runningSessions } : {})
-        })
-      }
-    } catch (error) {
-      console.error('Failed to switch Claude account from status bar:', error)
-      toast.error(
-        t('auto.components.settings.AccountsPane.2743cdc0af', 'Claude account update failed.'),
-        { description: getClaudeAccountErrorDescription(error) }
-      )
-    } finally {
-      if (mountedRef.current) {
-        setIsSwitching(false)
-      }
-    }
+    )
   }
 
   const handleSelectRuntime = async (group: ClaudeStatusSwitchGroup): Promise<void> => {

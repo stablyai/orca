@@ -1,7 +1,7 @@
 import { useMemo, type Ref } from 'react'
 import { useAppStore } from '@/store'
 import { formatNativeChatFileReference } from '../../../../shared/native-chat/input/composer/agent-image-paste'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { NativeChatComposer } from '../native-chat/composer/NativeChatComposer'
 import type { NativeChatComposerHandle } from '../native-chat/composer/native-chat-composer-types'
@@ -52,6 +52,7 @@ export function AgentLaunchPromptComposer({
   disabled?: boolean
   onLaunch: (prompt: string) => boolean | void | Promise<boolean>
 }): React.JSX.Element {
+  const t = useTranslate()
   const scopeKey = agentLaunchPromptScopeKey(entry)
   const { worktreeId } = entry
   const runtimeEnvironmentId = useAppStore((state) =>
@@ -102,16 +103,10 @@ export function AgentLaunchPromptComposer({
         }
       },
       placeholder: getNativeChatAgentProfile(entry.agent)
-        ? translate(
-            'agentPicker.promptPlaceholder',
-            'Add a prompt (optional): / for skills, @ for files'
-          )
-        : translate(
-            'agentPicker.promptPlaceholderFilesOnly',
-            'Add a prompt (optional): @ for files'
-          )
+        ? t('agentPicker.promptPlaceholder', 'Add a prompt (optional): / for skills, @ for files')
+        : t('agentPicker.promptPlaceholderFilesOnly', 'Add a prompt (optional): @ for files')
     }),
-    [entry.agent, onLaunch, scopeKey]
+    [entry.agent, onLaunch, scopeKey, t]
   )
   return (
     <NativeChatComposer

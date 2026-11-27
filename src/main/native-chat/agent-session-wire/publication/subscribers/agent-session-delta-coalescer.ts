@@ -44,6 +44,10 @@ export type AgentSessionDeltaCoalescer = {
   forget: (key: string) => void
   dispose: () => void
   snapshot: (key: string) => AgentSessionDeltaSnapshot | null
+  /** Whether `snapshot` would return one, without joining its text. */
+  has: (key: string) => boolean
+  /** Whether any stream's buffered length meets `test`, without joining text. */
+  someLength: (test: (key: string, textLength: number) => boolean) => boolean
   /** The retained text, or undefined past `maxLength`; a longer text is never joined. */
   textWithin: (key: string, maxLength: number) => string | undefined
   /** The key's current stream, new each time one starts: until it is truncated, its text only
@@ -251,6 +255,15 @@ export function createAgentSessionDeltaCoalescer(
       streams.clear()
       evictable.clear()
       totalRetainedBytes = 0
+    },
+    has: (key) => streams.has(key),
+    someLength: (test) => {
+      for (const [key, stream] of streams) {
+        if (test(key, stream.textLength)) {
+          return true
+        }
+      }
+      return false
     },
     // Truncation rewrites the tail with a marker, so a truncated stream promises no growth.
     streamOf: (key) => {

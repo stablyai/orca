@@ -19,8 +19,7 @@ import {
 import { useBackClaim } from '../navigation/use-back-claim'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsSection } from '../settings/settings-screen-frame'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { SheetBot } from './bot-sheet-operations'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
@@ -39,7 +38,7 @@ export function MobileBotAgentPage(props: {
   /** Saves its model and options; null goes back to the chat defaults. */
   onLaunch: (launch: BotLaunch | null) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { bot } = props
   const choices = useNewBotAgentChoices(props.client)?.agents ?? null

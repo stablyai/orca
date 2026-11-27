@@ -1,7 +1,7 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
-  RuntimeTerminalListResult,
-  RuntimeTerminalOrphanAdoptionClaim
+  RuntimeTerminalOrphanAdoptionClaim,
+  RuntimeTerminalSummaryWithoutPreview
 } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { toRuntimeWorktreeSelector } from '../../../rpc/targets/runtime-worktree-selector'
@@ -133,7 +133,8 @@ export async function resolveTerminalOrphanInventory(args: {
           worktree: toRuntimeWorktreeSelector(snapshot.worktree),
           handles: inventoryHandles,
           requireFreshPtyLiveness: true,
-          includeVisualLayouts: false
+          includeVisualLayouts: false,
+          includePreview: false
         },
         timeoutMs: 15_000,
         expectedEnvironmentPairingRevision
@@ -153,7 +154,7 @@ export async function resolveTerminalOrphanInventory(args: {
   }
   const listed = listedResponse.result
   const inventoryHandleSet = new Set(inventoryHandles)
-  const listedByHandle = new Map<string, RuntimeTerminalListResult['terminals'][number]>()
+  const listedByHandle = new Map<string, RuntimeTerminalSummaryWithoutPreview>()
   const duplicateListedHandles = new Set<string>()
   for (const terminal of listed.terminals) {
     if (!inventoryHandleSet.has(terminal.handle)) {

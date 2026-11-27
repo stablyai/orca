@@ -1,5 +1,4 @@
 import type { Translate } from '../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import type { StructuredSessionOpenFailure } from '../../../src/shared/agent-session/view/open-structured-agent-session'
 import { BOT_ACCESS_LINK_COPY } from '../../../src/shared/bots/bot-access-link-copy'
 import type { AccessRequestRedemption } from '../../../src/shared/bots/bot-link-resolution'
@@ -9,20 +8,29 @@ export const BOT_LINK_UPDATE_NOTICE = 'bots-update'
 function joinHostNames(
   t: Translate,
   hostNames: readonly string[],
+  intlLocale: string,
   type: 'conjunction' | 'disjunction' = 'conjunction'
 ): string {
   return hostNames.length > 0
-    ? new Intl.ListFormat(getUiIntlLocale(), { type }).format([...hostNames])
+    ? new Intl.ListFormat(intlLocale, { type }).format([...hostNames])
     : t('bots.link.computer', 'your computer')
 }
 
-export function botLinkUpdateNeededLine(t: Translate, hostNames: readonly string[]): string {
+export function botLinkUpdateNeededLine(
+  t: Translate,
+  hostNames: readonly string[],
+  intlLocale: string
+): string {
   return t('bots.link.updateNeeded', 'Update Orca on {{names}} to open this link.', {
-    names: joinHostNames(t, hostNames)
+    names: joinHostNames(t, hostNames, intlLocale)
   })
 }
 
-export function botLinkUnreachableLine(t: Translate, hostNames: readonly string[]): string {
+export function botLinkUnreachableLine(
+  t: Translate,
+  hostNames: readonly string[],
+  intlLocale: string
+): string {
   if (hostNames.length === 1) {
     return t(
       'bots.link.unreachableSingle',
@@ -34,16 +42,25 @@ export function botLinkUnreachableLine(t: Translate, hostNames: readonly string[
     'bots.link.unreachable',
     'Couldn’t reach {{names}}. Make sure Orca is running on one, then try again.',
     {
-      names: joinHostNames(t, hostNames, getUiIntlLocale() === 'en' ? 'disjunction' : 'conjunction')
+      names: joinHostNames(
+        t,
+        hostNames,
+        intlLocale,
+        intlLocale === 'en' ? 'disjunction' : 'conjunction'
+      )
     }
   )
 }
 
-export function botLinkAmbiguousLine(t: Translate, hostNames: readonly string[]): string {
+export function botLinkAmbiguousLine(
+  t: Translate,
+  hostNames: readonly string[],
+  intlLocale: string
+): string {
   return t(
     'bots.link.ambiguous',
     'This bot is on {{names}}. Open the chat in Orca on the one you want.',
-    { names: joinHostNames(t, hostNames) }
+    { names: joinHostNames(t, hostNames, intlLocale) }
   )
 }
 

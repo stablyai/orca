@@ -65,6 +65,7 @@ function mount(hookId: string) {
     pairedHostId: 'p',
     hostLabel: 'Mac',
     openBotChat: () => {},
+    openBotHome: () => {},
     editOffer: () => {}
   }
   act(() => {

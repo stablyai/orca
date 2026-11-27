@@ -16,7 +16,7 @@ import {
 } from '../../shared/bots/bot-acts-for'
 import { originOf, requestsOriginPlace } from './bot-request-origin-place'
 import { carriedAskersOf, stampedPerson } from './bot-stamped-askers'
-import { typedInOrcaByOwner, typedOnAnotherDevice } from './bot-typed-in-orca'
+import { personSendsOf, typedInOrcaByOwner, typedOnAnotherDevice } from './bot-typed-in-orca'
 import { isRootTurnRecord, isRootUserMessage, turnMessages } from './bot-turn-messages'
 import { requestTextOf } from './bot-request-text'
 import { requestTurnAskedBy } from './bot-request-askers-of'
@@ -242,6 +242,8 @@ export function readBotActingTurnWithin(
   submissions: readonly AgentJournalSubmission[],
   newestTurns: number | null
 ): BotActingTurn | null {
+  // One index of the read's sends, built only when a message needs it.
+  const sends = personSendsOf(submissions)
   // A turn only worker mail woke reads an older turn's askers, never its place: its work is no thread's.
   for (const [index, window] of turnWindows(items, submissions, newestTurns).entries()) {
     const readings = window.map((item) => ({ item, reading: readItem(item.body, lookups) }))
@@ -279,7 +281,7 @@ export function readBotActingTurnWithin(
           ...stamped,
           ...carried
         ]),
-        askedBy: requestTurnAskedBy(records, window, submissions),
+        askedBy: requestTurnAskedBy(records, window, sends, typedByAnother),
         request: null,
         actingOnRequestId: requestIds[0] ?? null,
         requestIds,
@@ -311,8 +313,7 @@ export function readBotActingTurnWithin(
         (entry) => entry.reading.kind === 'conversation' && entry.reading.run
       )
       // Only the newest turn: one a worker's report reads back to is not the turn now running.
-      const typedByOwner =
-        index === 0 && window.every((item) => typedInOrcaByOwner(item, submissions))
+      const typedByOwner = index === 0 && window.every((item) => typedInOrcaByOwner(item, sends))
       // A paired device Orca can't place as the owner asked as someone it can't name.
       const askedBy = openers.flatMap((entry): readonly BotRequestAsker[] =>
         entry.reading.kind === 'asker'

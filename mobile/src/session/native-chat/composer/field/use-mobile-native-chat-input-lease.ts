@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { nativeChatTurnStatusCopy } from '../../transcript/messages/native-chat-turn-status-copy'
-import { translate, type Translate } from '../../../../i18n/mobile-i18n'
+import type { Translate } from '../../../../i18n/mobile-i18n'
 import type { MobileNativeChatInputLockReason } from '../../MobileNativeChatView'
 
 export function useMobileNativeChatInputLease(args: {
@@ -94,8 +94,8 @@ export function useSettledMobileNativeChatInputLock(
 
 export function mobileNativeChatComposerPlaceholder(
   lockReason: MobileNativeChatInputLockReason | null,
-  afterStop?: 'queue' | 'send',
-  t: Translate = translate
+  t: Translate,
+  afterStop?: 'queue' | 'send'
 ): string {
   // Offline still takes typing: Send queues, so the usual prompt stays.
   if (lockReason === 'waiting') {
@@ -106,5 +106,5 @@ export function mobileNativeChatComposerPlaceholder(
       ? nativeChatTurnStatusCopy(t).queueAfterStop
       : nativeChatTurnStatusCopy(t).sendAfterStop
   }
-  return t('chat.composerPlaceholder.prompt', 'Ask anything, @ to mention files, / for commands')
+  return t('chat.composer.askAnything', 'Ask anything')
 }

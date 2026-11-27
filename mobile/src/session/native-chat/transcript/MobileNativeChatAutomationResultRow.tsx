@@ -1,4 +1,4 @@
-import { StyleSheet, Text } from 'react-native'
+import { Text } from 'react-native'
 import {
   AUTOMATION_RESULT_NOTE_COPY as COPY,
   type AutomationResultNote
@@ -6,7 +6,8 @@ import {
 import type { AutomationRowMark } from '../../../../../src/shared/automations/automation-chat-row'
 import { sayAutomationRunEnglish as say } from '../../../../../src/shared/automations/automation-run-row-words'
 import { MobileNativeChatMarkdown } from './message-content/MobileNativeChatMarkdown'
-import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
 import { CHAT_PROSE_SCALE, scaledType } from './messages/mobile-native-chat-message-styles'
 import { MobileAutomationRowFrame } from './MobileAutomationRowFrame'
 
@@ -21,6 +22,7 @@ export function MobileNativeChatAutomationResultRow({
   cleared?: boolean
   fontScale: number
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   const finished = note.outcome === 'finished'
   const mark: AutomationRowMark = note.trigger === 'schedule' ? 'schedule' : 'event'
   const label = note.trigger === 'schedule' ? say('scheduled') : say('event')
@@ -52,9 +54,9 @@ export function MobileNativeChatAutomationResultRow({
   )
 }
 
-const styles = StyleSheet.create({
+const stylesSheet = themedStyleSheet((colors) => ({
   caption: {
     marginTop: spacing.xs,
     color: colors.textMuted
   }
-})
+}))

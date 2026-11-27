@@ -155,7 +155,7 @@ export function createBotTurnContext(
       const plan = text.length === 0 ? null : { text: text.join('\n\n'), given: taken }
       return withOrcaRules(sessionId, entry, held, plan)
     },
-    plan: async (sessionId, message, held) => {
+    plan: async (sessionId, message, held, clientMessageId) => {
       const stored = given.get(sessionId)
       if (!stored) {
         return null
@@ -167,7 +167,7 @@ export function createBotTurnContext(
         workNote(sessionId, message).catch(() => null),
         readTopics(stored.folder),
         recentChats(stored.botId, sessionId).catch(() => null),
-        unansweredQuestionNote(sessionId, stored.botId).catch(() => null)
+        unansweredQuestionNote(sessionId, stored.botId, clientMessageId).catch(() => null)
       ])
       const soul = fingerprint(files.soul)
       const memory = fingerprint(files.memory)
@@ -184,12 +184,12 @@ export function createBotTurnContext(
         memory !== entry.memory ? botMemoryUpdateText(entry.memoryText, files.memory) : null
       const topicsNow = entry.topics ? botMemoryTopicsUpdateText(entry.topics, topics) : null
       const others = recent && recent.key !== entry.recentChats ? recent.text : null
-      const workNotes = [work, unanswered?.text].filter(Boolean)
       const changed: BotContextChange[] = [
         ...(soul !== entry.soul ? ['soul' as const] : []),
         ...(memoryNow || topicsNow ? ['memory' as const] : [])
       ]
-      if (changed.length === 0 && !workNotes.length && !skillsNow && !rules && !others) {
+      const workNotes = [work, unanswered?.text].filter(Boolean)
+      if (changed.length === 0 && !skillsNow && !rules && !others && workNotes.length === 0) {
         return withOrcaRules(sessionId, entry, held, null)
       }
       return withOrcaRules(sessionId, entry, held, {

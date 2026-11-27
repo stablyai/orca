@@ -9,6 +9,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { BotRow } from './BotRow'
+import { cn } from '@/lib/class-names'
 
 const now = Date.now()
 const MIN = 60_000
@@ -36,9 +37,14 @@ function bot(id: string): Bot {
 
 const devOpsOn = bot('devops-on')
 const devOpsOff = bot('devops-off')
+const longName = {
+  ...bot('long-name'),
+  name: 'Eng - Release Coordination and Infrastructure Reviewer'
+}
+const owners = [devOpsOn, devOpsOff, longName]
 const LIMIT_RESET = now + 40 * MIN
 
-const chats: AgentStatusEntry[] = [devOpsOn, devOpsOff].map((owner) => ({
+const chats: AgentStatusEntry[] = owners.map((owner) => ({
   paneKey: structuredAgentSessionStatusPaneKey(`chat-${owner.id}`),
   worktreeId: folderWorkspaceKey(owner.folderWorkspaceId),
   agentType: 'claude',
@@ -57,9 +63,9 @@ export const usageLimitRows = defineFixture({
     agentStatusByPaneKey: acceptedAgentStatuses(chats.map((entry) => [entry.paneKey, entry]))
   },
   setup: () => {
-    publishBots([devOpsOn, devOpsOff], { threadReplies: false, webhooks: undefined, waits: {} })
+    publishBots(owners, { threadReplies: false, webhooks: undefined, waits: {} })
     stubUsageLimitFeed(
-      [devOpsOn, devOpsOff].map((owner) => ({
+      owners.map((owner) => ({
         sessionId: `look-${owner.id}`,
         workspaceId: folderWorkspaceKey(owner.folderWorkspaceId),
         name: 'Look around',
@@ -74,12 +80,18 @@ export const usageLimitRows = defineFixture({
         {(
           [
             ['Auto-continue on', devOpsOn],
-            ['Auto-continue off', devOpsOff]
+            ['Auto-continue off', devOpsOff],
+            ['Longest name, narrow', longName]
           ] as const
         ).map(([label, owner]) => (
           <div key={label} className="flex flex-col gap-1.5">
             <div className="text-[11px] text-muted-foreground">{label}</div>
-            <div className="flex w-[280px] flex-col rounded-lg border border-border bg-worktree-sidebar py-1 pr-1.5 text-worktree-sidebar-foreground">
+            <div
+              className={cn(
+                'flex flex-col rounded-lg border border-border bg-worktree-sidebar py-1 pr-1.5 text-worktree-sidebar-foreground',
+                owner === longName ? 'w-[200px]' : 'w-[280px]'
+              )}
+            >
               <BotRow
                 bot={owner}
                 home={makeFolderWorkspace({

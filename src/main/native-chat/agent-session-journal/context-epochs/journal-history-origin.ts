@@ -1,28 +1,35 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { JournalEpochRow } from '../durable-rows/journal-row-schema'
 
-const text = z.string().min(1)
-const handle = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('codex'), threadId: text }),
-  z.object({ kind: z.literal('claude'), sessionId: text, leafUuid: text.nullable() }),
-  z.object({ kind: z.literal('opaque'), agent: text, value: text })
-])
-const legacyOrigin = z.object({
-  version: z.literal(1),
-  kind: z.literal('legacy_import'),
-  providerHandle: handle,
-  importedAt: z.number().finite()
-})
+const text = lazyZodSchema(() => z.string().min(1))
+const handle = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('codex'), threadId: text }),
+    z.object({ kind: z.literal('claude'), sessionId: text, leafUuid: text.nullable() }),
+    z.object({ kind: z.literal('opaque'), agent: text, value: text })
+  ])
+)
+const legacyOrigin = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    kind: z.literal('legacy_import'),
+    providerHandle: handle,
+    importedAt: z.number().finite()
+  })
+)
 
-const nativeCopyOrigin = z.object({
-  version: z.literal(1),
-  kind: z.literal('native_copy'),
-  providerHandle: handle,
-  unit: z.enum(['codex-turn', 'claude-entry', 'acp-user-message']),
-  agent: text,
-  ids: z.array(text)
-})
-const origin = z.discriminatedUnion('kind', [legacyOrigin, nativeCopyOrigin])
+const nativeCopyOrigin = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    kind: z.literal('native_copy'),
+    providerHandle: handle,
+    unit: z.enum(['codex-turn', 'claude-entry', 'acp-user-message']),
+    agent: text,
+    ids: z.array(text)
+  })
+)
+const origin = lazyZodSchema(() => z.discriminatedUnion('kind', [legacyOrigin, nativeCopyOrigin]))
 export type NativeCopyCoverage = Pick<z.infer<typeof nativeCopyOrigin>, 'unit' | 'ids'>
 export type NativeCopyOrigin = z.infer<typeof nativeCopyOrigin>
 const parsedOrigins = new WeakMap<JournalHistoryOrigin, ReturnType<typeof origin.safeParse>>()

@@ -1,18 +1,11 @@
 import { useState } from 'react'
 import { View, Text, Pressable } from 'react-native'
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import {
-  colors,
-  concentricRadius,
-  radii,
-  spacing,
-  typography,
-  pressedStyle
-} from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { concentricRadius, radii, spacing } from '../../theme/mobile-theme'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import { MessageBox } from '../../components/composer-input/MessageBox'
 import { TextField } from '../../components/composer-input/TextField'
+import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
+import { SettingsNote } from '../../settings/settings-screen-frame'
 import { getQuickCommandAgentLabel } from './quick-commands'
 import { getTerminalQuickCommandBodySize } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import {
@@ -20,20 +13,14 @@ import {
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH
 } from '../../../../src/shared/terminal/quick-commands/terminal-quick-commands'
 
-import {
-  type QuickCommandDraft,
-  isQuickCommandDraftPromptTooLong,
-  isQuickCommandDraftValid
-} from './quick-command-draft'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { type QuickCommandDraft, isQuickCommandDraftPromptTooLong } from './quick-command-draft'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
 import { MobileSwitch } from '../../components/controls/MobileSwitch'
 
 type Props = {
   draft: QuickCommandDraft
-  mode: 'add' | 'edit'
-  saving: boolean
   error: string | null
   // A mobile session lives in one repo, so "Project" scope means the current
   // worktree's repo — no cross-repo picker like desktop.
@@ -42,39 +29,38 @@ type Props = {
   agentPromptMaxLength: number | null
   onChange: (patch: Partial<QuickCommandDraft>) => void
   onOpenAgentPicker: () => void
-  onCancel: () => void
-  onSave: () => void
 }
 
-function ActionToggle({
+function ToggleGroup<T extends string>({
+  options,
   value,
   onChange
 }: {
-  value: QuickCommandDraft['action']
-  onChange: (action: QuickCommandDraft['action']) => void
+  options: { value: T; label: string; disabled?: boolean }[]
+  value: T
+  onChange: (value: T) => void
 }) {
-  useMobileColorScheme()
-  const t = useMobileTranslation()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.toggleGroup}>
-      {(['terminal-command', 'agent-prompt'] as const).map((action) => {
-        const selected = value === action
+      {options.map((option) => {
+        const selected = value === option.value
         return (
           <Pressable
-            key={action}
+            key={option.value}
+            disabled={option.disabled}
             style={({ pressed }) => [
               styles.toggleItem,
               selected && styles.toggleItemSelected,
+              option.disabled && styles.toggleItemDisabled,
               pressed && !selected && styles.pressed
             ]}
-            onPress={() => onChange(action)}
+            onPress={() => onChange(option.value)}
             accessibilityRole="button"
-            accessibilityState={{ selected }}
+            accessibilityState={{ selected, disabled: option.disabled === true }}
           >
             <Text style={[styles.toggleText, selected && styles.toggleTextSelected]}>
-              {action === 'terminal-command'
-                ? t('session.quickCommandEditorForm.terminalCommand', 'Terminal Command')
-                : t('session.quickCommandEditorForm.agentPrompt', 'Agent Prompt')}
+              {option.label}
             </Text>
           </Pressable>
         )
@@ -83,263 +69,195 @@ function ActionToggle({
   )
 }
 
+// The editor's body; Cancel and Save live in the sheet's header.
 export function QuickCommandEditorForm({
   draft,
-  mode,
-  saving,
   error,
   repoId,
   repoName,
   agentPromptMaxLength,
   onChange,
-  onOpenAgentPicker,
-  onCancel,
-  onSave
+  onOpenAgentPicker
 }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  const hasRepoScope = repoId !== null
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const [advancedOpen, setAdvancedOpen] = useState(draft.scope.type === 'repo')
   const isAgent = draft.action === 'agent-prompt'
-  const canSave = isQuickCommandDraftValid(draft, agentPromptMaxLength) && !saving
   const promptTooLong = isQuickCommandDraftPromptTooLong(draft, agentPromptMaxLength)
   const promptSize = getTerminalQuickCommandBodySize(
     'agent-prompt',
     draft.prompt,
     agentPromptMaxLength
   )
+  const appendEnterTitle = t('session.quickCommandEditorForm.appendEnter', 'Append Enter')
 
   return (
     <View style={styles.form}>
-      <View style={styles.field}>
-        <Text style={styles.label}>{t('session.quickCommandEditorForm.label', 'Label')}</Text>
-        <TextField
-          value={draft.label}
-          onChangeText={(label) => onChange({ label })}
-          placeholder={t('session.quickCommandEditorForm.labelPlaceholder', 'Start dev server')}
-          autoCapitalize="none"
-          autoCorrect={false}
-          maxLength={MAX_QUICK_COMMAND_LABEL_LENGTH}
-        />
-      </View>
+      {/* A failed save shows under the header, beside the Save the user just tapped. */}
+      {error ? <SettingsNote error>{error}</SettingsNote> : null}
+      <SectionHeader title={t('session.quickCommandEditorForm.label', 'Label')} first />
+      <TextField
+        value={draft.label}
+        onChangeText={(label) => onChange({ label })}
+        placeholder={t('session.quickCommandEditorForm.labelPlaceholder', 'Start dev server')}
+        autoCapitalize="none"
+        autoCorrect={false}
+        maxLength={MAX_QUICK_COMMAND_LABEL_LENGTH}
+      />
 
-      <View style={styles.field}>
-        <Text style={styles.label}>{t('session.quickCommandEditorForm.action', 'Action')}</Text>
-        <ActionToggle value={draft.action} onChange={(action) => onChange({ action })} />
-      </View>
+      <SectionHeader title={t('session.quickCommandEditorForm.action', 'Action')} />
+      <ToggleGroup
+        options={[
+          {
+            value: 'terminal-command',
+            label: t('session.quickCommandEditorForm.terminalCommand', 'Terminal Command')
+          },
+          {
+            value: 'agent-prompt',
+            label: t('session.quickCommandEditorForm.agentPrompt', 'Agent Prompt')
+          }
+        ]}
+        value={draft.action}
+        onChange={(action) => onChange({ action })}
+      />
 
       {isAgent ? (
-        <View style={styles.field}>
-          <Text style={styles.label}>{t('session.quickCommandEditorForm.agent', 'Agent')}</Text>
-          <Pressable
-            style={({ pressed }) => [styles.select, pressed && styles.pressed]}
+        <ListGroup style={styles.agentGroup}>
+          <ListRow
+            title={t('session.quickCommandEditorForm.agent', 'Agent')}
+            value={
+              draft.agent
+                ? getQuickCommandAgentLabel(draft.agent)
+                : t('session.quickCommandEditorForm.chooseAgent', 'Choose agent')
+            }
+            valueIcon={
+              draft.agent ? <MobileAgentIcon agentId={draft.agent} size={16} /> : undefined
+            }
+            navigates
             onPress={onOpenAgentPicker}
-            accessibilityRole="button"
-          >
-            {draft.agent ? (
-              <View style={styles.selectValue}>
-                <MobileAgentIcon agentId={draft.agent} size={16} />
-                <Text style={styles.selectValueText}>{getQuickCommandAgentLabel(draft.agent)}</Text>
-              </View>
-            ) : (
-              <Text style={styles.selectPlaceholder}>
-                {t('session.quickCommandEditorForm.chooseAgent', 'Choose agent')}
-              </Text>
-            )}
-            <ChevronDown size={16} color={colors.textMuted} />
-          </Pressable>
-        </View>
+          />
+        </ListGroup>
       ) : null}
 
-      <View style={styles.field}>
-        <Text style={styles.label}>
-          {isAgent
+      <SectionHeader
+        title={
+          isAgent
             ? t('session.quickCommandEditorForm.prompt', 'Prompt')
-            : t('session.quickCommandEditorForm.commandText', 'Command Text')}
-        </Text>
-        <MessageBox
-          monospace={!isAgent}
-          value={isAgent ? draft.prompt : draft.command}
-          onChangeText={(text) => onChange(isAgent ? { prompt: text } : { command: text })}
-          placeholder={
-            isAgent
+            : t('session.quickCommandEditorForm.commandText', 'Command Text')
+        }
+      />
+      <MessageBox
+        monospace={!isAgent}
+        value={isAgent ? draft.prompt : draft.command}
+        onChangeText={(text) => onChange(isAgent ? { prompt: text } : { command: text })}
+        placeholder={
+          isAgent
+            ? t(
+                'session.quickCommandEditorForm.promptPlaceholder',
+                'Ask the agent to investigate this workspace'
+              )
+            : 'npm run dev'
+        }
+        autoCapitalize="none"
+        autoCorrect={false}
+        // Why: maxLength drops the tail of a paste silently, so prompts show a refusal instead.
+        maxLength={isAgent ? undefined : MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH}
+      />
+      {promptTooLong ? (
+        <>
+          {/* Why static text in the alert: a live count would re-announce on every keystroke. */}
+          <SettingsNote error>
+            {promptSize.olderHostCap
               ? t(
-                  'session.quickCommandEditorForm.promptPlaceholder',
-                  'Ask the agent to investigate this workspace'
+                  'session.quickCommandEditorForm.olderHostPromptTooLong',
+                  'Too long for this host. Update Orca on the host to save longer prompts.'
                 )
-              : 'npm run dev'
-          }
-          autoCapitalize="none"
-          autoCorrect={false}
-          // Why: maxLength drops the tail of a paste silently, so prompts show a refusal instead.
-          maxLength={isAgent ? undefined : MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH}
-        />
-        {promptTooLong ? (
-          <View>
-            {/* Why static text in the alert: a live count would re-announce on every keystroke. */}
-            <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">
-              {promptSize.olderHostCap
-                ? t(
-                    'session.quickCommandEditorForm.olderHostPromptTooLong',
-                    'Too long for this host. Update Orca on the host to save longer prompts.'
-                  )
-                : t('session.quickCommandEditorForm.promptTooLong', 'Too long to save.')}
-            </Text>
-            <Text style={styles.hint}>
-              {promptSize.unit === 'bytes'
-                ? t(
-                    'session.quickCommandEditorForm.promptSizeKilobytes',
-                    '{{used}} KB / {{max}} KB',
-                    {
-                      used: Math.ceil(promptSize.used / 1024).toLocaleString(getUiIntlLocale()),
-                      max: Math.ceil(promptSize.max / 1024).toLocaleString(getUiIntlLocale())
-                    }
-                  )
-                : t(
-                    'session.quickCommandEditorForm.promptSizeCharacters',
-                    '{{used}} / {{max}} characters',
-                    {
-                      used: promptSize.used.toLocaleString(getUiIntlLocale()),
-                      max: promptSize.max.toLocaleString(getUiIntlLocale())
-                    }
-                  )}
-            </Text>
-          </View>
-        ) : isAgent ? (
-          <Text style={styles.hint}>
-            {t(
-              'session.quickCommandEditorForm.promptHint',
-              'Supports skills, file paths, and built-in commands.'
-            )}
-          </Text>
-        ) : null}
-      </View>
-
-      <View style={styles.field}>
-        <Pressable
-          style={({ pressed }) => [styles.advancedToggle, pressed && styles.pressed]}
-          onPress={() => setAdvancedOpen((open) => !open)}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: advancedOpen }}
-        >
-          {advancedOpen ? (
-            <ChevronDown size={16} color={colors.textSecondary} />
-          ) : (
-            <ChevronRight size={16} color={colors.textSecondary} />
+              : t('session.quickCommandEditorForm.promptTooLong', 'Too long to save.')}
+          </SettingsNote>
+          <SettingsNote>
+            {promptSize.unit === 'bytes'
+              ? t(
+                  'session.quickCommandEditorForm.promptSizeKilobytes',
+                  '{{used}} KB / {{max}} KB',
+                  {
+                    used: Math.ceil(promptSize.used / 1024).toLocaleString(intlLocale),
+                    max: Math.ceil(promptSize.max / 1024).toLocaleString(intlLocale)
+                  }
+                )
+              : t(
+                  'session.quickCommandEditorForm.promptSizeCharacters',
+                  '{{used}} / {{max}} characters',
+                  {
+                    used: promptSize.used.toLocaleString(intlLocale),
+                    max: promptSize.max.toLocaleString(intlLocale)
+                  }
+                )}
+          </SettingsNote>
+        </>
+      ) : isAgent ? (
+        <SettingsNote>
+          {t(
+            'session.quickCommandEditorForm.promptHint',
+            'Supports skills, file paths, and built-in commands.'
           )}
-          <Text style={styles.advancedText}>
-            {t('session.quickCommandEditorForm.advanced', 'Advanced')}
-          </Text>
-        </Pressable>
+        </SettingsNote>
+      ) : null}
 
-        {advancedOpen ? (
-          <View style={styles.advancedBody}>
-            {!isAgent ? (
-              <View style={styles.switchRow}>
-                <View style={styles.switchText}>
-                  <Text style={styles.switchTitle}>
-                    {t('session.quickCommandEditorForm.appendEnter', 'Append Enter')}
-                  </Text>
-                  <Text style={styles.switchDesc}>
-                    {t(
-                      'session.quickCommandEditorForm.appendEnterDescription',
-                      'Submit immediately instead of only inserting text.'
-                    )}
-                  </Text>
-                </View>
-                <MobileSwitch
-                  accessibilityLabel={t(
-                    'session.quickCommandEditorForm.appendEnter',
-                    'Append Enter'
-                  )}
-                  value={draft.appendEnter}
-                  onValueChange={(appendEnter) => onChange({ appendEnter })}
-                />
-              </View>
-            ) : null}
-
-            <View style={styles.field}>
-              <Text style={styles.label}>{t('session.quickCommandEditorForm.scope', 'Scope')}</Text>
-              <View style={styles.toggleGroup}>
-                {(['global', 'repo'] as const).map((scopeType) => {
-                  const selected = draft.scope.type === scopeType
-                  const disabled = scopeType === 'repo' && !hasRepoScope
-                  return (
-                    <Pressable
-                      key={scopeType}
-                      disabled={disabled}
-                      style={({ pressed }) => [
-                        styles.toggleItem,
-                        selected && styles.toggleItemSelected,
-                        disabled && styles.toggleItemDisabled,
-                        pressed && !selected && !disabled && styles.pressed
-                      ]}
-                      onPress={() =>
-                        onChange({
-                          scope:
-                            scopeType === 'repo' && repoId
-                              ? { type: 'repo', repoId }
-                              : { type: 'global' }
-                        })
-                      }
-                      accessibilityRole="button"
-                      accessibilityState={{ selected, disabled }}
-                    >
-                      <Text style={[styles.toggleText, selected && styles.toggleTextSelected]}>
-                        {scopeType === 'global'
-                          ? t('session.quickCommandEditorForm.globalScope', 'Global')
-                          : t('session.quickCommandEditorForm.projectScope', 'Project')}
-                      </Text>
-                    </Pressable>
-                  )
-                })}
-              </View>
-              {draft.scope.type === 'repo' && repoName ? (
-                <Text style={styles.scopeRepoName}>{repoName}</Text>
-              ) : null}
-            </View>
-          </View>
-        ) : null}
-      </View>
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      <View style={styles.footer}>
-        <Pressable
-          style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.pressed]}
-          onPress={onCancel}
-          accessibilityRole="button"
-        >
-          <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            styles.button,
-            styles.saveButton,
-            !canSave && styles.saveButtonDisabled,
-            pressed && pressedStyle
-          ]}
-          disabled={!canSave}
-          onPress={onSave}
-          accessibilityRole="button"
-        >
-          <Text style={[styles.saveText, !canSave && styles.saveTextDisabled]}>
-            {mode === 'edit'
-              ? t('common.save', 'Save')
-              : t('session.quickCommandEditorForm.addQuickCommand', 'Add Quick Command')}
-          </Text>
-        </Pressable>
-      </View>
+      <SectionHeader
+        title={t('session.quickCommandEditorForm.advanced', 'Advanced')}
+        expanded={advancedOpen}
+        onToggle={() => setAdvancedOpen((open) => !open)}
+      />
+      {advancedOpen ? (
+        <>
+          {!isAgent ? (
+            <ListGroup style={styles.advancedGroup}>
+              <ListRow
+                title={appendEnterTitle}
+                subtitle={t(
+                  'session.quickCommandEditorForm.appendEnterDescription',
+                  'Submit immediately instead of only inserting text.'
+                )}
+                accessory={
+                  <MobileSwitch
+                    accessibilityLabel={appendEnterTitle}
+                    value={draft.appendEnter}
+                    onValueChange={(appendEnter) => onChange({ appendEnter })}
+                  />
+                }
+              />
+            </ListGroup>
+          ) : null}
+          <ToggleGroup
+            options={[
+              {
+                value: 'global',
+                label: t('session.quickCommandEditorForm.globalScope', 'Global')
+              },
+              {
+                value: 'repo',
+                label: t('session.quickCommandEditorForm.projectScope', 'Project'),
+                disabled: repoId === null
+              }
+            ]}
+            value={draft.scope.type}
+            onChange={(scopeType) =>
+              onChange({
+                scope:
+                  scopeType === 'repo' && repoId ? { type: 'repo', repoId } : { type: 'global' }
+              })
+            }
+          />
+          {draft.scope.type === 'repo' && repoName ? <SettingsNote>{repoName}</SettingsNote> : null}
+        </>
+      ) : null}
     </View>
   )
 }
 
-const styles = themedStyleSheet(() => ({
-  form: { gap: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.sm },
-  field: { gap: spacing.sm },
-  label: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
-  hint: { fontSize: 12, color: colors.textMuted },
-  error: { fontSize: 13, color: colors.statusRed, marginTop: spacing.xs },
+const stylesSheet = themedStyleSheet((colors) => ({
+  form: { paddingBottom: spacing.sm },
   pressed: { backgroundColor: colors.borderSubtle },
   toggleGroup: { flexDirection: 'row', gap: spacing.sm },
   toggleItem: {
@@ -356,49 +274,7 @@ const styles = themedStyleSheet(() => ({
   toggleItemDisabled: { opacity: 0.4 },
   toggleText: { fontSize: 13, fontWeight: '500', color: colors.textSecondary },
   toggleTextSelected: { color: colors.textPrimary },
-  select: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.sheetGroup,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2
-  },
-  selectValue: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  selectValueText: { fontSize: 14, color: colors.textPrimary },
-  selectPlaceholder: { fontSize: 14, color: colors.textMuted },
-  scopeRepoName: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    fontFamily: typography.monoFamily,
-    paddingHorizontal: spacing.xs
-  },
-  advancedToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.xs
-  },
-  advancedText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
-  advancedBody: { gap: spacing.md, paddingTop: spacing.xs },
-  switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  switchText: { flex: 1 },
-  switchTitle: { fontSize: 14, color: colors.textPrimary },
-  switchDesc: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
-  footer: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  button: {
-    flex: 1,
-    borderRadius: radii.control,
-    paddingVertical: spacing.md,
-    alignItems: 'center'
-  },
-  cancelButton: { borderWidth: 1, borderColor: colors.borderSubtle },
-  cancelText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  saveButton: { backgroundColor: colors.textPrimary },
-  saveButtonDisabled: { backgroundColor: colors.borderSubtle },
-  saveText: { fontSize: 14, fontWeight: '700', color: colors.bgBase },
-  saveTextDisabled: { color: colors.textMuted }
+  advancedGroup: { marginBottom: spacing.sm },
+  // The picker row follows the Action toggle the way a section follows another.
+  agentGroup: { marginTop: spacing.lg }
 }))

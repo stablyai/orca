@@ -137,6 +137,10 @@ export function isRuntimePathAbsolute(
 }
 
 export function resolveRuntimePath(basePath: string, targetPath: string): string {
+  if (targetPath.startsWith('\\') && !targetPath.startsWith('\\\\')) {
+    const { root } = splitRuntimePathRoot(normalizeRuntimePathSeparators(basePath), 'windows')
+    return normalizeRuntimePathDots(`${root || '/'}${targetPath.slice(1)}`, 'windows')
+  }
   const pathFlavor =
     isWindowsPathFlavor(basePath) || isWindowsPathFlavor(targetPath) ? 'windows' : 'posix'
   if (isRuntimePathAbsolute(targetPath, pathFlavor)) {
