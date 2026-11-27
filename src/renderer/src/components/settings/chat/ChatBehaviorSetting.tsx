@@ -66,6 +66,7 @@ export function ChatBehaviorSetting({
     entries.markNewMessages,
     entries.linkPreviews,
     entries.composerSpellcheck,
+    entries.composerDetails,
     entries.promptSuggestions,
     entries.shellEnvironment
   ]
@@ -78,6 +79,7 @@ export function ChatBehaviorSetting({
   const markNewMessages = nativeChatMarksNewMessages(settings)
   const linkPreviewsEnabled = settings.nativeChatLinkPreviews !== false
   const composerSpellcheckEnabled = settings.nativeChatComposerSpellcheck !== false
+  const composerDetailsShown = settings.nativeChatComposerDetails === true
   const promptSuggestions = nativeChatShowsPromptSuggestions(settings)
   return (
     <SettingsGroup id="chat-behavior" title={getChatBehaviorTitle(t)}>
@@ -209,6 +211,18 @@ export function ChatBehaviorSetting({
           onChange={() =>
             updateSettings({ nativeChatComposerSpellcheck: !composerSpellcheckEnabled })
           }
+        />
+      </SearchableSetting>
+      <SearchableSetting
+        {...entries.composerDetails}
+        id={entries.composerDetails.targetSectionId}
+        forceVisible={forceVisible}
+        className="max-w-none"
+      >
+        <SettingsSwitchRow
+          label={entries.composerDetails.title}
+          checked={composerDetailsShown}
+          onChange={() => updateSettings({ nativeChatComposerDetails: !composerDetailsShown })}
         />
       </SearchableSetting>
       <SearchableSetting

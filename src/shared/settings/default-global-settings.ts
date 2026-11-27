@@ -166,6 +166,8 @@ export function buildDefaultSettings(args: {
     nativeChatIdleStopMinutes: DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES,
     nativeChatInlineVisuals: true,
     nativeChatLinkPreviews: true,
+    // New profiles only; stored profiles without the key keep the row (keepComposerDetailsOnForExistingProfiles).
+    nativeChatComposerDetails: false,
     nativeChatOpenedPullRequests: true,
     nativeChatScrollToLatestOnSend: true,
     nativeChatTurnDiffSummary: true,

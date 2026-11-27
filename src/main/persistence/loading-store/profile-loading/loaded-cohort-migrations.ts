@@ -143,6 +143,22 @@ export class LoadedCohortMigrationOperations {
     return { ...state, settings: { ...state.settings, experimentalAppRail: false } }
   }
 
+  /** The composer's details row is off for new profiles; profiles saved before without a choice keep it. */
+  keepComposerDetailsOnForExistingProfiles(
+    state: PersistedState,
+    savedProfile: unknown
+  ): PersistedState {
+    if (!isRecord(savedProfile) || isTelemetryOnlyProfile(savedProfile)) {
+      return state
+    }
+    const saved = isRecord(savedProfile.settings) ? savedProfile.settings : undefined
+    if (typeof saved?.nativeChatComposerDetails === 'boolean') {
+      return state
+    }
+    this.runtime.loadNeedsSave = true
+    return { ...state, settings: { ...state.settings, nativeChatComposerDetails: true } }
+  }
+
   migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     return this.seedMilestoneInstallCohort(
       this.migrateTelemetryIdentity(state, fileExistedOnLoad),

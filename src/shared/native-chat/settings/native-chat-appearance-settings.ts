@@ -37,6 +37,8 @@ export type NativeChatGlobalSettings = {
   nativeChatMarkNewMessages?: boolean
   /** The agent's suggested next prompt in an empty composer. Absent means on. */
   nativeChatPromptSuggestions?: boolean
+  /** The computer, folder, branch and sign-in row under the composer; off for new profiles, on for older ones. */
+  nativeChatComposerDetails?: boolean
 }
 
 /** Not written into default settings, so flipping this reaches everyone who never chose. */

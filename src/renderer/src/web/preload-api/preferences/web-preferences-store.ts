@@ -14,6 +14,7 @@ import {
   mergeSettings,
   stripRetiredWebChatSettings,
   migrateStoredWebSettings,
+  keepExistingWebProfileDefaults,
   needsChatUiChoiceCarry,
   retainOriginalWebChatSetting,
   runtimeChatPermissionSetting
@@ -50,9 +51,8 @@ export function getStoredSettings(): GlobalSettings {
   const hasStoredSettings = isStoredSettingsObject(rawStoredSettings)
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
   const migratedStored = migrateStoredWebSettings(stored)
-  if (hasStoredSettings && typeof migratedStored.experimentalAppRail !== 'boolean') {
-    // Existing browser profiles keep the app rail off unless they explicitly chose it.
-    migratedStored.experimentalAppRail = false
+  if (hasStoredSettings) {
+    keepExistingWebProfileDefaults(migratedStored)
   }
   delete migratedStored.nativeChatAutoContinueAfterUsageLimit
   if (
@@ -73,6 +73,7 @@ export function getStoredSettings(): GlobalSettings {
       stored.pluginAppThemeLight !== migratedStored.pluginAppThemeLight ||
       stored.pluginAppThemeDark !== migratedStored.pluginAppThemeDark ||
       stored.experimentalAppRail !== migratedStored.experimentalAppRail ||
+      stored.nativeChatComposerDetails !== migratedStored.nativeChatComposerDetails ||
       needsChatUiChoiceCarry(stored) ||
       stored.uiLanguagePortugueseMigrationApplied !== true)
   ) {

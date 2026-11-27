@@ -147,6 +147,24 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       )
     ]
   },
+  composerDetails: {
+    targetSectionId: 'chat-composer-details',
+    title: translate('components.settings.nativeChat.composerDetailsTitle', 'Composer details'),
+    keywords: [
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.composerDetailsSearchRow',
+        'bottom row'
+      ),
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.composerDetailsSearchBranch',
+        'branch'
+      ),
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.composerDetailsSearchFolder',
+        'folder'
+      )
+    ]
+  },
   promptSuggestions: {
     targetSectionId: 'chat-prompt-suggestions',
     title: translate('components.settings.nativeChat.promptSuggestionsTitle', 'Suggested prompts'),

@@ -50,6 +50,16 @@ export function migrateStoredWebSettings(
   }
 }
 
+/** Existing browser profiles keep the app rail off and the composer's details row on unless they chose. */
+export function keepExistingWebProfileDefaults(settings: Partial<GlobalSettings>): void {
+  if (typeof settings.experimentalAppRail !== 'boolean') {
+    settings.experimentalAppRail = false
+  }
+  if (typeof settings.nativeChatComposerDetails !== 'boolean') {
+    settings.nativeChatComposerDetails = true
+  }
+}
+
 /** Retired host intent must not become a new browser-owned legacy choice. */
 export function stripRetiredWebChatSettings(
   settings: Partial<GlobalSettings>

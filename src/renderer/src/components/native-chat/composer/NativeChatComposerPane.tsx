@@ -11,7 +11,7 @@ import { useNativeChatLaunchDraftAdoption } from '../drafts/use-native-chat-laun
 import { useNativeChatComposerMentions } from '../native-chat-composer-room'
 import { useNativeChatRoomSend } from '../native-chat-room-send'
 import { NativeChatComposerRoomProvider } from '../NativeChatComposerRoomProvider'
-import { NativeChatComposerWorkspace } from './controls/NativeChatComposerWorkspace'
+import { NativeChatComposerDetails } from './controls/NativeChatComposerDetails'
 import { NativeChatComposerField } from './editor/NativeChatComposerField'
 import { useNativeChatComposerAttachments } from '../attachments/chips/use-native-chat-composer-attachments'
 import { nativeChatComposerSendState } from './submit/native-chat-composer-send-state'
@@ -360,7 +360,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
 
     const workspace = { terminalTabId, structuredTransport, isWorking }
     const workspaceFooter =
-      editSession || launchPrompt ? undefined : <NativeChatComposerWorkspace {...workspace} />
+      editSession || launchPrompt ? undefined : <NativeChatComposerDetails {...workspace} />
     return (
       <div ref={root} data-native-chat-composer-scope={draftScopeKey}>
         <NativeChatComposerRoomProvider mentions={mentions}>
