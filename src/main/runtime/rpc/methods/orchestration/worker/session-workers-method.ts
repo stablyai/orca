@@ -268,6 +268,12 @@ function sessionWorker(
     paneKey: structured ? null : durable.paneKey,
     chatSessionId,
     summary: task?.result ? workerResultSummary(task.result) : null,
+    ...(dispatch?.progress_note
+      ? {
+          progressNote: dispatch.progress_note,
+          progressUpdatedAt: epochMs(dispatch.progress_updated_at)
+        }
+      : {}),
     startedAt: epochMs(dispatch?.dispatched_at ?? dispatch?.created_at ?? null) ?? Date.now(),
     settledAt
   }

@@ -205,7 +205,8 @@ A worker does not inherit Orca's full environment: tokens, shell-rc variables an
 environment, so `git` credential helpers (such as libsecret) and ssh-agent can reach the session
 Orca started in. `ORCA_USER_DATA_PATH` names the profile Orca runs from, and on Windows the
 worker also keeps `APPDATA` and `LOCALAPPDATA`, so the `orca` CLI reaches the running app. `GIT_TERMINAL_PROMPT=0` is set, so `git` fails instead of asking
-for a password.
+for a password. TLS trust settings (`NODE_EXTRA_CA_CERTS`, `NODE_USE_SYSTEM_CA`, `SSL_CERT_FILE`,
+`SSL_CERT_DIR`) pass through when Orca's launch environment sets them.
 This filter only keeps secrets held in Orca's environment out of plugins; it is not a sandbox. A
 worker runs as you and can read your files, saved logins and SSH keys like any other program.
 
