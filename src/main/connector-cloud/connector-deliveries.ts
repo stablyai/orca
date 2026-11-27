@@ -178,13 +178,12 @@ export function dispatchDelivery(
   if (delivery.kind === 'start' && !startTarget) {
     return refuse(deliveryId, { outcome: 'unsupported' })
   }
-  const heldByMute =
-    delivery.kind === 'send'
-      ? seam.receipts.heldByMute(delivery.conversation, deliveryId, [requestText(delivery)])
-      : null
-  if (heldByMute) {
-    const done = settle(async () => withoutAutomations(delivery, await heldByMute))
-    return { deliveryId, received: false, done }
+  if (delivery.kind === 'send') {
+    const heldByMute = seam.receipts.heldByMute(delivery.conversation, deliveryId, [delivery.text])
+    if (heldByMute) {
+      const done = settle(async () => withoutAutomations(delivery, await heldByMute))
+      return { deliveryId, received: false, done }
+    }
   }
   const knownRequest =
     (delivery.kind === 'start' || delivery.kind === 'send') &&
