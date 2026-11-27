@@ -4,10 +4,10 @@ import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { PickerModal } from '../components/sheets/PickerModal'
 import { useConnectedHostPicker } from '../host-catalog/selection/use-connected-host-picker'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { HostProfile } from '../host-catalog/host-profile'
-import { homeListStyles as styles } from './home-list-styles'
+import { homeListStylesSheet } from './home-list-styles'
+import { useThemedStyles } from '../theme/themed-styles'
 
 type HomeHostSectionProps = {
   connectedHosts: HostProfile[]
@@ -42,7 +42,8 @@ function HomeSection(
     pickerTitle: string
   }
 ) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(homeListStylesSheet)
+  const colors = useMobileColors()
   const hostPicker = useConnectedHostPicker(props.connectedHosts)
   const Icon = props.icon
   // Nothing to browse until a computer is connected; the row appears then.

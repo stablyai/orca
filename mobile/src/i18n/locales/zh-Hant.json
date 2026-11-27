@@ -1150,7 +1150,7 @@
         "finishOnPage": "請在開啟的頁面完成",
         "needsAuth": "需要登入",
         "needsAuthAfterSend": "需要登入。傳送訊息後即可在此登入。",
-        "off": "關閉",
+        "disabled": "已停用",
         "pending": "正在連線…",
         "tools_other": "{{count}} 個工具",
         "waitingForSignIn": "正在等待登入…",
@@ -1710,7 +1710,9 @@
         "permissionAcceptEditsDescription": "核准檔案編輯和檔案命令；其餘操作會詢問",
         "permissionAutoDescription": "代你審查核准要求",
         "permissionFullAccessCodexDescription": "從不詢問；可以編輯任何檔案並使用網路",
-        "permissionFullAccessDescription": "編輯或執行命令前從不詢問"
+        "permissionFullAccessDescription": "編輯或執行命令前從不詢問",
+        "permissionAgentSettings": "{{agent}} 設定",
+        "permissionFromAgentSettings": "{{mode}}，來自 {{agent}} 設定"
       },
       "goal": {
         "sentAsGoal": "作為目標傳送"
@@ -3836,9 +3838,6 @@
       "title": "語音",
       "toggleMode": "切換",
       "updateFailed": "無法更新"
-    },
-    "agents": {
-      "permissionOwnAll": "各代理程式自身的設定"
     },
     "voiceTranscribeOn": {
       "heading": "轉寫位置",

@@ -28,10 +28,10 @@ function Card({ onRename }: { onRename: (name: string) => void }): React.JSX.Ele
   )
 }
 
-function startEditing(onRename: (name: string) => void): HTMLInputElement {
+async function startEditing(onRename: (name: string) => void): Promise<HTMLInputElement> {
   render(<Card onRename={onRename} />)
   fireEvent.doubleClick(screen.getByText('Old name'))
-  const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'Rename workspace' })
+  const input = await screen.findByRole<HTMLInputElement>('textbox', { name: 'Rename workspace' })
   fireEvent.change(input, { target: { value: 'New name' } })
   return input
 }
@@ -66,7 +66,7 @@ describe('WorktreeTitleInlineRename unmount', () => {
 
   it('saves a rename whose field unmounts mid-edit', async () => {
     const onRename = vi.fn()
-    startEditing(onRename)
+    await startEditing(onRename)
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
     })
@@ -75,7 +75,7 @@ describe('WorktreeTitleInlineRename unmount', () => {
 
   it('does not save a rename that Escape cancelled, even when cancelling unmounts the field', async () => {
     const onRename = vi.fn()
-    const input = startEditing(onRename)
+    const input = await startEditing(onRename)
     await act(async () => {
       fireEvent.keyDown(input, { key: 'Escape' })
     })

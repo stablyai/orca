@@ -2,22 +2,23 @@ import { branchRefLabels, branchRefLabel } from '../../../../src/shared/git/refs
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
-import { composerInputStyles } from '../../components/composer-input/composer-input-styles'
 import { TextField } from '../../components/composer-input/TextField'
 import { Search, Pencil } from 'lucide-react-native'
-import { colors, pressedStyle } from '../../theme/mobile-theme'
+import { pressedStyle } from '../../theme/mobile-theme'
 import { TASK_SECONDARY_DRAWER_Z_INDEX } from '../task-list/mobile-tasks-options'
 import { ListGroup, ListRow } from '../../components/list/ListGroup'
-import { styles } from '../mobile-tasks-legacy-styles'
-import { translate } from '../../i18n/mobile-i18n'
 
 export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPresentationModel) {
   const {
     clearWorkspaceBaseBranch,
+    colors,
+    composerInputStyles,
     selectWorkspaceBaseBranch,
     setShowWorkspaceBaseBranchPicker,
     setWorkspaceBaseBranchQuery,
     showWorkspaceBaseBranchPicker,
+    styles,
+    t,
     taskUiReady,
     workspaceBaseBranch,
     workspaceBaseBranchError,
@@ -36,10 +37,10 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
       <View>
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>
-            {translate('tasks.workspaceOptionPickers.baseBranchTitle', 'Start From')}
+            {t('tasks.workspaceOptionPickers.baseBranchTitle', 'Start From')}
           </Text>
           <Text style={styles.sheetSubtitle}>
-            {translate(
+            {t(
               'tasks.workspaceOptionPickers.baseBranchSubtitle',
               'Pick an existing branch or ref.'
             )}
@@ -49,10 +50,7 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
           <TextField
             value={workspaceBaseBranchQuery}
             onChangeText={setWorkspaceBaseBranchQuery}
-            placeholder={translate(
-              'tasks.workspaceOptionPickers.searchBranches',
-              'Search branches'
-            )}
+            placeholder={t('tasks.workspaceOptionPickers.searchBranches', 'Search branches')}
             leading={<Search size={16} color={colors.textMuted} />}
             style={composerInputStyles.filledField}
             autoCapitalize="none"
@@ -61,8 +59,8 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
           <ListGroup>
             <ListRow
               key="default"
-              title={translate('tasks.workspaceOptionPickers.defaultBranch', 'Default branch')}
-              subtitle={translate(
+              title={t('tasks.workspaceOptionPickers.defaultBranch', 'Default branch')}
+              subtitle={t(
                 'tasks.workspaceOptionPickers.defaultBranchSubtitle',
                 "Use this repository's configured base"
               )}
@@ -77,13 +75,9 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
                 title={labels.get(branch.refName) ?? branchRefLabel(branch.refName)}
                 subtitle={
                   branch.localBranchName !== branchRefLabel(branch.refName)
-                    ? translate(
-                        'tasks.workspaceOptionPickers.branchName',
-                        'Branch name: {{name}}',
-                        {
-                          name: branch.localBranchName
-                        }
-                      )
+                    ? t('tasks.workspaceOptionPickers.branchName', 'Branch name: {{name}}', {
+                        name: branch.localBranchName
+                      })
                     : undefined
                 }
                 selected={workspaceBaseBranch?.refName === branch.refName}
@@ -101,7 +95,7 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
             <Text style={styles.detailError}>{workspaceBaseBranchError}</Text>
           ) : workspaceBaseBranchQuery.trim() && workspaceBaseBranchResults.length === 0 ? (
             <Text style={styles.detailMuted}>
-              {translate('tasks.workspaceOptionPickers.noBranches', 'No branches match.')}
+              {t('tasks.workspaceOptionPickers.noBranches', 'No branches match.')}
             </Text>
           ) : null}
         </View>
@@ -112,11 +106,14 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
 
 export function renderMobileTasksWorkspaceSparsePicker(model: ConnectionPresentationModel) {
   const {
+    colors,
     setShowWorkspaceSparsePicker,
     setWorkspaceSparsePresetId,
     showWorkspaceSparsePicker,
     startEditWorkspaceSparsePreset,
     startNewWorkspaceSparsePreset,
+    styles,
+    t,
     taskUiReady,
     workspaceCreateDraft,
     workspaceSparsePresetId,
@@ -133,14 +130,14 @@ export function renderMobileTasksWorkspaceSparsePicker(model: ConnectionPresenta
       <View>
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>
-            {translate('tasks.workspaceOptionPickers.sparseCheckoutTitle', 'Sparse Checkout')}
+            {t('tasks.workspaceOptionPickers.sparseCheckoutTitle', 'Sparse Checkout')}
           </Text>
         </View>
         <ListGroup>
           <ListRow
             key="full"
-            title={translate('tasks.workspaceOptionPickers.fullCheckout', 'Full checkout')}
-            subtitle={translate(
+            title={t('tasks.workspaceOptionPickers.fullCheckout', 'Full checkout')}
+            subtitle={t(
               'tasks.workspaceOptionPickers.fullCheckoutSubtitle',
               'Use the whole repository'
             )}
@@ -160,7 +157,7 @@ export function renderMobileTasksWorkspaceSparsePicker(model: ConnectionPresenta
                 <Pressable
                   style={({ pressed }) => [styles.iconActionButton, pressed && pressedStyle]}
                   accessibilityRole="button"
-                  accessibilityLabel={translate(
+                  accessibilityLabel={t(
                     'tasks.workspaceOptionPickers.editPreset',
                     'Edit {{name}}',
                     {
@@ -191,7 +188,7 @@ export function renderMobileTasksWorkspaceSparsePicker(model: ConnectionPresenta
           onPress={startNewWorkspaceSparsePreset}
         >
           <Text style={styles.inlineSaveText}>
-            {translate('tasks.workspaceOptionPickers.newPreset', 'New preset')}
+            {t('tasks.workspaceOptionPickers.newPreset', 'New preset')}
           </Text>
         </Pressable>
       </View>

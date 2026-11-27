@@ -4,7 +4,7 @@ import { runWithRequestedPageUrl } from '../../browser/cdp/input/browser-expecte
 import type { RuntimeBrowserCommandHost } from '../browser/commands/browser-command-contracts'
 import type { RuntimeBrowserCommands } from '../browser/commands/browser-commands'
 import type { RuntimeEmulatorCommands } from '../emulator/runtime-emulator-commands'
-import { RuntimeBrowserScreencastController } from '../browser/screencast/runtime-browser-screencast-controller'
+import type { RuntimeBrowserScreencastController } from '../browser/screencast/runtime-browser-screencast-controller'
 import { createRuntimeBrowserCommands } from '../browser/installation/runtime-browser-commands-factory'
 import type { RuntimeJiraCommands } from '../integrations/jira/runtime-jira-commands'
 import type { RpcBinarySender } from '../rpc/transports/rpc-binary-sender'
@@ -167,7 +167,9 @@ export class RuntimeEdgeCommandController {
   private emulatorPromise: Promise<RuntimeEmulatorCommands> | null = null
   private readonly emulatorHost: EmulatorHost
   private readonly browser: RuntimeBrowserCommands
-  private readonly screencasts: RuntimeBrowserScreencastController
+  private screencasts: RuntimeBrowserScreencastController | null = null
+  private screencastsPromise: Promise<RuntimeBrowserScreencastController> | null = null
+  private readonly screencastDeps: ScreencastDependencies
   readonly surface: RuntimeEdgeCommandSurface
 
   constructor(args: {
@@ -180,10 +182,10 @@ export class RuntimeEdgeCommandController {
     this.jiraHost = args.jiraHost
     this.emulatorHost = args.emulatorHost
     this.browser = createRuntimeBrowserCommands(args.browserHost)
-    this.screencasts = new RuntimeBrowserScreencastController({
+    this.screencastDeps = {
       ...args.screencast,
       getCommands: () => args.getBrowserCommands?.() ?? this.browser
-    })
+    }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bound name lists are checked against the classes above; spreading loses their key types.
     this.surface = {
       ...bindLazyAsyncMethods(() => this.loadJira(), JIRA_ASYNC_COMMAND_NAMES),
@@ -193,7 +195,8 @@ export class RuntimeEdgeCommandController {
           : { ok: true },
       ...bindBrowserMethods(this.browser, BROWSER_COMMAND_NAMES),
       ...bindLazyAsyncMethods(() => this.loadEmulator(), EMULATOR_COMMAND_NAMES),
-      browserScreencast: (params, options) => this.screencasts.start(params, options)
+      browserScreencast: async (params, options) =>
+        (await this.loadScreencasts()).start(params, options)
     } as RuntimeEdgeCommandSurface
   }
 
@@ -236,16 +239,35 @@ export class RuntimeEdgeCommandController {
     return this.emulatorPromise
   }
 
+  private loadScreencasts(): Promise<RuntimeBrowserScreencastController> {
+    if (this.screencasts) {
+      return Promise.resolve(this.screencasts)
+    }
+    if (!this.screencastsPromise) {
+      this.screencastsPromise =
+        import('../browser/screencast/runtime-browser-screencast-controller')
+          .then(({ RuntimeBrowserScreencastController }) => {
+            this.screencasts = new RuntimeBrowserScreencastController(this.screencastDeps)
+            return this.screencasts
+          })
+          .catch((error: unknown) => {
+            this.screencastsPromise = null
+            throw error
+          })
+    }
+    return this.screencastsPromise
+  }
+
   cancelScreencast(browserPageId: string): void {
-    this.screencasts.cancelMobilePage(browserPageId, true)
+    this.screencasts?.cancelMobilePage(browserPageId, true)
   }
 
   publishBrowserDriver(browserPageId: string, driver: RuntimeTerminalDriverState): void {
-    this.screencasts.publishDriver(browserPageId, driver)
+    this.screencasts?.publishDriver(browserPageId, driver)
   }
 
   getBrowserRemoteViewerPages(): string[] {
-    return this.screencasts.getRemoteViewerPages()
+    return this.screencasts?.getRemoteViewerPages() ?? []
   }
 
   getBrowserCommands(): RuntimeBrowserCommands {

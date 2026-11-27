@@ -3,8 +3,7 @@ import { ActivityIndicator } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { KeyRound, RefreshCw } from 'lucide-react-native'
 import { LIST_LEADING_INSET, ListRow } from '../components/list/ListGroup'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import {
   loadPendingHostCredentialCleanup,
   subscribePendingHostCredentialCleanup
@@ -14,7 +13,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsSection } from './settings-screen-frame'
 
 export function PendingCredentialCleanupCard() {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const [pendingCredentialIds, setPendingCredentialIds] = useState<string[]>([])
   const [credentialStorageUnreadable, setCredentialStorageUnreadable] = useState(false)

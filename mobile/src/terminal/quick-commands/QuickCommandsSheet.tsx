@@ -1,6 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Alert } from 'react-native'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -40,7 +39,6 @@ export function QuickCommandsSheet({
   agentPromptMaxLength,
   onLaunch
 }: Props) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const { commands, loading, ready, error, persist } = useQuickCommands({
     client,

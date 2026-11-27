@@ -10,7 +10,6 @@ import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SetupGuideSidebarEntry } from '../../setup-guide/SetupGuideSidebarEntry'
-import { SidebarTaskNavButton } from './SidebarTaskNavButton'
 import { HideSidebarMenu, SIDEBAR_NAV_DIMMED_ICON_CLASS_NAME } from './sidebar-nav-controls'
 import { useTranslate } from '@/i18n/use-translate'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
@@ -50,6 +49,13 @@ export function shouldShowAgentDashboardButton(
 
 const AgentDashboardSidebarEntry = lazyWithRetry(
   () => import('../../dashboard/sidebar/AgentDashboardSidebarEntry')
+)
+const LazySidebarTaskNavButton = lazyWithRetry(
+  () =>
+    import('./SidebarTaskNavButton').then((module) => ({
+      default: module.SidebarTaskNavButton
+    })),
+  { reloadKey: 'sidebar-task-nav-button' }
 )
 
 const SidebarNav = React.memo(function SidebarNav() {
@@ -130,7 +136,11 @@ const SidebarNav = React.memo(function SidebarNav() {
         </span>
       </button>
       <SetupGuideSidebarEntry />
-      {appRailVisible ? null : <SidebarTaskNavButton />}
+      {appRailVisible ? null : (
+        <React.Suspense fallback={null}>
+          <LazySidebarTaskNavButton />
+        </React.Suspense>
+      )}
       {showArtifactsButton && !appRailVisible ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>

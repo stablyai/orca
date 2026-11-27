@@ -3,9 +3,9 @@ import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } fro
 import { Check, ChevronDown, ChevronRight } from 'lucide-react-native'
 import { DisclosureChevron } from './DisclosureChevron'
 import { triggerSelection } from '../../platform/haptics/haptics'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export const LIST_ROW_PADDING = spacing.lg
 export const LIST_LEADING_SLOT = 24
@@ -20,7 +20,7 @@ type ListGroupProps = {
 
 /** Rows on one rounded surface with hairlines between them; the group draws the separators, never the rows. */
 export function ListGroup({ children, separatorInset = LIST_ROW_PADDING, style }: ListGroupProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const rows = Children.toArray(children).filter(isValidElement)
   return (
     <View style={[styles.group, style]}>
@@ -34,7 +34,7 @@ export function ListGroup({ children, separatorInset = LIST_ROW_PADDING, style }
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   group: {
     borderRadius: radii.surface,
     backgroundColor: colors.sheetGroup,
@@ -69,7 +69,8 @@ export function SectionHeader({
   onToggle,
   first = false
 }: SectionHeaderProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const sectionHeaderStyles = useThemedStyles(sectionHeaderStylesSheet)
   const label = (
     <>
       {icon}
@@ -110,7 +111,7 @@ export function SectionHeader({
   )
 }
 
-const sectionHeaderStyles = themedStyleSheet(() => ({
+const sectionHeaderStylesSheet = themedStyleSheet((colors) => ({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -214,7 +215,8 @@ export function ListRow({
   accessibilityRole,
   testID
 }: ListRowProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const listRowStyles = useThemedStyles(listRowStylesSheet)
   const inertState = { disabled: disabled || busy, ...(busy && { busy }) }
   const rowStyle = [
     listRowStyles.row,
@@ -336,6 +338,7 @@ function WithIcon({
   shrink?: boolean
   children: ReactNode
 }) {
+  const listRowStyles = useThemedStyles(listRowStylesSheet)
   if (icon === undefined || icon === null) {
     return <>{children}</>
   }
@@ -347,7 +350,7 @@ function WithIcon({
   )
 }
 
-const listRowStyles = themedStyleSheet(() => ({
+const listRowStylesSheet = themedStyleSheet((colors) => ({
   row: {
     minHeight: 48,
     flexDirection: 'row',

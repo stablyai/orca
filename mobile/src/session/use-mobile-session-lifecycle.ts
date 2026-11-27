@@ -1,7 +1,8 @@
 import { useShellStorage } from '../platform/shell-storage/shell-storage'
 import { useDirectionPadAvailable } from '../layout/use-shell-side-rail'
 import { settleSessionPreferenceRead } from './session-preference-read'
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useRef, useCallback, useMemo, useState } from 'react'
+import { recomputeOn } from '../hooks/recompute-on'
 import { AppState, type AppStateStatus, Platform } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { currentAppStateStatus } from '../platform/app-state-status'
@@ -68,23 +69,27 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     customKeysRef.current = customKeys
   }, [customKeys])
   const customKeysReadRevisionRef = useRef(0)
-  const refreshCustomKeys = useCallback(() => {
-    const revision = ++customKeysReadRevisionRef.current
-    const keysAtStart = customKeysRef.current
-    void settleSessionPreferenceRead(loadCustomKeys(keysAtStart)).then((keys) => {
-      if (customKeysReadRevisionRef.current === revision) {
-        if (keys && customKeysRef.current === keysAtStart) {
-          setCustomKeys(keys)
+  const refreshCustomKeys = useMemo(
+    () =>
+      recomputeOn([shellStorage], () => () => {
+        const revision = ++customKeysReadRevisionRef.current
+        const keysAtStart = customKeysRef.current
+        void settleSessionPreferenceRead(loadCustomKeys(keysAtStart)).then((keys) => {
+          if (customKeysReadRevisionRef.current === revision) {
+            if (keys && customKeysRef.current === keysAtStart) {
+              setCustomKeys(keys)
+            }
+            setCustomKeysLoaded(true)
+          }
+        })
+        return () => {
+          if (customKeysReadRevisionRef.current === revision) {
+            customKeysReadRevisionRef.current += 1
+          }
         }
-        setCustomKeysLoaded(true)
-      }
-    })
-    return () => {
-      if (customKeysReadRevisionRef.current === revision) {
-        customKeysReadRevisionRef.current += 1
-      }
-    }
-  }, [shellStorage])
+      }),
+    [shellStorage]
+  )
 
   useEffect(
     () =>
@@ -99,24 +104,30 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
   )
 
   const layoutReadRevisionRef = useRef(0)
-  const refreshAccessoryLayout = useCallback(() => {
-    const revision = ++layoutReadRevisionRef.current
-    void settleSessionPreferenceRead(loadTerminalAccessoryLayout(padAvailable)).then((layout) => {
-      if (layoutReadRevisionRef.current === revision) {
-        if (layout) {
-          setVisibleBuiltInIds(layout.visibleBuiltInIds)
-          setDirectionPadEnabled(layout.directionPadEnabled !== false)
-          setSmartRailEnabled(layout.smartRail === true)
+  const refreshAccessoryLayout = useMemo(
+    () =>
+      recomputeOn([shellStorage], () => () => {
+        const revision = ++layoutReadRevisionRef.current
+        void settleSessionPreferenceRead(loadTerminalAccessoryLayout(padAvailable)).then(
+          (layout) => {
+            if (layoutReadRevisionRef.current === revision) {
+              if (layout) {
+                setVisibleBuiltInIds(layout.visibleBuiltInIds)
+                setDirectionPadEnabled(layout.directionPadEnabled !== false)
+                setSmartRailEnabled(layout.smartRail === true)
+              }
+              setAccessoryLayoutLoaded(true)
+            }
+          }
+        )
+        return () => {
+          if (layoutReadRevisionRef.current === revision) {
+            layoutReadRevisionRef.current += 1
+          }
         }
-        setAccessoryLayoutLoaded(true)
-      }
-    })
-    return () => {
-      if (layoutReadRevisionRef.current === revision) {
-        layoutReadRevisionRef.current += 1
-      }
-    }
-  }, [padAvailable, shellStorage])
+      }),
+    [padAvailable, shellStorage]
+  )
 
   useFocusEffect(
     useCallback(() => {

@@ -1,9 +1,9 @@
 import { StyleSheet } from 'react-native'
 import { themedStyleSheet } from '../../theme/themed-styles'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
 import { LIST_ROW_PADDING } from '../../components/list/ListGroup'
 
-export const mobileTasksDiffCommentStyles = themedStyleSheet(() => ({
+export const mobileTasksDiffCommentStylesSheet = themedStyleSheet((colors) => ({
   filePreview: {
     gap: spacing.xs,
     marginTop: spacing.xs

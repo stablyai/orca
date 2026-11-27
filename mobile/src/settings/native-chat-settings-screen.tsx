@@ -16,7 +16,6 @@ import {
   type NativeChatFont
 } from '../session/native-chat/preferences/native-chat-text-settings'
 import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   nativeChatLineSpacingSegments,
   NativeChatTextSizeSlider,
@@ -24,7 +23,8 @@ import {
   StackedRow
 } from './native-chat-text-controls'
 import { NativeChatTextPreview } from './native-chat-text-preview'
-import { SettingsScreen, SettingsSection, settingsScreenStyles } from './settings-screen-frame'
+import { SettingsScreen, SettingsSection, settingsScreenStylesSheet } from './settings-screen-frame'
+import { useThemedStyles } from '../theme/themed-styles'
 
 const IOS = Platform.OS === 'ios'
 
@@ -49,7 +49,7 @@ function fontOptions(t: Translate): PickerOption<NativeChatFont>[] {
 }
 
 export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => void }) {
-  useMobileColorScheme()
+  const settingsScreenStyles = useThemedStyles(settingsScreenStylesSheet)
   const t = useMobileTranslation()
   const router = useRouter()
   const { settings, stored } = useNativeChatTextSettingsSnapshot()

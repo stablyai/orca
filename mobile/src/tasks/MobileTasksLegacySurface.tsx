@@ -9,12 +9,13 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { View, Text, Pressable } from 'react-native'
 import { AlertTriangle, GitBranch } from 'lucide-react-native'
-import { colors, pressedStyle } from '../theme/mobile-theme'
+import { pressedStyle } from '../theme/mobile-theme'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../theme/themed-styles'
+import { useMobileColorScheme, useMobileColors } from '../theme/use-mobile-color-scheme'
 import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
-import { styles } from './mobile-tasks-legacy-styles'
+import { stylesSheet } from './mobile-tasks-legacy-styles'
 import {
   getHostedReviewMergeMethodLabel,
   getHostedMergeConfirmMessage,
@@ -60,6 +61,8 @@ import { MobileTasksItemDetailPush } from './item-detail/mobile-tasks-item-detai
 
 export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentationModel }) {
   const colorScheme = useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [bottomBarHeight, setBottomBarHeight] = useState(0)
   const {
@@ -206,7 +209,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
 
         {renderMobileTasksWorkspaceCreateTargetPicker(model)}
 
-        {renderMobileTasksWorkspaceCreateDrawer(model)}
+        {renderMobileTasksWorkspaceCreateDrawer(model, colorScheme)}
 
         {renderMobileTasksWorkspaceCreateRepoPicker(model)}
 
@@ -236,7 +239,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
           actions={
             mergeMethodProjectRow
               ? (['squash', 'merge', 'rebase'] as const).map((method) => ({
-                  label: getHostedReviewMergeMethodLabel(method),
+                  label: getHostedReviewMergeMethodLabel(t, method),
                   icon: GitBranch,
                   onPress: () => {
                     setPendingProjectGitHubMerge({ row: mergeMethodProjectRow, method })
@@ -269,7 +272,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
                   label:
                     mergeMethodTaskItem.provider === 'gitlab' && method === 'merge'
                       ? t('tasks.legacySurface.mergeAction', 'Merge')
-                      : getHostedReviewMergeMethodLabel(method),
+                      : getHostedReviewMergeMethodLabel(t, method),
                   icon: GitBranch,
                   onPress: () => {
                     const item = mergeMethodTaskItem
@@ -288,11 +291,11 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
               : t('tasks.legacySurface.mergePullRequestTitle', 'Merge Pull Request')
           }
           message={
-            pendingHostedMerge ? getHostedMergeConfirmMessage(pendingHostedMerge) : undefined
+            pendingHostedMerge ? getHostedMergeConfirmMessage(t, pendingHostedMerge) : undefined
           }
           confirmLabel={
             pendingHostedMerge
-              ? getHostedReviewMergeMethodLabel(pendingHostedMerge.method)
+              ? getHostedReviewMergeMethodLabel(t, pendingHostedMerge.method)
               : t('tasks.legacySurface.mergeAction', 'Merge')
           }
           onConfirm={() => {
@@ -308,12 +311,12 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
           title={t('tasks.legacySurface.mergePullRequestTitle', 'Merge Pull Request')}
           message={
             pendingProjectGitHubMerge
-              ? getProjectGitHubMergeConfirmMessage(pendingProjectGitHubMerge)
+              ? getProjectGitHubMergeConfirmMessage(t, pendingProjectGitHubMerge)
               : undefined
           }
           confirmLabel={
             pendingProjectGitHubMerge
-              ? getHostedReviewMergeMethodLabel(pendingProjectGitHubMerge.method)
+              ? getHostedReviewMergeMethodLabel(t, pendingProjectGitHubMerge.method)
               : t('tasks.legacySurface.mergeAction', 'Merge')
           }
           onConfirm={() => {

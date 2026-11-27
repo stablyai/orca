@@ -6,13 +6,10 @@ import {
   TextInput,
   View,
   type PanResponderInstance,
-  type StyleProp,
-  type ViewStyle,
   type HostInstance
 } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useKeyboardPersistingTaps } from '../../platform/keyboard/keyboard-persisting-taps'
 import { useOptionalHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import { MobileStateButton } from '../../components/feedback/MobileStateView'
@@ -26,7 +23,7 @@ import { MobileBrowserLoadFailure, useMobileBrowserLoadFailure } from './MobileB
 import { useMobileBrowserPageMenu } from './use-mobile-browser-page-menu'
 import { useMobileBrowserLiveTyping } from '../page-interaction/use-mobile-browser-live-typing'
 import type { MobileBrowserPageInput } from '../page-interaction/use-mobile-browser-page-input-queue'
-import { mobileBrowserPaneStyles as styles } from './mobile-browser-pane-styles'
+import { mobileBrowserPaneStylesSheet as stylesSheet } from './mobile-browser-pane-styles'
 import type { BrowserFrameLayerBinding } from '../screencast/browser-frame-pacer'
 import type {
   BrowserFrameGeometry,
@@ -37,12 +34,7 @@ import type { MobileBrowserViewMode } from '../screencast/browser-screencast-req
 import type { MobileBrowserTab } from '../../session/tabs/mobile-session-tabs'
 import type { BrowserDialogState } from '../screencast/mobile-browser-stream-events'
 import type { MobileCertificateProceedFailure } from '../certificate/mobile-browser-certificate-proceed'
-
-// Why: seeds layer 0 as the visible one; the pacer owns opacity after mount, so a render must not.
-const FRAME_LAYER_STYLES: [StyleProp<ViewStyle>, StyleProp<ViewStyle>] = [
-  styles.browserImageLayer,
-  [styles.browserImageLayer, styles.browserImageLayerHidden]
-]
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type MobileBrowserPaneViewProps = {
   /** Just the page and typing, for a sign-in: no address, page buttons or ⋯. */
@@ -95,8 +87,9 @@ type MobileBrowserPaneViewProps = {
 // Frame cap can leave viewport unpainted despite live stream; oversized frames are dropped, never fatal.
 // Area budget prevents starvation: C6.6 with budget disabled measured 299 dropped/6 applied and a persistent spinner.
 export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const {
     bare = false,
     pageOverlay,
@@ -209,7 +202,11 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
                       key={layer}
                       ref={frameLayers[layer].attachView}
                       pointerEvents="none"
-                      style={FRAME_LAYER_STYLES[layer]}
+                      style={
+                        layer === 0
+                          ? styles.browserImageLayer
+                          : [styles.browserImageLayer, styles.browserImageLayerHidden]
+                      }
                     >
                       <Image
                         ref={frameLayers[layer].attachImage}
@@ -236,7 +233,11 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
                   key={layer}
                   ref={frameLayers[layer].attachView}
                   pointerEvents="none"
-                  style={FRAME_LAYER_STYLES[layer]}
+                  style={
+                    layer === 0
+                      ? styles.browserImageLayer
+                      : [styles.browserImageLayer, styles.browserImageLayerHidden]
+                  }
                 >
                   <Image
                     ref={frameLayers[layer].attachImage}

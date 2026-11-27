@@ -8,17 +8,17 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { hostOs } from '../../../platform/host-os'
 import { canCommentOnGitHub } from '../diff-actions/mobile-diff-review-github'
 import type { useMobileDiffReviewController } from '../use-mobile-diff-review-controller'
-import { colors } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { TextField } from '../../../components/composer-input/TextField'
 import { ListGroup, ListRow, SectionHeader } from '../../../components/list/ListGroup'
 import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
-import { prSheetStyles } from '../pull-request/pr-tab-styles'
+import { mobileDiffReviewStylesSheet } from './mobile-diff-review-screen-styles'
+import { prSheetStylesSheet } from '../pull-request/pr-tab-styles'
 import { PrThreadCode } from '../pull-request/comments/PrThreadCode'
 import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
 import type { ReviewSheet } from '../diff-actions/mobile-diff-review-sheets'
 import type { MobileReviewTerminalTab } from '../terminal-delivery/review-terminal-reply-schema'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 type Props = {
   controller: ReturnType<typeof useMobileDiffReviewController>
@@ -32,7 +32,9 @@ export function MobileDiffReviewRangeSheet({
   controller,
   range
 }: Props & { range: Extract<ReviewSheet, { kind: 'range' }> }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(mobileDiffReviewStylesSheet)
+  const prSheetStyles = useThemedStyles(prSheetStylesSheet)
   const t = useMobileTranslation()
   // Only the file the lines were picked in; another file's lines never take this note.
   const item = controller.currentItem?.key === range.itemKey ? controller.currentItem : null

@@ -1,8 +1,8 @@
-import { colors, radii, spacing } from '../../../theme/mobile-theme'
+import { radii, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { LIST_ROW_PADDING } from '../../../components/list/ListGroup'
 
-export const newWorktreeFormStyles = themedStyleSheet(() => ({
+export const newWorktreeFormStylesSheet = themedStyleSheet((colors) => ({
   header: {
     marginTop: -spacing.xs
   },

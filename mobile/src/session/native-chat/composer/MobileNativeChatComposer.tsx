@@ -10,8 +10,7 @@ import { MobileNativeChatComposerAllocation } from './field/MobileNativeChatComp
 import { useRef, useState } from 'react'
 import { Keyboard, View, type HostInstance, type TextInputInstance } from 'react-native'
 import Animated from 'react-native-reanimated'
-import { colors } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileNativeChatComposerSuggestions } from './menus/MobileNativeChatComposerMenu'
 import { MobileNativeChatComposerField } from './field/MobileNativeChatComposerField'
@@ -25,8 +24,8 @@ import { mobileNativeChatComposerPasteHandler } from './attachments/mobile-nativ
 import { useMobileNativeChatComposerMenu } from './menus/use-mobile-native-chat-composer-menu'
 import { useMobileNativeChatMentionBots } from './menus/use-mobile-native-chat-mention-bots'
 import { shownDictationPreview } from './menus/mobile-native-chat-bot-mention-display'
-import { mobileNativeChatComposerStyles as styles } from './field/mobile-native-chat-composer-styles'
-import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
+import { mobileNativeChatComposerStylesSheet as stylesSheet } from './field/mobile-native-chat-composer-styles'
+import { composerInputStylesSheet as inputStylesSheet } from '../../../components/composer-input/composer-input-styles'
 import { MobileNativeChatComposerSendSlot } from './delivery/MobileNativeChatComposerSendSlot'
 import { useMobileNativeChatComposerSend } from './delivery/use-mobile-native-chat-composer-send'
 import { MobileNativeChatEditActions } from './field/MobileNativeChatEditActions'
@@ -48,6 +47,7 @@ import type { MobileNativeChatComposerProps } from './mobile-native-chat-compose
 import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
 import { MobileNativeChatQuoteTab } from './quotes/MobileNativeChatQuoteTab'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -101,7 +101,9 @@ export function MobileNativeChatComposer({
   sendFollowUp = null,
   steerHead
 }: Props): React.JSX.Element {
-  useMobileColorScheme()
+  const inputStyles = useThemedStyles(inputStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const fallbackInputRef = useRef<TextInputInstance>(null)
   const fieldRef = inputRef ?? fallbackInputRef

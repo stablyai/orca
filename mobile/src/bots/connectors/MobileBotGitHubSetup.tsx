@@ -19,7 +19,6 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { openConnectorLink, GITHUB_LINK_HOSTS } from './connector-link'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
@@ -29,6 +28,7 @@ import { MobileConnectorTryIt } from './MobileConnectorTryIt'
 import type { ConnectorPage } from './connector-pages'
 import type { PhoneGitHubView } from './use-phone-connector-account'
 import { usePhoneConnectTrip, useSignInOnOpen } from './use-phone-connect-trip'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 /** The repositories as one line, as the desktop's gitHubInstallationLabel. */
 function gitHubRepositoriesLine(
@@ -57,6 +57,7 @@ export function MobileBotGitHubSetup(props: {
   /** On GitHub, after Try it: its page takes over. */
   onDone: () => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { bot, github, hostName } = props
   const [saving, setSaving] = useState(false)

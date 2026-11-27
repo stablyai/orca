@@ -1,11 +1,11 @@
 import { StyleSheet, type TextStyle } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet, themedStyles } from '../../theme/themed-styles'
 
 /** Lifts the 13pt base to 14pt body text for documents (file preview, PR bodies); headings scale with it. */
 export const MOBILE_MARKDOWN_DOCUMENT_SCALE = 14 / 13
 
-export const styles = themedStyleSheet(() => ({
+export const stylesSheet = themedStyleSheet((colors) => ({
   root: {
     gap: spacing.lg
   },
@@ -271,6 +271,8 @@ export function scaledMarkdownText(
     : null
 }
 
+export type MarkdownStyles = ReturnType<typeof stylesSheet.resolve>
+
 export type MarkdownTone = {
   text: TextStyle | null
   secondary: TextStyle | null
@@ -280,36 +282,44 @@ export type MarkdownTone = {
   heading?: TextStyle | null
 }
 
-/** Colours and weight over the styles above, for one surface. The default tone overrides nothing. */
-export const MARKDOWN_TONES: Record<
-  'default' | 'userMessage' | 'reply' | 'strong' | 'medium' | 'muted',
-  MarkdownTone
-> = {
-  default: { text: null, secondary: null, link: null, inlineCode: null },
-  // A card's title: the question an agent asks.
-  strong: { text: { fontWeight: '600' }, secondary: null, link: null, inlineCode: null },
-  // The answer card's question: body size, lighter than its options' bold labels.
-  medium: { text: { fontWeight: '500' }, secondary: null, link: null, inlineCode: null },
-  // Settled text beside a receipt's muted answer.
-  muted: themedStyles(() => ({
-    text: { color: colors.textMuted },
-    secondary: null,
-    link: null,
-    inlineCode: null
-  })),
-  // An agent's reply in the chat: desktop's softer strong chat foreground, headings at full strength.
-  reply: themedStyles(() => ({
-    text: { color: colors.chatForegroundStrong },
-    secondary: null,
-    link: null,
-    inlineCode: null,
-    heading: { color: colors.textPrimary }
-  })),
-  // Desktop's user bubble only strengthens the text; links and code keep their chat colors.
-  userMessage: themedStyles(() => ({
-    text: { color: colors.chatForegroundStrong },
-    secondary: null,
-    link: null,
-    inlineCode: null
-  }))
+export type MarkdownToneName = 'default' | 'userMessage' | 'reply' | 'strong' | 'medium' | 'muted'
+
+export const DEFAULT_MARKDOWN_TONE: MarkdownTone = {
+  text: null,
+  secondary: null,
+  link: null,
+  inlineCode: null
 }
+
+/** Colours and weight over the styles above, for one surface. The default tone overrides nothing. */
+export const markdownTonesSheet = themedStyles(
+  (colors): Record<MarkdownToneName, MarkdownTone> => ({
+    default: DEFAULT_MARKDOWN_TONE,
+    // A card's title: the question an agent asks.
+    strong: { text: { fontWeight: '600' }, secondary: null, link: null, inlineCode: null },
+    // The answer card's question: body size, lighter than its options' bold labels.
+    medium: { text: { fontWeight: '500' }, secondary: null, link: null, inlineCode: null },
+    // Settled text beside a receipt's muted answer.
+    muted: {
+      text: { color: colors.textMuted },
+      secondary: null,
+      link: null,
+      inlineCode: null
+    },
+    // An agent's reply in the chat: desktop's softer strong chat foreground, headings at full strength.
+    reply: {
+      text: { color: colors.chatForegroundStrong },
+      secondary: null,
+      link: null,
+      inlineCode: null,
+      heading: { color: colors.textPrimary }
+    },
+    // Desktop's user bubble only strengthens the text; links and code keep their chat colors.
+    userMessage: {
+      text: { color: colors.chatForegroundStrong },
+      secondary: null,
+      link: null,
+      inlineCode: null
+    }
+  })
+)

@@ -1,7 +1,7 @@
-import { colors, spacing, radii, typography } from '../../../theme/mobile-theme'
+import { spacing, radii, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
-export const mobileSessionReviewCommentStyles = themedStyleSheet(() => ({
+export const mobileSessionReviewCommentStylesSheet = themedStyleSheet((colors) => ({
   diffCommentAddButton: {
     width: 26,
     height: 22,

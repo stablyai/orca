@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { AddWslHostFormPanel, canAddWslDistro, wslHostAddRequest } from './AddWslHostFormPanel'
+import { AddWslHostFormPanel } from './AddWslHostFormPanel'
+import { canAddWslDistro, wslHostAddRequest } from './wsl-host-distro-model'
 import { useWslDistroList } from './use-wsl-distro-list'
 import { useWslHostServerFilesMissing } from '../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'

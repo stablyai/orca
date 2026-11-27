@@ -11,6 +11,7 @@ import {
 } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { readTextOrFileFlag } from '../arguments/command-body-input'
+import { hasImpossibleLeadingDate } from '../arguments/calendar-date'
 import { refuseForwardedShell } from './slack-action-files'
 
 /** A message's words from --text or --text-file <path|->; words that are only blanks post nothing. */
@@ -58,16 +59,6 @@ const ZONED = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}
 const MAX_AHEAD_SECONDS = 120 * 86_400
 const MIN_AHEAD_SECONDS = 60
 
-// The parser rolls a day a month doesn't have into the next one (Nov 31 becomes Dec 1): a date
-// that isn't on the calendar is refused instead, by reading it back.
-function realDate(zoned: string): boolean {
-  const [year, month, day] = zoned.slice(0, 10).split('-').map(Number)
-  const read = new Date(Date.UTC(year ?? 0, (month ?? 0) - 1, day ?? 0))
-  return (
-    read.getUTCFullYear() === year && read.getUTCMonth() + 1 === month && read.getUTCDate() === day
-  )
-}
-
 /** `--at` as the moment to post (epoch seconds): a while from now (+30m, +2h, +3d) or a time with
  *  its zone. Nothing when the flag is absent. */
 export function scheduledFor(at: string | undefined, nowMs: number): { postAt?: number } {
@@ -80,7 +71,7 @@ export function scheduledFor(at: string | undefined, nowMs: number): { postAt?: 
   const postAt =
     ahead && (unit === 'm' || unit === 'h' || unit === 'd')
       ? now + Number(ahead[1]) * UNIT_SECONDS[unit]
-      : ZONED.test(at.trim()) && realDate(at.trim())
+      : ZONED.test(at.trim()) && !hasImpossibleLeadingDate(at.trim())
         ? Math.floor(Date.parse(at.trim()) / 1000)
         : Number.NaN
   if (!Number.isSafeInteger(postAt)) {

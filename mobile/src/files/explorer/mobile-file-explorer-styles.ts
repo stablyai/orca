@@ -1,7 +1,7 @@
-import { colors, feedback, spacing, typography } from '../../theme/mobile-theme'
+import { feedback, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const fileExplorerStyles = themedStyleSheet(() => ({
+export const fileExplorerStylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase

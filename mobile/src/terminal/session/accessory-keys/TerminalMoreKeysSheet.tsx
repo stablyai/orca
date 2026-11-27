@@ -14,13 +14,17 @@ import { MobileSwitch } from '../../../components/controls/MobileSwitch'
 import { triggerMediumImpact } from '../../../platform/haptics/haptics'
 import type { TerminalAccessoryKey } from '../../key-input/terminal-accessory-keys'
 import '../../key-input/terminal-accessory-keys'
-import { TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS as TERMINAL_SHORTCUT_SPECIAL_KEYS } from '../../key-input/terminal-key-definitions'
+import {
+  TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS as TERMINAL_SHORTCUT_SPECIAL_KEYS,
+  terminalAccessoryKeyAccessibilityLabel,
+  terminalSpecialKeyAccessibilityLabel
+} from '../../key-input/terminal-key-definitions'
 import type { CustomKey } from '../../key-input/terminal-custom-keys'
 import type { Translate } from '../../../i18n/mobile-i18n'
-import { colors } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { terminalDockStyles as styles } from './terminal-dock-styles'
+import { terminalDockStylesSheet } from './terminal-dock-styles'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 const EXTRA_KEY_IDS = new Set([
   'home',
@@ -112,7 +116,8 @@ export function TerminalMoreKeysSheet({
   onDeleteCustomKey,
   onAddCustomKey
 }: TerminalMoreKeysSheetProps): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(terminalDockStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   // Pickers and modals open after the sheet is gone so they never stack under it.
   const afterCloseRef = useRef<(() => void) | null>(null)
@@ -231,10 +236,14 @@ export function TerminalMoreKeysSheet({
           <SectionHeader title={t('session.terminalMoreKeys.keys', 'Keys')} />
           <View style={styles.sheetGrid}>
             {keys.map((k) =>
-              key(k.id, k.label, k.accessibilityLabel ?? k.label, () => onBuiltInKey(k))
+              key(k.id, k.label, terminalAccessoryKeyAccessibilityLabel(k, t) ?? k.label, () =>
+                onBuiltInKey(k)
+              )
             )}
             {EXTRA_KEYS.map((k) =>
-              key(k.id, k.label, k.accessibilityLabel, () => onSpecialKey(k.id))
+              key(k.id, k.label, terminalSpecialKeyAccessibilityLabel(k.id, t), () =>
+                onSpecialKey(k.id)
+              )
             )}
           </View>
         </View>

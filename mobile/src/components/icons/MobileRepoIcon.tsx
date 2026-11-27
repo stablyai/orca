@@ -27,8 +27,8 @@ import { Image, StyleSheet, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../../host-screen/host-screen-reply-schema'
 import { softMarkColors } from '../../../../src/shared/repository/appearance/repo-badge-color'
 import { monogramFontScale } from '../../../../src/shared/repository/appearance/repo-monogram'
-import { colors, radii } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii } from '../../theme/mobile-theme'
+import { useMobileColorScheme, useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 // Match desktop repo-icon picker’s lucide glyphs so mobile project headers retain chosen icons.
 const REPO_LUCIDE_ICONS: Record<string, LucideIcon> = {
@@ -62,8 +62,10 @@ type Props = {
 }
 
 // Render desktop-style custom image/emoji/lucide with Folder fallback, never bare project dot.
-export function MobileRepoIcon({ repoIcon, size = 14, color = colors.textSecondary }: Props) {
+export function MobileRepoIcon({ repoIcon, size = 14, color: colorProp }: Props) {
   const scheme = useMobileColorScheme()
+  const colors = useMobileColors()
+  const color = colorProp ?? colors.textSecondary
   // Keyed by src so a changed icon gets a fresh try; the page shell refuses every https load.
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   if (repoIcon?.type === 'image' && repoIcon.src !== failedSrc) {

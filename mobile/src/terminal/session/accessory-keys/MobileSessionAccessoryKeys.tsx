@@ -11,15 +11,18 @@ import { ClipboardPaste, Ellipsis } from 'lucide-react-native'
 import { triggerMediumImpact } from '../../../platform/haptics/haptics'
 import { createTerminalLiveAccessoryInput } from '../../live-input/terminal-live-accessory-input'
 import { TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from '../../key-input/terminal-accessory-repeat'
-import { TERMINAL_ACCESSORY_KEY_DEFINITIONS } from '../../key-input/terminal-key-definitions'
+import {
+  TERMINAL_ACCESSORY_KEY_DEFINITIONS,
+  terminalAccessoryKeyAccessibilityLabel
+} from '../../key-input/terminal-key-definitions'
 import {
   TERMINAL_ARROW_HIT_SLOP,
   TERMINAL_KEY_HIT_SLOP,
-  terminalDockStyles as styles
+  terminalDockStylesSheet
 } from './terminal-dock-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../../../theme/themed-styles'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors } from '../../../theme/mobile-theme'
 import { useKeyboardPersistingTaps } from '../../../platform/keyboard/keyboard-persisting-taps'
 import type { MobileSessionController } from '../../../session/use-mobile-session-controller'
 import {
@@ -48,7 +51,8 @@ export function MobileSessionAccessoryKeys({
   controller: MobileSessionController
   onMoreKeys: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(terminalDockStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const {
     customKeys,
@@ -162,7 +166,7 @@ export function MobileSessionAccessoryKeys({
     delayLongPress: TERMINAL_ACCESSORY_REPEAT_DELAY_MS,
     // A web <button> clicks on Enter keydown as well, which would send a held key twice.
     accessibilityRole: key.repeatable ? undefined : ('button' as const),
-    accessibilityLabel: key.accessibilityLabel ?? sendKeyLabel(key.label)
+    accessibilityLabel: terminalAccessoryKeyAccessibilityLabel(key, t) ?? sendKeyLabel(key.label)
   })
   const builtInKey = (key: TerminalAccessoryKey) => (
     <Pressable

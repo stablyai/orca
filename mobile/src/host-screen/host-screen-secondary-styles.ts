@@ -1,9 +1,9 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
 import { WORKTREE_ROW_LAYOUT } from '../worktree/row-presentation/worktree-list-row-layout'
 import { themedStyleSheet } from '../theme/themed-styles'
 
-export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
+export const hostScreenSecondaryStylesSheet = themedStyleSheet((colors) => ({
   list: {
     paddingBottom: spacing.lg
   },

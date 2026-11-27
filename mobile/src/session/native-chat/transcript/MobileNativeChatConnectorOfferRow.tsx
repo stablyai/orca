@@ -23,9 +23,9 @@ import { usePhoneGitHubAccount } from '../../../bots/connectors/use-phone-connec
 import { ghSignedOut } from '../../../../../src/shared/connector-bot-github-contract'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors, typography } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { scaledType } from './messages/mobile-native-chat-message-styles'
 
 type ConnectorCardOffer = ConnectorOffer & { source: ConnectorOfferSource }
@@ -112,7 +112,8 @@ export function MobileNativeChatConnectorOfferRow({
   cardId: string
   fontScale: number
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const bot = useHostBotById(offer.botId)
   const answer = useMobileBotOfferAnswer(offer.botId, cardId)
@@ -233,7 +234,7 @@ export function MobileNativeChatConnectorOfferRow({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   connected: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   detail: { color: colors.textMuted },
   error: { color: colors.statusRed }

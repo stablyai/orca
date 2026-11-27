@@ -1,10 +1,10 @@
 import { useAppStateValue, useAppStateViewActive } from '@/store/retained-views/app-state-view'
-import React, { useCallback } from 'react'
+import React, { Suspense, useCallback } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useAppStore } from '@/store/index'
-import {
-  getOverlayFocusOwners,
-  overlayFocusContains
-} from '@/lib/overlay-interaction/overlay-focus-ownership'
+import { restoreAgentSettingsInvoker } from './restore-agent-settings-invoker'
+
+export { restoreAgentSettingsInvoker }
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,6 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { AgentsPane } from '@/components/settings/agents/AgentsPane'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   isWindowsTerminalCapabilityHost,
@@ -21,6 +20,12 @@ import {
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useWindowsTerminalCapabilityOwnerKey } from '@/runtime/hosts/capabilities/useWindowsTerminalCapabilityOwnerKey'
 import { resolveSettingsHostScope } from '@/components/settings/host-scope/settings-host-scope'
+
+const AgentsPane = lazy(() =>
+  import('@/components/settings/agents/AgentsPane').then((module) => ({
+    default: module.AgentsPane
+  }))
+)
 
 type AgentSettingsDialogProps = {
   open: boolean
@@ -91,40 +96,21 @@ export default function AgentSettingsDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="scrollbar-sleek -mr-2 max-h-[70vh] overflow-y-auto pr-2">
-          <AgentsPane
-            settings={settings}
-            updateSettings={updateSettings}
-            hostScope={hostScope}
-            wslSupportedPlatform={wslSupportedPlatform}
-            wslAvailable={localWindowsTerminalCapabilities.wslAvailable}
-            wslDistros={localWindowsTerminalCapabilities.wslDistros}
-            wslCapabilitiesLoading={localWindowsTerminalCapabilities.isLoading}
-          />
+          {open ? (
+            <Suspense fallback={null}>
+              <AgentsPane
+                settings={settings}
+                updateSettings={updateSettings}
+                hostScope={hostScope}
+                wslSupportedPlatform={wslSupportedPlatform}
+                wslAvailable={localWindowsTerminalCapabilities.wslAvailable}
+                wslDistros={localWindowsTerminalCapabilities.wslDistros}
+                wslCapabilitiesLoading={localWindowsTerminalCapabilities.isLoading}
+              />
+            </Suspense>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
   )
-}
-
-export function restoreAgentSettingsInvoker(event: Event, invoker: HTMLButtonElement | null): void {
-  if (event.defaultPrevented) {
-    return
-  }
-  event.preventDefault()
-  const active = document.activeElement
-  const dialog = event.target
-  if (
-    invoker?.isConnected &&
-    !invoker.disabled &&
-    !invoker.closest('[inert]') &&
-    (active === document.body ||
-      active === invoker ||
-      (dialog instanceof HTMLElement && active && overlayFocusContains(dialog, active))) &&
-    !getOverlayFocusOwners(invoker).some(
-      (owner) =>
-        owner !== dialog && !(dialog instanceof HTMLElement && overlayFocusContains(dialog, owner))
-    )
-  ) {
-    invoker.focus({ preventScroll: true })
-  }
 }

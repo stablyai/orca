@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react'
 import { View, Text, Pressable } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, spacing, radii, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, radii, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { BottomDrawer } from '../bottom-drawer/BottomDrawer'
 
 type ContentProps = {
@@ -51,7 +50,7 @@ export function ConfirmContent({
   onCancel
 }: ContentProps) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <>
       <View style={styles.content}>
@@ -94,7 +93,7 @@ export function ConfirmContent({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   content: {
     paddingBottom: spacing.lg
   },

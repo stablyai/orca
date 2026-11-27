@@ -3,9 +3,9 @@ import { Text } from 'react-native'
 import { FolderGit2 } from 'lucide-react-native'
 import { NavBarBadge } from '../../components/nav-bar/NavBarButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
 import { useCachedHostWorktrees } from './use-cached-host-worktrees'
 import { useRouter } from 'expo-router'
@@ -30,14 +30,15 @@ export function MobileSessionOtherWorkspaces({
   worktreeId: string
   now: number
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const router = useRouter()
   const worktrees = useCachedHostWorktrees(hostId)
   // Ranked when the catalog changes, not every minute: the clock only moves the times on the rows.
   const rows = useMemo(
-    () => otherWorkspaceRows(worktrees ?? [], worktreeId, now),
-    [worktrees, worktreeId]
+    () => otherWorkspaceRows(worktrees ?? [], worktreeId, now, t),
+    [worktrees, worktreeId, t]
   )
   if (rows.length === 0) {
     return null
@@ -86,7 +87,7 @@ export function MobileSessionOtherWorkspaces({
               style={styles.badge}
             />
           ) : row.activityAt !== null ? (
-            <Text style={styles.time}>{formatTimeAgo(row.activityAt, now)}</Text>
+            <Text style={styles.time}>{formatTimeAgo(row.activityAt, now, t)}</Text>
           ) : null}
         </SidebarRow>
       ))}
@@ -94,7 +95,7 @@ export function MobileSessionOtherWorkspaces({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   // In the row's trailing slot, where the tab rows' × sits.
   badge: { position: 'relative', top: 0, right: 0, marginRight: spacing.md },
   time: {

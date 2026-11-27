@@ -1,9 +1,8 @@
 import { ScrollView, Text, View } from 'react-native'
 import type { PRCommentGroup } from '../../../../../../src/shared/source-control/review-comments/pr-comment-groups'
 import { threadDiffLines } from '../../../../../../src/shared/github/comments/pr-comment-diff-hunk'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../../../platform/external-links/external-link'
 import { useKeyboardOcclusion } from '../../../../platform/keyboard/keyboard-occlusion'
@@ -50,7 +49,7 @@ export function PrThreadScreen({
   backLabel?: string
   bottomInset: number
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const keyboardHeight = useKeyboardOcclusion()
   if (!thread) {
@@ -166,7 +165,7 @@ export function PrThreadScreen({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   content: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.lg },
   message: { gap: spacing.xs },
   head: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },

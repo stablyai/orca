@@ -8,9 +8,9 @@ import {
 import { stripSentImagePromptMarkers } from '../../../src/shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { MobileNativeChatMessage } from '../session/native-chat/transcript/messages/MobileNativeChatMessage'
 import { MobileNativeChatMessageTime } from '../session/native-chat/transcript/messages/MobileNativeChatMessageTime'
-import { styles as messageStyles } from '../session/native-chat/transcript/messages/mobile-native-chat-message-styles'
+import { stylesSheet as messageStylesSheet } from '../session/native-chat/transcript/messages/mobile-native-chat-message-styles'
 import { spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from './host-bots-operations'
 import { MobileBotGroupPeerRequestLine } from './MobileBotGroupPeerRequestLine'
@@ -32,6 +32,8 @@ export function MobileBotGroupPost({
   onStop: (botId: string) => void
   onReply: (botId: string) => void
 }) {
+  const messageStyles = useThemedStyles(messageStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View>
       {message.author.kind === 'owner' ? (
@@ -76,7 +78,7 @@ export function MobileBotGroupPost({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   ownerTime: {
     alignSelf: 'flex-end',
     paddingHorizontal: spacing.lg,

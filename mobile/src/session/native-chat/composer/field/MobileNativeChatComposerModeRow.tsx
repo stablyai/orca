@@ -9,7 +9,8 @@ import {
 import type { useMobileNativeChatPickerPresentation } from '../../input/session-options/use-mobile-native-chat-picker-presentation'
 import { MobileNativeChatComposerPlanChip } from '../commands/MobileNativeChatComposerPlanChip'
 import type { MobileNativeChatContext } from '../commands/MobileNativeChatContextUsage'
-import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
+import { mobileNativeChatComposerStylesSheet as stylesSheet } from './mobile-native-chat-composer-styles'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 /** The full composer's model pill and mode chips after +, which the idle pill leaves out. */
 export function MobileNativeChatComposerModeRow({
@@ -35,6 +36,7 @@ export function MobileNativeChatComposerModeRow({
   fieldRef: RefObject<TextInputInstance | null>
   goalChip: ReactNode
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   // A tap on the model pill or a chip keeps the field focused, so the box never folds under the finger.
   const keepsFocus = useKeyboardPersistingTaps('handled')
   // A request the sheet can't show (nothing it lists is settable) never opens it, so nothing would clear it.

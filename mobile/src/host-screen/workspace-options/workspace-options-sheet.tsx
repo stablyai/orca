@@ -1,6 +1,5 @@
 import { useMemo, type ReactNode } from 'react'
 import { View } from 'react-native'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import {
   BottomDrawer,
@@ -24,7 +23,7 @@ import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { resolveWorktreeHostId } from '../../worktree/row-presentation/worktree-host-context-labels'
 import { withServerHosts } from '../../worktree/execution-hosts/server-workspaces'
-import { hostScreenStyles as styles } from '../host-screen-styles'
+import { hostScreenStylesSheet as stylesSheet } from '../host-screen-styles'
 import type { HostScreenController } from '../use-host-screen-controller'
 import { ListGroup, SectionHeader } from '../../components/list/ListGroup'
 import { DrillRow } from './workspace-option-rows'
@@ -33,6 +32,7 @@ import {
   type WorkspaceOptionHost,
   type WorkspaceOptionProps
 } from './workspace-option-controls'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 function workspaceOptionLabels(t: Translate): Record<WorkspaceViewOptionKey, string> {
   return {
@@ -158,8 +158,8 @@ function WorkspaceOptionsContent({
   pager: OptionPagerControls<WorkspaceViewOptionKey>
   onDone: () => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const { settings, state } = controller
   const hosts = useWorkspaceOptionHosts(controller)
   const optionLabels = workspaceOptionLabels(t)

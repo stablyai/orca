@@ -886,7 +886,7 @@
         "finishOnPage": "Завершите на открывшейся странице",
         "needsAuth": "Требуется вход",
         "needsAuthAfterSend": "Требуется вход. Отправьте сообщение, чтобы войти здесь.",
-        "off": "Выключен",
+        "disabled": "Выключен",
         "pending": "Подключение…",
         "tools_few": "{{count}} инструмента",
         "tools_many": "{{count}} инструментов",
@@ -1848,7 +1848,9 @@
         "backToBots": "Назад к ботам",
         "loadingBotChats": "Загрузка чатов {{name}}…",
         "noOtherChats": "Других чатов нет",
-        "noMatchingChats": "Подходящих чатов нет"
+        "noMatchingChats": "Подходящих чатов нет",
+        "permissionAgentSettings": "Настройки {{agent}}",
+        "permissionFromAgentSettings": "{{mode}}, из настроек {{agent}}"
       },
       "goal": {
         "sentAsGoal": "Отправлено как цель"
@@ -4123,9 +4125,6 @@
       "toggleMode": "Переключение",
       "updateFailed": "Не удалось обновить",
       "loading": "Загрузка настроек голоса…"
-    },
-    "agents": {
-      "permissionOwnAll": "Собственные настройки агентов"
     },
     "voiceTranscribeOn": {
       "heading": "Где распознавать",

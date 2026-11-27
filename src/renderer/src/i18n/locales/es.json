@@ -3428,7 +3428,7 @@
         "99c2755218": "Busca issues o escribe JQL, p. ej. project = ABC",
         "2ff9fd71fd": "Actualizar issues de Jira",
         "0b65d3fb2c": "Buscar proyectos de Linear...",
-        "eec0c5c079": "Buscar issues de Linear...",
+        "eec0c5c079": "Buscar...",
         "8964184a8b": "Actualizar Linear",
         "3feb524d42": "Nuevo issue de Linear",
         "0cbf7e5cf3": "Modo de tarea Linear",
@@ -13545,7 +13545,12 @@
             "rollbackStopIncomplete": "No se hizo: Orca no pudo confirmar que el servidor actual se cerró, así que no hizo la reversión. Revisa orcad.log en la carpeta de instalación del servidor, dentro de ~/.orca-remote en el host, antes de volver a intentarlo.",
             "failed": "Orca no pudo completar esto en el servidor. Inténtalo de nuevo.",
             "defaultServer": "No se hizo: este servidor es el host predeterminado para proyectos nuevos. Elige otro en «Los proyectos nuevos se abren en» antes de detenerlo.",
-            "wslMoveRunning": "No se hizo: un proyecto se está moviendo a este servidor. Orca lo actualizará cuando termine el traslado."
+            "wslMoveRunning": "No se hizo: un proyecto se está moviendo a este servidor. Orca lo actualizará cuando termine el traslado.",
+            "recoveryRequired": "No se hizo: una actualización o detención interrumpida bloquea este host. Usa «Recuperar» o «Cancelar detención» si Orca lo ofrece y vuelve a intentarlo.",
+            "snapshotSpace": "No se hizo: este host no tiene espacio para la copia que Orca hace antes de actualizar. Libera espacio en el host y vuelve a intentarlo.",
+            "policyRefused": "No se hizo: Orca no activará esta compilación en este host. Revisa el host y vuelve a actualizar, o actualiza Orca primero si una versión más reciente de Orca lo ejecutó por última vez.",
+            "hostNewer": "No se hizo: una versión más reciente de Orca ejecutó por última vez el servidor de este host. Actualiza Orca y vuelve a intentarlo.",
+            "preflightFailed": "No se hizo: el nuevo servidor de Orca no superó su comprobación de inicio en este host, así que Orca dejó el host como estaba."
           },
           "reassurance": "Se ejecuta en cada host y se accede a través de tu propia conexión SSH. Tu código y tus archivos se quedan donde están. Solo la lista de proyectos, pestañas y terminales de Orca pasa al host."
         },

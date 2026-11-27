@@ -2,8 +2,7 @@ import { Plus } from 'lucide-react-native'
 import { Fragment, memo, useCallback } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import type { HostCatalogEntry } from '../host-catalog/host-profile'
 import type { HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
@@ -11,9 +10,10 @@ import {
   classifyHomeHostConnection,
   type HomeHostConnections
 } from './home-host-connection-projection'
-import { homeListStyles } from './home-list-styles'
+import { homeListStylesSheet } from './home-list-styles'
 import { MobileHomeDesktopRow } from './MobileHomeDesktopRow'
 import { MobileHomeSectionHeading } from './MobileHomeSectionHeading'
+import { useThemedStyles } from '../theme/themed-styles'
 
 type MobileHomeHostListProps = {
   autoConnectHostIds: string[]
@@ -34,7 +34,8 @@ type MobileHomeHostListProps = {
 /** Home's Computers section: one row per paired computer, then "Pair a computer". */
 export function MobileHomeHostList(props: MobileHomeHostListProps) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const homeListStyles = useThemedStyles(homeListStylesSheet)
   return (
     <>
       <MobileHomeSectionHeading
@@ -99,7 +100,8 @@ type MobileHomeHostRowProps = Pick<
 
 const MobileHomeHostRow = memo(function MobileHomeHostRow(props: MobileHomeHostRowProps) {
   const { item, onOpen, onOpenActions } = props
-  const { state, verdict } = classifyHomeHostConnection(item, props)
+  const t = useMobileTranslation()
+  const { state, verdict } = classifyHomeHostConnection(item, props, t)
   const connection = props.hostConnections[item.id]
   const open = useCallback(() => onOpen(item), [item, onOpen])
   const openActions = useCallback(() => onOpenActions(item), [item, onOpenActions])
