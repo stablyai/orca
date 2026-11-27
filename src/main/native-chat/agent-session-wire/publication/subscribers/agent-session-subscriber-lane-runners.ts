@@ -18,7 +18,11 @@ import type { Subscriber } from './agent-session-subscribe-input'
 type LaneOwner = {
   deliveryPort: () => SubscriberDeliveryPort
   now: () => number
-  sendLiveTail: (subscriber: Subscriber, journal: SubscriberCatchUp['journal'], fence: number) => Promise<void>
+  sendLiveTail: (
+    subscriber: Subscriber,
+    journal: SubscriberCatchUp['journal'],
+    fence: number
+  ) => Promise<void>
   isActive: (subscriber: Subscriber) => boolean
   fail: (subscriber: Subscriber, error: unknown) => void
 }

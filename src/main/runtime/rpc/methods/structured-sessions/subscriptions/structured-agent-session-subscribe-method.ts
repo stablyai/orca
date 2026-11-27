@@ -12,6 +12,7 @@ import { requireInstalledStructuredHost as requireInstalledHost } from '../creat
 import { bindStructuredAgentSessionStream } from './structured-agent-session-status-stream'
 import { structuredAgentSessionSubscriptionId as subscriptionIdFor } from './structured-agent-session-subscription-id'
 import { SubscribeParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-subscribe-params'
+import { lazyZodSchema } from '../../../../../../shared/schema/lazy-zod-schema'
 import * as queuedImages from '../attachments/structured-agent-session-queued-image-capability'
 import { projectReceiptDeviceEvent } from './structured-agent-session-receipt-devices'
 import {
@@ -26,7 +27,9 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
   handler: subscribe
 })
 
-const LocalSubscribeParams = SubscribeParams.extend({ receiptReader: ReceiptReader.optional() })
+const LocalSubscribeParams = lazyZodSchema(() =>
+  SubscribeParams.extend({ receiptReader: ReceiptReader.optional() })
+)
 
 export const LOCAL_STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
   name: 'agentSession.subscribe',
@@ -117,7 +120,11 @@ async function subscribe(
           liveTextViewer: viewer,
           liveTextShown: capabilities?.liveTextViewer?.shown === true,
           onLiveTextShown: (set: (shown: boolean) => void) => {
-            releaseViewer = registerLiveTextViewer(viewer, capabilities?.liveTextViewer?.seq ?? 0, set)
+            releaseViewer = registerLiveTextViewer(
+              viewer,
+              capabilities?.liveTextViewer?.seq ?? 0,
+              set
+            )
           }
         }
       : {}),
