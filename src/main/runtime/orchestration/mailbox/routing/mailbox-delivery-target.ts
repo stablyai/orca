@@ -1,6 +1,13 @@
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { OrchestrationMailboxTerminal } from './mailbox-owner'
 
+export type ForegroundShellProbe = {
+  incarnationId: string | null
+  read: () => Promise<boolean>
+}
+
+type ProbeDeferral = { mailboxes: Set<string>; joinedInFlight: boolean }
+
 type OrchestrationMailboxDeliveryTargetDependencies = {
   getDb: () => OrchestrationDb | null
   /** The terminal now in the pane, keyed by its PTY, so a replaced or unlisted PTY is still reached. */
@@ -12,12 +19,13 @@ type OrchestrationMailboxDeliveryTargetDependencies = {
   canProbePtyLiveness: () => boolean
   controllerKnowsPtyIsLive: (ptyId: string) => boolean
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
-  /** Reads whether a shell, not the pane's agent, is in front; null when the pane names no agent. */
-  foregroundShellProbe: (ptyId: string) => (() => Promise<boolean>) | null
+  /** The pane's agent process incarnation and a read of whether a shell, not it, is in front;
+   *  null when the pane names no agent or the host can't read its foreground per terminal. */
+  foregroundShellProbe: (ptyId: string) => ForegroundShellProbe | null
 }
 
 export class OrchestrationMailboxDeliveryTarget {
-  private readonly probeDeferredMailboxes = new Map<string, Set<string>>()
+  private readonly probeDeferrals = new Map<string, ProbeDeferral>()
 
   constructor(private readonly deps: OrchestrationMailboxDeliveryTargetDependencies) {}
 
@@ -83,12 +91,13 @@ export class OrchestrationMailboxDeliveryTarget {
   }
 
   /** Type only after async proof that the PTY exists and its agent, not a shell, is in front:
-   *  the agent's status outlives its exit, so mail would run in the shell it left. */
+   *  the agent's status outlives its exit, so mail would run in the shell it left.
+   *  `redeliver(mailbox, reprobe)` types at once, or probes again when the proof went stale. */
   deferForTerminalProbe(
     ptyId: string,
     mailboxHandle: string,
     skipProbe: boolean | undefined,
-    redeliver: (mailboxHandle: string) => void
+    redeliver: (mailboxHandle: string, reprobe: boolean) => void
   ): boolean {
     if (skipProbe) {
       return false
@@ -100,27 +109,39 @@ export class OrchestrationMailboxDeliveryTarget {
       return false
     }
     // A coordinator of several Runs can defer one mailbox per Run on the same probe.
-    const deferred = this.probeDeferredMailboxes.get(ptyId)
-    if (deferred) {
-      deferred.add(mailboxHandle)
+    const inFlight = this.probeDeferrals.get(ptyId)
+    if (inFlight) {
+      inFlight.mailboxes.add(mailboxHandle)
+      // A later edge (the agent back at its prompt) may postdate the probe's reading.
+      inFlight.joinedInFlight = true
       return true
     }
-    const mailboxes = new Set([mailboxHandle])
-    this.probeDeferredMailboxes.set(ptyId, mailboxes)
+    const deferral: ProbeDeferral = { mailboxes: new Set([mailboxHandle]), joinedInFlight: false }
+    this.probeDeferrals.set(ptyId, deferral)
     void Promise.all([
       probeAbsence ? this.deps.isLeafPtyProvenAbsent(ptyId) : false,
-      probeShell ? probeShell() : false
+      probeShell ? probeShell.read() : false
     ])
       .then(([absent, shellInFront]) => {
-        this.probeDeferredMailboxes.delete(ptyId)
-        // Held mail stays unread; the next agent status edge delivers it.
-        if (!absent && !shellInFront) {
-          for (const deferredMailbox of mailboxes) {
-            setTimeout(() => redeliver(deferredMailbox), 0)
-          }
+        this.probeDeferrals.delete(ptyId)
+        if (absent) {
+          return
+        }
+        // Held mail stays unread for the next agent status edge, unless one already arrived.
+        if (shellInFront && !deferral.joinedInFlight) {
+          return
+        }
+        for (const deferredMailbox of deferral.mailboxes) {
+          setTimeout(() => {
+            const stale =
+              shellInFront ||
+              (probeShell !== null &&
+                this.deps.foregroundShellProbe(ptyId)?.incarnationId !== probeShell.incarnationId)
+            redeliver(deferredMailbox, stale)
+          }, 0)
         }
       })
-      .catch(() => this.probeDeferredMailboxes.delete(ptyId))
+      .catch(() => this.probeDeferrals.delete(ptyId))
     return true
   }
 }

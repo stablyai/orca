@@ -128,7 +128,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         ptyId,
         mailboxHandle,
         options.skipTerminalProbe,
-        (probedMailbox) => this.redeliverAfterProbe(ptyId, probedMailbox)
+        (probedMailbox, reprobe) => this.redeliverAfterProbe(ptyId, probedMailbox, reprobe)
       )
     ) {
       return
@@ -219,10 +219,10 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     this.coldParkedPtys.delete(ptyId)
   }
 
-  private redeliverAfterProbe(ptyId: string, mailboxHandle: string): void {
+  private redeliverAfterProbe(ptyId: string, mailboxHandle: string, reprobe: boolean): void {
     const current = this.deps.getTerminal(ptyId)
     if (current) {
-      this.deliver(current, { mailboxHandle, skipTerminalProbe: true })
+      this.deliver(current, { mailboxHandle, skipTerminalProbe: !reprobe })
     }
   }
 

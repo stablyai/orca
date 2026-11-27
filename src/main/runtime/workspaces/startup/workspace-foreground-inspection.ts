@@ -2,6 +2,7 @@ import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-te
 import { OrcaRuntimeWithListManagedWorktrees } from '../managed-workspace-operations'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { ForegroundShellProbe } from '../../orchestration/mailbox/routing/mailbox-delivery-target'
 import {
   describeLaunchedAgentHost,
   readAdoptedRootAgentForeground,
@@ -40,12 +41,21 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
       : 'unknown'
   }
 
-  /** Mail waits while a shell is in front: the pane's agent status outlives the agent's exit. */
-  protected mailForegroundShellProbe(ptyId: string): (() => Promise<boolean>) | null {
+  /** Mail waits while a shell is in front: the pane's agent status outlives the agent's exit.
+   *  A local daemon without per-terminal foreground observation would list every session per read. */
+  protected mailForegroundShellProbe(ptyId: string): ForegroundShellProbe | null {
     const agent = this.getPaneTerminalAgent(ptyId)
-    return isTuiAgent(agent)
-      ? async () => (await this.readLaunchedAgentForeground(ptyId, agent)) === 'shell'
-      : null
+    const host = this.launchedAgentHost(ptyId)
+    if (
+      !isTuiAgent(agent) ||
+      (!host.remote && !host.windows && !this.ptyController?.supportsForegroundObservation?.(ptyId))
+    ) {
+      return null
+    }
+    return {
+      incarnationId: this.ptysById.get(ptyId)?.incarnationId ?? null,
+      read: async () => (await this.readLaunchedAgentForeground(ptyId, agent)) === 'shell'
+    }
   }
 
   /** Whether a command mark's agent is itself still in front: any other program is the shell's turn. */

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrchestrationMailboxDeliveryTarget } from './mailbox-delivery-target'
 
-function target(shellInFront: boolean | null) {
+function target(readShell: () => Promise<boolean>) {
   return new OrchestrationMailboxDeliveryTarget({
     getDb: () => null,
     getMailboxTerminalForPaneKey: () => null,
@@ -11,24 +11,27 @@ function target(shellInFront: boolean | null) {
     canProbePtyLiveness: () => true,
     controllerKnowsPtyIsLive: () => true,
     isLeafPtyProvenAbsent: async () => false,
-    foregroundShellProbe: () => (shellInFront === null ? null : async () => shellInFront)
+    foregroundShellProbe: () => ({ incarnationId: 'inc-1', read: readShell })
   })
 }
 
 async function probe(
-  shellInFront: boolean | null
-): Promise<{ deferred: boolean; redelivered: string[] }> {
+  readShell: () => Promise<boolean>,
+  mailboxes: string[]
+): Promise<[string, boolean][]> {
   vi.useFakeTimers()
   try {
-    const redelivered: string[] = []
-    const deferred = target(shellInFront).deferForTerminalProbe(
-      'pty-1',
-      'term_a',
-      false,
-      (mailbox) => redelivered.push(mailbox)
-    )
+    const delivery = target(readShell)
+    const redelivered: [string, boolean][] = []
+    for (const mailbox of mailboxes) {
+      expect(
+        delivery.deferForTerminalProbe('pty-1', mailbox, false, (probed, reprobe) =>
+          redelivered.push([probed, reprobe])
+        )
+      ).toBe(true)
+    }
     await vi.runAllTimersAsync()
-    return { deferred, redelivered }
+    return redelivered
   } finally {
     vi.useRealTimers()
   }
@@ -37,10 +40,17 @@ async function probe(
 describe('deferForTerminalProbe', () => {
   // An exited agent's status outlives it; typing then runs the pointer in the shell and consumes the mail.
   it('holds mail while a shell is in front of the exited agent', async () => {
-    expect(await probe(true)).toEqual({ deferred: true, redelivered: [] })
+    expect(await probe(async () => true, ['term_a'])).toEqual([])
   })
 
   it('types once the agent itself is in front', async () => {
-    expect(await probe(false)).toEqual({ deferred: true, redelivered: ['term_a'] })
+    expect(await probe(async () => false, ['term_a'])).toEqual([['term_a', false]])
+  })
+
+  it('probes again when a delivery joined a probe that then read a shell', async () => {
+    expect(await probe(async () => true, ['term_a', 'run:r1'])).toEqual([
+      ['term_a', true],
+      ['run:r1', true]
+    ])
   })
 })
