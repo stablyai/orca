@@ -4,7 +4,12 @@ import { shutdownPairedRuntimeBrowserClientHosts } from '../../browser/client-ho
 import { closeAllPairedPortForwards } from '../../ports/paired-forwards/paired-port-forwards'
 import { disposeDesktopBrowserBridge } from '../../ipc/browser/desktop-browser-bridge-wiring'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
-import { settleTeardownWithinDeadline, type NamedQuitTeardown } from './quit-teardown-deadline'
+import {
+  finishQuitTeardown,
+  quitTeardownDeadlineMs,
+  quitWorkerStoreDeadlineMs,
+  type NamedQuitTeardown
+} from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
 import { abortPluginGitForShutdown } from '../../plugins/installation/plugin-git-repository'
 import { destroySystemTray } from '../../tray/system-tray'
@@ -128,38 +133,29 @@ function installWillQuitHandler(): void {
         isDevParentShutdown: isDevParentShutdownRequested
       }
     )
-    // Bound unsettled transports and these final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
-    // Extension storage's final save runs after this, unbounded, as its old synchronous will-quit save was.
-    const teardowns = [
-      ...coreTeardowns,
-      { name: 'install-park', promise: pendingServeSupervisorQuitCommit() }
-    ]
-    const teardownSettlement = Promise.allSettled(teardowns.map((item) => item.promise))
-    settleTeardownWithinDeadline([
-      ...teardowns,
-      { name: 'environment-store', promise: teardownSettlement.then(closeEnvironmentStore) }
-    ])
-      .then((pendingTeardowns) => {
-        if (pendingTeardowns.length > 0) {
-          console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
-        }
-      })
-      .then(() => shutdownTelemetry())
-      .then(() => shutdownObservability())
-      .catch(() => {
-        /* swallow — telemetry must never prevent app.quit() */
-      })
-      // Last before quitting, so it saves every extension write accepted during teardown.
-      .then(() =>
+    // Bound unsettled transports so quit cannot hang (#9447); atomic swaps preserve old files if a debounce is lost.
+    void finishQuitTeardown({
+      teardowns: [
+        ...coreTeardowns,
+        { name: 'install-park', promise: pendingServeSupervisorQuitCommit() }
+      ],
+      deadlineMs: quitTeardownDeadlineMs(updateQuitInProgress),
+      // After the teardown, so they save every write it accepted; each never rejects.
+      closeDataStores: () =>
         Promise.all([
           closeBrowserExtensionProfileDocumentStores(),
           closeBrowserExtensionProfileStateStore()
-        ])
-      )
-      .then(() => {
-        daemonDisconnectDone = true
-        app.quit()
-      })
+        ]),
+      closeWorkerStores: closeEnvironmentStore,
+      workerStoreDeadlineMs: quitWorkerStoreDeadlineMs(updateQuitInProgress),
+      shutdownDiagnostics: async () => {
+        await shutdownTelemetry()
+        await shutdownObservability()
+      }
+    }).then(() => {
+      daemonDisconnectDone = true
+      app.quit()
+    })
   })
 }
 

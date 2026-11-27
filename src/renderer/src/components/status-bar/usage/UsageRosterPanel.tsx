@@ -224,7 +224,7 @@ export function UsageRow({
       {showDetails ? (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">
           {sections.map((section) => {
-            const label = shortUsageLabel(p, section, false, t)
+            const label = shortUsageLabel(p, section, false)
             return (
               <DetailMetric
                 key={section.label}

@@ -5,15 +5,6 @@ import { automationDate } from './automation-run-presentation'
 
 type NextRunFields = Pick<MobileAutomationRow['automation'], 'enabled' | 'nextRunAt' | 'timezone'>
 
-/** "Next: <date>" in the automation's own timezone, or that a paused one has none. */
-export function automationNextRunLabel(automation: NextRunFields): string {
-  return automation.enabled
-    ? translate('automations.mobile.nextDate', 'Next: {{date}}', {
-        date: automationDate(automation.nextRunAt, automation.timezone)
-      })
-    : translate('automations.mobile.noNextScheduledRun', 'No next scheduled run')
-}
-
 const DAY_MS = 24 * 60 * 60 * 1000
 
 function localDay(timestamp: number): number {

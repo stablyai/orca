@@ -7,15 +7,12 @@ import {
   Pressable,
   ActivityIndicator,
   KeyboardAvoidingView,
-  ScrollView,
-  TextInput,
-  type TextInputProps
+  ScrollView
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Check, ChevronLeft } from 'lucide-react-native'
+import { Check } from 'lucide-react-native'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../src/theme/mobile-theme'
-import { NavBar } from '../../../src/components/nav-bar/NavBar'
 import { NavBarButton } from '../../../src/components/nav-bar/NavBarButton'
 import { themedStyleSheet } from '../../../src/theme/themed-styles'
 import { useMobileColorScheme } from '../../../src/theme/use-mobile-color-scheme'
@@ -31,12 +28,15 @@ import { removeHostAndCloseClient } from '../../../src/host-catalog/host-removal
 import { useHostDisplay } from '../../../src/host-descriptors/use-host-display'
 import { leaveHostRoute } from '../../../src/host-route-exit'
 import { ConfirmModal } from '../../../src/components/sheets/ConfirmModal'
-import { LIST_ROW_PADDING, ListRow } from '../../../src/components/list/ListGroup'
+import { ListRow } from '../../../src/components/list/ListGroup'
+import { TextField } from '../../../src/components/composer-input/TextField'
+import { groupFieldStyles } from '../../../src/components/composer-input/composer-input-styles'
 import type { HostProfile } from '../../../src/host-catalog/host-profile'
 import { hostOs } from '../../../src/platform/host-os'
 import { translate } from '../../../src/i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../src/i18n/use-mobile-translation'
 import {
+  SettingsNavBar,
   SettingsNote,
   SettingsSection,
   settingsScreenStyles
@@ -73,7 +73,7 @@ export default function EditHostScreen() {
   const load = useCallback(
     async (revision: number) => {
       if (!hostId) {
-        setLoadError(translate('host.edit.missingHost', 'Missing host.'))
+        setLoadError(translate('host.edit.computerNotFound', 'This computer isn’t on this phone.'))
         return
       }
       try {
@@ -83,7 +83,7 @@ export default function EditHostScreen() {
         }
         const found = hosts.find((h) => h.id === hostId) ?? null
         if (!found) {
-          setLoadError(translate('host.edit.hostRemoved', 'This host was removed from this phone.'))
+          setLoadError(translate('host.edit.computerRemoved', 'This computer was removed.'))
           setHost(null)
           return
         }
@@ -99,7 +99,7 @@ export default function EditHostScreen() {
         setLoadError(
           err instanceof Error
             ? err.message
-            : translate('host.edit.loadFailed', 'Failed to load host.')
+            : translate('host.edit.couldNotLoad', 'Couldn’t load this computer.')
         )
         setHost(null)
       }
@@ -178,7 +178,9 @@ export default function EditHostScreen() {
     } catch (err) {
       if (revision === routeRevision.current) {
         setSaveError(
-          err instanceof Error ? err.message : t('host.edit.saveFailed', 'Failed to save host.')
+          err instanceof Error
+            ? err.message
+            : t('host.edit.couldNotSave', 'Couldn’t save this computer.')
         )
         savingRef.current = false
         setSaving(false)
@@ -215,7 +217,7 @@ export default function EditHostScreen() {
     } catch {
       setConfirmRemove(true)
       Alert.alert(
-        t('home.screen.removeHostFailed', 'Could not remove host'),
+        t('home.screen.removeComputerFailed', 'Couldn’t remove computer'),
         t('home.screen.tryAgain', 'Please try again.')
       )
       return
@@ -225,22 +227,16 @@ export default function EditHostScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <NavBar
-        leading={
-          <NavBarButton
-            icon={ChevronLeft}
-            onPress={leave}
-            accessibilityLabel={t('common.back', 'Back')}
-          />
-        }
-        title={t('host.edit.title', 'Edit host')}
+    <View style={[settingsScreenStyles.container, { paddingTop: insets.top }]}>
+      <SettingsNavBar
+        onBack={leave}
+        title={t('host.edit.editComputer', 'Edit computer')}
         trailing={
           <NavBarButton
             icon={Check}
             onPress={() => void handleSave()}
             disabled={!canSave}
-            accessibilityLabel={t('host.edit.saveHost', 'Save host')}
+            accessibilityLabel={t('host.edit.save', 'Save')}
           />
         }
       />
@@ -272,7 +268,7 @@ export default function EditHostScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <SettingsSection first footer={fieldsNote}>
-              <HostFieldRow
+              <TextField
                 key="name"
                 label={t('host.edit.name', 'Name')}
                 value={name}
@@ -281,14 +277,13 @@ export default function EditHostScreen() {
                   setSaveError(null)
                 }}
                 // An empty name falls back to the one the host reports, which the placeholder shows.
-                placeholder={
-                  host.lastKnownMachineName ?? t('host.edit.hostNamePlaceholder', 'Host name')
-                }
+                placeholder={host.lastKnownMachineName ?? t('host.edit.name', 'Name')}
                 autoCapitalize="words"
                 autoCorrect={false}
                 returnKeyType="next"
+                style={groupFieldStyles.line}
               />
-              <HostFieldRow
+              <TextField
                 key="address"
                 label={t('host.edit.address', 'Address')}
                 value={address}
@@ -307,6 +302,7 @@ export default function EditHostScreen() {
                     void handleSave()
                   }
                 }}
+                style={groupFieldStyles.line}
               />
             </SettingsSection>
 
@@ -315,7 +311,7 @@ export default function EditHostScreen() {
             <SettingsSection>
               <ListRow
                 key="remove"
-                title={t('host.edit.removeHost', 'Remove host')}
+                title={t('host.edit.removeComputer', 'Remove computer')}
                 destructive
                 disabled={saving}
                 onPress={() => setConfirmRemove(true)}
@@ -326,10 +322,14 @@ export default function EditHostScreen() {
       )}
       <ConfirmModal
         visible={confirmRemove}
-        title={t('home.screen.removeHostTitle', 'Remove Host')}
-        message={t('home.screen.removeHostMessage', 'Remove "{{name}}"? You can re-pair later.', {
-          name: hostTitle
-        })}
+        title={t('home.screen.removeComputerTitle', 'Remove computer')}
+        message={t(
+          'home.screen.removeComputerMessage',
+          'Remove “{{name}}”? You can pair it again later.',
+          {
+            name: hostTitle
+          }
+        )}
         confirmLabel={t('common.remove', 'Remove')}
         destructive
         onConfirm={() => void handleRemove()}
@@ -339,57 +339,9 @@ export default function EditHostScreen() {
   )
 }
 
-type HostFieldRowProps = Omit<
-  TextInputProps,
-  'style' | 'placeholderTextColor' | 'selectionColor' | 'accessibilityLabel'
-> & { label: string }
-
-// An editable grouped-list row: the label where a ListRow's title sits, the text after it.
-function HostFieldRow({ label, ...inputProps }: HostFieldRowProps) {
-  useMobileColorScheme()
-  return (
-    <View style={styles.fieldRow}>
-      <Text style={styles.fieldLabel} numberOfLines={1}>
-        {label}
-      </Text>
-      <TextInput
-        accessibilityLabel={label}
-        placeholderTextColor={colors.textMuted}
-        selectionColor={colors.accentBlue}
-        style={styles.fieldInput}
-        {...inputProps}
-      />
-    </View>
-  )
-}
-
 const styles = themedStyleSheet(() => ({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
   flex: {
     flex: 1
-  },
-  fieldRow: {
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: LIST_ROW_PADDING
-  },
-  fieldLabel: {
-    minWidth: 72,
-    fontSize: 15,
-    color: colors.textPrimary
-  },
-  fieldInput: {
-    flex: 1,
-    minHeight: 48,
-    paddingVertical: 0,
-    fontSize: 15,
-    color: colors.textPrimary,
-    outlineWidth: 0
   },
   errorText: {
     color: colors.statusRed,
@@ -412,7 +364,7 @@ const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radii.control,
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.sheetGroup
   },
   secondaryButtonText: {
     color: colors.textPrimary,

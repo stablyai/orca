@@ -35,7 +35,7 @@ export function MobileMarkdownRemoteImage({
   }, [uri])
   if (size === 'failed') {
     return (
-      <Text style={markdownStyles.link} onPress={() => onOpenLink(uri)}>
+      <Text style={[markdownStyles.paragraph, markdownStyles.link]} onPress={() => onOpenLink(uri)}>
         {alt || uri}
       </Text>
     )

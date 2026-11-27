@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { SALVAGE, salvageLineDate, salvageLineHash } from './bot-memory-salvage'
 
@@ -26,17 +27,21 @@ export const SALVAGE_STATES = [
   'expired'
 ] as const
 
-const SourceSchema = z.object({
-  month: z.string(),
-  line: z.string(),
-  movedAt: z.number(),
-  state: z.enum(SALVAGE_STATES),
-  /** Proposals that expired with it listed. */
-  expiries: z.number().default(0)
-})
+const SourceSchema = lazyZodSchema(() =>
+  z.object({
+    month: z.string(),
+    line: z.string(),
+    movedAt: z.number(),
+    state: z.enum(SALVAGE_STATES),
+    /** Proposals that expired with it listed. */
+    expiries: z.number().default(0)
+  })
+)
 
-const BotSalvageSchema = z.object({ sources: z.record(z.string(), SourceSchema) })
-const FileSchema = z.object({ bots: z.record(z.string(), BotSalvageSchema) })
+const BotSalvageSchema = lazyZodSchema(() =>
+  z.object({ sources: z.record(z.string(), SourceSchema) })
+)
+const FileSchema = lazyZodSchema(() => z.object({ bots: z.record(z.string(), BotSalvageSchema) }))
 
 export type SalvageSource = z.infer<typeof SourceSchema>
 export type BotSalvage = z.infer<typeof BotSalvageSchema>

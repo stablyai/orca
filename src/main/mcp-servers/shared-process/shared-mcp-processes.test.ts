@@ -52,7 +52,7 @@ describe('SharedMcpProcesses', () => {
     spawned = 0
     started = Promise.resolve()
     processes = new SharedMcpProcesses({
-      read: async (_folder, id) => (id === ID ? stored : null),
+      servers: async () => new Map(stored ? [[ID, stored]] : []),
       prepare: async (server) => {
         spawned += 1
         await started

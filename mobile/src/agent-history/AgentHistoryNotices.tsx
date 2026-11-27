@@ -35,14 +35,14 @@ export function AgentHistoryScanNotices({
   const blocking = blockingAiVaultScanIssue(scan)
   const notices = aiVaultScanNoticeIssues(scan)
   const skipped = skippedAiVaultTranscriptIssues(scan)
+  // One notice at a time, the one that matters most, so the sessions stay in view.
   return (
     <>
       {blocking ? (
         <View style={styles.notice}>
           <Text style={styles.hostIssueText}>{blocking.message}</Text>
         </View>
-      ) : null}
-      {notices.length > 0 ? (
+      ) : notices.length > 0 ? (
         <View style={styles.notice}>
           <AutoHeight maxHeight={ISSUE_LIST_MAX_HEIGHT}>
             <ScrollView contentContainerStyle={styles.noticeList} nestedScrollEnabled>
@@ -57,8 +57,9 @@ export function AgentHistoryScanNotices({
             </ScrollView>
           </AutoHeight>
         </View>
+      ) : skipped.length > 0 ? (
+        <AgentHistorySkippedNotice issues={skipped} />
       ) : null}
-      {skipped.length > 0 ? <AgentHistorySkippedNotice issues={skipped} /> : null}
     </>
   )
 }
@@ -176,11 +177,16 @@ export function AgentHistoryHandoffNotice({
   )
 }
 
+/** Whether the restart offer has something to say. */
+export function agentHistoryInterruptedShown(offer: AgentHistoryRestartOffer): boolean {
+  return offer.count > 0 || offer.failedCount > 0 || offer.requestFailed
+}
+
 /** Desktop's resume-after-restart offer, as the phone's notice strip: "3 chats were interrupted · Resume all". */
 export function AgentHistoryInterruptedNotice({ offer }: { offer: AgentHistoryRestartOffer }) {
   const t = useMobileTranslation()
   const { count, failedCount, requestFailed, resuming } = offer
-  const shown = count > 0 || failedCount > 0 || requestFailed
+  const shown = agentHistoryInterruptedShown(offer)
   const message = requestFailed
     ? t('agentHistory.interrupted.failed', "Couldn't resume the interrupted chats.")
     : count > 0

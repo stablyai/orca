@@ -199,12 +199,26 @@ worker. `orca/worker` holds only types, so import it with `import type`; a value
 the worker starts.
 
 A worker does not inherit Orca's full environment: tokens, shell-rc variables and display variables
-(`DISPLAY`, `WAYLAND_DISPLAY`) are withheld. It keeps `PATH`, `HOME`, locale and temp-dir
-variables, plus `XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS` and `SSH_AUTH_SOCK` from Orca's launch
+(`DISPLAY`, `WAYLAND_DISPLAY`) are withheld. It keeps `PATH`, `HOME`, the login name (`USER`,
+`LOGNAME`, `USERNAME`), locale and temp-dir variables, plus `XDG_RUNTIME_DIR`,
+`DBUS_SESSION_BUS_ADDRESS` and `SSH_AUTH_SOCK` from Orca's launch
 environment, so `git` credential helpers (such as libsecret) and ssh-agent can reach the session
-Orca started in. `GIT_TERMINAL_PROMPT=0` is set, so `git` fails instead of asking for a password.
+Orca started in. `ORCA_USER_DATA_PATH` names the profile Orca runs from, and on Windows the
+worker also keeps `APPDATA` and `LOCALAPPDATA`, so the `orca` CLI reaches the running app. `GIT_TERMINAL_PROMPT=0` is set, so `git` fails instead of asking
+for a password. TLS trust settings (`NODE_EXTRA_CA_CERTS`, `NODE_USE_SYSTEM_CA`, `SSL_CERT_FILE`,
+`SSL_CERT_DIR`) pass through when Orca's launch environment sets them.
 This filter only keeps secrets held in Orca's environment out of plugins; it is not a sandbox. A
 worker runs as you and can read your files, saved logins and SSH keys like any other program.
+
+The worker always runs on the desktop machine, even when the agent does not: a workspace on an SSH
+host or a `runtime:<environment>` host (a WSL distro, a paired machine), a workspace whose path is
+inside WSL, or a project on a Windows drive whose runtime is set to WSL. An agent there cannot run
+scripts by their desktop paths or reach a socket the worker opens. Before an `agent.launch.before`
+hook adds such paths to a command, look the workspace up in `workspace.list` and leave the launch
+unchanged unless `hostId` is `local` or null (this machine) and `path` does not start with
+`\\wsl.localhost\`, `\\wsl$\` or `//wsl.localhost/` (compared case-insensitively). Also leave it
+unchanged when `workspaceId` is null or the lookup finds no workspace. A Windows-drive project
+running in WSL still reports `local` with a `C:\` path, so a hook cannot tell it apart yet.
 
 ### Panels, workers and data
 

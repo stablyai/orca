@@ -23,7 +23,6 @@ import { publishHostBot, useHostBotById, useHostBotsEntry } from '../../../../bo
 import { mobileBotAvatarSource } from '../../../../bots/host-bot-row-facts'
 import { workspaceLineageRead, type PhoneBot } from '../../../../bots/host-bots-operations'
 import { MobileBotAvatar } from '../../../../bots/MobileBotAvatar'
-import { publishBotLink } from '../../../../bots/pending-bot-link'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { colors, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
@@ -242,7 +241,7 @@ export function MobileBotCreateOfferCard({
         <MobileBotCardActions>
           <MobileNativeChatNoticePill
             label={say('open')}
-            onPress={() => publishBotLink({ kind: 'bot', botId: created.id })}
+            onPress={() => host.openBotHome(created)}
           />
         </MobileBotCardActions>
       ) : null}

@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain, type WebContents } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { randomUUID } from 'node:crypto'
 import { AvccFrameStream } from '../../emulator/avcc-frame-stream'
 import { scrcpyVideoRegistry } from '../../emulator/scrcpy-video-registry'
@@ -7,7 +8,8 @@ import { errorMessage } from '../../../shared/errors/error-message'
 import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
 
 export function registerEmulatorVideoStreamHandlers(
-  resolveIosVideoStreamUrl: (deviceId: string) => string | null | undefined
+  resolveIosVideoStreamUrl: (deviceId: string) => string | null | undefined,
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
   type Subscription = {
     owner: WebContents
@@ -30,7 +32,7 @@ export function registerEmulatorVideoStreamHandlers(
     subscription.unsubscribe()
   }
 
-  ipcMain.handle(
+  ipc.handle(
     'emulator:videoStreamStart',
     (event, args: { deviceId: string; streamId?: string }) => {
       const owner = event.sender
@@ -124,7 +126,7 @@ export function registerEmulatorVideoStreamHandlers(
     }
   )
 
-  ipcMain.handle('emulator:videoStreamStop', (event, args: { streamId: string }) => {
+  ipc.handle('emulator:videoStreamStop', (event, args: { streamId: string }) => {
     stopSubscription(args.streamId, event.sender)
   })
 }

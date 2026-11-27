@@ -152,8 +152,9 @@ export async function releaseLeaseOfEndedStructuredAgentSessionChild(
   context: Pick<StructuredAgentSessionLifetimeContext, 'deps' | 'sessions' | 'now'>,
   sessionId: string
 ): Promise<boolean> {
-  const ended = context.sessions.get(sessionId)?.lastEndedChild
-  if (!ended || !structuredAgentSessionEndedChildHoldsLease(context, sessionId)) {
+  const session = context.sessions.get(sessionId)
+  const ended = session?.lastEndedChild
+  if (!session || !ended || !structuredAgentSessionEndedChildHoldsLease(context, sessionId)) {
     return false
   }
   await releaseStoredStructuredAgentSessionOwnerAfterExit({
@@ -161,6 +162,9 @@ export async function releaseLeaseOfEndedStructuredAgentSessionChild(
     sessionId,
     expectedFence: ended.fence,
     now: context.now(),
+    ...(ended.cause === 'exit' && !ended.duringStartup
+      ? { unexpectedExitJournal: session.journal }
+      : {}),
     ...(ended.deathEvidenceKind ? { deathEvidenceKind: ended.deathEvidenceKind } : {}),
     ...(ended.reason ? { exitReason: ended.reason } : {})
   }).catch((error: unknown) =>

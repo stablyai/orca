@@ -1,9 +1,12 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
-import { View, Text, Pressable, ActivityIndicator } from 'react-native'
+import { View, Text } from 'react-native'
 import { MessageBox } from '../../components/composer-input/MessageBox'
 import { TextField } from '../../components/composer-input/TextField'
-import { colors, pressedStyle } from '../../theme/mobile-theme'
+import { groupFieldStyles } from '../../components/composer-input/composer-input-styles'
+import { SheetHeader } from '../../components/nav-bar/SheetHeader'
+import { SettingsNote } from '../../settings/settings-screen-frame'
+import { colors } from '../../theme/mobile-theme'
 import { Check, X } from 'lucide-react-native'
 import { TASK_SECONDARY_DRAWER_Z_INDEX } from '../task-list/mobile-tasks-options'
 import { setupSourceLabel } from '../repositories/mobile-tasks-repository-presentation'
@@ -43,83 +46,64 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
     >
       {workspaceSparseDraft ? (
         <View>
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>
-              {workspaceSparseDraft.mode === 'new'
+          <SheetHeader
+            title={
+              workspaceSparseDraft.mode === 'new'
                 ? translate('tasks.workspaceTrustDrawers.newSparsePreset', 'New Sparse Preset')
-                : translate('tasks.workspaceTrustDrawers.editSparsePreset', 'Edit Sparse Preset')}
-            </Text>
-          </View>
-          <View style={styles.detailGroup}>
-            <View style={styles.detailSection}>
-              <Text style={styles.detailSectionTitle}>
-                {translate('tasks.workspaceTrustDrawers.nameLabel', 'Name')}
-              </Text>
-              <TextField
-                value={workspaceSparseDraft.name}
-                onChangeText={(name) => setWorkspaceSparseDraft({ ...workspaceSparseDraft, name })}
-                placeholder={translate(
-                  'tasks.workspaceTrustDrawers.namePlaceholder',
-                  'Renderer UI'
-                )}
-                autoCapitalize="none"
-                autoCorrect={false}
-                maxLength={80}
-              />
-            </View>
-            <View style={styles.detailSection}>
-              <Text style={styles.detailSectionTitle}>
-                {translate('tasks.workspaceTrustDrawers.directoriesLabel', 'Directories')}
-              </Text>
-              <MessageBox
-                value={workspaceSparseDraft.directoriesText}
-                onChangeText={(directoriesText) =>
-                  setWorkspaceSparseDraft({ ...workspaceSparseDraft, directoriesText })
-                }
-                placeholder={'src/renderer\npackages/ui'}
-                autoCapitalize="none"
-                autoCorrect={false}
-                monospace
-              />
-            </View>
-            <Text style={workspaceSparseDraftError ? styles.detailError : styles.detailMuted}>
-              {workspaceSparseDraftError ??
-                (count === 1
-                  ? translate(
-                      'tasks.workspaceTrustDrawers.directories_one',
-                      '{{count}} directory',
-                      { count }
-                    )
-                  : translate(
-                      'tasks.workspaceTrustDrawers.directories_other',
-                      '{{count}} directories',
-                      { count }
-                    ))}
-            </Text>
-          </View>
-          <View style={styles.drawerActionRow}>
-            <Pressable
-              style={({ pressed }) => [styles.secondaryActionButton, pressed && pressedStyle]}
-              disabled={workspaceSparseSaving}
-              onPress={() => setWorkspaceSparseDraft(null)}
-            >
-              <Text style={styles.secondaryActionText}>{translate('common.cancel', 'Cancel')}</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryActionButton,
-                !canSaveWorkspaceSparseDraft ? styles.fieldButtonDisabled : undefined,
-                pressed && pressedStyle
-              ]}
-              disabled={!canSaveWorkspaceSparseDraft}
-              onPress={() => void saveWorkspaceSparsePreset()}
-            >
-              {workspaceSparseSaving ? (
-                <ActivityIndicator size="small" color={colors.bgBase} />
-              ) : null}
-              <Text style={styles.primaryActionText}>{translate('common.save', 'Save')}</Text>
-            </Pressable>
-          </View>
+                : translate('tasks.workspaceTrustDrawers.editSparsePreset', 'Edit Sparse Preset')
+            }
+            leading={{
+              label: translate('common.cancel', 'Cancel'),
+              onPress: () => setWorkspaceSparseDraft(null),
+              disabled: workspaceSparseSaving
+            }}
+            trailing={{
+              label: translate('common.save', 'Save'),
+              onPress: () => void saveWorkspaceSparsePreset(),
+              disabled: !canSaveWorkspaceSparseDraft,
+              busy: workspaceSparseSaving
+            }}
+          />
+          <ListGroup style={groupFieldStyles.underHeader}>
+            <TextField
+              key="name"
+              value={workspaceSparseDraft.name}
+              onChangeText={(name) => setWorkspaceSparseDraft({ ...workspaceSparseDraft, name })}
+              placeholder={translate('tasks.workspaceTrustDrawers.nameLabel', 'Name')}
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={80}
+              style={groupFieldStyles.line}
+            />
+            <MessageBox
+              key="directories"
+              value={workspaceSparseDraft.directoriesText}
+              onChangeText={(directoriesText) =>
+                setWorkspaceSparseDraft({ ...workspaceSparseDraft, directoriesText })
+              }
+              placeholder={'src/renderer\npackages/ui'}
+              accessibilityLabel={translate(
+                'tasks.workspaceTrustDrawers.directoriesLabel',
+                'Directories'
+              )}
+              autoCapitalize="none"
+              autoCorrect={false}
+              monospace
+              style={groupFieldStyles.lines}
+            />
+          </ListGroup>
+          <SettingsNote error={workspaceSparseDraftError != null}>
+            {workspaceSparseDraftError ??
+              (count === 1
+                ? translate('tasks.workspaceTrustDrawers.directories_one', '{{count}} directory', {
+                    count
+                  })
+                : translate(
+                    'tasks.workspaceTrustDrawers.directories_other',
+                    '{{count}} directories',
+                    { count }
+                  ))}
+          </SettingsNote>
         </View>
       ) : null}
     </BottomDrawer>

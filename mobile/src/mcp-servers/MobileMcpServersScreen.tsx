@@ -183,7 +183,7 @@ export function MobileMcpServersScreen() {
               workspaces={data.workspaces}
               online={online}
               onBack={workspacesPager.close}
-              onChange={(workspaces) => actions.setWorkspaces(opened, workspaces)}
+              onChange={(workspaces, base) => actions.setWorkspaces(opened, workspaces, base)}
             />
           ) : null
         }

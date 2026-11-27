@@ -1,15 +1,11 @@
-import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { resumeSubscriber } from './agent-session-stop-note-refresh'
 import {
   deliverToSubscriber,
   publishSubscriberSnapshot,
   type SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
-import {
-  publishSubscriberLiveText,
-  subscriberAtHead,
-  republishSubscriberBackgroundTasks
-} from './agent-session-live-publications'
+import { republishSubscriberBackgroundTasks } from './agent-session-live-publications'
+import { publishSubscriberLiveText, subscriberAtHead } from './agent-session-subscriber-live-text'
 import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
 import {
   SubscriberDeliveryLane,
@@ -22,7 +18,7 @@ import type { Subscriber } from './agent-session-subscribe-input'
 type LaneOwner = {
   deliveryPort: () => SubscriberDeliveryPort
   now: () => number
-  readLiveText: (sessionId: string) => readonly AgentJournalRenderItem[]
+  sendLiveTail: (subscriber: Subscriber, journal: SubscriberCatchUp['journal'], fence: number) => Promise<void>
   isActive: (subscriber: Subscriber) => boolean
   fail: (subscriber: Subscriber, error: unknown) => void
 }
@@ -112,11 +108,11 @@ export class SubscriberLanes {
       const fence = subscriber.fence
       const caughtUp = resume
         ? await resumeSubscriber(port, subscriber, journal, hostNow, input.refreshForkMarkers)
-        : await publishSubscriberSnapshot(port, subscriber, journal, fence, hostNow)
+        : (await publishSubscriberSnapshot(port, subscriber, journal, fence, hostNow)) !== undefined
       if (!resume) {
         subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
       }
-      await this.finishOpening(subscriber, journal, fence, hostNow, caughtUp)
+      await this.finishOpening(subscriber, journal, fence, caughtUp)
     })
   }
 
@@ -128,8 +124,9 @@ export class SubscriberLanes {
     hostNow: number
   ): void {
     this.of(subscriber).ordered(async () => {
-      const caughtUp = await publishSubscriberSnapshot(port, subscriber, journal, fence, hostNow)
-      await this.finishOpening(subscriber, journal, fence, hostNow, caughtUp)
+      const caughtUp =
+        (await publishSubscriberSnapshot(port, subscriber, journal, fence, hostNow)) !== undefined
+      await this.finishOpening(subscriber, journal, fence, caughtUp)
     })
   }
 
@@ -137,23 +134,9 @@ export class SubscriberLanes {
     subscriber: Subscriber,
     journal: SubscriberCatchUp['journal'],
     fence: number,
-    hostNow: number,
     caughtUp: boolean
   ): Promise<void> {
-    const { sessionId } = subscriber
-    const items = this.owner.readLiveText(sessionId)
-    const sends =
-      items.length > 0 &&
-      subscriberAtHead(subscriber, journal) &&
-      this.of(subscriber).sendsLiveText(items)
-    await publishSubscriberLiveText(this.owner.deliveryPort(), {
-      sessionId,
-      journal,
-      fence,
-      items: sends ? items : [],
-      subscribers: [subscriber],
-      hostNow
-    })
+    await this.owner.sendLiveTail(subscriber, journal, fence)
     if (caughtUp) {
       openProviderReceiptsAtHead(subscriber, journal)
     }

@@ -4,13 +4,14 @@ import {
 } from '../../../shared/source-control/ai/generation/generation-argument'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { findOptionOccurrence } from '../../../shared/cli/command-option-occurrence'
 import {
   compactRecipeOptions,
   KIMI_VALUE_OPTIONS
 } from '../../../shared/source-control/ai/generation/commit-message-generation-options'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
-const object = z.record(z.string(), z.unknown())
+const object = lazyZodSchema(() => z.record(z.string(), z.unknown()))
 
 export async function prepareKimiTextTaskPolicy(
   plan: CommitMessagePlan<GenerationArgument>,

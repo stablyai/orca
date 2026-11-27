@@ -10,7 +10,6 @@ import type {
   BotRequestCardReading
 } from '../../../../../../src/shared/bots/bot-request-card'
 import { useHostBotById, useHostBotStatus } from '../../../../bots/host-bot-store'
-import { publishBotLink } from '../../../../bots/pending-bot-link'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { colors, pressedStyle, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
@@ -207,10 +206,12 @@ function HostBotRequestRow({
   const subject = view.sent ? card.subject : ''
   const answer = scaledType(typography.bodySize, fontScale)
   // The request's own chat when the host names one other than Home; else Home.
-  const openChat = () =>
-    reading.chatId && reading.chatId !== bot.chatSessionId && host
-      ? host.openBotChat(bot, reading.chatId)
-      : publishBotLink({ kind: 'bot', botId: bot.id })
+  const openChat = host
+    ? () =>
+        reading.chatId && reading.chatId !== bot.chatSessionId
+          ? host.openBotChat(bot, reading.chatId)
+          : host.openBotHome(bot)
+    : null
   return (
     <MobileNativeChatEventRow
       testID={`bot-request-card:${cardId}`}
@@ -218,7 +219,7 @@ function HostBotRequestRow({
       badge={view.badge}
       label={[`${view.heading} ${bot.name}`, subject].filter(Boolean).join(' · ')}
       action={
-        view.sent ? (
+        view.sent && openChat ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('chat.agentMessage.open', 'Open {{name}}', { name: bot.name })}

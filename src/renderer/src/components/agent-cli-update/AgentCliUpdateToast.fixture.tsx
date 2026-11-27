@@ -101,7 +101,7 @@ function toast(
       settled={settled}
       failed={view === 'failed' ? 2 : 0}
       canUpdate
-      items={items(view, count)}
+      items={() => items(view, count)}
       listOpen={listOpen}
       onToggleList={() => {}}
       onClose={() => {}}

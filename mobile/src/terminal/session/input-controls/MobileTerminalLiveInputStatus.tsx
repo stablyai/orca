@@ -51,14 +51,9 @@ export function MobileTerminalLiveInputStatus({
   if (!dictationTitle) {
     return isAttaching ? (
       <View style={styles.status} pointerEvents="none">
-        <Text style={styles.title} numberOfLines={1}>
-          {t('session.terminalLiveInputStatus.uploadingImageTitle', 'Uploading image')}
+        <Text style={styles.uploading} numberOfLines={1}>
+          {t('session.terminalLiveInputStatus.uploading', 'Uploading…')}
         </Text>
-        <View style={styles.detailLine}>
-          <TailClippedText style={styles.detail}>
-            {t('session.terminalLiveInputStatus.uploadingImage', 'Uploading image to host')}
-          </TailClippedText>
-        </View>
       </View>
     ) : null
   }
@@ -110,7 +105,8 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.pill,
+    // The field's own corners, so the cover lines up with the edge it sits on.
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   // The ✕ hugs the field's left edge, the way the mock's cancel sits in the pill.
@@ -124,10 +120,10 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.sm
   },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+  uploading: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.bodySize
   },
   detailLine: {
     flex: 1

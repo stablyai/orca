@@ -83,7 +83,12 @@ export type MobileDesktopRelayHosts = {
   watchChanges: (
     host: Pick<MobileDesktopRelayHost, 'environmentId'>,
     expected: NonNullable<MobileDesktopRelayCallOptions['expected']>,
-    callbacks: { onChange: (change: { catalog: boolean }) => void; onClose: () => void }
+    callbacks: {
+      onChange: (change: { catalog: boolean }) => void
+      /** An agent row changed: worktreeRowsChanged or agentListChanged. */
+      onRowsChanged?: () => void
+      onClose: () => void
+    }
   ) => MobileDesktopRelayHostWatch | Promise<MobileDesktopRelayHostWatch>
 }
 

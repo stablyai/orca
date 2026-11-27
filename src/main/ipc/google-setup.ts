@@ -4,20 +4,25 @@ import { readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { GOOGLE_CLIENT_FILE_MAX_BYTES } from '../../shared/google/google-client-config'
 import type {
   GoogleSetupFileResult,
   GoogleSetupFoundKey
 } from '../../shared/google/google-setup-ipc-types'
 import { findGoogleKeyInFolder, watchFolderForGoogleKey } from '../google/google-key-download-watch'
-const FindKeyArgs = z.object({
-  since: z.number().nonnegative(),
-  projectId: z.string().min(1).max(120).optional()
-})
-const SaveArgs = z.object({
-  text: z.string().min(1).max(GOOGLE_CLIENT_FILE_MAX_BYTES),
-  name: z.string().regex(/^[\w.-]{1,120}$/)
-})
+const FindKeyArgs = lazyZodSchema(() =>
+  z.object({
+    since: z.number().nonnegative(),
+    projectId: z.string().min(1).max(120).optional()
+  })
+)
+const SaveArgs = lazyZodSchema(() =>
+  z.object({
+    text: z.string().min(1).max(GOOGLE_CLIENT_FILE_MAX_BYTES),
+    name: z.string().regex(/^[\w.-]{1,120}$/)
+  })
+)
 
 const TOO_LARGE = "This file is too large to be your team's Google app file."
 

@@ -5,6 +5,7 @@ import {
   getCommitMessageModel,
   isCustomAgentId,
   isNamingOnlyTextAgent,
+  isRetiredTextAgent,
   listCommitMessageAgentCapabilities,
   resolveCommitMessageAgentChoice
 } from './generation/commit-message-agent-spec'
@@ -20,7 +21,9 @@ import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
 import { projectSourceControlAiToLegacyCommitMessageAi as projectLegacySettings } from './settings/source-control-ai-legacy-projection'
 import {
-  getDiscoveredModels,
+  getFreshAccountModelListing,
+  getTextGenerationModels,
+  listsAccountModels,
   resolveThinkingLevel,
   selectPersistedModelId
 } from './settings/source-control-ai-model-selection'
@@ -175,7 +178,11 @@ export function resolveSourceControlAiForOperation(
       legacy?.customPrompt
     ),
     commandInputTemplate: actionRecipe.commandInputTemplate,
-    ...(actionRecipe.agentArgs !== undefined ? { agentArgs: actionRecipe.agentArgs } : {})
+    // A retired agent's arguments would reach the agent picked in its place.
+    ...(actionRecipe.agentArgs !== undefined &&
+    !isRetiredTextAgent(preferredAgent || input.settings.defaultTuiAgent)
+      ? { agentArgs: actionRecipe.agentArgs }
+      : {})
   }
   if (isCustomAgentId(agentChoice)) {
     if (!customAgentCommand) {
@@ -218,19 +225,33 @@ export function resolveSourceControlAiForOperation(
     )
   }
   const hostKey = input.discoveryHostKey ?? LOCAL_COMMIT_MESSAGE_HOST_KEY
+  const listing = getFreshAccountModelListing(source, legacy, hostKey, resolvedAgent)
+  const models =
+    listing ?? getTextGenerationModels(spec.models, source, legacy, hostKey, resolvedAgent)
+  // Without a fresh account listing a pick may be newer than Orca knows; Codex's refusal retry covers a bad one.
+  const runsUnlistedPicks = !listing && listsAccountModels(resolvedAgent)
   const persistedModelId = selectPersistedModelId({
     source,
     legacy,
     repoOverrides,
     operation: input.operation,
     hostKey,
-    agentId: resolvedAgent
+    agentId: resolvedAgent,
+    // Only an account listing skips a pick; elsewhere the nearest pick stands, as before.
+    isAvailable: (modelId) => !listing || listing.some((candidate) => candidate.id === modelId)
   })
-  const discoveredModels = getDiscoveredModels(source, legacy, hostKey, resolvedAgent)
   const pickedModel =
-    spec.models.find((candidate) => candidate.id === persistedModelId) ??
-    discoveredModels.find((candidate) => candidate.id === persistedModelId)
-  const model = pickedModel ?? getCommitMessageModel(resolvedAgent, spec.defaultModelId)
+    models.find((candidate) => candidate.id === persistedModelId) ??
+    (runsUnlistedPicks && persistedModelId
+      ? getCommitMessageModel(resolvedAgent, persistedModelId)
+      : undefined)
+  // An account listing without Orca's default runs the listing's own default, else its first model.
+  const model =
+    pickedModel ??
+    models.find((candidate) => candidate.id === spec.defaultModelId) ??
+    (listing
+      ? (listing.find((candidate) => candidate.isDefault) ?? listing[0])
+      : getCommitMessageModel(resolvedAgent, spec.defaultModelId))
   if (!model) {
     return resolveFailure(textGenerationFailure('noModelForAgent', { label: spec.label }))
   }

@@ -68,7 +68,7 @@ export function Prose({
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const prose = useNativeChatProseText(fontScale)
+  const prose = useNativeChatProseText(fontScale, userMessage === true)
   const renderImage = useCallback(
     (href: string, alt: string): React.ReactNode => {
       const image = mobileNativeChatMarkdownImageBlock(href, alt)
@@ -113,6 +113,7 @@ export function Prose({
           growing={revealing}
           streaming={growing || revealing}
           renderVisual={renderVisual}
+          tone="reply"
           rangeSelectable
           {...prose}
           onLongPress={onLongPress}

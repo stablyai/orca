@@ -1,6 +1,7 @@
 import { mkdir, readFile, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { writePluginFileAtomically } from '../../plugins/installation/plugin-atomic-file-write'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
@@ -10,31 +11,37 @@ import {
 
 export const MAX_CLAUDE_AGENT_VIEW_SESSIONS = 1024
 
-export const ClaudeAgentViewIdentity = z.object({
-  paneKey: z
-    .string()
-    .max(256)
-    .refine((value) => parsePaneKey(value) !== null),
-  sessionId: z.string().min(1).max(256),
-  instanceId: z.string().min(1).max(256)
-})
+export const ClaudeAgentViewIdentity = lazyZodSchema(() =>
+  z.object({
+    paneKey: z
+      .string()
+      .max(256)
+      .refine((value) => parsePaneKey(value) !== null),
+    sessionId: z.string().min(1).max(256),
+    instanceId: z.string().min(1).max(256)
+  })
+)
 
-const RegisteredView = ClaudeAgentViewIdentity.extend({
-  chord: z
-    .string()
-    .refine((chord) => CLAUDE_AGENT_VIEW_SHORTCUTS.some((s) => s.chord === chord))
-    .optional(),
-  seenAt: z.number(),
-  configDir: z.string().min(1).max(4096).optional(),
-  view: ClaudeAgentViewObservation.optional()
-})
+const RegisteredView = lazyZodSchema(() =>
+  ClaudeAgentViewIdentity.extend({
+    chord: z
+      .string()
+      .refine((chord) => CLAUDE_AGENT_VIEW_SHORTCUTS.some((s) => s.chord === chord))
+      .optional(),
+    seenAt: z.number(),
+    configDir: z.string().min(1).max(4096).optional(),
+    view: ClaudeAgentViewObservation.optional()
+  })
+)
 export type RegisteredClaudeAgentView = z.infer<typeof RegisteredView>
 
-const RegistryFile = z.object({
-  version: z.literal(1),
-  // Restore admits saved panes ahead of the cap, so a file may hold up to twice it.
-  sessions: z.array(RegisteredView).max(MAX_CLAUDE_AGENT_VIEW_SESSIONS * 2)
-})
+const RegistryFile = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    // Restore admits saved panes ahead of the cap, so a file may hold up to twice it.
+    sessions: z.array(RegisteredView).max(MAX_CLAUDE_AGENT_VIEW_SESSIONS * 2)
+  })
+)
 
 /** undefined: the file exists but could not be read now (a lock), so the caller retries. */
 async function readRegistry(filePath: string): Promise<RegisteredClaudeAgentView[] | undefined> {

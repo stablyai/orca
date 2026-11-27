@@ -163,9 +163,9 @@ export const generateUsageLimit = defineFixture({
   interact: (frame) => openGenerate(frame, 'a friendly orange fox astronaut')
 })
 
-export const generateRealPerson = defineFixture({
+export const generateNoImage = defineFixture({
   width: 420,
-  setup: stubGeneration(READY, 'image'),
+  setup: stubGeneration(READY, 'no-image'),
   render: () => <Settings />,
   interact: (frame) => openGenerate(frame, 'me as a superhero')
 })

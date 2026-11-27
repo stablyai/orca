@@ -35,7 +35,7 @@ export function formatGoogleAccount(
   const name = isDefault ? `${account.email} (default)` : account.email
   if (account.status === 'reconnect') {
     return [
-      `  ${name}: Reconnect. ${account.reason ?? 'Google access ended.'} Run \`orca google connect --account ${account.email}\`.`
+      `  ${name}: Reconnect. ${account.reason ?? 'Google access ended.'}${account.googleError ? ` Google said: ${account.googleError}.` : ''} Run \`orca google connect --account ${account.email}\`.`
     ]
   }
   return [`  ${name}: connected`, ...serviceLines(account)]

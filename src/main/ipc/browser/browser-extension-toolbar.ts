@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { isChromeExtensionId } from '../../../shared/browser/extensions/browser-extension-url'
 import type { BrowserExtensionActionResult } from '../../../shared/browser/extensions/browser-extension-types'
 import type { BrowserExtensionToolbarState } from '../../../shared/browser/extensions/browser-extension-toolbar-types'
@@ -15,14 +16,16 @@ import {
 import { setBrowserExtensionPinned } from '../../browser/extensions/actions/browser-extension-toolbar-pins'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
-const pageArgs = z.object({ browserPageId: z.string().min(1) })
-const extensionId = z.string().refine(isChromeExtensionId)
-const anchorSchema = z.object({
-  x: z.number().finite(),
-  y: z.number().finite(),
-  width: z.number().finite().nonnegative(),
-  height: z.number().finite().nonnegative()
-})
+const pageArgs = lazyZodSchema(() => z.object({ browserPageId: z.string().min(1) }))
+const extensionId = lazyZodSchema(() => z.string().refine(isChromeExtensionId))
+const anchorSchema = lazyZodSchema(() =>
+  z.object({
+    x: z.number().finite(),
+    y: z.number().finite(),
+    width: z.number().finite().nonnegative(),
+    height: z.number().finite().nonnegative()
+  })
+)
 const UNTRUSTED: BrowserExtensionActionResult = { ok: false, error: 'Not allowed' }
 
 const CHANNELS = [

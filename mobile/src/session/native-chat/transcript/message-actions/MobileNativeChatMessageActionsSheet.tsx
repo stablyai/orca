@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react'
+import { useContext, useRef, useState, useSyncExternalStore } from 'react'
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { Copy, TextSelect, Trash2, X } from 'lucide-react-native'
+import { Copy, GitFork, TextSelect, Trash2, X } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { ActionSheetContent } from '../../../../components/sheets/ActionSheetModal'
 import { BottomDrawer } from '../../../../components/bottom-drawer/BottomDrawer'
@@ -13,6 +13,10 @@ import { translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { mobileNativeChatDisplayCopyText } from '../messages/mobile-native-chat-display-copy'
 import { useMobileSlackMirrorContext } from '../../slack-mirror/use-mobile-slack-mirror'
+import { MobileNativeChatForkContext } from '../../history/use-mobile-native-chat-fork'
+import { useMobileNativeChatMessageTimeLabel } from '../messages/MobileNativeChatMessageTime'
+
+const NO_SUBSCRIBE = () => () => {}
 
 type Props = {
   message: NativeChatMessage
@@ -34,6 +38,17 @@ export function MobileNativeChatMessageActionsSheet({
   const closeSheet = () => setSheetVisible(false)
   const mirror = useMobileSlackMirrorContext()
   const posted = mirror?.link.mirrorPosts?.[message.id]?.state === 'posted'
+  const fork = useContext(MobileNativeChatForkContext)
+  // Whether Fork is listed is read once, so rows never move under the finger; its enabled state stays live.
+  const [forkListed] = useState(() => {
+    const offer = fork?.offerFor(message)
+    return offer === 'available' || offer === 'disabled'
+  })
+  const forkOffer = useSyncExternalStore(
+    fork?.subscribe ?? NO_SUBSCRIBE,
+    () => fork?.offerFor(message) ?? 'hidden'
+  )
+  const time = useMobileNativeChatMessageTimeLabel(message.timestamp)
 
   return (
     <>
@@ -44,6 +59,7 @@ export function MobileNativeChatMessageActionsSheet({
         dragContentToDismiss
       >
         <ActionSheetContent
+          {...(time ? { title: time.short, titleAccessibilityLabel: time.full } : {})}
           onClose={closeSheet}
           actions={[
             {
@@ -74,6 +90,17 @@ export function MobileNativeChatMessageActionsSheet({
                 selectRequested.current = true
               }
             },
+            ...(fork && forkListed
+              ? [
+                  {
+                    id: 'fork',
+                    label: t('chat.message.forkFromResponse', 'Fork from this response'),
+                    icon: GitFork,
+                    disabled: forkOffer !== 'available',
+                    onPress: () => fork.fork(message)
+                  }
+                ]
+              : []),
             ...(mirror && posted
               ? [
                   {

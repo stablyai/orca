@@ -1,7 +1,11 @@
 // Which of the host list's command servers Orca runs once on the host for every session, read
 // without writing: a launch points its agent at them, the relay starts them.
 import type { BotToolServer } from '../../shared/bot-tools'
-import { botToolEntries, readBotToolsSnapshot } from '../bots/bot-tools-file'
+import { botToolEntries, botToolsPath, readBotToolsSnapshot } from '../bots/bot-tools-file'
+import {
+  createIntegrationStateFileCache,
+  type IntegrationStateFileCache
+} from '../credentials/integration-state-file-cache'
 import type { BotToolEntry } from '../bots/bot-tool-entry-extras'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 
@@ -52,13 +56,48 @@ export async function sharedMcpProcessIds(folder: string): Promise<Map<string, s
   return sharedIds(await entriesOf(folder))
 }
 
+async function readSharedServers(folder: string): Promise<ReadonlyMap<string, McpCommandServer>> {
+  const entries = await entriesOf(folder)
+  const byName = new Map(entries.map(({ server }) => [server.name, server]))
+  const servers = new Map<string, McpCommandServer>()
+  for (const [name, id] of sharedIds(entries)) {
+    const server = byName.get(name)
+    if (server && !('url' in server)) {
+      servers.set(id, server)
+    }
+  }
+  return servers
+}
+
+/** One folder's, the host list's in practice: another folder's read replaces it. */
+let sharedServersRead: {
+  folder: string
+  cache: IntegrationStateFileCache<ReadonlyMap<string, McpCommandServer>>
+} | null = null
+
+/**
+ * The host list's shared command servers, by id. Every relay request asks, so the list is read
+ * again only once its file changes.
+ */
+export function sharedMcpProcessServers(
+  folder = mcpHostListFolder()
+): Promise<ReadonlyMap<string, McpCommandServer>> {
+  if (sharedServersRead?.folder !== folder) {
+    sharedServersRead = {
+      folder,
+      cache: createIntegrationStateFileCache({
+        filePath: () => botToolsPath(folder),
+        readFromDisk: () => readSharedServers(folder)
+      })
+    }
+  }
+  return sharedServersRead.cache.get()
+}
+
 /** The command server with `id` while it's set to share one process; null otherwise. */
 export async function sharedMcpProcessServer(
   id: string,
   folder = mcpHostListFolder()
 ): Promise<McpCommandServer | null> {
-  const entries = await entriesOf(folder)
-  const name = [...sharedIds(entries)].find(([, shared]) => shared === id)?.[0]
-  const entry = entries.find(({ server }) => server.name === name)
-  return entry && !('url' in entry.server) ? entry.server : null
+  return (await sharedMcpProcessServers(folder)).get(id) ?? null
 }

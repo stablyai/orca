@@ -79,6 +79,8 @@ export function useNativeChatAntigravityAuth(): NativeChatAntigravityAuth | null
   return useContext(NativeChatAntigravityAuthContext)
 }
 
+const subscribeToNothing = (): (() => void) => () => {}
+
 /** Signs agy in with Google, keeping the saved method. */
 const GOOGLE_SIGN_IN = 'google-sign-in'
 type AuthAction = AntigravitySwitchableMethod | typeof GOOGLE_SIGN_IN
@@ -207,10 +209,14 @@ export function NativeChatAntigravityAuthProvider({
 
   // A sign-in or a method saved elsewhere (Settings, another client) changes what's detected.
   useAntigravityChatSignIn(host)
-  const signInRevision = useSyncExternalStore(subscribeAntigravityChatSignIns, () => {
-    const snapshot = host ? readAntigravityChatSignInSnapshot(host) : null
-    return snapshot?.kind === 'known' ? snapshot.state.revision : -1
-  })
+  // Panes with no Antigravity host (every other agent's) skip the store's publications.
+  const signInRevision = useSyncExternalStore(
+    host ? subscribeAntigravityChatSignIns : subscribeToNothing,
+    () => {
+      const snapshot = host ? readAntigravityChatSignInSnapshot(host) : null
+      return snapshot?.kind === 'known' ? snapshot.state.revision : -1
+    }
+  )
   useEffect(() => {
     if (host) {
       refreshAntigravityChatAuthDetectionAt(host, signInRevision)

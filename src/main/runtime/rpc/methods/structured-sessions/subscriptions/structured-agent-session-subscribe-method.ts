@@ -14,6 +14,10 @@ import { structuredAgentSessionSubscriptionId as subscriptionIdFor } from './str
 import { SubscribeParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-subscribe-params'
 import * as queuedImages from '../attachments/structured-agent-session-queued-image-capability'
 import { projectReceiptDeviceEvent } from './structured-agent-session-receipt-devices'
+import {
+  liveTextViewerKey,
+  registerLiveTextViewer
+} from './structured-agent-session-live-text-viewers'
 
 export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
   name: 'agentSession.subscribe',
@@ -38,13 +42,22 @@ async function subscribe(
 ): Promise<void> {
   const { capabilities, receiptReader } = params
   const { localProviderReceipts, requestId } = ctx
-  const emit =
-    capabilities?.textAppend === 1 ? sendingTextAppends(emitFrame, capabilities) : emitFrame
+  const appends =
+    capabilities?.textAppend === 1 ? sendingTextAppends(emitFrame, capabilities) : null
+  const emit = appends ?? emitFrame
   const host = await requireInstalledHost(ctx, params.sessionId)
   const subscriptionId = subscriptionIdFor(ctx, params.sessionId)
   // A stream reads; it never keeps an agent alive or starts one.
   let dispose = (): void => {}
-  const stream = bindStructuredAgentSessionStream(ctx, subscriptionId, () => dispose())
+  let releaseViewer = (): void => {}
+  const viewer =
+    capabilities?.liveTextViewer !== undefined
+      ? liveTextViewerKey(params.sessionId, capabilities.liveTextViewer.id)
+      : undefined
+  const stream = bindStructuredAgentSessionStream(ctx, subscriptionId, () => {
+    releaseViewer()
+    dispose()
+  })
   if (stream.isClosed()) {
     return
   }
@@ -98,10 +111,21 @@ async function subscribe(
     ...(params.cursor ? { cursor: params.cursor } : {}),
     snapshotCatchUp: clientSupportsSnapshotCatchUp(ctx),
     ...(capabilities?.promptSuggestions === 1 ? { showsPromptSuggestions: true } : {}),
+    ...(appends ? { holdsTextBase: appends.holdsBase } : {}),
+    ...(viewer
+      ? {
+          liveTextViewer: viewer,
+          liveTextShown: capabilities?.liveTextViewer?.shown === true,
+          onLiveTextShown: (set: (shown: boolean) => void) => {
+            releaseViewer = registerLiveTextViewer(viewer, capabilities?.liveTextViewer?.seq ?? 0, set)
+          }
+        }
+      : {}),
     // Every phone's app, whatever its version, ends a stream over a frame its bridge cannot carry.
     ...(ctx.clientKind === 'mobile' ? { boundedFrames: true } : {})
   })
   if (stream.isClosed()) {
+    releaseViewer()
     dispose()
     return
   }

@@ -27,6 +27,7 @@ import {
   mobileMcpTraySummary
 } from './mobile-native-chat-mcp-server-copy'
 import { mcpPanelStyles as styles } from './mobile-native-chat-mcp-panel-styles'
+import { composerInputStyles } from '../../../components/composer-input/composer-input-styles'
 
 type McpAction = Exclude<AgentSessionMcpOperation, { action: 'status' }>
 
@@ -316,7 +317,7 @@ function McpPasteBox({
       </Text>
       <View style={styles.pasteRow}>
         <TextField
-          style={styles.pasteField}
+          style={[composerInputStyles.filledField, styles.pasteField]}
           value={address}
           onChangeText={setAddress}
           placeholder={t('chat.mcp.pastePlaceholder', 'Paste address')}

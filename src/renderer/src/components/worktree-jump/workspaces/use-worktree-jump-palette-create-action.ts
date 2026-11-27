@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { subscribeCmdJRowIndexJump } from '@/lib/workspace/search/palette/cmd-j-row-index-jump'
 import type { WorktreeJumpPaletteFilter } from '../results/use-worktree-jump-palette-filter'
 import type { WorktreeJumpPaletteLocalState } from '../state/use-worktree-jump-palette-local-state'
@@ -19,7 +19,7 @@ type WorktreeJumpPaletteCreateActionInput = WorktreeJumpPaletteStoreState &
   ReturnType<typeof useWorktreeJumpPaletteSelectionActions> &
   WorktreeJumpPaletteSelectionLifecycle &
   WorktreeJumpPaletteTaskUrl &
-  Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'>
+  Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'> & { revealResultsNow: () => void }
 
 export function useWorktreeJumpPaletteCreateAction({
   digitShortcutItemsRef,
@@ -30,8 +30,12 @@ export function useWorktreeJumpPaletteCreateAction({
   handleSelectItem,
   inputRef,
   setDialogElement,
+  resultsReady,
+  revealResultsNow,
   ...createWorktreeInput
 }: WorktreeJumpPaletteCreateActionInput) {
+  // A digit shortcut that lands before the rows exist waits for them instead of being dropped.
+  const pendingRowJumpRef = useRef<number | null>(null)
   useLayoutEffect(() => {
     digitShortcutItemsRef.current = paletteSections.visibleOpenTabItems
   }, [digitShortcutItemsRef, paletteSections])
@@ -40,12 +44,36 @@ export function useWorktreeJumpPaletteCreateAction({
       return
     }
     return subscribeCmdJRowIndexJump((index) => {
+      if (!resultsReady) {
+        pendingRowJumpRef.current = index
+        revealResultsNow()
+        return
+      }
       const item = digitShortcutItemsRef.current[index]
       if (item) {
         handleSelectItem(item)
       }
     })
-  }, [digitShortcutItemsRef, handleSelectItem, hasQuery, query.length, visible])
+  }, [
+    digitShortcutItemsRef,
+    handleSelectItem,
+    hasQuery,
+    query.length,
+    resultsReady,
+    revealResultsNow,
+    visible
+  ])
+  useEffect(() => {
+    const index = pendingRowJumpRef.current
+    if (!resultsReady || index === null) {
+      return
+    }
+    pendingRowJumpRef.current = null
+    const item = digitShortcutItemsRef.current[index]
+    if (item) {
+      handleSelectItem(item)
+    }
+  }, [digitShortcutItemsRef, handleSelectItem, resultsReady])
 
   const handleCreateWorktree = createWorktreeJumpPaletteWorktreeHandler(createWorktreeInput)
 

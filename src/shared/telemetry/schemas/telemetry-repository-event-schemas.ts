@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import {
   NESTED_REPO_COUNT_BUCKETS,
   NESTED_REPO_IMPORT_ACTIONS,
@@ -22,54 +23,64 @@ import {
   workspaceSourceSchema
 } from './telemetry-property-schemas'
 
-export const existingWorkspaceCountSchema = z.number().int().min(1).max(50)
+export const existingWorkspaceCountSchema = lazyZodSchema(() => z.number().int().min(1).max(50))
 export const addRepoExistingWorkspaceContextSchema = {
   source: addRepoExistingWorkspaceSourceSchema,
   existing_workspace_count: existingWorkspaceCountSchema,
   existing_linked_workspace_count: z.number().int().min(0).max(50)
 } as const
 
-export const addRepoSetupStepActionEventSchema = z
-  .object({
-    action: addRepoSetupStepActionSchema,
-    source: addRepoExistingWorkspaceSourceSchema.optional(),
-    existing_workspace_count: existingWorkspaceCountSchema.optional(),
-    existing_linked_workspace_count: z.number().int().min(0).max(50).optional(),
-    nth_repo_added: nthRepoAddedSchema
-  })
-  .strict()
-export const addRepoExistingWorkspacesDetectedSchema = z
-  .object({
-    ...addRepoExistingWorkspaceContextSchema,
-    main_workspace_count: z.number().int().min(0).max(50),
-    branch_named_workspace_count: z.number().int().min(0).max(50),
-    detached_workspace_count: z.number().int().min(0).max(50),
-    custom_named_workspace_count: z.number().int().min(0).max(50),
-    sparse_workspace_count: z.number().int().min(0).max(50),
-    nth_repo_added: nthRepoAddedSchema
-  })
-  .strict()
-export const addRepoDefaultCheckoutHandoffSchema = z
-  .object({
-    source: addRepoDefaultCheckoutHandoffSourceSchema,
-    result: addRepoDefaultCheckoutHandoffResultSchema,
-    reason: addRepoDefaultCheckoutHandoffReasonSchema,
-    nth_repo_added: nthRepoAddedSchema
-  })
-  .strict()
+export const addRepoSetupStepActionEventSchema = lazyZodSchema(() =>
+  z
+    .object({
+      action: addRepoSetupStepActionSchema,
+      source: addRepoExistingWorkspaceSourceSchema.optional(),
+      existing_workspace_count: existingWorkspaceCountSchema.optional(),
+      existing_linked_workspace_count: z.number().int().min(0).max(50).optional(),
+      nth_repo_added: nthRepoAddedSchema
+    })
+    .strict()
+)
+export const addRepoExistingWorkspacesDetectedSchema = lazyZodSchema(() =>
+  z
+    .object({
+      ...addRepoExistingWorkspaceContextSchema,
+      main_workspace_count: z.number().int().min(0).max(50),
+      branch_named_workspace_count: z.number().int().min(0).max(50),
+      detached_workspace_count: z.number().int().min(0).max(50),
+      custom_named_workspace_count: z.number().int().min(0).max(50),
+      sparse_workspace_count: z.number().int().min(0).max(50),
+      nth_repo_added: nthRepoAddedSchema
+    })
+    .strict()
+)
+export const addRepoDefaultCheckoutHandoffSchema = lazyZodSchema(() =>
+  z
+    .object({
+      source: addRepoDefaultCheckoutHandoffSourceSchema,
+      result: addRepoDefaultCheckoutHandoffResultSchema,
+      reason: addRepoDefaultCheckoutHandoffReasonSchema,
+      nth_repo_added: nthRepoAddedSchema
+    })
+    .strict()
+)
 
 // Strict enum-only failures keep raw errors off the wire.
-export const workspaceCreateFailedSchema = z
-  .object({
-    source: workspaceSourceSchema,
-    error_class: workspaceCreateErrorClassSchema,
-    nth_repo_added: nthRepoAddedSchema,
-    ...workspaceCreateFailedProperties
-  })
-  .strict()
+export const workspaceCreateFailedSchema = lazyZodSchema(() =>
+  z
+    .object({
+      source: workspaceSourceSchema,
+      error_class: workspaceCreateErrorClassSchema,
+      nth_repo_added: nthRepoAddedSchema,
+      ...workspaceCreateFailedProperties
+    })
+    .strict()
+)
 
-export const setupScriptPromptModeSchema = z.enum(['import_available', 'configure_needed'])
-export const setupScriptCountBucketSchema = z.enum(['0', '1', '2-3', '4+'])
+export const setupScriptPromptModeSchema = lazyZodSchema(() =>
+  z.enum(['import_available', 'configure_needed'])
+)
+export const setupScriptCountBucketSchema = lazyZodSchema(() => z.enum(['0', '1', '2-3', '4+']))
 export const setupScriptPromptContextSchema = {
   mode: setupScriptPromptModeSchema,
   // Keep the ZodObject shape available to cohort injection; refine instead of transforming.
@@ -104,10 +115,9 @@ export function validateSetupScriptPromptProvider(
     })
   }
 }
-export const setupScriptPromptShownSchema = z
-  .object(setupScriptPromptContextSchema)
-  .strict()
-  .superRefine(validateSetupScriptPromptProvider)
+export const setupScriptPromptShownSchema = lazyZodSchema(() =>
+  z.object(setupScriptPromptContextSchema).strict().superRefine(validateSetupScriptPromptProvider)
+)
 export const setupScriptDetectedSaveActions = [
   'save_detected_setup_clicked',
   'save_detected_setup_completed',
@@ -150,35 +160,43 @@ export function validateSetupScriptPromptAction(
   }
 }
 
-export const setupScriptPromptActionSchema = z
-  .object({
-    ...setupScriptPromptContextSchema,
-    action: z.enum([
-      'import_completed',
-      'import_failed',
-      'configure_clicked',
-      'dismissed',
-      ...setupScriptDetectedSaveActions
-    ]),
-    edited_before_save: z.boolean().optional()
-  })
-  .strict()
-  .superRefine(validateSetupScriptPromptAction)
+export const setupScriptPromptActionSchema = lazyZodSchema(() =>
+  z
+    .object({
+      ...setupScriptPromptContextSchema,
+      action: z.enum([
+        'import_completed',
+        'import_failed',
+        'configure_clicked',
+        'dismissed',
+        ...setupScriptDetectedSaveActions
+      ]),
+      edited_before_save: z.boolean().optional()
+    })
+    .strict()
+    .superRefine(validateSetupScriptPromptAction)
+)
 
-export const nestedRepoTelemetrySurfaceSchema = z.enum(NESTED_REPO_TELEMETRY_SURFACES)
-export const nestedRepoTelemetryRuntimeKindSchema = z.enum(NESTED_REPO_TELEMETRY_RUNTIME_KINDS)
-export const nestedRepoCountSchema = z
-  .number()
-  .int()
-  .min(0)
-  .max(NESTED_REPO_TELEMETRY_MAX_REPO_COUNT)
-export const nestedRepoCountBucketSchema = z.enum(NESTED_REPO_COUNT_BUCKETS)
-export const nestedRepoScanResultSchema = z.enum(NESTED_REPO_SCAN_RESULTS)
-export const nestedRepoImportActionSchema = z.enum(NESTED_REPO_IMPORT_ACTIONS)
-export const nestedRepoImportOutcomeSchema = z.enum(NESTED_REPO_IMPORT_OUTCOMES)
-export const nestedRepoScanPathKindSchema = z.enum(['git_repo', 'non_git_folder'])
-export const nestedRepoImportModeSchema = z.enum(['group', 'separate'])
-export const nestedRepoAttemptIdSchema = z.string().uuid()
+export const nestedRepoTelemetrySurfaceSchema = lazyZodSchema(() =>
+  z.enum(NESTED_REPO_TELEMETRY_SURFACES)
+)
+export const nestedRepoTelemetryRuntimeKindSchema = lazyZodSchema(() =>
+  z.enum(NESTED_REPO_TELEMETRY_RUNTIME_KINDS)
+)
+export const nestedRepoCountSchema = lazyZodSchema(() =>
+  z.number().int().min(0).max(NESTED_REPO_TELEMETRY_MAX_REPO_COUNT)
+)
+export const nestedRepoCountBucketSchema = lazyZodSchema(() => z.enum(NESTED_REPO_COUNT_BUCKETS))
+export const nestedRepoScanResultSchema = lazyZodSchema(() => z.enum(NESTED_REPO_SCAN_RESULTS))
+export const nestedRepoImportActionSchema = lazyZodSchema(() => z.enum(NESTED_REPO_IMPORT_ACTIONS))
+export const nestedRepoImportOutcomeSchema = lazyZodSchema(() =>
+  z.enum(NESTED_REPO_IMPORT_OUTCOMES)
+)
+export const nestedRepoScanPathKindSchema = lazyZodSchema(() =>
+  z.enum(['git_repo', 'non_git_folder'])
+)
+export const nestedRepoImportModeSchema = lazyZodSchema(() => z.enum(['group', 'separate']))
+export const nestedRepoAttemptIdSchema = lazyZodSchema(() => z.string().uuid())
 
 export function validateNestedRepoCountBucket(
   props: Record<string, unknown>,
@@ -219,48 +237,54 @@ export const nestedRepoTelemetryBaseSchema = {
   nth_repo_added: nthRepoAddedSchema
 } as const
 
-export const addRepoNestedScanResultSchema = z
-  .object({
-    ...nestedRepoTelemetryBaseSchema,
-    result: nestedRepoScanResultSchema,
-    selected_path_kind: nestedRepoScanPathKindSchema.optional(),
-    found_count: nestedRepoCountSchema,
-    found_count_bucket: nestedRepoCountBucketSchema,
-    truncated: z.boolean(),
-    timed_out: z.boolean()
-  })
-  .strict()
-  .superRefine(validateNestedRepoCountBuckets)
+export const addRepoNestedScanResultSchema = lazyZodSchema(() =>
+  z
+    .object({
+      ...nestedRepoTelemetryBaseSchema,
+      result: nestedRepoScanResultSchema,
+      selected_path_kind: nestedRepoScanPathKindSchema.optional(),
+      found_count: nestedRepoCountSchema,
+      found_count_bucket: nestedRepoCountBucketSchema,
+      truncated: z.boolean(),
+      timed_out: z.boolean()
+    })
+    .strict()
+    .superRefine(validateNestedRepoCountBuckets)
+)
 
-export const addRepoNestedImportActionSchema = z
-  .object({
-    ...nestedRepoTelemetryBaseSchema,
-    action: nestedRepoImportActionSchema,
-    found_count: nestedRepoCountSchema,
-    found_count_bucket: nestedRepoCountBucketSchema,
-    selected_count: nestedRepoCountSchema,
-    selected_count_bucket: nestedRepoCountBucketSchema,
-    all_selected: z.boolean()
-  })
-  .strict()
-  .superRefine(validateNestedRepoCountBuckets)
+export const addRepoNestedImportActionSchema = lazyZodSchema(() =>
+  z
+    .object({
+      ...nestedRepoTelemetryBaseSchema,
+      action: nestedRepoImportActionSchema,
+      found_count: nestedRepoCountSchema,
+      found_count_bucket: nestedRepoCountBucketSchema,
+      selected_count: nestedRepoCountSchema,
+      selected_count_bucket: nestedRepoCountBucketSchema,
+      all_selected: z.boolean()
+    })
+    .strict()
+    .superRefine(validateNestedRepoCountBuckets)
+)
 
-export const addRepoNestedImportResultSchema = z
-  .object({
-    ...nestedRepoTelemetryBaseSchema,
-    mode: nestedRepoImportModeSchema,
-    outcome: nestedRepoImportOutcomeSchema,
-    found_count: nestedRepoCountSchema,
-    found_count_bucket: nestedRepoCountBucketSchema,
-    selected_count: nestedRepoCountSchema,
-    selected_count_bucket: nestedRepoCountBucketSchema,
-    imported_count: nestedRepoCountSchema,
-    imported_count_bucket: nestedRepoCountBucketSchema,
-    already_known_count: nestedRepoCountSchema,
-    already_known_count_bucket: nestedRepoCountBucketSchema,
-    failed_count: nestedRepoCountSchema,
-    failed_count_bucket: nestedRepoCountBucketSchema,
-    all_selected: z.boolean()
-  })
-  .strict()
-  .superRefine(validateNestedRepoCountBuckets)
+export const addRepoNestedImportResultSchema = lazyZodSchema(() =>
+  z
+    .object({
+      ...nestedRepoTelemetryBaseSchema,
+      mode: nestedRepoImportModeSchema,
+      outcome: nestedRepoImportOutcomeSchema,
+      found_count: nestedRepoCountSchema,
+      found_count_bucket: nestedRepoCountBucketSchema,
+      selected_count: nestedRepoCountSchema,
+      selected_count_bucket: nestedRepoCountBucketSchema,
+      imported_count: nestedRepoCountSchema,
+      imported_count_bucket: nestedRepoCountBucketSchema,
+      already_known_count: nestedRepoCountSchema,
+      already_known_count_bucket: nestedRepoCountBucketSchema,
+      failed_count: nestedRepoCountSchema,
+      failed_count_bucket: nestedRepoCountBucketSchema,
+      all_selected: z.boolean()
+    })
+    .strict()
+    .superRefine(validateNestedRepoCountBuckets)
+)

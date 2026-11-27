@@ -1,12 +1,15 @@
 // Which of a bot's skills a Share dialog ticks.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 /** The owner's tick on a skill linked into a project from outside it: its name, and a key for the
  *  folder it was in when ticked. A skill linked in from another folder since is a new choice. */
-export const BotShareOutsidePickSchema = z.object({
-  name: z.string().min(1).max(200),
-  key: z.string().min(1).max(64)
-})
+export const BotShareOutsidePickSchema = lazyZodSchema(() =>
+  z.object({
+    name: z.string().min(1).max(200),
+    key: z.string().min(1).max(64)
+  })
+)
 export type BotShareOutsidePick = z.infer<typeof BotShareOutsidePickSchema>
 
 type Skill = { name: string; optInFrom?: string; optInKey?: string }

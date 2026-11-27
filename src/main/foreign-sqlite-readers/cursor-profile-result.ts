@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
 export type CursorDesktopProfile = {
   accessToken: string | null
@@ -16,20 +17,22 @@ export function cursorProfileReadFailure(): CursorDesktopProfileReadResult {
   return { status: 'error', error: 'Unable to read the Cursor desktop login' }
 }
 
-const nullableString = z.string().nullable()
-const resultSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('missing') }),
-  z.object({ status: z.literal('error'), error: z.string() }),
-  z.object({
-    status: z.literal('ok'),
-    profile: z.object({
-      accessToken: nullableString,
-      email: nullableString,
-      membershipType: nullableString,
-      subscriptionStatus: nullableString
+const nullableString = lazyZodSchema(() => z.string().nullable())
+const resultSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('status', [
+    z.object({ status: z.literal('missing') }),
+    z.object({ status: z.literal('error'), error: z.string() }),
+    z.object({
+      status: z.literal('ok'),
+      profile: z.object({
+        accessToken: nullableString,
+        email: nullableString,
+        membershipType: nullableString,
+        subscriptionStatus: nullableString
+      })
     })
-  })
-])
+  ])
+)
 
 // Validate structured-clone replies at the worker boundary.
 export function parseCursorProfileReadResult(

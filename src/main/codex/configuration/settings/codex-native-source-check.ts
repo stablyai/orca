@@ -1,5 +1,3 @@
-import { join } from 'node:path'
-import { observeAgentStateFile } from '../codex-path-observation'
 import { resolvesIntoWslShareAsync } from '../../../wsl/filesystem/wsl-share-path-resolution'
 import { resolvePromotionWriteTargetAsync } from './config-settings-promotion-write-target'
 import { retireCodexNativeSourceMark } from './config-settings-baseline'
@@ -13,14 +11,9 @@ export function isCodexNativeSourceCheckPending(runtimeHomePath: string): boolea
 
 /**
  * A clean pass trusted the native-source mark; confirm it off the hot path. If ~/.codex now leads
- * into a distro, record what that pass would have: no kept values, unless the managed copy changed
- * since, in which case only the mark goes and the next pass keeps its pending edits.
+ * into a distro, drop the mark so the next pass resolves it and pauses (pending edits are kept).
  */
-export function startCodexNativeSourceCheck(
-  runtimeHomePath: string,
-  systemTomlPath: string,
-  runtimeConfig: string | null
-): void {
+export function startCodexNativeSourceCheck(runtimeHomePath: string, systemTomlPath: string): void {
   if (pendingChecks.has(runtimeHomePath)) {
     return
   }
@@ -28,16 +21,9 @@ export function startCodexNativeSourceCheck(
   void classifyHostSource(systemTomlPath)
     .then((outcome) => {
       pendingChecks.delete(runtimeHomePath)
-      if (outcome === 'native') {
-        return
+      if (outcome !== 'native') {
+        retireCodexNativeSourceMark(runtimeHomePath)
       }
-      const current = observeAgentStateFile(join(runtimeHomePath, 'config.toml'))
-      // An unreadable copy counts as changed, so its pending edits are kept.
-      const unchanged =
-        current.kind === 'present'
-          ? current.value === runtimeConfig
-          : current.kind === 'absent' && runtimeConfig === null
-      retireCodexNativeSourceMark(runtimeHomePath, outcome === 'guest' && unchanged)
     })
     .catch((error: unknown) => {
       pendingChecks.delete(runtimeHomePath)

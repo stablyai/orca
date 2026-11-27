@@ -1,37 +1,43 @@
-import { findNodeAtLocation, parseTree, type Node } from 'jsonc-parser'
-import { skipTrivia } from './json-property-removal'
+import { parseTree } from 'jsonc-parser'
+import { findActiveJsonNode, skipTrivia } from './json-property-removal'
 
 function lineIndent(text: string, offset: number): string {
   return /^[ \t]*/.exec(text.slice(text.lastIndexOf('\n', offset - 1) + 1))?.[0] ?? ''
 }
 
 /**
- * Adds `name: value` as the last property of the object at `path`, indented like its siblings. Only
- * the new text goes in (no reformatting), so `removeJsonProperty` takes back exactly these bytes.
- * Null when there's no object at `path`.
+ * Adds each `[name, value]`, in order, as the last properties of the object at `path`, indented like
+ * their siblings, from one parse. Only the new text goes in (no reformatting), so
+ * `removeJsonProperties` takes back exactly these bytes. Null when there's no object at `path`.
  */
-export function insertJsonProperty(
+export function insertJsonProperties(
   text: string,
   path: readonly string[],
-  name: string,
-  value: unknown
+  properties: readonly (readonly [string, unknown])[]
 ): string | null {
   const tree = parseTree(text, [], { allowTrailingComma: true })
-  const object: Node | undefined =
-    tree && path.length > 0 ? findNodeAtLocation(tree, [...path]) : tree
+  const object = findActiveJsonNode(tree, path)
   if (!object || object.type !== 'object') {
     return null
+  }
+  if (properties.length === 0) {
+    return text
   }
   const eol = text.includes('\r\n') ? '\r\n' : '\n'
   const outer = lineIndent(text, object.offset)
   const last = object.children?.at(-1)
   const indent = last ? lineIndent(text, last.offset) : `${outer}  `
   const unit = indent.length > outer.length ? indent.slice(outer.length) : '  '
-  const property = `${JSON.stringify(name)}: ${JSON.stringify(value, null, unit)
-    .split('\n')
-    .join(eol + indent)}`
+  const property = properties
+    .map(
+      ([name, value]) =>
+        `${JSON.stringify(name)}: ${JSON.stringify(value, null, unit)
+          .split('\n')
+          .join(eol + indent)}`
+    )
+    .join(`,${eol}${indent}`)
   if (!last) {
-    // An empty object: the property goes on its own line before `}`, after any comment inside.
+    // An empty object: the properties go on their own lines before `}`, after any comment inside.
     const close = object.offset + object.length - 1
     const inside = text.slice(object.offset + 1, close).trimEnd()
     return `${text.slice(0, object.offset + 1)}${inside}${eol}${indent}${property}${eol}${outer}${text.slice(close)}`

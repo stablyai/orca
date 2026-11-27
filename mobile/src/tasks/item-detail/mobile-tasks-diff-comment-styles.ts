@@ -100,9 +100,13 @@ export const mobileTasksDiffCommentStyles = themedStyleSheet(() => ({
     marginBottom: 2
   },
   commentMeta: {
-    fontSize: 11,
-    color: colors.textMuted,
+    fontSize: 13,
+    color: colors.textSecondary,
     marginBottom: 2
+  },
+  commentAuthor: {
+    fontWeight: '600',
+    color: colors.textPrimary
   },
   commentControls: {
     gap: spacing.xs,
@@ -143,11 +147,6 @@ export const mobileTasksDiffCommentStyles = themedStyleSheet(() => ({
     flex: 1,
     fontSize: typography.bodySize,
     color: colors.textPrimary
-  },
-  actionSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
   },
   setupPromptBox: {
     backgroundColor: colors.sheetGroup,

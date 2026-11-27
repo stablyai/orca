@@ -23,8 +23,10 @@ export function MobileMcpWorkspacesPage(props: {
   workspaces: readonly McpWorkspace[]
   online: boolean
   onBack: () => void
-  /** Settles once the host has the choice; writes made meanwhile follow it in order. */
-  onChange: (workspaces: PhoneMcpWorkspaces) => Promise<void>
+  /** Settles once the host has the choice; writes made meanwhile follow it in order. `base` is
+   *  the choice a tap edited; All, and a tick from All (only that one), send none: they set the
+   *  whole choice. */
+  onChange: (workspaces: PhoneMcpWorkspaces, base?: PhoneMcpWorkspaces) => Promise<void>
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -32,10 +34,10 @@ export function MobileMcpWorkspacesPage(props: {
   const [draft, setDraft] = useState<PhoneMcpWorkspaces | null>(null)
   const writes = useRef(0)
   const chosen = draft ?? props.server.workspaces
-  const choose = (next: PhoneMcpWorkspaces) => {
+  const choose = (next: PhoneMcpWorkspaces, base?: PhoneMcpWorkspaces) => {
     setDraft(next)
     const write = (writes.current += 1)
-    void props.onChange(next).finally(() => write === writes.current && setDraft(null))
+    void props.onChange(next, base).finally(() => write === writes.current && setDraft(null))
   }
   const all = isAllMcpWorkspaces(chosen)
   return (
@@ -69,7 +71,9 @@ export function MobileMcpWorkspacesPage(props: {
                 selected={on}
                 accessibilityRole="checkbox"
                 disabled={!props.online}
-                onPress={() => choose(toggleMcpWorkspace(chosen, workspace.key))}
+                onPress={() =>
+                  choose(toggleMcpWorkspace(chosen, workspace.key), all ? undefined : chosen)
+                }
               />
             )
           })}

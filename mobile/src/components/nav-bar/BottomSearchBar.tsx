@@ -36,6 +36,8 @@ type BottomSearchBarProps = {
   bottomInset: number
   /** Usually filters or view options. Hidden while searching. */
   leading?: BarButton
+  /** Filters that narrow a search, e.g. Tasks': the leading button returns once the keyboard is down. */
+  leadingWithSearch?: boolean
   /** The screen's primary action, e.g. New workspace. Gives way to Close while searching. */
   primary?: BarButton
   /** How much of the screen's bottom the bar and keyboard cover; lists and empty states pad by it. */
@@ -60,6 +62,7 @@ export function BottomSearchBar({
   placeholder,
   bottomInset,
   leading,
+  leadingWithSearch = false,
   primary,
   onCoveredHeightChange,
   onSubmitEditing,
@@ -120,7 +123,12 @@ export function BottomSearchBar({
         </Svg>
       </View>
       <View style={styles.row}>
-        {leading ? <LeadingSlot button={leading} hidden={searching} /> : null}
+        {leading ? (
+          <LeadingSlot
+            button={leading}
+            hidden={leadingWithSearch ? focused || keyboardUp : searching}
+          />
+        ) : null}
         <View style={styles.search}>
           <MobileSearchField
             value={value}
@@ -239,14 +247,13 @@ const styles = themedStyleSheet(() => ({
     flex: 1,
     minWidth: 0
   },
+  // The pill wears the round buttons' fill and hairline, so the bar reads as one set.
   field: {
     minHeight: BUTTON_SIZE,
     borderRadius: radii.pill,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6
+    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.composerBorder
   },
   button: {
     width: BUTTON_SIZE,
@@ -256,12 +263,7 @@ const styles = themedStyleSheet(() => ({
     justifyContent: 'center',
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.composerBorder,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6
+    borderColor: colors.composerBorder
   },
   buttonEmphasis: {
     backgroundColor: colors.createActionFill,

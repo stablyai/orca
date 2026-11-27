@@ -6,6 +6,7 @@ import type { WorktreeStatus } from '../../../../../../shared/worktree/row-displ
 import { EMPTY_BROWSER_TABS, EMPTY_TABS } from './worktree-card-empty-inputs'
 import {
   selectLivePtyIdsForWorktree,
+  selectPaneForegroundAgentsForWorktree,
   selectTerminalLayoutRootsForWorktree,
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
@@ -113,6 +114,7 @@ function resolveMemoizedStatus(
     selectStoppedWorktreeEnvironmentId(statusInputs, worktreeId),
     selectRuntimePaneTitlesForWorktree(statusInputs, worktreeId),
     selectTerminalLayoutRootsForWorktree(statusInputs, worktreeId),
+    selectPaneForegroundAgentsForWorktree(statusInputs, worktreeId),
     summary
   ] as const
   if (memo && inputs.every((input, index) => input === memo.inputs[index])) {
@@ -125,7 +127,8 @@ function resolveMemoizedStatus(
     ptyIdsByTabId,
     stoppedEnvironmentId,
     runtimePaneTitlesByTabId,
-    terminalLayoutRootsByTabId
+    terminalLayoutRootsByTabId,
+    paneForegroundAgentByPaneKey
   ] = inputs
   const { status, heuristic } = resolveWorktreeStatusParts({
     tabs,
@@ -138,6 +141,7 @@ function resolveMemoizedStatus(
     agentStatusPaneIdsByTabId: summary.agentStatusPaneIdsByTabId,
     stalePaneIdsByTabId: summary.stalePaneIdsByTabId,
     terminalLayoutRootsByTabId,
+    paneForegroundAgentByPaneKey,
     hasPermission: summary.hasPermission,
     hasLiveWorking: summary.hasLiveWorking,
     hasLiveMonitoring: summary.hasLiveMonitoring,
