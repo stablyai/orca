@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard/clipboard-text'
 import { BrowserError } from '../../../browser/browser-error'
 import {
@@ -17,9 +18,11 @@ import {
 
 export type PageInputSession = Pick<ExternalChromiumBrowserSession, 'run' | 'runSteps'>
 
-const ElementCallResult = z.object({
-  result: z.object({ reached: z.boolean(), outcome: z.unknown().optional() })
-})
+const ElementCallResult = lazyZodSchema(() =>
+  z.object({
+    result: z.object({ reached: z.boolean(), outcome: z.unknown().optional() })
+  })
+)
 
 // Bounds how long one helper process runs while typing.
 const MAX_KEY_COMMANDS_PER_RUN = 256

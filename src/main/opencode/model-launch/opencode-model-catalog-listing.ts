@@ -1,6 +1,7 @@
 // OpenCode 1.x and its forks' `models --verbose` emit each provider/model ID followed by indented JSON.
 
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import { assertJsonTextStructureWithinLimits } from '../../../shared/json-stream/json-text-structure-limit'
 
@@ -10,10 +11,12 @@ export const OPENCODE_MODEL_LISTING_ARGS = ['models', '--verbose'] as const
 const DEFAULT_VARIANT = 'default'
 const MODEL_JSON_LIMITS = { structuralTokens: 64 * 1024, nestingDepth: 32 } as const
 
-const modelMetaSchema = z.looseObject({
-  name: z.string().min(1).optional(),
-  variants: z.record(z.string(), z.unknown()).optional()
-})
+const modelMetaSchema = lazyZodSchema(() =>
+  z.looseObject({
+    name: z.string().min(1).optional(),
+    variants: z.record(z.string(), z.unknown()).optional()
+  })
+)
 
 function variantLabel(variant: string): string {
   return variant

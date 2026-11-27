@@ -4,6 +4,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
 const DEFAULT_LOCATION = 'global'
 
@@ -17,10 +18,12 @@ function gcloudConfigDirectory(env: Readonly<Record<string, string>>): string {
   return join(env.HOME ?? env.USERPROFILE ?? homedir(), '.config', 'gcloud')
 }
 
-const AdcFileSchema = z.object({
-  quota_project_id: z.string().trim().min(1).optional(),
-  project_id: z.string().trim().min(1).optional()
-})
+const AdcFileSchema = lazyZodSchema(() =>
+  z.object({
+    quota_project_id: z.string().trim().min(1).optional(),
+    project_id: z.string().trim().min(1).optional()
+  })
+)
 
 /** ADC's quota project, else a service account key's own project. */
 async function readAdcProject(path: string): Promise<string | null> {

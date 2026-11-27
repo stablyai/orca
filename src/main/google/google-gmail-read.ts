@@ -2,6 +2,7 @@
 // thread or message as text, paged by character offset across its bodies. Mail is someone else's
 // words; the CLI shows it fenced as content.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type {
   GmailAttachment,
   GmailMessageView,
@@ -32,7 +33,9 @@ import { htmlToText } from './google-html-text'
 export const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me'
 // Gmail's per-user concurrency limit answers 429 well before 50 parallel reads.
 export const GMAIL_CALLS_AT_ONCE = 10
-const AttachmentSchema = z.object({ data: z.string(), size: z.number().optional() })
+const AttachmentSchema = lazyZodSchema(() =>
+  z.object({ data: z.string(), size: z.number().optional() })
+)
 
 /** `work` over `items`, at most `limit` at a time, in order. */
 export async function inBatches<T, R>(
