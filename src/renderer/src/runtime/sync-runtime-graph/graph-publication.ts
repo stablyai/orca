@@ -41,6 +41,7 @@ import {
   appliedOrchestrationRevision,
   applyOrchestrationReply
 } from './orchestration-graph-revision'
+import { selectedNativeSessionIds } from '../../../../shared/workspace-layout/selected-native-session-id'
 import type {
   RuntimeMobileSessionTabsPublication,
   RuntimeMobileSessionTabsSnapshot,
@@ -75,10 +76,16 @@ export async function syncRuntimeGraph(): Promise<void> {
   const senderWhole = state.agentSenderPublicationsByHost?.local?.['*']
   const senderBase = senderWhole && deliveredAgentSenderRevision(senderWhole)
   const orchestrationBase = appliedOrchestrationRevision(state)
+
   const graph: RuntimeRendererSyncWindowGraph = {
     tabs: [],
     leaves: [],
     rendererGeneration: mobilePublicationEpoch,
+    activeSessionIdsByWorkspace: selectedNativeSessionIds({
+      unifiedTabs: state.unifiedTabsByWorktree,
+      tabGroups: state.groupsByWorktree,
+      activeGroupIdByWorktree: state.activeGroupIdByWorktree
+    }),
     mobileSessionTabs: publication.changed,
     unchangedMobileSessionWorktrees: publication.unchangedWorktrees,
     ...(gridSizes ? { terminalGroupGridSizes: gridSizes.groups } : {}),

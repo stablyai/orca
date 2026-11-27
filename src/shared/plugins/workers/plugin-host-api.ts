@@ -6,6 +6,7 @@ import { PLUGIN_WORKER_ACTIONS_API } from './plugin-host-api-worker-actions'
 import { PLUGIN_EDITOR_TYPOGRAPHY_API } from './plugin-host-api-editor-typography'
 import {
   PLUGIN_TERMINAL_ID_MAX_LENGTH,
+  PLUGIN_WORKSPACE_CONTEXT_MINOR,
   pluginWorkspaceContextSchema
 } from './plugin-host-api-workspace-context'
 import {
@@ -121,7 +122,7 @@ export function isPluginExternalUrl(url: string): boolean {
 export const PLUGIN_HOST_API = {
   'workspace.readContext': spec({
     summary:
-      'Id, branch, name and terminal ids of the focused workspace, or null when none is focused.',
+      'Id, branch, name and terminal ids of the focused workspace, or null when none is focused. `activeSessionId` (host API 1.11) is the selected native Orca chat id: null for a known non-chat selection, omitted when unavailable; never a provider resume id.',
     since: 0,
     scope: 'active-workspace',
     capability: 'workspace:read',
@@ -311,11 +312,10 @@ export function getPluginHostMethodSpec(name: string): PluginHostMethodSpec | nu
   return isPluginHostMethodName(name) ? PLUGIN_HOST_API[name] : null
 }
 
-/** The minor this host implements: the newest `since` or `paramsSince` among frozen methods. */
+/** The newest frozen method, parameter or additive workspace-context contract this host implements. */
 export const PLUGIN_HOST_API_MINOR = Math.max(
-  ...PLUGIN_STABLE_HOST_METHOD_NAMES.map((name) =>
-    Math.max(PLUGIN_HOST_API[name].since, ...Object.values(PLUGIN_HOST_API[name].paramsSince ?? {}))
-  )
+  PLUGIN_WORKSPACE_CONTEXT_MINOR,
+  pluginHostApiMinorFor(PLUGIN_STABLE_HOST_METHOD_NAMES, 'worker')
 )
 
 /** Methods a surface may call, for `hello` and `host.has`; proposed ones only when allowed. */

@@ -24,10 +24,13 @@ export type PluginRuntimeDelegate = {
   resolveActiveWorktreeContext(): Promise<{
     worktreeId: string
     identityKey?: string
+    activeSessionId?: string | null
     path: string
     branch: string
     displayName: string
   } | null>
+  readActiveSessionId?(worktreeId: string): string | null | undefined
+  onActiveSessionChanged?(listener: () => void): () => void
   listTerminals(
     worktreeSelector?: string,
     limit?: number,
@@ -89,6 +92,9 @@ export function bindPluginHostServices(input: {
       return {
         worktreeId: context.worktreeId,
         ...(context.identityKey ? { identityKey: context.identityKey } : {}),
+        ...(context.activeSessionId !== undefined
+          ? { activeSessionId: context.activeSessionId }
+          : {}),
         branch: context.branch,
         displayName: context.displayName
       }
