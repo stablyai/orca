@@ -10,7 +10,13 @@ import {
   BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY
 } from '../../../../shared/bot-runtime-capabilities'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import { PICKABLE_BOT_MASCOT_IDS, isBotMascotId, mascotAvatar } from '../../../../shared/bot-avatar'
+import {
+  PICKABLE_BOT_MASCOT_IDS,
+  avatarPackAvatar,
+  isBotMascotId,
+  mascotAvatar,
+  parseBotAvatar
+} from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
 import { botErrorMessage } from './bot-presentation'
 import { useBotMascotLook, type BotOutfitArt } from './bot-mascot-look'
@@ -23,6 +29,12 @@ import { pictureMascotIndex, type BotPictureCustom, type BotPictureValue } from 
 import { noteBotPictureChoice } from './bot-picture-ops'
 import { newAvatarDraftKey } from './use-avatar-generation'
 import type { GenerateFaceDraft } from './AvatarGenerateFace'
+import { useAppStore } from '@/store'
+import {
+  resolveAvatarPackCharacterIndex,
+  resolveAvatarPackId,
+  useAvatarPackCatalog
+} from './avatar-packs/avatar-pack-catalog'
 
 // Opens on a random mascot, or the one a proposal chose, so no bot is created without a picture.
 function firstMascot(chosen: string | undefined): BotPictureValue {
@@ -33,8 +45,14 @@ function firstMascot(chosen: string | undefined): BotPictureValue {
   }
 }
 
+function randomPackSeed(): number {
+  return Math.floor(Math.random() * 1_000_000)
+}
+
 /** An uploaded picture, placed just after the mascot it was chosen from. */
 type NewBotUpload = { png: string; after: number }
+
+type AnimatedPackDraftChoice = { kind: 'auto' } | { kind: 'explicit'; avatar: string | null }
 
 export type NewBotPicture = {
   /** For BotPicturePicker. */
@@ -58,6 +76,9 @@ export type NewBotPicture = {
   src: string
   /** The outfit's art, drawn over `src`. */
   outfitArt: BotOutfitArt | null
+  /** When using an animated avatar pack, the `mascot:pack/<pack>/<index>` identifier. */
+  animatedAvatar: string | null
+  setAnimatedAvatar: (avatar: string | null) => void
   /** createBot's `avatar`: the mascot shown, or the one before an upload, which the bot keeps if the upload is refused. */
   avatar: string
   /** createBot's `avatarColor`: set only when a mascot is shown on another color. */
@@ -75,8 +96,6 @@ export type NewBotPicture = {
   choiceKey: string
 }
 
-/** `initialUpload` (base64 PNG) opens on that picture, placed first, as a shared bot's own; `look` opens
- *  the mascot on a shared bot's tile color and outfit; `host` says whether the host stores them. */
 /** Whether the host saves a tile color and an outfit with a new bot. */
 export function useNewBotHostLooks(hostId: ExecutionHostId): { colors: boolean; outfits: boolean } {
   return {
@@ -85,6 +104,8 @@ export function useNewBotHostLooks(hostId: ExecutionHostId): { colors: boolean; 
   }
 }
 
+/** `initialUpload` (base64 PNG) opens on that picture, placed first, as a shared bot's own; `look` opens
+ *  the mascot on a shared bot's tile color and outfit; `host` says whether the host stores them. */
 export function useNewBotPicture(
   host: { colors: boolean; outfits: boolean },
   mascot?: string,
@@ -92,7 +113,15 @@ export function useNewBotPicture(
   look?: { color?: string; outfit?: string }
 ): NewBotPicture {
   const t = useTranslate()
+  const settings = useAppStore((s) => s.settings)
+  const packsEnabled = settings?.avatarPacksEnabled ?? false
+  const defaultPack = settings?.avatarDefaultPack
+  const canAutoDefaultPack = !initialUpload && !mascot && !look && packsEnabled
+  const { catalog } = useAvatarPackCatalog(canAutoDefaultPack)
+
   const [choiceKey] = useState(newAvatarDraftKey)
+  const [packSeed, setPackSeed] = useState(randomPackSeed)
+  const [packChoice, setPackChoice] = useState<AnimatedPackDraftChoice>({ kind: 'auto' })
   const [value, setValue] = useState<BotPictureValue>(() =>
     initialUpload ? { kind: 'custom' } : firstMascot(mascot)
   )
@@ -115,6 +144,33 @@ export function useNewBotPicture(
   const mascotId =
     PICKABLE_BOT_MASCOT_IDS[pictureMascotIndex(value, custom)] ?? PICKABLE_BOT_MASCOT_IDS[0]
   const mascotLook = useBotMascotLook(mascotId, color, outfit, 'large')
+
+  let resolvedAnimatedAvatar: string | null = null
+  if (!showingUpload) {
+    if (packChoice.kind === 'explicit') {
+      if (packChoice.avatar && catalog) {
+        const parsed = parseBotAvatar(packChoice.avatar)
+        resolvedAnimatedAvatar =
+          parsed?.kind === 'avatar-pack' && catalog[parsed.pack]
+            ? avatarPackAvatar(
+                parsed.pack,
+                resolveAvatarPackCharacterIndex(catalog, parsed.pack, parsed.charIndex)
+              )
+            : packChoice.avatar
+      } else {
+        resolvedAnimatedAvatar = packChoice.avatar
+      }
+    } else if (canAutoDefaultPack && catalog) {
+      const pack = resolveAvatarPackId(catalog, defaultPack)
+      if (pack) {
+        const charIndex = resolveAvatarPackCharacterIndex(catalog, pack, packSeed)
+        resolvedAnimatedAvatar = avatarPackAvatar(pack, charIndex)
+      }
+    }
+  }
+
+  const showingAnimatedPack = resolvedAnimatedAvatar !== null
+
   return {
     value,
     custom,
@@ -148,11 +204,21 @@ export function useNewBotPicture(
           setOutfit(next)
         }
       : undefined,
+    animatedAvatar: resolvedAnimatedAvatar,
+    setAnimatedAvatar: (nextAvatar) => {
+      noteBotPictureChoice(choiceKey)
+      setPackChoice({ kind: 'explicit', avatar: nextAvatar })
+    },
     src: showingUpload && custom ? custom.src : mascotLook.src,
     outfitArt: showingUpload ? null : mascotLook.outfit,
-    avatar: mascotAvatar(mascotId),
-    avatarColor: showingUpload || !color ? undefined : color,
-    avatarOutfit: showingUpload || !host.outfits || !pickedOutfit ? undefined : pickedOutfit,
+    avatar: showingUpload
+      ? mascotAvatar(mascotId)
+      : (resolvedAnimatedAvatar ?? mascotAvatar(mascotId)),
+    avatarColor: showingUpload || showingAnimatedPack || !color ? undefined : color,
+    avatarOutfit:
+      showingUpload || showingAnimatedPack || !host.outfits || !pickedOutfit
+        ? undefined
+        : pickedOutfit,
     shownUpload: showingUpload ? upload.png : null,
     saveUpload: async (bot) =>
       showingUpload
@@ -174,6 +240,8 @@ export function useNewBotPicture(
       setOutfit(look?.outfit ?? null)
       setValue(initialUpload ? { kind: 'custom' } : firstMascot(mascot))
       setUpload(initialUpload ? { png: initialUpload, after: -1 } : null)
+      setPackSeed(randomPackSeed())
+      setPackChoice({ kind: 'auto' })
     },
     choiceKey
   }

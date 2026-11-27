@@ -4,11 +4,18 @@ import React, { useEffect, useRef, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
+import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
-import { BotAvatar, BotAvatarTile } from './BotAvatar'
+import { BotAvatar, BotAvatarTile, BotPictureGeneratingVeil } from './BotAvatar'
 import { BotPicturePicker } from './BotPicturePicker'
 import type { GenerateFace } from './AvatarGenerateFace'
 import { popIn } from './BotPickList'
+import { AnimatedBotAvatar } from './avatar-packs/AnimatedBotAvatar'
+import {
+  AvatarPackCharacterPicker,
+  BotPictureModeTabs,
+  ResetToClassicMascotButton
+} from './avatar-packs/AvatarPackCharacterPicker'
 import type { BotAvatarIntake } from './use-bot-avatar-intake'
 import type { NewBotPicture } from './use-new-bot-picture'
 
@@ -50,6 +57,11 @@ export function ImportBotHero({
     setOpen(false)
   }
   const running = generate?.run.kind === 'running'
+  const parsedPack = picture.animatedAvatar ? parseBotAvatar(picture.animatedAvatar) : null
+  const isAnimatedPack = parsedPack?.kind === 'avatar-pack'
+  const [activeTab, setActiveTab] = useState<'animated' | 'classic'>(() =>
+    isAnimatedPack ? 'animated' : 'classic'
+  )
   const oldRef = useRef<HTMLSpanElement>(null)
   useEffect(() => {
     popIn(oldRef.current, FACE_POP_MS)
@@ -78,7 +90,15 @@ export function ImportBotHero({
         </Face>
       ) : (
         <Face label={t('bots.import.newBotLabel', 'New bot')}>
-          <Popover open={open} onOpenChange={setOpen}>
+          <Popover
+            open={open}
+            onOpenChange={(next) => {
+              if (next) {
+                setActiveTab(isAnimatedPack ? 'animated' : 'classic')
+              }
+              setOpen(next)
+            }}
+          >
             <PopoverTrigger asChild>
               <button
                 type="button"
@@ -87,30 +107,68 @@ export function ImportBotHero({
                 className="rounded-2xl outline-none hover:opacity-90 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:hover:opacity-100"
               >
                 {/* A picture still being made, picker open or closed; it lands on its own. */}
-                <BotAvatarTile
-                  src={picture.src}
-                  outfit={picture.outfitArt}
-                  fallback=""
-                  className="size-24 rounded-2xl"
-                  generating={running}
-                />
+                {isAnimatedPack ? (
+                  <span className="relative flex size-24 items-center justify-center overflow-hidden rounded-2xl border border-border bg-muted/40 p-1.5">
+                    <AnimatedBotAvatar
+                      pack={parsedPack.pack}
+                      charIndex={parsedPack.charIndex}
+                      state="idle"
+                      className="size-full"
+                    />
+                    {running ? <BotPictureGeneratingVeil /> : null}
+                  </span>
+                ) : (
+                  <BotAvatarTile
+                    src={picture.src}
+                    outfit={picture.outfitArt}
+                    fallback=""
+                    className="size-24 rounded-2xl"
+                    generating={running}
+                  />
+                )}
               </button>
             </PopoverTrigger>
             {/* A window too short for the open picker scrolls the card; any other fits it whole. */}
             <PopoverContent wheelScroll className="flex w-96 flex-col">
-              <div className="scrollbar-sleek min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain">
-                <BotPicturePicker
-                  value={picture.value}
-                  custom={picture.custom}
-                  onChange={picture.onChange}
-                  onUpload={picture.onUpload}
-                  color={picture.color}
-                  onColorChange={picture.onColorChange}
-                  outfit={picture.outfit}
-                  onOutfitChange={picture.onOutfitChange}
-                  generate={generate}
-                  intake={intake}
-                />
+              <BotPictureModeTabs activeTab={activeTab} onTabChange={setActiveTab} />
+              <div className="scrollbar-sleek min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain p-3">
+                {activeTab === 'animated' ? (
+                  <div className="flex flex-col gap-2">
+                    <AvatarPackCharacterPicker
+                      currentAvatar={picture.animatedAvatar}
+                      onSelect={(newAvatar) => {
+                        picture.setAnimatedAvatar(newAvatar)
+                      }}
+                    />
+                    {picture.animatedAvatar ? (
+                      <ResetToClassicMascotButton
+                        onReset={() => {
+                          picture.setAnimatedAvatar(null)
+                          setActiveTab('classic')
+                        }}
+                      />
+                    ) : null}
+                  </div>
+                ) : (
+                  <BotPicturePicker
+                    value={picture.value}
+                    custom={picture.custom}
+                    onChange={(next) => {
+                      picture.setAnimatedAvatar(null)
+                      picture.onChange(next)
+                    }}
+                    onUpload={(png, after) => {
+                      picture.setAnimatedAvatar(null)
+                      picture.onUpload(png, after)
+                    }}
+                    color={picture.color}
+                    onColorChange={picture.onColorChange}
+                    outfit={picture.outfit}
+                    onOutfitChange={picture.onOutfitChange}
+                    generate={generate}
+                    intake={intake}
+                  />
+                )}
               </div>
             </PopoverContent>
           </Popover>

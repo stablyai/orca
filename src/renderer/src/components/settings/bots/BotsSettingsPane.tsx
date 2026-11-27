@@ -5,6 +5,7 @@ import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { useBotSettingsAccounts, useBotSettingsComputers } from './bot-settings-computers'
 import { BotAccountGroup, BotComputerGroup } from './BotSettingsGroups'
+import { BotAvatarPacksGroup } from './BotAvatarPacksGroup'
 
 /** The bots switch and this computer's bot settings, then each Orca account and each computer with bots. */
 export function BotsSettingsPane({
@@ -54,6 +55,7 @@ export function BotsSettingsPane({
           }
         />
       </div>
+      <BotAvatarPacksGroup settings={settings} updateSettings={updateSettings} />
       <div className="space-y-6">
         {accounts.map((account) => (
           <BotAccountGroup key={account.email ?? ''} account={account} />

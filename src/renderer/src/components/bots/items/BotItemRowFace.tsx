@@ -5,6 +5,7 @@ import { botFallback } from '../../../../../shared/bots/bot-avatar-fallback'
 import { BotAvatar, BotAvatarTile } from '../BotAvatar'
 import { wornBotOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
 import { useBotMascotLayers } from '../bot-mascot-look'
+import { useResolvedAvatarPack } from '../avatar-packs/use-resolved-avatar-pack'
 import {
   BotGroupFacePicturesContext,
   BotItemFaceFolded,
@@ -39,6 +40,7 @@ function BotPanelFace({
   pictures: BotGroupFacePictures
 }): React.JSX.Element {
   const parsed = parseBotAvatar(bot.avatar)
+  const animatedPack = useResolvedAvatarPack(bot)
   const folded = useContext(BotItemFaceFolded)
   const handle = parsed?.kind === 'upload' ? pictures.faceOf(bot, parsed.version) : NO_UPLOAD
   const picture = folded ? (handle.folded ?? handle) : handle
@@ -48,6 +50,9 @@ function BotPanelFace({
     bot.avatarColor,
     wornBotOutfit(bot.avatarOutfit)
   )
+  if (!folded && animatedPack?.active) {
+    return <BotAvatar bot={bot} className={FACE_CLASS} />
+  }
   return (
     <BotAvatarTile
       src={look?.src ?? upload}

@@ -14,6 +14,13 @@ import { BOT_PICTURE_DROP_OUTLINE, BotPicturePicker } from './BotPicturePicker'
 import { useBotAvatarIntakeHost, type BotAvatarIntake } from './use-bot-avatar-intake'
 import type { NewBotPicture } from './use-new-bot-picture'
 import type { GenerateFace } from './AvatarGenerateFace'
+import { AnimatedBotAvatar } from './avatar-packs/AnimatedBotAvatar'
+import {
+  AvatarPackCharacterPicker,
+  BotPictureModeTabs,
+  ResetToClassicMascotButton
+} from './avatar-packs/AvatarPackCharacterPicker'
+import { parseBotAvatar } from '../../../../shared/bot-avatar'
 
 /** The unified form dialog's padding (`p-5`). */
 const DIALOG_PADDING_PX = 20
@@ -50,6 +57,11 @@ export function NewBotPictureButton({
     setOpen(false)
   }
   const running = generate?.run.kind === 'running'
+  const parsedPack = picture.animatedAvatar ? parseBotAvatar(picture.animatedAvatar) : null
+  const isAnimatedPack = parsedPack?.kind === 'avatar-pack'
+  const [activeTab, setActiveTab] = useState<'animated' | 'classic'>(() =>
+    isAnimatedPack ? 'animated' : 'classic'
+  )
   // The popover stays inside the dialog's padding sideways, so a narrow dialog narrows it rather than its
   // edge; downward it may pass the dialog, so an open outfit grid shows whole.
   const [dialogWidth, setDialogWidth] = useState<number | null>(null)
@@ -71,6 +83,9 @@ export function NewBotPictureButton({
       <Popover
         open={open && !disabled}
         onOpenChange={(next) => {
+          if (next) {
+            setActiveTab(isAnimatedPack ? 'animated' : 'classic')
+          }
           setOpen(next)
           if (next && line.kind === 'error') {
             intake.dismiss()
@@ -85,12 +100,31 @@ export function NewBotPictureButton({
             aria-describedby={showReading ? readingId : undefined}
             className="group/picture relative size-16 shrink-0 cursor-pointer rounded-[18px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-default"
           >
-            <BotAvatarTile
-              src={picture.src}
-              outfit={picture.outfitArt}
-              fallback=""
-              className="size-16 rounded-[inherit] shadow-[0_0_0_3px_var(--dialog-surface)] transition-[filter] group-hover/picture:brightness-95"
-            />
+            {isAnimatedPack ? (
+              <span className="flex size-16 items-center justify-center overflow-hidden rounded-[inherit] border border-border bg-muted/40 p-1 shadow-[0_0_0_3px_var(--dialog-surface)] transition-colors group-hover/picture:bg-muted/70">
+                <AnimatedBotAvatar
+                  pack={parsedPack.pack}
+                  charIndex={parsedPack.charIndex}
+                  state="idle"
+                  className="size-full"
+                  fallback={
+                    <img
+                      src={picture.src}
+                      alt=""
+                      draggable={false}
+                      className="size-full rounded-[inherit] object-cover"
+                    />
+                  }
+                />
+              </span>
+            ) : (
+              <BotAvatarTile
+                src={picture.src}
+                outfit={picture.outfitArt}
+                fallback=""
+                className="size-16 rounded-[inherit] shadow-[0_0_0_3px_var(--dialog-surface)] transition-[filter] group-hover/picture:brightness-95"
+              />
+            )}
             {line.kind === 'drop' ? (
               <span className="absolute inset-0 overflow-hidden rounded-[inherit] [&>span]:rounded-[inherit] [&>span]:text-[10px]">
                 <BotPictureVeil />
@@ -117,6 +151,8 @@ export function NewBotPictureButton({
           wheelScroll
           className="flex w-[min(20rem,var(--new-bot-picture-width),var(--radix-popover-content-available-width))] flex-col"
         >
+          <BotPictureModeTabs activeTab={activeTab} onTabChange={setActiveTab} />
+
           {/* The whole popover takes a dropped picture, so all of it is outlined while one is dragged. */}
           {/* 12 px to what shows: the carousel adds 4 px above the picture, the caption 6 px below its text. */}
           <div
@@ -125,20 +161,45 @@ export function NewBotPictureButton({
               'scrollbar-sleek min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain px-3 pt-2 pb-1.5'
             )}
           >
-            <BotPicturePicker
-              value={picture.value}
-              custom={picture.custom}
-              onChange={picture.onChange}
-              onUpload={picture.onUpload}
-              color={picture.color}
-              onColorChange={picture.onColorChange}
-              outfit={picture.outfit}
-              onOutfitChange={picture.onOutfitChange}
-              descriptionDraft={picture.descriptionDraft}
-              uploadLink
-              intake={intake}
-              generate={generate}
-            />
+            {activeTab === 'animated' ? (
+              <div className="flex flex-col gap-2">
+                <AvatarPackCharacterPicker
+                  currentAvatar={picture.animatedAvatar}
+                  onSelect={(newAvatar) => {
+                    picture.setAnimatedAvatar(newAvatar)
+                  }}
+                />
+                {picture.animatedAvatar ? (
+                  <ResetToClassicMascotButton
+                    onReset={() => {
+                      picture.setAnimatedAvatar(null)
+                      setActiveTab('classic')
+                    }}
+                  />
+                ) : null}
+              </div>
+            ) : (
+              <BotPicturePicker
+                value={picture.value}
+                custom={picture.custom}
+                onChange={(next) => {
+                  picture.setAnimatedAvatar(null)
+                  picture.onChange(next)
+                }}
+                onUpload={(png, after) => {
+                  picture.setAnimatedAvatar(null)
+                  picture.onUpload(png, after)
+                }}
+                color={picture.color}
+                onColorChange={picture.onColorChange}
+                outfit={picture.outfit}
+                onOutfitChange={picture.onOutfitChange}
+                descriptionDraft={picture.descriptionDraft}
+                uploadLink
+                intake={intake}
+                generate={generate}
+              />
+            )}
           </div>
         </PopoverContent>
       </Popover>

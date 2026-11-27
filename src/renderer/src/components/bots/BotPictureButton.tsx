@@ -12,14 +12,23 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { botRefKey } from '@/lib/bot-hosts'
+import { updateBot } from '@/lib/bot-catalog'
+import { isAvatarPackAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
 import type { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
 import { BotAvatar } from './BotAvatar'
 import { BOT_EDIT_HINT } from './bot-edit-hint'
+import { noteBotPictureChoice } from './bot-picture-ops'
 import { BOT_PICTURE_DROP_OUTLINE, BotPicturePicker, pictureTakesLook } from './BotPicturePicker'
 import { useGenerateFace } from './AvatarGenerateFace'
 import { useBotPictureGenerating } from './avatar-generation-requests'
 import { failedForToast } from './avatar-generation-request-apply'
+import {
+  AvatarPackCharacterPicker,
+  BotPictureModeTabs,
+  ResetToClassicMascotButton
+} from './avatar-packs/AvatarPackCharacterPicker'
 
 export function BotPictureButton({
   bot,
@@ -41,6 +50,10 @@ export function BotPictureButton({
   const generating = useBotPictureGenerating(bot)
   const [open, setOpen] = useState(false)
   const [tipOpen, setTipOpen] = useState(false)
+  const hasAvatarPack = isAvatarPackAvatar(bot.avatar)
+  const [activeTab, setActiveTab] = useState<'animated' | 'classic'>(() =>
+    hasAvatarPack ? 'animated' : 'classic'
+  )
   // A host that sends Slack the drawn picture gives it the color and outfit too.
   const slackIcon = useBotHostHas(bot.hostId, BOTS_SLACK_ICON_RUNTIME_CAPABILITY)
   // The note is only for a mascot's color and outfit, which an older host's Slack icon leaves out; an
@@ -78,7 +91,15 @@ export function BotPictureButton({
     }
   )
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        if (next) {
+          setActiveTab(hasAvatarPack ? 'animated' : 'classic')
+        }
+        setOpen(next)
+      }}
+    >
       <Tooltip open={generating && tipOpen} onOpenChange={setTipOpen}>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
@@ -114,8 +135,10 @@ export function BotPictureButton({
       <PopoverContent
         // A window too short for the open picker scrolls the card; any other fits it whole.
         wheelScroll
-        className="flex w-80 flex-col"
+        className="flex w-84 flex-col"
       >
+        <BotPictureModeTabs activeTab={activeTab} onTabChange={setActiveTab} />
+
         {/* The whole popover takes a dropped picture, so all of it is outlined while one is dragged;
             the padding keeps the picture and caption clear of its edges. */}
         <div
@@ -124,20 +147,40 @@ export function BotPictureButton({
             'scrollbar-sleek min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain p-3'
           )}
         >
-          <BotPicturePicker
-            value={picture.value}
-            custom={picture.custom}
-            onChange={picture.pick}
-            onUpload={picture.upload}
-            onUndo={picture.undo}
-            color={picture.color}
-            onColorChange={colors ? picture.pickColor : undefined}
-            outfit={picture.outfit}
-            onOutfitChange={outfits ? picture.pickOutfit : undefined}
-            footer={slackNote}
-            generate={face}
-            onIntakeStart={picture.beginIntake}
-          />
+          {activeTab === 'animated' ? (
+            <div className="flex flex-col gap-2">
+              <AvatarPackCharacterPicker
+                currentAvatar={bot.avatar}
+                onSelect={(newAvatar) => {
+                  noteBotPictureChoice(botRefKey(bot))
+                  void updateBot({ id: bot.id, hostId: bot.hostId }, { avatar: newAvatar })
+                }}
+              />
+              {hasAvatarPack ? (
+                <ResetToClassicMascotButton
+                  onReset={() => {
+                    picture.pick({ kind: 'mascot', index: 0 })
+                    setActiveTab('classic')
+                  }}
+                />
+              ) : null}
+            </div>
+          ) : (
+            <BotPicturePicker
+              value={picture.value}
+              custom={picture.custom}
+              onChange={picture.pick}
+              onUpload={picture.upload}
+              onUndo={picture.undo}
+              color={picture.color}
+              onColorChange={colors ? picture.pickColor : undefined}
+              outfit={picture.outfit}
+              onOutfitChange={outfits ? picture.pickOutfit : undefined}
+              footer={slackNote}
+              generate={face}
+              onIntakeStart={picture.beginIntake}
+            />
+          )}
         </div>
       </PopoverContent>
     </Popover>

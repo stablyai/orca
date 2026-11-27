@@ -10,4 +10,10 @@ export type BotsGlobalSettings = {
   avatarGenerationAgent?: AvatarImageAgent
   /** The description that made a bot's saved picture, by `host|bot|avatar`; shown as its caption. */
   generatedAvatarDescriptions?: Record<string, string>
+  /** Whether animated vector avatar packs are enabled for bots without a custom upload. */
+  avatarPacksEnabled?: boolean
+  /** Default animated avatar pack id when `avatarPacksEnabled` is on. */
+  avatarDefaultPack?: string
+  /** Local directory holding `catalog_index.json` and `packs/` for animated bot avatars. */
+  avatarPacksDir?: string
 }

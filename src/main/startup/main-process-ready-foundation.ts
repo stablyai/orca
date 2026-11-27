@@ -40,6 +40,7 @@ import {
   suppressDevEducationForStore
 } from './profile-startup/dev-education-suppression'
 import { setBrowserNetworkProxySettingsResolver } from '../browser/sessions/proxy/browser-session-proxy'
+import { resetAvatarPacksDirCache } from '../avatar-packs/avatar-pack-protocol'
 import { installPreviewProtocolHandlers } from './preview-protocol-handlers'
 import { registerDocPreviewGrantHandlers } from '../ipc/doc-preview-grant-ipc'
 import {
@@ -284,6 +285,9 @@ export async function initializeReadyFoundation(): Promise<void> {
         wslHookRelayManager.disposeAll({ permanent: false })
       }
     }
+    if ('avatarPacksDir' in updates) {
+      resetAvatarPacksDirCache()
+    }
   })
   applyAppIcon(nativeSettings.getSettings().appIcon)
   if (shouldSuppressDevEducation({ isDev: !app.isPackaged })) {
@@ -291,7 +295,9 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   // Install the proxy resolver before partitions materialize.
   setBrowserNetworkProxySettingsResolver(() => nativeSettings.getSettings())
-  installPreviewProtocolHandlers()
+  installPreviewProtocolHandlers({
+    getSettings: () => state.store?.getSettings()
+  })
   registerDocPreviewGrantHandlers()
   // Session setup needs the extension support decision before loading profiles.
   initializeBrowserExtensionSupport({

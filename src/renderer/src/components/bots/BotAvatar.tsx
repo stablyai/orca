@@ -8,6 +8,8 @@ import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import { BOT_MASCOT_URLS } from './bot-mascots'
 import type { BotOutfitArt, BotPictureSize } from './bot-mascot-look'
 import { useBotPictureGenerating } from './avatar-generation-requests'
+import { AnimatedBotAvatar } from './avatar-packs/AnimatedBotAvatar'
+import { useResolvedAvatarPack } from './avatar-packs/use-resolved-avatar-pack'
 
 /** The bot's picture, else its emoji, else its initial; veiled with a spinner while a new one is being
  *  made for it, from a picker open or closed. */
@@ -17,21 +19,56 @@ export function BotAvatar({
   className,
   style
 }: {
-  bot: Pick<Bot, 'id' | 'name' | 'avatar' | 'avatarColor' | 'avatarOutfit'> & BotOnHost
+  bot: Pick<Bot, 'id' | 'name' | 'avatar' | 'avatarColor' | 'avatarOutfit'> &
+    BotOnHost & { paused?: boolean; folderWorkspaceId?: string | null }
   /** 'large' for a picture over about 48 px, so an outfit draws its large art. */
   size?: BotPictureSize
   className?: string
   style?: React.CSSProperties
 }): React.JSX.Element {
   const look = useBotAvatarLook(bot, size)
+  const generating = useBotPictureGenerating(bot)
+  const animatedPack = useResolvedAvatarPack(bot)
+  const fallbackText = botFallback(bot)
+
+  if (animatedPack?.active) {
+    return (
+      <span
+        aria-hidden
+        style={style}
+        className={cn(
+          'relative flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md border-0 bg-transparent text-xs font-semibold text-foreground',
+          className
+        )}
+      >
+        <AnimatedBotAvatar
+          pack={animatedPack.pack}
+          charIndex={animatedPack.charIndex}
+          state={animatedPack.state}
+          className="size-full"
+          fallback={
+            look.src ? (
+              <img src={look.src} alt="" draggable={false} className="size-full object-cover" />
+            ) : (
+              <span className="flex size-full items-center justify-center rounded-[inherit] border border-border bg-muted">
+                {fallbackText}
+              </span>
+            )
+          }
+        />
+        {generating ? <BotPictureGeneratingVeil /> : null}
+      </span>
+    )
+  }
+
   return (
     <BotAvatarTile
       src={look.src}
       outfit={look.outfit}
-      fallback={botFallback(bot)}
+      fallback={fallbackText}
       className={className}
       style={style}
-      generating={useBotPictureGenerating(bot)}
+      generating={generating}
     />
   )
 }
@@ -48,10 +85,34 @@ export function CarriedBotAvatar({
   className?: string
 }): React.JSX.Element {
   const parsed = parseBotAvatar(avatar)
+  const fallbackText = botFallback({ name, avatar })
+  if (parsed?.kind === 'avatar-pack') {
+    return (
+      <span
+        aria-hidden
+        className={cn(
+          'relative flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md border-0 bg-transparent text-xs font-semibold text-foreground',
+          className
+        )}
+      >
+        <AnimatedBotAvatar
+          pack={parsed.pack}
+          charIndex={parsed.charIndex}
+          state="idle"
+          className="size-full"
+          fallback={
+            <span className="flex size-full items-center justify-center rounded-[inherit] border border-border bg-muted">
+              {fallbackText}
+            </span>
+          }
+        />
+      </span>
+    )
+  }
   return (
     <BotAvatarTile
       src={parsed?.kind === 'mascot' ? BOT_MASCOT_URLS[parsed.id] : null}
-      fallback={botFallback({ name, avatar })}
+      fallback={fallbackText}
       className={className}
     />
   )
