@@ -7,6 +7,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { compareVersions, isPrereleaseVersion, isValidVersion } from '../releases/updater-fallback'
 
@@ -18,33 +19,35 @@ export function bakedRolloutFlag(_name: RolloutFlagName, appVersion: string): bo
   return isPrereleaseVersion(appVersion)
 }
 
-const versionString = z.string().refine(isValidVersion)
-
 // Why not strict: a newer server may add fields; an entry this build can't read falls back alone.
-const rolloutFlagEntrySchema = z
-  .object({
-    // `off` is the kill switch; `on` admits `percent` of installs; `default` defers to the build.
-    state: z.enum(['default', 'off', 'on']),
-    percent: z.number().min(0).max(100).optional(),
-    minVersion: versionString.optional(),
-    maxVersion: versionString.optional()
-  })
-  .refine(
-    (entry) =>
-      entry.minVersion === undefined ||
-      entry.maxVersion === undefined ||
-      compareVersions(entry.minVersion, entry.maxVersion) <= 0
-  )
+const rolloutFlagEntrySchema = lazyZodSchema(() =>
+  z
+    .object({
+      // `off` is the kill switch; `on` admits `percent` of installs; `default` defers to the build.
+      state: z.enum(['default', 'off', 'on']),
+      percent: z.number().min(0).max(100).optional(),
+      minVersion: z.string().refine(isValidVersion).optional(),
+      maxVersion: z.string().refine(isValidVersion).optional()
+    })
+    .refine(
+      (entry) =>
+        entry.minVersion === undefined ||
+        entry.maxVersion === undefined ||
+        compareVersions(entry.minVersion, entry.maxVersion) <= 0
+    )
+)
 
 export type RolloutFlagEntry = z.infer<typeof rolloutFlagEntrySchema>
 export type RolloutConfig = Partial<Record<RolloutFlagName, RolloutFlagEntry>>
 
-const campaignRolloutSchema = z.object({
-  rollout: z.object({
-    version: z.literal(1),
-    flags: z.record(z.string(), z.unknown())
+const campaignRolloutSchema = lazyZodSchema(() =>
+  z.object({
+    rollout: z.object({
+      version: z.literal(1),
+      flags: z.record(z.string(), z.unknown())
+    })
   })
-})
+)
 
 /** Reads the optional `rollout` block of a campaign payload; anything unreadable is null. */
 export function parseRolloutConfig(payload: unknown): RolloutConfig | null {
