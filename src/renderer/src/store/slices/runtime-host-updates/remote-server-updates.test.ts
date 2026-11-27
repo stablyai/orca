@@ -1,13 +1,11 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { createStore } from 'zustand/vanilla'
 import {
   REMOTE_SERVER_UPDATE_CAPABILITY,
   type RemoteServerUpdateSupport
 } from '../../../../../shared/remote-runtime/host-catalog/remote-server-update'
 import { publicRuntimeEnvironment } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
-import type { AppState } from '../../types'
-import { createRemoteServerUpdatesSlice } from './remote-server-updates'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 
 const HOST = 'fixture-host'
 const SUPPORT: RemoteServerUpdateSupport = {
@@ -17,6 +15,8 @@ const SUPPORT: RemoteServerUpdateSupport = {
 }
 
 function setup() {
+  const store = createTestStore()
+  store.setState({ setRuntimeEnvironments: () => {} })
   const response = createCompatibleRuntimeStatusResponse()
   const call = vi.fn().mockRejectedValue(new Error('Fixture download unavailable'))
   const list = vi.fn().mockResolvedValue([publicRuntimeEnvironment({ id: HOST })])
@@ -38,13 +38,6 @@ function setup() {
       updater: { getVersion: async () => '1.4.276' }
     }
   })
-  const store = createStore<AppState>()(
-    (...args) =>
-      ({
-        ...createRemoteServerUpdatesSlice(...args),
-        setRuntimeEnvironments: () => {}
-      }) as unknown as AppState
-  )
   return { state: store.getState, call, list }
 }
 
