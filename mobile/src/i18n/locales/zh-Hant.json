@@ -766,6 +766,7 @@
         "task": "任務"
       },
       "unnamedRecipient": "一個代理程式",
+      "recipientName": "{{name}}",
       "event": {
         "followedUp": "已傳送後續訊息",
         "update": "更新",
@@ -7014,7 +7015,11 @@
         "signIn": "登入 GitHub",
         "pickSubtitle": "選擇它可以使用的存放庫"
       },
-      "allRepositoriesShort": "所有存放庫"
+      "allRepositoriesShort": "所有存放庫",
+      "ghSignedOut": {
+        "line": "{{host}} 上的 gh 未登入。請在該主機上執行 gh auth login。",
+        "copy": "複製 {{text}}"
+      }
     },
     "connect": {
       "finishOnHost": "請在 {{host}} 上的 Orca 中完成 {{service}} 的連線。",
@@ -7245,6 +7250,7 @@
     "agentFilesMessage": "Orca 會將你的 MCP 伺服器保存在各代理程式的設定檔中。你自己的項目會維持原狀。",
     "allow": "允許",
     "removeTitle": "要移除 {{name}} 嗎？",
+    "removeMessageSavedData": "使用此伺服器的工作階段可能會立即失去存取權。這可能會刪除為此伺服器儲存的標頭、環境變數或登入資訊。若是如此，你可能需要重新輸入這些資訊或重新登入，才能恢復存取權。",
     "remove": "移除",
     "moveTitle": "要將 {{name}} 移至 Orca 嗎？",
     "moveMessage": "Orca 會將它從 {{agents}} 的設定中移除，並保留備份。",
