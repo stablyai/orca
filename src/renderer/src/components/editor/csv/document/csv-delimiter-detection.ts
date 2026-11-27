@@ -1,8 +1,5 @@
 export const CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS = 64 * 1024
 
-const LINE_FEED_CODE_UNIT = 10
-const CARRIAGE_RETURN_CODE_UNIT = 13
-
 export function detectCsvDelimiter(filePath: string, content: string): string {
   if (filePath.toLowerCase().endsWith('.tsv')) {
     return '\t'
@@ -12,11 +9,10 @@ export function detectCsvDelimiter(filePath: string, content: string): string {
   if (text.charCodeAt(0) === 0xfeff) {
     text = text.slice(1)
   }
-  // Skip blank leading lines, whose zero-delimiter tie would incorrectly classify TSV as comma-separated.
-  const firstLine = findFirstNonEmptyCsvSniffLine(text)
-  const tabs = countDelimiterOutsideQuotes(firstLine, '\t')
-  const semicolons = countDelimiterOutsideQuotes(firstLine, ';')
-  const commas = countDelimiterOutsideQuotes(firstLine, ',')
+  // Quoted header cells may span physical lines; sniff the first nonblank record.
+  const tabs = countFirstCsvRecordDelimiters(text, '\t')
+  const semicolons = countFirstCsvRecordDelimiters(text, ';')
+  const commas = countFirstCsvRecordDelimiters(text, ',')
   // Keep the existing comma/tab choice unless semicolon strictly wins.
   const existingDelimiter = tabs > commas ? '\t' : ','
   if (semicolons > commas && semicolons > tabs) {
@@ -95,35 +91,46 @@ function hasConsistentExistingCsvColumns(text: string, delimiter: string): boole
   )
 }
 
-function findFirstNonEmptyCsvSniffLine(text: string): string {
-  // Scan a representative line without allocating an array entry per pasted/dropped row.
+function countFirstCsvRecordDelimiters(text: string, delimiter: string): number {
   const scanLength = Math.min(text.length, CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS)
-  let lineStart = 0
-  let lineHasContent = false
-
+  let count = 0
+  let inQuotes = false
+  let fieldIsEmpty = true
+  let hasContent = false
   for (let index = 0; index < scanLength; index += 1) {
-    const codeUnit = text.charCodeAt(index)
-    if (codeUnit === LINE_FEED_CODE_UNIT || codeUnit === CARRIAGE_RETURN_CODE_UNIT) {
-      if (lineHasContent) {
-        return text.slice(lineStart, index)
+    const ch = text[index]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[index + 1] === '"' && index + 1 < scanLength) {
+          index += 1
+        } else {
+          inQuotes = false
+        }
       }
-      if (
-        codeUnit === CARRIAGE_RETURN_CODE_UNIT &&
-        index + 1 < scanLength &&
-        text.charCodeAt(index + 1) === LINE_FEED_CODE_UNIT
-      ) {
-        index += 1
-      }
-      lineStart = index + 1
-      lineHasContent = false
       continue
     }
-    if (!lineHasContent && !isCsvSniffWhitespace(codeUnit)) {
-      lineHasContent = true
+    if (ch === '"' && fieldIsEmpty) {
+      inQuotes = true
+      hasContent = true
+      continue
     }
+    if (ch === '\r' || ch === '\n') {
+      if (hasContent) {
+        return count
+      }
+      count = 0
+      fieldIsEmpty = true
+      continue
+    }
+    if (ch === delimiter) {
+      count += 1
+      fieldIsEmpty = true
+    } else {
+      fieldIsEmpty = false
+    }
+    hasContent ||= !isCsvSniffWhitespace(text.charCodeAt(index))
   }
-
-  return lineHasContent ? text.slice(lineStart, scanLength) : ''
+  return hasContent ? count : 0
 }
 
 function isCsvSniffWhitespace(codeUnit: number): boolean {
@@ -134,24 +141,4 @@ function isCsvSniffWhitespace(codeUnit: number): boolean {
     codeUnit === 0x20 ||
     codeUnit === 0xa0
   )
-}
-
-function countDelimiterOutsideQuotes(line: string, delimiter: string): number {
-  let count = 0
-  let inQuotes = false
-  for (let i = 0; i < line.length; i += 1) {
-    const ch = line[i]
-    if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        i += 1
-      } else {
-        inQuotes = !inQuotes
-      }
-      continue
-    }
-    if (!inQuotes && ch === delimiter) {
-      count += 1
-    }
-  }
-  return count
 }
