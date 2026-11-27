@@ -49,3 +49,15 @@ export async function prepareAntigravityAccountForLaunch(args: {
   }
   await (await getAntigravityAccountService({ runtime: 'host' })).prepareForLaunch()
 }
+
+/** Chats never had the launch gate: put the selected account back when that's safe, else start on
+ *  agy's current login as before. */
+export async function restoreAntigravityAccountForChat(
+  env: Readonly<Record<string, string>>
+): Promise<void> {
+  try {
+    await prepareAntigravityAccountForLaunch({ launchAgent: 'antigravity', env: { ...env } })
+  } catch (error) {
+    console.warn("[antigravity] chat starts on agy's current login:", error)
+  }
+}
