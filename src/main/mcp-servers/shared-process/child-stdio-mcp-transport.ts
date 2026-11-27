@@ -49,11 +49,13 @@ export class ChildStdioMcpTransport implements Transport {
         reject(new Error('The server’s process has ended.'))
         return
       }
-      if (this.child.stdin.write(serializeMessage(message))) {
-        resolve()
-      } else {
-        this.child.stdin.once('drain', resolve)
-      }
+      this.child.stdin.write(serializeMessage(message), (error) => {
+        if (error) {
+          reject(error)
+        } else {
+          resolve()
+        }
+      })
     })
   }
 
