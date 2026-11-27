@@ -38,6 +38,7 @@ import { RepositoryWindowsRuntimeSection } from './runtime/RepositoryWindowsRunt
 import { matchesRepositoryIdentitySearch } from './identity/repository-identity-search'
 import { RepositoryWorktreeDefaultsSection } from './worktrees/RepositoryWorktreeDefaultsSection'
 import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
+import { RepositoryItsaplanProjectSection } from './RepositoryItsaplanProjectSection'
 import { getProjectRuntimeSessionSummary } from './runtime/repository-runtime-session-summary'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 import {
@@ -290,6 +291,13 @@ export function RepositoryPane({
 
         <RepositoryJiraProjectSection
           key={`${selectedHostId}:${repo.id}`}
+          repo={repo}
+          updateRepo={updateSelectedRepo}
+          forceVisible={forceFullPaneForRepoMatch}
+        />
+
+        <RepositoryItsaplanProjectSection
+          key={`${selectedHostId}:${repo.id}:itsaplan`}
           repo={repo}
           updateRepo={updateSelectedRepo}
           forceVisible={forceFullPaneForRepoMatch}
