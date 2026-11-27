@@ -2,7 +2,7 @@ import { getProviderDisplayName } from '../../../src/shared/agent-usage/display/
 import { lazy, Suspense, useContext, useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import {
-  composerInputStyles,
+  composerInputStylesSheet,
   MESSAGE_TEXT_INSET
 } from '../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -118,6 +118,7 @@ function useComposerUsageReading(agent: string | null | undefined): Reading | nu
 /** The composer action row's flexible gap, with the agent's usage meter centered in it unless it sits above. */
 export function ComposerUsageSlot({ agent, spanSideStrip }: Props): React.JSX.Element {
   const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
 
   const position = useComposerUsagePosition()
   const [room, setRoom] = useState<number | null>(null)
@@ -157,6 +158,7 @@ export function ComposerUsageMeter({
   onFullWidth?: (width: number | null) => void
 }): React.JSX.Element | null {
   const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
 
   useMobileColorScheme()
   const reading = useComposerUsageReading(agent)
@@ -261,6 +263,7 @@ export function ComposerUsageStrip({
   spanSideStrip = false
 }: Props): React.JSX.Element | null {
   const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
 
   useMobileColorScheme()
   const position = useComposerUsagePosition()
