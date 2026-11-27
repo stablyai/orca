@@ -3,6 +3,7 @@ import { RailPageFilterButton } from '@/components/rail-page/RailPageToolbar'
 import { X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { MENU_SUB_TRIGGER_CHEVRON_CLASS } from '@/components/ui/menu-item'
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -236,16 +237,20 @@ export function AutomationListFilterMenu({
         {filter.bot ? (
           <>
             {/* Set only by a bot's "All N automations"; listed here so the badge's count is visible. */}
-            <DropdownMenuCheckboxItem
-              checked
-              onCheckedChange={() => onChange({ ...filter, bot: null })}
-              title={filter.bot.name}
-            >
-              <span className="min-w-0 truncate">
-                {t('auto.components.automations.AutomationListFilterMenu.bot', 'Bot')}:{' '}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuItem onSelect={() => onChange({ ...filter, bot: null })}>
+                  <span className="min-w-0 truncate">
+                    {t('auto.components.automations.AutomationListFilterMenu.bot', 'Bot')}:{' '}
+                    {filter.bot.name}
+                  </span>
+                  <X className={MENU_SUB_TRIGGER_CHEVRON_CLASS} aria-hidden />
+                </DropdownMenuItem>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={6} className="max-w-72 break-words">
                 {filter.bot.name}
-              </span>
-            </DropdownMenuCheckboxItem>
+              </TooltipContent>
+            </Tooltip>
             <DropdownMenuSeparator />
           </>
         ) : null}

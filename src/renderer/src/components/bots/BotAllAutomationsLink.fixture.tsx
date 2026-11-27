@@ -271,25 +271,35 @@ export const noMatches = defineFixture({
 })
 
 // The Filters menu lists the Bot filter its badge counts.
+async function openFiltersMenu(frame: HTMLElement): Promise<void> {
+  ;(await allLink(frame)).click()
+  await settle()
+  const trigger = [...frame.querySelectorAll('button')].find((button) =>
+    button.textContent?.startsWith('Filters')
+  )
+  trigger?.dispatchEvent(
+    new PointerEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      pointerType: 'mouse'
+    })
+  )
+  await settle()
+}
+
 export const filtersMenu = defineFixture({
   width: 980,
   store: botPanelPage(true, null),
   setup: stubBotPanel(ACTIVITY),
   render: () => <Frame />,
-  interact: async (frame) => {
-    ;(await allLink(frame)).click()
-    await settle()
-    const trigger = [...frame.querySelectorAll('button')].find((button) =>
-      button.textContent?.startsWith('Filters')
-    )
-    trigger?.dispatchEvent(
-      new PointerEvent('pointerdown', {
-        bubbles: true,
-        cancelable: true,
-        button: 0,
-        pointerType: 'mouse'
-      })
-    )
-    await settle()
-  }
+  interact: openFiltersMenu
+})
+
+export const filtersMenuLongName = defineFixture({
+  width: 980,
+  store: botPanelPage(true, null),
+  setup: stubBotPanel(ACTIVITY, longNamed),
+  render: () => <Frame />,
+  interact: openFiltersMenu
 })
